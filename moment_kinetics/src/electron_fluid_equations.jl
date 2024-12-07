@@ -127,6 +127,11 @@ end
 
 function calculate_electron_moments!(scratch, pdf, moments, composition, collisions, r, z,
                                      vpa)
+    if length(scratch.pdf_electron) > 0
+        pdf_electron = scratch.pdf_electron
+    else
+        pdf_electron = pdf.electron
+    end
     calculate_electron_density!(scratch.electron_density, moments.electron.dens_updated,
                                 scratch.density)
     calculate_electron_upar_from_charge_conservation!(
@@ -144,7 +149,7 @@ function calculate_electron_moments!(scratch, pdf, moments, composition, collisi
     end
     update_electron_vth_temperature!(moments, scratch.electron_ppar,
                                      scratch.electron_density, composition)
-    calculate_electron_qpar!(moments.electron, pdf.electron, scratch.electron_ppar,
+    calculate_electron_qpar!(moments.electron, pdf_electron, scratch.electron_ppar,
                              scratch.electron_upar, scratch.upar,
                              collisions.electron_fluid.nu_ei, composition.me_over_mi,
                              composition.electron_physics, vpa)

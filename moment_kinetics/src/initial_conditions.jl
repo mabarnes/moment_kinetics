@@ -816,6 +816,14 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
             pdf.electron.pdf_before_ion_timestep[ivpa,ivperp,iz,ir] =
                 pdf.electron.norm[ivpa,ivperp,iz,ir]
         end
+        if length(scratch[1].pdf_electron) > 0
+            @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
+                for i ∈ 1:length(scratch)
+                    scratch[i].pdf_electron[ivpa,ivperp,iz,ir] =
+                        pdf.electron.norm[ivpa,ivperp,iz,ir]
+                end
+            end
+        end
 
         # No need to do electron I/O (apart from possibly debug I/O) any more, so if
         # adaptive timestep is used, it does not need to adjust to output times.

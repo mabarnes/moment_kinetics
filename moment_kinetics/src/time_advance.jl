@@ -46,7 +46,9 @@ using ..charge_exchange: ion_charge_exchange_collisions_1V!,
                          neutral_charge_exchange_collisions_1V!,
                          ion_charge_exchange_collisions_3V!,
                          neutral_charge_exchange_collisions_3V!
-using ..electron_kinetic_equation: update_electron_pdf!, implicit_electron_advance!
+using ..electron_kinetic_equation: update_electron_pdf!, implicit_electron_advance!,
+                                   electron_backward_euler!,
+                                   electron_kinetic_equation_euler_update!
 using ..ionization: ion_ionization_collisions_1V!, neutral_ionization_collisions_1V!,
                     ion_ionization_collisions_3V!, neutral_ionization_collisions_3V!
 using ..krook_collisions: krook_collisions!
@@ -384,6 +386,7 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
         # Not an IMEX scheme, so cannot have any implicit terms
         t_input["implicit_braginskii_conduction"] = false
         t_input["implicit_electron_advance"] = false
+        t_input["implicit_electron_time_evolving"] = false
         t_input["implicit_ion_advance"] = false
         t_input["implicit_vpa_advection"] = false
         t_input["implicit_electron_ppar"] = false
@@ -394,6 +397,7 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
         if composition.electron_physics ∉ (kinetic_electrons,
                                            kinetic_electrons_with_temperature_equation)
             t_input["implicit_electron_advance"] = false
+            t_input["implicit_electron_time_evolving"] = false
             t_input["implicit_electron_ppar"] = false
         end
     end
@@ -426,6 +430,7 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
 
         implicit_electron_ppar = false
         implicit_electron_advance = false
+        implicit_electron_time_evolving = false
         electron_preconditioner_type = nothing
         decrease_dt_iteration_threshold = t_input["decrease_dt_iteration_threshold"]
         increase_dt_iteration_threshold = t_input["increase_dt_iteration_threshold"]
@@ -438,6 +443,7 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
         debug_io = nothing
         implicit_electron_ppar = false
         implicit_electron_advance = false
+        implicit_electron_time_evolving = false
         electron_preconditioner_type = nothing
         decrease_dt_iteration_threshold = -1
         increase_dt_iteration_threshold = typemax(mk_int)
@@ -451,6 +457,8 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
 
         implicit_electron_ppar = (t_input["implicit_electron_ppar"] !== false)
         implicit_electron_advance = (t_input["implicit_electron_advance"] !== false)
+        implicit_electron_time_evolving = (t_input["implicit_electron_time_evolving"] !== false)
+        electron_precon_types = Dict("lu" => :electron_lu, "adi" => :electron_adi)
         if implicit_electron_ppar
             if t_input["implicit_electron_ppar"] === true
                 if block_size[] == 1
@@ -461,7 +469,6 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
                     electron_preconditioner_type = Val(:electron_adi)
                 end
             else
-                electron_precon_types = Dict("lu" => :electron_lu, "adi" => :electron_adi)
                 if t_input["implicit_electron_ppar"] ∈ keys(electron_precon_types)
                     electron_preconditioner_type = Val(electron_precon_types[t_input["implicit_electron_ppar"]])
                 else
@@ -478,6 +485,26 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
                       * "implicit_electron_advance.")
             end
             electron_preconditioner_type = Val(:electron_lu)
+        elseif implicit_electron_time_evolving
+            if t_input["implicit_electron_time_evolving"] === true
+                if block_size[] == 1
+                    # No need to parallelise, so un-split LU solver should be most efficient.
+                    electron_preconditioner_type = Val(:electron_lu)
+                else
+                    # Want to parallelise preconditioner, so use ADI method.
+                    electron_preconditioner_type = Val(:electron_adi)
+                end
+            else
+                if t_input["implicit_electron_time_evolving"] ∈ keys(electron_precon_types)
+                    electron_preconditioner_type = Val(electron_precon_types[t_input["implicit_electron_time_evolving"]])
+                else
+                    precon_keys = collect(keys(electron_precon_types))
+                    error("Unrecognised option implicit_electron_time_evolving="
+                          * "\"$(t_input["implicit_electron_time_evolving"])\"  which "
+                          * "should be either false/true or a string giving the type of "
+                          * "preconditioner to use - one of $precon_keys.")
+                end
+            end
         else
             electron_preconditioner_type = Val(:none)
         end
@@ -507,7 +534,7 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
                      mk_float(t_input["last_fail_proximity_factor"]),
                      mk_float(t_input["minimum_dt"]), mk_float(t_input["maximum_dt"]),
                      electron !== nothing && t_input["implicit_braginskii_conduction"],
-                     implicit_electron_advance,
+                     implicit_electron_advance, implicit_electron_time_evolving,
                      electron !== nothing && t_input["implicit_ion_advance"],
                      electron !== nothing && t_input["implicit_vpa_advection"],
                      implicit_electron_ppar, electron_preconditioner_type,
@@ -721,7 +748,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
                                                                     default_rtol=t_params.rtol / 10.0,
                                                                     default_atol=t_params.atol / 10.0)
     nl_solver_electron_advance_params =
-        setup_nonlinear_solve(t_params.implicit_electron_advance || composition.electron_physics ∈ (kinetic_electrons, kinetic_electrons_with_temperature_equation),
+        setup_nonlinear_solve(t_params.implicit_electron_advance || t_params.implicit_electron_time_evolving || t_params.implicit_electron_ppar,
                               input_dict,
                               (z=z, vperp=vperp, vpa=vpa),
                               (r,);
@@ -750,9 +777,10 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
         error("Cannot use implicit_ion_advance and implicit_vpa_advection at the same "
               * "time")
     end
-    if t_params.implicit_electron_advance && t_params.implicit_electron_ppar
-        error("Cannot use implicit_electron_advance and implicit_electron_ppar at the "
-              * "same time.")
+    if (t_params.implicit_electron_advance + t_params.implicit_electron_time_evolving +
+        t_params.implicit_electron_ppar) > 1
+        error("Can only use one of implicit_electron_advance, "
+              * "implicit_electron_time_evolving, and implicit_electron_ppar.")
     end
     nl_solver_params = (electron_conduction=electron_conduction_nl_solve_parameters,
                         electron_advance=nl_solver_electron_advance_params,
@@ -771,9 +799,11 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
 
     # create an array of structs containing scratch arrays for the pdf and low-order moments
     # that may be evolved separately via fluid equations
-    scratch = setup_scratch_arrays(moments, pdf, t_params.n_rk_stages + 1)
+    scratch = setup_scratch_arrays(moments, pdf, t_params.n_rk_stages + 1,
+                                   t_params.implicit_electron_time_evolving)
     if t_params.rk_coefs_implicit !== nothing
-        scratch_implicit = setup_scratch_arrays(moments, pdf, t_params.n_rk_stages)
+        scratch_implicit = setup_scratch_arrays(moments, pdf, t_params.n_rk_stages,
+                                                t_params.implicit_electron_time_evolving)
     else
         scratch_implicit = nothing
     end
@@ -1170,6 +1200,7 @@ function setup_advance_flags(moments, composition, t_params, collisions,
     advance_continuity = false
     advance_force_balance = false
     advance_energy = false
+    advance_electron_pdf = false
     advance_electron_energy = false
     advance_electron_conduction = false
     advance_neutral_z_advection = false
@@ -1293,7 +1324,9 @@ function setup_advance_flags(moments, composition, t_params, collisions,
         # moment-kinetically then advance the electron energy equation
         if composition.electron_physics ∈ (kinetic_electrons,
                                            kinetic_electrons_with_temperature_equation)
-            if !(t_params.implicit_electron_advance || t_params.implicit_electron_ppar)
+            if !(t_params.implicit_electron_advance ||
+                 t_params.implicit_electron_time_evolving ||
+                 t_params.implicit_electron_ppar)
                 advance_electron_energy = true
                 advance_electron_conduction = true
             end
@@ -1338,8 +1371,8 @@ function setup_advance_flags(moments, composition, t_params, collisions,
                         advance_external_source, advance_ion_numerical_dissipation,
                         advance_neutral_numerical_dissipation, advance_sources,
                         advance_continuity, advance_force_balance, advance_energy,
-                        advance_electron_energy, advance_electron_conduction,
-                        advance_neutral_external_source,
+                        advance_electron_pdf, advance_electron_energy,
+                        advance_electron_conduction, advance_neutral_external_source,
                         advance_neutral_sources, advance_neutral_continuity,
                         advance_neutral_force_balance, advance_neutral_energy,
                         manufactured_solns_test, r_diffusion, vpa_diffusion,
@@ -1378,6 +1411,7 @@ function setup_implicit_advance_flags(moments, composition, t_params, collisions
     advance_continuity = false
     advance_force_balance = false
     advance_energy = false
+    advance_electron_pdf = false
     advance_electron_energy = false
     advance_electron_conduction = false
     advance_neutral_z_advection = false
@@ -1452,9 +1486,13 @@ function setup_implicit_advance_flags(moments, composition, t_params, collisions
         advance_electron_conduction = true
     end
 
-    if (t_params.implicit_electron_advance || t_params.implicit_electron_ppar)
+    if (t_params.implicit_electron_advance || t_params.implicit_electron_time_evolving ||
+            t_params.implicit_electron_ppar)
         advance_electron_energy = true
         advance_electron_conduction = true
+    end
+    if t_params.implicit_electron_time_evolving
+        advance_electron_pdf = true
     end
 
     manufactured_solns_test = manufactured_solns_input.use_for_advance
@@ -1470,11 +1508,12 @@ function setup_implicit_advance_flags(moments, composition, t_params, collisions
                         advance_external_source, advance_ion_numerical_dissipation,
                         advance_neutral_numerical_dissipation, advance_sources,
                         advance_continuity, advance_force_balance, advance_energy,
-                        advance_electron_energy, advance_electron_conduction,
-                        advance_neutral_external_source, advance_neutral_sources,
-                        advance_neutral_continuity, advance_neutral_force_balance,
-                        advance_neutral_energy, manufactured_solns_test, r_diffusion,
-                        vpa_diffusion, vperp_diffusion, vz_diffusion)
+                        advance_electron_pdf, advance_electron_energy,
+                        advance_electron_conduction, advance_neutral_external_source,
+                        advance_neutral_sources, advance_neutral_continuity,
+                        advance_neutral_force_balance, advance_neutral_energy,
+                        manufactured_solns_test, r_diffusion, vpa_diffusion,
+                        vperp_diffusion, vz_diffusion)
 end
 
 function setup_dummy_and_buffer_arrays(nr, nz, nvpa, nvperp, nvz, nvr, nvzeta,
@@ -1675,15 +1714,21 @@ end
 create an array of structs containing scratch arrays for the normalised pdf and low-order moments
 that may be evolved separately via fluid equations
 """
-function setup_scratch_arrays(moments, pdf, n)
+function setup_scratch_arrays(moments, pdf, n, time_evolve_electrons)
     # will create n structs, each of which will contain one pdf,
     # density, parallel flow, parallel pressure, and perpendicular pressure array for ions
     # (possibly) the same for electrons, and the same for neutrals. The actual array will
     # be created at the end of the first step of the loop below, once we have a
     # `scratch_pdf` object of the correct type.
-    scratch = Vector{scratch_pdf{5,3,2,6,3}}(undef, n)
+    scratch = Vector{scratch_pdf{5,3,4,2,6,3}}(undef, n)
     pdf_dims = size(pdf.ion.norm)
     moment_dims = size(moments.ion.dens)
+
+    if time_evolve_electrons
+        pdf_electron_dims = size(pdf.electron.norm)
+    else
+        pdf_electron_dims = (0,0,0,0)
+    end
     moment_electron_dims = size(moments.electron.dens)
 
     pdf_neutral_dims = size(pdf.neutral.norm)
@@ -1699,6 +1744,7 @@ function setup_scratch_arrays(moments, pdf, n)
         pperp_array = allocate_shared_float(moment_dims...)
         temp_array = allocate_shared_float(moment_dims...)
 
+        pdf_electron_array = allocate_shared_float(pdf_electron_dims...)
         density_electron_array = allocate_shared_float(moment_electron_dims...)
         upar_electron_array = allocate_shared_float(moment_electron_dims...)
         ppar_electron_array = allocate_shared_float(moment_electron_dims...)
@@ -1713,11 +1759,11 @@ function setup_scratch_arrays(moments, pdf, n)
 
         scratch[istage] = scratch_pdf(pdf_array, density_array, upar_array,
                                       ppar_array, pperp_array, temp_array,
-                                      density_electron_array, upar_electron_array,
-                                      ppar_electron_array, pperp_electron_array,
-                                      temp_electron_array, pdf_neutral_array,
-                                      density_neutral_array, uz_neutral_array,
-                                      pz_neutral_array)
+                                      pdf_electron_array, density_electron_array,
+                                      upar_electron_array, ppar_electron_array,
+                                      pperp_electron_array, temp_electron_array,
+                                      pdf_neutral_array, density_neutral_array,
+                                      uz_neutral_array, pz_neutral_array)
         @serial_region begin
             scratch[istage].pdf .= pdf.ion.norm
             scratch[istage].density .= moments.ion.dens
@@ -1725,6 +1771,9 @@ function setup_scratch_arrays(moments, pdf, n)
             scratch[istage].ppar .= moments.ion.ppar
             scratch[istage].pperp .= moments.ion.pperp
 
+            if time_evolve_electrons
+                scratch[istage].pdf_electron .= pdf.electron.norm
+            end
             scratch[istage].electron_density .= moments.electron.dens
             scratch[istage].electron_upar .= moments.electron.upar
             scratch[istage].electron_ppar .= moments.electron.ppar
@@ -2679,6 +2728,7 @@ appropriate.
                     scratch[t_params.n_rk_stages+1].ppar,
                     scratch[t_params.n_rk_stages+1].pperp,
                     scratch[t_params.n_rk_stages+1].temp_z_s,
+                    scratch[t_params.n_rk_stages+1].pdf_electron,
                     scratch[t_params.n_rk_stages+1].electron_density,
                     scratch[t_params.n_rk_stages+1].electron_upar,
                     scratch[t_params.n_rk_stages+1].electron_ppar,
@@ -3012,6 +3062,12 @@ end
         first_scratch.pperp[iz,ir,is] = moments.ion.pperp[iz,ir,is]
     end
 
+    if length(first_scratch.pdf_electron) > 0
+        begin_r_z_vperp_vpa_region()
+        @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
+            first_scratch.pdf_electron[ivpa,ivperp,iz,ir] = pdf.electron.norm[ivpa,ivperp,iz,ir]
+        end
+    end
     begin_r_z_region()
     @loop_r_z ir iz begin
         first_scratch.electron_density[iz,ir] = moments.electron.dens[iz,ir]
@@ -3094,7 +3150,9 @@ end
                 # The result of the implicit solve gives the state vector at 'istage'
                 # which is used as input to the explicit part of the IMEX time step.
                 old_scratch = scratch_implicit[istage]
-                update_electrons = !(t_params.implicit_electron_advance || t_params.implicit_electron_ppar)
+                update_electrons = !(t_params.implicit_electron_advance ||
+                                     t_params.implicit_electron_time_evolving ||
+                                     t_params.implicit_electron_ppar)
                 bcs_constraints_success = apply_all_bcs_constraints_update_moments!(
                     scratch_implicit[istage], pdf, moments, fields,
                     boundary_distributions, scratch_electron, vz, vr, vzeta, vpa, vperp,
@@ -3143,7 +3201,9 @@ end
                                 || (istage == n_rk_stages && t_params.implicit_coefficient_is_zero[1])
                                 || t_params.implicit_coefficient_is_zero[istage+1])
         update_electrons = (t_params.rk_coefs_implicit === nothing
-                            || !(t_params.implicit_electron_advance || t_params.implicit_electron_ppar))
+                            || !(t_params.implicit_electron_advance ||
+                                 t_params.implicit_electron_time_evolving ||
+                                 t_params.implicit_electron_ppar))
         diagnostic_moments = diagnostic_checks && istage == n_rk_stages
         bcs_constraints_success = apply_all_bcs_constraints_update_moments!(
             scratch[istage+1], pdf, moments, fields, boundary_distributions,
@@ -3166,7 +3226,7 @@ end
 
     if t_params.adaptive
         nl_max_its_fraction = 0.0
-        if t_params.implicit_electron_advance
+        if t_params.implicit_electron_advance || t_params.implicit_electron_time_evolving
             params_to_check = (nl_solver_params.ion_advance,
                                nl_solver_params.vpa_advection,
                                nl_solver_params.electron_conduction,
@@ -3215,6 +3275,9 @@ end
         t_params.electron.max_step_count_this_ion_step[] = 0
         t_params.electron.max_t_increment_this_ion_step[] = 0.0
     end
+    if t_params.implicit_electron_time_evolving
+        reset_nonlinear_per_stage_counters!(nl_solver_params.electron_advance)
+    end
 
 
     if t_params.previous_dt[] > 0.0
@@ -3234,6 +3297,12 @@ end
         end
         # No need to synchronize here as we only change electron quantities and previous
         # region only changed ion quantities.
+        if length(final_scratch.pdf_electron) > 0
+            begin_r_z_vperp_vpa_region()
+            @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
+                pdf.electron.norm[ivpa,ivperp,iz,ir] = final_scratch.pdf_electron[ivpa,ivperp,iz,ir]
+            end
+        end
         begin_r_z_region(no_synchronize=true)
         @loop_r_z ir iz begin
             moments.electron.dens[iz,ir] = final_scratch.electron_density[iz,ir]
@@ -3546,6 +3615,18 @@ with fvec_in an input and fvec_out the output
                                  z_spectral, composition,
                                  external_source_settings.neutral, num_diss_params)
     end
+
+    if advance.electron_pdf
+        electron_t_params = (dt=Ref(dt),)
+        for ir ∈ 1:r.n
+            @views electron_kinetic_equation_euler_update!(
+                       fvec_out.pdf_electron[:,:,:,ir], fvec_out.electron_ppar[:,ir],
+                       fvec_in.pdf_electron[:,:,:,ir], fvec_in.electron_ppar[:,ir],
+                       moments, z, vperp, vpa, z_spectral, vpa_spectral, z_advect,
+                       vpa_advect, scratch_dummy, collisions, composition,
+                       external_source_settings, num_diss_params, electron_t_params, ir)
+        end
+    end
     if advance.electron_energy
         electron_energy_equation!(fvec_out.electron_ppar, fvec_in.electron_ppar,
                                   fvec_in.density, fvec_in.electron_upar, fvec_in.density,
@@ -3601,6 +3682,17 @@ end
                                                       nl_solver_params.electron_advance)
 
         success = success && (electron_success == "")
+    elseif t_params.implicit_electron_time_evolving
+        t_params.electron.dt[] = dt
+        for ir ∈ 1:r.n
+            electron_success = electron_backward_euler!(
+                          fvec_in, fvec_out, moments, fields.phi, collisions, composition, r,
+                          z, vperp, vpa, z_spectral, vperp_spectral, vpa_spectral, z_advect,
+                          vpa_advect, scratch_dummy, t_params.electron,
+                          external_source_settings, num_diss_params,
+                          nl_solver_params.electron_advance, ir; evolve_ppar=true)
+            success = success && electron_success
+        end
     elseif t_params.implicit_electron_ppar
         max_electron_pdf_iterations = t_params.electron.max_pseudotimesteps
         max_electron_sim_time = t_params.electron.max_pseudotime
@@ -3931,6 +4023,12 @@ function update_solution_vector!(new_evolved, old_evolved, moments, composition,
         new_evolved.density[iz,ir,is] = old_evolved.density[iz,ir,is]
         new_evolved.upar[iz,ir,is] = old_evolved.upar[iz,ir,is]
         new_evolved.ppar[iz,ir,is] = old_evolved.ppar[iz,ir,is]
+    end
+    if length(new_evolved.pdf_electron) > 0
+        begin_r_z_vperp_vpa_region()
+        @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
+            new_evolved.pdf_electron[ivpa,ivperp,iz,ir] = old_evolved.pdf_electron[ivpa,ivperp,iz,ir]
+        end
     end
     begin_r_z_region()
     @loop_r_z ir iz begin

@@ -3277,9 +3277,9 @@ binary output file
         # add the distribution function data at this time slice to the output file
         write_ion_dfns_data_to_binary(scratch, t_params, n_ion_species, io_dfns, t_idx, r,
                                       z, vperp, vpa)
-        if scratch_electron !== nothing
-            write_electron_dfns_data_to_binary(scratch_electron, t_params, io_dfns, t_idx,
-                                               r, z, vperp, vpa)
+        if t_params.implicit_electron_time_evolving || scratch_electron !== nothing
+            write_electron_dfns_data_to_binary(scratch, scratch_electron, t_params,
+                                               io_dfns, t_idx, r, z, vperp, vpa)
         end
         write_neutral_dfns_data_to_binary(scratch, t_params, n_neutral_species, io_dfns,
                                           t_idx, r, z, vzeta, vr, vz)
@@ -3318,7 +3318,7 @@ write time-dependent distribution function data for electrons to the binary outp
 
 Note: should only be called from within a function that (re-)opens the output file.
 """
-function write_electron_dfns_data_to_binary(scratch_electron, t_params,
+function write_electron_dfns_data_to_binary(scratch, scratch_electron, t_params,
                                             io_dfns::Union{io_dfns_info,io_initial_electron_info},
                                             t_idx, r, z, vperp, vpa)
     @serial_region begin
@@ -3327,22 +3327,27 @@ function write_electron_dfns_data_to_binary(scratch_electron, t_params,
         parallel_io = io_dfns.io_input.parallel_io
 
         if io_dfns.f_electron !== nothing
-            if t_params.electron === nothing
+            if t_params.implicit_electron_time_evolving
+                n_rk_stages = t_params.n_rk_stages
+                this_scratch = scratch
+            elseif t_params.electron === nothing
                 # t_params is the t_params for electron timestepping
                 n_rk_stages = t_params.n_rk_stages
+                this_scratch = scratch_electron
             else
                 n_rk_stages = t_params.electron.n_rk_stages
+                this_scratch = scratch_electron
             end
             append_to_dynamic_var(io_dfns.f_electron,
-                                  scratch_electron[n_rk_stages+1].pdf_electron,
+                                  this_scratch[n_rk_stages+1].pdf_electron,
                                   t_idx, parallel_io, vpa, vperp, z, r)
             # If options were not set to select the following outputs, then the io
             # variables will be `nothing` and nothing will be written.
             append_to_dynamic_var(io_dfns.f_electron_loworder,
-                                  scratch_electron[2].pdf_electron,
+                                  this_scratch[2].pdf_electron,
                                   t_idx, parallel_io, vpa, vperp, z, r)
             append_to_dynamic_var(io_dfns.f_electron_start_last_timestep,
-                                  scratch_electron[1].pdf_electron,
+                                  this_scratch[1].pdf_electron,
                                   t_idx, parallel_io, vpa, vperp, z, r)
         end
     end
@@ -3408,7 +3413,7 @@ function write_electron_state(scratch_electron, moments, t_params,
         append_to_dynamic_var(io_initial_electron.electron_cumulative_pseudotime,
                               t_params.t[], t_idx, parallel_io)
 
-        write_electron_dfns_data_to_binary(scratch_electron, t_params,
+        write_electron_dfns_data_to_binary(nothing, scratch_electron, t_params,
                                            io_initial_electron, t_idx, r, z, vperp, vpa)
 
         write_electron_moments_data_to_binary(scratch_electron, moments, t_params,
