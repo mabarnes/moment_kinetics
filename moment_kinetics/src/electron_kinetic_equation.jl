@@ -898,6 +898,10 @@ function electron_backward_euler_pseudotimestepping!(scratch, pdf, moments, phi,
                 # to arrays, because f_electron_old and electron_ppar_old are captured by
                 # residual_func!() above, so any change in the things they refer to will
                 # cause type instability in residual_func!().
+                f_electron_new = @view new_scratch.pdf_electron[:,:,:,ir]
+                f_electron_old = @view old_scratch.pdf_electron[:,:,:,ir]
+                electron_ppar_new = @view new_scratch.electron_ppar[:,ir]
+                electron_ppar_old = @view old_scratch.electron_ppar[:,ir]
                 begin_z_vperp_vpa_region()
                 @loop_z_vperp_vpa iz ivperp ivpa begin
                     f_electron_new[ivpa,ivperp,iz] = f_electron_old[ivpa,ivperp,iz]
@@ -929,6 +933,8 @@ function electron_backward_euler_pseudotimestepping!(scratch, pdf, moments, phi,
                                          buffer_3, buffer_4, z_spectral, z)
                 end
             end
+
+            reset_nonlinear_per_stage_counters!(nl_solver_params)
 
             residual_norm = -1.0
             if step_success
@@ -998,8 +1004,6 @@ function electron_backward_euler_pseudotimestepping!(scratch, pdf, moments, phi,
                     end
                 end
             end
-
-            reset_nonlinear_per_stage_counters!(nl_solver_params)
 
             t_params.step_counter[] += 1
             if electron_pdf_converged[]

@@ -111,6 +111,7 @@ kinetic_electron_input = recursive_merge(cheb_input, OptionsDict("evolve_moments
                                                                  "vr" => OptionsDict("ngrid" => 1,
                                                                                      "nelement" => 1),
                                                                  "composition" => OptionsDict("electron_physics" => "kinetic_electrons"),
+                                                                 "timestepping" => OptionsDict("type" => "KennedyCarpenterARK324"),
                                                                  "electron_timestepping" => OptionsDict("nstep" => 1,
                                                                                                         "dt" => 2.0e-11,
                                                                                                         "initialization_residual_value" => 1.0e10,
