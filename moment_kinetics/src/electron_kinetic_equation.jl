@@ -883,6 +883,8 @@ function electron_backward_euler_pseudotimestepping!(scratch, pdf, moments, phi,
                     else
                         t_params.dt[] = min(t_params.dt[] * t_params.max_increase_factor, t_params.cap_factor_ion_dt * ion_dt)
                     end
+                    # Ensure dt does not exceed maximum_dt
+                    t_params.dt[] = min(t_params.dt[], t_params.maximum_dt)
                 end
 
                 first_step = false
