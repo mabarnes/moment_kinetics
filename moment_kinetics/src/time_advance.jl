@@ -1928,6 +1928,7 @@ function  time_advance!(pdf, scratch, scratch_implicit, scratch_electron, t_para
                 # Stop cleanly if a file called 'stop' was created
                 println("Found 'stopnow' file $(t_params.stopfile * "now"), aborting run")
                 finish_now = true
+                t_params.dt_before_output[] = t_params.dt[]
             end
 
             if t_params.adaptive && !t_params.write_after_fixed_step_count
