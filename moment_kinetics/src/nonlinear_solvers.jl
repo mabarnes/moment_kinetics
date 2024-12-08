@@ -71,6 +71,7 @@ struct nl_solver_info{TH,TV,Tcsg,Tlig,Tprecon,Tpretype}
     serial_solve::Bool
     max_nonlinear_iterations_this_step::Base.RefValue{mk_int}
     max_linear_iterations_this_step::Base.RefValue{mk_int}
+    total_its_soft_limit::mk_int
     preconditioner_type::Tpretype
     preconditioner_update_interval::mk_int
     preconditioners::Tprecon
@@ -98,6 +99,7 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); defa
         linear_restart=10,
         linear_max_restarts=0,
         preconditioner_update_interval=300,
+        total_its_soft_limit=50,
         adi_precon_iterations=1,
        )
 
@@ -278,7 +280,7 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); defa
                           Ref(nl_solver_input.preconditioner_update_interval),
                           Ref(mk_float(0.0)), zeros(mk_int, n_vcut_inds),
                           zeros(mk_int, n_vcut_inds), serial_solve, Ref(0), Ref(0),
-                          preconditioner_type,
+                          nl_solver_input.total_its_soft_limit, preconditioner_type,
                           nl_solver_input.preconditioner_update_interval, preconditioners)
 end
 

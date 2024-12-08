@@ -1058,15 +1058,17 @@ end
 """
     adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms,
                                        total_points, error_norm_method, success,
-                                       nl_max_its_fraction, composition;
-                                       electron=false, local_max_dt::mk_float=Inf)
+                                       nl_max_its_fraction, nl_total_its_soft_limit,
+                                       composition; electron=false,
+                                       local_max_dt::mk_float=Inf)
 
 Use the calculated `CFL_limits` and `error_norms` to update the timestep in `t_params`.
 """
 function adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms,
                                             total_points, error_norm_method, success,
-                                            nl_max_its_fraction, composition;
-                                            electron=false, local_max_dt::mk_float=Inf)
+                                            nl_max_its_fraction, nl_total_its_soft_limit,
+                                            composition; electron=false,
+                                            local_max_dt::mk_float=Inf)
     # Get global minimum of CFL limits
     CFL_limit = Ref(0.0)
     this_limit_caused_by = nothing
@@ -1325,7 +1327,7 @@ function adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms,
                 end
             end
 
-            if nl_max_its_fraction > 0.5 && t_params.previous_dt[] > 0.0
+            if (nl_max_its_fraction > 0.5 || nl_total_its_soft_limit) && t_params.previous_dt[] > 0.0
                 # The last step took many nonlinear iterations, so do not allow the
                 # timestep to increase.
                 # If t_params.previous_dt[]==0.0, then the previous step failed so
