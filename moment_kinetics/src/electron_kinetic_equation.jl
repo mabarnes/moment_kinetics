@@ -18,7 +18,8 @@ using ..calculus: derivative!, second_derivative!, integral,
 using ..communication
 using ..gauss_legendre: gausslegendre_info
 using ..input_structs
-using ..interpolation: interpolate_to_grid_1d!
+using ..interpolation: interpolate_to_grid_1d!,
+                       interpolate_symmetric!
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float
 using ..electron_fluid_equations: calculate_electron_moments!,
@@ -29,23 +30,34 @@ using ..electron_fluid_equations: calculate_electron_moments!,
 using ..electron_fluid_equations: electron_energy_equation!,
                                   electron_energy_equation_no_r!,
                                   add_electron_energy_equation_to_Jacobian!,
+                                  add_electron_energy_equation_to_v_only_Jacobian!,
+                                  add_electron_energy_equation_to_z_only_Jacobian!,
                                   electron_energy_residual!
 using ..electron_z_advection: electron_z_advection!, update_electron_speed_z!,
-                              add_electron_z_advection_to_Jacobian!
+                              add_electron_z_advection_to_Jacobian!,
+                              add_electron_z_advection_to_v_only_Jacobian!,
+                              add_electron_z_advection_to_z_only_Jacobian!
 using ..electron_vpa_advection: electron_vpa_advection!, update_electron_speed_vpa!,
-                                add_electron_vpa_advection_to_Jacobian!
+                                add_electron_vpa_advection_to_Jacobian!,
+                                add_electron_vpa_advection_to_v_only_Jacobian!
 using ..em_fields: update_phi!
 using ..external_sources: total_external_electron_sources!,
-                          add_total_external_electron_source_to_Jacobian!
+                          add_total_external_electron_source_to_Jacobian!,
+                          add_total_external_electron_source_to_v_only_Jacobian!,
+                          add_total_external_electron_source_to_z_only_Jacobian!
 using ..file_io: get_electron_io_info, write_electron_state, finish_electron_io
 using ..krook_collisions: electron_krook_collisions!, get_collision_frequency_ee,
                           get_collision_frequency_ei,
-                          add_electron_krook_collisions_to_Jacobian!
+                          add_electron_krook_collisions_to_Jacobian!,
+                          add_electron_krook_collisions_to_v_only_Jacobian!,
+                          add_electron_krook_collisions_to_z_only_Jacobian!
 using ..timer_utils
 using ..moment_constraints: hard_force_moment_constraints!,
                             moment_constraints_on_residual!,
                             electron_implicit_constraint_forcing!,
-                            add_electron_implicit_constraint_forcing_to_Jacobian!
+                            add_electron_implicit_constraint_forcing_to_Jacobian!,
+                            add_electron_implicit_constraint_forcing_to_v_only_Jacobian!,
+                            add_electron_implicit_constraint_forcing_to_z_only_Jacobian!
 using ..moment_kinetics_structs: scratch_pdf, scratch_electron_pdf, electron_pdf_substruct
 using ..nonlinear_solvers
 using ..runge_kutta: rk_update_variable!, rk_loworder_solution!, local_error_norm,
@@ -392,8 +404,8 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
                                                  moments.electron.dens, composition)
             end
 
-            apply_electron_bc_and_constraints!(scratch[istage+1], phi, moments, z, vperp,
-                                               vpa, vperp_spectral, vpa_spectral,
+            apply_electron_bc_and_constraints!(scratch[istage+1], phi, moments, r, z,
+                                               vperp, vpa, vperp_spectral, vpa_spectral,
                                                vpa_advect, num_diss_params, composition)
 
             latest_pdf = scratch[istage+1].pdf_electron
@@ -665,7 +677,9 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
 
     reduced_by_ion_dt = false
     if ion_dt !== nothing
-        evolve_ppar = true
+        if !evolve_ppar
+            error("evolve_ppar must be `true` when `ion_dt` is passed. ion_dt=$ion_dt")
+        end
 
         # Use forward-Euler step (with `ion_dt` as the timestep) as initial guess for
         # updated electron_ppar
@@ -742,7 +756,7 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                                  t_params.moments_output_counter[], r, z, vperp, vpa)
         end
     end
-    electron_pdf_converged = false
+    electron_pdf_converged = Ref(false)
     # No paralleism in r for now - will need to add a specially adapted shared-memory
     # parallelism scheme to allow it for 2D1V or 2D2V simulations.
     for ir ∈ 1:r.n
@@ -753,11 +767,11 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
         buffer_4 = @view scratch_dummy.buffer_rs_4[ir,1]
 
         # initialise the electron pdf convergence flag to false
-        electron_pdf_converged = false
+        electron_pdf_converged[] = false
 
         first_step = true
         # evolve (artificially) in time until the residual is less than the tolerance
-        while (!electron_pdf_converged
+        while (!electron_pdf_converged[]
                && ((max_electron_pdf_iterations !== nothing && t_params.step_counter[] - initial_step_counter < max_electron_pdf_iterations)
                    || (max_electron_sim_time !== nothing && t_params.t[] - initial_time < max_electron_sim_time))
                && t_params.dt[] > 0.0 && !isnan(t_params.dt[]))
@@ -796,11 +810,10 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                        scratch_dummy, z, z_spectral,
                        num_diss_params.electron.moment_dissipation_coefficient, ir)
 
-            if nl_solver_params.preconditioner_type == "electron_split_lu"
+            if nl_solver_params.preconditioner_type === Val(:electron_split_lu)
                 if nl_solver_params.solves_since_precon_update[] ≥ nl_solver_params.preconditioner_update_interval
                     nl_solver_params.solves_since_precon_update[] = 0
 
-                    dt = t_params.dt[]
                     vth = @view moments.electron.vth[:,ir]
                     me = composition.me_over_mi
                     dens = @view moments.electron.dens[:,ir]
@@ -825,171 +838,16 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                     begin_vperp_vpa_region()
                     update_electron_speed_z!(z_advect[1], upar, vth, vpa.grid, ir)
                     @loop_vperp_vpa ivperp ivpa begin
-                        z_matrix = allocate_float(z.n, z.n)
-                        z_matrix .= 0.0
-
-                        z_speed = @view z_advect[1].speed[:,ivpa,ivperp,ir]
-                        for ielement ∈ 1:z.nelement_local
-                            imin = z.imin[ielement] - (ielement != 1)
-                            imax = z.imax[ielement]
-                            if ielement == 1
-                                z_matrix[imin,imin:imax] .+= z_spectral.lobatto.Dmat[1,:] ./ z.element_scale[ielement]
-                            else
-                                if z_speed[imin] < 0.0
-                                    z_matrix[imin,imin:imax] .+= z_spectral.lobatto.Dmat[1,:] ./ z.element_scale[ielement]
-                                elseif z_speed[imin] > 0.0
-                                    # Do nothing
-                                else
-                                    z_matrix[imin,imin:imax] .+= 0.5 .* z_spectral.lobatto.Dmat[1,:] ./ z.element_scale[ielement]
-                                end
-                            end
-                            z_matrix[imin+1:imax-1,imin:imax] .+= z_spectral.lobatto.Dmat[2:end-1,:] ./ z.element_scale[ielement]
-                            if ielement == z.nelement_local
-                                z_matrix[imax,imin:imax] .+= z_spectral.lobatto.Dmat[end,:] ./ z.element_scale[ielement]
-                            else
-                                if z_speed[imax] < 0.0
-                                    # Do nothing
-                                elseif z_speed[imax] > 0.0
-                                    z_matrix[imax,imin:imax] .+= z_spectral.lobatto.Dmat[end,:] ./ z.element_scale[ielement]
-                                else
-                                    z_matrix[imax,imin:imax] .+= 0.5 .* z_spectral.lobatto.Dmat[end,:] ./ z.element_scale[ielement]
-                                end
-                            end
-                        end
-                        # Multiply by advection speed
-                        for row ∈ 1:z.n
-                            z_matrix[row,:] .*= dt * z_speed[row]
-                        end
-
-                        # Diagonal entries
-                        for row ∈ 1:z.n
-                            z_matrix[row,row] += 1.0
-
-                            # Terms from `add_contribution_from_pdf_term!()`
-                            z_matrix[row,row] += dt * (0.5 * dqpar_dz[row] / ppar[row]
-                                                       + vpa.grid[ivpa] * vth[row] * (ddens_dz[row] / dens[row]
-                                                                                      - dvth_dz[row] / vth[row]))
-                        end
-                        if external_source_settings.electron.active
-                            for row ∈ 1:z.n
-                                # Source terms from `add_contribution_from_pdf_term!()`
-                                z_matrix[row,row] += dt * (1.5 * source_density_amplitude[row] / dens[row]
-                                                           - (0.5 * source_pressure_amplitude[row]
-                                                              + source_momentum_amplitude[row]) / ppar[row]
-                                                          )
-                            end
-                            if external_source_settings.electron.source_type == "energy"
-                                for row ∈ 1:z.n
-                                    # Contribution from `external_electron_source!()`
-                                    z_matrix[row,row] += dt * source_amplitude[row]
-                                end
-                            end
-                        end
-                        if collisions.krook.nuee0 > 0.0 || collisions.krook.nuei0 > 0.0
-                            for row ∈ 1:z.n
-                                # Contribution from electron_krook_collisions!()
-                                nu_ee = get_collision_frequency_ee(collisions, dens[row], vth[row])
-                                nu_ei = get_collision_frequency_ei(collisions, dens[row], vth[row])
-                                z_matrix[row,row] += dt * (nu_ee + nu_ei)
-                            end
-                        end
-
+                        z_matrix, ppar_matrix = get_electron_split_Jacobians!(
+                             ivperp, ivpa, ppar, moments, collisions, composition, z,
+                             vperp, vpa, z_spectral, vperp_spectral, vpa_spectral,
+                             z_advect, vpa_advect, scratch_dummy,
+                             external_source_settings, num_diss_params, t_params, ion_dt,
+                             ir, evolve_ppar)
                         @timeit_debug global_timer "lu" nl_solver_params.preconditioners.z[ivpa,ivperp,ir] = lu(sparse(z_matrix))
-                    end
-
-                    if z.irank == 0
-                        ppar_matrix = allocate_float(z.n, z.n)
-                        ppar_matrix .= 0.0
-
-                        if composition.electron_physics == kinetic_electrons_with_temperature_equation
-                            error("kinetic_electrons_with_temperature_equation not "
-                                  * "supported yet in preconditioner")
-                        elseif composition.electron_physics != kinetic_electrons
-                            error("Unsupported electron_physics=$(composition.electron_physics) "
-                                  * "in electron_backward_euler!() preconditioner.")
+                        if ivperp == 1 && ivpa == 1
+                            @timeit_debug global_timer "lu" nl_solver_params.preconditioners.ppar[ir] = lu(sparse(ppar_matrix))
                         end
-
-                        # Reconstruct w_∥^3 moment of g_e from already-calculated qpar
-                        @views third_moment = @. 0.5 * moments.electron.qpar[:,ir] / electron_ppar_new / vth
-
-                        # Note that as
-                        #   qpar = 2 * ppar * vth * third_moment
-                        #        = 2 * ppar^(3/2) / dens^(1/2) / me^(1/2) * third_moment
-                        # we have that
-                        #   d(qpar)/dz = 2 * ppar^(3/2) / dens^(1/2) / me^(1/2) * d(third_moment)/dz
-                        #                - ppar^(3/2) / dens^(3/2) / me^(1/2) * third_moment * d(dens)/dz
-                        #                + 3 * ppar^(1/2) / dens^(1/2) / me^(1/2) * third_moment * d(ppar)/dz
-                        # so for the Jacobian
-                        #   d[d(qpar)/dz)]/d[ppar]
-                        #     = 3 * ppar^(1/2) / dens^(1/2) / me^(1/2) * d(third_moment)/dz
-                        #       - 3/2 * ppar^(1/2) / dens^(3/2) / me^(1/2) * third_moment * d(dens)/dz
-                        #       + 3/2 / ppar^(1/2) / dens^(1/2) / me^(1/2) * third_moment * d(ppar)/dz
-                        #       + 3 * ppar^(1/2) / dens^(1/2) / me^(1/2) * third_moment * d(.)/dz
-                        dthird_moment_dz = z.scratch2
-                        derivative_z!(z.scratch2, third_moment, buffer_1, buffer_2,
-                                      buffer_3, buffer_4, z_spectral, z)
-
-                        # Diagonal terms
-                        for row ∈ 1:z.n
-                            ppar_matrix[row,row] = 1.0
-
-                            # 3*ppar*dupar_dz
-                            ppar_matrix[row,row] += 3.0 * dt * dupar_dz[row]
-
-                            # terms from d(qpar)/dz
-                            ppar_matrix[row,row] +=
-                                dt * (3.0 * sqrt(electron_ppar_new[row] / dens[row] / me) * dthird_moment_dz[row]
-                                      - 1.5 * sqrt(electron_ppar_new[row] / me) / dens[row]^1.5 * third_moment[row] * ddens_dz[row]
-                                      + 1.5 / sqrt(electron_ppar_new[row] / dens[row] / me) * third_moment[row] * dppar_dz[row])
-                        end
-                        if ion_dt !== nothing
-                            # Backward-Euler forcing term
-                            for row ∈ 1:z.n
-                                ppar_matrix[row,row] += dt / ion_dt 
-                            end
-                        end
-
-
-                        # d(.)/dz terms
-                        # Note that the z-derivative matrix is local to this block, and
-                        # for the preconditioner we do not include any distributed-MPI
-                        # communication (we rely on the JFNK iteration to sort out the
-                        # coupling between blocks).
-                        if !isa(z_spectral, gausslegendre_info)
-                            error("Only gausslegendre_pseudospectral coordinate type is "
-                                  * "supported by electron_backward_euler!() "
-                                  * "preconditioner because we need differentiation"
-                                  * "matrices.")
-                        end
-                        z_deriv_matrix = z_spectral.D_matrix
-                        for row ∈ 1:z.n
-                            @. ppar_matrix[row,:] +=
-                                dt * (upar[row]
-                                      + 3.0 * sqrt(electron_ppar_new[row] / dens[row] / me) * third_moment[row]) *
-                                z_deriv_matrix[row,:]
-                        end
-
-                        if num_diss_params.electron.moment_dissipation_coefficient > 0.0
-                            error("z-diffusion of electron_ppar not yet supported in "
-                                  * "preconditioner")
-                        end
-                        if collisions.nu_ei > 0.0
-                            error("electron-ion collision terms for electron_ppar not yet "
-                                  * "supported in preconditioner")
-                        end
-                        if composition.n_neutral_species > 0 && collisions.charge_exchange_electron > 0.0
-                            error("electron 'charge exchange' terms for electron_ppar not yet "
-                                  * "supported in preconditioner")
-                        end
-                        if composition.n_neutral_species > 0 && collisions.ionization_electron > 0.0
-                            error("electron ionization terms for electron_ppar not yet "
-                                  * "supported in preconditioner")
-                        end
-
-                        @timeit_debug global_timer "lu" nl_solver_params.preconditioners.ppar[ir] = lu(sparse(ppar_matrix))
-                    else
-                        ppar_matrix = allocate_float(0, 0)
-                        ppar_matrix[] = 1.0
                     end
                 end
 
@@ -1019,7 +877,7 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
 
                 left_preconditioner = identity
                 right_preconditioner = split_precon!
-            elseif nl_solver_params.preconditioner_type == "electron_lu"
+            elseif nl_solver_params.preconditioner_type === Val(:electron_lu)
 
                 if t_params.dt[] > 1.5 * nl_solver_params.precon_dt[] ||
                         t_params.dt[] < 2.0/3.0 * nl_solver_params.precon_dt[]
@@ -1075,36 +933,36 @@ global_rank[] == 0 && println("recalculating precon")
                 end
 
 
-                function lu_precon!(x)
+                @timeit_debug global_timer lu_precon!(x) = begin
                     precon_ppar, precon_f = x
 
-                    precon_lu, _, input_buffer, output_buffer =
+                    precon_lu, _, this_input_buffer, this_output_buffer =
                         nl_solver_params.preconditioners[ir]
 
                     begin_serial_region()
                     counter = 1
                     @loop_z_vperp_vpa iz ivperp ivpa begin
-                        input_buffer[counter] = precon_f[ivpa,ivperp,iz]
+                        this_input_buffer[counter] = precon_f[ivpa,ivperp,iz]
                         counter += 1
                     end
                     @loop_z iz begin
-                        input_buffer[counter] = precon_ppar[iz]
+                        this_input_buffer[counter] = precon_ppar[iz]
                         counter += 1
                     end
 
                     begin_serial_region()
                     @serial_region begin
-                        @timeit_debug global_timer "ldiv!" ldiv!(output_buffer, precon_lu, input_buffer)
+                        @timeit_debug global_timer "ldiv!" ldiv!(this_output_buffer, precon_lu, this_input_buffer)
                     end
 
                     begin_serial_region()
                     counter = 1
                     @loop_z_vperp_vpa iz ivperp ivpa begin
-                        precon_f[ivpa,ivperp,iz] = output_buffer[counter]
+                        precon_f[ivpa,ivperp,iz] = this_output_buffer[counter]
                         counter += 1
                     end
                     @loop_z iz begin
-                        precon_ppar[iz] = output_buffer[counter]
+                        precon_ppar[iz] = this_output_buffer[counter]
                         counter += 1
                     end
 
@@ -1149,7 +1007,397 @@ global_rank[] == 0 && println("recalculating precon")
 
                 left_preconditioner = identity
                 right_preconditioner = lu_precon!
-            elseif nl_solver_params.preconditioner_type == "none"
+            elseif nl_solver_params.preconditioner_type === Val(:electron_adi)
+
+                if t_params.dt[] > 1.5 * nl_solver_params.precon_dt[] ||
+                        t_params.dt[] < 2.0/3.0 * nl_solver_params.precon_dt[]
+
+                    # dt has changed significantly, so update the preconditioner
+                    nl_solver_params.solves_since_precon_update[] = nl_solver_params.preconditioner_update_interval
+                end
+
+                if nl_solver_params.solves_since_precon_update[] ≥ nl_solver_params.preconditioner_update_interval
+global_rank[] == 0 && println("recalculating precon")
+                    nl_solver_params.solves_since_precon_update[] = 0
+                    nl_solver_params.precon_dt[] = t_params.dt[]
+
+                    adi_info = nl_solver_params.preconditioners[ir]
+
+                    dens = @view moments.electron.dens[:,ir]
+                    upar = @view moments.electron.upar[:,ir]
+                    vth = @view moments.electron.vth[:,ir]
+                    qpar = @view moments.electron.qpar[:,ir]
+
+                    # Reconstruct w_∥^3 moment of g_e from already-calculated qpar
+                    third_moment = scratch_dummy.buffer_z_1
+                    dthird_moment_dz = scratch_dummy.buffer_z_2
+                    begin_z_region()
+                    @loop_z iz begin
+                        third_moment[iz] = 0.5 * qpar[iz] / electron_ppar_new[iz] / vth[iz]
+                    end
+                    derivative_z!(dthird_moment_dz, third_moment, buffer_1, buffer_2,
+                                  buffer_3, buffer_4, z_spectral, z)
+
+                    z_speed = @view z_advect[1].speed[:,:,:,ir]
+
+                    dpdf_dz = @view scratch_dummy.buffer_vpavperpzr_1[:,:,:,ir]
+                    begin_vperp_vpa_region()
+                    update_electron_speed_z!(z_advect[1], upar, vth, vpa.grid, ir)
+                    @loop_vperp_vpa ivperp ivpa begin
+                        @views z_advect[1].adv_fac[:,ivpa,ivperp,ir] = -z_speed[:,ivpa,ivperp]
+                    end
+                    #calculate the upwind derivative
+                    @views derivative_z_pdf_vpavperpz!(dpdf_dz, f_electron_new,
+                                                       z_advect[1].adv_fac[:,:,:,ir],
+                                                       scratch_dummy.buffer_vpavperpr_1[:,:,ir],
+                                                       scratch_dummy.buffer_vpavperpr_2[:,:,ir],
+                                                       scratch_dummy.buffer_vpavperpr_3[:,:,ir],
+                                                       scratch_dummy.buffer_vpavperpr_4[:,:,ir],
+                                                       scratch_dummy.buffer_vpavperpr_5[:,:,ir],
+                                                       scratch_dummy.buffer_vpavperpr_6[:,:,ir],
+                                                       z_spectral, z)
+
+                    dpdf_dvpa = @view scratch_dummy.buffer_vpavperpzr_2[:,:,:,ir]
+                    begin_z_vperp_region()
+                    update_electron_speed_vpa!(vpa_advect[1], dens, upar,
+                                               electron_ppar_new, moments, vpa.grid,
+                                               external_source_settings.electron, ir)
+                    @loop_z_vperp iz ivperp begin
+                        @views @. vpa_advect[1].adv_fac[:,ivperp,iz,ir] = -vpa_advect[1].speed[:,ivperp,iz,ir]
+                    end
+                    #calculate the upwind derivative of the electron pdf w.r.t. wpa
+                    @loop_z_vperp iz ivperp begin
+                        @views derivative!(dpdf_dvpa[:,ivperp,iz], f_electron_new[:,ivperp,iz], vpa,
+                                           vpa_advect[1].adv_fac[:,ivperp,iz,ir], vpa_spectral)
+                    end
+
+                    zeroth_moment = z.scratch_shared
+                    first_moment = z.scratch_shared2
+                    second_moment = z.scratch_shared3
+                    begin_z_region()
+                    vpa_grid = vpa.grid
+                    vpa_wgts = vpa.wgts
+                    @loop_z iz begin
+                        @views zeroth_moment[iz] = integrate_over_vspace(f_electron_new[:,1,iz], vpa_wgts)
+                        @views first_moment[iz] = integrate_over_vspace(f_electron_new[:,1,iz], vpa_grid, vpa_wgts)
+                        @views second_moment[iz] = integrate_over_vspace(f_electron_new[:,1,iz], vpa_grid, 2, vpa_wgts)
+                    end
+
+                    v_size = vperp.n * vpa.n
+
+                    # Do setup for 'v solves'
+                    v_solve_counter = 0
+                    A = adi_info.v_solve_matrix_buffer
+                    explicit_J = adi_info.J_buffer
+                    # Get sparse matrix for explicit, right-hand-side part of the
+                    # solve.
+                    if adi_info.n_extra_iterations > 0
+                        # If we only do one 'iteration' we don't need the 'explicit
+                        # matrix' for the first solve (the v-solve), because the initial
+                        # guess is zero,
+                        fill_electron_kinetic_equation_Jacobian!(
+                            explicit_J, f_electron_new, electron_ppar_new, moments,
+                            collisions, composition, z, vperp, vpa, z_spectral,
+                            vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
+                            external_source_settings, num_diss_params, t_params, ion_dt, ir,
+                            evolve_ppar, :explicit_z, false)
+                    end
+                    begin_z_region()
+                    @loop_z iz begin
+                        v_solve_counter += 1
+                        # Get LU-factorized matrix for implicit part of the solve
+                        @views fill_electron_kinetic_equation_v_only_Jacobian!(
+                            A, f_electron_new[:,:,iz], electron_ppar_new[iz],
+                            dpdf_dz[:,:,iz], dpdf_dvpa[:,:,iz], z_speed, moments,
+                            zeroth_moment[iz], first_moment[iz], second_moment[iz],
+                            third_moment[iz], dthird_moment_dz[iz], collisions,
+                            composition, z, vperp, vpa, z_spectral, vperp_spectral,
+                            vpa_spectral, z_advect, vpa_advect, scratch_dummy,
+                            external_source_settings, num_diss_params, t_params, ion_dt,
+                            ir, iz, evolve_ppar)
+                        A_sparse = sparse(A)
+                        if !isassigned(adi_info.v_solve_implicit_lus, v_solve_counter)
+                            @timeit_debug global_timer "lu" adi_info.v_solve_implicit_lus[v_solve_counter] = lu(A_sparse)
+                        else
+                            # LU decomposition was previously created. The Jacobian always
+                            # has the same sparsity pattern, so by using `lu!()` we can
+                            # reuse some setup.
+                            try
+                                @timeit_debug global_timer "lu!" lu!(adi_info.v_solve_implicit_lus[v_solve_counter], A_sparse; check=false)
+                            catch e
+                                if !isa(e, ArgumentError)
+                                    rethrow(e)
+                                end
+                                println("Sparsity pattern of matrix changed, rebuilding "
+                                        * " LU from scratch ir=$ir, iz=$iz")
+                                @timeit_debug global_timer "lu" adi_info.v_solve_implicit_lus[v_solve_counter] = lu(A_sparse)
+                            end
+                        end
+
+                        if adi_info.n_extra_iterations > 0
+                            # If we only do one 'iteration' we don't need the 'explicit
+                            # matrix' for the first solve (the v-solve), because the
+                            # initial guess is zero,
+                            adi_info.v_solve_explicit_matrices[v_solve_counter] = sparse(@view(explicit_J[adi_info.v_solve_global_inds[v_solve_counter],:]))
+                        end
+                    end
+                    @boundscheck v_solve_counter == adi_info.v_solve_nsolve || error("v_solve_counter($v_solve_counter) != v_solve_nsolve($(adi_info.v_solve_nsolve))")
+
+                    # Do setup for 'z solves'
+                    z_solve_counter = 0
+                    A = adi_info.z_solve_matrix_buffer
+                    explicit_J = adi_info.J_buffer
+                    # Get sparse matrix for explicit, right-hand-side part of the
+                    # solve.
+                    fill_electron_kinetic_equation_Jacobian!(
+                        explicit_J, f_electron_new, electron_ppar_new, moments,
+                        collisions, composition, z, vperp, vpa, z_spectral,
+                        vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
+                        external_source_settings, num_diss_params, t_params, ion_dt, ir,
+                        evolve_ppar, :explicit_v, false)
+                    begin_vperp_vpa_region()
+                    @loop_vperp_vpa ivperp ivpa begin
+                        z_solve_counter += 1
+
+                        # Get LU-factorized matrix for implicit part of the solve
+                        @views fill_electron_kinetic_equation_z_only_Jacobian_f!(
+                            A, f_electron_new[ivpa,ivperp,:], electron_ppar_new,
+                            dpdf_dz[ivpa,ivperp,:], dpdf_dvpa[ivpa,ivperp,:], z_speed,
+                            moments, zeroth_moment, first_moment, second_moment,
+                            third_moment, dthird_moment_dz, collisions, composition, z,
+                            vperp, vpa, z_spectral, vperp_spectral, vpa_spectral,
+                            z_advect, vpa_advect, scratch_dummy, external_source_settings,
+                            num_diss_params, t_params, ion_dt, ir, ivperp, ivpa,
+                            evolve_ppar)
+
+                        A_sparse = sparse(A)
+                        if !isassigned(adi_info.z_solve_implicit_lus, z_solve_counter)
+                            @timeit_debug global_timer "lu" adi_info.z_solve_implicit_lus[z_solve_counter] = lu(A_sparse)
+                        else
+                            # LU decomposition was previously created. The Jacobian always
+                            # has the same sparsity pattern, so by using `lu!()` we can
+                            # reuse some setup.
+                            try
+                                @timeit_debug global_timer "lu!" lu!(adi_info.z_solve_implicit_lus[z_solve_counter], A_sparse; check=false)
+                            catch e
+                                if !isa(e, ArgumentError)
+                                    rethrow(e)
+                                end
+                                println("Sparsity pattern of matrix changed, rebuilding "
+                                        * " LU from scratch ir=$ir, ivperp=$ivperp, ivpa=$ivpa")
+                                @timeit_debug global_timer "lu" adi_info.z_solve_implicit_lus[z_solve_counter] = lu(A_sparse)
+                            end
+                        end
+
+                        adi_info.z_solve_explicit_matrices[z_solve_counter] = sparse(@view(explicit_J[adi_info.z_solve_global_inds[z_solve_counter],:]))
+                    end
+                    begin_serial_region(; no_synchronize=true)
+                    @serial_region begin
+                        # Do the solve for ppar on the rank-0 process, which has the
+                        # fewest grid points to handle if there are not an exactly equal
+                        # number of points for each process.
+                        z_solve_counter += 1
+
+                        # Get LU-factorized matrix for implicit part of the solve
+                        @views fill_electron_kinetic_equation_z_only_Jacobian_ppar!(
+                            A, electron_ppar_new, moments, zeroth_moment, first_moment,
+                            second_moment, third_moment, dthird_moment_dz, collisions,
+                            composition, z, vperp, vpa, z_spectral, vperp_spectral,
+                            vpa_spectral, z_advect, vpa_advect, scratch_dummy,
+                            external_source_settings, num_diss_params, t_params, ion_dt,
+                            ir, evolve_ppar)
+
+                        A_sparse = sparse(A)
+                        if !isassigned(adi_info.z_solve_implicit_lus, z_solve_counter)
+                            @timeit_debug global_timer "lu" adi_info.z_solve_implicit_lus[z_solve_counter] = lu(A_sparse)
+                        else
+                            # LU decomposition was previously created. The Jacobian always
+                            # has the same sparsity pattern, so by using `lu!()` we can
+                            # reuse some setup.
+                            try
+                                @timeit_debug global_timer "lu!" lu!(adi_info.z_solve_implicit_lus[z_solve_counter], A_sparse; check=false)
+                            catch e
+                                if !isa(e, ArgumentError)
+                                    rethrow(e)
+                                end
+                                println("Sparsity pattern of matrix changed, rebuilding "
+                                        * " LU from scratch ir=$ir, ppar z-solve")
+                                @timeit_debug global_timer "lu" adi_info.z_solve_implicit_lus[z_solve_counter] = lu(A_sparse)
+                            end
+                        end
+
+                        adi_info.z_solve_explicit_matrices[z_solve_counter] = sparse(@view(explicit_J[adi_info.z_solve_global_inds[z_solve_counter],:]))
+                    end
+                    @boundscheck z_solve_counter == adi_info.z_solve_nsolve || error("z_solve_counter($z_solve_counter) != z_solve_nsolve($(adi_info.z_solve_nsolve))")
+                end
+
+                @timeit_debug global_timer adi_precon!(x) = begin
+                    precon_ppar, precon_f = x
+
+                    adi_info = nl_solver_params.preconditioners[ir]
+                    precon_iterations = nl_solver_params.precon_iterations
+                    this_input_buffer = adi_info.input_buffer
+                    this_intermediate_buffer = adi_info.intermediate_buffer
+                    this_output_buffer = adi_info.output_buffer
+                    global_index_subrange = adi_info.global_index_subrange
+                    n_extra_iterations = adi_info.n_extra_iterations
+
+                    v_size = vperp.n * vpa.n
+                    pdf_size = z.n * v_size
+
+                    # Use these views to communicate block-boundary points
+                    output_buffer_pdf_view = reshape(@view(this_output_buffer[1:pdf_size]), size(precon_f))
+                    output_buffer_ppar_view = @view(this_output_buffer[pdf_size+1:end])
+                    f_lower_endpoints = @view scratch_dummy.buffer_vpavperpr_1[:,:,ir]
+                    f_upper_endpoints = @view scratch_dummy.buffer_vpavperpr_2[:,:,ir]
+                    receive_buffer1 = @view scratch_dummy.buffer_vpavperpr_3[:,:,ir]
+                    receive_buffer2 = @view scratch_dummy.buffer_vpavperpr_4[:,:,ir]
+
+                    function adi_communicate_boundary_points()
+                        # Ensure values of precon_f and precon_ppar are consistent across
+                        # distributed-MPI block boundaries. For precon_f take the upwind
+                        # value, and for precon_ppar take the average.
+                        begin_vperp_vpa_region()
+                        @loop_vperp_vpa ivperp ivpa begin
+                            f_lower_endpoints[ivpa,ivperp] = output_buffer_pdf_view[ivpa,ivperp,1]
+                            f_upper_endpoints[ivpa,ivperp] = output_buffer_pdf_view[ivpa,ivperp,end]
+                        end
+                        # We upwind the z-derivatives in `electron_z_advection!()`, so would
+                        # expect that upwinding the results here in z would make sense.
+                        # However, upwinding here makes convergence much slower (~10x),
+                        # compared to picking the values from one side or other of the block
+                        # boundary, or taking the average of the values on either side.
+                        # Neither direction is special, so taking the average seems most
+                        # sensible (although in an intial test it does not seem to converge
+                        # faster than just picking one or the other).
+                        # Maybe this could indicate that it is more important to have a fully
+                        # self-consistent Jacobian inversion for the
+                        # `electron_vpa_advection()` part rather than taking half(ish) of the
+                        # values from one block and the other half(ish) from the other.
+                        reconcile_element_boundaries_MPI_z_pdf_vpavperpz!(
+                            output_buffer_pdf_view, f_lower_endpoints, f_upper_endpoints, receive_buffer1,
+                            receive_buffer2, z)
+
+                        begin_serial_region()
+                        @serial_region begin
+                            buffer_1[] = output_buffer_ppar_view[1]
+                            buffer_2[] = output_buffer_ppar_view[end]
+                        end
+                        reconcile_element_boundaries_MPI!(
+                            output_buffer_ppar_view, buffer_1, buffer_2, buffer_3, buffer_4, z)
+
+                        return nothing
+                    end
+
+                    begin_z_vperp_vpa_region()
+                    @loop_z_vperp_vpa iz ivperp ivpa begin
+                        row = (iz - 1)*v_size + (ivperp - 1)*vpa.n + ivpa
+                        this_input_buffer[row] = precon_f[ivpa,ivperp,iz]
+                    end
+                    begin_z_region()
+                    @loop_z iz begin
+                        row = pdf_size + iz
+                        this_input_buffer[row] = precon_ppar[iz]
+                    end
+                    _block_synchronize()
+
+                    # Use this to copy current guess from output_buffer to
+                    # intermediate_buffer, to avoid race conditions as new guess is
+                    # written into output_buffer.
+                    function fill_intermediate_buffer!()
+                        _block_synchronize()
+                        for i ∈ global_index_subrange
+                            this_intermediate_buffer[i] = this_output_buffer[i]
+                        end
+                        _block_synchronize()
+                    end
+
+                    v_solve_global_inds = adi_info.v_solve_global_inds
+                    v_solve_nsolve = adi_info.v_solve_nsolve
+                    v_solve_implicit_lus = adi_info.v_solve_implicit_lus
+                    v_solve_explicit_matrices = adi_info.v_solve_explicit_matrices
+                    v_solve_buffer = adi_info.v_solve_buffer
+                    v_solve_buffer2 = adi_info.v_solve_buffer2
+                    function first_adi_v_solve!()
+                        # The initial guess is all-zero, so for the first solve there is
+                        # no need to multiply by the 'explicit matrix' as x==0, so E.x==0
+                        for isolve ∈ 1:v_solve_nsolve
+                            this_inds = v_solve_global_inds[isolve]
+                            v_solve_buffer .= this_input_buffer[this_inds]
+                            @timeit_debug global_timer "ldiv!" ldiv!(v_solve_buffer2, v_solve_implicit_lus[isolve], v_solve_buffer)
+                            this_output_buffer[this_inds] .= v_solve_buffer2
+                        end
+                    end
+                    function adi_v_solve!()
+                        for isolve ∈ 1:v_solve_nsolve
+                            this_inds = v_solve_global_inds[isolve]
+                            v_solve_buffer .= @view this_input_buffer[this_inds]
+                            # Need to multiply the 'explicit matrix' by -1, because all
+                            # the Jacobian-calculation functions are defined as if the
+                            # terms are being added to the left-hand-side preconditioner
+                            # matrix, but here the 'explicit matrix' terms are added on
+                            # the right-hand-side.
+                            @timeit_debug global_timer "mul!" mul!(v_solve_buffer, v_solve_explicit_matrices[isolve],
+                                 this_intermediate_buffer, -1.0, 1.0)
+                            @timeit_debug global_timer "ldiv!" ldiv!(v_solve_buffer2, v_solve_implicit_lus[isolve], v_solve_buffer)
+                            this_output_buffer[this_inds] .= v_solve_buffer2
+                        end
+                    end
+
+                    z_solve_global_inds = adi_info.z_solve_global_inds
+                    z_solve_nsolve = adi_info.z_solve_nsolve
+                    z_solve_implicit_lus = adi_info.z_solve_implicit_lus
+                    z_solve_explicit_matrices = adi_info.z_solve_explicit_matrices
+                    z_solve_buffer = adi_info.z_solve_buffer
+                    z_solve_buffer2 = adi_info.z_solve_buffer2
+                    function adi_z_solve!()
+                        for isolve ∈ 1:z_solve_nsolve
+                            this_inds = z_solve_global_inds[isolve]
+                            z_solve_buffer .= @view this_input_buffer[this_inds]
+                            # Need to multiply the 'explicit matrix' by -1, because all
+                            # the Jacobian-calculation functions are defined as if the
+                            # terms are being added to the left-hand-side preconditioner
+                            # matrix, but here the 'explicit matrix' terms are added on
+                            # the right-hand-side.
+                            @timeit_debug global_timer "mul!" mul!(z_solve_buffer, z_solve_explicit_matrices[isolve], this_intermediate_buffer, -1.0, 1.0)
+                            @timeit_debug global_timer "ldiv!" ldiv!(z_solve_buffer2, z_solve_implicit_lus[isolve], z_solve_buffer)
+                            this_output_buffer[this_inds] .= z_solve_buffer2
+                        end
+                    end
+
+                    precon_iterations[] += 1
+                    first_adi_v_solve!()
+                    fill_intermediate_buffer!()
+                    adi_z_solve!()
+                    adi_communicate_boundary_points()
+
+                    for n ∈ 1:n_extra_iterations
+                        precon_iterations[] += 1
+                        fill_intermediate_buffer!()
+                        adi_v_solve!()
+                        fill_intermediate_buffer!()
+                        adi_z_solve!()
+                        adi_communicate_boundary_points()
+                    end
+
+                    # Unpack preconditioner solution
+                    begin_z_vperp_vpa_region()
+                    @loop_z_vperp_vpa iz ivperp ivpa begin
+                        row = (iz - 1)*v_size + (ivperp - 1)*vpa.n + ivpa
+                        precon_f[ivpa,ivperp,iz] = this_output_buffer[row]
+                    end
+                    begin_z_region()
+                    @loop_z iz begin
+                        row = pdf_size + iz
+                        precon_ppar[iz] = this_output_buffer[row]
+                    end
+
+                    return nothing
+                end
+
+                left_preconditioner = identity
+                right_preconditioner = adi_precon!
+            elseif nl_solver_params.preconditioner_type === Val(:none)
                 left_preconditioner = identity
                 right_preconditioner = identity
             else
@@ -1159,17 +1407,9 @@ global_rank[] == 0 && println("recalculating precon")
 
             # Do a backward-Euler update of the electron pdf, and (if evove_ppar=true) the
             # electron parallel pressure.
-            function residual_func!(residual, new_variables)
-                electron_ppar_residual, f_electron_residual = residual
+            function residual_func!(this_residual, new_variables; krylov=false)
+                electron_ppar_residual, f_electron_residual = this_residual
                 electron_ppar_newvar, f_electron_newvar = new_variables
-
-                # enforce the boundary condition(s) on the electron pdf
-                @views enforce_boundary_condition_on_electron_pdf!(
-                           f_electron_newvar, phi, moments.electron.vth[:,ir],
-                           moments.electron.upar[:,ir], z, vperp, vpa, vperp_spectral,
-                           vpa_spectral, vpa_advect, moments,
-                           num_diss_params.electron.vpa_dissipation_coefficient > 0.0,
-                           composition.me_over_mi; bc_constraints=false)
 
                 if evolve_ppar
                     this_dens = moments.electron.dens
@@ -1179,10 +1419,22 @@ global_rank[] == 0 && println("recalculating precon")
                     @loop_z iz begin
                         # update the electron thermal speed using the updated electron
                         # parallel pressure
-                        this_vth[iz,ir] = sqrt(abs(2.0 * electron_ppar_newvar[iz,ir] /
+                        this_vth[iz,ir] = sqrt(abs(2.0 * electron_ppar_newvar[iz] /
                                                    (this_dens[iz,ir] *
                                                     composition.me_over_mi)))
                     end
+                end
+
+                # enforce the boundary condition(s) on the electron pdf
+                @views enforce_boundary_condition_on_electron_pdf!(
+                           f_electron_newvar, phi, moments.electron.vth[:,ir],
+                           moments.electron.upar[:,ir], z, vperp, vpa, vperp_spectral,
+                           vpa_spectral, vpa_advect, moments,
+                           num_diss_params.electron.vpa_dissipation_coefficient > 0.0,
+                           composition.me_over_mi, ir; bc_constraints=false,
+                           update_vcut=!krylov)
+
+                if evolve_ppar
                     # Calculate heat flux and derivatives using new_variables
                     @views calculate_electron_qpar_from_pdf_no_r!(moments.electron.qpar[:,ir],
                                                                   electron_ppar_newvar,
@@ -1280,22 +1532,20 @@ global_rank[] == 0 && println("recalculating precon")
                     v_unnorm = vpa.scratch
                     zero = 1.0e-14
                     if z.irank == 0
-                        iz = 1
-                        v_unnorm .= vpagrid_to_dzdt(vpa.grid, moments.electron.vth[iz,ir],
-                                                    moments.electron.upar[iz,ir], true, true)
+                        v_unnorm .= vpagrid_to_dzdt(vpa.grid, moments.electron.vth[1,ir],
+                                                    moments.electron.upar[1,ir], true, true)
                         @loop_vperp_vpa ivperp ivpa begin
                             if v_unnorm[ivpa] > -zero
-                                f_electron_residual[ivpa,ivperp,iz] = 0.0
+                                f_electron_residual[ivpa,ivperp,1] = 0.0
                             end
                         end
                     end
                     if z.irank == z.nrank - 1
-                        iz = z.n
-                        v_unnorm .= vpagrid_to_dzdt(vpa.grid, moments.electron.vth[iz,ir],
-                                                    moments.electron.upar[iz,ir], true, true)
+                        v_unnorm .= vpagrid_to_dzdt(vpa.grid, moments.electron.vth[end,ir],
+                                                    moments.electron.upar[end,ir], true, true)
                         @loop_vperp_vpa ivperp ivpa begin
                             if v_unnorm[ivpa] < zero
-                                f_electron_residual[ivpa,ivperp,iz] = 0.0
+                                f_electron_residual[ivpa,ivperp,end] = 0.0
                             end
                         end
                     end
@@ -1385,15 +1635,18 @@ global_rank[] == 0 && println("recalculating precon")
                 nl_solver_params.solves_since_precon_update[] = nl_solver_params.preconditioner_update_interval
 
                 # Swap old_scratch and new_scratch so that the next step restarts from the
-                # same state
-                scratch[1] = new_scratch
-                scratch[t_params.n_rk_stages+1] = old_scratch
-                old_scratch = scratch[1]
-                new_scratch = scratch[t_params.n_rk_stages+1]
-                f_electron_old = @view old_scratch.pdf_electron[:,:,:,ir]
-                f_electron_new = @view new_scratch.pdf_electron[:,:,:,ir]
-                electron_ppar_old = @view old_scratch.electron_ppar[:,ir]
-                electron_ppar_new = @view new_scratch.electron_ppar[:,ir]
+                # same state. Copy values over here rather than just swapping references
+                # to arrays, because f_electron_old and electron_ppar_old are captured by
+                # residual_func!() above, so any change in the things they refer to will
+                # cause type instability in residual_func!().
+                begin_z_vperp_vpa_region()
+                @loop_z_vperp_vpa iz ivperp ivpa begin
+                    f_electron_new[ivpa,ivperp,iz] = f_electron_old[ivpa,ivperp,iz]
+                end
+                begin_z_region()
+                @loop_z iz begin
+                    electron_ppar_new[iz] = electron_ppar_old[iz]
+                end
             end
 
             apply_electron_bc_and_constraints_no_r!(f_electron_new, phi, moments, z,
@@ -1415,48 +1668,52 @@ global_rank[] == 0 && println("recalculating precon")
                                      buffer_3, buffer_4, z_spectral, z)
             end
 
-            residual = -1.0
+            residual_norm = -1.0
             if newton_success
                 # Calculate residuals to decide if iteration is converged.
-                # Might want an option to calculate the residual only after a certain number
-                # of iterations (especially during initialization when there are likely to be
-                # a large number of iterations required) to avoid the expense, and especially
-                # the global MPI.Bcast()?
+                # Might want an option to calculate the r_normesidual only after a certain
+                # number of iterations (especially during initialization when there are
+                # likely to be a large number of iterations required) to avoid the
+                # expense, and especially the global MPI.Bcast()?
                 begin_z_vperp_vpa_region()
-                residual = steady_state_residuals(new_scratch.pdf_electron,
-                                                  old_scratch.pdf_electron,
-                                                  t_params.dt[]; use_mpi=true,
-                                                  only_max_abs=true)
                 if global_rank[] == 0
-                    residual = first(values(residual))[1]
+                    residual_norm = steady_state_residuals(new_scratch.pdf_electron,
+                                                           old_scratch.pdf_electron,
+                                                           t_params.dt[], true, true)[1]
+                else
+                    steady_state_residuals(new_scratch.pdf_electron,
+                                           old_scratch.pdf_electron, t_params.dt[], true,
+                                           true)
                 end
                 if evolve_ppar
-                    ppar_residual =
+                    if global_rank[] == 0
+                        ppar_residual =
+                            steady_state_residuals(new_scratch.electron_ppar,
+                                                   old_scratch.electron_ppar,
+                                                   t_params.dt[], true, true)[1]
+                        residual_norm = max(residual_norm, ppar_residual)
+                    else
                         steady_state_residuals(new_scratch.electron_ppar,
                                                old_scratch.electron_ppar,
-                                               t_params.dt[]; use_mpi=true,
-                                               only_max_abs=true)
-                    if global_rank[] == 0
-                        ppar_residual = first(values(ppar_residual))[1]
-                        residual = max(residual, ppar_residual)
+                                               t_params.dt[], true, true)
                     end
                 end
                 if global_rank[] == 0
                     if residual_tolerance === nothing
                         residual_tolerance = t_params.converged_residual_value
                     end
-                    electron_pdf_converged = abs(residual) < residual_tolerance
+                    electron_pdf_converged[] = abs(residual_norm) < residual_tolerance
                 end
-                @timeit_debug global_timer "MPI.Bcast comm_world" electron_pdf_converged = MPI.Bcast(electron_pdf_converged, 0, comm_world)
+                @timeit_debug global_timer "MPI.Bcast! comm_world" MPI.Bcast!(electron_pdf_converged, 0, comm_world)
             end
 
             if (mod(t_params.step_counter[] - initial_step_counter,100) == 0)
                 begin_serial_region()
                 @serial_region begin
                     if z.irank == 0 && z.irank == z.nrank - 1
-                        println("iteration: ", t_params.step_counter[] - initial_step_counter, " time: ", t_params.t[], " dt_electron: ", t_params.dt[], " phi_boundary: ", phi[[1,end],1], " residual: ", residual)
+                        println("iteration: ", t_params.step_counter[] - initial_step_counter, " time: ", t_params.t[], " dt_electron: ", t_params.dt[], " phi_boundary: ", phi[[1,end],1], " residual_norm: ", residual_norm)
                     elseif z.irank == 0
-                        println("iteration: ", t_params.step_counter[] - initial_step_counter, " time: ", t_params.t[], " dt_electron: ", t_params.dt[], " phi_boundary_lower: ", phi[1,1], " residual: ", residual)
+                        println("iteration: ", t_params.step_counter[] - initial_step_counter, " time: ", t_params.t[], " dt_electron: ", t_params.dt[], " phi_boundary_lower: ", phi[1,1], " residual_norm: ", residual_norm)
                     end
                 end
             end
@@ -1483,11 +1740,11 @@ global_rank[] == 0 && println("recalculating precon")
             reset_nonlinear_per_stage_counters!(nl_solver_params)
 
             t_params.step_counter[] += 1
-            if electron_pdf_converged
+            if electron_pdf_converged[]
                 break
             end
         end
-        if !electron_pdf_converged
+        if !electron_pdf_converged[]
             # If electron solve failed to converge for some `ir`, the failure will be
             # handled by restarting the ion timestep with a smaller dt, so no need to try
             # to solve for further `ir` values.
@@ -1511,7 +1768,7 @@ global_rank[] == 0 && println("recalculating precon")
     end
     begin_serial_region()
     @serial_region begin
-        if !electron_pdf_converged || do_debug_io
+        if !electron_pdf_converged[] || do_debug_io
             if io_electron !== nothing && io_electron !== true
                 t_params.moments_output_counter[] += 1
                 write_electron_state(scratch, moments, t_params, io_electron,
@@ -1546,7 +1803,7 @@ global_rank[] == 0 && println("recalculating precon")
         # Reset dt in case it was reduced to be less than 0.5*ion_dt
         t_params.dt[] = t_params.previous_dt[]
     end
-    if !electron_pdf_converged
+    if !electron_pdf_converged[]
         success = "kinetic-electrons"
     else
         success = ""
@@ -1604,7 +1861,7 @@ to allow the outer r-loop to be parallelised.
 
     newton_success = false
     for ir ∈ 1:r.n
-        function residual_func!(residual, new_variables; debug=false)
+        function residual_func!(residual, new_variables; debug=false, krylov=false)
             electron_ppar_residual, f_electron_residual = residual
             electron_ppar_new, f_electron_new = new_variables
 
@@ -1819,7 +2076,7 @@ function speedup_hack!(fvec_out, fvec_in, z_speedup_fac, z, vpa; evolve_ppar=fal
     return nothing
 end
 
-function apply_electron_bc_and_constraints!(this_scratch, phi, moments, z, vperp, vpa,
+function apply_electron_bc_and_constraints!(this_scratch, phi, moments, r, z, vperp, vpa,
                                             vperp_spectral, vpa_spectral, vpa_advect,
                                             num_diss_params, composition)
     latest_pdf = this_scratch.pdf_electron
@@ -1829,13 +2086,15 @@ function apply_electron_bc_and_constraints!(this_scratch, phi, moments, z, vperp
         latest_pdf[ivpa,ivperp,iz,ir] = max(latest_pdf[ivpa,ivperp,iz,ir], 0.0)
     end
 
-    # enforce the boundary condition(s) on the electron pdf
-    enforce_boundary_condition_on_electron_pdf!(latest_pdf, phi, moments.electron.vth,
-                                                moments.electron.upar, z, vperp, vpa,
-                                                vperp_spectral, vpa_spectral, vpa_advect,
-                                                moments,
-                                                num_diss_params.electron.vpa_dissipation_coefficient > 0.0,
-                                                composition.me_over_mi)
+    for ir ∈ 1:r.n
+        # enforce the boundary condition(s) on the electron pdf
+        @views enforce_boundary_condition_on_electron_pdf!(
+                   latest_pdf[:,:,:,ir], phi[:,ir], moments.electron.vth[:,ir],
+                   moments.electron.upar[:,ir], z, vperp, vpa, vperp_spectral,
+                   vpa_spectral, vpa_advect, moments,
+                   num_diss_params.electron.vpa_dissipation_coefficient > 0.0,
+                   composition.me_over_mi, ir)
+    end
 
     begin_r_z_region()
     A = moments.electron.constraints_A_coefficient
@@ -1869,7 +2128,7 @@ function apply_electron_bc_and_constraints_no_r!(f_electron, phi, moments, z, vp
                f_electron, phi, moments.electron.vth[:,ir], moments.electron.upar[:,ir],
                z, vperp, vpa, vperp_spectral, vpa_spectral, vpa_advect, moments,
                num_diss_params.electron.vpa_dissipation_coefficient > 0.0,
-               composition.me_over_mi)
+               composition.me_over_mi, ir)
 
     begin_z_region()
     A = moments.electron.constraints_A_coefficient
@@ -1889,27 +2148,186 @@ function apply_electron_bc_and_constraints_no_r!(f_electron, phi, moments, z, vp
     end
 end
 
+function get_cutoff_params_lower(upar, vthe, phi, me_over_mi, vpa, ir)
+    u_over_vt = upar[1,ir] / vthe[1,ir]
+
+    # sigma is the location we use for w_∥(v_∥=0) - set to 0 to ignore the 'upar
+    # shift'
+    sigma = -u_over_vt
+
+    vpa_unnorm = @. vpa.scratch2 = vthe[1,ir] * (vpa.grid - sigma)
+
+    # Initial guess for cut-off velocity is result from previous RK stage (which
+    # might be the previous timestep if this is the first stage). Recalculate this
+    # value from phi.
+    vcut = sqrt(phi[1,ir] / me_over_mi)
+
+    # -vcut is between minus_vcut_ind-1 and minus_vcut_ind
+    minus_vcut_ind = searchsortedfirst(vpa_unnorm, -vcut)
+    if vcut == 0.0
+        # Force a non-zero initial guess, as zero makes no sense - that would mean all
+        # electrons are absorbed, i.e. there is no sheath.
+        minus_vcut_ind -= 1
+        vcut = -vpa_unnorm[minus_vcut_ind]
+    end
+    if minus_vcut_ind < 2
+        error("In lower-z electron bc, failed to find vpa=-vcut point, minus_vcut_ind=$minus_vcut_ind")
+    end
+    if minus_vcut_ind > vpa.n
+        error("In lower-z electron bc, failed to find vpa=-vcut point, minus_vcut_ind=$minus_vcut_ind")
+    end
+
+    # sigma is between sigma_ind-1 and sigma_ind
+    sigma_ind = searchsortedfirst(vpa_unnorm, 0.0)
+    if sigma_ind < 2
+        error("In lower-z electron bc, failed to find vpa=0 point, sigma_ind=$sigma_ind")
+    end
+    if sigma_ind > vpa.n
+        error("In lower-z electron bc, failed to find vpa=0 point, sigma_ind=$sigma_ind")
+    end
+
+    # sigma_fraction is the fraction of the distance between sigma_ind-1 and
+    # sigma_ind where sigma is.
+    sigma_fraction = -vpa_unnorm[sigma_ind-1] / (vpa_unnorm[sigma_ind] - vpa_unnorm[sigma_ind-1])
+
+    # Want the element that contains the interval on the lower side of sigma_ind. For
+    # points on element boundaries, the `ielement` array contains the element on the lower
+    # side of the grid point, so just looking up the `ielement` of `sigma_ind` is what we
+    # want here.
+    element_with_zero = vpa.ielement[sigma_ind]
+    element_with_zero_boundary = element_with_zero == 1 ? vpa.imin[element_with_zero] :
+                                                          vpa.imin[element_with_zero] - 1
+    # This searchsortedlast() call finds the last point ≤ to the negative of v_∥
+    # at the lower boundary of the element containing zero.
+    last_point_near_zero = searchsortedlast(vpa_unnorm,
+                                            -vpa_unnorm[element_with_zero_boundary])
+
+    # Want to construct the w-grid corresponding to -vpa.
+    #   wpa(vpa) = (vpa - upar)/vth
+    #   ⇒ vpa = vth*wpa(vpa) + upar
+    #   wpa(-vpa) = (-vpa - upar)/vth
+    #             = (-(vth*wpa(vpa) + upar) - upar)/vth
+    #             = (-vth*wpa - 2*upar)/vth
+    #             = -wpa - 2*upar/vth
+    # [Note that `vpa.grid` is slightly mis-named here - it contains the values of
+    #  wpa(+vpa) as we are using a 'moment kinetic' approach.]
+    # Need to reverse vpa.grid because the grid passed as the second argument of
+    # interpolate_to_grid_1d!() needs to be sorted in increasing order.
+    reversed_wpa_of_minus_vpa = @. vpa.scratch3 = -vpa.grid + 2.0 * sigma
+    #reversed_wpa_of_minus_vpa = vpa.scratch3 .= .-vpa.grid
+    reverse!(reversed_wpa_of_minus_vpa)
+
+    return vpa_unnorm, u_over_vt, vcut, minus_vcut_ind, sigma, sigma_ind, sigma_fraction,
+           element_with_zero, element_with_zero_boundary, last_point_near_zero,
+           reversed_wpa_of_minus_vpa
+end
+
+function get_cutoff_params_upper(upar, vthe, phi, me_over_mi, vpa, ir)
+    u_over_vt = upar[end,ir] / vthe[end,ir]
+
+    # sigma is the location we use for w_∥(v_∥=0) - set to 0 to ignore the 'upar
+    # shift'
+    sigma = -u_over_vt
+
+    # Delete the upar contribution here if ignoring the 'upar shift'
+    vpa_unnorm = @. vpa.scratch2 = vthe[end,ir] * (vpa.grid - sigma)
+
+    # Initial guess for cut-off velocity is result from previous RK stage (which
+    # might be the previous timestep if this is the first stage). Recalculate this
+    # value from phi.
+    vcut = sqrt(phi[end,ir] / me_over_mi)
+
+    # vcut is between plus_vcut_ind and plus_vcut_ind+1
+    plus_vcut_ind = searchsortedlast(vpa_unnorm, vcut)
+    if vcut == 0.0
+        # Force a non-zero initial guess, as zero makes no sense - that would mean all
+        # electrons are absorbed, i.e. there is no sheath.
+        plus_vcut_ind += 1
+        vcut = vpa_unnorm[plus_vcut_ind]
+    end
+    if plus_vcut_ind < 1
+        error("In upper-z electron bc, failed to find vpa=vcut point, plus_vcut_ind=$plus_vcut_ind")
+    end
+    if plus_vcut_ind > vpa.n - 1
+        error("In upper-z electron bc, failed to find vpa=vcut point, plus_vcut_ind=$plus_vcut_ind")
+    end
+
+    # sigma is between sigma_ind and sigma_ind+1
+    sigma_ind = searchsortedlast(vpa_unnorm, 0.0)
+    if sigma_ind < 1
+        error("In upper-z electron bc, failed to find vpa=0 point, sigma_ind=$sigma_ind")
+    end
+    if sigma_ind > vpa.n - 1
+        error("In upper-z electron bc, failed to find vpa=0 point, sigma_ind=$sigma_ind")
+    end
+
+    # sigma_fraction is the fraction of the distance between sigma_ind+1 and
+    # sigma_ind where sigma is.
+    sigma_fraction = -vpa_unnorm[sigma_ind+1] / (vpa_unnorm[sigma_ind] - vpa_unnorm[sigma_ind+1])
+
+    # Want the element that contains the interval on the upper side of sigma_ind. For
+    # points on element boundaries, the `ielement` array contains the element on the lower
+    # side of the grid point, we need the `ielement` of `sigma_ind+1` here.
+    element_with_zero = vpa.ielement[sigma_ind+1]
+    element_with_zero_boundary = vpa.imax[element_with_zero]
+    # This searchsortedfirst() call finds the first point ≥ to the negative of v_∥ at the
+    # upper boundary of the element containing zero.
+    first_point_near_zero = searchsortedfirst(vpa_unnorm,
+                                              -vpa_unnorm[element_with_zero_boundary])
+
+    # Want to construct the w-grid corresponding to -vpa.
+    #   wpa(vpa) = (vpa - upar)/vth
+    #   ⇒ vpa = vth*wpa(vpa) + upar
+    #   wpa(-vpa) = (-vpa - upar)/vth
+    #             = (-(vth*wpa(vpa) + upar) - upar)/vth
+    #             = (-vth*wpa - 2*upar)/vth
+    #             = -wpa - 2*upar/vth
+    # [Note that `vpa.grid` is slightly mis-named here - it contains the values of
+    #  wpa(+vpa) as we are using a 'moment kinetic' approach.]
+    # Need to reverse vpa.grid because the grid passed as the second argument of
+    # interpolate_to_grid_1d!() needs to be sorted in increasing order.
+    reversed_wpa_of_minus_vpa = @. vpa.scratch3 = -vpa.grid + 2.0 * sigma
+    #reversed_wpa_of_minus_vpa = vpa.scratch3 .= .-vpa.grid
+    reverse!(reversed_wpa_of_minus_vpa)
+
+    return vpa_unnorm, u_over_vt, vcut, plus_vcut_ind, sigma, sigma_ind, sigma_fraction,
+           element_with_zero, element_with_zero_boundary, first_point_near_zero,
+           reversed_wpa_of_minus_vpa
+end
+
+function get_minus_vcut_fraction(vcut, minus_vcut_ind, vpa_unnorm)
+    return (-vcut - vpa_unnorm[minus_vcut_ind-1]) /
+           (vpa_unnorm[minus_vcut_ind] - vpa_unnorm[minus_vcut_ind-1])
+end
+
+function get_plus_vcut_fraction(vcut, plus_vcut_ind, vpa_unnorm)
+    return (vcut - vpa_unnorm[plus_vcut_ind]) /
+           (vpa_unnorm[plus_vcut_ind+1] - vpa_unnorm[plus_vcut_ind])
+end
+
 @timeit global_timer enforce_boundary_condition_on_electron_pdf!(
                          pdf, phi, vthe, upar, z, vperp, vpa, vperp_spectral,
-                         vpa_spectral, vpa_adv, moments, vpa_diffusion, me_over_mi;
-                         bc_constraints=true) = begin
+                         vpa_spectral, vpa_adv, moments, vpa_diffusion, me_over_mi, ir;
+                         bc_constraints=true, update_vcut=true) = begin
+
+    @boundscheck bc_constraints && !update_vcut && error("update_vcut is not used when bc_constraints=true, but update_vcut has non-default value")
 
     newton_tol = 1.0e-13
 
     # Enforce velocity-space boundary conditions
     if vpa.n > 1
-        begin_r_z_vperp_region()
-        @loop_r_z_vperp ir iz ivperp begin
+        begin_z_vperp_region()
+        @loop_z_vperp iz ivperp begin
             # enforce the vpa BC
             # use that adv.speed independent of vpa
-            @views enforce_v_boundary_condition_local!(pdf[:,ivperp,iz,ir], vpa.bc,
+            @views enforce_v_boundary_condition_local!(pdf[:,ivperp,iz], vpa.bc,
                                                        vpa_adv[1].speed[:,ivperp,iz,ir],
                                                        vpa_diffusion, vpa, vpa_spectral)
         end
     end
     if vperp.n > 1
-        begin_r_z_vpa_region()
-        @views enforce_vperp_boundary_condition!(pdf, vperp.bc, vperp, vperp_spectral)
+        begin_z_vpa_region()
+        enforce_vperp_boundary_condition!(pdf, vperp.bc, vperp, vperp_spectral, ir)
     end
 
     if z.bc == "periodic"
@@ -1918,21 +2336,25 @@ end
     elseif z.bc == "constant"
         begin_r_vperp_vpa_region()
         density_offset = 1.0
-        vwidth = 1.0/sqrt(composition.me_over_mi)
+        vwidth = 1.0/sqrt(me_over_mi)
         dens = moments.electron.dens
         if z.irank == 0
-            speed = z_adv[1].speed
-            @loop_r_vperp_vpa ir ivperp ivpa begin
-                if speed[1,ivpa,ivperp,ir] > 0.0
-                    pdf[ivpa,ivperp,1,ir,is] = density_offset / dens[1,ir] * vthe[1,ir] * exp(-(speed[1,ivpa,ivperp,ir]^2 + vperp.grid[ivperp]^2)/vwidth^2)
+            @loop_vperp_vpa ivperp ivpa begin
+                u = moments.electron.upar[1]
+                vthe = moments.electron.vth[1]
+                speed = vpa.grid[ivpa] * vthe + u
+                if speed > 0.0
+                    pdf[ivpa,ivperp,1] = density_offset / dens[1] * vthe[1] * exp(-(speed^2 + vperp.grid[ivperp]^2)/vwidth^2)
                 end
             end
         end
         if z.irank == z.nrank - 1
-            speed = z_adv[is].speed
-            @loop_r_vperp_vpa ir ivperp ivpa begin
-                if speed[end,ivpa,ivperp,ir] > 0.0
-                    pdf[ivpa,ivperp,end,ir,is] = density_offset / dens[end,ir] * vthe[end,ir] * exp(-(speed[end,ivpa,ivperp,ir]^2 + vperp.grid[ivperp]^2)/vwidth^2)
+            @loop_vperp_vpa ivperp ivpa begin
+                u = moments.electron.upar[end]
+                vthe = moments.electron.vth[end]
+                speed = vpa.grid[ivpa] * vthe + u
+                if speed > 0.0
+                    pdf[ivpa,ivperp,end] = density_offset / dens[end] * vthe[end] * exp(-(speed^2 + vperp.grid[ivperp]^2)/vwidth^2)
                 end
             end
         end
@@ -1947,10 +2369,9 @@ end
     # the electrostatic potential at the boundary, which determines the critical speed, is unknown a priori;
     # use the constraint that the first moment of the normalised pdf be zero to choose the potential.
 
-    begin_r_region()
+    begin_serial_region()
 
     newton_max_its = 100
-    reversed_pdf = vpa.scratch
 
     function get_residual_and_coefficients_for_bc(a1, a1prime, a2, a2prime, b1, b1prime,
                                                   c1, c1prime, c2, c2prime, d1, d1prime,
@@ -1985,118 +2406,103 @@ end
         return epsilon, epsilonprime, A, C
     end
 
-    if z.irank == 0
-        if z.bc != "wall"
-            error("Options other than wall, constant or z-periodic bc not implemented yet for electrons")
-        end
-        @loop_r ir begin
+    @serial_region begin
+        if z.irank == 0
+            if z.bc != "wall"
+                error("Options other than wall, constant or z-periodic bc not implemented yet for electrons")
+            end
+
             # Impose sheath-edge boundary condition, while also imposing moment
             # constraints and determining the cut-off velocity (and therefore the sheath
             # potential).
 
-            # Delete the upar contribution here if ignoring the 'upar shift'
-            vpa_unnorm = @. vpa.scratch2 = vthe[1,ir] * vpa.grid + upar[1,ir]
-
-            u_over_vt = upar[1,ir] / vthe[1,ir]
-
-            # Initial guess for cut-off velocity is result from previous RK stage (which
-            # might be the previous timestep if this is the first stage). Recalculate this
-            # value from phi.
-            vcut = sqrt(phi[1,ir] / me_over_mi)
-
-            # -vcut is between minus_vcut_ind-1 and minus_vcut_ind
-            minus_vcut_ind = searchsortedfirst(vpa_unnorm, -vcut)
-            if minus_vcut_ind < 2
-                error("In lower-z electron bc, failed to find vpa=-vcut point, minus_vcut_ind=$minus_vcut_ind")
-            end
-            if minus_vcut_ind > vpa.n
-                error("In lower-z electron bc, failed to find vpa=-vcut point, minus_vcut_ind=$minus_vcut_ind")
-            end
-
-            # sigma is the location we use for w_∥(v_∥=0) - set to 0 to ignore the 'upar
-            # shift'
-            sigma = -u_over_vt
-
-            # sigma is between sigma_ind-1 and sigma_ind
-            sigma_ind = searchsortedfirst(vpa_unnorm, 0.0)
-            if sigma_ind < 2
-                error("In lower-z electron bc, failed to find vpa=0 point, sigma_ind=$sigma_ind")
-            end
-            if sigma_ind > vpa.n
-                error("In lower-z electron bc, failed to find vpa=0 point, sigma_ind=$sigma_ind")
-            end
-
-            # sigma_fraction is the fraction of the distance between sigma_ind-1 and
-            # sigma_ind where sigma is.
-            sigma_fraction = (sigma - vpa_unnorm[sigma_ind-1]) / (vpa_unnorm[sigma_ind] - vpa_unnorm[sigma_ind-1])
-
-            # Want to construct the w-grid corresponding to -vpa.
-            #   wpa(vpa) = (vpa - upar)/vth
-            #   ⇒ vpa = vth*wpa(vpa) + upar
-            #   wpa(-vpa) = (-vpa - upar)/vth
-            #             = (-(vth*wpa(vpa) + upar) - upar)/vth
-            #             = (-vth*wpa - 2*upar)/vth
-            #             = -wpa - 2*upar/vth
-            # [Note that `vpa.grid` is slightly mis-named here - it contains the values of
-            #  wpa(+vpa) as we are using a 'moment kinetic' approach.]
-            # Need to reverse vpa.grid because the grid passed as the second argument of
-            # interpolate_to_grid_1d!() needs to be sorted in increasing order.
-            reversed_wpa_of_minus_vpa = @. vpa.scratch3 = -vpa.grid + 2.0 * sigma
-            #reversed_wpa_of_minus_vpa = vpa.scratch3 .= .-vpa.grid
-            reverse!(reversed_wpa_of_minus_vpa)
+            vpa_unnorm, u_over_vt, vcut, minus_vcut_ind, sigma, sigma_ind, sigma_fraction,
+                element_with_zero, element_with_zero_boundary, last_point_near_zero,
+                reversed_wpa_of_minus_vpa = get_cutoff_params_lower(upar, vthe, phi,
+                                                                    me_over_mi, vpa, ir)
 
             # interpolate the pdf onto this grid
-            #@views interpolate_to_grid_1d!(interpolated_pdf, wpa_values, pdf[:,1,1,ir], vpa, vpa_spectral)
-            @views interpolate_to_grid_1d!(reversed_pdf, reversed_wpa_of_minus_vpa, pdf[:,1,1,ir], vpa, vpa_spectral) # Could make this more efficient by only interpolating to the points needed below, by taking an appropriate view of wpa_of_minus_vpa. Also, in the element containing vpa=0, this interpolation depends on the values that will be replaced by the reflected, interpolated values, which is not ideal (maybe this element should be treated specially first?).
-            reverse!(reversed_pdf)
-            pdf[sigma_ind:end,1,1,ir] .= reversed_pdf[sigma_ind:end]
+            # 'near zero' means in the range where
+            # abs(v_∥)≤abs(lower boundary of element including v_∥=0)
+            # 'far from zero' means larger values of v_∥.
+
+            # Interpolate to the 'near zero' points
+            @views interpolate_symmetric!(pdf[sigma_ind:last_point_near_zero,1,1],
+                                          vpa_unnorm[sigma_ind:last_point_near_zero],
+                                          pdf[element_with_zero_boundary:sigma_ind-1,1,1],
+                                          vpa_unnorm[element_with_zero_boundary:sigma_ind-1])
+
+            # Interpolate to the 'far from zero' points
+            reversed_pdf_far_from_zero = @view vpa.scratch[last_point_near_zero+1:end]
+            @views interpolate_to_grid_1d!(reversed_pdf_far_from_zero,
+                                           reversed_wpa_of_minus_vpa[1:vpa.n-last_point_near_zero],
+                                           pdf[:,1,1], vpa, vpa_spectral)
+            reverse!(reversed_pdf_far_from_zero)
+            pdf[last_point_near_zero+1:end,1,1] .= reversed_pdf_far_from_zero
 
             # Per-grid-point contributions to moment integrals
             # Note that we need to include the normalisation factor of 1/sqrt(pi) that
             # would be factored in by integrate_over_vspace(). This will need to
             # change/adapt when we support 2V as well as 1V.
-            density_integral_pieces = @views @. vpa.scratch3 = pdf[:,1,1,ir] * vpa.wgts / sqrt(pi)
-            flow_integral_pieces = @views @. vpa.scratch4 = density_integral_pieces * vpa_unnorm / vthe[1,ir]
-            energy_integral_pieces = @views @. vpa.scratch5 = flow_integral_pieces * vpa_unnorm / vthe[1,ir]
-            cubic_integral_pieces = @views @. vpa.scratch6 = energy_integral_pieces * vpa_unnorm / vthe[1,ir]
-            quartic_integral_pieces = @views @. vpa.scratch7 = cubic_integral_pieces * vpa_unnorm / vthe[1,ir]
+            density_integral_pieces_lowerz = @views @. vpa.scratch3 = pdf[:,1,1] * vpa.wgts / sqrt(pi)
+            flow_integral_pieces_lowerz = @. vpa.scratch4 = density_integral_pieces_lowerz * vpa_unnorm / vthe[1]
+            energy_integral_pieces_lowerz = @. vpa.scratch5 = flow_integral_pieces_lowerz * vpa_unnorm / vthe[1]
+            cubic_integral_pieces_lowerz = @. vpa.scratch6 = energy_integral_pieces_lowerz * vpa_unnorm / vthe[1]
+            quartic_integral_pieces_lowerz = @. vpa.scratch7 = cubic_integral_pieces_lowerz * vpa_unnorm / vthe[1]
 
             function get_integrals_and_derivatives_lowerz(vcut, minus_vcut_ind)
                 # vcut_fraction is the fraction of the distance between minus_vcut_ind-1 and
                 # minus_vcut_ind where -vcut is.
-                vcut_fraction = (-vcut - vpa_unnorm[minus_vcut_ind-1]) / (vpa_unnorm[minus_vcut_ind] - vpa_unnorm[minus_vcut_ind-1])
+                local vcut_fraction = get_minus_vcut_fraction(vcut, minus_vcut_ind, vpa_unnorm)
 
                 function get_for_one_moment(integral_pieces)
-                    # Integral contribution from the cell containing vcut
-                    integral_vcut_cell = (0.5 * integral_pieces[minus_vcut_ind-1] + 0.5 * integral_pieces[minus_vcut_ind])
+                    # Integral contributions from the cell containing vcut.
+                    # Define these as follows to be consistent with the way the cutoff is
+                    # applied around plus_vcut_ind below.
+                    # Note that `integral_vcut_cell_part1` and `integral_vcut_cell_part2`
+                    # include all the contributions from the grid points
+                    # `minus_vcut_ind-1` and `minus_vcut_ind`, not just those from
+                    # 'inside' the grid cell.
+                    if vcut_fraction < 0.5
+                        integral_vcut_cell_part2 = integral_pieces[minus_vcut_ind-1] * (0.5 - vcut_fraction) +
+                                                   integral_pieces[minus_vcut_ind]
+                        integral_vcut_cell_part1 = integral_pieces[minus_vcut_ind-1] * (0.5 + vcut_fraction)
 
-                    part1 = sum(integral_pieces[1:minus_vcut_ind-2])
-                    part1 += 0.5 * integral_pieces[minus_vcut_ind-1] + vcut_fraction * integral_vcut_cell
-                    # part1prime is d(part1)/d(vcut)
-                    part1prime = -integral_vcut_cell / (vpa_unnorm[minus_vcut_ind] - vpa_unnorm[minus_vcut_ind-1])
+                        # part1prime is d(part1)/d(vcut)
+                        part1prime = -integral_pieces[minus_vcut_ind-1] / (vpa_unnorm[minus_vcut_ind] - vpa_unnorm[minus_vcut_ind-1])
+                    else
+                        integral_vcut_cell_part2 = integral_pieces[minus_vcut_ind] * (1.5 - vcut_fraction)
+                        integral_vcut_cell_part1 = integral_pieces[minus_vcut_ind-1] +
+                                                   integral_pieces[minus_vcut_ind] * (vcut_fraction - 0.5)
+
+                        # part1prime is d(part1)/d(vcut)
+                        part1prime = -integral_pieces[minus_vcut_ind] / (vpa_unnorm[minus_vcut_ind] - vpa_unnorm[minus_vcut_ind-1])
+                    end
+
+                    part1 = sum(@view integral_pieces[1:minus_vcut_ind-2]) + integral_vcut_cell_part1
 
                     # Integral contribution from the cell containing sigma
                     integral_sigma_cell = (0.5 * integral_pieces[sigma_ind-1] + 0.5 * integral_pieces[sigma_ind])
 
-                    part2 = sum(integral_pieces[minus_vcut_ind+1:sigma_ind-2])
-                    part2 += (1.0 - vcut_fraction) * integral_vcut_cell + 0.5 * integral_pieces[minus_vcut_ind] + 0.5 * integral_pieces[sigma_ind-1] + sigma_fraction * integral_sigma_cell
+                    part2 = sum(@view integral_pieces[minus_vcut_ind+1:sigma_ind-2])
+                    part2 += integral_vcut_cell_part2 + 0.5 * integral_pieces[sigma_ind-1] + sigma_fraction * integral_sigma_cell
                     # part2prime is d(part2)/d(vcut)
                     part2prime = -part1prime
 
                     return part1, part1prime, part2, part2prime
                 end
-                a1, a1prime, a2, a2prime = get_for_one_moment(density_integral_pieces)
-                b1, b1prime, b2, _ = get_for_one_moment(flow_integral_pieces)
-                c1, c1prime, c2, c2prime = get_for_one_moment(energy_integral_pieces)
-                d1, d1prime, d2, _ = get_for_one_moment(cubic_integral_pieces)
-                e1, e1prime, e2, e2prime = get_for_one_moment(quartic_integral_pieces)
+                this_a1, this_a1prime, this_a2, this_a2prime = get_for_one_moment(density_integral_pieces_lowerz)
+                this_b1, this_b1prime, this_b2, _ = get_for_one_moment(flow_integral_pieces_lowerz)
+                this_c1, this_c1prime, this_c2, this_c2prime = get_for_one_moment(energy_integral_pieces_lowerz)
+                this_d1, this_d1prime, this_d2, _ = get_for_one_moment(cubic_integral_pieces_lowerz)
+                this_e1, this_e1prime, this_e2, this_e2prime = get_for_one_moment(quartic_integral_pieces_lowerz)
 
-                return get_residual_and_coefficients_for_bc(a1, a1prime, a2, a2prime, b1,
-                                                            b1prime, c1, c1prime, c2,
-                                                            c2prime, d1, d1prime, e1,
-                                                            e1prime, e2, e2prime,
-                                                            u_over_vt)...,
-                       a2, b2, c2, d2
+                return get_residual_and_coefficients_for_bc(
+                           this_a1, this_a1prime, this_a2, this_a2prime, this_b1,
+                           this_b1prime, this_c1, this_c1prime, this_c2, this_c2prime,
+                           this_d1, this_d1prime, this_e1, this_e1prime, this_e2,
+                           this_e2prime, u_over_vt)...,
+                       this_a2, this_b2, this_c2, this_d2
             end
 
             counter = 1
@@ -2104,57 +2510,76 @@ end
             C = 0.0
             # Always do at least one update of vcut
             epsilon, epsilonprime, A, C, a2, b2, c2, d2 = get_integrals_and_derivatives_lowerz(vcut, minus_vcut_ind)
-            while true
-                # Newton iteration update. Note that primes denote derivatives with
-                # respect to vcut
-                delta_v = - epsilon / epsilonprime
+            if bc_constraints
+                while true
+                    # Newton iteration update. Note that primes denote derivatives with
+                    # respect to vcut
+                    delta_v = - epsilon / epsilonprime
 
-                if vcut > vthe[1,ir] && epsilonprime < 0.0
-                    # epsilon should be increasing with vcut at epsilon=0, so if
-                    # epsilonprime is negative, the solution is actually at a lower vcut -
-                    # at larger vcut, epsilon will just tend to 0 but never reach it.
-                    delta_v = -0.1 * vthe[1,ir]
+                    if vcut > vthe[1] && epsilonprime < 0.0
+                        # epsilon should be increasing with vcut at epsilon=0, so if
+                        # epsilonprime is negative, the solution is actually at a lower vcut -
+                        # at larger vcut, epsilon will just tend to 0 but never reach it.
+                        delta_v = -0.1 * vthe[1]
+                    end
+
+                    # Prevent the step size from getting too big, to make Newton iteration
+                    # more robust.
+                    delta_v = min(delta_v, 0.1 * vthe[1])
+                    delta_v = max(delta_v, -0.1 * vthe[1])
+
+                    vcut = vcut + delta_v
+                    minus_vcut_ind = searchsortedfirst(vpa_unnorm, -vcut)
+
+                    epsilon, epsilonprime, A, C, a2, b2, c2, d2 = get_integrals_and_derivatives_lowerz(vcut, minus_vcut_ind)
+
+                    if abs(epsilon) < newton_tol
+                        break
+                    end
+
+                    if counter ≥ newton_max_its
+                        error("Newton iteration for electron lower-z boundary failed to "
+                              * "converge after $counter iterations")
+                    end
+                    counter += 1
                 end
+            elseif update_vcut
+                # When bc_constraints=false, no constraints are applied in
+                # get_integrals_and_derivatives_lowerz(), so updating vcut is usually just
+                # solving a linear equation, not doing a Newton iteration. The exception
+                # is if minus_vcut_ind changes, in which case we have to re-do the update.
+                while true
+                    vcut = vcut - epsilon / epsilonprime
+                    minus_vcut_ind = searchsortedfirst(vpa_unnorm, -vcut)
 
-                # Prevent the step size from getting too big, to make Newton iteration
-                # more robust.
-                delta_v = min(delta_v, 0.1 * vthe[1,ir])
-                delta_v = max(delta_v, -0.1 * vthe[1,ir])
+                    vcut_fraction = get_minus_vcut_fraction(vcut, minus_vcut_ind, vpa_unnorm)
 
-                vcut = vcut + delta_v
-                minus_vcut_ind = searchsortedfirst(vpa_unnorm, -vcut)
+                    if 0.0 ≤ vcut_fraction ≤ 1.0
+                        break
+                    end
 
-                epsilon, epsilonprime, A, C, a2, b2, c2, d2 = get_integrals_and_derivatives_lowerz(vcut, minus_vcut_ind)
-
-                if abs(epsilon) < newton_tol
-                    break
+                    epsilon, epsilonprime, _, _, _, _, _, _ = get_integrals_and_derivatives_lowerz(vcut, minus_vcut_ind)
                 end
-
-                if counter ≥ newton_max_its
-                    error("Newton iteration for electron lower-z boundary failed to "
-                          * "converge after $counter iterations")
-                end
-                counter += 1
             end
 
             # Adjust pdf so that after reflecting and cutting off tail, it will obey the
             # constraints.
-            @. pdf[:,1,1,ir] *= A + C * vpa_unnorm^2 / vthe[1,ir]^2
+            @. pdf[:,1,1] *= A + C * vpa_unnorm^2 / vthe[1]^2
 
             plus_vcut_ind = searchsortedlast(vpa_unnorm, vcut)
-            pdf[plus_vcut_ind+2:end,1,1,ir] .= 0.0
+            pdf[plus_vcut_ind+2:end,1,1] .= 0.0
             # vcut_fraction is the fraction of the distance between plus_vcut_ind and
             # plus_vcut_ind+1 where vcut is.
-            vcut_fraction = (vcut - vpa_unnorm[plus_vcut_ind]) / (vpa_unnorm[plus_vcut_ind+1] - vpa_unnorm[plus_vcut_ind])
+            vcut_fraction = get_plus_vcut_fraction(vcut, plus_vcut_ind, vpa_unnorm)
             if vcut_fraction > 0.5
-                pdf[plus_vcut_ind+1,1,1,ir] *= vcut_fraction - 0.5
+                pdf[plus_vcut_ind+1,1,1] *= vcut_fraction - 0.5
             else
-                pdf[plus_vcut_ind+1,1,1,ir] = 0.0
-                pdf[plus_vcut_ind+1,1,1,ir] *= vcut_fraction + 0.5
+                pdf[plus_vcut_ind+1,1,1] = 0.0
+                pdf[plus_vcut_ind,1,1] *= vcut_fraction + 0.5
             end
 
             # update the electrostatic potential at the boundary to be the value corresponding to the updated cutoff velocity
-            phi[1,ir] = me_over_mi * vcut^2
+            phi[1] = me_over_mi * vcut^2
 
             moments.electron.constraints_A_coefficient[1,ir] = A
             moments.electron.constraints_B_coefficient[1,ir] = 0.0
@@ -2167,11 +2592,11 @@ end
             # interpolation.
 
             # Need to recalculate these with the updated distribution function
-            density_integral_pieces = @views @. vpa.scratch3 = pdf[:,1,1,ir] * vpa.wgts / sqrt(pi)
-            flow_integral_pieces = @views @. vpa.scratch4 = density_integral_pieces * vpa_unnorm / vthe[1,ir]
-            energy_integral_pieces = @views @. vpa.scratch5 = flow_integral_pieces * vpa_unnorm / vthe[1,ir]
-            cubic_integral_pieces = @views @. vpa.scratch6 = energy_integral_pieces * vpa_unnorm / vthe[1,ir]
-            quartic_integral_pieces = @views @. vpa.scratch7 = cubic_integral_pieces * vpa_unnorm / vthe[1,ir]
+            @views @. density_integral_pieces_lowerz = pdf[:,1,1] * vpa.wgts / sqrt(pi)
+            @. flow_integral_pieces_lowerz = density_integral_pieces_lowerz * vpa_unnorm / vthe[1]
+            @. energy_integral_pieces_lowerz = flow_integral_pieces_lowerz * vpa_unnorm / vthe[1]
+            @. cubic_integral_pieces_lowerz = energy_integral_pieces_lowerz * vpa_unnorm / vthe[1]
+            @. quartic_integral_pieces_lowerz = cubic_integral_pieces_lowerz * vpa_unnorm / vthe[1]
 
             # Update the part2 integrals since we've applied the A and C factors
             _, _, _, _, a2, b2, c2, d2 = get_integrals_and_derivatives_lowerz(vcut, minus_vcut_ind)
@@ -2180,17 +2605,19 @@ end
                 # Integral contribution from the cell containing sigma
                 integral_sigma_cell = (0.5 * integral_pieces[sigma_ind-1] + 0.5 * integral_pieces[sigma_ind])
 
-                @views part3 = sum(integral_pieces[sigma_ind+1:plus_vcut_ind+1])
+                part3 = sum(@view integral_pieces[sigma_ind+1:plus_vcut_ind+1])
                 part3 += 0.5 * integral_pieces[sigma_ind] + (1.0 - sigma_fraction) * integral_sigma_cell
 
                 return part3
             end
-            a3 = get_part3_for_one_moment_lower(density_integral_pieces)
-            b3 = get_part3_for_one_moment_lower(flow_integral_pieces)
-            c3 = get_part3_for_one_moment_lower(energy_integral_pieces)
-            d3 = get_part3_for_one_moment_lower(cubic_integral_pieces)
+            a3 = get_part3_for_one_moment_lower(density_integral_pieces_lowerz)
+            b3 = get_part3_for_one_moment_lower(flow_integral_pieces_lowerz)
+            c3 = get_part3_for_one_moment_lower(energy_integral_pieces_lowerz)
+            d3 = get_part3_for_one_moment_lower(cubic_integral_pieces_lowerz)
 
-            correction0_integral_pieces = @views @. vpa.scratch3 = pdf[:,1,1,ir] * vpa.wgts / sqrt(pi) * vpa_unnorm^2 / vthe[1,ir]^2 / (1.0 + vpa_unnorm^2 / vthe[1,ir]^2)
+            # Use scale factor to adjust how sharp the cutoff near vpa_unnorm=0 is.
+            sharpness = 4.0
+            correction0_integral_pieces = @views @. vpa.scratch3 = pdf[:,1,1] * vpa.wgts / sqrt(pi) * sharpness * vpa_unnorm^2 / vthe[1]^2 / (1.0 + sharpness * vpa_unnorm^2 / vthe[1]^2)
             for ivpa ∈ 1:sigma_ind
                 # We only add the corrections to 'part3', so zero them out for negative v_∥.
                 # I think this is only actually significant for `sigma_ind-1` and
@@ -2204,12 +2631,12 @@ end
                 # v_∥^2/vth^2/(1+v_∥^2/vth^2)≈v_∥^2/vth^2≈0.
                 correction0_integral_pieces[ivpa] = 0.0
             end
-            correction1_integral_pieces = @views @. vpa.scratch4 = correction0_integral_pieces * vpa_unnorm / vthe[1,ir]
-            correction2_integral_pieces = @views @. vpa.scratch5 = correction1_integral_pieces * vpa_unnorm / vthe[1,ir]
-            correction3_integral_pieces = @views @. vpa.scratch6 = correction2_integral_pieces * vpa_unnorm / vthe[1,ir]
-            correction4_integral_pieces = @views @. vpa.scratch7 = correction3_integral_pieces * vpa_unnorm / vthe[1,ir]
-            correction5_integral_pieces = @views @. vpa.scratch8 = correction4_integral_pieces * vpa_unnorm / vthe[1,ir]
-            correction6_integral_pieces = @views @. vpa.scratch9 = correction5_integral_pieces * vpa_unnorm / vthe[1,ir]
+            correction1_integral_pieces = @. vpa.scratch4 = correction0_integral_pieces * vpa_unnorm / vthe[1]
+            correction2_integral_pieces = @. vpa.scratch5 = correction1_integral_pieces * vpa_unnorm / vthe[1]
+            correction3_integral_pieces = @. vpa.scratch6 = correction2_integral_pieces * vpa_unnorm / vthe[1]
+            correction4_integral_pieces = @. vpa.scratch7 = correction3_integral_pieces * vpa_unnorm / vthe[1]
+            correction5_integral_pieces = @. vpa.scratch8 = correction4_integral_pieces * vpa_unnorm / vthe[1]
+            correction6_integral_pieces = @. vpa.scratch9 = correction5_integral_pieces * vpa_unnorm / vthe[1]
 
             alpha = get_part3_for_one_moment_lower(correction0_integral_pieces)
             beta = get_part3_for_one_moment_lower(correction1_integral_pieces)
@@ -2234,194 +2661,195 @@ end
                        ] \ [a2-a3, -b2-b3, c2-c3, -d2-d3]
             A, B, C, D = solution
             for ivpa ∈ sigma_ind+1:plus_vcut_ind+1
-                v_over_vth = vpa_unnorm[ivpa]/vthe[1,ir]
-                pdf[ivpa,1,1,ir] = pdf[ivpa,1,1,ir] +
+                v_over_vth = vpa_unnorm[ivpa]/vthe[1]
+                pdf[ivpa,1,1] = pdf[ivpa,1,1] +
                                    (A
                                     + B * v_over_vth
                                     + C * v_over_vth^2
                                     + D * v_over_vth^3) *
-                                   v_over_vth^2 / (1.0 + v_over_vth^2) *
-                                   pdf[ivpa,1,1,ir]
+                                   sharpness * v_over_vth^2 / (1.0 + sharpness * v_over_vth^2) *
+                                   pdf[ivpa,1,1]
             end
         end
-    end
 
-    # next enforce the boundary condition at z_max.
-    # this involves forcing the pdf to be zero for electrons travelling faster than the max speed
-    # they could attain by accelerating in the electric field between the wall and the simulation boundary;
-    # for electrons with negative velocities less than this critical value, they must have the same
-    # pdf as electrons with positive velocities of the same magnitude.
-    # the electrostatic potential at the boundary, which determines the critical speed, is unknown a priori;
-    # use the constraint that the first moment of the normalised pdf be zero to choose the potential.
-    
-    if z.irank == z.nrank - 1
-        if z.bc != "wall"
-            error("Options other than wall or z-periodic bc not implemented yet for electrons")
-        end
-        @loop_r ir begin
+        # next enforce the boundary condition at z_max.
+        # this involves forcing the pdf to be zero for electrons travelling faster than the max speed
+        # they could attain by accelerating in the electric field between the wall and the simulation boundary;
+        # for electrons with negative velocities less than this critical value, they must have the same
+        # pdf as electrons with positive velocities of the same magnitude.
+        # the electrostatic potential at the boundary, which determines the critical speed, is unknown a priori;
+        # use the constraint that the first moment of the normalised pdf be zero to choose the potential.
+        
+        if z.irank == z.nrank - 1
+            if z.bc != "wall"
+                error("Options other than wall or z-periodic bc not implemented yet for electrons")
+            end
+
             # Impose sheath-edge boundary condition, while also imposing moment
             # constraints and determining the cut-off velocity (and therefore the sheath
             # potential).
 
-            # Delete the upar contribution here if ignoring the 'upar shift'
-            vpa_unnorm = @. vpa.scratch2 = vthe[end,ir] * vpa.grid + upar[end,ir]
-
-            u_over_vt = upar[end,ir] / vthe[end,ir]
-
-            # Initial guess for cut-off velocity is result from previous RK stage (which
-            # might be the previous timestep if this is the first stage). Recalculate this
-            # value from phi.
-            vcut = sqrt(phi[end,ir] / me_over_mi)
-
-            # vcut is between plus_vcut_ind and plus_vcut_ind+1
-            plus_vcut_ind = searchsortedlast(vpa_unnorm, vcut)
-            if plus_vcut_ind < 1
-                error("In upper-z electron bc, failed to find vpa=vcut point, plus_vcut_ind=$plus_vcut_ind")
-            end
-            if plus_vcut_ind > vpa.n - 1
-                error("In upper-z electron bc, failed to find vpa=vcut point, plus_vcut_ind=$plus_vcut_ind")
-            end
-
-            # sigma is the location we use for w_∥(v_∥=0) - set to 0 to ignore the 'upar
-            # shift'
-            sigma = -u_over_vt
-
-            # sigma is between sigma_ind and sigma_ind+1
-            sigma_ind = searchsortedlast(vpa_unnorm, 0.0)
-            if sigma_ind < 1
-                error("In upper-z electron bc, failed to find vpa=0 point, sigma_ind=$sigma_ind")
-            end
-            if sigma_ind > vpa.n - 1
-                error("In upper-z electron bc, failed to find vpa=0 point, sigma_ind=$sigma_ind")
-            end
-
-            # sigma_fraction is the fraction of the distance between sigma_ind+1 and
-            # sigma_ind where sigma is.
-            sigma_fraction = (sigma - vpa_unnorm[sigma_ind+1]) / (vpa_unnorm[sigma_ind] - vpa_unnorm[sigma_ind+1])
-
-            # Want to construct the w-grid corresponding to -vpa.
-            #   wpa(vpa) = (vpa - upar)/vth
-            #   ⇒ vpa = vth*wpa(vpa) + upar
-            #   wpa(-vpa) = (-vpa - upar)/vth
-            #             = (-(vth*wpa(vpa) + upar) - upar)/vth
-            #             = (-vth*wpa - 2*upar)/vth
-            #             = -wpa - 2*upar/vth
-            # [Note that `vpa.grid` is slightly mis-named here - it contains the values of
-            #  wpa(+vpa) as we are using a 'moment kinetic' approach.]
-            # Need to reverse vpa.grid because the grid passed as the second argument of
-            # interpolate_to_grid_1d!() needs to be sorted in increasing order.
-            reversed_wpa_of_minus_vpa = @. vpa.scratch3 = -vpa.grid + 2.0 * sigma
-            #reversed_wpa_of_minus_vpa = vpa.scratch3 .= .-vpa.grid
-            reverse!(reversed_wpa_of_minus_vpa)
+            vpa_unnorm, u_over_vt, vcut, plus_vcut_ind, sigma, sigma_ind, sigma_fraction,
+                element_with_zero, element_with_zero_boundary, first_point_near_zero,
+                reversed_wpa_of_minus_vpa = get_cutoff_params_upper(upar, vthe, phi,
+                                                                    me_over_mi, vpa, ir)
 
             # interpolate the pdf onto this grid
-            #@views interpolate_to_grid_1d!(interpolated_pdf, wpa_values, pdf[:,1,1,ir], vpa, vpa_spectral)
-            @views interpolate_to_grid_1d!(reversed_pdf, reversed_wpa_of_minus_vpa, pdf[:,1,end,ir], vpa, vpa_spectral) # Could make this more efficient by only interpolating to the points needed below, by taking an appropriate view of wpa_of_minus_vpa. Also, in the element containing vpa=0, this interpolation depends on the values that will be replaced by the reflected, interpolated values, which is not ideal (maybe this element should be treated specially first?).
+            # 'near zero' means in the range where
+            # abs(v_∥)≤abs(upper boundary of element including v_∥=0)
+            # 'far from zero' means more negative values of v_∥.
+
+            # Interpolate to the 'near zero' points
+            @views interpolate_symmetric!(pdf[first_point_near_zero:sigma_ind,1,end],
+                                          vpa_unnorm[first_point_near_zero:sigma_ind],
+                                          pdf[sigma_ind+1:element_with_zero_boundary,1,end],
+                                          vpa_unnorm[sigma_ind+1:element_with_zero_boundary])
+
+            # Interpolate to the 'far from zero' points
+            reversed_pdf = @view vpa.scratch[1:first_point_near_zero-1]
+            @views interpolate_to_grid_1d!(reversed_pdf,
+                                           reversed_wpa_of_minus_vpa[vpa.n-first_point_near_zero+2:end],
+                                           pdf[:,1,end], vpa, vpa_spectral)
             reverse!(reversed_pdf)
-            pdf[1:sigma_ind,1,end,ir] .= reversed_pdf[1:sigma_ind]
+            pdf[1:first_point_near_zero-1,1,end] .= reversed_pdf
 
             # Per-grid-point contributions to moment integrals
             # Note that we need to include the normalisation factor of 1/sqrt(pi) that
             # would be factored in by integrate_over_vspace(). This will need to
             # change/adapt when we support 2V as well as 1V.
-            density_integral_pieces = @views @. vpa.scratch3 = pdf[:,1,end,ir] * vpa.wgts / sqrt(pi)
-            flow_integral_pieces = @views @. vpa.scratch4 = density_integral_pieces * vpa_unnorm / vthe[end,ir]
-            energy_integral_pieces = @views @. vpa.scratch5 = flow_integral_pieces * vpa_unnorm / vthe[end,ir]
-            cubic_integral_pieces = @views @. vpa.scratch6 = energy_integral_pieces * vpa_unnorm / vthe[end,ir]
-            quartic_integral_pieces = @views @. vpa.scratch7 = cubic_integral_pieces * vpa_unnorm / vthe[end,ir]
+            density_integral_pieces_upperz = @views @. vpa.scratch3 = pdf[:,1,end] * vpa.wgts / sqrt(pi)
+            flow_integral_pieces_upperz = @. vpa.scratch4 = density_integral_pieces_upperz * vpa_unnorm / vthe[end]
+            energy_integral_pieces_upperz = @. vpa.scratch5 = flow_integral_pieces_upperz * vpa_unnorm / vthe[end]
+            cubic_integral_pieces_upperz = @. vpa.scratch6 = energy_integral_pieces_upperz * vpa_unnorm / vthe[end]
+            quartic_integral_pieces_upperz = @. vpa.scratch7 = cubic_integral_pieces_upperz * vpa_unnorm / vthe[end]
 
             function get_integrals_and_derivatives_upperz(vcut, plus_vcut_ind)
                 # vcut_fraction is the fraction of the distance between plus_vcut_ind and
                 # plus_vcut_ind+1 where vcut is.
-                vcut_fraction = (vcut - vpa_unnorm[plus_vcut_ind+1]) / (vpa_unnorm[plus_vcut_ind] - vpa_unnorm[plus_vcut_ind+1])
+                local vcut_fraction = get_plus_vcut_fraction(vcut, plus_vcut_ind, vpa_unnorm)
 
                 function get_for_one_moment(integral_pieces)
                     # Integral contribution from the cell containing vcut
-                    integral_vcut_cell = (0.5 * integral_pieces[plus_vcut_ind] + 0.5 * integral_pieces[plus_vcut_ind+1])
+                    # Define these as follows to be consistent with the way the cutoff is
+                    # applied around plus_vcut_ind below.
+                    # Note that `integral_vcut_cell_part1` and `integral_vcut_cell_part2`
+                    # include all the contributions from the grid points `plus_vcut_ind`
+                    # and `plus_vcut_ind+1`, not just those from 'inside' the grid cell.
+                    if vcut_fraction > 0.5
+                        integral_vcut_cell_part2 = integral_pieces[plus_vcut_ind] +
+                                                   integral_pieces[plus_vcut_ind+1] * (vcut_fraction - 0.5)
+                        integral_vcut_cell_part1 = integral_pieces[plus_vcut_ind+1] * (1.5 - vcut_fraction)
 
-                    part1 = sum(integral_pieces[plus_vcut_ind+2:end])
-                    part1 += 0.5 * integral_pieces[plus_vcut_ind+1] + vcut_fraction * integral_vcut_cell
-                    # part1prime is d(part1)/d(vcut)
-                    part1prime = integral_vcut_cell / (vpa_unnorm[plus_vcut_ind] - vpa_unnorm[plus_vcut_ind+1])
+                        # part1prime is d(part1)/d(vcut)
+                        part1prime = -integral_pieces[plus_vcut_ind+1] / (vpa_unnorm[plus_vcut_ind+1] - vpa_unnorm[plus_vcut_ind])
+                    else
+                        integral_vcut_cell_part2 = integral_pieces[plus_vcut_ind] * (0.5 + vcut_fraction)
+                        integral_vcut_cell_part1 = integral_pieces[plus_vcut_ind] * (0.5 - vcut_fraction) +
+                                                   integral_pieces[plus_vcut_ind+1]
+
+                        # part1prime is d(part1)/d(vcut)
+                        part1prime = -integral_pieces[plus_vcut_ind] / (vpa_unnorm[plus_vcut_ind+1] - vpa_unnorm[plus_vcut_ind])
+                    end
+
+                    part1 = sum(@view integral_pieces[plus_vcut_ind+2:end]) + integral_vcut_cell_part1
 
                     # Integral contribution from the cell containing sigma
                     integral_sigma_cell = (0.5 * integral_pieces[sigma_ind] + 0.5 * integral_pieces[sigma_ind+1])
 
-                    part2 = sum(integral_pieces[sigma_ind+2:plus_vcut_ind-1])
-                    part2 += (1.0 - vcut_fraction) * integral_vcut_cell + 0.5 * integral_pieces[plus_vcut_ind] + 0.5 * integral_pieces[sigma_ind+1] + sigma_fraction * integral_sigma_cell
+                    part2 = sum(@view integral_pieces[sigma_ind+2:plus_vcut_ind-1])
+                    part2 += integral_vcut_cell_part2 + 0.5 * integral_pieces[sigma_ind+1] + sigma_fraction * integral_sigma_cell
                     # part2prime is d(part2)/d(vcut)
                     part2prime = -part1prime
 
                     return part1, part1prime, part2, part2prime
                 end
-                a1, a1prime, a2, a2prime = get_for_one_moment(density_integral_pieces)
-                b1, b1prime, b2, _ = get_for_one_moment(flow_integral_pieces)
-                c1, c1prime, c2, c2prime = get_for_one_moment(energy_integral_pieces)
-                d1, d1prime, d2, _ = get_for_one_moment(cubic_integral_pieces)
-                e1, e1prime, e2, e2prime = get_for_one_moment(quartic_integral_pieces)
+                this_a1, this_a1prime, this_a2, this_a2prime = get_for_one_moment(density_integral_pieces_upperz)
+                this_b1, this_b1prime, this_b2, _ = get_for_one_moment(flow_integral_pieces_upperz)
+                this_c1, this_c1prime, this_c2, this_c2prime = get_for_one_moment(energy_integral_pieces_upperz)
+                this_d1, this_d1prime, this_d2, _ = get_for_one_moment(cubic_integral_pieces_upperz)
+                this_e1, this_e1prime, this_e2, this_e2prime = get_for_one_moment(quartic_integral_pieces_upperz)
 
-                return get_residual_and_coefficients_for_bc(a1, a1prime, a2, a2prime, b1,
-                                                            b1prime, c1, c1prime, c2,
-                                                            c2prime, d1, d1prime, e1,
-                                                            e1prime, e2, e2prime,
-                                                            u_over_vt)...,
-                       a2, b2, c2, d2
+                return get_residual_and_coefficients_for_bc(
+                           this_a1, this_a1prime, this_a2, this_a2prime, this_b1,
+                           this_b1prime, this_c1, this_c1prime, this_c2, this_c2prime,
+                           this_d1, this_d1prime, this_e1, this_e1prime, this_e2,
+                           this_e2prime, u_over_vt)...,
+                       this_a2, this_b2, this_c2, this_d2
             end
 
             counter = 1
             # Always do at least one update of vcut
             epsilon, epsilonprime, A, C, a2, b2, c2, d2 = get_integrals_and_derivatives_upperz(vcut, plus_vcut_ind)
-            while true
-                # Newton iteration update. Note that primes denote derivatives with
-                # respect to vcut
-                delta_v = - epsilon / epsilonprime
+            if bc_constraints
+                while true
+                    # Newton iteration update. Note that primes denote derivatives with
+                    # respect to vcut
+                    delta_v = - epsilon / epsilonprime
 
-                if vcut > vthe[1,ir] && epsilonprime > 0.0
-                    # epsilon should be decreasing with vcut at epsilon=0, so if
-                    # epsilonprime is positive, the solution is actually at a lower vcut -
-                    # at larger vcut, epsilon will just tend to 0 but never reach it.
-                    delta_v = -0.1 * vthe[1,ir]
+                    if vcut > vthe[1] && epsilonprime > 0.0
+                        # epsilon should be decreasing with vcut at epsilon=0, so if
+                        # epsilonprime is positive, the solution is actually at a lower vcut -
+                        # at larger vcut, epsilon will just tend to 0 but never reach it.
+                        delta_v = -0.1 * vthe[1]
+                    end
+
+                    # Prevent the step size from getting too big, to make Newton iteration
+                    # more robust.
+                    delta_v = min(delta_v, 0.1 * vthe[end])
+                    delta_v = max(delta_v, -0.1 * vthe[end])
+
+                    vcut = vcut + delta_v
+                    plus_vcut_ind = searchsortedlast(vpa_unnorm, vcut)
+
+                    epsilon, epsilonprime, A, C, a2, b2, c2, d2 = get_integrals_and_derivatives_upperz(vcut, plus_vcut_ind)
+
+                    if abs(epsilon) < newton_tol
+                        break
+                    end
+
+                    if counter ≥ newton_max_its
+                        error("Newton iteration for electron upper-z boundary failed to "
+                              * "converge after $counter iterations")
+                    end
+                    counter += 1
                 end
+            elseif update_vcut
+                # When bc_constraints=false, no constraints are applied in
+                # get_integrals_and_derivatives_upperz(), so updating vcut is usually just
+                # solving a linear equation, not doing a Newton iteration. The exception
+                # is if minus_vcut_ind changes, in which case we have to re-do the update.
+                while true
+                    vcut = vcut - epsilon / epsilonprime
+                    plus_vcut_ind = searchsortedlast(vpa_unnorm, vcut)
 
-                # Prevent the step size from getting too big, to make Newton iteration
-                # more robust.
-                delta_v = min(delta_v, 0.1 * vthe[end,ir])
-                delta_v = max(delta_v, -0.1 * vthe[end,ir])
+                    vcut_fraction = get_plus_vcut_fraction(vcut, plus_vcut_ind, vpa_unnorm)
 
-                vcut = vcut + delta_v
-                plus_vcut_ind = searchsortedlast(vpa_unnorm, vcut)
+                    if 0.0 ≤ vcut_fraction ≤ 1.0
+                        break
+                    end
 
-                epsilon, epsilonprime, A, C, a2, b2, c2, d2 = get_integrals_and_derivatives_upperz(vcut, plus_vcut_ind)
-
-                if abs(epsilon) < newton_tol
-                    break
+                    epsilon, epsilonprime, _, _, _, _, _, _ = get_integrals_and_derivatives_upperz(vcut, plus_vcut_ind)
                 end
-
-                if counter ≥ newton_max_its
-                    error("Newton iteration for electron upper-z boundary failed to "
-                          * "converge after $counter iterations")
-                end
-                counter += 1
             end
 
             # Adjust pdf so that after reflecting and cutting off tail, it will obey the
             # constraints.
-            @. pdf[:,1,end,ir] *= A + C * vpa_unnorm^2 / vthe[end,ir]^2
+            @. pdf[:,1,end] *= A + C * vpa_unnorm^2 / vthe[end]^2
 
             minus_vcut_ind = searchsortedfirst(vpa_unnorm, -vcut)
-            pdf[1:minus_vcut_ind-2,1,end,ir] .= 0.0
-            # vcut_fraction is the fraction of the distance between minus_vcut_ind and
-            # minus_vcut_ind-1 where -vcut is.
-            vcut_fraction = (-vcut - vpa_unnorm[minus_vcut_ind]) / (vpa_unnorm[minus_vcut_ind-1] - vpa_unnorm[minus_vcut_ind])
-            if vcut_fraction > 0.5
-                pdf[minus_vcut_ind-1,1,end,ir] *= vcut_fraction - 0.5
+            pdf[1:minus_vcut_ind-2,1,end] .= 0.0
+            # vcut_fraction is the fraction of the distance between minus_vcut_ind-1 and
+            # minus_vcut_ind where -vcut is.
+            vcut_fraction = get_minus_vcut_fraction(vcut, minus_vcut_ind, vpa_unnorm)
+            if vcut_fraction < 0.5
+                pdf[minus_vcut_ind-1,1,end] *= 0.5 - vcut_fraction
             else
-                pdf[minus_vcut_ind-1,1,end,ir] = 0.0
-                pdf[minus_vcut_ind,1,end,ir] *= vcut_fraction + 0.5
+                pdf[minus_vcut_ind-1,1,end] = 0.0
+                pdf[minus_vcut_ind,1,end] *= 1.5 - vcut_fraction
             end
 
             # update the electrostatic potential at the boundary to be the value corresponding to the updated cutoff velocity
-            phi[end,ir] = me_over_mi * vcut^2
+            phi[end] = me_over_mi * vcut^2
 
             moments.electron.constraints_A_coefficient[end,ir] = A
             moments.electron.constraints_B_coefficient[end,ir] = 0.0
@@ -2434,11 +2862,11 @@ end
             # interpolation.
 
             # Need to recalculate these with the updated distribution function
-            density_integral_pieces = @views @. vpa.scratch3 = pdf[:,1,end,ir] * vpa.wgts / sqrt(pi)
-            flow_integral_pieces = @views @. vpa.scratch4 = density_integral_pieces * vpa_unnorm / vthe[end,ir]
-            energy_integral_pieces = @views @. vpa.scratch5 = flow_integral_pieces * vpa_unnorm / vthe[end,ir]
-            cubic_integral_pieces = @views @. vpa.scratch6 = energy_integral_pieces * vpa_unnorm / vthe[end,ir]
-            quartic_integral_pieces = @views @. vpa.scratch7 = cubic_integral_pieces * vpa_unnorm / vthe[end,ir]
+            @views @. density_integral_pieces_upperz = pdf[:,1,end] * vpa.wgts / sqrt(pi)
+            @. flow_integral_pieces_upperz = density_integral_pieces_upperz * vpa_unnorm / vthe[end]
+            @. energy_integral_pieces_upperz = flow_integral_pieces_upperz * vpa_unnorm / vthe[end]
+            @. cubic_integral_pieces_upperz = energy_integral_pieces_upperz * vpa_unnorm / vthe[end]
+            @. quartic_integral_pieces_upperz = cubic_integral_pieces_upperz * vpa_unnorm / vthe[end]
 
             # Update the part2 integrals since we've applied the A and C factors
             _, _, _, _, a2, b2, c2, d2 = get_integrals_and_derivatives_upperz(vcut, plus_vcut_ind)
@@ -2447,17 +2875,19 @@ end
                 # Integral contribution from the cell containing sigma
                 integral_sigma_cell = (0.5 * integral_pieces[sigma_ind] + 0.5 * integral_pieces[sigma_ind+1])
 
-                @views part3 = sum(integral_pieces[minus_vcut_ind-1:sigma_ind-1])
+                part3 = sum(@view integral_pieces[minus_vcut_ind-1:sigma_ind-1])
                 part3 += 0.5 * integral_pieces[sigma_ind] + (1.0 - sigma_fraction) * integral_sigma_cell
 
                 return part3
             end
-            a3 = get_part3_for_one_moment_upper(density_integral_pieces)
-            b3 = get_part3_for_one_moment_upper(flow_integral_pieces)
-            c3 = get_part3_for_one_moment_upper(energy_integral_pieces)
-            d3 = get_part3_for_one_moment_upper(cubic_integral_pieces)
+            a3 = get_part3_for_one_moment_upper(density_integral_pieces_upperz)
+            b3 = get_part3_for_one_moment_upper(flow_integral_pieces_upperz)
+            c3 = get_part3_for_one_moment_upper(energy_integral_pieces_upperz)
+            d3 = get_part3_for_one_moment_upper(cubic_integral_pieces_upperz)
 
-            correction0_integral_pieces = @views @. vpa.scratch3 = pdf[:,1,end,ir] * vpa.wgts / sqrt(pi) * vpa_unnorm^2 / vthe[end,ir]^2 / (1.0 + vpa_unnorm^2 / vthe[end,ir]^2)
+            # Use scale factor to adjust how sharp the cutoff near vpa_unnorm=0 is.
+            sharpness = 4.0
+            correction0_integral_pieces = @views @. vpa.scratch3 = pdf[:,1,end] * vpa.wgts / sqrt(pi) * sharpness * vpa_unnorm^2 / vthe[end]^2 / (1.0 + sharpness * vpa_unnorm^2 / vthe[end]^2)
             for ivpa ∈ sigma_ind:vpa.n
                 # We only add the corrections to 'part3', so zero them out for positive v_∥.
                 # I think this is only actually significant for `sigma_ind` and
@@ -2471,12 +2901,12 @@ end
                 # v_∥^2/vth^2/(1+v_∥^2/vth^2)≈v_∥^2/vth^2≈0.
                 correction0_integral_pieces[ivpa] = 0.0
             end
-            correction1_integral_pieces = @views @. vpa.scratch4 = correction0_integral_pieces * vpa_unnorm / vthe[end,ir]
-            correction2_integral_pieces = @views @. vpa.scratch5 = correction1_integral_pieces * vpa_unnorm / vthe[end,ir]
-            correction3_integral_pieces = @views @. vpa.scratch6 = correction2_integral_pieces * vpa_unnorm / vthe[end,ir]
-            correction4_integral_pieces = @views @. vpa.scratch7 = correction3_integral_pieces * vpa_unnorm / vthe[end,ir]
-            correction5_integral_pieces = @views @. vpa.scratch8 = correction4_integral_pieces * vpa_unnorm / vthe[end,ir]
-            correction6_integral_pieces = @views @. vpa.scratch9 = correction5_integral_pieces * vpa_unnorm / vthe[end,ir]
+            correction1_integral_pieces = @. vpa.scratch4 = correction0_integral_pieces * vpa_unnorm / vthe[end]
+            correction2_integral_pieces = @. vpa.scratch5 = correction1_integral_pieces * vpa_unnorm / vthe[end]
+            correction3_integral_pieces = @. vpa.scratch6 = correction2_integral_pieces * vpa_unnorm / vthe[end]
+            correction4_integral_pieces = @. vpa.scratch7 = correction3_integral_pieces * vpa_unnorm / vthe[end]
+            correction5_integral_pieces = @. vpa.scratch8 = correction4_integral_pieces * vpa_unnorm / vthe[end]
+            correction6_integral_pieces = @. vpa.scratch9 = correction5_integral_pieces * vpa_unnorm / vthe[end]
 
             alpha = get_part3_for_one_moment_upper(correction0_integral_pieces)
             beta = get_part3_for_one_moment_upper(correction1_integral_pieces)
@@ -2501,14 +2931,14 @@ end
                        ] \ [a2-a3, -b2-b3, c2-c3, -d2-d3]
             A, B, C, D = solution
             for ivpa ∈ minus_vcut_ind-1:sigma_ind-1
-                v_over_vth = vpa_unnorm[ivpa]/vthe[end,ir]
-                pdf[ivpa,1,end,ir] = pdf[ivpa,1,end,ir] +
+                v_over_vth = vpa_unnorm[ivpa]/vthe[end]
+                pdf[ivpa,1,end] = pdf[ivpa,1,end] +
                                    (A
                                     + B * v_over_vth
                                     + C * v_over_vth^2
                                     + D * v_over_vth^3) *
-                                   v_over_vth^2 / (1.0 + v_over_vth^2) *
-                                   pdf[ivpa,1,end,ir]
+                                   sharpness * v_over_vth^2 / (1.0 + sharpness * v_over_vth^2) *
+                                   pdf[ivpa,1,end]
             end
         end
     end
@@ -2592,8 +3022,8 @@ appropriate.
         update_electron_vth_temperature!(moments, scratch[2].electron_ppar,
                                          moments.electron.dens, composition)
     end
-    apply_electron_bc_and_constraints!(scratch[t_params.n_rk_stages+1], phi, moments, z,
-                                       vperp, vpa, vperp_spectral, vpa_spectral,
+    apply_electron_bc_and_constraints!(scratch[t_params.n_rk_stages+1], phi, moments, r,
+                                       z, vperp, vpa, vperp_spectral, vpa_spectral,
                                        vpa_advect, num_diss_params, composition)
     if evolve_ppar
         # Reset vth in the `moments` struct to the result consistent with full-accuracy RK
@@ -2938,7 +3368,7 @@ end
                                              vpa_spectral, z_advect, vpa_advect,
                                              scratch_dummy, external_source_settings,
                                              num_diss_params, t_params, ion_dt,
-                                             ir, evolve_ppar)
+                                             ir, evolve_ppar, include=:all)
 
 Fill a pre-allocated matrix with the Jacobian matrix for electron kinetic equation and (if
 `evolve_ppar=true`) the electron energy equation.
@@ -2947,7 +3377,8 @@ Fill a pre-allocated matrix with the Jacobian matrix for electron kinetic equati
                          jacobian_matrix, f, ppar, moments, collisions, composition, z,
                          vperp, vpa, z_spectral, vperp_spectral, vpa_spectral, z_advect,
                          vpa_advect, scratch_dummy, external_source_settings,
-                         num_diss_params, t_params, ion_dt, ir, evolve_ppar) = begin
+                         num_diss_params, t_params, ion_dt, ir, evolve_ppar,
+                         include=:all, include_qpar_integral_terms=true) = begin
     dt = t_params.dt[]
 
     buffer_1 = @view scratch_dummy.buffer_rs_1[ir,1]
@@ -2986,10 +3417,11 @@ Fill a pre-allocated matrix with the Jacobian matrix for electron kinetic equati
     @loop_z_vperp_vpa iz ivperp ivpa begin
         # Rows corresponding to pdf_electron
         row = (iz - 1) * v_size + (ivperp - 1) * vpa.n + ivpa
-        v_remainder = (ivperp - 1) * vpa.n + ivpa
 
         jacobian_matrix[row,:] .= 0.0
-        jacobian_matrix[row,row] += 1.0
+        if include === :all
+            jacobian_matrix[row,row] += 1.0
+        end
     end
     begin_z_region()
     @loop_z iz begin
@@ -2997,47 +3429,471 @@ Fill a pre-allocated matrix with the Jacobian matrix for electron kinetic equati
         row = pdf_size + iz
 
         jacobian_matrix[row,:] .= 0.0
-        jacobian_matrix[row,row] += 1.0
+        if include === :all
+            jacobian_matrix[row,row] += 1.0
+        end
     end
 
     z_speed = @view z_advect[1].speed[:,:,:,ir]
 
+    if include ∈ (:all, :explicit_v)
+        dpdf_dz = @view scratch_dummy.buffer_vpavperpzr_1[:,:,:,ir]
+        begin_vperp_vpa_region()
+        update_electron_speed_z!(z_advect[1], upar, vth, vpa.grid, ir)
+        @loop_vperp_vpa ivperp ivpa begin
+            @views z_advect[1].adv_fac[:,ivpa,ivperp,ir] = -z_speed[:,ivpa,ivperp]
+        end
+        #calculate the upwind derivative
+        @views derivative_z_pdf_vpavperpz!(dpdf_dz, f, z_advect[1].adv_fac[:,:,:,ir],
+                                           scratch_dummy.buffer_vpavperpr_1[:,:,ir],
+                                           scratch_dummy.buffer_vpavperpr_2[:,:,ir],
+                                           scratch_dummy.buffer_vpavperpr_3[:,:,ir],
+                                           scratch_dummy.buffer_vpavperpr_4[:,:,ir],
+                                           scratch_dummy.buffer_vpavperpr_5[:,:,ir],
+                                           scratch_dummy.buffer_vpavperpr_6[:,:,ir],
+                                           z_spectral, z)
+    else
+        dpdf_dz = nothing
+    end
+
+    dpdf_dvpa = @view scratch_dummy.buffer_vpavperpzr_2[:,:,:,ir]
+    begin_z_vperp_region()
+    update_electron_speed_vpa!(vpa_advect[1], dens, upar, ppar, moments, vpa.grid,
+                               external_source_settings.electron, ir)
+    @loop_z_vperp iz ivperp begin
+        @views @. vpa_advect[1].adv_fac[:,ivperp,iz,ir] = -vpa_advect[1].speed[:,ivperp,iz,ir]
+    end
+    #calculate the upwind derivative of the electron pdf w.r.t. wpa
+    @loop_z_vperp iz ivperp begin
+        @views derivative!(dpdf_dvpa[:,ivperp,iz], f[:,ivperp,iz], vpa,
+                           vpa_advect[1].adv_fac[:,ivperp,iz,ir], vpa_spectral)
+    end
+
+    zeroth_moment = z.scratch_shared
+    first_moment = z.scratch_shared2
+    second_moment = z.scratch_shared3
+    begin_z_region()
+    vpa_grid = vpa.grid
+    vpa_wgts = vpa.wgts
+    @loop_z iz begin
+        @views zeroth_moment[iz] = integrate_over_vspace(f[:,1,iz], vpa_wgts)
+        @views first_moment[iz] = integrate_over_vspace(f[:,1,iz], vpa_grid, vpa_wgts)
+        @views second_moment[iz] = integrate_over_vspace(f[:,1,iz], vpa_grid, 2, vpa_wgts)
+    end
+
     add_electron_z_advection_to_Jacobian!(
-        jacobian_matrix, f, dens, upar, ppar, vth, me, z, vperp, vpa, z_spectral,
-        z_advect, scratch_dummy, dt, ir; ppar_offset=pdf_size)
+        jacobian_matrix, f, dens, upar, ppar, vth, dpdf_dz, me, z, vperp, vpa, z_spectral,
+        z_advect, z_speed, scratch_dummy, dt, ir, include; ppar_offset=pdf_size)
     add_electron_vpa_advection_to_Jacobian!(
-        jacobian_matrix, f, dens, upar, ppar, vth, third_moment, ddens_dz, dppar_dz,
-        dthird_moment_dz, moments, me, z, vperp, vpa, z_spectral, vpa_spectral,
-        vpa_advect, z_speed, scratch_dummy, external_source_settings, dt, ir;
-        ppar_offset=pdf_size)
+        jacobian_matrix, f, dens, upar, ppar, vth, third_moment, dpdf_dvpa, ddens_dz,
+        dppar_dz, dthird_moment_dz, moments, me, z, vperp, vpa, z_spectral, vpa_spectral,
+        vpa_advect, z_speed, scratch_dummy, external_source_settings, dt, ir, include,
+        include_qpar_integral_terms; ppar_offset=pdf_size)
     add_contribution_from_electron_pdf_term_to_Jacobian!(
         jacobian_matrix, f, dens, upar, ppar, vth, third_moment, ddens_dz, dppar_dz,
         dvth_dz, dqpar_dz, dthird_moment_dz, moments, me, external_source_settings, z,
-        vperp, vpa, z_spectral, z_speed, scratch_dummy, dt, ir; ppar_offset=pdf_size)
+        vperp, vpa, z_spectral, z_speed, scratch_dummy, dt, ir, include,
+        include_qpar_integral_terms; ppar_offset=pdf_size)
     add_electron_dissipation_term_to_Jacobian!(
-        jacobian_matrix, f, num_diss_params, z, vperp, vpa, vpa_spectral, z_speed, dt, ir)
+        jacobian_matrix, f, num_diss_params, z, vperp, vpa, vpa_spectral, z_speed, dt, ir,
+        include)
     add_electron_krook_collisions_to_Jacobian!(
         jacobian_matrix, f, dens, upar, ppar, vth, upar_ion, collisions, z, vperp, vpa,
-        z_speed, dt, ir; ppar_offset=pdf_size)
+        z_speed, dt, ir, include; ppar_offset=pdf_size)
     add_total_external_electron_source_to_Jacobian!(
         jacobian_matrix, f, moments, me, z_speed, external_source_settings.electron, z,
-        vperp, vpa, dt, ir; ppar_offset=pdf_size)
+        vperp, vpa, dt, ir, include; ppar_offset=pdf_size)
     add_electron_implicit_constraint_forcing_to_Jacobian!(
-        jacobian_matrix, f, z_speed, z, vperp, vpa, t_params.constraint_forcing_rate, dt,
-        ir)
+        jacobian_matrix, f, zeroth_moment, first_moment, second_moment, z_speed, z, vperp,
+        vpa, t_params.constraint_forcing_rate, dt, ir, include)
     # Always add the electron energy equation term, even if evolve_ppar=false, so that the
     # Jacobian matrix always has the same shape, meaning that we can always reuse the LU
     # factorization struct.
     add_electron_energy_equation_to_Jacobian!(
         jacobian_matrix, f, dens, upar, ppar, vth, third_moment, ddens_dz, dupar_dz,
         dppar_dz, dthird_moment_dz, collisions, composition, z, vperp, vpa, z_spectral,
-        num_diss_params, dt, ir; ppar_offset=pdf_size)
+        num_diss_params, dt, ir, include; ppar_offset=pdf_size)
     if ion_dt !== nothing
         add_ion_dt_forcing_of_electron_ppar_to_Jacobian!(
-            jacobian_matrix, z, dt, ion_dt, ir; ppar_offset=pdf_size)
+            jacobian_matrix, z, dt, ion_dt, ir, include; ppar_offset=pdf_size)
     end
 
     return nothing
+end
+
+"""
+    fill_electron_kinetic_equation_v_only_Jacobian!(jacobian_matrix, f, ppar, moments,
+                                                    collisions, composition, z, vperp,
+                                                    vpa, z_spectral, vperp_specral,
+                                                    vpa_spectral, z_advect, vpa_advect,
+                                                    scratch_dummy,
+                                                    external_source_settings,
+                                                    num_diss_params, t_params, ion_dt, ir,
+                                                    iz, evolve_ppar, include=:all)
+
+Fill a pre-allocated matrix with the Jacobian matrix for a velocity-space solve part of
+the ADI method for electron kinetic equation and (if `evolve_ppar=true`) the electron
+energy equation.
+"""
+@timeit global_timer fill_electron_kinetic_equation_v_only_Jacobian!(
+                         jacobian_matrix, f, ppar, dpdf_dz, dpdf_dvpa, z_speed, moments,
+                         zeroth_moment, first_moment, second_moment, third_moment,
+                         dthird_moment_dz, collisions, composition, z, vperp, vpa,
+                         z_spectral, vperp_spectral, vpa_spectral, z_advect, vpa_advect,
+                         scratch_dummy, external_source_settings, num_diss_params,
+                         t_params, ion_dt, ir, iz, evolve_ppar) = begin
+    dt = t_params.dt[]
+
+    vth = moments.electron.vth[iz,ir]
+    me = composition.me_over_mi
+    dens = moments.electron.dens[iz,ir]
+    upar = moments.electron.upar[iz,ir]
+    qpar = moments.electron.qpar[iz,ir]
+    ddens_dz = moments.electron.ddens_dz[iz,ir]
+    dupar_dz = moments.electron.dupar_dz[iz,ir]
+    dppar_dz = moments.electron.dppar_dz[iz,ir]
+    dvth_dz = moments.electron.dvth_dz[iz,ir]
+    dqpar_dz = moments.electron.dqpar_dz[iz,ir]
+
+    upar_ion = moments.ion.upar[iz,ir,1]
+
+    pdf_size = z.n * vperp.n * vpa.n
+    v_size = vperp.n * vpa.n
+
+    # Initialise jacobian_matrix to the identity
+    for row ∈ 1:size(jacobian_matrix, 1)
+        jacobian_matrix[row,:] .= 0.0
+        jacobian_matrix[row,row] += 1.0
+    end
+
+    add_electron_z_advection_to_v_only_Jacobian!(
+        jacobian_matrix, f, dens, upar, ppar, vth, dpdf_dz, me, z, vperp, vpa, z_spectral,
+        z_advect, z_speed, scratch_dummy, dt, ir, iz)
+    add_electron_vpa_advection_to_v_only_Jacobian!(
+        jacobian_matrix, f, dens, upar, ppar, vth, third_moment, dpdf_dvpa, ddens_dz,
+        dppar_dz, dthird_moment_dz, moments, me, z, vperp, vpa, z_spectral, vpa_spectral,
+        vpa_advect, z_speed, scratch_dummy, external_source_settings, dt, ir, iz)
+    add_contribution_from_electron_pdf_term_to_v_only_Jacobian!(
+        jacobian_matrix, f, dens, upar, ppar, vth, third_moment, ddens_dz, dppar_dz,
+        dvth_dz, dqpar_dz, dthird_moment_dz, moments, me, external_source_settings, z,
+        vperp, vpa, z_spectral, z_speed, scratch_dummy, dt, ir, iz)
+    add_electron_dissipation_term_to_v_only_Jacobian!(
+        jacobian_matrix, f, num_diss_params, z, vperp, vpa, vpa_spectral, z_speed, dt, ir,
+        iz)
+    add_electron_krook_collisions_to_v_only_Jacobian!(
+        jacobian_matrix, f, dens, upar, ppar, vth, upar_ion, collisions, z, vperp, vpa,
+        z_speed, dt, ir, iz)
+    add_total_external_electron_source_to_v_only_Jacobian!(
+        jacobian_matrix, f, moments, me, z_speed, external_source_settings.electron, z,
+        vperp, vpa, dt, ir, iz)
+    add_electron_implicit_constraint_forcing_to_v_only_Jacobian!(
+        jacobian_matrix, f, zeroth_moment, first_moment, second_moment, z_speed, z, vperp,
+        vpa, t_params.constraint_forcing_rate, dt, ir, iz)
+    # Always add the electron energy equation term, even if evolve_ppar=false, so that the
+    # Jacobian matrix always has the same shape, meaning that we can always reuse the LU
+    # factorization struct.
+    add_electron_energy_equation_to_v_only_Jacobian!(
+        jacobian_matrix, f, dens, upar, ppar, vth, third_moment, ddens_dz, dupar_dz,
+        dppar_dz, dthird_moment_dz, collisions, composition, z, vperp, vpa, z_spectral,
+        num_diss_params, dt, ir, iz)
+    if ion_dt !== nothing
+        add_ion_dt_forcing_of_electron_ppar_to_v_only_Jacobian!(
+            jacobian_matrix, z, dt, ion_dt, ir, iz)
+    end
+
+    return nothing
+end
+
+"""
+    fill_electron_kinetic_equation_z_only_Jacobian_f!(
+        jacobian_matrix, f, ppar, dpdf_dz, dpdf_dvpa, z_speed, moments, zeroth_moment,
+        first_moment, second_moment, third_moment, dthird_moment_dz, collisions,
+        composition, z, vperp, vpa, z_spectral, vperp_spectral, vpa_spectral, z_advect,
+        vpa_advect, scratch_dummy, external_source_settings, num_diss_params, t_params,
+        ion_dt, ir, ivperp, ivpa, evolve_ppar)
+
+Fill a pre-allocated matrix with the Jacobian matrix for a z-direction solve part of the
+ADI method for electron kinetic equation and (if `evolve_ppar=true`) the electron energy
+equation.
+"""
+@timeit global_timer fill_electron_kinetic_equation_z_only_Jacobian_f!(
+                         jacobian_matrix, f, ppar, dpdf_dz, dpdf_dvpa, z_speed, moments,
+                         zeroth_moment, first_moment, second_moment, third_moment,
+                         dthird_moment_dz, collisions, composition, z, vperp, vpa,
+                         z_spectral, vperp_spectral, vpa_spectral, z_advect, vpa_advect,
+                         scratch_dummy, external_source_settings, num_diss_params,
+                         t_params, ion_dt, ir, ivperp, ivpa, evolve_ppar) = begin
+    dt = t_params.dt[]
+
+    vth = @view moments.electron.vth[:,ir]
+    me = composition.me_over_mi
+    dens = @view moments.electron.dens[:,ir]
+    upar = @view moments.electron.upar[:,ir]
+    qpar = @view moments.electron.qpar[:,ir]
+    ddens_dz = @view moments.electron.ddens_dz[:,ir]
+    dupar_dz = @view moments.electron.dupar_dz[:,ir]
+    dppar_dz = @view moments.electron.dppar_dz[:,ir]
+    dvth_dz = @view moments.electron.dvth_dz[:,ir]
+    dqpar_dz = @view moments.electron.dqpar_dz[:,ir]
+
+    upar_ion = @view moments.ion.upar[:,ir,1]
+
+    pdf_size = z.n * vperp.n * vpa.n
+    v_size = vperp.n * vpa.n
+
+    # Initialise jacobian_matrix to the identity
+    for row ∈ 1:size(jacobian_matrix, 1)
+        jacobian_matrix[row,:] .= 0.0
+        jacobian_matrix[row,row] += 1.0
+    end
+
+    add_electron_z_advection_to_z_only_Jacobian!(
+        jacobian_matrix, f, dens, upar, ppar, vth, dpdf_dz, me, z, vperp, vpa, z_spectral,
+        z_advect, z_speed, scratch_dummy, dt, ir, ivperp, ivpa)
+    add_contribution_from_electron_pdf_term_to_z_only_Jacobian!(
+        jacobian_matrix, f, dens, upar, ppar, vth, third_moment, ddens_dz, dppar_dz,
+        dvth_dz, dqpar_dz, dthird_moment_dz, moments, me, external_source_settings, z,
+        vperp, vpa, z_spectral, z_speed, scratch_dummy, dt, ir, ivperp, ivpa)
+    add_electron_krook_collisions_to_z_only_Jacobian!(
+        jacobian_matrix, f, dens, upar, ppar, vth, upar_ion, collisions, z, vperp, vpa,
+        z_speed, dt, ir, ivperp, ivpa)
+    add_total_external_electron_source_to_z_only_Jacobian!(
+        jacobian_matrix, f, moments, me, z_speed, external_source_settings.electron, z,
+        vperp, vpa, dt, ir, ivperp, ivpa)
+    add_electron_implicit_constraint_forcing_to_z_only_Jacobian!(
+        jacobian_matrix, f, zeroth_moment, first_moment, second_moment, z_speed, z, vperp,
+        vpa, t_params.constraint_forcing_rate, dt, ir, ivperp, ivpa)
+
+    return nothing
+end
+
+"""
+    fill_electron_kinetic_equation_z_only_Jacobian_ppar!(
+        jacobian_matrix, ppar, moments, zeroth_moment, first_moment, second_moment,
+        third_moment, dthird_moment_dz, collisions, composition, z, vperp, vpa,
+        z_spectral, vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
+        external_source_settings, num_diss_params, t_params, ion_dt, ir, evolve_ppar)
+
+Fill a pre-allocated matrix with the Jacobian matrix for a z-direction solve part of the
+ADI method for electron kinetic equation and (if `evolve_ppar=true`) the electron energy
+equation.
+"""
+@timeit global_timer fill_electron_kinetic_equation_z_only_Jacobian_ppar!(
+                         jacobian_matrix, ppar, moments, zeroth_moment, first_moment,
+                         second_moment, third_moment, dthird_moment_dz, collisions,
+                         composition, z, vperp, vpa, z_spectral, vperp_spectral,
+                         vpa_spectral, z_advect, vpa_advect, scratch_dummy,
+                         external_source_settings, num_diss_params, t_params, ion_dt, ir,
+                         evolve_ppar) = begin
+    dt = t_params.dt[]
+
+    vth = @view moments.electron.vth[:,ir]
+    dens = @view moments.electron.dens[:,ir]
+    upar = @view moments.electron.upar[:,ir]
+    ddens_dz = @view moments.electron.ddens_dz[:,ir]
+    dupar_dz = @view moments.electron.dupar_dz[:,ir]
+    dppar_dz = @view moments.electron.dppar_dz[:,ir]
+
+    pdf_size = z.n * vperp.n * vpa.n
+
+    # Initialise jacobian_matrix to the identity
+    for row ∈ 1:size(jacobian_matrix, 1)
+        jacobian_matrix[row,:] .= 0.0
+        jacobian_matrix[row,row] += 1.0
+    end
+
+    add_electron_energy_equation_to_z_only_Jacobian!(
+        jacobian_matrix, dens, upar, ppar, vth, third_moment, ddens_dz, dupar_dz,
+        dppar_dz, dthird_moment_dz, collisions, composition, z, vperp, vpa, z_spectral,
+        num_diss_params, dt, ir)
+    if ion_dt !== nothing
+        add_ion_dt_forcing_of_electron_ppar_to_z_only_Jacobian!(
+            jacobian_matrix, z, dt, ion_dt, ir)
+    end
+
+    return nothing
+end
+
+"""
+    get_electron_split_Jacobians!(ivperp, ivpa, ppar, moments, collisions, composition,
+                                  z, vperp, vpa, z_spectral, vperp_spectral, vpa_spectral,
+                                  z_advect, vpa_advect, scratch_dummy,
+                                  external_source_settings, num_diss_params, t_params,
+                                  ion_dt, ir, evolve_ppar
+
+Fill a pre-allocated matrix with the Jacobian matrix for electron kinetic equation and (if
+`evolve_ppar=true`) the electron energy equation.
+"""
+@timeit global_timer get_electron_split_Jacobians!(
+                         ivperp, ivpa, ppar, moments, collisions, composition, z,
+                         vperp, vpa, z_spectral, vperp_spectral, vpa_spectral, z_advect,
+                         vpa_advect, scratch_dummy, external_source_settings,
+                         num_diss_params, t_params, ion_dt, ir, evolve_ppar) = begin
+
+    dt = t_params.dt[]
+
+    z_matrix = allocate_float(z.n, z.n)
+    z_matrix .= 0.0
+
+    z_speed = @view z_advect[1].speed[:,ivpa,ivperp,ir]
+    for ielement ∈ 1:z.nelement_local
+        imin = z.imin[ielement] - (ielement != 1)
+        imax = z.imax[ielement]
+        if ielement == 1
+            z_matrix[imin,imin:imax] .+= z_spectral.lobatto.Dmat[1,:] ./ z.element_scale[ielement]
+        else
+            if z_speed[imin] < 0.0
+                z_matrix[imin,imin:imax] .+= z_spectral.lobatto.Dmat[1,:] ./ z.element_scale[ielement]
+            elseif z_speed[imin] > 0.0
+                # Do nothing
+            else
+                z_matrix[imin,imin:imax] .+= 0.5 .* z_spectral.lobatto.Dmat[1,:] ./ z.element_scale[ielement]
+            end
+        end
+        z_matrix[imin+1:imax-1,imin:imax] .+= z_spectral.lobatto.Dmat[2:end-1,:] ./ z.element_scale[ielement]
+        if ielement == z.nelement_local
+            z_matrix[imax,imin:imax] .+= z_spectral.lobatto.Dmat[end,:] ./ z.element_scale[ielement]
+        else
+            if z_speed[imax] < 0.0
+                # Do nothing
+            elseif z_speed[imax] > 0.0
+                z_matrix[imax,imin:imax] .+= z_spectral.lobatto.Dmat[end,:] ./ z.element_scale[ielement]
+            else
+                z_matrix[imax,imin:imax] .+= 0.5 .* z_spectral.lobatto.Dmat[end,:] ./ z.element_scale[ielement]
+            end
+        end
+    end
+    # Multiply by advection speed
+    for row ∈ 1:z.n
+        z_matrix[row,:] .*= dt * z_speed[row]
+    end
+
+    # Diagonal entries
+    for row ∈ 1:z.n
+        z_matrix[row,row] += 1.0
+
+        # Terms from `add_contribution_from_pdf_term!()`
+        z_matrix[row,row] += dt * (0.5 * dqpar_dz[row] / ppar[row]
+                                   + vpa.grid[ivpa] * vth[row] * (ddens_dz[row] / dens[row]
+                                                                  - dvth_dz[row] / vth[row]))
+    end
+    if external_source_settings.electron.active
+        for row ∈ 1:z.n
+            # Source terms from `add_contribution_from_pdf_term!()`
+            z_matrix[row,row] += dt * (1.5 * source_density_amplitude[row] / dens[row]
+                                       - (0.5 * source_pressure_amplitude[row]
+                                          + source_momentum_amplitude[row]) / ppar[row]
+                                      )
+        end
+        if external_source_settings.electron.source_type == "energy"
+            for row ∈ 1:z.n
+                # Contribution from `external_electron_source!()`
+                z_matrix[row,row] += dt * source_amplitude[row]
+            end
+        end
+    end
+    if collisions.krook.nuee0 > 0.0 || collisions.krook.nuei0 > 0.0
+        for row ∈ 1:z.n
+            # Contribution from electron_krook_collisions!()
+            nu_ee = get_collision_frequency_ee(collisions, dens[row], vth[row])
+            nu_ei = get_collision_frequency_ei(collisions, dens[row], vth[row])
+            z_matrix[row,row] += dt * (nu_ee + nu_ei)
+        end
+    end
+
+    if z.irank == 0 && ivperp == 1 && ivpa == 1
+        ppar_matrix = allocate_float(z.n, z.n)
+        ppar_matrix .= 0.0
+
+        if composition.electron_physics == kinetic_electrons_with_temperature_equation
+            error("kinetic_electrons_with_temperature_equation not "
+                  * "supported yet in preconditioner")
+        elseif composition.electron_physics != kinetic_electrons
+            error("Unsupported electron_physics=$(composition.electron_physics) "
+                  * "in electron_backward_euler!() preconditioner.")
+        end
+
+        # Reconstruct w_∥^3 moment of g_e from already-calculated qpar
+        @views third_moment = @. 0.5 * moments.electron.qpar[:,ir] / electron_ppar_new / vth
+
+        # Note that as
+        #   qpar = 2 * ppar * vth * third_moment
+        #        = 2 * ppar^(3/2) / dens^(1/2) / me^(1/2) * third_moment
+        # we have that
+        #   d(qpar)/dz = 2 * ppar^(3/2) / dens^(1/2) / me^(1/2) * d(third_moment)/dz
+        #                - ppar^(3/2) / dens^(3/2) / me^(1/2) * third_moment * d(dens)/dz
+        #                + 3 * ppar^(1/2) / dens^(1/2) / me^(1/2) * third_moment * d(ppar)/dz
+        # so for the Jacobian
+        #   d[d(qpar)/dz)]/d[ppar]
+        #     = 3 * ppar^(1/2) / dens^(1/2) / me^(1/2) * d(third_moment)/dz
+        #       - 3/2 * ppar^(1/2) / dens^(3/2) / me^(1/2) * third_moment * d(dens)/dz
+        #       + 3/2 / ppar^(1/2) / dens^(1/2) / me^(1/2) * third_moment * d(ppar)/dz
+        #       + 3 * ppar^(1/2) / dens^(1/2) / me^(1/2) * third_moment * d(.)/dz
+        dthird_moment_dz = z.scratch2
+        derivative_z!(z.scratch2, third_moment, buffer_1, buffer_2,
+                      buffer_3, buffer_4, z_spectral, z)
+
+        # Diagonal terms
+        for row ∈ 1:z.n
+            ppar_matrix[row,row] = 1.0
+
+            # 3*ppar*dupar_dz
+            ppar_matrix[row,row] += 3.0 * dt * dupar_dz[row]
+
+            # terms from d(qpar)/dz
+            ppar_matrix[row,row] +=
+                dt * (3.0 * sqrt(electron_ppar_new[row] / dens[row] / me) * dthird_moment_dz[row]
+                      - 1.5 * sqrt(electron_ppar_new[row] / me) / dens[row]^1.5 * third_moment[row] * ddens_dz[row]
+                      + 1.5 / sqrt(electron_ppar_new[row] / dens[row] / me) * third_moment[row] * dppar_dz[row])
+        end
+        if ion_dt !== nothing
+            # Backward-Euler forcing term
+            for row ∈ 1:z.n
+                ppar_matrix[row,row] += dt / ion_dt
+            end
+        end
+
+        # d(.)/dz terms
+        # Note that the z-derivative matrix is local to this block, and
+        # for the preconditioner we do not include any distributed-MPI
+        # communication (we rely on the JFNK iteration to sort out the
+        # coupling between blocks).
+        if !isa(z_spectral, gausslegendre_info)
+            error("Only gausslegendre_pseudospectral coordinate type is "
+                  * "supported by electron_backward_euler!() "
+                  * "preconditioner because we need differentiation"
+                  * "matrices.")
+        end
+        z_deriv_matrix = z_spectral.D_matrix
+        for row ∈ 1:z.n
+            @. ppar_matrix[row,:] +=
+                dt * (upar[row]
+                      + 3.0 * sqrt(electron_ppar_new[row] / dens[row] / me) * third_moment[row]) *
+                z_deriv_matrix[row,:]
+        end
+
+        if num_diss_params.electron.moment_dissipation_coefficient > 0.0
+            error("z-diffusion of electron_ppar not yet supported in "
+                  * "preconditioner")
+        end
+        if collisions.nu_ei > 0.0
+            error("electron-ion collision terms for electron_ppar not yet "
+                  * "supported in preconditioner")
+        end
+        if composition.n_neutral_species > 0 && collisions.charge_exchange_electron > 0.0
+            error("electron 'charge exchange' terms for electron_ppar not yet "
+                  * "supported in preconditioner")
+        end
+        if composition.n_neutral_species > 0 && collisions.ionization_electron > 0.0
+            error("electron ionization terms for electron_ppar not yet "
+                  * "supported in preconditioner")
+        end
+    else
+        ppar_matrix = allocate_float(0, 0)
+        ppar_matrix[] = 1.0
+    end
+
+    return z_matrix, ppar_matrix
 end
 
 #"""
@@ -3224,9 +4080,10 @@ end
 
 function add_electron_dissipation_term_to_Jacobian!(jacobian_matrix, f, num_diss_params,
                                                     z, vperp, vpa, vpa_spectral, z_speed,
-                                                    dt, ir; f_offset=0)
-    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2)
-    @boundscheck size(jacobian_matrix, 1) ≥ f_offset + z.n * vperp.n * vpa.n
+                                                    dt, ir, include=:all; f_offset=0)
+    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
+    @boundscheck size(jacobian_matrix, 1) ≥ f_offset + z.n * vperp.n * vpa.n || error("f_offset=$f_offset is too big")
+    @boundscheck include ∈ (:all, :explicit_z, :explicit_v) || error("Unexpected value for include=$include")
 
     vpa_dissipation_coefficient = num_diss_params.electron.vpa_dissipation_coefficient
 
@@ -3247,8 +4104,43 @@ function add_electron_dissipation_term_to_Jacobian!(jacobian_matrix, f, num_diss
         row = (iz - 1) * v_size + (ivperp - 1) * vpa.n + ivpa + f_offset
 
         # Terms from add_dissipation_term!()
+        if include ∈ (:all, :explicit_v)
+            for icolvperp ∈ 1:vperp.n, icolvpa ∈ 1:vpa.n
+                col = (iz - 1) * v_size + (icolvperp - 1) * vpa.n + icolvpa + f_offset
+                jacobian_matrix[row,col] -= dt * vpa_dissipation_coefficient * vpa_dense_second_deriv_matrix[ivpa,icolvpa]
+            end
+        end
+    end
+
+    return nothing
+end
+
+function add_electron_dissipation_term_to_v_only_Jacobian!(
+        jacobian_matrix, f, num_diss_params, z, vperp, vpa, vpa_spectral, z_speed, dt, ir,
+        iz)
+
+    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
+    @boundscheck size(jacobian_matrix, 1) == vperp.n * vpa.n + 1 || error("Jacobian matrix size is wrong")
+
+    vpa_dissipation_coefficient = num_diss_params.electron.vpa_dissipation_coefficient
+
+    if vpa_dissipation_coefficient ≤ 0.0
+        return nothing
+    end
+
+    vpa_dense_second_deriv_matrix = vpa_spectral.dense_second_deriv_matrix
+
+    @loop_vperp_vpa ivperp ivpa begin
+        if skip_f_electron_bc_points_in_Jacobian(iz, ivperp, ivpa, z, vperp, vpa, z_speed)
+            continue
+        end
+
+        # Rows corresponding to pdf_electron
+        row = (ivperp - 1) * vpa.n + ivpa
+
+        # Terms from add_dissipation_term!()
         for icolvperp ∈ 1:vperp.n, icolvpa ∈ 1:vpa.n
-            col = (iz - 1) * v_size + (icolvperp - 1) * vpa.n + icolvpa + f_offset
+            col = (icolvperp - 1) * vpa.n + icolvpa
             jacobian_matrix[row,col] -= dt * vpa_dissipation_coefficient * vpa_dense_second_deriv_matrix[ivpa,icolvpa]
         end
     end
@@ -3499,15 +4391,17 @@ end
 function add_contribution_from_electron_pdf_term_to_Jacobian!(
         jacobian_matrix, f, dens, upar, ppar, vth, third_moment, ddens_dz, dppar_dz,
         dvth_dz, dqpar_dz, dthird_moment_dz, moments, me, external_source_settings, z,
-        vperp, vpa, z_spectral, z_speed, scratch_dummy, dt, ir; f_offset=0, ppar_offset=0)
+        vperp, vpa, z_spectral, z_speed, scratch_dummy, dt, ir, include=:all,
+        include_qpar_integral_terms=true; f_offset=0, ppar_offset=0)
 
     if f_offset == ppar_offset
         error("Got f_offset=$f_offset the same as ppar_offset=$ppar_offset. f and ppar "
               * "cannot be in same place in state vector.")
     end
-    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2)
-    @boundscheck size(jacobian_matrix, 1) ≥ f_offset + z.n * vperp.n * vpa.n
-    @boundscheck size(jacobian_matrix, 1) ≥ ppar_offset + z.n
+    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
+    @boundscheck size(jacobian_matrix, 1) ≥ f_offset + z.n * vperp.n * vpa.n || error("f_offset=$f_offset is too big")
+    @boundscheck size(jacobian_matrix, 1) ≥ ppar_offset + z.n || error("ppar_offset=$ppar_offset is too big")
+    @boundscheck include ∈ (:all, :explicit_z, :explicit_v) || error("Unexpected value for include=$include")
 
     source_density_amplitude = moments.electron.external_source_density_amplitude
     source_momentum_amplitude = moments.electron.external_source_momentum_amplitude
@@ -3559,43 +4453,53 @@ function add_contribution_from_electron_pdf_term_to_Jacobian!(
         #   (3/4*sqrt(2/me)/p^(1/2)/n^(3/2)*dn/dz + 1/2/sqrt(2*n*me)/p^(3/2)*dp/dz)[irowz] * delta(irowz,icolz)
         #   -1/sqrt(2*p*n*me)[irowz] * z_deriv_matrix[irowz,icolz]
         #
-        jacobian_matrix[row,row] += dt * (0.5 * dqpar_dz[iz] / ppar[iz]
-                                          + vpa.grid[ivpa] * vth[iz] * (ddens_dz[iz] / dens[iz]
-                                                                        - dvth_dz[iz] / vth[iz]))
-        for icolvperp ∈ 1:vperp.n, icolvpa ∈ 1:vpa.n
-            col = (iz - 1) * v_size + (icolvperp - 1) * vpa.n + icolvpa + f_offset
-            jacobian_matrix[row,col] +=
-                dt * f[ivpa,ivperp,iz] *
-                (1.5*sqrt(2.0/ppar[iz]/dens[iz]/me)*dppar_dz[iz] - 0.5*sqrt(2.0*ppar[iz]/me)/dens[iz]^1.5*ddens_dz[iz]) *
-                vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^3
+        if include === :all
+            jacobian_matrix[row,row] += dt * (0.5 * dqpar_dz[iz] / ppar[iz]
+                                              + vpa.grid[ivpa] * vth[iz] * (ddens_dz[iz] / dens[iz]
+                                                                            - dvth_dz[iz] / vth[iz]))
+        end
+        if include ∈ (:all, :explicit_v)
+            for icolvperp ∈ 1:vperp.n, icolvpa ∈ 1:vpa.n
+                col = (iz - 1) * v_size + (icolvperp - 1) * vpa.n + icolvpa + f_offset
+                jacobian_matrix[row,col] +=
+                    dt * f[ivpa,ivperp,iz] *
+                    (1.5*sqrt(2.0/ppar[iz]/dens[iz]/me)*dppar_dz[iz] - 0.5*sqrt(2.0*ppar[iz]/me)/dens[iz]^1.5*ddens_dz[iz]) *
+                    vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^3
+            end
         end
         z_deriv_row_startind = z_deriv_matrix.rowptr[iz]
         z_deriv_row_endind = z_deriv_matrix.rowptr[iz+1] - 1
         z_deriv_colinds = @view z_deriv_matrix.colval[z_deriv_row_startind:z_deriv_row_endind]
         z_deriv_row_nonzeros = @view z_deriv_matrix.nzval[z_deriv_row_startind:z_deriv_row_endind]
-        for (icolz, z_deriv_entry) ∈ zip(z_deriv_colinds, z_deriv_row_nonzeros), icolvperp ∈ 1:vperp.n, icolvpa ∈ 1:vpa.n
-            col = (icolz - 1) * v_size + (icolvperp - 1) * vpa.n + icolvpa + f_offset
-            jacobian_matrix[row,col] +=
-                dt * f[ivpa,ivperp,iz] * vth[iz] *
-                vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^3 * z_deriv_entry
-        end
-        for index ∈ eachindex(external_source_settings.electron)
-            electron_source = external_source_settings.electron[index]
-            if electron_source.active
-                # Source terms from `add_contribution_from_pdf_term!()`
-                jacobian_matrix[row,row] += dt * (1.5 * source_density_amplitude[iz,ir,index] / dens[iz]
-                                                  - (0.5 * source_pressure_amplitude[iz,ir,index]
-                                                     + source_momentum_amplitude[iz,ir,index]) / ppar[iz]
-                                                 )
+        if include_qpar_integral_terms
+            for (icolz, z_deriv_entry) ∈ zip(z_deriv_colinds, z_deriv_row_nonzeros), icolvperp ∈ 1:vperp.n, icolvpa ∈ 1:vpa.n
+                col = (icolz - 1) * v_size + (icolvperp - 1) * vpa.n + icolvpa + f_offset
+                jacobian_matrix[row,col] +=
+                    dt * f[ivpa,ivperp,iz] * vth[iz] *
+                    vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^3 * z_deriv_entry
             end
         end
-        jacobian_matrix[row,ppar_offset+iz] +=
-            dt * f[ivpa,ivperp,iz] *
-            (-0.75*sqrt(2.0/dens[iz]/me)/ppar[iz]^1.5*third_moment[iz]*dppar_dz[iz]
-             - 0.25*sqrt(2.0/ppar[iz]/me)/dens[iz]^1.5*third_moment[iz]*ddens_dz[iz]
-             + 0.5*sqrt(2.0/ppar[iz]/dens[iz]/me)*dthird_moment_dz[iz]
-             + vpa.grid[ivpa] * (0.75*sqrt(2.0/me/ppar[iz])/dens[iz]^1.5*ddens_dz[iz]
-                                 + 0.5/sqrt(2.0*dens[iz]*me)/ppar[iz]^1.5*dppar_dz[iz]))
+        if include === :all
+            for index ∈ eachindex(external_source_settings.electron)
+                electron_source = external_source_settings.electron[index]
+                if electron_source.active
+                    # Source terms from `add_contribution_from_pdf_term!()`
+                    jacobian_matrix[row,row] += dt * (1.5 * source_density_amplitude[iz,ir,index] / dens[iz]
+                                                      - (0.5 * source_pressure_amplitude[iz,ir,index]
+                                                         + source_momentum_amplitude[iz,ir,index]) / ppar[iz]
+                                                     )
+                end
+            end
+        end
+        if include ∈ (:all, :explicit_v)
+            jacobian_matrix[row,ppar_offset+iz] +=
+                dt * f[ivpa,ivperp,iz] *
+                (-0.75*sqrt(2.0/dens[iz]/me)/ppar[iz]^1.5*third_moment[iz]*dppar_dz[iz]
+                 - 0.25*sqrt(2.0/ppar[iz]/me)/dens[iz]^1.5*third_moment[iz]*ddens_dz[iz]
+                 + 0.5*sqrt(2.0/ppar[iz]/dens[iz]/me)*dthird_moment_dz[iz]
+                 + vpa.grid[ivpa] * (0.75*sqrt(2.0/me/ppar[iz])/dens[iz]^1.5*ddens_dz[iz]
+                                     + 0.5/sqrt(2.0*dens[iz]*me)/ppar[iz]^1.5*dppar_dz[iz]))
+        end
         for (icolz, z_deriv_entry) ∈ zip(z_deriv_colinds, z_deriv_row_nonzeros)
             col = ppar_offset + icolz
             jacobian_matrix[row,col] += dt * f[ivpa,ivperp,iz] *
@@ -3607,19 +4511,141 @@ function add_contribution_from_electron_pdf_term_to_Jacobian!(
     return nothing
 end
 
-function add_ion_dt_forcing_of_electron_ppar_to_Jacobian!(jacobian_matrix, z, dt, ion_dt,
-                                                          ir; ppar_offset=0)
-    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2)
-    @boundscheck size(jacobian_matrix, 1) ≥ ppar_offset + z.n
+function add_contribution_from_electron_pdf_term_to_z_only_Jacobian!(
+        jacobian_matrix, f, dens, upar, ppar, vth, third_moment, ddens_dz, dppar_dz,
+        dvth_dz, dqpar_dz, dthird_moment_dz, moments, me, external_source_settings, z,
+        vperp, vpa, z_spectral, z_speed, scratch_dummy, dt, ir, ivperp, ivpa)
 
-    begin_z_region()
+    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
+    @boundscheck size(jacobian_matrix, 1) == z.n || error("Jacobian matrix size is wrong")
+
+    source_density_amplitude = moments.electron.external_source_density_amplitude
+    source_momentum_amplitude = moments.electron.external_source_momentum_amplitude
+    source_pressure_amplitude = moments.electron.external_source_pressure_amplitude
+
+    @loop_z iz begin
+        if skip_f_electron_bc_points_in_Jacobian(iz, ivperp, ivpa, z, vperp, vpa, z_speed)
+            continue
+        end
+
+        # Rows corresponding to pdf_electron
+        row = iz
+
+        jacobian_matrix[row,row] += dt * (0.5 * dqpar_dz[iz] / ppar[iz]
+                                          + vpa.grid[ivpa] * vth[iz] * (ddens_dz[iz] / dens[iz]
+                                                                        - dvth_dz[iz] / vth[iz]))
+        for index ∈ eachindex(external_source_settings.electron)
+            electron_source = external_source_settings.electron[index]
+            if electron_source.active
+                # Source terms from `add_contribution_from_pdf_term!()`
+                jacobian_matrix[row,row] += dt * (1.5 * source_density_amplitude[iz,ir,index] / dens[iz]
+                                                  - (0.5 * source_pressure_amplitude[iz,ir,index]
+                                                     + source_momentum_amplitude[iz,ir,index]) / ppar[iz]
+                                                 )
+            end
+        end
+    end
+
+    return nothing
+end
+
+function add_contribution_from_electron_pdf_term_to_v_only_Jacobian!(
+        jacobian_matrix, f, dens, upar, ppar, vth, third_moment, ddens_dz, dppar_dz,
+        dvth_dz, dqpar_dz, dthird_moment_dz, moments, me, external_source_settings, z,
+        vperp, vpa, z_spectral, z_speed, scratch_dummy, dt, ir, iz)
+
+    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
+    @boundscheck size(jacobian_matrix, 1) == vperp.n * vpa.n + 1 || error("Jacobian matrix size is wrong")
+
+    source_density_amplitude = moments.electron.external_source_density_amplitude
+    source_momentum_amplitude = moments.electron.external_source_momentum_amplitude
+    source_pressure_amplitude = moments.electron.external_source_pressure_amplitude
+    z_deriv_matrix = z_spectral.D_matrix_csr
+    v_size = vperp.n * vpa.n
+
+    @loop_vperp_vpa ivperp ivpa begin
+        if skip_f_electron_bc_points_in_Jacobian(iz, ivperp, ivpa, z, vperp, vpa, z_speed)
+            continue
+        end
+
+        # Rows corresponding to pdf_electron
+        row = (ivperp - 1) * vpa.n + ivpa
+
+        jacobian_matrix[row,row] += dt * (0.5 * dqpar_dz / ppar
+                                          + vpa.grid[ivpa] * vth * (ddens_dz / dens
+                                                                    - dvth_dz / vth))
+        for icolvperp ∈ 1:vperp.n, icolvpa ∈ 1:vpa.n
+            col = (icolvperp - 1) * vpa.n + icolvpa
+            jacobian_matrix[row,col] +=
+                dt * f[ivpa,ivperp] *
+                (1.5*sqrt(2.0/ppar/dens/me)*dppar_dz - 0.5*sqrt(2.0*ppar/me)/dens^1.5*ddens_dz) *
+                vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^3
+        end
+        for index ∈ eachindex(external_source_settings.electron)
+            electron_source = external_source_settings.electron[index]
+            if electron_source.active
+                # Source terms from `add_contribution_from_pdf_term!()`
+                jacobian_matrix[row,row] += dt * (1.5 * source_density_amplitude[iz,ir,index] / dens
+                                                  - (0.5 * source_pressure_amplitude[iz,ir,index]
+                                                     + source_momentum_amplitude[iz,ir,index]) / ppar
+                                                 )
+            end
+        end
+        jacobian_matrix[row,end] +=
+            dt * f[ivpa,ivperp] *
+            (-0.75*sqrt(2.0/dens/me)/ppar^1.5*third_moment*dppar_dz
+             - 0.25*sqrt(2.0/ppar/me)/dens^1.5*third_moment*ddens_dz
+             + 0.5*sqrt(2.0/ppar/dens/me)*dthird_moment_dz
+             + vpa.grid[ivpa] * (0.75*sqrt(2.0/me/ppar)/dens^1.5*ddens_dz
+                                 + 0.5/sqrt(2.0*dens*me)/ppar^1.5*dppar_dz))
+    end
+
+    return nothing
+end
+
+function add_ion_dt_forcing_of_electron_ppar_to_Jacobian!(jacobian_matrix, z, dt, ion_dt,
+                                                          ir, include=:all; ppar_offset=0)
+    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
+    @boundscheck size(jacobian_matrix, 1) ≥ ppar_offset + z.n || error("ppar_offset=$ppar_offset is too big")
+    @boundscheck include ∈ (:all, :explicit_z, :explicit_v) || error("Unexpected value for include=$include")
+
+    if include === :all
+        begin_z_region()
+        @loop_z iz begin
+            # Rows corresponding to electron_ppar
+            row = ppar_offset + iz
+
+            # Backward-Euler forcing term
+            jacobian_matrix[row,row] += dt / ion_dt
+        end
+    end
+
+    return nothing
+end
+
+function add_ion_dt_forcing_of_electron_ppar_to_z_only_Jacobian!(jacobian_matrix, z, dt,
+                                                                 ion_dt, ir)
+    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
+    @boundscheck size(jacobian_matrix, 1) == z.n || error("Jacobian matrix size is wrong")
+
     @loop_z iz begin
         # Rows corresponding to electron_ppar
-        row = ppar_offset + iz
+        row = iz
 
         # Backward-Euler forcing term
         jacobian_matrix[row,row] += dt / ion_dt
     end
+
+    return nothing
+end
+
+function add_ion_dt_forcing_of_electron_ppar_to_v_only_Jacobian!(jacobian_matrix, z, dt,
+                                                                 ion_dt, ir, iz)
+    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
+    #@boundscheck size(jacobian_matrix, 1) == vperp.n * vpa.n + 1 || error("Jacobian matrix size is wrong")
+
+    # Backward-Euler forcing term
+    jacobian_matrix[end,end] += dt / ion_dt
 
     return nothing
 end

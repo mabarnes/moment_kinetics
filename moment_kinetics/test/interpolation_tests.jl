@@ -4,7 +4,7 @@ include("setup.jl")
 
 using moment_kinetics.coordinates: define_test_coordinate
 using moment_kinetics.interpolation:
-    interpolate_to_grid_1d, interpolate_to_grid_z, interpolate_to_grid_vpa
+    interpolate_to_grid_1d, interpolate_to_grid_z, interpolate_to_grid_vpa, interpolate_symmetric!
 
 using MPI
 
@@ -91,6 +91,44 @@ function runtests()
 
                 @test isapprox(interpolate_to_grid_vpa(test_grid, f, vpa, spectral),
                                expected, rtol=rtol, atol=1.e-14)
+            end
+        end
+
+        @testset "symmetric interpolation" begin
+            @testset "lower to upper $nx" for nx ∈ 4:10
+                rtol = 0.2 ^ nx
+
+                ix = collect(1:nx)
+                x = @. 1.8 * (ix - 1) / (nx - 1) - 1.23
+                first_positive_ind = searchsortedlast(x, 0.0) + 1
+                f = cos.(x)
+
+                expected = f[first_positive_ind:end]
+
+                result = zeros(nx - first_positive_ind + 1)
+                @views interpolate_symmetric!(result, x[first_positive_ind:end],
+                                              f[1:first_positive_ind-1],
+                                              x[1:first_positive_ind-1])
+
+                @test isapprox(result, expected; rtol=rtol, atol=1.0e-14)
+            end
+
+            @testset "upper to lower $nx" for nx ∈ 4:10
+                rtol = 0.2 ^ nx
+
+                ix = collect(1:nx)
+                x = @. 1.8 * (ix - 1) / (nx - 1) - 0.57
+                first_positive_ind = searchsortedlast(x, 0.0) + 1
+                f = cos.(x)
+
+                expected = f[1:first_positive_ind-1]
+
+                result = zeros(first_positive_ind-1)
+                @views interpolate_symmetric!(result, x[1:first_positive_ind-1],
+                                              f[first_positive_ind:end],
+                                              x[first_positive_ind:end])
+
+                @test isapprox(result, expected; rtol=rtol, atol=1.0e-14)
             end
         end
     end

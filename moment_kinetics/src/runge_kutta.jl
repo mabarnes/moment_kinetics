@@ -1166,10 +1166,25 @@ function adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms,
             t_params.failure_caused_by[end] += 1
         end
 
-        # If we were trying to take a step to the output timestep, dt will be smaller on
-        # the re-try, so will not reach the output time.
-        t_params.step_to_moments_output[] = false
-        t_params.step_to_dfns_output[] = false
+        if t_params.exact_output_times
+            # If we were trying to take a step to the output timestep, dt will be smaller on
+            # the re-try, so will not reach the output time.
+            t_params.step_to_moments_output[] = false
+            t_params.step_to_dfns_output[] = false
+        else
+            # If with the reduced dt the step will not pass the next output time,
+            # deactivate step_to_*_output[].
+            if (t_params.step_to_moments_output[]
+                && t_params.t[] + t_params.previous_dt[] + t_params.dt[] <
+                   t_params.moments_output_times[t_params.moments_output_counter[]])
+                t_params.step_to_moments_output[] = false
+            end
+            if (t_params.step_to_dfns_output[]
+                && t_params.t[] + t_params.previous_dt[] + t_params.dt[] <
+                   t_params.dfns_output_times[t_params.dfns_output_counter[]])
+                t_params.step_to_dfns_output[] = false
+            end
+        end
     elseif (error_norm[] > 1.0 || isnan(error_norm[])) && t_params.dt[] > t_params.minimum_dt * (1.0 + 1.0e-13)
         # (1.0 + 1.0e-13) fudge factor accounts for possible rounding errors when
         # t+dt=next_output_time.
@@ -1199,10 +1214,25 @@ function adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms,
             t_params.failure_caused_by[max_error_variable_index] += 1
         end
 
-        # If we were trying to take a step to the output timestep, dt will be smaller on
-        # the re-try, so will not reach the output time.
-        t_params.step_to_moments_output[] = false
-        t_params.step_to_dfns_output[] = false
+        if t_params.exact_output_times
+            # If we were trying to take a step to the output timestep, dt will be smaller on
+            # the re-try, so will not reach the output time.
+            t_params.step_to_moments_output[] = false
+            t_params.step_to_dfns_output[] = false
+        else
+            # If with the reduced dt the step will not pass the next output time,
+            # deactivate step_to_*_output[].
+            if (t_params.step_to_moments_output[]
+                && t_params.t[] + t_params.previous_dt[] + t_params.dt[] <
+                   t_params.moments_output_times[t_params.moments_output_counter[]])
+                t_params.step_to_moments_output[] = false
+            end
+            if (t_params.step_to_dfns_output[]
+                && t_params.t[] + t_params.previous_dt[] + t_params.dt[] <
+                   t_params.dfns_output_times[t_params.dfns_output_counter[]])
+                t_params.step_to_dfns_output[] = false
+            end
+        end
 
         #println("t=$t, timestep failed, error_norm=$(error_norm[]), error_norms=$error_norms, decreasing timestep to ", t_params.dt[])
     else
@@ -1211,9 +1241,11 @@ function adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms,
         t_params.previous_dt[] = t_params.dt[]
 
         if t_params.step_to_moments_output[] || t_params.step_to_dfns_output[]
-            # Completed an output step, reset dt to what it was before it was reduced to reach
-            # the output time
-            t_params.dt[] = t_params.dt_before_output[]
+            if !t_params.exact_output_times
+                # Completed an output step, reset dt to what it was before it was reduced to reach
+                # the output time
+                t_params.dt[] = t_params.dt_before_output[]
+            end
 
             if t_params.step_to_moments_output[]
                 t_params.step_to_moments_output[] = false
@@ -1227,7 +1259,8 @@ function adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms,
             if t_params.dt[] > CFL_limit[]
                 t_params.dt[] = CFL_limit[]
             end
-        else
+        end
+        if !t_params.exact_output_times || !(t_params.write_moments_output[] || t_params.write_dfns_output[])
             # Adjust timestep according to Fehlberg's suggestion
             # (https://en.wikipedia.org/wiki/Runge%E2%80%93Kutta%E2%80%93Fehlberg_method).
             # `step_update_prefactor` is a constant numerical factor to make the estimate
@@ -1337,7 +1370,9 @@ function adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms,
         && (current_time + t_params.dt[] >= t_params.moments_output_times[t_params.moments_output_counter[]]))
 
         t_params.dt_before_output[] = current_dt
-        t_params.dt[] = t_params.moments_output_times[t_params.moments_output_counter[]] - current_time
+        if t_params.exact_output_times
+            t_params.dt[] = t_params.moments_output_times[t_params.moments_output_counter[]] - current_time
+        end
         t_params.step_to_moments_output[] = true
 
         if t_params.dt[] < 0.0
@@ -1352,7 +1387,9 @@ function adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms,
         && (current_time + t_params.dt[] >= t_params.dfns_output_times[t_params.dfns_output_counter[]]))
 
         t_params.dt_before_output[] = current_dt
-        t_params.dt[] = t_params.dfns_output_times[t_params.dfns_output_counter[]] - current_time
+        if t_params.exact_output_times
+            t_params.dt[] = t_params.dfns_output_times[t_params.dfns_output_counter[]] - current_time
+        end
         t_params.step_to_dfns_output[] = true
 
         if t_params.dt[] < 0.0
