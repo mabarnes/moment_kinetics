@@ -478,43 +478,44 @@ old_precon_iterations = nl_solver_params.precon_iterations[]
         if isnan(residual_norm)
             error("NaN in Newton iteration at iteration $counter")
         end
-        if residual_norm > previous_residual_norm
-            # Do a line search between x and x+delta_x to try to find an update that does
-            # decrease residual_norm
-            s = 0.5
-            while s > 1.0e-2
-                parallel_map(solver_type, (x,delta_x,s) -> x + s * delta_x, w, x, delta_x, s)
-                residual_func!(residual, x)
-                residual_norm = distributed_norm(solver_type, residual, norm_params...)
-                if residual_norm ≤ previous_residual_norm
-                    break
-                end
-                s *= 0.5
-            end
-
-            #if residual_norm > previous_residual_norm
-            #    # Failed to find a point that decreases the residual, so try a negative
-            #    # step
-            #    s = -1.0e-5
-            #    parallel_map(solver_type, (x,delta_x,s) -> x + s * delta_x, w, x, delta_x, s)
-            #    residual_func!(residual, x)
-            #    residual_norm = distributed_norm(solver_type, residual, norm_params...)
-            #    if residual_norm > previous_residual_norm
-            #        # That didn't work either, so just take the full step and hope for
-            #        # convergence later
-            #        parallel_map(solver_type, (x,delta_x,s) -> x + s * delta_x, w, x, delta_x, s)
-            #        residual_func!(residual, x)
-            #        residual_norm = distributed_norm(solver_type, residual, norm_params...)
-            #    end
-            #end
-            if residual_norm > previous_residual_norm
-                # Line search didn't work, so just take the full step and hope for
-                # convergence later
-                parallel_map(solver_type, (x,delta_x,s) -> x + s * delta_x, w, x, delta_x, s)
-                residual_func!(residual, x)
-                residual_norm = distributed_norm(solver_type, residual, norm_params...)
-            end
-        end
+#        if residual_norm > previous_residual_norm
+#            # Do a line search between x and x+delta_x to try to find an update that does
+#            # decrease residual_norm
+#            s = 0.5
+#            while s > 1.0e-2
+#                parallel_map(solver_type, (x,delta_x,s) -> x + s * delta_x, w, x, delta_x, s)
+#                residual_func!(residual, x)
+#                residual_norm = distributed_norm(solver_type, residual, norm_params...)
+#                if residual_norm ≤ previous_residual_norm
+#                    break
+#                end
+#                s *= 0.5
+#            end
+#            println("line search s ", s)
+#
+#            #if residual_norm > previous_residual_norm
+#            #    # Failed to find a point that decreases the residual, so try a negative
+#            #    # step
+#            #    s = -1.0e-5
+#            #    parallel_map(solver_type, (x,delta_x,s) -> x + s * delta_x, w, x, delta_x, s)
+#            #    residual_func!(residual, x)
+#            #    residual_norm = distributed_norm(solver_type, residual, norm_params...)
+#            #    if residual_norm > previous_residual_norm
+#            #        # That didn't work either, so just take the full step and hope for
+#            #        # convergence later
+#            #        parallel_map(solver_type, (x,delta_x,s) -> x + s * delta_x, w, x, delta_x, s)
+#            #        residual_func!(residual, x)
+#            #        residual_norm = distributed_norm(solver_type, residual, norm_params...)
+#            #    end
+#            #end
+#            if residual_norm > previous_residual_norm
+#                # Line search didn't work, so just take the full step and hope for
+#                # convergence later
+#                parallel_map(solver_type, (x,delta_x,s) -> x + s * delta_x, w, x, delta_x, s)
+#                residual_func!(residual, x)
+#                residual_norm = distributed_norm(solver_type, residual, norm_params...)
+#            end
+#        end
         parallel_map(solver_type, (w) -> w, x, w)
         previous_residual_norm = residual_norm
 
