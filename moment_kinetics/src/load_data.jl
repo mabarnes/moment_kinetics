@@ -3349,7 +3349,7 @@ mix Strings and Tuples in a call).
 
 By default load data from moments files, pass `dfns=true` to load from distribution
 functions files, or `initial_electron=true` and `dfns=true` to load from initial electron
-state files.
+state files, or `electron_debug=true` and `dfns=true` to load from electron debug files.
 
 The `itime_min`, `itime_max` and `itime_skip` options can be used to select only a slice
 of time points when loading data. In `makie_post_process` these options are read from the
@@ -3361,18 +3361,22 @@ values are used as offsets from the final time index of the run.
 """
 function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractString,Union{Int,Nothing}}}...;
                                itime_min=1, itime_max=0, itime_skip=1, dfns=false,
-                               initial_electron=false)
+                               initial_electron=false, electron_debug=false)
     if length(run_dir) == 0
         error("No run_dir passed")
     end
     if initial_electron && !dfns
         error("When `initial_electron=true` is passed, `dfns=true` must also be passed")
     end
+    if electron_debug && !dfns
+        error("When `electron_debug=true` is passed, `dfns=true` must also be passed")
+    end
     if length(run_dir) > 1
         run_info = Tuple(get_run_info_no_setup(r; itime_min=itime_min,
                                                itime_max=itime_max, itime_skip=itime_skip,
                                                dfns=dfns,
-                                               initial_electron=initial_electron)
+                                               initial_electron=initial_electron,
+                                               electron_debug=electron_debug)
                          for r ∈ run_dir)
         return run_info
     end
@@ -3393,7 +3397,6 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
               * "`(String, Nothing)`. Got $run_dir")
     end
 
-    electron_debug = false
     if isfile(this_run_dir)
         # this_run_dir is actually a filename. Assume it is a moment_kinetics output file
         # and infer the directory and the run_name from the filename.
@@ -3409,7 +3412,6 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
             run_name = split(filename, ".initial_electron.")[1]
         elseif occursin(".electron_debug.", filename)
             run_name = split(filename, ".electron_debug.")[1]
-            electron_debug = true
         else
             error("Cannot recognise '$this_run_dir/$filename' as a moment_kinetics output file")
         end
@@ -3471,11 +3473,9 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
     end
 
     if initial_electron
-        if electron_debug
-            ext = "electron_debug"
-        else
-            ext = "initial_electron"
-        end
+        ext = "initial_electron"
+    elseif electron_debug
+        ext = "electron_debug"
     elseif dfns
         ext = "dfns"
     else
