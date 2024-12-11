@@ -517,6 +517,15 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
         max_pseudotime = Inf
         include_wall_bc_in_preconditioner = false
         electron_t_params = electron
+
+        # Check maximum dt for electrons
+        if rk_coefs_implicit !== nothing
+            electron.dt[] = min(electron.dt[], electron.maximum_dt,
+                                electron.cap_factor_ion_dt * dt[] * rk_coefs_implicit[1,1])
+        else
+            electron.dt[] = min(electron.dt[], electron.maximum_dt)
+        end
+        electron.previous_dt[] = electron.dt[]
     end
     return time_info(n_variables, t_input["nstep"], end_time, t, dt, previous_dt,
                      dt_before_output, dt_before_last_fail, mk_float(CFL_prefactor),
