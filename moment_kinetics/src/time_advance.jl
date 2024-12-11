@@ -2704,6 +2704,10 @@ appropriate.
         begin_s_r_z_region()
         rk_loworder_solution!(scratch, scratch_implicit, :ppar, t_params)
     end
+    if t_params.implicit_electron_time_evolving
+        begin_r_z_vperp_vpa_region()
+        rk_loworder_solution!(scratch, scratch_implicit, :pdf_electron, t_params)
+    end
     if composition.electron_physics ∈ (braginskii_fluid, kinetic_electrons,
                                        kinetic_electrons_with_temperature_equation)
         begin_r_z_region()
@@ -2735,7 +2739,7 @@ appropriate.
                     scratch[t_params.n_rk_stages+1].ppar,
                     scratch[t_params.n_rk_stages+1].pperp,
                     scratch[t_params.n_rk_stages+1].temp_z_s,
-                    scratch[t_params.n_rk_stages+1].pdf_electron,
+                    scratch[2].pdf_electron,
                     scratch[t_params.n_rk_stages+1].electron_density,
                     scratch[t_params.n_rk_stages+1].electron_upar,
                     scratch[t_params.n_rk_stages+1].electron_ppar,
