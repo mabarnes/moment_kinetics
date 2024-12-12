@@ -108,7 +108,7 @@ function run_test(test_input, base, message, rtol, atol; tol_3V, args...)
         name = name[1:60]
     end
     if parallel_io
-        name *= "parallel-io"
+        name *= "p-io"
     end
 
     # Provide some progress info

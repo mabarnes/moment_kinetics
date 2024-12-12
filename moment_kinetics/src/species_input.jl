@@ -13,6 +13,8 @@ using ..input_structs: spatial_initial_condition_input, velocity_initial_conditi
 using ..input_structs: boltzmann_electron_response, boltzmann_electron_response_with_simple_sheath
 using ..reference_parameters: setup_reference_parameters
 
+using OrderedCollections: OrderedDict
+
 function get_species_input(toml_input)
     
     reference_params = setup_reference_parameters(toml_input)
@@ -79,7 +81,7 @@ function get_species_input(toml_input)
                                                  velocity_initial_condition_input,
                                                  "vpa_IC_ion_species_$is")
         
-        spec_input = Dict(Symbol(k)=>v for (k,v) in spec_section)
+        spec_input = OrderedDict(Symbol(k)=>v for (k,v) in spec_section)
         ion_spec_params_list[is] = ion_species_parameters(; type="ion", z_IC=z_IC,
                                                             r_IC=r_IC, vpa_IC=vpa_IC,
                                                             spec_input...)
@@ -106,14 +108,14 @@ function get_species_input(toml_input)
                                                 velocity_initial_condition_input,
                                                 "vz_IC_neutral_species_$isn")
         
-        spec_input = Dict(Symbol(k)=>v for (k,v) in spec_section)
+        spec_input = OrderedDict(Symbol(k)=>v for (k,v) in spec_section)
         neutral_spec_params_list[isn] = neutral_species_parameters(; type="neutral",
                                                                      z_IC=z_IC, r_IC=r_IC,
                                                                      vz_IC=vz_IC,
                                                                      spec_input...)
     end
     # construct composition struct
-    composition_input = Dict(Symbol(k)=>v for (k,v) in composition_section)
+    composition_input = OrderedDict(Symbol(k)=>v for (k,v) in composition_section)
     composition = species_composition(; n_species=nspec_tot, ion=ion_spec_params_list,
                                         neutral=neutral_spec_params_list,
                                         composition_input...)

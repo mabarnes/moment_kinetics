@@ -41,6 +41,18 @@ String and as a tree of HDF5 variables.
     use `nothing` as a default for some setting, that is fine, but must be done
     after the input is read, and not stored in the `input_dict`.
 
+!!! warning "Parallel I/O consistency"
+    To ensure consistency between all MPI ranks in the order of reads and/or
+    writes when using Parallel I/O, all dictionary types used to store options
+    must be either `OrderedDict` or `SortedDict`, so that their order of
+    entries is deterministic (which is not the case for `Dict`, which instead
+    optimises for look-up speed). This should mostly be taken care of by using
+    `moment_kinetics`'s `OptionsDict` type (which is an alias for
+    `OrderedDict{String,Any}`). We also need to sort the input after it is read
+    by `TOML`, which is taken care of by
+    [`moment_kinetics.input_structs.convert_to_sorted_nested_OptionsDict`](@ref).
+    See also [Parallel I/O](@ref parallel_io_section).
+
 
 ## Array types
 
@@ -218,6 +230,48 @@ communicator is `comm_block[]`).
 
 See also notes on debugging the 'anyv' parallelisation: [Collision operator and
 'anyv' region](@ref).
+
+## [Parallel I/O](@id parallel_io_section)
+
+The code provides an option to use parallel I/O, which allows all output to be
+written to a single output file even when using distributed-MPI parallelism -
+this is the default option when the linked HDF5 library is compiled with
+parallel-I/O support.
+
+There are a few things to be aware of to ensure parallel I/O works correctly:
+* Some operations have to be called simultaneously on all the MPI ranks that
+  have the output file open. Roughly, these are any operations that change the
+  'metadata' of the file, for example opening/closing files, creating
+  variables, extending dimensions of variables, changing attributes of
+  variables. Reading or writing the data from a variable does not have to be
+  done collectively - actually when we write data we ensure that every rank
+  that is writing writes a non-overlapping slice of the array to avoid
+  contention that could slow down the I/O (because one rank has to wait for
+  another) and to avoid slight inconsistencies because it is uncertain which
+  rank writes the data last. For more details see the [HDF5.jl
+  documentation](https://juliaio.github.io/HDF5.jl/stable/mpi/#Reading-and-writing-data-in-parallel)
+  and the [HDF5
+  documentation](https://support.hdfgroup.org/archive/support/HDF5/doc/RM/CollectiveCalls.html).
+* One important subtlety is that the `Dict` type does not guarantee a
+  deterministic order of entries. When you iterate over a `Dict`, you can get
+  the results in a different order at different times or on different MPI
+  ranks. If we iterated over a `Dict` to create variables to write to an output
+  file, or to read from a file, then different MPI ranks might (sometimes) get
+  the variables in a different order, causing errors. We therefore use either
+  `OrderedDict` or `SortedDict` types for anything that might be written to or
+  read from an HDF5 file.
+
+If the collective operations are not done perfectly consistently, the errors
+can be extremely non-obvious. The inconsistent operations may appear to execute
+correctly, for example because the same number of variables are created, and
+the metadata may only actually be written from the rank-0 process, but the
+inconsistency may cause errors later. [JTO, 3/11/2024: my best guess as to the
+reason for this is that it puts HDF5's 'metadata cache' in inconsistent states
+on different ranks, and this means that at some later time the ranks will cycle
+some metadata out of the cache in different orders, and then some ranks will be
+able to get the metadata from the cache, while others have to read it from the
+file. The reading from the file requires some collective MPI call, which is
+only called from some ranks and not others, causing the code to hang.]
 
 ## Package structure
 

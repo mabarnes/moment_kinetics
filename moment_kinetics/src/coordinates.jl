@@ -20,6 +20,7 @@ using ..input_structs
 using ..moment_kinetics_structs: null_spatial_dimension_info, null_velocity_dimension_info
 
 using MPI
+using OrderedCollections: OrderedDict
 
 """
 structure containing basic information related to coordinates
@@ -204,7 +205,7 @@ function get_coordinate_input(input_dict, name; ignore_MPI=false)
     if input_dict === nothing
         boundary_parameters = nothing
     else
-        boundary_parameters_defaults = Dict{Symbol,Any}()
+        boundary_parameters_defaults = OrderedDict{Symbol,Any}()
         if name == "z"
             # parameter controlling the cutoff of the ion distribution function in the vpa
             # domain at the wall in z

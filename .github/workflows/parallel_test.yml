@@ -10,7 +10,7 @@ permissions:
 jobs:
   test-ubuntu:
     runs-on: ubuntu-latest
-    timeout-minutes: 150
+    timeout-minutes: 180
 
     steps:
       - uses: actions/checkout@v4
@@ -21,14 +21,15 @@ jobs:
       - uses: julia-actions/cache@v2
       - run: |
           touch Project.toml
-          julia --project -O3 --check-bounds=no -e 'import Pkg; Pkg.add(["MPI", "MPIPreferences"]); using MPIPreferences; MPIPreferences.use_jll_binary("OpenMPI_jll")'
+          julia --project -O3 --check-bounds=no -e 'import Pkg; Pkg.add(["MPI", "MPIPreferences", "PackageCompiler"]); using MPIPreferences; MPIPreferences.use_jll_binary("OpenMPI_jll")'
           julia --project -O3 --check-bounds=no -e 'using MPI; MPI.install_mpiexecjl(; destdir=".")'
           julia --project -O3 --check-bounds=no -e 'import Pkg; Pkg.add(["NCDatasets", "Random", "SpecialFunctions", "StatsBase", "Test"]); Pkg.develop(path="moment_kinetics/")'
           julia --project -O3 --check-bounds=no -e 'import Pkg; Pkg.precompile()'
+          julia --project -O3 --check-bounds=no precompile.jl
           # Need to use openmpi so that we can use `--oversubscribe` to allow using more MPI ranks than physical cores
-          ./mpiexecjl -np 3 --oversubscribe julia --project -O3 --check-bounds=no moment_kinetics/test/runtests.jl --ci --debug 1
-          ./mpiexecjl -np 4 --oversubscribe julia --project -O3 --check-bounds=no moment_kinetics/test/runtests.jl --ci --debug 1
-          ./mpiexecjl -np 2 --oversubscribe julia --project -O3 --check-bounds=no moment_kinetics/test/runtests.jl --ci --debug 1 --long
+          ./mpiexecjl -np 3 --oversubscribe julia -J moment_kinetics.so --project -O3 --check-bounds=no moment_kinetics/test/runtests.jl --ci --debug 1
+          ./mpiexecjl -np 4 --oversubscribe julia -J moment_kinetics.so --project -O3 --check-bounds=no moment_kinetics/test/runtests.jl --ci --debug 1
+          ./mpiexecjl -np 2 --oversubscribe julia -J moment_kinetics.so --project -O3 --check-bounds=no moment_kinetics/test/runtests.jl --ci --debug 1 --long
           # Note: MPI.jl's default implementation is mpich, which has a similar option
           # `--with-device=ch3:sock`, but that needs to be set when compiling mpich.
         shell: bash
@@ -46,12 +47,13 @@ jobs:
       - uses: julia-actions/cache@v2
       - run: |
           touch Project.toml
-          julia --project -O3 --check-bounds=no -e 'import Pkg; Pkg.add(["MPI", "MPIPreferences"]); using MPIPreferences; MPIPreferences.use_jll_binary("OpenMPI_jll")'
+          julia --project -O3 --check-bounds=no -e 'import Pkg; Pkg.add(["MPI", "MPIPreferences", "PackageCompiler"]); using MPIPreferences; MPIPreferences.use_jll_binary("OpenMPI_jll")'
           julia --project -O3 --check-bounds=no -e 'using MPI; MPI.install_mpiexecjl(; destdir=".")'
           julia --project -O3 --check-bounds=no -e 'import Pkg; Pkg.add(["NCDatasets", "Random", "SpecialFunctions", "StatsBase", "Test"]); Pkg.develop(path="moment_kinetics/")'
           julia --project -O3 --check-bounds=no -e 'import Pkg; Pkg.precompile()'
+          julia --project -O3 --check-bounds=no precompile.jl
           # Need to use openmpi so that we can use `--oversubscribe` to allow using more MPI ranks than physical cores
-          ./mpiexecjl -np 4 --oversubscribe julia --project -O3 --check-bounds=no moment_kinetics/test/runtests.jl --ci --debug 1
+          ./mpiexecjl -np 4 --oversubscribe julia -J moment_kinetics.so --project -O3 --check-bounds=no moment_kinetics/test/runtests.jl --ci --debug 1
           # Note: MPI.jl's default implementation is mpich, which has a similar option
           # `--with-device=ch3:sock`, but that needs to be set when compiling mpich.
         shell: bash
