@@ -1,10 +1,15 @@
 [deps]
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+Glob = "c27321d9-0574-5035-807b-f59d2c89b15c"
 makie_post_processing = "4dd1b173-c370-4c56-9cc2-d797e41ae9f0"
 moment_kinetics = "b5ff72cc-06fc-4161-ad14-dba1c22ed34e"
 plots_post_processing = "c3e9b6e6-652c-46aa-9ac0-1bc582aad122"
 
-[sources]
-makie_post_processing = {path = "../makie_post_processing/makie_post_processing"}
-moment_kinetics = {path = "../moment_kinetics/"}
-plots_post_processing = {path = "../plots_post_processing/plots_post_processing"}
+[sources.makie_post_processing]
+path = "../makie_post_processing/makie_post_processing"
+
+[sources.moment_kinetics]
+path = "../moment_kinetics/"
+
+[sources.plots_post_processing]
+path = "../plots_post_processing/plots_post_processing"
