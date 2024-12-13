@@ -1528,7 +1528,11 @@ for dim ∈ one_dimension_combinations
                      end
 
                      if n_runs > 1
-                         put_legend_above(fig, ax)
+                         put_legend_below(fig, ax)
+                         # Ensure the first row width is 3/4 of the column width so that
+                         # the plot does not get squashed by the legend
+                         rowsize!(fig.layout, 1, Aspect(1, 3/4))
+                         resize_to_layout!(fig)
                      end
 
                      if outfile !== nothing
@@ -1975,7 +1979,11 @@ for dim ∈ one_dimension_combinations_no_t
                      end
 
                      if n_runs > 1
-                         put_legend_above(fig, ax)
+                         put_legend_below(fig, ax)
+                         # Ensure the first row width is 3/4 of the column width so that
+                         # the plot does not get squashed by the legend
+                         rowsize!(fig.layout, 1, Aspect(1, 3/4))
+                         resize_to_layout!(fig)
                      end
 
                      if it === nothing
@@ -3903,7 +3911,11 @@ function plot_f_unnorm_vs_vpa(run_info::Tuple; f_over_vpa2=false, electron=false
         end
 
         if n_runs > 1
-            put_legend_above(fig, ax)
+            put_legend_below(fig, ax)
+            # Ensure the first row width is 3/4 of the column width so that
+            # the plot does not get squashed by the legend
+            rowsize!(fig.layout, 1, Aspect(1, 3/4))
+            resize_to_layout!(fig)
         end
 
         if outfile !== nothing
@@ -4265,7 +4277,11 @@ function animate_f_unnorm_vs_vpa(run_info::Tuple; f_over_vpa2=false, electron=fa
         end
 
         if n_runs > 1
-            put_legend_above(fig, ax)
+            put_legend_below(fig, ax)
+            # Ensure the first row width is 3/4 of the column width so that
+            # the plot does not get squashed by the legend
+            rowsize!(fig.layout, 1, Aspect(1, 3/4))
+            resize_to_layout!(fig)
         end
 
         if outfile !== nothing
@@ -4698,7 +4714,11 @@ function plot_charged_pdf_2D_at_wall(run_info; plot_prefix, electron=false)
                                     label="$(run_label)iz=$iz", ax=ax)
                     end
                 end
-                put_legend_right(fig, ax)
+                put_legend_below(fig, ax)
+                # Ensure the first row width is 3/4 of the column width so that
+                # the plot does not get squashed by the legend
+                rowsize!(fig.layout, 1, Aspect(1, 3/4))
+                resize_to_layout!(fig)
                 outfile=plot_prefix * "pdf$(electron_suffix)_$(label)_vs_vpa.pdf"
                 save(outfile, fig)
 
@@ -4715,7 +4735,11 @@ function plot_charged_pdf_2D_at_wall(run_info; plot_prefix, electron=false)
                                     transform=(x)->positive_or_nan(x; epsilon=1.e-20))
                     end
                 end
-                put_legend_right(fig, ax)
+                put_legend_below(fig, ax)
+                # Ensure the first row width is 3/4 of the column width so that
+                # the plot does not get squashed by the legend
+                rowsize!(fig.layout, 1, Aspect(1, 3/4))
+                resize_to_layout!(fig)
                 outfile=plot_prefix * "logpdf$(electron_suffix)_$(label)_vs_vpa.pdf"
                 save(outfile, fig)
 
@@ -4732,7 +4756,11 @@ function plot_charged_pdf_2D_at_wall(run_info; plot_prefix, electron=false)
                                                  label="$(run_label)iz=$iz", ax=ax)
                         end
                     end
-                    put_legend_right(fig, ax)
+                    put_legend_below(fig, ax)
+                    # Ensure the first row width is 3/4 of the column width so that
+                    # the plot does not get squashed by the legend
+                    rowsize!(fig.layout, 1, Aspect(1, 3/4))
+                    resize_to_layout!(fig)
                     outfile=plot_prefix * "pdf_unnorm_$(label)_vs_vpa.pdf"
                     save(outfile, fig)
 
@@ -4749,7 +4777,11 @@ function plot_charged_pdf_2D_at_wall(run_info; plot_prefix, electron=false)
                                                  transform=(x)->positive_or_nan(x; epsilon=1.e-20))
                         end
                     end
-                    put_legend_right(fig, ax)
+                    put_legend_below(fig, ax)
+                    # Ensure the first row width is 3/4 of the column width so that
+                    # the plot does not get squashed by the legend
+                    rowsize!(fig.layout, 1, Aspect(1, 3/4))
+                    resize_to_layout!(fig)
                     outfile=plot_prefix * "logpdf_unnorm_$(label)_vs_vpa.pdf"
                     save(outfile, fig)
                 end
@@ -4790,7 +4822,11 @@ function plot_charged_pdf_2D_at_wall(run_info; plot_prefix, electron=false)
                                        frame_index=frame_index)
                     end
                 end
-                put_legend_right(fig, ax)
+                put_legend_below(fig, ax)
+                # Ensure the first row width is 3/4 of the column width so that
+                # the plot does not get squashed by the legend
+                rowsize!(fig.layout, 1, Aspect(1, 3/4))
+                resize_to_layout!(fig)
                 outfile=plot_prefix * "pdf$(electron_suffix)_$(label)_vs_vpa." * input.animation_ext
                 save_animation(fig, frame_index, nt, outfile)
 
@@ -4809,7 +4845,11 @@ function plot_charged_pdf_2D_at_wall(run_info; plot_prefix, electron=false)
                                        transform=(x)->positive_or_nan(x; epsilon=1.e-20))
                     end
                 end
-                put_legend_right(fig, ax)
+                put_legend_below(fig, ax)
+                # Ensure the first row width is 3/4 of the column width so that
+                # the plot does not get squashed by the legend
+                rowsize!(fig.layout, 1, Aspect(1, 3/4))
+                resize_to_layout!(fig)
                 outfile=plot_prefix * "logpdf$(electron_suffix)_$(label)_vs_vpa." * input.animation_ext
                 save_animation(fig, frame_index, nt, outfile)
 
@@ -4828,7 +4868,11 @@ function plot_charged_pdf_2D_at_wall(run_info; plot_prefix, electron=false)
                                                     frame_index=frame_index)
                         end
                     end
-                    put_legend_right(fig, ax)
+                    put_legend_below(fig, ax)
+                    # Ensure the first row width is 3/4 of the column width so that
+                    # the plot does not get squashed by the legend
+                    rowsize!(fig.layout, 1, Aspect(1, 3/4))
+                    resize_to_layout!(fig)
                     outfile=plot_prefix * "pdf_unnorm_$(label)_vs_vpa." * input.animation_ext
                     save_animation(fig, frame_index, nt, outfile)
 
@@ -4847,7 +4891,11 @@ function plot_charged_pdf_2D_at_wall(run_info; plot_prefix, electron=false)
                                                     transform=(x)->positive_or_nan(x; epsilon=1.e-20))
                         end
                     end
-                    put_legend_right(fig, ax)
+                    put_legend_below(fig, ax)
+                    # Ensure the first row width is 3/4 of the column width so that
+                    # the plot does not get squashed by the legend
+                    rowsize!(fig.layout, 1, Aspect(1, 3/4))
+                    resize_to_layout!(fig)
                     outfile=plot_prefix * "logpdf_unnorm_$(label)_vs_vpa." * input.animation_ext
                     save_animation(fig, frame_index, nt, outfile)
                 end
@@ -4953,7 +5001,11 @@ function plot_neutral_pdf_2D_at_wall(run_info; plot_prefix)
                                    label="$(run_label)iz=$iz", ax=ax)
                     end
                 end
-                put_legend_right(fig, ax)
+                put_legend_below(fig, ax)
+                # Ensure the first row width is 3/4 of the column width so that
+                # the plot does not get squashed by the legend
+                rowsize!(fig.layout, 1, Aspect(1, 3/4))
+                resize_to_layout!(fig)
                 outfile=plot_prefix * "pdf_neutral_$(label)_vs_vz.pdf"
                 save(outfile, fig)
 
@@ -4970,7 +5022,11 @@ function plot_neutral_pdf_2D_at_wall(run_info; plot_prefix)
                                    transform=(x)->positive_or_nan(x; epsilon=1.e-20))
                     end
                 end
-                put_legend_right(fig, ax)
+                put_legend_below(fig, ax)
+                # Ensure the first row width is 3/4 of the column width so that
+                # the plot does not get squashed by the legend
+                rowsize!(fig.layout, 1, Aspect(1, 3/4))
+                resize_to_layout!(fig)
                 outfile=plot_prefix * "logpdf_neutral_$(label)_vs_vpa.pdf"
                 save(outfile, fig)
 
@@ -4988,7 +5044,11 @@ function plot_neutral_pdf_2D_at_wall(run_info; plot_prefix)
                                                  ax=ax)
                         end
                     end
-                    put_legend_right(fig, ax)
+                    put_legend_below(fig, ax)
+                    # Ensure the first row width is 3/4 of the column width so that
+                    # the plot does not get squashed by the legend
+                    rowsize!(fig.layout, 1, Aspect(1, 3/4))
+                    resize_to_layout!(fig)
                     outfile=plot_prefix * "pdf_neutral_unnorm_$(label)_vs_vpa.pdf"
                     save(outfile, fig)
 
@@ -5006,7 +5066,11 @@ function plot_neutral_pdf_2D_at_wall(run_info; plot_prefix)
                                                  transform=(x)->positive_or_nan(x; epsilon=1.e-20))
                         end
                     end
-                    put_legend_right(fig, ax)
+                    put_legend_below(fig, ax)
+                    # Ensure the first row width is 3/4 of the column width so that
+                    # the plot does not get squashed by the legend
+                    rowsize!(fig.layout, 1, Aspect(1, 3/4))
+                    resize_to_layout!(fig)
                     outfile=plot_prefix * "logpdf_neutral_unnorm_$(label)_vs_vpa.pdf"
                     save(outfile, fig)
                 end
@@ -5065,7 +5129,11 @@ function plot_neutral_pdf_2D_at_wall(run_info; plot_prefix)
                                       frame_index=frame_index)
                     end
                 end
-                put_legend_right(fig, ax)
+                put_legend_below(fig, ax)
+                # Ensure the first row width is 3/4 of the column width so that
+                # the plot does not get squashed by the legend
+                rowsize!(fig.layout, 1, Aspect(1, 3/4))
+                resize_to_layout!(fig)
                 outfile=plot_prefix * "pdf_neutral_$(label)_vs_vz." * input.animation_ext
                 save_animation(fig, frame_index, nt, outfile)
 
@@ -5084,7 +5152,11 @@ function plot_neutral_pdf_2D_at_wall(run_info; plot_prefix)
                                       transform=(x)->positive_or_nan(x; epsilon=1.e-20))
                     end
                 end
-                put_legend_right(fig, ax)
+                put_legend_below(fig, ax)
+                # Ensure the first row width is 3/4 of the column width so that
+                # the plot does not get squashed by the legend
+                rowsize!(fig.layout, 1, Aspect(1, 3/4))
+                resize_to_layout!(fig)
                 outfile=plot_prefix * "logpdf_neutral_$(label)_vs_vz." * input.animation_ext
                 save_animation(fig, frame_index, nt, outfile)
 
@@ -5104,7 +5176,11 @@ function plot_neutral_pdf_2D_at_wall(run_info; plot_prefix)
                                                     frame_index=frame_index)
                         end
                     end
-                    put_legend_right(fig, ax)
+                    put_legend_below(fig, ax)
+                    # Ensure the first row width is 3/4 of the column width so that
+                    # the plot does not get squashed by the legend
+                    rowsize!(fig.layout, 1, Aspect(1, 3/4))
+                    resize_to_layout!(fig)
                     outfile=plot_prefix * "pdf_neutral_unnorm_$(label)_vs_vz." * input.animation_ext
                     save_animation(fig, frame_index, nt, outfile)
 
@@ -5123,7 +5199,11 @@ function plot_neutral_pdf_2D_at_wall(run_info; plot_prefix)
                                                     transform=(x)->positive_or_nan(x; epsilon=1.e-20))
                         end
                     end
-                    put_legend_right(fig, ax)
+                    put_legend_below(fig, ax)
+                    # Ensure the first row width is 3/4 of the column width so that
+                    # the plot does not get squashed by the legend
+                    rowsize!(fig.layout, 1, Aspect(1, 3/4))
+                    resize_to_layout!(fig)
                     outfile=plot_prefix * "logpdf_neutral_unnorm_$(label)_vs_vz." * input.animation_ext
                     save_animation(fig, frame_index, nt, outfile)
                 end
@@ -5248,7 +5328,11 @@ function constraints_plots(run_info; plot_prefix=plot_prefix)
                                   input=input)
                     end
                 end
-                put_legend_right(fig, ax)
+                put_legend_below(fig, ax)
+                # Ensure the first row width is 3/4 of the column width so that
+                # the plot does not get squashed by the legend
+                rowsize!(fig.layout, 1, Aspect(1, 3/4))
+                resize_to_layout!(fig)
                 save(plot_prefix * "ion_constraints.pdf", fig)
             end
 
@@ -5292,7 +5376,11 @@ function constraints_plots(run_info; plot_prefix=plot_prefix)
                                   input=input)
                     end
                 end
-                put_legend_right(fig, ax)
+                put_legend_below(fig, ax)
+                # Ensure the first row width is 3/4 of the column width so that
+                # the plot does not get squashed by the legend
+                rowsize!(fig.layout, 1, Aspect(1, 3/4))
+                resize_to_layout!(fig)
                 save(plot_prefix * "neutral_constraints.pdf", fig)
             end
 
@@ -5325,7 +5413,11 @@ function constraints_plots(run_info; plot_prefix=plot_prefix)
             #        plot_vs_z(ri, varname; label=label, ax=ax, it=it0, ir=ir0,
             #                  input=input)
             #    end
-            #    put_legend_right(fig, ax)
+            #    put_legend_below(fig, ax)
+            #    # Ensure the first row width is 3/4 of the column width so that
+            #    # the plot does not get squashed by the legend
+            #    rowsize!(fig.layout, 1, Aspect(1, 3/4))
+            #    resize_to_layout!(fig)
             #    save(plot_prefix * "electron_constraints.pdf", fig)
             #end
         end
@@ -5390,7 +5482,11 @@ function constraints_plots(run_info; plot_prefix=plot_prefix)
                                      input=input)
                     end
                 end
-                put_legend_right(fig, ax)
+                put_legend_below(fig, ax)
+                # Ensure the first row width is 3/4 of the column width so that
+                # the plot does not get squashed by the legend
+                rowsize!(fig.layout, 1, Aspect(1, 3/4))
+                resize_to_layout!(fig)
                 ylims!(ax, ymin, ymax)
                 save_animation(fig, frame_index, nt,
                                plot_prefix * "ion_constraints." * input.animation_ext)
@@ -5454,7 +5550,11 @@ function constraints_plots(run_info; plot_prefix=plot_prefix)
                                      input=input)
                     end
                 end
-                put_legend_right(fig, ax)
+                put_legend_below(fig, ax)
+                # Ensure the first row width is 3/4 of the column width so that
+                # the plot does not get squashed by the legend
+                rowsize!(fig.layout, 1, Aspect(1, 3/4))
+                resize_to_layout!(fig)
                 ylims!(ax, ymin, ymax)
                 save_animation(fig, frame_index, nt,
                                plot_prefix * "neutral_constraints." * input.animation_ext)
@@ -5505,7 +5605,11 @@ function constraints_plots(run_info; plot_prefix=plot_prefix)
             #        animate_vs_z(ri, varname; label=label, data=data,
             #                     frame_index=frame_index, ax=ax, ir=ir0, input=input)
             #    end
-            #    put_legend_right(fig, ax)
+            #    put_legend_below(fig, ax)
+            #    # Ensure the first row width is 3/4 of the column width so that
+            #    # the plot does not get squashed by the legend
+            #    rowsize!(fig.layout, 1, Aspect(1, 3/4))
+            #    resize_to_layout!(fig)
             #    ylims!(ax, ymin, ymax)
             #    save_animation(fig, frame_index, nt,
             #                   plot_prefix * "electron_constraints." * input.animation_ext)
@@ -5695,12 +5799,20 @@ function Chodura_condition_plots(run_info::Tuple; plot_prefix)
             fig = figs[1]
             ax = axes[1][1]
             put_legend_below(fig, ax)
+            # Ensure the first row width is 3/4 of the column width so that
+            # the plot does not get squashed by the legend
+            rowsize!(fig.layout, 1, Aspect(1, 3/4))
+            resize_to_layout!(fig)
             outfile = string(plot_prefix, "Chodura_ratio_lower_vs_t.pdf")
             save(outfile, fig)
 
             fig = figs[2]
             ax = axes[1][2]
             put_legend_below(fig, ax)
+            # Ensure the first row width is 3/4 of the column width so that
+            # the plot does not get squashed by the legend
+            rowsize!(fig.layout, 1, Aspect(1, 3/4))
+            resize_to_layout!(fig)
             outfile = string(plot_prefix, "Chodura_ratio_upper_vs_t.pdf")
             save(outfile, fig)
         end
@@ -5708,12 +5820,20 @@ function Chodura_condition_plots(run_info::Tuple; plot_prefix)
             fig = figs[3]
             ax = axes[1][3]
             put_legend_below(fig, ax)
+            # Ensure the first row width is 3/4 of the column width so that
+            # the plot does not get squashed by the legend
+            rowsize!(fig.layout, 1, Aspect(1, 3/4))
+            resize_to_layout!(fig)
             outfile = string(plot_prefix, "Chodura_ratio_lower_vs_r.pdf")
             save(outfile, fig)
 
             fig = figs[4]
             ax = axes[1][4]
             put_legend_below(fig, ax)
+            # Ensure the first row width is 3/4 of the column width so that
+            # the plot does not get squashed by the legend
+            rowsize!(fig.layout, 1, Aspect(1, 3/4))
+            resize_to_layout!(fig)
             outfile = string(plot_prefix, "Chodura_ratio_upper_vs_r.pdf")
             save(outfile, fig)
         end
@@ -5731,12 +5851,20 @@ function Chodura_condition_plots(run_info::Tuple; plot_prefix)
             println("check axes ", axes)
             ax = axes[1][7]
             put_legend_below(fig, ax)
+            # Ensure the first row width is 3/4 of the column width so that
+            # the plot does not get squashed by the legend
+            rowsize!(fig.layout, 1, Aspect(1, 3/4))
+            resize_to_layout!(fig)
             outfile = string(plot_prefix, "pdf_unnorm_over_vpa2_wall-_vs_vpa.pdf")
             save(outfile, fig)
 
             fig = figs[8]
             ax = axes[1][8]
             put_legend_below(fig, ax)
+            # Ensure the first row width is 3/4 of the column width so that
+            # the plot does not get squashed by the legend
+            rowsize!(fig.layout, 1, Aspect(1, 3/4))
+            resize_to_layout!(fig)
             outfile = string(plot_prefix, "pdf_unnorm_over_vpa2_wall+_vs_vpa.pdf")
             save(outfile, fig)
         end
@@ -5747,6 +5875,10 @@ function Chodura_condition_plots(run_info::Tuple; plot_prefix)
             ax = axes[1][9][1]
             frame_index = axes[1][9][2]
             put_legend_below(fig, ax)
+            # Ensure the first row width is 3/4 of the column width so that
+            # the plot does not get squashed by the legend
+            rowsize!(fig.layout, 1, Aspect(1, 3/4))
+            resize_to_layout!(fig)
             outfile = string(plot_prefix, "pdf_unnorm_over_vpa2_wall-_vs_vpa." * input.animation_ext)
             save_animation(fig, frame_index, nt, outfile)
 
@@ -5754,6 +5886,10 @@ function Chodura_condition_plots(run_info::Tuple; plot_prefix)
             ax = axes[1][10][1]
             frame_index = axes[1][10][2]
             put_legend_below(fig, ax)
+            # Ensure the first row width is 3/4 of the column width so that
+            # the plot does not get squashed by the legend
+            rowsize!(fig.layout, 1, Aspect(1, 3/4))
+            resize_to_layout!(fig)
             outfile = string(plot_prefix, "pdf_unnorm_over_vpa2_wall+_vs_vpa." * input.animation_ext)
             save_animation(fig, frame_index, nt, outfile)
         end
@@ -6038,7 +6174,11 @@ function sound_wave_plots(run_info::Tuple; plot_prefix)
         end
 
         if input.plot
-            put_legend_right(fig, ax)
+            put_legend_below(fig, ax)
+            # Ensure the first row width is 3/4 of the column width so that
+            # the plot does not get squashed by the legend
+            rowsize!(fig.layout, 1, Aspect(1, 3/4))
+            resize_to_layout!(fig)
 
             save(outfile, fig)
 
@@ -6106,7 +6246,11 @@ function sound_wave_plots(run_info; outfile=nothing, ax=nothing, phi=nothing)
                 error("Cannot save figure from this function when `ax` was passed. Please "
                       * "save the figure that contains `ax`")
             end
-            put_legend_right(fig, ax)
+            put_legend_below(fig, ax)
+            # Ensure the first row width is 3/4 of the column width so that
+            # the plot does not get squashed by the legend
+            rowsize!(fig.layout, 1, Aspect(1, 3/4))
+            resize_to_layout!(fig)
             save(outfile, fig)
         end
     end
@@ -7788,7 +7932,11 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                 end
             end
 
-            put_legend_right(steps_fig, ax_failures)
+            put_legend_below(steps_fig, ax_failures)
+            # Ensure the first row width is 3/4 of the column width so that
+            # the plot does not get squashed by the legend
+            rowsize!(steps_fig.layout, 1, Aspect(1, 3/4))
+            resize_to_layout!(steps_fig)
 
             if plot_prefix !== nothing
                 outfile = plot_prefix * electron_prefix * "timestep_diagnostics.pdf"
@@ -7886,7 +8034,11 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                 end
             end
             #ylims!(ax, 0.0, 10.0 * maxval)
-            put_legend_right(CFL_fig, ax)
+            put_legend_below(CFL_fig, ax)
+            # Ensure the first row width is 3/4 of the column width so that
+            # the plot does not get squashed by the legend
+            rowsize!(CFL_fig.layout, 1, Aspect(1, 3/4))
+            resize_to_layout!(CFL_fig)
 
             if plot_prefix !== nothing
                 outfile = plot_prefix * electron_prefix * "CFL_factors.pdf"
@@ -8053,7 +8205,11 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                 end
             end
 
-            put_legend_right(limits_fig, ax)
+            put_legend_below(limits_fig, ax)
+            # Ensure the first row width is 3/4 of the column width so that
+            # the plot does not get squashed by the legend
+            rowsize!(limits_fig.layout, 1, Aspect(1, 3/4))
+            resize_to_layout!(limits_fig)
 
             if plot_prefix !== nothing
                 outfile = plot_prefix * electron_prefix * "timestep_limits.pdf"
@@ -8102,7 +8258,11 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
             end
 
             if has_nl_solver
-                put_legend_right(nl_solvers_fig, ax)
+                put_legend_below(nl_solvers_fig, ax)
+                # Ensure the first row width is 3/4 of the column width so that
+                # the plot does not get squashed by the legend
+                rowsize!(nl_solvers_fig.layout, 1, Aspect(1, 3/4))
+                resize_to_layout!(nl_solvers_fig)
 
                 if plot_prefix !== nothing
                     outfile = plot_prefix * "nonlinear_solver_iterations.pdf"
@@ -8143,7 +8303,11 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
             end
 
             if has_electron_solve
-                put_legend_right(electron_solver_fig, ax)
+                put_legend_below(electron_solver_fig, ax)
+                # Ensure the first row width is 3/4 of the column width so that
+                # the plot does not get squashed by the legend
+                rowsize!(electron_solver_fig.layout, 1, Aspect(1, 3/4))
+                resize_to_layout!(electron_solver_fig)
 
                 if has_electron_solve
                     outfile = plot_prefix * "electron_steps.pdf"
