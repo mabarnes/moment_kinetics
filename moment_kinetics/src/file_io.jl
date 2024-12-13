@@ -320,8 +320,12 @@ struct io_initial_electron_info{Tfile, Tfe, Tmom, Texte1, Texte2, Texte3, Texte4
     electron_constraints_C_coefficient::Tconstr
     # cumulative number of electron pseudo-timesteps taken
     electron_step_counter::Telectronint
+    # local electron pseudo-time
+    electron_local_pseudotime::Telectrontime
     # cumulative electron pseudo-time
     electron_cumulative_pseudotime::Telectrontime
+    # current residual for the electron pseudo-timestepping loop
+    electron_residual::Telectrontime
     # current electron pseudo-timestep size
     electron_dt::Telectrontime
     # size of last electron pseudo-timestep before the output was written
@@ -533,6 +537,10 @@ function setup_electron_io(io_input, vpa, vperp, z, r, composition, collisions,
 
         io_pseudotime = create_dynamic_variable!(dynamic, "time", mk_float; parallel_io=parallel_io,
                                                  description="pseudotime used for electron initialization")
+        io_local_pseudotime = create_dynamic_variable!(dynamic, "electron_local_pseudotime", mk_float; parallel_io=parallel_io,
+                                                       description="pseudotime within a single pseudotimestepping loop")
+        io_electron_residual = create_dynamic_variable!(dynamic, "electron_residual", mk_float; parallel_io=parallel_io,
+                                                        description="residual for electron pseudotimestepping loop")
         io_f_electron = create_dynamic_variable!(dynamic, "f_electron", mk_float, vpa,
                                                  vperp, z, r;
                                                  parallel_io=parallel_io,
@@ -642,7 +650,9 @@ function reopen_initial_electron_io(file_info)
                                         getvar("electron_constraints_B_coefficient"),
                                         getvar("electron_constraints_C_coefficient"),
                                         getvar("electron_step_counter"),
+                                        getvar("electron_local_pseudotime"),
                                         getvar("electron_cumulative_pseudotime"),
+                                        getvar("electron_residual"),
                                         getvar("electron_dt"),
                                         getvar("electron_previous_dt"),
                                         getvar("electron_failure_counter"),
@@ -3386,12 +3396,14 @@ end
 
 """
     write_electron_state(scratch_electron, moments, t_params, io_initial_electron,
-                         t_idx, r, z, vperp, vpa; pdf_electron_converged=false)
+                         t_idx, local_pseudotime, electron_residual, r, z, vperp, vpa;
+                         pdf_electron_converged=false)
 
 Write the electron state to an output file.
 """
 function write_electron_state(scratch_electron, moments, t_params,
-                              io_or_file_info_initial_electron, t_idx, r, z, vperp, vpa;
+                              io_or_file_info_initial_electron, t_idx, local_pseudotime,
+                              electron_residual, r, z, vperp, vpa;
                               pdf_electron_converged=false)
 
     @serial_region begin
@@ -3410,8 +3422,12 @@ function write_electron_state(scratch_electron, moments, t_params,
         # add the pseudo-time for this time slice to the hdf5 file
         append_to_dynamic_var(io_initial_electron.time,
                               t_params.t[], t_idx, parallel_io)
+        append_to_dynamic_var(io_initial_electron.electron_local_pseudotime, local_pseudotime,
+                              t_idx, parallel_io)
         append_to_dynamic_var(io_initial_electron.electron_cumulative_pseudotime,
                               t_params.t[], t_idx, parallel_io)
+        append_to_dynamic_var(io_initial_electron.electron_residual, electron_residual,
+                              t_idx, parallel_io)
 
         write_electron_dfns_data_to_binary(nothing, scratch_electron, t_params,
                                            io_initial_electron, t_idx, r, z, vperp, vpa)
