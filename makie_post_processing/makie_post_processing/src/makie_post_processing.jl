@@ -5340,7 +5340,7 @@ function constraints_plots(run_info; plot_prefix=plot_prefix)
             end
 
             # Neutrals
-            if any(ri.n_neutral_species > 1
+            if any(ri.n_neutral_species > 0
                    && (ri.evolve_density || ri.evolve_upar || ri.evolve_ppar)
                    for ri ∈ run_info)
 
@@ -5388,41 +5388,41 @@ function constraints_plots(run_info; plot_prefix=plot_prefix)
             end
 
             # Electrons
-            #if any(ri.composition.electron_physics ∈ (kinetic_electrons,
-            #                                          kinetic_electrons_with_temperature_equation)
-            #       for ri ∈ run_info)
+            if any(ri.composition.electron_physics ∈ (kinetic_electrons,
+                                                      kinetic_electrons_with_temperature_equation)
+                   for ri ∈ run_info)
 
-            #    fig, ax = get_1d_ax(; xlabel="z", ylabel="constraint coefficient")
-            #    for ri ∈ run_info
-            #        if length(run_info) > 1
-            #            prefix = ri.run_name * ", "
-            #        else
-            #            prefix = ""
-            #        end
+                fig, ax = get_1d_ax(; xlabel="z", ylabel="constraint coefficient")
+                for ri ∈ run_info
+                    if length(run_info) > 1
+                        prefix = ri.run_name * ", "
+                    else
+                        prefix = ""
+                    end
 
-            #        varname = "electron_constraints_A_coefficient"
-            #        label = prefix * "(A-1)"
-            #        data = get_variable(ri, varname; it=it0, ir=ir0)
-            #        data .-= 1.0
-            #        plot_vs_z(ri, varname; label=label, data=data, ax=ax, input=input)
+                    varname = "electron_constraints_A_coefficient"
+                    label = prefix * "(A-1)"
+                    data = get_variable(ri, varname; it=it0, ir=ir0)
+                    data .-= 1.0
+                    plot_vs_z(ri, varname; label=label, data=data, ax=ax, input=input)
 
-            #        varname = "electron_constraints_B_coefficient"
-            #        label = prefix * "B"
-            #        plot_vs_z(ri, varname; label=label, ax=ax, it=it0, ir=ir0,
-            #                  input=input)
+                    varname = "electron_constraints_B_coefficient"
+                    label = prefix * "B"
+                    plot_vs_z(ri, varname; label=label, ax=ax, it=it0, ir=ir0,
+                              input=input)
 
-            #        varname = "electron_constraints_C_coefficient"
-            #        label = prefix * "C"
-            #        plot_vs_z(ri, varname; label=label, ax=ax, it=it0, ir=ir0,
-            #                  input=input)
-            #    end
-            #    put_legend_below(fig, ax)
-            #    # Ensure the first row width is 3/4 of the column width so that
-            #    # the plot does not get squashed by the legend
-            #    rowsize!(fig.layout, 1, Aspect(1, 3/4))
-            #    resize_to_layout!(fig)
-            #    save(plot_prefix * "electron_constraints.pdf", fig)
-            #end
+                    varname = "electron_constraints_C_coefficient"
+                    label = prefix * "C"
+                    plot_vs_z(ri, varname; label=label, ax=ax, it=it0, ir=ir0,
+                              input=input)
+                end
+                put_legend_below(fig, ax)
+                # Ensure the first row width is 3/4 of the column width so that
+                # the plot does not get squashed by the legend
+                rowsize!(fig.layout, 1, Aspect(1, 3/4))
+                resize_to_layout!(fig)
+                save(plot_prefix * "electron_constraints.pdf", fig)
+            end
         end
 
         if input.animate
@@ -5496,7 +5496,7 @@ function constraints_plots(run_info; plot_prefix=plot_prefix)
             end
 
             # Neutrals
-            if any(ri.n_neutral_species > 1
+            if any(ri.n_neutral_species > 0
                    && (ri.evolve_density || ri.evolve_upar || ri.evolve_ppar)
                    for ri ∈ run_info)
 
@@ -5564,59 +5564,59 @@ function constraints_plots(run_info; plot_prefix=plot_prefix)
             end
 
             # Electrons
-            #if any(ri.composition.electron_physics ∈ (kinetic_electrons,
-            #                                          kinetic_electrons_with_temperature_equation)
-            #       for ri ∈ run_info)
+            if any(ri.composition.electron_physics ∈ (kinetic_electrons,
+                                                      kinetic_electrons_with_temperature_equation)
+                   for ri ∈ run_info)
 
-            #    frame_index = Observable(1)
-            #    fig, ax = get_1d_ax(; xlabel="z", ylabel="constraint coefficient")
+                frame_index = Observable(1)
+                fig, ax = get_1d_ax(; xlabel="z", ylabel="constraint coefficient")
 
-            #    # Calculate plot limits manually so we can exclude the first time point, which
-            #    # often has a large value for (A-1) due to the way initialisation is done,
-            #    # which can make the subsequent values hard to see.
-            #    ymin = Inf
-            #    ymax = -Inf
-            #    for ri ∈ run_info
-            #        if length(run_info) > 1
-            #            prefix = ri.run_name * ", "
-            #        else
-            #            prefix = ""
-            #        end
+                # Calculate plot limits manually so we can exclude the first time point, which
+                # often has a large value for (A-1) due to the way initialisation is done,
+                # which can make the subsequent values hard to see.
+                ymin = Inf
+                ymax = -Inf
+                for ri ∈ run_info
+                    if length(run_info) > 1
+                        prefix = ri.run_name * ", "
+                    else
+                        prefix = ""
+                    end
 
-            #        varname = "electron_constraints_A_coefficient"
-            #        label = prefix * "(A-1)"
-            #        data = get_variable(ri, varname; ir=ir0)
-            #        data .-= 1.0
-            #        ymin = min(ymin, minimum(data[:,2:end]))
-            #        ymax = max(ymax, maximum(data[:,2:end]))
-            #        animate_vs_z(ri, varname; label=label, data=data,
-            #                     frame_index=frame_index, ax=ax, input=input)
+                    varname = "electron_constraints_A_coefficient"
+                    label = prefix * "(A-1)"
+                    data = get_variable(ri, varname; ir=ir0)
+                    data .-= 1.0
+                    ymin = min(ymin, minimum(data[:,2:end]))
+                    ymax = max(ymax, maximum(data[:,2:end]))
+                    animate_vs_z(ri, varname; label=label, data=data,
+                                 frame_index=frame_index, ax=ax, input=input)
 
-            #        varname = "electron_constraints_B_coefficient"
-            #        label = prefix * "B"
-            #        data = get_variable(ri, varname; ir=ir0)
-            #        ymin = min(ymin, minimum(data[:,2:end]))
-            #        ymax = max(ymax, maximum(data[:,2:end]))
-            #        animate_vs_z(ri, varname; label=label, data=data,
-            #                     frame_index=frame_index, ax=ax, ir=ir0, input=input)
+                    varname = "electron_constraints_B_coefficient"
+                    label = prefix * "B"
+                    data = get_variable(ri, varname; ir=ir0)
+                    ymin = min(ymin, minimum(data[:,2:end]))
+                    ymax = max(ymax, maximum(data[:,2:end]))
+                    animate_vs_z(ri, varname; label=label, data=data,
+                                 frame_index=frame_index, ax=ax, ir=ir0, input=input)
 
-            #        varname = "electron_constraints_C_coefficient"
-            #        label = prefix * "C"
-            #        data = get_variable(ri, varname; ir=ir0)
-            #        ymin = min(ymin, minimum(data[:,2:end]))
-            #        ymax = max(ymax, maximum(data[:,2:end]))
-            #        animate_vs_z(ri, varname; label=label, data=data,
-            #                     frame_index=frame_index, ax=ax, ir=ir0, input=input)
-            #    end
-            #    put_legend_below(fig, ax)
-            #    # Ensure the first row width is 3/4 of the column width so that
-            #    # the plot does not get squashed by the legend
-            #    rowsize!(fig.layout, 1, Aspect(1, 3/4))
-            #    resize_to_layout!(fig)
-            #    ylims!(ax, ymin, ymax)
-            #    save_animation(fig, frame_index, nt,
-            #                   plot_prefix * "electron_constraints." * input.animation_ext)
-            #end
+                    varname = "electron_constraints_C_coefficient"
+                    label = prefix * "C"
+                    data = get_variable(ri, varname; ir=ir0)
+                    ymin = min(ymin, minimum(data[:,2:end]))
+                    ymax = max(ymax, maximum(data[:,2:end]))
+                    animate_vs_z(ri, varname; label=label, data=data,
+                                 frame_index=frame_index, ax=ax, ir=ir0, input=input)
+                end
+                put_legend_below(fig, ax)
+                # Ensure the first row width is 3/4 of the column width so that
+                # the plot does not get squashed by the legend
+                rowsize!(fig.layout, 1, Aspect(1, 3/4))
+                resize_to_layout!(fig)
+                ylims!(ax, ymin, ymax)
+                save_animation(fig, frame_index, nt,
+                               plot_prefix * "electron_constraints." * input.animation_ext)
+            end
         end
     catch e
         return makie_post_processing_error_handler(
