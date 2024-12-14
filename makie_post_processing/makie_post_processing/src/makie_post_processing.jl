@@ -723,6 +723,7 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
         advection_velocity=false,
         colormap=this_input_dict["colormap"],
         animation_ext=this_input_dict["animation_ext"],
+        n_points_near_wall=4,
        )
 
     set_defaults_and_check_section!(
@@ -732,6 +733,7 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
         advection_velocity=false,
         colormap=this_input_dict["colormap"],
         animation_ext=this_input_dict["animation_ext"],
+        n_points_near_wall=4,
        )
 
     set_defaults_and_check_section!(
@@ -741,6 +743,7 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
         advection_velocity=false,
         colormap=this_input_dict["colormap"],
         animation_ext=this_input_dict["animation_ext"],
+        n_points_near_wall=4,
        )
 
     set_defaults_and_check_section!(
@@ -4696,8 +4699,8 @@ function plot_charged_pdf_2D_at_wall(run_info; plot_prefix, electron=false)
 
         nt = minimum(ri.nt for ri ∈ run_info)
 
-        for (z, z_range, label) ∈ ((z_lower, z_lower:z_lower+4, "wall-"),
-                                   (z_upper, z_upper-4:z_upper, "wall+"))
+        for (z, z_range, label) ∈ ((z_lower, z_lower:z_lower+input.n_points_near_wall, "wall-"),
+                                   (z_upper, z_upper-input.n_points_near_wall:z_upper, "wall+"))
             f_input = copy(input_dict_dfns["f"])
             f_input["iz0"] = z
 
@@ -4983,8 +4986,8 @@ function plot_neutral_pdf_2D_at_wall(run_info; plot_prefix)
                              for ri ∈ run_info)
         nt = minimum(ri.nt for ri ∈ run_info)
 
-        for (z, z_range, label) ∈ ((z_lower, z_lower:z_lower+4, "wall-"),
-                                   (z_upper, z_upper-4:z_upper, "wall+"))
+        for (z, z_range, label) ∈ ((z_lower, z_lower:z_lower+input.n_points_near_wall, "wall-"),
+                                   (z_upper, z_upper-input.n_points_near_wall:z_upper, "wall+"))
             f_neutral_input = copy(input_dict_dfns["f_neutral"])
             f_neutral_input["iz0"] = z
 
