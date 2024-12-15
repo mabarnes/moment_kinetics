@@ -48,7 +48,8 @@ using ..charge_exchange: ion_charge_exchange_collisions_1V!,
                          neutral_charge_exchange_collisions_3V!
 using ..electron_kinetic_equation: update_electron_pdf!, implicit_electron_advance!,
                                    electron_backward_euler!,
-                                   electron_kinetic_equation_euler_update!
+                                   electron_kinetic_equation_euler_update!,
+                                   apply_electron_bc_and_constraints_no_r!
 using ..ionization: ion_ionization_collisions_1V!, neutral_ionization_collisions_1V!,
                     ion_ionization_collisions_3V!, neutral_ionization_collisions_3V!
 using ..krook_collisions: krook_collisions!
@@ -2470,6 +2471,17 @@ moments and moment derivatives
                 (A[iz,ir,is], B[iz,ir,is], C[iz,ir,is]) =
                     @views hard_force_moment_constraints!(this_scratch.pdf[:,:,iz,ir,is],
                                                           moments, vpa)
+            end
+        end
+
+        if composition.electron_physics ∈ (kinetic_electrons,
+                                           kinetic_electrons_with_temperature_equation)
+            for ir ∈ 1:r.n
+                @views apply_electron_bc_and_constraints_no_r!(
+                           this_scratch.pdf_electron[:,:,:,ir], fields.phi[:,ir], moments,
+                           r, z, vperp, vpa, vperp_spectral, vpa_spectral,
+                           electron_vpa_advect, num_diss_params, composition, ir,
+                           nl_solver_params.electron_advance)
             end
         end
     end
