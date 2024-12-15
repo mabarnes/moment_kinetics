@@ -815,12 +815,12 @@ function electron_backward_euler_pseudotimestepping!(scratch, pdf, moments, phi,
             end
 
             step_success = electron_backward_euler!(
-                               scratch[1], scratch[t_params.n_rk_stages+1], moments, phi,
-                               collisions, composition, r, z, vperp, vpa, z_spectral,
-                               vperp_spectral, vpa_spectral, z_advect, vpa_advect,
-                               scratch_dummy, t_params, external_source_settings,
-                               num_diss_params, nl_solver_params, ir;
-                               evolve_ppar=evolve_ppar, ion_dt=ion_dt)
+                               old_scratch, new_scratch, moments, phi, collisions,
+                               composition, r, z, vperp, vpa, z_spectral, vperp_spectral,
+                               vpa_spectral, z_advect, vpa_advect, scratch_dummy,
+                               t_params, external_source_settings, num_diss_params,
+                               nl_solver_params, ir; evolve_ppar=evolve_ppar,
+                               ion_dt=ion_dt)
 
             if step_success
                 apply_electron_bc_and_constraints_no_r!(f_electron_new, phi, moments, r,
