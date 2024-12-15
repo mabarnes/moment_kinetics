@@ -117,6 +117,7 @@ kinetic_input["timestepping"] = OptionsDict("type" => "PareschiRusso2(2,2,2)",
 
 kinetic_input["electron_timestepping"] = OptionsDict("nstep" => 5000000,
                                                      "dt" => 2.0e-5,
+                                                     "maximum_dt" => Inf,
                                                      "nwrite" => 10000,
                                                      "nwrite_dfns" => 100000,
                                                      "decrease_dt_iteration_threshold" => 5000,
