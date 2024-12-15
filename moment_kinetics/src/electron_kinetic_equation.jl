@@ -823,6 +823,26 @@ function electron_backward_euler_pseudotimestepping!(scratch, pdf, moments, phi,
                                evolve_ppar=evolve_ppar, ion_dt=ion_dt)
 
             if step_success
+                apply_electron_bc_and_constraints_no_r!(f_electron_new, phi, moments, r,
+                                                        z, vperp, vpa, vperp_spectral,
+                                                        vpa_spectral, vpa_advect,
+                                                        num_diss_params, composition, ir,
+                                                        nl_solver_params)
+
+                if !evolve_ppar
+                    # update the electron heat flux
+                    moments.electron.qpar_updated[] = false
+                    @views calculate_electron_qpar_from_pdf_no_r!(moments.electron.qpar[:,ir],
+                                                                  electron_ppar_new,
+                                                                  moments.electron.vth[:,ir],
+                                                                  f_electron_new, vpa, ir)
+
+                    # compute the z-derivative of the parallel electron heat flux
+                    @views derivative_z!(moments.electron.dqpar_dz[:,ir],
+                                         moments.electron.qpar[:,ir], buffer_1, buffer_2,
+                                         buffer_3, buffer_4, z_spectral, z)
+                end
+
                 #println("Newton its ", nl_solver_params.max_nonlinear_iterations_this_step[], " ", t_params.dt[])
                 # update the time following the pdf update
                 t_params.t[] += t_params.dt[]
@@ -912,51 +932,8 @@ function electron_backward_euler_pseudotimestepping!(scratch, pdf, moments, phi,
                 apply_electron_bc_and_constraints_no_r!(f_electron_new, phi, moments, z,
                                                         vperp, vpa, vperp_spectral,
                                                         vpa_spectral, vpa_advect,
-                                                        num_diss_params, composition, ir;
-                                                        lowerz_vcut_ind=new_lowerz_vcut_ind,
-                                                        upperz_vcut_ind=new_upperz_vcut_ind)
-                # Check if either vcut_ind has changed - if either has, recalculate the
-                # preconditioner because the response at the grid point before the cutoff is
-                # sharp, so the preconditioner could be significantly wrong when it was
-                # calculated using the wrong vcut_ind.
-                lower_vcut_changed = @view z.scratch_shared_int[1:1]
-                upper_vcut_changed = @view z.scratch_shared_int[2:2]
-                @serial_region begin
-                    if z.irank == 0
-                        precon_lowerz_vcut_inds = nl_solver_params.precon_lowerz_vcut_inds
-                        if new_lowerz_vcut_ind[] == precon_lowerz_vcut_inds[ir]
-                            lower_vcut_changed[] = 0
-                        else
-                            lower_vcut_changed[] = 1
-                            precon_lowerz_vcut_inds[ir] = new_lowerz_vcut_ind[]
-                        end
-                    end
-                    MPI.Bcast!(lower_vcut_changed, comm_inter_block[]; root=0)
-                    #req1 = MPI.Ibcast!(lower_vcut_changed, comm_inter_block[]; root=0)
-
-                    if z.irank == z.nrank - 1
-                        precon_upperz_vcut_inds = nl_solver_params.precon_upperz_vcut_inds
-                        if new_upperz_vcut_ind[] == precon_upperz_vcut_inds[ir]
-                            upper_vcut_changed[] = 0
-                        else
-                            upper_vcut_changed[] = 1
-                            precon_upperz_vcut_inds[ir] = new_upperz_vcut_ind[]
-                        end
-                    end
-                    MPI.Bcast!(upper_vcut_changed, comm_inter_block[]; root=n_blocks[]-1)
-                    #req2 = MPI.Ibcast!(upper_vcut_changed, comm_inter_block[]; root=n_blocks[]-1)
-
-                    # Eventually can use Ibcast!() to make the two broadcasts run
-                    # simultaneously, but need the function to be merged into MPI.jl (see
-                    # https://github.com/JuliaParallel/MPI.jl/pull/882).
-                    #MPI.Waitall([req1, req2])
-                end
-                _block_synchronize()
-                if lower_vcut_changed[] == 1 || upper_vcut_changed[] == 1
-                    # One or both of the indices changed for some `ir`, so force the
-                    # preconditioner to be recalculated next time.
-                    nl_solver_params.solves_since_precon_update[] = nl_solver_params.preconditioner_update_interval
-                end
+                                                        num_diss_params, composition, ir,
+                                                        nl_solver_params)
 
                 if !evolve_ppar
                     # update the electron heat flux
@@ -1890,74 +1867,6 @@ global_rank[] == 0 && println("recalculating precon")
                                    right_preconditioner=right_preconditioner,
                                    coords=(z=z, vperp=vperp, vpa=vpa))
 
-    if newton_success
-        new_lowerz_vcut_ind = @view r.scratch_shared_int[ir:ir]
-        new_upperz_vcut_ind = @view r.scratch_shared_int2[ir:ir]
-        apply_electron_bc_and_constraints_no_r!(f_electron_new, phi, moments, z,
-                                                vperp, vpa, vperp_spectral,
-                                                vpa_spectral, vpa_advect,
-                                                num_diss_params, composition, ir;
-                                                lowerz_vcut_ind=new_lowerz_vcut_ind,
-                                                upperz_vcut_ind=new_upperz_vcut_ind)
-        # Check if either vcut_ind has changed - if either has, recalculate the
-        # preconditioner because the response at the grid point before the cutoff is
-        # sharp, so the preconditioner could be significantly wrong when it was
-        # calculated using the wrong vcut_ind.
-        lower_vcut_changed = @view z.scratch_shared_int[1:1]
-        upper_vcut_changed = @view z.scratch_shared_int[2:2]
-        @serial_region begin
-            if z.irank == 0
-                precon_lowerz_vcut_inds = nl_solver_params.precon_lowerz_vcut_inds
-                if new_lowerz_vcut_ind[] == precon_lowerz_vcut_inds[ir]
-                    lower_vcut_changed[] = 0
-                else
-                    lower_vcut_changed[] = 1
-                    precon_lowerz_vcut_inds[ir] = new_lowerz_vcut_ind[]
-                end
-            end
-            MPI.Bcast!(lower_vcut_changed, comm_inter_block[]; root=0)
-            #req1 = MPI.Ibcast!(lower_vcut_changed, comm_inter_block[]; root=0)
-
-            if z.irank == z.nrank - 1
-                precon_upperz_vcut_inds = nl_solver_params.precon_upperz_vcut_inds
-                if new_upperz_vcut_ind[] == precon_upperz_vcut_inds[ir]
-                    upper_vcut_changed[] = 0
-                else
-                    upper_vcut_changed[] = 1
-                    precon_upperz_vcut_inds[ir] = new_upperz_vcut_ind[]
-                end
-            end
-            MPI.Bcast!(upper_vcut_changed, comm_inter_block[]; root=n_blocks[]-1)
-            #req2 = MPI.Ibcast!(upper_vcut_changed, comm_inter_block[]; root=n_blocks[]-1)
-
-            # Eventually can use Ibcast!() to make the two broadcasts run
-            # simultaneously, but need the function to be merged into MPI.jl (see
-            # https://github.com/JuliaParallel/MPI.jl/pull/882).
-            #MPI.Waitall([req1, req2])
-        end
-        _block_synchronize()
-        if lower_vcut_changed[] == 1 || upper_vcut_changed[] == 1
-            # One or both of the indices changed for some `ir`, so force the
-            # preconditioner to be recalculated next time.
-            nl_solver_params.solves_since_precon_update[] = nl_solver_params.preconditioner_update_interval
-        end
-
-        if !evolve_ppar
-            # update the electron heat flux
-            moments.electron.qpar_updated[] = false
-            @views calculate_electron_qpar_from_pdf_no_r!(moments.electron.qpar[:,ir],
-                                                          electron_ppar_new,
-                                                          moments.electron.vth[:,ir],
-                                                          f_electron_new, vpa, ir)
-
-            # compute the z-derivative of the parallel electron heat flux
-            @views derivative_z!(moments.electron.dqpar_dz[:,ir],
-                                 moments.electron.qpar[:,ir], buffer_1, buffer_2,
-                                 buffer_3, buffer_4, z_spectral, z)
-        end
-
-    end
-
     return newton_success
 end
 
@@ -2377,23 +2286,68 @@ function apply_electron_bc_and_constraints!(this_scratch, phi, moments, r, z, vp
     end
 end
 
-function apply_electron_bc_and_constraints_no_r!(f_electron, phi, moments, z, vperp,
+function apply_electron_bc_and_constraints_no_r!(f_electron, phi, moments, r, z, vperp,
                                                  vpa, vperp_spectral, vpa_spectral,
                                                  vpa_advect, num_diss_params, composition,
-                                                 ir; lowerz_vcut_ind=nothing,
-                                                 upperz_vcut_ind=nothing)
+                                                 ir, nl_solver_params)
     begin_z_vperp_vpa_region()
     @loop_z_vperp_vpa iz ivperp ivpa begin
         f_electron[ivpa,ivperp,iz] = max(f_electron[ivpa,ivperp,iz], 0.0)
     end
+
+    new_lowerz_vcut_ind = @view r.scratch_shared_int[ir:ir]
+    new_upperz_vcut_ind = @view r.scratch_shared_int2[ir:ir]
 
     # enforce the boundary condition(s) on the electron pdf
     @views enforce_boundary_condition_on_electron_pdf!(
                f_electron, phi, moments.electron.vth[:,ir], moments.electron.upar[:,ir],
                z, vperp, vpa, vperp_spectral, vpa_spectral, vpa_advect, moments,
                num_diss_params.electron.vpa_dissipation_coefficient > 0.0,
-               composition.me_over_mi, ir; lowerz_vcut_ind=lowerz_vcut_ind,
-               upperz_vcut_ind=upperz_vcut_ind)
+               composition.me_over_mi, ir; lowerz_vcut_ind=new_lowerz_vcut_ind,
+               upperz_vcut_ind=new_upperz_vcut_ind)
+
+    # Check if either vcut_ind has changed - if either has, recalculate the
+    # preconditioner because the response at the grid point before the cutoff is
+    # sharp, so the preconditioner could be significantly wrong when it was
+    # calculated using the wrong vcut_ind.
+    lower_vcut_changed = @view z.scratch_shared_int[1:1]
+    upper_vcut_changed = @view z.scratch_shared_int[2:2]
+    @serial_region begin
+        if z.irank == 0
+            precon_lowerz_vcut_inds = nl_solver_params.precon_lowerz_vcut_inds
+            if new_lowerz_vcut_ind[] == precon_lowerz_vcut_inds[ir]
+                lower_vcut_changed[] = 0
+            else
+                lower_vcut_changed[] = 1
+                precon_lowerz_vcut_inds[ir] = new_lowerz_vcut_ind[]
+            end
+        end
+        MPI.Bcast!(lower_vcut_changed, comm_inter_block[]; root=0)
+        #req1 = MPI.Ibcast!(lower_vcut_changed, comm_inter_block[]; root=0)
+
+        if z.irank == z.nrank - 1
+            precon_upperz_vcut_inds = nl_solver_params.precon_upperz_vcut_inds
+            if new_upperz_vcut_ind[] == precon_upperz_vcut_inds[ir]
+                upper_vcut_changed[] = 0
+            else
+                upper_vcut_changed[] = 1
+                precon_upperz_vcut_inds[ir] = new_upperz_vcut_ind[]
+            end
+        end
+        MPI.Bcast!(upper_vcut_changed, comm_inter_block[]; root=n_blocks[]-1)
+        #req2 = MPI.Ibcast!(upper_vcut_changed, comm_inter_block[]; root=n_blocks[]-1)
+
+        # Eventually can use Ibcast!() to make the two broadcasts run
+        # simultaneously, but need the function to be merged into MPI.jl (see
+        # https://github.com/JuliaParallel/MPI.jl/pull/882).
+        #MPI.Waitall([req1, req2])
+    end
+    _block_synchronize()
+    if lower_vcut_changed[] == 1 || upper_vcut_changed[] == 1
+        # One or both of the indices changed for some `ir`, so force the
+        # preconditioner to be recalculated next time.
+        nl_solver_params.solves_since_precon_update[] = nl_solver_params.preconditioner_update_interval
+    end
 
     begin_z_region()
     A = moments.electron.constraints_A_coefficient
