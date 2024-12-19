@@ -82,6 +82,16 @@ collisions_input2 = recursive_merge(wall_bc_cheb_input, OptionsDict("composition
                                                                                            "bc" => "zero-impose-regularity"),
                                                                     "vpa" => OptionsDict("discretization" => "gausslegendre_pseudospectral"),
                                                                    ))
+collisions_input3 = recursive_merge(wall_bc_cheb_input, OptionsDict("composition" => OptionsDict("n_neutral_species" => 0),
+                                                                    "fokker_planck_collisions" => OptionsDict("use_fokker_planck" => true, "self_collisions" => true, "boundary_data_option" => "delta_f_multipole"),
+                                                                    "vperp" => OptionsDict("discretization" => "gausslegendre_pseudospectral"),
+                                                                    "vpa" => OptionsDict("discretization" => "gausslegendre_pseudospectral"),
+                                                                   ))
+collisions_input4 = recursive_merge(wall_bc_cheb_input, OptionsDict("composition" => OptionsDict("n_neutral_species" => 0),
+                                                                    "fokker_planck_collisions" => OptionsDict("use_fokker_planck" => true, "self_collisions" => true, "boundary_data_option" => "multipole_expansion"),
+                                                                    "vperp" => OptionsDict("discretization" => "gausslegendre_pseudospectral"),
+                                                                    "vpa" => OptionsDict("discretization" => "gausslegendre_pseudospectral"),
+                                                                   ))
 # add an additional input for every geometry option available in addition to the default
 geo_input1 = recursive_merge(wall_bc_cheb_input, OptionsDict("composition" => OptionsDict("n_neutral_species" => 0),
                                                              "geometry" => OptionsDict("option" => "1D-mirror", "DeltaB" => 0.5, "pitch" => 0.5, "rhostar" => 1.0)))
@@ -109,7 +119,7 @@ kinetic_electron_input = recursive_merge(cheb_input, OptionsDict("evolve_moments
                                                                                                         "no_restart" => true),
                                                                 ))
 
-push!(inputs_list, collisions_input1, collisions_input2, geo_input1, kinetic_electron_input)
+push!(inputs_list, collisions_input1, collisions_input2, collisions_input3, collisions_input4, geo_input1, kinetic_electron_input)
 
 for input in inputs_list
     run_moment_kinetics(input)

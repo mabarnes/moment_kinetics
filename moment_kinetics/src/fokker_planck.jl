@@ -1,5 +1,5 @@
 """
-module for including the Full-F Fokker-Planck Collision Operator
+Module for including the Full-F Fokker-Planck Collision Operator.
 
 The functions in this module are split into two groups. 
 
@@ -54,6 +54,7 @@ using ..velocity_moments: get_density, get_upar, get_ppar, get_pperp, get_qpar, 
 using ..looping
 using ..timer_utils
 using ..input_structs: fkpl_collisions_input, set_defaults_and_check_section!
+using ..input_structs: multipole_expansion, direct_integration
 using ..reference_parameters: get_reference_collision_frequency_ii
 using ..fokker_planck_calculus: init_Rosenbluth_potential_integration_weights!
 using ..fokker_planck_calculus: init_Rosenbluth_potential_boundary_integration_weights!
@@ -67,7 +68,7 @@ using ..fokker_planck_calculus: assemble_explicit_collision_operator_rhs_paralle
 using ..fokker_planck_calculus: assemble_explicit_collision_operator_rhs_parallel_analytical_inputs!
 using ..fokker_planck_calculus: calculate_YY_arrays, enforce_vpavperp_BCs!
 using ..fokker_planck_calculus: calculate_rosenbluth_potential_boundary_data!
-using ..fokker_planck_calculus: enforce_zero_bc!, elliptic_solve!, algebraic_solve!
+using ..fokker_planck_calculus: elliptic_solve!, algebraic_solve!
 using ..fokker_planck_calculus: calculate_rosenbluth_potentials_via_elliptic_solve!
 using ..fokker_planck_test: Cssp_fully_expanded_form, calculate_collisional_fluxes, H_Maxwellian, dGdvperp_Maxwellian
 using ..fokker_planck_test: d2Gdvpa2_Maxwellian, d2Gdvperpdvpa_Maxwellian, d2Gdvperp2_Maxwellian, dHdvpa_Maxwellian, dHdvperp_Maxwellian
@@ -78,10 +79,10 @@ using ..reference_parameters: setup_reference_parameters
 Function for reading Fokker Planck collision operator input parameters. 
 Structure the namelist as follows.
 
-[fokker_planck_collisions]
-use_fokker_planck = true
-nuii = 1.0
-frequency_option = "manual"
+    [fokker_planck_collisions]
+    use_fokker_planck = true
+    nuii = 1.0
+    frequency_option = "manual"
 """
 function setup_fkpl_collisions_input(toml_input::AbstractDict)
     reference_params = setup_reference_parameters(toml_input)
@@ -95,6 +96,7 @@ function setup_fkpl_collisions_input(toml_input::AbstractDict)
        frequency_option = "reference_parameters",
        self_collisions = true,
        use_conserving_corrections = true,
+       boundary_data_option = direct_integration,
        slowing_down_test = false,
        sd_density = 1.0,
        sd_temp = 0.01,
@@ -153,7 +155,7 @@ end
 ########################################################
 
 """
-function that initialises the arrays needed for Fokker Planck collisions
+Function that initialises the arrays needed for Fokker Planck collisions
 using numerical integration to compute the Rosenbluth potentials only
 at the boundary and using an elliptic solve to obtain the potentials 
 in the rest of the velocity space domain.
@@ -240,6 +242,7 @@ end
 Function for advancing with the explicit, weak-form, self-collision operator
 using the existing method for computing the Rosenbluth potentials, with
 the addition of cross-species collisions against fixed Maxwellian distribution functions
+where the Rosenbluth potentials are specified using analytical results.
 """
 @timeit global_timer explicit_fp_collisions_weak_form_Maxwellian_cross_species!(
                          pdf_out, pdf_in, dSdt, composition, collisions, dt,
@@ -306,7 +309,7 @@ end
 
 
 """
-Function for advancing with the explicit, weak-form, self-collision operator
+Function for advancing with the explicit, weak-form, self-collision operator.
 """
 @timeit global_timer explicit_fokker_planck_collisions_weak_form!(
                          pdf_out, pdf_in, dSdt, composition, collisions, dt,
@@ -337,13 +340,15 @@ Function for advancing with the explicit, weak-form, self-collision operator
     Zi = collisions.fkpl.Zi # generalise!
     nussp = nuref*(Zi^4) # include charge number factor for self collisions
     use_conserving_corrections = collisions.fkpl.use_conserving_corrections
+    boundary_data_option = collisions.fkpl.boundary_data_option
     # N.B. parallelisation using special 'anyv' region
     begin_s_r_z_anyv_region()
     @loop_s_r_z is ir iz begin
         # first argument is Fs, and second argument is Fs' in C[Fs,Fs'] 
         @views fokker_planck_collision_operator_weak_form!(
             pdf_in[:,:,iz,ir,is], pdf_in[:,:,iz,ir,is], ms, msp, nussp, fkpl_arrays,
-            vperp, vpa, vperp_spectral, vpa_spectral)
+            vperp, vpa, vperp_spectral, vpa_spectral, 
+            boundary_data_option = boundary_data_option)
         # enforce the boundary conditions on CC before it is used for timestepping
         enforce_vpavperp_BCs!(fkpl_arrays.CC,vpa,vperp,vpa_spectral,vperp_spectral)
         # make ad-hoc conserving corrections
@@ -398,7 +403,8 @@ with \$\\gamma_\\mathrm{ref} = 2 \\pi e^4 \\ln \\Lambda_{ii} / (4 \\pi
                          use_Maxwellian_Rosenbluth_coefficients=false,
                          use_Maxwellian_field_particle_distribution=false,
                          algebraic_solve_for_d2Gdvperp2 = false, calculate_GG=false,
-                         calculate_dGdvperp=false) = begin
+                         calculate_dGdvperp=false,
+                         boundary_data_option=direct_integration) = begin
     @boundscheck vpa.n == size(ffsp_in,1) || throw(BoundsError(ffsp_in))
     @boundscheck vperp.n == size(ffsp_in,2) || throw(BoundsError(ffsp_in))
     @boundscheck vpa.n == size(ffs_in,1) || throw(BoundsError(ffs_in))
@@ -448,7 +454,8 @@ with \$\\gamma_\\mathrm{ref} = 2 \\pi e^4 \\ln \\Lambda_{ii} / (4 \\pi
              d2Gdvpa2,dGdvperp,d2Gdvperpdvpa,d2Gdvperp2,ffsp_in,
              vpa,vperp,vpa_spectral,vperp_spectral,fkpl_arrays,
              algebraic_solve_for_d2Gdvperp2=algebraic_solve_for_d2Gdvperp2,
-             calculate_GG=calculate_GG,calculate_dGdvperp=calculate_dGdvperp)
+             calculate_GG=calculate_GG,calculate_dGdvperp=calculate_dGdvperp,
+             boundary_data_option=boundary_data_option)
     end
     # assemble the RHS of the collision operator matrix eq
     if use_Maxwellian_field_particle_distribution
@@ -504,11 +511,10 @@ Function for computing the collision operator
 ```math
 \\sum_{s^\\prime} C[F_{s},F_{s^\\prime}]
 ```
-when 
-```math
-F_{s^\\prime}
-```
-is an analytically specified Maxwellian distribution
+when \$F_{s^\\prime}\$
+is an analytically specified Maxwellian distribution and
+the corresponding Rosenbluth potentials
+are specified using analytical results.
 """
 @timeit global_timer fokker_planck_collision_operator_weak_form_Maxwellian_Fsp!(
                          ffs_in, nuref::mk_float, ms::mk_float, Zs::mk_float,
@@ -591,11 +597,18 @@ is an analytically specified Maxwellian distribution
     return nothing
 end
 
-# solves A x = b for a matrix of the form
-# A00  0    A02
-# 0    A11  A12
-# A02  A12  A22
-# appropriate for the moment numerical conserving terms
+"""
+Function that solves `A x = b` for a matrix of the form
+```math
+\\begin{array}{ccc}
+A_{00} & 0 & A_{02} \\\\
+0 & A_{11} & A_{12} \\\\
+A_{02} & A_{12} & A_{22} \\\\
+\\end{array}
+```
+appropriate for the moment numerical conserving terms used in
+the Fokker-Planck collision operator.
+"""
 function symmetric_matrix_inverse(A00,A02,A11,A12,A22,b0,b1,b2)
     # matrix determinant
     detA = A00*(A11*A22 - A12^2) - A11*A02^2
@@ -616,11 +629,17 @@ function symmetric_matrix_inverse(A00,A02,A11,A12,A22,b0,b1,b2)
     return x0, x1, x2
 end
 
-# solves A x = b for a matrix of the form
-# A00  A01  A02
-# A01  A11  A12
-# A02  A12  A22
-# appropriate for the moment numerical conserving terms
+"""
+Function that solves `A x = b` for a matrix of the form
+```math
+\\begin{array}{ccc}
+A_{00} & A_{01} & A_{02} \\\\
+A_{01} & A_{11} & A_{12} \\\\
+A_{02} & A_{12} & A_{22} \\\\
+\\end{array}
+```
+appropriate for moment numerical conserving terms. 
+"""
 function symmetric_matrix_inverse(A00,A01,A02,A11,A12,A22,b0,b1,b2)
     # matrix determinant
     detA = A00*(A11*A22 - A12^2) - A01*(A01*A22 - A12*A02) + A02*(A01*A12 - A11*A02)
@@ -641,6 +660,18 @@ function symmetric_matrix_inverse(A00,A01,A02,A11,A12,A22,b0,b1,b2)
     return x0, x1, x2
 end
 
+"""
+Function that applies numerical-error correcting terms to ensure
+numerical conservation of the moments `density, upar, pressure` in the self-collision operator.
+Modifies the collision operator such that the operator becomes
+```math
+C_{ss} = C^\\ast_{ss}[F_s,F_{s}] - \\left(x_0 + x_1(v_{\\|}-u_{\\|})+ x_2(v_\\perp^2 +(v_{\\|}-u_{\\|})^2)\\right)F_s
+```
+where \$C^\\ast_{ss}[F_s,F_{s}]\$ is the weak-form self-collision operator computed using 
+the finite-element implementation, \$u_{\\|}\$ is the parallel velocity of \$F_s\$,
+and \$x_0,x_1,x_2\$ are parameters that are chosen so that \$C_{ss}\$
+conserves density, parallel velocity and pressure of \$F_s\$.
+"""
 function conserving_corrections!(CC,pdf_in,vpa,vperp,dummy_vpavperp)
     begin_anyv_region()
     x0, x1, x2, upar = 0.0, 0.0, 0.0, 0.0
@@ -688,6 +719,15 @@ function conserving_corrections!(CC,pdf_in,vpa,vperp,dummy_vpavperp)
     end
 end
 
+"""
+Function that applies a numerical-error correcting term to ensure
+numerical conservation of the `density` in the collision operator.
+```math
+C_{ss^\\prime} = C^\\ast_{ss}[F_s,F_{s^\\prime}] - x_0 F_s
+```
+where \$C^\\ast_{ss}[F_s,F_{s^\\prime}]\$ is the weak-form collision operator computed using 
+the finite-element implementation.
+"""
 function density_conserving_correction!(CC,pdf_in,vpa,vperp,dummy_vpavperp)
     begin_anyv_region()
     x0 = 0.0
@@ -735,7 +775,7 @@ end
 
 
 """
-allocate the required ancilliary arrays 
+Function that allocates the required ancilliary arrays for direct integration routines.
 """
 function allocate_fokkerplanck_arrays_direct_integration(vperp,vpa)
     nvpa = vpa.n
@@ -785,7 +825,7 @@ function allocate_fokkerplanck_arrays_direct_integration(vperp,vpa)
 end
 
 """
-function that initialises the arrays needed to calculate the Rosenbluth potentials
+Function that initialises the arrays needed to calculate the Rosenbluth potentials
 by direct integration. As this function is only supported to keep the testing
 of the direct integration method, the struct 'fka' created here does not contain
 all of the arrays necessary to compute the weak-form operator. This functionality

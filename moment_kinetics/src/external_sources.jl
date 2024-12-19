@@ -814,7 +814,7 @@ Add external source term to the ion kinetic equation.
         end
     elseif source_type == "alphas" || source_type == "alphas-with-losses"
         begin_s_r_z_region()
-        source_v0 = ion_source_settings.source_v0
+        source_v0 = ion_source.source_v0
         if !(source_v0 > 1.0e-8)
             error("source_v0=$source_v0 < 1.0e-8")
         end
@@ -840,8 +840,8 @@ Add external source term to the ion kinetic equation.
             end
             
             if source_type == "alphas-with-losses"
-                sink_vth = ion_source_settings.sink_vth
-                sink_strength = ion_source_settings.sink_strength
+                sink_vth = ion_source.sink_vth
+                sink_strength = ion_source.sink_strength
                 if !(sink_vth > 1.0e-8)
                    error("sink_vth=$sink_vth < 1.0e-8")
                 end
@@ -871,8 +871,8 @@ Add external source term to the ion kinetic equation.
         end
     elseif source_type == "beam" || source_type == "beam-with-losses"
         begin_s_r_z_region()
-        source_vpa0 = ion_source_settings.source_vpa0
-        source_vperp0 = ion_source_settings.source_vperp0
+        source_vpa0 = ion_source.source_vpa0
+        source_vperp0 = ion_source.source_vperp0
         if !(source_vpa0 > 1.0e-8)
             error("source_vpa0=$source_vpa0 < 1.0e-8")
         end
@@ -901,8 +901,8 @@ Add external source term to the ion kinetic equation.
             end
             
             if source_type == "beam-with-losses"
-                sink_vth = ion_source_settings.sink_vth
-                sink_strength = ion_source_settings.sink_strength
+                sink_vth = ion_source.sink_vth
+                sink_strength = ion_source.sink_strength
                 if !(sink_vth > 1.0e-8)
                    error("sink_vth=$sink_vth < 1.0e-8")
                 end
