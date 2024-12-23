@@ -3,8 +3,10 @@
 module calculus
 
 export derivative!, second_derivative!, laplacian_derivative!
+export elementwise_indefinite_integration!
 export reconcile_element_boundaries_MPI!
 export integral
+export indefinite_integral!
 
 using ..moment_kinetics_structs: discretization_info, null_spatial_dimension_info,
                                  null_velocity_dimension_info, weak_discretization_info
@@ -29,6 +31,47 @@ calculates a derivative without upwinding information.
 Result is stored in coord.scratch_2d.
 """
 function elementwise_derivative! end
+
+"""
+"""
+function elementwise_indefinite_integration! end
+
+"""
+    indefinite_integral!(pf, f, coord, spectral)
+
+Indefinite line integral.
+"""
+function indefinite_integral!(pf, f, coord, spectral::discretization_info)
+    # get the indefinite integral at each grid point within each element and store in
+    # coord.scratch_2d
+    elementwise_indefinite_integration!(coord, f, spectral)
+    # map the integral from the elemental grid to the full grid;
+    # taking care to match integral constants at the boundaries
+    # we assume that the lower limit of the indefinite integral
+    # is the lowest value in coord.grid
+    indefinite_integral_elements_to_full_grid!(pf, coord)
+end
+
+"""
+"""
+function indefinite_integral_elements_to_full_grid!(pf, coord)
+    pf2d = coord.scratch_2d
+    nelement_local = coord.nelement_local
+    ngrid = coord.ngrid
+    igrid_full = coord.igrid_full   
+    j = 1 # the first element
+    for i in 1:ngrid
+        pf[i] = pf2d[i,j]
+    end
+    for j in 2:nelement_local
+        ilast = igrid_full[ngrid,j-1] # the grid index of the last point in the previous element
+        for k in 2:coord.ngrid
+            i = coord.igrid_full[k,j] # the index in the full grid
+            pf[i] = pf2d[k,j] + pf[ilast]
+        end
+    end
+    return nothing
+end
 
 """
     derivative!(df, f, coord, adv_fac, spectral)
