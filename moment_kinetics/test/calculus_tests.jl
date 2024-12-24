@@ -4,7 +4,7 @@ include("setup.jl")
 
 using moment_kinetics.coordinates: define_test_coordinate
 using moment_kinetics.calculus: derivative!, second_derivative!, integral
-using moment_kinetics.calculus: laplacian_derivative!
+using moment_kinetics.calculus: laplacian_derivative!, indefinite_integral!
 
 using MPI
 using Random
@@ -1860,6 +1860,103 @@ function runtests()
                 #minf = minimum(f)
                 #println("$nelement $ngrid $err $maxfe $maxf $minf")
                 @test isapprox(f, expected_f, rtol=rtol, atol=1.e-10,
+                               norm=maxabs_norm)
+            end
+        end
+
+        @testset "GaussLegendre indefinite line integration" verbose=false begin
+            @testset "$nelement $ngrid" for name in ("z","vperp"), (nelement, ngrid, rtol) ∈
+                    (
+                     (1, 8, 1.e-3),
+                     (1, 9, 7.e-5),
+                     (1, 10, 5.e-5),
+                     (1, 11, 8.e-7),
+                     (1, 12, 5.e-7),
+                     (1, 13, 8.e-9),
+                     (1, 14, 5.e-9),
+                     (1, 15, 1.e-10),
+                     (1, 16, 5.e-10),
+                     (1, 17, 5.e-10),
+                     
+                     (2, 6, 1.e-4),
+                     (2, 7, 5.e-5),
+                     (2, 8, 1.e-6),
+                     (2, 9, 5.e-7),
+                     (2, 10, 5.e-9),
+                     (2, 11, 5.e-10),
+                     (2, 12, 5.e-10),
+                     (2, 13, 5.e-10),
+                     (2, 14, 5.e-10),
+                     (2, 15, 5.e-10),
+                     (2, 16, 5.e-10),
+                     (2, 17, 5.e-10),
+                     
+                     (3, 6, 5.e-5),
+                     (3, 7, 1.e-6),
+                     (3, 8, 8.e-8),
+                     (3, 9, 5.e-9),
+                     (3, 10, 5.e-10),
+                     (3, 11, 5.e-10),
+                     (3, 12, 5.e-10),
+                     (3, 13, 5.e-10),
+                     (3, 14, 5.e-10),
+                     (3, 15, 5.e-10),
+                     (3, 16, 5.e-10),
+                     (3, 17, 5.e-8),
+                     
+                     (4, 5, 6.e-5),
+                     (4, 6, 5.e-6),
+                     (4, 7, 1.e-7),
+                     (4, 8, 5.e-9),
+                     (4, 9, 1.e-10),
+                     (4, 10, 1.e-10),
+                     (4, 11, 8.e-10),
+                     (4, 12, 8.e-10),
+                     (4, 13, 8.e-10),
+                     (4, 14, 8.e-10),
+                     (4, 15, 8.e-10),
+                     (4, 16, 8.e-8),
+                     (4, 17, 8.e-8),
+                     
+                     (5, 5, 4.e-5),
+                     (5, 6, 8.e-7),
+                     (5, 7, 5.e-8),
+                     (5, 8, 5.e-10),
+                     (5, 9, 8.e-10),
+                     (5, 10, 5.e-10),
+                     (5, 11, 8.e-10),
+                     (5, 12, 4.e-10),
+                     (5, 13, 2.e-10),
+                     (5, 14, 2.e-10),
+                     (5, 15, 8.e-10),
+                     (5, 16, 8.e-10),
+                     (5, 17, 8.e-10),
+                     )
+
+                # define inputs needed for the test
+                L = 6.0
+                bc = "zero"
+                element_spacing_option = "uniform"
+                # create the coordinate struct 'x'
+                # This test runs effectively in serial, so implicitly uses
+                # `ignore_MPI=true` to avoid errors due to communicators not being fully
+                # set up.
+                x, spectral = define_test_coordinate(name; ngrid=ngrid,
+                                                     nelement=nelement, L=L,
+                                                     discretization="gausslegendre_pseudospectral",
+                                                     bc=bc,
+                                                     element_spacing_option=element_spacing_option,
+                                                     collision_operator_dim=false)
+                xllim = x.element_boundaries[1] # lower endpoint
+                f = @. cos(x.grid - xllim)
+                expected_pf = @. sin(x.grid - xllim)
+                # create array for the indefinite integral pf
+                pf = similar(f)
+
+                # differentiate f
+                indefinite_integral!(pf, f, x, spectral)
+                #println("$nelement $ngrid error: ",maximum(abs.(pf .- expected_pf)))
+                @test isapprox(pf, expected_pf, rtol=rtol, atol=1.e-10,
                                norm=maxabs_norm)
             end
         end
