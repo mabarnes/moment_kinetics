@@ -1864,8 +1864,8 @@ function runtests()
             end
         end
 
-        @testset "GaussLegendre indefinite line integration" verbose=false begin
-            @testset "$nelement $ngrid" for name in ("z","vperp"), (nelement, ngrid, rtol) ∈
+        @testset "Indefinite line integration" verbose=false begin
+            @testset "$nelement $ngrid" for discretization in ("gausslegendre_pseudospectral", "chebyshev_pseudospectral"), name in ("z","vperp"), (nelement, ngrid, rtol) ∈
                     (
                      (1, 8, 1.e-3),
                      (1, 9, 7.e-5),
@@ -1878,12 +1878,12 @@ function runtests()
                      (1, 16, 5.e-10),
                      (1, 17, 5.e-10),
                      
-                     (2, 6, 1.e-4),
+                     (2, 6, 2.e-4),
                      (2, 7, 5.e-5),
                      (2, 8, 1.e-6),
                      (2, 9, 5.e-7),
                      (2, 10, 5.e-9),
-                     (2, 11, 5.e-10),
+                     (2, 11, 1.e-9),
                      (2, 12, 5.e-10),
                      (2, 13, 5.e-10),
                      (2, 14, 5.e-10),
@@ -1908,7 +1908,7 @@ function runtests()
                      (4, 6, 5.e-6),
                      (4, 7, 1.e-7),
                      (4, 8, 5.e-9),
-                     (4, 9, 1.e-10),
+                     (4, 9, 1.e-9),
                      (4, 10, 1.e-10),
                      (4, 11, 8.e-10),
                      (4, 12, 8.e-10),
@@ -1921,7 +1921,7 @@ function runtests()
                      (5, 5, 4.e-5),
                      (5, 6, 8.e-7),
                      (5, 7, 5.e-8),
-                     (5, 8, 5.e-10),
+                     (5, 8, 1.e-9),
                      (5, 9, 8.e-10),
                      (5, 10, 5.e-10),
                      (5, 11, 8.e-10),
@@ -1943,7 +1943,7 @@ function runtests()
                 # set up.
                 x, spectral = define_test_coordinate(name; ngrid=ngrid,
                                                      nelement=nelement, L=L,
-                                                     discretization="gausslegendre_pseudospectral",
+                                                     discretization=discretization,
                                                      bc=bc,
                                                      element_spacing_option=element_spacing_option,
                                                      collision_operator_dim=false)

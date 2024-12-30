@@ -20,6 +20,7 @@ export setup_gausslegendre_pseudospectral
 export GaussLegendre_weak_product_matrix!
 export ielement_global_func
 export get_QQ_local!
+export integration_matrix!
 
 using FastGaussQuadrature
 using LegendrePolynomials: Pl, dnPl

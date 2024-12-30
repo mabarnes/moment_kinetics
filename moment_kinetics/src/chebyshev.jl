@@ -17,10 +17,11 @@ using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float, allocate_complex
 using ..clenshaw_curtis: clenshawcurtisweights
 import ..calculus: elementwise_derivative!
+import ..calculus: elementwise_indefinite_integration!
 using ..communication
 import ..interpolation: single_element_interpolate!
 using ..moment_kinetics_structs: discretization_info
-
+using ..gauss_legendre: integration_matrix!
 """
 Chebyshev pseudospectral discretization
 """
@@ -43,6 +44,8 @@ struct chebyshev_base_info{TForward <: FFTW.cFFTWPlan, TBackward <: AbstractFFTs
     Dmat::Array{mk_float,2}
     # elementwise differentiation vector (ngrid) for the point x = -1
     D0::Array{mk_float,1}
+    # elementwise antidifferentiation matrix
+    Amat::Array{mk_float,2}
 end
 
 struct chebyshev_info{TForward <: FFTW.cFFTWPlan, TBackward <: AbstractFFTs.ScaledPlan} <: discretization_info
@@ -141,9 +144,12 @@ function setup_chebyshev_pseudospectral_lobatto(coord, fftw_flags)
     cheb_derivative_matrix_elementwise!(Dmat,coord.ngrid)
     D0 = allocate_float(coord.ngrid)
     D0 .= Dmat[1,:]
+    Amat = allocate_float(coord.ngrid, coord.ngrid)
+    x = chebyshevpoints(coord.ngrid)
+    integration_matrix!(Amat,x,coord.ngrid)
     # return a structure containing the information needed to carry out
     # a 1D Chebyshev transform
-    return chebyshev_base_info(fext, fcheby, dcheby, forward_transform, backward_transform, Dmat, D0)
+    return chebyshev_base_info(fext, fcheby, dcheby, forward_transform, backward_transform, Dmat, D0, Amat)
 end
 
 function setup_chebyshev_pseudospectral_radau(coord, fftw_flags)
@@ -164,9 +170,12 @@ function setup_chebyshev_pseudospectral_radau(coord, fftw_flags)
         cheb_derivative_matrix_elementwise_radau_by_FFT!(Dmat, coord, fcheby, dcheby, fext, forward_transform)
         D0 = allocate_float(coord.ngrid)
         cheb_lower_endpoint_derivative_vector_elementwise_radau_by_FFT!(D0, coord, fcheby, dcheby, fext, forward_transform)
+        Amat = allocate_float(coord.ngrid, coord.ngrid)
+        x = chebyshev_radau_points(coord.ngrid)
+        integration_matrix!(Amat,x,coord.ngrid)
         # return a structure containing the information needed to carry out
         # a 1D Chebyshev transform
-        return chebyshev_base_info(fext, fcheby, dcheby, forward_transform, backward_transform, Dmat, D0)
+        return chebyshev_base_info(fext, fcheby, dcheby, forward_transform, backward_transform, Dmat, D0, Amat)
 end
 
 """
@@ -917,5 +926,47 @@ https://people.maths.ox.ac.uk/trefethen/pdetext.html
         D[1] = 0.0
         D[1] = -sum(D[:])
     end
+
+"""
+A function that takes the indefinite integral in each element of `coord.grid`,
+leaving the result (element-wise) in `coord.scratch_2d`.
+"""
+function elementwise_indefinite_integration!(coord, ff, chebyshev::chebyshev_info)
+    # the primative of f
+    pf = coord.scratch_2d
+    # define local variable nelement for convenience
+    nelement = coord.nelement_local
+    # check array bounds
+    @boundscheck nelement == size(pf,2) && coord.ngrid == size(pf,1) || throw(BoundsError(pf))
+    
+    # variable k will be used to avoid double counting of overlapping point
+    k = 0
+    j = 1 # the first element
+    imin = coord.imin[j]-k
+    # imax is the maximum index on the full grid for this (jth) element
+    imax = coord.imax[j]        
+    if coord.radau_first_element && coord.irank == 0 # differentiate this element with the Radau scheme
+        @views mul!(pf[:,j],chebyshev.radau.Amat[:,:],ff[imin:imax])
+    else #differentiate using the Lobatto scheme
+        @views mul!(pf[:,j],chebyshev.lobatto.Amat[:,:],ff[imin:imax])
+    end
+    # transform back to the physical coordinate scale
+    for i in 1:coord.ngrid
+        pf[i,j] *= coord.element_scale[j]
+    end
+    # calculate the derivative on each element
+    @inbounds for j ∈ 2:nelement
+        k = 1 
+        imin = coord.imin[j]-k
+        # imax is the maximum index on the full grid for this (jth) element
+        imax = coord.imax[j]
+        @views mul!(pf[:,j],chebyshev.lobatto.Amat[:,:],ff[imin:imax])        
+        # transform back to the physical coordinate scale
+        for i in 1:coord.ngrid
+            pf[i,j] *= coord.element_scale[j]
+        end
+    end
+    return nothing
+end
 
 end
