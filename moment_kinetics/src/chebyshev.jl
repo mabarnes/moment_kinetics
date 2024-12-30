@@ -190,11 +190,10 @@ imax -- the array of maximum indices of each element on the extended grid.
 """
 function scaled_chebyshev_grid(ngrid, nelement_local, n,
 			element_scale, element_shift, imin, imax)
-    # initialize chebyshev grid defined on [1,-1]
+    # initialize chebyshev grid defined on [-1,1]
     # with n grid points chosen to facilitate
     # the fast Chebyshev transform (aka the discrete cosine transform)
     # needed to obtain Chebyshev spectral coefficients
-    # this grid goes from +1 to -1
     chebyshev_grid = chebyshevpoints(ngrid)
     # create array for the full grid
     grid = allocate_float(n)
@@ -206,9 +205,9 @@ function scaled_chebyshev_grid(ngrid, nelement_local, n,
     @inbounds for j ∈ 1:nelement_local
         scale_factor = element_scale[j]
         shift = element_shift[j]
-        # reverse the order of the original chebyshev_grid (ran from [1,-1])
+        # take the original chebyshev_grid (ran from [-1,1])
         # and apply the scale factor and shift
-        grid[imin[j]:imax[j]] .= (reverse(chebyshev_grid)[k:ngrid] * scale_factor) .+ shift
+        grid[imin[j]:imax[j]] .= (chebyshev_grid[k:ngrid] * scale_factor) .+ shift
         # after first element, increase minimum index for chebyshev_grid to 2
         # to avoid double-counting boundary element
         k = 2
@@ -219,11 +218,10 @@ end
 
 function scaled_chebyshev_radau_grid(ngrid, nelement_local, n,
 			element_scale, element_shift, imin, imax, irank)
-    # initialize chebyshev grid defined on [1,-1]
+    # initialize chebyshev grid defined on [-1,1]
     # with n grid points chosen to facilitate
     # the fast Chebyshev transform (aka the discrete cosine transform)
     # needed to obtain Chebyshev spectral coefficients
-    # this grid goes from +1 to -1
     chebyshev_grid = chebyshevpoints(ngrid)
     chebyshev_radau_grid = chebyshev_radau_points(ngrid)
     # create array for the full grid
@@ -242,9 +240,9 @@ function scaled_chebyshev_radau_grid(ngrid, nelement_local, n,
         @inbounds for j ∈ 2:nelement_local
             scale_factor = element_scale[j]
             shift = element_shift[j]
-            # reverse the order of the original chebyshev_grid (ran from [1,-1])
+            # take the original chebyshev_grid (ran from [-1,1])
             # and apply the scale factor and shift
-            grid[imin[j]:imax[j]] .= (reverse(chebyshev_grid)[k:ngrid] * scale_factor) .+ shift
+            grid[imin[j]:imax[j]] .= (chebyshev_grid[k:ngrid] * scale_factor) .+ shift
         end
         wgts = clenshaw_curtis_radau_weights(ngrid, nelement_local, n, imin, imax, element_scale)
     else
@@ -255,9 +253,9 @@ function scaled_chebyshev_radau_grid(ngrid, nelement_local, n,
         @inbounds for j ∈ 1:nelement_local
             scale_factor = element_scale[j]
             shift = element_shift[j]
-            # reverse the order of the original chebyshev_grid (ran from [1,-1])
+            # take the original chebyshev_grid (ran from [-1,1])
             # and apply the scale factor and shift
-            grid[imin[j]:imax[j]] .= (reverse(chebyshev_grid)[k:ngrid] * scale_factor) .+ shift
+            grid[imin[j]:imax[j]] .= (chebyshev_grid[k:ngrid] * scale_factor) .+ shift
             # after first element, increase minimum index for chebyshev_grid to 2
             # to avoid double-counting boundary element
             k = 2
@@ -556,6 +554,7 @@ end
 
 """
 returns the Chebyshev-Gauss-Lobatto grid points on an n point grid
+in the range [-1,1]
 """
 function chebyshevpoints(n)
     grid = allocate_float(n)
@@ -566,9 +565,14 @@ function chebyshevpoints(n)
             grid[j] = cospi((j-1)*nfac)
         end
     end
-    return grid
+    # return grid on z in [-1,1]
+    return reverse(grid)
 end
 
+"""
+returns the Chebyshev-Gauss-Radau grid points on an n point grid
+in the range (-1,1]
+"""
 function chebyshev_radau_points(n)
     grid = allocate_float(n)
     nfac = 1.0/(n-0.5)
