@@ -204,12 +204,15 @@ function calculate_phi_from_Epar!(phi, Epar, r, z, z_spectral)
         
         # Restore the constant offset from the lower boundary
         # to all ranks so that we can use this_delta_phi below
-        @loop_r ir begin
-            @views phi[1,ir] += r.scratch3[ir]
+        @loop_r_z ir iz begin
+            @views phi[iz,ir] += r.scratch3[ir]
         end
         # Add contributions to integral along z from processes at smaller z-values than
         # this one.
-        this_delta_phi = r.scratch2 .= phi[end,:] .- phi[1,:]
+        this_delta_phi = r.scratch2
+        @loop_r ir begin
+            this_delta_phi[ir] = phi[end,ir] - phi[1,ir]
+        end
         for irank ∈ 0:z.nrank-2
             MPI.Bcast!(this_delta_phi, z.comm; root=irank)
             if z.irank > irank
