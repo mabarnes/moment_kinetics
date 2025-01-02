@@ -16,6 +16,7 @@ using ..velocity_moments: update_density!
 using ..derivatives: derivative_r!, derivative_z!
 using ..electron_fluid_equations: calculate_Epar_from_electron_force_balance!
 using ..gyroaverages: gyro_operators, gyroaverage_field!
+using ..calculus: indefinite_integral!
 
 using MPI
 
@@ -121,7 +122,7 @@ function update_phi!(fields, fvec, vperp, z, r, composition, collisions, moments
             composition.n_neutral_species, collisions.reactions.electron_charge_exchange_frequency,
             composition.me_over_mi, fvec.density_neutral, fvec.uz_neutral,
             fvec.electron_upar)
-        calculate_phi_from_Epar!(fields.phi, fields.Ez, r, z)
+        calculate_phi_from_Epar!(fields.phi, fields.Ez, r, z, z_spectral)
     end
     ## can calculate phi at z = L and hence phi_wall(z=L) using jpar_i at z =L if needed
     _block_synchronize()
@@ -174,30 +175,38 @@ function update_phi!(fields, fvec, vperp, z, r, composition, collisions, moments
     return nothing
 end
 
-function calculate_phi_from_Epar!(phi, Epar, r, z)
+function calculate_phi_from_Epar!(phi, Epar, r, z, z_spectral)
     # simple calculation of phi from Epar for now. Assume phi is already set at the
     # lower-ze boundary, e.g. by the kinetic electron boundary condition.
     begin_serial_region()
 
-    dz = z.cell_width
     @serial_region begin
-        # Need to broadcast the lower-z boundary value, because we only communicate
-        # delta_phi below, rather than passing the boundary values directly from block to
-        # block.
-        MPI.Bcast!(@view(phi[1,:]), z.comm; root=0)
-
+        if z.irank == 0
+            # Don't want to change the lower-z boundary value, so save it here so we can
+            # restore it at the end
+            @views @. r.scratch3 = phi[1,:]
+        end
+        # Broadcast the lower-z boundary value, so that we can communicate
+        # delta_phi = phi[end,:] - phi[1,:] below, rather than passing the boundary values directly
+        # from block to block.
+        MPI.Bcast!(r.scratch3, z.comm; root=0)
         if z.irank == z.nrank - 1
             # Don't want to change the upper-z boundary value, so save it here so we can
             # restore it at the end
             @views @. r.scratch = phi[end,:]
         end
-
+        
+        # calculate phi on each local rank, up to a constant
+        # phi[1,:] = 0.0 by convention here
         @loop_r ir begin
-            for iz ∈ 2:z.n
-                phi[iz,ir] = phi[iz-1,ir] - dz[iz-1]*Epar[iz,ir]
-            end
+            @views indefinite_integral!(phi[:,ir], -Epar[:,ir], z, z_spectral)
         end
-
+        
+        # Restore the constant offset from the lower boundary
+        # to all ranks so that we can use this_delta_phi below
+        @loop_r ir begin
+            @views phi[1,ir] += r.scratch3[ir]
+        end
         # Add contributions to integral along z from processes at smaller z-values than
         # this one.
         this_delta_phi = r.scratch2 .= phi[end,:] .- phi[1,:]
@@ -212,7 +221,9 @@ function calculate_phi_from_Epar!(phi, Epar, r, z)
 
         if z.irank == z.nrank - 1
             # Restore the upper-z boundary value
-            @views @. phi[end,:] = r.scratch
+            @loop_r ir begin 
+                @views phi[end,ir] = r.scratch[ir]
+            end
         end
     end
 
