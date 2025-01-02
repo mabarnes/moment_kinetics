@@ -5,6 +5,7 @@ module finite_differences
 using ..type_definitions: mk_float
 import ..calculus: elementwise_derivative!, second_derivative!,
                    derivative_elements_to_full_grid!
+import ..calculus: elementwise_indefinite_integration!
 using ..moment_kinetics_structs: discretization_info
 
 """
@@ -537,6 +538,53 @@ function second_derivative_finite_difference!(df::Array{mk_float,2}, f, del, bc,
         df[igrid[i],ielement[i]] = (-f[i+3] + 4.0*f[i+2] - 5.0*f[i+1] + 2.0*f[i]) / del[i]^2
         i = n
         df[igrid[i],ielement[i]] = (2.0*f[i] - 5.0*f[i-1] + 4.0*f[i-2] - f[i-3]) / del[i]^2
+    end
+end
+
+"""
+    elementwise_indefinite_integration!(coord, f, not_spectral::finite_difference_info)
+
+Calculate the primative of f using second-order accurate trapezium rule; result stored
+in coord.scratch_2d.
+"""
+function elementwise_indefinite_integration!(coord, f, not_spectral::finite_difference_info)
+    return primative_finite_difference!(coord, f, coord.finite_difference_option)
+end
+
+"""
+"""
+function primative_finite_difference!(coord, f, finite_difference_option)
+	# space here to add different integration methods, if required
+	primative_second_order!(coord, f)
+	return nothing
+end
+
+"""
+Integrate the input function f and return as pf
+using second-order trapezium rule.
+Do the integral on each element separately.
+"""
+function primative_second_order!(coord, f)
+	n = length(f)
+	ngrid = coord.ngrid
+	nelement = coord.nelement_local
+	# the primative
+	pf = coord.scratch_2d
+	# the grid
+	z = coord.grid
+	igrid_full = coord.igrid_full
+	for j in 1:nelement
+		# lower value of primative is zero
+		# indefinite_integral_elements_to_full_grid!() in calculus.jl
+		# will calculate the correct integration constants
+		pf[1,j] = 0.0
+		# do the integral on the element
+		for i in 2:ngrid
+			# the index on the full grid
+			k = igrid_full[i,j]
+			# the summation
+			pf[i,j] = pf[i-1,j] + 0.5*(z[k] - z[k-1])*(f[k]+f[k-1])
+		end
     end
 end
 
