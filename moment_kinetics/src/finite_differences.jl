@@ -544,18 +544,18 @@ end
 """
     elementwise_indefinite_integration!(coord, f, not_spectral::finite_difference_info)
 
-Calculate the primative of f using second-order accurate trapezium rule; result stored
+Calculate the primitive of f using second-order accurate trapezium rule; result stored
 in coord.scratch_2d.
 """
 function elementwise_indefinite_integration!(coord, f, not_spectral::finite_difference_info)
-    return primative_finite_difference!(coord, f, coord.finite_difference_option)
+    return primitive_finite_difference!(coord, f, coord.finite_difference_option)
 end
 
 """
 """
-function primative_finite_difference!(coord, f, finite_difference_option)
+function primitive_finite_difference!(coord, f, finite_difference_option)
 	# space here to add different integration methods, if required
-	primative_second_order!(coord, f)
+	primitive_second_order!(coord, f)
 	return nothing
 end
 
@@ -564,17 +564,17 @@ Integrate the input function f and return as pf
 using second-order trapezium rule.
 Do the integral on each element separately.
 """
-function primative_second_order!(coord, f)
+function primitive_second_order!(coord, f)
 	n = length(f)
 	ngrid = coord.ngrid
 	nelement = coord.nelement_local
-	# the primative
+	# the primitive
 	pf = coord.scratch_2d
 	# the grid
 	z = coord.grid
 	igrid_full = coord.igrid_full
 	for j in 1:nelement
-		# lower value of primative is zero
+		# lower value of primitive is zero
 		# indefinite_integral_elements_to_full_grid!() in calculus.jl
 		# will calculate the correct integration constants
 		pf[1,j] = 0.0

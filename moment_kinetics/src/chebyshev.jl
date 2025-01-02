@@ -932,7 +932,7 @@ A function that takes the indefinite integral in each element of `coord.grid`,
 leaving the result (element-wise) in `coord.scratch_2d`.
 """
 function elementwise_indefinite_integration!(coord, ff, chebyshev::chebyshev_info)
-    # the primative of f
+    # the primitive of f
     pf = coord.scratch_2d
     # define local variable nelement for convenience
     nelement = coord.nelement_local
