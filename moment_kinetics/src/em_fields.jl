@@ -4,6 +4,8 @@ module em_fields
 
 export setup_em_fields
 export update_phi!
+# for testing
+export calculate_phi_from_Epar!
 
 using ..type_definitions: mk_float
 using ..array_allocation: allocate_shared_float
@@ -210,10 +212,13 @@ function calculate_phi_from_Epar!(phi, Epar, r, z, z_spectral)
         # Add contributions to integral along z from processes at smaller z-values than
         # this one.
         this_delta_phi = r.scratch2
-        @loop_r ir begin
-            this_delta_phi[ir] = phi[end,ir] - phi[1,ir]
-        end
         for irank ∈ 0:z.nrank-2
+            # update this_delta_phi before broadcasting
+            @loop_r ir begin
+                this_delta_phi[ir] = phi[end,ir] - phi[1,ir]
+            end
+            # broadcast this_delta_phi from z.irank = irank to all processes
+            # updating this_delta_phi everywhere
             MPI.Bcast!(this_delta_phi, z.comm; root=irank)
             if z.irank > irank
                 @loop_r_z ir iz begin
