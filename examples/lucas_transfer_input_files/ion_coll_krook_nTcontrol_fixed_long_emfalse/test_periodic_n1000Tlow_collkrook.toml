@@ -1,0 +1,64 @@
+[evolve_moments]
+parallel_pressure = true
+density = true
+moments_conservation = true
+parallel_flow = true
+
+[r]
+ngrid = 1
+nelement = 1
+
+[z]
+ngrid = 5
+discretization = "chebyshev_pseudospectral"
+nelement = 32
+#nelement_local = 4
+bc = "periodic"
+#element_spacing_option = "compressed_4"
+
+[vpa]
+ngrid = 6
+discretization = "chebyshev_pseudospectral"
+nelement = 43
+L = 24.0
+element_spacing_option = "coarse_tails"
+bc = "zero"
+
+[composition]
+T_e = 0.2
+electron_physics = "boltzmann_electron_response"
+n_ion_species = 1
+n_neutral_species = 0
+
+[ion_species_1]
+initial_temperature = 1.0
+initial_density = 1000.0
+
+[z_IC_ion_species_1]
+initialization_option = "sinusoid"
+density_amplitude = 0.0 #0.2
+temperature_amplitude = 0.01
+density_phase = 0.0
+upar_amplitude = 0.0 #0.1
+temperature_phase = 1.0
+upar_phase = 2.0
+
+[vpa_IC_ion_species_1]
+initialization_option = "gaussian"
+density_amplitude = 1.0
+temperature_amplitude = 0.0
+density_phase = 0.0
+upar_amplitude = 0.0
+temperature_phase = 0.0
+upar_phase = 0.0
+
+[krook_collisions]
+use_krook = true
+
+[timestepping]
+nstep = 25000
+steady_state_residual = true
+dt = 0.0002
+nwrite = 500
+type = "SSPRK4"
+nwrite_dfns = 500
