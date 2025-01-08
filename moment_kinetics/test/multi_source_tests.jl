@@ -187,7 +187,7 @@ function runtests()
     test_output_directory = get_MPI_tempdir()
 
     @testset "Multi Source Tests" verbose=use_verbose begin
-        println("Multi Source Tests")
+        println("multi source tests")
         @testset "multi source test 1" begin
             test_input_1["output"]["base_directory"] = test_output_directory
             run_test(test_input_1,

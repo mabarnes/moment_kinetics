@@ -856,7 +856,7 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
         include_patterns=String[],
         exclude_patterns=String[],
         ranks=mk_int[],
-        figsize=(600,800)
+        figsize=[600,800]
        )
 
     # We allow top-level options in the post-processing input file
@@ -8810,7 +8810,7 @@ end
 """
     timing_data(run_info; plot_prefix=nothing, threshold=nothing,
                 include_patterns=nothing, exclude_patterns=nothing, ranks=nothing,
-                figsize=nothing, interactive_figs=nothing, include_legend=true)
+                figsize=nothing, include_legend=true)
 
 Plot timings from different parts of the `moment_kinetics` code. Only timings from
 function calls during the time evolution loop are included, not from the setup, because we
@@ -8844,11 +8844,11 @@ set in `this_input_dict`. When this function is called as part of
 the settings are read from the post processing input file (by default
 `post_processing_input.toml`). The function arguments take precedence, if they are given.
 
-If you load GLMakie (by doing `using GLMakie`) before running this function,
-`interactive_figs` can be passed one of, or a Vector of, `:times`, `:ncalls`, or `:allocs`
-to display an interactive window showing that figure. Multiple values can be passed, but
-the DataInspector (which displays information when you hover over the figure) will only
-work for the first one in the list (this may be a GLMakie bug?).
+If you load GLMakie by doing `using GLMakie` before running this function, but after
+calling `using makie_post_processing` (because `CairoMakie` is loaded when the module is
+loaded and would take over if you load `GLMakie` before `makie_post_processing`), the
+figures will be displayed in interactive windows. When you hover over a line some useful
+information will be displayed.
 
 Pass `include_legend=false` to remove legends from the figures. This is mostly useful for
 interactive figures where hovering over the lines can show what they are, so that the
@@ -8856,8 +8856,7 @@ legend is not needed.
 """
 function timing_data(run_info::Tuple; plot_prefix=nothing, threshold=nothing,
                      include_patterns=nothing, exclude_patterns=nothing, ranks=nothing,
-                     this_input_dict=nothing, figsize=nothing, interactive_figs=nothing,
-                     include_legend=true)
+                     this_input_dict=nothing, figsize=nothing, include_legend=true)
 
     if this_input_dict !== nothing
         input = Dict_to_NamedTuple(this_input_dict["timing_data"])
@@ -8873,7 +8872,7 @@ function timing_data(run_info::Tuple; plot_prefix=nothing, threshold=nothing,
 
     if figsize === nothing
         if input !== nothing
-            figsize = input.figsize
+            figsize = Tuple(input.figsize)
         else
             figsize = (600,800)
         end
@@ -8896,40 +8895,31 @@ function timing_data(run_info::Tuple; plot_prefix=nothing, threshold=nothing,
                     ncalls_ax=ncalls_ax, allocs_ax=allocs_ax, irun=irun, figsize=figsize)
     end
 
-    if interactive_figs === nothing && string(Makie.current_backend()) == "GLMakie"
+    if string(Makie.current_backend()) == "GLMakie"
         # Can make interactive plots
 
-        if isa(interactive_figs, Symbol)
-            interactive_figs = [interactive_figs]
-        end
         backend = Makie.current_backend()
 
-        for figtype ∈ interactive_figs
-            if figtype == :times
-                if include_legend
-                    Legend(times_fig[2,1], times_ax; tellheight=true, tellwidth=false,
-                           merge=true)
-                end
-                DataInspector(times_fig)
-                display(backend.Screen(), times_fig)
-            elseif figtype == :ncalls
-                if include_legend
-                    Legend(ncalls_fig[2,1], times_ax; tellheight=true, tellwidth=false,
-                           merge=true)
-                end
-                DataInspector(ncalls_fig)
-                display(backend.Screen(), ncalls_fig)
-            elseif figtype == :allocs
-                if include_legend
-                    Legend(allocs_fig[2,1], times_ax; tellheight=true, tellwidth=false,
-                           merge=true)
-                end
-                DataInspector(allocs_fig)
-                display(backend.Screen(), allocs_fig)
-            else
-                error("Got unrecognized entry $figtype in `interactive_figs`")
-            end
+        if include_legend
+            Legend(times_fig[2,1], times_ax; tellheight=true, tellwidth=false,
+                   merge=true)
         end
+        DataInspector(times_fig)
+        display(backend.Screen(), times_fig)
+
+        if include_legend
+            Legend(ncalls_fig[2,1], times_ax; tellheight=true, tellwidth=false,
+                   merge=true)
+        end
+        DataInspector(ncalls_fig)
+        display(backend.Screen(), ncalls_fig)
+
+        if include_legend
+            Legend(allocs_fig[2,1], times_ax; tellheight=true, tellwidth=false,
+                   merge=true)
+        end
+        DataInspector(allocs_fig)
+        display(backend.Screen(), allocs_fig)
     elseif plot_prefix !== nothing
         if include_legend
             Legend(times_fig[2,1], times_ax; tellheight=true, tellwidth=true, merge=true)
@@ -8968,7 +8958,7 @@ end
 function timing_data(run_info; plot_prefix=nothing, threshold=nothing,
                      include_patterns=nothing, exclude_patterns=nothing, ranks=nothing,
                      this_input_dict=nothing, times_ax=nothing, ncalls_ax=nothing,
-                     allocs_ax=nothing, irun=1, figsize=nothing, interactive_figs=nothing,
+                     allocs_ax=nothing, irun=1, figsize=nothing,
                      include_legend=true)
 
     if this_input_dict !== nothing
@@ -8983,7 +8973,7 @@ function timing_data(run_info; plot_prefix=nothing, threshold=nothing,
 
     if figsize === nothing
         if input !== nothing
-            figsize = input.figsize
+            figsize = Tuple(input.figsize)
         else
             figsize = (600,800)
         end
@@ -9039,143 +9029,155 @@ function timing_data(run_info; plot_prefix=nothing, threshold=nothing,
     end
 
     linestyles = linestyle=[:solid, :dash, :dot, :dashdot, :dashdotdot]
-    for irank ∈ 0:run_info.nrank-1
-        all_global_timer_variables = run_info.timing_variable_names[irank]
-        time_advance_timer_variables = [v for v ∈ all_global_timer_variables if occursin("time_advance! step", v)]
-        time_variables = [v for v ∈ time_advance_timer_variables if startswith(v, "time:")]
-        ncalls_variables = [v for v ∈ time_advance_timer_variables if startswith(v, "ncalls:")]
-        allocs_variables = [v for v ∈ time_advance_timer_variables if startswith(v, "allocs:")]
+    time_advance_timer_variables = [v for v ∈ run_info.timing_variable_names if occursin("time_advance! step", v)]
+    time_variables = [v for v ∈ time_advance_timer_variables if startswith(v, "time:")]
+    ncalls_variables = [v for v ∈ time_advance_timer_variables if startswith(v, "ncalls:")]
+    allocs_variables = [v for v ∈ time_advance_timer_variables if startswith(v, "allocs:")]
 
-        this_rank_group = "timing_data/rank$irank"
+    timing_group = "timing_data"
 
-        inspector_label_func = (self,i,p) -> "$(self.label[]) $irank\nx: $(p[1])\ny: $(p[2])"
-
-        function label_irank(ax, variable, color, unit_conversion=1)
-            if run_info.nrank > 1
-                # Label curves with irank so we can tell which is which
-                index = ((irank + 1) % (length(variable) - 1)) + 1
-                with_theme
-                text!(ax, run_info.time[index],
-                      variable[index] * unit_conversion;
-                      text="$irank", color=color)
-            end
+    function label_irank(ax, variable, irank, color, unit_conversion=1)
+        if run_info.nrank > 1
+            # Label curves with irank so we can tell which is which
+            index = ((irank + 1) % (length(variable) - 1)) + 1
+            with_theme
+            text!(ax, run_info.time[index],
+                  variable[index] * unit_conversion;
+                  text="$irank", color=color)
         end
+    end
 
-        function check_include_exclude(variable_name)
-            explicitly_included = (include_patterns !== nothing &&
-                                   any(occursin(p, variable_name) for p ∈ include_patterns))
-            if exclude_patterns === nothing && include_patterns !== nothing
-                excluded = !explicitly_included
-            elseif exclude_patterns !== nothing
-                if !explicitly_included &&
-                        any(occursin(p, variable_name) for p ∈ exclude_patterns)
-                    excluded = true
-                else
-                    excluded = false
-                end
+    function check_include_exclude(variable_name)
+        explicitly_included = (include_patterns !== nothing &&
+                               any(occursin(p, variable_name) for p ∈ include_patterns))
+        if exclude_patterns === nothing && include_patterns !== nothing
+            excluded = !explicitly_included
+        elseif exclude_patterns !== nothing
+            if !explicitly_included &&
+                    any(occursin(p, variable_name) for p ∈ exclude_patterns)
+                excluded = true
             else
                 excluded = false
             end
-            return excluded, explicitly_included
+        else
+            excluded = false
         end
+        return excluded, explicitly_included
+    end
 
-        # Plot the total time
-        time_unit_conversion = 1.0e-9 # ns to s
-        total_time_variable_name = "time:moment_kinetics;time_advance! step"
-        total_time = get_variable(run_info, total_time_variable_name * "_per_step",
-                                  group=this_rank_group)
+    # Plot the total time
+    time_unit_conversion = 1.0e-9 # ns to s
+    total_time_variable_name = "time:moment_kinetics;time_advance! step"
+    total_time = get_variable(run_info, total_time_variable_name * "_per_step",
+                              group=timing_group)
+    for irank ∈ 0:run_info.nrank-1
         label = "time_advance! step"
-        lines!(times_ax, run_info.time, total_time .* time_unit_conversion; color=:black,
-               linestyle=linestyles[irun], label=label,
-               inspector_label=inspector_label_func)
-        label_irank(times_ax, total_time, :black, time_unit_conversion)
-        mean_total_time = mean(total_time)
-        for (variable_counter, variable_name) ∈ enumerate(time_variables)
-            if variable_name == total_time_variable_name
-                # Plotted this already
-                continue
-            end
-            excluded, explicitly_included = check_include_exclude(variable_name)
-            if excluded
-                continue
-            end
-            variable = get_variable(run_info, variable_name * "_per_step",
-                                    group=this_rank_group)
-            if !explicitly_included && mean(variable) < threshold * mean_total_time
-                # This variable takes a very small amount of time, so skip.
-                continue
-            end
-            label = split(variable_name, "time_advance! step;")[2]
-            l = lines!(times_ax, run_info.time, variable .* time_unit_conversion;
-                       color=Cycled(variable_counter), linestyle=linestyles[irun],
-                       label=label, inspector_label=inspector_label_func)
-            label_irank(times_ax, variable, l.color, time_unit_conversion)
-        end
-
-        # Plot the number of calls
-        total_ncalls_variable_name = "ncalls:moment_kinetics;time_advance! step"
-        total_ncalls = get_variable(run_info, total_ncalls_variable_name * "_per_step",
-                                  group=this_rank_group)
-        label = "time_advance! step"
-        lines!(ncalls_ax, run_info.time, total_ncalls; color=:black,
-               linestyle=linestyles[irun], label=label,
-               inspector_label=inspector_label_func)
-        label_irank(ncalls_ax, total_ncalls, :black)
-        mean_total_ncalls = mean(total_ncalls)
-        for (variable_counter, variable_name) ∈ enumerate(ncalls_variables)
-            if variable_name == total_ncalls_variable_name
-                # Plotted this already
-                continue
-            end
-            excluded, explicitly_included = check_include_exclude(variable_name)
-            if excluded
-                continue
-            end
-            variable = get_variable(run_info, variable_name * "_per_step",
-                                    group=this_rank_group)
-            if !explicitly_included && mean(variable) < threshold * mean_total_ncalls
-                # This variable takes a very small number of calls, so skip.
-                continue
-            end
-            label = split(variable_name, "time_advance! step;")[2]
-            l = lines!(ncalls_ax, run_info.time, variable; color=Cycled(variable_counter),
-                       linestyle=linestyles[irun], label=label,
-                       inspector_label=inspector_label_func)
-            label_irank(ncalls_ax, variable, l.color)
-        end
-
-        # Plot the total allocs
-        allocs_unit_conversion = 2^(-20) # bytes to MB
-        total_allocs_variable_name = "allocs:moment_kinetics;time_advance! step"
-        total_allocs = get_variable(run_info, total_allocs_variable_name * "_per_step",
-                                    group=this_rank_group)
-        label = "time_advance! step"
-        lines!(allocs_ax, run_info.time, total_allocs .* allocs_unit_conversion;
+        irank_slice = total_time[irank+1,:]
+        lines!(times_ax, run_info.time, irank_slice .* time_unit_conversion;
                color=:black, linestyle=linestyles[irun], label=label,
-               inspector_label=inspector_label_func)
-        label_irank(allocs_ax, total_allocs, :black, allocs_unit_conversion)
-        mean_total_allocs = mean(total_allocs)
-        for (variable_counter, variable_name) ∈ enumerate(allocs_variables)
-            if variable_name == total_allocs_variable_name
-                # Plotted this already
-                continue
-            end
-            excluded, explicitly_included = check_include_exclude(variable_name)
-            if excluded
-                continue
-            end
-            variable = get_variable(run_info, variable_name * "_per_step",
-                                    group=this_rank_group)
-            if !explicitly_included && mean(variable) < threshold * mean_total_allocs
-                # This variable represents a very small amount of allocs, so skip.
-                continue
-            end
+               inspector_label=(self,i,p) -> "$(self.label[]) $irank\nx: $(p[1])\ny: $(p[2])")
+        label_irank(times_ax, irank_slice, irank, :black, time_unit_conversion)
+    end
+    mean_total_time = mean(total_time)
+    for (variable_counter, variable_name) ∈ enumerate(time_variables)
+        if variable_name == total_time_variable_name
+            # Plotted this already
+            continue
+        end
+        excluded, explicitly_included = check_include_exclude(variable_name)
+        if excluded
+            continue
+        end
+        variable = get_variable(run_info, variable_name * "_per_step",
+                                group=timing_group)
+        if !explicitly_included && mean(variable) < threshold * mean_total_time
+            # This variable takes a very small amount of time, so skip.
+            continue
+        end
+        for irank ∈ 0:run_info.nrank-1
             label = split(variable_name, "time_advance! step;")[2]
-            l = lines!(allocs_ax, run_info.time, variable .* allocs_unit_conversion;
+            irank_slice = variable[irank+1,:]
+            l = lines!(times_ax, run_info.time, irank_slice .* time_unit_conversion;
                        color=Cycled(variable_counter), linestyle=linestyles[irun],
-                       label=label, inspector_label=inspector_label_func)
-            label_irank(allocs_ax, variable, l.color,
-                        allocs_unit_conversion)
+                       label=label, inspector_label=(self,i,p) -> "$(self.label[]) $irank\nx: $(p[1])\ny: $(p[2])")
+            label_irank(times_ax, irank_slice, irank, l.color, time_unit_conversion)
+        end
+    end
+
+    # Plot the number of calls
+    total_ncalls_variable_name = "ncalls:moment_kinetics;time_advance! step"
+    total_ncalls = get_variable(run_info, total_ncalls_variable_name * "_per_step",
+                              group=timing_group)
+    for irank ∈ 0:run_info.nrank-1
+        label = "time_advance! step"
+        irank_slice = total_ncalls[irank+1,:]
+        lines!(ncalls_ax, run_info.time, irank_slice; color=:black,
+               linestyle=linestyles[irun], label=label,
+               inspector_label=(self,i,p) -> "$(self.label[]) $irank\nx: $(p[1])\ny: $(p[2])")
+        label_irank(ncalls_ax, irank_slice, irank, :black)
+    end
+    mean_total_ncalls = mean(total_ncalls)
+    for (variable_counter, variable_name) ∈ enumerate(ncalls_variables)
+        if variable_name == total_ncalls_variable_name
+            # Plotted this already
+            continue
+        end
+        excluded, explicitly_included = check_include_exclude(variable_name)
+        if excluded
+            continue
+        end
+        variable = get_variable(run_info, variable_name * "_per_step",
+                                group=timing_group)
+        if !explicitly_included && mean(variable) < threshold * mean_total_ncalls
+            # This variable takes a very small number of calls, so skip.
+            continue
+        end
+        for irank ∈ 0:run_info.nrank-1
+            label = split(variable_name, "time_advance! step;")[2]
+            irank_slice = variable[irank+1,:]
+            l = lines!(ncalls_ax, run_info.time, irank_slice;
+                       color=Cycled(variable_counter), linestyle=linestyles[irun],
+                       label=label, inspector_label=(self,i,p) -> "$(self.label[]) $irank\nx: $(p[1])\ny: $(p[2])")
+            label_irank(ncalls_ax, irank_slice, irank, l.color)
+        end
+    end
+
+    # Plot the total allocs
+    allocs_unit_conversion = 2^(-20) # bytes to MB
+    total_allocs_variable_name = "allocs:moment_kinetics;time_advance! step"
+    total_allocs = get_variable(run_info, total_allocs_variable_name * "_per_step",
+                                group=timing_group)
+    for irank ∈ 0:run_info.nrank-1
+        label = "time_advance! step"
+        irank_slice = total_allocs[irank+1,:]
+        lines!(allocs_ax, run_info.time, irank_slice .* allocs_unit_conversion;
+               color=:black, linestyle=linestyles[irun], label=label,
+               inspector_label=(self,i,p) -> "$(self.label[]) $irank\nx: $(p[1])\ny: $(p[2])")
+        label_irank(allocs_ax, irank_slice, irank, :black, allocs_unit_conversion)
+    end
+    mean_total_allocs = mean(total_allocs)
+    for (variable_counter, variable_name) ∈ enumerate(allocs_variables)
+        if variable_name == total_allocs_variable_name
+            # Plotted this already
+            continue
+        end
+        excluded, explicitly_included = check_include_exclude(variable_name)
+        if excluded
+            continue
+        end
+        variable = get_variable(run_info, variable_name * "_per_step",
+                                group=timing_group)
+        if !explicitly_included && mean(variable) < threshold * mean_total_allocs
+            # This variable represents a very small amount of allocs, so skip.
+            continue
+        end
+        for irank ∈ 0:run_info.nrank-1
+            label = split(variable_name, "time_advance! step;")[2]
+            irank_slice = variable[irank+1,:]
+            l = lines!(allocs_ax, run_info.time, irank_slice .* allocs_unit_conversion;
+                       color=Cycled(variable_counter), linestyle=linestyles[irun],
+                       label=label, inspector_label=(self,i,p) -> "$(self.label[]) $irank\nx: $(p[1])\ny: $(p[2])")
+            label_irank(allocs_ax, irank_slice, irank, l.color, allocs_unit_conversion)
         end
     end
 
@@ -9184,37 +9186,28 @@ function timing_data(run_info; plot_prefix=nothing, threshold=nothing,
 
         # Can make interactive plots
 
-        if isa(interactive_figs, Symbol)
-            interactive_figs = [interactive_figs]
-        end
         backend = Makie.current_backend()
 
-        for figtype ∈ interactive_figs
-            if figtype == :times
-                if include_legend
-                    Legend(times_fig[2,1], times_ax; tellheight=true, tellwidth=false,
-                           merge=true)
-                end
-                DataInspector(times_fig)
-                display(backend.Screen(), times_fig)
-            elseif figtype == :ncalls
-                if include_legend
-                    Legend(ncalls_fig[2,1], times_ax; tellheight=true, tellwidth=false,
-                           merge=true)
-                end
-                DataInspector(ncalls_fig)
-                display(backend.Screen(), ncalls_fig)
-            elseif figtype == :allocs
-                if include_legend
-                    Legend(allocs_fig[2,1], times_ax; tellheight=true, tellwidth=false,
-                           merge=true)
-                end
-                DataInspector(allocs_fig)
-                display(backend.Screen(), allocs_fig)
-            else
-                error("Got unrecognized entry $figtype in `interactive_figs`")
-            end
+        if include_legend
+            Legend(times_fig[2,1], times_ax; tellheight=true, tellwidth=false,
+                   merge=true)
         end
+        DataInspector(times_fig)
+        display(backend.Screen(), times_fig)
+
+        if include_legend
+            Legend(ncalls_fig[2,1], times_ax; tellheight=true, tellwidth=false,
+                   merge=true)
+        end
+        DataInspector(ncalls_fig)
+        display(backend.Screen(), ncalls_fig)
+
+        if include_legend
+            Legend(allocs_fig[2,1], times_ax; tellheight=true, tellwidth=false,
+                   merge=true)
+        end
+        DataInspector(allocs_fig)
+        display(backend.Screen(), allocs_fig)
     else
         if times_fig !== nothing
             if include_legend

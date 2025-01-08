@@ -11,7 +11,7 @@ batch_system = mk_preferences["batch_system"]
 if mk_preferences["use_plots"] == "y"
     python_venv_path = joinpath(repo_dir, "machines", "artifacts", "mk_venv")
     activate_path = joinpath(python_venv_path, "bin", "activate")
-    run(`bash -c "python -m venv --system-site-packages $python_venv_path; source $activate_path; PYTHONNOUSERSITE=1 pip install matplotlib"`)
+    run(`bash -c "/usr/bin/env python3 -m venv --system-site-packages $python_venv_path; source $activate_path; PYTHONNOUSERSITE=1 pip install matplotlib"`)
     if batch_system
         open("julia.env", "a") do io
             println(io, "source $activate_path")

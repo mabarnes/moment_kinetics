@@ -21,6 +21,8 @@ using ..calculus: second_derivative!
 using ..timer_utils
 using ..reference_parameters: get_reference_collision_frequency_ii, setup_reference_parameters
 
+using OrderedCollections: OrderedDict
+
 """
 Function for reading Maxwell diffusion operator input parameters. 
 Structure the namelist as follows.
@@ -30,7 +32,7 @@ use_maxwell_diffusion = true
 D_ii = 1.0
 diffusion_coefficient_option = "manual"
 """
-function setup_mxwl_diff_collisions_input(toml_input::Dict)
+function setup_mxwl_diff_collisions_input(toml_input::AbstractDict)
     reference_params = setup_reference_parameters(toml_input)
     # get reference diffusion coefficient, made up of collision frequency and 
     # thermal speed for now. NOTE THAT THIS CONSTANT PRODUCES ERRORS. DO NOT USE
@@ -63,7 +65,7 @@ function setup_mxwl_diff_collisions_input(toml_input::Dict)
         input_section["D_ii"] = -1.0
         input_section["D_nn"] = -1.0
     end
-    input = Dict(Symbol(k)=>v for (k,v) in input_section)
+    input = OrderedDict(Symbol(k)=>v for (k,v) in input_section)
 
     return mxwl_diff_collisions_input(; input...)
 end

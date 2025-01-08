@@ -1030,7 +1030,7 @@ function electron_backward_euler!(scratch, pdf, moments, phi, collisions, compos
                 end
 
                 if nl_solver_params.solves_since_precon_update[] ≥ nl_solver_params.preconditioner_update_interval
-println("recalculating precon")
+global_rank[] == 0 && println("recalculating precon")
                     nl_solver_params.solves_since_precon_update[] = 0
                     nl_solver_params.precon_dt[] = t_params.dt[]
 
@@ -1336,26 +1336,26 @@ println("recalculating precon")
                     if t_params.dt[] < t_params.previous_dt[]
                         # Had to decrease timestep on the first step to get convergence,
                         # so start next ion timestep with the decreased value.
-                        print("decreasing previous_dt due to failures ", t_params.previous_dt[])
+                        global_rank[] == 0 && print("decreasing previous_dt due to failures ", t_params.previous_dt[])
                         t_params.previous_dt[] = t_params.dt[]
-                        println(" -> ", t_params.previous_dt[])
+                        global_rank[] == 0 && println(" -> ", t_params.previous_dt[])
                     #elseif nl_solver_params.max_linear_iterations_this_step[] > max(0.4 * nl_solver_params.nonlinear_max_iterations, 5)
                     elseif nl_solver_params.max_linear_iterations_this_step[] > t_params.decrease_dt_iteration_threshold
                         # Step succeeded, but took a lot of iterations so decrease initial
                         # step size.
-                        print("decreasing previous_dt due to iteration count ", t_params.previous_dt[])
+                        global_rank[] == 0 && print("decreasing previous_dt due to iteration count ", t_params.previous_dt[])
                         t_params.previous_dt[] /= t_params.max_increase_factor
-                        println(" -> ", t_params.previous_dt[])
+                        global_rank[] == 0 && println(" -> ", t_params.previous_dt[])
                     #elseif nl_solver_params.max_linear_iterations_this_step[] < max(0.1 * nl_solver_params.nonlinear_max_iterations, 2)
                     elseif nl_solver_params.max_linear_iterations_this_step[] < t_params.increase_dt_iteration_threshold && (ion_dt === nothing || t_params.previous_dt[] < t_params.cap_factor_ion_dt * ion_dt)
                         # Only took a few iterations, so increase initial step size.
-                        print("increasing previous_dt due to iteration count ", t_params.previous_dt[])
+                        global_rank[] == 0 && print("increasing previous_dt due to iteration count ", t_params.previous_dt[])
                         if ion_dt === nothing
                             t_params.previous_dt[] *= t_params.max_increase_factor
                         else
                             t_params.previous_dt[] = min(t_params.previous_dt[] * t_params.max_increase_factor, t_params.cap_factor_ion_dt * ion_dt)
                         end
-                        println(" -> ", t_params.previous_dt[])
+                        global_rank[] == 0 && println(" -> ", t_params.previous_dt[])
                     end
                 end
 

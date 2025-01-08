@@ -11,6 +11,8 @@ using ..input_structs: krook_collisions_input, set_defaults_and_check_section!
 using ..timer_utils 
 using ..collision_frequencies
 using ..reference_parameters
+using OrderedCollections: OrderedDict
+
 """
 Function for reading Krook collision operator input parameters. 
 Structure the namelist as follows.
@@ -20,7 +22,7 @@ use_krook = true
 nuii0 = 1.0
 frequency_option = "manual"
 """
-function setup_krook_collisions_input(toml_input::Dict)
+function setup_krook_collisions_input(toml_input::AbstractDict)
     reference_params = setup_reference_parameters(toml_input)
     # get reference collision frequency
     nuii_krook_default = get_reference_collision_frequency_ii(reference_params)
@@ -59,7 +61,7 @@ function setup_krook_collisions_input(toml_input::Dict)
         input_section["nuee0"] = -1.0
         input_section["nuei0"] = -1.0
     end
-    input = Dict(Symbol(k)=>v for (k,v) in input_section)
+    input = OrderedDict(Symbol(k)=>v for (k,v) in input_section)
     #println(input)
     return krook_collisions_input(; input...)
 end
