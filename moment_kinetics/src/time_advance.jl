@@ -1979,9 +1979,6 @@ function  time_advance!(pdf, scratch, scratch_implicit, scratch_electron, t_para
                                 "t = ", rpad(string(round(t_params.t[], sigdigits=6)), 7), "  ",
                                 "nstep = ", rpad(string(t_params.step_counter[]), 7), "  ",
                                 Dates.format(now(), dateformat"H:MM:SS"))
-                    println("ion temperature at middle: ", moments.ion.vth[65,1,1]^2)
-                    println("ion density at middle: ", moments.ion.dens[65,1,1])
-                    println("ion source amplitude: ", moments.ion.external_source_amplitude[65,1,:])
                         flush(stdout)
                     end
                 end

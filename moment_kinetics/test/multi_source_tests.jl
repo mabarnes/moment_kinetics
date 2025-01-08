@@ -79,15 +79,15 @@ if global_size[] > 2 && global_size[] % 2 == 0
 end
 
 test_input_1 = recursive_merge(test_input,
-                                    OptionsDict("output" => OptionsDict("run_name" => "Multi Source Test 1")))
+                                    OptionsDict("output" => OptionsDict("run_name" => "two_ion_sources")))
 test_input_2 = recursive_merge(test_input_1,
-                                    OptionsDict("output" => OptionsDict("run_name" => "Multi Source Test 2"),
+                                    OptionsDict("output" => OptionsDict("run_name" => "two_ion_sources_moments"),
                                                 "evolve_moments" => OptionsDict("density" => false,
                                                          "parallel_flow" => false,
                                                          "parallel_pressure" => false,
                                                          "moments_conservation" => false)))
 test_input_3 = recursive_merge(test_input,
-                                    OptionsDict("output" => OptionsDict("run_name" => "Multi Source Test 3"),
+                                    OptionsDict("output" => OptionsDict("run_name" => "PI_controller_sources"),
                                                 "ion_source_1" => OptionsDict("active" => true,
                                                                 "z_profile" => "super_gaussian_4",
                                                                 "z_width" => 0.275816,
@@ -107,7 +107,7 @@ test_input_3 = recursive_merge(test_input,
                                                                 "PI_density_controller_P" => 1.0,
                                                                 "PI_density_target_amplitude" => 1.15)))
 test_input_4 = recursive_merge(test_input_3,
-                                    OptionsDict("output" => OptionsDict("run_name" => "Multi Source Test 4"),
+                                    OptionsDict("output" => OptionsDict("run_name" => "PI_controller_sources_moments"),
                                                 "evolve_moments" => OptionsDict("density" => false,
                                                          "parallel_flow" => false,
                                                          "parallel_pressure" => false,
