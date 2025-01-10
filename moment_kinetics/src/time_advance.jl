@@ -2635,7 +2635,8 @@ end
                               advect_objects, gyroavs, num_diss_params,
                               nl_solver_params, advance, scratch_dummy, r, z, vperp,
                               vpa, vzeta, vr, vz, success, nl_max_its_fraction,
-                              nl_total_its_soft_limit)
+                              nl_total_its_soft_limit,
+                              nl_total_its_soft_limit_reduce_dt)
 
 Check the error estimate for the embedded RK method and adjust the timestep if
 appropriate.
@@ -2646,7 +2647,8 @@ appropriate.
                          geometry, external_source_settings, spectral_objects,
                          advect_objects, gyroavs, num_diss_params, nl_solver_params,
                          advance, scratch_dummy, r, z, vperp, vpa, vzeta, vr, vz, success,
-                         nl_max_its_fraction, nl_total_its_soft_limit) = begin
+                         nl_max_its_fraction, nl_total_its_soft_limit,
+                         nl_total_its_soft_limit_reduce_dt) = begin
     #error_norm_method = "Linf"
     error_norm_method = "L2"
 
@@ -2960,7 +2962,8 @@ appropriate.
 
     adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms, total_points,
                                        error_norm_method, success, nl_max_its_fraction,
-                                       nl_total_its_soft_limit, composition)
+                                       nl_total_its_soft_limit,
+                                       nl_total_its_soft_limit_reduce_dt, composition)
 
     if composition.electron_physics ∈ (kinetic_electrons,
                                        kinetic_electrons_with_temperature_equation)
@@ -3262,6 +3265,7 @@ end
     if t_params.adaptive
         nl_max_its_fraction = 0.0
         nl_total_its_soft_limit = false
+        nl_total_its_soft_limit_reduce_dt = false
         if t_params.implicit_electron_advance || t_params.implicit_electron_time_evolving
             params_to_check = (nl_solver_params.ion_advance,
                                nl_solver_params.vpa_advection,
@@ -3288,6 +3292,7 @@ end
                     max(p.max_nonlinear_iterations_this_step[] / p.nonlinear_max_iterations,
                         nl_max_its_fraction)
                 nl_total_its_soft_limit = p.max_linear_iterations_this_step[] > p.total_its_soft_limit || nl_total_its_soft_limit
+                nl_total_its_soft_limit_reduce_dt = p.max_linear_iterations_this_step[] > 1.5 * p.total_its_soft_limit || nl_total_its_soft_limit_reduce_dt
             end
         end
         adaptive_timestep_update!(scratch, scratch_implicit, scratch_electron,
@@ -3297,7 +3302,8 @@ end
                                   advect_objects, gyroavs, num_diss_params,
                                   nl_solver_params, advance, scratch_dummy, r, z, vperp,
                                   vpa, vzeta, vr, vz, success, nl_max_its_fraction,
-                                  nl_total_its_soft_limit)
+                                  nl_total_its_soft_limit,
+                                  nl_total_its_soft_limit_reduce_dt)
     elseif success != ""
         error("Implicit part of timestep failed")
     end

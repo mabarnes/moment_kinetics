@@ -1059,6 +1059,7 @@ end
     adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms,
                                        total_points, error_norm_method, success,
                                        nl_max_its_fraction, nl_total_its_soft_limit,
+                                       nl_total_its_soft_limit_reduce_dt,
                                        composition; electron=false,
                                        local_max_dt::mk_float=Inf)
 
@@ -1067,6 +1068,7 @@ Use the calculated `CFL_limits` and `error_norms` to update the timestep in `t_p
 function adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms,
                                             total_points, error_norm_method, success,
                                             nl_max_its_fraction, nl_total_its_soft_limit,
+                                            nl_total_its_soft_limit_reduce_dt,
                                             composition; electron=false,
                                             local_max_dt::mk_float=Inf)
     # Get global minimum of CFL limits
@@ -1327,7 +1329,19 @@ function adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms,
                 end
             end
 
-            if (nl_max_its_fraction > 0.5 || nl_total_its_soft_limit) && t_params.previous_dt[] > 0.0
+            if nl_total_its_soft_limit_reduce_dt && t_params.previous_dt[] > 0.0
+                # The last step took very many nonlinear iterations, so reduce the
+                # timestep slightly.
+                # If t_params.previous_dt[]==0.0, then the previous step failed so
+                # timestep will not be increasing, so do not need this check.
+                iteration_limited_dt = t_params.previous_dt[] / t_params.max_increase_factor
+                if t_params.dt[] > iteration_limited_dt
+                    t_params.dt[] = iteration_limited_dt
+                    @serial_region begin
+                        this_limit_caused_by = 5
+                    end
+                end
+            elseif (nl_max_its_fraction > 0.5 || nl_total_its_soft_limit) && t_params.previous_dt[] > 0.0
                 # The last step took many nonlinear iterations, so do not allow the
                 # timestep to increase.
                 # If t_params.previous_dt[]==0.0, then the previous step failed so

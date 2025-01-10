@@ -4486,8 +4486,9 @@ appropriate.
     end
 
     adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms, total_points,
-                                       error_norm_method, "", 0.0, false, composition;
-                                       electron=true, local_max_dt=local_max_dt)
+                                       error_norm_method, "", 0.0, false, false,
+                                       composition; electron=true,
+                                       local_max_dt=local_max_dt)
     if t_params.previous_dt[] == 0.0
         # Timestep failed, so reset  scratch[t_params.n_rk_stages+1] equal to
         # scratch[1] to start the timestep over.
