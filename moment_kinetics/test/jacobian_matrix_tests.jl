@@ -36,7 +36,7 @@ using moment_kinetics.moment_constraints: electron_implicit_constraint_forcing!,
 using moment_kinetics.type_definitions: mk_float
 using moment_kinetics.velocity_moments: calculate_electron_moment_derivatives_no_r!
 
-using StatsBase
+using moment_kinetics.StatsBase
 
 # Small parameter used to create perturbations to test Jacobian against
 epsilon = 1.0e-6
