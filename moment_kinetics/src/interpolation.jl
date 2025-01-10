@@ -5,7 +5,7 @@ Note these are not guaranteed to be highly optimized!
 """
 module interpolation
 
-export interpolate_to_grid_z
+export interpolate_to_grid_z, interpolate_to_grid_1d!, interpolate_symmetric!
 
 using ..array_allocation: allocate_float
 using ..moment_kinetics_structs: null_spatial_dimension_info, null_velocity_dimension_info
@@ -275,4 +275,43 @@ function interpolate_to_grid_vpa(newgrid, f::AbstractVector{mk_float}, vpa, spec
     return interpolate_to_grid_1d(newgrid, f, vpa, spectral)
 end
 
+"""
+    interpolate_symmetric!(result, newgrid, f, oldgrid)
+
+Interpolate f from oldgrid to newgrid, imposing that `f(x)` is symmetric around `x=0`, so
+the interpolation is done by fitting a polynomial in `x^2` to the values of `f` given on
+`oldgrid`, and evaluating on `newgrid`. Since interpolation is done in a polynomial of
+`x^2`, the signs of the points on `newgrid` and `oldgrid` do not matter, and are ignored.
+"""
+function interpolate_symmetric!(result, newgrid, f, oldgrid)
+    nnew = length(newgrid)
+    nold = length(oldgrid)
+
+    if nnew == 0
+        return nothing
+    end
+
+    # Check all points in newgrid are covered by oldgrid (i.e. between zero and the
+    # maximum of oldgrid)
+    @boundscheck maximum(abs.(newgrid)) ≤ maximum(abs.(oldgrid)) || error("newgrid bigger ($(maximum(abs.(newgrid)))) than oldgrid ($(maximum(abs.(oldgrid)))).")
+    @boundscheck size(result) == size(newgrid) || error("Size of result ($(size(result))) is not the same as size of newgrid ($(size(newgrid))).")
+    @boundscheck size(f) == size(oldgrid) || error("Size of f ($(size(f))) is not the same as size of oldgrid ($(size(oldgrid))).")
+
+    if nold == 1
+        # Interpolating 'polynomial' is just a constant
+        result .= f[1]
+    else
+        result .= 0.0
+        for j ∈ 1:nold
+            one_over_denominator = 1.0 / prod((oldgrid[j]^2 - oldgrid[k]^2) for k ∈ 1:nold if k ≠ j)
+            this_f = f[j]
+            for i ∈ 1:nnew
+                result[i] += this_f * prod((newgrid[i]^2 - oldgrid[k]^2) for k ∈ 1:nold if k ≠ j) * one_over_denominator
+            end
+        end
+    end
+
+    return nothing
 end
+
+end # interpolation

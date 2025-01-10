@@ -67,7 +67,7 @@ function linear_test()
                                zeros(mk_float, 0, 0))
         coords = NamedTuple(c => the_coord for c ∈ coord_names)
 
-        function rhs_func!(residual, x)
+        function rhs_func!(residual, x; krylov=false)
             if serial_solve
                 residual .= A * x - b
             else
@@ -180,7 +180,7 @@ function nonlinear_test()
                                zeros(mk_float, 0, 0))
         coords = NamedTuple(c => the_coord for c ∈ coord_names)
 
-        function rhs_func!(residual, x)
+        function rhs_func!(residual, x; krylov=false)
             if serial_solve
                 i = 1
                 D = abs(x[i])^2.5

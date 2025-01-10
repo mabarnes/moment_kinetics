@@ -358,15 +358,16 @@ function add_electron_energy_equation_to_Jacobian!(jacobian_matrix, f, dens, upa
                                                    vth, third_moment, ddens_dz, dupar_dz,
                                                    dppar_dz, dthird_moment_dz, collisions,
                                                    composition, z, vperp, vpa, z_spectral,
-                                                   num_diss_params, dt, ir; f_offset=0,
-                                                   ppar_offset=0)
+                                                   num_diss_params, dt, ir, include=:all;
+                                                   f_offset=0, ppar_offset=0)
     if f_offset == ppar_offset
         error("Got f_offset=$f_offset the same as ppar_offset=$ppar_offset. f and ppar "
               * "cannot be in same place in state vector.")
     end
-    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2)
-    @boundscheck size(jacobian_matrix, 1) ≥ f_offset + z.n * vperp.n * vpa.n
-    @boundscheck size(jacobian_matrix, 1) ≥ ppar_offset + z.n
+    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
+    @boundscheck size(jacobian_matrix, 1) ≥ f_offset + z.n * vperp.n * vpa.n || error("f_offset=$f_offset is too big")
+    @boundscheck size(jacobian_matrix, 1) ≥ ppar_offset + z.n || error("ppar_offset=$ppar_offset is too big")
+    @boundscheck include ∈ (:all, :explicit_z, :explicit_v) || error("Unexpected value for include=$include")
 
     if composition.electron_physics == kinetic_electrons_with_temperature_equation
         error("kinetic_electrons_with_temperature_equation not "
@@ -423,8 +424,97 @@ function add_electron_energy_equation_to_Jacobian!(jacobian_matrix, f, dens, upa
         z_deriv_row_endind = z_deriv_matrix.rowptr[iz+1] - 1
         z_deriv_colinds = @view z_deriv_matrix.colval[z_deriv_row_startind:z_deriv_row_endind]
         z_deriv_row_nonzeros = @view z_deriv_matrix.nzval[z_deriv_row_startind:z_deriv_row_endind]
+        if include ∈ (:all, :explicit_z)
+            for (icolz, z_deriv_entry) ∈ zip(z_deriv_colinds, z_deriv_row_nonzeros)
+                col = ppar_offset + icolz
+                jacobian_matrix[row,col] +=
+                    dt * upar[iz] * z_deriv_entry
+            end
+        end
+
+        # 3*ppar*dupar_dz
+        if include === :all
+            jacobian_matrix[row,row] += 3.0 * dt * dupar_dz[iz]
+        end
+
+        # terms from d(qpar)/dz
+        if include === :all
+            jacobian_matrix[row,row] +=
+                dt * (3.0 * sqrt(2.0 * ppar[iz] / dens[iz] / me) * dthird_moment_dz[iz]
+                      - 1.5 * sqrt(2.0 * ppar[iz] / me) / dens[iz]^1.5 * third_moment[iz] * ddens_dz[iz]
+                      + 1.5 * sqrt(2.0 / ppar[iz] / dens[iz] / me) * third_moment[iz] * dppar_dz[iz])
+        end
+        if include ∈ (:all, :explicit_z)
+            for (icolz, z_deriv_entry) ∈ zip(z_deriv_colinds, z_deriv_row_nonzeros)
+                col = ppar_offset + icolz
+                jacobian_matrix[row,col] += dt * 3.0 * sqrt(2.0 * ppar[iz] / dens[iz] / me) * third_moment[iz] * z_deriv_entry
+            end
+        end
+        if include ∈ (:all, :explicit_v)
+            for icolvperp ∈ 1:vperp.n, icolvpa ∈ 1:vpa.n
+                col = (iz - 1) * v_size + (icolvperp - 1) * vpa.n + icolvpa + f_offset
+                jacobian_matrix[row,col] += dt * (-(ppar[iz]/dens[iz])^1.5*sqrt(2.0/me)*ddens_dz[iz]
+                                                  + 3.0*sqrt(2.0*ppar[iz]/dens[iz]/me)*dppar_dz[iz]) *
+                                                 vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^3
+            end
+        end
+        for (icolz, z_deriv_entry) ∈ zip(z_deriv_colinds, z_deriv_row_nonzeros), icolvperp ∈ 1:vperp.n, icolvpa ∈ 1:vpa.n
+            col = (icolz - 1) * v_size + (icolvperp - 1) * vpa.n + icolvpa + f_offset
+            jacobian_matrix[row,col] += dt * 2.0*ppar[iz]^1.5*sqrt(2.0/dens[iz]/me) *
+                                             vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^3 * z_deriv_entry
+        end
+    end
+
+    return nothing
+end
+
+function add_electron_energy_equation_to_z_only_Jacobian!(
+        jacobian_matrix, dens, upar, ppar, vth, third_moment, ddens_dz, dupar_dz,
+        dppar_dz, dthird_moment_dz, collisions, composition, z, vperp, vpa, z_spectral,
+        num_diss_params, dt, ir)
+
+    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
+    @boundscheck size(jacobian_matrix, 1) == z.n || error("Jacobian matrix size is wrong")
+
+    if composition.electron_physics == kinetic_electrons_with_temperature_equation
+        error("kinetic_electrons_with_temperature_equation not "
+              * "supported yet in preconditioner")
+    elseif composition.electron_physics != kinetic_electrons
+        error("Unsupported electron_physics=$(composition.electron_physics) "
+              * "in electron_backward_euler!() preconditioner.")
+    end
+    if num_diss_params.electron.moment_dissipation_coefficient > 0.0
+        error("z-diffusion of electron_ppar not yet supported in "
+              * "preconditioner")
+    end
+    if collisions.electron_fluid.nu_ei > 0.0
+        error("electron-ion collision terms for electron_ppar not yet "
+              * "supported in preconditioner")
+    end
+    if composition.n_neutral_species > 0 && collisions.reactions.electron_charge_exchange_frequency > 0.0
+        error("electron 'charge exchange' terms for electron_ppar not yet "
+              * "supported in preconditioner")
+    end
+    if composition.n_neutral_species > 0 && collisions.reactions.electron_ionization_frequency > 0.0
+        error("electron ionization terms for electron_ppar not yet "
+              * "supported in preconditioner")
+    end
+
+    me = composition.me_over_mi
+    z_deriv_matrix = z_spectral.D_matrix_csr
+    v_size = vperp.n * vpa.n
+
+    @loop_z iz begin
+        # Rows corresponding to electron_ppar
+        row = iz
+
+        # upar*dppar_dz
+        z_deriv_row_startind = z_deriv_matrix.rowptr[iz]
+        z_deriv_row_endind = z_deriv_matrix.rowptr[iz+1] - 1
+        z_deriv_colinds = @view z_deriv_matrix.colval[z_deriv_row_startind:z_deriv_row_endind]
+        z_deriv_row_nonzeros = @view z_deriv_matrix.nzval[z_deriv_row_startind:z_deriv_row_endind]
         for (icolz, z_deriv_entry) ∈ zip(z_deriv_colinds, z_deriv_row_nonzeros)
-            col = ppar_offset + icolz
+            col = icolz
             jacobian_matrix[row,col] +=
                 dt * upar[iz] * z_deriv_entry
         end
@@ -438,20 +528,59 @@ function add_electron_energy_equation_to_Jacobian!(jacobian_matrix, f, dens, upa
                   - 1.5 * sqrt(2.0 * ppar[iz] / me) / dens[iz]^1.5 * third_moment[iz] * ddens_dz[iz]
                   + 1.5 * sqrt(2.0 / ppar[iz] / dens[iz] / me) * third_moment[iz] * dppar_dz[iz])
         for (icolz, z_deriv_entry) ∈ zip(z_deriv_colinds, z_deriv_row_nonzeros)
-            col = ppar_offset + icolz
+            col = icolz
             jacobian_matrix[row,col] += dt * 3.0 * sqrt(2.0 * ppar[iz] / dens[iz] / me) * third_moment[iz] * z_deriv_entry
         end
-        for icolvperp ∈ 1:vperp.n, icolvpa ∈ 1:vpa.n
-            col = (iz - 1) * v_size + (icolvperp - 1) * vpa.n + icolvpa + f_offset
-            jacobian_matrix[row,col] += dt * (-(ppar[iz]/dens[iz])^1.5*sqrt(2.0/me)*ddens_dz[iz]
-                                              + 3.0*sqrt(2.0*ppar[iz]/dens[iz]/me)*dppar_dz[iz]) *
-                                             vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^3
-        end
-        for (icolz, z_deriv_entry) ∈ zip(z_deriv_colinds, z_deriv_row_nonzeros), icolvperp ∈ 1:vperp.n, icolvpa ∈ 1:vpa.n
-            col = (icolz - 1) * v_size + (icolvperp - 1) * vpa.n + icolvpa + f_offset
-            jacobian_matrix[row,col] += dt * 2.0*ppar[iz]^1.5*sqrt(2.0/dens[iz]/me) *
-                                             vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^3 * z_deriv_entry
-        end
+    end
+
+    return nothing
+end
+
+function add_electron_energy_equation_to_v_only_Jacobian!(
+        jacobian_matrix, f, dens, upar, ppar, vth, third_moment, ddens_dz, dupar_dz,
+        dppar_dz, dthird_moment_dz, collisions, composition, z, vperp, vpa, z_spectral,
+        num_diss_params, dt, ir, iz)
+
+    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
+    @boundscheck size(jacobian_matrix, 1) == vperp.n * vpa.n + 1 || error("Jacobian matrix size is wrong")
+
+    if composition.electron_physics == kinetic_electrons_with_temperature_equation
+        error("kinetic_electrons_with_temperature_equation not "
+              * "supported yet in preconditioner")
+    elseif composition.electron_physics != kinetic_electrons
+        error("Unsupported electron_physics=$(composition.electron_physics) "
+              * "in electron_backward_euler!() preconditioner.")
+    end
+    if num_diss_params.electron.moment_dissipation_coefficient > 0.0
+        error("z-diffusion of electron_ppar not yet supported in "
+              * "preconditioner")
+    end
+    if collisions.electron_fluid.nu_ei > 0.0
+        error("electron-ion collision terms for electron_ppar not yet "
+              * "supported in preconditioner")
+    end
+    if composition.n_neutral_species > 0 && collisions.reactions.electron_charge_exchange_frequency > 0.0
+        error("electron 'charge exchange' terms for electron_ppar not yet "
+              * "supported in preconditioner")
+    end
+    if composition.n_neutral_species > 0 && collisions.reactions.electron_ionization_frequency > 0.0
+        error("electron ionization terms for electron_ppar not yet "
+              * "supported in preconditioner")
+    end
+
+    me = composition.me_over_mi
+
+    jacobian_matrix[end,end] += 3.0 * dt * dupar_dz
+
+    jacobian_matrix[end,end] +=
+        dt * (3.0 * sqrt(2.0 * ppar / dens / me) * dthird_moment_dz
+              - 1.5 * sqrt(2.0 * ppar / me) / dens^1.5 * third_moment * ddens_dz
+              + 1.5 * sqrt(2.0 / ppar / dens / me) * third_moment * dppar_dz)
+    for icolvperp ∈ 1:vperp.n, icolvpa ∈ 1:vpa.n
+        col = (icolvperp - 1) * vpa.n + icolvpa
+        jacobian_matrix[end,col] += dt * (-(ppar/dens)^1.5*sqrt(2.0/me)*ddens_dz
+                                          + 3.0*sqrt(2.0*ppar/dens/me)*dppar_dz) *
+                                         vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^3
     end
 
     return nothing
@@ -562,7 +691,7 @@ end
         # `residual` is zero, electron_ppar is the result of a backward-Euler timestep:
         #   (f_new - f_old) / dt = RHS(f_new)
         # ⇒ (f_new - f_old)/dt - RHS(f_new) = 0
-        function residual_func!(residual, electron_ppar)
+        function residual_func!(residual, electron_ppar; krylov=false)
             begin_z_region()
             @loop_z iz begin
                 residual[iz] = ppar_in[iz]
@@ -749,7 +878,7 @@ function calculate_electron_qpar_from_pdf_no_r!(qpar, ppar, vth, pdf, vpa, ir)
     begin_z_region()
     ivperp = 1
     @loop_z iz begin
-        @views qpar[iz] = 2*ppar[iz]*vth[iz]*integrate_over_vspace(pdf[:, ivperp, iz], vpa.grid.^3, vpa.wgts)
+        @views qpar[iz] = 2*ppar[iz]*vth[iz]*integrate_over_vspace(pdf[:, ivperp, iz], vpa.grid, 3, vpa.wgts)
     end
 end
 

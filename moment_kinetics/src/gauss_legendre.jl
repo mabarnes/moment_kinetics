@@ -181,6 +181,8 @@ implement the Fokker-Planck collision operator.
 """
 function setup_gausslegendre_pseudospectral_lobatto(coord; collision_operator_dim=true)
     x, w = gausslobatto(coord.ngrid)
+    x = mk_float.(x)
+    w = mk_float.(w)
     Dmat = allocate_float(coord.ngrid, coord.ngrid)
     gausslobattolegendre_differentiation_matrix!(Dmat,x,coord.ngrid)
     
@@ -257,6 +259,8 @@ implement the Fokker-Planck collision operator.
 function setup_gausslegendre_pseudospectral_radau(coord; collision_operator_dim=true)
     # Gauss-Radau points on [-1,1)
     x, w = gaussradau(coord.ngrid)
+    x = mk_float.(x)
+    w = mk_float.(w)
     # Gauss-Radau points on (-1,1] 
     xreverse, wreverse = -reverse(x), reverse(w)
     # elemental differentiation matrix
@@ -425,7 +429,7 @@ Or https://doc.nektar.info/tutorials/latest/fundamentals/differentiation/fundame
 
 Note that D has does not include a scaling factor
 """
-function gausslobattolegendre_differentiation_matrix!(D::Array{Float64,2},x::Array{Float64,1},ngrid::Int64)
+function gausslobattolegendre_differentiation_matrix!(D::Array{mk_float,2},x::Array{mk_float,1},ngrid::mk_int)
     D[:,:] .= 0.0
     for ix in 1:ngrid
         for ixp in 1:ngrid
@@ -457,7 +461,7 @@ https://doc.nektar.info/tutorials/latest/fundamentals/differentiation/fundamenta
 
 Note that D has does not include a scaling factor
 """
-function gaussradaulegendre_differentiation_matrix!(D::Array{Float64,2},x::Array{Float64,1},ngrid::Int64)
+function gaussradaulegendre_differentiation_matrix!(D::Array{mk_float,2},x::Array{mk_float,1},ngrid::Int64)
     D[:,:] .= 0.0
     for ix in 1:ngrid
         for ixp in 1:ngrid

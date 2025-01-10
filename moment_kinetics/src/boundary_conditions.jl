@@ -1029,7 +1029,7 @@ function enforce_v_boundary_condition_local!(f, bc, speed, v_diffusion, v, v_spe
 
         D0 = v_spectral.lobatto.Dmat[end,:]
         # adjust F(vpa = L/2) so that d F / d vpa = 0 at vpa = L/2
-        f[end] = -sum(D0[1:ngrid-1].*f[end-v.ngrid+1:end-1])/D0[v.ngrid]
+        f[end] = -sum(D0[1:v.ngrid-1].*f[end-v.ngrid+1:end-1])/D0[v.ngrid]
     elseif bc == "periodic"
         f[1] = 0.5*(f[1]+f[end])
         f[end] = f[1]
@@ -1038,6 +1038,7 @@ function enforce_v_boundary_condition_local!(f, bc, speed, v_diffusion, v, v_spe
     else
         error("Unsupported boundary condition option '$bc' for $(v.name)")
     end
+    return nothing
 end
 
 """

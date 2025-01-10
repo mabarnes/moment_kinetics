@@ -9,32 +9,55 @@ using moment_kinetics.analysis: vpagrid_to_dzdt
 using moment_kinetics.array_allocation: allocate_shared_float
 using moment_kinetics.boundary_conditions: enforce_v_boundary_condition_local!,
                                            enforce_vperp_boundary_condition!
-using moment_kinetics.derivatives: derivative_z!
+using moment_kinetics.calculus: derivative!
+using moment_kinetics.communication
+using moment_kinetics.derivatives: derivative_z!, derivative_z_pdf_vpavperpz!
 using moment_kinetics.electron_fluid_equations: calculate_electron_qpar_from_pdf_no_r!,
                                                 electron_energy_equation_no_r!,
-                                                add_electron_energy_equation_to_Jacobian!
+                                                add_electron_energy_equation_to_Jacobian!,
+                                                add_electron_energy_equation_to_z_only_Jacobian!,
+                                                add_electron_energy_equation_to_v_only_Jacobian!
 using moment_kinetics.electron_kinetic_equation: add_contribution_from_pdf_term!,
                                                  add_contribution_from_electron_pdf_term_to_Jacobian!,
+                                                 add_contribution_from_electron_pdf_term_to_z_only_Jacobian!,
+                                                 add_contribution_from_electron_pdf_term_to_v_only_Jacobian!,
                                                  add_dissipation_term!,
                                                  add_electron_dissipation_term_to_Jacobian!,
+                                                 add_electron_dissipation_term_to_v_only_Jacobian!,
                                                  add_ion_dt_forcing_of_electron_ppar_to_Jacobian!,
+                                                 add_ion_dt_forcing_of_electron_ppar_to_z_only_Jacobian!,
+                                                 add_ion_dt_forcing_of_electron_ppar_to_v_only_Jacobian!,
                                                  electron_kinetic_equation_euler_update!,
-                                                 fill_electron_kinetic_equation_Jacobian!
+                                                 fill_electron_kinetic_equation_Jacobian!,
+                                                 fill_electron_kinetic_equation_v_only_Jacobian!,
+                                                 fill_electron_kinetic_equation_z_only_Jacobian_f!,
+                                                 fill_electron_kinetic_equation_z_only_Jacobian_ppar!
 using moment_kinetics.electron_vpa_advection: electron_vpa_advection!,
-                                              add_electron_vpa_advection_to_Jacobian!
+                                              update_electron_speed_vpa!,
+                                              add_electron_vpa_advection_to_Jacobian!,
+                                              add_electron_vpa_advection_to_v_only_Jacobian!
 using moment_kinetics.electron_z_advection: electron_z_advection!,
                                             update_electron_speed_z!,
-                                            add_electron_z_advection_to_Jacobian!
+                                            add_electron_z_advection_to_Jacobian!,
+                                            add_electron_z_advection_to_z_only_Jacobian!,
+                                            add_electron_z_advection_to_v_only_Jacobian!
 using moment_kinetics.external_sources: total_external_electron_sources!,
-                                        add_total_external_electron_source_to_Jacobian!
+                                        add_total_external_electron_source_to_Jacobian!,
+                                        add_total_external_electron_source_to_z_only_Jacobian!,
+                                        add_total_external_electron_source_to_v_only_Jacobian!
 using moment_kinetics.krook_collisions: electron_krook_collisions!,
-                                        add_electron_krook_collisions_to_Jacobian!
+                                        add_electron_krook_collisions_to_Jacobian!,
+                                        add_electron_krook_collisions_to_z_only_Jacobian!,
+                                        add_electron_krook_collisions_to_v_only_Jacobian!
 using moment_kinetics.looping
 using moment_kinetics.moment_constraints: electron_implicit_constraint_forcing!,
                                           add_electron_implicit_constraint_forcing_to_Jacobian!,
+                                          add_electron_implicit_constraint_forcing_to_z_only_Jacobian!,
+                                          add_electron_implicit_constraint_forcing_to_v_only_Jacobian!,
                                           hard_force_moment_constraints!
 using moment_kinetics.type_definitions: mk_float
-using moment_kinetics.velocity_moments: calculate_electron_moment_derivatives_no_r!
+using moment_kinetics.velocity_moments: calculate_electron_moment_derivatives_no_r!,
+                                        integrate_over_vspace
 
 using moment_kinetics.StatsBase
 
@@ -276,8 +299,27 @@ function test_electron_z_advection(test_input; rtol=(2.5e2*epsilon)^2)
         p_size = length(ppar)
         total_size = pdf_size + p_size
 
+        z_speed = @view z_advect[1].speed[:,:,:,ir]
+
+        dpdf_dz = @view scratch_dummy.buffer_vpavperpzr_1[:,:,:,ir]
+        begin_vperp_vpa_region()
+        update_electron_speed_z!(z_advect[1], upar, vth, vpa.grid, ir)
+        @loop_vperp_vpa ivperp ivpa begin
+            @views z_advect[1].adv_fac[:,ivpa,ivperp,ir] = -z_speed[:,ivpa,ivperp]
+        end
+        #calculate the upwind derivative
+        @views derivative_z_pdf_vpavperpz!(dpdf_dz, f, z_advect[1].adv_fac[:,:,:,ir],
+                                           scratch_dummy.buffer_vpavperpr_1[:,:,ir],
+                                           scratch_dummy.buffer_vpavperpr_2[:,:,ir],
+                                           scratch_dummy.buffer_vpavperpr_3[:,:,ir],
+                                           scratch_dummy.buffer_vpavperpr_4[:,:,ir],
+                                           scratch_dummy.buffer_vpavperpr_5[:,:,ir],
+                                           scratch_dummy.buffer_vpavperpr_6[:,:,ir],
+                                           z_spectral, z)
+
         jacobian_matrix = allocate_shared_float(total_size, total_size)
         @serial_region begin
+            jacobian_matrix .= 0.0
             for row ∈ 1:total_size
                 # Initialise identity matrix
                 jacobian_matrix[row,row] = 1.0
@@ -285,8 +327,85 @@ function test_electron_z_advection(test_input; rtol=(2.5e2*epsilon)^2)
         end
 
         add_electron_z_advection_to_Jacobian!(
-            jacobian_matrix, f, dens, upar, ppar, vth, me, z, vperp, vpa, z_spectral,
-            z_advect, scratch_dummy, dt, ir; ppar_offset=pdf_size)
+            jacobian_matrix, f, dens, upar, ppar, vth, dpdf_dz, me, z, vperp, vpa,
+            z_spectral, z_advect, z_speed, scratch_dummy, dt, ir; ppar_offset=pdf_size)
+
+        # Test 'ADI Jacobians' before other tests, because residual_func() may modify some
+        # variables (vth, etc.).
+
+        jacobian_matrix_ADI_check = allocate_shared_float(total_size, total_size)
+
+        @testset "ADI Jacobians - implicit z" begin
+            # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
+            begin_serial_region()
+            @serial_region begin
+                jacobian_matrix_ADI_check .= 0.0
+                for row ∈ 1:total_size
+                    # Initialise identity matrix
+                    jacobian_matrix_ADI_check[row,row] = 1.0
+                end
+            end
+
+            v_size = vperp.n * vpa.n
+
+            # Add 'implicit' contribution
+            begin_vperp_vpa_region()
+            @loop_vperp_vpa ivperp ivpa begin
+                this_slice = (ivperp - 1)*vpa.n + ivpa:v_size:(z.n - 1)*v_size + (ivperp - 1)*vpa.n + ivpa
+                @views add_electron_z_advection_to_z_only_Jacobian!(
+                    jacobian_matrix_ADI_check[this_slice,this_slice], f[ivpa,ivperp,:],
+                    dens, upar, ppar, vth, dpdf_dz[ivpa,ivperp,:], me, z, vperp, vpa,
+                    z_spectral, z_advect, z_speed, scratch_dummy, dt, ir,
+                    ivperp, ivpa)
+            end
+
+            # Add 'explicit' contribution
+            add_electron_z_advection_to_Jacobian!(
+                jacobian_matrix_ADI_check, f, dens, upar, ppar, vth, dpdf_dz, me, z,
+                vperp, vpa, z_spectral, z_advect, z_speed, scratch_dummy, dt, ir,
+                :explicit_v; ppar_offset=pdf_size)
+
+            begin_serial_region()
+            @serial_region begin
+                @test elementwise_isapprox(jacobian_matrix_ADI_check, jacobian_matrix; rtol=0.0, atol=1.0e-15)
+            end
+        end
+
+        @testset "ADI Jacobians - implicit v" begin
+            # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
+            begin_serial_region()
+            @serial_region begin
+                jacobian_matrix_ADI_check .= 0.0
+                for row ∈ 1:total_size
+                    # Initialise identity matrix
+                    jacobian_matrix_ADI_check[row,row] = 1.0
+                end
+            end
+
+            v_size = vperp.n * vpa.n
+
+            # Add 'implicit' contribution
+            begin_z_region()
+            @loop_z iz begin
+                this_slice = collect((iz - 1)*v_size + 1:iz*v_size)
+                push!(this_slice, iz + pdf_size)
+                @views add_electron_z_advection_to_v_only_Jacobian!(
+                    jacobian_matrix_ADI_check[this_slice,this_slice], f[:,:,iz],
+                    dens[iz], upar[iz], ppar[iz], vth[iz], dpdf_dz[:,:,iz], me, z, vperp,
+                    vpa, z_spectral, z_advect, z_speed, scratch_dummy, dt, ir, iz)
+            end
+
+            # Add 'explicit' contribution
+            add_electron_z_advection_to_Jacobian!(
+                jacobian_matrix_ADI_check, f, dens, upar, ppar, vth, dpdf_dz, me, z,
+                vperp, vpa, z_spectral, z_advect, z_speed, scratch_dummy, dt, ir,
+                :explicit_z; ppar_offset=pdf_size)
+
+            begin_serial_region()
+            @serial_region begin
+                @test elementwise_isapprox(jacobian_matrix_ADI_check, jacobian_matrix; rtol=0.0, atol=1.0e-15)
+            end
+        end
 
         function residual_func!(residual, this_f, this_p)
             begin_z_region()
@@ -525,9 +644,23 @@ function test_electron_vpa_advection(test_input; rtol=(3.0e2*epsilon)^2)
         p_size = length(ppar)
         total_size = pdf_size + p_size
 
+        dpdf_dvpa = @view scratch_dummy.buffer_vpavperpzr_2[:,:,:,ir]
+        begin_z_vperp_region()
+        update_electron_speed_vpa!(vpa_advect[1], dens, upar, ppar, moments, vpa.grid,
+                                   external_source_settings.electron, ir)
+        @loop_z_vperp iz ivperp begin
+            @views @. vpa_advect[1].adv_fac[:,ivperp,iz,ir] = -vpa_advect[1].speed[:,ivperp,iz,ir]
+        end
+        #calculate the upwind derivative of the electron pdf w.r.t. wpa
+        @loop_z_vperp iz ivperp begin
+            @views derivative!(dpdf_dvpa[:,ivperp,iz], f[:,ivperp,iz], vpa,
+                               vpa_advect[1].adv_fac[:,ivperp,iz,ir], vpa_spectral)
+        end
+
         jacobian_matrix = allocate_shared_float(total_size, total_size)
         begin_serial_region()
         @serial_region begin
+            jacobian_matrix .= 0.0
             for row ∈ 1:total_size
                 # Initialise identity matrix
                 jacobian_matrix[row,row] = 1.0
@@ -535,10 +668,80 @@ function test_electron_vpa_advection(test_input; rtol=(3.0e2*epsilon)^2)
         end
 
         add_electron_vpa_advection_to_Jacobian!(
-            jacobian_matrix, f, dens, upar, ppar, vth, third_moment, ddens_dz, dppar_dz,
-            dthird_moment_dz, moments, me, z, vperp, vpa, z_spectral, vpa_spectral,
-            vpa_advect, z_speed, scratch_dummy, external_source_settings, dt, ir;
-            ppar_offset=pdf_size)
+            jacobian_matrix, f, dens, upar, ppar, vth, third_moment, dpdf_dvpa, ddens_dz,
+            dppar_dz, dthird_moment_dz, moments, me, z, vperp, vpa, z_spectral,
+            vpa_spectral, vpa_advect, z_speed, scratch_dummy, external_source_settings,
+            dt, ir; ppar_offset=pdf_size)
+
+        # Test 'ADI Jacobians' before other tests, because residual_func() may modify some
+        # variables (vth, etc.).
+
+        jacobian_matrix_ADI_check = allocate_shared_float(total_size, total_size)
+
+        @testset "ADI Jacobians - implicit z" begin
+            # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
+            begin_serial_region()
+            @serial_region begin
+                jacobian_matrix_ADI_check .= 0.0
+                for row ∈ 1:total_size
+                    # Initialise identity matrix
+                    jacobian_matrix_ADI_check[row,row] = 1.0
+                end
+            end
+
+            # There is no 'implicit z' contribution for vpa advection
+
+            # Add 'explicit' contribution
+            add_electron_vpa_advection_to_Jacobian!(
+                jacobian_matrix_ADI_check, f, dens, upar, ppar, vth, third_moment,
+                dpdf_dvpa, ddens_dz, dppar_dz, dthird_moment_dz, moments, me, z, vperp,
+                vpa, z_spectral, vpa_spectral, vpa_advect, z_speed, scratch_dummy,
+                external_source_settings, dt, ir, :explicit_v; ppar_offset=pdf_size)
+
+            begin_serial_region()
+            @serial_region begin
+                @test elementwise_isapprox(jacobian_matrix_ADI_check, jacobian_matrix; rtol=0.0, atol=1.0e-15)
+            end
+        end
+
+        @testset "ADI Jacobians - implicit v" begin
+            # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
+            begin_serial_region()
+            @serial_region begin
+                jacobian_matrix_ADI_check .= 0.0
+                for row ∈ 1:total_size
+                    # Initialise identity matrix
+                    jacobian_matrix_ADI_check[row,row] = 1.0
+                end
+            end
+
+            v_size = vperp.n * vpa.n
+
+            # Add 'implicit' contribution
+            begin_z_region()
+            @loop_z iz begin
+                this_slice = collect((iz - 1)*v_size + 1:iz*v_size)
+                push!(this_slice, iz + pdf_size)
+                @views add_electron_vpa_advection_to_v_only_Jacobian!(
+                    jacobian_matrix_ADI_check[this_slice,this_slice], f[:,:,iz], dens[iz],
+                    upar[iz], ppar[iz], vth[iz], third_moment[iz], dpdf_dvpa[:,:,iz],
+                    ddens_dz[iz], dppar_dz[iz], dthird_moment_dz[iz], moments, me, z,
+                    vperp, vpa, z_spectral, vpa_spectral, vpa_advect, z_speed,
+                    scratch_dummy, external_source_settings, dt, ir, iz)
+            end
+
+            # Add 'explicit' contribution
+            add_electron_vpa_advection_to_Jacobian!(
+                jacobian_matrix_ADI_check, f, dens, upar, ppar, vth, third_moment,
+                dpdf_dvpa, ddens_dz, dppar_dz, dthird_moment_dz, moments, me, z, vperp,
+                vpa, z_spectral, vpa_spectral, vpa_advect, z_speed, scratch_dummy,
+                external_source_settings, dt, ir, :explicit_z; ppar_offset=pdf_size)
+
+            begin_serial_region()
+            @serial_region begin
+                @test elementwise_isapprox(jacobian_matrix_ADI_check, jacobian_matrix; rtol=0.0, atol=1.0e-15)
+            end
+        end
 
         function residual_func!(residual, this_f, this_p)
             begin_z_region()
@@ -798,6 +1001,7 @@ function test_contribution_from_electron_pdf_term(test_input; rtol=(4.0e2*epsilo
         jacobian_matrix = allocate_shared_float(total_size, total_size)
         begin_serial_region()
         @serial_region begin
+            jacobian_matrix .= 0.0
             for row ∈ 1:total_size
                 # Initialise identity matrix
                 jacobian_matrix[row,row] = 1.0
@@ -808,6 +1012,87 @@ function test_contribution_from_electron_pdf_term(test_input; rtol=(4.0e2*epsilo
             jacobian_matrix, f, dens, upar, ppar, vth, third_moment, ddens_dz, dppar_dz,
             dvth_dz, dqpar_dz, dthird_moment_dz, moments, me, external_source_settings, z,
             vperp, vpa, z_spectral, z_speed, scratch_dummy, dt, ir; ppar_offset=pdf_size)
+
+        # Test 'ADI Jacobians' before other tests, because residual_func() may modify some
+        # variables (vth, etc.).
+
+        jacobian_matrix_ADI_check = allocate_shared_float(total_size, total_size)
+
+        @testset "ADI Jacobians - implicit z" begin
+            # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
+            begin_serial_region()
+            @serial_region begin
+                jacobian_matrix_ADI_check .= 0.0
+                for row ∈ 1:total_size
+                    # Initialise identity matrix
+                    jacobian_matrix_ADI_check[row,row] = 1.0
+                end
+            end
+
+            v_size = vperp.n * vpa.n
+
+            # Add 'implicit' contribution
+            begin_vperp_vpa_region()
+            @loop_vperp_vpa ivperp ivpa begin
+                this_slice = (ivperp - 1)*vpa.n + ivpa:v_size:(z.n - 1)*v_size + (ivperp - 1)*vpa.n + ivpa
+                @views add_contribution_from_electron_pdf_term_to_z_only_Jacobian!(
+                    jacobian_matrix_ADI_check[this_slice,this_slice], f[ivpa,ivperp,:],
+                    dens, upar, ppar, vth, third_moment, ddens_dz, dppar_dz, dvth_dz,
+                    dqpar_dz, dthird_moment_dz, moments, me, external_source_settings, z,
+                    vperp, vpa, z_spectral, z_speed, scratch_dummy, dt, ir, ivperp, ivpa)
+            end
+
+            # Add 'explicit' contribution
+            add_contribution_from_electron_pdf_term_to_Jacobian!(
+                jacobian_matrix_ADI_check, f, dens, upar, ppar, vth, third_moment,
+                ddens_dz, dppar_dz, dvth_dz, dqpar_dz, dthird_moment_dz, moments, me,
+                external_source_settings, z, vperp, vpa, z_spectral, z_speed,
+                scratch_dummy, dt, ir, :explicit_v; ppar_offset=pdf_size)
+
+            begin_serial_region()
+            @serial_region begin
+                @test elementwise_isapprox(jacobian_matrix_ADI_check, jacobian_matrix; rtol=0.0, atol=1.0e-13)
+            end
+        end
+
+        @testset "ADI Jacobians - implicit v" begin
+            # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
+            begin_serial_region()
+            @serial_region begin
+                jacobian_matrix_ADI_check .= 0.0
+                for row ∈ 1:total_size
+                    # Initialise identity matrix
+                    jacobian_matrix_ADI_check[row,row] = 1.0
+                end
+            end
+
+            v_size = vperp.n * vpa.n
+
+            # Add 'implicit' contribution
+            begin_z_region()
+            @loop_z iz begin
+                this_slice = collect((iz - 1)*v_size + 1:iz*v_size)
+                push!(this_slice, iz + pdf_size)
+                @views add_contribution_from_electron_pdf_term_to_v_only_Jacobian!(
+                    jacobian_matrix_ADI_check[this_slice,this_slice], f[:,:,iz], dens[iz],
+                    upar[iz], ppar[iz], vth[iz], third_moment[iz], ddens_dz[iz],
+                    dppar_dz[iz], dvth_dz[iz], dqpar_dz[iz], dthird_moment_dz[iz],
+                    moments, me, external_source_settings, z, vperp, vpa, z_spectral,
+                    z_speed, scratch_dummy, dt, ir, iz)
+            end
+
+            # Add 'explicit' contribution
+            add_contribution_from_electron_pdf_term_to_Jacobian!(
+                jacobian_matrix_ADI_check, f, dens, upar, ppar, vth, third_moment,
+                ddens_dz, dppar_dz, dvth_dz, dqpar_dz, dthird_moment_dz, moments, me,
+                external_source_settings, z, vperp, vpa, z_spectral, z_speed,
+                scratch_dummy, dt, ir, :explicit_z; ppar_offset=pdf_size)
+
+            begin_serial_region()
+            @serial_region begin
+                @test elementwise_isapprox(jacobian_matrix_ADI_check, jacobian_matrix; rtol=0.0, atol=1.0e-13)
+            end
+        end
 
         function residual_func!(residual, this_f, this_p)
             begin_z_region()
@@ -1032,6 +1317,7 @@ function test_electron_dissipation_term(test_input; rtol=(3.0e0*epsilon)^2)
         jacobian_matrix = allocate_shared_float(total_size, total_size)
         begin_serial_region()
         @serial_region begin
+            jacobian_matrix .= 0.0
             for row ∈ 1:total_size
                 # Initialise identity matrix
                 jacobian_matrix[row,row] = 1.0
@@ -1041,6 +1327,69 @@ function test_electron_dissipation_term(test_input; rtol=(3.0e0*epsilon)^2)
         add_electron_dissipation_term_to_Jacobian!(
             jacobian_matrix, f, num_diss_params, z, vperp, vpa, vpa_spectral, z_speed, dt,
             ir)
+
+        # Test 'ADI Jacobians' before other tests, because residual_func() may modify some
+        # variables (vth, etc.).
+
+        jacobian_matrix_ADI_check = allocate_shared_float(total_size, total_size)
+
+        @testset "ADI Jacobians - implicit z" begin
+            # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
+            begin_serial_region()
+            @serial_region begin
+                jacobian_matrix_ADI_check .= 0.0
+                for row ∈ 1:total_size
+                    # Initialise identity matrix
+                    jacobian_matrix_ADI_check[row,row] = 1.0
+                end
+            end
+
+            # There is no 'implicit z' contribution for electron dissipation
+
+            # Add 'explicit' contribution
+            add_electron_dissipation_term_to_Jacobian!(
+                jacobian_matrix_ADI_check, f, num_diss_params, z, vperp, vpa,
+                vpa_spectral, z_speed, dt, ir, :explicit_v)
+
+            begin_serial_region()
+            @serial_region begin
+                @test elementwise_isapprox(jacobian_matrix_ADI_check, jacobian_matrix; rtol=0.0, atol=1.0e-15)
+            end
+        end
+
+        @testset "ADI Jacobians - implicit v" begin
+            # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
+            begin_serial_region()
+            @serial_region begin
+                jacobian_matrix_ADI_check .= 0.0
+                for row ∈ 1:total_size
+                    # Initialise identity matrix
+                    jacobian_matrix_ADI_check[row,row] = 1.0
+                end
+            end
+
+            v_size = vperp.n * vpa.n
+
+            # Add 'implicit' contribution
+            begin_z_region()
+            @loop_z iz begin
+                this_slice = collect((iz - 1)*v_size + 1:iz*v_size)
+                push!(this_slice, iz + pdf_size)
+                @views add_electron_dissipation_term_to_v_only_Jacobian!(
+                    jacobian_matrix_ADI_check[this_slice,this_slice], f[:,:,iz],
+                    num_diss_params, z, vperp, vpa, vpa_spectral, z_speed, dt, ir, iz)
+            end
+
+            # Add 'explicit' contribution
+            add_electron_dissipation_term_to_Jacobian!(
+                jacobian_matrix_ADI_check, f, num_diss_params, z, vperp, vpa,
+                vpa_spectral, z_speed, dt, ir, :explicit_z)
+
+            begin_serial_region()
+            @serial_region begin
+                @test elementwise_isapprox(jacobian_matrix_ADI_check, jacobian_matrix; rtol=0.0, atol=1.0e-15)
+            end
+        end
 
         function residual_func!(residual, this_f, this_p)
             begin_z_region()
@@ -1269,6 +1618,7 @@ function test_electron_krook_collisions(test_input; rtol=(2.0e1*epsilon)^2)
         jacobian_matrix = allocate_shared_float(total_size, total_size)
         begin_serial_region()
         @serial_region begin
+            jacobian_matrix .= 0.0
             for row ∈ 1:total_size
                 # Initialise identity matrix
                 jacobian_matrix[row,row] = 1.0
@@ -1278,6 +1628,82 @@ function test_electron_krook_collisions(test_input; rtol=(2.0e1*epsilon)^2)
         add_electron_krook_collisions_to_Jacobian!(
             jacobian_matrix, f, dens, upar, ppar, vth, @view(moments.ion.upar[:,ir]),
             collisions, z, vperp, vpa, z_speed, dt, ir; ppar_offset=pdf_size)
+
+        # Test 'ADI Jacobians' before other tests, because residual_func() may modify some
+        # variables (vth, etc.).
+
+        jacobian_matrix_ADI_check = allocate_shared_float(total_size, total_size)
+
+        @testset "ADI Jacobians - implicit z" begin
+            # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
+            begin_serial_region()
+            @serial_region begin
+                jacobian_matrix_ADI_check .= 0.0
+                for row ∈ 1:total_size
+                    # Initialise identity matrix
+                    jacobian_matrix_ADI_check[row,row] = 1.0
+                end
+            end
+
+            v_size = vperp.n * vpa.n
+
+            # Add 'implicit' contribution
+            begin_vperp_vpa_region()
+            @loop_vperp_vpa ivperp ivpa begin
+                this_slice = (ivperp - 1)*vpa.n + ivpa:v_size:(z.n - 1)*v_size + (ivperp - 1)*vpa.n + ivpa
+                @views add_electron_krook_collisions_to_z_only_Jacobian!(
+                    jacobian_matrix_ADI_check[this_slice,this_slice], f[ivpa,ivperp,:],
+                    dens, upar, ppar, vth, moments.ion.upar[:,ir], collisions, z, vperp,
+                    vpa, z_speed, dt, ir, ivperp, ivpa)
+            end
+
+            # Add 'explicit' contribution
+            add_electron_krook_collisions_to_Jacobian!(
+                jacobian_matrix_ADI_check, f, dens, upar, ppar, vth,
+                @view(moments.ion.upar[:,ir]), collisions, z, vperp, vpa, z_speed, dt, ir,
+                :explicit_v; ppar_offset=pdf_size)
+
+            begin_serial_region()
+            @serial_region begin
+                @test elementwise_isapprox(jacobian_matrix_ADI_check, jacobian_matrix; rtol=0.0, atol=1.0e-15)
+            end
+        end
+
+        @testset "ADI Jacobians - implicit v" begin
+            # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
+            begin_serial_region()
+            @serial_region begin
+                jacobian_matrix_ADI_check .= 0.0
+                for row ∈ 1:total_size
+                    # Initialise identity matrix
+                    jacobian_matrix_ADI_check[row,row] = 1.0
+                end
+            end
+
+            v_size = vperp.n * vpa.n
+
+            # Add 'implicit' contribution
+            begin_z_region()
+            @loop_z iz begin
+                this_slice = collect((iz - 1)*v_size + 1:iz*v_size)
+                push!(this_slice, iz + pdf_size)
+                @views add_electron_krook_collisions_to_v_only_Jacobian!(
+                    jacobian_matrix_ADI_check[this_slice,this_slice], f[:,:,iz], dens[iz],
+                    upar[iz], ppar[iz], vth[iz], moments.ion.upar[iz,ir], collisions, z,
+                    vperp, vpa, z_speed, dt, ir, iz)
+            end
+
+            # Add 'explicit' contribution
+            add_electron_krook_collisions_to_Jacobian!(
+                jacobian_matrix_ADI_check, f, dens, upar, ppar, vth,
+                @view(moments.ion.upar[:,ir]), collisions, z, vperp, vpa, z_speed, dt, ir,
+                :explicit_z; ppar_offset=pdf_size)
+
+            begin_serial_region()
+            @serial_region begin
+                @test elementwise_isapprox(jacobian_matrix_ADI_check, jacobian_matrix; rtol=0.0, atol=1.0e-15)
+            end
+        end
 
         function residual_func!(residual, this_f, this_p)
             begin_z_region()
@@ -1520,6 +1946,7 @@ function test_external_electron_source(test_input; rtol=(3.0e1*epsilon)^2)
         jacobian_matrix = allocate_shared_float(total_size, total_size)
         begin_serial_region()
         @serial_region begin
+            jacobian_matrix .= 0.0
             for row ∈ 1:total_size
                 # Initialise identity matrix
                 jacobian_matrix[row,row] = 1.0
@@ -1529,6 +1956,82 @@ function test_external_electron_source(test_input; rtol=(3.0e1*epsilon)^2)
         add_total_external_electron_source_to_Jacobian!(
             jacobian_matrix, f, moments, me, z_speed, external_source_settings.electron,
             z, vperp, vpa, dt, ir; ppar_offset=pdf_size)
+
+        # Test 'ADI Jacobians' before other tests, because residual_func() may modify some
+        # variables (vth, etc.).
+
+        jacobian_matrix_ADI_check = allocate_shared_float(total_size, total_size)
+
+        @testset "ADI Jacobians - implicit z" begin
+            # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
+            begin_serial_region()
+            @serial_region begin
+                jacobian_matrix_ADI_check .= 0.0
+                for row ∈ 1:total_size
+                    # Initialise identity matrix
+                    jacobian_matrix_ADI_check[row,row] = 1.0
+                end
+            end
+
+            v_size = vperp.n * vpa.n
+
+            # Add 'implicit' contribution
+            begin_vperp_vpa_region()
+            @loop_vperp_vpa ivperp ivpa begin
+                this_slice = (ivperp - 1)*vpa.n + ivpa:v_size:(z.n - 1)*v_size + (ivperp - 1)*vpa.n + ivpa
+                @views add_total_external_electron_source_to_z_only_Jacobian!(
+                    jacobian_matrix_ADI_check[this_slice,this_slice], f[ivpa,ivperp,:],
+                    moments, me, z_speed, external_source_settings.electron, z, vperp,
+                    vpa, dt, ir, ivperp, ivpa)
+            end
+
+            # Add 'explicit' contribution
+            add_total_external_electron_source_to_Jacobian!(
+                jacobian_matrix_ADI_check, f, moments, me, z_speed,
+                external_source_settings.electron, z, vperp, vpa, dt, ir, :explicit_v;
+                ppar_offset=pdf_size)
+
+            begin_serial_region()
+            @serial_region begin
+                @test elementwise_isapprox(jacobian_matrix_ADI_check, jacobian_matrix; rtol=0.0, atol=1.0e-15)
+            end
+        end
+
+        @testset "ADI Jacobians - implicit v" begin
+            # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
+            begin_serial_region()
+            @serial_region begin
+                jacobian_matrix_ADI_check .= 0.0
+                for row ∈ 1:total_size
+                    # Initialise identity matrix
+                    jacobian_matrix_ADI_check[row,row] = 1.0
+                end
+            end
+
+            v_size = vperp.n * vpa.n
+
+            # Add 'implicit' contribution
+            begin_z_region()
+            @loop_z iz begin
+                this_slice = collect((iz - 1)*v_size + 1:iz*v_size)
+                push!(this_slice, iz + pdf_size)
+                @views add_total_external_electron_source_to_v_only_Jacobian!(
+                    jacobian_matrix_ADI_check[this_slice,this_slice], f[:,:,iz],
+                    moments, me, z_speed, external_source_settings.electron, z, vperp,
+                    vpa, dt, ir, iz)
+            end
+
+            # Add 'explicit' contribution
+            add_total_external_electron_source_to_Jacobian!(
+                jacobian_matrix_ADI_check, f, moments, me, z_speed,
+                external_source_settings.electron, z, vperp, vpa, dt, ir, :explicit_z;
+                ppar_offset=pdf_size)
+
+            begin_serial_region()
+            @serial_region begin
+                @test elementwise_isapprox(jacobian_matrix_ADI_check, jacobian_matrix; rtol=0.0, atol=1.0e-15)
+            end
+        end
 
         function residual_func!(residual, this_f, this_p)
             begin_z_region()
@@ -1772,9 +2275,22 @@ function test_electron_implicit_constraint_forcing(test_input; rtol=(1.5e0*epsil
         p_size = length(ppar)
         total_size = pdf_size + p_size
 
+        zeroth_moment = z.scratch_shared
+        first_moment = z.scratch_shared2
+        second_moment = z.scratch_shared3
+        begin_z_region()
+        vpa_grid = vpa.grid
+        vpa_wgts = vpa.wgts
+        @loop_z iz begin
+            @views zeroth_moment[iz] = integrate_over_vspace(f[:,1,iz], vpa_wgts)
+            @views first_moment[iz] = integrate_over_vspace(f[:,1,iz], vpa_grid, vpa_wgts)
+            @views second_moment[iz] = integrate_over_vspace(f[:,1,iz], vpa_grid, 2, vpa_wgts)
+        end
+
         jacobian_matrix = allocate_shared_float(total_size, total_size)
         begin_serial_region()
         @serial_region begin
+            jacobian_matrix .= 0.0
             for row ∈ 1:total_size
                 # Initialise identity matrix
                 jacobian_matrix[row,row] = 1.0
@@ -1782,8 +2298,84 @@ function test_electron_implicit_constraint_forcing(test_input; rtol=(1.5e0*epsil
         end
 
         add_electron_implicit_constraint_forcing_to_Jacobian!(
-            jacobian_matrix, f, z_speed, z, vperp, vpa,
-            t_params.electron.constraint_forcing_rate, dt, ir)
+            jacobian_matrix, f, zeroth_moment, first_moment, second_moment, z_speed, z,
+            vperp, vpa, t_params.electron.constraint_forcing_rate, dt, ir)
+
+        # Test 'ADI Jacobians' before other tests, because residual_func() may modify some
+        # variables (vth, etc.).
+
+        jacobian_matrix_ADI_check = allocate_shared_float(total_size, total_size)
+
+        @testset "ADI Jacobians - implicit z" begin
+            # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
+            begin_serial_region()
+            @serial_region begin
+                jacobian_matrix_ADI_check .= 0.0
+                for row ∈ 1:total_size
+                    # Initialise identity matrix
+                    jacobian_matrix_ADI_check[row,row] = 1.0
+                end
+            end
+
+            v_size = vperp.n * vpa.n
+
+            # Add 'implicit' contribution
+            begin_vperp_vpa_region()
+            @loop_vperp_vpa ivperp ivpa begin
+                this_slice = (ivperp - 1)*vpa.n + ivpa:v_size:(z.n - 1)*v_size + (ivperp - 1)*vpa.n + ivpa
+                @views add_electron_implicit_constraint_forcing_to_z_only_Jacobian!(
+                    jacobian_matrix_ADI_check[this_slice,this_slice], f[ivpa,ivperp,:],
+                    zeroth_moment, first_moment, second_moment, z_speed, z, vperp, vpa,
+                    t_params.electron.constraint_forcing_rate, dt, ir, ivperp, ivpa)
+            end
+
+            # Add 'explicit' contribution
+            add_electron_implicit_constraint_forcing_to_Jacobian!(
+                jacobian_matrix_ADI_check, f, zeroth_moment, first_moment, second_moment,
+                z_speed, z, vperp, vpa, t_params.electron.constraint_forcing_rate, dt, ir,
+                :explicit_v)
+
+            begin_serial_region()
+            @serial_region begin
+                @test elementwise_isapprox(jacobian_matrix_ADI_check, jacobian_matrix; rtol=0.0, atol=1.0e-15)
+            end
+        end
+
+        @testset "ADI Jacobians - implicit v" begin
+            # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
+            begin_serial_region()
+            @serial_region begin
+                jacobian_matrix_ADI_check .= 0.0
+                for row ∈ 1:total_size
+                    # Initialise identity matrix
+                    jacobian_matrix_ADI_check[row,row] = 1.0
+                end
+            end
+
+            v_size = vperp.n * vpa.n
+
+            # Add 'implicit' contribution
+            begin_z_region()
+            @loop_z iz begin
+                this_slice = collect((iz - 1)*v_size + 1:iz*v_size)
+                push!(this_slice, iz + pdf_size)
+                @views add_electron_implicit_constraint_forcing_to_v_only_Jacobian!(
+                    jacobian_matrix_ADI_check[this_slice,this_slice], f[:,:,iz],
+                    zeroth_moment[iz], first_moment[iz], second_moment[iz], z_speed, z,
+                    vperp, vpa, t_params.electron.constraint_forcing_rate, dt, ir, iz)
+            end
+
+            # Add 'explicit' contribution
+            add_electron_implicit_constraint_forcing_to_Jacobian!(
+                jacobian_matrix_ADI_check, f, zeroth_moment, first_moment, second_moment,
+                z_speed, z, vperp, vpa, t_params.electron.constraint_forcing_rate, dt, ir,
+                :explicit_z)
+
+            begin_serial_region()
+            @serial_region begin
+                @test elementwise_isapprox(jacobian_matrix_ADI_check, jacobian_matrix; rtol=0.0, atol=1.0e-15)
+            end
+        end
 
         function residual_func!(residual, this_f, this_p)
             begin_z_region()
@@ -2029,6 +2621,7 @@ function test_electron_energy_equation(test_input; rtol=(6.0e2*epsilon)^2)
         jacobian_matrix = allocate_shared_float(total_size, total_size)
         begin_serial_region()
         @serial_region begin
+            jacobian_matrix .= 0.0
             for row ∈ 1:total_size
                 # Initialise identity matrix
                 jacobian_matrix[row,row] = 1.0
@@ -2039,6 +2632,85 @@ function test_electron_energy_equation(test_input; rtol=(6.0e2*epsilon)^2)
             jacobian_matrix, f, dens, upar, ppar, vth, third_moment, ddens_dz, dupar_dz,
             dppar_dz, dthird_moment_dz, collisions, composition, z, vperp, vpa,
             z_spectral, num_diss_params, dt, ir; ppar_offset=pdf_size)
+
+        # Test 'ADI Jacobians' before other tests, because residual_func() may modify some
+        # variables (vth, etc.).
+
+        jacobian_matrix_ADI_check = allocate_shared_float(total_size, total_size)
+
+        @testset "ADI Jacobians - implicit z" begin
+            # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
+            begin_serial_region()
+            @serial_region begin
+                jacobian_matrix_ADI_check .= 0.0
+                for row ∈ 1:total_size
+                    # Initialise identity matrix
+                    jacobian_matrix_ADI_check[row,row] = 1.0
+                end
+            end
+
+            v_size = vperp.n * vpa.n
+
+            @serial_region begin
+                # Add 'implicit' contribution
+                this_slice = total_size - z.n + 1:total_size
+                @views add_electron_energy_equation_to_z_only_Jacobian!(
+                    jacobian_matrix_ADI_check[this_slice,this_slice], dens, upar, ppar,
+                    vth, third_moment, ddens_dz, dupar_dz, dppar_dz, dthird_moment_dz,
+                    collisions, composition, z, vperp, vpa, z_spectral, num_diss_params,
+                    dt, ir)
+            end
+
+            # Add 'explicit' contribution
+            add_electron_energy_equation_to_Jacobian!(
+                jacobian_matrix_ADI_check, f, dens, upar, ppar, vth, third_moment,
+                ddens_dz, dupar_dz, dppar_dz, dthird_moment_dz, collisions, composition,
+                z, vperp, vpa, z_spectral, num_diss_params, dt, ir, :explicit_v;
+                ppar_offset=pdf_size)
+
+            begin_serial_region()
+            @serial_region begin
+                @test elementwise_isapprox(jacobian_matrix_ADI_check, jacobian_matrix; rtol=0.0, atol=1.0e-15)
+            end
+        end
+
+        @testset "ADI Jacobians - implicit v" begin
+            # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
+            begin_serial_region()
+            @serial_region begin
+                jacobian_matrix_ADI_check .= 0.0
+                for row ∈ 1:total_size
+                    # Initialise identity matrix
+                    jacobian_matrix_ADI_check[row,row] = 1.0
+                end
+            end
+
+            v_size = vperp.n * vpa.n
+
+            # Add 'implicit' contribution
+            begin_z_region()
+            @loop_z iz begin
+                this_slice = collect((iz - 1)*v_size + 1:iz*v_size)
+                push!(this_slice, iz + pdf_size)
+                @views add_electron_energy_equation_to_v_only_Jacobian!(
+                    jacobian_matrix_ADI_check[this_slice,this_slice], f[:,:,iz], dens[iz],
+                    upar[iz], ppar[iz], vth[iz], third_moment[iz], ddens_dz[iz],
+                    dupar_dz[iz], dppar_dz[iz], dthird_moment_dz[iz], collisions,
+                    composition, z, vperp, vpa, z_spectral, num_diss_params, dt, ir, iz)
+            end
+
+            # Add 'explicit' contribution
+            add_electron_energy_equation_to_Jacobian!(
+                jacobian_matrix_ADI_check, f, dens, upar, ppar, vth, third_moment,
+                ddens_dz, dupar_dz, dppar_dz, dthird_moment_dz, collisions, composition,
+                z, vperp, vpa, z_spectral, num_diss_params, dt, ir, :explicit_z;
+                ppar_offset=pdf_size)
+
+            begin_serial_region()
+            @serial_region begin
+                @test elementwise_isapprox(jacobian_matrix_ADI_check, jacobian_matrix; rtol=0.0, atol=1.0e-15)
+            end
+        end
 
         function residual_func!(residual, this_f, this_p)
             begin_z_region()
@@ -2219,6 +2891,7 @@ function test_ion_dt_forcing_of_electron_ppar(test_input; rtol=(1.5e1*epsilon)^2
         jacobian_matrix = allocate_shared_float(total_size, total_size)
         begin_serial_region()
         @serial_region begin
+            jacobian_matrix .= 0.0
             for row ∈ 1:total_size
                 # Initialise identity matrix
                 jacobian_matrix[row,row] = 1.0
@@ -2227,6 +2900,76 @@ function test_ion_dt_forcing_of_electron_ppar(test_input; rtol=(1.5e1*epsilon)^2
 
         add_ion_dt_forcing_of_electron_ppar_to_Jacobian!(
             jacobian_matrix, z, dt, ion_dt, ir; ppar_offset=pdf_size)
+
+        # Test 'ADI Jacobians' before other tests, because residual_func() may modify some
+        # variables (vth, etc.).
+
+        jacobian_matrix_ADI_check = allocate_shared_float(total_size, total_size)
+
+        @testset "ADI Jacobians - implicit z" begin
+            # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
+            begin_serial_region()
+            @serial_region begin
+                jacobian_matrix_ADI_check .= 0.0
+                for row ∈ 1:total_size
+                    # Initialise identity matrix
+                    jacobian_matrix_ADI_check[row,row] = 1.0
+                end
+            end
+
+            v_size = vperp.n * vpa.n
+
+            @serial_region begin
+                # Add 'implicit' contribution
+                this_slice = total_size - z.n + 1:total_size
+                @views add_ion_dt_forcing_of_electron_ppar_to_z_only_Jacobian!(
+                    jacobian_matrix_ADI_check[this_slice,this_slice], z, dt, ion_dt, ir)
+            end
+
+            # Add 'explicit' contribution
+            add_ion_dt_forcing_of_electron_ppar_to_Jacobian!(
+                jacobian_matrix_ADI_check, z, dt, ion_dt, ir, :explicit_v;
+                ppar_offset=pdf_size)
+
+            begin_serial_region()
+            @serial_region begin
+                @test elementwise_isapprox(jacobian_matrix_ADI_check, jacobian_matrix; rtol=0.0, atol=1.0e-15)
+            end
+        end
+
+        @testset "ADI Jacobians - implicit v" begin
+            # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
+            begin_serial_region()
+            @serial_region begin
+                jacobian_matrix_ADI_check .= 0.0
+                for row ∈ 1:total_size
+                    # Initialise identity matrix
+                    jacobian_matrix_ADI_check[row,row] = 1.0
+                end
+            end
+
+            v_size = vperp.n * vpa.n
+
+            # Add 'implicit' contribution
+            begin_z_region()
+            @loop_z iz begin
+                this_slice = collect((iz - 1)*v_size + 1:iz*v_size)
+                push!(this_slice, iz + pdf_size)
+                @views add_ion_dt_forcing_of_electron_ppar_to_v_only_Jacobian!(
+                    jacobian_matrix_ADI_check[this_slice,this_slice], z, dt, ion_dt, ir,
+                    iz)
+            end
+
+            # Add 'explicit' contribution
+            add_ion_dt_forcing_of_electron_ppar_to_Jacobian!(
+                jacobian_matrix_ADI_check, z, dt, ion_dt, ir, :explicit_z;
+                ppar_offset=pdf_size)
+
+            begin_serial_region()
+            @serial_region begin
+                @test elementwise_isapprox(jacobian_matrix_ADI_check, jacobian_matrix; rtol=0.0, atol=1.0e-15)
+            end
+        end
 
         function residual_func!(residual, this_f, this_p)
             begin_z_region()
@@ -2409,19 +3152,209 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
         total_size = pdf_size + p_size
 
         jacobian_matrix = allocate_shared_float(total_size, total_size)
+
+        # Calculate this later, so that we can use `jacobian_matrix` as a temporary
+        # buffer, to avoid allocating too much shared memory for the Github Actions CI
+        # servers.
+        #fill_electron_kinetic_equation_Jacobian!(
+        #    jacobian_matrix, f, ppar, moments, collisions, composition, z, vperp, vpa,
+        #    z_spectral, vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
+        #    external_source_settings, num_diss_params, t_params.electron, ion_dt, ir,
+        #    true)
+
+        # Test 'ADI Jacobians' before other tests, because residual_func() may modify some
+        # variables (vth, etc.).
+
+        # Reconstruct w_∥^3 moment of g_e from already-calculated qpar
+        buffer_1 = @view scratch_dummy.buffer_rs_1[ir,1]
+        buffer_2 = @view scratch_dummy.buffer_rs_2[ir,1]
+        buffer_3 = @view scratch_dummy.buffer_rs_3[ir,1]
+        buffer_4 = @view scratch_dummy.buffer_rs_4[ir,1]
+        third_moment = scratch_dummy.buffer_z_1
+        dthird_moment_dz = scratch_dummy.buffer_z_2
+        begin_z_region()
+        @loop_z iz begin
+            third_moment[iz] = 0.5 * qpar[iz] / ppar[iz] / vth[iz]
+        end
+        derivative_z!(dthird_moment_dz, third_moment, buffer_1, buffer_2, buffer_3,
+                      buffer_4, z_spectral, z)
+
+        z_speed = @view z_advect[1].speed[:,:,:,ir]
+
+        dpdf_dz = @view scratch_dummy.buffer_vpavperpzr_1[:,:,:,ir]
+        begin_vperp_vpa_region()
+        update_electron_speed_z!(z_advect[1], upar, vth, vpa.grid, ir)
+        @loop_vperp_vpa ivperp ivpa begin
+            @views z_advect[1].adv_fac[:,ivpa,ivperp,ir] = -z_speed[:,ivpa,ivperp]
+        end
+        #calculate the upwind derivative
+        @views derivative_z_pdf_vpavperpz!(dpdf_dz, f, z_advect[1].adv_fac[:,:,:,ir],
+                                           scratch_dummy.buffer_vpavperpr_1[:,:,ir],
+                                           scratch_dummy.buffer_vpavperpr_2[:,:,ir],
+                                           scratch_dummy.buffer_vpavperpr_3[:,:,ir],
+                                           scratch_dummy.buffer_vpavperpr_4[:,:,ir],
+                                           scratch_dummy.buffer_vpavperpr_5[:,:,ir],
+                                           scratch_dummy.buffer_vpavperpr_6[:,:,ir],
+                                           z_spectral, z)
+
+        dpdf_dvpa = @view scratch_dummy.buffer_vpavperpzr_2[:,:,:,ir]
+        begin_z_vperp_region()
+        update_electron_speed_vpa!(vpa_advect[1], dens, upar, ppar, moments, vpa.grid,
+                                   external_source_settings.electron, ir)
+        @loop_z_vperp iz ivperp begin
+            @views @. vpa_advect[1].adv_fac[:,ivperp,iz,ir] = -vpa_advect[1].speed[:,ivperp,iz,ir]
+        end
+        #calculate the upwind derivative of the electron pdf w.r.t. wpa
+        @loop_z_vperp iz ivperp begin
+            @views derivative!(dpdf_dvpa[:,ivperp,iz], f[:,ivperp,iz], vpa,
+                               vpa_advect[1].adv_fac[:,ivperp,iz,ir], vpa_spectral)
+        end
+
+        zeroth_moment = z.scratch_shared
+        first_moment = z.scratch_shared2
+        second_moment = z.scratch_shared3
+        begin_z_region()
+        vpa_grid = vpa.grid
+        vpa_wgts = vpa.wgts
+        @loop_z iz begin
+            @views zeroth_moment[iz] = integrate_over_vspace(f[:,1,iz], vpa_wgts)
+            @views first_moment[iz] = integrate_over_vspace(f[:,1,iz], vpa_grid, vpa_wgts)
+            @views second_moment[iz] = integrate_over_vspace(f[:,1,iz], vpa_grid, 2, vpa_wgts)
+        end
+
+        # Test 'ADI Jacobians' before other tests, because residual_func() may modify some
+        # variables (vth, etc.).
+
+        jacobian_matrix_ADI_check = allocate_shared_float(total_size, total_size)
         begin_serial_region()
         @serial_region begin
-            for row ∈ 1:total_size
-                # Initialise identity matrix
-                jacobian_matrix[row,row] = 1.0
+            # Need to explicitly initialise because
+            # fill_electron_kinetic_equation_z_only_Jacobian_f!() and
+            # fill_electron_kinetic_equation_z_only_Jacobian_ppar!()
+            # only fill the diagonal-in-velocity-indices elements, so when applied to
+            # a full matrix they would not initialise every element.
+            jacobian_matrix_ADI_check .= 0.0
+        end
+
+        @testset "ADI Jacobians - implicit z" begin
+            # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
+
+            v_size = vperp.n * vpa.n
+
+            # Add 'implicit' contribution
+            begin_vperp_vpa_region()
+            @loop_vperp_vpa ivperp ivpa begin
+                this_slice = (ivperp - 1)*vpa.n + ivpa:v_size:(z.n - 1)*v_size + (ivperp - 1)*vpa.n + ivpa
+                @views fill_electron_kinetic_equation_z_only_Jacobian_f!(
+                    jacobian_matrix_ADI_check[this_slice,this_slice], f[ivpa,ivperp,:],
+                    ppar, dpdf_dz[ivpa,ivperp,:], dpdf_dvpa[ivpa,ivperp,:], z_speed,
+                    moments, zeroth_moment, first_moment, second_moment, third_moment,
+                    dthird_moment_dz, collisions, composition, z, vperp, vpa, z_spectral,
+                    vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
+                    external_source_settings, num_diss_params, t_params.electron, ion_dt,
+                    ir, ivperp, ivpa, true)
+            end
+
+            @serial_region begin
+                # Add 'implicit' contribution
+                this_slice = (pdf_size + 1):total_size
+                @views fill_electron_kinetic_equation_z_only_Jacobian_ppar!(
+                    jacobian_matrix_ADI_check[this_slice,this_slice], ppar, moments,
+                    zeroth_moment, first_moment, second_moment, third_moment,
+                    dthird_moment_dz, collisions, composition, z, vperp, vpa, z_spectral,
+                    vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
+                    external_source_settings, num_diss_params, t_params.electron, ion_dt,
+                    ir, true)
+            end
+
+            # Add 'explicit' contribution
+            # Use jacobian_matrix as a temporary buffer here.
+            fill_electron_kinetic_equation_Jacobian!(
+                jacobian_matrix, f, ppar, moments, collisions, composition, z, vperp, vpa,
+                z_spectral, vperp_spectral, vpa_spectral, z_advect, vpa_advect,
+                scratch_dummy, external_source_settings, num_diss_params,
+                t_params.electron, ion_dt, ir, true, :explicit_v)
+            begin_serial_region()
+            @serial_region begin
+                jacobian_matrix_ADI_check .+= jacobian_matrix
+            end
+
+            fill_electron_kinetic_equation_Jacobian!(
+                jacobian_matrix, f, ppar, moments, collisions, composition, z, vperp, vpa,
+                z_spectral, vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
+                external_source_settings, num_diss_params, t_params.electron, ion_dt, ir,
+                true)
+
+            begin_serial_region()
+            @serial_region begin
+                # The settings for this test are a bit strange, due to trying to get the
+                # finite-difference approximation to the Jacobian to agree with the
+                # Jacobian matrix functions without being too messed up by floating-point
+                # rounding errors. The result is that some entries in the Jacobian matrix
+                # here are O(1.0e5), so it is important to use `rtol` here.
+                @test elementwise_isapprox(jacobian_matrix_ADI_check, jacobian_matrix; rtol=1.0e-15, atol=1.0e-15)
             end
         end
 
-        fill_electron_kinetic_equation_Jacobian!(
-            jacobian_matrix, f, ppar, moments, collisions, composition, z, vperp, vpa,
-            z_spectral, vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
-            external_source_settings, num_diss_params, t_params.electron, ion_dt, ir,
-            true)
+        begin_serial_region()
+        @serial_region begin
+            # Need to explicitly initialise because
+            # fill_electron_kinetic_equation_z_only_Jacobian_f!() and
+            # fill_electron_kinetic_equation_z_only_Jacobian_ppar!()
+            # only fill the diagonal-in-velocity-indices elements, so when applied to
+            # a full matrix they would not initialise every element.
+            jacobian_matrix_ADI_check .= 0.0
+        end
+
+        @testset "ADI Jacobians - implicit v" begin
+            # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
+
+            v_size = vperp.n * vpa.n
+
+            # Add 'implicit' contribution
+            begin_z_region()
+            @loop_z iz begin
+                this_slice = collect((iz - 1)*v_size + 1:iz*v_size)
+                push!(this_slice, iz + pdf_size)
+                @views fill_electron_kinetic_equation_v_only_Jacobian!(
+                    jacobian_matrix_ADI_check[this_slice,this_slice], f[:,:,iz], ppar[iz],
+                    dpdf_dz[:,:,iz], dpdf_dvpa[:,:,iz], z_speed, moments,
+                    zeroth_moment[iz], first_moment[iz], second_moment[iz],
+                    third_moment[iz], dthird_moment_dz[iz], collisions, composition, z,
+                    vperp, vpa, z_spectral, vperp_spectral, vpa_spectral, z_advect,
+                    vpa_advect, scratch_dummy, external_source_settings, num_diss_params,
+                    t_params.electron, ion_dt, ir, iz, true)
+            end
+
+            # Add 'explicit' contribution
+            # Use jacobian_matrix as a temporary buffer here.
+            fill_electron_kinetic_equation_Jacobian!(
+                jacobian_matrix, f, ppar, moments, collisions, composition, z, vperp, vpa,
+                z_spectral, vperp_spectral, vpa_spectral, z_advect, vpa_advect,
+                scratch_dummy, external_source_settings, num_diss_params,
+                t_params.electron, ion_dt, ir, true, :explicit_z)
+
+            begin_serial_region()
+            @serial_region begin
+                jacobian_matrix_ADI_check .+= jacobian_matrix
+            end
+
+            fill_electron_kinetic_equation_Jacobian!(
+                jacobian_matrix, f, ppar, moments, collisions, composition, z, vperp, vpa,
+                z_spectral, vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
+                external_source_settings, num_diss_params, t_params.electron, ion_dt, ir,
+                true)
+
+            begin_serial_region()
+            @serial_region begin
+                # The settings for this test are a bit strange, due to trying to get the
+                # finite-difference approximation to the Jacobian to agree with the
+                # Jacobian matrix functions without being too messed up by floating-point
+                # rounding errors. The result is that some entries in the Jacobian matrix
+                # here are O(1.0e5), so it is important to use `rtol` here.
+                @test elementwise_isapprox(jacobian_matrix_ADI_check, jacobian_matrix; rtol=1.0e-13, atol=1.0e-13)
+            end
+        end
 
         function residual_func!(residual_f, residual_p, this_f, this_p)
             begin_z_region()
@@ -2602,6 +3535,11 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
 end
 
 function runtests()
+    if Sys.isapple() && "CI" ∈ keys(ENV) && global_size[] > 1
+        # These tests are too slow in the parallel tests job on macOS, so skip in that
+        # case.
+        return nothing
+    end
     # Create a temporary directory for test output
     test_output_directory = get_MPI_tempdir()
     test_input["output"]["base_directory"] = test_output_directory
