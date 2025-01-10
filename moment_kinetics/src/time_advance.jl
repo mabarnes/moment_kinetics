@@ -3530,7 +3530,17 @@ end
                                                 nl_solver_params.electron_advance,
                                                 max_electron_pdf_iterations,
                                                 max_electron_sim_time; ion_dt=dt)
+
+        # Update `fvec_out.electron_ppar` with the new electron pressure
+        begin_r_z_region()
+        fvec_out_electron_ppar = fvec_out.electron_ppar
+        moments_electron_ppar = moments.electron.ppar
+        @loop_r_z ir iz begin
+            fvec_out_electron_ppar[iz,ir] = moments_electron_ppar[iz,ir]
+        end
+
         success = (electron_success == "")
+
     elseif advance.electron_conduction
         success = implicit_braginskii_conduction!(fvec_out, fvec_in, moments, z, r, dt,
                                                   z_spectral, composition, collisions,
