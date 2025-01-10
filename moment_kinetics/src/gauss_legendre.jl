@@ -34,9 +34,11 @@ using ..lagrange_polynomials: lagrange_poly_optimised
 using ..moment_kinetics_structs: weak_discretization_info
 
 
+#structs for passing around matrices for taking
+#the derivatives on Gauss-Legendre points in 1D
 """
-structs for passing around matrices for taking
-the derivatives on Gauss-Legendre points in 1D
+A struct for passing around elemental matrices
+on Gauss-Legendre points in 1D
 """
 struct gausslegendre_base_info
     # elementwise differentiation matrix (ngrid*ngrid)
@@ -83,6 +85,11 @@ struct gausslegendre_base_info
     Y31::Array{mk_float,3}
 end
 
+"""
+A struct for Gauss-Legendre arrays needed for global operations in 1D,
+contains the struct of elemental matrices for Lobatto and Radau points,
+as well as some assembled 1D global matrices.
+"""
 struct gausslegendre_info{TSparse, TSparseCSR, TLU, TLmat, TLmatLU} <: weak_discretization_info
     lobatto::gausslegendre_base_info
     radau::gausslegendre_base_info
@@ -114,6 +121,9 @@ struct gausslegendre_info{TSparse, TSparseCSR, TLU, TLmat, TLmatLU} <: weak_disc
     Qmat::Array{mk_float,2}
 end
 
+"""
+Function to create `gausslegendre_info` struct.
+"""
 function setup_gausslegendre_pseudospectral(coord; collision_operator_dim=true)
     lobatto = setup_gausslegendre_pseudospectral_lobatto(coord,collision_operator_dim=collision_operator_dim)
     radau = setup_gausslegendre_pseudospectral_radau(coord,collision_operator_dim=collision_operator_dim)
@@ -153,6 +163,9 @@ function setup_gausslegendre_pseudospectral(coord; collision_operator_dim=true)
                               mass_matrix_lu,L_matrix_lu,Qmat)
 end
 
+"""
+Function that fills and `n` x `n` array with the values of the identity matrix `I`.
+"""
 function identity_matrix!(I,n)
     @. I[:,:] = 0.0
     for i in 1:n
@@ -161,6 +174,11 @@ function identity_matrix!(I,n)
     return nothing    
 end
 
+"""
+Function that creates the `gausslegendre_base_info` struct for Lobatto points.
+If `collision_operator_dim = true`, assign the elemental matrices used to
+implement the Fokker-Planck collision operator.
+"""
 function setup_gausslegendre_pseudospectral_lobatto(coord; collision_operator_dim=true)
     x, w = gausslobatto(coord.ngrid)
     Dmat = allocate_float(coord.ngrid, coord.ngrid)
@@ -231,6 +249,11 @@ function setup_gausslegendre_pseudospectral_lobatto(coord; collision_operator_di
             K0,K1,K2,P0,P1,P2,D0,Y00,Y01,Y10,Y11,Y20,Y21,Y30,Y31)
 end
 
+"""
+Function that creates the `gausslegendre_base_info` struct for Lobatto points.
+If `collision_operator_dim = true`, assign the elemental matrices used to
+implement the Fokker-Planck collision operator.
+"""
 function setup_gausslegendre_pseudospectral_radau(coord; collision_operator_dim=true)
     # Gauss-Radau points on [-1,1)
     x, w = gaussradau(coord.ngrid)
@@ -303,6 +326,10 @@ function setup_gausslegendre_pseudospectral_radau(coord; collision_operator_dim=
             K0,K1,K2,P0,P1,P2,D0,Y00,Y01,Y10,Y11,Y20,Y21,Y30,Y31)
 end 
 
+"""
+A function that takes the first derivative in each element of `coord.grid`,
+leaving the result (element-wise) in `coord.scratch_2d`.
+"""
 function elementwise_derivative!(coord, ff, gausslegendre::gausslegendre_info)
     df = coord.scratch_2d
     # define local variable nelement for convenience
@@ -341,11 +368,19 @@ function elementwise_derivative!(coord, ff, gausslegendre::gausslegendre_info)
     return nothing
 end
 
+"""
+Wrapper function for element-wise derivatives with advection.
+Note that Gauss-Legendre spectral the element method implemented here
+does not use upwinding within an element.
+"""
 # Spectral element method does not use upwinding within an element
 function elementwise_derivative!(coord, ff, adv_fac, spectral::gausslegendre_info)
     return elementwise_derivative!(coord, ff, spectral)
 end
 
+"""
+Function to perform interpolation on a single element.
+"""
 function single_element_interpolate!(result, newgrid, f, imin, imax, ielement, coord,
                                      gausslegendre::gausslegendre_base_info)
     n_new = length(newgrid)
@@ -369,6 +404,9 @@ function single_element_interpolate!(result, newgrid, f, imin, imax, ielement, c
     return nothing
 end
 
+"""
+Function to carry out a 1D (global) mass matrix solve.
+"""
 function mass_matrix_solve!(f, b, spectral::gausslegendre_info)
     # invert mass matrix system
     y = spectral.mass_matrix_lu \ b
@@ -377,13 +415,13 @@ function mass_matrix_solve!(f, b, spectral::gausslegendre_info)
 end
 
 """
-Formula for differentiation matrix taken from p196 of Chpt `The Spectral Elemtent Method' of 
+Formula for Gauss-Legendre-Lobatto differentiation matrix taken from p196 of Chpt `The Spectral Elemtent Method' of 
 `Computational Seismology'. Heiner Igel First Edition. Published in 2017 by Oxford University Press.
 Or https://doc.nektar.info/tutorials/latest/fundamentals/differentiation/fundamentals-differentiationch2.html
 
-D -- differentiation matrix 
-x -- Gauss-Legendre-Lobatto points in [-1,1]
-ngrid -- number of points per element (incl. boundary points)
+    D -- differentiation matrix 
+    x -- Gauss-Legendre-Lobatto points in [-1,1]
+    ngrid -- number of points per element (incl. boundary points)
 
 Note that D has does not include a scaling factor
 """
@@ -408,13 +446,14 @@ function gausslobattolegendre_differentiation_matrix!(D::Array{Float64,2},x::Arr
     end 
     return nothing
 end
+
 """
-From 
+Formula for Gauss-Legendre-Radau differentiation matrix taken from
 https://doc.nektar.info/tutorials/latest/fundamentals/differentiation/fundamentals-differentiationch2.html
 
-D -- differentiation matrix 
-x -- Gauss-Legendre-Radau points in [-1,1)
-ngrid -- number of points per element (incl. boundary points)
+    D -- differentiation matrix 
+    x -- Gauss-Legendre-Radau points in [-1,1)
+    ngrid -- number of points per element (incl. boundary points)
 
 Note that D has does not include a scaling factor
 """
@@ -449,12 +488,12 @@ function gaussradaulegendre_differentiation_matrix!(D::Array{Float64,2},x::Array
 end
 
 """
-Gauss-Legendre derivative at arbitrary x values, for boundary condition on radau points
-D0 -- the vector
-xj -- the x location where the derivative is evaluated 
-ngrid -- number of points in x
-x -- the grid from -1, 1
-Note that D0 is not scaled to the physical grid
+Gauss-Legendre derivative at arbitrary x values, for boundary condition on Radau points.
+    D0 -- the vector
+    xj -- the x location where the derivative is evaluated 
+    ngrid -- number of points in x
+    x -- the grid from -1, 1
+Note that D0 is not scaled to the physical grid with a scaling factor.
 """
 function GaussLegendre_derivative_vector!(D0,xj,ngrid,x,wgts;radau=false)
     # coefficient in expansion of 
@@ -482,7 +521,7 @@ function GaussLegendre_derivative_vector!(D0,xj,ngrid,x,wgts;radau=false)
 end
 
 """
-result of the inner product of Legendre polys of order k
+Result of the inner product of Legendre polynomials of order k.
 """
 function Legendre_h_n(k)
     h_n = 2.0/(2.0*k + 1)
@@ -491,8 +530,42 @@ end
 
 
 """
-assign abitrary weak inner product matrix Q on a 1D line with Jacobian = 1
-matrix Q acts on a single vector x such that y = Q * x is also a vector
+Assign abitrary weak inner product matrix `Q` on a 1D line with Jacobian equal to 1
+matrix `Q` acts on a single vector `x` such that `y = Q * x` is also a vector.
+
+We use a projection onto Gauss-Legendre polynomials to carry out the calculation
+in two steps (see, e.g, S. A. Teukolsky, Short note on the mass matrix for Gauss–Lobatto grid
+points, J. Comput. Phys. 283 (2015) 408–413. https://doi.org/10.1016/j.jcp.2014.12.012).
+First, we write the desired matrix elements in terms of Legendre polynomials
+```math
+   l_i(x) = \\sum_j \\frac{P_j(x)P_j(x_i)w_i}{\\gamma_j}
+```
+with \$w_i\$ the weights from an integration on the Gauss-Legendre-Lobatto (or Radau) points \$x_i\$,
+i.e., 
+```math 
+ \\int^1_{-1} f(x) d x = \\sum_{i} f(x_i)w_i,
+```
+and \$\\gamma_j = \\sum_k w_k P_j(x_k)P_j(x_k)\$ the numerical inner-product.
+Then, a matrix element can be expressed in integrals over Legendre polynomials
+rather than Lagrange polynomials, i.e.,
+```math
+   M_{ij} = \\int^1_{-1} l_i(x)l_j(x) d x = \\sum_{mn} \\frac{w_m P_m(x_i) w_n P_n(x_j)}{\\gamma_m\\gamma_n} \\int^{1}_{-1} P_m(x)P_n(x) d x. 
+```
+Defining 
+```math
+  A_{mn} = \\int^{1}_{-1} P_m(x)P_n(x) d x, 
+```
+we can thus write
+```math
+   M_{ij} = \\sum_{mn} \\frac{w_m P_m(x_i) w_n P_n(x_j)}{\\gamma_m\\gamma_n} A_{mn}. 
+```
+We can use a quadrature which yields exact results (to machine precision)
+to evaluate \$A_{mn}\$ using fast library functions for the Legendre polynomials,
+and then carry out the sum \$\\sum_{mn}\$ to obtain exact results (to machine-precision).
+Here we use a Gauss-Legendre integration quadrature with exact results up to 
+polynomials with order \$k_{max} = 4N +1\$, with \$N=\$`ngrid` and the highest order polynomial product
+that we integrate is \$P_{N-1}(x)P_{N-1}(x)x^2\$, which has order \$k=2N < k_{max}\$.
+
 """
 function GaussLegendre_weak_product_matrix!(QQ::Array{mk_float,2},ngrid,x,wgts,option;radau=false)
     # coefficient in expansion of 
@@ -627,9 +700,10 @@ function GaussLegendre_weak_product_matrix!(QQ::Array{mk_float,2},ngrid,x,wgts,o
 end
 
 """
-assign abitrary weak inner product matrix Q on a 1D line with Jacobian = 1
-matrix Q acts on two vectors x1 and x2 such that the quadratic form 
-y = x1 * Q * x2 is also a vector
+Assign abitrary weak (nonlinear) inner product matrix `Q` on a 1D line with Jacobian equal to 1.
+matrix `Q` acts on two vectors `x1` and `x2` such that the quadratic form 
+`y = x1 * Q * x2` is also a vector. See documentation of corresponding function
+for linear inner product matrices.
 """
 function GaussLegendre_weak_product_matrix!(QQ::Array{mk_float,3},ngrid,x,wgts,option;radau=false)
     # coefficient in expansion of 
@@ -756,10 +830,18 @@ function GaussLegendre_weak_product_matrix!(QQ::Array{mk_float,3},ngrid,x,wgts,o
     return nothing
 end
 
+"""
+Function for computing the scale factor on a grid with uniformed spaced element boundaries.
+Unused.
+"""
 function scale_factor_func(L,nelement_global)
     return 0.5*L/float(nelement_global)
 end
 
+"""
+Function for computing the shift factor on a grid with uniformed spaced element boundaries.
+Unused.
+"""
 function shift_factor_func(L,nelement_global,nelement_local,irank,ielement_local)
     #ielement_global = ielement_local # for testing + irank*nelement_local
     ielement_global = ielement_local + irank*nelement_local # proper line for future distributed memory MPI use
@@ -767,13 +849,17 @@ function shift_factor_func(L,nelement_global,nelement_local,irank,ielement_local
     return shift
 end
 
+"""
+Function for finding the elemental index in the global distributed-memory grid.
+Distributed-memory for global finite-element operators is not yet supported.
+"""
 function ielement_global_func(nelement_local,irank,ielement_local)
     return ielement_global = ielement_local + irank*nelement_local
 end
 
 """
-function for setting up the full Gauss-Legendre-Lobatto
-grid and collocation point weights
+Function for setting up the full Gauss-Legendre-Lobatto
+grid and collocation point weights.
 """
 function scaled_gauss_legendre_lobatto_grid(ngrid, nelement_local, n_local, element_scale, element_shift, imin, imax)
     # get Gauss-Legendre-Lobatto points and weights on [-1,1]
@@ -802,9 +888,8 @@ function scaled_gauss_legendre_lobatto_grid(ngrid, nelement_local, n_local, elem
 end
 
 """
-function for setting up the full Gauss-Legendre-Radau
-grid and collocation point weights
-see comments of Gauss-Legendre-Lobatto routine above
+Function for setting up the full Gauss-Legendre-Radau
+grid and collocation point weights.
 """
 function scaled_gauss_legendre_radau_grid(ngrid, nelement_local, n_local, element_scale, element_shift, imin, imax, irank)
     # get Gauss-Legendre-Lobatto points and weights on [-1,1]
@@ -885,7 +970,7 @@ or
 `dirichlet_bc = true`, `b[1] = f[1]` (except for cylindrical coordinates), `b[end] = f[end]`
 
 in the function call, and create new matrices for this purpose
-in the gausslegendre_info struct. Currently the Laplacian matrix
+in the `gausslegendre_info` struct. Currently the Laplacian matrix
 is supported with boundary conditions.
 """
 function setup_global_weak_form_matrix!(QQ_global::Array{mk_float,2},
@@ -964,7 +1049,7 @@ the operators constructed from this function can only be used
 for differentiation, and not solving 1D ODEs.
 The shared points in the element assembly are
 averaged (instead of simply added) to be consistent with the
-derivative_elements_to_full_grid!() function in calculus.jl.
+`derivative_elements_to_full_grid!()` function in `calculus.jl`.
 """
 function setup_global_strong_form_matrix!(QQ_global::Array{mk_float,2},
                                           lobatto::gausslegendre_base_info,
@@ -1024,6 +1109,10 @@ function setup_global_strong_form_matrix!(QQ_global::Array{mk_float,2},
     return nothing
 end
 
+"""
+Construction function to provide the appropriate elemental 
+matrix `Q` to the global matrix assembly functions.
+"""
 function get_QQ_local!(QQ::Array{mk_float,2},ielement,
         lobatto::gausslegendre_base_info,
         radau::gausslegendre_base_info, 
@@ -1057,6 +1146,17 @@ function get_QQ_local!(QQ::Array{mk_float,2},ielement,
         return nothing
 end
 
+"""
+If called for `coord.name = vperp` elemental matrix `MM` on the \$i^{th}\$ element is
+```math
+ M_{jk} = \\int^{v_\\perp^U}_{v_\\perp^L}  \\varphi_j(v_\\perp)\\varphi_k(v_\\perp) v_\\perp d v_\\perp = \\int^1_{-1} (c_i + x s_i)l_j(x)l_k(x) s_i d x 
+```
+with \$c_i\$ and \$s_i\$ the appropriate shift and scale factors, respectively. 
+Otherwise, if called for any other coordinate elemental matrix `MM` is 
+```math
+ M_{jk} = \\int^{v_\\|^U}_{v_\\|^L}  \\varphi_j(v_\\|)\\varphi_k(v_\\|) d v_\\| = \\int^1_{-1} l_j(x)l_k(x) s_i d x.
+```
+"""
 function get_MM_local!(QQ,ielement,
         lobatto::gausslegendre_base_info,
         radau::gausslegendre_base_info, 
@@ -1108,6 +1208,17 @@ function get_SS_local!(QQ,ielement,
         return nothing
 end
 
+"""
+If called for `coord.name = vperp` elemental matrix `KK` on the \$i^{th}\$ element is
+```math
+ K_{jk} = -\\int^{v_\\perp^U}_{v_\\perp^L} \\left(v_\\perp \\frac{\\partial\\varphi_j(v_\\perp)}{\\partial v_\\perp} + \\varphi_j(v_\\perp) \\right)
+ \\frac{\\partial\\varphi_k(v_\\perp)}{\\partial v_\\perp} d v_\\perp
+ = -\\int^1_{-1} ((c_i + x s_i)l_j^\\prime(x) + l_j(x))l_k^\\prime(x) d x /s_i
+```
+with \$c_i\$ and \$s_i\$ the appropriate shift and scale factors, respectively. 
+Otherwise, if called for any other coordinate elemental matrix `KK` is the same as `LL` (see `get_LL_local!()).
+If `explicit_BC_terms = true`, boundary terms arising from integration by parts are included at the extreme boundary points.
+"""
 function get_KK_local!(QQ,ielement,
         lobatto::gausslegendre_base_info,
         radau::gausslegendre_base_info, 
@@ -1152,15 +1263,22 @@ function get_KK_local!(QQ,ielement,
         return nothing
 end
 
-# second derivative matrix with vperp^2 Jacobian factor if 
-# coord is vperp. Not useful for the vpa coordinate
+"""
+If called for `coord.name = vperp` elemental matrix `KJ` on the \$i^{th}\$ element is
+```math
+ (KJ)_{jk} = -\\int^{v_\\perp^U}_{v_\\perp^L} \\frac{\\partial\\varphi_j(v_\\perp)}{\\partial v_\\perp}\\frac{\\partial\\varphi_k(v_\\perp)}{\\partial v_\\perp} v_\\perp^2 d v_\\perp
+ = -\\int^1_{-1} (c_i + x s_i)^2l_j^\\prime(x)l_k^\\prime(x) d x /s_i
+```
+with \$c_i\$ and \$s_i\$ the appropriate shift and scale factors, respectively. 
+Otherwise, if called for any other coordinate elemental matrix `KJ` is the same as `LL` (see `get_LL_local()!`).
+"""
 function get_KJ_local!(QQ,ielement,
         lobatto::gausslegendre_base_info,
         radau::gausslegendre_base_info, 
         coord)
         
-        scale_factor = scale_factor_func(coord.L,coord.nelement_global)
-        shift_factor = shift_factor_func(coord.L,coord.nelement_global,coord.nelement_local,coord.irank,ielement) + 0.5*coord.L
+        scale_factor = coord.element_scale[ielement]
+        shift_factor = coord.element_shift[ielement]
         if coord.name == "vperp" # assume integrals of form int^infty_0 (.) vperp d vperp
             # extra scale and shift factors required because of vperp^2 in integral
             if ielement > 1 || coord.irank > 0 # lobatto points
@@ -1178,6 +1296,20 @@ function get_KJ_local!(QQ,ielement,
         return nothing
 end
 
+"""
+If called for `coord.name = vperp` elemental matrix `LL` on the \$i^{th}\$ element is
+```math
+ L_{jk} = -\\int^{v_\\perp^U}_{v_\\perp^L} \\frac{\\partial\\varphi_j(v_\\perp)}{\\partial v_\\perp}\\frac{\\partial\\varphi_k(v_\\perp)}{\\partial v_\\perp} v_\\perp d v_\\perp
+ = -\\int^1_{-1} (c_i + x s_i)l_j^\\prime(x)l_k^\\prime(x) d x /s_i
+```
+with \$c_i\$ and \$s_i\$ the appropriate shift and scale factors, respectively. 
+Otherwise, if called for any other coordinate elemental matrix `LL` is 
+```math
+ L_{jk} = -\\int^{v_\\|^U}_{v_\\|^L}  \\frac{\\partial\\varphi_j(v_\\|)}{\\partial v_\\|}\\frac{\\partial\\varphi_k(v_\\|)}{\\partial v_\\|} d v_\\| =
+ -\\int^1_{-1} l_j^\\prime(x)l_k^\\prime(x) d x /s_i.
+```
+If `explicit_BC_terms = true`, boundary terms arising from integration by parts are included at the extreme boundary points.
+"""
 function get_LL_local!(QQ,ielement,
         lobatto::gausslegendre_base_info,
         radau::gausslegendre_base_info, 
@@ -1234,8 +1366,14 @@ function get_DD_local!(QQ, ielement, lobatto::gausslegendre_base_info,
     return nothing
 end
 
-# mass matrix without vperp factor (matrix N)
-# only useful for the vperp coordinate
+"""
+If called for `coord.name = vperp` elemental matrix `MN` on the \$i^{th}\$ element is
+```math
+ (MN)_{jk} = \\int^{v_\\perp^U}_{v_\\perp^L}  \\varphi_j(v_\\perp)\\varphi_k(v_\\perp) d v_\\perp = \\int^1_{-1} l_j(x)l_k(x) s_i d x 
+```
+with \$c_i\$ and \$s_i\$ the appropriate shift and scale factors, respectively. 
+Otherwise, if called for any other coordinate elemental matrix `MN` is the same as `MM` (see `get_MM_local!()`).
+"""
 function get_MN_local!(QQ,ielement,
         lobatto::gausslegendre_base_info,
         radau::gausslegendre_base_info, 
@@ -1255,8 +1393,14 @@ function get_MN_local!(QQ,ielement,
         return nothing
 end
 
-# mass matrix with vperp^2 factor (matrix R)
-# only useful for the vperp coordinate
+"""
+If called for `coord.name = vperp` elemental matrix `MR` on the \$i^{th}\$ element is
+```math
+ (MR)_{jk} = \\int^{v_\\perp^U}_{v_\\perp^L}  \\varphi_j(v_\\perp)\\varphi_k(v_\\perp) v_\\perp^2 d v_\\perp = \\int^1_{-1} (c_i + s_i x)^2 l_j(x)l_k(x) s_i d x 
+```
+with \$c_i\$ and \$s_i\$ the appropriate shift and scale factors, respectively. 
+Otherwise, if called for any other coordinate elemental matrix `MR` is the same as `MM` (see `get_MM_local!()`).
+"""
 function get_MR_local!(QQ,ielement,
         lobatto::gausslegendre_base_info,
         radau::gausslegendre_base_info, 
@@ -1281,8 +1425,18 @@ function get_MR_local!(QQ,ielement,
         return nothing
 end
 
-# derivative matrix (matrix P, no integration by parts)
-# with vperp Jacobian factor if coord is vperp (matrix P)
+"""
+If called for `coord.name = vperp` elemental matrix `PP` on the \$i^{th}\$ element is
+```math
+ P_{jk} = \\int^{v_\\perp^U}_{v_\\perp^L}  \\varphi_j(v_\\perp)\\frac{\\partial\\varphi_k(v_\\perp)}{\\partial v_\\perp} v_\\perp d v_\\perp
+ = \\int^1_{-1} (c_i + x s_i)l_j(x)l_k^\\prime(x) d x 
+```
+with \$c_i\$ and \$s_i\$ the appropriate shift and scale factors, respectively. 
+Otherwise, if called for any other coordinate elemental matrix `PP` is 
+```math
+ P_{jk} = \\int^{v_\\|^U}_{v_\\|^L}  \\varphi_j(v_\\|)\\frac{\\partial\\varphi_k(v_\\|)}{\\partial v_\\|} d v_\\| = \\int^1_{-1} l_j(x)l_k^\\prime(x) d x.
+```
+"""
 function get_PP_local!(QQ,ielement,
         lobatto::gausslegendre_base_info,
         radau::gausslegendre_base_info, 
@@ -1303,9 +1457,15 @@ function get_PP_local!(QQ,ielement,
         return nothing
 end
 
-# derivative matrix (matrix P, no integration by parts)
-# with vperp^2 Jacobian factor if coord is vperp (matrix U)
-# not useful for vpa coordinate
+"""
+If called for `coord.name = vperp` elemental matrix `PP` on the \$i^{th}\$ element is
+```math
+ (PU)_{jk} = \\int^{v_\\perp^U}_{v_\\perp^L}  \\varphi_j(v_\\perp)\\frac{\\partial\\varphi_k(v_\\perp)}{\\partial v_\\perp} v_\\perp^2 d v_\\perp
+ = \\int^1_{-1} (c_i + x s_i)^2l_j(x)l_k^\\prime(x) d x 
+```
+with \$c_i\$ and \$s_i\$ the appropriate shift and scale factors, respectively. 
+Otherwise, if called for any other coordinate elemental matrix `PU` is the same as `PP` see `get_PP_local!()`.
+"""
 function get_PU_local!(QQ,ielement,
         lobatto::gausslegendre_base_info,
         radau::gausslegendre_base_info, 
@@ -1331,10 +1491,9 @@ function get_PU_local!(QQ,ielement,
 end
 
 """
-construction function for nonlinear diffusion matrices, only
+Construction function for nonlinear diffusion matrices, only
 used in the assembly of the collision operator
 """
-
 function get_QQ_local!(QQ::AbstractArray{mk_float,3},
         ielement,lobatto::gausslegendre_base_info,
         radau::gausslegendre_base_info, 
@@ -1352,6 +1511,19 @@ function get_QQ_local!(QQ::AbstractArray{mk_float,3},
         return nothing
 end
 
+"""
+If called for `coord.name = vperp` elemental matrix `YY0` on the \$i^{th}\$ element is
+```math
+ (YY0)_{jkm} = \\int^{v_\\perp^U}_{v_\\perp^L}  \\varphi_j(v_\\perp)\\varphi_k(v_\\perp)\\varphi_m(v_\\perp) v_\\perp d v_\\perp
+ = \\int^1_{-1} (c_i + x s_i)l_j(x)l_k(x)l_m(x) s_i d x 
+```
+with \$c_i\$ and \$s_i\$ the appropriate shift and scale factors, respectively. 
+Otherwise, if called for any other coordinate elemental matrix `YY0` is 
+```math
+ (YY0)_{jkm} = \\int^{v_\\|^U}_{v_\\|^L}  \\varphi_j(v_\\|)\\varphi_k(v_\\|)\\varphi_m(v_\\|) d v_\\|
+ = \\int^1_{-1} l_j(x)l_k(x)l_m(x) s_i d x.
+```
+"""
 function get_YY0_local!(QQ,ielement,
         lobatto::gausslegendre_base_info,
         radau::gausslegendre_base_info, 
@@ -1372,6 +1544,19 @@ function get_YY0_local!(QQ,ielement,
         return nothing
 end
 
+"""
+If called for `coord.name = vperp` elemental matrix `YY1` on the \$i^{th}\$ element is
+```math
+ (YY1)_{jkm} = \\int^{v_\\perp^U}_{v_\\perp^L}  \\varphi_j(v_\\perp)\\varphi_k(v_\\perp)\\frac{\\partial\\varphi_m(v_\\perp)}{\\partial v_\\perp} v_\\perp d v_\\perp
+ = \\int^1_{-1} (c_i + x s_i)l_j(x)l_k(x)l_m^\\prime(x) d x 
+```
+with \$c_i\$ and \$s_i\$ the appropriate shift and scale factors, respectively. 
+Otherwise, if called for any other coordinate elemental matrix `YY1` is 
+```math
+ (YY1)_{jkm} = \\int^{v_\\|^U}_{v_\\|^L}  \\varphi_j(v_\\|)\\varphi_k(v_\\|)\\frac{\\partial\\varphi_m(v_\\|)}{\\partial v_\\|} d v_\\|
+ = \\int^1_{-1} l_j(x)l_k(x)l_m^\\prime(x) d x.
+```
+"""
 function get_YY1_local!(QQ,ielement,
         lobatto::gausslegendre_base_info,
         radau::gausslegendre_base_info, 
@@ -1392,6 +1577,19 @@ function get_YY1_local!(QQ,ielement,
         return nothing
 end
 
+"""
+If called for `coord.name = vperp` elemental matrix `YY2` on the \$i^{th}\$ element is
+```math
+ (YY2)_{jkm} = \\int^{v_\\perp^U}_{v_\\perp^L}  \\varphi_j(v_\\perp)\\frac{\\partial\\varphi_k(v_\\|)}{\\partial v_\\|}\\frac{\\partial\\varphi_m(v_\\perp)}{\\partial v_\\perp} v_\\perp d v_\\perp
+ = \\int^1_{-1} (c_i + x s_i)l_j(x)l_k^\\prime(x)l_m^\\prime(x) d x/s_i 
+```
+with \$c_i\$ and \$s_i\$ the appropriate shift and scale factors, respectively. 
+Otherwise, if called for any other coordinate elemental matrix `YY2` is 
+```math
+ (YY2)_{jkm} = \\int^{v_\\|^U}_{v_\\|^L}  \\varphi_j(v_\\|)\\frac{\\partial\\varphi_k(v_\\|)}{\\partial v_\\|}\\frac{\\partial\\varphi_m(v_\\|)}{\\partial v_\\|} d v_\\|
+ = \\int^1_{-1} l_j(x)l_k^\\prime(x)l_m^\\prime(x) d x /s_i.
+```
+"""
 function get_YY2_local!(QQ,ielement,
         lobatto::gausslegendre_base_info,
         radau::gausslegendre_base_info, 
@@ -1412,6 +1610,19 @@ function get_YY2_local!(QQ,ielement,
         return nothing
 end
 
+"""
+If called for `coord.name = vperp` elemental matrix `YY3` on the \$i^{th}\$ element is
+```math
+ (YY3)_{jkm} = \\int^{v_\\perp^U}_{v_\\perp^L}  \\varphi_j(v_\\perp)\\frac{\\partial\\varphi_k(v_\\|)}{\\partial v_\\|}\\varphi_m(v_\\perp) v_\\perp d v_\\perp
+ = \\int^1_{-1} (c_i + x s_i)l_j(x)l_k^\\prime(x)l_m(x) d x 
+```
+with \$c_i\$ and \$s_i\$ the appropriate shift and scale factors, respectively. 
+Otherwise, if called for any other coordinate elemental matrix `YY3` is 
+```math
+ (YY3)_{jkm} = \\int^{v_\\|^U}_{v_\\|^L}  \\varphi_j(v_\\|)\\frac{\\partial\\varphi_k(v_\\|)}{\\partial v_\\|}\\varphi_m(v_\\|) d v_\\|
+ = \\int^1_{-1} l_j(x)l_k^\\prime(x)l_m(x) d x.
+```
+"""
 function get_YY3_local!(QQ,ielement,
         lobatto::gausslegendre_base_info,
         radau::gausslegendre_base_info, 
