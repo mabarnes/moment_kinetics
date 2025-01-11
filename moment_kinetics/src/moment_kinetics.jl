@@ -5,6 +5,7 @@ module moment_kinetics
 export run_moment_kinetics
 
 using MPI
+using StatsBase
 
 # Include submodules from other source files
 # Note that order of includes matters - things used in one module must already

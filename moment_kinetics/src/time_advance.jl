@@ -783,7 +783,13 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
                                                   n_neutral_species_alloc, t_params)
     # create arrays for Fokker-Planck collisions 
     if advance.explicit_weakform_fp_collisions
-        fp_arrays = init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_spectral; precompute_weights=true)
+        if collisions.fkpl.boundary_data_option == direct_integration
+            precompute_weights = true
+        else
+            precompute_weights = false
+        end
+        fp_arrays = init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_spectral;
+                      precompute_weights=precompute_weights)
     else
         fp_arrays = nothing
     end
@@ -1673,7 +1679,7 @@ function setup_scratch_arrays(moments, pdf, n)
     # (possibly) the same for electrons, and the same for neutrals. The actual array will
     # be created at the end of the first step of the loop below, once we have a
     # `scratch_pdf` object of the correct type.
-    scratch = Vector{scratch_pdf{5,3,2,6,3}}(undef, n)
+    scratch = Vector{scratch_pdf}(undef, n)
     pdf_dims = size(pdf.ion.norm)
     moment_dims = size(moments.ion.dens)
     moment_electron_dims = size(moments.electron.dens)
@@ -1736,7 +1742,7 @@ function setup_electron_scratch_arrays(moments, pdf, n)
     # array for electrons.
     # The actual array will be created at the end of the first step of the loop below,
     # once we have a `scratch_electron_pdf` object of the correct type.
-    scratch = Vector{scratch_electron_pdf{4,2}}(undef, n)
+    scratch = Vector{scratch_electron_pdf}(undef, n)
     pdf_dims = size(pdf.electron.norm)
     moment_dims = size(moments.electron.dens)
 

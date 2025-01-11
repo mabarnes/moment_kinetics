@@ -65,7 +65,7 @@ using moment_kinetics.velocity_moments: calculate_electron_moment_derivatives_no
                                         integrate_over_vspace
 
 using LinearAlgebra
-using StatsBase
+using moment_kinetics.StatsBase
 
 # Small parameter used to create perturbations to test Jacobian against
 epsilon = 1.0e-6
