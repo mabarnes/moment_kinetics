@@ -1670,7 +1670,7 @@ function setup_scratch_arrays(moments, pdf, n)
     # (possibly) the same for electrons, and the same for neutrals. The actual array will
     # be created at the end of the first step of the loop below, once we have a
     # `scratch_pdf` object of the correct type.
-    scratch = Vector{scratch_pdf{5,3,2,6,3}}(undef, n)
+    scratch = Vector{scratch_pdf}(undef, n)
     pdf_dims = size(pdf.ion.norm)
     moment_dims = size(moments.ion.dens)
     moment_electron_dims = size(moments.electron.dens)
@@ -1733,7 +1733,7 @@ function setup_electron_scratch_arrays(moments, pdf, n)
     # array for electrons.
     # The actual array will be created at the end of the first step of the loop below,
     # once we have a `scratch_electron_pdf` object of the correct type.
-    scratch = Vector{scratch_electron_pdf{4,2}}(undef, n)
+    scratch = Vector{scratch_electron_pdf}(undef, n)
     pdf_dims = size(pdf.electron.norm)
     moment_dims = size(moments.electron.dens)
 
