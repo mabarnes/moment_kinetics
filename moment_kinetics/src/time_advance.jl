@@ -780,7 +780,13 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
                                                   n_neutral_species_alloc, t_params)
     # create arrays for Fokker-Planck collisions 
     if advance.explicit_weakform_fp_collisions
-        fp_arrays = init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_spectral; precompute_weights=true)
+        if collisions.fkpl.boundary_data_option == direct_integration
+            precompute_weights = true
+        else
+            precompute_weights = false
+        end
+        fp_arrays = init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_spectral;
+                      precompute_weights=precompute_weights)
     else
         fp_arrays = nothing
     end
