@@ -1008,6 +1008,15 @@ function electron_backward_euler_pseudotimestepping!(scratch, pdf, moments, phi,
                     # For now can only do I/O within the pseudo-timestepping loop when there
                     # is no r-dimension, because different points in r would take different
                     # number and length of timesteps to converge.
+
+                    # Update the electron heat flux for output. This will be done anyway
+                    # before using qpar in the next residual_func!() call, but there is no
+                    # convenient way to include that calculation in this debug output.
+                    moments.electron.qpar_updated[] = false
+                    @views calculate_electron_qpar_from_pdf_no_r!(moments.electron.qpar[:,ir],
+                                                                  electron_ppar_new,
+                                                                  moments.electron.vth[:,ir],
+                                                                  f_electron_new, vpa, ir)
                     begin_serial_region()
                     t_params.moments_output_counter[] += 1
                     @serial_region begin
