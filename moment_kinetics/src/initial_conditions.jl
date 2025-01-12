@@ -706,6 +706,8 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
             if !skip_electron_solve
                 # Can't let this counter stay set to 0
                 t_params.electron.dfns_output_counter[] = max(t_params.electron.dfns_output_counter[], 1)
+                implicit_electron_pseudotimestep = (nl_solver_params.electron_advance !== nothing)
+                electron_solution_method = implicit_electron_pseudotimestep ? "backward_euler" : "artificial_time_derivative"
                 success =
                     @views update_electron_pdf!(scratch_electron, pdf.electron.norm,
                                                 moments, fields.phi, r, z, vperp, vpa,
@@ -720,7 +722,8 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
                                                 io_electron=io_initial_electron,
                                                 initial_time=code_time,
                                                 residual_tolerance=t_input["initialization_residual_value"],
-                                                evolve_ppar=true)
+                                                evolve_ppar=true,
+                                                solution_method=electron_solution_method)
                 if success != ""
                     error("!!!max number of iterations for electron pdf update exceeded!!!\n"
                           * "Stopping at $(Dates.format(now(), dateformat"H:MM:SS"))")
@@ -795,7 +798,8 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
                                          max_electron_pdf_iterations,
                                          max_electron_sim_time;
                                          io_electron=io_initial_electron,
-                                         evolve_ppar=true, ion_dt=t_params.dt[])
+                                         evolve_ppar=true, ion_dt=t_params.dt[],
+                                         solution_method=electron_solution_method)
             end
             if success != ""
                 error("!!!max number of iterations for electron pdf update exceeded!!!\n"

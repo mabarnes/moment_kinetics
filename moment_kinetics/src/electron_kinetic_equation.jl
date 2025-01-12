@@ -200,10 +200,6 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
         initial_time=nothing, residual_tolerance=nothing, evolve_ppar=false,
         ion_dt=nothing)
 
-    if max_electron_pdf_iterations !== nothing && max_electron_sim_time !== nothing
-        error("Cannot use both max_electron_pdf_iterations=$max_electron_pdf_iterations "
-              * "and max_electron_sim_time=$max_electron_sim_time at the same time")
-    end
     if max_electron_pdf_iterations === nothing && max_electron_sim_time === nothing
         error("Must set one of max_electron_pdf_iterations and max_electron_sim_time")
     end
@@ -2273,8 +2269,9 @@ function apply_electron_bc_and_constraints!(this_scratch, phi, moments, r, z, vp
                    moments.electron.upar[:,ir], z, vperp, vpa, vperp_spectral,
                    vpa_spectral, vpa_advect, moments,
                    num_diss_params.electron.vpa_dissipation_coefficient > 0.0,
-                   composition.me_over_mi, ir; lowerz_vcut_inds=lowerz_vcut_inds,
-                   upperz_vcut_inds=upperz_vcut_inds)
+                   composition.me_over_mi, ir;
+                   lowerz_vcut_ind=(lowerz_vcut_inds === nothing ? nothing : lowerz_vcut_inds[ir]),
+                   upperz_vcut_ind=(upperz_vcut_inds === nothing ? nothing : upperz_vcut_inds[ir]))
     end
 
     begin_r_z_region()
@@ -4489,7 +4486,7 @@ appropriate.
     end
 
     adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms, total_points,
-                                       error_norm_method, "", 0.0, composition;
+                                       error_norm_method, "", 0.0, false, composition;
                                        electron=true, local_max_dt=local_max_dt)
     if t_params.previous_dt[] == 0.0
         # Timestep failed, so reset  scratch[t_params.n_rk_stages+1] equal to
