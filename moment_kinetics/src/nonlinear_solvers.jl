@@ -66,6 +66,8 @@ struct nl_solver_info{TH,TV,Tcsg,Tlig,Tprecon,Tpretype}
     global_precon_iterations::Base.RefValue{mk_int}
     solves_since_precon_update::Base.RefValue{mk_int}
     precon_dt::Base.RefValue{mk_float}
+    precon_lowerz_vcut_inds::Vector{mk_int}
+    precon_upperz_vcut_inds::Vector{mk_int}
     serial_solve::Bool
     max_nonlinear_iterations_this_step::Base.RefValue{mk_int}
     max_linear_iterations_this_step::Base.RefValue{mk_int}
@@ -113,6 +115,7 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); defa
 
     linear_restart = nl_solver_input.linear_restart
 
+    n_vcut_inds = 0
     if serial_solve
         H = allocate_float(linear_restart + 1, linear_restart)
         c = allocate_float(linear_restart + 1)
@@ -143,6 +146,8 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); defa
         end
 
         V = (V_ppar, V_pdf)
+
+        n_vcut_inds = prod(outer_coord_sizes)
     else
         H = allocate_shared_float(linear_restart + 1, linear_restart)
         c = allocate_shared_float(linear_restart + 1)
@@ -271,7 +276,8 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); defa
                           linear_initial_guess, Ref(0), Ref(0), Ref(0), Ref(0), Ref(0),
                           Ref(0), Ref(0), Ref(0),
                           Ref(nl_solver_input.preconditioner_update_interval),
-                          Ref(mk_float(0.0)), serial_solve, Ref(0), Ref(0),
+                          Ref(mk_float(0.0)), zeros(mk_int, n_vcut_inds),
+                          zeros(mk_int, n_vcut_inds), serial_solve, Ref(0), Ref(0),
                           preconditioner_type,
                           nl_solver_input.preconditioner_update_interval, preconditioners)
 end
