@@ -91,7 +91,12 @@ test_input = OptionsDict("composition" => OptionsDict("n_ion_species" => 1,
                          "neutral_numerical_dissipation" => OptionsDict("force_minimum_pdf_value" => 0.0,
                                                                         "vz_dissipation_coefficient" => 1e-2))
 
+test_input_adi = deepcopy(test_input)
+test_input_adi["output"]["run_name"] = "kinetic_electron_adi"
+test_input_adi["timestepping"]["implicit_electron_ppar"] = "adi"
+
 
 test_input_list = [
      test_input,
+     test_input_adi,
     ]
