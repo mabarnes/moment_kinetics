@@ -4775,18 +4775,20 @@ Note that this function operates on a single point in `r`, given by `ir`, and `f
                    composition, external_source_settings.electron, num_diss_params, z, ir)
 
         if ion_dt !== nothing
-            # Add source term to turn steady state solution into a backward-Euler update of
-            # electron_ppar with the ion timestep `ion_dt`.
-            ppar_previous_ion_step = moments.electron.ppar
-            begin_z_region()
-            @loop_z iz begin
-                # At this point, ppar_out = ppar_in + dt*RHS(ppar_in). Here we add a
-                # source/damping term so that in the steady state of the electron
-                # pseudo-timestepping iteration,
-                #   RHS(ppar) - (ppar - ppar_previous_ion_step) / ion_dt = 0,
-                # resulting in a backward-Euler step (as long as the pseudo-timestepping
-                # loop converges).
-                ppar_out[iz] += -dt * (ppar_in[iz] - ppar_previous_ion_step[iz,ir]) / ion_dt
+            @timeit global_timer "electron_ppar_ion_dt" begin
+                # Add source term to turn steady state solution into a backward-Euler
+                # update of electron_ppar with the ion timestep `ion_dt`.
+                ppar_previous_ion_step = moments.electron.ppar
+                begin_z_region()
+                @loop_z iz begin
+                    # At this point, ppar_out = ppar_in + dt*RHS(ppar_in). Here we add a
+                    # source/damping term so that in the steady state of the electron
+                    # pseudo-timestepping iteration,
+                    #   RHS(ppar) - (ppar - ppar_previous_ion_step) / ion_dt = 0,
+                    # resulting in a backward-Euler step (as long as the
+                    # pseudo-timestepping loop converges).
+                    ppar_out[iz] += -dt * (ppar_in[iz] - ppar_previous_ion_step[iz,ir]) / ion_dt
+                end
             end
         end
     end
@@ -5521,8 +5523,8 @@ function add_source_term!(source_term, vpa, z, dvth_dz)
     return nothing
 end
 
-function add_dissipation_term!(pdf_out, pdf_in, scratch_dummy, z_spectral, z, vpa,
-                               vpa_spectral, num_diss_params, dt)
+@timeit global_timer add_dissipation_term!(pdf_out, pdf_in, scratch_dummy, z_spectral, z,
+                                           vpa, vpa_spectral, num_diss_params, dt) = begin
     if num_diss_params.electron.vpa_dissipation_coefficient ≤ 0.0
         return nothing
     end
@@ -5530,7 +5532,7 @@ function add_dissipation_term!(pdf_out, pdf_in, scratch_dummy, z_spectral, z, vp
     begin_z_vperp_region()
     @loop_z_vperp iz ivperp begin
         @views second_derivative!(vpa.scratch, pdf_in[:,ivperp,iz], vpa, vpa_spectral)
-        @. pdf_out[:,ivperp,iz] += dt * num_diss_params.electron.vpa_dissipation_coefficient * vpa.scratch
+        @views @. pdf_out[:,ivperp,iz] += dt * num_diss_params.electron.vpa_dissipation_coefficient * vpa.scratch
     end
     return nothing
 end
@@ -5803,13 +5805,14 @@ function calculate_pdf_dot_prefactor!(pdf_dot_prefactor, ppar, vth, dens, ddens_
 end
 
 # add contribution to the residual coming from the term proporational to the pdf
-function add_contribution_from_pdf_term!(pdf_out, pdf_in, ppar, dens, upar, moments, vpa,
-                                         z, dt, electron_source_settings, ir)
+@timeit global_timer add_contribution_from_pdf_term!(pdf_out, pdf_in, ppar, dens, upar,
+                                                     moments, vpa, z, dt,
+                                                     electron_source_settings, ir) = begin
     vth = @view moments.electron.vth[:,ir]
     ddens_dz = @view moments.electron.ddens_dz[:,ir]
     dvth_dz = @view moments.electron.dvth_dz[:,ir]
     dqpar_dz = @view moments.electron.dqpar_dz[:,ir]
-    begin_z_vperp_vpa_region()
+    begin_z_vperp_region()
     @loop_z iz begin
         this_dqpar_dz = dqpar_dz[iz]
         this_ppar = ppar[iz]
@@ -5818,11 +5821,11 @@ function add_contribution_from_pdf_term!(pdf_out, pdf_in, ppar, dens, upar, mome
         this_dens = dens[iz]
         this_dvth_dz = dvth_dz[iz]
         this_vth = vth[iz]
-        @loop_vperp_vpa ivperp ivpa begin
-            pdf_out[ivpa,ivperp,iz] +=
-                dt * (-0.5 * this_dqpar_dz / this_ppar - vpa[ivpa] * this_vth *
+        @loop_vperp ivperp begin
+            @views @. pdf_out[:,ivperp,iz] +=
+                dt * (-0.5 * this_dqpar_dz / this_ppar - vpa * this_vth *
                       (this_ddens_dz / this_dens - this_dvth_dz / this_vth)) *
-                pdf_in[ivpa,ivperp,iz]
+                pdf_in[:,ivperp,iz]
         end
     end
 
@@ -5832,11 +5835,11 @@ function add_contribution_from_pdf_term!(pdf_out, pdf_in, ppar, dens, upar, mome
             @views source_momentum_amplitude = moments.electron.external_source_momentum_amplitude[:, ir, index]
             @views source_pressure_amplitude = moments.electron.external_source_pressure_amplitude[:, ir, index]
             @loop_z iz begin
-                term = dt * (1.5 * source_density_amplitude[iz,ir] / dens[iz,ir] -
-                            (0.5 * source_pressure_amplitude[iz,ir] +
-                            source_momentum_amplitude[iz,ir]) / ppar[iz,ir])
-                @loop_vperp_vpa ivperp ivpa begin
-                    pdf_out[ivpa,ivperp,iz,ir] -= term * pdf_in[ivpa,ivperp,iz,ir]
+                term = dt * (1.5 * source_density_amplitude[iz] / dens[iz] -
+                            (0.5 * source_pressure_amplitude[iz] +
+                            source_momentum_amplitude[iz]) / ppar[iz])
+                @loop_vperp ivperp begin
+                    @views @. pdf_out[:,ivperp,iz] -= term * pdf_in[:,ivperp,iz]
                 end
             end
         end

@@ -61,10 +61,10 @@ function update_electron_speed_vpa!(advect, density, upar, ppar, moments, vpa,
     dppar_dz = @view moments.electron.dppar_dz[:,ir]
     dqpar_dz = @view moments.electron.dqpar_dz[:,ir]
     dvth_dz = @view moments.electron.dvth_dz[:,ir]
-    speed = advect.speed
+    speed = @view advect.speed[:,:,:,ir]
     # calculate the advection speed in wpa
     @loop_z_vperp_vpa iz ivperp ivpa begin
-        speed[ivpa,ivperp,iz,ir] = ((vth[iz] * dppar_dz[iz] + vpa[ivpa] * dqpar_dz[iz])
+        speed[ivpa,ivperp,iz] = ((vth[iz] * dppar_dz[iz] + vpa[ivpa] * dqpar_dz[iz])
                                     / (2 * ppar[iz]) - vpa[ivpa]^2 * dvth_dz[iz])
     end
 
@@ -80,8 +80,8 @@ function update_electron_speed_vpa!(advect, density, upar, ppar, moments, vpa,
                             2.0 * upar[iz] * source_momentum_amplitude[iz]) /
                         ppar[iz] +
                     0.5 * source_density_amplitude[iz] / density[iz]
-                @loop_vperp_vpa ivperp ivpa begin
-                    speed[ivpa,ivperp,iz,ir] += term1 + vpa[ivpa] * term2_over_vpa
+                @loop_vperp ivperp begin
+                    @. speed[:,ivperp,iz] += term1 + vpa * term2_over_vpa
                 end
             end
         end
