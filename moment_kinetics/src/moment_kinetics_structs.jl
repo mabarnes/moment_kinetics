@@ -34,6 +34,7 @@ struct scratch_pdf
     pperp::MPISharedArray{mk_float, ndim_moment}
     temp_z_s::MPISharedArray{mk_float, ndim_moment}
     # electrons
+    pdf_electron::MPISharedArray{mk_float, ndim_pdf_electron}
     electron_density::MPISharedArray{mk_float, ndim_moment_electron}
     electron_upar::MPISharedArray{mk_float, ndim_moment_electron}
     electron_ppar::MPISharedArray{mk_float, ndim_moment_electron}

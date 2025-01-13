@@ -127,6 +127,12 @@ end
 
 function calculate_electron_moments!(scratch, pdf, moments, composition, collisions, r, z,
                                      vpa)
+    if length(scratch.pdf_electron) > 0
+        pdf_electron = scratch.pdf_electron
+    else
+        pdf_electron = pdf.electron
+    end
+    electron_ppar = scratch.electron_ppar
     calculate_electron_density!(scratch.electron_density, moments.electron.dens_updated,
                                 scratch.density)
     calculate_electron_upar_from_charge_conservation!(
@@ -136,20 +142,20 @@ function calculate_electron_moments!(scratch, pdf, moments, composition, collisi
                                        kinetic_electrons_with_temperature_equation)
         begin_r_z_region()
         @loop_r_z ir iz begin
-            scratch.electron_ppar[iz,ir] = 0.5 * composition.me_over_mi *
-                                           scratch.electron_density[iz,ir] *
-                                           moments.electron.vth[iz,ir]^2
+            electron_ppar[iz,ir] = 0.5 * composition.me_over_mi *
+                                   scratch.electron_density[iz,ir] *
+                                   moments.electron.vth[iz,ir]^2
         end
         moments.electron.ppar_updated[] = true
     end
-    update_electron_vth_temperature!(moments, scratch.electron_ppar,
-                                     scratch.electron_density, composition)
-    calculate_electron_qpar!(moments.electron, pdf.electron, scratch.electron_ppar,
+    update_electron_vth_temperature!(moments, electron_ppar, scratch.electron_density,
+                                     composition)
+    calculate_electron_qpar!(moments.electron, pdf_electron, electron_ppar,
                              scratch.electron_upar, scratch.upar,
                              collisions.electron_fluid.nu_ei, composition.me_over_mi,
                              composition.electron_physics, vpa)
     if composition.electron_physics == braginskii_fluid
-        electron_fluid_qpar_boundary_condition!(scratch.electron_ppar,
+        electron_fluid_qpar_boundary_condition!(electron_ppar,
                                                 scratch.electron_upar,
                                                 scratch.electron_density,
                                                 moments.electron, z)
@@ -864,7 +870,7 @@ function calculate_electron_qpar_from_pdf!(qpar, ppar, vth, pdf, vpa)
     begin_r_z_region()
     ivperp = 1
     @loop_r_z ir iz begin
-        @views qpar[iz, ir] = 2*ppar[iz,ir]*vth[iz,ir]*integrate_over_vspace(pdf[:, ivperp, iz, ir], vpa.grid.^3, vpa.wgts)
+        @views qpar[iz, ir] = 2*ppar[iz,ir]*vth[iz,ir]*integrate_over_vspace(pdf[:, ivperp, iz, ir], vpa.grid, 3, vpa.wgts)
     end
 end
 

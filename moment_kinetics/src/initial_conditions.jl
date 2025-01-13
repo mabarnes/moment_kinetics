@@ -706,6 +706,8 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
             if !skip_electron_solve
                 # Can't let this counter stay set to 0
                 t_params.electron.dfns_output_counter[] = max(t_params.electron.dfns_output_counter[], 1)
+                implicit_electron_pseudotimestep = (nl_solver_params.electron_advance !== nothing)
+                electron_solution_method = implicit_electron_pseudotimestep ? "backward_euler" : "artificial_time_derivative"
                 success =
                     @views update_electron_pdf!(scratch_electron, pdf.electron.norm,
                                                 moments, fields.phi, r, z, vperp, vpa,
@@ -720,7 +722,8 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
                                                 io_electron=io_initial_electron,
                                                 initial_time=code_time,
                                                 residual_tolerance=t_input["initialization_residual_value"],
-                                                evolve_ppar=true)
+                                                evolve_ppar=true,
+                                                solution_method=electron_solution_method)
                 if success != ""
                     error("!!!max number of iterations for electron pdf update exceeded!!!\n"
                           * "Stopping at $(Dates.format(now(), dateformat"H:MM:SS"))")
@@ -766,6 +769,7 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
                                    nl_solver_params.electron_advance.serial_solve,
                                    nl_solver_params.electron_advance.max_nonlinear_iterations_this_step,
                                    nl_solver_params.electron_advance.max_linear_iterations_this_step,
+                                   nl_solver_params.electron_advance.total_its_soft_limit,
                                    nl_solver_params.electron_advance.preconditioner_type,
                                    nl_solver_params.electron_advance.preconditioner_update_interval,
                                    nl_solver_params.electron_advance.preconditioners,
@@ -794,7 +798,8 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
                                          max_electron_pdf_iterations,
                                          max_electron_sim_time;
                                          io_electron=io_initial_electron,
-                                         evolve_ppar=true, ion_dt=t_params.dt[])
+                                         evolve_ppar=true, ion_dt=t_params.dt[],
+                                         solution_method=electron_solution_method)
             end
             if success != ""
                 error("!!!max number of iterations for electron pdf update exceeded!!!\n"
@@ -806,8 +811,8 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
             t_params.electron.moments_output_counter[] += 1
             write_electron_state(scratch_electron, moments, t_params.electron,
                                  io_initial_electron,
-                                 t_params.electron.moments_output_counter[], r, z, vperp,
-                                 vpa; pdf_electron_converged=true)
+                                 t_params.electron.moments_output_counter[], -1.0, 0.0, r,
+                                 z, vperp, vpa; pdf_electron_converged=true)
             finish_electron_io(io_initial_electron)
         end
 
@@ -815,6 +820,14 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
         @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
             pdf.electron.pdf_before_ion_timestep[ivpa,ivperp,iz,ir] =
                 pdf.electron.norm[ivpa,ivperp,iz,ir]
+        end
+        if length(scratch[1].pdf_electron) > 0
+            @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
+                for i ∈ 1:length(scratch)
+                    scratch[i].pdf_electron[ivpa,ivperp,iz,ir] =
+                        pdf.electron.norm[ivpa,ivperp,iz,ir]
+                end
+            end
         end
 
         # No need to do electron I/O (apart from possibly debug I/O) any more, so if
