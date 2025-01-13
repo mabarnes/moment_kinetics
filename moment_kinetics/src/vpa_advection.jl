@@ -267,7 +267,7 @@ end
             # `residual` is zero, f_new is the result of a backward-Euler timestep:
             #   (f_new - f_old) / dt = RHS(f_new)
             # ⇒ f_new - f_old - dt*RHS(f_new) = 0
-            function residual_func!(residual, f_new)
+            function residual_func!(residual, f_new; krylov=false)
                 apply_bc!(f_new)
                 residual .= f_old
                 advance_f_local!(residual, f_new, vpa_advect[is], ivperp, iz, ir, vpa, dt,

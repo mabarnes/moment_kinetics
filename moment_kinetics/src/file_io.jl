@@ -1203,6 +1203,10 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
                                          dynamic, "$(term)_linear_iterations", mk_int;
                                          parallel_io=parallel_io,
                                          description="Number of linear iterations for $term"),
+                   precon_iterations=create_dynamic_variable!(
+                                         dynamic, "$(term)_precon_iterations", mk_int;
+                                         parallel_io=parallel_io,
+                                         description="Number of preconditioner iterations for $term"),
                   )
             for (term, params) ∈ pairs(nl_solver_params) if params !== nothing)
 
@@ -2154,7 +2158,8 @@ function reopen_moments_io(file_info)
                                for name ∈ nl_names)
                 return NamedTuple(Symbol(term)=>(n_solves=dyn["$(term)_n_solves"],
                                                  nonlinear_iterations=dyn["$(term)_nonlinear_iterations"],
-                                                 linear_iterations=dyn["$(term)_linear_iterations"])
+                                                 linear_iterations=dyn["$(term)_linear_iterations"],
+                                                 precon_iterations=dyn["$(term)_precon_iterations"])
                                   for term ∈ nl_prefixes)
             else
                 return nothing
@@ -2315,7 +2320,8 @@ function reopen_dfns_io(file_info)
                                for name ∈ nl_names)
                 return NamedTuple(Symbol(term)=>(n_solves=dyn["$(term)_n_solves"],
                                                  nonlinear_iterations=dyn["$(term)_nonlinear_iterations"],
-                                                 linear_iterations=dyn["$(term)_linear_iterations"])
+                                                 linear_iterations=dyn["$(term)_linear_iterations"],
+                                                 precon_iterations=dyn["$(term)_precon_iterations"])
                                   for term ∈ nl_prefixes)
             else
                 return nothing
@@ -2497,6 +2503,8 @@ file
                                   v.nonlinear_iterations[], t_idx, parallel_io)
             append_to_dynamic_var(io_moments.nl_solver_diagnostics[k].linear_iterations,
                                   v.linear_iterations[], t_idx, parallel_io)
+            append_to_dynamic_var(io_moments.nl_solver_diagnostics[k].precon_iterations,
+                                  v.precon_iterations[], t_idx, parallel_io)
         end
     end
 

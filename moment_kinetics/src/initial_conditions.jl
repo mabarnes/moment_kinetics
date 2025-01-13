@@ -340,7 +340,7 @@ function initialize_electrons!(pdf, moments, fields, geometry, composition, r, z
         end
         init_electron_pdf_over_density_and_boundary_phi!(
             pdf.electron.norm, fields.phi, moments.electron.dens, moments.electron.upar,
-            moments.electron.vth, z, vpa, vperp, vperp_spectral, vpa_spectral,
+            moments.electron.vth, r, z, vpa, vperp, vperp_spectral, vpa_spectral,
             [(speed=speed,)], moments, num_diss_params,
             composition.me_over_mi, scratch_dummy)
     end
@@ -669,7 +669,7 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
         ##max_electron_pdf_iterations = 10000
         #max_electron_sim_time = nothing
         max_electron_pdf_iterations = nothing
-        max_electron_sim_time = 2.0
+        max_electron_sim_time = max(2.0, t_params.electron.max_pseudotime)
         if t_params.electron.debug_io !== nothing
             io_electron = setup_electron_io(t_params.electron.debug_io[1], vpa, vperp, z,
                                             r, composition, collisions,
@@ -755,11 +755,15 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
                                    nl_solver_params.electron_advance.n_solves,
                                    nl_solver_params.electron_advance.nonlinear_iterations,
                                    nl_solver_params.electron_advance.linear_iterations,
+                                   nl_solver_params.electron_advance.precon_iterations,
                                    nl_solver_params.electron_advance.global_n_solves,
                                    nl_solver_params.electron_advance.global_nonlinear_iterations,
                                    nl_solver_params.electron_advance.global_linear_iterations,
+                                   nl_solver_params.electron_advance.global_precon_iterations,
                                    nl_solver_params.electron_advance.solves_since_precon_update,
                                    nl_solver_params.electron_advance.precon_dt,
+                                   nl_solver_params.electron_advance.precon_lowerz_vcut_inds,
+                                   nl_solver_params.electron_advance.precon_upperz_vcut_inds,
                                    nl_solver_params.electron_advance.serial_solve,
                                    nl_solver_params.electron_advance.max_nonlinear_iterations_this_step,
                                    nl_solver_params.electron_advance.max_linear_iterations_this_step,
@@ -1563,8 +1567,8 @@ care is taken to ensure that the parallel boundary condition is satisfied;
 NB: as the electron pdf is obtained via a time-independent equation,
 this 'initital' value for the electron will just be the first guess in an iterative solution
 """
-function init_electron_pdf_over_density_and_boundary_phi!(pdf, phi, density, upar, vth, z,
-        vpa, vperp, vperp_spectral, vpa_spectral, vpa_advect, moments, num_diss_params,
+function init_electron_pdf_over_density_and_boundary_phi!(pdf, phi, density, upar, vth, r,
+        z, vpa, vperp, vperp_spectral, vpa_spectral, vpa_advect, moments, num_diss_params,
         me_over_mi, scratch_dummy; restart_from_boltzmann=false)
 
     if z.bc == "wall"
@@ -1580,11 +1584,13 @@ function init_electron_pdf_over_density_and_boundary_phi!(pdf, phi, density, upa
         end
         # Apply the sheath boundary condition to get cut-off boundary distribution
         # functions and boundary values of phi
-        enforce_boundary_condition_on_electron_pdf!(pdf, phi, vth, upar, z, vperp, vpa,
-                                                    vperp_spectral, vpa_spectral,
-                                                    vpa_advect, moments,
-                                                    num_diss_params.electron.vpa_dissipation_coefficient > 0.0,
-                                                    me_over_mi)
+        for ir ∈ 1:r.n
+            @views enforce_boundary_condition_on_electron_pdf!(
+                       pdf[:,:,:,ir], phi[:,ir], vth[:,ir], upar[:,ir], z, vperp, vpa,
+                       vperp_spectral, vpa_spectral, vpa_advect, moments,
+                       num_diss_params.electron.vpa_dissipation_coefficient > 0.0,
+                       me_over_mi, ir)
+        end
 
         # Distribute the z-boundary pdf values to every process
         begin_serial_region()

@@ -33,7 +33,7 @@ using TOML
 an option but known at compile time when a `time_info` struct is passed as a function
 argument.
 """
-struct time_info{Terrorsum <: Real, T_debug_output, T_electron, Trkimp, Timpzero}
+struct time_info{Terrorsum <: Real, T_debug_output, T_electron, Trkimp, Timpzero, Telectronprecon}
     n_variables::mk_int
     nstep::mk_int
     end_time::mk_float
@@ -65,6 +65,7 @@ struct time_info{Terrorsum <: Real, T_debug_output, T_electron, Trkimp, Timpzero
     implicit_coefficient_is_zero::Timpzero
     n_rk_stages::mk_int
     rk_order::mk_int
+    exact_output_times::Bool
     adaptive::Bool
     low_storage::Bool
     rtol::mk_float
@@ -81,10 +82,14 @@ struct time_info{Terrorsum <: Real, T_debug_output, T_electron, Trkimp, Timpzero
     implicit_ion_advance::Bool
     implicit_vpa_advection::Bool
     implicit_electron_ppar::Bool
+    electron_preconditioner_type::Telectronprecon
     constraint_forcing_rate::mk_float
     decrease_dt_iteration_threshold::mk_int
     increase_dt_iteration_threshold::mk_int
     cap_factor_ion_dt::mk_float
+    max_pseudotimesteps::mk_int
+    max_pseudotime::mk_float
+    include_wall_bc_in_preconditioner::Bool
     write_after_fixed_step_count::Bool
     error_sum_zero::Terrorsum
     split_operators::Bool
@@ -497,6 +502,18 @@ Base.@kwdef struct krook_collisions_input
     frequency_option::String # "reference_parameters" # "manual", 
 end
 
+"""
+"""
+@enum boundary_data_type begin
+    direct_integration
+    multipole_expansion
+    delta_f_multipole
+end
+export boundary_data_type
+export direct_integration
+export multipole_expansion
+export delta_f_multipole
+
 Base.@kwdef struct fkpl_collisions_input
     # option to check if fokker planck frequency should be > 0
     use_fokker_planck::Bool
@@ -509,6 +526,8 @@ Base.@kwdef struct fkpl_collisions_input
     self_collisions::Bool
     # option to determine if ad-hoc moment_kinetics-style conserving corrections are used
     use_conserving_corrections::Bool
+    # enum option to determine which method is used to provide boundary data for Rosenbluth potential calculations.
+    boundary_data_option::boundary_data_type
     # option to determine if cross-collisions against fixed Maxwellians are used
     slowing_down_test::Bool
     # Setting to switch between different options for Fokker-Planck collision frequency input

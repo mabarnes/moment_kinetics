@@ -19,6 +19,7 @@ using moment_kinetics.velocity_moments: get_density, get_upar, get_ppar, get_ppe
 using moment_kinetics.communication
 using moment_kinetics.communication: MPISharedArray
 using moment_kinetics.looping
+using moment_kinetics.input_structs: direct_integration, multipole_expansion
 using SparseArrays: sparse
 using LinearAlgebra: mul!, lu, cholesky
 
@@ -30,7 +31,7 @@ using moment_kinetics.fokker_planck_test: print_test_data, fkpl_error_data, allo
 using moment_kinetics.fokker_planck_test: save_fkpl_error_data
 
 using moment_kinetics.fokker_planck_calculus: elliptic_solve!
-using moment_kinetics.fokker_planck_calculus: enforce_zero_bc!, allocate_rosenbluth_potential_boundary_data
+using moment_kinetics.fokker_planck_calculus: allocate_rosenbluth_potential_boundary_data
 using moment_kinetics.fokker_planck_calculus: calculate_rosenbluth_potential_boundary_data!, calculate_rosenbluth_potential_boundary_data_exact!
 using moment_kinetics.fokker_planck_calculus: test_rosenbluth_potential_boundary_data, enforce_vpavperp_BCs!
 using moment_kinetics.fokker_planck_calculus: calculate_rosenbluth_potentials_via_elliptic_solve!
@@ -78,7 +79,8 @@ end
         use_Maxwellian_Rosenbluth_coefficients=false,
         use_Maxwellian_field_particle_distribution=false,
         test_numerical_conserving_terms=false,
-        algebraic_solve_for_d2Gdvperp2=false)
+        algebraic_solve_for_d2Gdvperp2=false,
+        boundary_data_option=direct_integration)
         # define inputs needed for the test
         #plot_test_output = false#true
         #test_parallelism = false#true
@@ -125,9 +127,13 @@ end
         nc_global = vpa.n*vperp.n
         begin_serial_region()
         start_init_time = now()
-        
+        if boundary_data_option == direct_integration
+            precompute_weights = true
+        else
+            precompute_weights = false
+        end
         fkpl_arrays = init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_spectral; 
-                           precompute_weights=true, test_dense_matrix_construction=test_dense_construction)
+                           precompute_weights=precompute_weights, test_dense_matrix_construction=test_dense_construction)
         KKpar2D_with_BC_terms_sparse = fkpl_arrays.KKpar2D_with_BC_terms_sparse
         KKperp2D_with_BC_terms_sparse = fkpl_arrays.KKperp2D_with_BC_terms_sparse
         lu_obj_MM = fkpl_arrays.lu_obj_MM
@@ -263,7 +269,8 @@ end
                                              use_Maxwellian_Rosenbluth_coefficients=use_Maxwellian_Rosenbluth_coefficients,
                                              use_Maxwellian_field_particle_distribution=use_Maxwellian_field_particle_distribution,
                                              algebraic_solve_for_d2Gdvperp2=algebraic_solve_for_d2Gdvperp2,
-                                             calculate_GG = false, calculate_dGdvperp=false)
+                                             calculate_GG = false, calculate_dGdvperp=false,
+                                             boundary_data_option=boundary_data_option)
         if test_numerical_conserving_terms && test_self_operator
             # enforce the boundary conditions on CC before it is used for timestepping
             enforce_vpavperp_BCs!(fkpl_arrays.CC,vpa,vperp,vpa_spectral,vperp_spectral)
@@ -274,7 +281,7 @@ end
         calculate_rosenbluth_potentials_via_elliptic_solve!(fkpl_arrays.GG,fkpl_arrays.HH,fkpl_arrays.dHdvpa,fkpl_arrays.dHdvperp,
              fkpl_arrays.d2Gdvpa2,fkpl_arrays.dGdvperp,fkpl_arrays.d2Gdvperpdvpa,fkpl_arrays.d2Gdvperp2,F_M,
              vpa,vperp,vpa_spectral,vperp_spectral,fkpl_arrays;
-             algebraic_solve_for_d2Gdvperp2=false,calculate_GG=true,calculate_dGdvperp=true)
+             algebraic_solve_for_d2Gdvperp2=false,calculate_GG=true,calculate_dGdvperp=true,boundary_data_option=boundary_data_option)
         # extract C[Fs,Fs'] result
         # and Rosenbluth potentials for testing
         begin_s_r_z_anyv_region()
@@ -389,7 +396,9 @@ end
         test_numerical_conserving_terms=false,
         algebraic_solve_for_d2Gdvperp2=false,
         test_self_operator = true,
-        Lvpa = 12.0, Lvperp = 6.0)
+        Lvpa = 12.0, Lvperp = 6.0,
+        boundary_data_option = direct_integration,
+        outdir = "")
         initialize_comms!()
         #ngrid = 5
         #plot_scan = true
@@ -460,7 +469,7 @@ end
             use_Maxwellian_field_particle_distribution=use_Maxwellian_field_particle_distribution,
             test_numerical_conserving_terms=test_numerical_conserving_terms,
             algebraic_solve_for_d2Gdvperp2=algebraic_solve_for_d2Gdvperp2,
-            standalone=false, Lvpa=Lvpa, Lvperp=Lvperp)
+            standalone=false, Lvpa=Lvpa, Lvperp=Lvperp, boundary_data_option=boundary_data_option)
             max_C_err[iscan], L2_C_err[iscan] = fkerr.C_M.max ,fkerr.C_M.L2
             max_H_err[iscan], L2_H_err[iscan] = fkerr.H_M.max ,fkerr.H_M.L2
             max_dHdvpa_err[iscan], L2_dHdvpa_err[iscan] = fkerr.dHdvpa_M.max ,fkerr.dHdvpa_M.L2
@@ -495,7 +504,7 @@ end
              shape =:circle, xscale=:log10, yscale=:log10, xticks = (nelement_list, nelement_list), yticks = (ytick_sequence, ytick_sequence), markersize = 5, linewidth=2, 
               xtickfontsize = fontsize, xguidefontsize = fontsize, ytickfontsize = fontsize, yguidefontsize = fontsize, legendfontsize = fontsize,
               foreground_color_legend = nothing, background_color_legend = nothing, legend=:bottomleft)
-            outfile = "fkpl_C_G_H_max_test_ngrid_"*string(ngrid)*"_GLL.pdf"
+            outfile = outdir*"fkpl_C_G_H_max_test_ngrid_"*string(ngrid)*"_GLL.pdf"
             savefig(outfile)
             println(outfile)
             println([max_C_err,max_H_err,max_G_err, expected, expected_integral])
@@ -505,7 +514,7 @@ end
              shape =:circle, xscale=:log10, yscale=:log10, xticks = (nelement_list, nelement_list), yticks = (ytick_sequence, ytick_sequence), markersize = 5, linewidth=2, 
               xtickfontsize = fontsize, xguidefontsize = fontsize, ytickfontsize = fontsize, yguidefontsize = fontsize, legendfontsize = fontsize,
               foreground_color_legend = nothing, background_color_legend = nothing, legend=:bottomleft)
-            outfile = "fkpl_coeffs_max_test_ngrid_"*string(ngrid)*"_GLL.pdf"
+            outfile = outdir*"fkpl_coeffs_max_test_ngrid_"*string(ngrid)*"_GLL.pdf"
             savefig(outfile)
             println(outfile)
             println([max_dHdvpa_err, max_dHdvperp_err, max_d2Gdvperp2_err, max_d2Gdvpa2_err, max_d2Gdvperpdvpa_err, max_dGdvperp_err, expected,      expected_integral])
@@ -527,7 +536,7 @@ end
              shape =:circle, xscale=:log10, yscale=:log10, xticks = (nelement_list, nelement_list), yticks = (ytick_sequence, ytick_sequence), markersize = 5, linewidth=2, 
               xtickfontsize = fontsize, xguidefontsize = fontsize, ytickfontsize = fontsize, yguidefontsize = fontsize, legendfontsize = fontsize,
               foreground_color_legend = nothing, background_color_legend = nothing, legend=:bottomleft)
-            outfile = "fkpl_C_G_H_L2_test_ngrid_"*string(ngrid)*"_GLL.pdf"
+            outfile = outdir*"fkpl_C_G_H_L2_test_ngrid_"*string(ngrid)*"_GLL.pdf"
             savefig(outfile)
             println(outfile)
             println([L2_C_err,L2_H_err,L2_G_err, expected, expected_integral])
@@ -537,7 +546,7 @@ end
              shape =:circle, xscale=:log10, yscale=:log10, xticks = (nelement_list, nelement_list), yticks = (ytick_sequence, ytick_sequence), markersize = 5, linewidth=2, 
               xtickfontsize = fontsize, xguidefontsize = fontsize, ytickfontsize = fontsize, yguidefontsize = fontsize, legendfontsize = fontsize,
               foreground_color_legend = nothing, background_color_legend = nothing, legend=:bottomleft)
-            outfile = "fkpl_coeffs_L2_test_ngrid_"*string(ngrid)*"_GLL.pdf"
+            outfile = outdir*"fkpl_coeffs_L2_test_ngrid_"*string(ngrid)*"_GLL.pdf"
             savefig(outfile)
             println(outfile)
             println([L2_dHdvpa_err, L2_dHdvperp_err, L2_d2Gdvperp2_err, L2_d2Gdvpa2_err, L2_d2Gdvperpdvpa_err, L2_dGdvperp_err,  expected,      expected_integral])
@@ -552,7 +561,7 @@ end
                  shape =:circle, xscale=:log10, yscale=:log10, xticks = (nelement_list, nelement_list), yticks = (ytick_sequence, ytick_sequence), markersize = 5, linewidth=2, 
                   xtickfontsize = fontsize, xguidefontsize = fontsize, ytickfontsize = fontsize, yguidefontsize = fontsize, legendfontsize = fontsize,
                   foreground_color_legend = nothing, background_color_legend = nothing, legend=:bottomleft)
-                outfile = "fkpl_conservation_test_ngrid_"*string(ngrid)*"_GLL.pdf"
+                outfile = outdir*"fkpl_conservation_test_ngrid_"*string(ngrid)*"_GLL.pdf"
                 savefig(outfile)
                 println(outfile)
                 println([max_C_err, L2_C_err, n_err, u_err, p_err, expected, expected_integral])
@@ -562,7 +571,7 @@ end
                  shape =:circle, xscale=:log10, yscale=:log10, xticks = (nelement_list, nelement_list), yticks = (ytick_sequence, ytick_sequence), markersize = 5, linewidth=2, 
                   xtickfontsize = fontsize, xguidefontsize = fontsize, ytickfontsize = fontsize, yguidefontsize = fontsize, legendfontsize = fontsize,
                   foreground_color_legend = nothing, background_color_legend = nothing, legend=:bottomleft)
-                outfile = "fkpl_conservation_test_ngrid_"*string(ngrid)*"_GLL.pdf"
+                outfile = outdir*"fkpl_conservation_test_ngrid_"*string(ngrid)*"_GLL.pdf"
                 savefig(outfile)
                 println(outfile)        
                 println([max_C_err, L2_C_err, n_err, expected, expected_integral])
@@ -570,20 +579,28 @@ end
             
             calculate_timeslabel = "time/step (ms)"
             init_timeslabel = "time/init (ms)"
-            ytick_sequence_timing = Array([10^2,10^3,10^4,10^5,10^6])
-            plot(nelement_list, [calculate_times, init_times, expected_t_2, expected_t_3],
-            xlabel=xlabel, label=[calculate_timeslabel init_timeslabel expected_t_2_label expected_t_3_label], ylabel="",
-             shape =:circle, xscale=:log10, yscale=:log10, xticks = (nelement_list, nelement_list), markersize = 5, linewidth=2, 
-              xtickfontsize = fontsize, xguidefontsize = fontsize, ytickfontsize = fontsize, yguidefontsize = fontsize, legendfontsize = fontsize,
-              foreground_color_legend = nothing, background_color_legend = nothing, legend=:topleft)
-            outfile = "fkpl_timing_test_ngrid_"*string(ngrid)*"_GLL.pdf"
+            outfile = outdir*"fkpl_timing_test_ngrid_"*string(ngrid)*"_GLL.pdf"
+            if boundary_data_option == direct_integration
+                ytick_sequence_timing = Array([10^2,10^3,10^4,10^5,10^6])
+                plot(nelement_list, [calculate_times, init_times, expected_t_2, expected_t_3],
+                xlabel=xlabel, label=[calculate_timeslabel init_timeslabel expected_t_2_label expected_t_3_label], ylabel="",
+                 shape =:circle, xscale=:log10, yscale=:log10, xticks = (nelement_list, nelement_list), markersize = 5, linewidth=2, 
+                  xtickfontsize = fontsize, xguidefontsize = fontsize, ytickfontsize = fontsize, yguidefontsize = fontsize, legendfontsize = fontsize,
+                  foreground_color_legend = nothing, background_color_legend = nothing, legend=:topleft)
+                println([calculate_times, init_times, expected_t_2, expected_t_3])
+            else
+                ytick_sequence_timing = Array([10^2,10^3,10^4,10^5])
+                plot(nelement_list, [calculate_times, init_times, expected_t_2],
+                xlabel=xlabel, label=[calculate_timeslabel init_timeslabel expected_t_2_label], ylabel="",
+                 shape =:circle, xscale=:log10, yscale=:log10, xticks = (nelement_list, nelement_list), markersize = 5, linewidth=2, 
+                  xtickfontsize = fontsize, xguidefontsize = fontsize, ytickfontsize = fontsize, yguidefontsize = fontsize, legendfontsize = fontsize,
+                  foreground_color_legend = nothing, background_color_legend = nothing, legend=:topleft)
+                println([calculate_times, init_times, expected_t_2])
+            end
             savefig(outfile)
             println(outfile)
-            println([calculate_times, init_times, expected_t_2, expected_t_3])
-            
         end
         if global_rank[]==0 && save_HDF5
-            outdir = ""
             ncore = global_size[]
             save_fkpl_error_data(outdir,ncore,ngrid,nelement_list,
                 max_C_err, max_H_err, max_G_err, max_dHdvpa_err, max_dHdvperp_err,
