@@ -201,7 +201,8 @@ function calculate_phi_from_Epar!(phi, Epar, r, z, z_spectral)
         # calculate phi on each local rank, up to a constant
         # phi[1,:] = 0.0 by convention here
         @loop_r ir begin
-            @views indefinite_integral!(phi[:,ir], -Epar[:,ir], z, z_spectral)
+            @views @. z.scratch = -Epar[:,ir]
+            @views indefinite_integral!(phi[:,ir], z.scratch, z, z_spectral)
         end
         
         # Restore the constant offset from the lower boundary
