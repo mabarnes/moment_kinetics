@@ -23,7 +23,7 @@ export get_QQ_local!
 
 using FastGaussQuadrature
 using LegendrePolynomials: Pl, dnPl
-using LinearAlgebra: mul!, lu, LU
+using LinearAlgebra: mul!, lu, ldiv!
 using SparseArrays: sparse, AbstractSparseArray
 using SparseMatricesCSR
 using ..type_definitions: mk_float, mk_int
@@ -459,8 +459,7 @@ Function to carry out a 1D (global) mass matrix solve.
 """
 function mass_matrix_solve!(f, b, spectral::gausslegendre_info)
     # invert mass matrix system
-    y = spectral.mass_matrix_lu \ b
-    @. f = y
+    ldiv!(f, spectral.mass_matrix_lu, b)
     return nothing
 end
 

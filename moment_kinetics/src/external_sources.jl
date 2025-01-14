@@ -1048,14 +1048,13 @@ Note that this function operates on a single point in `r`, given by `ir`, and `p
         this_upar = electron_upar[iz]
         this_prefactor = dt * this_vth / electron_density[iz] * vth_factor *
                          source_amplitude[iz]
-        @loop_vperp_vpa ivperp ivpa begin
+        @loop_vperp ivperp begin
             # Factor of 1/sqrt(π) (for 1V) or 1/π^(3/2) (for 2V/3V) is absorbed by the
             # normalisation of F
             vperp_unnorm = vperp_grid[ivperp] * this_vth
-            vpa_unnorm = vpa_grid[ivpa] * this_vth + this_upar
-            pdf_out[ivpa,ivperp,iz] +=
+            @. pdf_out[:,ivperp,iz] +=
                 this_prefactor *
-                exp(-(vperp_unnorm^2 + vpa_unnorm^2) * me_over_mi / source_T)
+                exp(-(vperp_unnorm^2 + (vpa_grid * this_vth + this_upar)^2) * me_over_mi / source_T)
         end
     end
 

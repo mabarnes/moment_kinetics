@@ -71,6 +71,7 @@ struct nl_solver_info{TH,TV,Tcsg,Tlig,Tprecon,Tpretype}
     serial_solve::Bool
     max_nonlinear_iterations_this_step::Base.RefValue{mk_int}
     max_linear_iterations_this_step::Base.RefValue{mk_int}
+    total_its_soft_limit::mk_int
     preconditioner_type::Tpretype
     preconditioner_update_interval::mk_int
     preconditioners::Tprecon
@@ -98,6 +99,7 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); defa
         linear_restart=10,
         linear_max_restarts=0,
         preconditioner_update_interval=300,
+        total_its_soft_limit=50,
         adi_precon_iterations=1,
        )
 
@@ -278,7 +280,7 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); defa
                           Ref(nl_solver_input.preconditioner_update_interval),
                           Ref(mk_float(0.0)), zeros(mk_int, n_vcut_inds),
                           zeros(mk_int, n_vcut_inds), serial_solve, Ref(0), Ref(0),
-                          preconditioner_type,
+                          nl_solver_input.total_its_soft_limit, preconditioner_type,
                           nl_solver_input.preconditioner_update_interval, preconditioners)
 end
 
@@ -393,17 +395,21 @@ is not necessary to have a very tight `linear_rtol` for the GMRES solve.
 @timeit global_timer newton_solve!(
                          x, residual_func!, residual, delta_x, rhs_delta, v, w,
                          nl_solver_params; left_preconditioner=nothing,
-                         right_preconditioner=nothing, coords) = begin
+                         right_preconditioner=nothing, recalculate_preconditioner=nothing,
+                         coords) = begin
     # This wrapper function constructs the `solver_type` from coords, so that the body of
     # the inner `newton_solve!()` can be fully type-stable
     solver_type = Val(Symbol((c for c ∈ keys(coords))...))
     return newton_solve!(x, residual_func!, residual, delta_x, rhs_delta, v, w,
                          nl_solver_params, solver_type; left_preconditioner=left_preconditioner,
-                         right_preconditioner=right_preconditioner, coords=coords)
+                         right_preconditioner=right_preconditioner,
+                         recalculate_preconditioner=recalculate_preconditioner,
+                         coords=coords)
 end
 function newton_solve!(x, residual_func!, residual, delta_x, rhs_delta, v, w,
                        nl_solver_params, solver_type::Val; left_preconditioner=nothing,
-                       right_preconditioner=nothing, coords)
+                       right_preconditioner=nothing, recalculate_preconditioner=nothing,
+                       coords)
 
     rtol = nl_solver_params.rtol
     atol = nl_solver_params.atol
@@ -472,45 +478,52 @@ old_precon_iterations = nl_solver_params.precon_iterations[]
         if isnan(residual_norm)
             error("NaN in Newton iteration at iteration $counter")
         end
-        if residual_norm > previous_residual_norm
-            # Do a line search between x and x+delta_x to try to find an update that does
-            # decrease residual_norm
-            s = 0.5
-            while s > 1.0e-2
-                parallel_map(solver_type, (x,delta_x,s) -> x + s * delta_x, w, x, delta_x, s)
-                residual_func!(residual, x)
-                residual_norm = distributed_norm(solver_type, residual, norm_params...)
-                if residual_norm ≤ previous_residual_norm
-                    break
-                end
-                s *= 0.5
-            end
-
-            #if residual_norm > previous_residual_norm
-            #    # Failed to find a point that decreases the residual, so try a negative
-            #    # step
-            #    s = -1.0e-5
-            #    parallel_map(solver_type, (x,delta_x,s) -> x + s * delta_x, w, x, delta_x, s)
-            #    residual_func!(residual, x)
-            #    residual_norm = distributed_norm(solver_type, residual, norm_params...)
-            #    if residual_norm > previous_residual_norm
-            #        # That didn't work either, so just take the full step and hope for
-            #        # convergence later
-            #        parallel_map(solver_type, (x,delta_x,s) -> x + s * delta_x, w, x, delta_x, s)
-            #        residual_func!(residual, x)
-            #        residual_norm = distributed_norm(solver_type, residual, norm_params...)
-            #    end
-            #end
-            if residual_norm > previous_residual_norm
-                # Line search didn't work, so just take the full step and hope for
-                # convergence later
-                parallel_map(solver_type, (x,delta_x,s) -> x + s * delta_x, w, x, delta_x, s)
-                residual_func!(residual, x)
-                residual_norm = distributed_norm(solver_type, residual, norm_params...)
-            end
-        end
+#        if residual_norm > previous_residual_norm
+#            # Do a line search between x and x+delta_x to try to find an update that does
+#            # decrease residual_norm
+#            s = 0.5
+#            while s > 1.0e-2
+#                parallel_map(solver_type, (x,delta_x,s) -> x + s * delta_x, w, x, delta_x, s)
+#                residual_func!(residual, x)
+#                residual_norm = distributed_norm(solver_type, residual, norm_params...)
+#                if residual_norm ≤ previous_residual_norm
+#                    break
+#                end
+#                s *= 0.5
+#            end
+#            println("line search s ", s)
+#
+#            #if residual_norm > previous_residual_norm
+#            #    # Failed to find a point that decreases the residual, so try a negative
+#            #    # step
+#            #    s = -1.0e-5
+#            #    parallel_map(solver_type, (x,delta_x,s) -> x + s * delta_x, w, x, delta_x, s)
+#            #    residual_func!(residual, x)
+#            #    residual_norm = distributed_norm(solver_type, residual, norm_params...)
+#            #    if residual_norm > previous_residual_norm
+#            #        # That didn't work either, so just take the full step and hope for
+#            #        # convergence later
+#            #        parallel_map(solver_type, (x,delta_x,s) -> x + s * delta_x, w, x, delta_x, s)
+#            #        residual_func!(residual, x)
+#            #        residual_norm = distributed_norm(solver_type, residual, norm_params...)
+#            #    end
+#            #end
+#            if residual_norm > previous_residual_norm
+#                # Line search didn't work, so just take the full step and hope for
+#                # convergence later
+#                parallel_map(solver_type, (x,delta_x,s) -> x + s * delta_x, w, x, delta_x, s)
+#                residual_func!(residual, x)
+#                residual_norm = distributed_norm(solver_type, residual, norm_params...)
+#            end
+#        end
         parallel_map(solver_type, (w) -> w, x, w)
         previous_residual_norm = residual_norm
+
+        if recalculate_preconditioner !== nothing && counter % nl_solver_params.preconditioner_update_interval == 0
+            # Have taken a large number of Newton iterations already - convergence must be
+            # slow, so try updating the preconditioner.
+            recalculate_preconditioner()
+        end
 
         #println("Newton residual ", residual_norm, " ", linear_its, " $rtol $atol")
 
