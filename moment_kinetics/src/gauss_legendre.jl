@@ -464,6 +464,39 @@ function mass_matrix_solve!(f, b, spectral::gausslegendre_info)
 end
 
 """
+Function to calculate the elemental anti-differentiation (integration) matrix.
+This function forms the primitive
+```math
+F(x) = \\int^x_{x_{\\rm min}} f(x^\\prime) d x^\\prime
+```
+of the function 
+```math
+f(x) = \\sum_j f_j l_j(x),
+```
+where \$l_j(x)\$ is the \$j^{\\rm th}\$ Lagrange polynomial on the element and \$f_j = f(x_j)\$,
+with \$x_j\$ \$j^{\\rm th}\$ collocation point on the element. We find \$F(x)\$ at the collocation
+points on the element, giving a series of integrals to evaluate:
+```math
+F(x_i) = \\int^{x_i}_{-1} f(x^\\prime) d x^\\prime = \\sum_j f_j \\int^{x_i}_{-1} l_j(x^\\prime) d x^\\prime,
+```
+where we have used that \$x_{\\rm min} = -1\$ on the elemental grid.
+Changing to a normalised coordinate \$y\$ suitable for Gaussian quadrature 
+```math
+x^\\prime = \\frac{x_i + 1}{2} y + \\frac{x_i - 1}{2}
+```
+we can write the operation in matrix form:
+```math
+F(x_i) = \\sum_{j}A_{ij}f_j,
+```
+with the matrix \$A_{ij}\$ defined by
+```math
+A_{ij} = \\left(\\frac{x_i + 1}{2}\\right) \\int^1_{-1} l_j \\left( \\frac{(x_i + 1)y + x_i - 1}{2} \\right) dy,
+```
+or in discretised form
+```math
+A_{ij} = \\left(\\frac{x_i + 1}{2}\\right) \\sum_k l_j \\left( \\frac{(x_i + 1)y_k + x_i - 1}{2} \\right) w_k,
+```
+with \$y_k\$ and \$w_k\$ Gauss-quadrature points and weights, respectively.
 """
 function integration_matrix!(A::Array{Float64,2},x::Array{Float64,1},ngrid::Int64)
     nquad = 2*ngrid
