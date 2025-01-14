@@ -1057,7 +1057,7 @@ Note that this function operates on a single point in `r`, given by `ir`, and `p
             # Factor of 1/sqrt(π) (for 1V) or 1/π^(3/2) (for 2V/3V) is absorbed by the
             # normalisation of F
             vperp_unnorm = vperp_grid[ivperp] * this_vth
-            @. pdf_out[:,ivperp,iz] +=
+            @views @. pdf_out[:,ivperp,iz] +=
                 this_prefactor *
                 exp(-(vperp_unnorm^2 + (vpa_grid * this_vth + this_upar)^2) * me_over_mi / source_T)
         end
@@ -1065,9 +1065,9 @@ Note that this function operates on a single point in `r`, given by `ir`, and `p
 
     if electron_source.source_type == "energy"
         # Take particles out of pdf so source does not change density
-        @loop_z_vperp_vpa iz ivperp ivpa begin
-            pdf_out[ivpa,ivperp,iz] -= dt * source_amplitude[iz] *
-                                            pdf_in[ivpa,ivperp,iz]
+        @loop_z_vperp iz ivperp begin
+            @views @. pdf_out[:,ivperp,iz] -= dt * source_amplitude[iz] *
+                                              pdf_in[:,ivperp,iz]
         end
     end
 
