@@ -2,6 +2,9 @@
 """
 module calculus
 
+# Import moment_kinetics so that we can refer to it in docstrings
+import moment_kinetics
+
 export derivative!, second_derivative!, laplacian_derivative!
 export elementwise_indefinite_integration!
 export reconcile_element_boundaries_MPI!
@@ -39,7 +42,15 @@ function elementwise_indefinite_integration! end
 """
     indefinite_integral!(pf, f, coord, spectral)
 
-Indefinite line integral.
+Indefinite line integral. 
+
+This function is designed to work on local-in-memory data only,
+with distributed-memory MPI not implemented here.
+A function which integrates along a line which is distributed
+in memory exists in [`moment_kinetics.em_fields`](@ref) as 
+`calculate_phi_from_Epar!()`. The distributed-memory functionality could
+be ported to a generic function, similiar to how the derivative!
+functions are generalised in [`moment_kinetics.derivatives`](@ref).
 """
 function indefinite_integral!(pf, f, coord, spectral::discretization_info)
     # get the indefinite integral at each grid point within each element and store in
