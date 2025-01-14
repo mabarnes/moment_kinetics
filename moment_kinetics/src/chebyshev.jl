@@ -473,7 +473,7 @@ function chebyshev_spectral_derivative!(df,f)
 end
 
 function single_element_interpolate!(result, newgrid, f, imin, imax, ielement, coord,
-                                     chebyshev::chebyshev_base_info)
+                                     chebyshev::chebyshev_base_info, derivative::Val{0})
     # Temporary buffer to store Chebyshev coefficients
     cheby_f = chebyshev.df
 
@@ -496,6 +496,71 @@ function single_element_interpolate!(result, newgrid, f, imin, imax, ielement, c
         for coef ∈ @view(cheby_f[3:end])
             cheb1, cheb2 = cheb2, 2.0 * z * cheb2 - cheb1
             result[i] += coef * cheb2
+        end
+    end
+
+    return nothing
+end
+
+# Evaluate first derivative of the interpolating function
+function single_element_interpolate!(result, newgrid, f, imin, imax, ielement, coord,
+                                     chebyshev::chebyshev_base_info, derivative::Val{1})
+    # Temporary buffer to store Chebyshev coefficients
+    cheby_f = chebyshev.df
+
+    if length(cheby_f) == 1
+        # Chebyshev 'polynomial' is only a constant, so derivative must be zero?
+        result .= 0.0
+        return nothing
+    end
+
+    # Need to transform newgrid values to a scaled z-coordinate associated with the
+    # Chebyshev coefficients to get the interpolated function values. Transform is a
+    # shift and scale so that the element coordinate goes from -1 to 1
+    shift = 0.5 * (coord.grid[imin] + coord.grid[imax])
+    scale = 2.0 / (coord.grid[imax] - coord.grid[imin])
+
+    # Get Chebyshev coefficients
+    chebyshev_forward_transform!(cheby_f, chebyshev.fext, f, chebyshev.forward, coord.ngrid)
+
+    if length(cheby_f) == 2
+        # Handle this case specially because the generic algorithm below uses cheby_f[3]
+        # explicitly.
+        for i ∈ 1:length(newgrid)
+            x = newgrid[i]
+            z = scale * (x - shift)
+
+            # cheby_f[2] is multiplied by U_0, but U_0 = 1
+            result[i] = cheby_f[2] * scale
+        end
+        return nothing
+    end
+
+    # Need to evaluate first derivatives of the Chebyshev polynomials. Can do this using
+    # the differentiation formula
+    # https://en.wikipedia.org/wiki/Chebyshev_polynomials#Differentiation_and_integration
+    #   d T_n / dz = n * U_(n-1)
+    # where U_n are the Chebyshev polynomials of the second kind, which in turn can be
+    # evaluated using the recurrence relation
+    # https://en.wikipedia.org/wiki/Chebyshev_polynomials#Recurrence_definition
+    #   U_0 = 1
+    #   U_1 = 2*z
+    #   U_(n+1) = 2*z*U_n - U_(n-1)
+    for i ∈ 1:length(newgrid)
+        x = newgrid[i]
+        z = scale * (x - shift)
+        # Evaluate sum of Chebyshev polynomials at z using recurrence relation
+        U_nminus1 = 1.0
+        U_n = 2.0*z
+
+        # Note that the derivative of the zero'th Chebyshev polynomial (a constant) does
+        # not contribute, so cheby_f[1] is not used.
+        nplus1 = 2.0
+        result[i] = cheby_f[2] * U_nminus1 * scale + cheby_f[3] * nplus1 * U_n * scale
+        for coef ∈ @view(cheby_f[4:end])
+            nplus1 += 1.0
+            U_nminus1, U_n = U_n, 2.0 * z * U_n - U_nminus1
+            result[i] += coef * nplus1 * U_n * scale
         end
     end
 

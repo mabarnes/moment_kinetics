@@ -8,7 +8,7 @@ export set_element_boundaries
 
 using LinearAlgebra
 using ..type_definitions: mk_float, mk_int, OptionsDict
-using ..array_allocation: allocate_float, allocate_shared_float, allocate_int
+using ..array_allocation: allocate_float, allocate_shared_float, allocate_int, allocate_shared_int
 using ..calculus: derivative!
 using ..chebyshev: scaled_chebyshev_grid, scaled_chebyshev_radau_grid, setup_chebyshev_pseudospectral
 using ..communication
@@ -25,7 +25,7 @@ using OrderedCollections: OrderedDict
 """
 structure containing basic information related to coordinates
 """
-struct coordinate{T <: AbstractVector{mk_float},Tbparams}
+struct coordinate{T <: AbstractVector{mk_float}, Ti <: AbstractVector{mk_int}, Tbparams}
     # name is the name of the variable associated with this coordiante
     name::String
     # n_global is the total number of grid points associated with this coordinate
@@ -95,6 +95,11 @@ struct coordinate{T <: AbstractVector{mk_float},Tbparams}
     scratch8::Array{mk_float,1}
     # scratch9 is an array used for intermediate calculations requiring n entries
     scratch9::Array{mk_float,1}
+    # scratch10 is an array used for intermediate calculations requiring n entries
+    scratch10::Array{mk_float,1}
+    # scratch_int_nelement_plus_1 is an integer array used for intermediate calculations
+    # requiring nelement+1 entries
+    scratch_int_nelement_plus_1::Array{mk_int,1}
     # scratch_shared is a shared-memory array used for intermediate calculations requiring
     # n entries
     scratch_shared::T
@@ -104,6 +109,12 @@ struct coordinate{T <: AbstractVector{mk_float},Tbparams}
     # scratch_shared3 is a shared-memory array used for intermediate calculations requiring
     # n entries
     scratch_shared3::T
+    # scratch_shared_int is a shared-memory array used for intermediate calculations
+    # requiring n integer entries
+    scratch_shared_int::Ti
+    # scratch_shared_int is a shared-memory array used for intermediate calculations
+    # requiring n integer entries
+    scratch_shared_int2::Ti
     # scratch_2d and scratch2_2d are arrays used for intermediate calculations requiring
     # ngrid x nelement entries
     scratch_2d::Array{mk_float,2}
@@ -307,14 +318,21 @@ function define_coordinate(coord_input::NamedTuple; parallel_io::Bool=false,
     duniform_dgrid = allocate_float(coord_input.ngrid, coord_input.nelement_local)
     # scratch is an array used for intermediate calculations requiring n entries
     scratch = allocate_float(n_local)
+    # scratch_int_nelement_plus_1 is an array used for intermediate calculations requiring
+    # nelement+1 entries
+    scratch_int_nelement_plus_1 = allocate_int(coord_input.nelement_local + 1)
     if ignore_MPI
         scratch_shared = allocate_float(n_local)
         scratch_shared2 = allocate_float(n_local)
         scratch_shared3 = allocate_float(n_local)
+        scratch_shared_int = allocate_int(n_local)
+        scratch_shared_int2 = allocate_int(n_local)
     else
         scratch_shared = allocate_shared_float(n_local)
         scratch_shared2 = allocate_shared_float(n_local)
         scratch_shared3 = allocate_shared_float(n_local)
+        scratch_shared_int = allocate_shared_int(n_local)
+        scratch_shared_int2 = allocate_shared_int(n_local)
     end
     # Initialise scratch_shared* so that the debug checks do not complain when they get
     # printed by `println(io, all_inputs)` in mk_input().
@@ -322,6 +340,8 @@ function define_coordinate(coord_input::NamedTuple; parallel_io::Bool=false,
         scratch_shared .= NaN
         scratch_shared2 .= NaN
         scratch_shared3 .= NaN
+        scratch_shared_int .= typemin(mk_int)
+        scratch_shared_int2 .= typemin(mk_int)
     end
     if !ignore_MPI
         _block_synchronize()
@@ -381,15 +401,16 @@ function define_coordinate(coord_input::NamedTuple; parallel_io::Bool=false,
     end
 
     coord = coordinate(coord_input.name, n_global, n_local, coord_input.ngrid,
-        coord_input.nelement, coord_input.nelement_local, nrank, irank, coord_input.L,
-        grid, cell_width, igrid, ielement, imin, imax, igrid_full,
-        coord_input.discretization, coord_input.finite_difference_option,
+        coord_input.nelement, coord_input.nelement_local, nrank, irank,
+        mk_float(coord_input.L), grid, cell_width, igrid, ielement, imin, imax,
+        igrid_full, coord_input.discretization, coord_input.finite_difference_option,
         coord_input.cheb_option, coord_input.bc, coord_input.boundary_parameters, wgts,
         uniform_grid, duniform_dgrid, scratch, copy(scratch), copy(scratch),
         copy(scratch), copy(scratch), copy(scratch), copy(scratch), copy(scratch),
-        copy(scratch), scratch_shared, scratch_shared2, scratch_shared3, scratch_2d,
-        copy(scratch_2d), advection, send_buffer, receive_buffer, comm, local_io_range,
-        global_io_range, element_scale, element_shift,
+        copy(scratch), copy(scratch), scratch_int_nelement_plus_1, scratch_shared,
+        scratch_shared2, scratch_shared3, scratch_shared_int, scratch_shared_int2,
+        scratch_2d, copy(scratch_2d), advection, send_buffer, receive_buffer, comm,
+        local_io_range, global_io_range, element_scale, element_shift,
         coord_input.element_spacing_option, element_boundaries, radau_first_element,
         other_nodes, one_over_denominator)
 

@@ -42,7 +42,7 @@ using MPI
 using SparseArrays
 using StatsBase: mean
 
-struct nl_solver_info{TH,TV,Tcsg,Tlig,Tprecon}
+struct nl_solver_info{TH,TV,Tcsg,Tlig,Tprecon,Tpretype}
     rtol::mk_float
     atol::mk_float
     nonlinear_max_iterations::mk_int
@@ -59,15 +59,20 @@ struct nl_solver_info{TH,TV,Tcsg,Tlig,Tprecon}
     n_solves::Base.RefValue{mk_int}
     nonlinear_iterations::Base.RefValue{mk_int}
     linear_iterations::Base.RefValue{mk_int}
+    precon_iterations::Base.RefValue{mk_int}
     global_n_solves::Base.RefValue{mk_int}
     global_nonlinear_iterations::Base.RefValue{mk_int}
     global_linear_iterations::Base.RefValue{mk_int}
+    global_precon_iterations::Base.RefValue{mk_int}
     solves_since_precon_update::Base.RefValue{mk_int}
     precon_dt::Base.RefValue{mk_float}
+    precon_lowerz_vcut_inds::Vector{mk_int}
+    precon_upperz_vcut_inds::Vector{mk_int}
     serial_solve::Bool
     max_nonlinear_iterations_this_step::Base.RefValue{mk_int}
     max_linear_iterations_this_step::Base.RefValue{mk_int}
-    preconditioner_type::String
+    total_its_soft_limit::mk_int
+    preconditioner_type::Tpretype
     preconditioner_update_interval::mk_int
     preconditioners::Tprecon
 end
@@ -83,7 +88,7 @@ for example a preconditioner object for each point in that outer loop.
 """
 function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); default_rtol=1.0e-5,
                                default_atol=1.0e-12, serial_solve=false,
-                               electron_ppar_pdf_solve=false, preconditioner_type="none")
+                               electron_ppar_pdf_solve=false, preconditioner_type=Val(:none))
     nl_solver_section = set_defaults_and_check_section!(
         input_dict, "nonlinear_solver";
         rtol=default_rtol,
@@ -94,6 +99,8 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); defa
         linear_restart=10,
         linear_max_restarts=0,
         preconditioner_update_interval=300,
+        total_its_soft_limit=50,
+        adi_precon_iterations=1,
        )
 
     if !active
@@ -110,6 +117,7 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); defa
 
     linear_restart = nl_solver_input.linear_restart
 
+    n_vcut_inds = 0
     if serial_solve
         H = allocate_float(linear_restart + 1, linear_restart)
         c = allocate_float(linear_restart + 1)
@@ -140,6 +148,8 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); defa
         end
 
         V = (V_ppar, V_pdf)
+
+        n_vcut_inds = prod(outer_coord_sizes)
     else
         H = allocate_shared_float(linear_restart + 1, linear_restart)
         c = allocate_shared_float(linear_restart + 1)
@@ -157,12 +167,12 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); defa
         end
     end
 
-    if preconditioner_type == "lu"
+    if preconditioner_type === Val(:lu)
         # Create dummy LU solver objects so we can create an array for preconditioners.
         # These will be calculated properly within the time loop.
         preconditioners = fill(lu(sparse(1.0*I, total_size_coords, total_size_coords)),
                                reverse(outer_coord_sizes))
-    elseif preconditioner_type == "electron_split_lu"
+    elseif preconditioner_type === Val(:electron_split_lu)
         preconditioners = (z=fill(lu(sparse(1.0*I, coords.z.n, coords.z.n)),
                                   tuple(coords.vpa.n, reverse(outer_coord_sizes)...)),
                            vpa=fill(lu(sparse(1.0*I, coords.vpa.n, coords.vpa.n)),
@@ -170,7 +180,7 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); defa
                            ppar=fill(lu(sparse(1.0*I, coords.z.n, coords.z.n)),
                                      reverse(outer_coord_sizes)),
                           )
-    elseif preconditioner_type == "electron_lu"
+    elseif preconditioner_type === Val(:electron_lu)
         pdf_plus_ppar_size = total_size_coords + coords.z.n
         preconditioners = fill((lu(sparse(1.0*I, 1, 1)),
                                 allocate_shared_float(pdf_plus_ppar_size, pdf_plus_ppar_size),
@@ -178,7 +188,81 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); defa
                                 allocate_shared_float(pdf_plus_ppar_size),
                                ),
                                reverse(outer_coord_sizes))
-    elseif preconditioner_type == "none"
+    elseif preconditioner_type === Val(:electron_adi)
+        nz = coords.z.n
+        pdf_plus_ppar_size = total_size_coords + nz
+        nvperp = coords.vperp.n
+        nvpa = coords.vpa.n
+        v_size = nvperp * nvpa
+
+        function get_adi_precon_buffers()
+            v_solve_z_range = looping.loop_ranges_store[(:z,)].z
+            v_solve_global_inds = [[((iz - 1)*v_size+1 : iz*v_size)..., total_size_coords+iz] for iz ∈ v_solve_z_range]
+            v_solve_nsolve = length(v_solve_z_range)
+            # Plus one for the one point of ppar that is included in the 'v solve'.
+            v_solve_n = nvperp * nvpa + 1
+            v_solve_implicit_lus = Vector{SparseArrays.UMFPACK.UmfpackLU{mk_float, mk_int}}(undef, v_solve_nsolve)
+            v_solve_explicit_matrices = Vector{SparseMatrixCSC{mk_float, mk_int}}(undef, v_solve_nsolve)
+            # This buffer is not shared-memory, because it will be used for a serial LU solve.
+            v_solve_buffer = allocate_float(v_solve_n)
+            v_solve_buffer2 = allocate_float(v_solve_n)
+            v_solve_matrix_buffer = allocate_float(v_solve_n, v_solve_n)
+
+            z_solve_vperp_range = looping.loop_ranges_store[(:vperp,:vpa)].vperp
+            z_solve_vpa_range = looping.loop_ranges_store[(:vperp,:vpa)].vpa
+            z_solve_global_inds = vec([(ivperp-1)*nvpa+ivpa:v_size:(nz-1)*v_size+(ivperp-1)*nvpa+ivpa for ivperp ∈ z_solve_vperp_range, ivpa ∈ z_solve_vpa_range])
+            z_solve_nsolve = length(z_solve_vperp_range) * length(z_solve_vpa_range)
+            @serial_region begin
+                # Do the solve for ppar on the rank-0 process, which has the fewest grid
+                # points to handle if there are not an exactly equal number of points for each
+                # process.
+                push!(z_solve_global_inds, total_size_coords+1 : total_size_coords+nz)
+                z_solve_nsolve += 1
+            end
+            z_solve_n = nz
+            z_solve_implicit_lus = Vector{SparseArrays.UMFPACK.UmfpackLU{mk_float, mk_int}}(undef, z_solve_nsolve)
+            z_solve_explicit_matrices = Vector{SparseMatrixCSC{mk_float, mk_int}}(undef, z_solve_nsolve)
+            # This buffer is not shared-memory, because it will be used for a serial LU solve.
+            z_solve_buffer = allocate_float(z_solve_n)
+            z_solve_buffer2 = allocate_float(z_solve_n)
+            z_solve_matrix_buffer = allocate_float(z_solve_n, z_solve_n)
+
+            J_buffer = allocate_shared_float(pdf_plus_ppar_size, pdf_plus_ppar_size)
+            input_buffer = allocate_shared_float(pdf_plus_ppar_size)
+            intermediate_buffer = allocate_shared_float(pdf_plus_ppar_size)
+            output_buffer = allocate_shared_float(pdf_plus_ppar_size)
+            error_buffer = allocate_shared_float(pdf_plus_ppar_size)
+
+            chunk_size = (pdf_plus_ppar_size + block_size[] - 1) ÷ block_size[]
+            # Set up so root process has fewest points, as root may have other work to do.
+            global_index_subrange = max(1, pdf_plus_ppar_size - (block_size[] - block_rank[]) * chunk_size + 1):(pdf_plus_ppar_size - (block_size[] - block_rank[] - 1) * chunk_size)
+
+            if nl_solver_input.adi_precon_iterations < 1
+                error("Setting adi_precon_iterations=$(nl_solver_input.adi_precon_iterations) "
+                      * "would mean the preconditioner does nothing.")
+            end
+            n_extra_iterations = nl_solver_input.adi_precon_iterations - 1
+
+            return (v_solve_global_inds=v_solve_global_inds,
+                    v_solve_nsolve=v_solve_nsolve,
+                    v_solve_implicit_lus=v_solve_implicit_lus,
+                    v_solve_explicit_matrices=v_solve_explicit_matrices,
+                    v_solve_buffer=v_solve_buffer, v_solve_buffer2=v_solve_buffer2,
+                    v_solve_matrix_buffer=v_solve_matrix_buffer,
+                    z_solve_global_inds=z_solve_global_inds,
+                    z_solve_nsolve=z_solve_nsolve,
+                    z_solve_implicit_lus=z_solve_implicit_lus,
+                    z_solve_explicit_matrices=z_solve_explicit_matrices,
+                    z_solve_buffer=z_solve_buffer, z_solve_buffer2=z_solve_buffer2,
+                    z_solve_matrix_buffer=z_solve_matrix_buffer, J_buffer=J_buffer,
+                    input_buffer=input_buffer, intermediate_buffer=intermediate_buffer,
+                    output_buffer=output_buffer,
+                    global_index_subrange=global_index_subrange,
+                    n_extra_iterations=n_extra_iterations)
+        end
+
+        preconditioners = fill(get_adi_precon_buffers(), reverse(outer_coord_sizes))
+    elseif preconditioner_type === Val(:none)
         preconditioners = nothing
     else
         error("Unrecognised preconditioner_type=$preconditioner_type")
@@ -186,13 +270,17 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); defa
 
     linear_initial_guess = zeros(linear_restart)
 
-    return nl_solver_info(nl_solver_input.rtol, nl_solver_input.atol,
+    return nl_solver_info(mk_float(nl_solver_input.rtol), mk_float(nl_solver_input.atol),
                           nl_solver_input.nonlinear_max_iterations,
-                          nl_solver_input.linear_rtol, nl_solver_input.linear_atol,
-                          linear_restart, nl_solver_input.linear_max_restarts, H, c, s, g,
-                          V, linear_initial_guess, Ref(0), Ref(0), Ref(0), Ref(0), Ref(0),
-                          Ref(0), Ref(nl_solver_input.preconditioner_update_interval),
-                          Ref(0.0), serial_solve, Ref(0), Ref(0), preconditioner_type,
+                          mk_float(nl_solver_input.linear_rtol),
+                          mk_float(nl_solver_input.linear_atol), linear_restart,
+                          nl_solver_input.linear_max_restarts, H, c, s, g, V,
+                          linear_initial_guess, Ref(0), Ref(0), Ref(0), Ref(0), Ref(0),
+                          Ref(0), Ref(0), Ref(0),
+                          Ref(nl_solver_input.preconditioner_update_interval),
+                          Ref(mk_float(0.0)), zeros(mk_int, n_vcut_inds),
+                          zeros(mk_int, n_vcut_inds), serial_solve, Ref(0), Ref(0),
+                          nl_solver_input.total_its_soft_limit, preconditioner_type,
                           nl_solver_input.preconditioner_update_interval, preconditioners)
 end
 
@@ -233,12 +321,14 @@ total.
         nl_solver_params.ion_advance.global_n_solves[] = nl_solver_params.ion_advance.n_solves[]
         nl_solver_params.ion_advance.global_nonlinear_iterations[] = nl_solver_params.ion_advance.nonlinear_iterations[]
         nl_solver_params.ion_advance.global_linear_iterations[] = nl_solver_params.ion_advance.linear_iterations[]
+        nl_solver_params.ion_advance.global_precon_iterations[] = nl_solver_params.ion_advance.precon_iterations[]
     end
     if nl_solver_params.vpa_advection !== nothing
         # Solves are run in serial on separate processes, so need a global Allreduce
         @timeit_debug global_timer "MPI.Allreduce! comm_world" MPI.Allreduce!(nl_solver_params.vpa_advection.n_solves[], +, comm_world)
         @timeit_debug global_timer "MPI.Allreduce! comm_world" MPI.Allreduce!(nl_solver_params.vpa_advection.nonlinear_iterations[], +, comm_world)
         @timeit_debug global_timer "MPI.Allreduce! comm_world" MPI.Allreduce!(nl_solver_params.vpa_advection.linear_iterations[], +, comm_world)
+        @timeit_debug global_timer "MPI.Allreduce! comm_world" MPI.Allreduce!(nl_solver_params.vpa_advection.precon_iterations[], +, comm_world)
     end
 end
 
@@ -305,17 +395,21 @@ is not necessary to have a very tight `linear_rtol` for the GMRES solve.
 @timeit global_timer newton_solve!(
                          x, residual_func!, residual, delta_x, rhs_delta, v, w,
                          nl_solver_params; left_preconditioner=nothing,
-                         right_preconditioner=nothing, coords) = begin
+                         right_preconditioner=nothing, recalculate_preconditioner=nothing,
+                         coords) = begin
     # This wrapper function constructs the `solver_type` from coords, so that the body of
     # the inner `newton_solve!()` can be fully type-stable
     solver_type = Val(Symbol((c for c ∈ keys(coords))...))
     return newton_solve!(x, residual_func!, residual, delta_x, rhs_delta, v, w,
                          nl_solver_params, solver_type; left_preconditioner=left_preconditioner,
-                         right_preconditioner=right_preconditioner, coords=coords)
+                         right_preconditioner=right_preconditioner,
+                         recalculate_preconditioner=recalculate_preconditioner,
+                         coords=coords)
 end
 function newton_solve!(x, residual_func!, residual, delta_x, rhs_delta, v, w,
                        nl_solver_params, solver_type::Val; left_preconditioner=nothing,
-                       right_preconditioner=nothing, coords)
+                       right_preconditioner=nothing, recalculate_preconditioner=nothing,
+                       coords)
 
     rtol = nl_solver_params.rtol
     atol = nl_solver_params.atol
@@ -334,12 +428,15 @@ function newton_solve!(x, residual_func!, residual, delta_x, rhs_delta, v, w,
     counter = 0
     linear_counter = 0
 
-    parallel_map(solver_type, ()->0.0, delta_x)
+    # Would need this if delta_x was not set to zero within the Newton iteration loop
+    # below.
+    #parallel_map(solver_type, ()->0.0, delta_x)
 
     close_counter = -1
     close_linear_counter = -1
     success = true
     previous_residual_norm = residual_norm
+old_precon_iterations = nl_solver_params.precon_iterations[]
     while (counter < 1 && residual_norm > 1.0e-8) || residual_norm > 1.0
         counter += 1
         #println("\nNewton ", counter)
@@ -359,7 +456,8 @@ function newton_solve!(x, residual_func!, residual, delta_x, rhs_delta, v, w,
                                    s=nl_solver_params.s, g=nl_solver_params.g,
                                    V=nl_solver_params.V, rhs_delta=rhs_delta,
                                    initial_guess=nl_solver_params.linear_initial_guess,
-                                   serial_solve=nl_solver_params.serial_solve)
+                                   serial_solve=nl_solver_params.serial_solve,
+                                   initial_delta_x_is_zero=true)
         linear_counter += linear_its
 
         # If the residual does not decrease, we will do a line search to find an update
@@ -380,45 +478,52 @@ function newton_solve!(x, residual_func!, residual, delta_x, rhs_delta, v, w,
         if isnan(residual_norm)
             error("NaN in Newton iteration at iteration $counter")
         end
-        if residual_norm > previous_residual_norm
-            # Do a line search between x and x+delta_x to try to find an update that does
-            # decrease residual_norm
-            s = 0.5
-            while s > 1.0e-2
-                parallel_map(solver_type, (x,delta_x,s) -> x + s * delta_x, w, x, delta_x, s)
-                residual_func!(residual, x)
-                residual_norm = distributed_norm(solver_type, residual, norm_params...)
-                if residual_norm ≤ previous_residual_norm
-                    break
-                end
-                s *= 0.5
-            end
-
-            #if residual_norm > previous_residual_norm
-            #    # Failed to find a point that decreases the residual, so try a negative
-            #    # step
-            #    s = -1.0e-5
-            #    parallel_map(solver_type, (x,delta_x,s) -> x + s * delta_x, w, x, delta_x, s)
-            #    residual_func!(residual, x)
-            #    residual_norm = distributed_norm(solver_type, residual, norm_params...)
-            #    if residual_norm > previous_residual_norm
-            #        # That didn't work either, so just take the full step and hope for
-            #        # convergence later
-            #        parallel_map(solver_type, (x,delta_x,s) -> x + s * delta_x, w, x, delta_x, s)
-            #        residual_func!(residual, x)
-            #        residual_norm = distributed_norm(solver_type, residual, norm_params...)
-            #    end
-            #end
-            if residual_norm > previous_residual_norm
-                # Line search didn't work, so just take the full step and hope for
-                # convergence later
-                parallel_map(solver_type, (x,delta_x,s) -> x + s * delta_x, w, x, delta_x, s)
-                residual_func!(residual, x)
-                residual_norm = distributed_norm(solver_type, residual, norm_params...)
-            end
-        end
+#        if residual_norm > previous_residual_norm
+#            # Do a line search between x and x+delta_x to try to find an update that does
+#            # decrease residual_norm
+#            s = 0.5
+#            while s > 1.0e-2
+#                parallel_map(solver_type, (x,delta_x,s) -> x + s * delta_x, w, x, delta_x, s)
+#                residual_func!(residual, x)
+#                residual_norm = distributed_norm(solver_type, residual, norm_params...)
+#                if residual_norm ≤ previous_residual_norm
+#                    break
+#                end
+#                s *= 0.5
+#            end
+#            println("line search s ", s)
+#
+#            #if residual_norm > previous_residual_norm
+#            #    # Failed to find a point that decreases the residual, so try a negative
+#            #    # step
+#            #    s = -1.0e-5
+#            #    parallel_map(solver_type, (x,delta_x,s) -> x + s * delta_x, w, x, delta_x, s)
+#            #    residual_func!(residual, x)
+#            #    residual_norm = distributed_norm(solver_type, residual, norm_params...)
+#            #    if residual_norm > previous_residual_norm
+#            #        # That didn't work either, so just take the full step and hope for
+#            #        # convergence later
+#            #        parallel_map(solver_type, (x,delta_x,s) -> x + s * delta_x, w, x, delta_x, s)
+#            #        residual_func!(residual, x)
+#            #        residual_norm = distributed_norm(solver_type, residual, norm_params...)
+#            #    end
+#            #end
+#            if residual_norm > previous_residual_norm
+#                # Line search didn't work, so just take the full step and hope for
+#                # convergence later
+#                parallel_map(solver_type, (x,delta_x,s) -> x + s * delta_x, w, x, delta_x, s)
+#                residual_func!(residual, x)
+#                residual_norm = distributed_norm(solver_type, residual, norm_params...)
+#            end
+#        end
         parallel_map(solver_type, (w) -> w, x, w)
         previous_residual_norm = residual_norm
+
+        if recalculate_preconditioner !== nothing && counter % nl_solver_params.preconditioner_update_interval == 0
+            # Have taken a large number of Newton iterations already - convergence must be
+            # slow, so try updating the preconditioner.
+            recalculate_preconditioner()
+        end
 
         #println("Newton residual ", residual_norm, " ", linear_its, " $rtol $atol")
 
@@ -444,6 +549,9 @@ function newton_solve!(x, residual_func!, residual, delta_x, rhs_delta, v, w,
 #    println("Final residual: ", residual_norm)
 #    println("Total linear iterations: ", linear_counter)
 #    println("Linear iterations per Newton: ", linear_counter / counter)
+#    precon_count = nl_solver_params.precon_iterations[] - old_precon_iterations
+#    println("Total precon iterations: ", precon_count)
+#    println("Precon iterations per linear: ", precon_count / linear_counter)
 #
 #    println("Newton iterations after close: ", counter - close_counter)
 #    println("Total linear iterations after close: ", linear_counter - close_linear_counter)
@@ -1139,7 +1247,8 @@ MGS-GMRES' in Zou (2023) [https://doi.org/10.1016/j.amc.2023.127869].
                          x, residual_func!, residual0, delta_x, v, w, solver_type::Val,
                          norm_params; coords, rtol, atol, restart, max_restarts,
                          left_preconditioner, right_preconditioner, H, c, s, g, V,
-                         rhs_delta, initial_guess, serial_solve) = begin
+                         rhs_delta, initial_guess, serial_solve,
+                         initial_delta_x_is_zero) = begin
     # Solve (approximately?):
     #   J δx = residual0
 
@@ -1156,11 +1265,13 @@ MGS-GMRES' in Zou (2023) [https://doi.org/10.1016/j.amc.2023.127869].
     # by a large number `Jv_scale_factor` (in constrast to the small `epsilon` in the
     # 'usual' case where the norm does not include either reative or absolute tolerance)
     # to ensure that we get a reasonable estimate of J.v.
-    function approximate_Jacobian_vector_product!(v)
-        right_preconditioner(v)
+    function approximate_Jacobian_vector_product!(v, skip_first_precon::Bool=false)
+        if !skip_first_precon
+            right_preconditioner(v)
+        end
 
         parallel_map(solver_type, (x,v) -> x + Jv_scale_factor * v, v, x, v)
-        residual_func!(rhs_delta, v)
+        residual_func!(rhs_delta, v; krylov=true)
         parallel_map(solver_type, (rhs_delta, residual0) -> (rhs_delta - residual0) * inv_Jv_scale_factor,
                      v, rhs_delta, residual0)
         left_preconditioner(v)
@@ -1171,8 +1282,12 @@ MGS-GMRES' in Zou (2023) [https://doi.org/10.1016/j.amc.2023.127869].
     # the left-preconditioner.
     parallel_map(solver_type, (delta_x) -> delta_x, v, delta_x)
     left_preconditioner(residual0)
+
     # This function transforms the data stored in 'v' from δx to ≈J.δx
-    approximate_Jacobian_vector_product!(v)
+    # If initial δx is all-zero, we can skip a right-preconditioner evaluation because it
+    # would just transform all-zero to all-zero.
+    approximate_Jacobian_vector_product!(v, initial_delta_x_is_zero)
+
     # Now we actually set 'w' as the first Krylov vector, and normalise it.
     parallel_map(solver_type, (residual0, v) -> -residual0 - v, w, residual0, v)
     beta = distributed_norm(solver_type, w, norm_params...)

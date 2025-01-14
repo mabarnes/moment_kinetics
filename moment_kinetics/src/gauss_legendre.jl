@@ -24,15 +24,16 @@ export integration_matrix!
 
 using FastGaussQuadrature
 using LegendrePolynomials: Pl, dnPl
-using LinearAlgebra: mul!, lu, LU
+using LinearAlgebra: mul!, lu, ldiv!
 using SparseArrays: sparse, AbstractSparseArray
 using SparseMatricesCSR
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float
-import ..calculus: elementwise_derivative!, mass_matrix_solve!
-import ..calculus: elementwise_indefinite_integration!
-import ..interpolation: single_element_interpolate!
-using ..lagrange_polynomials: lagrange_poly_optimised, lagrange_poly
+import ..calculus: elementwise_derivative!, mass_matrix_solve!,
+                   elementwise_indefinite_integration!
+import ..interpolation: single_element_interpolate!,
+                        fill_single_element_interpolation_matrix!
+using ..lagrange_polynomials: lagrange_poly_optimised, lagrange_poly_derivative_optimised, lagrange_poly
 using ..moment_kinetics_structs: weak_discretization_info
 
 
@@ -185,6 +186,8 @@ implement the Fokker-Planck collision operator.
 """
 function setup_gausslegendre_pseudospectral_lobatto(coord; collision_operator_dim=true)
     x, w = gausslobatto(coord.ngrid)
+    x = mk_float.(x)
+    w = mk_float.(w)
     Dmat = allocate_float(coord.ngrid, coord.ngrid)
     gausslobattolegendre_differentiation_matrix!(Dmat,x,coord.ngrid)
     Amat = allocate_float(coord.ngrid, coord.ngrid)
@@ -263,6 +266,8 @@ implement the Fokker-Planck collision operator.
 function setup_gausslegendre_pseudospectral_radau(coord; collision_operator_dim=true)
     # Gauss-Radau points on [-1,1)
     x, w = gaussradau(coord.ngrid)
+    x = mk_float.(x)
+    w = mk_float.(w)
     # Gauss-Radau points on (-1,1] 
     xreverse, wreverse = -reverse(x), reverse(w)
     # elemental differentiation matrix
@@ -431,7 +436,8 @@ end
 Function to perform interpolation on a single element.
 """
 function single_element_interpolate!(result, newgrid, f, imin, imax, ielement, coord,
-                                     gausslegendre::gausslegendre_base_info)
+                                     gausslegendre::gausslegendre_base_info,
+                                     derivative::Val{0})
     n_new = length(newgrid)
 
     i = 1
@@ -456,10 +462,53 @@ end
 """
 Function to carry out a 1D (global) mass matrix solve.
 """
+# Evaluate first derivative of the interpolating function
+function single_element_interpolate!(result, newgrid, f, imin, imax, ielement, coord,
+                                     gausslegendre::gausslegendre_base_info,
+                                     derivative::Val{1})
+    n_new = length(newgrid)
+
+    i = 1
+    other_nodes = @view coord.other_nodes[:,i,ielement]
+    one_over_denominator = coord.one_over_denominator[i,ielement]
+    this_f = f[i]
+    for j ∈ 1:n_new
+        result[j] = this_f * lagrange_poly_derivative_optimised(other_nodes, one_over_denominator, newgrid[j])
+    end
+    for i ∈ 2:coord.ngrid
+        other_nodes = @view coord.other_nodes[:,i,ielement]
+        one_over_denominator = coord.one_over_denominator[i,ielement]
+        this_f = f[i]
+        for j ∈ 1:n_new
+            result[j] += this_f * lagrange_poly_derivative_optimised(other_nodes, one_over_denominator, newgrid[j])
+        end
+    end
+
+    return nothing
+end
+
+function fill_single_element_interpolation_matrix!(
+             matrix_slice, newgrid, jelement, coord,
+             gausslegendre::gausslegendre_base_info)
+    n_new = length(newgrid)
+
+    for j ∈ 1:coord.ngrid
+        other_nodes = @view coord.other_nodes[:,j,jelement]
+        one_over_denominator = coord.one_over_denominator[j,jelement]
+        for i ∈ 1:n_new
+            matrix_slice[i,j] = lagrange_poly_optimised(other_nodes, one_over_denominator, newgrid[i])
+        end
+    end
+
+    return nothing
+end
+
+"""
+Function to carry out a 1D (global) mass matrix solve.
+"""
 function mass_matrix_solve!(f, b, spectral::gausslegendre_info)
     # invert mass matrix system
-    y = spectral.mass_matrix_lu \ b
-    @. f = y
+    ldiv!(f, spectral.mass_matrix_lu, b)
     return nothing
 end
 
@@ -533,7 +582,7 @@ Or https://doc.nektar.info/tutorials/latest/fundamentals/differentiation/fundame
 
 Note that D has does not include a scaling factor
 """
-function gausslobattolegendre_differentiation_matrix!(D::Array{Float64,2},x::Array{Float64,1},ngrid::Int64)
+function gausslobattolegendre_differentiation_matrix!(D::Array{mk_float,2},x::Array{mk_float,1},ngrid::mk_int)
     D[:,:] .= 0.0
     for ix in 1:ngrid
         for ixp in 1:ngrid
@@ -565,7 +614,7 @@ https://doc.nektar.info/tutorials/latest/fundamentals/differentiation/fundamenta
 
 Note that D has does not include a scaling factor
 """
-function gaussradaulegendre_differentiation_matrix!(D::Array{Float64,2},x::Array{Float64,1},ngrid::Int64)
+function gaussradaulegendre_differentiation_matrix!(D::Array{mk_float,2},x::Array{mk_float,1},ngrid::Int64)
     D[:,:] .= 0.0
     for ix in 1:ngrid
         for ixp in 1:ngrid

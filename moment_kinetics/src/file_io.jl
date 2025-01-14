@@ -320,8 +320,12 @@ struct io_initial_electron_info{Tfile, Tfe, Tmom, Texte1, Texte2, Texte3, Texte4
     electron_constraints_C_coefficient::Tconstr
     # cumulative number of electron pseudo-timesteps taken
     electron_step_counter::Telectronint
+    # local electron pseudo-time
+    electron_local_pseudotime::Telectrontime
     # cumulative electron pseudo-time
     electron_cumulative_pseudotime::Telectrontime
+    # current residual for the electron pseudo-timestepping loop
+    electron_residual::Telectrontime
     # current electron pseudo-timestep size
     electron_dt::Telectrontime
     # size of last electron pseudo-timestep before the output was written
@@ -533,6 +537,10 @@ function setup_electron_io(io_input, vpa, vperp, z, r, composition, collisions,
 
         io_pseudotime = create_dynamic_variable!(dynamic, "time", mk_float; parallel_io=parallel_io,
                                                  description="pseudotime used for electron initialization")
+        io_local_pseudotime = create_dynamic_variable!(dynamic, "electron_local_pseudotime", mk_float; parallel_io=parallel_io,
+                                                       description="pseudotime within a single pseudotimestepping loop")
+        io_electron_residual = create_dynamic_variable!(dynamic, "electron_residual", mk_float; parallel_io=parallel_io,
+                                                        description="residual for electron pseudotimestepping loop")
         io_f_electron = create_dynamic_variable!(dynamic, "f_electron", mk_float, vpa,
                                                  vperp, z, r;
                                                  parallel_io=parallel_io,
@@ -642,7 +650,9 @@ function reopen_initial_electron_io(file_info)
                                         getvar("electron_constraints_B_coefficient"),
                                         getvar("electron_constraints_C_coefficient"),
                                         getvar("electron_step_counter"),
+                                        getvar("electron_local_pseudotime"),
                                         getvar("electron_cumulative_pseudotime"),
+                                        getvar("electron_residual"),
                                         getvar("electron_dt"),
                                         getvar("electron_previous_dt"),
                                         getvar("electron_failure_counter"),
@@ -1203,6 +1213,10 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
                                          dynamic, "$(term)_linear_iterations", mk_int;
                                          parallel_io=parallel_io,
                                          description="Number of linear iterations for $term"),
+                   precon_iterations=create_dynamic_variable!(
+                                         dynamic, "$(term)_precon_iterations", mk_int;
+                                         parallel_io=parallel_io,
+                                         description="Number of preconditioner iterations for $term"),
                   )
             for (term, params) ∈ pairs(nl_solver_params) if params !== nothing)
 
@@ -2152,7 +2166,8 @@ function reopen_moments_io(file_info)
                                for name ∈ nl_names)
                 return NamedTuple(Symbol(term)=>(n_solves=dyn["$(term)_n_solves"],
                                                  nonlinear_iterations=dyn["$(term)_nonlinear_iterations"],
-                                                 linear_iterations=dyn["$(term)_linear_iterations"])
+                                                 linear_iterations=dyn["$(term)_linear_iterations"],
+                                                 precon_iterations=dyn["$(term)_precon_iterations"])
                                   for term ∈ nl_prefixes)
             else
                 return nothing
@@ -2313,7 +2328,8 @@ function reopen_dfns_io(file_info)
                                for name ∈ nl_names)
                 return NamedTuple(Symbol(term)=>(n_solves=dyn["$(term)_n_solves"],
                                                  nonlinear_iterations=dyn["$(term)_nonlinear_iterations"],
-                                                 linear_iterations=dyn["$(term)_linear_iterations"])
+                                                 linear_iterations=dyn["$(term)_linear_iterations"],
+                                                 precon_iterations=dyn["$(term)_precon_iterations"])
                                   for term ∈ nl_prefixes)
             else
                 return nothing
@@ -2495,6 +2511,8 @@ file
                                   v.nonlinear_iterations[], t_idx, parallel_io)
             append_to_dynamic_var(io_moments.nl_solver_diagnostics[k].linear_iterations,
                                   v.linear_iterations[], t_idx, parallel_io)
+            append_to_dynamic_var(io_moments.nl_solver_diagnostics[k].precon_iterations,
+                                  v.precon_iterations[], t_idx, parallel_io)
         end
     end
 
@@ -2735,7 +2753,10 @@ function write_timing_data(io_moments, t_idx, dfns=false)
             # If we got the length of `time:$this_name`, the variable might have
             # the wrong length (e.g. if it has only just been created and has
             # length 1).
-            t_idx = length(io_group["time:" * first(keys(timer_names_all_ranks))])
+            length_check_var = io_group["time:" * first(keys(timer_names_all_ranks))]
+            this_t_idx = size(length_check_var, ndims(length_check_var))
+        else
+            this_t_idx = t_idx
         end
         if parallel_io
             timer_coord = (local_io_range=1:block_size[],
@@ -2748,12 +2769,12 @@ function write_timing_data(io_moments, t_idx, dfns=false)
             io_time = io_group["time:" * this_name]
             io_ncalls = io_group["ncalls:" * this_name]
             io_allocs = io_group["allocs:" * this_name]
-            @views append_to_dynamic_var(io_time, gathered_times_data[counter,:], t_idx,
-                                         parallel_io, timer_coord)
+            @views append_to_dynamic_var(io_time, gathered_times_data[counter,:],
+                                         this_t_idx, parallel_io, timer_coord)
             @views append_to_dynamic_var(io_ncalls, gathered_ncalls_data[counter,:],
-                                         t_idx, parallel_io, timer_coord)
+                                         this_t_idx, parallel_io, timer_coord)
             @views append_to_dynamic_var(io_allocs, gathered_allocs_data[counter,:],
-                                         t_idx, parallel_io, timer_coord)
+                                         this_t_idx, parallel_io, timer_coord)
             counter += 1
             for (sub_name, sub_dict) ∈ pairs(names_dict)
                 write_level(sub_dict, this_name * ";" * sub_name)
@@ -3266,9 +3287,9 @@ binary output file
         # add the distribution function data at this time slice to the output file
         write_ion_dfns_data_to_binary(scratch, t_params, n_ion_species, io_dfns, t_idx, r,
                                       z, vperp, vpa)
-        if scratch_electron !== nothing
-            write_electron_dfns_data_to_binary(scratch_electron, t_params, io_dfns, t_idx,
-                                               r, z, vperp, vpa)
+        if t_params.implicit_electron_time_evolving || scratch_electron !== nothing
+            write_electron_dfns_data_to_binary(scratch, scratch_electron, t_params,
+                                               io_dfns, t_idx, r, z, vperp, vpa)
         end
         write_neutral_dfns_data_to_binary(scratch, t_params, n_neutral_species, io_dfns,
                                           t_idx, r, z, vzeta, vr, vz)
@@ -3307,7 +3328,7 @@ write time-dependent distribution function data for electrons to the binary outp
 
 Note: should only be called from within a function that (re-)opens the output file.
 """
-function write_electron_dfns_data_to_binary(scratch_electron, t_params,
+function write_electron_dfns_data_to_binary(scratch, scratch_electron, t_params,
                                             io_dfns::Union{io_dfns_info,io_initial_electron_info},
                                             t_idx, r, z, vperp, vpa)
     @serial_region begin
@@ -3316,22 +3337,27 @@ function write_electron_dfns_data_to_binary(scratch_electron, t_params,
         parallel_io = io_dfns.io_input.parallel_io
 
         if io_dfns.f_electron !== nothing
-            if t_params.electron === nothing
+            if t_params.implicit_electron_time_evolving
+                n_rk_stages = t_params.n_rk_stages
+                this_scratch = scratch
+            elseif t_params.electron === nothing
                 # t_params is the t_params for electron timestepping
                 n_rk_stages = t_params.n_rk_stages
+                this_scratch = scratch_electron
             else
                 n_rk_stages = t_params.electron.n_rk_stages
+                this_scratch = scratch_electron
             end
             append_to_dynamic_var(io_dfns.f_electron,
-                                  scratch_electron[n_rk_stages+1].pdf_electron,
+                                  this_scratch[n_rk_stages+1].pdf_electron,
                                   t_idx, parallel_io, vpa, vperp, z, r)
             # If options were not set to select the following outputs, then the io
             # variables will be `nothing` and nothing will be written.
             append_to_dynamic_var(io_dfns.f_electron_loworder,
-                                  scratch_electron[2].pdf_electron,
+                                  this_scratch[2].pdf_electron,
                                   t_idx, parallel_io, vpa, vperp, z, r)
             append_to_dynamic_var(io_dfns.f_electron_start_last_timestep,
-                                  scratch_electron[1].pdf_electron,
+                                  this_scratch[1].pdf_electron,
                                   t_idx, parallel_io, vpa, vperp, z, r)
         end
     end
@@ -3370,12 +3396,14 @@ end
 
 """
     write_electron_state(scratch_electron, moments, t_params, io_initial_electron,
-                         t_idx, r, z, vperp, vpa; pdf_electron_converged=false)
+                         t_idx, local_pseudotime, electron_residual, r, z, vperp, vpa;
+                         pdf_electron_converged=false)
 
 Write the electron state to an output file.
 """
 function write_electron_state(scratch_electron, moments, t_params,
-                              io_or_file_info_initial_electron, t_idx, r, z, vperp, vpa;
+                              io_or_file_info_initial_electron, t_idx, local_pseudotime,
+                              electron_residual, r, z, vperp, vpa;
                               pdf_electron_converged=false)
 
     @serial_region begin
@@ -3394,10 +3422,14 @@ function write_electron_state(scratch_electron, moments, t_params,
         # add the pseudo-time for this time slice to the hdf5 file
         append_to_dynamic_var(io_initial_electron.time,
                               t_params.t[], t_idx, parallel_io)
+        append_to_dynamic_var(io_initial_electron.electron_local_pseudotime, local_pseudotime,
+                              t_idx, parallel_io)
         append_to_dynamic_var(io_initial_electron.electron_cumulative_pseudotime,
                               t_params.t[], t_idx, parallel_io)
+        append_to_dynamic_var(io_initial_electron.electron_residual, electron_residual,
+                              t_idx, parallel_io)
 
-        write_electron_dfns_data_to_binary(scratch_electron, t_params,
+        write_electron_dfns_data_to_binary(nothing, scratch_electron, t_params,
                                            io_initial_electron, t_idx, r, z, vperp, vpa)
 
         write_electron_moments_data_to_binary(scratch_electron, moments, t_params,

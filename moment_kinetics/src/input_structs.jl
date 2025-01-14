@@ -33,7 +33,7 @@ using TOML
 an option but known at compile time when a `time_info` struct is passed as a function
 argument.
 """
-struct time_info{Terrorsum <: Real, T_debug_output, T_electron, Trkimp, Timpzero}
+struct time_info{Terrorsum <: Real, T_debug_output, T_electron, Trkimp, Timpzero, Telectronprecon}
     n_variables::mk_int
     nstep::mk_int
     end_time::mk_float
@@ -65,6 +65,7 @@ struct time_info{Terrorsum <: Real, T_debug_output, T_electron, Trkimp, Timpzero
     implicit_coefficient_is_zero::Timpzero
     n_rk_stages::mk_int
     rk_order::mk_int
+    exact_output_times::Bool
     adaptive::Bool
     low_storage::Bool
     rtol::mk_float
@@ -78,13 +79,18 @@ struct time_info{Terrorsum <: Real, T_debug_output, T_electron, Trkimp, Timpzero
     maximum_dt::mk_float
     implicit_braginskii_conduction::Bool
     implicit_electron_advance::Bool
+    implicit_electron_time_evolving::Bool
     implicit_ion_advance::Bool
     implicit_vpa_advection::Bool
     implicit_electron_ppar::Bool
+    electron_preconditioner_type::Telectronprecon
     constraint_forcing_rate::mk_float
     decrease_dt_iteration_threshold::mk_int
     increase_dt_iteration_threshold::mk_int
     cap_factor_ion_dt::mk_float
+    max_pseudotimesteps::mk_int
+    max_pseudotime::mk_float
+    include_wall_bc_in_preconditioner::Bool
     write_after_fixed_step_count::Bool
     error_sum_zero::Terrorsum
     split_operators::Bool
@@ -125,6 +131,7 @@ struct advance_info
     continuity::Bool
     force_balance::Bool
     energy::Bool
+    electron_pdf::Bool
     electron_energy::Bool
     electron_conduction::Bool
     neutral_external_source::Bool

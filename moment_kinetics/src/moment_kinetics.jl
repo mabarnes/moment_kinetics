@@ -5,6 +5,7 @@ module moment_kinetics
 export run_moment_kinetics
 
 using MPI
+using StatsBase
 
 # Include submodules from other source files
 # Note that order of includes matters - things used in one module must already
@@ -101,7 +102,7 @@ using .looping: debug_setup_loop_ranges_split_one_combination!
 using .moment_kinetics_input: mk_input, read_input_file
 using .time_advance: setup_time_advance!, time_advance!
 using .timer_utils
-using .type_definitions: mk_int, OptionsDict
+using .type_definitions: mk_float, mk_int, OptionsDict
 using .utils: to_minutes, get_default_restart_filename,
               get_prefix_iblock_and_move_existing_file
 using .em_fields: setup_em_fields
@@ -122,6 +123,9 @@ function run_moment_kinetics(input_dict::OptionsDict; restart=false, restart_tim
         # than the system image.
         check_so_newer_than_code()
     end
+
+    # Reset timers in case there was a previous run which did not clean them up.
+    reset_mk_timers!()
 
     mk_state = nothing
     try
@@ -275,7 +279,7 @@ parallel loop ranges, and are only used by the tests in `debug_test/`.
                               manufactured_solns_input, t_input, num_diss_params,
                               advection_structs, io_input, input_dict)
         # initialize time variable
-        code_time = 0.
+        code_time = mk_float(0.0)
         dt = nothing
         dt_before_last_fail = nothing
         electron_dt = nothing
@@ -327,7 +331,7 @@ parallel loop ranges, and are only used by the tests in `debug_test/`.
 
     # Broadcast code_time from the root process of each shared-memory block (on which it
     # might have been loaded from a restart file).
-    code_time = MPI.Bcast(code_time, 0, comm_block[])
+    code_time = MPI.Bcast(code_time, 0, comm_block[])::mk_float
 
     # create arrays and do other work needed to setup
     # the main time advance loop -- including normalisation of f by density if requested
