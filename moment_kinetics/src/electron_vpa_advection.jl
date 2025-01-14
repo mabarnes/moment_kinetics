@@ -81,7 +81,7 @@ function update_electron_speed_vpa!(advect, density, upar, ppar, moments, vpa,
                         ppar[iz] +
                     0.5 * source_density_amplitude[iz] / density[iz]
                 @loop_vperp ivperp begin
-                    @. speed[:,ivperp,iz] += term1 + vpa * term2_over_vpa
+                    @views @. speed[:,ivperp,iz] += term1 + vpa * term2_over_vpa
                 end
             end
         end
