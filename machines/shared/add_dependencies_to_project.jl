@@ -186,8 +186,7 @@ if mk_preferences["use_system_mpi"] == "y"
             local_hdf5_install_dir = realpath(local_hdf5_install_dir)
             # We have downloaded and compiled HDF5, so link that
             hdf5_dir = local_hdf5_install_dir
-            hdf5_lib = joinpath(local_hdf5_install_dir, "libhdf5.so")
-            hdf5_lib_hl = joinpath(local_hdf5_install_dir, "libhdf5_hl.so")
+            hdf5_lib, hdf5_lib_hl = get_hdf5_lib_names(local_hdf5_install_dir)
         elseif !prompt_for_lib_paths
             hdf5_dir = mk_preferences["hdf5_dir"]
             if hdf5_dir != "default"
@@ -207,9 +206,10 @@ if mk_preferences["use_system_mpi"] == "y"
                 global hdf5_dir, hdf5_lib, hdf5_lib_hl
                 hdf5_dir = get_input_with_path_completion(
                     "\nAn HDF5 installation compiled with your system MPI is required to use\n"
-                    * "parallel I/O. Enter the directory where the libhdf5.so and libhdf5_hl.so are\n"
-                    * "located (enter 'default' to use the Julia-provided HDF5, which does not\n"
-                    * "support parallel I/O): [$default_hdf5_dir]")
+                    * "parallel I/O. Enter the directory where the libhdf5.so and\n"
+                    * "libhdf5_hl.so (or libhdf5.dylib and libhdf5_hl.dylib on macOS)\n"
+                    * "are located (enter 'default' to use the Julia-provided HDF5, which\n"
+                    * "is not compatible with using the system MPI): [$default_hdf5_dir]")
 
                 if hdf5_dir == ""
                     hdf5_dir = default_hdf5_dir
@@ -222,8 +222,7 @@ if mk_preferences["use_system_mpi"] == "y"
                 if isdir(hdf5_dir)
                     hdf5_dir = realpath(hdf5_dir)
                 end
-                hdf5_lib = joinpath(hdf5_dir, "libhdf5.so")
-                hdf5_lib_hl = joinpath(hdf5_dir, "libhdf5_hl.so")
+                hdf5_lib, hdf5_lib_hl = get_hdf5_lib_names(hdf5_dir)
                 if isfile(hdf5_lib) && isfile(hdf5_lib_hl)
                     break
                 else
