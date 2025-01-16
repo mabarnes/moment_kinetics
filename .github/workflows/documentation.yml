@@ -20,8 +20,6 @@ jobs:
           # https://github.com/JuliaPy/PyPlot.jl/issues/582).
           pip3 install --user "matplotlib==3.8.3"
       - name: Build and deploy
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Authenticate with GitHub Actions token
         run: julia --project=docs/ docs/make.jl
 
   build-pdf:
