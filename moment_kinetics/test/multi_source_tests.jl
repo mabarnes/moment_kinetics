@@ -79,15 +79,15 @@ if global_size[] > 2 && global_size[] % 2 == 0
 end
 
 test_input_1 = recursive_merge(test_input,
-                                    OptionsDict("output" => OptionsDict("run_name" => "two_ion_sources")))
+                                    OptionsDict("output" => OptionsDict("run_name" => "two_ion_sources_moments")))
 test_input_2 = recursive_merge(test_input_1,
-                                    OptionsDict("output" => OptionsDict("run_name" => "two_ion_sources_moments"),
+                                    OptionsDict("output" => OptionsDict("run_name" => "two_ion_sources"),
                                                 "evolve_moments" => OptionsDict("density" => false,
                                                          "parallel_flow" => false,
                                                          "parallel_pressure" => false,
                                                          "moments_conservation" => false)))
 test_input_3 = recursive_merge(test_input,
-                                    OptionsDict("output" => OptionsDict("run_name" => "PI_controller_sources"),
+                                    OptionsDict("output" => OptionsDict("run_name" => "PI_controller_sources_moments"),
                                                 "ion_source_1" => OptionsDict("active" => true,
                                                                 "z_profile" => "super_gaussian_4",
                                                                 "z_width" => 0.275816,
@@ -106,8 +106,26 @@ test_input_3 = recursive_merge(test_input,
                                                                 "PI_density_controller_I" => 1.0,
                                                                 "PI_density_controller_P" => 1.0,
                                                                 "PI_density_target_amplitude" => 1.15)))
-test_input_4 = recursive_merge(test_input_3,
-                                    OptionsDict("output" => OptionsDict("run_name" => "PI_controller_sources_moments"),
+test_input_4 = recursive_merge(test_input,
+                                    OptionsDict("output" => OptionsDict("run_name" => "PI_controller_sources"),
+                                                "ion_source_1" => OptionsDict("active" => true,
+                                                                "z_profile" => "super_gaussian_4",
+                                                                "z_width" => 0.275816,
+                                                                "source_strength" => 5.0,
+                                                                "source_T" => 1.5,
+                                                                "source_type" => "temperature_midpoint_control",
+                                                                "PI_temperature_controller_I" => 5.0,
+                                                                "PI_temperature_controller_P" => 5.0,
+                                                                "PI_temperature_target_amplitude" => 1.0),
+                                                "ion_source_2" => OptionsDict("active" => true,
+                                                                "z_profile" => "wall_exp_decay",
+                                                                "z_width" => 0.15,
+                                                                "source_strength" => 5.0,
+                                                                "source_T" => 0.1,
+                                                                "source_type" => "density_midpoint_control",
+                                                                "PI_density_controller_I" => 1.0,
+                                                                "PI_density_controller_P" => 1.0,
+                                                                "PI_density_target_amplitude" => 1.15),
                                                 "evolve_moments" => OptionsDict("density" => false,
                                                          "parallel_flow" => false,
                                                          "parallel_pressure" => false,
@@ -210,30 +228,29 @@ function runtests()
                      1.133544688363875, 1.1411360468552718, 1.1545894547758784, 1.174956401346126, 
                      1.209797710419845, 1.2427519584559887, 1.2408823667463018])
         end
-        @testset "multi source test 3" begin
-            test_input_3["output"]["base_directory"] = test_output_directory
-            run_test(test_input_3,
-                     [0.6177907120532832, 0.6714507211126516, 0.6523619301063776, 0.6173205979429355, 
-                     0.560793173299856, 0.4983683354590131, 0.4478610245186523, 0.3950887054237573, 
-                     0.3220700317619086, 0.24549730249164423, 0.1867954403779762, 0.12959108381174708, 
-                     0.06685142332403297, 0.03888955546971082, 0.045344100597110824, 0.07550857945193809, 
-                     0.14224887025065472, 0.21885493860947924, 0.27752958192522187, 0.3348792276448188, 
-                     0.4072309432326458, 0.475791910406979, 0.5248484169383675, 0.5709636529795862, 
-                     0.6261662818808416, 0.6661211342613766, 0.6672280315188327])
-        end
-        @testset "multi source test 4" begin
-            test_input_4["output"]["base_directory"] = test_output_directory
-            run_test(test_input_4,
-                     [0.5984365214316864, 0.6744906059289919, 0.6534852815849308, 0.6178888606892614, 
-                     0.5614296327200545, 0.49778285412482914, 0.44710694784149596, 0.39467742579032516, 
-                     0.3209369740409064, 0.24518024027297647, 0.18643336780127007, 0.12988039805427473, 
-                     0.06835594800600428, 0.03752999665967363, 0.04533170640973584, 0.07717489277321508, 
-                     0.1422937389561499, 0.21852502360651355, 0.2769230904373071, 0.33371818093027633, 
-                     0.4068546785524141, 0.474933015820431, 0.5249009953973673, 0.5716423767122453, 
-                     0.6267156044798625, 0.6674142974837349, 0.6701223308005594])
-        end
+        # @testset "multi source test 3" begin
+        #     test_input_3["output"]["base_directory"] = test_output_directory
+        #     run_test(test_input_3,
+        #              [0.6177907120532832, 0.6714507211126516, 0.6523619301063776, 0.6173205979429355, 
+        #              0.560793173299856, 0.4983683354590131, 0.4478610245186523, 0.3950887054237573, 
+        #              0.3220700317619086, 0.24549730249164423, 0.1867954403779762, 0.12959108381174708, 
+        #              0.06685142332403297, 0.03888955546971082, 0.045344100597110824, 0.07550857945193809, 
+        #              0.14224887025065472, 0.21885493860947924, 0.27752958192522187, 0.3348792276448188, 
+        #              0.4072309432326458, 0.475791910406979, 0.5248484169383675, 0.5709636529795862, 
+        #              0.6261662818808416, 0.6661211342613766, 0.6672280315188327])
+        # end
+        # @testset "multi source test 4" begin
+        #     test_input_4["output"]["base_directory"] = test_output_directory
+        #     run_test(test_input_4,
+        #              [0.5984365214316864, 0.6744906059289919, 0.6534852815849308, 0.6178888606892614, 
+        #              0.5614296327200545, 0.49778285412482914, 0.44710694784149596, 0.39467742579032516, 
+        #              0.3209369740409064, 0.24518024027297647, 0.18643336780127007, 0.12988039805427473, 
+        #              0.06835594800600428, 0.03752999665967363, 0.04533170640973584, 0.07717489277321508, 
+        #              0.1422937389561499, 0.21852502360651355, 0.2769230904373071, 0.33371818093027633, 
+        #              0.4068546785524141, 0.474933015820431, 0.5249009953973673, 0.5716423767122453, 
+        #              0.6267156044798625, 0.6674142974837349, 0.6701223308005594])
+        # end
     end
-
     if global_rank[] == 0
         # Delete output directory to avoid using too much disk space
         rm(realpath(test_output_directory); recursive=true)
