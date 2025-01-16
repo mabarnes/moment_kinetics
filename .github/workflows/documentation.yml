@@ -20,7 +20,7 @@ jobs:
           # https://github.com/JuliaPy/PyPlot.jl/issues/582).
           pip3 install --user "matplotlib==3.8.3"
       - name: Build and deploy
-        run: julia --project=docs/ docs/make.jl
+        run: julia --project=docs/ docs/make-pdf.jl
 
   build-pdf:
     runs-on: ubuntu-latest
@@ -36,4 +36,4 @@ jobs:
           # https://github.com/JuliaPy/PyPlot.jl/issues/582).
           pip3 install --user "matplotlib==3.8.3"
       - name: Build and deploy
-        run: julia --project=docs/ docs/make-pdf.jl
+        run: julia --project=docs/ docs/make.jl
