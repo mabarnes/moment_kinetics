@@ -1,13 +1,17 @@
 using Pkg
 
+println("doing develop and instantiate")
 repo_dir = dirname(dirname(@__FILE__))
 Pkg.develop([PackageSpec(path=joinpath(repo_dir, "moment_kinetics")),
              PackageSpec(path=joinpath(repo_dir, "makie_post_processing", "makie_post_processing")),
              PackageSpec(path=joinpath(repo_dir, "plots_post_processing", "plots_post_processing"))])
+println("done develop")
 Pkg.instantiate()
+println("done instantiate")
 
 using Documenter
 using moment_kinetics, makie_post_processing, plots_post_processing
+println("done using")
 
 if get(ENV, "CI", nothing) == "true"
     # On the CI, run in strict mode to turn warnings into errors, so that we don't deploy
@@ -17,6 +21,7 @@ else
     strict = false
 end
 
+println("calling makedocs")
 makedocs(
     sitename = "moment_kinetics",
     format = Documenter.HTML(prettyurls = get(ENV, "CI", nothing) == "true"),
