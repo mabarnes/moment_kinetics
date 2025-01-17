@@ -379,7 +379,8 @@ function mk_input(input_dict=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
                                               ignore_MPI=ignore_MPI)
 
     external_source_settings = setup_external_sources!(input_dict, r, z,
-                                                       composition.electron_physics)
+                                                       composition.electron_physics;
+                                                       ignore_MPI=ignore_MPI)
 
     geometry = init_magnetic_geometry(geometry_in,z,r)
     if any(geometry.dBdz .!= 0.0) &&

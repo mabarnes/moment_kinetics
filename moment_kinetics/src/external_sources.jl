@@ -46,7 +46,7 @@ and z-coordinates.
 Returns a NamedTuple `(ion=ion_source_settings, neutral=neutral_source_settings)`
 containing two NamedTuples of settings.
 """
-function setup_external_sources!(input_dict, r, z, electron_physics)
+function setup_external_sources!(input_dict, r, z, electron_physics; ignore_MPI=false)
     function get_settings_ions(source_index, active_flag)
         input = set_defaults_and_check_section!(
                      input_dict, "ion_source_$source_index";
@@ -95,7 +95,11 @@ function setup_external_sources!(input_dict, r, z, electron_physics)
                 get_source_profile(input["PI_density_target_z_profile"],
                     input["PI_density_target_z_width"],
                     input["PI_density_target_z_relative_minimum"], z)
-            PI_density_target = allocate_shared_float(z.n,r.n)
+            if ignore_MPI
+                PI_density_target = allocate_float(z.n,r.n)
+            else
+                PI_density_target = allocate_shared_float(z.n,r.n)
+            end
             @serial_region begin
                 for ir ∈ 1:r.n, iz ∈ 1:z.n
                     PI_density_target[iz,ir] =
@@ -115,12 +119,12 @@ function setup_external_sources!(input_dict, r, z, electron_physics)
         elseif input["source_type"] == "density_midpoint_control"
             PI_density_target = input["PI_density_target_amplitude"]
 
-            if comm_block[] != MPI.COMM_NULL
-                PI_controller_amplitude = allocate_shared_float(1)
-                controller_source_profile = allocate_shared_float(z.n, r.n)
-            else
+            if ignore_MPI
                 PI_controller_amplitude = allocate_float(1)
                 controller_source_profile = allocate_float(z.n, r.n)
+            else
+                PI_controller_amplitude = allocate_shared_float(1)
+                controller_source_profile = allocate_shared_float(z.n, r.n)
             end
             for ir ∈ 1:r.n, iz ∈ 1:z.n
                 controller_source_profile[iz,ir] = r_amplitude[ir] * z_amplitude[iz]
@@ -138,7 +142,7 @@ function setup_external_sources!(input_dict, r, z, electron_physics)
                 else
                     PI_density_target_rank = 0
                 end
-                if comm_inter_block[] != MPI.COMM_NULL
+                if !ignore_MPI
                     PI_density_target_rank = MPI.Allreduce(PI_density_target_rank, +,
                                                            comm_inter_block[])
                 end
@@ -162,12 +166,12 @@ function setup_external_sources!(input_dict, r, z, electron_physics)
             PI_density_target_iz = nothing
             PI_density_target_rank = nothing
 
-            if comm_block[] != MPI.COMM_NULL
-                PI_controller_amplitude = allocate_shared_float(1)
-                controller_source_profile = allocate_shared_float(z.n, r.n)
-            else
+            if ignore_MPI
                 PI_controller_amplitude = allocate_float(1)
                 controller_source_profile = allocate_float(z.n, r.n)
+            else
+                PI_controller_amplitude = allocate_shared_float(1)
+                controller_source_profile = allocate_shared_float(z.n, r.n)
             end
             for ir ∈ 1:r.n, iz ∈ 1:z.n
                 controller_source_profile[iz,ir] = r_amplitude[ir] * z_amplitude[iz]
@@ -185,7 +189,7 @@ function setup_external_sources!(input_dict, r, z, electron_physics)
                 else
                     PI_temperature_target_rank = 0
                 end
-                if comm_inter_block[] != MPI.COMM_NULL
+                if !ignore_MPI
                     PI_temperature_target_rank = MPI.Allreduce(PI_temperature_target_rank, +,
                                                            comm_inter_block[])
                 end
