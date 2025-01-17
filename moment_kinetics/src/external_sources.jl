@@ -397,7 +397,7 @@ function setup_external_sources!(input_dict, r, z, electron_physics; ignore_MPI=
                      source_strength=ion_settings.source_strength,
                      source_T=ion_settings.source_T,
                     )
-        if ion_settings.source_type != "energy" && ion_settings.source_type != "temperature_midpoint_control"
+        if ion_settings.source_type ∉("energy", "temperature_midpoint_control")
             # Need to keep same amplitude for ions and electrons so there is no charge
             # source.
             if input["source_strength"] != ion_settings.source_strength
