@@ -493,7 +493,7 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
                     electron_preconditioner_type = Val(:electron_lu)
                 else
                     # Want to parallelise preconditioner, so use ADI method.
-                    electron_preconditioner_type = Val(:electron_adi)
+                    electron_preconditioner_type = Val(:electron_lu) # now actually MPIQR
                 end
             else
                 if t_input["implicit_electron_time_evolving"] ∈ keys(electron_precon_types)

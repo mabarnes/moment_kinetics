@@ -41,6 +41,7 @@ using LinearAlgebra
 using MPI
 using SparseArrays
 using StatsBase: mean
+using MPIQR
 
 struct nl_solver_info{TH,TV,Tcsg,Tlig,Tprecon,Tpretype}
     rtol::mk_float
@@ -166,23 +167,25 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); defa
             V .= 0.0
         end
     end
-
+    mpiqr = MPIQR.MPIQRMatrix(zeros(Float64, 1, 1), (1, block_size[]);
+                              blocksize=1, comm=comm_block[])
+    mpiqrstruct = MPIQR.MPIQRStruct(mpiqr)
     if preconditioner_type === Val(:lu)
         # Create dummy LU solver objects so we can create an array for preconditioners.
         # These will be calculated properly within the time loop.
-        preconditioners = fill(lu(sparse(1.0*I, total_size_coords, total_size_coords)),
+        preconditioners = fill(mpiqrstruct,
                                reverse(outer_coord_sizes))
     elseif preconditioner_type === Val(:electron_split_lu)
-        preconditioners = (z=fill(lu(sparse(1.0*I, coords.z.n, coords.z.n)),
+        preconditioners = (z=fill(mpiqrstruct,
                                   tuple(coords.vpa.n, reverse(outer_coord_sizes)...)),
-                           vpa=fill(lu(sparse(1.0*I, coords.vpa.n, coords.vpa.n)),
+                           vpa=fill(mpqirstruct,
                                     tuple(coords.z.n, reverse(outer_coord_sizes)...)),
-                           ppar=fill(lu(sparse(1.0*I, coords.z.n, coords.z.n)),
+                           ppar=fill(mpiqrstruct,
                                      reverse(outer_coord_sizes)),
                           )
     elseif preconditioner_type === Val(:electron_lu)
         pdf_plus_ppar_size = total_size_coords + coords.z.n
-        preconditioners = fill((lu(sparse(1.0*I, 1, 1)),
+        preconditioners = fill((mpiqrstruct,
                                 allocate_shared_float(pdf_plus_ppar_size, pdf_plus_ppar_size),
                                 allocate_shared_float(pdf_plus_ppar_size),
                                 allocate_shared_float(pdf_plus_ppar_size),
@@ -202,6 +205,7 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); defa
             # Plus one for the one point of ppar that is included in the 'v solve'.
             v_solve_n = nvperp * nvpa + 1
             v_solve_implicit_lus = Vector{SparseArrays.UMFPACK.UmfpackLU{mk_float, mk_int}}(undef, v_solve_nsolve)
+            #v_solve_implicit_lus = Vector{Any}(undef, v_solve_nsolve)
             v_solve_explicit_matrices = Vector{SparseMatrixCSC{mk_float, mk_int}}(undef, v_solve_nsolve)
             # This buffer is not shared-memory, because it will be used for a serial LU solve.
             v_solve_buffer = allocate_float(v_solve_n)
@@ -221,6 +225,7 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); defa
             end
             z_solve_n = nz
             z_solve_implicit_lus = Vector{SparseArrays.UMFPACK.UmfpackLU{mk_float, mk_int}}(undef, z_solve_nsolve)
+            #z_solve_implicit_lus = Vector{Any}(undef, z_solve_nsolve)
             z_solve_explicit_matrices = Vector{SparseMatrixCSC{mk_float, mk_int}}(undef, z_solve_nsolve)
             # This buffer is not shared-memory, because it will be used for a serial LU solve.
             z_solve_buffer = allocate_float(z_solve_n)

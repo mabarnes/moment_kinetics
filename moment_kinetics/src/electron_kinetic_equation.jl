@@ -3,6 +3,8 @@ module electron_kinetic_equation
 using LinearAlgebra
 using MPI
 using SparseArrays
+using MPIQR
+using ProgressMeter
 
 export get_electron_critical_velocities
 
@@ -70,7 +72,6 @@ using ..velocity_moments: integrate_over_vspace, calculate_electron_moment_deriv
 import ..runge_kutta
 
 const integral_correction_sharpness = 4.0
-
 """
 update_electron_pdf is a function that uses the electron kinetic equation 
 to solve for the updated electron pdf
@@ -1217,7 +1218,7 @@ pressure \$p_{e∥}\$.
         end
 
         if nl_solver_params.solves_since_precon_update[] ≥ nl_solver_params.preconditioner_update_interval
-global_rank[] == 0 && println("recalculating precon")
+global_rank[] == 0 && println("recalculating precon 1")
             nl_solver_params.solves_since_precon_update[] = 0
             nl_solver_params.precon_dt[] = t_params.dt[]
 
@@ -1231,27 +1232,45 @@ global_rank[] == 0 && println("recalculating precon")
                 external_source_settings, num_diss_params, t_params, ion_dt,
                 ir, evolve_ppar)
 
-            begin_serial_region()
-            if block_rank[] == 0
-                if size(orig_lu) == (1, 1)
+            #begin_serial_region()
+            qrblocksize = 4
+            localcols = MPIQR.localcolumns(block_rank[], size(precon_matrix, 2),
+                                           qrblocksize, block_size[])#1:size(precon_matrix, 2)#
+            if block_rank[] >= 0 # == 0
+                if size(orig_lu, 1) == 1
                     # Have not properly created the LU decomposition before, so
                     # cannot reuse it.
-                    @timeit_debug global_timer "lu" nl_solver_params.preconditioners[ir] =
-                        (lu(sparse(precon_matrix)), precon_matrix, input_buffer,
-                         output_buffer)
+                    #@timeit_debug global_timer "lu" nl_solver_params.preconditioners[ir] =
+                    #    (lu(sparse(precon_matrix)), precon_matrix, input_buffer,
+                    #     output_buffer)
+                    @timeit_debug global_timer "lu" begin
+                        mpiqrmatrix = MPIQR.MPIQRMatrix((precon_matrix[:, localcols]),
+                          size(precon_matrix); blocksize=qrblocksize)
+                        progress = Progress(mpiqrmatrix, dt=iszero(block_rank[]) ? 1 : 2^31;
+                                            showspeed=true)
+                        mpiqrstruct = qr!(mpiqrmatrix; progress=progress)
+                        nl_solver_params.preconditioners[ir] =
+                        (mpiqrstruct, precon_matrix, input_buffer, output_buffer)
+                    end
                 else
                     # LU decomposition was previously created. The Jacobian always
                     # has the same sparsity pattern, so by using `lu!()` we can
                     # reuse some setup.
                     try
-                        @timeit_debug global_timer "lu!" lu!(orig_lu, sparse(precon_matrix); check=false)
+                        #@timeit_debug global_timer "lu!" lu!(orig_lu, sparse(precon_matrix); check=false)
+                        @timeit_debug global_timer "lu!" begin
+                          orig_lu[:, localcols] = precon_matrix[:, localcols]
+                          qr!(orig_lu)
+                        end
                     catch e
                         if !isa(e, ArgumentError)
                             rethrow(e)
                         end
                         println("Sparsity pattern of matrix changed, rebuilding "
                                 * " LU from scratch")
-                        @timeit_debug global_timer "lu" orig_lu = lu(sparse(precon_matrix))
+                        mpiqrmatrix = MPIQR.MPIQRMatrix((precon_matrix[:, localcols]),
+                          size(precon_matrix); blocksize=qrblocksize)
+                        @timeit_debug global_timer "lu" orig_lu = qr!(mpiqrmatrix)
                     end
                     nl_solver_params.preconditioners[ir] =
                         (orig_lu, precon_matrix, input_buffer, output_buffer)
@@ -1280,10 +1299,10 @@ global_rank[] == 0 && println("recalculating precon")
                 counter += 1
             end
 
-            begin_serial_region()
-            @serial_region begin
-                @timeit_debug global_timer "ldiv!" ldiv!(this_output_buffer, precon_lu, this_input_buffer)
-            end
+            #begin_serial_region()
+            #@serial_region begin
+                @timeit_debug global_timer "ldiv!" MPIQR.ldiv!(this_output_buffer, precon_lu, this_input_buffer)
+            #end
 
             begin_serial_region()
             counter = 1
@@ -1347,7 +1366,7 @@ global_rank[] == 0 && println("recalculating precon")
         end
 
         if nl_solver_params.solves_since_precon_update[] ≥ nl_solver_params.preconditioner_update_interval
-global_rank[] == 0 && println("recalculating precon")
+global_rank[] == 0 && println("recalculating precon 2")
             nl_solver_params.solves_since_precon_update[] = 0
             nl_solver_params.precon_dt[] = t_params.dt[]
 
@@ -1931,7 +1950,7 @@ to allow the outer r-loop to be parallelised.
 
         function recalculate_preconditioner!()
             if nl_solver_params.preconditioner_type === Val(:electron_lu)
-global_rank[] == 0 && println("recalculating precon")
+global_rank[] == 0 && println("recalculating precon 3")
                 nl_solver_params.solves_since_precon_update[] = 0
                 nl_solver_params.precon_dt[] = ion_dt
 
@@ -1944,20 +1963,35 @@ global_rank[] == 0 && println("recalculating precon")
                     z_advect, vpa_advect, scratch_dummy, external_source_settings,
                     num_diss_params, t_params, ion_dt, ir, true, :all, true, false)
 
-                begin_serial_region()
-                if block_rank[] == 0
-                    if size(orig_lu) == (1, 1)
+                #begin_serial_region()
+                qrblocksize = 4
+                localcols = MPIQR.localcols(block_rank[], size(precon_matrix, 2),
+                                            qrblocksize, block_size[])
+
+                if block_rank[] == 0 # >= 0
+                    if size(orig_lu, 1) == 1
                         # Have not properly created the LU decomposition before, so
                         # cannot reuse it.
-                        @timeit_debug global_timer "lu" nl_solver_params.preconditioners[ir] =
-                            (lu(sparse(precon_matrix)), precon_matrix, input_buffer,
-                             output_buffer)
+                        #@timeit_debug global_timer "lu" nl_solver_params.preconditioners[ir] =
+                        #    (lu(sparse(precon_matrix)), precon_matrix, input_buffer,
+                        #     output_buffer)
+                        @timeit_debug global_timer "lu" begin
+                            mpiqrmatrix = MPIQR.MPIQRMatrix((precon_matrix[:, localcols]), size(precon_matrix);
+                                                      blocksize=qrblocksize)
+                            mpiqrstruct = qr!(mpiqrmatrix)
+                            nl_solver_params.preconditioners[ir] =
+                            (mpiqrstruct, precon_matrix, input_buffer, output_buffer)
+                        end
                     else
                         # LU decomposition was previously created. The Jacobian always
                         # has the same sparsity pattern, so by using `lu!()` we can
                         # reuse some setup.
                         try
-                            @timeit_debug global_timer "lu!" lu!(orig_lu, sparse(precon_matrix); check=false)
+                            #@timeit_debug global_timer "lu!" lu!(orig_lu, sparse(precon_matrix); check=false)
+                            @timeit_debug global_timer "lu!" begin
+                              orig_lu[:, localcols] = precon_matrix[:, localcols]
+                              qr!(orig_lu)
+                            end
                         catch e
                             if !isa(e, ArgumentError)
                                 rethrow(e)
@@ -2007,10 +2041,10 @@ global_rank[] == 0 && println("recalculating precon")
                     counter += 1
                 end
 
-                begin_serial_region()
-                @serial_region begin
-                    @timeit_debug global_timer "ldiv!" ldiv!(this_output_buffer, precon_lu, this_input_buffer)
-                end
+                #begin_serial_region()
+                #@serial_region begin
+                    @timeit_debug global_timer "ldiv!" MPIQR.ldiv!(this_output_buffer, precon_lu, this_input_buffer)
+                #end
 
                 begin_serial_region()
                 counter = 1
