@@ -67,7 +67,7 @@ end
                               fvec_in.density_neutral, fvec_in.uz_neutral,
                               fvec_in.pz_neutral)
     update_derived_moments!(new_scratch, moments, vpa, vperp, z, r, composition,
-                            r_spectral, geometry, gyroavs, scratch_dummy, z_advect, false)
+                            r_spectral, geometry, gyroavs, scratch_dummy, z_advect, collisions, false)
     calculate_ion_moment_derivatives!(moments, new_scratch, scratch_dummy, z,
                                       z_spectral,
                                       num_diss_params.ion.moment_dissipation_coefficient)

@@ -20,7 +20,7 @@ using ..initial_conditions: initialize_electrons!
 using ..looping
 using ..moment_kinetics_structs: scratch_pdf, scratch_electron_pdf
 using ..velocity_moments: update_moments!, update_moments_neutral!, reset_moments_status!, update_derived_moments!, update_derived_moments_neutral!
-using ..velocity_moments: update_density!, update_upar!, update_ppar!, update_pperp!, update_qpar!, update_vth!
+using ..velocity_moments: update_density!, update_upar!, update_ppar!, update_pperp!, update_ion_qpar!, update_vth!
 using ..velocity_moments: update_neutral_density!, update_neutral_qz!
 using ..velocity_moments: update_neutral_uzeta!, update_neutral_uz!, update_neutral_ur!
 using ..velocity_moments: update_neutral_pzeta!, update_neutral_pz!, update_neutral_pr!
@@ -1051,7 +1051,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
         # constraints to the pdf
         reset_moments_status!(moments)
         update_moments!(moments, pdf.ion.norm, gyroavs, vpa, vperp, z, r, composition,
-           r_spectral,geometry,scratch_dummy,z_advect)
+           r_spectral,geometry,scratch_dummy,z_advect, collisions)
         # enforce boundary conditions in r and z on the neutral particle distribution function
         if n_neutral_species > 0
             # Note, so far vr and vzeta do not need advect objects, so pass `nothing` for
@@ -2502,8 +2502,13 @@ moments and moment derivatives
     # Note these may be needed for the boundary condition on the neutrals, so must be
     # calculated before that is applied. Also may be needed to calculate advection speeds
     # for for CFL stability limit calculations in adaptive_timestep_update!().
-    update_derived_moments!(this_scratch, moments, vpa, vperp, z, r, composition,
-        r_spectral, geometry, gyroavs, scratch_dummy, z_advect, diagnostic_moments)
+    if composition.ion_physics ∈ (drift_kinetic_ions, gyrokinetic_ions)
+        update_derived_moments!(this_scratch, moments, vpa, vperp, z, r, composition,
+            r_spectral, geometry, gyroavs, scratch_dummy, z_advect, collisions, diagnostic_moments)
+    else
+        update_derived_moments!(this_scratch, moments, vpa, vperp, z, r, composition,
+            r_spectral, geometry, gyroavs, scratch_dummy, z_advect, collisions, false)
+    end
 
     calculate_ion_moment_derivatives!(moments, this_scratch, scratch_dummy, z, z_spectral,
                                       num_diss_params.ion.moment_dissipation_coefficient)
@@ -3445,167 +3450,169 @@ with fvec_in an input and fvec_out the output
                                             external_source_settings.neutral, r, z, dt)
     end
 
-    if advance.vpa_advection
-        vpa_advection!(fvec_out.pdf, fvec_in, fields, moments, vpa_advect, vpa, vperp, z, r, dt, t,
-            vpa_spectral, composition, collisions, external_source_settings.ion, geometry)
-    end
-
-    # z_advection! advances 1D advection equation in z
-    # apply z-advection operation to ion species
-
-    if advance.z_advection
-        z_advection!(fvec_out.pdf, fvec_in, moments, fields, z_advect, z, vpa, vperp, r,
-                     dt, t, z_spectral, composition, geometry, scratch_dummy)
-    end
-
-    # r advection relies on derivatives in z to get ExB
-    if advance.r_advection
-        r_advection!(fvec_out.pdf, fvec_in, moments, fields, r_advect, r, z, vperp, vpa,
-                     dt, r_spectral, composition, geometry, scratch_dummy)
-    end
-    # vperp_advection requires information about z and r advection
-    # so call vperp_advection! only after z and r advection routines
-    if advance.vperp_advection
-        vperp_advection!(fvec_out.pdf, fvec_in, vperp_advect, r, z, vperp, vpa,
-                      dt, vperp_spectral, composition, z_advect, r_advect, geometry,
-                      moments, fields, t)
-    end
-
-    if advance.source_terms
-        source_terms!(fvec_out.pdf, fvec_in, moments, vpa, z, r, dt, z_spectral,
-                      composition, collisions, external_source_settings.ion)
-    end
-
-    if advance.neutral_z_advection
-        neutral_advection_z!(fvec_out.pdf_neutral, fvec_in, moments, neutral_z_advect,
-            r, z, vzeta, vr, vz, dt, t, z_spectral, composition, scratch_dummy)
-    end
-
-    if advance.neutral_r_advection
-        neutral_advection_r!(fvec_out.pdf_neutral, fvec_in, neutral_r_advect,
-            r, z, vzeta, vr, vz, dt, r_spectral, composition, geometry, scratch_dummy)
-    end
-
-    if advance.neutral_vz_advection
-        neutral_advection_vz!(fvec_out.pdf_neutral, fvec_in, fields, moments,
-                              neutral_vz_advect, vz, vr, vzeta, z, r, dt, vz_spectral,
-                              composition, collisions, external_source_settings.neutral)
-    end
-
-    if advance.neutral_source_terms
-        source_terms_neutral!(fvec_out.pdf_neutral, fvec_in, moments, vpa, z, r, dt, z_spectral,
-                      composition, collisions, external_source_settings.neutral)
-    end
-
-    if advance.manufactured_solns_test
-        source_terms_manufactured!(fvec_out.pdf, fvec_out.pdf_neutral, vz, vr, vzeta, vpa, vperp, z, r, t, dt, composition, manufactured_source_list)
-    end
-
-    if advance.ion_cx_collisions || advance.ion_ionization_collisions
-        # gyroaverage neutral dfn and place it in the ion.buffer array for use in the collisions step
-        vzvrvzeta_to_vpavperp!(pdf.ion.buffer, fvec_in.pdf_neutral, vz, vr, vzeta, vpa, vperp, gyrophase, z, r, geometry, composition)
-    end
-    if advance.neutral_cx_collisions || advance.neutral_ionization_collisions
-        # interpolate ion particle dfn and place it in the neutral.buffer array for use in the collisions step
-        vpavperp_to_vzvrvzeta!(pdf.neutral.buffer, fvec_in.pdf, vz, vr, vzeta, vpa, vperp, z, r, geometry, composition)
-    end
-
-    # account for charge exchange collisions between ions and neutrals
-    if advance.ion_cx_collisions_1V
-        ion_charge_exchange_collisions_1V!(fvec_out.pdf, fvec_in, moments, composition,
-                                           vpa, vz, collisions.reactions.charge_exchange_frequency,
-                                           vpa_spectral, vz_spectral, dt)
-    elseif advance.ion_cx_collisions
-        ion_charge_exchange_collisions_3V!(fvec_out.pdf, pdf.ion.buffer, fvec_in,
-                                           composition, vz, vr, vzeta, vpa, vperp, z, r,
-                                           collisions.reactions.charge_exchange_frequency, dt)
-    end
-    if advance.neutral_cx_collisions_1V
-        neutral_charge_exchange_collisions_1V!(fvec_out.pdf_neutral, fvec_in, moments,
-                                               composition, vpa, vz,
-                                               collisions.reactions.charge_exchange_frequency, vpa_spectral,
-                                               vz_spectral, dt)
-    elseif advance.neutral_cx_collisions
-        neutral_charge_exchange_collisions_3V!(fvec_out.pdf_neutral, pdf.neutral.buffer,
-                                               fvec_in, composition, vz, vr, vzeta, vpa,
-                                               vperp, z, r, collisions.reactions.charge_exchange_frequency,
-                                               dt)
-    end
-    # account for ionization collisions between ions and neutrals
-    if advance.ion_ionization_collisions_1V
-        ion_ionization_collisions_1V!(fvec_out.pdf, fvec_in, vz, vpa, vperp, z, r,
-                                      vz_spectral, moments, composition, collisions, dt)
-    elseif advance.ion_ionization_collisions
-        ion_ionization_collisions_3V!(fvec_out.pdf, pdf.ion.buffer, fvec_in, composition,
-                                      vz, vr, vzeta, vpa, vperp, z, r, collisions, dt)
-    end
-    if advance.neutral_ionization_collisions_1V
-        neutral_ionization_collisions_1V!(fvec_out.pdf_neutral, fvec_in, vz, vpa, vperp,
-                                          z, r, vz_spectral, moments, composition,
-                                          collisions, dt)
-    elseif advance.neutral_ionization_collisions
-        neutral_ionization_collisions_3V!(fvec_out.pdf_neutral, fvec_in, composition, vz,
-                                          vr, vzeta, vpa, vperp, z, r, collisions, dt)
-    end
-
-    # Add Krook collision operator for ions
-    if advance.krook_collisions_ii
-        krook_collisions!(fvec_out.pdf, fvec_in, moments, composition, collisions,
-                          vperp, vpa, dt)
-    end
-    # Add maxwellian diffusion collision operator for ions
-    if advance.mxwl_diff_collisions_ii
-        ion_vpa_maxwell_diffusion!(fvec_out.pdf, fvec_in, moments, vpa, vperp, vpa_spectral, 
-                                   dt, collisions.mxwl_diff.D_ii)
-    end
-    # Add maxwellian diffusion collision operator for neutrals
-    if advance.mxwl_diff_collisions_nn
-        neutral_vz_maxwell_diffusion!(fvec_out.pdf_neutral, fvec_in, moments, vzeta, vr, vz, vz_spectral, 
-                                   dt, collisions.mxwl_diff.D_nn)
-    end
-
-    if advance.external_source
-        total_external_ion_sources!(fvec_out.pdf, fvec_in, moments, external_source_settings.ion,
-                            vperp, vpa, dt, scratch_dummy)
-    end
-    if advance.neutral_external_source
-        total_external_neutral_sources!(fvec_out.pdf_neutral, fvec_in, moments,
-                                external_source_settings.neutral, vzeta, vr, vz, dt)
-    end
-
-    # add numerical dissipation
-    if advance.ion_numerical_dissipation
-        vpa_dissipation!(fvec_out.pdf, fvec_in.pdf, vpa, vpa_spectral, dt,
-                         num_diss_params.ion.vpa_dissipation_coefficient)
-        vperp_dissipation!(fvec_out.pdf, fvec_in.pdf, vperp, vperp_spectral, dt,
-                         num_diss_params.ion.vperp_dissipation_coefficient)
-        z_dissipation!(fvec_out.pdf, fvec_in.pdf, z, z_spectral, dt,
-                       num_diss_params.ion.z_dissipation_coefficient, scratch_dummy)
-        r_dissipation!(fvec_out.pdf, fvec_in.pdf, r, r_spectral, dt,
-                       num_diss_params.ion.r_dissipation_coefficient, scratch_dummy)
-    end
-    if advance.neutral_numerical_dissipation
-        vz_dissipation_neutral!(fvec_out.pdf_neutral, fvec_in.pdf_neutral, vz,
-                                vz_spectral, dt, num_diss_params.neutral.vz_dissipation_coefficient)
-        z_dissipation_neutral!(fvec_out.pdf_neutral, fvec_in.pdf_neutral, z, z_spectral,
-                               dt, num_diss_params.neutral.z_dissipation_coefficient, scratch_dummy)
-        r_dissipation_neutral!(fvec_out.pdf_neutral, fvec_in.pdf_neutral, r, r_spectral,
-                               dt, num_diss_params.neutral.r_dissipation_coefficient, scratch_dummy)
-    end
-    # advance with the Fokker-Planck self-collision operator
-    if advance.explicit_weakform_fp_collisions
-        update_entropy_diagnostic = (istage == 1)
-        if collisions.fkpl.self_collisions
-            # self collisions for each species
-            explicit_fokker_planck_collisions_weak_form!(fvec_out.pdf,fvec_in.pdf,moments.ion.dSdt,composition,
-                                 collisions,dt,fp_arrays,r,z,vperp,vpa,vperp_spectral,vpa_spectral,scratch_dummy,
-                                                     diagnose_entropy_production = update_entropy_diagnostic)
+    if composition.ion_physics ∈ (drift_kinetic_ions, gyrokinetic_ions)
+        if advance.vpa_advection
+            vpa_advection!(fvec_out.pdf, fvec_in, fields, moments, vpa_advect, vpa, vperp, z, r, dt, t,
+                vpa_spectral, composition, collisions, external_source_settings.ion, geometry)
         end
-        if collisions.fkpl.slowing_down_test
-        # include cross-collsions with fixed Maxwellian backgrounds
-            explicit_fp_collisions_weak_form_Maxwellian_cross_species!(fvec_out.pdf,fvec_in.pdf,moments.ion.dSdt,
-                             composition,collisions,dt,fp_arrays,r,z,vperp,vpa,vperp_spectral,vpa_spectral,
-                                             diagnose_entropy_production = update_entropy_diagnostic)
+
+        # z_advection! advances 1D advection equation in z
+        # apply z-advection operation to ion species
+
+        if advance.z_advection
+            z_advection!(fvec_out.pdf, fvec_in, moments, fields, z_advect, z, vpa, vperp, r,
+                        dt, t, z_spectral, composition, geometry, scratch_dummy)
+        end
+
+        # r advection relies on derivatives in z to get ExB
+        if advance.r_advection
+            r_advection!(fvec_out.pdf, fvec_in, moments, fields, r_advect, r, z, vperp, vpa,
+                        dt, r_spectral, composition, geometry, scratch_dummy)
+        end
+        # vperp_advection requires information about z and r advection
+        # so call vperp_advection! only after z and r advection routines
+        if advance.vperp_advection
+            vperp_advection!(fvec_out.pdf, fvec_in, vperp_advect, r, z, vperp, vpa,
+                        dt, vperp_spectral, composition, z_advect, r_advect, geometry,
+                        moments, fields, t)
+        end
+
+        if advance.source_terms
+            source_terms!(fvec_out.pdf, fvec_in, moments, vpa, z, r, dt, z_spectral,
+                        composition, collisions, external_source_settings.ion)
+        end
+
+        if advance.neutral_z_advection
+            neutral_advection_z!(fvec_out.pdf_neutral, fvec_in, moments, neutral_z_advect,
+                r, z, vzeta, vr, vz, dt, t, z_spectral, composition, scratch_dummy)
+        end
+
+        if advance.neutral_r_advection
+            neutral_advection_r!(fvec_out.pdf_neutral, fvec_in, neutral_r_advect,
+                r, z, vzeta, vr, vz, dt, r_spectral, composition, geometry, scratch_dummy)
+        end
+
+        if advance.neutral_vz_advection
+            neutral_advection_vz!(fvec_out.pdf_neutral, fvec_in, fields, moments,
+                                neutral_vz_advect, vz, vr, vzeta, z, r, dt, vz_spectral,
+                                composition, collisions, external_source_settings.neutral)
+        end
+
+        if advance.neutral_source_terms
+            source_terms_neutral!(fvec_out.pdf_neutral, fvec_in, moments, vpa, z, r, dt, z_spectral,
+                        composition, collisions, external_source_settings.neutral)
+        end
+
+        if advance.manufactured_solns_test
+            source_terms_manufactured!(fvec_out.pdf, fvec_out.pdf_neutral, vz, vr, vzeta, vpa, vperp, z, r, t, dt, composition, manufactured_source_list)
+        end
+
+        if advance.ion_cx_collisions || advance.ion_ionization_collisions
+            # gyroaverage neutral dfn and place it in the ion.buffer array for use in the collisions step
+            vzvrvzeta_to_vpavperp!(pdf.ion.buffer, fvec_in.pdf_neutral, vz, vr, vzeta, vpa, vperp, gyrophase, z, r, geometry, composition)
+        end
+        if advance.neutral_cx_collisions || advance.neutral_ionization_collisions
+            # interpolate ion particle dfn and place it in the neutral.buffer array for use in the collisions step
+            vpavperp_to_vzvrvzeta!(pdf.neutral.buffer, fvec_in.pdf, vz, vr, vzeta, vpa, vperp, z, r, geometry, composition)
+        end
+
+        # account for charge exchange collisions between ions and neutrals
+        if advance.ion_cx_collisions_1V
+            ion_charge_exchange_collisions_1V!(fvec_out.pdf, fvec_in, moments, composition,
+                                            vpa, vz, collisions.reactions.charge_exchange_frequency,
+                                            vpa_spectral, vz_spectral, dt)
+        elseif advance.ion_cx_collisions
+            ion_charge_exchange_collisions_3V!(fvec_out.pdf, pdf.ion.buffer, fvec_in,
+                                            composition, vz, vr, vzeta, vpa, vperp, z, r,
+                                            collisions.reactions.charge_exchange_frequency, dt)
+        end
+        if advance.neutral_cx_collisions_1V
+            neutral_charge_exchange_collisions_1V!(fvec_out.pdf_neutral, fvec_in, moments,
+                                                composition, vpa, vz,
+                                                collisions.reactions.charge_exchange_frequency, vpa_spectral,
+                                                vz_spectral, dt)
+        elseif advance.neutral_cx_collisions
+            neutral_charge_exchange_collisions_3V!(fvec_out.pdf_neutral, pdf.neutral.buffer,
+                                                fvec_in, composition, vz, vr, vzeta, vpa,
+                                                vperp, z, r, collisions.reactions.charge_exchange_frequency,
+                                                dt)
+        end
+        # account for ionization collisions between ions and neutrals
+        if advance.ion_ionization_collisions_1V
+            ion_ionization_collisions_1V!(fvec_out.pdf, fvec_in, vz, vpa, vperp, z, r,
+                                        vz_spectral, moments, composition, collisions, dt)
+        elseif advance.ion_ionization_collisions
+            ion_ionization_collisions_3V!(fvec_out.pdf, pdf.ion.buffer, fvec_in, composition,
+                                        vz, vr, vzeta, vpa, vperp, z, r, collisions, dt)
+        end
+        if advance.neutral_ionization_collisions_1V
+            neutral_ionization_collisions_1V!(fvec_out.pdf_neutral, fvec_in, vz, vpa, vperp,
+                                            z, r, vz_spectral, moments, composition,
+                                            collisions, dt)
+        elseif advance.neutral_ionization_collisions
+            neutral_ionization_collisions_3V!(fvec_out.pdf_neutral, fvec_in, composition, vz,
+                                            vr, vzeta, vpa, vperp, z, r, collisions, dt)
+        end
+
+        # Add Krook collision operator for ions
+        if advance.krook_collisions_ii
+            krook_collisions!(fvec_out.pdf, fvec_in, moments, composition, collisions,
+                            vperp, vpa, dt)
+        end
+        # Add maxwellian diffusion collision operator for ions
+        if advance.mxwl_diff_collisions_ii
+            ion_vpa_maxwell_diffusion!(fvec_out.pdf, fvec_in, moments, vpa, vperp, vpa_spectral, 
+                                    dt, collisions.mxwl_diff.D_ii)
+        end
+        # Add maxwellian diffusion collision operator for neutrals
+        if advance.mxwl_diff_collisions_nn
+            neutral_vz_maxwell_diffusion!(fvec_out.pdf_neutral, fvec_in, moments, vzeta, vr, vz, vz_spectral, 
+                                    dt, collisions.mxwl_diff.D_nn)
+        end
+
+        if advance.external_source
+            total_external_ion_sources!(fvec_out.pdf, fvec_in, moments, external_source_settings.ion,
+                                vperp, vpa, dt, scratch_dummy)
+        end
+        if advance.neutral_external_source
+            total_external_neutral_sources!(fvec_out.pdf_neutral, fvec_in, moments,
+                                    external_source_settings.neutral, vzeta, vr, vz, dt)
+        end
+
+        # add numerical dissipation
+        if advance.ion_numerical_dissipation
+            vpa_dissipation!(fvec_out.pdf, fvec_in.pdf, vpa, vpa_spectral, dt,
+                            num_diss_params.ion.vpa_dissipation_coefficient)
+            vperp_dissipation!(fvec_out.pdf, fvec_in.pdf, vperp, vperp_spectral, dt,
+                            num_diss_params.ion.vperp_dissipation_coefficient)
+            z_dissipation!(fvec_out.pdf, fvec_in.pdf, z, z_spectral, dt,
+                        num_diss_params.ion.z_dissipation_coefficient, scratch_dummy)
+            r_dissipation!(fvec_out.pdf, fvec_in.pdf, r, r_spectral, dt,
+                        num_diss_params.ion.r_dissipation_coefficient, scratch_dummy)
+        end
+        if advance.neutral_numerical_dissipation
+            vz_dissipation_neutral!(fvec_out.pdf_neutral, fvec_in.pdf_neutral, vz,
+                                    vz_spectral, dt, num_diss_params.neutral.vz_dissipation_coefficient)
+            z_dissipation_neutral!(fvec_out.pdf_neutral, fvec_in.pdf_neutral, z, z_spectral,
+                                dt, num_diss_params.neutral.z_dissipation_coefficient, scratch_dummy)
+            r_dissipation_neutral!(fvec_out.pdf_neutral, fvec_in.pdf_neutral, r, r_spectral,
+                                dt, num_diss_params.neutral.r_dissipation_coefficient, scratch_dummy)
+        end
+        # advance with the Fokker-Planck self-collision operator
+        if advance.explicit_weakform_fp_collisions
+            update_entropy_diagnostic = (istage == 1)
+            if collisions.fkpl.self_collisions
+                # self collisions for each species
+                explicit_fokker_planck_collisions_weak_form!(fvec_out.pdf,fvec_in.pdf,moments.ion.dSdt,composition,
+                                    collisions,dt,fp_arrays,r,z,vperp,vpa,vperp_spectral,vpa_spectral,scratch_dummy,
+                                                        diagnose_entropy_production = update_entropy_diagnostic)
+            end
+            if collisions.fkpl.slowing_down_test
+            # include cross-collsions with fixed Maxwellian backgrounds
+                explicit_fp_collisions_weak_form_Maxwellian_cross_species!(fvec_out.pdf,fvec_in.pdf,moments.ion.dSdt,
+                                composition,collisions,dt,fp_arrays,r,z,vperp,vpa,vperp_spectral,vpa_spectral,
+                                                diagnose_entropy_production = update_entropy_diagnostic)
+            end
         end
     end
     
@@ -3994,7 +4001,7 @@ Do a backward-Euler timestep for all terms in the ion kinetic equation.
         # Ensure moments are consistent with f_new
         update_derived_moments!(new_scratch, moments, vpa, vperp, z, r, composition,
                                 r_spectral, geometry, gyroavs, scratch_dummy, z_advect,
-                                false)
+                                collisions, false)
         calculate_ion_moment_derivatives!(moments, new_scratch, scratch_dummy, z,
                                           z_spectral,
                                           num_diss_params.ion.moment_dissipation_coefficient)

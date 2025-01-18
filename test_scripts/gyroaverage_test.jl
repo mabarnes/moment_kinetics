@@ -235,13 +235,13 @@ function create_test_composition()
     # The ion flux reaching the wall that is recycled as neutrals is reduced by
     # `recycling_fraction` to account for ions absorbed by the wall.
     recycling_fraction = 1.0
-    gyrokinetic_ions = true
+    ion_physics = gyrokinetic_ions
     species_opts = OptionsDict("n_ion_species" => n_ion_species,
                                "n_neutral_species" => n_neutral_species, "T_e" => T_e,
                                "T_wall" => T_wall, "phi_wall" => phi_wall,
                                "mn_over_mi" => mn_over_mi, "me_over_mi" => me_over_mi,
                                "recycling_fraction" => recycling_fraction,
-                               "gyrokinetic_ions" => gyrokinetic_ions)
+                               "ion_physics" => ion_physics)
     return get_species_input(OptionsDict("composition" => species_opts))
 end
 

@@ -46,9 +46,9 @@ using ..external_sources: total_external_electron_sources!,
                           add_total_external_electron_source_to_v_only_Jacobian!,
                           add_total_external_electron_source_to_z_only_Jacobian!
 using ..file_io: get_electron_io_info, write_electron_state, finish_electron_io
-using ..krook_collisions: electron_krook_collisions!, get_collision_frequency_ee,
-                          get_collision_frequency_ei,
-                          add_electron_krook_collisions_to_Jacobian!,
+using ..collision_frequencies: get_collision_frequency_ee,
+                                 get_collision_frequency_ei
+using ..krook_collisions: electron_krook_collisions!, add_electron_krook_collisions_to_Jacobian!,
                           add_electron_krook_collisions_to_v_only_Jacobian!,
                           add_electron_krook_collisions_to_z_only_Jacobian!
 using ..timer_utils

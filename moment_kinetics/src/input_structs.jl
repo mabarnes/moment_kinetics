@@ -175,6 +175,15 @@ export braginskii_fluid
 export kinetic_electrons
 export kinetic_electrons_with_temperature_equation
 
+@enum ion_physics_type begin
+    gyrokinetic_ions
+    drift_kinetic_ions
+    coll_krook_ions
+end
+export ion_physics_type
+export gyrokinetic_ions
+export drift_kinetic_ions
+export coll_krook_ions
 """
 """
 Base.@kwdef struct spatial_initial_condition_input
@@ -274,6 +283,11 @@ Base.@kwdef struct species_composition
     #   density is fixed to be Nₑ*(eϕ/T_e) and N_e is calculated using a current
     #   condition at the wall
     electron_physics::electron_physics_type
+    # ion physics can be drift_kinetic_ions, gyrokinetic_ions and coll_krook_ions
+    # gyrokinetic_ions (originally gyrokinetic_ions = true) -> use gyroaveraged fields at fixed guiding 
+    # centre and moments of the pdf computed at fixed r
+    # drift_kinetic_ions (originally gyrokinetic_ions = false) -> use drift kinetic approximation
+    ion_physics::ion_physics_type
     # if false -- wall bc uses true Knudsen cosine to specify neutral pdf leaving the wall
     # if true -- use a simpler pdf that is easier to integrate
     use_test_neutral_wall_pdf::Bool
@@ -290,10 +304,6 @@ Base.@kwdef struct species_composition
     # The ion flux reaching the wall that is recycled as neutrals is reduced by
     # `recycling_fraction` to account for ions absorbed by the wall.
     recycling_fraction::mk_float
-    # gyrokinetic_ions is a flag determining if the ion species is gyrokinetic
-    # gyrokinetic_ions = true -> use gyroaveraged fields at fixed guiding centre and moments of the pdf computed at fixed r
-    # gyrokinetic_ions = false -> use drift kinetic approximation
-    gyrokinetic_ions::Bool
     # array of structs of parameters for each ion species
     ion::Vector{ion_species_parameters}
     # array of structs of parameters for each neutral species
@@ -362,6 +372,9 @@ Base.@kwdef struct ion_source_data
     PI_density_target_z_profile::String
     PI_density_target_z_width::mk_float
     PI_density_target_z_relative_minimum::mk_float
+    PI_temperature_controller_P::mk_float
+    PI_temperature_controller_I::mk_float
+    PI_temperature_target_amplitude::mk_float
     recycling_controller_fraction::mk_float
     # r_amplitude through the r coordinate (in 1D this can just be set to 1.0)
     r_amplitude::Vector{mk_float}
@@ -369,12 +382,16 @@ Base.@kwdef struct ion_source_data
     # constant profile, parabolic, etc..
     z_amplitude::Vector{mk_float}
     PI_density_target::Union{mk_float, Nothing, MPISharedArray{mk_float,2}}
+    PI_temperature_target::Union{mk_float, Nothing, MPISharedArray{mk_float,2}}
     PI_controller_amplitude::Union{Nothing, MPISharedArray{mk_float,1}}
     controller_source_profile::Union{Nothing, MPISharedArray{mk_float,2}, Array{mk_float, 2}}
     PI_density_target_ir::Union{mk_int, Nothing}
     PI_density_target_iz::Union{mk_int, Nothing}
     PI_density_target_rank::Union{mk_int, Nothing} #possibly this should have Int64 as well, 
     # in the event that the code is running with mk_int = Int32 but the rank is set to 0::Int64
+    PI_temperature_target_ir::Union{mk_int, Nothing}
+    PI_temperature_target_iz::Union{mk_int, Nothing}
+    PI_temperature_target_rank::Union{mk_int, Nothing}
 end
 
 Base.@kwdef struct electron_source_data

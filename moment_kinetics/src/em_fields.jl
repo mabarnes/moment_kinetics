@@ -158,7 +158,7 @@ function update_phi!(fields, fvec, vperp, z, r, composition, collisions, moments
     end
 
     # get gyroaveraged field arrays for distribution function advance
-    gkions = composition.gyrokinetic_ions
+    gkions = composition.ion_physics == gyrokinetic_ions
     if gkions
         gyroaverage_field!(fields.gphi,fields.phi,gyroavs,vperp,z,r,composition)
         gyroaverage_field!(fields.gEz,fields.Ez,gyroavs,vperp,z,r,composition)

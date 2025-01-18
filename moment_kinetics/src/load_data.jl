@@ -26,6 +26,8 @@ using ..file_io: check_io_implementation, get_group, get_subgroup_keys, get_vari
 using ..input_structs
 using ..interpolation: interpolate_to_grid_1d!
 using ..krook_collisions
+using ..collision_frequencies: get_collision_frequency_ii, get_collision_frequency_ee,
+                                get_collision_frequency_ei
 using ..looping
 using ..moment_kinetics_input: mk_input
 using ..neutral_vz_advection: update_speed_neutral_vz!
@@ -776,7 +778,8 @@ function reload_evolving_fields!(pdf, moments, fields, boundary_distributions,
                 if length(moments.ion.external_source_controller_integral) == 1
                     moments.ion.external_source_controller_integral .=
                         load_slice(dynamic, "external_source_controller_integral", time_index)
-                else
+            elseif size(moments.ion.external_source_controller_integral)[1] > 1 ||
+                    size(moments.ion.external_source_controller_integral)[2] > 1 
                     moments.ion.external_source_controller_integral .=
                         reload_moment("external_source_controller_integral", dynamic,
                                       time_index, r, z, r_range, z_range, restart_r,
@@ -4209,6 +4212,88 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
     if variable_name == "temperature"
         vth = get_variable(run_info, "thermal_speed"; kwargs...)
         variable = vth.^2
+    elseif variable_name == "dT_dz"
+        T = get_variable(run_info, "temperature"; kwargs...)
+        variable = similar(T)
+        if :iz ∈ keys(kwargs) && kwargs[:iz] !== nothing
+            error("Cannot take z-derivative when iz!==nothing")
+        end
+        if :ir ∈ keys(kwargs) && isa(kwargs[:ir], mk_int)
+            for it ∈ 1:size(variable, 3)
+                @views derivative!(variable[:,:,it], T[:,:,it], run_info.z, run_info.z_spectral)
+            end
+        else
+            for it ∈ 1:size(variable, 4), ir ∈ 1:run_info.r.n
+                @views derivative!(variable[:,:,ir,it], T[:,:,ir,it], run_info.z, run_info.z_spectral)
+            end
+        end
+    elseif variable_name == "dn_dz"
+        n = get_variable(run_info, "density"; kwargs...)
+        variable = similar(n)
+        if :iz ∈ keys(kwargs) && kwargs[:iz] !== nothing
+            error("Cannot take z-derivative when iz!==nothing")
+        end
+        if :ir ∈ keys(kwargs) && isa(kwargs[:ir], mk_int)
+            for it ∈ 1:size(variable, 3)
+                @views derivative!(variable[:,:,it], n[:,:,it], run_info.z, run_info.z_spectral)
+            end
+        else
+            for it ∈ 1:size(variable, 4), ir ∈ 1:run_info.r.n
+                @views derivative!(variable[:,:,ir,it], n[:,:,ir,it], run_info.z, run_info.z_spectral)
+            end
+        end
+    elseif variable_name == "dupar_dz"
+        upar = get_variable(run_info, "parallel_flow"; kwargs...)
+        variable = similar(upar)
+        if :iz ∈ keys(kwargs) && kwargs[:iz] !== nothing
+            error("Cannot take z-derivative when iz!==nothing")
+        end
+        if :ir ∈ keys(kwargs) && isa(kwargs[:ir], mk_int)
+            for it ∈ 1:size(variable, 3)
+                @views derivative!(variable[:,:,it], upar[:,:,it], run_info.z, run_info.z_spectral)
+            end
+        else
+            for it ∈ 1:size(variable, 4), ir ∈ 1:run_info.r.n
+                @views derivative!(variable[:,:,ir,it], upar[:,:,ir,it], run_info.z, run_info.z_spectral)
+            end
+        end
+    elseif variable_name == "mfp"
+        vth = get_variable(run_info, "thermal_speed"; kwargs...)
+        nu_ii = get_variable(run_info, "collision_frequency_ii"; kwargs...)
+        variable = vth ./ nu_ii
+    elseif variable_name == "L_T"
+        dT_dz = get_variable(run_info, "dT_dz"; kwargs...)
+        temp = get_variable(run_info, "temperature"; kwargs...)
+        # We define gradient lengthscale of T as LT^-1 = dln(T)/dz (ignore negative sign
+        # tokamak convention as we're only concerned with comparing magnitudes)
+        variable = abs.(temp .* dT_dz.^(-1))
+        # flat points in temperature have diverging LT, so ignore those with NaN
+        # using a hard coded 10.0 tolerance for now
+        variable[variable .> 10.0] .= NaN
+    elseif variable_name == "L_n"
+        dn_dz = get_variable(run_info, "dn_dz"; kwargs...)
+        n = get_variable(run_info, "density"; kwargs...)
+        # We define gradient lengthscale of n as Ln^-1 = dln(n)/dz (ignore negative sign
+        # tokamak convention as we're only concerned with comparing magnitudes)
+        variable = abs.(n .* dn_dz.^(-1))
+        # flat points in temperature have diverging Ln, so ignore those with NaN
+        # using a hard coded 10.0 tolerance for now
+        variable[variable .> 10.0] .= NaN
+    elseif variable_name == "L_upar"
+        dupar_dz = get_variable(run_info, "dupar_dz"; kwargs...)
+        upar = get_variable(run_info, "parallel_flow"; kwargs...)
+        # We define gradient lengthscale of upar as Lupar^-1 = dln(upar)/dz (ignore negative sign
+        # tokamak convention as we're only concerned with comparing magnitudes)
+        variable = abs.(upar .* dupar_dz.^(-1))
+        # flat points in temperature have diverging Lupar, so ignore those with NaN
+        # using a hard coded 10.0 tolerance for now
+        variable[variable .> 10.0] .= NaN
+    elseif variable_name == "coll_krook_heat_flux"
+        n = get_variable(run_info, "density"; kwargs...)
+        vth = get_variable(run_info, "thermal_speed"; kwargs...)
+        dT_dz = get_variable(run_info, "dT_dz"; kwargs...)
+        nu_ii = get_variable(run_info, "collision_frequency_ii"; kwargs...)
+        variable = @. -(1/2) * 3/2 * n * vth^2 * dT_dz / nu_ii
     elseif variable_name == "collision_frequency_ii"
         n = get_variable(run_info, "density"; kwargs...)
         vth = get_variable(run_info, "thermal_speed"; kwargs...)
@@ -4320,7 +4405,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
             n = get_variable(run_info, "density"; kwargs...)
 
             # Note factor of 0.5 in front of qpar because the definition of qpar (see e.g.
-            # `update_qpar_species!()`) is unconventional (i.e. missing a factor of 0.5).
+            # `update_ion_qpar_species!()`) is unconventional (i.e. missing a factor of 0.5).
             # Factor of 3/2 in front of 1/2*n*vth^2*upar because this in 1V - would be 5/2
             # for 2V/3V cases.
             variable = @. 0.5*qpar + 0.75*n*vth^2*upar + 0.5*n*upar^3
@@ -4335,7 +4420,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
             n = get_variable(run_info, "density_neutral"; kwargs...)
 
             # Note factor of 0.5 in front of qpar because the definition of qpar (see e.g.
-            # `update_qpar_species!()`) is unconventional (i.e. missing a factor of 0.5).
+            # `update_ion_qpar_species!()`) is unconventional (i.e. missing a factor of 0.5).
             # Factor of 3/2 in front of 1/2*n*vth^2*upar because this in 1V - would be 5/2
             # for 2V/3V cases.
             variable = @. 0.5*qpar + 0.75*n*vth^2*upar + 0.5*n*upar^3
@@ -4407,9 +4492,6 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         density = get_variable(run_info, "density")
         upar = get_variable(run_info, "parallel_flow")
         ppar = get_variable(run_info, "parallel_pressure")
-        density_neutral = get_variable(run_info, "density_neutral")
-        uz_neutral = get_variable(run_info, "uz_neutral")
-        pz_neutral = get_variable(run_info, "pz_neutral")
         vth = get_variable(run_info, "thermal_speed")
         dupar_dz = get_z_derivative(run_info, "parallel_flow")
         dppar_dz = get_z_derivative(run_info, "parallel_pressure")
@@ -4459,6 +4541,15 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         setup_loop_ranges!(0, 1; s=nspecies, sn=run_info.n_neutral_species, r=nr, z=nz,
                            vperp=nvperp, vpa=nvpa, vzeta=run_info.vzeta.n,
                            vr=run_info.vr.n, vz=run_info.vz.n)
+        
+        # Use neutrals for fvec calculation in moment_kinetic version only when 
+        # n_neutrals != 0
+        if run_info.n_neutral_species != 0
+            density_neutral = get_variable(run_info, "density_neutral")
+            uz_neutral = get_variable(run_info, "uz_neutral")
+            pz_neutral = get_variable(run_info, "pz_neutral")
+        end
+
         for it ∈ 1:nt
             begin_serial_region()
             # Only need some struct with a 'speed' variable
@@ -4477,12 +4568,18 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
                              evolve_density=run_info.evolve_density,
                              evolve_upar=run_info.evolve_upar,
                              evolve_ppar=run_info.evolve_ppar)
-            @views fvec = (density=density[:,:,:,it],
-                           upar=upar[:,:,:,it],
-                           ppar=ppar[:,:,:,it],
-                           density_neutral=density_neutral[:,:,:,it],
-                           uz_neutral=uz_neutral[:,:,:,it],
-                           pz_neutral=pz_neutral[:,:,:,it])
+            if run_info.n_neutral_species != 0
+                @views fvec = (density=density[:,:,:,it],
+                            upar=upar[:,:,:,it],
+                            ppar=ppar[:,:,:,it],
+                            density_neutral=density_neutral[:,:,:,it],
+                            uz_neutral=uz_neutral[:,:,:,it],
+                            pz_neutral=pz_neutral[:,:,:,it])
+            else
+                @views fvec = (density=density[:,:,:,it],
+                            upar=upar[:,:,:,it],
+                            ppar=ppar[:,:,:,it])
+            end
             @views update_speed_vpa!(advect, fields, fvec, moments, run_info.vpa,
                                      run_info.vperp, run_info.z, run_info.r,
                                      run_info.composition, run_info.collisions,

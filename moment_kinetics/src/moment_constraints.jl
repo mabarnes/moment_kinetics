@@ -10,7 +10,7 @@ using ..communication: _block_synchronize
 using ..looping
 using ..timer_utils
 using ..type_definitions: mk_float
-using ..velocity_moments: integrate_over_vspace, update_qpar!
+using ..velocity_moments: integrate_over_vspace, update_ion_qpar!
 
 export hard_force_moment_constraints!, hard_force_moment_constraints_neutral!,
        electron_implicit_constraint_forcing!,

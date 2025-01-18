@@ -11,7 +11,7 @@ export update_density!
 export update_upar!
 export update_ppar!
 export update_pperp!
-export update_qpar!
+export update_ion_qpar!
 export update_vth!
 export reset_moments_status!
 export update_neutral_density!
@@ -41,9 +41,11 @@ using ..derivatives: derivative_z!, second_derivative_z!
 using ..derivatives: derivative_r!, second_derivative_r!
 using ..looping
 using ..gyroaverages: gyro_operators, gyroaverage_pdf!
+using ..collision_frequencies: get_collision_frequency_ii
 using ..input_structs
 using ..moment_kinetics_structs: moments_ion_substruct, moments_electron_substruct,
                                  moments_neutral_substruct
+
 
 #global tmpsum1 = 0.0
 #global tmpsum2 = 0.0
@@ -71,6 +73,8 @@ function create_moments_ion(nz, nr, n_species, evolve_density, evolve_upar,
     parallel_pressure_updated .= false
     # allocate array used for the perpendicular pressure
     perpendicular_pressure = allocate_shared_float(nz, nr, n_species)
+    # allocate array used for the temperature
+    temperature = allocate_shared_float(nz, nr, n_species)
     # allocate array used for the parallel flow
     parallel_heat_flux = allocate_shared_float(nz, nr, n_species)
     # allocate array of Bools that indicate if the parallel flow is updated for each species
@@ -129,11 +133,13 @@ function create_moments_ion(nz, nr, n_species, evolve_density, evolve_upar,
         d2ppar_dz2 = allocate_shared_float(nz, nr, n_species)
         dqpar_dz = allocate_shared_float(nz, nr, n_species)
         dvth_dz = allocate_shared_float(nz, nr, n_species)
+        dT_dz = allocate_shared_float(nz, nr, n_species)
     else
         dppar_dz_upwind = nothing
         d2ppar_dz2 = nothing
         dqpar_dz = nothing
         dvth_dz = nothing
+        dT_dz = nothing
     end
 
     entropy_production = allocate_shared_float(nz, nr, n_species)
@@ -187,10 +193,10 @@ function create_moments_ion(nz, nr, n_species, evolve_density, evolve_upar,
     # return struct containing arrays needed to update moments
     return moments_ion_substruct(density, density_updated, parallel_flow,
         parallel_flow_updated, parallel_pressure, parallel_pressure_updated,perpendicular_pressure,
-        parallel_heat_flux, parallel_heat_flux_updated, thermal_speed, 
+        parallel_heat_flux, parallel_heat_flux_updated, thermal_speed, temperature, 
         chodura_integral_lower, chodura_integral_upper, v_norm_fac,
         ddens_dz, ddens_dz_upwind, d2dens_dz2, dupar_dz, dupar_dz_upwind, d2upar_dz2,
-        dppar_dz, dppar_dz_upwind, d2ppar_dz2, dqpar_dz, dvth_dz, entropy_production,
+        dppar_dz, dppar_dz_upwind, d2ppar_dz2, dqpar_dz, dvth_dz, dT_dz, entropy_production,
         external_source_amplitude, external_source_density_amplitude,
         external_source_momentum_amplitude, external_source_pressure_amplitude,
         external_source_controller_integral, constraints_A_coefficient,
@@ -427,8 +433,8 @@ this function is only used once after initialisation
 the function used to update moments at run time is update_derived_moments! in time_advance.jl
 """
 function update_moments!(moments, ff_in, gyroavs::gyro_operators, vpa, vperp, z, r, composition,
-        r_spectral, geometry, scratch_dummy, z_advect)
-    if composition.gyrokinetic_ions
+        r_spectral, geometry, scratch_dummy, z_advect, collisions)
+    if composition.ion_physics == gyrokinetic_ions
         ff = scratch_dummy.buffer_vpavperpzrs_1 # the buffer array for the ion pdf -> make sure not to reuse this array below
         # fill buffer with ring-averaged F (gyroaverage at fixed position)
         gyroaverage_pdf!(ff,ff_in,gyroavs,vpa,vperp,z,r,composition)
@@ -466,12 +472,12 @@ function update_moments!(moments, ff_in, gyroavs::gyro_operators, vpa, vperp, z,
         end
         @views update_pperp_species!(moments.ion.pperp[:,:,is], ff[:,:,:,:,is], vpa, vperp, z, r)
         if moments.ion.qpar_updated[is] == false
-            @views update_qpar_species!(moments.ion.qpar[:,:,is],
+            @views update_ion_qpar_species!(moments.ion.qpar[:,:,is],
                                         moments.ion.dens[:,:,is],
                                         moments.ion.upar[:,:,is],
-                                        moments.ion.vth[:,:,is], ff[:,:,:,:,is], vpa,
+                                        moments.ion.vth[:,:,is],  moments.ion.dT_dz, ff[:,:,:,:,is], vpa,
                                         vperp, z, r, moments.evolve_density,
-                                        moments.evolve_upar, moments.evolve_ppar)
+                                        moments.evolve_upar, moments.evolve_ppar, composition.ion_physics, collisions)
             moments.ion.qpar_updated[is] = true
         end
     end
@@ -736,17 +742,18 @@ end
 """
 NB: the incoming pdf is the normalized pdf
 """
-function update_qpar!(qpar, qpar_updated, density, upar, vth, pdf, vpa, vperp, z, r,
-                      composition, evolve_density, evolve_upar, evolve_ppar)
+function update_ion_qpar!(qpar, qpar_updated, density, upar, vth, dT_dz, pdf, vpa, vperp, z, r,
+                          composition, ion_physics, collisions, evolve_density, evolve_upar, evolve_ppar)
     @boundscheck composition.n_ion_species == size(qpar,3) || throw(BoundsError(qpar))
 
     begin_s_r_z_region()
 
     @loop_s is begin
         if qpar_updated[is] == false
-            @views update_qpar_species!(qpar[:,:,is], density[:,:,is], upar[:,:,is],
-                                        vth[:,:,is], pdf[:,:,:,:,is], vpa, vperp, z, r,
-                                        evolve_density, evolve_upar, evolve_ppar)
+            @views update_ion_qpar_species!(qpar[:,:,is], density[:,:,is], upar[:,:,is],
+                                        vth[:,:,is], dT_dz, pdf[:,:,:,:,is], vpa, vperp, z, r,
+                                        evolve_density, evolve_upar, evolve_ppar, 
+                                        ion_physics, collisions)
             qpar_updated[is] = true
         end
     end
@@ -755,8 +762,25 @@ end
 """
 calculate the updated parallel heat flux (qpar) for a given species
 """
-function update_qpar_species!(qpar, density, upar, vth, ff, vpa, vperp, z, r, evolve_density,
-                              evolve_upar, evolve_ppar)
+function update_ion_qpar_species!(qpar, density, upar, vth, dT_dz, ff, vpa, vperp, z, r, evolve_density,
+                                  evolve_upar, evolve_ppar, ion_physics, collisions)
+    if ion_physics ∈ (drift_kinetic_ions, gyrokinetic_ions)
+        calculate_ion_qpar_from_pdf!(qpar, density, upar, vth, ff, vpa, vperp, z, r, evolve_density,
+                                     evolve_upar, evolve_ppar)
+    elseif ion_physics == coll_krook_ions
+        calculate_ion_qpar_from_coll_krook!(qpar, density, upar, vth, dT_dz, z, r, vperp, collisions, evolve_density, 
+                                            evolve_upar, evolve_ppar)
+    else
+        throw(ArgumentError("ion model $ion_physics not implemented for qpar calculation"))
+    end
+    return nothing
+end
+
+"""
+calculate parallel heat flux if ion composition flag is kinetic ions
+"""
+function calculate_ion_qpar_from_pdf!(qpar, density, upar, vth, ff, vpa, vperp, z, r, evolve_density, 
+                                      evolve_upar, evolve_ppar)
     @boundscheck r.n == size(ff, 4) || throw(BoundsError(ff))
     @boundscheck z.n == size(ff, 3) || throw(BoundsError(ff))
     @boundscheck vperp.n == size(ff, 2) || throw(BoundsError(ff))
@@ -793,7 +817,82 @@ function update_qpar_species!(qpar, density, upar, vth, ff, vpa, vperp, z, r, ev
     end
     return nothing
 end
+"""
+calculate parallel heat flux if ion composition flag is coll_krook fluid ions
+"""
+function calculate_ion_qpar_from_coll_krook!(qpar, density, upar, vth, dT_dz, z, r, vperp, collisions, evolve_density, evolve_upar, evolve_ppar)
+    # Note that this is a braginskii heat flux for ions using the krook operator. The full Fokker-Planck operator
+    # Braginskii heat flux is different! This also assumes one ion species, and so no friction between ions.
+    @boundscheck r.n == size(qpar, 2) || throw(BoundsError(qpar))
+    @boundscheck z.n == size(qpar, 1) || throw(BoundsError(qpar))
 
+    # calculate coll_krook heat flux. Currently only works for one ion species! (hence the 1 in dT_dz[iz,ir,1])
+    if evolve_density && evolve_upar && evolve_ppar
+        begin_r_z_region()
+        @loop_r_z ir iz begin
+            nu_ii = get_collision_frequency_ii(collisions, density[iz,ir], vth[iz,ir])
+            qpar[iz,ir] = -(1/2) * 3/2 * density[iz,ir] * vth[iz,ir]^2 /nu_ii * dT_dz[iz,ir,1]
+        end
+    else
+        throw(ArgumentError("coll_krook heat flux simulation requires evolve_density, 
+              evolve_upar and evolve_ppar to be true, since it is a purely fluid simulation"))
+    end
+
+    # add boundary condition to the heat flux, since now there is no distribution function 
+    # (in this case shape function) whose cutoff boundary condition can hold the parallel heat
+    # flux in check. See Stangeby textbook, equations (2.92) and (2.93), and the paragraph between.
+
+    if z.bc == "periodic"
+        # There's no wall boundary condition here, do nothing (qpar can be what it wants)
+        return nothing
+    end
+
+    begin_r_region()
+
+    if z.irank == 0 && (z.irank == z.nrank - 1)
+        z_indices = (1, z.n)
+    elseif z.irank == 0
+        z_indices = (1,)
+    elseif z.irank == z.nrank - 1
+        z_indices = (z.n,)
+    else
+        return nothing
+    end
+    # Stangeby (25.2) suggests that, when including kinetic effects, a value
+    # for gamma_i of around 2.5 is sensible.
+    # However, maybe for the purposes of this coll_krook scan, at very high
+    # collisionality we expect the distribution function of the ions at the
+    # sheath entrance to be close to a drifting maxwellian, in which case
+    # the original Stangeby (2.92) would be more appropriate. However, this
+    # also depends on whether we're 1V or 2V - as in 1V gamma_i = 2.5, 
+    # in 2V gamma_i = 3.5.
+
+    if vperp.n == 1
+        gamma_i = 2.5
+    else
+        gamma_i = 3.5
+    end
+    @loop_r ir begin
+        for iz ∈ z_indices
+            this_ppar = vth[iz,ir]^2 * density[iz,ir]/2.0
+            this_upar = upar[iz,ir]
+            this_dens = density[iz,ir]
+            particle_flux = this_dens * this_upar
+            T_i = vth[iz,ir]^2
+
+            # Stangeby (2.92)
+            total_heat_flux = gamma_i * T_i * particle_flux
+
+            # E.g. Helander&Sigmar (2.14), but in 1D we have no viscosity and only 3/2
+            # rather than 5/2.
+            conductive_heat_flux = total_heat_flux - 1.5 * this_ppar * this_upar - 
+                                                     0.5 * this_dens * this_upar^3
+
+            qpar[iz,ir] = conductive_heat_flux
+        end
+    end
+    return nothing
+end
 """
 runtime diagnostic routine for computing the Chodura ratio
 in a single species plasma with Z = 1
@@ -959,6 +1058,14 @@ function calculate_ion_moment_derivatives!(moments, scratch, scratch_dummy, z, z
                              buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
         @views derivative_z!(moments.ion.dvth_dz, vth, buffer_r_1,
                              buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
+
+        # calculate the z derivative of the ion temperature
+        @loop_s_r_z is ir iz begin
+            # store the temperature in dummy_zrs
+            dummy_zrs[iz,ir,is] = 2*ppar[iz,ir,is]/density[iz,ir,is]
+        end
+        @views derivative_z!(moments.ion.dT_dz, dummy_zrs, buffer_r_1,
+                            buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
     end
 end
 
@@ -1627,9 +1734,9 @@ end
 update velocity moments that are calculable from the evolved ion pdf
 """
 function update_derived_moments!(new_scratch, moments, vpa, vperp, z, r, composition,
-    r_spectral, geometry, gyroavs, scratch_dummy, z_advect, diagnostic_moments)
+    r_spectral, geometry, gyroavs, scratch_dummy, z_advect, collisions, diagnostic_moments)
 
-    if composition.gyrokinetic_ions
+    if composition.ion_physics == gyrokinetic_ions
         ff = scratch_dummy.buffer_vpavperpzrs_1
         # fill buffer with ring-averaged F (gyroaverage at fixed position)
         gyroaverage_pdf!(ff,new_scratch.pdf,gyroavs,vpa,vperp,z,r,composition)
@@ -1675,9 +1782,9 @@ function update_derived_moments!(new_scratch, moments, vpa, vperp, z, r, composi
         rethrow(e)
     end
     # update the parallel heat flux
-    update_qpar!(moments.ion.qpar, moments.ion.qpar_updated, new_scratch.density,
-                 new_scratch.upar, moments.ion.vth, ff, vpa, vperp, z, r,
-                 composition, moments.evolve_density, moments.evolve_upar,
+    update_ion_qpar!(moments.ion.qpar, moments.ion.qpar_updated, new_scratch.density,
+                 new_scratch.upar, moments.ion.vth, moments.ion.dT_dz, ff, vpa, vperp, z, r,
+                 composition, composition.ion_physics, collisions, moments.evolve_density, moments.evolve_upar,
                  moments.evolve_ppar)
     # add further moments to be computed here
 

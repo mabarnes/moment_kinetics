@@ -6,7 +6,7 @@ test_input = OptionsDict(
     "output" => OptionsDict("run_name" => "gyroaverage"),
     "composition" => OptionsDict("n_ion_species" => 1,
                           "n_neutral_species" => 0,
-                          "gyrokinetic_ions" => true,
+                          "ion_physics" => "gyrokinetic_ions",
                           "T_e" => 1.0,
                           "T_wall" => 1.0),
     "evolve_moments" => OptionsDict("density" => false,
