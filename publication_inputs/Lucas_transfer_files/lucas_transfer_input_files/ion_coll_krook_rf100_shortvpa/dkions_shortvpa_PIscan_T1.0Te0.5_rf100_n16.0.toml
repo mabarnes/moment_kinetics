@@ -1,0 +1,78 @@
+[r]
+ngrid = 1
+nelement = 1
+
+[evolve_moments]
+parallel_pressure = true
+density = true
+moments_conservation = true
+parallel_flow = true
+
+[ion_species_1]
+initial_temperature = 1.0
+initial_density = 16.0
+
+[krook_collisions]
+use_krook = true
+frequency_option = "reference_parameters"
+
+[vpa]
+ngrid = 6
+discretization = "chebyshev_pseudospectral"
+nelement = 43
+L = 24.0
+element_spacing_option = "coarse_tails"
+bc = "zero"
+
+[z]
+ngrid = 5
+discretization = "chebyshev_pseudospectral"
+nelement = 32
+bc = "wall"
+
+[vpa_IC_ion_species_1]
+initialization_option = "gaussian"
+density_amplitude = 1.0
+temperature_amplitude = 0.0
+density_phase = 0.0
+upar_amplitude = 0.0
+temperature_phase = 0.0
+upar_phase = 0.0
+
+[composition]
+T_e = 0.5
+electron_physics = "boltzmann_electron_response"
+n_ion_species = 1
+n_neutral_species = 0
+
+[ion_source_2]
+source_T = 0.1
+active = true
+source_strength = 16.0
+z_profile = "wall_exp_decay"
+z_width = 0.15
+
+[z_IC_ion_species_1]
+initialization_option = "gaussian"
+density_amplitude = 0.001
+temperature_amplitude = 0.0
+density_phase = 0.0
+upar_amplitude = 1.0
+temperature_phase = 0.0
+upar_phase = 0.0
+
+[ion_source_1]
+z_width = 0.275816
+source_T = 1.0
+active = true
+source_strength = 16.0
+z_profile = "super_gaussian_4"
+source_type = "energy"
+
+[timestepping]
+nstep = 50000
+steady_state_residual = true
+dt = 0.0002
+nwrite = 1000
+type = "SSPRK4"
+nwrite_dfns = 1000

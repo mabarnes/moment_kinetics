@@ -33,7 +33,7 @@ using ..nonlinear_solvers: nl_solver_info
 using ..velocity_moments: integrate_over_vspace, integrate_over_neutral_vspace
 using ..velocity_moments: integrate_over_positive_vz, integrate_over_negative_vz
 using ..velocity_moments: create_moments_ion, create_moments_electron, create_moments_neutral
-using ..velocity_moments: update_qpar!
+using ..velocity_moments: update_ion_qpar!
 using ..velocity_moments: update_neutral_density!, update_neutral_pz!, update_neutral_pr!, update_neutral_pzeta!
 using ..velocity_moments: update_neutral_uz!, update_neutral_ur!, update_neutral_uzeta!, update_neutral_qz!
 using ..velocity_moments: update_ppar!, update_upar!, update_density!, update_pperp!, update_vth!, reset_moments_status!
@@ -142,7 +142,7 @@ function init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geo
                                              r, composition.n_ion_species,
                                              composition.n_neutral_species,
                                              geometry.input, composition, species,
-                                             manufactured_solns_input)
+                                             manufactured_solns_input, collisions)
     else
         n_ion_species = composition.n_ion_species
         n_neutral_species = composition.n_neutral_species
@@ -201,10 +201,11 @@ function init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geo
                         vpa, vzeta, vr, vz, vpa_spectral, vz_spectral, species)
 
         begin_s_r_z_region()
-        # calculate the initial parallel heat flux from the initial un-normalised pdf
-        update_qpar!(moments.ion.qpar, moments.ion.qpar_updated,
-                     moments.ion.dens, moments.ion.upar, moments.ion.vth,
-                     pdf.ion.norm, vpa, vperp, z, r, composition,
+        # calculate the initial parallel heat flux from the initial un-normalised pdf. Even if coll_krook fluid is being
+        # advanced, initialised ion_qpar uses the pdf 
+        update_ion_qpar!(moments.ion.qpar, moments.ion.qpar_updated,
+                     moments.ion.dens, moments.ion.upar, moments.ion.vth, moments.ion.dT_dz,
+                     pdf.ion.norm, vpa, vperp, z, r, composition, drift_kinetic_ions, collisions,
                      moments.evolve_density, moments.evolve_upar, moments.evolve_ppar)
 
         begin_serial_region()
@@ -339,7 +340,7 @@ function initialize_electrons!(pdf, moments, fields, geometry, composition, r, z
         end
         init_electron_pdf_over_density_and_boundary_phi!(
             pdf.electron.norm, fields.phi, moments.electron.dens, moments.electron.upar,
-            moments.electron.vth, z, vpa, vperp, vperp_spectral, vpa_spectral,
+            moments.electron.vth, r, z, vpa, vperp, vperp_spectral, vpa_spectral,
             [(speed=speed,)], moments, num_diss_params,
             composition.me_over_mi, scratch_dummy)
     end
@@ -668,7 +669,7 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
         ##max_electron_pdf_iterations = 10000
         #max_electron_sim_time = nothing
         max_electron_pdf_iterations = nothing
-        max_electron_sim_time = 2.0
+        max_electron_sim_time = max(2.0, t_params.electron.max_pseudotime)
         if t_params.electron.debug_io !== nothing
             io_electron = setup_electron_io(t_params.electron.debug_io[1], vpa, vperp, z,
                                             r, composition, collisions,
@@ -706,6 +707,8 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
             if !skip_electron_solve
                 # Can't let this counter stay set to 0
                 t_params.electron.dfns_output_counter[] = max(t_params.electron.dfns_output_counter[], 1)
+                implicit_electron_pseudotimestep = (nl_solver_params.electron_advance !== nothing)
+                electron_solution_method = implicit_electron_pseudotimestep ? "backward_euler" : "artificial_time_derivative"
                 success =
                     @views update_electron_pdf!(scratch_electron, pdf.electron.norm,
                                                 moments, fields.phi, r, z, vperp, vpa,
@@ -720,7 +723,8 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
                                                 io_electron=io_initial_electron,
                                                 initial_time=code_time,
                                                 residual_tolerance=t_input["initialization_residual_value"],
-                                                evolve_ppar=true)
+                                                evolve_ppar=true,
+                                                solution_method=electron_solution_method)
                 if success != ""
                     error("!!!max number of iterations for electron pdf update exceeded!!!\n"
                           * "Stopping at $(Dates.format(now(), dateformat"H:MM:SS"))")
@@ -754,14 +758,19 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
                                    nl_solver_params.electron_advance.n_solves,
                                    nl_solver_params.electron_advance.nonlinear_iterations,
                                    nl_solver_params.electron_advance.linear_iterations,
+                                   nl_solver_params.electron_advance.precon_iterations,
                                    nl_solver_params.electron_advance.global_n_solves,
                                    nl_solver_params.electron_advance.global_nonlinear_iterations,
                                    nl_solver_params.electron_advance.global_linear_iterations,
+                                   nl_solver_params.electron_advance.global_precon_iterations,
                                    nl_solver_params.electron_advance.solves_since_precon_update,
                                    nl_solver_params.electron_advance.precon_dt,
+                                   nl_solver_params.electron_advance.precon_lowerz_vcut_inds,
+                                   nl_solver_params.electron_advance.precon_upperz_vcut_inds,
                                    nl_solver_params.electron_advance.serial_solve,
                                    nl_solver_params.electron_advance.max_nonlinear_iterations_this_step,
                                    nl_solver_params.electron_advance.max_linear_iterations_this_step,
+                                   nl_solver_params.electron_advance.total_its_soft_limit,
                                    nl_solver_params.electron_advance.preconditioner_type,
                                    nl_solver_params.electron_advance.preconditioner_update_interval,
                                    nl_solver_params.electron_advance.preconditioners,
@@ -790,7 +799,8 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
                                          max_electron_pdf_iterations,
                                          max_electron_sim_time;
                                          io_electron=io_initial_electron,
-                                         evolve_ppar=true, ion_dt=t_params.dt[])
+                                         evolve_ppar=true, ion_dt=t_params.dt[],
+                                         solution_method=electron_solution_method)
             end
             if success != ""
                 error("!!!max number of iterations for electron pdf update exceeded!!!\n"
@@ -802,8 +812,8 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
             t_params.electron.moments_output_counter[] += 1
             write_electron_state(scratch_electron, moments, t_params.electron,
                                  io_initial_electron,
-                                 t_params.electron.moments_output_counter[], r, z, vperp,
-                                 vpa; pdf_electron_converged=true)
+                                 t_params.electron.moments_output_counter[], -1.0, 0.0, r,
+                                 z, vperp, vpa; pdf_electron_converged=true)
             finish_electron_io(io_initial_electron)
         end
 
@@ -811,6 +821,14 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
         @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
             pdf.electron.pdf_before_ion_timestep[ivpa,ivperp,iz,ir] =
                 pdf.electron.norm[ivpa,ivperp,iz,ir]
+        end
+        if length(scratch[1].pdf_electron) > 0
+            @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
+                for i ∈ 1:length(scratch)
+                    scratch[i].pdf_electron[ivpa,ivperp,iz,ir] =
+                        pdf.electron.norm[ivpa,ivperp,iz,ir]
+                end
+            end
         end
 
         # No need to do electron I/O (apart from possibly debug I/O) any more, so if
@@ -1562,8 +1580,8 @@ care is taken to ensure that the parallel boundary condition is satisfied;
 NB: as the electron pdf is obtained via a time-independent equation,
 this 'initital' value for the electron will just be the first guess in an iterative solution
 """
-function init_electron_pdf_over_density_and_boundary_phi!(pdf, phi, density, upar, vth, z,
-        vpa, vperp, vperp_spectral, vpa_spectral, vpa_advect, moments, num_diss_params,
+function init_electron_pdf_over_density_and_boundary_phi!(pdf, phi, density, upar, vth, r,
+        z, vpa, vperp, vperp_spectral, vpa_spectral, vpa_advect, moments, num_diss_params,
         me_over_mi, scratch_dummy; restart_from_boltzmann=false)
 
     if z.bc == "wall"
@@ -1579,11 +1597,13 @@ function init_electron_pdf_over_density_and_boundary_phi!(pdf, phi, density, upa
         end
         # Apply the sheath boundary condition to get cut-off boundary distribution
         # functions and boundary values of phi
-        enforce_boundary_condition_on_electron_pdf!(pdf, phi, vth, upar, z, vperp, vpa,
-                                                    vperp_spectral, vpa_spectral,
-                                                    vpa_advect, moments,
-                                                    num_diss_params.electron.vpa_dissipation_coefficient > 0.0,
-                                                    me_over_mi)
+        for ir ∈ 1:r.n
+            @views enforce_boundary_condition_on_electron_pdf!(
+                       pdf[:,:,:,ir], phi[:,ir], vth[:,ir], upar[:,ir], z, vperp, vpa,
+                       vperp_spectral, vpa_spectral, vpa_advect, moments,
+                       num_diss_params.electron.vpa_dissipation_coefficient > 0.0,
+                       me_over_mi, ir)
+        end
 
         # Distribute the z-boundary pdf values to every process
         begin_serial_region()
@@ -1652,7 +1672,8 @@ function init_electron_pdf_over_density_and_boundary_phi!(pdf, phi, density, upa
     return nothing
 end
 
-function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, vperp, z, r, n_ion_species, n_neutral_species, geometry,composition)
+function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, vperp, z, r, n_ion_species, n_neutral_species, 
+                                              geometry, composition, species, manufactured_solns_input, collisions)
     manufactured_solns_list = manufactured_solutions(r.L,z.L,r.bc,z.bc,geometry,composition,r.n)
     dfni_func = manufactured_solns_list.dfni_func
     densi_func = manufactured_solns_list.densi_func
@@ -1679,10 +1700,10 @@ function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, 
                  vpa, vperp, z, r, composition, moments.evolve_density,
                  moments.evolve_upar)
     update_pperp!(moments.ion.pperp, pdf.ion.norm, vpa, vperp, z, r, composition)
-    update_qpar!(moments.ion.qpar, moments.ion.qpar_updated,
+    update_ion_qpar!(moments.ion.qpar, moments.ion.qpar_updated,
                  moments.ion.dens, moments.ion.upar,
-                 moments.ion.vth, pdf.ion.norm, vpa, vperp, z, r,
-                 composition, moments.evolve_density, moments.evolve_upar,
+                 moments.ion.vth, moments.ion.dT_dz, pdf.ion.norm, vpa, vperp, z, r,
+                 composition, drift_kinetic_ions, collisions, moments.evolve_density, moments.evolve_upar,
                  moments.evolve_ppar)
     update_vth!(moments.ion.vth, moments.ion.ppar, moments.ion.pperp, moments.ion.dens, vperp, z, r, composition)
 

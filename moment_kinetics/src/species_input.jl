@@ -11,6 +11,7 @@ using ..input_structs: set_defaults_and_check_section!
 using ..input_structs: species_composition, ion_species_parameters, neutral_species_parameters
 using ..input_structs: spatial_initial_condition_input, velocity_initial_condition_input
 using ..input_structs: boltzmann_electron_response, boltzmann_electron_response_with_simple_sheath
+using ..input_structs: drift_kinetic_ions
 using ..reference_parameters: setup_reference_parameters
 
 using OrderedCollections: OrderedDict
@@ -31,6 +32,15 @@ function get_species_input(toml_input)
         #   electron density is fixed to be N_e*(eϕ/T_e) and N_e is calculated w.r.t a
         #   reference value using J_||e + J_||i = 0 at z = 0
         electron_physics = boltzmann_electron_response,
+        # If ion_physics=drift_kinetic_ions, the ion distribution function is advanced in 
+        # time in the drift kinetic approximation like usual. 
+        # If ion_physics=gyrokinetic_ions, the ion distribution function is
+        # advanced in time using gyroaveraged fields at fixed guiding centre and moments of the
+        # pdf computed at fixed r
+        # If ion_physics=coll_krook_ions, there is no need for a shape function to evolve, and the code 
+        # only evolves ions in a fluid sense (i.e. all evolve_moments are set to true), with a 
+        # coll_krook closure for the ion heat flux.
+        ion_physics = drift_kinetic_ions,
         # initial Tₑ = 1
         T_e = 1.0,
         # wall temperature T_wall = Tw/Te
@@ -45,10 +55,7 @@ function get_species_input(toml_input)
         use_test_neutral_wall_pdf = false,
         # The ion flux reaching the wall that is recycled as neutrals is reduced by
         # `recycling_fraction` to account for ions absorbed by the wall.
-        recycling_fraction = 1.0,
-        # gyrokinetic_ions = True -> use gyroaveraged fields at fixed guiding centre and moments of the pdf computed at fixed r
-        # gyrokinetic_ions = False -> use drift kinetic approximation
-        gyrokinetic_ions = false)
+        recycling_fraction = 1.0)
 
     nspec_ion = composition_section["n_ion_species"]
     nspec_neutral = composition_section["n_neutral_species"]

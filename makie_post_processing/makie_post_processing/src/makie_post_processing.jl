@@ -261,6 +261,12 @@ function makie_post_process(run_dir::Union{String,Tuple},
             mkpath(comparison_plot_dir)
             plot_prefix = joinpath(comparison_plot_dir, "compare_")
         end
+    else
+        if length(run_info) != 1
+            comparison_plot_dir = "comparison_plots_$plot_prefix"
+            mkpath(comparison_plot_dir)
+            plot_prefix = joinpath(comparison_plot_dir, "compare_")
+        end
     end
 
     timestep_diagnostics(run_info, run_info_dfns; plot_prefix=plot_prefix)
@@ -348,6 +354,8 @@ function makie_post_process(run_dir::Union{String,Tuple},
     Chodura_condition_plots(run_info_dfns, plot_prefix=plot_prefix)
 
     sound_wave_plots(run_info; plot_prefix=plot_prefix)
+
+    collisionality_plots(run_info, plot_prefix)
 
     if all(ri === nothing for ri ∈ run_info_dfns)
         nvperp = nothing
@@ -723,6 +731,7 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
         advection_velocity=false,
         colormap=this_input_dict["colormap"],
         animation_ext=this_input_dict["animation_ext"],
+        n_points_near_wall=4,
        )
 
     set_defaults_and_check_section!(
@@ -732,6 +741,7 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
         advection_velocity=false,
         colormap=this_input_dict["colormap"],
         animation_ext=this_input_dict["animation_ext"],
+        n_points_near_wall=4,
        )
 
     set_defaults_and_check_section!(
@@ -741,6 +751,7 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
         advection_velocity=false,
         colormap=this_input_dict["colormap"],
         animation_ext=this_input_dict["animation_ext"],
+        n_points_near_wall=4,
        )
 
     set_defaults_and_check_section!(
@@ -818,7 +829,29 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
         plot_steady_state_residual=false,
         animate_steady_state_residual=false,
        )
-
+    
+    set_defaults_and_check_section!(
+        this_input_dict, "collisionality_plots";
+        plot=true,
+        plot_dT_dz_vs_z=false,
+        animate_dT_dz_vs_z=false,
+        plot_mfp_vs_z=false,
+        animate_mfp_vs_z=false,
+        plot_nu_ii_vth_mfp_vs_z = false,
+        plot_LT_mfp_vs_z = false,
+        animate_LT_mfp_vs_z = false,
+        plot_LT_dT_dz_temp_vs_z = false,
+        plot_Ln_mfp_vs_z = false,
+        animate_Ln_mfp_vs_z = false,
+        plot_Lupar_mfp_vs_z = false,
+        animate_Lupar_mfp_vs_z = false,
+        plot_Lupar_Ln_LT_mfp_vs_z = false,
+        animate_Lupar_Ln_LT_mfp_vs_z = false,
+        plot_overlay_coll_krook_heat_flux = false,
+        animate_overlay_coll_krook_heat_flux = false,
+        animation_ext = "gif"
+       )
+       
     set_defaults_and_check_section!(
         this_input_dict, "timing_data";
         plot=false,
@@ -847,11 +880,11 @@ end
 
 """
     get_run_info(run_dir...; itime_min=1, itime_max=0,
-                 itime_skip=1, dfns=false, initial_electron=false, do_setup=true,
-                 setup_input_file=nothing)
+                 itime_skip=1, dfns=false, initial_electron=false, electron_debug=false,
+                 do_setup=true, setup_input_file=nothing)
     get_run_info((run_dir, restart_index)...; itime_min=1, itime_max=0,
-                 itime_skip=1, dfns=false, initial_electron=false, do_setup=true,
-                 setup_input_file=nothing)
+                 itime_skip=1, dfns=false, initial_electron=false, electron_debug=false,
+                 do_setup=true, setup_input_file=nothing)
 
 Get file handles and other info for a single run
 
@@ -874,7 +907,7 @@ mix Strings and Tuples in a call).
 
 By default load data from moments files, pass `dfns=true` to load from distribution
 functions files, or `initial_electron=true` and `dfns=true` to load from initial electron
-state files.
+state files, or `electron_debug=true` and `dfns=true` to load from electron debug files.
 
 The `itime_min`, `itime_max` and `itime_skip` options can be used to select only a slice
 of time points when loading data. In `makie_post_process` these options are read from the
@@ -1528,7 +1561,11 @@ for dim ∈ one_dimension_combinations
                      end
 
                      if n_runs > 1
-                         put_legend_above(fig, ax)
+                         put_legend_below(fig, ax)
+                         # Ensure the first row width is 3/4 of the column width so that
+                         # the plot does not get squashed by the legend
+                         rowsize!(fig.layout, 1, Aspect(1, 3/4))
+                         resize_to_layout!(fig)
                      end
 
                      if outfile !== nothing
@@ -1945,11 +1982,11 @@ for dim ∈ one_dimension_combinations_no_t
                              all(isapprox.(ri.time, run_info[1].time))
                              for ri ∈ run_info[2:end])
                          # All times are the same
-                         time = select_slice(run_info[1].time, :t; input=input, it=it)
+                         time = select_time_slice(run_info[1].time, it)
                          title = lift(i->string("t = ", time[i]), frame_index)
                      else
                          title = lift(i->join((string("t", irun, " = ",
-                                                      select_slice(ri.time, :t; input=input, it=it)[i])
+                                                      select_time_slice(ri.time, it)[i])
                                                for (irun,ri) ∈ enumerate(run_info)), "; "),
                                       frame_index)
                      end
@@ -1975,7 +2012,11 @@ for dim ∈ one_dimension_combinations_no_t
                      end
 
                      if n_runs > 1
-                         put_legend_above(fig, ax)
+                         put_legend_below(fig, ax)
+                         # Ensure the first row width is 3/4 of the column width so that
+                         # the plot does not get squashed by the legend
+                         rowsize!(fig.layout, 1, Aspect(1, 3/4))
+                         resize_to_layout!(fig)
                      end
 
                      if it === nothing
@@ -2038,7 +2079,7 @@ for dim ∈ one_dimension_combinations_no_t
                      ind = frame_index
                  end
                  if ax === nothing
-                     time = select_slice(run_info.time, :t; input=input, it=it)
+                     time = select_time_slice(run_info.time, it)
                      title = lift(i->string("t = ", time[i]), ind)
                      fig, ax = get_1d_ax(; xlabel="$($dim_str)",
                                          ylabel=get_variable_symbol(var_name),
@@ -2188,13 +2229,13 @@ for (dim1, dim2) ∈ two_dimension_combinations_no_t
                      if length(run_info) > 1
                          title = get_variable_symbol(var_name)
                          subtitles = (lift(i->string(ri.run_name, "\nt = ",
-                                                     select_slice(ri.time, :t; input=input, it=it)[i]),
+                                                     select_time_slice(ri.time, it)[i]),
                                            frame_index)
                                       for ri ∈ run_info)
                      else
-                         time = select_slice(run_info[1].time, :t; input=input, it=it)
+                         time = select_time_slice(run_info[1].time, it)
                          title = lift(i->string(get_variable_symbol(var_name), "\nt = ",
-                                                run_info[1].time[i]),
+                                                time[i]),
                                       frame_index)
                          subtitles = nothing
                      end
@@ -2276,9 +2317,9 @@ for (dim1, dim2) ∈ two_dimension_combinations_no_t
                      colormap = input.colormap
                  end
                  if title === nothing && ax == nothing
-                     time = select_slice(run_info.time, :t; input=input, it=it)
+                     time = select_time_slice(run_info.time, it)
                      title = lift(i->string(get_variable_symbol(var_name), "\nt = ",
-                                            run_info.time[i]),
+                                            time[i]),
                                   ind)
                  end
 
@@ -3515,6 +3556,20 @@ function select_slice(variable::AbstractArray{T,7}, dims::Symbol...; input=nothi
 end
 
 """
+    select_time_slice(time::AbstractVector, range)
+
+Variant of `select_slice()` to be used on 'time' arrays, which are always 1D.
+"""
+function select_time_slice(time::AbstractVector, range)
+    if range === nothing
+        return time
+    else
+        return @view time[range]
+    end
+end
+
+
+"""
 get_dimension_slice_indices(keep_dims...; input, it=nothing, is=nothing,
                             ir=nothing, iz=nothing, ivperp=nothing, ivpa=nothing,
                             ivzeta=nothing, ivr=nothing, ivz=nothing)
@@ -3889,7 +3944,11 @@ function plot_f_unnorm_vs_vpa(run_info::Tuple; f_over_vpa2=false, electron=false
         end
 
         if n_runs > 1
-            put_legend_above(fig, ax)
+            put_legend_below(fig, ax)
+            # Ensure the first row width is 3/4 of the column width so that
+            # the plot does not get squashed by the legend
+            rowsize!(fig.layout, 1, Aspect(1, 3/4))
+            resize_to_layout!(fig)
         end
 
         if outfile !== nothing
@@ -4251,7 +4310,11 @@ function animate_f_unnorm_vs_vpa(run_info::Tuple; f_over_vpa2=false, electron=fa
         end
 
         if n_runs > 1
-            put_legend_above(fig, ax)
+            put_legend_below(fig, ax)
+            # Ensure the first row width is 3/4 of the column width so that
+            # the plot does not get squashed by the legend
+            rowsize!(fig.layout, 1, Aspect(1, 3/4))
+            resize_to_layout!(fig)
         end
 
         if outfile !== nothing
@@ -4666,8 +4729,8 @@ function plot_charged_pdf_2D_at_wall(run_info; plot_prefix, electron=false)
 
         nt = minimum(ri.nt for ri ∈ run_info)
 
-        for (z, z_range, label) ∈ ((z_lower, z_lower:z_lower+4, "wall-"),
-                                   (z_upper, z_upper-4:z_upper, "wall+"))
+        for (z, z_range, label) ∈ ((z_lower, z_lower:z_lower+input.n_points_near_wall, "wall-"),
+                                   (z_upper, z_upper-input.n_points_near_wall:z_upper, "wall+"))
             f_input = copy(input_dict_dfns["f"])
             f_input["iz0"] = z
 
@@ -4684,7 +4747,11 @@ function plot_charged_pdf_2D_at_wall(run_info; plot_prefix, electron=false)
                                     label="$(run_label)iz=$iz", ax=ax)
                     end
                 end
-                put_legend_right(fig, ax)
+                put_legend_below(fig, ax)
+                # Ensure the first row width is 3/4 of the column width so that
+                # the plot does not get squashed by the legend
+                rowsize!(fig.layout, 1, Aspect(1, 3/4))
+                resize_to_layout!(fig)
                 outfile=plot_prefix * "pdf$(electron_suffix)_$(label)_vs_vpa.pdf"
                 save(outfile, fig)
 
@@ -4701,7 +4768,11 @@ function plot_charged_pdf_2D_at_wall(run_info; plot_prefix, electron=false)
                                     transform=(x)->positive_or_nan(x; epsilon=1.e-20))
                     end
                 end
-                put_legend_right(fig, ax)
+                put_legend_below(fig, ax)
+                # Ensure the first row width is 3/4 of the column width so that
+                # the plot does not get squashed by the legend
+                rowsize!(fig.layout, 1, Aspect(1, 3/4))
+                resize_to_layout!(fig)
                 outfile=plot_prefix * "logpdf$(electron_suffix)_$(label)_vs_vpa.pdf"
                 save(outfile, fig)
 
@@ -4718,7 +4789,11 @@ function plot_charged_pdf_2D_at_wall(run_info; plot_prefix, electron=false)
                                                  label="$(run_label)iz=$iz", ax=ax)
                         end
                     end
-                    put_legend_right(fig, ax)
+                    put_legend_below(fig, ax)
+                    # Ensure the first row width is 3/4 of the column width so that
+                    # the plot does not get squashed by the legend
+                    rowsize!(fig.layout, 1, Aspect(1, 3/4))
+                    resize_to_layout!(fig)
                     outfile=plot_prefix * "pdf_unnorm_$(label)_vs_vpa.pdf"
                     save(outfile, fig)
 
@@ -4735,7 +4810,11 @@ function plot_charged_pdf_2D_at_wall(run_info; plot_prefix, electron=false)
                                                  transform=(x)->positive_or_nan(x; epsilon=1.e-20))
                         end
                     end
-                    put_legend_right(fig, ax)
+                    put_legend_below(fig, ax)
+                    # Ensure the first row width is 3/4 of the column width so that
+                    # the plot does not get squashed by the legend
+                    rowsize!(fig.layout, 1, Aspect(1, 3/4))
+                    resize_to_layout!(fig)
                     outfile=plot_prefix * "logpdf_unnorm_$(label)_vs_vpa.pdf"
                     save(outfile, fig)
                 end
@@ -4776,7 +4855,11 @@ function plot_charged_pdf_2D_at_wall(run_info; plot_prefix, electron=false)
                                        frame_index=frame_index)
                     end
                 end
-                put_legend_right(fig, ax)
+                put_legend_below(fig, ax)
+                # Ensure the first row width is 3/4 of the column width so that
+                # the plot does not get squashed by the legend
+                rowsize!(fig.layout, 1, Aspect(1, 3/4))
+                resize_to_layout!(fig)
                 outfile=plot_prefix * "pdf$(electron_suffix)_$(label)_vs_vpa." * input.animation_ext
                 save_animation(fig, frame_index, nt, outfile)
 
@@ -4795,7 +4878,11 @@ function plot_charged_pdf_2D_at_wall(run_info; plot_prefix, electron=false)
                                        transform=(x)->positive_or_nan(x; epsilon=1.e-20))
                     end
                 end
-                put_legend_right(fig, ax)
+                put_legend_below(fig, ax)
+                # Ensure the first row width is 3/4 of the column width so that
+                # the plot does not get squashed by the legend
+                rowsize!(fig.layout, 1, Aspect(1, 3/4))
+                resize_to_layout!(fig)
                 outfile=plot_prefix * "logpdf$(electron_suffix)_$(label)_vs_vpa." * input.animation_ext
                 save_animation(fig, frame_index, nt, outfile)
 
@@ -4814,7 +4901,11 @@ function plot_charged_pdf_2D_at_wall(run_info; plot_prefix, electron=false)
                                                     frame_index=frame_index)
                         end
                     end
-                    put_legend_right(fig, ax)
+                    put_legend_below(fig, ax)
+                    # Ensure the first row width is 3/4 of the column width so that
+                    # the plot does not get squashed by the legend
+                    rowsize!(fig.layout, 1, Aspect(1, 3/4))
+                    resize_to_layout!(fig)
                     outfile=plot_prefix * "pdf_unnorm_$(label)_vs_vpa." * input.animation_ext
                     save_animation(fig, frame_index, nt, outfile)
 
@@ -4833,7 +4924,11 @@ function plot_charged_pdf_2D_at_wall(run_info; plot_prefix, electron=false)
                                                     transform=(x)->positive_or_nan(x; epsilon=1.e-20))
                         end
                     end
-                    put_legend_right(fig, ax)
+                    put_legend_below(fig, ax)
+                    # Ensure the first row width is 3/4 of the column width so that
+                    # the plot does not get squashed by the legend
+                    rowsize!(fig.layout, 1, Aspect(1, 3/4))
+                    resize_to_layout!(fig)
                     outfile=plot_prefix * "logpdf_unnorm_$(label)_vs_vpa." * input.animation_ext
                     save_animation(fig, frame_index, nt, outfile)
                 end
@@ -4921,8 +5016,8 @@ function plot_neutral_pdf_2D_at_wall(run_info; plot_prefix)
                              for ri ∈ run_info)
         nt = minimum(ri.nt for ri ∈ run_info)
 
-        for (z, z_range, label) ∈ ((z_lower, z_lower:z_lower+4, "wall-"),
-                                   (z_upper, z_upper-4:z_upper, "wall+"))
+        for (z, z_range, label) ∈ ((z_lower, z_lower:z_lower+input.n_points_near_wall, "wall-"),
+                                   (z_upper, z_upper-input.n_points_near_wall:z_upper, "wall+"))
             f_neutral_input = copy(input_dict_dfns["f_neutral"])
             f_neutral_input["iz0"] = z
 
@@ -4939,7 +5034,11 @@ function plot_neutral_pdf_2D_at_wall(run_info; plot_prefix)
                                    label="$(run_label)iz=$iz", ax=ax)
                     end
                 end
-                put_legend_right(fig, ax)
+                put_legend_below(fig, ax)
+                # Ensure the first row width is 3/4 of the column width so that
+                # the plot does not get squashed by the legend
+                rowsize!(fig.layout, 1, Aspect(1, 3/4))
+                resize_to_layout!(fig)
                 outfile=plot_prefix * "pdf_neutral_$(label)_vs_vz.pdf"
                 save(outfile, fig)
 
@@ -4956,7 +5055,11 @@ function plot_neutral_pdf_2D_at_wall(run_info; plot_prefix)
                                    transform=(x)->positive_or_nan(x; epsilon=1.e-20))
                     end
                 end
-                put_legend_right(fig, ax)
+                put_legend_below(fig, ax)
+                # Ensure the first row width is 3/4 of the column width so that
+                # the plot does not get squashed by the legend
+                rowsize!(fig.layout, 1, Aspect(1, 3/4))
+                resize_to_layout!(fig)
                 outfile=plot_prefix * "logpdf_neutral_$(label)_vs_vpa.pdf"
                 save(outfile, fig)
 
@@ -4974,7 +5077,11 @@ function plot_neutral_pdf_2D_at_wall(run_info; plot_prefix)
                                                  ax=ax)
                         end
                     end
-                    put_legend_right(fig, ax)
+                    put_legend_below(fig, ax)
+                    # Ensure the first row width is 3/4 of the column width so that
+                    # the plot does not get squashed by the legend
+                    rowsize!(fig.layout, 1, Aspect(1, 3/4))
+                    resize_to_layout!(fig)
                     outfile=plot_prefix * "pdf_neutral_unnorm_$(label)_vs_vpa.pdf"
                     save(outfile, fig)
 
@@ -4992,7 +5099,11 @@ function plot_neutral_pdf_2D_at_wall(run_info; plot_prefix)
                                                  transform=(x)->positive_or_nan(x; epsilon=1.e-20))
                         end
                     end
-                    put_legend_right(fig, ax)
+                    put_legend_below(fig, ax)
+                    # Ensure the first row width is 3/4 of the column width so that
+                    # the plot does not get squashed by the legend
+                    rowsize!(fig.layout, 1, Aspect(1, 3/4))
+                    resize_to_layout!(fig)
                     outfile=plot_prefix * "logpdf_neutral_unnorm_$(label)_vs_vpa.pdf"
                     save(outfile, fig)
                 end
@@ -5051,7 +5162,11 @@ function plot_neutral_pdf_2D_at_wall(run_info; plot_prefix)
                                       frame_index=frame_index)
                     end
                 end
-                put_legend_right(fig, ax)
+                put_legend_below(fig, ax)
+                # Ensure the first row width is 3/4 of the column width so that
+                # the plot does not get squashed by the legend
+                rowsize!(fig.layout, 1, Aspect(1, 3/4))
+                resize_to_layout!(fig)
                 outfile=plot_prefix * "pdf_neutral_$(label)_vs_vz." * input.animation_ext
                 save_animation(fig, frame_index, nt, outfile)
 
@@ -5070,7 +5185,11 @@ function plot_neutral_pdf_2D_at_wall(run_info; plot_prefix)
                                       transform=(x)->positive_or_nan(x; epsilon=1.e-20))
                     end
                 end
-                put_legend_right(fig, ax)
+                put_legend_below(fig, ax)
+                # Ensure the first row width is 3/4 of the column width so that
+                # the plot does not get squashed by the legend
+                rowsize!(fig.layout, 1, Aspect(1, 3/4))
+                resize_to_layout!(fig)
                 outfile=plot_prefix * "logpdf_neutral_$(label)_vs_vz." * input.animation_ext
                 save_animation(fig, frame_index, nt, outfile)
 
@@ -5090,7 +5209,11 @@ function plot_neutral_pdf_2D_at_wall(run_info; plot_prefix)
                                                     frame_index=frame_index)
                         end
                     end
-                    put_legend_right(fig, ax)
+                    put_legend_below(fig, ax)
+                    # Ensure the first row width is 3/4 of the column width so that
+                    # the plot does not get squashed by the legend
+                    rowsize!(fig.layout, 1, Aspect(1, 3/4))
+                    resize_to_layout!(fig)
                     outfile=plot_prefix * "pdf_neutral_unnorm_$(label)_vs_vz." * input.animation_ext
                     save_animation(fig, frame_index, nt, outfile)
 
@@ -5109,7 +5232,11 @@ function plot_neutral_pdf_2D_at_wall(run_info; plot_prefix)
                                                     transform=(x)->positive_or_nan(x; epsilon=1.e-20))
                         end
                     end
-                    put_legend_right(fig, ax)
+                    put_legend_below(fig, ax)
+                    # Ensure the first row width is 3/4 of the column width so that
+                    # the plot does not get squashed by the legend
+                    rowsize!(fig.layout, 1, Aspect(1, 3/4))
+                    resize_to_layout!(fig)
                     outfile=plot_prefix * "logpdf_neutral_unnorm_$(label)_vs_vz." * input.animation_ext
                     save_animation(fig, frame_index, nt, outfile)
                 end
@@ -5234,12 +5361,16 @@ function constraints_plots(run_info; plot_prefix=plot_prefix)
                                   input=input)
                     end
                 end
-                put_legend_right(fig, ax)
+                put_legend_below(fig, ax)
+                # Ensure the first row width is 3/4 of the column width so that
+                # the plot does not get squashed by the legend
+                rowsize!(fig.layout, 1, Aspect(1, 3/4))
+                resize_to_layout!(fig)
                 save(plot_prefix * "ion_constraints.pdf", fig)
             end
 
             # Neutrals
-            if any(ri.n_neutral_species > 1
+            if any(ri.n_neutral_species > 0
                    && (ri.evolve_density || ri.evolve_upar || ri.evolve_ppar)
                    for ri ∈ run_info)
 
@@ -5278,42 +5409,50 @@ function constraints_plots(run_info; plot_prefix=plot_prefix)
                                   input=input)
                     end
                 end
-                put_legend_right(fig, ax)
+                put_legend_below(fig, ax)
+                # Ensure the first row width is 3/4 of the column width so that
+                # the plot does not get squashed by the legend
+                rowsize!(fig.layout, 1, Aspect(1, 3/4))
+                resize_to_layout!(fig)
                 save(plot_prefix * "neutral_constraints.pdf", fig)
             end
 
             # Electrons
-            #if any(ri.composition.electron_physics ∈ (kinetic_electrons,
-            #                                          kinetic_electrons_with_temperature_equation)
-            #       for ri ∈ run_info)
+            if any(ri.composition.electron_physics ∈ (kinetic_electrons,
+                                                      kinetic_electrons_with_temperature_equation)
+                   for ri ∈ run_info)
 
-            #    fig, ax = get_1d_ax(; xlabel="z", ylabel="constraint coefficient")
-            #    for ri ∈ run_info
-            #        if length(run_info) > 1
-            #            prefix = ri.run_name * ", "
-            #        else
-            #            prefix = ""
-            #        end
+                fig, ax = get_1d_ax(; xlabel="z", ylabel="constraint coefficient")
+                for ri ∈ run_info
+                    if length(run_info) > 1
+                        prefix = ri.run_name * ", "
+                    else
+                        prefix = ""
+                    end
 
-            #        varname = "electron_constraints_A_coefficient"
-            #        label = prefix * "(A-1)"
-            #        data = get_variable(ri, varname; it=it0, ir=ir0)
-            #        data .-= 1.0
-            #        plot_vs_z(ri, varname; label=label, data=data, ax=ax, input=input)
+                    varname = "electron_constraints_A_coefficient"
+                    label = prefix * "(A-1)"
+                    data = get_variable(ri, varname; it=it0, ir=ir0)
+                    data .-= 1.0
+                    plot_vs_z(ri, varname; label=label, data=data, ax=ax, input=input)
 
-            #        varname = "electron_constraints_B_coefficient"
-            #        label = prefix * "B"
-            #        plot_vs_z(ri, varname; label=label, ax=ax, it=it0, ir=ir0,
-            #                  input=input)
+                    varname = "electron_constraints_B_coefficient"
+                    label = prefix * "B"
+                    plot_vs_z(ri, varname; label=label, ax=ax, it=it0, ir=ir0,
+                              input=input)
 
-            #        varname = "electron_constraints_C_coefficient"
-            #        label = prefix * "C"
-            #        plot_vs_z(ri, varname; label=label, ax=ax, it=it0, ir=ir0,
-            #                  input=input)
-            #    end
-            #    put_legend_right(fig, ax)
-            #    save(plot_prefix * "electron_constraints.pdf", fig)
-            #end
+                    varname = "electron_constraints_C_coefficient"
+                    label = prefix * "C"
+                    plot_vs_z(ri, varname; label=label, ax=ax, it=it0, ir=ir0,
+                              input=input)
+                end
+                put_legend_below(fig, ax)
+                # Ensure the first row width is 3/4 of the column width so that
+                # the plot does not get squashed by the legend
+                rowsize!(fig.layout, 1, Aspect(1, 3/4))
+                resize_to_layout!(fig)
+                save(plot_prefix * "electron_constraints.pdf", fig)
+            end
         end
 
         if input.animate
@@ -5376,14 +5515,18 @@ function constraints_plots(run_info; plot_prefix=plot_prefix)
                                      input=input)
                     end
                 end
-                put_legend_right(fig, ax)
+                put_legend_below(fig, ax)
+                # Ensure the first row width is 3/4 of the column width so that
+                # the plot does not get squashed by the legend
+                rowsize!(fig.layout, 1, Aspect(1, 3/4))
+                resize_to_layout!(fig)
                 ylims!(ax, ymin, ymax)
                 save_animation(fig, frame_index, nt,
                                plot_prefix * "ion_constraints." * input.animation_ext)
             end
 
             # Neutrals
-            if any(ri.n_neutral_species > 1
+            if any(ri.n_neutral_species > 0
                    && (ri.evolve_density || ri.evolve_upar || ri.evolve_ppar)
                    for ri ∈ run_info)
 
@@ -5440,62 +5583,70 @@ function constraints_plots(run_info; plot_prefix=plot_prefix)
                                      input=input)
                     end
                 end
-                put_legend_right(fig, ax)
+                put_legend_below(fig, ax)
+                # Ensure the first row width is 3/4 of the column width so that
+                # the plot does not get squashed by the legend
+                rowsize!(fig.layout, 1, Aspect(1, 3/4))
+                resize_to_layout!(fig)
                 ylims!(ax, ymin, ymax)
                 save_animation(fig, frame_index, nt,
                                plot_prefix * "neutral_constraints." * input.animation_ext)
             end
 
             # Electrons
-            #if any(ri.composition.electron_physics ∈ (kinetic_electrons,
-            #                                          kinetic_electrons_with_temperature_equation)
-            #       for ri ∈ run_info)
+            if any(ri.composition.electron_physics ∈ (kinetic_electrons,
+                                                      kinetic_electrons_with_temperature_equation)
+                   for ri ∈ run_info)
 
-            #    frame_index = Observable(1)
-            #    fig, ax = get_1d_ax(; xlabel="z", ylabel="constraint coefficient")
+                frame_index = Observable(1)
+                fig, ax = get_1d_ax(; xlabel="z", ylabel="constraint coefficient")
 
-            #    # Calculate plot limits manually so we can exclude the first time point, which
-            #    # often has a large value for (A-1) due to the way initialisation is done,
-            #    # which can make the subsequent values hard to see.
-            #    ymin = Inf
-            #    ymax = -Inf
-            #    for ri ∈ run_info
-            #        if length(run_info) > 1
-            #            prefix = ri.run_name * ", "
-            #        else
-            #            prefix = ""
-            #        end
+                # Calculate plot limits manually so we can exclude the first time point, which
+                # often has a large value for (A-1) due to the way initialisation is done,
+                # which can make the subsequent values hard to see.
+                ymin = Inf
+                ymax = -Inf
+                for ri ∈ run_info
+                    if length(run_info) > 1
+                        prefix = ri.run_name * ", "
+                    else
+                        prefix = ""
+                    end
 
-            #        varname = "electron_constraints_A_coefficient"
-            #        label = prefix * "(A-1)"
-            #        data = get_variable(ri, varname; ir=ir0)
-            #        data .-= 1.0
-            #        ymin = min(ymin, minimum(data[:,2:end]))
-            #        ymax = max(ymax, maximum(data[:,2:end]))
-            #        animate_vs_z(ri, varname; label=label, data=data,
-            #                     frame_index=frame_index, ax=ax, input=input)
+                    varname = "electron_constraints_A_coefficient"
+                    label = prefix * "(A-1)"
+                    data = get_variable(ri, varname; ir=ir0)
+                    data .-= 1.0
+                    ymin = min(ymin, minimum(data[:,2:end]))
+                    ymax = max(ymax, maximum(data[:,2:end]))
+                    animate_vs_z(ri, varname; label=label, data=data,
+                                 frame_index=frame_index, ax=ax, input=input)
 
-            #        varname = "electron_constraints_B_coefficient"
-            #        label = prefix * "B"
-            #        data = get_variable(ri, varname; ir=ir0)
-            #        ymin = min(ymin, minimum(data[:,2:end]))
-            #        ymax = max(ymax, maximum(data[:,2:end]))
-            #        animate_vs_z(ri, varname; label=label, data=data,
-            #                     frame_index=frame_index, ax=ax, ir=ir0, input=input)
+                    varname = "electron_constraints_B_coefficient"
+                    label = prefix * "B"
+                    data = get_variable(ri, varname; ir=ir0)
+                    ymin = min(ymin, minimum(data[:,2:end]))
+                    ymax = max(ymax, maximum(data[:,2:end]))
+                    animate_vs_z(ri, varname; label=label, data=data,
+                                 frame_index=frame_index, ax=ax, ir=ir0, input=input)
 
-            #        varname = "electron_constraints_C_coefficient"
-            #        label = prefix * "C"
-            #        data = get_variable(ri, varname; ir=ir0)
-            #        ymin = min(ymin, minimum(data[:,2:end]))
-            #        ymax = max(ymax, maximum(data[:,2:end]))
-            #        animate_vs_z(ri, varname; label=label, data=data,
-            #                     frame_index=frame_index, ax=ax, ir=ir0, input=input)
-            #    end
-            #    put_legend_right(fig, ax)
-            #    ylims!(ax, ymin, ymax)
-            #    save_animation(fig, frame_index, nt,
-            #                   plot_prefix * "electron_constraints." * input.animation_ext)
-            #end
+                    varname = "electron_constraints_C_coefficient"
+                    label = prefix * "C"
+                    data = get_variable(ri, varname; ir=ir0)
+                    ymin = min(ymin, minimum(data[:,2:end]))
+                    ymax = max(ymax, maximum(data[:,2:end]))
+                    animate_vs_z(ri, varname; label=label, data=data,
+                                 frame_index=frame_index, ax=ax, ir=ir0, input=input)
+                end
+                put_legend_below(fig, ax)
+                # Ensure the first row width is 3/4 of the column width so that
+                # the plot does not get squashed by the legend
+                rowsize!(fig.layout, 1, Aspect(1, 3/4))
+                resize_to_layout!(fig)
+                ylims!(ax, ymin, ymax)
+                save_animation(fig, frame_index, nt,
+                               plot_prefix * "electron_constraints." * input.animation_ext)
+            end
         end
     catch e
         return makie_post_processing_error_handler(
@@ -5681,12 +5832,20 @@ function Chodura_condition_plots(run_info::Tuple; plot_prefix)
             fig = figs[1]
             ax = axes[1][1]
             put_legend_below(fig, ax)
+            # Ensure the first row width is 3/4 of the column width so that
+            # the plot does not get squashed by the legend
+            rowsize!(fig.layout, 1, Aspect(1, 3/4))
+            resize_to_layout!(fig)
             outfile = string(plot_prefix, "Chodura_ratio_lower_vs_t.pdf")
             save(outfile, fig)
 
             fig = figs[2]
             ax = axes[1][2]
             put_legend_below(fig, ax)
+            # Ensure the first row width is 3/4 of the column width so that
+            # the plot does not get squashed by the legend
+            rowsize!(fig.layout, 1, Aspect(1, 3/4))
+            resize_to_layout!(fig)
             outfile = string(plot_prefix, "Chodura_ratio_upper_vs_t.pdf")
             save(outfile, fig)
         end
@@ -5694,12 +5853,20 @@ function Chodura_condition_plots(run_info::Tuple; plot_prefix)
             fig = figs[3]
             ax = axes[1][3]
             put_legend_below(fig, ax)
+            # Ensure the first row width is 3/4 of the column width so that
+            # the plot does not get squashed by the legend
+            rowsize!(fig.layout, 1, Aspect(1, 3/4))
+            resize_to_layout!(fig)
             outfile = string(plot_prefix, "Chodura_ratio_lower_vs_r.pdf")
             save(outfile, fig)
 
             fig = figs[4]
             ax = axes[1][4]
             put_legend_below(fig, ax)
+            # Ensure the first row width is 3/4 of the column width so that
+            # the plot does not get squashed by the legend
+            rowsize!(fig.layout, 1, Aspect(1, 3/4))
+            resize_to_layout!(fig)
             outfile = string(plot_prefix, "Chodura_ratio_upper_vs_r.pdf")
             save(outfile, fig)
         end
@@ -5717,12 +5884,20 @@ function Chodura_condition_plots(run_info::Tuple; plot_prefix)
             println("check axes ", axes)
             ax = axes[1][7]
             put_legend_below(fig, ax)
+            # Ensure the first row width is 3/4 of the column width so that
+            # the plot does not get squashed by the legend
+            rowsize!(fig.layout, 1, Aspect(1, 3/4))
+            resize_to_layout!(fig)
             outfile = string(plot_prefix, "pdf_unnorm_over_vpa2_wall-_vs_vpa.pdf")
             save(outfile, fig)
 
             fig = figs[8]
             ax = axes[1][8]
             put_legend_below(fig, ax)
+            # Ensure the first row width is 3/4 of the column width so that
+            # the plot does not get squashed by the legend
+            rowsize!(fig.layout, 1, Aspect(1, 3/4))
+            resize_to_layout!(fig)
             outfile = string(plot_prefix, "pdf_unnorm_over_vpa2_wall+_vs_vpa.pdf")
             save(outfile, fig)
         end
@@ -5733,6 +5908,10 @@ function Chodura_condition_plots(run_info::Tuple; plot_prefix)
             ax = axes[1][9][1]
             frame_index = axes[1][9][2]
             put_legend_below(fig, ax)
+            # Ensure the first row width is 3/4 of the column width so that
+            # the plot does not get squashed by the legend
+            rowsize!(fig.layout, 1, Aspect(1, 3/4))
+            resize_to_layout!(fig)
             outfile = string(plot_prefix, "pdf_unnorm_over_vpa2_wall-_vs_vpa." * input.animation_ext)
             save_animation(fig, frame_index, nt, outfile)
 
@@ -5740,6 +5919,10 @@ function Chodura_condition_plots(run_info::Tuple; plot_prefix)
             ax = axes[1][10][1]
             frame_index = axes[1][10][2]
             put_legend_below(fig, ax)
+            # Ensure the first row width is 3/4 of the column width so that
+            # the plot does not get squashed by the legend
+            rowsize!(fig.layout, 1, Aspect(1, 3/4))
+            resize_to_layout!(fig)
             outfile = string(plot_prefix, "pdf_unnorm_over_vpa2_wall+_vs_vpa." * input.animation_ext)
             save_animation(fig, frame_index, nt, outfile)
         end
@@ -6024,7 +6207,11 @@ function sound_wave_plots(run_info::Tuple; plot_prefix)
         end
 
         if input.plot
-            put_legend_right(fig, ax)
+            put_legend_below(fig, ax)
+            # Ensure the first row width is 3/4 of the column width so that
+            # the plot does not get squashed by the legend
+            rowsize!(fig.layout, 1, Aspect(1, 3/4))
+            resize_to_layout!(fig)
 
             save(outfile, fig)
 
@@ -6092,7 +6279,11 @@ function sound_wave_plots(run_info; outfile=nothing, ax=nothing, phi=nothing)
                 error("Cannot save figure from this function when `ax` was passed. Please "
                       * "save the figure that contains `ax`")
             end
-            put_legend_right(fig, ax)
+            put_legend_below(fig, ax)
+            # Ensure the first row width is 3/4 of the column width so that
+            # the plot does not get squashed by the legend
+            rowsize!(fig.layout, 1, Aspect(1, 3/4))
+            resize_to_layout!(fig)
             save(outfile, fig)
         end
     end
@@ -7774,7 +7965,11 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                 end
             end
 
-            put_legend_right(steps_fig, ax_failures)
+            put_legend_below(steps_fig, ax_failures)
+            # Ensure the first row width is 3/4 of the column width so that
+            # the plot does not get squashed by the legend
+            rowsize!(steps_fig.layout, 1, Aspect(1, 3/4))
+            resize_to_layout!(steps_fig)
 
             if plot_prefix !== nothing
                 outfile = plot_prefix * electron_prefix * "timestep_diagnostics.pdf"
@@ -7872,7 +8067,11 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                 end
             end
             #ylims!(ax, 0.0, 10.0 * maxval)
-            put_legend_right(CFL_fig, ax)
+            put_legend_below(CFL_fig, ax)
+            # Ensure the first row width is 3/4 of the column width so that
+            # the plot does not get squashed by the legend
+            rowsize!(CFL_fig.layout, 1, Aspect(1, 3/4))
+            resize_to_layout!(CFL_fig)
 
             if plot_prefix !== nothing
                 outfile = plot_prefix * electron_prefix * "CFL_factors.pdf"
@@ -8039,7 +8238,11 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                 end
             end
 
-            put_legend_right(limits_fig, ax)
+            put_legend_below(limits_fig, ax)
+            # Ensure the first row width is 3/4 of the column width so that
+            # the plot does not get squashed by the legend
+            rowsize!(limits_fig.layout, 1, Aspect(1, 3/4))
+            resize_to_layout!(limits_fig)
 
             if plot_prefix !== nothing
                 outfile = plot_prefix * electron_prefix * "timestep_limits.pdf"
@@ -8079,14 +8282,20 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                     for p ∈ nl_prefixes
                         nonlinear_iterations = get_variable(ri, "$(p)_nonlinear_iterations_per_solve")
                         linear_iterations = get_variable(ri, "$(p)_linear_iterations_per_nonlinear_iteration")
+                        precon_iterations = get_variable(ri, "$(p)_precon_iterations_per_linear_iteration")
                         plot_1d(time, nonlinear_iterations, label=prefix * " " * p * " NL per solve", ax=ax)
                         plot_1d(time, linear_iterations, label=prefix * " " * p * " L per NL", ax=ax)
+                        plot_1d(time, precon_iterations, label=prefix * " " * p * " P per L", ax=ax)
                     end
                 end
             end
 
             if has_nl_solver
-                put_legend_right(nl_solvers_fig, ax)
+                put_legend_below(nl_solvers_fig, ax)
+                # Ensure the first row width is 3/4 of the column width so that
+                # the plot does not get squashed by the legend
+                rowsize!(nl_solvers_fig.layout, 1, Aspect(1, 3/4))
+                resize_to_layout!(nl_solvers_fig)
 
                 if plot_prefix !== nothing
                     outfile = plot_prefix * "nonlinear_solver_iterations.pdf"
@@ -8127,7 +8336,11 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
             end
 
             if has_electron_solve
-                put_legend_right(electron_solver_fig, ax)
+                put_legend_below(electron_solver_fig, ax)
+                # Ensure the first row width is 3/4 of the column width so that
+                # the plot does not get squashed by the legend
+                rowsize!(electron_solver_fig.layout, 1, Aspect(1, 3/4))
+                resize_to_layout!(electron_solver_fig)
 
                 if has_electron_solve
                     outfile = plot_prefix * "electron_steps.pdf"
@@ -8424,6 +8637,357 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
     end
 
     return steps_fig, dt_fig, CFL_fig
+end
+
+"""
+A function to plot collisionalities. The mean free path is plotted (or animated) 
+along with the lengthscales of the gradients of density, parallel flow and temperature.
+
+There are also functions to check the calculations of the mean free path and the 
+comparison of temperature, L_T and dT_dz. They would only be for making sure
+lengthscales and mean free path calculations are sensible.
+"""
+function collisionality_plots(run_info, plot_prefix=nothing)
+    if !isa(run_info, Tuple)
+        run_info = (run_info,)
+    end
+    input = Dict_to_NamedTuple(input_dict["collisionality_plots"])
+
+    if input.plot
+        println("Making plots for collisionality")
+
+        temperature_input = Dict_to_NamedTuple(input_dict["temperature"])
+        mfp = get_variable(run_info, "mfp")
+        L_T = get_variable(run_info, "L_T")
+        L_n = get_variable(run_info, "L_n")
+        L_upar = get_variable(run_info, "L_upar")
+        nt = minimum(length(mfp[ri][1,1,1,:]) for ri in eachindex(run_info))
+        # print warning if the lengths of all the mfp[ri][1,1,1,:] are not the same
+        if any(length(mfp[ri][1,1,1,:]) != nt for ri in eachindex(run_info))
+            println("Warning: The number of timesteps of some simulations are different, " *
+                    "so only the first common timesteps will be animated.")
+        end
+
+        # write function to check that mfp[ri][1, 1, 1, :] is the same length (i.e. nt) for all ri 
+        if input.plot_mfp_vs_z
+            variable_name = "mean_free_path"
+            variable = mfp
+            variable_prefix = plot_prefix * variable_name
+            plot_vs_z(run_info, variable_name, is=1, data=variable, input=temperature_input,
+                    outfile=variable_prefix * "_vs_z.pdf")
+        end
+
+        if input.animate_mfp_vs_z
+            variable_name = "mean_free_path"
+            variable = mfp
+            variable_prefix = plot_prefix * variable_name
+            animate_vs_z(run_info, variable_name, is=1, data=variable, input=temperature_input,
+                            outfile=variable_prefix * "_vs_z." * input.animation_ext)
+        end
+
+        if input.plot_dT_dz_vs_z
+            variable_name = "dT_dz"
+            variable = nothing
+            try
+                variable = get_variable(run_info, variable_name)
+            catch e
+                return makie_post_processing_error_handler(
+                        e,
+                        "collisionality_plots () failed for $variable_name - could not load data.")
+            end
+
+            variable_prefix = plot_prefix * variable_name
+            plot_vs_z(run_info, variable_name, is=1, data=variable, input=temperature_input,
+                    outfile=variable_prefix * "_vs_z.pdf")
+        end
+
+        if input.animate_dT_dz_vs_z
+            variable_name = "dT_dz"
+            variable = nothing
+            try
+                variable = get_variable(run_info, variable_name)
+            catch e
+                return makie_post_processing_error_handler(
+                        e,
+                        "collisionality_plots () failed for $variable_name - could not load data.")
+            end
+
+            variable_prefix = plot_prefix * variable_name
+            animate_vs_z(run_info, variable_name, is=1, data=variable, input=temperature_input,
+                            outfile=variable_prefix * "_vs_z." * input.animation_ext)
+        end
+
+        if input.plot_nu_ii_vth_mfp_vs_z
+            vth = get_variable(run_info, "thermal_speed")
+            nu_ii = get_variable(run_info, "collision_frequency_ii")
+            variable_prefix = plot_prefix * "checking_mfp_vth_and_nu_ii"
+
+            fig, ax, legend_place = get_1d_ax(1; get_legend_place=:below)
+            for ri ∈ eachindex(run_info)
+                if length(run_info) > 1
+                    run_label = run_info[ri].run_name * " "
+                else
+                    run_label = " "
+                end
+                plot_1d(run_info[ri].z.grid, vth[ri][:,1,1,end], xlabel="z",
+                        ylabel="values", label=run_label*"vth", ax=ax[1], title = "checking_mfp_vth")
+                plot_1d(run_info[ri].z.grid, nu_ii[ri][:,1,1,end], label=run_label*"nu_ii", ax=ax[1])
+                plot_1d(run_info[ri].z.grid, mfp[ri][:,1,1,end], label=run_label*"mfp", ax=ax[1])
+            end
+            Legend(legend_place[1], ax[1]; tellheight=true, tellwidth=false,
+                orientation=:vertical)
+            outfile = variable_prefix * "_vs_z.pdf"
+            save(outfile, fig)
+        end
+
+        if input.plot_LT_dT_dz_temp_vs_z
+            dT_dz = get_variable(run_info, "dT_dz")
+            temp = get_variable(run_info, "temperature")
+            variable_prefix = plot_prefix * "LT_dT_dz_temp"
+            fig, ax, legend_place = get_1d_ax(1; get_legend_place=:below)
+            for ri ∈ eachindex(run_info)
+                if length(run_info) > 1
+                    run_label = run_info[ri].run_name * " "
+                else
+                    run_label = " "
+                end
+                plot_1d(run_info[ri].z.grid, L_T[ri][:,1,1,end], xlabel="z",
+                        ylabel="values", label=run_label*"L_T", ax=ax[1], title = "LT_dT_dz_temp")
+                plot_1d(run_info[ri].z.grid, dT_dz[ri][:,1,1,end], label=run_label*"dT_dz", ax=ax[1])
+                plot_1d(run_info[ri].z.grid, temp[ri][:,1,1,end], label=run_label*"temp", ax=ax[1])
+            end
+            Legend(legend_place[1], ax[1]; tellheight=true, tellwidth=false,
+                orientation=:vertical)
+            outfile = variable_prefix * "_vs_z.pdf"
+            save(outfile, fig)
+        end
+
+        if input.plot_LT_mfp_vs_z
+            variable_prefix = plot_prefix * "LT_mfp"
+            fig, ax, legend_place = get_1d_ax(1; get_legend_place=:below)
+            for ri ∈ eachindex(run_info)
+                if length(run_info) > 1
+                    run_label = run_info[ri].run_name * " "
+                else
+                    run_label = " "
+                end
+                plot_1d(run_info[ri].z.grid, L_T[ri][:,1,1,end], xlabel="z",
+                        ylabel="values", label=run_label*"L_T", ax=ax[1], title = "L_T and mean free path comparison")
+                plot_1d(run_info[ri].z.grid, mfp[ri][:,1,1,end], label=run_label*"mfp", ax=ax[1])
+            end
+            Legend(legend_place[1], ax[1]; tellheight=true, tellwidth=false,
+                orientation=:vertical)
+            outfile = variable_prefix * "_vs_z.pdf"
+            save(outfile, fig)
+        end
+
+        if input.animate_LT_mfp_vs_z
+            variable_prefix = plot_prefix * "LT_mfp"
+            fig, ax, legend_place = get_1d_ax(1; get_legend_place=:below)
+            frame_index = Observable(1)
+            for ri ∈ eachindex(run_info)
+                if length(run_info) > 1
+                    run_label = run_info[ri].run_name * " "
+                else
+                    run_label = " "
+                end
+                animate_1d(run_info[ri].z.grid, L_T[ri][:,1,1,:],
+                        frame_index=frame_index, xlabel="z", ylabel="values",
+                        label=run_label*"L_T", ax=ax[1], title = "L_T and mean free path comparison")
+                animate_1d(run_info[ri].z.grid, mfp[ri][:,1,1,:],
+                        frame_index=frame_index, xlabel="z", ylabel="values",
+                        label=run_label*"mfp", ax=ax[1])
+            end
+            Legend(legend_place[1], ax[1]; tellheight=true, tellwidth=false,
+                orientation=:vertical)
+            outfile = variable_prefix * "_vs_z." * input.animation_ext
+            save_animation(fig, frame_index, nt, outfile)
+        end
+
+        if input.plot_Ln_mfp_vs_z
+            variable_prefix = plot_prefix * "Ln_mfp"
+            fig, ax, legend_place = get_1d_ax(1; get_legend_place=:below)
+            for ri ∈ eachindex(run_info)
+                if length(run_info) > 1
+                    run_label = run_info[ri].run_name * " "
+                else
+                    run_label = " "
+                end
+                plot_1d(run_info[ri].z.grid, L_n[ri][:,1,1,end], xlabel="z",
+                        ylabel="values", label=run_label*"L_n", ax=ax[1], title = "Ln and mean free path comparison")
+                plot_1d(run_info[ri].z.grid, mfp[ri][:,1,1,end], label=run_label*"mfp", ax=ax[1])
+            end
+            Legend(legend_place[1], ax[1]; tellheight=true, tellwidth=false,
+                orientation=:vertical)
+            outfile = variable_prefix * "_vs_z.pdf"
+            save(outfile, fig)
+        end
+
+        if input.animate_Ln_mfp_vs_z
+            variable_prefix = plot_prefix * "Ln_mfp"
+            fig, ax, legend_place = get_1d_ax(1; get_legend_place=:below)
+            frame_index = Observable(1)
+            for ri ∈ eachindex(run_info)
+                if length(run_info) > 1
+                    run_label = run_info[ri].run_name * " "
+                else
+                    run_label = " "
+                end
+                animate_1d(run_info[ri].z.grid, L_n[ri][:,1,1,:],
+                        frame_index=frame_index, xlabel="z", ylabel="values",
+                        label=run_label*"L_n", ax=ax[1], title = "L_n and mean free path comparison")
+                animate_1d(run_info[ri].z.grid, mfp[ri][:,1,1,:],
+                        frame_index=frame_index, xlabel="z", ylabel="values",
+                        label=run_label*"mfp", ax=ax[1])
+            end
+            Legend(legend_place[1], ax[1]; tellheight=true, tellwidth=false,
+                orientation=:vertical)
+            outfile = variable_prefix * "_vs_z." * input.animation_ext
+            save_animation(fig, frame_index, nt, outfile)
+        end
+
+        if input.plot_Lupar_mfp_vs_z
+            variable_prefix = plot_prefix * "Lupar_mfp"
+            fig, ax, legend_place = get_1d_ax(1; get_legend_place=:below)
+            for ri ∈ eachindex(run_info)
+                if length(run_info) > 1
+                    run_label = run_info[ri].run_name * " "
+                else
+                    run_label = " "
+                end
+                plot_1d(run_info[ri].z.grid, L_upar[ri][:,1,1,end], xlabel="z",
+                        ylabel="values", label=run_label*"L_upar", ax=ax[1], title = "Lupar and mean free path comparison")
+                plot_1d(run_info[ri].z.grid, mfp[ri][:,1,1,end], label=run_label*"mfp", ax=ax[1])
+            end
+            Legend(legend_place[1], ax[1]; tellheight=true, tellwidth=false,
+                orientation=:vertical)
+            outfile = variable_prefix * "_vs_z.pdf"
+            save(outfile, fig)
+        end
+
+        if input.animate_Lupar_mfp_vs_z
+            variable_prefix = plot_prefix * "Lupar_mfp"
+            fig, ax, legend_place = get_1d_ax(1; get_legend_place=:below)
+            frame_index = Observable(1)
+            for ri ∈ eachindex(run_info)
+                if length(run_info) > 1
+                    run_label = run_info[ri].run_name * " "
+                else
+                    run_label = " "
+                end
+                animate_1d(run_info[ri].z.grid, L_upar[ri][:,1,1,:],
+                        frame_index=frame_index, xlabel="z", ylabel="values",
+                        label=run_label*"L_upar", ax=ax[1], title = "L_upar and mean free path comparison")
+                animate_1d(run_info[ri].z.grid, mfp[ri][:,1,1,:],
+                        frame_index=frame_index, xlabel="z", ylabel="values",
+                        label=run_label*"mfp", ax=ax[1])
+            end
+            Legend(legend_place[1], ax[1]; tellheight=true, tellwidth=false,
+                orientation=:vertical)
+            outfile = variable_prefix * "_vs_z." * input.animation_ext
+            save_animation(fig, frame_index, nt, outfile)
+        end
+
+        if input.plot_Lupar_Ln_LT_mfp_vs_z
+            variable_prefix = plot_prefix * "Lupar_Ln_LT_mfp"
+            fig, ax, legend_place = get_1d_ax(1; get_legend_place=:below)
+            for ri ∈ eachindex(run_info)
+                if length(run_info) > 1
+                    run_label = run_info[ri].run_name * " "
+                else
+                    run_label = " "
+                end
+                plot_1d(run_info[ri].z.grid, L_upar[ri][:,1,1,end], xlabel="z",
+                        ylabel="values", label=run_label*"L_upar", ax=ax[1], title = "Lupar Ln LT and mean free path comparison")
+                plot_1d(run_info[ri].z.grid, L_n[ri][:,1,1,end], label=run_label*"L_n", ax=ax[1])
+                plot_1d(run_info[ri].z.grid, L_T[ri][:,1,1,end], label=run_label*"L_T", ax=ax[1])
+                plot_1d(run_info[ri].z.grid, mfp[ri][:,1,1,end], label=run_label*"mfp", ax=ax[1])
+            end
+            Legend(legend_place[1], ax[1]; tellheight=true, tellwidth=false,
+                orientation=:horizontal)
+            outfile = variable_prefix * "_vs_z.pdf"
+            save(outfile, fig)
+        end
+
+        if input.animate_Lupar_Ln_LT_mfp_vs_z
+            variable_prefix = plot_prefix * "Lupar_Ln_LT_mfp"
+            fig, ax, legend_place = get_1d_ax(1; get_legend_place=:below)
+            frame_index = Observable(1)
+            for ri ∈ eachindex(run_info)
+                if length(run_info) > 1
+                    run_label = run_info[ri].run_name * " "
+                else
+                    run_label = " "
+                end
+                animate_1d(run_info[ri].z.grid, L_upar[ri][:,1,1,:],
+                        frame_index=frame_index, xlabel="z", ylabel="values",
+                        label=run_label*"L_upar", ax=ax[1], title = "Lupar Ln LT and mean free path comparison")
+                animate_1d(run_info[ri].z.grid, L_n[ri][:,1,1,:],
+                        frame_index=frame_index, xlabel="z", ylabel="values",
+                        label=run_label*"L_n", ax=ax[1])
+                animate_1d(run_info[ri].z.grid, L_T[ri][:,1,1,:],
+                        frame_index=frame_index, xlabel="z", ylabel="values",
+                        label=run_label*"L_T", ax=ax[1])
+                animate_1d(run_info[ri].z.grid, mfp[ri][:,1,1,:],
+                        frame_index=frame_index, xlabel="z", ylabel="values",
+                        label=run_label*"mfp", ax=ax[1])
+            end
+            Legend(legend_place[1], ax[1]; tellheight=true, tellwidth=false,
+                orientation=:vertical)
+            outfile = variable_prefix * "_vs_z." * input.animation_ext
+            save_animation(fig, frame_index, nt, outfile)
+        end
+
+        if input.plot_overlay_coll_krook_heat_flux
+            variable_prefix = plot_prefix * "coll_krook_vs_original_heat_flux"
+            coll_krook_q = get_variable(run_info, "coll_krook_heat_flux")
+            original_q = get_variable(run_info, "parallel_heat_flux")
+            fig, ax, legend_place = get_1d_ax(1; get_legend_place=:below)
+            for ri ∈ eachindex(run_info)
+                if length(run_info) > 1
+                    run_label = run_info[ri].run_name * " "
+                else
+                    run_label = " "
+                end
+                if get(run_info[ri].input["composition"], "ion_physics", "") !== coll_krook_ions
+                    plot_1d(run_info[ri].z.grid, coll_krook_q[ri][:,1,1,end], xlabel="z",
+                            ylabel="values", label=run_label*"coll_krook_q_overlay", ax=ax[1], title = "coll_krook heat flux overlay")
+                end
+                plot_1d(run_info[ri].z.grid, original_q[ri][:,1,1,end], label=run_label*"original_q", ax=ax[1])
+            end
+            Legend(legend_place[1], ax[1]; tellheight=true, tellwidth=false,
+                orientation=:vertical)
+            outfile = variable_prefix * "_vs_z.pdf"
+            save(outfile, fig)
+        end
+
+        if input.animate_overlay_coll_krook_heat_flux
+            variable_prefix = plot_prefix * "coll_krook_vs_original_heat_flux"
+            coll_krook_q = get_variable(run_info, "coll_krook_heat_flux")
+            original_q = get_variable(run_info, "parallel_heat_flux")
+            fig, ax, legend_place = get_1d_ax(1; get_legend_place=:below)
+            frame_index = Observable(1)
+            for ri ∈ eachindex(run_info)
+                if length(run_info) > 1
+                    run_label = run_info[ri].run_name * " "
+                else
+                    run_label = " "
+                end
+                if get(run_info[ri].input["composition"], "ion_physics", "") !== coll_krook_ions
+                    animate_1d(run_info[ri].z.grid, coll_krook_q[ri][:,1,1,:],
+                            frame_index=frame_index, xlabel="z", ylabel="values",
+                            label=run_label*"coll_krook_q_overlay", ax=ax[1], title = "coll_krook heat flux overlay")
+                end
+                animate_1d(run_info[ri].z.grid, original_q[ri][:,1,1,:],
+                        frame_index=frame_index, xlabel="z", ylabel="values",
+                        label=run_label*"original_q", ax=ax[1])
+            end
+            Legend(legend_place[1], ax[1]; tellheight=true, tellwidth=false,
+                orientation=:vertical)
+            outfile = variable_prefix * "_vs_z." * input.animation_ext
+            save_animation(fig, frame_index, nt, outfile)
+        end
+    end
 end
 
 """

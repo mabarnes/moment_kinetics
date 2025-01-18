@@ -8,7 +8,7 @@ their being scattered (and possibly duplicated) in other modules.
 """
 module lagrange_polynomials
 
-export lagrange_poly, lagrange_poly_optimised
+export lagrange_poly, lagrange_poly_optimised, lagrange_poly_derivative_optimised
 
 """
 Lagrange polynomial
@@ -48,6 +48,33 @@ point where this Lagrange polynomial is 1.
 """
 function lagrange_poly_optimised(other_nodes, one_over_denominator, x)
     return prod(x - n for n ∈ other_nodes) * one_over_denominator
+end
+
+"""
+    lagrange_poly_derivative_optimised(other_nodes, one_over_denominator, x)
+
+Optimised calculation of the first derivative of a Lagrange polynomial, making use of
+pre-calculated quantities.
+
+`other_nodes` is a vector of the grid points in this element where this Lagrange
+polynomial is zero (the other nodes than the one where it is 1).
+
+`one_over_denominator` is `1/prod(x0 - n for n ∈ other_nodes)` where `x0` is the grid
+point where this Lagrange polynomial is 1.
+
+`x` is the point to evaluate the Lagrange polynomial at.
+"""
+function lagrange_poly_derivative_optimised(other_nodes, one_over_denominator, x)
+    result = 0.0
+    k = length(other_nodes)
+    # Is there a more efficient way of doing this? Not a big deal for now because this
+    # function will only be used to calculate a preconditioner matrix, which is done
+    # rarely.
+    for i ∈ 1:k
+        result += prod(x - other_nodes[j] for j ∈ 1:k if j ≠ i)
+    end
+    result *= one_over_denominator
+    return result
 end
 
 end

@@ -33,7 +33,7 @@ using TOML
 an option but known at compile time when a `time_info` struct is passed as a function
 argument.
 """
-struct time_info{Terrorsum <: Real, T_debug_output, T_electron, Trkimp, Timpzero}
+struct time_info{Terrorsum <: Real, T_debug_output, T_electron, Trkimp, Timpzero, Telectronprecon}
     n_variables::mk_int
     nstep::mk_int
     end_time::mk_float
@@ -65,6 +65,7 @@ struct time_info{Terrorsum <: Real, T_debug_output, T_electron, Trkimp, Timpzero
     implicit_coefficient_is_zero::Timpzero
     n_rk_stages::mk_int
     rk_order::mk_int
+    exact_output_times::Bool
     adaptive::Bool
     low_storage::Bool
     rtol::mk_float
@@ -78,13 +79,18 @@ struct time_info{Terrorsum <: Real, T_debug_output, T_electron, Trkimp, Timpzero
     maximum_dt::mk_float
     implicit_braginskii_conduction::Bool
     implicit_electron_advance::Bool
+    implicit_electron_time_evolving::Bool
     implicit_ion_advance::Bool
     implicit_vpa_advection::Bool
     implicit_electron_ppar::Bool
+    electron_preconditioner_type::Telectronprecon
     constraint_forcing_rate::mk_float
     decrease_dt_iteration_threshold::mk_int
     increase_dt_iteration_threshold::mk_int
     cap_factor_ion_dt::mk_float
+    max_pseudotimesteps::mk_int
+    max_pseudotime::mk_float
+    include_wall_bc_in_preconditioner::Bool
     write_after_fixed_step_count::Bool
     error_sum_zero::Terrorsum
     split_operators::Bool
@@ -125,6 +131,7 @@ struct advance_info
     continuity::Bool
     force_balance::Bool
     energy::Bool
+    electron_pdf::Bool
     electron_energy::Bool
     electron_conduction::Bool
     neutral_external_source::Bool
@@ -168,6 +175,15 @@ export braginskii_fluid
 export kinetic_electrons
 export kinetic_electrons_with_temperature_equation
 
+@enum ion_physics_type begin
+    gyrokinetic_ions
+    drift_kinetic_ions
+    coll_krook_ions
+end
+export ion_physics_type
+export gyrokinetic_ions
+export drift_kinetic_ions
+export coll_krook_ions
 """
 """
 Base.@kwdef struct spatial_initial_condition_input
@@ -267,6 +283,11 @@ Base.@kwdef struct species_composition
     #   density is fixed to be Nₑ*(eϕ/T_e) and N_e is calculated using a current
     #   condition at the wall
     electron_physics::electron_physics_type
+    # ion physics can be drift_kinetic_ions, gyrokinetic_ions and coll_krook_ions
+    # gyrokinetic_ions (originally gyrokinetic_ions = true) -> use gyroaveraged fields at fixed guiding 
+    # centre and moments of the pdf computed at fixed r
+    # drift_kinetic_ions (originally gyrokinetic_ions = false) -> use drift kinetic approximation
+    ion_physics::ion_physics_type
     # if false -- wall bc uses true Knudsen cosine to specify neutral pdf leaving the wall
     # if true -- use a simpler pdf that is easier to integrate
     use_test_neutral_wall_pdf::Bool
@@ -283,10 +304,6 @@ Base.@kwdef struct species_composition
     # The ion flux reaching the wall that is recycled as neutrals is reduced by
     # `recycling_fraction` to account for ions absorbed by the wall.
     recycling_fraction::mk_float
-    # gyrokinetic_ions is a flag determining if the ion species is gyrokinetic
-    # gyrokinetic_ions = true -> use gyroaveraged fields at fixed guiding centre and moments of the pdf computed at fixed r
-    # gyrokinetic_ions = false -> use drift kinetic approximation
-    gyrokinetic_ions::Bool
     # array of structs of parameters for each ion species
     ion::Vector{ion_species_parameters}
     # array of structs of parameters for each neutral species
@@ -355,6 +372,9 @@ Base.@kwdef struct ion_source_data
     PI_density_target_z_profile::String
     PI_density_target_z_width::mk_float
     PI_density_target_z_relative_minimum::mk_float
+    PI_temperature_controller_P::mk_float
+    PI_temperature_controller_I::mk_float
+    PI_temperature_target_amplitude::mk_float
     recycling_controller_fraction::mk_float
     # r_amplitude through the r coordinate (in 1D this can just be set to 1.0)
     r_amplitude::Vector{mk_float}
@@ -362,12 +382,16 @@ Base.@kwdef struct ion_source_data
     # constant profile, parabolic, etc..
     z_amplitude::Vector{mk_float}
     PI_density_target::Union{mk_float, Nothing, MPISharedArray{mk_float,2}}
+    PI_temperature_target::Union{mk_float, Nothing, MPISharedArray{mk_float,2}}
     PI_controller_amplitude::Union{Nothing, MPISharedArray{mk_float,1}}
     controller_source_profile::Union{Nothing, MPISharedArray{mk_float,2}, Array{mk_float, 2}}
     PI_density_target_ir::Union{mk_int, Nothing}
     PI_density_target_iz::Union{mk_int, Nothing}
     PI_density_target_rank::Union{mk_int, Nothing} #possibly this should have Int64 as well, 
     # in the event that the code is running with mk_int = Int32 but the rank is set to 0::Int64
+    PI_temperature_target_ir::Union{mk_int, Nothing}
+    PI_temperature_target_iz::Union{mk_int, Nothing}
+    PI_temperature_target_rank::Union{mk_int, Nothing}
 end
 
 Base.@kwdef struct electron_source_data
@@ -480,6 +504,18 @@ Base.@kwdef struct krook_collisions_input
     frequency_option::String # "reference_parameters" # "manual", 
 end
 
+"""
+"""
+@enum boundary_data_type begin
+    direct_integration
+    multipole_expansion
+    delta_f_multipole
+end
+export boundary_data_type
+export direct_integration
+export multipole_expansion
+export delta_f_multipole
+
 Base.@kwdef struct fkpl_collisions_input
     # option to check if fokker planck frequency should be > 0
     use_fokker_planck::Bool
@@ -492,6 +528,8 @@ Base.@kwdef struct fkpl_collisions_input
     self_collisions::Bool
     # option to determine if ad-hoc moment_kinetics-style conserving corrections are used
     use_conserving_corrections::Bool
+    # enum option to determine which method is used to provide boundary data for Rosenbluth potential calculations.
+    boundary_data_option::boundary_data_type
     # option to determine if cross-collisions against fixed Maxwellians are used
     slowing_down_test::Bool
     # Setting to switch between different options for Fokker-Planck collision frequency input

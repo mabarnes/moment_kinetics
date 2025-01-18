@@ -169,6 +169,11 @@ test_input_adaptive_split3["timestepping"] = recursive_merge(test_input_adaptive
                                                                          "minimum_dt" => 1.0e-7,
                                                                          "step_update_prefactor" => 0.064))
 
+# Test exact_output_times option in full-f/split1/split2 cases
+test_input_adaptive["timestepping"]["exact_output_times"] = true
+test_input_adaptive_split1["timestepping"]["exact_output_times"] = true
+test_input_adaptive_split2["timestepping"]["exact_output_times"] = true
+
 """
 Run a test for a single set of parameters
 """
@@ -341,14 +346,14 @@ function runtests()
         @testset "Adaptive timestep - split 3" begin
             test_input_adaptive_split3["output"]["base_directory"] = test_output_directory
             run_test(test_input_adaptive_split3,
-                     [-0.034623352735472034, -0.03200541773193755, -0.02714032291656093,
-                      -0.020924986472905527, -0.01015057042512689, 0.0027893133203071574,
-                      0.012837899470698978, 0.022096372980618853, 0.0330348469665054,
-                      0.041531828755231016, 0.045382106043818246, 0.046246244563868354,
-                      0.042551970615727366, 0.034815169767529956, 0.027080688565416164,
-                      0.017886490800418996, 0.004784403555306537, -0.007762152788142663,
-                      -0.01629330539573498, -0.02413421820486561, -0.0315621379076817,
-                      -0.03416924694766477], rtol=6.0e-4, atol=2.0e-12)
+                     [-0.0346196925024167, -0.03200201693849987, -0.02713764319615098,
+                      -0.02092311349672712, -0.010150026206894121, 0.0027883420935253572,
+                      0.012835791449600767, 0.02209326318113659, 0.03303078703903627,
+                      0.04152829640863164, 0.04538051487359227, 0.04624543438581702,
+                      0.04254876799453081, 0.03481104153755928, 0.027077084096581314,
+                      0.01788382934269672, 0.00478320487966262, -0.0077618876322877485,
+                      -0.016292009420807548, -0.024131976958124225, -0.031559093785483404,
+                      -0.0341657304695615], rtol=6.0e-4, atol=2.0e-12)
         end
 
         @long @testset "Check other timestep - $type" for

@@ -15,7 +15,7 @@ using ..interpolation: interpolate_to_grid_1d
 using ..load_data: open_readonly_output_file, get_nranks, load_pdf_data, load_rank_data
 using ..load_data: load_distributed_ion_pdf_slice
 using ..looping
-using ..type_definitions: mk_int
+using ..type_definitions: mk_int, mk_float
 using ..velocity_moments: integrate_over_vspace
 
 using FFTW
@@ -595,7 +595,8 @@ const default_epsilon = 1.0e-4
 
 """
     steady_state_residuals(variable, variable_at_previous_time, dt;
-                           epsilon=$default_epsilon, use_mpi=false)
+                           epsilon=$default_epsilon, use_mpi=false,
+                           only_max_abs=false)
 
 Calculate how close a variable is to steady state.
 
@@ -630,23 +631,26 @@ initialised, and that `variable` has r and z dimensions but no species dimension
 distributed-memory MPI, this routine will double-count the points on block boundaries.
 
 If `only_max_abs=true` is passed, then only calculate the 'maxium absolute residual'. In
-this case the OrderedDict returned will have only one entry, for `"max absolute
-residual"`.
+this case just returns the "max absolute residual", not an OrderedDict.
 """
 function steady_state_residuals(variable, variable_at_previous_time, dt;
                                 epsilon=default_epsilon, use_mpi=false,
                                 only_max_abs=false)
+    return steady_state_residuals(variable, variable_at_previous_time, dt, use_mpi,
+                                  only_max_abs, epsilon)
+end
+function steady_state_residuals(variable, variable_at_previous_time, dt, use_mpi,
+                                only_max_abs=false, epsilon=default_epsilon)
     square_residual_norms =
-        steady_state_square_residuals(variable, variable_at_previous_time, dt;
-                                      epsilon=epsilon, use_mpi=use_mpi,
-                                      only_max_abs=only_max_abs)
+        steady_state_square_residuals(variable, variable_at_previous_time, dt, nothing,
+                                      use_mpi, only_max_abs, epsilon)
     if global_rank[] == 0
         if only_max_abs
             # In this case as an optimisation the residual was not squared, so do not need
             # to square-root here
             return square_residual_norms
         else
-            return OrderedDict(k=>sqrt.(v) for (k,v) ∈ square_residual_norms)
+            return OrderedDict{String,Vector{mk_float}}(k=>sqrt.(v) for (k,v) ∈ square_residual_norms)
         end
     else
         return nothing
@@ -654,9 +658,9 @@ function steady_state_residuals(variable, variable_at_previous_time, dt;
 end
 
 """
-    steady_state_square_residuals(variable, variable_at_previous_time, dt;
-                                  variable_max=nothing, epsilon=1.0e-4,
-                                  use_mpi=false, only_max_abs=false)
+    steady_state_square_residuals(variable, variable_at_previous_time, dt,
+                                  variable_max=nothing, use_mpi=false,
+                                  only_max_abs=false, epsilon=$default_epsilon)
 
 Used to calculate the mean square residual for [`steady_state_residuals`](@ref).
 
@@ -668,9 +672,9 @@ See [`steady_state_residuals`](@ref) for documenation of the other arguments. Th
 values of [`steady_state_residuals`](@ref) are the square-root of the return values of
 this function.
 """
-function steady_state_square_residuals(variable, variable_at_previous_time, dt;
-                                       variable_max=nothing, epsilon=default_epsilon,
-                                       use_mpi=false, only_max_abs=false)
+function steady_state_square_residuals(variable, variable_at_previous_time, dt,
+                                       variable_max=nothing, use_mpi=false,
+                                       only_max_abs=false, epsilon=default_epsilon)
     if ndims(dt) == 0
         t_dim = ndims(variable) + 1
     else
@@ -797,10 +801,9 @@ function steady_state_square_residuals(variable, variable_at_previous_time, dt;
                                              (size(packed_results)..., n_blocks[]))
 
             if only_max_abs
-                return OrderedDict(
-                           "max absolute residual"=>maximum(gathered_block_results, dims=2))
+                return maximum(gathered_block_results, dims=2)
             else
-                return OrderedDict(
+                return OrderedDict{String,mk_float}(
                            "RMS absolute residual"=>mean(@view(gathered_block_results[:,1,:]), dims=2),
                            "max absolute residual"=>maximum(@view(gathered_block_results[:,2,:]), dims=2),
                            "RMS relative residual"=>mean(@view(gathered_block_results[:,3,:]), dims=2),
@@ -817,13 +820,11 @@ function steady_state_square_residuals(variable, variable_at_previous_time, dt;
 
         if only_max_abs
             absolute_residual =
-                _steady_state_residual(variable, variable_at_previous_time, reshaped_dt)
+                _steady_state_absolute_residual(variable, variable_at_previous_time, reshaped_dt)
             # Need to wrap the maximum(...) in a call to vec(...) so that we return a
             # Vector, not an N-dimensional array where the first (N-1) dimensions all have
             # size 1.
-            return OrderedDict(
-                       "max absolute residual"=>vec(maximum(absolute_residual;
-                                                            dims=tuple((1:t_dim-1)...))))
+            return vec(maximum(absolute_residual; dims=tuple((1:t_dim-1)...)))
         else
             absolute_square_residual, relative_square_residual =
                 _steady_state_square_residual(variable, variable_at_previous_time,
@@ -831,7 +832,7 @@ function steady_state_square_residuals(variable, variable_at_previous_time, dt;
             # Need to wrap the mean(...) or maximum(...) in a call to vec(...) so that we
             # return a Vector, not an N-dimensional array where the first (N-1) dimensions all
             # have size 1.
-            return OrderedDict(
+            return OrderedDict{String,Vector{mk_float}}(
                        "RMS absolute residual"=>vec(mean(absolute_square_residual;
                                                          dims=tuple((1:t_dim-1)...))),
                        "max absolute residual"=>vec(maximum(absolute_square_residual;
