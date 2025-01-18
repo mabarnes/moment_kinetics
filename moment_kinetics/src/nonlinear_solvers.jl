@@ -29,17 +29,18 @@ module nonlinear_solvers
 export setup_nonlinear_solve, gather_nonlinear_solver_counters!,
        reset_nonlinear_per_stage_counters!, newton_solve!
 
-using ..array_allocation: allocate_float, allocate_shared_float
+using ..array_allocation: allocate_float, allocate_shared_float, allocate_int
 using ..communication
 using ..coordinates: coordinate
 using ..input_structs
 using ..looping
 using ..timer_utils
-using ..type_definitions: mk_float, mk_int
+using ..type_definitions
 
 using LinearAlgebra
 using MPI
 using SparseArrays
+using InboundsArrays: InboundsSparseMatrixCSC
 using StatsBase: mean
 
 struct nl_solver_info{TH,TV,Tcsg,Tlig,Tprecon,Tpretype}
@@ -66,8 +67,8 @@ struct nl_solver_info{TH,TV,Tcsg,Tlig,Tprecon,Tpretype}
     global_precon_iterations::Base.RefValue{mk_int}
     solves_since_precon_update::Base.RefValue{mk_int}
     precon_dt::Base.RefValue{mk_float}
-    precon_lowerz_vcut_inds::Vector{mk_int}
-    precon_upperz_vcut_inds::Vector{mk_int}
+    precon_lowerz_vcut_inds::MKVector{mk_int}
+    precon_upperz_vcut_inds::MKVector{mk_int}
     serial_solve::Bool
     max_nonlinear_iterations_this_step::Base.RefValue{mk_int}
     max_linear_iterations_this_step::Base.RefValue{mk_int}
@@ -202,8 +203,8 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); defa
             v_solve_nsolve = length(v_solve_z_range)
             # Plus one for the one point of ppar that is included in the 'v solve'.
             v_solve_n = nvperp * nvpa + 1
-            v_solve_implicit_lus = Vector{SparseArrays.UMFPACK.UmfpackLU{mk_float, mk_int}}(undef, v_solve_nsolve)
-            v_solve_explicit_matrices = Vector{SparseMatrixCSC{mk_float, mk_int}}(undef, v_solve_nsolve)
+            v_solve_implicit_lus = MKVector{SparseArrays.UMFPACK.UmfpackLU{mk_float, mk_int}}(undef, v_solve_nsolve)
+            v_solve_explicit_matrices = MKVector{InboundsSparseMatrixCSC{mk_float, mk_int}}(undef, v_solve_nsolve)
             # This buffer is not shared-memory, because it will be used for a serial LU solve.
             v_solve_buffer = allocate_float(v_solve_n)
             v_solve_buffer2 = allocate_float(v_solve_n)
@@ -221,8 +222,8 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); defa
                 z_solve_nsolve += 1
             end
             z_solve_n = nz
-            z_solve_implicit_lus = Vector{SparseArrays.UMFPACK.UmfpackLU{mk_float, mk_int}}(undef, z_solve_nsolve)
-            z_solve_explicit_matrices = Vector{SparseMatrixCSC{mk_float, mk_int}}(undef, z_solve_nsolve)
+            z_solve_implicit_lus = MKVector{SparseArrays.UMFPACK.UmfpackLU{mk_float, mk_int}}(undef, z_solve_nsolve)
+            z_solve_explicit_matrices = MKVector{InboundsSparseMatrixCSC{mk_float, mk_int}}(undef, z_solve_nsolve)
             # This buffer is not shared-memory, because it will be used for a serial LU solve.
             z_solve_buffer = allocate_float(z_solve_n)
             z_solve_buffer2 = allocate_float(z_solve_n)
@@ -279,8 +280,8 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); defa
                           linear_initial_guess, Ref(0), Ref(0), Ref(0), Ref(0), Ref(0),
                           Ref(0), Ref(0), Ref(0),
                           Ref(nl_solver_input.preconditioner_update_interval),
-                          Ref(mk_float(0.0)), zeros(mk_int, n_vcut_inds),
-                          zeros(mk_int, n_vcut_inds), serial_solve, Ref(0), Ref(0),
+                          Ref(mk_float(0.0)), mk_zeros(mk_int, n_vcut_inds),
+                          mk_zeros(mk_int, n_vcut_inds), serial_solve, Ref(0), Ref(0),
                           nl_solver_input.total_its_soft_limit, preconditioner_type,
                           nl_solver_input.preconditioner_update_interval, preconditioners)
 end
@@ -563,7 +564,7 @@ old_precon_iterations = nl_solver_params.precon_iterations[]
 end
 
 @timeit_debug global_timer distributed_norm(
-                               ::Val{:z}, residual::AbstractArray{mk_float, 1}, coords,
+                               ::Val{:z}, residual::AbstractMKArray{mk_float, 1}, coords,
                                rtol, atol, x) = begin
     z = coords.z
 
@@ -599,7 +600,7 @@ end
 end
 
 @timeit_debug global_timer distributed_norm(
-                               ::Val{:vpa}, residual::AbstractArray{mk_float, 1}, coords,
+                               ::Val{:vpa}, residual::AbstractMKArray{mk_float, 1}, coords,
                                rtol, atol, x) = begin
     # No parallelism needed when the implicit solve is over vpa - assume that this will be
     # called inside a parallelised s_r_z_vperp loop.
@@ -615,7 +616,7 @@ end
 
 @timeit_debug global_timer distributed_norm(
                                ::Val{:zvperpvpa},
-                               residual::Tuple{AbstractArray{mk_float, 1},AbstractArray{mk_float, 3}},
+                               residual::Tuple{AbstractMKArray{mk_float, 1},AbstractMKArray{mk_float, 3}},
                                coords, rtol, atol, x) = begin
     ppar_residual, pdf_residual = residual
     x_ppar, x_pdf = x
@@ -678,7 +679,7 @@ end
 end
 
 @timeit_debug global_timer distributed_norm(
-                  ::Val{:srzvperpvpa}, residual::AbstractArray{mk_float, 5}, coords, rtol,
+                  ::Val{:srzvperpvpa}, residual::AbstractMKArray{mk_float, 5}, coords, rtol,
                   atol, x) = begin
     n_ion_species = coords.s
     r = coords.r
@@ -723,7 +724,7 @@ end
 end
 
 @timeit_debug global_timer distributed_dot(
-                  ::Val{:z}, v::AbstractArray{mk_float, 1}, w::AbstractArray{mk_float, 1},
+                  ::Val{:z}, v::AbstractMKArray{mk_float, 1}, w::AbstractMKArray{mk_float, 1},
                   coords, rtol, atol, x) = begin
 
     z = coords.z
@@ -760,7 +761,7 @@ end
 end
 
 @timeit_debug global_timer distributed_dot(
-                  ::Val{:vpa}, v::AbstractArray{mk_float, 1}, w::AbstractArray{mk_float, 1}, coords,
+                  ::Val{:vpa}, v::AbstractMKArray{mk_float, 1}, w::AbstractMKArray{mk_float, 1}, coords,
                   rtol, atol, x) = begin
     # No parallelism needed when the implicit solve is over vpa - assume that this will be
     # called inside a parallelised s_r_z_vperp loop.
@@ -773,8 +774,8 @@ end
 end
 
 @timeit_debug global_timer distributed_dot(
-                  ::Val{:zvperpvpa}, v::Tuple{AbstractArray{mk_float, 1},AbstractArray{mk_float, 3}},
-                  w::Tuple{AbstractArray{mk_float, 1},AbstractArray{mk_float, 3}}, coords,
+                  ::Val{:zvperpvpa}, v::Tuple{AbstractMKArray{mk_float, 1},AbstractMKArray{mk_float, 3}},
+                  w::Tuple{AbstractMKArray{mk_float, 1},AbstractMKArray{mk_float, 3}}, coords,
                   rtol, atol, x) = begin
     v_ppar, v_pdf = v
     w_ppar, w_pdf = w
@@ -834,8 +835,8 @@ end
 end
 
 @timeit_debug global_timer distributed_dot(
-                  ::Val{:srzvperpvpa}, v::AbstractArray{mk_float, 5},
-                  w::AbstractArray{mk_float, 5}, coords, rtol, atol, x) = begin
+                  ::Val{:srzvperpvpa}, v::AbstractMKArray{mk_float, 5},
+                  w::AbstractMKArray{mk_float, 5}, coords, rtol, atol, x) = begin
     n_ion_species = coords.s
     r = coords.r
     z = coords.z
@@ -879,7 +880,7 @@ end
 # slow code
 
 @timeit_debug global_timer parallel_map(
-                  ::Val{:z}, func, result::AbstractArray{mk_float, 1}) = begin
+                  ::Val{:z}, func, result::AbstractMKArray{mk_float, 1}) = begin
 
     begin_z_region()
 
@@ -890,7 +891,7 @@ end
     return nothing
 end
 @timeit_debug global_timer parallel_map(
-                  ::Val{:z}, func, result::AbstractArray{mk_float, 1}, x1) = begin
+                  ::Val{:z}, func, result::AbstractMKArray{mk_float, 1}, x1) = begin
 
     begin_z_region()
 
@@ -901,11 +902,11 @@ end
     return nothing
 end
 @timeit_debug global_timer parallel_map(
-                  ::Val{:z}, func, result::AbstractArray{mk_float, 1}, x1, x2) = begin
+                  ::Val{:z}, func, result::AbstractMKArray{mk_float, 1}, x1, x2) = begin
 
     begin_z_region()
 
-    if isa(x2, AbstractArray)
+    if isa(x2, AbstractMKArray)
         @loop_z iz begin
             result[iz] = func(x1[iz], x2[iz])
         end
@@ -918,11 +919,11 @@ end
     return nothing
 end
 @timeit_debug global_timer parallel_map(
-                  ::Val{:z}, func, result::AbstractArray{mk_float, 1}, x1, x2, x3) = begin
+                  ::Val{:z}, func, result::AbstractMKArray{mk_float, 1}, x1, x2, x3) = begin
 
     begin_z_region()
 
-    if isa(x3, AbstractArray)
+    if isa(x3, AbstractMKArray)
         @loop_z iz begin
             result[iz] = func(x1[iz], x2[iz], x3[iz])
         end
@@ -936,7 +937,7 @@ end
 end
 
 @timeit_debug global_timer parallel_map(
-                  ::Val{:vpa}, func, result::AbstractArray{mk_float, 1}) = begin
+                  ::Val{:vpa}, func, result::AbstractMKArray{mk_float, 1}) = begin
     # No parallelism needed when the implicit solve is over vpa - assume that this will be
     # called inside a parallelised s_r_z_vperp loop.
     for i ∈ eachindex(result)
@@ -945,7 +946,7 @@ end
     return nothing
 end
 @timeit_debug global_timer parallel_map(
-                  ::Val{:vpa}, func, result::AbstractArray{mk_float, 1}, x1) = begin
+                  ::Val{:vpa}, func, result::AbstractMKArray{mk_float, 1}, x1) = begin
     # No parallelism needed when the implicit solve is over vpa - assume that this will be
     # called inside a parallelised s_r_z_vperp loop.
     for i ∈ eachindex(result)
@@ -954,10 +955,10 @@ end
     return nothing
 end
 @timeit_debug global_timer parallel_map(
-                  ::Val{:vpa}, func, result::AbstractArray{mk_float, 1}, x1, x2) = begin
+                  ::Val{:vpa}, func, result::AbstractMKArray{mk_float, 1}, x1, x2) = begin
     # No parallelism needed when the implicit solve is over vpa - assume that this will be
     # called inside a parallelised s_r_z_vperp loop.
-    if isa(x2, AbstractArray)
+    if isa(x2, AbstractMKArray)
         for i ∈ eachindex(result)
             result[i] = func(x1[i], x2[i])
         end
@@ -969,10 +970,10 @@ end
     return nothing
 end
 @timeit_debug global_timer parallel_map(
-                  ::Val{:vpa}, func, result::AbstractArray{mk_float, 1}, x1, x2, x3) = begin
+                  ::Val{:vpa}, func, result::AbstractMKArray{mk_float, 1}, x1, x2, x3) = begin
     # No parallelism needed when the implicit solve is over vpa - assume that this will be
     # called inside a parallelised s_r_z_vperp loop.
-    if isa(x3, AbstractArray)
+    if isa(x3, AbstractMKArray)
         for i ∈ eachindex(result)
             result[i] = func(x1[i], x2[i], x3[i])
         end
@@ -985,7 +986,7 @@ end
 end
 
 @timeit_debug global_timer parallel_map(
-                  ::Val{:zvperpvpa}, func, result::Tuple{AbstractArray{mk_float, 1},AbstractArray{mk_float, 3}}) = begin
+                  ::Val{:zvperpvpa}, func, result::Tuple{AbstractMKArray{mk_float, 1},AbstractMKArray{mk_float, 3}}) = begin
 
     result_ppar, result_pdf = result
 
@@ -1004,7 +1005,7 @@ end
     return nothing
 end
 @timeit_debug global_timer parallel_map(
-                  ::Val{:zvperpvpa}, func, result::Tuple{AbstractArray{mk_float, 1},AbstractArray{mk_float, 3}},
+                  ::Val{:zvperpvpa}, func, result::Tuple{AbstractMKArray{mk_float, 1},AbstractMKArray{mk_float, 3}},
                   x1) = begin
 
     result_ppar, result_pdf = result
@@ -1025,7 +1026,7 @@ end
     return nothing
 end
 @timeit_debug global_timer parallel_map(
-                  ::Val{:zvperpvpa}, func, result::Tuple{AbstractArray{mk_float, 1},AbstractArray{mk_float, 3}},
+                  ::Val{:zvperpvpa}, func, result::Tuple{AbstractMKArray{mk_float, 1},AbstractMKArray{mk_float, 3}},
                   x1, x2) = begin
 
     result_ppar, result_pdf = result
@@ -1061,7 +1062,7 @@ end
     return nothing
 end
 @timeit_debug global_timer parallel_map(
-                  ::Val{:zvperpvpa}, func, result::Tuple{AbstractArray{mk_float, 1},AbstractArray{mk_float, 3}},
+                  ::Val{:zvperpvpa}, func, result::Tuple{AbstractMKArray{mk_float, 1},AbstractMKArray{mk_float, 3}},
                   x1, x2, x3) = begin
 
     result_ppar, result_pdf = result
@@ -1099,7 +1100,7 @@ end
 end
 
 @timeit_debug global_timer parallel_map(
-                  ::Val{:srzvperpvpa}, func, result::AbstractArray{mk_float, 5}) = begin
+                  ::Val{:srzvperpvpa}, func, result::AbstractMKArray{mk_float, 5}) = begin
 
     begin_s_r_z_vperp_vpa_region()
 
@@ -1110,7 +1111,7 @@ end
     return nothing
 end
 @timeit_debug global_timer parallel_map(
-                  ::Val{:srzvperpvpa}, func, result::AbstractArray{mk_float, 5}, x1) = begin
+                  ::Val{:srzvperpvpa}, func, result::AbstractMKArray{mk_float, 5}, x1) = begin
 
     begin_s_r_z_vperp_vpa_region()
 
@@ -1121,11 +1122,11 @@ end
     return nothing
 end
 @timeit_debug global_timer parallel_map(
-                  ::Val{:srzvperpvpa}, func, result::AbstractArray{mk_float, 5}, x1, x2) = begin
+                  ::Val{:srzvperpvpa}, func, result::AbstractMKArray{mk_float, 5}, x1, x2) = begin
 
     begin_s_r_z_vperp_vpa_region()
 
-    if isa(x2, AbstractArray)
+    if isa(x2, AbstractMKArray)
         @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
             result[ivpa,ivperp,iz,ir,is] = func(x1[ivpa,ivperp,iz,ir,is], x2[ivpa,ivperp,iz,ir,is])
         end
@@ -1138,12 +1139,12 @@ end
     return nothing
 end
 @timeit_debug global_timer parallel_map(
-                  ::Val{:srzvperpvpa}, func, result::AbstractArray{mk_float, 5}, x1, x2,
+                  ::Val{:srzvperpvpa}, func, result::AbstractMKArray{mk_float, 5}, x1, x2,
                   x3) = begin
 
     begin_s_r_z_vperp_vpa_region()
 
-    if isa(x3, AbstractArray)
+    if isa(x3, AbstractMKArray)
         @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
             result[ivpa,ivperp,iz,ir,is] = func(x1[ivpa,ivperp,iz,ir,is], x2[ivpa,ivperp,iz,ir,is], x3[ivpa,ivperp,iz,ir,is])
         end
@@ -1157,7 +1158,7 @@ end
 end
 
 @timeit_debug global_timer parallel_delta_x_calc(
-                  ::Val{:z}, delta_x::AbstractArray{mk_float, 1}, V, y) = begin
+                  ::Val{:z}, delta_x::AbstractMKArray{mk_float, 1}, V, y) = begin
 
     begin_z_region()
 
@@ -1172,7 +1173,7 @@ end
 end
 
 @timeit_debug global_timer parallel_delta_x_calc(
-                  ::Val{:vpa}, delta_x::AbstractArray{mk_float, 1}, V, y) = begin
+                  ::Val{:vpa}, delta_x::AbstractMKArray{mk_float, 1}, V, y) = begin
     # No parallelism needed when the implicit solve is over vpa - assume that this will be
     # called inside a parallelised s_r_z_vperp loop.
     ny = length(y)
@@ -1185,7 +1186,7 @@ end
 end
 
 @timeit_debug global_timer parallel_delta_x_calc(
-                  ::Val{:zvperpvpa}, delta_x::Tuple{AbstractArray{mk_float, 1},AbstractArray{mk_float, 3}}, V,
+                  ::Val{:zvperpvpa}, delta_x::Tuple{AbstractMKArray{mk_float, 1},AbstractMKArray{mk_float, 3}}, V,
                   y) = begin
 
     delta_x_ppar, delta_x_pdf = delta_x
@@ -1213,7 +1214,7 @@ end
 end
 
 @timeit_debug global_timer parallel_delta_x_calc(
-                  ::Val{:srzvperpvpa}, delta_x::AbstractArray{mk_float, 5}, V, y) = begin
+                  ::Val{:srzvperpvpa}, delta_x::AbstractMKArray{mk_float, 5}, V, y) = begin
 
     begin_s_r_z_vperp_vpa_region()
 

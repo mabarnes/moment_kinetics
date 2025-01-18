@@ -7,16 +7,17 @@ using moment_kinetics.coordinates: define_test_coordinate
 using moment_kinetics.interpolation:
     interpolate_to_grid_1d, fill_1d_interpolation_matrix!, interpolate_to_grid_z,
     interpolate_to_grid_vpa, interpolate_symmetric!, fill_interpolate_symmetric_matrix!
+using moment_kinetics.type_definitions
 
 using MPI
 
 # periodic test function
 # returns an array whose shape is the outer product of the 2nd, 3rd, ... arguments
 test_function(L, coords...) =
-    [cospi(2.0*sum(x)/L)*exp(-sinpi(2.0*sum(x)/L)) for x in Iterators.product(coords...)]
+    MKArray([cospi(2.0*sum(x)/L)*exp(-sinpi(2.0*sum(x)/L)) for x in Iterators.product(coords...)])
 
 test_function_first_derivative(L, coord) =
-    [-2.0*π/L*sinpi(2.0*x/L)*exp(-sinpi(2.0*x/L)) - 2.0*π/L*cospi(2.0*x/L)^2*exp(-sinpi(2.0*x/L)) for x in coord]
+    MKArray([-2.0*π/L*sinpi(2.0*x/L)*exp(-sinpi(2.0*x/L)) - 2.0*π/L*cospi(2.0*x/L)^2*exp(-sinpi(2.0*x/L)) for x in coord])
 
 println("interpolation tests")
 
@@ -163,7 +164,7 @@ function runtests()
             @testset "upper to lower $nx" for nx ∈ 4:10
                 rtol = 0.2 ^ nx
 
-                ix = collect(1:nx)
+                ix = MKArray(collect(1:nx))
                 x = @. 1.8 * (ix - 1) / (nx - 1) - 0.57
                 first_positive_ind = searchsortedlast(x, 0.0) + 1
                 f = cos.(x)

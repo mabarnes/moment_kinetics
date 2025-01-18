@@ -46,7 +46,7 @@ using Dates
 using LinearAlgebra: lu, ldiv!
 using MPI
 using OrderedCollections: OrderedDict
-using ..type_definitions: mk_float, mk_int
+using ..type_definitions
 using ..array_allocation: allocate_float, allocate_shared_float
 using ..communication
 using ..velocity_moments: integrate_over_vspace
@@ -273,15 +273,15 @@ where the Rosenbluth potentials are specified using analytical results.
     mref = 1.0 # generalise if multiple ions evolved
     Zs = fkin.Zi # generalise if multiple ions evolved
     nuref = fkin.nuii # generalise if multiple ions evolved
-    msp = [fkin.sd_mi, fkin.sd_me]
-    Zsp = [fkin.sd_q, -1.0]
+    msp = MKArray([fkin.sd_mi, fkin.sd_me])
+    Zsp = MKArray([fkin.sd_q, -1.0])
     # assume here that ne = sum_i n_i and that initial condition
     # for beam ions has unit density
     ns = 1.0 # initial density of evolved ions (hardcode to be the same as initial conditions)
     # get electron density from quasineutrality ne = sum_s Zs ns
-    densp = [fkin.sd_density, fkin.sd_q*fkin.sd_density+ns*Zs] 
-    uparsp = [0.0, 0.0]
-    vthsp = [sqrt(fkin.sd_temp/msp[1]), sqrt(fkin.sd_temp/msp[2])]
+    densp = MKArray([fkin.sd_density, fkin.sd_q*fkin.sd_density+ns*Zs])
+    uparsp = MKArray([0.0, 0.0])
+    vthsp = MKArray([sqrt(fkin.sd_temp/msp[1]), sqrt(fkin.sd_temp/msp[2])])
     
     # N.B. parallelisation using special 'anyv' region
     begin_s_r_z_anyv_region()
@@ -519,9 +519,9 @@ are specified using analytical results.
 """
 @timeit global_timer fokker_planck_collision_operator_weak_form_Maxwellian_Fsp!(
                          ffs_in, nuref::mk_float, ms::mk_float, Zs::mk_float,
-                         msp::Array{mk_float,1}, Zsp::Array{mk_float,1},
-                         densp::Array{mk_float,1}, uparsp::Array{mk_float,1},
-                         vthsp::Array{mk_float,1},
+                         msp::AbstractMKArray{mk_float,1}, Zsp::AbstractMKArray{mk_float,1},
+                         densp::AbstractMKArray{mk_float,1}, uparsp::AbstractMKArray{mk_float,1},
+                         vthsp::AbstractMKArray{mk_float,1},
                          fkpl_arrays::fokkerplanck_weakform_arrays_struct, vperp, vpa,
                          vperp_spectral, vpa_spectral) = begin
     @boundscheck vpa.n == size(ffs_in,1) || throw(BoundsError(ffs_in))

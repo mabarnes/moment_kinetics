@@ -25,8 +25,8 @@ using FastGaussQuadrature
 using LegendrePolynomials: Pl, dnPl
 using LinearAlgebra: mul!, lu, ldiv!
 using SparseArrays: sparse, AbstractSparseArray
-using SparseMatricesCSR
-using ..type_definitions: mk_float, mk_int
+using InboundsArrays: InboundsSparseMatrixCSR
+using ..type_definitions
 using ..array_allocation: allocate_float
 import ..calculus: elementwise_derivative!, mass_matrix_solve!
 import ..interpolation: single_element_interpolate!,
@@ -43,47 +43,47 @@ on Gauss-Legendre points in 1D
 """
 struct gausslegendre_base_info
     # elementwise differentiation matrix (ngrid*ngrid)
-    Dmat::Array{mk_float,2}
+    Dmat::MKMatrix{mk_float}
     # local mass matrix type 0
-    M0::Array{mk_float,2}
+    M0::MKMatrix{mk_float}
     # local mass matrix type 1
-    M1::Array{mk_float,2}
+    M1::MKMatrix{mk_float}
     # local mass matrix type 2
-    M2::Array{mk_float,2}
+    M2::MKMatrix{mk_float}
     # local S (weak derivative) matrix type 0
-    S0::Array{mk_float,2}
+    S0::MKMatrix{mk_float}
     # local S (weak derivative) matrix type 1
-    S1::Array{mk_float,2}
+    S1::MKMatrix{mk_float}
     # local K (weak second derivative) matrix type 0
-    K0::Array{mk_float,2}
+    K0::MKMatrix{mk_float}
     # local K (weak second derivative) matrix type 1
-    K1::Array{mk_float,2}
+    K1::MKMatrix{mk_float}
     # local K (weak second derivative) matrix type 2
-    K2::Array{mk_float,2}
+    K2::MKMatrix{mk_float}
     # local P (weak derivative no integration by parts) matrix type 0
-    P0::Array{mk_float,2}
+    P0::MKMatrix{mk_float}
     # local P (weak derivative no integration by parts) matrix type 1
-    P1::Array{mk_float,2}
+    P1::MKMatrix{mk_float}
     # local P (weak derivative no integration by parts) matrix type 2
-    P2::Array{mk_float,2}
+    P2::MKMatrix{mk_float}
     # boundary condition differentiation matrix (for vperp grid using radau points)
-    D0::Array{mk_float,1}
+    D0::MKVector{mk_float}
     # local nonlinear diffusion matrix Y00
-    Y00::Array{mk_float,3}
+    Y00::MKArray{mk_float,3}
     # local nonlinear diffusion matrix Y01
-    Y01::Array{mk_float,3}
+    Y01::MKArray{mk_float,3}
     # local nonlinear diffusion matrix Y10
-    Y10::Array{mk_float,3}
+    Y10::MKArray{mk_float,3}
     # local nonlinear diffusion matrix Y11
-    Y11::Array{mk_float,3}
+    Y11::MKArray{mk_float,3}
     # local nonlinear diffusion matrix Y20
-    Y20::Array{mk_float,3}
+    Y20::MKArray{mk_float,3}
     # local nonlinear diffusion matrix Y21
-    Y21::Array{mk_float,3}
+    Y21::MKArray{mk_float,3}
     # local nonlinear diffusion matrix Y30
-    Y30::Array{mk_float,3}
+    Y30::MKArray{mk_float,3}
     # local nonlinear diffusion matrix Y31
-    Y31::Array{mk_float,3}
+    Y31::MKArray{mk_float,3}
 end
 
 """
@@ -95,9 +95,9 @@ struct gausslegendre_info{TSparse, TSparseCSR, TLU, TLmat, TLmatLU} <: weak_disc
     lobatto::gausslegendre_base_info
     radau::gausslegendre_base_info
     # global (1D) mass matrix
-    mass_matrix::Array{mk_float,2}
+    mass_matrix::MKMatrix{mk_float}
     # global (1D) weak derivative matrix
-    #S_matrix::Array{mk_float,2}
+    #S_matrix::MKMatrix{mk_float}
     S_matrix::TSparse
     # global (1D) weak second derivative matrix
     K_matrix::TSparse
@@ -109,7 +109,7 @@ struct gausslegendre_info{TSparse, TSparseCSR, TLU, TLmat, TLmatLU} <: weak_disc
     D_matrix_csr::TSparseCSR
     # global (1D) weak second derivative matrix, with inverse mass matrix included (so
     # matrix is dense)
-    dense_second_deriv_matrix::Array{mk_float,2}
+    dense_second_deriv_matrix::MKMatrix{mk_float}
     # global (1D) weak Laplacian derivative matrix with boundary conditions - might be
     # `nothing` if boundary conditions are not supported
     L_matrix_with_bc::TLmat
@@ -119,7 +119,7 @@ struct gausslegendre_info{TSparse, TSparseCSR, TLU, TLmat, TLmatLU} <: weak_disc
     # `nothing` if boundary conditions are not supported
     L_matrix_lu::TLmatLU
     # dummy matrix for local operators
-    Qmat::Array{mk_float,2}
+    Qmat::MKMatrix{mk_float}
 end
 
 """
@@ -160,7 +160,7 @@ function setup_gausslegendre_pseudospectral(coord; collision_operator_dim=true)
 
     Qmat = allocate_float(coord.ngrid,coord.ngrid)
 
-    return gausslegendre_info(lobatto,radau,mass_matrix,sparse(S_matrix),sparse(K_matrix),sparse(L_matrix),sparse(D_matrix),convert(SparseMatrixCSR{1,mk_float,mk_int},D_matrix),dense_second_deriv_matrix,L_matrix_with_bc,
+    return gausslegendre_info(lobatto,radau,mass_matrix,sparse(S_matrix),sparse(K_matrix),sparse(L_matrix),sparse(D_matrix),convert(InboundsSparseMatrixCSR{1,mk_float,mk_int},D_matrix),dense_second_deriv_matrix,L_matrix_with_bc,
                               mass_matrix_lu,L_matrix_lu,Qmat)
 end
 
@@ -182,8 +182,8 @@ implement the Fokker-Planck collision operator.
 """
 function setup_gausslegendre_pseudospectral_lobatto(coord; collision_operator_dim=true)
     x, w = gausslobatto(coord.ngrid)
-    x = mk_float.(x)
-    w = mk_float.(w)
+    x = MKArray(mk_float.(x))
+    w = MKArray(mk_float.(w))
     Dmat = allocate_float(coord.ngrid, coord.ngrid)
     gausslobattolegendre_differentiation_matrix!(Dmat,x,coord.ngrid)
     
@@ -260,10 +260,10 @@ implement the Fokker-Planck collision operator.
 function setup_gausslegendre_pseudospectral_radau(coord; collision_operator_dim=true)
     # Gauss-Radau points on [-1,1)
     x, w = gaussradau(coord.ngrid)
-    x = mk_float.(x)
-    w = mk_float.(w)
+    x = MKArray(mk_float.(x))
+    w = MKArray(mk_float.(w))
     # Gauss-Radau points on (-1,1] 
-    xreverse, wreverse = -reverse(x), reverse(w)
+    xreverse, wreverse = .-reverse(x), reverse(w)
     # elemental differentiation matrix
     Dmat = allocate_float(coord.ngrid, coord.ngrid)
     gaussradaulegendre_differentiation_matrix!(Dmat,x,coord.ngrid)
@@ -474,7 +474,7 @@ Or https://doc.nektar.info/tutorials/latest/fundamentals/differentiation/fundame
 
 Note that D has does not include a scaling factor
 """
-function gausslobattolegendre_differentiation_matrix!(D::Array{mk_float,2},x::Array{mk_float,1},ngrid::mk_int)
+function gausslobattolegendre_differentiation_matrix!(D::AbstractMKArray{mk_float,2},x::AbstractMKArray{mk_float,1},ngrid::mk_int)
     D[:,:] .= 0.0
     for ix in 1:ngrid
         for ixp in 1:ngrid
@@ -506,7 +506,7 @@ https://doc.nektar.info/tutorials/latest/fundamentals/differentiation/fundamenta
 
 Note that D has does not include a scaling factor
 """
-function gaussradaulegendre_differentiation_matrix!(D::Array{mk_float,2},x::Array{mk_float,1},ngrid::Int64)
+function gaussradaulegendre_differentiation_matrix!(D::AbstractMKArray{mk_float,2},x::AbstractMKArray{mk_float,1},ngrid::mk_int)
     D[:,:] .= 0.0
     for ix in 1:ngrid
         for ixp in 1:ngrid
@@ -616,7 +616,7 @@ polynomials with order \$k_{max} = 4N +1\$, with \$N=\$`ngrid` and the highest o
 that we integrate is \$P_{N-1}(x)P_{N-1}(x)x^2\$, which has order \$k=2N < k_{max}\$.
 
 """
-function GaussLegendre_weak_product_matrix!(QQ::Array{mk_float,2},ngrid,x,wgts,option;radau=false)
+function GaussLegendre_weak_product_matrix!(QQ::AbstractMKArray{mk_float,2},ngrid,x,wgts,option;radau=false)
     # coefficient in expansion of 
     # lagrange polys in terms of Legendre polys
     gamma = allocate_float(ngrid)
@@ -754,7 +754,7 @@ matrix `Q` acts on two vectors `x1` and `x2` such that the quadratic form
 `y = x1 * Q * x2` is also a vector. See documentation of corresponding function
 for linear inner product matrices.
 """
-function GaussLegendre_weak_product_matrix!(QQ::Array{mk_float,3},ngrid,x,wgts,option;radau=false)
+function GaussLegendre_weak_product_matrix!(QQ::AbstractMKArray{mk_float,3},ngrid,x,wgts,option;radau=false)
     # coefficient in expansion of 
     # lagrange polys in terms of Legendre polys
     gamma = allocate_float(ngrid)
@@ -1022,7 +1022,7 @@ in the function call, and create new matrices for this purpose
 in the `gausslegendre_info` struct. Currently the Laplacian matrix
 is supported with boundary conditions.
 """
-function setup_global_weak_form_matrix!(QQ_global::Array{mk_float,2},
+function setup_global_weak_form_matrix!(QQ_global::AbstractMKArray{mk_float,2},
                                lobatto::gausslegendre_base_info,
                                radau::gausslegendre_base_info, 
                                coord,option; dirichlet_bc=false, periodic_bc=false)
@@ -1100,7 +1100,7 @@ The shared points in the element assembly are
 averaged (instead of simply added) to be consistent with the
 `derivative_elements_to_full_grid!()` function in `calculus.jl`.
 """
-function setup_global_strong_form_matrix!(QQ_global::Array{mk_float,2},
+function setup_global_strong_form_matrix!(QQ_global::AbstractMKArray{mk_float,2},
                                           lobatto::gausslegendre_base_info,
                                           radau::gausslegendre_base_info, 
                                           coord,option; periodic_bc=false)
@@ -1146,7 +1146,7 @@ function setup_global_strong_form_matrix!(QQ_global::Array{mk_float,2},
         # upper boundary assembly on element
         if j == coord.nelement_local
             if periodic_bc && coord.nrank == 1
-                QQ_global[imax[j],imin[j]-1:imax[j]] .+= QQ_j[ngrid,:] / 2.0
+                QQ_global[imax[j],imin[j]-1:imax[j]] .+= QQ_j[ngrid,:] ./ 2.0
             else
                 QQ_global[imax[j],imin[j]-1:imax[j]] .+= QQ_j[ngrid,:]
             end
@@ -1162,7 +1162,7 @@ end
 Construction function to provide the appropriate elemental 
 matrix `Q` to the global matrix assembly functions.
 """
-function get_QQ_local!(QQ::Array{mk_float,2},ielement,
+function get_QQ_local!(QQ::AbstractMKArray{mk_float,2},ielement,
         lobatto::gausslegendre_base_info,
         radau::gausslegendre_base_info, 
         coord,option)
@@ -1543,7 +1543,7 @@ end
 Construction function for nonlinear diffusion matrices, only
 used in the assembly of the collision operator
 """
-function get_QQ_local!(QQ::AbstractArray{mk_float,3},
+function get_QQ_local!(QQ::AbstractMKArray{mk_float,3},
         ielement,lobatto::gausslegendre_base_info,
         radau::gausslegendre_base_info, 
         coord,option)

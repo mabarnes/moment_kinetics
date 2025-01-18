@@ -121,31 +121,31 @@ function add_electron_z_advection_to_Jacobian!(jacobian_matrix, f, dens, upar, p
         # Contributions from (w_∥*vth + upar)*dg/dz
         if include ∈ (:all, :explicit_z)
             if ielement_z == 1 && igrid_z == 1
-                jacobian_matrix[row,(icolumn_min_z-1)*v_size+v_remainder:v_size:(icolumn_max_z-1)*v_size+v_remainder] .+=
-                dt * this_z_speed * z_Dmat[1,:] ./ z_element_scale[ielement_z]
+                @. jacobian_matrix[row,(icolumn_min_z-1)*v_size+v_remainder:v_size:(icolumn_max_z-1)*v_size+v_remainder] +=
+                    dt * this_z_speed * z_Dmat[1,:] / z_element_scale[ielement_z]
             elseif ielement_z == z.nelement_local && igrid_z == z.ngrid
-                jacobian_matrix[row,(icolumn_min_z-1)*v_size+v_remainder:v_size:(icolumn_max_z-1)*v_size+v_remainder] .+=
-                dt * this_z_speed * z_Dmat[end,:] ./ z_element_scale[ielement_z]
+                @. jacobian_matrix[row,(icolumn_min_z-1)*v_size+v_remainder:v_size:(icolumn_max_z-1)*v_size+v_remainder] +=
+                    dt * this_z_speed * z_Dmat[end,:] / z_element_scale[ielement_z]
             elseif igrid_z == z.ngrid
                 # Note igrid_z is only ever 1 when ielement_z==1, because
                 # of the way element boundaries are counted.
                 icolumn_min_z_next = z.imin[ielement_z+1] - 1
                 icolumn_max_z_next = z.imax[ielement_z+1]
                 if this_z_speed < 0.0
-                    jacobian_matrix[row,(icolumn_min_z_next-1)*v_size+v_remainder:v_size:(icolumn_max_z_next-1)*v_size+v_remainder] .+=
-                    dt * this_z_speed * z_Dmat[1,:] ./ z_element_scale[ielement_z+1]
+                    @. jacobian_matrix[row,(icolumn_min_z_next-1)*v_size+v_remainder:v_size:(icolumn_max_z_next-1)*v_size+v_remainder] +=
+                        dt * this_z_speed * z_Dmat[1,:] / z_element_scale[ielement_z+1]
                 elseif this_z_speed > 0.0
-                    jacobian_matrix[row,(icolumn_min_z-1)*v_size+v_remainder:v_size:(icolumn_max_z-1)*v_size+v_remainder] .+=
-                    dt * this_z_speed * z_Dmat[end,:] ./ z_element_scale[ielement_z]
+                    @. jacobian_matrix[row,(icolumn_min_z-1)*v_size+v_remainder:v_size:(icolumn_max_z-1)*v_size+v_remainder] +=
+                        dt * this_z_speed * z_Dmat[end,:] / z_element_scale[ielement_z]
                 else
-                    jacobian_matrix[row,(icolumn_min_z-1)*v_size+v_remainder:v_size:(icolumn_max_z-1)*v_size+v_remainder] .+=
-                    dt * this_z_speed * 0.5 * z_Dmat[end,:] ./ z_element_scale[ielement_z]
-                    jacobian_matrix[row,(icolumn_min_z_next-1)*v_size+v_remainder:v_size:(icolumn_max_z_next-1)*v_size+v_remainder] .+=
-                    dt * this_z_speed * 0.5 * z_Dmat[1,:] ./ z_element_scale[ielement_z+1]
+                    @. jacobian_matrix[row,(icolumn_min_z-1)*v_size+v_remainder:v_size:(icolumn_max_z-1)*v_size+v_remainder] +=
+                        dt * this_z_speed * 0.5 * z_Dmat[end,:] / z_element_scale[ielement_z]
+                    @. jacobian_matrix[row,(icolumn_min_z_next-1)*v_size+v_remainder:v_size:(icolumn_max_z_next-1)*v_size+v_remainder] +=
+                        dt * this_z_speed * 0.5 * z_Dmat[1,:] / z_element_scale[ielement_z+1]
                 end
             else
-                jacobian_matrix[row,(icolumn_min_z-1)*v_size+v_remainder:v_size:(icolumn_max_z-1)*v_size+v_remainder] .+=
-                dt * this_z_speed * z_Dmat[igrid_z,:] ./ z_element_scale[ielement_z]
+                @. jacobian_matrix[row,(icolumn_min_z-1)*v_size+v_remainder:v_size:(icolumn_max_z-1)*v_size+v_remainder] +=
+                    dt * this_z_speed * z_Dmat[igrid_z,:] / z_element_scale[ielement_z]
             end
         end
         # vth = sqrt(2*p/n/me)
@@ -192,31 +192,31 @@ function add_electron_z_advection_to_z_only_Jacobian!(
 
         # Contributions from (w_∥*vth + upar)*dg/dz
         if ielement_z == 1 && igrid_z == 1
-            jacobian_matrix[row,icolumn_min_z:icolumn_max_z] .+=
-            dt * this_z_speed * z_Dmat[1,:] ./ z_element_scale[ielement_z]
+            @. jacobian_matrix[row,icolumn_min_z:icolumn_max_z] +=
+                dt * this_z_speed * z_Dmat[1,:] / z_element_scale[ielement_z]
         elseif ielement_z == z.nelement_local && igrid_z == z.ngrid
-            jacobian_matrix[row,icolumn_min_z:icolumn_max_z] .+=
-            dt * this_z_speed * z_Dmat[end,:] ./ z_element_scale[ielement_z]
+            @. jacobian_matrix[row,icolumn_min_z:icolumn_max_z] +=
+                dt * this_z_speed * z_Dmat[end,:] / z_element_scale[ielement_z]
         elseif igrid_z == z.ngrid
             # Note igrid_z is only ever 1 when ielement_z==1, because
             # of the way element boundaries are counted.
             icolumn_min_z_next = z.imin[ielement_z+1] - 1
             icolumn_max_z_next = z.imax[ielement_z+1]
             if this_z_speed < 0.0
-                jacobian_matrix[row,icolumn_min_z_next:icolumn_max_z_next] .+=
-                dt * this_z_speed * z_Dmat[1,:] ./ z_element_scale[ielement_z+1]
+                @. jacobian_matrix[row,icolumn_min_z_next:icolumn_max_z_next] +=
+                    dt * this_z_speed * z_Dmat[1,:] / z_element_scale[ielement_z+1]
             elseif this_z_speed > 0.0
-                jacobian_matrix[row,icolumn_min_z:icolumn_max_z] .+=
-                dt * this_z_speed * z_Dmat[end,:] ./ z_element_scale[ielement_z]
+                @. jacobian_matrix[row,icolumn_min_z:icolumn_max_z] +=
+                    dt * this_z_speed * z_Dmat[end,:] / z_element_scale[ielement_z]
             else
-                jacobian_matrix[row,icolumn_min_z:icolumn_max_z] .+=
-                dt * this_z_speed * 0.5 * z_Dmat[end,:] ./ z_element_scale[ielement_z]
-                jacobian_matrix[row,icolumn_min_z_next:icolumn_max_z_next] .+=
-                dt * this_z_speed * 0.5 * z_Dmat[1,:] ./ z_element_scale[ielement_z+1]
+                @. jacobian_matrix[row,icolumn_min_z:icolumn_max_z] +=
+                    dt * this_z_speed * 0.5 * z_Dmat[end,:] / z_element_scale[ielement_z]
+                @. jacobian_matrix[row,icolumn_min_z_next:icolumn_max_z_next] +=
+                    dt * this_z_speed * 0.5 * z_Dmat[1,:] / z_element_scale[ielement_z+1]
             end
         else
-            jacobian_matrix[row,icolumn_min_z:icolumn_max_z] .+=
-            dt * this_z_speed * z_Dmat[igrid_z,:] ./ z_element_scale[ielement_z]
+            @. jacobian_matrix[row,icolumn_min_z:icolumn_max_z] +=
+                dt * this_z_speed * z_Dmat[igrid_z,:] / z_element_scale[ielement_z]
         end
     end
 

@@ -13,7 +13,7 @@ export chebyshev_info
 using LinearAlgebra: mul!
 using FFTW
 using MPI
-using ..type_definitions: mk_float, mk_int
+using ..type_definitions
 using ..array_allocation: allocate_float, allocate_complex
 using ..clenshaw_curtis: clenshawcurtisweights
 import ..calculus: elementwise_derivative!
@@ -24,25 +24,29 @@ using ..moment_kinetics_structs: discretization_info
 """
 Chebyshev pseudospectral discretization
 """
-struct chebyshev_base_info{TForward <: FFTW.cFFTWPlan, TBackward <: AbstractFFTs.ScaledPlan}
+struct chebyshev_base_info{TForward <: FFTW.cFFTWPlan,
+                           TBackward <: AbstractFFTs.ScaledPlan,
+                           Tc <: AbstractMKArray{Complex{mk_float}},
+                           Tm <: AbstractMKArray{mk_float},
+                           T <: AbstractMKArray{mk_float}}
     # fext is an array for storing f(z) on the extended domain needed
     # to perform complex-to-complex FFT using the fact that f(theta) is even in theta
-    fext::Array{Complex{mk_float},1}
+    fext::Tc
     # Chebyshev spectral coefficients of distribution function f
     # first dimension contains location within element
     # second dimension indicates the element
-    f::Array{mk_float,2}
+    f::Tm
     # Chebyshev spectral coefficients of derivative of f
-    df::Array{mk_float,1}
+    df::T
     # plan for the complex-to-complex, in-place, forward Fourier transform on Chebyshev-Gauss-Lobatto/Radau grid
     forward::TForward
     # plan for the complex-to-complex, in-place, backward Fourier transform on Chebyshev-Gauss-Lobatto/Radau grid
     # backward_transform::FFTW.cFFTWPlan
     backward::TBackward
     # elementwise differentiation matrix (ngrid*ngrid)
-    Dmat::Array{mk_float,2}
+    Dmat::Tm
     # elementwise differentiation vector (ngrid) for the point x = -1
-    D0::Array{mk_float,1}
+    D0::T
 end
 
 struct chebyshev_info{TForward <: FFTW.cFFTWPlan, TBackward <: AbstractFFTs.ScaledPlan} <: discretization_info
@@ -208,7 +212,7 @@ function scaled_chebyshev_grid(ngrid, nelement_local, n,
         shift = element_shift[j]
         # reverse the order of the original chebyshev_grid (ran from [1,-1])
         # and apply the scale factor and shift
-        grid[imin[j]:imax[j]] .= (reverse(chebyshev_grid)[k:ngrid] * scale_factor) .+ shift
+        grid[imin[j]:imax[j]] .= (reverse(chebyshev_grid)[k:ngrid] .* scale_factor) .+ shift
         # after first element, increase minimum index for chebyshev_grid to 2
         # to avoid double-counting boundary element
         k = 2
@@ -234,7 +238,7 @@ function scaled_chebyshev_radau_grid(ngrid, nelement_local, n,
     if irank == 0 # use a Chebyshev-Gauss-Radau element for the lowest element on rank 0
         scale_factor = element_scale[1]
         shift = element_shift[1]
-        grid[imin[1]:imax[1]] .= (chebyshev_radau_grid[1:ngrid] * scale_factor) .+ shift
+        grid[imin[1]:imax[1]] .= (chebyshev_radau_grid[1:ngrid] .* scale_factor) .+ shift
         # account for the fact that the minimum index needed for the chebyshev_grid
         # within each element changes from 1 to 2 in going from the first element
         # to the remaining elements
@@ -244,7 +248,7 @@ function scaled_chebyshev_radau_grid(ngrid, nelement_local, n,
             shift = element_shift[j]
             # reverse the order of the original chebyshev_grid (ran from [1,-1])
             # and apply the scale factor and shift
-            grid[imin[j]:imax[j]] .= (reverse(chebyshev_grid)[k:ngrid] * scale_factor) .+ shift
+            grid[imin[j]:imax[j]] .= (reverse(chebyshev_grid)[k:ngrid] .* scale_factor) .+ shift
         end
         wgts = clenshaw_curtis_radau_weights(ngrid, nelement_local, n, imin, imax, element_scale)
     else
@@ -257,7 +261,7 @@ function scaled_chebyshev_radau_grid(ngrid, nelement_local, n,
             shift = element_shift[j]
             # reverse the order of the original chebyshev_grid (ran from [1,-1])
             # and apply the scale factor and shift
-            grid[imin[j]:imax[j]] .= (reverse(chebyshev_grid)[k:ngrid] * scale_factor) .+ shift
+            grid[imin[j]:imax[j]] .= (reverse(chebyshev_grid)[k:ngrid] .* scale_factor) .+ shift
             # after first element, increase minimum index for chebyshev_grid to 2
             # to avoid double-counting boundary element
             k = 2
@@ -566,7 +570,7 @@ with all grid points for Clenshaw-Curtis quadrature
 """
 function clenshaw_curtis_weights(ngrid, nelement_local, n, imin, imax, element_scale)
     # create array containing the integration weights
-    wgts = zeros(mk_float, n)
+    wgts = mk_zeros(n)
     # calculate the modified Chebshev moments of the first kind
     μ = chebyshevmoments(ngrid)
     # calculate the raw weights for a normalised grid on [-1,1]
@@ -574,10 +578,10 @@ function clenshaw_curtis_weights(ngrid, nelement_local, n, imin, imax, element_s
     @inbounds begin
         # calculate the weights within a single element and
         # scale to account for modified domain (not [-1,1])
-        wgts[1:ngrid] = w*element_scale[1]
+        wgts[1:ngrid] .= w .* element_scale[1]
         if nelement_local > 1
             for j ∈ 2:nelement_local
-                wgts[imin[j]-1:imax[j]] .+= w*element_scale[j]
+                wgts[imin[j]-1:imax[j]] .+= w .* element_scale[j]
             end
         end
     end
@@ -586,7 +590,7 @@ end
 
 function clenshaw_curtis_radau_weights(ngrid, nelement_local, n, imin, imax, element_scale)
     # create array containing the integration weights
-    wgts = zeros(mk_float, n)
+    wgts = mk_zeros(n)
     # calculate the modified Chebshev moments of the first kind
     μ = chebyshevmoments(ngrid)
     wgts_lobatto = clenshawcurtisweights(μ)
@@ -594,13 +598,13 @@ function clenshaw_curtis_radau_weights(ngrid, nelement_local, n, imin, imax, ele
     @inbounds begin
         # calculate the weights within a single element and
         # scale to account for modified domain (not [-1,1])
-        wgts[1:ngrid] .= wgts_radau[1:ngrid]*element_scale[1]
+        wgts[1:ngrid] .= wgts_radau[1:ngrid] .* element_scale[1]
         if nelement_local > 1
             for j ∈ 2:nelement_local
                 # account for double-counting of points at inner element boundaries
-                wgts[imin[j]-1] += wgts_lobatto[1]*element_scale[j]
+                wgts[imin[j]-1] += wgts_lobatto[1] .* element_scale[j]
                 # assign weights for interior of elements and one boundary point
-                wgts[imin[j]:imax[j]] .= wgts_lobatto[2:ngrid]*element_scale[j]
+                wgts[imin[j]:imax[j]] .= wgts_lobatto[2:ngrid] .* element_scale[j]
             end
         end
     end
@@ -612,7 +616,7 @@ compute and return modified Chebyshev moments of the first kind:
 ∫dx Tᵢ(x) over range [-1,1]
 """
 function chebyshevmoments(N)
-    μ = zeros(N)
+    μ = mk_zeros(N)
     @inbounds for i = 0:2:N-1
         μ[i+1] = 2/(1-i^2)
     end
@@ -646,7 +650,7 @@ function chebyshev_radau_points(n)
     return grid
 end
 
-function chebyshev_radau_weights(moments::Array{mk_float,1}, n)
+function chebyshev_radau_weights(moments::MKVector{mk_float}, n)
     # input should have values moments[j] = (cos(pi j) + 1)/(1-j^2) for j >= 0
     nfft = 2*n - 1
     # create array for moments on extended [0,2π] domain in theta = ArcCos[z]
@@ -668,7 +672,7 @@ function chebyshev_radau_weights(moments::Array{mk_float,1}, n)
     # also sort out normalisation and order of array
     # note that fft order output is reversed compared to the order of 
     # the grid chosen, which runs from (-1,1]
-    wgts = allocate_float(n)
+    wgts = mk_zeros(n)
     @inbounds begin
         for j ∈ 2:n
             wgts[n-j+1] = 2.0*real(fext[j])/nfft
@@ -862,11 +866,11 @@ https://people.maths.ox.ac.uk/trefethen/8all.pdf
 full list of Chapters may be obtained here 
 https://people.maths.ox.ac.uk/trefethen/pdetext.html
 """
-    function cheb_derivative_matrix_elementwise!(D::Array{Float64,2},n::Int64)
+    function cheb_derivative_matrix_elementwise!(D::MKArray{Float64,2},n::Int64)
         
         # define Gauss-Lobatto Chebyshev points in reversed order x_j = { -1, ... , 1}
         # consistent with use in elements of the grid
-        x = Array{Float64,1}(undef,n)
+        x = allocate_float(n)
         for j in 1:n
             x[j] = cospi((n-j)/(n-1))
         end
@@ -935,7 +939,7 @@ https://people.maths.ox.ac.uk/trefethen/pdetext.html
             D[j,j] = -sum(D[j,:])
         end
     end
-    function Djk(x::Array{Float64,1},j::Int64,k::Int64,c_j::Float64,c_k::Float64)
+    function Djk(x::AbstractMKArray{mk_float},j::mk_int,k::mk_int,c_j::mk_float,c_k::mk_float)
         return  (c_j/c_k)*((-1)^(k+j))/(x[j] - x[k])
     end
  """
@@ -943,9 +947,9 @@ https://people.maths.ox.ac.uk/trefethen/pdetext.html
  Note that a similar function could be constructed for the 
  Chebyshev-Lobatto grid, if desired.
  """
-    function cheb_derivative_matrix_elementwise_radau_by_FFT!(D::Array{Float64,2}, coord, f, df, fext, forward)
-        ff_buffer = Array{Float64,1}(undef,coord.ngrid)
-        df_buffer = Array{Float64,1}(undef,coord.ngrid)
+     function cheb_derivative_matrix_elementwise_radau_by_FFT!(D::AbstractMKArray{mk_float}, coord, f, df, fext, forward)
+        ff_buffer = allocate_float(coord.ngrid)
+        df_buffer = allocate_float(coord.ngrid)
         # use response matrix approach to calculate derivative matrix D 
         for j in 1:coord.ngrid 
             ff_buffer .= 0.0 
@@ -962,9 +966,9 @@ https://people.maths.ox.ac.uk/trefethen/pdetext.html
         end
     end
     
-    function cheb_lower_endpoint_derivative_vector_elementwise_radau_by_FFT!(D::Array{Float64,1}, coord, f, df, fext, forward)
-        ff_buffer = Array{Float64,1}(undef,coord.ngrid)
-        df_buffer = Array{Float64,1}(undef,coord.ngrid)
+    function cheb_lower_endpoint_derivative_vector_elementwise_radau_by_FFT!(D::AbstractMKArray{mk_float}, coord, f, df, fext, forward)
+        ff_buffer = allocate_float(coord.ngrid)
+        df_buffer = allocate_float(coord.ngrid)
         # use response matrix approach to calculate derivative vector D 
         for j in 1:coord.ngrid 
             ff_buffer .= 0.0 

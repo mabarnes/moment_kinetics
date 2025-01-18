@@ -11,7 +11,7 @@ export setup_geometry_input
 using ..input_structs: geometry_input, set_defaults_and_check_section!
 using ..file_io: input_option_error
 using ..array_allocation: allocate_float
-using ..type_definitions: mk_float, mk_int
+using ..type_definitions
 using ..reference_parameters: setup_reference_parameters
 
 using OrderedCollections: OrderedDict
@@ -31,35 +31,35 @@ input::geometry_input
 rhostar::mk_float
 # the spatially varying coefficients
 # Bz/Bref
-Bzed::Array{mk_float,2}
+Bzed::MKArray{mk_float,2}
 # Bzeta/Bref
-Bzeta::Array{mk_float,2}
+Bzeta::MKArray{mk_float,2}
 # Btot/Bref
-Bmag::Array{mk_float,2}
+Bmag::MKArray{mk_float,2}
 # bz -- unit vector component in z direction
-bzed::Array{mk_float,2}
+bzed::MKArray{mk_float,2}
 # bz -- unit vector component in zeta direction
-bzeta::Array{mk_float,2}
+bzeta::MKArray{mk_float,2}
 
 
 # now the new coefficients
 
 # d Bmag d z
-dBdz::Array{mk_float,2}
+dBdz::MKArray{mk_float,2}
 # d Bmag d r
-dBdr::Array{mk_float,2}
+dBdr::MKArray{mk_float,2}
 # jacobian =  r grad r x grad z . grad zeta
-jacobian::Array{mk_float,2}
+jacobian::MKArray{mk_float,2}
 
 # magnetic drift physics coefficients
 # cvdriftr = (b/B) x (b.grad b) . grad r
-cvdriftr::Array{mk_float,2}
+cvdriftr::MKArray{mk_float,2}
 # cvdriftz = (b/B) x (b.grad b) . grad z
-cvdriftz::Array{mk_float,2}
+cvdriftz::MKArray{mk_float,2}
 # gbdriftr = (b/B^2) x grad B . grad r
-gbdriftr::Array{mk_float,2}
+gbdriftr::MKArray{mk_float,2}
 # gbdriftz = (b/B^2) x grad B . grad z
-gbdriftz::Array{mk_float,2}
+gbdriftz::MKArray{mk_float,2}
 end
 
 """

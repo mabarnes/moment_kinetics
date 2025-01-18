@@ -2376,6 +2376,11 @@ function put_legend_right(fig, ax; kwargs...)
     return Legend(fig[end,end+1], ax; kwargs...)
 end
 
+if !(AbstractMKVector <: AbstractArray)
+    # Method to pass wrapped array through to matrix_grid(), since this is an internal
+    # function of Makie that does not have methods added by InboundsArrays.jl
+    @inline Makie.matrix_grid(t, x::AbstractMKArray, y::AbstractMKArray, z::AbstractMKArray) = Makie.matrix_grid(t, x.a, y.a, z.a)
+end
 """
     curvilinear_grid_mesh(xs, ys, zs, colors)
 
@@ -2589,13 +2594,13 @@ function irregular_heatmap!(ax, xs, ys, zs; kwargs...)
         end
     end
 
-    vertices, faces, colors = curvilinear_grid_mesh(xs, ys, zeros(nx, ny), zs)
+    vertices, faces, colors = curvilinear_grid_mesh(xs, ys, mk_zeros(nx, ny), zs)
 
     return mesh!(ax, vertices, faces; color = colors, shading = NoShading, kwargs...)
 end
 
 """
-    grid_points_to_faces(coord::AbstractVector)
+    grid_points_to_faces(coord::AbstractMKVector)
     grid_points_to_faces(coord::Observable{T} where T <: AbstractVector)
     grid_points_to_faces(coord::AbstractMatrix)
     grid_points_to_faces(coord::Observable{T} where T <: AbstractMatrix)
@@ -2608,7 +2613,7 @@ points between grid points.
 """
 function grid_points_to_faces end
 
-function grid_points_to_faces(coord::AbstractVector)
+function grid_points_to_faces(coord::AbstractMKVector)
     n = length(coord)
     faces = allocate_float(n+1)
     faces[1] = coord[1]
@@ -2620,7 +2625,7 @@ function grid_points_to_faces(coord::AbstractVector)
     return faces
 end
 
-function grid_points_to_faces(coord::Observable{T} where T <: AbstractVector)
+function grid_points_to_faces(coord::Observable{T} where T <: AbstractMKVector)
     n = length(coord.val)
     faces = allocate_float(n+1)
     faces[1] = coord.val[1]
@@ -2632,7 +2637,7 @@ function grid_points_to_faces(coord::Observable{T} where T <: AbstractVector)
     return faces
 end
 
-function grid_points_to_faces(coord::AbstractMatrix)
+function grid_points_to_faces(coord::AbstractMKMatrix)
     ni, nj = size(coord)
     faces = allocate_float(ni+1, nj+1)
     faces[1,1] = coord[1,1]
@@ -2656,7 +2661,7 @@ function grid_points_to_faces(coord::AbstractMatrix)
     return faces
 end
 
-function grid_points_to_faces(coord::Observable{T} where T <: AbstractMatrix)
+function grid_points_to_faces(coord::Observable{T} where T <: AbstractMKMatrix)
     ni, nj = size(coord.val)
     faces = allocate_float(ni+1, nj+1)
     faces[1,1] = coord.val[1,1]

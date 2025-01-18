@@ -24,7 +24,7 @@ clenshawcurtisweights(μ) = clenshawcurtisweights!(copy(μ))
 clenshawcurtisweights!(μ) = clenshawcurtisweights!(μ, plan_clenshawcurtis(μ))
 function clenshawcurtisweights!(μ, plan)
     N = length(μ)
-    rmul!(μ, inv(N-1))
+    μ .*= inv(N-1)
     plan*μ
     μ[1] *= 0.5; μ[N] *= 0.5
     return μ

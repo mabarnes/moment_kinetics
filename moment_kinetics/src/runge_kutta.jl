@@ -11,7 +11,7 @@ using ..array_allocation: allocate_float
 using ..communication
 using ..input_structs
 using ..looping
-using ..type_definitions: mk_float
+using ..type_definitions
 
 using MPI
 using StatsBase: mean
@@ -360,6 +360,13 @@ function setup_runge_kutta_coefficients!(type, input_CFL_prefactor, split_operat
               * "is not (n_rk_stages,)=$correct_size")
     end
 
+    if rk_coefs !== nothing
+        rk_coefs = MKArray(rk_coefs)
+    end
+    if rk_coefs_implicit !== nothing
+        rk_coefs_implicit = MKArray(rk_coefs_implicit)
+    end
+
     return rk_coefs, rk_coefs_implicit, implicit_coefficient_is_zero, n_rk_stages,
            rk_order, adaptive, low_storage, CFL_prefactor
 end
@@ -547,9 +554,9 @@ end
 
 # Ion distribution function
 function rk_update_loop_low_storage!(rk_coefs, rk_coefs_implicit,
-                                     new::AbstractArray{mk_float,5},
-                                     old::AbstractArray{mk_float,5},
-                                     first::AbstractArray{mk_float,5}, new_implicit,
+                                     new::AbstractMKArray{mk_float,5},
+                                     old::AbstractMKArray{mk_float,5},
+                                     first::AbstractMKArray{mk_float,5}, new_implicit,
                                      old_implicit, first_implicit; output=new)
     @boundscheck length(rk_coefs) == 3
 
@@ -573,7 +580,7 @@ function rk_update_loop_low_storage!(rk_coefs, rk_coefs_implicit,
     return nothing
 end
 function rk_update_loop!(rk_coefs, rk_coefs_implicit,
-                         var_arrays::NTuple{N,AbstractArray{mk_float,5}},
+                         var_arrays::NTuple{N,AbstractMKArray{mk_float,5}},
                          var_arrays_implicit; output=var_arrays[N]) where N
     @boundscheck length(rk_coefs) ≥ N
 
@@ -596,9 +603,9 @@ end
 
 # Ion moments
 function rk_update_loop_low_storage!(rk_coefs, rk_coefs_implicit,
-                                     new::AbstractArray{mk_float,3},
-                                     old::AbstractArray{mk_float,3},
-                                     first::AbstractArray{mk_float,3}, new_implicit,
+                                     new::AbstractMKArray{mk_float,3},
+                                     old::AbstractMKArray{mk_float,3},
+                                     first::AbstractMKArray{mk_float,3}, new_implicit,
                                      old_implicit, first_implicit; output=new)
     @boundscheck length(rk_coefs) == 3
 
@@ -622,7 +629,7 @@ function rk_update_loop_low_storage!(rk_coefs, rk_coefs_implicit,
     return nothing
 end
 function rk_update_loop!(rk_coefs, rk_coefs_implicit,
-                         var_arrays::NTuple{N,AbstractArray{mk_float,3}},
+                         var_arrays::NTuple{N,AbstractMKArray{mk_float,3}},
                          var_arrays_implicit; output=var_arrays[N]) where N
     @boundscheck length(rk_coefs) ≥ N
 
@@ -643,9 +650,9 @@ end
 
 # Electron distribution function
 function rk_update_loop_low_storage!(rk_coefs, rk_coefs_implicit,
-                                     new::AbstractArray{mk_float,4},
-                                     old::AbstractArray{mk_float,4},
-                                     first::AbstractArray{mk_float,4}, new_implicit,
+                                     new::AbstractMKArray{mk_float,4},
+                                     old::AbstractMKArray{mk_float,4},
+                                     first::AbstractMKArray{mk_float,4}, new_implicit,
                                      old_implicit, first_implicit; output=new)
     @boundscheck length(rk_coefs) == 3
 
@@ -669,7 +676,7 @@ function rk_update_loop_low_storage!(rk_coefs, rk_coefs_implicit,
     return nothing
 end
 function rk_update_loop!(rk_coefs, rk_coefs_implicit,
-                         var_arrays::NTuple{N,AbstractArray{mk_float,4}},
+                         var_arrays::NTuple{N,AbstractMKArray{mk_float,4}},
                          var_arrays_implicit; output=var_arrays[N]) where N
     @boundscheck length(rk_coefs) ≥ N
 
@@ -693,9 +700,9 @@ end
 
 # Electron moments
 function rk_update_loop_low_storage!(rk_coefs, rk_coefs_implicit,
-                                     new::AbstractArray{mk_float,2},
-                                     old::AbstractArray{mk_float,2},
-                                     first::AbstractArray{mk_float,2}, new_implicit,
+                                     new::AbstractMKArray{mk_float,2},
+                                     old::AbstractMKArray{mk_float,2},
+                                     first::AbstractMKArray{mk_float,2}, new_implicit,
                                      old_implicit, first_implicit; output=new)
     @boundscheck length(rk_coefs) == 3
 
@@ -719,7 +726,7 @@ function rk_update_loop_low_storage!(rk_coefs, rk_coefs_implicit,
     return nothing
 end
 function rk_update_loop!(rk_coefs, rk_coefs_implicit,
-                         var_arrays::NTuple{N,AbstractArray{mk_float,2}},
+                         var_arrays::NTuple{N,AbstractMKArray{mk_float,2}},
                          var_arrays_implicit;
                          output=var_arrays[N]) where N
     @boundscheck length(rk_coefs) ≥ N
@@ -742,9 +749,9 @@ end
 
 # Neutral distribution function
 function rk_update_loop_neutrals_low_storage!(rk_coefs, rk_coefs_implicit,
-                                              new::AbstractArray{mk_float,6},
-                                              old::AbstractArray{mk_float,6},
-                                              first::AbstractArray{mk_float,6},
+                                              new::AbstractMKArray{mk_float,6},
+                                              old::AbstractMKArray{mk_float,6},
+                                              first::AbstractMKArray{mk_float,6},
                                               new_implicit, old_implicit, first_implicit;
                                               output=new)
     @boundscheck length(rk_coefs) == 3
@@ -769,7 +776,7 @@ function rk_update_loop_neutrals_low_storage!(rk_coefs, rk_coefs_implicit,
     return nothing
 end
 function rk_update_loop_neutrals!(rk_coefs, rk_coefs_implicit,
-                                  var_arrays::NTuple{N,AbstractArray{mk_float,6}},
+                                  var_arrays::NTuple{N,AbstractMKArray{mk_float,6}},
                                   var_arrays_implicit; output=var_arrays[N]) where N
     @boundscheck length(rk_coefs) ≥ N
 
@@ -793,9 +800,9 @@ end
 
 # Neutral moments
 function rk_update_loop_neutrals_low_storage!(rk_coefs, rk_coefs_implicit,
-                                              new::AbstractArray{mk_float,3},
-                                              old::AbstractArray{mk_float,3},
-                                              first::AbstractArray{mk_float,3},
+                                              new::AbstractMKArray{mk_float,3},
+                                              old::AbstractMKArray{mk_float,3},
+                                              first::AbstractMKArray{mk_float,3},
                                               new_implicit, old_implicit, first_implicit;
                                               output=new)
     @boundscheck length(rk_coefs) == 3
@@ -820,7 +827,7 @@ function rk_update_loop_neutrals_low_storage!(rk_coefs, rk_coefs_implicit,
     return nothing
 end
 function rk_update_loop_neutrals!(rk_coefs, rk_coefs_implicit,
-                                  var_arrays::NTuple{N,AbstractArray{mk_float,3}},
+                                  var_arrays::NTuple{N,AbstractMKArray{mk_float,3}},
                                   var_arrays_implicit; output=var_arrays[N]) where N
     @boundscheck length(rk_coefs) ≥ N
 

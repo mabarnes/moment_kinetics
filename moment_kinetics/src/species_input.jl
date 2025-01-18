@@ -6,7 +6,7 @@ module species_input
 
 export get_species_input
 
-using ..type_definitions: mk_float, mk_int
+using ..type_definitions
 using ..input_structs: set_defaults_and_check_section!
 using ..input_structs: species_composition, ion_species_parameters, neutral_species_parameters
 using ..input_structs: spatial_initial_condition_input, velocity_initial_condition_input
@@ -63,8 +63,8 @@ function get_species_input(toml_input, warn_unexpected::Bool)
     nspec_tot = nspec_ion + nspec_neutral
     
     # read individual species parameters
-    ion_spec_params_list = Array{ion_species_parameters,1}(undef,nspec_ion)
-    neutral_spec_params_list = Array{neutral_species_parameters,1}(undef,nspec_neutral)
+    ion_spec_params_list = MKVector{ion_species_parameters}(undef,nspec_ion)
+    neutral_spec_params_list = MKVector{neutral_species_parameters}(undef,nspec_neutral)
     for is in 1:nspec_ion
         spec_section = set_defaults_and_check_section!(
             toml_input, "ion_species_$is", warn_unexpected;

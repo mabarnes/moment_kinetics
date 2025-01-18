@@ -154,31 +154,31 @@ function add_electron_vpa_advection_to_Jacobian!(jacobian_matrix, f, dens, upar,
         #    + w_∥*1/2*source_density_amplitude/n) * dg/dw_∥
         if include ∈ (:all, :explicit_v)
             if ielement_vpa == 1 && igrid_vpa == 1
-                jacobian_matrix[row,(iz-1)*v_size+(ivperp-1)*vpa.n+icolumn_min_vpa:(iz-1)*v_size+(ivperp-1)*vpa.n+icolumn_max_vpa] .+=
-                    dt * vpa_speed * vpa_Dmat[1,:] ./ vpa_element_scale[ielement_vpa]
+                @. jacobian_matrix[row,(iz-1)*v_size+(ivperp-1)*vpa.n+icolumn_min_vpa:(iz-1)*v_size+(ivperp-1)*vpa.n+icolumn_max_vpa] +=
+                    dt * vpa_speed * vpa_Dmat[1,:] / vpa_element_scale[ielement_vpa]
             elseif ielement_vpa == vpa.nelement_local && igrid_vpa == vpa.ngrid
-                jacobian_matrix[row,(iz-1)*v_size+(ivperp-1)*vpa.n+icolumn_min_vpa:(iz-1)*v_size+(ivperp-1)*vpa.n+icolumn_max_vpa] .+=
-                    dt * vpa_speed * vpa_Dmat[end,:] ./ vpa_element_scale[ielement_vpa]
+                @. jacobian_matrix[row,(iz-1)*v_size+(ivperp-1)*vpa.n+icolumn_min_vpa:(iz-1)*v_size+(ivperp-1)*vpa.n+icolumn_max_vpa] +=
+                    dt * vpa_speed * vpa_Dmat[end,:] / vpa_element_scale[ielement_vpa]
             elseif igrid_vpa == vpa.ngrid
                 # Note igrid_vpa is only ever 1 when ielement_vpa==1, because
                 # of the way element boundaries are counted.
                 icolumn_min_vpa_next = vpa.imin[ielement_vpa+1] - 1
                 icolumn_max_vpa_next = vpa.imax[ielement_vpa+1]
                 if vpa_speed < 0.0
-                    jacobian_matrix[row,(iz-1)*v_size+(ivperp-1)*vpa.n+icolumn_min_vpa_next:(iz-1)*v_size+(ivperp-1)*vpa.n+icolumn_max_vpa_next] .+=
-                        dt * vpa_speed * vpa_Dmat[1,:] ./ vpa_element_scale[ielement_vpa+1]
+                    @. jacobian_matrix[row,(iz-1)*v_size+(ivperp-1)*vpa.n+icolumn_min_vpa_next:(iz-1)*v_size+(ivperp-1)*vpa.n+icolumn_max_vpa_next] +=
+                        dt * vpa_speed * vpa_Dmat[1,:] / vpa_element_scale[ielement_vpa+1]
                 elseif vpa_speed > 0.0
-                    jacobian_matrix[row,(iz-1)*v_size+(ivperp-1)*vpa.n+icolumn_min_vpa:(iz-1)*v_size+(ivperp-1)*vpa.n+icolumn_max_vpa] .+=
-                        dt * vpa_speed * vpa_Dmat[end,:] ./ vpa_element_scale[ielement_vpa]
+                    @. jacobian_matrix[row,(iz-1)*v_size+(ivperp-1)*vpa.n+icolumn_min_vpa:(iz-1)*v_size+(ivperp-1)*vpa.n+icolumn_max_vpa] +=
+                        dt * vpa_speed * vpa_Dmat[end,:] / vpa_element_scale[ielement_vpa]
                 else
-                    jacobian_matrix[row,(iz-1)*v_size+(ivperp-1)*vpa.n+icolumn_min_vpa:(iz-1)*v_size+(ivperp-1)*vpa.n+icolumn_max_vpa] .+=
-                        dt * vpa_speed * 0.5 * vpa_Dmat[end,:] ./ vpa_element_scale[ielement_vpa]
-                    jacobian_matrix[row,(iz-1)*v_size+(ivperp-1)*vpa.n+icolumn_min_vpa_next:(iz-1)*v_size+(ivperp-1)*vpa.n+icolumn_max_vpa_next] .+=
-                        dt * vpa_speed * 0.5 * vpa_Dmat[1,:] ./ vpa_element_scale[ielement_vpa+1]
+                    @. jacobian_matrix[row,(iz-1)*v_size+(ivperp-1)*vpa.n+icolumn_min_vpa:(iz-1)*v_size+(ivperp-1)*vpa.n+icolumn_max_vpa] +=
+                        dt * vpa_speed * 0.5 * vpa_Dmat[end,:] / vpa_element_scale[ielement_vpa]
+                    @. jacobian_matrix[row,(iz-1)*v_size+(ivperp-1)*vpa.n+icolumn_min_vpa_next:(iz-1)*v_size+(ivperp-1)*vpa.n+icolumn_max_vpa_next] +=
+                        dt * vpa_speed * 0.5 * vpa_Dmat[1,:] / vpa_element_scale[ielement_vpa+1]
                 end
             else
-                jacobian_matrix[row,(iz-1)*v_size+(ivperp-1)*vpa.n+icolumn_min_vpa:(iz-1)*v_size+(ivperp-1)*vpa.n+icolumn_max_vpa] .+=
-                    dt * vpa_speed * vpa_Dmat[igrid_vpa,:] ./ vpa_element_scale[ielement_vpa]
+                @. jacobian_matrix[row,(iz-1)*v_size+(ivperp-1)*vpa.n+icolumn_min_vpa:(iz-1)*v_size+(ivperp-1)*vpa.n+icolumn_max_vpa] +=
+                    dt * vpa_speed * vpa_Dmat[igrid_vpa,:] / vpa_element_scale[ielement_vpa]
             end
         end
         # q = 2*p*vth*∫dw_∥ w_∥^3 g

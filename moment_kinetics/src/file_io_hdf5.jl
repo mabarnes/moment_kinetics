@@ -87,7 +87,7 @@ end
 
 # HDF5.H5DataStore is the supertype for HDF5.File and HDF5.Group
 function write_single_value!(file_or_group::HDF5.H5DataStore, name,
-                             data::Union{Number, AbstractString, AbstractArray{T,N}},
+                             data::Union{Number, AbstractString, AbstractMKArray{T,N}},
                              coords::Union{coordinate,mk_int,NamedTuple}...; parallel_io,
                              description=nothing, units=nothing,
                              overwrite=false) where {T,N}
@@ -259,7 +259,7 @@ function extend_time_index!(h5, t_idx)
 end
 
 function append_to_dynamic_var(io_var::HDF5.Dataset,
-                               data::Union{Nothing,Number,AbstractArray{T,N}}, t_idx,
+                               data::Union{Nothing,Number,AbstractMKArray{T,N}}, t_idx,
                                parallel_io::Bool,
                                coords::Union{coordinate,NamedTuple,Integer}...;
                                only_root=false, write_from_this_rank=nothing) where {T,N}

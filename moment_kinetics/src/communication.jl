@@ -20,6 +20,7 @@ export setup_distributed_memory_MPI
 export setup_distributed_memory_MPI_for_weights_precomputation
 export _block_synchronize, _anyv_subblock_synchronize
 
+using InboundsArrays
 using LinearAlgebra
 using MPI
 using SHA
@@ -28,7 +29,7 @@ using SHA
 import moment_kinetics
 using ..debugging
 using ..timer_utils
-using ..type_definitions: mk_float, mk_int
+using ..type_definitions
 
 """
 Can use a const `MPI.Comm` for `comm_world` and just copy the pointer from
@@ -396,7 +397,7 @@ end
     Special type for debugging race conditions in accesses to shared-memory arrays.
     Only used if debugging._debug_level is high enough.
     """
-    struct DebugMPISharedArray{T, N, TArray <: AbstractArray{T,N}, TIntArray <: AbstractArray{mk_int,N}, TBoolArray <: AbstractArray{Bool,N}} <: AbstractArray{T, N}
+    struct DebugMPISharedArray{T, N, TArray <: AbstractMKArray{T,N}, TIntArray <: AbstractMKArray{mk_int,N}, TBoolArray <: AbstractMKArray{Bool,N}} <: AbstractMKArray{T, N}
         data::TArray
         accessed::Base.RefValue{Bool}
         is_initialized::TIntArray
@@ -412,16 +413,16 @@ end
     export DebugMPISharedArray
 
     # Constructors
-    function DebugMPISharedArray(array::AbstractArray, comm)
+    function DebugMPISharedArray(array::AbstractMKArray, comm)
         dims = size(array)
         is_initialized = allocate_shared(mk_int, dims; comm=comm, maybe_debug=false)
         if block_rank[] == 0
             is_initialized .= 0
         end
         accessed = Ref(false)
-        is_read = Array{Bool}(undef, dims)
+        is_read = MKArray{Bool}(undef, dims)
         is_read .= false
-        is_written = Array{Bool}(undef, dims)
+        is_written = MKArray{Bool}(undef, dims)
         is_written .= false
         creation_stack_trace = @debug_track_array_allocate_location_ifelse(
                                    string([string(s, "\n") for s in stacktrace()]...),
@@ -430,9 +431,9 @@ end
             # Initialize as `true` so that the first call to _block_synchronize() with
             # @debug_detect_redundant_block_synchronize activated does not register the
             # previous call as unnecessary
-            previous_is_read = Array{Bool}(undef, dims)
+            previous_is_read = MKArray{Bool}(undef, dims)
             previous_is_read .= true
-            previous_is_written = Array{Bool}(undef, dims)
+            previous_is_written = MKArray{Bool}(undef, dims)
             previous_is_written .= true
             return DebugMPISharedArray(array, accessed, is_initialized, is_read, is_written,
                                        creation_stack_trace, previous_is_read,
@@ -440,6 +441,19 @@ end
         end
         return DebugMPISharedArray(array, accessed, is_initialized, is_read, is_written,
                                    creation_stack_trace)
+    end
+
+    if MKArray <: AbstractInboundsArray
+        # Hack so that DebugMPISharedArray behaves like the wrapped InboundsArray when
+        # needed (i.e. it behaves as though it had a field called `a`, which InboundsArray
+        # is expected to), when MKArray is an InboundsArray
+        function Base.getproperty(value::DebugMPISharedArray, name::Symbol, args...)
+            if name === :a
+                return Base.getproperty(value.data, name, args...)
+            else
+                return getfield(value, name, args...)
+            end
+        end
     end
 
     # Define functions needed for AbstractArray interface
@@ -489,12 +503,24 @@ end
         error("Forbidden to convert DebugMPISharedArray to Array - this would "
               * "silently disable the debug checks")
     end
+    function Base.convert(::Type{MKArray{T,N}} where {T,N}, a::DebugMPISharedArray)
+        error("Forbidden to convert DebugMPISharedArray to MKArray - this would "
+              * "silently disable the debug checks")
+    end
+    function Base.convert(::Type{MKArray{T}} where {T}, a::DebugMPISharedArray)
+        error("Forbidden to convert DebugMPISharedArray to MKArray - this would "
+              * "silently disable the debug checks")
+    end
+    function Base.convert(::Type{MKArray}, a::DebugMPISharedArray)
+        error("Forbidden to convert DebugMPISharedArray to MKArray - this would "
+              * "silently disable the debug checks")
+    end
 
     # Explicit overload for view() so the result is a DebugMPISharedArray
     import Base: view
     function view(A::DebugMPISharedArray, inds...)
         return DebugMPISharedArray(
-            (isa(getfield(A, name), AbstractArray) ?
+            (isa(getfield(A, name), AbstractMKArray) ?
              view(getfield(A, name), inds...) :
              getfield(A, name)
              for name ∈ fieldnames(typeof(A)))...)
@@ -504,7 +530,7 @@ end
     import Base: vec
     function vec(A::DebugMPISharedArray)
         return DebugMPISharedArray(
-            (isa(getfield(A, name), AbstractArray) ?
+            (isa(getfield(A, name), AbstractMKArray) ?
              vec(getfield(A, name)) :
              getfield(A, name)
              for name ∈ fieldnames(typeof(A)))...)
@@ -546,10 +572,10 @@ end
 
 """
 Type used to declare a shared-memory array. When debugging is not active `MPISharedArray`
-is just an alias for `Array`, but when `@debug_shared_array` is activated, it is instead
-defined as an alias for `DebugMPISharedArray`.
+is an alias for `MKArray`, but when `@debug_shared_array` is activated, it is
+instead defined as an alias for `DebugMPISharedArray`.
 """
-const MPISharedArray = @debug_shared_array_ifelse(DebugMPISharedArray, Array)
+const MPISharedArray = @debug_shared_array_ifelse(DebugMPISharedArray, MKArray)
 
 """
 Get a shared-memory array of `mk_float` (shared by all processes in a 'block')
@@ -576,7 +602,7 @@ maybe_debug - Bool
 
 Returns
 -------
-Array{mk_float}
+MKArray{mk_float}
 """
 function allocate_shared(T, dims; comm=nothing, maybe_debug=true)
     if comm === nothing
@@ -584,10 +610,13 @@ function allocate_shared(T, dims; comm=nothing, maybe_debug=true)
     elseif comm == MPI.COMM_NULL
         # If `comm` is a null communicator (on this process), then this array is just a
         # dummy that will not be used.
-        array = Array{T}(undef, (0 for _ ∈ dims)...)
+        # Use Array (which does not disable bounds-checking by default) if we are
+        # debugging.
+        array = MKArray{T}(undef, (0 for _ ∈ dims)...)
 
         @debug_shared_array begin
-            # If @debug_shared_array is active, create DebugMPISharedArray instead of Array
+            # If @debug_shared_array is active, create DebugMPISharedArray instead of
+            # MKArray
             if maybe_debug
                 array = DebugMPISharedArray(array, comm)
             end
@@ -602,10 +631,11 @@ function allocate_shared(T, dims; comm=nothing, maybe_debug=true)
     if n == 0
         # Special handling as some MPI implementations cause errors when allocating a
         # size-zero array
-        array = Array{T}(undef, dims...)
+        array = MKArray{T}(undef, dims...)
 
         @debug_shared_array begin
-            # If @debug_shared_array is active, create DebugMPISharedArray instead of Array
+            # If @debug_shared_array is active, create DebugMPISharedArray instead of
+            # MKArray
             if maybe_debug
                 array = DebugMPISharedArray(array, comm)
             end
@@ -649,7 +679,7 @@ function allocate_shared(T, dims; comm=nothing, maybe_debug=true)
     # Array is allocated contiguously, but `array_temp` contains only the 'locally owned'
     # part.  We want to use as a shared array, so want to wrap the entire shared array.
     # Get array from rank-0 process, which 'owns' the whole array.
-    array = MPI.Win_shared_query(Array{T}, dims, win; rank=0)
+    array = MKArray(MPI.Win_shared_query(Array{T}, dims, win; rank=0))
 
     # Don't think `win::MPI.Win` knows about the type of the pointer (its concrete type
     # is something like `MPI.Win(Ptr{Nothing} @0x00000000033affd0)`), so it's fine to
@@ -657,7 +687,7 @@ function allocate_shared(T, dims; comm=nothing, maybe_debug=true)
     push!(global_Win_store, win)
 
     @debug_shared_array begin
-        # If @debug_shared_array is active, create DebugMPISharedArray instead of Array
+        # If @debug_shared_array is active, create DebugMPISharedArray instead of MKArray
         if maybe_debug
             debug_array = DebugMPISharedArray(array, comm)
             if comm == comm_anyv_subblock[]

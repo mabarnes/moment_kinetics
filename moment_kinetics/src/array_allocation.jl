@@ -4,7 +4,7 @@ module array_allocation
 
 export allocate_float, allocate_int, allocate_complex, allocate_bool, allocate_shared
 
-using ..type_definitions: mk_float, mk_int
+using ..type_definitions
 using ..communication
 using ..debugging
 @debug_initialize_NaN using ..communication: block_rank, _block_synchronize
@@ -15,7 +15,7 @@ using MPI
 allocate array with dimensions given by dims and entries of type Bool
 """
 function allocate_bool(dims...)
-    return array = Array{Bool}(undef, dims...)
+    return array = MKArray{Bool}(undef, dims...)
 end
  
 """
@@ -29,7 +29,7 @@ end
 allocate 1d array with dimensions given by dims and entries of type mk_int
 """
 function allocate_int(dims...)
-    return array = Array{mk_int}(undef, dims...)
+    return array = MKArray{mk_int}(undef, dims...)
 end
 
 """
@@ -43,7 +43,7 @@ end
 allocate array with dimensions given by dims and entries of type mk_float
 """
 function allocate_float(dims...)
-    array = Array{mk_float}(undef, dims...)
+    array = MKArray{mk_float}(undef, dims...)
     @debug_initialize_NaN begin
         array .= NaN
     end
@@ -86,7 +86,7 @@ end
 allocate 1d array with dimensions given by dims and entries of type Complex{mk_float}
 """
 function allocate_complex(dims...)
-    array = Array{Complex{mk_float}}(undef, dims...)
+    array = MKArray{Complex{mk_float}}(undef, dims...)
     @debug_initialize_NaN begin
         array .= NaN
     end

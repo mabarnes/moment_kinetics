@@ -60,7 +60,7 @@ using moment_kinetics.moment_constraints: electron_implicit_constraint_forcing!,
                                           add_electron_implicit_constraint_forcing_to_v_only_Jacobian!,
                                           hard_force_moment_constraints!
 using moment_kinetics.timer_utils: reset_mk_timers!
-using moment_kinetics.type_definitions: mk_float
+using moment_kinetics.type_definitions
 using moment_kinetics.velocity_moments: calculate_electron_moment_derivatives_no_r!,
                                         integrate_over_vspace
 
@@ -231,7 +231,7 @@ function cleanup_mk_state!(args...)
     return nothing
 end
 
-function generate_norm_factor(perturbed_residual::AbstractArray{mk_float,3})
+function generate_norm_factor(perturbed_residual::MKArray{mk_float,3})
     # half-width of the window for moving average
     w = 3
     norm_factor_unsmoothed = mean(abs.(perturbed_residual); dims=3)
@@ -249,7 +249,7 @@ function generate_norm_factor(perturbed_residual::AbstractArray{mk_float,3})
     end
     return norm_factor
 end
-function generate_norm_factor(perturbed_residual::AbstractArray{mk_float,1})
+function generate_norm_factor(perturbed_residual::MKArray{mk_float,1})
     norm_factor_unsmoothed = mean(abs.(perturbed_residual); dims=1)
 end
 

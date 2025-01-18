@@ -9,7 +9,7 @@ using moment_kinetics.communication
 using moment_kinetics.looping
 using moment_kinetics.array_allocation: allocate_float, allocate_shared_float
 using moment_kinetics.coordinates: define_coordinate
-using moment_kinetics.type_definitions: mk_float, mk_int
+using moment_kinetics.type_definitions
 using moment_kinetics.velocity_moments: get_density, get_upar, get_ppar, get_pperp, get_pressure
 using moment_kinetics.input_structs: direct_integration, multipole_expansion, delta_f_multipole
 
@@ -578,11 +578,11 @@ function runtests()
                 dens, upar, vth = 1.0, 1.0, 1.0
                 mref = 1.0
                 Zref = 1.0
-                msp = [1.0,0.2]#[0.25, 0.25/1836.0]
-                Zsp = [0.5,0.5]#[0.5, 0.5]
-                denssp = [1.0,1.0]#[1.0, 1.0]
-                uparsp = [0.0,0.0]#[0.0, 0.0]
-                vthsp = [sqrt(0.5/msp[1]), sqrt(0.5/msp[2])]#[sqrt(0.01/msp[1]), sqrt(0.01/msp[2])]
+                msp = MKArray([1.0,0.2])#MKArray([0.25, 0.25/1836.0])
+                Zsp = MKArray([0.5,0.5])#MKArray([0.5, 0.5])
+                denssp = MKArray([1.0,1.0])#MKArray([1.0, 1.0])
+                uparsp = MKArray([0.0,0.0])#MKArray([0.0, 0.0])
+                vthsp = MKArray([sqrt(0.5/msp[1]), sqrt(0.5/msp[2])])#MKArray([sqrt(0.01/msp[1]), sqrt(0.01/msp[2])])
                 nsprime = size(msp,1)
                 nuref = 1.0
 

@@ -129,10 +129,13 @@ function update_phi!(fields, fvec, vperp, z, r, composition, collisions, moments
     ## calculate the electric fields after obtaining phi
     #Er = - d phi / dr 
     if r.n > 1
-        derivative_r!(fields.Er,-fields.phi,
+        derivative_r!(fields.Er,fields.phi,
                 scratch_dummy.buffer_z_1, scratch_dummy.buffer_z_2,
                 scratch_dummy.buffer_z_3, scratch_dummy.buffer_z_4,
                 r_spectral,r)
+        @loop_r_z ir iz begin
+            fields.Er[iz,ir] *= -1.0
+        end
         if z.irank == 0 && fields.force_Er_zero_at_wall
             fields.Er[1,:] .= 0.0
         end
@@ -150,10 +153,13 @@ function update_phi!(fields, fvec, vperp, z, r, composition, collisions, moments
                                        kinetic_electrons_with_temperature_equation)
         if z.n > 1
             # Ez = - d phi / dz
-            @views derivative_z!(fields.Ez,-fields.phi,
+            @views derivative_z!(fields.Ez, fields.phi,
                     scratch_dummy.buffer_rs_1[:,1], scratch_dummy.buffer_rs_2[:,1],
                     scratch_dummy.buffer_rs_3[:,1], scratch_dummy.buffer_rs_4[:,1],
                     z_spectral,z)
+            @loop_r_z ir iz begin
+                fields.Ez[iz,ir] *= -1.0
+            end
         end
     end
 

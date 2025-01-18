@@ -2,6 +2,7 @@ module CalculusTests
 
 include("setup.jl")
 
+using moment_kinetics.array_allocation: allocate_float
 using moment_kinetics.coordinates: define_test_coordinate
 using moment_kinetics.calculus: derivative!, second_derivative!, integral
 using moment_kinetics.calculus: laplacian_derivative!
@@ -47,9 +48,9 @@ function runtests()
                                                      element_spacing_option=element_spacing_option,
                                                      collision_operator_dim=false)
                 # create array for the function f(x) to be differentiated/integrated
-                f = Array{Float64,1}(undef, x.n)
+                f = allocate_float(x.n)
                 # create array for the derivative df/dx
-                df = Array{Float64,1}(undef, x.n)
+                df = allocate_float(x.n)
                 # initialize f
                 for ix ∈ 1:x.n
                     f[ix] = ( (cospi(2.0*x.grid[ix]/x.L)+sinpi(2.0*x.grid[ix]/x.L))
@@ -94,7 +95,7 @@ function runtests()
                                                      collision_operator_dim=false)
 
                 # create array for the derivative df/dx and the expected result
-                df = Array{Float64,1}(undef, x.n)
+                df = allocate_float(x.n)
 
                 # initialize f and expected df
                 offset = randn(rng)
@@ -142,7 +143,7 @@ function runtests()
                                                      collision_operator_dim=false)
 
                 # create array for the derivative df/dx and the expected result
-                df = Array{Float64,1}(undef, x.n)
+                df = allocate_float(x.n)
 
                 # initialize f and expected df
                 offset = randn(rng)
@@ -186,7 +187,7 @@ function runtests()
                                                      collision_operator_dim=false)
 
                 # create array for the derivative df/dx and the expected result
-                df = Array{Float64,1}(undef, x.n)
+                df = allocate_float(x.n)
 
                 # initialize f and expected df
                 offset = undef
@@ -236,7 +237,7 @@ function runtests()
                                                      collision_operator_dim=false)
 
                 # create array for the derivative df/dx and the expected result
-                df = Array{Float64,1}(undef, x.n)
+                df = allocate_float(x.n)
 
                 # initialize f and expected df
                 offset = undef
@@ -682,7 +683,7 @@ function runtests()
                 # test polynomials up to order ngrid-1
                 for n ∈ 0:ngrid-1
                     # create array for the function f(x) to be differentiated/integrated
-                    f = Array{Float64,1}(undef, x.n)
+                    f = allocate_float(x.n)
                     # create array for the derivative df/dx and the expected result
                     df = similar(f)
                     expected_df = similar(f)
@@ -728,7 +729,7 @@ function runtests()
                 # test polynomials up to order ngrid-1
                 for n ∈ 0:ngrid-1
                     # create array for the function f(x) to be differentiated/integrated
-                    f = Array{Float64,1}(undef, x.n)
+                    f = allocate_float(x.n)
                     # create array for the derivative df/dx and the expected result
                     df = similar(f)
                     expected_df = similar(f)
@@ -1009,7 +1010,7 @@ function runtests()
                 # test polynomials up to order ngrid-1
                 for n ∈ 0:ngrid-1
                     # create array for the function f(x) to be differentiated/integrated
-                    f = Array{Float64,1}(undef, x.n)
+                    f = allocate_float(x.n)
                     # create array for the derivative df/dx and the expected result
                     df = similar(f)
                     expected_df = similar(f)
@@ -1054,7 +1055,7 @@ function runtests()
                 # test polynomials up to order ngrid-1
                 for n ∈ 0:ngrid-1
                     # create array for the function f(x) to be differentiated/integrated
-                    f = Array{Float64,1}(undef, x.n)
+                    f = allocate_float(x.n)
                     # create array for the derivative df/dx and the expected result
                     df = similar(f)
                     expected_df = similar(f)

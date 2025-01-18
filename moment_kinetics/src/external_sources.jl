@@ -468,7 +468,9 @@ function get_source_profile(profile_type, width, relative_minimum, coord)
         error("relative_minimum must be ≥0, got $relative_minimum")
     end
     if profile_type == "constant"
-        return ones(coord.n)
+        r = allocate_float(coord.n)
+        r .= 1.0
+        return r
     elseif profile_type == "gaussian"
         x = coord.grid
         return @. (1.0 - relative_minimum) * exp(-(x / width)^2) + relative_minimum

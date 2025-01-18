@@ -10,7 +10,7 @@ export interpolate_to_grid_z, interpolate_to_grid_1d!, interpolate_symmetric!,
 
 using ..array_allocation: allocate_float
 using ..moment_kinetics_structs: null_spatial_dimension_info, null_velocity_dimension_info
-using ..type_definitions: mk_float, mk_int
+using ..type_definitions
 
 """
     single_element_interpolate!(result, newgrid, f, imin, imax, coord, spectral)
@@ -294,7 +294,7 @@ end
 
 """
 """
-function interpolate_to_grid_z!(result::Array{mk_float, 3}, newgrid, f::Array{mk_float, 3}, z, spectral)
+function interpolate_to_grid_z!(result::AbstractMKArray{mk_float, 3}, newgrid, f::AbstractMKArray{mk_float, 3}, z, spectral)
     size_f = size(f)
     for is ∈ 1:size_f[3]
         for ivpa ∈ 1:size_f[1]
@@ -307,7 +307,7 @@ end
 
 """
 """
-function interpolate_to_grid_z(newgrid, f::Array{mk_float, 3}, z, spectral)
+function interpolate_to_grid_z(newgrid, f::AbstractMKArray{mk_float, 3}, z, spectral)
     size_f = size(f)
     result = allocate_float(size_f[1], size(newgrid)[1], size_f[3])
 
@@ -318,7 +318,7 @@ end
 
 """
 """
-function interpolate_to_grid_z!(result::Array{mk_float, 2}, newgrid, f::Array{mk_float, 2}, z, spectral)
+function interpolate_to_grid_z!(result::AbstractMKArray{mk_float, 2}, newgrid, f::AbstractMKArray{mk_float, 2}, z, spectral)
     size_f = size(f)
     for is ∈ 1:size_f[2]
         @views interpolate_to_grid_1d!(result[:, is], newgrid, f[:, is], z, spectral)
@@ -329,7 +329,7 @@ end
 
 """
 """
-function interpolate_to_grid_z(newgrid, f::Array{mk_float, 2}, z, spectral)
+function interpolate_to_grid_z(newgrid, f::AbstractMKArray{mk_float, 2}, z, spectral)
     size_f = size(f)
     result = allocate_float(size(newgrid)[1], size_f[2])
 
@@ -340,7 +340,7 @@ end
 
 """
 """
-function interpolate_to_grid_z!(result::Array{mk_float, 1}, newgrid, f::Array{mk_float, 1}, z, spectral)
+function interpolate_to_grid_z!(result::AbstractMKArray{mk_float, 1}, newgrid, f::AbstractMKArray{mk_float, 1}, z, spectral)
     interpolate_to_grid_1d!(result, newgrid, f, z, spectral)
 
     return nothing
@@ -348,13 +348,13 @@ end
 
 """
 """
-function interpolate_to_grid_z(newgrid, f::Array{mk_float, 1}, z, spectral)
+function interpolate_to_grid_z(newgrid, f::AbstractMKArray{mk_float, 1}, z, spectral)
     return interpolate_to_grid_1d(newgrid, f, z, spectral)
 end
 
 """
 """
-function interpolate_to_grid_vpa!(result::Array{mk_float, 3}, newgrid, f::Array{mk_float, 3}, vpa, spectral)
+function interpolate_to_grid_vpa!(result::AbstractMKArray{mk_float, 3}, newgrid, f::AbstractMKArray{mk_float, 3}, vpa, spectral)
     size_f = size(f)
     for is ∈ 1:size_f[3]
         for iz ∈ 1:size_f[2]
@@ -367,7 +367,7 @@ end
 
 """
 """
-function interpolate_to_grid_vpa(newgrid, f::Array{mk_float, 3}, vpa, spectral)
+function interpolate_to_grid_vpa(newgrid, f::AbstractMKArray{mk_float, 3}, vpa, spectral)
     size_f = size(f)
     result = allocate_float(size(newgrid)[1], size_f[2:3]...)
 
@@ -378,8 +378,8 @@ end
 
 """
 """
-function interpolate_to_grid_vpa!(result::AbstractVector{mk_float}, newgrid,
-                                  f::AbstractVector{mk_float}, vpa, spectral)
+function interpolate_to_grid_vpa!(result::AbstractMKVector{mk_float}, newgrid,
+                                  f::AbstractMKVector{mk_float}, vpa, spectral)
 
     interpolate_to_grid_1d!(result, newgrid, f, vpa, spectral)
 
@@ -388,7 +388,7 @@ end
 
 """
 """
-function interpolate_to_grid_vpa(newgrid, f::AbstractVector{mk_float}, vpa, spectral)
+function interpolate_to_grid_vpa(newgrid, f::AbstractMKVector{mk_float}, vpa, spectral)
 
     return interpolate_to_grid_1d(newgrid, f, vpa, spectral)
 end

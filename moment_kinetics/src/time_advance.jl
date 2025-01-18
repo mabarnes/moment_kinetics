@@ -9,8 +9,9 @@ export setup_dummy_and_buffer_arrays
 
 using MPI
 using Quadmath
-using ..type_definitions: mk_float, mk_int
-using ..array_allocation: allocate_float, allocate_shared_float, allocate_shared_int, allocate_shared_bool
+using ..type_definitions
+using ..array_allocation: allocate_float, allocate_shared_float, allocate_int,
+                          allocate_shared_int, allocate_shared_bool
 using ..communication
 using ..communication: _block_synchronize
 using ..debugging
@@ -97,9 +98,9 @@ using ..analysis: steady_state_residuals
 #using ..post_processing: draw_v_parallel_zero!
 
 struct scratch_dummy_arrays
-    dummy_s::Array{mk_float,1}
-    dummy_sr::Array{mk_float,2}
-    dummy_vpavperp::Array{mk_float,2}
+    dummy_s::MKVector{mk_float}
+    dummy_sr::MKMatrix{mk_float}
+    dummy_vpavperp::MKMatrix{mk_float}
     dummy_zrs::MPISharedArray{mk_float,3}
     dummy_zrsn::MPISharedArray{mk_float,3}
 
@@ -220,15 +221,15 @@ struct scratch_dummy_arrays
 end 
 
 struct advect_object_struct
-    vpa_advect::Vector{advection_info{4,5}}
-    vperp_advect::Vector{advection_info{4,5}}
-    z_advect::Vector{advection_info{4,5}}
-    r_advect::Vector{advection_info{4,5}}
-    electron_z_advect::Vector{advection_info{4,5}}
-    electron_vpa_advect::Vector{advection_info{4,5}}
-    neutral_z_advect::Vector{advection_info{5,6}}
-    neutral_r_advect::Vector{advection_info{5,6}}
-    neutral_vz_advect::Vector{advection_info{5,6}}
+    vpa_advect::MKVector{advection_info{4,5}}
+    vperp_advect::MKVector{advection_info{4,5}}
+    z_advect::MKVector{advection_info{4,5}}
+    r_advect::MKVector{advection_info{4,5}}
+    electron_z_advect::MKVector{advection_info{4,5}}
+    electron_vpa_advect::MKVector{advection_info{4,5}}
+    neutral_z_advect::MKVector{advection_info{5,6}}
+    neutral_r_advect::MKVector{advection_info{5,6}}
+    neutral_vz_advect::MKVector{advection_info{5,6}}
 end
 
 # consider changing code structure so that
@@ -360,27 +361,29 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
     epsilon = 1.e-11
     if adaptive && !t_input["write_after_fixed_step_count"]
         if t_input["nwrite"] == 0
-            moments_output_times = [end_time]
+            moments_output_times = MKArray([end_time])
         else
-            moments_output_times = [code_time + i*t_input["dt"]
-                                    for i ∈ t_input["nwrite"]:t_input["nwrite"]:t_input["nstep"]]
+            moments_output_times = MKArray(
+                                       [code_time + i*t_input["dt"]
+                                        for i ∈ t_input["nwrite"]:t_input["nwrite"]:t_input["nstep"]])
         end
         if moments_output_times[end] < end_time - epsilon
             push!(moments_output_times, end_time)
         end
         if t_input["nwrite_dfns"] == 0
-            dfns_output_times = [end_time]
+            dfns_output_times = MKArray([end_time])
         else
-            dfns_output_times = [code_time + i*t_input["dt"]
-                                 for i ∈ t_input["nwrite_dfns"]:t_input["nwrite_dfns"]:t_input["nstep"]]
+            dfns_output_times = MKArray(
+                                    [code_time + i*t_input["dt"]
+                                     for i ∈ t_input["nwrite_dfns"]:t_input["nwrite_dfns"]:t_input["nstep"]])
         end
         if dfns_output_times[end] < end_time - epsilon
             push!(dfns_output_times, end_time)
         end
     else
         # Use nwrite_moments and nwrite_dfns to determine when to write output
-        moments_output_times = mk_float[]
-        dfns_output_times = mk_float[]
+        moments_output_times = allocate_float(0)
+        dfns_output_times = allocate_float(0)
     end
 
     if rk_coefs_implicit === nothing
@@ -531,7 +534,7 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
                      dt_before_output, dt_before_last_fail, mk_float(CFL_prefactor),
                      step_to_moments_output, step_to_dfns_output, write_moments_output,
                      write_dfns_output, Ref(0), Ref(0), Ref{mk_float}(0.0), Ref(0),
-                     Ref(0), Ref(0), mk_int[], mk_int[], t_input["nwrite"],
+                     Ref(0), Ref(0), allocate_int(0), allocate_int(0), t_input["nwrite"],
                      t_input["nwrite_dfns"], moments_output_times, dfns_output_times,
                      t_input["type"], rk_coefs, rk_coefs_implicit,
                      implicit_coefficient_is_zero, n_rk_stages, rk_order,
@@ -1736,7 +1739,7 @@ function setup_scratch_arrays(moments, pdf, n, time_evolve_electrons)
     # (possibly) the same for electrons, and the same for neutrals. The actual array will
     # be created at the end of the first step of the loop below, once we have a
     # `scratch_pdf` object of the correct type.
-    scratch = Vector{scratch_pdf}(undef, n)
+    scratch = MKVector{scratch_pdf}(undef, n)
     pdf_dims = size(pdf.ion.norm)
     moment_dims = size(moments.ion.dens)
 
@@ -1809,7 +1812,7 @@ function setup_electron_scratch_arrays(moments, pdf, n)
     # array for electrons.
     # The actual array will be created at the end of the first step of the loop below,
     # once we have a `scratch_electron_pdf` object of the correct type.
-    scratch = Vector{scratch_electron_pdf}(undef, n)
+    scratch = MKVector{scratch_electron_pdf}(undef, n)
     pdf_dims = size(pdf.electron.norm)
     moment_dims = size(moments.electron.dens)
 
@@ -2044,7 +2047,7 @@ function  time_advance!(pdf, scratch, scratch_implicit, scratch_electron, t_para
                     # Calculate some residuals to see how close simulation is to steady state
                     begin_r_z_region()
                     result_string = ""
-                    all_residuals = Vector{mk_float}()
+                    all_residuals = MKVector{mk_float}(undef, 0)
                     @loop_s is begin
                         @views residual_ni =
                             steady_state_residuals(scratch[t_params.n_rk_stages+1].density[:,:,is],

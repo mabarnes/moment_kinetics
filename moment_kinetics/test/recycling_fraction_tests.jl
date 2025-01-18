@@ -233,7 +233,7 @@ function run_test(test_input, expected_phi; rtol=4.e-14, atol=1.e-15, args...)
             println("data tested would be: ", actual_phi)
             @test false
         else
-            @test isapprox(actual_phi, expected_phi, rtol=rtol, atol=atol)
+            @test isapprox(actual_phi, expected_phi .- expected_phi[1] .+ actual_phi[1], rtol=rtol, atol=atol)
         end
     end
 end

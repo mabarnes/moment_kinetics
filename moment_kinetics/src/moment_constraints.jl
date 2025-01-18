@@ -9,7 +9,7 @@ using ..boundary_conditions: skip_f_electron_bc_points_in_Jacobian
 using ..communication: _block_synchronize
 using ..looping
 using ..timer_utils
-using ..type_definitions: mk_float
+using ..type_definitions
 using ..velocity_moments: integrate_over_vspace, update_ion_qpar!
 
 export hard_force_moment_constraints!, hard_force_moment_constraints_neutral!,
@@ -91,7 +91,7 @@ function hard_force_moment_constraints!(f, moments, vpa)
     return A, B, C
 end
 @timeit global_timer hard_force_moment_constraints!(
-                         f::AbstractArray{mk_float,4}, moments, vpa) = begin
+                         f::AbstractMKArray{mk_float,4}, moments, vpa) = begin
     A = moments.electron.constraints_A_coefficient
     B = moments.electron.constraints_B_coefficient
     C = moments.electron.constraints_C_coefficient
@@ -102,7 +102,7 @@ end
     end
 end
 @timeit global_timer hard_force_moment_constraints!(
-                         f::AbstractArray{mk_float,5}, moments, vpa) = begin
+                         f::AbstractMKArray{mk_float,5}, moments, vpa) = begin
     A = moments.ion.constraints_A_coefficient
     B = moments.ion.constraints_B_coefficient
     C = moments.ion.constraints_C_coefficient
@@ -167,7 +167,7 @@ function hard_force_moment_constraints_neutral!(f, moments, vz)
     return A, B, C
 end
 @timeit global_timer hard_force_moment_constraints_neutral!(
-                         f::AbstractArray{mk_float,6}, moments, vz) = begin
+                         f::AbstractMKArray{mk_float,6}, moments, vz) = begin
     A = moments.neutral.constraints_A_coefficient
     B = moments.neutral.constraints_B_coefficient
     C = moments.neutral.constraints_C_coefficient
@@ -193,8 +193,8 @@ r = \\hat{r} + (A + B w_{\\|} + C w_{\\|}^2) f
 
 Note this function assumes the input is given at a single spatial position.
 """
-function moment_constraints_on_residual!(residual::AbstractArray{T,N},
-                                         f::AbstractArray{T,N}, moments, vpa) where {T,N}
+function moment_constraints_on_residual!(residual::AbstractMKArray{T,N},
+                                         f::AbstractMKArray{T,N}, moments, vpa) where {T,N}
     if N == 2
         f = @view f[:,1]
         residual = @view residual[:,1]

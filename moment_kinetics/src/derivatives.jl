@@ -14,7 +14,7 @@ export derivative_z!, derivative_z_chrg!, derivative_z_ntrl!
 using ..calculus: derivative!, second_derivative!, reconcile_element_boundaries_MPI!,
                   reconcile_element_boundaries_MPI_z_pdf_vpavperpz!, apply_adv_fac!
 using ..communication
-using ..type_definitions: mk_float
+using ..type_definitions
 using ..looping
 
 using MPI
@@ -29,11 +29,11 @@ dfns (neutrals) -> [vz,vr,vzeta,z,r,sn]
 
 #df/dr
 #2D version for f[z,r] -> Er, Ez, phi
-function derivative_r!(dfdr::AbstractArray{mk_float,2}, f::AbstractArray{mk_float,2},
-        dfdr_lower_endpoints::AbstractArray{mk_float,1},
-        dfdr_upper_endpoints::AbstractArray{mk_float,1},
-        r_receive_buffer1::AbstractArray{mk_float,1},
-        r_receive_buffer2::AbstractArray{mk_float,1}, r_spectral, r)
+function derivative_r!(dfdr::AbstractMKArray{mk_float,2}, f::AbstractMKArray{mk_float,2},
+        dfdr_lower_endpoints::AbstractMKArray{mk_float,1},
+        dfdr_upper_endpoints::AbstractMKArray{mk_float,1},
+        r_receive_buffer1::AbstractMKArray{mk_float,1},
+        r_receive_buffer2::AbstractMKArray{mk_float,1}, r_spectral, r)
 
         begin_z_region()
 
@@ -56,11 +56,11 @@ end
 
 #df/dr
 #3D version for f[s,z,r] -> moments n, u, T etc
-function derivative_r!(dfdr::AbstractArray{mk_float,3}, f::AbstractArray{mk_float,3},
-        dfdr_lower_endpoints::AbstractArray{mk_float,2},
-        dfdr_upper_endpoints::AbstractArray{mk_float,2},
-        r_receive_buffer1::AbstractArray{mk_float,2},
-        r_receive_buffer2::AbstractArray{mk_float,2}, r_spectral, r; neutrals=false)
+function derivative_r!(dfdr::AbstractMKArray{mk_float,3}, f::AbstractMKArray{mk_float,3},
+        dfdr_lower_endpoints::AbstractMKArray{mk_float,2},
+        dfdr_upper_endpoints::AbstractMKArray{mk_float,2},
+        r_receive_buffer1::AbstractMKArray{mk_float,2},
+        r_receive_buffer2::AbstractMKArray{mk_float,2}, r_spectral, r; neutrals=false)
 
     # differentiate f w.r.t r
     if neutrals
@@ -94,11 +94,11 @@ end
 
 #df/dr
 #5D version for f[vpa,vperp,z,r,s] -> ion particle dfn
-function derivative_r!(dfdr::AbstractArray{mk_float,5}, f::AbstractArray{mk_float,5},
-        dfdr_lower_endpoints::AbstractArray{mk_float,4},
-        dfdr_upper_endpoints::AbstractArray{mk_float,4},
-        r_receive_buffer1::AbstractArray{mk_float,4},
-        r_receive_buffer2::AbstractArray{mk_float,4}, r_spectral, r)
+function derivative_r!(dfdr::AbstractMKArray{mk_float,5}, f::AbstractMKArray{mk_float,5},
+        dfdr_lower_endpoints::AbstractMKArray{mk_float,4},
+        dfdr_upper_endpoints::AbstractMKArray{mk_float,4},
+        r_receive_buffer1::AbstractMKArray{mk_float,4},
+        r_receive_buffer2::AbstractMKArray{mk_float,4}, r_spectral, r)
 
         begin_s_z_vperp_vpa_region()
 
@@ -120,11 +120,11 @@ function derivative_r!(dfdr::AbstractArray{mk_float,5}, f::AbstractArray{mk_floa
 end
 
 #6D version for f[vz,vz,vzeta,z,r,sn] -> neutral particle dfn (species indexing taken outside this loop)
-function derivative_r!(dfdr::AbstractArray{mk_float,6}, f::AbstractArray{mk_float,6},
-        dfdr_lower_endpoints::AbstractArray{mk_float,5},
-        dfdr_upper_endpoints::AbstractArray{mk_float,5},
-        r_receive_buffer1::AbstractArray{mk_float,5},
-        r_receive_buffer2::AbstractArray{mk_float,5}, r_spectral, r)
+function derivative_r!(dfdr::AbstractMKArray{mk_float,6}, f::AbstractMKArray{mk_float,6},
+        dfdr_lower_endpoints::AbstractMKArray{mk_float,5},
+        dfdr_upper_endpoints::AbstractMKArray{mk_float,5},
+        r_receive_buffer1::AbstractMKArray{mk_float,5},
+        r_receive_buffer2::AbstractMKArray{mk_float,5}, r_spectral, r)
 
         begin_sn_z_vzeta_vr_vz_region()
 
@@ -155,11 +155,11 @@ dfns (neutrals) -> [vz,vr,vzeta,z,r,sn]
 
 #df/dz
 #1D version for f[z], used by implicit solvers
-function derivative_z!(dfdz::AbstractArray{mk_float,1}, f::AbstractArray{mk_float,1},
-        dfdz_lower_endpoints::AbstractArray{mk_float,0},
-        dfdz_upper_endpoints::AbstractArray{mk_float,0},
-        z_send_buffer::AbstractArray{mk_float,0},
-        z_receive_buffer::AbstractArray{mk_float,0}, z_spectral, z)
+function derivative_z!(dfdz::AbstractMKArray{mk_float,1}, f::AbstractMKArray{mk_float,1},
+        dfdz_lower_endpoints::AbstractMKArray{mk_float,0},
+        dfdz_upper_endpoints::AbstractMKArray{mk_float,0},
+        z_send_buffer::AbstractMKArray{mk_float,0},
+        z_receive_buffer::AbstractMKArray{mk_float,0}, z_spectral, z)
 
     begin_serial_region()
 
@@ -182,11 +182,11 @@ end
 
 #df/dz
 #2D version for f[z,r] -> Er, Ez, phi
-function derivative_z!(dfdz::AbstractArray{mk_float,2}, f::AbstractArray{mk_float,2},
-        dfdz_lower_endpoints::AbstractArray{mk_float,1},
-        dfdz_upper_endpoints::AbstractArray{mk_float,1},
-        z_send_buffer::AbstractArray{mk_float,1},
-        z_receive_buffer::AbstractArray{mk_float,1}, z_spectral, z)
+function derivative_z!(dfdz::AbstractMKArray{mk_float,2}, f::AbstractMKArray{mk_float,2},
+        dfdz_lower_endpoints::AbstractMKArray{mk_float,1},
+        dfdz_upper_endpoints::AbstractMKArray{mk_float,1},
+        z_send_buffer::AbstractMKArray{mk_float,1},
+        z_receive_buffer::AbstractMKArray{mk_float,1}, z_spectral, z)
 
         begin_r_region()
 
@@ -209,11 +209,11 @@ end
 
 #df/dz
 #3D version for f[z,r] -> moments n, u, T etc
-function derivative_z!(dfdz::AbstractArray{mk_float,3}, f::AbstractArray{mk_float,3},
-        dfdz_lower_endpoints::AbstractArray{mk_float,2},
-        dfdz_upper_endpoints::AbstractArray{mk_float,2},
-        z_send_buffer::AbstractArray{mk_float,2},
-        z_receive_buffer::AbstractArray{mk_float,2}, z_spectral, z; neutrals=false)
+function derivative_z!(dfdz::AbstractMKArray{mk_float,3}, f::AbstractMKArray{mk_float,3},
+        dfdz_lower_endpoints::AbstractMKArray{mk_float,2},
+        dfdz_upper_endpoints::AbstractMKArray{mk_float,2},
+        z_send_buffer::AbstractMKArray{mk_float,2},
+        z_receive_buffer::AbstractMKArray{mk_float,2}, z_spectral, z; neutrals=false)
 
     # differentiate f w.r.t z
     if neutrals
@@ -248,11 +248,11 @@ end
 # df/dz
 # 3D version for f[vpa,vperp,z]. Uses modified function name to avoid clash with 'standard'
 # 3D version for ion/neutral moments.
-function derivative_z_pdf_vpavperpz!(dfdz::AbstractArray{mk_float,3}, f::AbstractArray{mk_float,3},
-        dfdz_lower_endpoints::AbstractArray{mk_float,2},
-        dfdz_upper_endpoints::AbstractArray{mk_float,2},
-        z_receive_buffer1::AbstractArray{mk_float,2},
-        z_receive_buffer2::AbstractArray{mk_float,2}, z_spectral, z)
+function derivative_z_pdf_vpavperpz!(dfdz::AbstractMKArray{mk_float,3}, f::AbstractMKArray{mk_float,3},
+        dfdz_lower_endpoints::AbstractMKArray{mk_float,2},
+        dfdz_upper_endpoints::AbstractMKArray{mk_float,2},
+        z_receive_buffer1::AbstractMKArray{mk_float,2},
+        z_receive_buffer2::AbstractMKArray{mk_float,2}, z_spectral, z)
 
     # differentiate f w.r.t z
     @loop_vperp_vpa ivperp ivpa begin
@@ -272,11 +272,11 @@ function derivative_z_pdf_vpavperpz!(dfdz::AbstractArray{mk_float,3}, f::Abstrac
 end
 
 #5D version for f[vpa,vperp,z,r,s] -> dfn ions
-function derivative_z!(dfdz::AbstractArray{mk_float,5}, f::AbstractArray{mk_float,5},
-        dfdz_lower_endpoints::AbstractArray{mk_float,4},
-        dfdz_upper_endpoints::AbstractArray{mk_float,4},
-        z_send_buffer::AbstractArray{mk_float,4},
-        z_receive_buffer::AbstractArray{mk_float,4}, z_spectral, z)
+function derivative_z!(dfdz::AbstractMKArray{mk_float,5}, f::AbstractMKArray{mk_float,5},
+        dfdz_lower_endpoints::AbstractMKArray{mk_float,4},
+        dfdz_upper_endpoints::AbstractMKArray{mk_float,4},
+        z_send_buffer::AbstractMKArray{mk_float,4},
+        z_receive_buffer::AbstractMKArray{mk_float,4}, z_spectral, z)
 
         begin_s_r_vperp_vpa_region()
 
@@ -298,11 +298,11 @@ function derivative_z!(dfdz::AbstractArray{mk_float,5}, f::AbstractArray{mk_floa
 end
 
 #4D version for f[vpa,vperp,z,r] -> dfn electron particles
-function derivative_z!(dfdz::AbstractArray{mk_float,4}, f::AbstractArray{mk_float,4},
-	dfdz_lower_endpoints::AbstractArray{mk_float,3},
-	dfdz_upper_endpoints::AbstractArray{mk_float,3},
-	z_send_buffer::AbstractArray{mk_float,3},
-	z_receive_buffer::AbstractArray{mk_float,3}, z_spectral, z)
+function derivative_z!(dfdz::AbstractMKArray{mk_float,4}, f::AbstractMKArray{mk_float,4},
+	dfdz_lower_endpoints::AbstractMKArray{mk_float,3},
+	dfdz_upper_endpoints::AbstractMKArray{mk_float,3},
+	z_send_buffer::AbstractMKArray{mk_float,3},
+	z_receive_buffer::AbstractMKArray{mk_float,3}, z_spectral, z)
 
         begin_r_vperp_vpa_region()
 
@@ -324,11 +324,11 @@ function derivative_z!(dfdz::AbstractArray{mk_float,4}, f::AbstractArray{mk_floa
 end
 
 #6D version for f[vz,vr,vzeta,z,r] -> dfn neutral particles
-function derivative_z!(dfdz::AbstractArray{mk_float,6}, f::AbstractArray{mk_float,6},
-        dfdz_lower_endpoints::AbstractArray{mk_float,5},
-        dfdz_upper_endpoints::AbstractArray{mk_float,5},
-        z_send_buffer::AbstractArray{mk_float,5},
-        z_receive_buffer::AbstractArray{mk_float,5}, z_spectral, z)
+function derivative_z!(dfdz::AbstractMKArray{mk_float,6}, f::AbstractMKArray{mk_float,6},
+        dfdz_lower_endpoints::AbstractMKArray{mk_float,5},
+        dfdz_upper_endpoints::AbstractMKArray{mk_float,5},
+        z_send_buffer::AbstractMKArray{mk_float,5},
+        z_receive_buffer::AbstractMKArray{mk_float,5}, z_spectral, z)
 
         begin_sn_r_vzeta_vr_vz_region()
 
@@ -359,11 +359,11 @@ dfns (neutrals) -> [vz,vr,vzeta,z,r,sn]
 
 #d2f/dr2
 #2D version for f[z,r] -> Er, Ez, phi
-function second_derivative_r!(d2fdr2::AbstractArray{mk_float,2}, f::AbstractArray{mk_float,2},
-        d2fdr2_lower_endpoints::AbstractArray{mk_float,1},
-        d2fdr2_upper_endpoints::AbstractArray{mk_float,1},
-        r_receive_buffer1::AbstractArray{mk_float,1},
-        r_receive_buffer2::AbstractArray{mk_float,1}, r_spectral, r)
+function second_derivative_r!(d2fdr2::AbstractMKArray{mk_float,2}, f::AbstractMKArray{mk_float,2},
+        d2fdr2_lower_endpoints::AbstractMKArray{mk_float,1},
+        d2fdr2_upper_endpoints::AbstractMKArray{mk_float,1},
+        r_receive_buffer1::AbstractMKArray{mk_float,1},
+        r_receive_buffer2::AbstractMKArray{mk_float,1}, r_spectral, r)
 
     begin_z_region()
 
@@ -385,11 +385,11 @@ end
 
 #d2f/dr2
 #3D version for f[s,z,r] -> moments n, u, T etc
-function second_derivative_r!(d2fdr2::AbstractArray{mk_float,3}, f::AbstractArray{mk_float,3},
-        d2fdr2_lower_endpoints::AbstractArray{mk_float,2},
-        d2fdr2_upper_endpoints::AbstractArray{mk_float,2},
-        r_receive_buffer1::AbstractArray{mk_float,2},
-        r_receive_buffer2::AbstractArray{mk_float,2}, r_spectral, r; neutrals=false)
+function second_derivative_r!(d2fdr2::AbstractMKArray{mk_float,3}, f::AbstractMKArray{mk_float,3},
+        d2fdr2_lower_endpoints::AbstractMKArray{mk_float,2},
+        d2fdr2_upper_endpoints::AbstractMKArray{mk_float,2},
+        r_receive_buffer1::AbstractMKArray{mk_float,2},
+        r_receive_buffer2::AbstractMKArray{mk_float,2}, r_spectral, r; neutrals=false)
 
     # differentiate f w.r.t r
     if neutrals
@@ -423,11 +423,11 @@ end
 
 #d2f/dr2
 #5D version for f[vpa,vperp,z,r,s] -> ion particle dfn
-function second_derivative_r!(d2fdr2::AbstractArray{mk_float,5}, f::AbstractArray{mk_float,5},
-        d2fdr2_lower_endpoints::AbstractArray{mk_float,4},
-        d2fdr2_upper_endpoints::AbstractArray{mk_float,4},
-        r_receive_buffer1::AbstractArray{mk_float,4},
-        r_receive_buffer2::AbstractArray{mk_float,4}, r_spectral, r)
+function second_derivative_r!(d2fdr2::AbstractMKArray{mk_float,5}, f::AbstractMKArray{mk_float,5},
+        d2fdr2_lower_endpoints::AbstractMKArray{mk_float,4},
+        d2fdr2_upper_endpoints::AbstractMKArray{mk_float,4},
+        r_receive_buffer1::AbstractMKArray{mk_float,4},
+        r_receive_buffer2::AbstractMKArray{mk_float,4}, r_spectral, r)
 
     begin_s_z_vperp_vpa_region()
 
@@ -448,11 +448,11 @@ function second_derivative_r!(d2fdr2::AbstractArray{mk_float,5}, f::AbstractArra
 end
 
 #6D version for f[vz,vz,vzeta,z,r,sn] -> neutral particle dfn (species indexing taken outside this loop)
-function second_derivative_r!(d2fdr2::AbstractArray{mk_float,6}, f::AbstractArray{mk_float,6},
-        d2fdr2_lower_endpoints::AbstractArray{mk_float,5},
-        d2fdr2_upper_endpoints::AbstractArray{mk_float,5},
-        r_receive_buffer1::AbstractArray{mk_float,5},
-        r_receive_buffer2::AbstractArray{mk_float,5}, r_spectral, r)
+function second_derivative_r!(d2fdr2::AbstractMKArray{mk_float,6}, f::AbstractMKArray{mk_float,6},
+        d2fdr2_lower_endpoints::AbstractMKArray{mk_float,5},
+        d2fdr2_upper_endpoints::AbstractMKArray{mk_float,5},
+        r_receive_buffer1::AbstractMKArray{mk_float,5},
+        r_receive_buffer2::AbstractMKArray{mk_float,5}, r_spectral, r)
 
     begin_sn_z_vzeta_vr_vz_region()
 
@@ -482,11 +482,11 @@ dfns (neutrals) -> [vz,vr,vzeta,z,r,sn]
 
 #d2f/dz2
 #2D version for f[z,r] -> Er, Ez, phi
-function second_derivative_z!(d2fdz2::AbstractArray{mk_float,2}, f::AbstractArray{mk_float,2},
-        d2fdz2_lower_endpoints::AbstractArray{mk_float,1},
-        d2fdz2_upper_endpoints::AbstractArray{mk_float,1},
-        z_send_buffer::AbstractArray{mk_float,1},
-        z_receive_buffer::AbstractArray{mk_float,1}, z_spectral, z)
+function second_derivative_z!(d2fdz2::AbstractMKArray{mk_float,2}, f::AbstractMKArray{mk_float,2},
+        d2fdz2_lower_endpoints::AbstractMKArray{mk_float,1},
+        d2fdz2_upper_endpoints::AbstractMKArray{mk_float,1},
+        z_send_buffer::AbstractMKArray{mk_float,1},
+        z_receive_buffer::AbstractMKArray{mk_float,1}, z_spectral, z)
 
     begin_r_region()
 
@@ -508,11 +508,11 @@ end
 
 #d2f/dz2
 #3D version for f[z,r] -> moments n, u, T etc
-function second_derivative_z!(d2fdz2::AbstractArray{mk_float,3}, f::AbstractArray{mk_float,3},
-        d2fdz2_lower_endpoints::AbstractArray{mk_float,2},
-        d2fdz2_upper_endpoints::AbstractArray{mk_float,2},
-        z_send_buffer::AbstractArray{mk_float,2},
-        z_receive_buffer::AbstractArray{mk_float,2}, z_spectral, z; neutrals=false)
+function second_derivative_z!(d2fdz2::AbstractMKArray{mk_float,3}, f::AbstractMKArray{mk_float,3},
+        d2fdz2_lower_endpoints::AbstractMKArray{mk_float,2},
+        d2fdz2_upper_endpoints::AbstractMKArray{mk_float,2},
+        z_send_buffer::AbstractMKArray{mk_float,2},
+        z_receive_buffer::AbstractMKArray{mk_float,2}, z_spectral, z; neutrals=false)
 
     # differentiate f w.r.t z
     if neutrals
@@ -545,11 +545,11 @@ function second_derivative_z!(d2fdz2::AbstractArray{mk_float,3}, f::AbstractArra
 end
 
 #5D version for f[vpa,vperp,z,r,s] -> dfn ions
-function second_derivative_z!(d2fdz2::AbstractArray{mk_float,5}, f::AbstractArray{mk_float,5},
-        d2fdz2_lower_endpoints::AbstractArray{mk_float,4},
-        d2fdz2_upper_endpoints::AbstractArray{mk_float,4},
-        z_send_buffer::AbstractArray{mk_float,4},
-        z_receive_buffer::AbstractArray{mk_float,4}, z_spectral, z)
+function second_derivative_z!(d2fdz2::AbstractMKArray{mk_float,5}, f::AbstractMKArray{mk_float,5},
+        d2fdz2_lower_endpoints::AbstractMKArray{mk_float,4},
+        d2fdz2_upper_endpoints::AbstractMKArray{mk_float,4},
+        z_send_buffer::AbstractMKArray{mk_float,4},
+        z_receive_buffer::AbstractMKArray{mk_float,4}, z_spectral, z)
 
     begin_s_r_vperp_vpa_region()
 
@@ -570,11 +570,11 @@ function second_derivative_z!(d2fdz2::AbstractArray{mk_float,5}, f::AbstractArra
 end
 
 #6D version for f[vz,vr,vzeta,z,r] -> dfn neutral particles
-function second_derivative_z!(d2fdz2::AbstractArray{mk_float,6}, f::AbstractArray{mk_float,6},
-        d2fdz2_lower_endpoints::AbstractArray{mk_float,5},
-        d2fdz2_upper_endpoints::AbstractArray{mk_float,5},
-        z_send_buffer::AbstractArray{mk_float,5},
-        z_receive_buffer::AbstractArray{mk_float,5}, z_spectral, z)
+function second_derivative_z!(d2fdz2::AbstractMKArray{mk_float,6}, f::AbstractMKArray{mk_float,6},
+        d2fdz2_lower_endpoints::AbstractMKArray{mk_float,5},
+        d2fdz2_upper_endpoints::AbstractMKArray{mk_float,5},
+        z_send_buffer::AbstractMKArray{mk_float,5},
+        z_receive_buffer::AbstractMKArray{mk_float,5}, z_spectral, z)
 
     begin_sn_r_vzeta_vr_vz_region()
 
@@ -604,13 +604,13 @@ dfns (neutrals) -> [vz,vr,vzeta,z,r,sn]
 
 #df/dr
 #2D version for f[z,r] -> Er, Ez, phi
-function derivative_r!(dfdr::AbstractArray{mk_float,2}, f::AbstractArray{mk_float,2},
-        adv_fac, adv_fac_lower_buffer::AbstractArray{mk_float,1},
-        adv_fac_upper_buffer::AbstractArray{mk_float,1},
-        dfdr_lower_endpoints::AbstractArray{mk_float,1},
-        dfdr_upper_endpoints::AbstractArray{mk_float,1},
-        r_receive_buffer1::AbstractArray{mk_float,1},
-        r_receive_buffer2::AbstractArray{mk_float,1}, r_spectral, r)
+function derivative_r!(dfdr::AbstractMKArray{mk_float,2}, f::AbstractMKArray{mk_float,2},
+        adv_fac, adv_fac_lower_buffer::AbstractMKArray{mk_float,1},
+        adv_fac_upper_buffer::AbstractMKArray{mk_float,1},
+        dfdr_lower_endpoints::AbstractMKArray{mk_float,1},
+        dfdr_upper_endpoints::AbstractMKArray{mk_float,1},
+        r_receive_buffer1::AbstractMKArray{mk_float,1},
+        r_receive_buffer2::AbstractMKArray{mk_float,1}, r_spectral, r)
 
     begin_z_region()
 
@@ -634,13 +634,13 @@ end
 
 #df/dr
 #3D version for f[z,r,s] -> moments n, u, T etc
-function derivative_r!(dfdr::AbstractArray{mk_float,3}, f::AbstractArray{mk_float,3},
-        adv_fac, adv_fac_lower_buffer::AbstractArray{mk_float,2},
-        adv_fac_upper_buffer::AbstractArray{mk_float,2},
-        dfdr_lower_endpoints::AbstractArray{mk_float,2},
-        dfdr_upper_endpoints::AbstractArray{mk_float,2},
-        r_receive_buffer1::AbstractArray{mk_float,2},
-        r_receive_buffer2::AbstractArray{mk_float,2}, r_spectral, r; neutrals=false)
+function derivative_r!(dfdr::AbstractMKArray{mk_float,3}, f::AbstractMKArray{mk_float,3},
+        adv_fac, adv_fac_lower_buffer::AbstractMKArray{mk_float,2},
+        adv_fac_upper_buffer::AbstractMKArray{mk_float,2},
+        dfdr_lower_endpoints::AbstractMKArray{mk_float,2},
+        dfdr_upper_endpoints::AbstractMKArray{mk_float,2},
+        r_receive_buffer1::AbstractMKArray{mk_float,2},
+        r_receive_buffer2::AbstractMKArray{mk_float,2}, r_spectral, r; neutrals=false)
 
     # differentiate f w.r.t r
     if neutrals
@@ -678,13 +678,13 @@ end
 
 #df/dr
 #5D version for f[vpa,vperp,z,r,s] -> ion particle dfn
-function derivative_r!(dfdr::AbstractArray{mk_float,5}, f::AbstractArray{mk_float,5},
-        advect, adv_fac_lower_buffer::AbstractArray{mk_float,4},
-        adv_fac_upper_buffer::AbstractArray{mk_float,4},
-        dfdr_lower_endpoints::AbstractArray{mk_float,4},
-        dfdr_upper_endpoints::AbstractArray{mk_float,4},
-        r_receive_buffer1::AbstractArray{mk_float,4},
-        r_receive_buffer2::AbstractArray{mk_float,4}, r_spectral, r)
+function derivative_r!(dfdr::AbstractMKArray{mk_float,5}, f::AbstractMKArray{mk_float,5},
+        advect, adv_fac_lower_buffer::AbstractMKArray{mk_float,4},
+        adv_fac_upper_buffer::AbstractMKArray{mk_float,4},
+        dfdr_lower_endpoints::AbstractMKArray{mk_float,4},
+        dfdr_upper_endpoints::AbstractMKArray{mk_float,4},
+        r_receive_buffer1::AbstractMKArray{mk_float,4},
+        r_receive_buffer2::AbstractMKArray{mk_float,4}, r_spectral, r)
 
         begin_s_z_vperp_vpa_region()
 
@@ -709,13 +709,13 @@ function derivative_r!(dfdr::AbstractArray{mk_float,5}, f::AbstractArray{mk_floa
 end
 
 #6D version for f[vz,vz,vzeta,z,r,sn] -> neutral particle dfn (species indexing taken outside this loop)
-function derivative_r!(dfdr::AbstractArray{mk_float,6}, f::AbstractArray{mk_float,6},
-        advect, adv_fac_lower_buffer::AbstractArray{mk_float,5},
-        adv_fac_upper_buffer::AbstractArray{mk_float,5},
-        dfdr_lower_endpoints::AbstractArray{mk_float,5},
-        dfdr_upper_endpoints::AbstractArray{mk_float,5},
-        r_receive_buffer1::AbstractArray{mk_float,5},
-        r_receive_buffer2::AbstractArray{mk_float,5}, r_spectral, r)
+function derivative_r!(dfdr::AbstractMKArray{mk_float,6}, f::AbstractMKArray{mk_float,6},
+        advect, adv_fac_lower_buffer::AbstractMKArray{mk_float,5},
+        adv_fac_upper_buffer::AbstractMKArray{mk_float,5},
+        dfdr_lower_endpoints::AbstractMKArray{mk_float,5},
+        dfdr_upper_endpoints::AbstractMKArray{mk_float,5},
+        r_receive_buffer1::AbstractMKArray{mk_float,5},
+        r_receive_buffer2::AbstractMKArray{mk_float,5}, r_spectral, r)
 
         begin_sn_z_vzeta_vr_vz_region()
 
@@ -749,13 +749,13 @@ dfns (neutrals) -> [vz,vr,vzeta,z,r,sn]
 """
 
 #2D version for f[z,r] -> Er, Ez, phi
-function derivative_z!(dfdz::AbstractArray{mk_float,2}, f::AbstractArray{mk_float,2},
-        adv_fac, adv_fac_lower_buffer::AbstractArray{mk_float,1},
-        adv_fac_upper_buffer::AbstractArray{mk_float,1},
-        dfdz_lower_endpoints::AbstractArray{mk_float,1},
-        dfdz_upper_endpoints::AbstractArray{mk_float,1},
-        z_send_buffer::AbstractArray{mk_float,1},
-        z_receive_buffer::AbstractArray{mk_float,1}, z_spectral, z)
+function derivative_z!(dfdz::AbstractMKArray{mk_float,2}, f::AbstractMKArray{mk_float,2},
+        adv_fac, adv_fac_lower_buffer::AbstractMKArray{mk_float,1},
+        adv_fac_upper_buffer::AbstractMKArray{mk_float,1},
+        dfdz_lower_endpoints::AbstractMKArray{mk_float,1},
+        dfdz_upper_endpoints::AbstractMKArray{mk_float,1},
+        z_send_buffer::AbstractMKArray{mk_float,1},
+        z_receive_buffer::AbstractMKArray{mk_float,1}, z_spectral, z)
 
     begin_r_region()
 
@@ -778,13 +778,13 @@ function derivative_z!(dfdz::AbstractArray{mk_float,2}, f::AbstractArray{mk_floa
 end
 
 #3D version for f[z,r] -> moments n, u, T etc
-function derivative_z!(dfdz::AbstractArray{mk_float,3}, f::AbstractArray{mk_float,3},
-        adv_fac, adv_fac_lower_buffer::AbstractArray{mk_float,2},
-        adv_fac_upper_buffer::AbstractArray{mk_float,2},
-        dfdz_lower_endpoints::AbstractArray{mk_float,2},
-        dfdz_upper_endpoints::AbstractArray{mk_float,2},
-        z_send_buffer::AbstractArray{mk_float,2},
-        z_receive_buffer::AbstractArray{mk_float,2}, z_spectral, z; neutrals=false)
+function derivative_z!(dfdz::AbstractMKArray{mk_float,3}, f::AbstractMKArray{mk_float,3},
+        adv_fac, adv_fac_lower_buffer::AbstractMKArray{mk_float,2},
+        adv_fac_upper_buffer::AbstractMKArray{mk_float,2},
+        dfdz_lower_endpoints::AbstractMKArray{mk_float,2},
+        dfdz_upper_endpoints::AbstractMKArray{mk_float,2},
+        z_send_buffer::AbstractMKArray{mk_float,2},
+        z_receive_buffer::AbstractMKArray{mk_float,2}, z_spectral, z; neutrals=false)
 
     # differentiate f w.r.t z
     if neutrals
@@ -823,13 +823,13 @@ end
 # df/dz
 # 3D version for f[vpa,vperp,z]. Uses modified function name to avoid clash with 'standard'
 # 3D version for ion/neutral moments.
-function derivative_z_pdf_vpavperpz!(dfdz::AbstractArray{mk_float,3}, f::AbstractArray{mk_float,3},
-        adv_fac, adv_fac_lower_buffer::AbstractArray{mk_float,2},
-        adv_fac_upper_buffer::AbstractArray{mk_float,2},
-        dfdz_lower_endpoints::AbstractArray{mk_float,2},
-        dfdz_upper_endpoints::AbstractArray{mk_float,2},
-        z_receive_buffer1::AbstractArray{mk_float,2},
-        z_receive_buffer2::AbstractArray{mk_float,2}, z_spectral, z)
+function derivative_z_pdf_vpavperpz!(dfdz::AbstractMKArray{mk_float,3}, f::AbstractMKArray{mk_float,3},
+        adv_fac, adv_fac_lower_buffer::AbstractMKArray{mk_float,2},
+        adv_fac_upper_buffer::AbstractMKArray{mk_float,2},
+        dfdz_lower_endpoints::AbstractMKArray{mk_float,2},
+        dfdz_upper_endpoints::AbstractMKArray{mk_float,2},
+        z_receive_buffer1::AbstractMKArray{mk_float,2},
+        z_receive_buffer2::AbstractMKArray{mk_float,2}, z_spectral, z)
 
     # differentiate f w.r.t z
     @loop_vperp_vpa ivperp ivpa begin
@@ -851,13 +851,13 @@ function derivative_z_pdf_vpavperpz!(dfdz::AbstractArray{mk_float,3}, f::Abstrac
 end
 
 #5D version for f[vpa,vperp,z,r,s] -> dfn ion particles
-function derivative_z!(dfdz::AbstractArray{mk_float,5}, f::AbstractArray{mk_float,5},
-        advect, adv_fac_lower_buffer::AbstractArray{mk_float,4},
-        adv_fac_upper_buffer::AbstractArray{mk_float,4},
-        dfdz_lower_endpoints::AbstractArray{mk_float,4},
-        dfdz_upper_endpoints::AbstractArray{mk_float,4},
-        z_send_buffer::AbstractArray{mk_float,4},
-        z_receive_buffer::AbstractArray{mk_float,4}, z_spectral, z)
+function derivative_z!(dfdz::AbstractMKArray{mk_float,5}, f::AbstractMKArray{mk_float,5},
+        advect, adv_fac_lower_buffer::AbstractMKArray{mk_float,4},
+        adv_fac_upper_buffer::AbstractMKArray{mk_float,4},
+        dfdz_lower_endpoints::AbstractMKArray{mk_float,4},
+        dfdz_upper_endpoints::AbstractMKArray{mk_float,4},
+        z_send_buffer::AbstractMKArray{mk_float,4},
+        z_receive_buffer::AbstractMKArray{mk_float,4}, z_spectral, z)
 
         begin_s_r_vperp_vpa_region()
 
@@ -882,13 +882,13 @@ function derivative_z!(dfdz::AbstractArray{mk_float,5}, f::AbstractArray{mk_floa
 end
 
 #4D version for f[vpa,vperp,z,r] -> dfn electron particles
-function derivative_z!(dfdz::AbstractArray{mk_float,4}, f::AbstractArray{mk_float,4},
-	advect, adv_fac_lower_buffer::AbstractArray{mk_float,3},
-	adv_fac_upper_buffer::AbstractArray{mk_float,3},
-	dfdz_lower_endpoints::AbstractArray{mk_float,3},
-	dfdz_upper_endpoints::AbstractArray{mk_float,3},
-	z_send_buffer::AbstractArray{mk_float,3},
-	z_receive_buffer::AbstractArray{mk_float,3}, z_spectral, z)
+function derivative_z!(dfdz::AbstractMKArray{mk_float,4}, f::AbstractMKArray{mk_float,4},
+	advect, adv_fac_lower_buffer::AbstractMKArray{mk_float,3},
+	adv_fac_upper_buffer::AbstractMKArray{mk_float,3},
+	dfdz_lower_endpoints::AbstractMKArray{mk_float,3},
+	dfdz_upper_endpoints::AbstractMKArray{mk_float,3},
+	z_send_buffer::AbstractMKArray{mk_float,3},
+	z_receive_buffer::AbstractMKArray{mk_float,3}, z_spectral, z)
 
     begin_r_vperp_vpa_region()
 
@@ -913,13 +913,13 @@ function derivative_z!(dfdz::AbstractArray{mk_float,4}, f::AbstractArray{mk_floa
 end
 
 #6D version for f[vz,vr,vzeta,z,r,sn] -> dfn neutral particles
-function derivative_z!(dfdz::AbstractArray{mk_float,6}, f::AbstractArray{mk_float,6},
-        advect, adv_fac_lower_buffer::AbstractArray{mk_float,5},
-        adv_fac_upper_buffer::AbstractArray{mk_float,5},
-        dfdz_lower_endpoints::AbstractArray{mk_float,5},
-        dfdz_upper_endpoints::AbstractArray{mk_float,5},
-        z_send_buffer::AbstractArray{mk_float,5},
-        z_receive_buffer::AbstractArray{mk_float,5}, z_spectral, z)
+function derivative_z!(dfdz::AbstractMKArray{mk_float,6}, f::AbstractMKArray{mk_float,6},
+        advect, adv_fac_lower_buffer::AbstractMKArray{mk_float,5},
+        adv_fac_upper_buffer::AbstractMKArray{mk_float,5},
+        dfdz_lower_endpoints::AbstractMKArray{mk_float,5},
+        dfdz_upper_endpoints::AbstractMKArray{mk_float,5},
+        z_send_buffer::AbstractMKArray{mk_float,5},
+        z_receive_buffer::AbstractMKArray{mk_float,5}, z_spectral, z)
 
         begin_sn_r_vzeta_vr_vz_region()
 

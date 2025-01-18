@@ -271,7 +271,7 @@ SEPARATE_POSTPROC_PROJECTS=$(bin/julia --project machines/shared/get_mk_preferen
 if [[ $BATCH_SYSTEM -eq 0 || $SEPARATE_POSTPROC_PROJECTS == "y" ]]; then
   # Batch systems can (conveniently) use different optimization flags for
   # running simulations and for post-processing.
-  OPTIMIZATION_FLAGS="-O3 --check-bounds=no"
+  OPTIMIZATION_FLAGS="-O3"
   POSTPROC_OPTIMIZATION_FLAGS="-O3"
 else
   # On interactive systems which use the same project for running simulations

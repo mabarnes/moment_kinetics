@@ -9,7 +9,7 @@ using moment_kinetics.input_structs: advection_input
 using moment_kinetics.looping
 using moment_kinetics.looping: setup_loop_ranges!
 using moment_kinetics.nonlinear_solvers
-using moment_kinetics.type_definitions: mk_float, mk_int
+using moment_kinetics.type_definitions
 
 using MPI
 
@@ -34,7 +34,7 @@ function linear_test()
         setup_loop_ranges!(block_rank[], block_size[]; s=1, sn=0, r=1, z=n, vperp=1, vpa=1,
                            vzeta=1, vr=1, vz=1)
 
-        A = zeros(n,n)
+        A = mk_zeros(n,n)
         i = 1
         A[i,i] = -2.0
         A[i,i+1] = 1.0
@@ -50,31 +50,35 @@ function linear_test()
         z = collect(0:n-1) ./ (n-1)
         b = @. - z * (1.0 - z)
 
-        the_coord = coordinate("foo", n, n, n, 1, 1, 1, 0, 1.0, zeros(mk_float, 0),
-                               zeros(mk_float, 0), zeros(mk_int, 0), zeros(mk_int, 0),
-                               zeros(mk_int, 0), zeros(mk_int, 0), zeros(mk_int, 0, 0),
-                               "", "", "", "", nothing, zeros(mk_float, 0), zeros(mk_float, 0),
-                               zeros(mk_float, 0, 0), zeros(mk_float, 0),
-                               zeros(mk_float, 0), zeros(mk_float, 0), zeros(mk_float, 0),
-                               zeros(mk_float, 0), zeros(mk_float, 0), zeros(mk_float, 0),
-                               zeros(mk_float, 0), zeros(mk_float, 0), zeros(mk_float, 0),
-                               zeros(mk_int, 0), zeros(mk_float, 0), zeros(mk_float, 0),
-                               zeros(mk_float, 0), zeros(mk_int, 0), zeros(mk_int, 0),
-                               zeros(mk_float, 0, 0), zeros(mk_float, 0, 0),
-                               advection_input("", 0.0, 0.0, 0.0), zeros(mk_float, 0),
-                               zeros(mk_float, 0), MPI.COMM_NULL, 1:n, 1:n,
-                               zeros(mk_float, 0), zeros(mk_float, 0), "",
-                               zeros(mk_float, 0), false, zeros(mk_float, 0, 0, 0),
-                               zeros(mk_float, 0, 0))
+        the_coord = coordinate("foo", n, n, n, 1, 1, 1, 0, 1.0, mk_zeros(mk_float, 0),
+                               mk_zeros(mk_float, 0), mk_zeros(mk_int, 0),
+                               mk_zeros(mk_int, 0), mk_zeros(mk_int, 0),
+                               mk_zeros(mk_int, 0), mk_zeros(mk_int, 0, 0), "", "", "",
+                               "", nothing, mk_zeros(mk_float, 0), mk_zeros(mk_float, 0),
+                               mk_zeros(mk_float, 0, 0), mk_zeros(mk_float, 0),
+                               mk_zeros(mk_float, 0), mk_zeros(mk_float, 0),
+                               mk_zeros(mk_float, 0), mk_zeros(mk_float, 0),
+                               mk_zeros(mk_float, 0), mk_zeros(mk_float, 0),
+                               mk_zeros(mk_float, 0), mk_zeros(mk_float, 0),
+                               mk_zeros(mk_float, 0), mk_zeros(mk_int, 0),
+                               mk_zeros(mk_float, 0), mk_zeros(mk_float, 0),
+                               mk_zeros(mk_float, 0), mk_zeros(mk_int, 0),
+                               mk_zeros(mk_int, 0), mk_zeros(mk_float, 0, 0),
+                               mk_zeros(mk_float, 0, 0),
+                               advection_input("", 0.0, 0.0, 0.0), mk_zeros(mk_float, 0),
+                               mk_zeros(mk_float, 0), MPI.COMM_NULL, 1:n, 1:n,
+                               mk_zeros(mk_float, 0), mk_zeros(mk_float, 0), "",
+                               mk_zeros(mk_float, 0), false, mk_zeros(mk_float, 0, 0, 0),
+                               mk_zeros(mk_float, 0, 0))
         coords = NamedTuple(c => the_coord for c ∈ coord_names)
 
         function rhs_func!(residual, x; krylov=false)
             if serial_solve
-                residual .= A * x - b
+                residual .= A * x .- b
             else
                 begin_serial_region()
                 @serial_region begin
-                    residual .= A * x - b
+                    residual .= A * x .- b
                 end
             end
             return nothing
@@ -164,22 +168,26 @@ function nonlinear_test()
         z = collect(0:n-1) ./ (n-1)
         b = @. - z * (1.0 - z)
 
-        the_coord = coordinate("foo", n, n, n, 1, 1, 1, 0, 1.0, zeros(mk_float, 0),
-                               zeros(mk_float, 0), zeros(mk_int, 0), zeros(mk_int, 0),
-                               zeros(mk_int, 0), zeros(mk_int, 0), zeros(mk_int, 0, 0),
-                               "", "", "", "", nothing, zeros(mk_float, 0), zeros(mk_float, 0),
-                               zeros(mk_float, 0, 0), zeros(mk_float, 0),
-                               zeros(mk_float, 0), zeros(mk_float, 0), zeros(mk_float, 0),
-                               zeros(mk_float, 0), zeros(mk_float, 0), zeros(mk_float, 0),
-                               zeros(mk_float, 0), zeros(mk_float, 0), zeros(mk_float, 0),
-                               zeros(mk_int, 0), zeros(mk_float, 0), zeros(mk_float, 0),
-                               zeros(mk_float, 0), zeros(mk_int, 0), zeros(mk_int, 0),
-                               zeros(mk_float, 0, 0), zeros(mk_float, 0, 0),
-                               advection_input("", 0.0, 0.0, 0.0), zeros(mk_float, 0),
-                               zeros(mk_float, 0), MPI.COMM_NULL, 1:n, 1:n,
-                               zeros(mk_float, 0), zeros(mk_float, 0), "",
-                               zeros(mk_float, 0), false, zeros(mk_float, 0, 0, 0),
-                               zeros(mk_float, 0, 0))
+        the_coord = coordinate("foo", n, n, n, 1, 1, 1, 0, 1.0, mk_zeros(mk_float, 0),
+                               mk_zeros(mk_float, 0), mk_zeros(mk_int, 0),
+                               mk_zeros(mk_int, 0), mk_zeros(mk_int, 0),
+                               mk_zeros(mk_int, 0), mk_zeros(mk_int, 0, 0), "", "", "",
+                               "", nothing, mk_zeros(mk_float, 0), mk_zeros(mk_float, 0),
+                               mk_zeros(mk_float, 0, 0), mk_zeros(mk_float, 0),
+                               mk_zeros(mk_float, 0), mk_zeros(mk_float, 0),
+                               mk_zeros(mk_float, 0), mk_zeros(mk_float, 0),
+                               mk_zeros(mk_float, 0), mk_zeros(mk_float, 0),
+                               mk_zeros(mk_float, 0), mk_zeros(mk_float, 0),
+                               mk_zeros(mk_float, 0), mk_zeros(mk_int, 0),
+                               mk_zeros(mk_float, 0), mk_zeros(mk_float, 0),
+                               mk_zeros(mk_float, 0), mk_zeros(mk_int, 0),
+                               mk_zeros(mk_int, 0), mk_zeros(mk_float, 0, 0),
+                               mk_zeros(mk_float, 0, 0),
+                               advection_input("", 0.0, 0.0, 0.0), mk_zeros(mk_float, 0),
+                               mk_zeros(mk_float, 0), MPI.COMM_NULL, 1:n, 1:n,
+                               mk_zeros(mk_float, 0), mk_zeros(mk_float, 0), "",
+                               mk_zeros(mk_float, 0), false, mk_zeros(mk_float, 0, 0, 0),
+                               mk_zeros(mk_float, 0, 0))
         coords = NamedTuple(c => the_coord for c ∈ coord_names)
 
         function rhs_func!(residual, x; krylov=false)
@@ -263,11 +271,11 @@ function nonlinear_test()
         rhs_func!(residual, x)
 
         if serial_solve
-            @test isapprox(residual, zeros(n); atol=4.0*atol)
+            @test isapprox(residual, mk_zeros(n); atol=4.0*atol)
         else
             begin_serial_region()
             @serial_region begin
-                @test isapprox(residual, zeros(n); atol=4.0*atol)
+                @test isapprox(residual, mk_zeros(n); atol=4.0*atol)
             end
         end
     end

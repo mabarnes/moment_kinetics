@@ -2,7 +2,7 @@
 """
 module finite_differences
 
-using ..type_definitions: mk_float
+using ..type_definitions
 import ..calculus: elementwise_derivative!, second_derivative!,
                    derivative_elements_to_full_grid!
 using ..moment_kinetics_structs: discretization_info
@@ -371,7 +371,7 @@ take the derivative of input function f and return as df
 using second-order, centered differences.
 input/output array df is 2D array of size ngrid x nelement
 """
-function centered_second_order!(df::Array{mk_float,2}, f, del, bc, igrid, ielement)
+function centered_second_order!(df::AbstractMKArray{mk_float,2}, f, del, bc, igrid, ielement)
 	n = length(f)
 	# get derivative at internal points
 	for i ∈ 2:n-1
@@ -411,7 +411,7 @@ take the derivative of input function f and return as df
 using second-order, centered differences.
 input/output df is 1D array of size n (full grid)
 """
-function centered_second_order!(df::Array{mk_float,1}, f, del, bc, igrid, ielement)
+function centered_second_order!(df::AbstractMKArray{mk_float,1}, f, del, bc, igrid, ielement)
 	n = length(f)
 	# get derivative at internal points
 	for i ∈ 2:n-1
@@ -451,7 +451,7 @@ take the derivative of input function f and return as df
 using fourth-order, centered differences.
 input/output array df is 2D array of size ngrid x nelement
 """
-function centered_fourth_order!(df::Array{mk_float,2}, f, del, bc, igrid, ielement)
+function centered_fourth_order!(df::AbstractMKArray{mk_float,2}, f, del, bc, igrid, ielement)
 	n = length(f)
 	# get derivative at internal points
 	for i ∈ 3:n-2
@@ -505,7 +505,7 @@ Take the second derivative of input function f and return as df using second-ord
 centered differences.
 output array df is 2D array of size ngrid x nelement
 """
-function second_derivative_finite_difference!(df::Array{mk_float,2}, f, del, bc, igrid, ielement)
+function second_derivative_finite_difference!(df::AbstractMKArray{mk_float,2}, f, del, bc, igrid, ielement)
     n = length(f)
     # get derivative at internal points
     for i ∈ 2:n-1

@@ -32,7 +32,7 @@ function check_moment_constraints(run_info, is_neutral; input, plot_prefix)
     if is_neutral
         fn = get_variable(run_info, "f_neutral")
         if run_info.evolve_density
-            moment = zeros(run_info.z.n, run_info.r.n, run_info.nt)
+            moment = mk_zeros(run_info.z.n, run_info.r.n, run_info.nt)
             for it ∈ 1:run_info.nt, ir ∈ 1:run_info.r.n, iz ∈ 1:run_info.z.n
                 moment[iz,ir,it] = integrate_over_neutral_vspace(
                     @view(fn[:,:,:,iz,ir,is,it]), run_info.vz.grid, 0, run_info.vz.wgts,
@@ -45,7 +45,7 @@ function check_moment_constraints(run_info, is_neutral; input, plot_prefix)
         end
 
         if run_info.evolve_upar
-            moment = zeros(run_info.z.n, run_info.r.n, run_info.nt)
+            moment = mk_zeros(run_info.z.n, run_info.r.n, run_info.nt)
             for it ∈ 1:run_info.nt, ir ∈ 1:run_info.r.n, iz ∈ 1:run_info.z.n
                 moment[iz,ir,it] = integrate_over_neutral_vspace(
                     @view(fn[:,:,:,iz,ir,is,it]), run_info.vz.grid, 1, run_info.vz.wgts,
@@ -58,7 +58,7 @@ function check_moment_constraints(run_info, is_neutral; input, plot_prefix)
         end
 
         if run_info.evolve_ppar
-            moment = zeros(run_info.z.n, run_info.r.n, run_info.nt)
+            moment = mk_zeros(run_info.z.n, run_info.r.n, run_info.nt)
             for it ∈ 1:run_info.nt, ir ∈ 1:run_info.r.n, iz ∈ 1:run_info.z.n
                 moment[iz,ir,it] = integrate_over_neutral_vspace(
                     @view(fn[:,:,:,iz,ir,is,it]), run_info.vz.grid, 2, run_info.vz.wgts,
@@ -72,7 +72,7 @@ function check_moment_constraints(run_info, is_neutral; input, plot_prefix)
     else
         f = get_variable(run_info, "f")
         if run_info.evolve_density
-            moment = zeros(run_info.z.n, run_info.r.n, run_info.nt)
+            moment = mk_zeros(run_info.z.n, run_info.r.n, run_info.nt)
             for it ∈ 1:run_info.nt, ir ∈ 1:run_info.r.n, iz ∈ 1:run_info.z.n
                 moment[iz,ir,it] = integrate_over_vspace(
                     @view(f[:,:,iz,ir,is,it]), run_info.vpa.grid, 0, run_info.vpa.wgts,
@@ -84,7 +84,7 @@ function check_moment_constraints(run_info, is_neutral; input, plot_prefix)
         end
 
         if run_info.evolve_upar
-            moment = zeros(run_info.z.n, run_info.r.n, run_info.nt)
+            moment = mk_zeros(run_info.z.n, run_info.r.n, run_info.nt)
             for it ∈ 1:run_info.nt, ir ∈ 1:run_info.r.n, iz ∈ 1:run_info.z.n
                 moment[iz,ir,it] = integrate_over_vspace(
                     @view(f[:,:,iz,ir,is,it]), run_info.vpa.grid, 1, run_info.vpa.wgts,
@@ -96,7 +96,7 @@ function check_moment_constraints(run_info, is_neutral; input, plot_prefix)
         end
 
         if run_info.evolve_ppar
-            moment = zeros(run_info.z.n, run_info.r.n, run_info.nt)
+            moment = mk_zeros(run_info.z.n, run_info.r.n, run_info.nt)
             for it ∈ 1:run_info.nt, ir ∈ 1:run_info.r.n, iz ∈ 1:run_info.z.n
                 moment[iz,ir,it] = integrate_over_vspace(
                     @view(f[:,:,iz,ir,is,it]), run_info.vpa.grid, 2, run_info.vpa.wgts,

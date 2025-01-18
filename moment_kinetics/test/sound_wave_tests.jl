@@ -11,6 +11,7 @@ using moment_kinetics.file_io: io_has_implementation
 using moment_kinetics.load_data: open_readonly_output_file
 using moment_kinetics.load_data: load_fields_data, load_time_data
 using moment_kinetics.load_data: load_species_data, load_coordinate_data
+using moment_kinetics.type_definitions
 using moment_kinetics.analysis: analyze_fields_data
 using moment_kinetics.analysis: fit_delta_phi_mode
 using moment_kinetics.utils: merge_dict_with_kwargs!
@@ -213,7 +214,7 @@ function run_test(test_input, analytic_frequency, analytic_growth_rate,
             # electrostatic potential
             itime_max = ntime
             iz0 = cld(z.n, 3)
-            shifted_time = allocate_float(ntime)
+            shifted_time = mk_zeros(mk_float, ntime)
             @. shifted_time = time - time[itime_min]
             @views phi_fit = fit_delta_phi_mode(shifted_time[itime_min:itime_max], z.grid,
                                                 delta_phi[:, itime_min:itime_max])

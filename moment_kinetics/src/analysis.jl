@@ -15,7 +15,7 @@ using ..interpolation: interpolate_to_grid_1d
 using ..load_data: open_readonly_output_file, get_nranks, load_pdf_data, load_rank_data
 using ..load_data: load_distributed_ion_pdf_slice
 using ..looping
-using ..type_definitions: mk_int, mk_float
+using ..type_definitions
 using ..velocity_moments: integrate_over_vspace
 
 using FFTW
@@ -29,12 +29,12 @@ using StatsBase
 """
 function analyze_fields_data(phi, ntime, z)
     print("Analyzing fields data...")
-    phi_fldline_avg = allocate_float(ntime)
+    phi_fldline_avg = mk_zeros(mk_float, ntime)
     for i ∈ 1:ntime
         phi_fldline_avg[i] = field_line_average(view(phi,:,i), z.wgts, z.L)
     end
     # delta_phi = phi - <phi> is the fluctuating phi
-    delta_phi = allocate_float(z.n,ntime)
+    delta_phi = mk_zeros(mk_float,z.n,ntime)
     for iz ∈ 1:z.n
         delta_phi[iz,:] .= phi[iz,:] - phi_fldline_avg
     end
@@ -141,8 +141,8 @@ function check_Chodura_condition(r, z, vperp, vpa, dens, upar, vth, temp_e, comp
         temp_e = fill(composition.T_e, 2, nr, ntime)
     end
 
-    lower_result = zeros(nr, ntime)
-    upper_result = zeros(nr, ntime)
+    lower_result = mk_zeros(nr, ntime)
+    upper_result = mk_zeros(nr, ntime)
     if f_lower !== nothing || f_upper !== nothing
         if it0 !== nothing
             error("Using `it0` not compatible with passing `f_lower` or `f_upper` as "
@@ -650,7 +650,7 @@ function steady_state_residuals(variable, variable_at_previous_time, dt, use_mpi
             # to square-root here
             return square_residual_norms
         else
-            return OrderedDict{String,Vector{mk_float}}(k=>sqrt.(v) for (k,v) ∈ square_residual_norms)
+            return OrderedDict{String,MKVector{mk_float}}(k=>sqrt.(v) for (k,v) ∈ square_residual_norms)
         end
     else
         return nothing
@@ -690,7 +690,7 @@ function steady_state_square_residuals(variable, variable_at_previous_time, dt,
             end
             variable_max = MPI.Allreduce(local_max, max, comm_world)
         end
-        if isa(dt, Vector)
+        if isa(dt, AbstractMKVector)
             reshaped_dt = reshape(dt, tuple((1 for _ ∈ 1:t_dim-1)..., size(dt)...))
         else
             reshaped_dt = dt
@@ -699,23 +699,23 @@ function steady_state_square_residuals(variable, variable_at_previous_time, dt,
             if size(dt) == ()
                 # local_max_absolute should always be at least a 1d array of size 1, not
                 # a 0d array, so that the MPI.Gather() below works correctly.
-                local_max_absolute = zeros(1)
+                local_max_absolute = mk_zeros(1)
             else
-                local_max_absolute = zeros(size(dt))
+                local_max_absolute = mk_zeros(size(dt))
             end
         else
             if size(dt) == ()
                 # local_max_absolute should always be at least a 1d array of size 1, not
                 # a 0d array, so that the MPI.Gather() below works correctly.
-                local_total_absolute_square = zeros(1)
-                local_max_absolute_square = zeros(1)
-                local_total_relative_square = zeros(1)
-                local_max_relative_square = zeros(1)
+                local_total_absolute_square = mk_zeros(1)
+                local_max_absolute_square = mk_zeros(1)
+                local_total_relative_square = mk_zeros(1)
+                local_max_relative_square = mk_zeros(1)
             else
-                local_total_absolute_square = zeros(size(dt))
-                local_max_absolute_square = zeros(size(dt))
-                local_total_relative_square = zeros(size(dt))
-                local_max_relative_square = zeros(size(dt))
+                local_total_absolute_square = mk_zeros(size(dt))
+                local_max_absolute_square = mk_zeros(size(dt))
+                local_total_relative_square = mk_zeros(size(dt))
+                local_max_relative_square = mk_zeros(size(dt))
             end
         end
         @loop_r_z ir iz begin
@@ -732,7 +732,7 @@ function steady_state_square_residuals(variable, variable_at_previous_time, dt,
                 # have size 1.
                 this_dims = tuple((1:t_dim-3)...)
                 if this_dims === ()
-                    local_max_absolute = max.(local_max_absolute, [absolute_residual])
+                    local_max_absolute[1] = max(local_max_absolute[1], absolute_residual[])
                 else
                     local_max_absolute = max.(local_max_absolute,
                                               vec(maximum(absolute_residual,
@@ -832,7 +832,7 @@ function steady_state_square_residuals(variable, variable_at_previous_time, dt,
             # Need to wrap the mean(...) or maximum(...) in a call to vec(...) so that we
             # return a Vector, not an N-dimensional array where the first (N-1) dimensions all
             # have size 1.
-            return OrderedDict{String,Vector{mk_float}}(
+            return OrderedDict{String,MKVector{mk_float}}(
                        "RMS absolute residual"=>vec(mean(absolute_square_residual;
                                                          dims=tuple((1:t_dim-1)...))),
                        "max absolute residual"=>vec(maximum(absolute_square_residual;
@@ -897,7 +897,7 @@ function get_unnormalised_f_coords_2d(f, z_grid, vpa_grid, density, upar, vth,
                                       evolve_density, evolve_upar, evolve_ppar)
 
     nvpa, nz = size(f)
-    z2d = zeros(nvpa, nz)
+    z2d = mk_zeros(nvpa, nz)
     for iz ∈ 1:nz
         z2d[:,iz] .= z_grid[iz]
     end
@@ -909,7 +909,7 @@ end
 function vpagrid_to_dzdt_2d(vpa_grid, vth, upar, evolve_ppar, evolve_upar)
     nvpa = length(vpa_grid)
     nz = length(vth)
-    dzdt2d = zeros(nvpa, nz)
+    dzdt2d = mk_zeros(nvpa, nz)
     for iz ∈ 1:nz
         @views dzdt2d[:,iz] .= vpagrid_to_dzdt(vpa_grid, vth[iz], upar[iz], evolve_ppar,
                                                evolve_upar)
@@ -996,7 +996,7 @@ phi_fit_result struct whose fields are:
 """
 function fit_delta_phi_mode(t, z, delta_phi)
     # First fit a cosine to each time slice
-    results = allocate_float(3, size(delta_phi)[2])
+    results = mk_zeros(mk_float, 3, size(delta_phi)[2])
     amplitude_guess = 1.0
     offset_guess = 0.0
     for (i, phi_z) in enumerate(eachcol(delta_phi))
@@ -1056,7 +1056,7 @@ function fit_delta_phi_mode(t, z, delta_phi)
         maxiter = 100
         for iter ∈ 1:maxiter
             @views growth_rate_change, frequency, phase, fit_error =
-                fit_phi0_vs_time(exp.(-growth_rate*t) .* amplitude, t)
+                fit_phi0_vs_time(exp.(.-growth_rate.*t) .* amplitude, t)
             growth_rate += growth_rate_change
             println("growth_rate: ", growth_rate, "  growth_rate_change/growth_rate: ", growth_rate_change/growth_rate, "  fit_error: ", fit_error)
             if abs(growth_rate_change/growth_rate) < 1.0e-12 || fit_error < 1.0e-11
@@ -1127,7 +1127,7 @@ function fit_phi0_vs_time(phi0, tmod)
     # phi(z0,t)/phi(z0,t0) = exp((t-t₀)γ)*cos((t-t₀)*ω + phase)/cos(phase),
     # where tmod = t-t0 and phase = ωt₀-φ
     @. model(t, p) = exp(p[1]*t) * cos(p[2]*t + p[3]) / cos(p[3])
-    model_params = allocate_float(3)
+    model_params = mk_zeros(mk_float, 3)
     model_params[1] = -0.1
     model_params[2] = 8.6
     model_params[3] = 0.0

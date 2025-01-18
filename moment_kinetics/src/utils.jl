@@ -12,6 +12,7 @@ using ..input_structs
 using ..looping
 using ..moment_kinetics_input: mk_input
 using ..reference_parameters
+using ..type_definitions
 
 # Import moment_kinetics so we can refer to it in docstrings
 import ..moment_kinetics
@@ -356,7 +357,7 @@ the z direction.
 Reduces the result over the shared-memory block (handling distributed parallelism is left
 to the calling site). The result is only to be used on rank-0 of the shared-memory block.
 """
-function get_minimum_CFL_z(speed::AbstractArray{T,4} where T, z)
+function get_minimum_CFL_z(speed::AbstractMKArray{T,4} where T, z)
     min_CFL = Inf
 
     dz = z.cell_width
@@ -384,7 +385,7 @@ the vpa direction.
 Reduces the result over the shared-memory block (handling distributed parallelism is left
 to the calling site). The result is only to be used on rank-0 of the shared-memory block.
 """
-function get_minimum_CFL_vpa(speed::AbstractArray{T,4} where T, vpa)
+function get_minimum_CFL_vpa(speed::AbstractMKArray{T,4} where T, vpa)
     min_CFL = Inf
 
     dvpa = vpa.cell_width
@@ -412,7 +413,7 @@ neutrals in the z direction.
 Reduces the result over the shared-memory block (handling distributed parallelism is left
 to the calling site). The result is only to be used on rank-0 of the shared-memory block.
 """
-function get_minimum_CFL_neutral_z(speed::AbstractArray{T,5} where T, z)
+function get_minimum_CFL_neutral_z(speed::AbstractMKArray{T,5} where T, z)
     min_CFL = Inf
 
     dz = z.cell_width
@@ -440,7 +441,7 @@ neutrals in the vz direction.
 Reduces the result over the shared-memory block (handling distributed parallelism is left
 to the calling site). The result is only to be used on rank-0 of the shared-memory block.
 """
-function get_minimum_CFL_neutral_vz(speed::AbstractArray{T,5} where T, vz)
+function get_minimum_CFL_neutral_vz(speed::AbstractMKArray{T,5} where T, vz)
     min_CFL = Inf
 
     dvz = vz.cell_width
@@ -471,7 +472,7 @@ post-processing.
 """
 function get_CFL end
 
-function get_CFL!(CFL::AbstractArray{T,4}, speed::AbstractArray{T,4}, coord) where T
+function get_CFL!(CFL::AbstractMKArray{T,4}, speed::AbstractMKArray{T,4}, coord) where T
 
     nmain, n2, n3, n4 = size(speed)
 
@@ -482,7 +483,7 @@ function get_CFL!(CFL::AbstractArray{T,4}, speed::AbstractArray{T,4}, coord) whe
     return CFL
 end
 
-function get_CFL!(CFL::AbstractArray{T,5}, speed::AbstractArray{T,5}, coord) where T
+function get_CFL!(CFL::AbstractMKArray{T,5}, speed::AbstractMKArray{T,5}, coord) where T
 
     nmain, n2, n3, n4, n5 = size(speed)
 
@@ -493,7 +494,7 @@ function get_CFL!(CFL::AbstractArray{T,5}, speed::AbstractArray{T,5}, coord) whe
     return CFL
 end
 
-function get_CFL!(CFL::AbstractArray{T,6}, speed::AbstractArray{T,6}, coord) where T
+function get_CFL!(CFL::AbstractMKArray{T,6}, speed::AbstractMKArray{T,6}, coord) where T
 
     nmain, n2, n3, n4, n5, n6 = size(speed)
 

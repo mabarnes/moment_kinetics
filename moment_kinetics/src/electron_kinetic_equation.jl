@@ -4888,7 +4888,7 @@ in the time derivative term as it is for the non-boundary points.]
         begin_vperp_vpa_region()
         update_electron_speed_z!(z_advect[1], upar, vth, vpa.grid, ir)
         @loop_vperp_vpa ivperp ivpa begin
-            @views z_advect[1].adv_fac[:,ivpa,ivperp,ir] = -z_speed[:,ivpa,ivperp]
+            @views @. z_advect[1].adv_fac[:,ivpa,ivperp,ir] = -z_speed[:,ivpa,ivperp]
         end
         #calculate the upwind derivative
         @views derivative_z_pdf_vpavperpz!(dpdf_dz, f, z_advect[1].adv_fac[:,:,:,ir],

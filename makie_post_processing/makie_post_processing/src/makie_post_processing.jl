@@ -33,7 +33,7 @@ using moment_kinetics.load_data: get_variable, timestep_diagnostic_variables,
 using moment_kinetics.type_definitions
 
 using LaTeXStrings
-using NaNMath
+import NaNMath
 using OrderedCollections
 using StatsBase
 

@@ -14,7 +14,7 @@ using ..interpolation: interpolate_to_grid_1d!
 using ..looping
 using ..timer_utils
 using ..moment_kinetics_structs: scratch_pdf, em_fields_struct
-using ..type_definitions: mk_float, mk_int
+using ..type_definitions
 using ..velocity_moments: integrate_over_vspace, integrate_over_neutral_vspace,
                           integrate_over_positive_vz, integrate_over_negative_vz
 
@@ -75,10 +75,10 @@ end
 """
 enforce boundary conditions on f in r
 """
-function enforce_r_boundary_condition!(f::AbstractArray{mk_float,5}, f_r_bc, bc::String,
-        adv, vpa, vperp, z, r, composition, end1::AbstractArray{mk_float,4},
-        end2::AbstractArray{mk_float,4}, buffer1::AbstractArray{mk_float,4},
-        buffer2::AbstractArray{mk_float,4}, r_diffusion::Bool)
+function enforce_r_boundary_condition!(f::AbstractMKArray{mk_float,5}, f_r_bc, bc::String,
+        adv, vpa, vperp, z, r, composition, end1::AbstractMKArray{mk_float,4},
+        end2::AbstractMKArray{mk_float,4}, buffer1::AbstractMKArray{mk_float,4},
+        buffer2::AbstractMKArray{mk_float,4}, r_diffusion::Bool)
 
     nr = r.n
 
@@ -125,9 +125,9 @@ end
 enforce boundary conditions on ion particle f in z
 """
 function enforce_z_boundary_condition!(pdf, density, upar, ppar, phi, moments, bc::String, adv,
-                                       z, vperp, vpa, composition, end1::AbstractArray{mk_float,4},
-                                       end2::AbstractArray{mk_float,4}, buffer1::AbstractArray{mk_float,4},
-                                       buffer2::AbstractArray{mk_float,4})
+                                       z, vperp, vpa, composition, end1::AbstractMKArray{mk_float,4},
+                                       end2::AbstractMKArray{mk_float,4}, buffer1::AbstractMKArray{mk_float,4},
+                                       buffer2::AbstractMKArray{mk_float,4})
     # this block ensures periodic BC can be supported with distributed memory MPI
     if z.nelement_global > z.nelement_local
         # reconcile internal element boundaries across processes
@@ -281,10 +281,10 @@ enforce boundary conditions on neutral particle distribution function
     end
 end
 
-function enforce_neutral_r_boundary_condition!(f::AbstractArray{mk_float,6},
-        f_r_bc::AbstractArray{mk_float,6}, adv, vz, vr, vzeta, z, r, composition,
-        end1::AbstractArray{mk_float,5}, end2::AbstractArray{mk_float,5},
-        buffer1::AbstractArray{mk_float,5}, buffer2::AbstractArray{mk_float,5},
+function enforce_neutral_r_boundary_condition!(f::AbstractMKArray{mk_float,6},
+        f_r_bc::AbstractMKArray{mk_float,6}, adv, vz, vr, vzeta, z, r, composition,
+        end1::AbstractMKArray{mk_float,5}, end2::AbstractMKArray{mk_float,5},
+        buffer1::AbstractMKArray{mk_float,5}, buffer2::AbstractMKArray{mk_float,5},
         r_diffusion) #f_initial,
 
     bc = r.bc
@@ -334,8 +334,8 @@ enforce boundary conditions on neutral particle f in z
 function enforce_neutral_z_boundary_condition!(pdf, density, uz, pz, moments, density_ion,
                                                upar_ion, Er, boundary_distributions, adv,
                                                z, vzeta, vr, vz, composition, geometry,
-                                               end1::AbstractArray{mk_float,5}, end2::AbstractArray{mk_float,5},
-                                               buffer1::AbstractArray{mk_float,5}, buffer2::AbstractArray{mk_float,5})
+                                               end1::AbstractMKArray{mk_float,5}, end2::AbstractMKArray{mk_float,5},
+                                               buffer1::AbstractMKArray{mk_float,5}, buffer2::AbstractMKArray{mk_float,5})
 
 
     if z.nelement_global > z.nelement_local
@@ -794,7 +794,7 @@ function enforce_neutral_wall_bc!(pdf, z, vzeta, vr, vz, pz, uz, density, wall_f
                 zero_vz_ind = 0
                 for ivz ∈ 1:vz.n
                     if vz.scratch2[ivz] <= -zero
-                        pdf[ivz,:,:,1] .= N_in*pdf[ivz,:,:,1]
+                        pdf[ivz,:,:,1] .= N_in .* pdf[ivz,:,:,1]
                     else
                         zero_vz_ind = ivz
                         if abs(vz.scratch2[ivz]) < zero
@@ -1046,14 +1046,14 @@ enforce zero boundary condition at vperp -> infinity
 """
 function enforce_vperp_boundary_condition! end
 
-function enforce_vperp_boundary_condition!(f::AbstractArray{mk_float,5}, bc, vperp, vperp_spectral, vperp_advect, diffusion)
+function enforce_vperp_boundary_condition!(f::AbstractMKArray{mk_float,5}, bc, vperp, vperp_spectral, vperp_advect, diffusion)
     @loop_s is begin
         @views enforce_vperp_boundary_condition!(f[:,:,:,:,is], bc, vperp, vperp_spectral, vperp_advect[is], diffusion)
     end
     return nothing
 end
 
-function enforce_vperp_boundary_condition!(f::AbstractArray{mk_float,4}, bc, vperp, vperp_spectral, vperp_advect, diffusion)
+function enforce_vperp_boundary_condition!(f::AbstractMKArray{mk_float,4}, bc, vperp, vperp_spectral, vperp_advect, diffusion)
     @loop_r ir begin
         @views enforce_vperp_boundary_condition!(f[:,:,:,ir], bc, vperp, vperp_spectral,
                                                  vperp_advect, diffusion, ir)
@@ -1061,7 +1061,7 @@ function enforce_vperp_boundary_condition!(f::AbstractArray{mk_float,4}, bc, vpe
     return nothing
 end
 
-function enforce_vperp_boundary_condition!(f::AbstractArray{mk_float,3}, bc, vperp,
+function enforce_vperp_boundary_condition!(f::AbstractMKArray{mk_float,3}, bc, vperp,
                                            vperp_spectral, vperp_advect, diffusion, ir)
     if bc == "zero" || bc == "zero-impose-regularity"
         nvperp = vperp.n

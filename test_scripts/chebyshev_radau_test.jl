@@ -4,6 +4,7 @@ using Printf
 using MPI
 
 import moment_kinetics
+using moment_kinetics.array_allocation: allocate_float
 using moment_kinetics.chebyshev
 using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.calculus: derivative!
@@ -71,8 +72,8 @@ function chebyshevradau_test(; ngrid=5, L_in=3.0, discretization="chebyshev_pseu
     D0 = y_spectral.radau.D0
     print_vector(D0,"Radau D0",y.ngrid)
     
-    ff_err = Array{Float64,1}(undef,y.n)
-    ff = Array{Float64,1}(undef,y.n)
+    ff_err = allocate_float(y.n)
+    ff = allocate_float(y.n)
     for iy in 1:y.n
         ff[iy] = exp(-4.0*y.grid[iy])
     end

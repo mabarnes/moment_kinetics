@@ -10,7 +10,7 @@ using moment_kinetics.array_allocation: allocate_float, allocate_shared_float
 using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.chebyshev: setup_chebyshev_pseudospectral
 using moment_kinetics.gauss_legendre: setup_gausslegendre_pseudospectral, get_QQ_local!
-using moment_kinetics.type_definitions: mk_float, mk_int, OptionsDict
+using moment_kinetics.type_definitions
 using moment_kinetics.fokker_planck: init_fokker_planck_collisions_weak_form
 using moment_kinetics.fokker_planck: fokker_planck_collision_operator_weak_form!
 using moment_kinetics.fokker_planck: conserving_corrections!
@@ -139,19 +139,19 @@ end
         lu_obj_MM = fkpl_arrays.lu_obj_MM
         finish_init_time = now()
         
-        fvpavperp = Array{mk_float,2}(undef,vpa.n,vperp.n)
-        fvpavperp_test = Array{mk_float,2}(undef,vpa.n,vperp.n)
-        fvpavperp_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
-        d2fvpavperp_dvpa2_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
-        d2fvpavperp_dvpa2_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
-        d2fvpavperp_dvpa2_num = Array{mk_float,2}(undef,vpa.n,vperp.n)
-        d2fvpavperp_dvperp2_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
-        d2fvpavperp_dvperp2_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
-        d2fvpavperp_dvperp2_num = Array{mk_float,2}(undef,vpa.n,vperp.n)
-        fc = Array{mk_float,1}(undef,nc_global)
-        dfc = Array{mk_float,1}(undef,nc_global)
-        gc = Array{mk_float,1}(undef,nc_global)
-        dgc = Array{mk_float,1}(undef,nc_global)
+        fvpavperp = allocate_float(vpa.n,vperp.n)
+        fvpavperp_test = allocate_float(vpa.n,vperp.n)
+        fvpavperp_err = allocate_float(vpa.n,vperp.n)
+        d2fvpavperp_dvpa2_exact = allocate_float(vpa.n,vperp.n)
+        d2fvpavperp_dvpa2_err = allocate_float(vpa.n,vperp.n)
+        d2fvpavperp_dvpa2_num = allocate_float(vpa.n,vperp.n)
+        d2fvpavperp_dvperp2_exact = allocate_float(vpa.n,vperp.n)
+        d2fvpavperp_dvperp2_err = allocate_float(vpa.n,vperp.n)
+        d2fvpavperp_dvperp2_num = allocate_float(vpa.n,vperp.n)
+        fc = allocate_float(nc_global)
+        dfc = allocate_float(nc_global)
+        gc = allocate_float(nc_global)
+        dgc = allocate_float(nc_global)
         for ivperp in 1:vperp.n
             for ivpa in 1:vpa.n
                 fvpavperp[ivpa,ivperp] = exp(-vpa.grid[ivpa]^2 - vperp.grid[ivperp]^2)
@@ -188,39 +188,39 @@ end
             end
         end
         # test the Laplacian solve with a standard F_Maxwellian -> H_Maxwellian test
-        dummy_vpavperp = Array{mk_float,2}(undef,vpa.n,vperp.n)
-        Fs_M = Array{mk_float,2}(undef,vpa.n,vperp.n)
-        F_M = Array{mk_float,2}(undef,vpa.n,vperp.n)
+        dummy_vpavperp = allocate_float(vpa.n,vperp.n)
+        Fs_M = allocate_float(vpa.n,vperp.n)
+        F_M = allocate_float(vpa.n,vperp.n)
         C_M_num = allocate_shared_float(vpa.n,vperp.n)
-        C_M_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
-        C_M_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
-        #dFdvpa_M = Array{mk_float,2}(undef,vpa.n,vperp.n)
-        #dFdvperp_M = Array{mk_float,2}(undef,vpa.n,vperp.n)
-        #d2Fdvperpdvpa_M = Array{mk_float,2}(undef,vpa.n,vperp.n)
-        H_M_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
+        C_M_exact = allocate_float(vpa.n,vperp.n)
+        C_M_err = allocate_float(vpa.n,vperp.n)
+        #dFdvpa_M = allocate_float(vpa.n,vperp.n)
+        #dFdvperp_M = allocate_float(vpa.n,vperp.n)
+        #d2Fdvperpdvpa_M = allocate_float(vpa.n,vperp.n)
+        H_M_exact = allocate_float(vpa.n,vperp.n)
         H_M_num = allocate_shared_float(vpa.n,vperp.n)
-        H_M_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
-        G_M_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
+        H_M_err = allocate_float(vpa.n,vperp.n)
+        G_M_exact = allocate_float(vpa.n,vperp.n)
         G_M_num = allocate_shared_float(vpa.n,vperp.n)
-        G_M_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
-        d2Gdvpa2_M_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
+        G_M_err = allocate_float(vpa.n,vperp.n)
+        d2Gdvpa2_M_exact = allocate_float(vpa.n,vperp.n)
         d2Gdvpa2_M_num = allocate_shared_float(vpa.n,vperp.n)
-        d2Gdvpa2_M_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
-        d2Gdvperp2_M_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
+        d2Gdvpa2_M_err = allocate_float(vpa.n,vperp.n)
+        d2Gdvperp2_M_exact = allocate_float(vpa.n,vperp.n)
         d2Gdvperp2_M_num = allocate_shared_float(vpa.n,vperp.n)
-        d2Gdvperp2_M_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
-        dGdvperp_M_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
+        d2Gdvperp2_M_err = allocate_float(vpa.n,vperp.n)
+        dGdvperp_M_exact = allocate_float(vpa.n,vperp.n)
         dGdvperp_M_num = allocate_shared_float(vpa.n,vperp.n)
-        dGdvperp_M_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
-        d2Gdvperpdvpa_M_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
+        dGdvperp_M_err = allocate_float(vpa.n,vperp.n)
+        d2Gdvperpdvpa_M_exact = allocate_float(vpa.n,vperp.n)
         d2Gdvperpdvpa_M_num = allocate_shared_float(vpa.n,vperp.n)
-        d2Gdvperpdvpa_M_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
-        dHdvpa_M_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
+        d2Gdvperpdvpa_M_err = allocate_float(vpa.n,vperp.n)
+        dHdvpa_M_exact = allocate_float(vpa.n,vperp.n)
         dHdvpa_M_num = allocate_shared_float(vpa.n,vperp.n)
-        dHdvpa_M_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
-        dHdvperp_M_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
+        dHdvpa_M_err = allocate_float(vpa.n,vperp.n)
+        dHdvperp_M_exact = allocate_float(vpa.n,vperp.n)
         dHdvperp_M_num = allocate_shared_float(vpa.n,vperp.n)
-        dHdvperp_M_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
+        dHdvperp_M_err = allocate_float(vpa.n,vperp.n)
 
         if test_self_operator
             dens, upar, vth = 1.0, 1.0, 1.0
@@ -310,7 +310,7 @@ end
                 max_H_err, max_dHdvpa_err, max_dHdvperp_err, max_G_err, max_dGdvperp_err,
                 max_d2Gdvperp2_err, max_d2Gdvperpdvpa_err, max_d2Gdvpa2_err = test_rosenbluth_potential_boundary_data(fkpl_arrays.rpbd,rpbd_exact,vpa,vperp)
             end
-            dummy_array = Array{mk_float,2}(undef,vpa.n,vperp.n)
+            dummy_array = allocate_float(vpa.n,vperp.n)
             fkerr.H_M.max, fkerr.H_M.L2 = print_test_data(H_M_exact,H_M_num,H_M_err,"H_M",vpa,vperp,dummy_array)
             fkerr.dHdvpa_M.max, fkerr.dHdvpa_M.L2 = print_test_data(dHdvpa_M_exact,dHdvpa_M_num,dHdvpa_M_err,"dHdvpa_M",vpa,vperp,dummy_array)
             fkerr.dHdvperp_M.max, fkerr.dHdvperp_M.L2 = print_test_data(dHdvperp_M_exact,dHdvperp_M_num,dHdvperp_M_err,"dHdvperp_M",vpa,vperp,dummy_array)
@@ -416,41 +416,41 @@ end
         #nelement_list = Int[8]
         #nelement_list = Int[4]
         nscan = size(nelement_list,1)
-        max_C_err = Array{mk_float,1}(undef,nscan)
-        max_H_err = Array{mk_float,1}(undef,nscan)
-        max_G_err = Array{mk_float,1}(undef,nscan)
-        max_dHdvpa_err = Array{mk_float,1}(undef,nscan)
-        max_dHdvperp_err = Array{mk_float,1}(undef,nscan)
-        max_d2Gdvperp2_err = Array{mk_float,1}(undef,nscan)
-        max_d2Gdvpa2_err = Array{mk_float,1}(undef,nscan)
-        max_d2Gdvperpdvpa_err = Array{mk_float,1}(undef,nscan)
-        max_dGdvperp_err = Array{mk_float,1}(undef,nscan)
-        L2_C_err = Array{mk_float,1}(undef,nscan)
-        L2_H_err = Array{mk_float,1}(undef,nscan)
-        L2_G_err = Array{mk_float,1}(undef,nscan)
-        L2_dHdvpa_err = Array{mk_float,1}(undef,nscan)
-        L2_dHdvperp_err = Array{mk_float,1}(undef,nscan)
-        L2_d2Gdvperp2_err = Array{mk_float,1}(undef,nscan)
-        L2_d2Gdvpa2_err = Array{mk_float,1}(undef,nscan)
-        L2_d2Gdvperpdvpa_err = Array{mk_float,1}(undef,nscan)
-        L2_dGdvperp_err = Array{mk_float,1}(undef,nscan)
-        #max_d2fsdvpa2_err = Array{mk_float,1}(undef,nscan)
-        #max_d2fsdvperp2_err = Array{mk_float,1}(undef,nscan)
-        n_err = Array{mk_float,1}(undef,nscan)
-        u_err = Array{mk_float,1}(undef,nscan)
-        p_err = Array{mk_float,1}(undef,nscan)
-        calculate_times = Array{mk_float,1}(undef,nscan)
-        init_times = Array{mk_float,1}(undef,nscan)
+        max_C_err = allocate_float(nscan)
+        max_H_err = allocate_float(nscan)
+        max_G_err = allocate_float(nscan)
+        max_dHdvpa_err = allocate_float(nscan)
+        max_dHdvperp_err = allocate_float(nscan)
+        max_d2Gdvperp2_err = allocate_float(nscan)
+        max_d2Gdvpa2_err = allocate_float(nscan)
+        max_d2Gdvperpdvpa_err = allocate_float(nscan)
+        max_dGdvperp_err = allocate_float(nscan)
+        L2_C_err = allocate_float(nscan)
+        L2_H_err = allocate_float(nscan)
+        L2_G_err = allocate_float(nscan)
+        L2_dHdvpa_err = allocate_float(nscan)
+        L2_dHdvperp_err = allocate_float(nscan)
+        L2_d2Gdvperp2_err = allocate_float(nscan)
+        L2_d2Gdvpa2_err = allocate_float(nscan)
+        L2_d2Gdvperpdvpa_err = allocate_float(nscan)
+        L2_dGdvperp_err = allocate_float(nscan)
+        #max_d2fsdvpa2_err = allocate_float(nscan)
+        #max_d2fsdvperp2_err = allocate_float(nscan)
+        n_err = allocate_float(nscan)
+        u_err = allocate_float(nscan)
+        p_err = allocate_float(nscan)
+        calculate_times = allocate_float(nscan)
+        init_times = allocate_float(nscan)
         
-        expected = Array{mk_float,1}(undef,nscan)
+        expected = allocate_float(nscan)
         expected_nelement_scaling!(expected,nelement_list,ngrid,nscan)
-        expected_integral = Array{mk_float,1}(undef,nscan)
+        expected_integral = allocate_float(nscan)
         expected_nelement_integral_scaling!(expected_integral,nelement_list,ngrid,nscan)
         expected_label = L"(1/N_{el})^{n_g - 1}"
         expected_integral_label = L"(1/N_{el})^{n_g +1}"
         
-        expected_t_2 = Array{mk_float,1}(undef,nscan)
-        expected_t_3 = Array{mk_float,1}(undef,nscan)
+        expected_t_2 = allocate_float(nscan)
+        expected_t_3 = allocate_float(nscan)
         expect_timing!(expected_t_2,nelement_list,nscan,2)
         expect_timing!(expected_t_3,nelement_list,nscan,3)
         expected_t_2_label = L"(N_{element})^2"
@@ -485,8 +485,8 @@ end
         end
         if global_rank[]==0 && plot_scan
             fontsize = 8
-            #ytick_sequence = Array([1.0e-13,1.0e-12,1.0e-11,1.0e-10,1.0e-9,1.0e-8,1.0e-7,1.0e-6,1.0e-5,1.0e-4,1.0e-3,1.0e-2,1.0e-1,1.0e-0,1.0e1])
-            ytick_sequence = Array([1.0e-12,1.0e-11,1.0e-10,1.0e-9,1.0e-8,1.0e-7,1.0e-6,1.0e-5,1.0e-4,1.0e-3,1.0e-2,1.0e-1])
+            #ytick_sequence = MKArray([1.0e-13,1.0e-12,1.0e-11,1.0e-10,1.0e-9,1.0e-8,1.0e-7,1.0e-6,1.0e-5,1.0e-4,1.0e-3,1.0e-2,1.0e-1,1.0e-0,1.0e1])
+            ytick_sequence = MKArray([1.0e-12,1.0e-11,1.0e-10,1.0e-9,1.0e-8,1.0e-7,1.0e-6,1.0e-5,1.0e-4,1.0e-3,1.0e-2,1.0e-1])
             xlabel = L"N_{element}"
             Clabel = L"\epsilon_{\infty}(C)"
             Hlabel = L"\epsilon_{\infty}(H)"
@@ -581,7 +581,7 @@ end
             init_timeslabel = "time/init (ms)"
             outfile = outdir*"fkpl_timing_test_ngrid_"*string(ngrid)*"_GLL.pdf"
             if boundary_data_option == direct_integration
-                ytick_sequence_timing = Array([10^2,10^3,10^4,10^5,10^6])
+                ytick_sequence_timing = MKArray([10^2,10^3,10^4,10^5,10^6])
                 plot(nelement_list, [calculate_times, init_times, expected_t_2, expected_t_3],
                 xlabel=xlabel, label=[calculate_timeslabel init_timeslabel expected_t_2_label expected_t_3_label], ylabel="",
                  shape =:circle, xscale=:log10, yscale=:log10, xticks = (nelement_list, nelement_list), markersize = 5, linewidth=2, 
@@ -589,7 +589,7 @@ end
                   foreground_color_legend = nothing, background_color_legend = nothing, legend=:topleft)
                 println([calculate_times, init_times, expected_t_2, expected_t_3])
             else
-                ytick_sequence_timing = Array([10^2,10^3,10^4,10^5])
+                ytick_sequence_timing = MKArray([10^2,10^3,10^4,10^5])
                 plot(nelement_list, [calculate_times, init_times, expected_t_2],
                 xlabel=xlabel, label=[calculate_timeslabel init_timeslabel expected_t_2_label], ylabel="",
                  shape =:circle, xscale=:log10, yscale=:log10, xticks = (nelement_list, nelement_list), markersize = 5, linewidth=2, 

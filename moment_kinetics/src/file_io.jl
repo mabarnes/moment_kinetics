@@ -18,7 +18,7 @@ using ..timer_utils
 using ..timer_utils: timer_names_all_ranks_moments, timer_names_all_ranks_dfns,
                      TimerNamesDict, SortedDict
 using ..moment_kinetics_structs: scratch_pdf, em_fields_struct
-using ..type_definitions: mk_float, mk_int
+using ..type_definitions
 
 # Import moment_kinetics so we can refer to it in docstrings
 import ..moment_kinetics
@@ -690,7 +690,7 @@ function get_variable_keys end
 
 """
     write_single_value!(file_or_group, name,
-                        data::Union{Number, AbstractString, AbstractArray{T,N}},
+                        data::Union{Number, AbstractString, MKArray{T,N}},
                         coords::Union{coordinate,mk_int,NamedTuple}...; parallel_io,
                         description=nothing, units=nothing,
                         overwrite=false) where {T,N}
@@ -2647,9 +2647,9 @@ function write_timing_data(io_moments, t_idx, dfns=false)
     # Once all the names are known, use this function to collect all the data from timers
     # on this process into arrays to be communicated.
     function get_data_from_timers()
-        times = mk_int[]
-        ncalls = mk_int[]
-        allocs = mk_int[]
+        times = MKArray(mk_int[])
+        ncalls = MKArray(mk_int[])
+        allocs = MKArray(mk_int[])
         function walk_through_timers(names_dict, timer)
             if timer === nothing
                 # Timer not found on this rank, so set to 0
@@ -2703,14 +2703,14 @@ function write_timing_data(io_moments, t_idx, dfns=false)
         new_names_string = string((s * "&" for s ∈ new_names_this_rank)...)
 
         # Get the sizes of the per-rank strings that need to be gathered
-        string_sizes = Vector{mk_int}(undef, comm_size)
+        string_sizes = MKVector{mk_int}(undef, comm_size)
         string_sizes[comm_rank+1] = length(new_names_string)
         string_buffer = MPI.UBuffer(string_sizes, 1)
         MPI.Allgather!(string_buffer, comm)
 
         # Gather the strings
-        gathered_char_vector = Vector{Char}(undef, sum(string_sizes))
-        local_start_index = sum(string_sizes[1:comm_rank]) + 1
+        gathered_char_vector = MKVector{Char}(undef, sum(string_sizes))
+        local_start_index = sum(@view string_sizes[1:comm_rank]) + 1
         local_end_index = local_start_index - 1 + string_sizes[comm_rank+1]
         gathered_char_vector[local_start_index:local_end_index] .= [new_names_string...]
         gathered_buffer = MPI.VBuffer(gathered_char_vector, string_sizes)

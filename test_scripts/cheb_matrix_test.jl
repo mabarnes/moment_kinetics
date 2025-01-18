@@ -8,10 +8,11 @@ using Pkg
 Pkg.activate(".")
 
 import moment_kinetics
+using moment_kinetics.array_allocation: allocate_float, allocate_int
     using moment_kinetics.coordinates: define_coordinate
     using moment_kinetics.chebyshev: setup_chebyshev_pseudospectral, chebyshev_radau_derivative_single_element!
     using moment_kinetics.calculus: derivative!, integral
-using moment_kinetics.type_definitions: OptionsDict
+using moment_kinetics.type_definitions
 #import LinearAlgebra
 #using IterativeSolvers: jacobi!, gauss_seidel!, idrs!
 using LinearAlgebra: mul!, lu, cond, det
@@ -39,10 +40,10 @@ function print_vector(vector,name,m)
     println("\n")
 end 
 
-function Djj(x::Array{Float64,1},j::Int64)
+function Djj(x::MKArray{Float64,1},j::Int64)
     return -0.5*x[j]/( 1.0 - x[j]^2)
 end
-function Djk(x::Array{Float64,1},j::Int64,k::Int64,c_j::Float64,c_k::Float64)
+function Djk(x::MKArray{Float64,1},j::Int64,k::Int64,c_j::Float64,c_k::Float64)
     return  (c_j/c_k)*((-1)^(k+j))/(x[j] - x[k])
 end
 
@@ -54,7 +55,7 @@ full list of Chapters may be obtained here
 https://people.maths.ox.ac.uk/trefethen/pdetext.html
 """
 
-function cheb_derivative_matrix!(D::Array{Float64,2},x::Array{Float64,1},n) 
+function cheb_derivative_matrix!(D::MKArray{Float64,2},x::MKArray{Float64,1},n)
     D[:,:] .= 0.0
     
     # top left, bottom right
@@ -115,8 +116,8 @@ function cheb_derivative_matrix!(D::Array{Float64,2},x::Array{Float64,1},n)
     end
 end 
 
-function cheb_derivative_matrix_reversed!(D::Array{Float64,2},x) 
-    D_elementwise = Array{Float64,2}(undef,x.ngrid,x.ngrid)
+function cheb_derivative_matrix_reversed!(D::MKArray{Float64,2},x)
+    D_elementwise = allocate_float(x.ngrid,x.ngrid)
     cheb_derivative_matrix_elementwise_reversed!(D_elementwise,x.ngrid,x.L,x.nelement_global)    
     if x.ngrid < 8
         println("\n D_elementwise \n")
@@ -130,10 +131,10 @@ function cheb_derivative_matrix_reversed!(D::Array{Float64,2},x)
     assign_cheb_derivative_matrix!(D,D_elementwise,x)
 end
 
-function cheb_second_derivative_matrix_reversed!(D::Array{Float64,2},x) 
-    D_elementwise = Array{Float64,2}(undef,x.ngrid,x.ngrid)
+function cheb_second_derivative_matrix_reversed!(D::MKArray{Float64,2},x)
+    D_elementwise = allocate_float(x.ngrid,x.ngrid)
     cheb_derivative_matrix_elementwise_reversed!(D_elementwise,x.ngrid,x.L,x.nelement_global)    
-    D2_elementwise = Array{Float64,2}(undef,x.ngrid,x.ngrid)
+    D2_elementwise = allocate_float(x.ngrid,x.ngrid)
     mul!(D2_elementwise,D_elementwise,D_elementwise)
     if x.ngrid < 8
         print_matrix(D2_elementwise,"D2_elementwise",x.ngrid,x.ngrid)
@@ -141,7 +142,7 @@ function cheb_second_derivative_matrix_reversed!(D::Array{Float64,2},x)
     assign_cheb_derivative_matrix!(D,D2_elementwise,x)
 end
 
-function assign_cheb_derivative_matrix!(D::Array{Float64,2},D_elementwise::Array{Float64,2},x) 
+function assign_cheb_derivative_matrix!(D::MKArray{Float64,2},D_elementwise::MKArray{Float64,2},x)
     
     # zero output matrix before assignment 
     D[:,:] .= 0.0
@@ -190,10 +191,10 @@ function assign_cheb_derivative_matrix!(D::Array{Float64,2},D_elementwise::Array
     
 end
 
-function cheb_derivative_matrix_elementwise_reversed!(D::Array{Float64,2},n::Int64,L::Float64,nelement::Int64) 
+function cheb_derivative_matrix_elementwise_reversed!(D::MKArray{Float64,2},n::Int64,L::Float64,nelement::Int64)
     
     #define Chebyshev points in reversed order x_j = { -1, ... , 1}
-    x = Array{Float64,1}(undef,n)
+    x = allocate_float(n)
     for j in 1:n
         x[j] = cospi((n-j)/(n-1))
     end
@@ -269,9 +270,9 @@ end
 """
 derivative matrix for radau grid 
 """
-function calculate_chebyshev_radau_D_matrix_via_FFT!(D::Array{Float64,2}, coord, spectral)
-    ff_buffer = Array{Float64,1}(undef,coord.ngrid)
-    df_buffer = Array{Float64,1}(undef,coord.ngrid)
+function calculate_chebyshev_radau_D_matrix_via_FFT!(D::MKArray{Float64,2}, coord, spectral)
+    ff_buffer = allocate_float(coord.ngrid)
+    df_buffer = allocate_float(coord.ngrid)
     # use response matrix approach to calculate derivative matrix D 
     for j in 1:coord.ngrid 
         ff_buffer .= 0.0 
@@ -291,11 +292,11 @@ function calculate_chebyshev_radau_D_matrix_via_FFT!(D::Array{Float64,2}, coord,
     D .= (2.0*float(coord.nelement_global)/coord.L).*D
 end
 
-function cheb_radau_derivative_matrix_reversed!(D::Array{Float64,2},x,x_spectral) 
-    D_lobotto_elementwise = Array{Float64,2}(undef,x.ngrid,x.ngrid)
+function cheb_radau_derivative_matrix_reversed!(D::MKArray{Float64,2},x,x_spectral)
+    D_lobotto_elementwise = allocate_float(x.ngrid,x.ngrid)
     cheb_derivative_matrix_elementwise_reversed!(D_lobotto_elementwise,x.ngrid,x.L,x.nelement_global) 
 
-    D_radau_elementwise = Array{Float64,2}(undef,x.ngrid,x.ngrid)
+    D_radau_elementwise = allocate_float(x.ngrid,x.ngrid)
     calculate_chebyshev_radau_D_matrix_via_FFT!(D_radau_elementwise,x,x_spectral)
     if x.ngrid < 8
         print_matrix(D_lobotto_elementwise,"D_lobotto_elementwise",x.ngrid,x.ngrid)
@@ -304,15 +305,15 @@ function cheb_radau_derivative_matrix_reversed!(D::Array{Float64,2},x,x_spectral
     assign_cheb_derivative_matrix!(D,D_lobotto_elementwise,D_radau_elementwise,x)
 end
 
-function cheb_radau_second_derivative_matrix_reversed!(D::Array{Float64,2},x,x_spectral) 
-    D_lobotto_elementwise = Array{Float64,2}(undef,x.ngrid,x.ngrid)
+function cheb_radau_second_derivative_matrix_reversed!(D::MKArray{Float64,2},x,x_spectral)
+    D_lobotto_elementwise = allocate_float(x.ngrid,x.ngrid)
     cheb_derivative_matrix_elementwise_reversed!(D_lobotto_elementwise,x.ngrid,x.L,x.nelement_global)    
-    D2_lobotto_elementwise = Array{Float64,2}(undef,x.ngrid,x.ngrid)
+    D2_lobotto_elementwise = allocate_float(x.ngrid,x.ngrid)
     mul!(D2_lobotto_elementwise,D_lobotto_elementwise,D_lobotto_elementwise)
     
-    D_radau_elementwise = Array{Float64,2}(undef,x.ngrid,x.ngrid)
+    D_radau_elementwise = allocate_float(x.ngrid,x.ngrid)
     calculate_chebyshev_radau_D_matrix_via_FFT!(D_radau_elementwise,x,x_spectral)
-    D2_radau_elementwise = Array{Float64,2}(undef,x.ngrid,x.ngrid)
+    D2_radau_elementwise = allocate_float(x.ngrid,x.ngrid)
     mul!(D2_radau_elementwise,D_radau_elementwise,D_radau_elementwise)
     
     if x.ngrid < 8
@@ -325,7 +326,7 @@ function cheb_radau_second_derivative_matrix_reversed!(D::Array{Float64,2},x,x_s
 end
 
 
-function assign_cheb_derivative_matrix!(D::Array{Float64,2},D_lobotto_elementwise::Array{Float64,2},D_radau_elementwise::Array{Float64,2},x) 
+function assign_cheb_derivative_matrix!(D::MKArray{Float64,2},D_lobotto_elementwise::MKArray{Float64,2},D_radau_elementwise::MKArray{Float64,2},x)
     
     # zero output matrix before assignment 
     D[:,:] .= 0.0
@@ -386,7 +387,7 @@ end
 function creating lu object for A = I - dt*nu*D2
 """
 function diffusion_matrix(D2,n,dt,nu;return_A=false)
-    A = Array{Float64,2}(undef,n,n)
+    A = allocate_float(n,n)
     for i in 1:n
         for j in 1:n
             A[i,j] = - dt*nu*D2[i,j]
@@ -489,8 +490,8 @@ input = OptionsDict("coord" => OptionsDict("ngrid"=>ngrid,
 # errors due to communicators not being fully set up.
 x, spectral = define_coordinate(input, "coord"; ignore_MPI=true)
     println("made x")
-Dx = Array{Float64,2}(undef, x.n, x.n)
-xchebgrid = Array{Float64,1}(undef, x.n)
+Dx = allocate_float(x.n, x.n)
+xchebgrid = allocate_float(x.n)
 for i in 1:x.n
     xchebgrid[i] = cos(pi*(i - 1)/(x.n - 1))
 end
@@ -503,16 +504,16 @@ cheb_derivative_matrix!(Dx,xchebgrid,x.n)
 #end
 
  # create array for the function f(x) to be differentiated/integrated
-    f = Array{Float64,1}(undef, x.n)
+    f = allocate_float(x.n)
     # create array for the derivative df/dx
-    df = Array{Float64,1}(undef, x.n)
-    df2 = Array{Float64,1}(undef, x.n)
-    df2cheb = Array{Float64,1}(undef, x.n)
-df_exact = Array{Float64,1}(undef, x.n)
-df2_exact = Array{Float64,1}(undef, x.n)
-df_err = Array{Float64,1}(undef, x.n)
-df2_err = Array{Float64,1}(undef, x.n)
-df2cheb_err = Array{Float64,1}(undef, x.n)
+    df = allocate_float(x.n)
+    df2 = allocate_float(x.n)
+    df2cheb = allocate_float(x.n)
+df_exact = allocate_float(x.n)
+df2_exact = allocate_float(x.n)
+df_err = allocate_float(x.n)
+df2_err = allocate_float(x.n)
+df2cheb_err = allocate_float(x.n)
 
 for ix in 1:x.n
     f[ix] = sin(pi*xchebgrid[ix])
@@ -537,11 +538,11 @@ input = OptionsDict("coord" => OptionsDict("ngrid"=>ngrid,
 # errors due to communicators not being fully set up.
 x, spectral = define_coordinate(input, "coord"; ignore_MPI=true)
 
-Dxreverse = Array{Float64,2}(undef, x.n, x.n)
+Dxreverse = allocate_float(x.n, x.n)
 cheb_derivative_matrix_reversed!(Dxreverse,x)
-Dxreverse2 = Array{Float64,2}(undef, x.n, x.n)
+Dxreverse2 = allocate_float(x.n, x.n)
 mul!(Dxreverse2,Dxreverse,Dxreverse)
-D2xreverse = Array{Float64,2}(undef, x.n, x.n)
+D2xreverse = allocate_float(x.n, x.n)
 cheb_second_derivative_matrix_reversed!(D2xreverse,x)
 
 Dxreverse2[1,1] = 2.0*Dxreverse2[1,1]
@@ -593,7 +594,7 @@ println("max(df2cheb_err) \n",maximum(abs.(df2cheb_err)))
 Dt = 0.1
 Nu = 1.0
 lu_obj, AA = diffusion_matrix(Dxreverse2,x.n,Dt,Nu,return_A=true)
-#AA = Array{Float64,2}(undef,x.n,x.n)
+#AA = allocate_float(x.n,x.n)
 #for i in 1:x.n
 #    for j in 1:x.n
 #        AA[i,j] = - Dt*Nu*Dxreverse2[i,j]
@@ -619,8 +620,8 @@ end
 println("LU == AA : \n",LUtest)
 
 #bb = ones(x.n) try this for bc = "" rather than bc = "zero"
-bb = Array{Float64,1}(undef,x.n)
-yy = Array{Float64,1}(undef,x.n)
+bb = allocate_float(x.n)
+yy = allocate_float(x.n)
 #for i in 1:x.n
 #    bb[i] = f[i]#exp(-(4.0*x.grid[i]/x.L)^2)
 #end
@@ -634,9 +635,9 @@ elliptic_solve_1D_infinite_domain_test = false#true
 elliptic_2Dsolve_test = true
 if MMS_test
     ntest = 5
-    MMS_errors = Array{Float64,1}(undef,ntest)
-    Dt_list = Array{Float64,1}(undef,ntest)
-    fac_list = Array{Int64,1}(undef,ntest)
+    MMS_errors = allocate_float(ntest)
+    Dt_list = allocate_float(ntest)
+    fac_list = allocate_int(ntest)
     fac_list .= [1, 10, 100, 1000, 10000]
     #for itest in [1, 10, 100, 1000, 10000]
     for itest in 1:ntest
@@ -649,9 +650,9 @@ if MMS_test
         nu = 1.0
         LU_obj = diffusion_matrix(Dxreverse2,x.n,dt,nu)
         
-        time = Array{Float64,1}(undef,ntime)
-        ff = Array{Float64,2}(undef,x.n,ntime)
-        ss = Array{Float64,1}(undef,x.n) #source
+        time = allocate_float(ntime)
+        ff = allocate_float(x.n,ntime)
+        ss = allocate_float(x.n) #source
 
         time[1] = 0.0
         ff[:,1] .= f[:] #initial condition
@@ -664,7 +665,7 @@ if MMS_test
             @views forward_euler_step!(ff[:,i+1],yy,ss,dt,x.n)
         end
 
-        ff_error = Array{Float64,1}(undef,x.n)
+        ff_error = allocate_float(x.n)
         ff_error[:] .= abs.(ff[:,end] - ff[:,1])
         maxfferr = maximum(ff_error)
         #println("ff_error \n",ff_error)
@@ -686,9 +687,9 @@ if evolution_test
     nu = 1.0
     LU_obj = diffusion_matrix(Dxreverse2,x.n,dt,nu)
     
-    time = Array{Float64,1}(undef,ntime)
-    ff = Array{Float64,2}(undef,x.n,ntime)
-    ss = Array{Float64,1}(undef,x.n) #source
+    time = allocate_float(ntime)
+    ff = allocate_float(x.n,ntime)
+    ss = allocate_float(x.n) #source
 
     time[1] = 0.0
     ff[:,1] .= f[:] #initial condition
@@ -728,7 +729,7 @@ if elliptic_solve_test
         # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
         # errors due to communicators not being fully set up.
         y, y_spectral = define_coordinate(input, "vperp"; ignore_MPI=true)
-        Dy = Array{Float64,2}(undef, y.n, y.n)
+        Dy = allocate_float(y.n, y.n)
         cheb_radau_derivative_matrix_reversed!(Dy,y,y_spectral)
     else #lobotto
         input = OptionsDict("vpa" => OptionsDict("ngrid"=>ngrid,
@@ -743,26 +744,26 @@ if elliptic_solve_test
         # errors due to communicators not being fully set up.
         y, y_spectral = define_coordinate(input, "vpa"; ignore_MPI=true)
         @. y.grid += y.L/2
-        Dy = Array{Float64,2}(undef, y.n, y.n)
+        Dy = allocate_float(y.n, y.n)
         cheb_derivative_matrix_reversed!(Dy,y)
     end  
     
-    yDy = Array{Float64,2}(undef, y.n, y.n)
+    yDy = allocate_float(y.n, y.n)
     for iy in 1:y.n
         @. yDy[iy,:] = y.grid[iy]*Dy[iy,:]
     end
     
     
-    Dy_yDy = Array{Float64,2}(undef, y.n, y.n)
+    Dy_yDy = allocate_float(y.n, y.n)
     mul!(Dy_yDy,Dy,yDy)
     #Dy_yDy[1,1] = 2.0*Dy_yDy[1,1]
     #Dy_yDy[end,end] = 2.0*Dy_yDy[end,end]
     
-    D2y = Array{Float64,2}(undef, y.n, y.n)
+    D2y = allocate_float(y.n, y.n)
     mul!(D2y,Dy,Dy)
     #Dy_yDy[1,1] = 2.0*Dy_yDy[1,1]
     D2y[end,end] = 2.0*D2y[end,end]
-    yD2y = Array{Float64,2}(undef, y.n, y.n)
+    yD2y = allocate_float(y.n, y.n)
     for iy in 1:y.n
         @. yD2y[iy,:] = y.grid[iy]*D2y[iy,:]
     end
@@ -773,17 +774,17 @@ if elliptic_solve_test
         print_matrix(Dy_yDy,"Dy_yDy",y.n,y.n)
         print_matrix(yD2y+Dy,"yD2y+Dy",y.n,y.n)
     end 
-    Sy = Array{Float64,1}(undef, y.n)
-    Fy = Array{Float64,1}(undef, y.n)
-    Fy_exact = Array{Float64,1}(undef, y.n)
-    Fy_err = Array{Float64,1}(undef, y.n)
+    Sy = allocate_float(y.n)
+    Fy = allocate_float(y.n)
+    Fy_exact = allocate_float(y.n)
+    Fy_err = allocate_float(y.n)
     for iy in 1:y.n
         #Sy[iy] = (y.grid[iy] - 1.0)*exp(-y.grid[iy])
         #Fy_exact[iy] = exp(-y.grid[iy])
         Sy[iy] = 4.0*y.grid[iy]*(y.grid[iy]^2 - 1.0)*exp(-y.grid[iy]^2)
         Fy_exact[iy] = exp(-y.grid[iy]^2)
     end
-    LL = Array{Float64,2}(undef, y.n, y.n)
+    LL = allocate_float(y.n, y.n)
     #@. LL = yD2y + Dy
     for iy in 1:y.n 
         #@. LL[iy,:] = Dy_yDy[iy,:] #*(1.0/y.grid[iy])
@@ -802,7 +803,7 @@ if elliptic_solve_test
             @. LL[1,:] = yDy[ilim,:]
             
             print_vector(Sy,"Sy before",y.n)
-            integrand = Array{Float64,1}(undef,ilim)
+            integrand = allocate_float(ilim)
             @. integrand[1:ilim] = Sy[1:ilim]*y.wgts[1:ilim]/(2.0*y.grid[1:ilim])
             
             print_vector(integrand,"integrand",ilim)
@@ -871,10 +872,10 @@ if elliptic_solve_1D_infinite_domain_test
     # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
     # errors due to communicators not being fully set up.
     x, x_spectral = define_coordinate(input, "vpa"; ignore_MPI=true)
-    Dx = Array{Float64,2}(undef, x.n, x.n)
+    Dx = allocate_float(x.n, x.n)
     cheb_derivative_matrix_reversed!(Dx,x)
     
-    D2x = Array{Float64,2}(undef, x.n, x.n)
+    D2x = allocate_float(x.n, x.n)
     mul!(D2x,Dx,Dx)
     Dirichlet= true
     if Dirichlet
@@ -893,13 +894,13 @@ if elliptic_solve_1D_infinite_domain_test
         print_matrix(Dx,"Dx",x.n,x.n)
         print_matrix(D2x,"D2x",x.n,x.n)
     end 
-    LLx = Array{Float64,2}(undef, x.n, x.n)
+    LLx = allocate_float(x.n, x.n)
     @. LLx = D2x
     
-    Sx = Array{Float64,1}(undef, x.n)
-    Fx = Array{Float64,1}(undef, x.n)
-    Fx_exact = Array{Float64,1}(undef, x.n)
-    Fx_err = Array{Float64,1}(undef, x.n)
+    Sx = allocate_float(x.n)
+    Fx = allocate_float(x.n)
+    Fx_exact = allocate_float(x.n)
+    Fx_err = allocate_float(x.n)
     for ix in 1:x.n
         Sx[ix] = (4.0*x.grid[ix]^2 - 2.0)*exp(-x.grid[ix]^2)
         Fx_exact[ix] = exp(-x.grid[ix]^2)
@@ -1010,9 +1011,9 @@ if elliptic_2Dsolve_test
     # errors due to communicators not being fully set up.
     x, x_spectral = define_coordinate(input, "vpa"; ignore_MPI=true)
     
-    Dx = Array{Float64,2}(undef, x.n, x.n)
+    Dx = allocate_float(x.n, x.n)
     cheb_derivative_matrix_reversed!(Dx,x)
-    D2x = Array{Float64,2}(undef, x.n, x.n)
+    D2x = allocate_float(x.n, x.n)
     if second_derivative_elementwise
         cheb_second_derivative_matrix_reversed!(D2x,x)
     else
@@ -1029,7 +1030,7 @@ if elliptic_2Dsolve_test
         D2x[end,end] = 1.0
     end 
     
-    IIx = Array{Float64,2}(undef,x.n,x.n) 
+    IIx = allocate_float(x.n,x.n)
     @. IIx = 0.0
     for ix in 1:x.n
         IIx[ix,ix] = 1.0 
@@ -1052,10 +1053,10 @@ if elliptic_2Dsolve_test
     # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
     # errors due to communicators not being fully set up.
     y, y_spectral = define_coordinate(input, "vperp"; ignore_MPI=true)
-    Dy = Array{Float64,2}(undef, y.n, y.n)
+    Dy = allocate_float(y.n, y.n)
     cheb_radau_derivative_matrix_reversed!(Dy,y,y_spectral)
     
-    D2y = Array{Float64,2}(undef, y.n, y.n)
+    D2y = allocate_float(y.n, y.n)
     if second_derivative_elementwise
         cheb_radau_second_derivative_matrix_reversed!(D2y,y,y_spectral)
     else
@@ -1065,7 +1066,7 @@ if elliptic_2Dsolve_test
         D2y[end,end] = 2.0*D2y[end,end]
     end         
     # y derivative operator 
-    LLy = Array{Float64,2}(undef,y.n,y.n)
+    LLy = allocate_float(y.n,y.n)
     for iy in 1:y.n 
         @. LLy[iy,:] = D2y[iy,:] + (1.0/y.grid[iy])*Dy[iy,:]
     end
@@ -1073,7 +1074,7 @@ if elliptic_2Dsolve_test
         @. LLy[end,:] = 0.0
         LLy[end,end] = 1.0
     end
-    IIy = Array{Float64,2}(undef,y.n,y.n) 
+    IIy = allocate_float(y.n,y.n)
     @. IIy = 0.0
     for iy in 1:y.n
         IIy[iy,iy] = 1.0 
@@ -1090,14 +1091,14 @@ if elliptic_2Dsolve_test
     # Array in 2D form 
     nx = x.n   
     ny = y.n 
-    Sxy = Array{Float64,2}(undef, nx, ny)
-    Sxy_check = Array{Float64,2}(undef, nx, ny)
-    Sxy_check_err = Array{Float64,2}(undef, nx, ny)
-    Txy = Array{Float64,2}(undef, nx, ny)
-    Fxy = Array{Float64,2}(undef, nx, ny)
-    Fxy_exact = Array{Float64,2}(undef, nx, ny)
-    Fxy_err = Array{Float64,2}(undef, nx, ny)
-    #LLxy = Array{Float64,4}(undef, nx, ny, nx, ny)
+    Sxy = allocate_float(nx, ny)
+    Sxy_check = allocate_float(nx, ny)
+    Sxy_check_err = allocate_float(nx, ny)
+    Txy = allocate_float(nx, ny)
+    Fxy = allocate_float(nx, ny)
+    Fxy_exact = allocate_float(nx, ny)
+    Fxy_err = allocate_float(nx, ny)
+    #LLxy = allocate_float(nx, ny, nx, ny)
     # Array in compound 1D form 
     # ic = (ix-1) + nx*(iy-1) + 1
     # iy = mod(ic,nx) + 1
@@ -1122,9 +1123,9 @@ if elliptic_2Dsolve_test
         return delta
     end
     nc = nx*ny
-    Fc = Array{Float64,1}(undef, nc)
-    Sc = Array{Float64,1}(undef, nc)
-    LLc = Array{Float64,2}(undef, nc, nc)
+    Fc = allocate_float(nc)
+    Sc = allocate_float(nc)
+    LLc = allocate_float(nc, nc)
     
     if exponential_decay_test
         for iy in 1:ny

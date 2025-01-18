@@ -14,6 +14,7 @@ import moment_kinetics.file_io: io_has_parallel, open_output_file_implementation
 import moment_kinetics.load_data: open_file_to_read, get_attribute, load_variable, load_slice
 using moment_kinetics.coordinates: coordinate
 using moment_kinetics.input_structs: netcdf
+using moment_kinetics.type_definitions
 
 using NCDatasets
 
@@ -105,7 +106,7 @@ function maybe_create_netcdf_dim(file_or_group::NCDataset, coord)
 end
 
 function write_single_value!(file_or_group::NCDataset, name,
-                             value::Union{Number, AbstractString, AbstractArray{T,N}},
+                             value::Union{Number, AbstractString, AbstractMKArray{T,N}},
                              coords::Union{coordinate,NamedTuple}...; parallel_io,
                              description=nothing, units=nothing,
                              overwrite=false) where {T,N}
@@ -209,7 +210,7 @@ function create_dynamic_variable!(file_or_group::NCDataset, name, type,
 end
 
 function append_to_dynamic_var(io_var::NCDatasets.CFVariable,
-                               data::Union{Nothing,Number,AbstractArray{T,N}}, t_idx,
+                               data::Union{Nothing,Number,AbstractMKArray{T,N}}, t_idx,
                                parallel_io::Bool,
                                coords...; only_root=false,
                                write_from_this_rank=nothing) where {T,N}
@@ -260,7 +261,7 @@ function load_variable(file_or_group::NCDataset, name::String)
         if isa(var, Char)
             var = (var == Char(true))
         end
-        return var
+        return MKArray(var)
     catch
         println("An error occured while loading $name")
         rethrow()
@@ -272,7 +273,7 @@ function load_slice(file_or_group::NCDataset, name::String, slices_or_indices...
     # file or a group).
     try
         var = file_or_group[name].var[slices_or_indices...]
-        return var
+        return MKArray(var)
     catch
         println("An error occured while loading $name")
         rethrow()

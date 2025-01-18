@@ -9,7 +9,7 @@ export advance_f_local!
 export advance_f_df_precomputed!
 export advection_info
 
-using ..type_definitions: mk_float, mk_int
+using ..type_definitions
 using ..array_allocation: allocate_shared_float, allocate_shared_int
 using ..calculus: derivative!
 using ..communication
@@ -40,7 +40,7 @@ function setup_advection(nspec, coords...)
     # allocate an array containing structures with much of the info needed
     # to do the 1D advection time advance
     ncoord = length(coords)
-    advection = Array{advection_info{ncoord,ncoord+1},1}(undef, nspec)
+    advection = MKVector{advection_info{ncoord,ncoord+1}}(undef, nspec)
     # store all of this information in a structure and return it
     for is ∈ 1:nspec
         advection[is] = setup_advection_per_species(coords...)

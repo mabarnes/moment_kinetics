@@ -55,7 +55,7 @@ function calculate_and_write_frequencies(run_name, ntime, time, z, itime_min, it
         phase = 0.0
         shifted_time = allocate_float(ntime)
         @. shifted_time = time - time[itime_min]
-        fitted_delta_phi = zeros(ntime)
+        fitted_delta_phi = mk_zeros(ntime)
 
     end
     return frequency, growth_rate, shifted_time, fitted_delta_phi

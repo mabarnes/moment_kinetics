@@ -32,7 +32,7 @@ using ..looping
 using ..moment_kinetics_input: mk_input
 using ..neutral_vz_advection: update_speed_neutral_vz!
 using ..neutral_z_advection: update_speed_neutral_z!
-using ..type_definitions: mk_float, mk_int, OptionsDict
+using ..type_definitions
 using ..utils: get_CFL!, get_minimum_CFL_z, get_minimum_CFL_vpa, get_minimum_CFL_neutral_z,
                get_minimum_CFL_neutral_vz, enum_from_string
 using ..vpa_advection: update_speed_vpa!
@@ -168,7 +168,7 @@ function load_variable(file_or_group::HDF5.H5DataStore, name::String)
     # This overload deals with cases where fid is an HDF5 `File` or `Group` (`H5DataStore`
     # is the abstract super-type for both
     try
-        return read(file_or_group[name])
+        return MKArray(read(file_or_group[name]))
     catch
         println("An error occured while loading $name")
         rethrow()
@@ -183,7 +183,7 @@ function load_slice(file_or_group::HDF5.H5DataStore, name::String, slices_or_ind
     # This overload deals with cases where fid is an HDF5 `File` or `Group` (`H5DataStore`
     # is the abstract super-type for both
     try
-        return file_or_group[name][slices_or_indices...]
+        return MKArray(file_or_group[name][slices_or_indices...])
     catch
         println("An error occured while loading $name")
         rethrow()
@@ -414,7 +414,7 @@ function load_time_data(fid; printout=false)
 
     group = get_group(first(fid), "dynamic_data")
     time = load_variable(group, "time")
-    restarts_nt = [length(time)]
+    restarts_nt = MKArray([length(time)])
     for f ∈ fid[2:end]
         group = get_group(f, "dynamic_data")
         # Skip first point as this is a duplicate of the last point of the previous
@@ -3818,8 +3818,10 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
             !isa(it, mk_int) && push!(dims, nt)
             vartype = typeof(variable[1][1])
             if vartype == mk_int
+                #result = allocate_int(dims...)
                 result = allocate_int(dims...)
             elseif vartype == mk_float
+                #result = allocate_float(dims...)
                 result = allocate_float(dims...)
             else
                 error("Unsupported dtype for 1D variable $(variable.dtype)")
@@ -3834,8 +3836,10 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
             !isa(it, mk_int) && push!(dims, nt)
             vartype = typeof(variable[1][1,1])
             if vartype == mk_int
+                #result = allocate_int(dims...)
                 result = allocate_int(dims...)
             elseif vartype == mk_float
+                #result = allocate_float(dims...)
                 result = allocate_float(dims...)
             else
                 error("Unsupported dtype for 1D variable $(variable.dtype)")
@@ -3846,6 +3850,7 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
             !isa(iz, mk_int) && push!(dims, nz)
             !isa(ir, mk_int) && push!(dims, nr)
             !isa(it, mk_int) && push!(dims, nt)
+            #result = allocate_float(dims...)
             result = allocate_float(dims...)
         elseif nd == 4
             # moment variable with dimensions (z,r,s,t)
@@ -3861,6 +3866,7 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
                 push!(dims, nspecies)
             end
             !isa(it, mk_int) && push!(dims, nt)
+            #result = allocate_float(dims...)
             result = allocate_float(dims...)
         elseif nd == 5
             # electron distribution function variable with dimensions (vpa,vperp,z,r,t)
@@ -3870,6 +3876,7 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
             !isa(iz, mk_int) && push!(dims, nz)
             !isa(ir, mk_int) && push!(dims, nr)
             !isa(it, mk_int) && push!(dims, nt)
+            #result = allocate_float(dims...)
             result = allocate_float(dims...)
         elseif nd == 6
             # ion distribution function variable with dimensions (vpa,vperp,z,r,s,t)
@@ -3885,6 +3892,7 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
                 push!(dims, nspecies)
             end
             !isa(it, mk_int) && push!(dims, nt)
+            #result = allocate_float(dims...)
             result = allocate_float(dims...)
         elseif nd == 7
             # neutral distribution function variable with dimensions (vz,vr,vzeta,z,r,s,t)
@@ -3901,6 +3909,7 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
                 push!(dims, nspecies)
             end
             !isa(it, mk_int) && push!(dims, nt)
+            #result = allocate_float(dims...)
             result = allocate_float(dims...)
         else
             error("Unsupported number of dimensions ($nd) for '$variable_name'.")
@@ -4095,7 +4104,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
                       kwargs...)
 
     # Select a slice of an time-series sized variable
-    function select_slice_of_variable(variable::AbstractVector; it=nothing,
+    function select_slice_of_variable(variable::AbstractMKVector; it=nothing,
                                       is=nothing, ir=nothing, iz=nothing, ivperp=nothing,
                                       ivpa=nothing, ivzeta=nothing, ivr=nothing,
                                       ivz=nothing)
@@ -4107,7 +4116,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
     end
 
     # Select a slice of an ion distribution function sized variable
-    function select_slice_of_variable(variable::AbstractArray{T,6} where T; it=nothing,
+    function select_slice_of_variable(variable::AbstractMKArray{T,6} where T; it=nothing,
                                       is=nothing, ir=nothing, iz=nothing, ivperp=nothing,
                                       ivpa=nothing, ivzeta=nothing, ivr=nothing,
                                       ivz=nothing)
@@ -4134,7 +4143,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
     end
 
     # Select a slice of an electron distribution function sized variable
-    function select_slice_of_variable(variable::AbstractArray{T,5} where T; it=nothing,
+    function select_slice_of_variable(variable::AbstractMKArray{T,5} where T; it=nothing,
                                       is=nothing, ir=nothing, iz=nothing, ivperp=nothing,
                                       ivpa=nothing, ivzeta=nothing, ivr=nothing,
                                       ivz=nothing)
@@ -4158,7 +4167,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
     end
 
     # Select a slice of a neutral distribution function sized variable
-    function select_slice_of_variable(variable::AbstractArray{T,7} where T; it=nothing,
+    function select_slice_of_variable(variable::AbstractMKArray{T,7} where T; it=nothing,
                                       is=nothing, ir=nothing, iz=nothing, ivperp=nothing,
                                       ivpa=nothing, ivzeta=nothing, ivr=nothing,
                                       ivz=nothing)
@@ -4503,24 +4512,24 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
             if run_info.evolve_density
                 external_source_density_amplitude = get_variable(run_info, "external_source_density_amplitude")
             else
-                external_source_density_amplitude = zeros(0,0,n_sources,run_info.nt)
+                external_source_density_amplitude = mk_zeros(0,0,n_sources,run_info.nt)
             end
             if run_info.evolve_upar
                 external_source_momentum_amplitude = get_variable(run_info, "external_source_momentum_amplitude")
             else
-                external_source_momentum_amplitude = zeros(0,0,n_sources,run_info.nt)
+                external_source_momentum_amplitude = mk_zeros(0,0,n_sources,run_info.nt)
             end
             if run_info.evolve_ppar
                 external_source_pressure_amplitude = get_variable(run_info, "external_source_pressure_amplitude")
             else
-                external_source_pressure_amplitude = zeros(0,0,n_sources,run_info.nt)
+                external_source_pressure_amplitude = mk_zeros(0,0,n_sources,run_info.nt)
             end
         else
             n_sources = 0
-            external_source_amplitude = zeros(0,0,n_sources,run_info.nt)
-            external_source_density_amplitude = zeros(0,0,n_sources,run_info.nt)
-            external_source_momentum_amplitude = zeros(0,0,n_sources,run_info.nt)
-            external_source_pressure_amplitude = zeros(0,0,n_sources,run_info.nt)
+            external_source_amplitude = mk_zeros(0,0,n_sources,run_info.nt)
+            external_source_density_amplitude = mk_zeros(0,0,n_sources,run_info.nt)
+            external_source_momentum_amplitude = mk_zeros(0,0,n_sources,run_info.nt)
+            external_source_pressure_amplitude = mk_zeros(0,0,n_sources,run_info.nt)
         end
 
         nz, nr, nspecies, nt = size(vth)
@@ -4663,10 +4672,10 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
             external_source_pressure_amplitude = get_variable(run_info, "external_source_electron_pressure_amplitude")
         else
             n_sources = 0
-            external_source_amplitude = zeros(0,0,n_sources,run_info.nt)
-            external_source_density_amplitude = zeros(0,0,n_sources,run_info.nt)
-            external_source_momentum_amplitude = zeros(0,0,n_sources,run_info.nt)
-            external_source_pressure_amplitude = zeros(0,0,n_sources,run_info.nt)
+            external_source_amplitude = mk_zeros(0,0,n_sources,run_info.nt)
+            external_source_density_amplitude = mk_zeros(0,0,n_sources,run_info.nt)
+            external_source_momentum_amplitude = mk_zeros(0,0,n_sources,run_info.nt)
+            external_source_pressure_amplitude = mk_zeros(0,0,n_sources,run_info.nt)
         end
 
         nz, nr, nt = size(vth)
@@ -4784,24 +4793,24 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
             if run_info.evolve_density
                 external_source_density_amplitude = get_variable(run_info, "external_source_neutral_density_amplitude")
             else
-                external_source_density_amplitude = zeros(0,0,n_sources,run_info.nt)
+                external_source_density_amplitude = mk_zeros(0,0,n_sources,run_info.nt)
             end
             if run_info.evolve_upar
                 external_source_momentum_amplitude = get_variable(run_info, "external_source_neutral_momentum_amplitude")
             else
-                external_source_momentum_amplitude = zeros(0,0,n_sources,run_info.nt)
+                external_source_momentum_amplitude = mk_zeros(0,0,n_sources,run_info.nt)
             end
             if run_info.evolve_ppar
                 external_source_pressure_amplitude = get_variable(run_info, "external_source_neutral_pressure_amplitude")
             else
-                external_source_pressure_amplitude = zeros(0,0,n_sources,run_info.nt)
+                external_source_pressure_amplitude = mk_zeros(0,0,n_sources,run_info.nt)
             end
         else
             n_sources = 0
-            external_source_amplitude = zeros(0,0,n_sources,run_info.nt)
-            external_source_density_amplitude = zeros(0,0,n_sources,run_info.nt)
-            external_source_momentum_amplitude = zeros(0,0,n_sources,run_info.nt)
-            external_source_pressure_amplitude = zeros(0,0,n_sources,run_info.nt)
+            external_source_amplitude = mk_zeros(0,0,n_sources,run_info.nt)
+            external_source_density_amplitude = mk_zeros(0,0,n_sources,run_info.nt)
+            external_source_momentum_amplitude = mk_zeros(0,0,n_sources,run_info.nt)
+            external_source_pressure_amplitude = mk_zeros(0,0,n_sources,run_info.nt)
         end
 
         nz, nr, nspecies, nt = size(vth)
@@ -4858,7 +4867,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
     elseif variable_name == "average_successful_dt"
         steps_per_output = get_variable(run_info, "steps_per_output"; kwargs...)
         failures_per_output = get_variable(run_info, "failures_per_output"; kwargs...)
-        successful_steps_per_output = steps_per_output - failures_per_output
+        successful_steps_per_output = steps_per_output .- failures_per_output
 
         delta_t = copy(run_info.time)
         for i ∈ length(delta_t):-1:2
@@ -4890,7 +4899,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
     elseif variable_name == "electron_average_successful_dt"
         electron_steps_per_output = get_variable(run_info, "electron_steps_per_output"; kwargs...)
         electron_failures_per_output = get_variable(run_info, "electron_failures_per_output"; kwargs...)
-        electron_successful_steps_per_output = electron_steps_per_output - electron_failures_per_output
+        electron_successful_steps_per_output = electron_steps_per_output .- electron_failures_per_output
         electron_pseudotime = get_variable(run_info, "electron_cumulative_pseudotime"; kwargs...)
 
         delta_t = copy(electron_pseudotime)
@@ -5206,7 +5215,7 @@ Read data which is a function of (z,r,t) or (z,r,species,t)
 run_names is a tuple. If it has more than one entry, this means that there are multiple
 restarts (which are sequential in time), so concatenate the data from each entry together.
 """
-function read_distributed_zr_data!(var::Array{mk_float,N}, var_name::String,
+function read_distributed_zr_data!(var::AbstractArray{mk_float,N}, var_name::String,
    run_names::Tuple, file_key::String, nblocks::Tuple,
    nz_local::mk_int, nr_local::mk_int, iskip::mk_int; group=nothing) where N
     # dimension of var is [z,r,species,t]

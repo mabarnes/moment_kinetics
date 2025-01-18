@@ -25,7 +25,7 @@ have 3 dimensions, 'moment' variables 4, 'ion distribution function' variables 6
 """
 function select_slice end
 
-function select_slice(variable::AbstractArray{T,1}, dims::Symbol...; input=nothing,
+function select_slice(variable::AbstractMKArray{T,1}, dims::Symbol...; input=nothing,
                       is=nothing, kwargs...) where T
     if length(dims) > 1
         error("Tried to get a slice of 1d variable with dimensions $dims")
@@ -38,7 +38,7 @@ function select_slice(variable::AbstractArray{T,1}, dims::Symbol...; input=nothi
     end
 end
 
-function select_slice(variable::AbstractArray{T,2}, dims::Symbol...; input=nothing,
+function select_slice(variable::AbstractMKArray{T,2}, dims::Symbol...; input=nothing,
                       is=nothing, kwargs...) where T
     if length(dims) > 2
         error("Tried to get a slice of 2d variable with dimensions $dims")
@@ -51,7 +51,7 @@ function select_slice(variable::AbstractArray{T,2}, dims::Symbol...; input=nothi
     end
 end
 
-function select_slice(variable::AbstractArray{T,3}, dims::Symbol...; input=nothing,
+function select_slice(variable::AbstractMKArray{T,3}, dims::Symbol...; input=nothing,
                       it=nothing, is=nothing, ir=nothing, iz=nothing, kwargs...) where T
     # Array is (z,r,t)
 
@@ -95,7 +95,7 @@ function select_slice(variable::AbstractArray{T,3}, dims::Symbol...; input=nothi
     return slice
 end
 
-function select_slice(variable::AbstractArray{T,4}, dims::Symbol...; input=nothing,
+function select_slice(variable::AbstractMKArray{T,4}, dims::Symbol...; input=nothing,
                       it=nothing, is=1, ir=nothing, iz=nothing, kwargs...) where T
     # Array is (z,r,species,t)
 
@@ -136,7 +136,7 @@ function select_slice(variable::AbstractArray{T,4}, dims::Symbol...; input=nothi
     return slice
 end
 
-function select_slice(variable::AbstractArray{T,5}, dims::Symbol...; input=nothing,
+function select_slice(variable::AbstractMKArray{T,5}, dims::Symbol...; input=nothing,
                       it=nothing, is=1, ir=nothing, iz=nothing, ivperp=nothing,
                       ivpa=nothing, kwargs...) where T
     # Array is (vpa,vperp,z,r,t)
@@ -197,7 +197,7 @@ function select_slice(variable::AbstractArray{T,5}, dims::Symbol...; input=nothi
     return slice
 end
 
-function select_slice(variable::AbstractArray{T,6}, dims::Symbol...; input=nothing,
+function select_slice(variable::AbstractMKArray{T,6}, dims::Symbol...; input=nothing,
                       it=nothing, is=1, ir=nothing, iz=nothing, ivperp=nothing,
                       ivpa=nothing, kwargs...) where T
     # Array is (vpa,vperp,z,r,species,t)
@@ -259,7 +259,7 @@ function select_slice(variable::AbstractArray{T,6}, dims::Symbol...; input=nothi
     return slice
 end
 
-function select_slice(variable::AbstractArray{T,7}, dims::Symbol...; input=nothing,
+function select_slice(variable::AbstractMKArray{T,7}, dims::Symbol...; input=nothing,
                       it=nothing, is=1, ir=nothing, iz=nothing, ivzeta=nothing,
                       ivr=nothing, ivz=nothing, kwargs...) where T
     # Array is (vz,vr,vzeta,z,r,species,t)
@@ -336,7 +336,7 @@ end
 
 Variant of `select_slice()` to be used on 'time' arrays, which are always 1D.
 """
-function select_time_slice(time::AbstractVector, range)
+function select_time_slice(time::AbstractMKVector, range)
     if range === nothing
         return time
     else

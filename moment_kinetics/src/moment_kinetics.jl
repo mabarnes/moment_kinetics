@@ -4,8 +4,13 @@ module moment_kinetics
 
 export run_moment_kinetics
 
+using HDF5
 using MPI
 using StatsBase
+try
+    using NCDatasets
+catch
+end
 
 # Include submodules from other source files
 # Note that order of includes matters - things used in one module must already

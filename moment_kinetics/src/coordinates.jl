@@ -7,7 +7,7 @@ export equally_spaced_grid
 export set_element_boundaries
 
 using LinearAlgebra
-using ..type_definitions: mk_float, mk_int, OptionsDict
+using ..type_definitions
 using ..array_allocation: allocate_float, allocate_shared_float, allocate_int, allocate_shared_int
 using ..calculus: derivative!
 using ..chebyshev: scaled_chebyshev_grid, scaled_chebyshev_radau_grid, setup_chebyshev_pseudospectral
@@ -25,7 +25,14 @@ using OrderedCollections: OrderedDict
 """
 structure containing basic information related to coordinates
 """
-struct coordinate{T <: AbstractVector{mk_float}, Ti <: AbstractVector{mk_int}, Tbparams}
+struct coordinate{Tshared <: AbstractMKVector{mk_float},
+                  Tsharedi <: AbstractMKVector{mk_int},
+                  Tunshared <: AbstractMKVector{mk_float},
+                  Tunsharedi <: AbstractMKVector{mk_int},
+                  Tunsharedmat <: AbstractMKMatrix{mk_float},
+                  Tunsharedmati <: AbstractMKMatrix{mk_int},
+                  Tunshared3 <: AbstractMKArray{mk_float,3},
+                  Tbparams}
     # name is the name of the variable associated with this coordiante
     name::String
     # n_global is the total number of grid points associated with this coordinate
@@ -45,19 +52,19 @@ struct coordinate{T <: AbstractVector{mk_float}, Ti <: AbstractVector{mk_int}, T
     # L is the box length in this coordinate
     L::mk_float
     # grid is the location of the grid points
-    grid::Array{mk_float,1}
+    grid::Tunshared
     # cell_width is the width associated with the cells between grid points
-    cell_width::Array{mk_float,1}
+    cell_width::Tunshared
     # igrid contains the grid point index within the element
-    igrid::Array{mk_int,1}
+    igrid::Tunsharedi
     # ielement contains the element index
-    ielement::Array{mk_int,1}
+    ielement::Tunsharedi
     # imin[j] contains the minimum index on the full grid for element j
-    imin::Array{mk_int,1}
+    imin::Tunsharedi
     # imax[j] contains the maximum index on the full grid for element j
-    imax::Array{mk_int,1}
+    imax::Tunsharedi
     # igrid_full[i,j] contains the index of the full grid for the elemental grid point i, on element j
-    igrid_full::Array{mk_int,2}
+    igrid_full::Tunsharedmati
     # discretization option for the grid
     discretization::String
     # if the discretization is finite differences, finite_difference_option provides the precise scheme
@@ -70,61 +77,61 @@ struct coordinate{T <: AbstractVector{mk_float}, Ti <: AbstractVector{mk_int}, T
     # condition.
     boundary_parameters::Tbparams
     # wgts contains the integration weights associated with each grid point
-    wgts::Array{mk_float,1}
+    wgts::Tunshared
     # uniform_grid contains location of grid points mapped to a uniform grid
     # if finite differences used for discretization, no mapping required, and uniform_grid = grid
-    uniform_grid::Array{mk_float,1}
+    uniform_grid::Tunshared
     # duniform_dgrid is the local derivative of the uniform grid with respect to
     # the coordinate grid
-    duniform_dgrid::Array{mk_float,2}
+    duniform_dgrid::Tunsharedmat
     # scratch is an array used for intermediate calculations requiring n entries
-    scratch::Array{mk_float,1}
+    scratch::Tunshared
     # scratch2 is an array used for intermediate calculations requiring n entries
-    scratch2::Array{mk_float,1}
+    scratch2::Tunshared
     # scratch3 is an array used for intermediate calculations requiring n entries
-    scratch3::Array{mk_float,1}
+    scratch3::Tunshared
     # scratch4 is an array used for intermediate calculations requiring n entries
-    scratch4::Array{mk_float,1}
+    scratch4::Tunshared
     # scratch5 is an array used for intermediate calculations requiring n entries
-    scratch5::Array{mk_float,1}
+    scratch5::Tunshared
     # scratch6 is an array used for intermediate calculations requiring n entries
-    scratch6::Array{mk_float,1}
+    scratch6::Tunshared
     # scratch7 is an array used for intermediate calculations requiring n entries
-    scratch7::Array{mk_float,1}
+    scratch7::Tunshared
     # scratch8 is an array used for intermediate calculations requiring n entries
-    scratch8::Array{mk_float,1}
+    scratch8::Tunshared
     # scratch9 is an array used for intermediate calculations requiring n entries
-    scratch9::Array{mk_float,1}
+    scratch9::Tunshared
     # scratch10 is an array used for intermediate calculations requiring n entries
-    scratch10::Array{mk_float,1}
+    scratch10::Tunshared
     # scratch_int_nelement_plus_1 is an integer array used for intermediate calculations
     # requiring nelement+1 entries
-    scratch_int_nelement_plus_1::Array{mk_int,1}
+    scratch_int_nelement_plus_1::Tunsharedi
     # scratch_shared is a shared-memory array used for intermediate calculations requiring
     # n entries
-    scratch_shared::T
+    scratch_shared::Tshared
     # scratch_shared2 is a shared-memory array used for intermediate calculations requiring
     # n entries
-    scratch_shared2::T
+    scratch_shared2::Tshared
     # scratch_shared3 is a shared-memory array used for intermediate calculations requiring
     # n entries
-    scratch_shared3::T
+    scratch_shared3::Tshared
     # scratch_shared_int is a shared-memory array used for intermediate calculations
     # requiring n integer entries
-    scratch_shared_int::Ti
+    scratch_shared_int::Tsharedi
     # scratch_shared_int is a shared-memory array used for intermediate calculations
     # requiring n integer entries
-    scratch_shared_int2::Ti
+    scratch_shared_int2::Tsharedi
     # scratch_2d and scratch2_2d are arrays used for intermediate calculations requiring
     # ngrid x nelement entries
-    scratch_2d::Array{mk_float,2}
-    scratch2_2d::Array{mk_float,2}
+    scratch_2d::Tunsharedmat
+    scratch2_2d::Tunsharedmat
     # struct containing advection speed options/inputs
     advection::advection_input
     # buffer of size 1 for communicating information about cell boundaries
-    send_buffer::Array{mk_float,1}
+    send_buffer::Tunshared
     # buffer of size 1 for communicating information about cell boundaries
-    receive_buffer::Array{mk_float,1}
+    receive_buffer::Tunshared
     # the MPI communicator appropriate for this calculation
     comm::MPI.Comm
     # local range to slice from variables to write to output file
@@ -132,19 +139,19 @@ struct coordinate{T <: AbstractVector{mk_float}, Ti <: AbstractVector{mk_int}, T
     # global range to write into in output file
     global_io_range::UnitRange{Int64}
     # scale for each element
-    element_scale::Array{mk_float,1}
+    element_scale::Tunshared
     # shift for each element
-    element_shift::Array{mk_float,1}
+    element_shift::Tunshared
     # option used to set up element spacing
     element_spacing_option::String
     # list of element boundaries
-    element_boundaries::Array{mk_float,1}
+    element_boundaries::Tunshared
     # Does the coordinate use a 'Radau' discretization for the first element?
     radau_first_element::Bool
     # 'Other' nodes where the j'th Lagrange polynomial (which is 1 at x[j]) is equal to 0
-    other_nodes::Array{mk_float,3}
+    other_nodes::Tunshared3
     # One over the denominators of the Lagrange polynomials
-    one_over_denominator::Array{mk_float,2}
+    one_over_denominator::Tunsharedmat
 end
 
 """

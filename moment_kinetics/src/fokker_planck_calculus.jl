@@ -35,7 +35,7 @@ export interpolate_2D_vspace!
 # Import moment_kinetics so that we can refer to it in docstrings
 import moment_kinetics
 
-using ..type_definitions: mk_float, mk_int
+using ..type_definitions
 using ..array_allocation: allocate_float, allocate_shared_float
 using ..calculus: derivative!
 using ..communication
@@ -100,8 +100,8 @@ struct fokkerplanck_arrays_direct_integration_struct
     dHdvperp::MPISharedArray{mk_float,2}
     #Cflux_vpa::MPISharedArray{mk_float,2}
     #Cflux_vperp::MPISharedArray{mk_float,2}
-    buffer_vpavperp_1::Array{mk_float,2}
-    buffer_vpavperp_2::Array{mk_float,2}
+    buffer_vpavperp_1::MKMatrix{mk_float}
+    buffer_vpavperp_2::MKMatrix{mk_float}
     Cssp_result_vpavperp::MPISharedArray{mk_float,2}
     dfdvpa::MPISharedArray{mk_float,2}
     d2fdvpa2::MPISharedArray{mk_float,2}
@@ -175,21 +175,21 @@ struct YY_collision_operator_arrays
     # and phi'_j(vperp) the first derivative of the Lagrange basis function
     # on the iel^th element. Then, the arrays are defined as follows.
     # YY0perp[i,j,k,iel] = \int phi_i(vperp) phi_j(vperp) phi_k(vperp) vperp d vperp
-    YY0perp::Array{mk_float,4}
+    YY0perp::MKArray{mk_float,4}
     # YY1perp[i,j,k,iel] = \int phi_i(vperp) phi_j(vperp) phi'_k(vperp) vperp d vperp
-    YY1perp::Array{mk_float,4}
+    YY1perp::MKArray{mk_float,4}
     # YY2perp[i,j,k,iel] = \int phi_i(vperp) phi'_j(vperp) phi'_k(vperp) vperp d vperp
-    YY2perp::Array{mk_float,4}
+    YY2perp::MKArray{mk_float,4}
     # YY3perp[i,j,k,iel] = \int phi_i(vperp) phi'_j(vperp) phi_k(vperp) vperp d vperp
-    YY3perp::Array{mk_float,4}
+    YY3perp::MKArray{mk_float,4}
     # YY0par[i,j,k,iel] = \int phi_i(vpa) phi_j(vpa) phi_k(vpa) vpa d vpa
-    YY0par::Array{mk_float,4}
+    YY0par::MKArray{mk_float,4}
     # YY1par[i,j,k,iel] = \int phi_i(vpa) phi_j(vpa) phi'_k(vpa) vpa d vpa
-    YY1par::Array{mk_float,4}
+    YY1par::MKArray{mk_float,4}
     # YY2par[i,j,k,iel] = \int phi_i(vpa) phi'_j(vpa) phi'_k(vpa) vpa d vpa
-    YY2par::Array{mk_float,4}
+    YY2par::MKArray{mk_float,4}
     # YY3par[i,j,k,iel] = \int phi_i(vpa) phi'_j(vpa) phi_k(vpa) vpa d vpa
-    YY3par::Array{mk_float,4}
+    YY3par::MKArray{mk_float,4}
 end
 
 """
@@ -365,8 +365,8 @@ function setup_basic_quadratures(vpa,vperp;print_to_screen=true)
     nlaguerre = nquad
     x_laguerre, w_laguerre = gausslaguerre(nlaguerre)
     
-    x_vpa, w_vpa = Array{mk_float,1}(undef,4*nquad), Array{mk_float,1}(undef,4*nquad)
-    x_vperp, w_vperp = Array{mk_float,1}(undef,4*nquad), Array{mk_float,1}(undef,4*nquad)
+    x_vpa, w_vpa = allocate_float(4*nquad), allocate_float(4*nquad)
+    x_vperp, w_vperp = allocate_float(4*nquad), allocate_float(4*nquad)
   
     return x_vpa, w_vpa, x_vperp, w_vperp, x_legendre, w_legendre, x_laguerre, w_laguerre
 end
@@ -1030,22 +1030,22 @@ Struct to contain data needed to create a sparse matrix.
 """
 struct sparse_matrix_constructor
     # the Ith row
-    II::Array{mk_float,1}
+    II::MKVector{mk_float}
     # the Jth column
-    JJ::Array{mk_float,1}
+    JJ::MKVector{mk_float}
     # the data S[I,J]
-    SS::Array{mk_float,1}
+    SS::MKVector{mk_float}
 end
 
 """
 Function to allocate an instance of `sparse_matrix_constructor`.
 """
 function allocate_sparse_matrix_constructor(nsparse::mk_int)
-    II = Array{mk_int,1}(undef,nsparse)
+    II = allocate_float(nsparse)
     @. II = 0
-    JJ = Array{mk_int,1}(undef,nsparse)
+    JJ = allocate_float(nsparse)
     @. JJ = 0
-    SS = Array{mk_float,1}(undef,nsparse)
+    SS = allocate_float(nsparse)
     @. SS = 0.0
     return sparse_matrix_constructor(II,JJ,SS)
 end
@@ -1267,7 +1267,7 @@ function calculate_rosenbluth_potential_boundary_data!(rpbd::rosenbluth_potentia
     return nothing
 end
 
-function multipole_H(vpa::mk_float,vperp::mk_float,Inn_vec::Vector{mk_float})
+function multipole_H(vpa::mk_float,vperp::mk_float,Inn_vec::AbstractMKVector{mk_float})
    (I00, I10, I20, I30, I40, I50, I60, I70, I80, 
    I02, I12, I22, I32, I42, I52, I62,
    I04, I14, I24, I34, I44,
@@ -1304,7 +1304,7 @@ function multipole_H(vpa::mk_float,vperp::mk_float,Inn_vec::Vector{mk_float})
    return H_series
 end
 
-function multipole_dHdvpa(vpa::mk_float,vperp::mk_float,Inn_vec::Vector{mk_float})
+function multipole_dHdvpa(vpa::mk_float,vperp::mk_float,Inn_vec::AbstractMKVector{mk_float})
    (I00, I10, I20, I30, I40, I50, I60, I70, I80, 
    I02, I12, I22, I32, I42, I52, I62,
    I04, I14, I24, I34, I44,
@@ -1341,7 +1341,7 @@ function multipole_dHdvpa(vpa::mk_float,vperp::mk_float,Inn_vec::Vector{mk_float
    return dHdvpa_series
 end
 
-function multipole_dHdvperp(vpa::mk_float,vperp::mk_float,Inn_vec::Vector{mk_float})
+function multipole_dHdvperp(vpa::mk_float,vperp::mk_float,Inn_vec::AbstractMKVector{mk_float})
    (I00, I10, I20, I30, I40, I50, I60, I70, I80, 
    I02, I12, I22, I32, I42, I52, I62,
    I04, I14, I24, I34, I44,
@@ -1378,7 +1378,7 @@ function multipole_dHdvperp(vpa::mk_float,vperp::mk_float,Inn_vec::Vector{mk_flo
    return dHdvperp_series
 end
 
-function multipole_G(vpa::mk_float,vperp::mk_float,Inn_vec::Vector{mk_float})
+function multipole_G(vpa::mk_float,vperp::mk_float,Inn_vec::AbstractMKVector{mk_float})
    (I00, I10, I20, I30, I40, I50, I60, I70, I80, 
    I02, I12, I22, I32, I42, I52, I62,
    I04, I14, I24, I34, I44,
@@ -1415,7 +1415,7 @@ function multipole_G(vpa::mk_float,vperp::mk_float,Inn_vec::Vector{mk_float})
    return G_series
 end
 
-function multipole_dGdvperp(vpa::mk_float,vperp::mk_float,Inn_vec::Vector{mk_float})
+function multipole_dGdvperp(vpa::mk_float,vperp::mk_float,Inn_vec::AbstractMKVector{mk_float})
    (I00, I10, I20, I30, I40, I50, I60, I70, I80, 
    I02, I12, I22, I32, I42, I52, I62,
    I04, I14, I24, I34, I44,
@@ -1452,7 +1452,7 @@ function multipole_dGdvperp(vpa::mk_float,vperp::mk_float,Inn_vec::Vector{mk_flo
    return dGdvperp_series
 end
 
-function multipole_d2Gdvperp2(vpa::mk_float,vperp::mk_float,Inn_vec::Vector{mk_float})
+function multipole_d2Gdvperp2(vpa::mk_float,vperp::mk_float,Inn_vec::AbstractMKVector{mk_float})
    (I00, I10, I20, I30, I40, I50, I60, I70, I80, 
    I02, I12, I22, I32, I42, I52, I62,
    I04, I14, I24, I34, I44,
@@ -1489,7 +1489,7 @@ function multipole_d2Gdvperp2(vpa::mk_float,vperp::mk_float,Inn_vec::Vector{mk_f
    return d2Gdvperp2_series
 end
 
-function multipole_d2Gdvperpdvpa(vpa::mk_float,vperp::mk_float,Inn_vec::Vector{mk_float})
+function multipole_d2Gdvperpdvpa(vpa::mk_float,vperp::mk_float,Inn_vec::AbstractMKVector{mk_float})
    (I00, I10, I20, I30, I40, I50, I60, I70, I80, 
    I02, I12, I22, I32, I42, I52, I62,
    I04, I14, I24, I34, I44,
@@ -1526,7 +1526,7 @@ function multipole_d2Gdvperpdvpa(vpa::mk_float,vperp::mk_float,Inn_vec::Vector{m
    return d2Gdvperpdvpa_series
 end
 
-function multipole_d2Gdvpa2(vpa::mk_float,vperp::mk_float,Inn_vec::Vector{mk_float})
+function multipole_d2Gdvpa2(vpa::mk_float,vperp::mk_float,Inn_vec::AbstractMKVector{mk_float})
    (I00, I10, I20, I30, I40, I50, I60, I70, I80, 
    I02, I12, I22, I32, I42, I52, I62,
    I04, I14, I24, I34, I44,
@@ -1756,11 +1756,11 @@ function calculate_rosenbluth_potential_boundary_data_multipole!(rpbd::rosenblut
        I08 = integrate_over_vspace(@view(pdf[:,:]), vpa.grid, 0, vpa.wgts, vperp.grid, 8, vperp.wgts)    
     end
     # Broadcast integrals to all processes in the 'anyv' subblock
-    Inn_vec = [I00, I10, I20, I30, I40, I50, I60, I70, I80, 
-                I02, I12, I22, I32, I42, I52, I62,
-                I04, I14, I24, I34, I44,
-                I06, I16, I26,
-                I08]
+    Inn_vec = MKArray([I00, I10, I20, I30, I40, I50, I60, I70, I80,
+                       I02, I12, I22, I32, I42, I52, I62,
+                       I04, I14, I24, I34, I44,
+                       I06, I16, I26,
+                       I08])
     if comm_anyv_subblock[] != MPI.COMM_NULL
         MPI.Bcast!(Inn_vec, 0, comm_anyv_subblock[])
     end
@@ -1880,9 +1880,9 @@ the maximum value of the error. Calls `test_boundary_data()`.
 function test_rosenbluth_potential_boundary_data(rpbd::rosenbluth_potential_boundary_data,
     rpbd_exact::rosenbluth_potential_boundary_data,vpa,vperp;print_to_screen=true)
     
-    error_buffer_vpa = Array{mk_float,1}(undef,vpa.n)
-    error_buffer_vperp_1 = Array{mk_float,1}(undef,vperp.n)
-    error_buffer_vperp_2 = Array{mk_float,1}(undef,vperp.n)
+    error_buffer_vpa = allocate_float(vpa.n)
+    error_buffer_vperp_1 = allocate_float(vperp.n)
+    error_buffer_vperp_2 = allocate_float(vperp.n)
     max_H_err = test_boundary_data(rpbd.H_data,rpbd_exact.H_data,"H",vpa,vperp,error_buffer_vpa,error_buffer_vperp_1,error_buffer_vperp_2,print_to_screen)  
     max_dHdvpa_err = test_boundary_data(rpbd.dHdvpa_data,rpbd_exact.dHdvpa_data,"dHdvpa",vpa,vperp,error_buffer_vpa,error_buffer_vperp_1,error_buffer_vperp_2,print_to_screen)  
     max_dHdvperp_err = test_boundary_data(rpbd.dHdvperp_data,rpbd_exact.dHdvperp_data,"dHdvperp",vpa,vperp,error_buffer_vpa,error_buffer_vperp_1,error_buffer_vperp_2,print_to_screen)  
@@ -2031,51 +2031,51 @@ function assemble_matrix_operators_dirichlet_bc(vpa,vperp,vpa_spectral,vperp_spe
     nc_global = vpa.n*vperp.n
     # Assemble a 2D mass matrix in the global compound coordinate
     nc_global = vpa.n*vperp.n
-    MM2D = Array{mk_float,2}(undef,nc_global,nc_global)
+    MM2D = allocate_float(nc_global,nc_global)
     MM2D .= 0.0
-    KKpar2D = Array{mk_float,2}(undef,nc_global,nc_global)
+    KKpar2D = allocate_float(nc_global,nc_global)
     KKpar2D .= 0.0
-    KKperp2D = Array{mk_float,2}(undef,nc_global,nc_global)
+    KKperp2D = allocate_float(nc_global,nc_global)
     KKperp2D .= 0.0
-    KPperp2D = Array{mk_float,2}(undef,nc_global,nc_global)
+    KPperp2D = allocate_float(nc_global,nc_global)
     KPperp2D .= 0.0
-    KKpar2D_with_BC_terms = Array{mk_float,2}(undef,nc_global,nc_global)
+    KKpar2D_with_BC_terms = allocate_float(nc_global,nc_global)
     KKpar2D_with_BC_terms .= 0.0
-    KKperp2D_with_BC_terms = Array{mk_float,2}(undef,nc_global,nc_global)
+    KKperp2D_with_BC_terms = allocate_float(nc_global,nc_global)
     KKperp2D_with_BC_terms .= 0.0
-    PUperp2D = Array{mk_float,2}(undef,nc_global,nc_global)
+    PUperp2D = allocate_float(nc_global,nc_global)
     PUperp2D .= 0.0
-    PPparPUperp2D = Array{mk_float,2}(undef,nc_global,nc_global)
+    PPparPUperp2D = allocate_float(nc_global,nc_global)
     PPparPUperp2D .= 0.0
-    PPpar2D = Array{mk_float,2}(undef,nc_global,nc_global)
+    PPpar2D = allocate_float(nc_global,nc_global)
     PPpar2D .= 0.0
-    MMparMNperp2D = Array{mk_float,2}(undef,nc_global,nc_global)
+    MMparMNperp2D = allocate_float(nc_global,nc_global)
     MMparMNperp2D .= 0.0
     # Laplacian matrix
-    LP2D = Array{mk_float,2}(undef,nc_global,nc_global)
+    LP2D = allocate_float(nc_global,nc_global)
     LP2D .= 0.0
     # Modified Laplacian matrix
-    LV2D = Array{mk_float,2}(undef,nc_global,nc_global)
+    LV2D = allocate_float(nc_global,nc_global)
     LV2D .= 0.0
     # Modified Laplacian matrix
-    LB2D = Array{mk_float,2}(undef,nc_global,nc_global)
+    LB2D = allocate_float(nc_global,nc_global)
     LB2D .= 0.0
     
     #print_matrix(MM2D,"MM2D",nc_global,nc_global)
     # local dummy arrays
-    MMpar = Array{mk_float,2}(undef,vpa.ngrid,vpa.ngrid)
-    MMperp = Array{mk_float,2}(undef,vperp.ngrid,vperp.ngrid)
-    MNperp = Array{mk_float,2}(undef,vperp.ngrid,vperp.ngrid)
-    MRperp = Array{mk_float,2}(undef,vperp.ngrid,vperp.ngrid)
-    KKpar = Array{mk_float,2}(undef,vpa.ngrid,vpa.ngrid)
-    KKperp = Array{mk_float,2}(undef,vperp.ngrid,vperp.ngrid)
-    KKpar_with_BC_terms = Array{mk_float,2}(undef,vpa.ngrid,vpa.ngrid)
-    KKperp_with_BC_terms = Array{mk_float,2}(undef,vperp.ngrid,vperp.ngrid)
-    KJperp = Array{mk_float,2}(undef,vperp.ngrid,vperp.ngrid)
-    LLperp = Array{mk_float,2}(undef,vperp.ngrid,vperp.ngrid)
-    PPperp = Array{mk_float,2}(undef,vperp.ngrid,vperp.ngrid)
-    PUperp = Array{mk_float,2}(undef,vperp.ngrid,vperp.ngrid)
-    PPpar = Array{mk_float,2}(undef,vpa.ngrid,vpa.ngrid)
+    MMpar = allocate_float(vpa.ngrid,vpa.ngrid)
+    MMperp = allocate_float(vperp.ngrid,vperp.ngrid)
+    MNperp = allocate_float(vperp.ngrid,vperp.ngrid)
+    MRperp = allocate_float(vperp.ngrid,vperp.ngrid)
+    KKpar = allocate_float(vpa.ngrid,vpa.ngrid)
+    KKperp = allocate_float(vperp.ngrid,vperp.ngrid)
+    KKpar_with_BC_terms = allocate_float(vpa.ngrid,vpa.ngrid)
+    KKperp_with_BC_terms = allocate_float(vperp.ngrid,vperp.ngrid)
+    KJperp = allocate_float(vperp.ngrid,vperp.ngrid)
+    LLperp = allocate_float(vperp.ngrid,vperp.ngrid)
+    PPperp = allocate_float(vperp.ngrid,vperp.ngrid)
+    PUperp = allocate_float(vperp.ngrid,vperp.ngrid)
+    PPpar = allocate_float(vpa.ngrid,vpa.ngrid)
         
     impose_BC_at_zero_vperp = false
     @serial_region begin
@@ -2289,19 +2289,19 @@ function assemble_matrix_operators_dirichlet_bc_sparse(vpa,vperp,vpa_spectral,vp
     LB2D = allocate_sparse_matrix_constructor(nsparse)
     
     # local dummy arrays
-    MMpar = Array{mk_float,2}(undef,ngrid_vpa,ngrid_vpa)
-    MMperp = Array{mk_float,2}(undef,ngrid_vperp,ngrid_vperp)
-    MNperp = Array{mk_float,2}(undef,ngrid_vperp,ngrid_vperp)
-    MRperp = Array{mk_float,2}(undef,ngrid_vperp,ngrid_vperp)
-    KKpar = Array{mk_float,2}(undef,ngrid_vpa,ngrid_vpa)
-    KKpar_with_BC_terms = Array{mk_float,2}(undef,ngrid_vpa,ngrid_vpa)
-    KKperp = Array{mk_float,2}(undef,ngrid_vperp,ngrid_vperp)
-    KKperp_with_BC_terms = Array{mk_float,2}(undef,ngrid_vperp,ngrid_vperp)
-    KJperp = Array{mk_float,2}(undef,ngrid_vperp,ngrid_vperp)
-    LLperp = Array{mk_float,2}(undef,ngrid_vperp,ngrid_vperp)
-    PPperp = Array{mk_float,2}(undef,ngrid_vperp,ngrid_vperp)
-    PUperp = Array{mk_float,2}(undef,ngrid_vperp,ngrid_vperp)
-    PPpar = Array{mk_float,2}(undef,ngrid_vpa,ngrid_vpa)
+    MMpar = allocate_float(ngrid_vpa,ngrid_vpa)
+    MMperp = allocate_float(ngrid_vperp,ngrid_vperp)
+    MNperp = allocate_float(ngrid_vperp,ngrid_vperp)
+    MRperp = allocate_float(ngrid_vperp,ngrid_vperp)
+    KKpar = allocate_float(ngrid_vpa,ngrid_vpa)
+    KKpar_with_BC_terms = allocate_float(ngrid_vpa,ngrid_vpa)
+    KKperp = allocate_float(ngrid_vperp,ngrid_vperp)
+    KKperp_with_BC_terms = allocate_float(ngrid_vperp,ngrid_vperp)
+    KJperp = allocate_float(ngrid_vperp,ngrid_vperp)
+    LLperp = allocate_float(ngrid_vperp,ngrid_vperp)
+    PPperp = allocate_float(ngrid_vperp,ngrid_vperp)
+    PUperp = allocate_float(ngrid_vperp,ngrid_vperp)
+    PPpar = allocate_float(ngrid_vpa,ngrid_vpa)
         
     impose_BC_at_zero_vperp = false
     @serial_region begin
@@ -2505,14 +2505,14 @@ Calls `get_QQ_local!()` from `gauss_legendre`. Definitions of these
 nonlinear stiffness matrices can be found in the docs for `get_QQ_local!()`.
 """
 function calculate_YY_arrays(vpa,vperp,vpa_spectral,vperp_spectral)
-    YY0perp = Array{mk_float,4}(undef,vperp.ngrid,vperp.ngrid,vperp.ngrid,vperp.nelement_local)
-    YY1perp = Array{mk_float,4}(undef,vperp.ngrid,vperp.ngrid,vperp.ngrid,vperp.nelement_local)
-    YY2perp = Array{mk_float,4}(undef,vperp.ngrid,vperp.ngrid,vperp.ngrid,vperp.nelement_local)
-    YY3perp = Array{mk_float,4}(undef,vperp.ngrid,vperp.ngrid,vperp.ngrid,vperp.nelement_local)
-    YY0par = Array{mk_float,4}(undef,vpa.ngrid,vpa.ngrid,vpa.ngrid,vpa.nelement_local)
-    YY1par = Array{mk_float,4}(undef,vpa.ngrid,vpa.ngrid,vpa.ngrid,vpa.nelement_local)
-    YY2par = Array{mk_float,4}(undef,vpa.ngrid,vpa.ngrid,vpa.ngrid,vpa.nelement_local)
-    YY3par = Array{mk_float,4}(undef,vpa.ngrid,vpa.ngrid,vpa.ngrid,vpa.nelement_local)
+    YY0perp = allocate_float(vperp.ngrid,vperp.ngrid,vperp.ngrid,vperp.nelement_local)
+    YY1perp = allocate_float(vperp.ngrid,vperp.ngrid,vperp.ngrid,vperp.nelement_local)
+    YY2perp = allocate_float(vperp.ngrid,vperp.ngrid,vperp.ngrid,vperp.nelement_local)
+    YY3perp = allocate_float(vperp.ngrid,vperp.ngrid,vperp.ngrid,vperp.nelement_local)
+    YY0par = allocate_float(vpa.ngrid,vpa.ngrid,vpa.ngrid,vpa.nelement_local)
+    YY1par = allocate_float(vpa.ngrid,vpa.ngrid,vpa.ngrid,vpa.nelement_local)
+    YY2par = allocate_float(vpa.ngrid,vpa.ngrid,vpa.ngrid,vpa.nelement_local)
+    YY3par = allocate_float(vpa.ngrid,vpa.ngrid,vpa.ngrid,vpa.nelement_local)
     
     for ielement_vperp in 1:vperp.nelement_local
         @views get_QQ_local!(YY0perp[:,:,:,ielement_vperp],ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"YY0")

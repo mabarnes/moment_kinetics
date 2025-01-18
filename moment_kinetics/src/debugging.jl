@@ -9,7 +9,7 @@ Also provides macro `*_ifelse` whose names are taken from `macronames`, which ca
 used to switch definitions, etc. For example, if `debug_shared_array` is in
 `macronames`, then
 ```
-const MPISharedArray = @debug_shared_array_ifelse(DebugMPISharedArray, Array)
+const MPISharedArray = @debug_shared_array_ifelse(DebugMPISharedArray, MKArray)
 ```
 can be used to make the type represented by `MPISharedArray` depend on the debug level.
 """

@@ -54,7 +54,7 @@ function get_scan_inputs(scan_inputs::AbstractDict)
     ##########################################
 
     # check all inputs have same size
-    inner_input_lengths = OrderedDict(k=>length(v) for (k,v) ∈ scan_inputs if v isa Vector)
+    inner_input_lengths = OrderedDict(k=>length(v) for (k,v) ∈ scan_inputs if v isa AbstractVector)
     length_inner_product = first(values(inner_input_lengths))
     if length(inner_input_lengths) > 0 &&
             !all(l == length_inner_product for l ∈ values(inner_input_lengths))
@@ -67,7 +67,7 @@ function get_scan_inputs(scan_inputs::AbstractDict)
         run_name = scan_inputs["output"]["run_name"]
         result[i] = OrderedDict{String,Any}()
         for (k,v) ∈ scan_inputs
-            if v isa Vector
+            if v isa AbstractVector
                 result[i][k] = v[i]
                 # Truncate `key` - seems that if file names are too long, HDF5 has a
                 # buffer overflow

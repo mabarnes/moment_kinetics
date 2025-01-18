@@ -171,7 +171,7 @@ function compare_moment_symbolic_test(run_info, plot_prefix, field_label, field_
     if !input.calculate_error_norms
         field_norm = nothing
     else
-        field_norm = zeros(mk_float,nt)
+        field_norm = mk_zeros(mk_float,nt)
         for it in 1:nt
             dummy = 0.0
             #dummy_N = 0.0
@@ -576,7 +576,7 @@ function compare_ion_pdf_symbolic_test(run_info, plot_prefix; io=nothing,
                 end
             end
         end
-        field_norm = zeros(mk_float,nt)
+        field_norm = mk_zeros(mk_float,nt)
         for it in 1:nt
             dummy = 0.0
             #dummy_N = 0.0
@@ -765,7 +765,7 @@ function compare_neutral_pdf_symbolic_test(run_info, plot_prefix; io=nothing,
                 end
             end
         end
-        field_norm = zeros(mk_float,nt)
+        field_norm = mk_zeros(mk_float,nt)
         for it in 1:nt
             dummy = 0.0
             #dummy_N = 0.0

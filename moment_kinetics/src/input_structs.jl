@@ -21,7 +21,7 @@ export set_defaults_and_check_top_level!, set_defaults_and_check_section!,
        convert_to_sorted_nested_OptionsDict
 
 using ..communication
-using ..type_definitions: mk_float, mk_int, OptionsDict
+using ..type_definitions
 
 using DataStructures: SortedDict
 using MPI
@@ -53,14 +53,14 @@ struct time_info{Terrorsum <: Real, T_debug_output, T_electron, Trkimp, Timpzero
     moments_output_counter::Base.RefValue{mk_int}
     dfns_output_counter::Base.RefValue{mk_int}
     failure_counter::Base.RefValue{mk_int}
-    failure_caused_by::Vector{mk_int}
-    limit_caused_by::Vector{mk_int}
+    failure_caused_by::MKVector{mk_int}
+    limit_caused_by::MKVector{mk_int}
     nwrite_moments::mk_int
     nwrite_dfns::mk_int
-    moments_output_times::Vector{mk_float}
-    dfns_output_times::Vector{mk_float}
+    moments_output_times::MKVector{mk_float}
+    dfns_output_times::MKVector{mk_float}
     type::String
-    rk_coefs::Array{mk_float,2}
+    rk_coefs::MKMatrix{mk_float}
     rk_coefs_implicit::Trkimp
     implicit_coefficient_is_zero::Timpzero
     n_rk_stages::mk_int
@@ -305,9 +305,9 @@ Base.@kwdef struct species_composition
     # `recycling_fraction` to account for ions absorbed by the wall.
     recycling_fraction::mk_float
     # array of structs of parameters for each ion species
-    ion::Vector{ion_species_parameters}
+    ion::MKVector{ion_species_parameters}
     # array of structs of parameters for each neutral species
-    neutral::Vector{neutral_species_parameters}
+    neutral::MKVector{neutral_species_parameters}
 end
 
 """
@@ -377,14 +377,14 @@ Base.@kwdef struct ion_source_data
     PI_temperature_target_amplitude::mk_float
     recycling_controller_fraction::mk_float
     # r_amplitude through the r coordinate (in 1D this can just be set to 1.0)
-    r_amplitude::Vector{mk_float}
+    r_amplitude::MKVector{mk_float}
     # z_amplitude through the z coordinate, which will have your gaussian profile,
     # constant profile, parabolic, etc..
-    z_amplitude::Vector{mk_float}
+    z_amplitude::MKVector{mk_float}
     PI_density_target::Union{mk_float, Nothing, MPISharedArray{mk_float,2}}
     PI_temperature_target::Union{mk_float, Nothing, MPISharedArray{mk_float,2}}
     PI_controller_amplitude::Union{Nothing, MPISharedArray{mk_float,1}}
-    controller_source_profile::Union{Nothing, MPISharedArray{mk_float,2}, Array{mk_float, 2}}
+    controller_source_profile::Union{Nothing, MPISharedArray{mk_float,2}, MKMatrix{mk_float}}
     PI_density_target_ir::Union{mk_int, Nothing}
     PI_density_target_iz::Union{mk_int, Nothing}
     PI_density_target_rank::Union{mk_int, Nothing} #possibly this should have Int64 as well, 
@@ -401,8 +401,8 @@ Base.@kwdef struct electron_source_data
     source_strength::mk_float
     source_T::mk_float
     active::Bool
-    r_amplitude::Vector{mk_float}
-    z_amplitude::Vector{mk_float}
+    r_amplitude::MKVector{mk_float}
+    z_amplitude::MKVector{mk_float}
     source_type::String
 end
 
@@ -454,13 +454,13 @@ Base.@kwdef struct neutral_source_data
     PI_density_target_z_relative_minimum::mk_float
     recycling_controller_fraction::mk_float
     # r_amplitude through the r coordinate (in 1D this can just be set to 1.0)
-    r_amplitude::Vector{mk_float}
+    r_amplitude::MKVector{mk_float}
     # z_amplitude through the z coordinate, which will have your gaussian profile,
     # constant profile, parabolic, etc..
-    z_amplitude::Vector{mk_float}
+    z_amplitude::MKVector{mk_float}
     PI_density_target::Union{mk_float, Nothing, MPISharedArray{mk_float,2}}
     PI_controller_amplitude::Union{Nothing, MPISharedArray{mk_float,1}}
-    controller_source_profile::Union{Nothing, MPISharedArray{mk_float,2}, Array{mk_float, 2}}
+    controller_source_profile::Union{Nothing, MPISharedArray{mk_float,2}, MKMatrix{mk_float}}
     PI_density_target_ir::Union{mk_int, Nothing}
     PI_density_target_iz::Union{mk_int, Nothing}
     PI_density_target_rank::Union{mk_int, Nothing} #possibly this should have Int64 as well, 

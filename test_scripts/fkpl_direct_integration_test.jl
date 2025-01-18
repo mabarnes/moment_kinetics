@@ -16,7 +16,7 @@ using moment_kinetics.fokker_planck_test: dHdvpa_Maxwellian, dHdvperp_Maxwellian
 using moment_kinetics.fokker_planck_test: F_Maxwellian, dFdvpa_Maxwellian, dFdvperp_Maxwellian
 using moment_kinetics.fokker_planck_test: d2Fdvpa2_Maxwellian, d2Fdvperpdvpa_Maxwellian, d2Fdvperp2_Maxwellian
 using moment_kinetics.fokker_planck_test: save_fkpl_integration_error_data
-using moment_kinetics.type_definitions: mk_float, mk_int
+using moment_kinetics.type_definitions
 using moment_kinetics.calculus: derivative!
 using moment_kinetics.velocity_moments: integrate_over_vspace, get_pressure
 using moment_kinetics.communication
@@ -116,35 +116,35 @@ function test_Lagrange_Rosenbluth_potentials(ngrid,nelement; standalone=true)
         println("beginning allocation   ", Dates.format(now(), dateformat"H:MM:SS"))
     end
     
-    fs_in = Array{mk_float,2}(undef,nvpa,nvperp)
+    fs_in = allocate_float(nvpa,nvperp)
     
-    dfsdvpa_Maxwell = Array{mk_float,2}(undef,nvpa,nvperp)
-    d2fsdvpa2_Maxwell = Array{mk_float,2}(undef,nvpa,nvperp)
-    dfsdvperp_Maxwell = Array{mk_float,2}(undef,nvpa,nvperp)
-    d2fsdvperpdvpa_Maxwell = Array{mk_float,2}(undef,nvpa,nvperp)
-    d2fsdvperp2_Maxwell = Array{mk_float,2}(undef,nvpa,nvperp)
-    dfsdvpa_err = Array{mk_float,2}(undef,nvpa,nvperp)
-    d2fsdvpa2_err = Array{mk_float,2}(undef,nvpa,nvperp)
-    dfsdvperp_err = Array{mk_float,2}(undef,nvpa,nvperp)
-    d2fsdvperpdvpa_err = Array{mk_float,2}(undef,nvpa,nvperp)
-    d2fsdvperp2_err = Array{mk_float,2}(undef,nvpa,nvperp)
+    dfsdvpa_Maxwell = allocate_float(nvpa,nvperp)
+    d2fsdvpa2_Maxwell = allocate_float(nvpa,nvperp)
+    dfsdvperp_Maxwell = allocate_float(nvpa,nvperp)
+    d2fsdvperpdvpa_Maxwell = allocate_float(nvpa,nvperp)
+    d2fsdvperp2_Maxwell = allocate_float(nvpa,nvperp)
+    dfsdvpa_err = allocate_float(nvpa,nvperp)
+    d2fsdvpa2_err = allocate_float(nvpa,nvperp)
+    dfsdvperp_err = allocate_float(nvpa,nvperp)
+    d2fsdvperpdvpa_err = allocate_float(nvpa,nvperp)
+    d2fsdvperp2_err = allocate_float(nvpa,nvperp)
     
-    GG_Maxwell = Array{mk_float,2}(undef,nvpa,nvperp)
+    GG_Maxwell = allocate_float(nvpa,nvperp)
     GG_err = allocate_shared_float(nvpa,nvperp)
-    d2Gdvpa2_Maxwell = Array{mk_float,2}(undef,nvpa,nvperp)
+    d2Gdvpa2_Maxwell = allocate_float(nvpa,nvperp)
     d2Gdvpa2_err = allocate_shared_float(nvpa,nvperp)
-    dGdvperp_Maxwell = Array{mk_float,2}(undef,nvpa,nvperp)
+    dGdvperp_Maxwell = allocate_float(nvpa,nvperp)
     dGdvperp_err = allocate_shared_float(nvpa,nvperp)
-    d2Gdvperpdvpa_Maxwell = Array{mk_float,2}(undef,nvpa,nvperp)
+    d2Gdvperpdvpa_Maxwell = allocate_float(nvpa,nvperp)
     d2Gdvperpdvpa_err = allocate_shared_float(nvpa,nvperp)
-    d2Gdvperp2_Maxwell = Array{mk_float,2}(undef,nvpa,nvperp)
+    d2Gdvperp2_Maxwell = allocate_float(nvpa,nvperp)
     d2Gdvperp2_err = allocate_shared_float(nvpa,nvperp)
     
-    HH_Maxwell = Array{mk_float,2}(undef,nvpa,nvperp)
+    HH_Maxwell = allocate_float(nvpa,nvperp)
     HH_err = allocate_shared_float(nvpa,nvperp)
-    dHdvpa_Maxwell = Array{mk_float,2}(undef,nvpa,nvperp)
+    dHdvpa_Maxwell = allocate_float(nvpa,nvperp)
     dHdvpa_err = allocate_shared_float(nvpa,nvperp)
-    dHdvperp_Maxwell = Array{mk_float,2}(undef,nvpa,nvperp)
+    dHdvperp_Maxwell = allocate_float(nvpa,nvperp)
     dHdvperp_err = allocate_shared_float(nvpa,nvperp)
     
     @serial_region begin
@@ -350,21 +350,21 @@ function test_rosenbluth_potentials_direct_integration(;ngrid=5,nelement_list=[2
     else
         initialize_comms!()
         nscan = size(nelement_list,1)
-        max_G_err = Array{mk_float,1}(undef,nscan)
-        max_H_err = Array{mk_float,1}(undef,nscan)
-        max_dHdvpa_err = Array{mk_float,1}(undef,nscan)
-        max_dHdvperp_err = Array{mk_float,1}(undef,nscan)
-        max_d2Gdvperp2_err = Array{mk_float,1}(undef,nscan)
-        max_d2Gdvpa2_err = Array{mk_float,1}(undef,nscan)
-        max_d2Gdvperpdvpa_err = Array{mk_float,1}(undef,nscan)
-        max_dGdvperp_err = Array{mk_float,1}(undef,nscan)
-        max_dfsdvpa_err = Array{mk_float,1}(undef,nscan)
-        max_dfsdvperp_err = Array{mk_float,1}(undef,nscan)
-        max_d2fsdvperpdvpa_err = Array{mk_float,1}(undef,nscan)
+        max_G_err = allocate_float(nscan)
+        max_H_err = allocate_float(nscan)
+        max_dHdvpa_err = allocate_float(nscan)
+        max_dHdvperp_err = allocate_float(nscan)
+        max_d2Gdvperp2_err = allocate_float(nscan)
+        max_d2Gdvpa2_err = allocate_float(nscan)
+        max_d2Gdvperpdvpa_err = allocate_float(nscan)
+        max_dGdvperp_err = allocate_float(nscan)
+        max_dfsdvpa_err = allocate_float(nscan)
+        max_dfsdvperp_err = allocate_float(nscan)
+        max_d2fsdvperpdvpa_err = allocate_float(nscan)
         
-        expected = Array{mk_float,1}(undef,nscan)
+        expected = allocate_float(nscan)
         expected_nelement_scaling!(expected,nelement_list,ngrid,nscan)
-        expected_integral = Array{mk_float,1}(undef,nscan)
+        expected_integral = allocate_float(nscan)
         expected_nelement_integral_scaling!(expected_integral,nelement_list,ngrid,nscan)
         
         expected_label = L"(1/N_{el})^{n_g - 1}"
@@ -381,7 +381,7 @@ function test_rosenbluth_potentials_direct_integration(;ngrid=5,nelement_list=[2
         end
         if global_rank[]==0 && plot_scan
             fontsize = 8
-            ytick_sequence = Array([1.0e-13,1.0e-12,1.0e-11,1.0e-10,1.0e-9,1.0e-8,1.0e-7,1.0e-6,1.0e-5,1.0e-4,1.0e-3,1.0e-2,1.0e-1,1.0e-0,1.0e1])
+            ytick_sequence = MKArray([1.0e-13,1.0e-12,1.0e-11,1.0e-10,1.0e-9,1.0e-8,1.0e-7,1.0e-6,1.0e-5,1.0e-4,1.0e-3,1.0e-2,1.0e-1,1.0e-0,1.0e1])
             xlabel = L"N_{element}"
             dHdvpalabel = L"\epsilon(dH/d v_{\|\|})"
             dHdvperplabel = L"\epsilon(dH/d v_{\perp})"

@@ -18,7 +18,7 @@ using ..input_structs
 using ..timer_utils
 using ..moment_kinetics_structs: electron_pdf_substruct, moments_electron_substruct
 using ..nonlinear_solvers
-using ..type_definitions: mk_float
+using ..type_definitions
 using ..velocity_moments: integrate_over_vspace
 
 using MPI
@@ -640,11 +640,11 @@ Add just the braginskii conduction contribution to the electron pressure, and as
 we have to calculate qpar and dqpar_dz from ppar within this function (they are not
 pre-calculated).
 """
-function electron_braginskii_conduction!(ppar_out::AbstractVector{mk_float},
-                                         ppar_in::AbstractVector{mk_float},
-                                         dens::AbstractVector{mk_float},
-                                         upar_e::AbstractVector{mk_float},
-                                         upar_i::AbstractVector{mk_float},
+function electron_braginskii_conduction!(ppar_out::AbstractMKVector{mk_float},
+                                         ppar_in::AbstractMKVector{mk_float},
+                                         dens::AbstractMKVector{mk_float},
+                                         upar_e::AbstractMKVector{mk_float},
+                                         upar_i::AbstractMKVector{mk_float},
                                          electron_moments, collisions, composition, z,
                                          z_spectral, scratch_dummy, dt, ir)
 
