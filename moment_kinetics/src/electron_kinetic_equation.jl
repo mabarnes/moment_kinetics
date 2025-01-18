@@ -1864,10 +1864,12 @@ global_rank[] == 0 && println("recalculating precon")
          scratch_dummy.implicit_buffer_vpavperpz_4)
     w = (scratch_dummy.implicit_buffer_z_5,
          scratch_dummy.implicit_buffer_vpavperpz_5)
+    buffer = (scratch_dummy.implicit_buffer_z_6,
+              scratch_dummy.implicit_buffer_vpavperpz_6)
 
     newton_success = newton_solve!((electron_ppar_new, f_electron_new),
                                    residual_func!, residual, delta_x, rhs_delta,
-                                   v, w, nl_solver_params;
+                                   v, w, buffer, nl_solver_params;
                                    left_preconditioner=left_preconditioner,
                                    right_preconditioner=right_preconditioner,
                                    coords=(z=z, vperp=vperp, vpa=vpa))
