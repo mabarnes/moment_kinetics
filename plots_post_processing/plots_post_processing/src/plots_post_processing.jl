@@ -59,7 +59,6 @@ using moment_kinetics.manufactured_solns: manufactured_solutions,
                                           manufactured_electric_fields,
                                           manufactured_geometry
 using moment_kinetics.moment_kinetics_input: mk_input, get
-using moment_kinetics.input_structs: geometry_input, species_composition
 using moment_kinetics.input_structs: boltzmann_electron_response, #electron_physics_type,
                                      boltzmann_electron_response_with_simple_sheath
 using moment_kinetics.species_input: get_species_input
