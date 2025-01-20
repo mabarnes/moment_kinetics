@@ -16,10 +16,10 @@ using ..input_structs
 
 """
 """
-function setup_reference_parameters(input_dict)
+function setup_reference_parameters(input_dict, warn_unexpected::Bool)
     # Get reference parameters for normalizations
     reference_parameter_section = copy(set_defaults_and_check_section!(
-        input_dict, "reference_params";
+        input_dict, "reference_params", warn_unexpected;
         Bref=1.0,
         Lref=10.0,
         Nref=1.0e19,

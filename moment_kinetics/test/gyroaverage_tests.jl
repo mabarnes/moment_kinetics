@@ -167,7 +167,7 @@ function gyroaverage_test(absolute_error; rhostar=0.1, pitch=0.5, ngrid=5, kr=2,
         # create test geometry
         option = "constant-helical"
         inputdict = OptionsDict("geometry" => OptionsDict("option" => option, "rhostar" => rhostar, "pitch" => pitch))
-        geometry_in = setup_geometry_input(inputdict)
+        geometry_in = setup_geometry_input(inputdict, true)
         geometry = init_magnetic_geometry(geometry_in,z,r)
         
         # create test composition
@@ -254,7 +254,7 @@ end
 function create_test_composition()
     input_dict = OptionsDict("composition" => OptionsDict("n_ion_species" => 1, "n_neutral_species" => 0, "ion_physics" => "gyrokinetic_ions") )
     #println(input_dict)
-    return get_species_input(input_dict)
+    return get_species_input(input_dict, true)
 end
 
 function fill_test_arrays!(phi,gphi,vperp,z,r,geometry,composition,kz,kr,phasez,phaser)

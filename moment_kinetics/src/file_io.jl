@@ -347,9 +347,10 @@ end
 """
 Read the settings for I/O
 """
-function setup_io_input(input_dict, timestepping_section; ignore_MPI=false)
+function setup_io_input(input_dict, timestepping_section, warn_unexpected::Bool;
+                        ignore_MPI=false)
     io_settings = set_defaults_and_check_section!(
-        input_dict, "output";
+        input_dict, "output", warn_unexpected;
         run_name="",
         base_directory="runs",
         ascii_output=false,

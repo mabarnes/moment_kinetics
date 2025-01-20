@@ -46,10 +46,11 @@ and z-coordinates.
 Returns a NamedTuple `(ion=ion_source_settings, neutral=neutral_source_settings)`
 containing two NamedTuples of settings.
 """
-function setup_external_sources!(input_dict, r, z, electron_physics; ignore_MPI=false)
+function setup_external_sources!(input_dict, r, z, electron_physics,
+                                 warn_unexpected::Bool; ignore_MPI=false)
     function get_settings_ions(source_index, active_flag)
         input = set_defaults_and_check_section!(
-                     input_dict, "ion_source_$source_index";
+                     input_dict, "ion_source_$source_index", warn_unexpected;
                      active=active_flag,
                      source_strength=1.0,
                      source_n=1.0,
@@ -229,7 +230,7 @@ function setup_external_sources!(input_dict, r, z, electron_physics; ignore_MPI=
 
     function get_settings_neutrals(source_index, active_flag)
         input = set_defaults_and_check_section!(
-                     input_dict, "neutral_source_$source_index";
+                     input_dict, "neutral_source_$source_index", warn_unexpected;
                      active=active_flag,
                      source_strength=1.0,
                      source_n=1.0,
@@ -393,7 +394,7 @@ function setup_external_sources!(input_dict, r, z, electron_physics; ignore_MPI=
         # electrons. `source_T` can be set independently, and when using
         # `source_type="energy"`, the `source_strength` could also be set.
         input = set_defaults_and_check_section!(
-                     input_dict, "electron_source_$i";
+                     input_dict, "electron_source_$i", warn_unexpected;
                      source_strength=ion_settings.source_strength,
                      source_T=ion_settings.source_T,
                     )

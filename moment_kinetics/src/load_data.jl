@@ -3522,7 +3522,7 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
     # and check input to catch errors
     io_input, evolve_moments, t_input, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _,
         composition, species, collisions, geometry, drive_input, external_source_settings,
-        num_diss_params, manufactured_solns_input = mk_input(input)
+        num_diss_params, manufactured_solns_input = mk_input(input; warn_unexpected=true)
 
     n_ion_species, n_neutral_species = load_species_data(file_final_restart)
     evolve_density, evolve_upar, evolve_ppar = load_mk_options(file_final_restart)

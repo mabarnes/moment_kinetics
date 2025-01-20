@@ -79,15 +79,17 @@ vz_dissipation_coefficient
 
 There will still be the -1.0 default parameters.
 """
-function setup_numerical_dissipation(input_dict)
+function setup_numerical_dissipation(input_dict, warn_unexpected::Bool)
     ion_params = set_defaults_and_check_section!(
-        input_dict, ion_num_diss_params, "ion_numerical_dissipation"
+        input_dict, ion_num_diss_params, warn_unexpected, "ion_numerical_dissipation"
        )
     electron_params = set_defaults_and_check_section!(
-        input_dict, electron_num_diss_params, "electron_numerical_dissipation"
+        input_dict, electron_num_diss_params, warn_unexpected,
+        "electron_numerical_dissipation"
        )
     neutral_params = set_defaults_and_check_section!(
-        input_dict, neutral_num_diss_params, "neutral_numerical_dissipation"
+        input_dict, neutral_num_diss_params, warn_unexpected,
+        "neutral_numerical_dissipation"
        )
 
     return numerical_dissipation_parameters(ion_params, electron_params, neutral_params)

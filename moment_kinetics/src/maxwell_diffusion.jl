@@ -32,20 +32,21 @@ use_maxwell_diffusion = true
 D_ii = 1.0
 diffusion_coefficient_option = "manual"
 """
-function setup_mxwl_diff_collisions_input(toml_input::AbstractDict)
-    reference_params = setup_reference_parameters(toml_input)
+function setup_mxwl_diff_collisions_input(toml_input::AbstractDict, warn_unexpected::Bool)
+    reference_params = setup_reference_parameters(toml_input, warn_unexpected)
     # get reference diffusion coefficient, made up of collision frequency and 
     # thermal speed for now. NOTE THAT THIS CONSTANT PRODUCES ERRORS. DO NOT USE
     D_ii_mxwl_diff_default = get_reference_collision_frequency_ii(reference_params)# *
                              #2 * reference_params.Tref/reference_params.mref
     D_nn_mxwl_diff_default = D_ii_mxwl_diff_default
     # read the input toml and specify a sensible default    
-    input_section = set_defaults_and_check_section!(toml_input, "maxwell_diffusion_collisions",
-       # begin default inputs (as kwargs)
-       use_maxwell_diffusion = false,
-       D_ii = -1.0,
-       D_nn = -1.0,
-       diffusion_coefficient_option = "reference_parameters")
+    input_section = set_defaults_and_check_section!(
+        toml_input, "maxwell_diffusion_collisions", warn_unexpected;
+        # begin default inputs (as kwargs)
+        use_maxwell_diffusion = false,
+        D_ii = -1.0,
+        D_nn = -1.0,
+        diffusion_coefficient_option = "reference_parameters")
        
     # ensure that the diffusion coefficient is consistent with the input option
     diffusion_coefficient_option = input_section["diffusion_coefficient_option"]

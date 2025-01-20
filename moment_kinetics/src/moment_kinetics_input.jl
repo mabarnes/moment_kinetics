@@ -53,7 +53,8 @@ false for other situations (e.g. when post-processing).
 `ignore_MPI` should be false when actually running a simulation, but defaults to true for
 other situations (e.g. when post-processing).
 """
-function mk_input(input_dict=OptionsDict(); save_inputs_to_txt=false, ignore_MPI=true)
+function mk_input(input_dict=OptionsDict(); save_inputs_to_txt=false, ignore_MPI=true,
+                  warn_unexpected=false)
 
     # Check for input options that used to exist, but do not any more. If these are
     # present, the user probably needs to update their input file.
@@ -90,14 +91,14 @@ function mk_input(input_dict=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
     end
     
     # read composition and species data
-    composition = get_species_input(input_dict)
+    composition = get_species_input(input_dict, warn_unexpected)
     n_ion_species = composition.n_ion_species
     n_neutral_species = composition.n_neutral_species
     
     # if evolve_moments.density = true, evolve density via continuity eqn
     # and g = f/n via modified drift kinetic equation
     evolve_moments_settings = set_defaults_and_check_section!(
-        input_dict, "evolve_moments";
+        input_dict, "evolve_moments", warn_unexpected;
         density=false,
         parallel_flow=false,
         parallel_pressure=false,
@@ -107,40 +108,40 @@ function mk_input(input_dict=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
 
     # Reference parameters that define the conversion between physical quantities and
     # normalised values used in the code.
-    reference_params = setup_reference_parameters(input_dict)
+    reference_params = setup_reference_parameters(input_dict, warn_unexpected)
     
     ## set geometry_input
-    geometry_in = setup_geometry_input(input_dict)
+    geometry_in = setup_geometry_input(input_dict, warn_unexpected)
     
     em_input = set_defaults_and_check_section!(
-        input_dict, em_fields_input, "em_fields"
+        input_dict, em_fields_input, warn_unexpected, "em_fields"
        )
 
-    manufactured_solns_input = setup_manufactured_solutions(input_dict)
+    manufactured_solns_input = setup_manufactured_solutions(input_dict, warn_unexpected)
 
     reactions_input = set_defaults_and_check_section!(
-        input_dict, reactions
+        input_dict, reactions, warn_unexpected
        )
     electron_fluid_collisions_input = set_defaults_and_check_section!(
-        input_dict, electron_fluid_collisions
+        input_dict, electron_fluid_collisions, warn_unexpected
        )
     # set up krook collision inputs
-    krook_input = setup_krook_collisions_input(input_dict)
+    krook_input = setup_krook_collisions_input(input_dict, warn_unexpected)
     # set up Fokker-Planck collision inputs
-    fkpl_input = setup_fkpl_collisions_input(input_dict)
+    fkpl_input = setup_fkpl_collisions_input(input_dict, warn_unexpected)
     # set up maxwell diffusion collision inputs
-    mxwl_diff_input = setup_mxwl_diff_collisions_input(input_dict)
+    mxwl_diff_input = setup_mxwl_diff_collisions_input(input_dict, warn_unexpected)
     # write total collision struct using the structs above, as each setup function 
     # for the collisions outputs itself a struct of the type of collision, which
     # is a substruct of the overall collisions_input struct.
     collisions = collisions_input(reactions_input, electron_fluid_collisions_input,
                                   krook_input, fkpl_input, mxwl_diff_input)
 
-    num_diss_params = setup_numerical_dissipation(input_dict)
+    num_diss_params = setup_numerical_dissipation(input_dict, warn_unexpected)
 
     # parameters related to the time stepping
     timestepping_section = set_defaults_and_check_section!(
-        input_dict, "timestepping";
+        input_dict, "timestepping", warn_unexpected;
         nstep=5,
         dt=0.00025/sqrt(composition.ion[1].initial_temperature),
         CFL_prefactor=-1.0,
@@ -186,7 +187,7 @@ function mk_input(input_dict=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
 
     # parameters related to electron time stepping
     electron_timestepping_section = set_defaults_and_check_section!(
-        input_dict, "electron_timestepping";
+        input_dict, "electron_timestepping", warn_unexpected;
         nstep=50000,
         dt=timestepping_section["dt"] * sqrt(composition.me_over_mi),
         CFL_prefactor=timestepping_section["CFL_prefactor"],
@@ -314,8 +315,10 @@ function mk_input(input_dict=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
     # set up distributed-memory MPI information for z and r coords
     # need grid and MPI information to determine these values 
     # MRH just put dummy values now 
-    r_coord_input = get_coordinate_input(input_dict, "r"; ignore_MPI=ignore_MPI)
-    z_coord_input = get_coordinate_input(input_dict, "z"; ignore_MPI=ignore_MPI)
+    r_coord_input = get_coordinate_input(input_dict, "r"; ignore_MPI=ignore_MPI,
+                                         warn_unexpected=warn_unexpected)
+    z_coord_input = get_coordinate_input(input_dict, "z"; ignore_MPI=ignore_MPI,
+                                         warn_unexpected=warn_unexpected)
     if ignore_MPI
         irank_z = irank_r = 0
         nrank_z = nrank_r = 1
@@ -328,7 +331,8 @@ function mk_input(input_dict=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
                                          r_coord_input.nelement_local)
     end
 
-    io_immutable = setup_io_input(input_dict, timestepping_section; ignore_MPI=ignore_MPI)
+    io_immutable = setup_io_input(input_dict, timestepping_section, warn_unexpected;
+                                  ignore_MPI=ignore_MPI)
 
     # this is the directory where the simulation data will be stored
     timestepping_section["stopfile_name"] = joinpath(io_immutable.output_dir, "stop")
@@ -348,38 +352,40 @@ function mk_input(input_dict=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
                                       run_directory=run_directory, ignore_MPI=ignore_MPI,
                                       irank=irank_r, nrank=nrank_r, comm=comm_sub_r)
     # initialize vpa grid and write grid point locations to file
-    vpa, vpa_spectral = define_coordinate(input_dict, "vpa";
+    vpa, vpa_spectral = define_coordinate(input_dict, "vpa", warn_unexpected;
                                           parallel_io=io_immutable.parallel_io,
                                           run_directory=run_directory,
                                           ignore_MPI=ignore_MPI)
     # initialize vperp grid and write grid point locations to file
-    vperp, vperp_spectral = define_coordinate(input_dict, "vperp";
+    vperp, vperp_spectral = define_coordinate(input_dict, "vperp", warn_unexpected;
                                               parallel_io=io_immutable.parallel_io,
                                               run_directory=run_directory,
                                               ignore_MPI=ignore_MPI)
     # initialize gyrophase grid and write grid point locations to file
-    gyrophase, gyrophase_spectral = define_coordinate(input_dict, "gyrophase";
+    gyrophase, gyrophase_spectral = define_coordinate(input_dict, "gyrophase",
+                                                      warn_unexpected;
                                                       parallel_io=io_immutable.parallel_io,
                                                       run_directory=run_directory,
                                                       ignore_MPI=ignore_MPI)
     # initialize vz grid and write grid point locations to file
-    vz, vz_spectral = define_coordinate(input_dict, "vz";
+    vz, vz_spectral = define_coordinate(input_dict, "vz", warn_unexpected;
                                         parallel_io=io_immutable.parallel_io,
                                         run_directory=run_directory,
                                         ignore_MPI=ignore_MPI)
     # initialize vr grid and write grid point locations to file
-    vr, vr_spectral = define_coordinate(input_dict, "vr";
+    vr, vr_spectral = define_coordinate(input_dict, "vr", warn_unexpected;
                                         parallel_io=io_immutable.parallel_io,
                                         run_directory=run_directory,
                                         ignore_MPI=ignore_MPI)
     # initialize vr grid and write grid point locations to file
-    vzeta, vzeta_spectral = define_coordinate(input_dict, "vzeta";
+    vzeta, vzeta_spectral = define_coordinate(input_dict, "vzeta", warn_unexpected;
                                               parallel_io=io_immutable.parallel_io,
                                               run_directory=run_directory,
                                               ignore_MPI=ignore_MPI)
 
     external_source_settings = setup_external_sources!(input_dict, r, z,
-                                                       composition.electron_physics;
+                                                       composition.electron_physics,
+                                                       warn_unexpected;
                                                        ignore_MPI=ignore_MPI)
 
     geometry = init_magnetic_geometry(geometry_in,z,r)

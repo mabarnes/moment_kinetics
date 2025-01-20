@@ -84,26 +84,27 @@ Structure the namelist as follows.
     nuii = 1.0
     frequency_option = "manual"
 """
-function setup_fkpl_collisions_input(toml_input::AbstractDict)
-    reference_params = setup_reference_parameters(toml_input)
+function setup_fkpl_collisions_input(toml_input::AbstractDict, warn_unexpected::Bool)
+    reference_params = setup_reference_parameters(toml_input, warn_unexpected)
     # get reference collision frequency (note factor of 1/2 due to definition choices)
     nuii_fkpl_default = 0.5*get_reference_collision_frequency_ii(reference_params)
     # read the input toml and specify a sensible default
-    input_section = set_defaults_and_check_section!(toml_input, "fokker_planck_collisions",
-       # begin default inputs (as kwargs)
-       use_fokker_planck = false,
-       nuii = -1.0,
-       frequency_option = "reference_parameters",
-       self_collisions = true,
-       use_conserving_corrections = true,
-       boundary_data_option = direct_integration,
-       slowing_down_test = false,
-       sd_density = 1.0,
-       sd_temp = 0.01,
-       sd_q = 1.0,
-       sd_mi = 0.25,
-       sd_me = 0.25/1836.0,
-       Zi = 1.0)
+    input_section = set_defaults_and_check_section!(
+        toml_input, "fokker_planck_collisions", warn_unexpected;
+        # begin default inputs (as kwargs)
+        use_fokker_planck = false,
+        nuii = -1.0,
+        frequency_option = "reference_parameters",
+        self_collisions = true,
+        use_conserving_corrections = true,
+        boundary_data_option = direct_integration,
+        slowing_down_test = false,
+        sd_density = 1.0,
+        sd_temp = 0.01,
+        sd_q = 1.0,
+        sd_mi = 0.25,
+        sd_me = 0.25/1836.0,
+        Zi = 1.0)
     # ensure that the collision frequency is consistent with the input option
     frequency_option = input_section["frequency_option"]
     if frequency_option == "reference_parameters"

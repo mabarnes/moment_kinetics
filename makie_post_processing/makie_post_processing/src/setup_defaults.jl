@@ -100,6 +100,9 @@ end
 function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
                               new_input_dict::AbstractDict{String,Any}, run_info,
                               dfns::Bool)
+    # Error on unexpected options, so that the user can fix them.
+    warn_unexpected = false
+
     # Remove all existing entries from this_input_dict
     clear_Dict!(this_input_dict)
 
@@ -172,7 +175,7 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
     only_global_options = ("itime_min", "itime_max", "itime_skip", "itime_min_dfns",
                            "itime_max_dfns", "itime_skip_dfns", "handle_errors")
 
-    set_defaults_and_check_top_level!(this_input_dict;
+    set_defaults_and_check_top_level!(this_input_dict, warn_unexpected;
        # Options that only apply at the global level (not per-variable)
        ################################################################
        # Options that provide the defaults for per-variable settings
@@ -231,7 +234,7 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
                                       !(k ∈ only_global_options))
     for variable_name ∈ tuple(all_moment_variables..., timestep_diagnostic_variables...)
         set_defaults_and_check_section!(
-            this_input_dict, variable_name;
+            this_input_dict, variable_name, warn_unexpected;
             OrderedDict(Symbol(k)=>v for (k,v) ∈ section_defaults)...)
     end
 
@@ -245,7 +248,7 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
     animate_log_options_2d = Tuple(Symbol(:animate_log_vs_, d2, :_, d1) for (d1, d2) ∈ two_dimension_combinations_no_t)
     for variable_name ∈ all_dfn_variables
         set_defaults_and_check_section!(
-            this_input_dict, variable_name;
+            this_input_dict, variable_name, warn_unexpected;
             check_moments=false,
             (o=>false for o ∈ plot_options_1d if String(o) ∉ keys(section_defaults))...,
             (o=>false for o ∈ plot_log_options_1d if String(o) ∉ keys(section_defaults))...,
@@ -277,7 +280,7 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
     end
 
     set_defaults_and_check_section!(
-        this_input_dict, "wall_pdf";
+        this_input_dict, "wall_pdf", warn_unexpected;
         plot=false,
         animate=false,
         advection_velocity=false,
@@ -287,7 +290,7 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
        )
 
     set_defaults_and_check_section!(
-        this_input_dict, "wall_pdf_electron";
+        this_input_dict, "wall_pdf_electron", warn_unexpected;
         plot=false,
         animate=false,
         advection_velocity=false,
@@ -297,7 +300,7 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
        )
 
     set_defaults_and_check_section!(
-        this_input_dict, "wall_pdf_neutral";
+        this_input_dict, "wall_pdf_neutral", warn_unexpected;
         plot=false,
         animate=false,
         advection_velocity=false,
@@ -307,7 +310,7 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
        )
 
     set_defaults_and_check_section!(
-        this_input_dict, "constraints";
+        this_input_dict, "constraints", warn_unexpected;
         plot=false,
         animate=false,
         it0=this_input_dict["it0"],
@@ -323,7 +326,7 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
        )
 
     set_defaults_and_check_section!(
-        this_input_dict, "Chodura_condition";
+        this_input_dict, "Chodura_condition", warn_unexpected;
         plot_vs_t=false,
         plot_vs_r=false,
         plot_vs_r_t=false,
@@ -335,7 +338,7 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
        )
 
     set_defaults_and_check_section!(
-        this_input_dict, "instability2D";
+        this_input_dict, "instability2D", warn_unexpected;
         plot_1d=false,
         plot_2d=false,
         animate_perturbations=false,
@@ -344,7 +347,7 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
        )
 
     set_defaults_and_check_section!(
-        this_input_dict, "sound_wave_fit";
+        this_input_dict, "sound_wave_fit", warn_unexpected;
         calculate_frequency=false,
         plot=false,
         ir0=this_input_dict["ir0"],
@@ -352,7 +355,7 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
        )
 
     set_defaults_and_check_section!(
-        this_input_dict, "manufactured_solns";
+        this_input_dict, "manufactured_solns", warn_unexpected;
         calculate_error_norms=true,
         wall_plots=false,
         (o=>false for o ∈ plot_options_1d)...,
@@ -371,7 +374,7 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
     sort!(this_input_dict["manufactured_solns"])
 
     set_defaults_and_check_section!(
-        this_input_dict, "timestep_diagnostics";
+        this_input_dict, "timestep_diagnostics", warn_unexpected;
         plot=true,
         animate_CFL=false,
         plot_timestep_residual=false,
@@ -383,7 +386,7 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
        )
     
     set_defaults_and_check_section!(
-        this_input_dict, "collisionality_plots";
+        this_input_dict, "collisionality_plots", warn_unexpected;
         plot=true,
         plot_dT_dz_vs_z=false,
         animate_dT_dz_vs_z=false,
@@ -405,7 +408,7 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
        )
        
     set_defaults_and_check_section!(
-        this_input_dict, "timing_data";
+        this_input_dict, "timing_data", warn_unexpected;
         plot=false,
         threshold=1.0e-2,
         include_patterns=String[],

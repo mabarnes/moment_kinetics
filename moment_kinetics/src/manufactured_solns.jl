@@ -29,11 +29,11 @@ function __init__()
     end
 end
 
-function setup_manufactured_solutions(input_dict)
+function setup_manufactured_solutions(input_dict, warn_unexpected::Bool)
     use_for_init_is_default = !(("manufactured_solns" ∈ keys(input_dict)) &&
                                 ("use_for_init" ∈ keys(input_dict["manufactured_solns"])))
     manufactured_solns_section = set_defaults_and_check_section!(
-        input_dict, "manufactured_solns";
+        input_dict, "manufactured_solns", warn_unexpected;
         use_for_advance=false,
         use_for_init=false,
         # constant to be used to control Ez divergence in MMS tests

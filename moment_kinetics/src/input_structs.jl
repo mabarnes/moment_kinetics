@@ -796,7 +796,8 @@ are not already present.
 
 Ignores any sections, as these will be checked separately.
 """
-function set_defaults_and_check_top_level!(options::OptionsDict; kwargs...)
+function set_defaults_and_check_top_level!(options::OptionsDict, warn_unexpected::Bool;
+                                           kwargs...)
     # Check for any unexpected values in the options - all options that are set should be
     # present in the kwargs of this function call
     options_keys_symbols = keys(kwargs)
@@ -804,7 +805,12 @@ function set_defaults_and_check_top_level!(options::OptionsDict; kwargs...)
     for (key, value) in options
         # Ignore any ssections when checking
         if !(isa(value, AbstractDict) || key ∈ options_keys)
-            error("Unexpected option '$key=$value' in top-level options")
+            if warn_unexpected
+                println("Unexpected option '$key=$value' in top-level options")
+                pop!(options, key)
+            else
+                error("Unexpected option '$key=$value' in top-level options")
+            end
         end
     end
 
@@ -821,7 +827,7 @@ function set_defaults_and_check_top_level!(options::OptionsDict; kwargs...)
 end
 
 function _get_section_and_check_option_names(options::OptionsDict, section_name,
-                                             section_keys)
+                                             section_keys, warn_unexpected::Bool)
 
     if !(section_name ∈ keys(options))
         # If section is not present, create it
@@ -844,7 +850,14 @@ function _get_section_and_check_option_names(options::OptionsDict, section_name,
         end
     end
     if length(unexpected_options) > 0
-        error("Unexpected options $(join(("$k=$(section[k])" for k ∈ unexpected_options), ", ", ", and ")) in section '$section_name'")
+        if warn_unexpected
+            println("Unexpected options $(join(("$k=$(section[k])" for k ∈ unexpected_options), ", ", ", and ")) in section '$section_name'")
+            for key ∈ unexpected_options
+                pop!(section, key)
+            end
+        else
+            error("Unexpected options $(join(("$k=$(section[k])" for k ∈ unexpected_options), ", ", ", and ")) in section '$section_name'")
+        end
     end
 
     return section
@@ -880,11 +893,13 @@ options (i.e. options that have no default).
 Modifies the options[section_name]::OptionsDict by adding defaults for any values that
 are not already present.
 """
-function set_defaults_and_check_section!(options::OptionsDict, section_name; kwargs...)
+function set_defaults_and_check_section!(options::OptionsDict, section_name::String,
+                                         warn_unexpected::Bool; kwargs...)
 
     section_keys_symbols = keys(kwargs)
     section_keys = (String(k) for k ∈ section_keys_symbols)
-    section = _get_section_and_check_option_names(options, section_name, section_keys)
+    section = _get_section_and_check_option_names(options, section_name, section_keys,
+                                                  warn_unexpected)
 
     # Set default values if a key was not set explicitly
     for (key_sym, default_value) ∈ kwargs
@@ -920,13 +935,15 @@ The name of the section in the options that will be read defaults to the name of
 Returns an instance of `struct_type`.
 """
 function set_defaults_and_check_section!(options::OptionsDict, struct_type::Type,
+                                         warn_unexpected::Bool,
                                          section_name::Union{String,Nothing}=nothing)
 
     if section_name === nothing
         section_name = String(nameof(struct_type))
     end
     section_keys = (String(key) for key ∈ fieldnames(struct_type))
-    section = _get_section_and_check_option_names(options, section_name, section_keys)
+    section = _get_section_and_check_option_names(options, section_name, section_keys,
+                                                  warn_unexpected)
 
     # Pass the settings in `section` as kwargs to the constructor for `struct_type`.
     # `struct_type` is an `@kwdef` struct, so this constructor takes care of the default
