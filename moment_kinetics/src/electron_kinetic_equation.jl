@@ -70,7 +70,7 @@ using ..velocity_moments: integrate_over_vspace, calculate_electron_moment_deriv
 # Only needed so we can reference it in a docstring
 import ..runge_kutta
 
-const MPIQRBLOCKSIZE = 4 # 1 will be slow, 4 is about optimum, 8 may be faster or slower, 16 will be slower.
+const MPIQRBLOCKSIZE = 8 # 1 will be slow, 4 is good for smaller matrices, 8 is good for larger matrices, 16 - who knows?!
 
 const integral_correction_sharpness = 4.0
 """
