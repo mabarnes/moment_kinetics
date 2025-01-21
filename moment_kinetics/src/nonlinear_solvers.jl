@@ -224,7 +224,6 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); defa
             end
             z_solve_n = nz
             z_solve_implicit_lus = Vector{SparseArrays.UMFPACK.UmfpackLU{mk_float, mk_int}}(undef, z_solve_nsolve)
-            #z_solve_implicit_lus = Vector{Any}(undef, z_solve_nsolve)
             z_solve_explicit_matrices = Vector{SparseMatrixCSC{mk_float, mk_int}}(undef, z_solve_nsolve)
             # This buffer is not shared-memory, because it will be used for a serial LU solve.
             z_solve_buffer = allocate_float(z_solve_n)
