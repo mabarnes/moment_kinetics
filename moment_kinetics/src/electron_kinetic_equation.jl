@@ -70,9 +70,10 @@ using ..velocity_moments: integrate_over_vspace, calculate_electron_moment_deriv
 # Only needed so we can reference it in a docstring
 import ..runge_kutta
 
-const MPIQRBLOCKSIZE = 8 # 1 will be slow, 4 is good for smaller matrices, 8 is good for larger matrices, 16 - who knows?!
-
 const integral_correction_sharpness = 4.0
+
+const mpiqr_blocksize = 8 # 1 will be slow, 4 is good for smaller matrices, 8 is good for larger matrices, 16 - who knows?!
+
 """
 update_electron_pdf is a function that uses the electron kinetic equation 
 to solve for the updated electron pdf
@@ -1236,13 +1237,13 @@ pressure \$p_{e∥}\$.
             _block_synchronize()
             if block_rank[] >= 0 # == 0
                 localcols = MPIQR.localcolumns(block_rank[], size(precon_matrix, 2),
-                                               MPIQRBLOCKSIZE, block_size[])
+                                               mpiqr_blocksize, block_size[])
                 if size(orig_lu, 1) == 1
                     # Have not properly created the LU decomposition before, so
                     # cannot reuse it.
                     @timeit_debug global_timer "lu" begin
                         mpiqrmatrix = MPIQR.MPIQRMatrix(precon_matrix[:, localcols],
-                          size(precon_matrix); blocksize=MPIQRBLOCKSIZE, comm=comm_block[])
+                          size(precon_matrix); blocksize=mpiqr_blocksize, comm=comm_block[])
                         mpiqrstruct = qr!(mpiqrmatrix)
                         nl_solver_params.preconditioners[ir] =
                           (mpiqrstruct, precon_matrix, input_buffer, output_buffer)
@@ -1263,7 +1264,7 @@ pressure \$p_{e∥}\$.
                         println("Sparsity pattern of matrix changed, rebuilding "
                                 * " LU from scratch")
                         mpiqrmatrix = MPIQR.MPIQRMatrix(precon_matrix[:, localcols],
-                          size(precon_matrix); blocksize=MPIQRBLOCKSIZE, comm=comm_block[])
+                          size(precon_matrix); blocksize=mpiqr_blocksize, comm=comm_block[])
                         @timeit_debug global_timer "lu" orig_lu = qr!(mpiqrmatrix)
                     end
                     nl_solver_params.preconditioners[ir] =
@@ -1959,13 +1960,13 @@ to allow the outer r-loop to be parallelised.
                 _block_synchronize()
                 if block_rank[] >= 0 # >= 0
                     localcols = MPIQR.localcols(block_rank[], size(precon_matrix, 2),
-                                                MPIQRBLOCKSIZE, block_size[])
+                                                mpiqr_blocksize, block_size[])
                     if size(orig_lu, 1) == 1
                         # Have not properly created the LU decomposition before, so
                         # cannot reuse it.
                         @timeit_debug global_timer "lu" begin
                             mpiqrmatrix = MPIQR.MPIQRMatrix((precon_matrix[:, localcols]), size(precon_matrix);
-                              blocksize=MPIQRBLOCKSIZE, comm=comm_block[])
+                              blocksize=mpiqr_blocksize, comm=comm_block[])
                             mpiqrstruct = qr!(mpiqrmatrix)
                             nl_solver_params.preconditioners[ir] =
                             (mpiqrstruct, precon_matrix, input_buffer, output_buffer)
@@ -1986,7 +1987,7 @@ to allow the outer r-loop to be parallelised.
                             println("Sparsity pattern of matrix changed, rebuilding "
                                     * " LU from scratch")
                             mpiqrmatrix = MPIQR.MPIQRMatrix(precon_matrix[:, localcols], size(precon_matrix);
-                              blocksize=MPIQRBLOCKSIZE, comm=comm_block[])
+                              blocksize=mpiqr_blocksize, comm=comm_block[])
                             @timeit_debug global_timer "lu" orig_lu = qr!(mpiqrmatrix)
                         end
                         nl_solver_params.preconditioners[ir] =
