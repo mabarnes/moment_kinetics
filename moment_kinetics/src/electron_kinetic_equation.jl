@@ -1234,8 +1234,7 @@ pressure \$p_{e∥}\$.
                 external_source_settings, num_diss_params, t_params, ion_dt,
                 ir, evolve_ppar)
 
-            _block_synchronize()
-            if block_rank[] >= 0 # == 0
+            if block_rank[] >= 0
                 localcols = MPIQR.localcolumns(block_rank[], size(precon_matrix, 2),
                                                mpiqr_blocksize, block_size[])
                 if size(orig_lu, 1) == 1
@@ -1274,7 +1273,6 @@ pressure \$p_{e∥}\$.
                 nl_solver_params.preconditioners[ir] =
                     (orig_lu, precon_matrix, input_buffer, output_buffer)
             end
-            _block_synchronize()
         end
 
 
@@ -1295,7 +1293,6 @@ pressure \$p_{e∥}\$.
                 counter += 1
             end
 
-            _block_synchronize()
             @timeit_debug global_timer "ldiv!" MPIQR.ldiv!(this_output_buffer, precon_lu, this_input_buffer)
 
             begin_serial_region()
@@ -1957,8 +1954,7 @@ to allow the outer r-loop to be parallelised.
                     z_advect, vpa_advect, scratch_dummy, external_source_settings,
                     num_diss_params, t_params, ion_dt, ir, true, :all, true, false)
 
-                _block_synchronize()
-                if block_rank[] >= 0 # >= 0
+                if block_rank[] >= 0
                     localcols = MPIQR.localcols(block_rank[], size(precon_matrix, 2),
                                                 mpiqr_blocksize, block_size[])
                     if size(orig_lu, 1) == 1
@@ -1997,7 +1993,6 @@ to allow the outer r-loop to be parallelised.
                     nl_solver_params.preconditioners[ir] =
                         (orig_lu, precon_matrix, input_buffer, output_buffer)
                 end
-                _block_synchronize()
 
                 return nothing
             end
@@ -2032,7 +2027,6 @@ to allow the outer r-loop to be parallelised.
                     counter += 1
                 end
 
-                _block_synchronize()
                 @timeit_debug global_timer "ldiv!" MPIQR.ldiv!(this_output_buffer, precon_lu, this_input_buffer)
 
                 begin_serial_region()
