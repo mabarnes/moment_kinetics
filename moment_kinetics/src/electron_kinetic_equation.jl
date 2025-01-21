@@ -1219,6 +1219,7 @@ pressure \$p_{e∥}\$.
         end
 
         if nl_solver_params.solves_since_precon_update[] ≥ nl_solver_params.preconditioner_update_interval
+            global_rank[] == 0 && println("recalculating precon :electron_lu 1")
             nl_solver_params.solves_since_precon_update[] = 0
             nl_solver_params.precon_dt[] = t_params.dt[]
 
@@ -1349,6 +1350,7 @@ pressure \$p_{e∥}\$.
         left_preconditioner = identity
         right_preconditioner = lu_precon!
     elseif nl_solver_params.preconditioner_type === Val(:electron_adi)
+        global_rank[] == 0 && println("recalculating precon :electron_adi")
 
         if t_params.dt[] > 1.5 * nl_solver_params.precon_dt[] ||
                 t_params.dt[] < 2.0/3.0 * nl_solver_params.precon_dt[]
@@ -1941,6 +1943,7 @@ to allow the outer r-loop to be parallelised.
 
         function recalculate_preconditioner!()
             if nl_solver_params.preconditioner_type === Val(:electron_lu)
+                global_rank[] == 0 && println("recalculating precon :electron_lu 2")
                 nl_solver_params.solves_since_precon_update[] = 0
                 nl_solver_params.precon_dt[] = ion_dt
 
