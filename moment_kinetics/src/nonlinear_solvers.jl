@@ -39,9 +39,9 @@ using ..type_definitions: mk_float, mk_int
 
 using LinearAlgebra
 using MPI
+using MPIQR
 using SparseArrays
 using StatsBase: mean
-using MPIQR
 
 struct nl_solver_info{TH,TV,Tcsg,Tlig,Tprecon,Tpretype}
     rtol::mk_float
