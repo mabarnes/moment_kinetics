@@ -1236,7 +1236,7 @@ pressure \$p_{e∥}\$.
             _block_synchronize()
             if block_rank[] >= 0 # == 0
                 localcols = MPIQR.localcolumns(block_rank[], size(precon_matrix, 2),
-                                               MPIQRBLOCKSIZE, block_size[])#1:size(precon_matrix, 2)#
+                                               MPIQRBLOCKSIZE, block_size[])
                 if size(orig_lu, 1) == 1
                     # Have not properly created the LU decomposition before, so
                     # cannot reuse it.
