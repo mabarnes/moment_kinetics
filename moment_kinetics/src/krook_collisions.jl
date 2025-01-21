@@ -22,20 +22,21 @@ use_krook = true
 nuii0 = 1.0
 frequency_option = "manual"
 """
-function setup_krook_collisions_input(toml_input::AbstractDict)
-    reference_params = setup_reference_parameters(toml_input)
+function setup_krook_collisions_input(toml_input::AbstractDict, warn_unexpected::Bool)
+    reference_params = setup_reference_parameters(toml_input, warn_unexpected)
     # get reference collision frequency
     nuii_krook_default = get_reference_collision_frequency_ii(reference_params)
     nuee_krook_default = get_reference_collision_frequency_ee(reference_params)
     nuei_krook_default = get_reference_collision_frequency_ei(reference_params)
     # read the input toml and specify a sensible default    
-    input_section = input_section = set_defaults_and_check_section!(toml_input, "krook_collisions",
-       # begin default inputs (as kwargs)
-       use_krook = false,
-       nuii0 = -1.0,
-       nuee0 = -1.0,
-       nuei0 = -1.0,
-       frequency_option = "reference_parameters")
+    input_section = input_section = set_defaults_and_check_section!(
+        toml_input, "krook_collisions", warn_unexpected;
+        # begin default inputs (as kwargs)
+        use_krook = false,
+        nuii0 = -1.0,
+        nuee0 = -1.0,
+        nuei0 = -1.0,
+        frequency_option = "reference_parameters")
        
     # ensure that the collision frequency is consistent with the input option
     frequency_option = input_section["frequency_option"]

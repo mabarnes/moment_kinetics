@@ -83,12 +83,13 @@ DeltaB = 0.0
 option = ""
 
 """
-function setup_geometry_input(toml_input::AbstractDict)
+function setup_geometry_input(toml_input::AbstractDict, warn_unexpected::Bool)
 
-    reference_params = setup_reference_parameters(toml_input)
+    reference_params = setup_reference_parameters(toml_input, warn_unexpected)
     reference_rhostar = get_default_rhostar(reference_params)
     # read the input toml and specify a sensible default
-    input_section = set_defaults_and_check_section!(toml_input, "geometry",
+    input_section = set_defaults_and_check_section!(
+        toml_input, "geometry", warn_unexpected;
         # begin default inputs (as kwargs)
         # rhostar ion (ref)
         rhostar = reference_rhostar, #used to premultiply ExB drift terms

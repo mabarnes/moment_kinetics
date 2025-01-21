@@ -88,9 +88,10 @@ for example a preconditioner object for each point in that outer loop.
 """
 function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); default_rtol=1.0e-5,
                                default_atol=1.0e-12, serial_solve=false,
-                               electron_ppar_pdf_solve=false, preconditioner_type=Val(:none))
+                               electron_ppar_pdf_solve=false,
+                               preconditioner_type=Val(:none), warn_unexpected=false)
     nl_solver_section = set_defaults_and_check_section!(
-        input_dict, "nonlinear_solver";
+        input_dict, "nonlinear_solver", warn_unexpected;
         rtol=default_rtol,
         atol=default_atol,
         nonlinear_max_iterations=20,

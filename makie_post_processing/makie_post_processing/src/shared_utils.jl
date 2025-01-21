@@ -7,7 +7,7 @@ using moment_kinetics.array_allocation: allocate_float
 using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.input_structs: boltzmann_electron_response,
                                      boltzmann_electron_response_with_simple_sheath,
-                                     geometry_input, species_composition
+                                     geometry_input
 using moment_kinetics.type_definitions: mk_float, mk_int
 using moment_kinetics.reference_parameters: setup_reference_parameters
 using moment_kinetics.geo: init_magnetic_geometry, setup_geometry_input
