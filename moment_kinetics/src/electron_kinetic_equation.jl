@@ -2,8 +2,8 @@ module electron_kinetic_equation
 
 using LinearAlgebra
 using MPI
-using SparseArrays
 using MPIQR
+using SparseArrays
 
 export get_electron_critical_velocities
 
