@@ -1293,7 +1293,8 @@ pressure \$p_{e∥}\$.
                 counter += 1
             end
 
-            @timeit_debug global_timer "ldiv!" MPIQR.ldiv!(this_output_buffer, precon_lu, this_input_buffer)
+            this_output_buffer .= this_input_buffer
+            @timeit_debug global_timer "ldiv!" MPIQR.ldiv!(precon_lu, this_output_buffer)
 
             begin_serial_region()
             counter = 1
@@ -2027,7 +2028,8 @@ to allow the outer r-loop to be parallelised.
                     counter += 1
                 end
 
-                @timeit_debug global_timer "ldiv!" MPIQR.ldiv!(this_output_buffer, precon_lu, this_input_buffer)
+                this_output_buffer .= this_input_buffer
+                @timeit_debug global_timer "ldiv!" MPIQR.ldiv!(precon_lu, this_output_buffer)
 
                 begin_serial_region()
                 counter = 1
