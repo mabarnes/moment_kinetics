@@ -363,9 +363,9 @@ end
 
 """
 """
-struct moments_struct
-    ion::moments_ion_substruct
-    electron::moments_electron_substruct
+struct moments_struct{ndim_moment_wall, ndim_moment_electron_source}
+    ion::moments_ion_substruct{ndim_moment_wall}
+    electron::moments_electron_substruct{ndim_moment_electron_source}
     neutral::moments_neutral_substruct
     # flag that indicates if the density should be evolved via continuity equation
     evolve_density::Bool

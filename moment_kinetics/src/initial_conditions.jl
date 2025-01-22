@@ -610,7 +610,7 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
             # Broadcast code_time and pdf_electron_converged from the root process of each
             # shared-memory block (on which it might have been loaded from a restart
             # file).
-            code_time = MPI.Bcast(code_time, 0, comm_block[])
+            code_time = MPI.Bcast(code_time, 0, comm_block[])::mk_float
             pdf_electron_converged = MPI.Bcast(pdf_electron_converged, 0, comm_block[])
 
             if pdf_electron_converged
