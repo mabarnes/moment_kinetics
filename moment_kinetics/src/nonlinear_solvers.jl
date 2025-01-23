@@ -39,7 +39,7 @@ using ..type_definitions: mk_float, mk_int
 
 using LinearAlgebra
 using MPI
-using MPIQR
+using MUMPS
 using SparseArrays
 using StatsBase: mean
 
@@ -167,25 +167,25 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); defa
             V .= 0.0
         end
     end
-    mpiqr = MPIQR.MPIQRMatrix(zeros(Float64, 1, 1), (1, block_size[]);
-                              blocksize=1, comm=comm_block[])
-    mpiqrstruct = MPIQR.MPIQRStruct(mpiqr)
+
+    mumps = Mumps{mk_float}(mumps_unsymmetric, default_icntl, default_cntl64;
+                            comm=MPI.API.MPI_Comm_f2c(comm_block[].val))
     if preconditioner_type === Val(:lu)
         # Create dummy LU solver objects so we can create an array for preconditioners.
         # These will be calculated properly within the time loop.
-        preconditioners = fill(mpiqrstruct,
+        preconditioners = fill(mumps,
                                reverse(outer_coord_sizes))
     elseif preconditioner_type === Val(:electron_split_lu)
-        preconditioners = (z=fill(mpiqrstruct,
+        preconditioners = (z=fill(mumps,
                                   tuple(coords.vpa.n, reverse(outer_coord_sizes)...)),
                            vpa=fill(mpqirstruct,
                                     tuple(coords.z.n, reverse(outer_coord_sizes)...)),
-                           ppar=fill(mpiqrstruct,
+                           ppar=fill(mumps,
                                      reverse(outer_coord_sizes)),
                           )
     elseif preconditioner_type === Val(:electron_lu)
         pdf_plus_ppar_size = total_size_coords + coords.z.n
-        preconditioners = fill((mpiqrstruct,
+        preconditioners = fill((mumps,
                                 allocate_shared_float(pdf_plus_ppar_size, pdf_plus_ppar_size),
                                 allocate_shared_float(pdf_plus_ppar_size),
                                 allocate_shared_float(pdf_plus_ppar_size),

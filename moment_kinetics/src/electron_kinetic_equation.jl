@@ -2,7 +2,7 @@ module electron_kinetic_equation
 
 using LinearAlgebra
 using MPI
-using MPIQR
+using MUMPS
 using SparseArrays
 
 export get_electron_critical_velocities
@@ -71,8 +71,6 @@ using ..velocity_moments: integrate_over_vspace, calculate_electron_moment_deriv
 import ..runge_kutta
 
 const integral_correction_sharpness = 4.0
-
-const mpiqr_blocksize = 8 # 1 will be slow, 4 is good for smaller matrices, 8 is good for larger matrices, 16 - who knows?!
 
 """
 update_electron_pdf is a function that uses the electron kinetic equation 
@@ -1233,19 +1231,19 @@ pressure \$p_{e∥}\$.
                 vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
                 external_source_settings, num_diss_params, t_params, ion_dt,
                 ir, evolve_ppar)
-
+            mumps = Mumps{mk_float}(mumps_unsymmetric, default_icntl, default_cntl64;
+                                    comm=MPI.API.MPI_Comm_f2c(comm_block[].val))
             if block_rank[] >= 0
-                localcols = MPIQR.localcolumns(block_rank[], size(precon_matrix, 2),
-                                               mpiqr_blocksize, block_size[])
-                if size(orig_lu, 1) == 1
+                if orig_lu.n == 0#size(orig_lu, 1) == 1
                     # Have not properly created the LU decomposition before, so
                     # cannot reuse it.
                     @timeit_debug global_timer "lu" begin
-                        mpiqrmatrix = MPIQR.MPIQRMatrix(precon_matrix[:, localcols],
-                          size(precon_matrix); blocksize=mpiqr_blocksize, comm=comm_block[])
-                        mpiqrstruct = qr!(mpiqrmatrix)
+                        if block_rank[] == 0
+                          MUMPS.associate_matrix!(mumps, sparse(precon_matrix))
+                        end
+                        MUMPS.factorize!(mumps)
                         nl_solver_params.preconditioners[ir] =
-                          (mpiqrstruct, precon_matrix, input_buffer, output_buffer)
+                          (mumps, precon_matrix, input_buffer, output_buffer)
                     end
                 else
                     # LU decomposition was previously created. The Jacobian always
@@ -1253,8 +1251,10 @@ pressure \$p_{e∥}\$.
                     # reuse some setup.
                     try
                         @timeit_debug global_timer "lu!" begin
-                          orig_lu[:, localcols] .= precon_matrix[:, localcols]
-                          qr!(orig_lu)
+                          if block_rank[] == 0
+                            MUMPS.associate_matrix!(orig_lu, sparse(precon_matrix))
+                          end
+                          MUMPS.factorize!(orig_lu)
                         end
                     catch e
                         if !isa(e, ArgumentError)
@@ -1262,9 +1262,15 @@ pressure \$p_{e∥}\$.
                         end
                         println("Sparsity pattern of matrix changed, rebuilding "
                                 * " LU from scratch")
-                        mpiqrmatrix = MPIQR.MPIQRMatrix(precon_matrix[:, localcols],
-                          size(precon_matrix); blocksize=mpiqr_blocksize, comm=comm_block[])
-                        @timeit_debug global_timer "lu" orig_lu = qr!(mpiqrmatrix)
+                        @timeit_debug global_timer "lu" begin
+                          if block_rank[] == 0
+                            MUMPS.associate_matrix!(mumps, sparse(precon_matrix))
+                          end
+                          MUMPS.factorize!(mumps)
+                          nl_solver_params.preconditioners[ir] =
+                            (mumps, precon_matrix, input_buffer, output_buffer)
+                        end
+
                     end
                     nl_solver_params.preconditioners[ir] =
                         (orig_lu, precon_matrix, input_buffer, output_buffer)
@@ -1294,7 +1300,10 @@ pressure \$p_{e∥}\$.
             end
 
             this_output_buffer .= this_input_buffer
-            @timeit_debug global_timer "ldiv!" MPIQR.ldiv!(precon_lu, this_output_buffer)
+            if block_rank[] == 0
+              MUMPS.associate_rhs!(precon_lu, this_output_buffer)
+            end
+            @timeit_debug global_timer "ldiv!" MUMPS.solve!(precon_lu)
 
             begin_serial_region()
             counter = 1
@@ -1955,18 +1964,19 @@ to allow the outer r-loop to be parallelised.
                     z_advect, vpa_advect, scratch_dummy, external_source_settings,
                     num_diss_params, t_params, ion_dt, ir, true, :all, true, false)
 
+            mumps = Mumps{mk_float}(mumps_unsymmetric, default_icntl, default_cntl64;
+                                    comm=MPI.API.MPI_Comm_f2c(comm_block[].val))
                 if block_rank[] >= 0
-                    localcols = MPIQR.localcols(block_rank[], size(precon_matrix, 2),
-                                                mpiqr_blocksize, block_size[])
-                    if size(orig_lu, 1) == 1
+                    if orig_lu.n == 0#size(orig_lu, 1) == 1
                         # Have not properly created the LU decomposition before, so
                         # cannot reuse it.
                         @timeit_debug global_timer "lu" begin
-                            mpiqrmatrix = MPIQR.MPIQRMatrix((precon_matrix[:, localcols]), size(precon_matrix);
-                              blocksize=mpiqr_blocksize, comm=comm_block[])
-                            mpiqrstruct = qr!(mpiqrmatrix)
-                            nl_solver_params.preconditioners[ir] =
-                            (mpiqrstruct, precon_matrix, input_buffer, output_buffer)
+                          if block_rank[] == 0
+                            MUMPS.associate_matrix!(mumps, sparse(precon_matrix))
+                          end
+                          MUMPS.factorize!(mumps)
+                          nl_solver_params.preconditioners[ir] =
+                            (mumps, precon_matrix, input_buffer, output_buffer)
                         end
                     else
                         # LU decomposition was previously created. The Jacobian always
@@ -1974,8 +1984,12 @@ to allow the outer r-loop to be parallelised.
                         # reuse some setup.
                         try
                             @timeit_debug global_timer "lu!" begin
-                              orig_lu[:, localcols] .= precon_matrix[:, localcols]
-                              qr!(orig_lu)
+                              if block_rank[] == 0
+                                MUMPS.associate_matrix!(orig_lu, sparse(precon_matrix))
+                              end
+                              MUMPS.factorize!(orig_lu)
+                              nl_solver_params.preconditioners[ir] =
+                                (orig_lu, precon_matrix, input_buffer, output_buffer)
                             end
                         catch e
                             if !isa(e, ArgumentError)
@@ -1983,9 +1997,12 @@ to allow the outer r-loop to be parallelised.
                             end
                             println("Sparsity pattern of matrix changed, rebuilding "
                                     * " LU from scratch")
-                            mpiqrmatrix = MPIQR.MPIQRMatrix(precon_matrix[:, localcols], size(precon_matrix);
-                              blocksize=mpiqr_blocksize, comm=comm_block[])
-                            @timeit_debug global_timer "lu" orig_lu = qr!(mpiqrmatrix)
+                            if block_rank[] == 0
+                              MUMPS.associate_matrix!(orig_lu, sparse(precon_matrix))
+                            end
+                            @timeit_debug global_timer "lu" MUMPS.factorize!(orig_lu)
+                            nl_solver_params.preconditioners[ir] =
+                              (orig_lu, precon_matrix, input_buffer, output_buffer)
                         end
                         nl_solver_params.preconditioners[ir] =
                             (orig_lu, precon_matrix, input_buffer, output_buffer)
@@ -2028,8 +2045,11 @@ to allow the outer r-loop to be parallelised.
                     counter += 1
                 end
 
-                this_output_buffer .= this_input_buffer
-                @timeit_debug global_timer "ldiv!" MPIQR.ldiv!(precon_lu, this_output_buffer)
+            this_output_buffer .= this_input_buffer
+            if block_rank[] == 0
+              MUMPS.associate_rhs!(precon_lu, this_output_buffer)
+            end
+            @timeit_debug global_timer "ldiv!" MUMPS.solve!(precon_lu)
 
                 begin_serial_region()
                 counter = 1
