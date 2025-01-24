@@ -1231,8 +1231,10 @@ pressure \$p_{e∥}\$.
                 vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
                 external_source_settings, num_diss_params, t_params, ion_dt,
                 ir, evolve_ppar)
-            mumps = Mumps{mk_float}(mumps_unsymmetric, default_icntl, default_cntl64;
+            mumps = Mumps{mk_float}(mumps_unsymmetric, get_icntl(), default_cntl64;
                                     comm=MPI.API.MPI_Comm_f2c(comm_block[].val))
+            begin_serial_region()
+            _block_synchronize()
             if block_rank[] >= 0
                 if orig_lu.n == 0#size(orig_lu, 1) == 1
                     # Have not properly created the LU decomposition before, so
@@ -1299,11 +1301,15 @@ pressure \$p_{e∥}\$.
                 counter += 1
             end
 
+                begin_serial_region()
             this_output_buffer .= this_input_buffer
             if block_rank[] == 0
               MUMPS.associate_rhs!(precon_lu, this_output_buffer)
             end
+
+            _block_synchronize()
             @timeit_debug global_timer "ldiv!" MUMPS.solve!(precon_lu)
+            _block_synchronize()
 
             begin_serial_region()
             counter = 1
@@ -1964,8 +1970,10 @@ to allow the outer r-loop to be parallelised.
                     z_advect, vpa_advect, scratch_dummy, external_source_settings,
                     num_diss_params, t_params, ion_dt, ir, true, :all, true, false)
 
-            mumps = Mumps{mk_float}(mumps_unsymmetric, default_icntl, default_cntl64;
+            mumps = Mumps{mk_float}(mumps_unsymmetric, get_icntl(), default_cntl64;
                                     comm=MPI.API.MPI_Comm_f2c(comm_block[].val))
+                begin_serial_region()
+                _block_synchronize()
                 if block_rank[] >= 0
                     if orig_lu.n == 0#size(orig_lu, 1) == 1
                         # Have not properly created the LU decomposition before, so
@@ -2045,11 +2053,14 @@ to allow the outer r-loop to be parallelised.
                     counter += 1
                 end
 
+                begin_serial_region()
             this_output_buffer .= this_input_buffer
             if block_rank[] == 0
               MUMPS.associate_rhs!(precon_lu, this_output_buffer)
             end
+            _block_synchronize()
             @timeit_debug global_timer "ldiv!" MUMPS.solve!(precon_lu)
+            _block_synchronize()
 
                 begin_serial_region()
                 counter = 1
