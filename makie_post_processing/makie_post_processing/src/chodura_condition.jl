@@ -1,3 +1,5 @@
+using moment_kinetics.analysis: check_Chodura_condition
+
 """
     Chodura_condition_plots(run_info::Tuple; plot_prefix)
     Chodura_condition_plots(run_info; plot_prefix=nothing, axes=nothing)
