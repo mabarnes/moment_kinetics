@@ -118,7 +118,7 @@ sed -e "s|NODES|$NODES|" -e "s|RUNTIME|$RUNTIME|" -e "s|ACCOUNT|$ACCOUNT|" -e "s
 
 if [[ "$WARN_OLD_SYSIMAGE" -eq 0 ]]; then
   # Check that source code has not been changed since moment_kinetics.so was created
-  bin/julia --project -O3 --check-bounds=no moment_kinetics/src/check_so_newer_than_code.jl moment_kinetics.so
+  bin/julia --project -O3 moment_kinetics/src/check_so_newer_than_code.jl moment_kinetics.so
 fi
 
 if [[ $SUBMIT -eq 0 ]]; then
