@@ -363,10 +363,10 @@ function enforce_neutral_z_boundary_condition!(pdf, density, uz, pz, moments, de
                 @loop_r ir begin
                     prefactor = density_offset
                     if moments.evolve_density
-                        density_offset /= density[1,ir,isn]
+                        prefactor /= density[1,ir,isn]
                     end
                     if moments.evolve_ppar
-                        density_offset *= moments.neutral.vth[1,ir,isn]
+                        prefactor *= moments.neutral.vth[1,ir,isn]
                     end
                     @loop_vzeta_vr_vz ivzeta ivr ivz begin
                         if speed[1,ivz,ivr,ivzeta,ir] > 0.0
@@ -383,10 +383,10 @@ function enforce_neutral_z_boundary_condition!(pdf, density, uz, pz, moments, de
                 @loop_r ir begin
                     prefactor = density_offset
                     if moments.evolve_density
-                        density_offset /= density[end,ir,isn]
+                        prefactor /= density[end,ir,isn]
                     end
                     if moments.evolve_ppar
-                        density_offset *= moments.neutral.vth[end,ir,isn]
+                        prefactor *= moments.neutral.vth[end,ir,isn]
                     end
                     @loop_vzeta_vr_vz ivzeta ivr ivz begin
                         if speed[end,ivz,ivr,ivzeta,ir] > 0.0
