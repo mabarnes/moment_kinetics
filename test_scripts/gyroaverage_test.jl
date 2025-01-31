@@ -242,7 +242,7 @@ function create_test_composition()
                                "mn_over_mi" => mn_over_mi, "me_over_mi" => me_over_mi,
                                "recycling_fraction" => recycling_fraction,
                                "ion_physics" => ion_physics)
-    return get_species_input(OptionsDict("composition" => species_opts))
+    return get_species_input(OptionsDict("composition" => species_opts), false)
 end
 
 function fill_test_arrays!(phi,gphi,vperp,z,r,geometry,kz,kr,phasez,phaser)
