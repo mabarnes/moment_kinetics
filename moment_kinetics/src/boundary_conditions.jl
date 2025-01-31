@@ -363,10 +363,10 @@ function enforce_neutral_z_boundary_condition!(pdf, density, uz, pz, moments, de
                 @loop_r ir begin
                     prefactor = density_offset
                     if moments.evolve_density
-                        density_offset /= density[1,ir,isn]
+                        prefactor /= density[1,ir,isn]
                     end
                     if moments.evolve_ppar
-                        density_offset *= moments.neutral.vth[1,ir,isn]
+                        prefactor *= moments.neutral.vth[1,ir,isn]
                     end
                     @loop_vzeta_vr_vz ivzeta ivr ivz begin
                         if speed[1,ivz,ivr,ivzeta,ir] > 0.0
@@ -383,10 +383,10 @@ function enforce_neutral_z_boundary_condition!(pdf, density, uz, pz, moments, de
                 @loop_r ir begin
                     prefactor = density_offset
                     if moments.evolve_density
-                        density_offset /= density[end,ir,isn]
+                        prefactor /= density[end,ir,isn]
                     end
                     if moments.evolve_ppar
-                        density_offset *= moments.neutral.vth[end,ir,isn]
+                        prefactor *= moments.neutral.vth[end,ir,isn]
                     end
                     @loop_vzeta_vr_vz ivzeta ivr ivz begin
                         if speed[end,ivz,ivr,ivzeta,ir] > 0.0
@@ -435,7 +435,7 @@ function enforce_neutral_z_boundary_condition!(pdf, density, uz, pz, moments, de
                     pdf[:,:,:,:,ir,isn], z, vzeta, vr, vz, pz[:,ir,isn], uz[:,ir,isn],
                     density[:,ir,isn], ion_flux_0, ion_flux_L, boundary_distributions,
                     vtfac, composition.recycling_fraction, moments.evolve_ppar,
-                    moments.evolve_upar, moments.evolve_density, zero)
+                    moments.evolve_upar, moments.evolve_density, zero, buffer1)
             end
         end
     end
@@ -636,12 +636,13 @@ i.e., the incoming flux of neutrals equals the sum of the ion/neutral outgoing f
 function enforce_neutral_wall_bc!(pdf, z, vzeta, vr, vz, pz, uz, density, wall_flux_0,
                                   wall_flux_L, boundary_distributions, vtfac,
                                   recycling_fraction, evolve_ppar, evolve_upar,
-                                  evolve_density, zero)
+                                  evolve_density, zero, buffer_vzvrvzetarsn)
 
     # Reduce the ion flux by `recycling_fraction` to account for ions absorbed by the
     # wall.
     wall_flux_0 *= recycling_fraction
     wall_flux_L *= recycling_fraction
+    pdf_buffer = @view buffer_vzvrvzetarsn[:,:,:,1,1]
 
     if !evolve_density && !evolve_upar
         knudsen_cosine = boundary_distributions.knudsen
@@ -651,7 +652,8 @@ function enforce_neutral_wall_bc!(pdf, z, vzeta, vr, vz, pz, uz, density, wall_f
 
             # add the neutral species's contribution to the combined ion/neutral particle
             # flux out of the domain at z=-Lz/2
-            @views wall_flux_0 += integrate_over_negative_vz(abs.(vz.grid) .* pdf[:,:,:,1], vz.grid, vz.wgts, vz.scratch, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
+            @views @. pdf_buffer = abs(vz.grid) * pdf[:,:,:,1]
+            wall_flux_0 += integrate_over_negative_vz(pdf_buffer, vz.grid, vz.wgts, vz.scratch, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
 
             # for left boundary in zed (z = -Lz/2), want
             # f_n(z=-Lz/2, v_parallel > 0) = Γ_0 * f_KW(v_parallel)
@@ -667,7 +669,8 @@ function enforce_neutral_wall_bc!(pdf, z, vzeta, vr, vz, pz, uz, density, wall_f
 
             # add the neutral species's contribution to the combined ion/neutral particle
             # flux out of the domain at z=-Lz/2
-            @views wall_flux_L += integrate_over_positive_vz(abs.(vz.grid) .* pdf[:,:,:,end], vz.grid, vz.wgts, vz.scratch, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
+            @views @. pdf_buffer = abs(vz.grid) * pdf[:,:,:,end]
+            wall_flux_L += integrate_over_positive_vz(pdf_buffer, vz.grid, vz.wgts, vz.scratch, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
 
             # for right boundary in zed (z = Lz/2), want
             # f_n(z=Lz/2, v_parallel < 0) = Γ_Lz * f_KW(v_parallel)
@@ -687,7 +690,8 @@ function enforce_neutral_wall_bc!(pdf, z, vzeta, vr, vz, pz, uz, density, wall_f
             # Note the numerical integrol of knudsen_cosine was forced to be 1 (to machine
             # precision) when it was initialised.
             @views pdf_integral_0 = integrate_over_negative_vz(pdf[:,:,:,1], vz.grid, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
-            @views pdf_integral_1 = integrate_over_negative_vz(vz.grid .* pdf[:,:,:,1], vz.grid, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
+            @views @. pdf_buffer = vz.grid * pdf[:,:,:,1]
+            pdf_integral_1 = integrate_over_negative_vz(pdf_buffer, vz.grid, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
             knudsen_integral_0 = integrate_over_positive_vz(knudsen_cosine, vz.grid, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
             knudsen_integral_1 = 1.0 # This is enforced in initialization
 
@@ -719,7 +723,8 @@ function enforce_neutral_wall_bc!(pdf, z, vzeta, vr, vz, pz, uz, density, wall_f
             # Note the numerical integrol of knudsen_cosine was forced to be 1 (to machine
             # precision) when it was initialised.
             @views pdf_integral_0 = integrate_over_positive_vz(pdf[:,:,:,end], vz.grid, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
-            @views pdf_integral_1 = integrate_over_positive_vz(vz.grid .* pdf[:,:,:,end], vz.grid, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
+            @views @. pdf_buffer = vz.grid * pdf[:,:,:,end]
+            @views pdf_integral_1 = integrate_over_positive_vz(pdf_buffer, vz.grid, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
             knudsen_integral_0 = integrate_over_negative_vz(knudsen_cosine, vz.grid, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
             knudsen_integral_1 = -1.0 # This is enforced in initialization
 
@@ -779,10 +784,12 @@ function enforce_neutral_wall_bc!(pdf, z, vzeta, vr, vz, pz, uz, density, wall_f
             # ions this is not an issue, because points set to 0 by the bc are not modified
             # from 0 by enforce_moment_constraints!().
             knudsen_integral_0 = integrate_over_positive_vz(vz.scratch, vz.scratch2, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
-            knudsen_integral_1 = integrate_over_positive_vz(vz.grid .* vz.scratch, vz.scratch2, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
+            @. vz.scratch4 = vz.grid * vz.scratch
+            knudsen_integral_1 = integrate_over_positive_vz(vz.scratch4, vz.scratch2, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
 
             @views pdf_integral_0 = integrate_over_negative_vz(pdf[:,:,:,1], vz.scratch2, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
-            @views pdf_integral_1 = integrate_over_negative_vz(vz.grid .* pdf[:,:,:,1], vz.scratch2, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
+            @views @. pdf_buffer = vz.grid * pdf[:,:,:,1]
+            pdf_integral_1 = integrate_over_negative_vz(pdf_buffer, vz.scratch2, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
             if !evolve_ppar
                 # Calculate normalisation factors N_in for the incoming and N_out for the
                 # Knudsen parts of the distirbution so that ∫dwpa F = 1 and ∫dwpa wpa F = 0
@@ -802,7 +809,7 @@ function enforce_neutral_wall_bc!(pdf, z, vzeta, vr, vz, pz, uz, density, wall_f
                             # from Knudsen cosine distribution, to be consistent with weights
                             # used in
                             # integrate_over_positive_vz()/integrate_over_negative_vz().
-                            @. pdf[ivz,:,:,1] = 0.5*(N_in*pdf[ivz,:,:,1] + N_out*vz.scratch[ivz])
+                            @views @. pdf[ivz,:,:,1] = 0.5*(N_in*pdf[ivz,:,:,1] + N_out*vz.scratch[ivz])
                         else
                             pdf[ivz,:,:,1] .= N_out*vz.scratch[ivz]
                         end
@@ -813,9 +820,12 @@ function enforce_neutral_wall_bc!(pdf, z, vzeta, vr, vz, pz, uz, density, wall_f
                     pdf[ivz,:,:,1] .= N_out*vz.scratch[ivz]
                 end
             else
-                knudsen_integral_2 = integrate_over_positive_vz(vz.grid .* vz.grid .* vz.scratch, vz.scratch2, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
-                @views pdf_integral_2 = integrate_over_negative_vz(vz.grid .* vz.grid .* pdf[:,:,:,1], vz.scratch2, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
-                @views pdf_integral_3 = integrate_over_negative_vz(vz.grid .* vz.grid .* vz.grid .* pdf[:,:,:,1], vz.scratch2, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
+                @. vz.scratch4 = vz.grid * vz.grid * vz.scratch
+                knudsen_integral_2 = integrate_over_positive_vz(vz.scratch4, vz.scratch2, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
+                @views @. pdf_buffer = vz.grid * vz.grid * pdf[:,:,:,1]
+                pdf_integral_2 = integrate_over_negative_vz(pdf_buffer, vz.scratch2, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
+                pdf_buffer .*= vz.grid
+                @views pdf_integral_3 = integrate_over_negative_vz(pdf_buffer, vz.scratch2, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
                 # Calculate normalisation factor N_out for the Knudsen part of the
                 # distirbution and normalisation factor N_in and correction term C*wpa*F_in
                 # for the incoming distribution so that ∫dwpa F = 1, ∫dwpa wpa F = 0, and
@@ -886,10 +896,12 @@ function enforce_neutral_wall_bc!(pdf, z, vzeta, vr, vz, pz, uz, density, wall_f
             # the integral (over negative v_parallel) of the outgoing Knudsen distribution
             # and (over positive v_parallel) of the incoming pdf.
             knudsen_integral_0 = integrate_over_negative_vz(vz.scratch, vz.scratch2, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
-            knudsen_integral_1 = integrate_over_negative_vz(vz.grid .* vz.scratch, vz.scratch2, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
+            @. vz.scratch4 = vz.grid * vz.scratch
+            knudsen_integral_1 = integrate_over_negative_vz(vz.scratch4, vz.scratch2, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
 
             @views pdf_integral_0 = integrate_over_positive_vz(pdf[:,:,:,end], vz.scratch2, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
-            @views pdf_integral_1 = integrate_over_positive_vz(vz.grid .* pdf[:,:,:,end], vz.scratch2, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
+            @views @. pdf_buffer = vz.grid * pdf[:,:,:,end]
+            pdf_integral_1 = integrate_over_positive_vz(pdf_buffer, vz.scratch2, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
 
             if !evolve_ppar
                 # Calculate normalisation factors N_in for the incoming and N_out for the
@@ -921,9 +933,12 @@ function enforce_neutral_wall_bc!(pdf, z, vzeta, vr, vz, pz, uz, density, wall_f
                     @. pdf[ivz,:,:,end] = N_out*vz.scratch[ivz]
                 end
             else
-                knudsen_integral_2 = integrate_over_negative_vz(vz.grid .* vz.grid .* vz.scratch, vz.scratch2, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
-                @views pdf_integral_2 = integrate_over_positive_vz(vz.grid .* vz.grid .* pdf[:,:,:,end], vz.scratch2, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
-                @views pdf_integral_3 = integrate_over_positive_vz(vz.grid .* vz.grid .* vz.grid .* pdf[:,:,:,end], vz.scratch2, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
+                @. vz.scratch4 = vz.grid * vz.grid * vz.scratch
+                knudsen_integral_2 = integrate_over_negative_vz(vz.scratch4, vz.scratch2, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
+                @views @. pdf_buffer = vz.grid * vz.grid * pdf[:,:,:,end]
+                pdf_integral_2 = integrate_over_positive_vz(pdf_buffer, vz.scratch2, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
+                pdf_buffer .*= vz.grid
+                pdf_integral_3 = integrate_over_positive_vz(pdf_buffer, vz.scratch2, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
                 # Calculate normalisation factor N_out for the Knudsen part of the
                 # distirbution and normalisation factor N_in and correction term C*wpa*F_in
                 # for the incoming distribution so that ∫dwpa F = 1, ∫dwpa wpa F = 0, and
