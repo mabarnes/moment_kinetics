@@ -687,6 +687,11 @@ for dims ∈ dimension_combinations
                     $ex
                 end
             end
+            ex = quote
+                @inbounds begin
+                    $ex
+                end
+            end
             return ex
         end
     end
