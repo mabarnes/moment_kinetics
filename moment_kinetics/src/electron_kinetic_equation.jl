@@ -1390,10 +1390,19 @@ global_rank[] == 0 && println("recalculating precon")
             end
 
             _block_synchronize()
-            @timeit_debug global_timer "HYPREesolve!" @views HYPRE.solve!(hypre_boomeramg,
-                                                                          this_output_buffer[ilower:iupper],
-                                                                          hypre_matrix,
-                                                                          this_input_buffer[ilower:iupper])
+            y = HYPRE.HYPREVector(comm_block[], this_output_buffer[ilower:iupper], ilower,
+                                  iupper)
+            x = HYPRE.HYPREVector(comm_block[], this_input_buffer[ilower:iupper], ilower,
+                                  iupper)
+            #@timeit_debug global_timer "HYPRE.solve!" @views HYPRE.solve!(hypre_boomeramg,
+            #                                                              this_output_buffer[ilower:iupper],
+            #                                                              hypre_matrix,
+            #                                                              this_input_buffer[ilower:iupper])
+            @timeit_debug global_timer "HYPRE.solve!" HYPRE.solve!(hypre_boomeramg, y,
+                                                                   hypre_matrix, x)
+            temp = allocate_float(iupper-ilower+1)
+            @views copy!(temp, y)
+            this_output_buffer[ilower:iupper] .= temp
             _block_synchronize()
 
             counter = 1
