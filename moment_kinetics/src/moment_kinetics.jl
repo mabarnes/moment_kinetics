@@ -141,7 +141,7 @@ function run_moment_kinetics(input_dict::OptionsDict; restart=false, restart_tim
 
         if global_rank[] == 0 && input_dict["output"]["display_timing_info"]
             # Print the timing information
-            format_global_timer(; show_output=true)
+            format_global_timer(; show_output=true, truncate_output=false)
         end
         write_final_timing_data_to_binary(mk_state[end-1:end]...)
 

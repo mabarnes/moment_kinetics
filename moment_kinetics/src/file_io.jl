@@ -2821,7 +2821,7 @@ function write_timing_data(io_moments, t_idx, dfns=false)
             # Write a formatted string showing the TimerOutput data, that replicates what
             # was printed to the terminal, for a quick look.
             string_to_write = format_global_timer(; show_output=false,
-                                                    top_level=top_level)
+                                                    top_level=top_level, truncate_output=false)
 
             # Ensure `string_to_write` is no longer than `global_timer_string_size`.
             string_to_write = string_to_write[1:min(length(string_to_write), global_timer_string_size)]
