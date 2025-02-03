@@ -1362,6 +1362,11 @@ global_rank[] == 0 && println("recalculating precon")
                                           @view precon_matrix[ilower:iupper,:])
             hypre_matrix = HYPRE.HYPREMatrix(comm_block[], local_sparse_matrix, ilower,
                                              iupper)
+            # input_buffer and output_buffer are actually unused in this call.
+            @timeit_debug global_timer "HYPRE_BoomerAMGSetup" begin
+                HYPRE.@check HYPRE.HYPRE_BoomerAMGSetup(hypre_boomeramg, hypre_matrix,
+                                                        input_buffer, output_buffer)
+            end
 
             nl_solver_params.preconditioners[ir] =
                 (hypre_matrix, hypre_boomeramg, ilower, iupper, precon_matrix,
@@ -1390,18 +1395,21 @@ global_rank[] == 0 && println("recalculating precon")
             end
 
             _block_synchronize()
-            y = HYPRE.HYPREVector(comm_block[], this_output_buffer[ilower:iupper], ilower,
+            x = HYPRE.HYPREVector(comm_block[], this_output_buffer[ilower:iupper], ilower,
                                   iupper)
-            x = HYPRE.HYPREVector(comm_block[], this_input_buffer[ilower:iupper], ilower,
+            b = HYPRE.HYPREVector(comm_block[], this_input_buffer[ilower:iupper], ilower,
                                   iupper)
             #@timeit_debug global_timer "HYPRE.solve!" @views HYPRE.solve!(hypre_boomeramg,
             #                                                              this_output_buffer[ilower:iupper],
             #                                                              hypre_matrix,
             #                                                              this_input_buffer[ilower:iupper])
-            @timeit_debug global_timer "HYPRE.solve!" HYPRE.solve!(hypre_boomeramg, y,
-                                                                   hypre_matrix, x)
+            #@timeit_debug global_timer "HYPRE.solve!" HYPRE.solve!(hypre_boomeramg, x,
+            #                                                       hypre_matrix, b)
+            @timeit_debug global_timer "HYPRE_BoomerAMGsolve" begin
+                HYPRE.@check HYPRE.HYPRE_BoomerAMGSolve(hypre_boomeramg, hypre_matrix, b, x)
+            end
             temp = allocate_float(iupper-ilower+1)
-            @views copy!(temp, y)
+            @views copy!(temp, x)
             this_output_buffer[ilower:iupper] .= temp
             _block_synchronize()
 
