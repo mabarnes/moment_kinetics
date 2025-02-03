@@ -192,6 +192,12 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); defa
                                ),
                                reverse(outer_coord_sizes))
     elseif preconditioner_type === Val(:electron_hypre)
+        # Set warn_unexpected=true for now so that we do not have to list all the possible
+        # inputs here
+        hypre_inputs = set_defaults_and_check_section!(
+            input_dict, "hypre", true;
+           )
+
         pdf_plus_ppar_size = total_size_coords + coords.z.n
         local_size = (pdf_plus_ppar_size + block_size[] - 1) ÷ block_size[]
         ilower = block_rank[] * local_size + 1
@@ -213,7 +219,13 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); defa
                                       @view precon_matrix[ilower:iupper,:])
         hypre_matrix = HYPRE.HYPREMatrix(comm_block[], local_sparse_matrix, ilower,
                                          iupper)
-        hypre_boomeramg = HYPRE.BoomerAMG(; Tol=0.0, MaxIter=1)
+        #hypre_boomeramg = HYPRE.BoomerAMG(; Tol=0.0, MaxIter=1) # defaults for a preconditioner
+        # Try playing with parameters...
+        #hypre_boomeramg = HYPRE.BoomerAMG(; Tol=0.0, MaxIter=1,
+        #                                  StrongThreshold=0.1,
+        #                                 )
+        hypre_boomeramg = HYPRE.BoomerAMG(; Tol=0.0, MaxIter=1, hypre_inputs...)
+        #HYPRE.HYPRE_BoomerAMGSetPrintLevel(hypre_boomeramg, 3)
         preconditioners = fill((hypre_matrix, hypre_boomeramg, ilower, iupper,
                                 precon_matrix,
                                 allocate_shared_float(pdf_plus_ppar_size),
