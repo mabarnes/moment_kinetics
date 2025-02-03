@@ -1,8 +1,10 @@
 module electron_kinetic_equation
 
+using HYPRE
 using LinearAlgebra
 using MPI
 using SparseArrays
+using SparseMatricesCSR
 
 export get_electron_critical_velocities
 
@@ -1140,6 +1142,13 @@ pressure \$p_{e∥}\$.
                scratch_dummy, z, z_spectral,
                num_diss_params.electron.moment_dissipation_coefficient, ir)
 
+    if t_params.dt[] > 1.5 * nl_solver_params.precon_dt[] ||
+            t_params.dt[] < 2.0/3.0 * nl_solver_params.precon_dt[]
+
+        # dt has changed significantly, so update the preconditioner
+        nl_solver_params.solves_since_precon_update[] = nl_solver_params.preconditioner_update_interval
+    end
+
     if nl_solver_params.preconditioner_type === Val(:electron_split_lu)
         if nl_solver_params.solves_since_precon_update[] ≥ nl_solver_params.preconditioner_update_interval
             nl_solver_params.solves_since_precon_update[] = 0
@@ -1208,13 +1217,6 @@ pressure \$p_{e∥}\$.
         left_preconditioner = identity
         right_preconditioner = split_precon!
     elseif nl_solver_params.preconditioner_type === Val(:electron_lu)
-
-        if t_params.dt[] > 1.5 * nl_solver_params.precon_dt[] ||
-                t_params.dt[] < 2.0/3.0 * nl_solver_params.precon_dt[]
-
-            # dt has changed significantly, so update the preconditioner
-            nl_solver_params.solves_since_precon_update[] = nl_solver_params.preconditioner_update_interval
-        end
 
         if nl_solver_params.solves_since_precon_update[] ≥ nl_solver_params.preconditioner_update_interval
 global_rank[] == 0 && println("recalculating precon")
@@ -1337,14 +1339,115 @@ global_rank[] == 0 && println("recalculating precon")
 
         left_preconditioner = identity
         right_preconditioner = lu_precon!
-    elseif nl_solver_params.preconditioner_type === Val(:electron_adi)
+    elseif nl_solver_params.preconditioner_type === Val(:electron_hypre)
 
-        if t_params.dt[] > 1.5 * nl_solver_params.precon_dt[] ||
-                t_params.dt[] < 2.0/3.0 * nl_solver_params.precon_dt[]
+        if nl_solver_params.solves_since_precon_update[] ≥ nl_solver_params.preconditioner_update_interval
+global_rank[] == 0 && println("recalculating precon")
+            nl_solver_params.solves_since_precon_update[] = 0
+            nl_solver_params.precon_dt[] = t_params.dt[]
 
-            # dt has changed significantly, so update the preconditioner
-            nl_solver_params.solves_since_precon_update[] = nl_solver_params.preconditioner_update_interval
+            hypre_matrix, hypre_boomeramg, ilower, iupper, precon_matrix, input_buffer,
+                output_buffer = nl_solver_params.preconditioners[ir]
+
+            fill_electron_kinetic_equation_Jacobian!(
+                precon_matrix, f_electron_new, electron_ppar_new, moments, phi,
+                collisions, composition, z, vperp, vpa, z_spectral,
+                vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
+                external_source_settings, num_diss_params, t_params, ion_dt,
+                ir, evolve_ppar)
+
+            # Set up Hypre's BoomerAMG as a preconditioner-only, see
+            # https://github.com/fredrikekre/HYPRE.jl/issues/30
+            local_sparse_matrix = convert(SparseMatrixCSR{1,mk_float,mk_int},
+                                          @view precon_matrix[ilower:iupper,:])
+            hypre_matrix = HYPRE.HYPREMatrix(comm_block[], local_sparse_matrix, ilower,
+                                             iupper)
+
+            nl_solver_params.preconditioners[ir] =
+                (hypre_matrix, hypre_boomeramg, ilower, iupper, precon_matrix,
+                 input_buffer, output_buffer)
         end
+
+
+        @timeit_debug global_timer hypre_precon!(x) = begin
+            precon_ppar, precon_f = x
+
+            hypre_matrix, hypre_boomeramg, ilower, iupper, _, this_input_buffer,
+                this_output_buffer = nl_solver_params.preconditioners[ir]
+
+            begin_serial_region()
+            counter = 1
+            @loop_z_vperp_vpa iz ivperp ivpa begin
+                this_input_buffer[counter] = precon_f[ivpa,ivperp,iz]
+                counter += 1
+            end
+            @loop_z iz begin
+                this_input_buffer[counter] = precon_ppar[iz]
+                counter += 1
+            end
+            @serial_region begin
+                this_output_buffer .= 0.0
+            end
+
+            _block_synchronize()
+            @timeit_debug global_timer "HYPREesolve!" @views HYPRE.solve!(hypre_boomeramg,
+                                                                          this_output_buffer[ilower:iupper],
+                                                                          hypre_matrix,
+                                                                          this_input_buffer[ilower:iupper])
+            _block_synchronize()
+
+            counter = 1
+            @loop_z_vperp_vpa iz ivperp ivpa begin
+                precon_f[ivpa,ivperp,iz] = this_output_buffer[counter]
+                counter += 1
+            end
+            @loop_z iz begin
+                precon_ppar[iz] = this_output_buffer[counter]
+                counter += 1
+            end
+
+            # Ensure values of precon_f and precon_ppar are consistent across
+            # distributed-MPI block boundaries. For precon_f take the upwind
+            # value, and for precon_ppar take the average.
+            f_lower_endpoints = @view scratch_dummy.buffer_vpavperpr_1[:,:,ir]
+            f_upper_endpoints = @view scratch_dummy.buffer_vpavperpr_2[:,:,ir]
+            receive_buffer1 = @view scratch_dummy.buffer_vpavperpr_3[:,:,ir]
+            receive_buffer2 = @view scratch_dummy.buffer_vpavperpr_4[:,:,ir]
+            begin_vperp_vpa_region()
+            @loop_vperp_vpa ivperp ivpa begin
+                f_lower_endpoints[ivpa,ivperp] = precon_f[ivpa,ivperp,1]
+                f_upper_endpoints[ivpa,ivperp] = precon_f[ivpa,ivperp,end]
+            end
+            # We upwind the z-derivatives in `electron_z_advection!()`, so would
+            # expect that upwinding the results here in z would make sense.
+            # However, upwinding here makes convergence much slower (~10x),
+            # compared to picking the values from one side or other of the block
+            # boundary, or taking the average of the values on either side.
+            # Neither direction is special, so taking the average seems most
+            # sensible (although in an intial test it does not seem to converge
+            # faster than just picking one or the other).
+            # Maybe this could indicate that it is more important to have a fully
+            # self-consistent Jacobian inversion for the
+            # `electron_vpa_advection()` part rather than taking half(ish) of the
+            # values from one block and the other half(ish) from the other.
+            reconcile_element_boundaries_MPI_z_pdf_vpavperpz!(
+                precon_f, f_lower_endpoints, f_upper_endpoints, receive_buffer1,
+                receive_buffer2, z)
+
+            begin_serial_region()
+            @serial_region begin
+                buffer_1[] = precon_ppar[1]
+                buffer_2[] = precon_ppar[end]
+            end
+            reconcile_element_boundaries_MPI!(
+                precon_ppar, buffer_1, buffer_2, buffer_3, buffer_4, z)
+
+            return nothing
+        end
+
+        left_preconditioner = identity
+        right_preconditioner = hypre_precon!
+    elseif nl_solver_params.preconditioner_type === Val(:electron_adi)
 
         if nl_solver_params.solves_since_precon_update[] ≥ nl_solver_params.preconditioner_update_interval
 global_rank[] == 0 && println("recalculating precon")

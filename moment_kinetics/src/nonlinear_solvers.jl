@@ -37,9 +37,11 @@ using ..looping
 using ..timer_utils
 using ..type_definitions: mk_float, mk_int
 
+using HYPRE
 using LinearAlgebra
 using MPI
 using SparseArrays
+using SparseMatricesCSR
 using StatsBase: mean
 
 struct nl_solver_info{TH,TV,Tcsg,Tlig,Tprecon,Tpretype}
@@ -185,6 +187,35 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); defa
         pdf_plus_ppar_size = total_size_coords + coords.z.n
         preconditioners = fill((lu(sparse(1.0*I, 1, 1)),
                                 allocate_shared_float(pdf_plus_ppar_size, pdf_plus_ppar_size),
+                                allocate_shared_float(pdf_plus_ppar_size),
+                                allocate_shared_float(pdf_plus_ppar_size),
+                               ),
+                               reverse(outer_coord_sizes))
+    elseif preconditioner_type === Val(:electron_hypre)
+        pdf_plus_ppar_size = total_size_coords + coords.z.n
+        local_size = (pdf_plus_ppar_size + block_size[] - 1) ÷ block_size[]
+        ilower = block_rank[] * local_size + 1
+        if block_rank[] == block_size[] - 1
+            iupper = pdf_plus_ppar_size
+        else
+            iupper = (block_rank[] + 1) * local_size
+        end
+        precon_matrix = allocate_shared_float(pdf_plus_ppar_size, pdf_plus_ppar_size)
+        # Initialise to identity
+        begin_serial_region()
+        @serial_region begin
+            precon_matrix .= 0.0
+            for i ∈ 1:pdf_plus_ppar_size
+                precon_matrix[i,i] = 1.0
+            end
+        end
+        local_sparse_matrix = convert(SparseMatrixCSR{1,mk_float,mk_int},
+                                      @view precon_matrix[ilower:iupper,:])
+        hypre_matrix = HYPRE.HYPREMatrix(comm_block[], local_sparse_matrix, ilower,
+                                         iupper)
+        hypre_boomeramg = HYPRE.BoomerAMG(; Tol=0.0, MaxIter=1)
+        preconditioners = fill((hypre_matrix, hypre_boomeramg, ilower, iupper,
+                                precon_matrix,
                                 allocate_shared_float(pdf_plus_ppar_size),
                                 allocate_shared_float(pdf_plus_ppar_size),
                                ),
