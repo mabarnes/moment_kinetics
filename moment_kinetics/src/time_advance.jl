@@ -459,7 +459,8 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
         implicit_electron_ppar = (t_input["implicit_electron_ppar"] !== false)
         implicit_electron_advance = (t_input["implicit_electron_advance"] !== false)
         implicit_electron_time_evolving = (t_input["implicit_electron_time_evolving"] !== false)
-        electron_precon_types = Dict("lu" => :electron_lu, "adi" => :electron_adi)
+        electron_precon_types = Dict("lu" => :electron_lu, "adi" => :electron_adi,
+                                     "hypre" => :electron_hypre)
         if implicit_electron_ppar
             if t_input["implicit_electron_ppar"] === true
                 if block_size[] == 1
