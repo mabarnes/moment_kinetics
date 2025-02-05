@@ -53,9 +53,15 @@ function plots_for_variable(run_info, variable_name; plot_prefix, has_rdim=true,
     try
         variable = get_variable(run_info, variable_name)
     catch e
-        return makie_post_processing_error_handler(
-                   e,
-                   "plots_for_variable() failed for $variable_name - could not load data.")
+        if isa(e, KeyError)
+            println("Key $(e.key) not found when loading $variable_name - probably not "
+                    * "present in output")
+            return nothing
+        else
+            return makie_post_processing_error_handler(
+                       e,
+                       "plots_for_variable() failed for $variable_name - could not load data.")
+        end
     end
 
     if variable_name ∈ em_variables

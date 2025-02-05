@@ -22,6 +22,6 @@ export SRUN_CPUS_PER_TASK=$SLURM_CPUS_PER_TASK
 
 echo "precompiling $(date)"
 
-bin/julia --project -O3 --check-bounds=no precompile-no-run.jl
+bin/julia --project -O3 precompile-no-run.jl
 
 echo "finished! $(date)"

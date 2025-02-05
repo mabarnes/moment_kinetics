@@ -231,6 +231,22 @@ communicator is `comm_block[]`).
 See also notes on debugging the 'anyv' parallelisation: [Collision operator and
 'anyv' region](@ref).
 
+## Bounds checking
+
+For best performance (i.e. 'production' runs), it is important that bounds
+checks not be included on array accesses. It should be possible to do this by
+running `julia` with the flag `--check-bounds=no`, but this flag has negative
+effects on the core Julia code and compiler, and works less well in Julia
+versions 1.10 and 1.11. As a workaround/alternative, the `@loop_*` macros
+described in the previous section wrap the contained code with an `@inbounds`
+macro (which disables bounds checks within the block, but the effect of
+`@inbounds` does not propagate down into functions called within the block). If
+performance-critical code that you write is within an `@loop`, then you do not
+need to do anything. However if it is not within an `@loop`, then you should
+add `@inbounds begin ... end` around any performance critical code. You can see
+examples of this being done in
+[`moment_kinetics.fokker_planck_calculus`](@ref).
+
 ## [Parallel I/O](@id parallel_io_section)
 
 The code provides an option to use parallel I/O, which allows all output to be
