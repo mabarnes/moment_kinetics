@@ -668,7 +668,6 @@ function runtests()
 
                 # define inputs needed for the test
                 L = 1.0
-                bc = "constant"
                 # create the coordinate struct 'x'
                 # This test runs effectively in serial, so implicitly uses
                 # `ignore_MPI=true` to avoid errors due to communicators not being fully
