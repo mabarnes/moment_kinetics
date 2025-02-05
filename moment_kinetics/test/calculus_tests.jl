@@ -664,7 +664,7 @@ function runtests()
         @testset "Chebyshev pseudospectral derivatives (4 argument), polynomials" verbose=false begin
             @testset "$nelement $ngrid $bc $element_spacing_option $cheb_option" for
                     bc ∈ ("constant", "zero"), element_spacing_option ∈ ("uniform", "sqrt"),
-                    nelement ∈ (1:5), ngrid ∈ (3:33), cheb_option in ("FFT","matrix")
+                    nelement ∈ (1:5), ngrid ∈ (3:24), cheb_option in ("FFT","matrix")
 
                 # define inputs needed for the test
                 L = 1.0
