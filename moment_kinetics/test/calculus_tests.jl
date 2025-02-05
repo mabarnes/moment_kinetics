@@ -71,7 +71,7 @@ function runtests()
             end
         end
 
-        rng = MersenneTwister(42)
+        rng = StableRNG(42)
 
         @testset "finite_difference derivatives (4 argument), periodic" verbose=false begin
             @testset "$nelement $ngrid" for nelement ∈ (1:5), ngrid ∈ (9:33)
