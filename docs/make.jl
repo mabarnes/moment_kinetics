@@ -1,31 +1,24 @@
 using Pkg
 
-repo_dir = dirname(dirname(@__FILE__))
-Pkg.develop([PackageSpec(path=joinpath(repo_dir, "moment_kinetics")),
-             PackageSpec(path=joinpath(repo_dir, "makie_post_processing", "makie_post_processing")),
-             #PackageSpec(path=joinpath(repo_dir, "plots_post_processing", "plots_post_processing")),
-            ])
 Pkg.instantiate()
 
-using Documenter
-using moment_kinetics, makie_post_processing#, plots_post_processing
-
-if get(ENV, "CI", nothing) == "true"
-    # On the CI, run in strict mode to turn warnings into errors, so that we don't deploy
-    # documentation with formatting bugs.
-    strict = true
-else
-    strict = false
-end
+using Documenter, UUIDs
+using moment_kinetics, makie_post_processing, plots_post_processing
 
 makedocs(
     sitename = "moment_kinetics",
-    format = Documenter.HTML(prettyurls = get(ENV, "CI", nothing) == "true"),
-    modules = [moment_kinetics,
-               makie_post_processing,
-               #plots_post_processing
-              ],
-    strict = strict,
+    format = Documenter.HTML(prettyurls = get(ENV, "CI", nothing) == "true",
+                             size_threshold = 1000000,
+                             size_threshold_warn = 500000,
+                             # Use the following horrible incantation to get the version
+                             # of moment_kinetics. moment_kinetics is the package with the
+                             # UUID being used here. We need to do this because the
+                             # Project.toml in the top-level directory is user-generated
+                             # and does not have a version, but this is the Project.toml
+                             # that would be used by default by Documenter.jl.
+                             inventory_version = Pkg.dependencies()[UUID("b5ff72cc-06fc-4161-ad14-dba1c22ed34e")].version,
+                            ),
+    modules = [moment_kinetics, makie_post_processing, plots_post_processing],
 )
 
 if get(ENV, "CI", nothing) == "true"

@@ -14,8 +14,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@latest
         with:
-          version: '1.10'
-      #- uses: julia-actions/cache@v2
+          version: '1.11'
+      - uses: julia-actions/cache@v2
       - name: Install dependencies
         run: |
           # Version 3.9.0 of matplotlib causes an error with PyPlot.jl, so pin
@@ -33,7 +33,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@latest
         with:
-          version: '1.10'
+          version: '1.11'
       - name: Install dependencies
         run: |
           # Version 3.9.0 of matplotlib causes an error with PyPlot.jl, so pin

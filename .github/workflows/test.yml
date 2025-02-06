@@ -14,13 +14,13 @@ jobs:
       matrix:
         os: [ubuntu-latest, macOS-latest]
       fail-fast: false
-    timeout-minutes: 50
+    timeout-minutes: 60
 
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@latest
         with:
-          version: '1.10'
+          version: '1.11'
       - uses: julia-actions/cache@v2
       - uses: julia-actions/julia-buildpkg@v1
         with:

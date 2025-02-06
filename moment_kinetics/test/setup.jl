@@ -9,6 +9,7 @@ Included in test files as `include("setup.jl")`
 ##########################
 using Test: @testset, @test
 using moment_kinetics
+using moment_kinetics.StableRNGs
 
 module MKTestUtilities
 

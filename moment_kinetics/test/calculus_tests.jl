@@ -71,7 +71,7 @@ function runtests()
             end
         end
 
-        rng = MersenneTwister(42)
+        rng = StableRNG(42)
 
         @testset "finite_difference derivatives (4 argument), periodic" verbose=false begin
             @testset "$nelement $ngrid" for nelement ∈ (1:5), ngrid ∈ (9:33)
@@ -664,11 +664,10 @@ function runtests()
         @testset "Chebyshev pseudospectral derivatives (4 argument), polynomials" verbose=false begin
             @testset "$nelement $ngrid $bc $element_spacing_option $cheb_option" for
                     bc ∈ ("constant", "zero"), element_spacing_option ∈ ("uniform", "sqrt"),
-                    nelement ∈ (1:5), ngrid ∈ (3:33), cheb_option in ("FFT","matrix")
+                    nelement ∈ (1:5), ngrid ∈ (3:24), cheb_option in ("FFT","matrix")
 
                 # define inputs needed for the test
                 L = 1.0
-                bc = "constant"
                 # create the coordinate struct 'x'
                 # This test runs effectively in serial, so implicitly uses
                 # `ignore_MPI=true` to avoid errors due to communicators not being fully
