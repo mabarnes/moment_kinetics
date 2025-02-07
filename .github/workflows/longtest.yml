@@ -30,5 +30,5 @@ jobs:
       # https://github.com/julia-actions/julia-runtest/blob/master/action.yml
       # in order to pass customised arguments to `Pkg.test()`
       - run: |
-          julia --check-bounds=yes --color=yes --depwarn=yes --project=moment_kinetics/ -e 'import Pkg; Pkg.test(; test_args=["--ci", "--long", "--force-optional-dependencies"])'
+          julia --color=yes --depwarn=yes --project=moment_kinetics/ -e 'import Pkg; Pkg.test(; test_args=["--ci", "--long", "--force-optional-dependencies"], julia_args=["--check-bounds=auto"])'
         shell: bash
