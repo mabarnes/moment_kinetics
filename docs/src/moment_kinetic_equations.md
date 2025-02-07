@@ -55,7 +55,7 @@ v_{Ts}^2(z,t) = \frac{4\pi}{3n_s}\int_{-\infty}^\infty dv_\parallel \int_0^\inft
     \left[ (v_\parallel - u_{s\parallel}(z,t))^2 + v_\perp^2 \right] f_s(z,v_\parallel,v_\perp,t)
 \end{align}
 ```
-for use later, we also give the definitions of the parallel and perpendicular pressure
+For use later, we also give the definitions of the parallel and perpendicular pressure
 ```math
 \begin{align}
 p_{s\parallel}(z,t) &= 2\pi\int_{-\infty}^\infty dv_\parallel \int_0^\infty dv_\perp v_\perp
@@ -71,6 +71,12 @@ we can note means that
 p_s &= n_s T_s = \frac{m_s}{2}n_s v_{Ts}^2 = \frac{1}{3}(p_{s\parallel} + 2p_{s\perp}) \\
 T_s &= \frac{1}{3}(T_{s\parallel} + 2T_{s\perp}) \\
 v_{Ts} &= \sqrt{\frac{2T_s}{m_s}}= \sqrt{\frac{2(T_{s\parallel} + 2T_{s\perp})}{3m_s}} \\
+\end{align}
+```
+The parallel heat flux is
+```math
+\begin{align}
+q_{s\parallel} = \int \frac{m_s}{2} \left( (v_\parallel - u_{s\parallel})^2 + v_\perp^2 \right) (v_\parallel - u_{s\parallel}) f_s d^3 v
 \end{align}
 ```
 
@@ -94,7 +100,7 @@ Can integrate the drift kinetic equation to give the moment equations:
   & \int \frac{\partial f_i}{\partial t} d^3 v
       + \underbrace{\int v_\parallel \frac{\partial f_i}{\partial z} d^3 v}_\text{take derivative out of velocity integral}
       - \frac{e}{m_i} \frac{\partial\phi}{\partial z} \underbrace{\int \frac{\partial f_i}{\partial v_\parallel} d^3 v}_\text{total derivative integrates to 0} \nonumber \\
-  &= \int C_{ii}[f_i] d^3 v +
+  &= \underbrace{\int C_{ii}[f_i] d^3 v}_{=0\text{, collisions conserve particles}} +
       \int \left[ \underbrace{-R_\mathrm{CX}(n_n f_i - n_i f_n)}_{=0\text{, no particle source from CX}} + R_\mathrm{ioniz} n_i f_n \right] d^3 v
       + \int S_i d^3 v \\
   \end{align}
@@ -119,20 +125,18 @@ Can integrate the drift kinetic equation to give the moment equations:
   & \int v_\parallel \frac{\partial f_i}{\partial t} d^3 v
       + \int v_\parallel^2 \frac{\partial f_i}{\partial z} d^3 v
       - \frac{e}{m_i} \frac{\partial\phi}{\partial z} \int v_\parallel \frac{\partial f_i}{\partial v_\parallel} d^3 v \nonumber \\
-  &= \int v_\parallel C_{ii}[f_i] d^3 v +
+  &= \underbrace{\int v_\parallel C_{ii}[f_i] d^3 v}_{=0\text{, collisions conserve momentum}} +
       \int v_\parallel \left[ -R_\mathrm{CX}(n_n f_i - n_i f_n) + R_\mathrm{ioniz} n_i f_n \right] d^3 v
       + \int v_\parallel S_i d^3 v \\
   & \frac{\partial}{\partial t} \int v_\parallel f_i d^3 v
       + \frac{\partial}{\partial z} \int v_\parallel^2 f_i d^3 v
       + \frac{e}{m_i} \frac{\partial\phi}{\partial z} \int f_i d^3 v \nonumber \\
-  &= \int v_\parallel C_{ii}[f_i] d^3 v +
-      \int v_\parallel \left[ -R_\mathrm{CX}(n_n f_i - n_i f_n) + R_\mathrm{ioniz} n_i f_n \right] d^3 v
+  &= \int v_\parallel \left[ -R_\mathrm{CX}(n_n f_i - n_i f_n) + R_\mathrm{ioniz} n_i f_n \right] d^3 v
       + \int v_\parallel S_i d^3 v \\
   & \frac{\partial}{\partial t} \int v_\parallel f_i d^3 v
       + \frac{\partial}{\partial z}(u_{i\parallel}^2 n_i) + \frac{\partial}{\partial z} \int v_{Ti}^2 \left( v_\parallel - u_{i\parallel} \right)^2 f_i d^3 v
       + \frac{e}{m_i} \frac{\partial\phi}{\partial z} \int f_i d^3 v \nonumber \\
-  &= \int v_\parallel C_{ii}[f_i] d^3 v +
-      \int v_\parallel \left[ -R_\mathrm{CX}(n_n f_i - n_i f_n) + R_\mathrm{ioniz} n_i f_n \right] d^3 v
+  &= \int v_\parallel \left[ -R_\mathrm{CX}(n_n f_i - n_i f_n) + R_\mathrm{ioniz} n_i f_n \right] d^3 v
       + \int v_\parallel S_i d^3 v \\
   \end{align}
   ```
@@ -145,8 +149,7 @@ Can integrate the drift kinetic equation to give the moment equations:
     + m_i \frac{\partial}{\partial z}(n_i u_{i\parallel}^2)
     + \frac{\partial p_{i\parallel}}{\partial z}
     + e n_i \frac{\partial \phi}{\partial z} \nonumber \\
-  &= \int v_\parallel C_{ii}[f_i]d^3v
-      + R_\mathrm{CX} m_i n_i n_n (u_{n\parallel} - u_{i\parallel})
+  &= R_\mathrm{CX} m_i n_i n_n (u_{n\parallel} - u_{i\parallel})
       + R_\mathrm{ioniz} m_i n_i n_n u_{n\parallel}
   \end{align}
   ```
@@ -176,8 +179,7 @@ Can integrate the drift kinetic equation to give the moment equations:
    + m_i u_{i\parallel}^2 \frac{\partial n_i}{\partial z}
    + m_i n_i 2u_{i\parallel} \frac{\partial u_{i\parallel}}{\partial z}
    + \frac{\partial p_{i\parallel}}{\partial z} + e n_i \frac{\partial\phi}{\partial z} \nonumber \\
-  &= \int v_\parallel C_{ii}[f_i]d^3v
-     + R_\mathrm{CX} m_i n_i n_n (u_{n\parallel} - u_{i\parallel})
+  &= R_\mathrm{CX} m_i n_i n_n (u_{n\parallel} - u_{i\parallel})
      + R_\mathrm{ioniz} m_i n_i n_n u_{n\parallel}
   \end{align}
   ```
@@ -187,7 +189,6 @@ Can integrate the drift kinetic equation to give the moment equations:
   &m_i n_i \frac{\partial u_{i\parallel}}{\partial t}
    + m_i n_i u_{i\parallel} \frac{\partial u_{i\parallel}}{\partial z} \nonumber \\
   &= - \frac{\partial p_{i\parallel}}{\partial z} - e n_i \frac{\partial\phi}{\partial z}
-     + \int v_\parallel C_{ii}[f_i]d^3v
      + R_\mathrm{CX} m_i n_i n_n (u_{n\parallel} - u_{i\parallel})
      + R_\mathrm{ioniz} m_i n_i n_n u_{n\parallel}
   \end{align}
@@ -201,34 +202,45 @@ Can integrate the drift kinetic equation to give the moment equations:
   & \frac{3}{2} \int v^2 \frac{\partial f_i}{\partial t} d^3 v
       + \frac{3}{2} \int v^2 v_\parallel \frac{\partial f_i}{\partial z} d^3 v
       - \frac{3}{2} \frac{e}{m_i} \frac{\partial\phi}{\partial z} \int v^2 \frac{\partial f_i}{\partial v_\parallel} d^3 v \nonumber \\
-  &\quad= \frac{3}{2} \int v^2 C_{ii}[f_i] d^3 v
+  &\quad= \frac{3}{2} \underbrace{\int v^2 C_{ii}[f_i] d^3 v}_{=0\text{, collisions conserve energy}}
         + \frac{3}{2} \int v^2 \left[ -R_\mathrm{CX}(n_n f_i - n_i f_n) + R_\mathrm{ioniz} n_i f_n \right] d^3 v
         + \frac{3}{2} \int v^2 S_i d^3 v \\
 
   & \frac{3}{2} \frac{\partial}{\partial t} \int v^2 f_i d^3 v
       + \frac{3}{2} \frac{\partial}{\partial z} \int v^2 v_\parallel f_i d^3 v
       + \frac{3}{2} \frac{e}{m_i} \frac{\partial\phi}{\partial z} \int 2 v_\parallel f_i d^3 v \nonumber \\
-  &\quad= \frac{3}{2} \int v^2 C_{ii}[f_i] d^3 v
-        + \frac{3}{2} \int v^2 \left[ -R_\mathrm{CX}(n_n f_i - n_i f_n) + R_\mathrm{ioniz} n_i f_n \right] d^3 v
+  &\quad= \frac{3}{2} \int v^2 \left[ -R_\mathrm{CX}(n_n f_i - n_i f_n) + R_\mathrm{ioniz} n_i f_n \right] d^3 v
         + \frac{3}{2} \int v^2 S_i d^3 v \\
 
   & \frac{3}{2} \frac{\partial}{\partial t} \int \left((v_\parallel - u_{i\parallel})^2 + \cancel{2(v_\parallel - u_{i\parallel}) u_{i\parallel}} + u_{i\parallel}^2 + v_\perp^2 \right) f_i d^3 v \nonumber \\
   &+ \frac{3}{2} \frac{\partial}{\partial z} \int \underbrace{\left((v_\parallel - u_{i\parallel})^2 + 2(v_\parallel - u_{i\parallel}) u_{i\parallel} + u_{i\parallel}^2 + v_\perp^2 \right) \left( (v_\parallel - u_{i\parallel}) + u_{i\parallel} \right)}_{(v_\parallel - u_{i\parallel})^3 + 2(v_\parallel - u_{i\parallel})^2 u_{i\parallel} + \cancel{u_{i\parallel}^2(v_\parallel - u_{i\parallel})} + v_\perp^2(v_\parallel - u_{i\parallel}) + (v_\parallel - u_{i\parallel})^2 u_{i\parallel} + \cancel{2(v_\parallel - u_{i\parallel})u_{i\parallel}^2} + u_{i\parallel}^3 + v_\perp^2 u_{i\parallel}} f_i d^3 v \nonumber \\
-  &+ \frac{3}{2} \frac{e}{m_i} \frac{\partial\phi}{\partial z} \int 2 \left( (v_\parallel - u_{i\parallel}) + u_{i\parallel} \right) f_i d^3 v \nonumber \\
-  &\quad= \frac{3}{2} \int \left((v_\parallel - u_{i\parallel})^2 + 2(v_\parallel - u_{i\parallel}) u_{i\parallel} + u_{i\parallel}^2 + v_\perp^2 \right) C_{ii}[f_i] d^3 v \nonumber \\
-  &\qquad- \frac{3}{2} \int \left((v_\parallel - u_{i\parallel})^2 + 2(v_\parallel - u_{i\parallel}) u_{i\parallel} + u_{i\parallel}^2 + v_\perp^2 \right) R_\mathrm{CX} n_n f_i d^3 v \nonumber \\
-  &\qquad+ \frac{3}{2} \int \left((v_\parallel - u_{i\parallel})^2 + 2(v_\parallel - u_{i\parallel}) u_{i\parallel} + u_{i\parallel}^2 + v_\perp^2 \right) R_\mathrm{CX} n_i f_n d^3 v \nonumber \\
-  &\qquad+ \frac{3}{2} \int \left((v_\parallel - u_{i\parallel})^2 + 2(v_\parallel - u_{i\parallel}) u_{i\parallel} + u_{i\parallel}^2 + v_\perp^2 \right) R_\mathrm{ioniz} n_i f_n d^3 v \nonumber \\
-  &\qquad+ \frac{3}{2} \int \left((v_\parallel - u_{i\parallel})^2 + 2(v_\parallel - u_{i\parallel}) u_{i\parallel} + u_{i\parallel}^2 + v_\perp^2 \right) S_i d^3 v \\
+  &+ \frac{3}{2} \frac{e}{m_i} \frac{\partial\phi}{\partial z} \int 2 \left( \cancel{(v_\parallel - u_{i\parallel})} + u_{i\parallel} \right) f_i d^3 v \nonumber \\
+  &\quad= - \frac{3}{2} \int \left((v_\parallel - u_{i\parallel})^2 + \cancel{2(v_\parallel - u_{i\parallel}) u_{i\parallel}} + u_{i\parallel}^2 + v_\perp^2 \right) R_\mathrm{CX} n_n f_i d^3 v \nonumber \\
+  &\qquad+ \frac{3}{2} \int \left((v_\parallel - u_{n\parallel})^2 + \cancel{2(v_\parallel - u_{n\parallel}) u_{n\parallel}} + u_{n\parallel}^2 + v_\perp^2 \right) R_\mathrm{CX} n_i f_n d^3 v \nonumber \\
+  &\qquad+ \frac{3}{2} \int \left((v_\parallel - u_{n\parallel})^2 + \cancel{2(v_\parallel - u_{n\parallel}) u_{n\parallel}} + u_{n\parallel}^2 + v_\perp^2 \right) R_\mathrm{ioniz} n_i f_n d^3 v \nonumber \\
+  &\qquad+ \frac{3}{2} \int v^2 S_i d^3 v \\
 
-  & \frac{3}{2} \frac{\partial}{\partial t} (3 p_i + n_i u_{i\parallel}^2) \nonumber \\
-  &+ \frac{3}{2} \frac{\partial}{\partial z} \left[ \int \left( (v_\parallel - u_{i\parallel})^3 + v_\perp^2(v_\parallel - u_{i\parallel}) \right) f_i d^3 v + 2p_{i\parallel} u_{i\parallel} + (v_\parallel - u_{i\parallel})^2 u_{i\parallel} + u_{i\parallel}^3 + v_\perp^2 u_{i\parallel} \right] \nonumber \\
-  &+ \frac{3}{2} \frac{e}{m_i} \frac{\partial\phi}{\partial z} \int 2 \left( (v_\parallel - u_{i\parallel}) + u_{i\parallel} \right) f_i d^3 v \nonumber \\
-  &\quad= \frac{3}{2} \int \left((v_\parallel - u_{i\parallel})^2 + 2(v_\parallel - u_{i\parallel}) u_{i\parallel} + u_{i\parallel}^2 + v_\perp^2 \right) C_{ii}[f_i] d^3 v \nonumber \\
-  &\qquad- \frac{3}{2} \int \left((v_\parallel - u_{i\parallel})^2 + 2(v_\parallel - u_{i\parallel}) u_{i\parallel} + u_{i\parallel}^2 + v_\perp^2 \right) R_\mathrm{CX} n_n f_i d^3 v \nonumber \\
-  &\qquad+ \frac{3}{2} \int \left((v_\parallel - u_{i\parallel})^2 + 2(v_\parallel - u_{i\parallel}) u_{i\parallel} + u_{i\parallel}^2 + v_\perp^2 \right) R_\mathrm{CX} n_i f_n d^3 v \nonumber \\
-  &\qquad+ \frac{3}{2} \int \left((v_\parallel - u_{i\parallel})^2 + 2(v_\parallel - u_{i\parallel}) u_{i\parallel} + u_{i\parallel}^2 + v_\perp^2 \right) R_\mathrm{ioniz} n_i f_n d^3 v \nonumber \\
-  &\qquad+ \frac{3}{2} \int \left((v_\parallel - u_{i\parallel})^2 + 2(v_\parallel - u_{i\parallel}) u_{i\parallel} + u_{i\parallel}^2 + v_\perp^2 \right) S_i d^3 v \\
+  & \frac{3}{2} \frac{\partial}{\partial t} \left( \frac{3 p_i}{m_i} + n_i u_{i\parallel}^2 \right) \nonumber \\
+  &+ \frac{3}{2} \frac{\partial}{\partial z} \left[ \int \left( (v_\parallel - u_{i\parallel})^3 + v_\perp^2(v_\parallel - u_{i\parallel}) \right) f_i d^3 v + 2\frac{p_{i\parallel}}{m_i} u_{i\parallel} + \frac{3 p_i}{m_i} u_{i\parallel} + n_i u_{i\parallel}^3 \right] \nonumber \\
+  &+ 3 \frac{e}{m_i} \frac{\partial\phi}{\partial z} n_i u_{i\parallel} \nonumber \\
+  &\quad= - \frac{3}{2} R_\mathrm{CX} \left(\frac{3 p_i}{m_i} n_n + n_i n_n u_{i\parallel}^2 - \frac{3 p_n}{m_i} n_i - n_i n_n u_{n\parallel}^2 \right) \nonumber \\
+  &\qquad+ \frac{3}{2} R_\mathrm{ioniz} n_i \left(\frac{3 p_n}{m_i} + n_n u_{n\parallel}^2 \right) \nonumber \\
+  &\qquad+ \frac{3}{2} \int v^2 S_i d^3 v \\
+
+  & \frac{3}{2} \frac{\partial}{\partial t} \left( \frac{3 p_i}{m_i} + n_i u_{i\parallel}^2 \right)
+    + \frac{3}{2} \frac{\partial}{\partial z} \left[ \frac{2 q_{i\parallel}}{m_i} + 2\frac{p_{i\parallel}}{m_i} u_{i\parallel} + \frac{3 p_i}{m_i} u_{i\parallel} + n_i u_{i\parallel}^3 \right]
+    + 3 \frac{e}{m_i} \frac{\partial\phi}{\partial z} n_i u_{i\parallel} \nonumber \\
+  &\quad= - \frac{3}{2} R_\mathrm{CX} \left(\frac{3 p_i}{m_i} n_n + n_i n_n u_{i\parallel}^2 - \frac{3 p_n}{m_i} n_i - n_i n_n u_{n\parallel}^2 \right)
+        + \frac{3}{2} R_\mathrm{ioniz} n_i \left(\frac{3 p_n}{m_i} + n_n u_{n\parallel}^2 \right) \nonumber \\
+  &\qquad+ \frac{3}{2} \int v^2 S_i d^3 v \\
+
+  & \frac{9}{2} \frac{\partial p_i}{\partial t} + 3 m_i u_{i\parallel} \frac{\partial(n_i u_{i\parallel})}{\partial t} - \frac{3}{2} m_i u_{i\parallel}^2 \frac{\partial n_i}{\partial t}
+    + 2 \frac{\partial q_{i\parallel}}{\partial z} + 3 u_{i\parallel} \frac{\partial p_{i\parallel}}{\partial z} + 3 p_{i\parallel} \frac{\partial u_{i\parallel}}{\partial z} \nonumber \\
+  &\quad+ \frac{9}{2} u_{i\parallel} \frac{\partial p_i}{\partial z} + \frac{9}{2} p_i \frac{\partial u_{i\parallel}}{\partial z} + \frac{9}{2} m_i n_i u_{i\parallel}^2 \frac{\partial u_{i\parallel}}{\partial z} + \frac{3}{2} m_i u_{i\parallel}^3 \frac{\partial n_i}{\partial z}
+    + 3 e \frac{\partial\phi}{\partial z} n_i u_{i\parallel} \nonumber \\
+  &\quad= - \frac{3}{2} R_\mathrm{CX} \left(3 p_i n_n + m_i n_i n_n u_{i\parallel}^2 - 3 p_n n_i - m_i n_i n_n u_{n\parallel}^2 \right)
+        + \frac{3}{2} R_\mathrm{ioniz} n_i \left(3 p_n + m_i n_n u_{n\parallel}^2 \right) \nonumber \\
+  &\qquad+ \frac{3}{2} \int m_i v^2 S_i d^3 v \\
   \end{align}
   ```
 
