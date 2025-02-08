@@ -392,6 +392,52 @@ Can integrate the drift kinetic equation to give the moment equations:
   \end{align}
   ```
 
+Kinetic equation
+----------------
+
+Before giving the full 'moment kinetic' equation, we consider two reduced
+versions which evolve separately only $n_i$, or only $n_i$ and $u_{i\parallel}$.
+
+### Separate $n_i$
+
+Normalise $n_i$ out of the distribution function. Velocity coordinates do not
+need to be modified.
+```math
+\begin{align}
+F_s(z,v_\parallel,v_\perp,t) = \frac{f_s(z,v_\parallel,v_\perp,t)}{n_s}
+\end{align}
+```
+```@raw html
+<details>
+<summary style="text-align:center">[ intermediate steps ]</summary>
+```
+```math
+\begin{align}
+& \frac{\partial n_i F_i}{\partial t} + v_\parallel \frac{\partial n_i F_i}{\partial z}
+    - \frac{e}{m_i} \frac{\partial\phi}{\partial z} \frac{\partial n_i F_i}{\partial v_\parallel} \nonumber \\
+&\quad= C_{ii}[n_i F_i] - R_\mathrm{CX}(n_n n_i F_i - n_i n_n F_n) + R_\mathrm{ioniz} n_i n_n F_n + S_i \\
+
+& n_i \frac{\partial F_i}{\partial t} + F_i \frac{\partial n_i}{\partial t} + n_i v_\parallel \frac{\partial F_i}{\partial z} + v_\parallel F_i \frac{\partial n_i}{\partial z}
+    - n_i \frac{e}{m_i} \frac{\partial\phi}{\partial z} \frac{\partial F_i}{\partial v_\parallel} \nonumber \\
+&\quad= C_{ii}[n_i F_i] - R_\mathrm{CX} n_i n_n (F_i - F_n) + R_\mathrm{ioniz} n_i n_n F_n + S_i \\
+
+& n_i \frac{\partial F_i}{\partial t} - F_i n_i \frac{\partial u_{i\parallel}}{\partial z} - F_i u_{i\parallel} \frac{\partial n_i}{\partial z} + F_i R_\mathrm{ioniz} n_i n_n + F_i \int S_i d^3 v + n_i v_\parallel \frac{\partial F_i}{\partial z} + v_\parallel F_i \frac{\partial n_i}{\partial z}
+    - n_i \frac{e}{m_i} \frac{\partial\phi}{\partial z} \frac{\partial F_i}{\partial v_\parallel} \nonumber \\
+&\quad= C_{ii}[n_i F_i] - R_\mathrm{CX} n_i n_n (F_i - F_n) + R_\mathrm{ioniz} n_i n_n F_n + S_i \\
+\end{align}
+```
+```@raw html
+</details>
+```
+```math
+\begin{align}
+& \frac{\partial F_i}{\partial t} + v_\parallel \frac{\partial F_i}{\partial z}
+  - \frac{e}{m_i} \frac{\partial\phi}{\partial z} \frac{\partial F_i}{\partial v_\parallel}
+  + \left(- \frac{\partial u_{i\parallel}}{\partial z} - \frac{u_{i\parallel}}{n_i} \frac{\partial n_i}{\partial z} + R_\mathrm{ioniz} n_n + \frac{1}{n_i} \int S_i d^3 v + \frac{v_\parallel}{n_i} \frac{\partial n_i}{\partial z} \right) F_i \nonumber \\
+&\quad= \frac{1}{n_i} C_{ii}[n_i F_i] - R_\mathrm{CX} n_n (F_i - F_n) + R_\mathrm{ioniz} n_n F_n + \frac{1}{n_i} S_i \\
+\end{align}
+```
+
 Old 1D1V moment kinetic equations
 ---------------------------------
 
