@@ -89,6 +89,9 @@ q_{s\parallel} = \int \frac{m_s}{2} \left( (v_\parallel - u_{s\parallel})^2 + v_
 \end{align}
 ```
 
+Moment equations
+----------------
+
 Can integrate the drift kinetic equation to give the moment equations:
 * continuity
   ```@raw html
@@ -293,6 +296,99 @@ Can integrate the drift kinetic equation to give the moment equations:
   &\qquad+ \frac{1}{2} \int m_i v^2 S_i d^3 v 
          - m_i u_{i\parallel} \int v_\parallel S_i d^3 v
          + \frac{1}{2} m_i u_{i\parallel}^2 \int S_i d^3 v \\
+  \end{align}
+  ```
+  We use the pressure as an evolving variable in the code, so this is the
+  energy equation used. It is also useful to subsitute in the continuity
+  equation to convert this to a temperature equation and then a $v_{Ti}$
+  equation, as the latter will be used to form the kinetic equation for $g_i$.
+  ```@raw html
+  <details>
+  <summary style="text-align:center">[ intermediate steps ]</summary>
+  ```
+  ```math
+  \begin{align}
+  & \frac{3}{2} \frac{\partial n_i T_i}{\partial t}
+    + \frac{\partial q_{i\parallel}}{\partial z} + p_{i\parallel} \frac{\partial u_{i\parallel}}{\partial z}
+    + \frac{3}{2} u_{i\parallel} \frac{\partial n_i T_i}{\partial z} + \frac{3}{2} n_i T_i \frac{\partial u_{i\parallel}}{\partial z} \nonumber \\
+  &\quad= - \frac{1}{2} R_\mathrm{CX} \left(3 p_i n_n - 3 p_n n_i - m_i n_i n_n (u_{i\parallel} - u_{n\parallel})^2 \right)
+        + \frac{1}{2} R_\mathrm{ioniz} n_i \left(3 p_n + m_i n_n (u_{i\parallel} - u_{n\parallel})^2 \right) \nonumber \\
+  &\qquad+ \frac{1}{2} \int m_i v^2 S_i d^3 v 
+         - m_i u_{i\parallel} \int v_\parallel S_i d^3 v
+         + \frac{1}{2} m_i u_{i\parallel}^2 \int S_i d^3 v \\
+
+  & \frac{3}{2} n_i \frac{\partial T_i}{\partial t} + \frac{3}{2} T_i \frac{\partial n_i}{\partial t}
+    + \frac{\partial q_{i\parallel}}{\partial z} + p_{i\parallel} \frac{\partial u_{i\parallel}}{\partial z}
+    + \frac{3}{2} n_i u_{i\parallel} \frac{\partial T_i}{\partial z} + \frac{3}{2} u_{i\parallel} T_i \frac{\partial n_i}{\partial z} + \frac{3}{2} n_i T_i \frac{\partial u_{i\parallel}}{\partial z} \nonumber \\
+  &\quad= - \frac{1}{2} R_\mathrm{CX} \left(3 p_i n_n - 3 p_n n_i - m_i n_i n_n (u_{i\parallel} - u_{n\parallel})^2 \right)
+        + \frac{1}{2} R_\mathrm{ioniz} n_i \left(3 p_n + m_i n_n (u_{i\parallel} - u_{n\parallel})^2 \right) \nonumber \\
+  &\qquad+ \frac{1}{2} \int m_i v^2 S_i d^3 v 
+         - m_i u_{i\parallel} \int v_\parallel S_i d^3 v
+         + \frac{1}{2} m_i u_{i\parallel}^2 \int S_i d^3 v \\
+
+  & \frac{3}{2} n_i \frac{\partial T_i}{\partial t}
+    - \frac{3}{2} n_i T_i \frac{\partial u_{i\parallel}}{\partial z} - \frac{3}{2} u_{i\parallel} T_i \frac{\partial n_i}{\partial z} + \frac{3}{2} T_i R_\mathrm{ioniz} n_i n_n + \frac{3}{2} T_i \int S_i d^3 v
+    + \frac{\partial q_{i\parallel}}{\partial z} + p_{i\parallel} \frac{\partial u_{i\parallel}}{\partial z}
+    + \frac{3}{2} n_i u_{i\parallel} \frac{\partial T_i}{\partial z} + \frac{3}{2} u_{i\parallel} T_i \frac{\partial n_i}{\partial z} + \frac{3}{2} n_i T_i \frac{\partial u_{i\parallel}}{\partial z} \nonumber \\
+  &\quad= - \frac{1}{2} R_\mathrm{CX} \left(3 p_i n_n - 3 p_n n_i - m_i n_i n_n (u_{i\parallel} - u_{n\parallel})^2 \right)
+        + \frac{1}{2} R_\mathrm{ioniz} n_i \left(3 p_n + m_i n_n (u_{i\parallel} - u_{n\parallel})^2 \right) \nonumber \\
+  &\qquad+ \frac{1}{2} \int m_i v^2 S_i d^3 v 
+         - m_i u_{i\parallel} \int v_\parallel S_i d^3 v
+         + \frac{1}{2} m_i u_{i\parallel}^2 \int S_i d^3 v \\
+  \end{align}
+  ```
+  ```@raw html
+  </details>
+  ```
+  ```math
+  \begin{align}
+  & \frac{3}{2} n_i \frac{\partial T_i}{\partial t}
+    + \frac{\partial q_{i\parallel}}{\partial z} + p_{i\parallel} \frac{\partial u_{i\parallel}}{\partial z}
+    + \frac{3}{2} n_i u_{i\parallel} \frac{\partial T_i}{\partial z} \nonumber \\
+  &\quad= - \frac{1}{2} R_\mathrm{CX} \left(3 p_i n_n - 3 p_n n_i - m_i n_i n_n (u_{i\parallel} - u_{n\parallel})^2 \right)
+        + \frac{1}{2} R_\mathrm{ioniz} n_i \left(3 p_n - 3 p_i + m_i n_n (u_{i\parallel} - u_{n\parallel})^2 \right) \nonumber \\
+  &\qquad+ \frac{1}{2} \int m_i v^2 S_i d^3 v 
+         - m_i u_{i\parallel} \int v_\parallel S_i d^3 v
+         + \left( \frac{1}{2} m_i u_{i\parallel}^2 - \frac{3}{2} T_i \right) \int S_i d^3 v \\
+  \end{align}
+  ```
+  ```@raw html
+  <details>
+  <summary style="text-align:center">[ intermediate steps ]</summary>
+  ```
+  ```math
+  \begin{align}
+  \frac{\partial T_i}{\partial t} &= \frac{1}{2} m_i \frac{\partial v_{Ti}^2}{\partial t} \nonumber \\
+  &= m_i v_{Ti} \frac{\partial v_{Ti}}{\partial t} \\
+  \frac{\partial T_i}{\partial z} &= \frac{1}{2} m_i \frac{\partial v_{Ti}^2}{\partial z} \nonumber \\
+  &= m_i v_{Ti} \frac{\partial v_{Ti}}{\partial z} \\
+  \end{align}
+  ```
+  ```math
+  \begin{align}
+  & \frac{3}{2} m_i n_i v_{Ti} \frac{\partial v_{Ti}}{\partial t}
+    + \frac{\partial q_{i\parallel}}{\partial z} + p_{i\parallel} \frac{\partial u_{i\parallel}}{\partial z}
+    + \frac{3}{2} m_i n_i u_{i\parallel} v_{Ti} \frac{\partial v_{Ti}}{\partial z} \nonumber \\
+  &\quad= - \frac{1}{2} R_\mathrm{CX} \left(3 p_i n_n - 3 p_n n_i - m_i n_i n_n (u_{i\parallel} - u_{n\parallel})^2 \right)
+        + \frac{1}{2} R_\mathrm{ioniz} n_i \left(3 p_n - 3 p_i + m_i n_n (u_{i\parallel} - u_{n\parallel})^2 \right) \nonumber \\
+  &\qquad+ \frac{1}{2} \int m_i v^2 S_i d^3 v 
+         - m_i u_{i\parallel} \int v_\parallel S_i d^3 v
+         + \left( \frac{1}{2} m_i u_{i\parallel}^2 - \frac{3}{2} T_i \right) \int S_i d^3 v \\
+  \end{align}
+  ```
+  ```@raw html
+  </details>
+  ```
+  ```math
+  \begin{align}
+  & \frac{3}{2} m_i n_i v_{Ti} \left( \frac{\partial v_{Ti}}{\partial t} + u_{i\parallel} \frac{\partial v_{Ti}}{\partial z} \right) \nonumber \\
+  &\quad= - \frac{\partial q_{i\parallel}}{\partial z} - p_{i\parallel} \frac{\partial u_{i\parallel}}{\partial z}
+       \nonumber \\
+  &\qquad- \frac{1}{2} R_\mathrm{CX} \left(3 p_i n_n - 3 p_n n_i - m_i n_i n_n (u_{i\parallel} - u_{n\parallel})^2 \right)
+        + \frac{1}{2} R_\mathrm{ioniz} n_i \left(3 p_n - 3 p_i + m_i n_n (u_{i\parallel} - u_{n\parallel})^2 \right) \nonumber \\
+  &\qquad+ \frac{1}{2} \int m_i v^2 S_i d^3 v 
+         - m_i u_{i\parallel} \int v_\parallel S_i d^3 v
+         + \left( \frac{1}{2} m_i u_{i\parallel}^2 - \frac{3}{2} T_i \right) \int S_i d^3 v \\
   \end{align}
   ```
 
