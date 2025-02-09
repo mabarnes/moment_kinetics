@@ -2,7 +2,7 @@ Moment kinetic equations
 ========================
 
 In 1D the ion kinetic equation for the distribution function
-$f_i(\boldsymbol{r}, \boldsymbol{v}, t)=f_i(z, v_\parallel, v_\perp, t)$ is
+$f_i(t, \boldsymbol{r}, \boldsymbol{v})=f_i(t, z, v_\parallel, v_\perp)$ is
 ```math
 \begin{align}
 \frac{\partial f_i}{\partial t} + v_\parallel \frac{\partial f_i}{\partial z}
@@ -25,43 +25,43 @@ Want to normalise the distribution for any species $s$ to extract low-order
 moments.
 ```math
 \begin{align}
-F_s(z,w_\parallel,w_\perp,t) =
-  \frac{v_{Ts}^3}{n_s} f_s(z, u_{s\parallel}(z,t) + v_{Ts}(z,t)w_\parallel, v_{Ts}(z,t)w_\perp, t)
+F_s(t,z,w_\parallel,w_\perp) =
+  \frac{v_{Ts}^3}{n_s} f_s(t, z, u_{s\parallel}(t,z) + v_{Ts}(t,z)w_\parallel, v_{Ts}(t,z)w_\perp)
 \end{align}
 ```
 with normalised velocities
 ```math
 \begin{align}
-w_\parallel(z,v_\parallel,t) &= \frac{v_\parallel, - u_{s\parallel}(z,t)}{v_{Ts}(z,t)} \\
-w_\perp(z,v_\perp,t) &= \frac{v_\perp}{v_{Ts}(z,t)}
+w_\parallel(t,z,v_\parallel) &= \frac{v_\parallel, - u_{s\parallel}(t,z)}{v_{Ts}(t,z)} \\
+w_\perp(t,z,v_\perp) &= \frac{v_\perp}{v_{Ts}(t,z)}
 \end{align}
 ```
 the density
 ```math
 \begin{align}
-n_s(z,t) = 2\pi\int_{-\infty}^\infty dv_\parallel \int_0^\infty dv_\perp v_\perp f_s(z,v_\parallel,v_\perp,t)
+n_s(t,z) = 2\pi\int_{-\infty}^\infty dv_\parallel \int_0^\infty dv_\perp v_\perp f_s(t,z,v_\parallel,v_\perp)
 \end{align}
 ```
 the average parallel velocity
 ```math
 \begin{align}
-u_{s\parallel}(z,t) = \frac{2\pi}{n_s}\int_{-\infty}^\infty dv_\parallel \int_0^\infty dv_\perp v_\perp v_\parallel f_s(z,v_\parallel,v_\perp,t)
+u_{s\parallel}(t,z) = \frac{2\pi}{n_s}\int_{-\infty}^\infty dv_\parallel \int_0^\infty dv_\perp v_\perp v_\parallel f_s(t,z,v_\parallel,v_\perp)
 \end{align}
 ```
 and the thermal speed
 ```math
 \begin{align}
-v_{Ts}^2(z,t) = \frac{4\pi}{3n_s}\int_{-\infty}^\infty dv_\parallel \int_0^\infty dv_\perp v_\perp
-    \left[ (v_\parallel - u_{s\parallel}(z,t))^2 + v_\perp^2 \right] f_s(z,v_\parallel,v_\perp,t)
+v_{Ts}^2(t,z) = \frac{4\pi}{3n_s}\int_{-\infty}^\infty dv_\parallel \int_0^\infty dv_\perp v_\perp
+    \left[ (v_\parallel - u_{s\parallel}(t,z))^2 + v_\perp^2 \right] f_s(t,z,v_\parallel,v_\perp)
 \end{align}
 ```
 For use later, we also give the definitions of the parallel and perpendicular pressure
 ```math
 \begin{align}
-p_{s\parallel}(z,t) &= 2\pi\int_{-\infty}^\infty dv_\parallel \int_0^\infty dv_\perp v_\perp
-    m_s \left( v_\parallel - u_{s\parallel}(z,t) \right)^2 f_s(z,v_\parallel,v_\perp,t) \\
-p_{s\perp}(z,t) &= 2\pi\int_{-\infty}^\infty dv_\parallel \int_0^\infty dv_\perp v_\perp
-    m_s \frac{v_\perp^2}{2} f_s(z,v_\parallel,v_\perp,t) \\
+p_{s\parallel}(t,z) &= 2\pi\int_{-\infty}^\infty dv_\parallel \int_0^\infty dv_\perp v_\perp
+    m_s \left( v_\parallel - u_{s\parallel}(t,z) \right)^2 f_s(t,z,v_\parallel,v_\perp) \\
+p_{s\perp}(t,z) &= 2\pi\int_{-\infty}^\infty dv_\parallel \int_0^\infty dv_\perp v_\perp
+    m_s \frac{v_\perp^2}{2} f_s(t,z,v_\parallel,v_\perp) \\
 \end{align}
 ```
 and $T_{s\parallel} = p_{s\parallel}/n_s$, $T_{s\perp} = p_{s\perp}/n_s$, which
@@ -83,9 +83,9 @@ q_{s\parallel} = \int \frac{m_s}{2} \left( (v_\parallel - u_{s\parallel})^2 + v_
  $F_s$ must therefore satisfy the conditions
 ```math
 \begin{align}
-2\pi \int_{-\infty}^\infty dw_\parallel \int_0^\infty dw_\perp w_\perp F_s(z,w_\parallel,w_\perp,t) &= 1 \\
-2\pi \int_{-\infty}^\infty dw_\parallel \int_0^\infty dw_\perp w_\perp w_\parallel F_s(z,w_\parallel,w_\perp,t) &= 0 \\
-2\pi \int_{-\infty}^\infty dw_\parallel \int_0^\infty dw_\perp w_\perp (w_\parallel^2 + w_\perp^2) F_s(z,w_\parallel,w_\perp,t) &= \frac{3}{2} \\
+2\pi \int_{-\infty}^\infty dw_\parallel \int_0^\infty dw_\perp w_\perp F_s(t,z,w_\parallel,w_\perp) &= 1 \\
+2\pi \int_{-\infty}^\infty dw_\parallel \int_0^\infty dw_\perp w_\perp w_\parallel F_s(t,z,w_\parallel,w_\perp) &= 0 \\
+2\pi \int_{-\infty}^\infty dw_\parallel \int_0^\infty dw_\perp w_\perp (w_\parallel^2 + w_\perp^2) F_s(t,z,w_\parallel,w_\perp) &= \frac{3}{2} \\
 \end{align}
 ```
 
@@ -404,7 +404,7 @@ Normalise $n_i$ out of the distribution function. Velocity coordinates do not
 need to be modified.
 ```math
 \begin{align}
-F_s(z,v_\parallel,v_\perp,t) = \frac{f_s(z,v_\parallel,v_\perp,t)}{n_s}
+F_s(t,z,v_\parallel,v_\perp) = \frac{f_s(t,z,v_\parallel,v_\perp)}{n_s}
 \end{align}
 ```
 ```@raw html
