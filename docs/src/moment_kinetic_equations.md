@@ -32,7 +32,7 @@ F_s(t,z,w_\parallel,w_\perp) =
 with normalised velocities
 ```math
 \begin{align}
-w_\parallel(t,z,v_\parallel) &= \frac{v_\parallel, - u_{s\parallel}(t,z)}{v_{Ts}(t,z)} \\
+w_\parallel(t,z,v_\parallel) &= \frac{v_\parallel - u_{s\parallel}(t,z)}{v_{Ts}(t,z)} \\
 w_\perp(t,z,v_\perp) &= \frac{v_\perp}{v_{Ts}(t,z)}
 \end{align}
 ```
@@ -543,6 +543,89 @@ subsitute from the parallel flow equation
                \right) \frac{\partial F_i}{\partial \hat{w}_\parallel} \nonumber \\
   &\quad+ \left( \frac{(v_\parallel - u_{i\parallel})}{n_i} \frac{\partial n_i}{\partial z} - \frac{\partial u_{i\parallel}}{\partial z} + R_\mathrm{ioniz} n_n + \frac{1}{n_i} \int S_i d^3 v \right) F_i \nonumber \\
 &\quad= \frac{1}{n_i} C_{ii}[n_i F_i] - R_\mathrm{CX} n_n (F_i - F_n) + R_\mathrm{ioniz} n_n F_n + \frac{1}{n_i} S_i \\
+\end{align}
+```
+
+### Full moment-kinetics (separate $n_i$, $u_{i\parallel}$ and $p_i$)
+
+Form evolution equation for $F_i(t,z,w_\parallel,w_\perp)$, starting from
+kinetic equation for $f_i(t,z,v_\parallel,v_\perp)$
+```math
+\begin{align}
+\left. \frac{\partial f_i}{\partial t} \right|_{z,v_\parallel,v_\perp}
+    + v_\parallel \left. \frac{\partial f_i}{\partial z} \right|_{t,v_\parallel,v_\perp}
+    - \frac{e}{m_i} \frac{\partial\phi}{\partial z} \left. \frac{\partial f_i}{\partial v_\parallel} \right|_{t,z,v_\perp}
+    = C_{ii}[f_i] - R_\mathrm{CX}(n_n f_i - n_i f_n) + R_\mathrm{ioniz} n_i f_n + S_i
+\end{align}
+```
+and using the definitions of the normalised distribution function and
+coordinates (repeated here for convenience)
+```math
+\begin{align}
+F_s(t,z,w_\parallel,w_\perp) &=
+  \frac{v_{Ts}^3}{n_s} f_s(t, z, u_{s\parallel}(t,z) + v_{Ts}(t,z)w_\parallel, v_{Ts}(t,z)w_\perp) \nonumber \\
+
+w_\parallel(t,z,v_\parallel) &= \frac{v_\parallel - u_{s\parallel}(t,z)}{v_{Ts}(t,z)} \nonumber \\
+
+w_\perp(t,z,v_\perp) &= \frac{v_\perp}{v_{Ts}(t,z)} \nonumber \\
+\end{align}
+```
+
+Substituting the definition of $F_i$ gives
+```math
+\begin{align}
+\left. \frac{\partial f_i}{\partial t} \right|_{z,v_\parallel,v_\perp}
+  &= \left. \frac{\partial}{\partial t} \right|_{z,v_\parallel,v_\perp} \left(\frac{n_i F_i}{v_{Ti}^3}\right) \nonumber \\
+  &= \left. \frac{\partial n_i}{\partial t} \right|_{z,v_\parallel,v_\perp} \frac{F_i}{v_{Ti}^3}
+     - 3 \left. \frac{\partial v_{Ti}}{\partial t} \right|_{z,v_\parallel,v_\perp} \frac{n_i F_i}{v_{Ti}^4}
+     + \frac{n_i}{v_{Ti}^3} \left. \frac{\partial F_i}{\partial t} \right|_{z,v_\parallel,v_\perp} \\
+
+v_\parallel \left. \frac{\partial f_i}{\partial z} \right|_{t,v_\parallel,v_\perp}
+  &= v_\parallel \left. \frac{\partial}{\partial z} \right|_{t,v_\parallel,v_\perp} \left(\frac{n_i F_i}{v_{Ti}^3}\right) \nonumber \\
+  &= v_\parallel \left. \frac{\partial n_i}{\partial z} \right|_{t,v_\parallel,v_\perp} \frac{F_i}{v_{Ti}^3}
+     - 3 v_\parallel \left. \frac{\partial v_{Ti}}{\partial z} \right|_{t,v_\parallel,v_\perp} \frac{n_i F_i}{v_{Ti}^4}
+     + v_\parallel \frac{n_i}{v_{Ti}^3} \left. \frac{\partial F_i}{\partial z} \right|_{t,v_\parallel,v_\perp} \\
+
+\frac{e}{m_i} \frac{\partial \phi}{\partial z} \left. \frac{\partial f_i}{\partial v_\parallel} \right|_{t,z,v_\perp}
+  &= \frac{e}{m_i} \frac{\partial \phi}{\partial z} \left. \frac{\partial}{\partial v_\parallel} \right|_{t,z,v_\perp} \left(\frac{n_i F_i}{v_{Ti}^3}\right) \nonumber \\
+  &= \frac{e n_i}{m_i v_{Ti}^3} \frac{\partial \phi}{\partial z} \left. \frac{\partial F_i}{\partial v_\parallel} \right|_{t,z,v_\perp} \\
+\end{align}
+```
+making the kinetic equation
+```math
+\begin{align}
+&\frac{n_i}{v_{Ti}^3} \left. \frac{\partial F_i}{\partial t} \right|_{z,v_\parallel,v_\perp}
+    + v_\parallel \frac{n_i}{v_{Ti}^3} \left. \frac{\partial F_i}{\partial z} \right|_{t,v_\parallel,v_\perp}
+    - \frac{e n_i}{m_i v_{Ti}^3} \frac{\partial\phi}{\partial z} \left. \frac{\partial F_i}{\partial v_\parallel} \right|_{t,z,v_\perp} \nonumber \\
+    &\quad + \left( \frac{1}{v_{Ti}^3} \frac{\partial n_i}{\partial t} - \frac{3 n_i}{v_{Ti}^4} \frac{\partial v_{Ti}}{\partial t} + \frac{v_\parallel}{v_{Ti}^3} \frac{\partial n_i}{\partial z} - \frac{3 v_\parallel n_i}{v_{Ti}^4} \frac{\partial v_{Ti}}{\partial z} \right) F_i \nonumber \\
+    &\quad= C_{ii}[\frac{n_i F_i}{v_{Ti}^3}] - R_\mathrm{CX} \left( n_n \frac{n_i F_i}{v_{Ti}^3} - n_i \frac{n_n F_n}{v_{Tn}^3} \right) + R_\mathrm{ioniz} n_i \frac{n_n F_n}{v_{Tn}^3} + S_i \\
+
+&\left. \frac{\partial F_i}{\partial t} \right|_{z,v_\parallel,v_\perp}
+    + v_\parallel \left. \frac{\partial F_i}{\partial z} \right|_{t,v_\parallel,v_\perp}
+    - \frac{e}{m_i} \frac{\partial\phi}{\partial z} \left. \frac{\partial F_i}{\partial v_\parallel} \right|_{t,z,v_\perp} \nonumber \\
+    &\quad + \left( \frac{1}{n_i} \frac{\partial n_i}{\partial t} - \frac{3}{v_{Ti}} \frac{\partial v_{Ti}}{\partial t} + \frac{v_\parallel}{n_i} \frac{\partial n_i}{\partial z} - \frac{3 v_\parallel}{v_{Ti}} \frac{\partial v_{Ti}}{\partial z} \right) F_i \nonumber \\
+    &\quad= \frac{v_{Ti}^3}{n_i} C_{ii}[\frac{n_i F_i}{v_{Ti}^3}] - R_\mathrm{CX} n_n \left( F_i - \frac{v_{Ti}^3}{v_{Tn}^3} F_n \right) + R_\mathrm{ioniz} n_n \frac{v_{Ti}^3}{v_{Tn}^3} F_n + \frac{v_{Ti}^3}{n_i} S_i \\
+\end{align}
+```
+
+The change of coordinates transforms the derivatives as
+```math
+\begin{align}
+\left. \frac{\partial}{\partial t} \right|_{z,v_\parallel,v_\perp}
+  &= \left. \frac{\partial t}{\partial t} \right|_{z,v_\parallel,v_\perp} \left. \frac{\partial}{\partial t} \right|_{z,w_\parallel,w_\perp}
+    + \left. \frac{\partial z}{\partial t} \right|_{z,v_\parallel,v_\perp} \left. \frac{\partial}{\partial z} \right|_{t,w_\parallel,w_\perp}
+    + \left. \frac{\partial w_\parallel}{\partial t} \right|_{z,v_\parallel,v_\perp} \left. \frac{\partial}{\partial w_\parallel} \right|_{t,z,w_\perp}
+    + \left. \frac{\partial w_\perp}{\partial t} \right|_{z,v_\parallel,v_\perp} \left. \frac{\partial}{\partial w_\perp} \right|_{t,z,w_\parallel} \\
+
+  &= \frac{\partial}{\partial t}
+    + \frac{\partial}{\partial z}
+    + \left( -\frac{1}{v_{Ti}} \frac{\partial u_{i\parallel}}{\partial t} - \frac{(v_\parallel - u_{i\parallel})}{v_{Ti}^2} \frac{\partial v_{Ti}}{\partial t} \right) \frac{\partial}{\partial w_\parallel}
+    + \left( \frac{v_\perp}{v_{Ti}^2} \frac{\partial v_{Ti}}{\partial t} \right) \frac{\partial}{\partial w_\perp} \\
+
+  &= \frac{\partial}{\partial t}
+    + \frac{\partial}{\partial z}
+    + \left( -\frac{1}{v_{Ti}} \frac{\partial u_{i\parallel}}{\partial t} - \frac{w_\parallel}{v_{Ti}} \frac{\partial v_{Ti}}{\partial t} \right) \frac{\partial}{\partial w_\parallel}
+    + \left( \frac{w_\perp}{v_{Ti}} \frac{\partial v_{Ti}}{\partial t} \right) \frac{\partial}{\partial w_\perp} \\
 \end{align}
 ```
 
