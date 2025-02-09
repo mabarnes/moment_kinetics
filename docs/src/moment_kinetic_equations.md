@@ -189,6 +189,9 @@ Can integrate the drift kinetic equation to give the moment equations:
   \end{align}
   ```
   Sub from continuity $\rightarrow$ cancellation
+  ```@raw html
+  </details>
+  ```
   ```math
   \begin{align}
   &m_i n_i \frac{\partial u_{i\parallel}}{\partial t}
@@ -198,9 +201,6 @@ Can integrate the drift kinetic equation to give the moment equations:
      + R_\mathrm{ioniz} m_i n_i n_n u_{n\parallel}
      + m_i \int v_\parallel S_i d^3 v \\
   \end{align}
-  ```
-  ```@raw html
-  </details>
   ```
 * Energy
   ```@raw html
@@ -433,7 +433,115 @@ F_s(t,z,v_\parallel,v_\perp) = \frac{f_s(t,z,v_\parallel,v_\perp)}{n_s}
 \begin{align}
 & \frac{\partial F_i}{\partial t} + v_\parallel \frac{\partial F_i}{\partial z}
   - \frac{e}{m_i} \frac{\partial\phi}{\partial z} \frac{\partial F_i}{\partial v_\parallel}
-  + \left(- \frac{\partial u_{i\parallel}}{\partial z} - \frac{u_{i\parallel}}{n_i} \frac{\partial n_i}{\partial z} + R_\mathrm{ioniz} n_n + \frac{1}{n_i} \int S_i d^3 v + \frac{v_\parallel}{n_i} \frac{\partial n_i}{\partial z} \right) F_i \nonumber \\
+  + \left( \frac{(v_\parallel - u_{i\parallel})}{n_i} \frac{\partial n_i}{\partial z} - \frac{\partial u_{i\parallel}}{\partial z} + R_\mathrm{ioniz} n_n + \frac{1}{n_i} \int S_i d^3 v \right) F_i \nonumber \\
+&\quad= \frac{1}{n_i} C_{ii}[n_i F_i] - R_\mathrm{CX} n_n (F_i - F_n) + R_\mathrm{ioniz} n_n F_n + \frac{1}{n_i} S_i \\
+\end{align}
+```
+
+### Separate $n_i$ and $u_{i\parallel}$
+
+Normalise $n_i$ out of the distribution function. Shift to peculiar velocity.
+```math
+\begin{align}
+F_s(t,z,\hat{w}_\parallel,v_\perp) &= \frac{f_s(t,z,\hat{w}_\parallel,v_\perp)}{n_s} \\
+\hat{w}_\parallel &= v_\parallel - u_{s\parallel}
+\end{align}
+```
+```math
+\begin{align}
+\left. \frac{\partial}{\partial t} \right|_{z,v_\parallel,v_\perp}
+  &= \left. \frac{\partial t}{\partial t} \right|_{z,v_\parallel,v_\perp} \left. \frac{\partial}{\partial t} \right|_{z,\hat{w}_\parallel,v_\perp}
+    + \left. \frac{\partial z}{\partial t} \right|_{z,v_\parallel,v_\perp} \left. \frac{\partial}{\partial z} \right|_{t,\hat{w}_\parallel,v_\perp}
+    + \left. \frac{\partial \hat{w}_\parallel}{\partial t} \right|_{z,v_\parallel,v_\perp} \left. \frac{\partial}{\partial \hat{w}_\parallel} \right|_{t,z,v_\perp}
+    + \left. \frac{\partial v_\perp}{\partial t} \right|_{z,v_\parallel,v_\perp} \left. \frac{\partial}{\partial v_\perp} \right|_{t,z,\hat{w}_\parallel} \\
+
+  &= \left. \frac{\partial}{\partial t} \right|_{z,\hat{w}_\parallel,v_\perp}
+    - \left. \frac{\partial u_{s\parallel}}{\partial t} \right|_{z,v_\parallel,v_\perp} \left. \frac{\partial}{\partial \hat{w}_\parallel} \right|_{t,z,v_\perp} \\
+
+  &\equiv \left. \frac{\partial}{\partial t} \right|_{z,\hat{w}_\parallel,v_\perp}
+    - \frac{\partial u_{s\parallel}}{\partial t} \left. \frac{\partial}{\partial \hat{w}_\parallel} \right|_{t,z,v_\perp} \\
+
+\left. \frac{\partial}{\partial z} \right|_{t,v_\parallel,v_\perp}
+  &= \left. \frac{\partial t}{\partial z} \right|_{t,v_\parallel,v_\perp} \left. \frac{\partial}{\partial z} \right|_{t,\hat{w}_\parallel,v_\perp}
+    + \left. \frac{\partial z}{\partial z} \right|_{t,v_\parallel,v_\perp} \left. \frac{\partial}{\partial z} \right|_{t,\hat{w}_\parallel,v_\perp}
+    + \left. \frac{\partial \hat{w}_\parallel}{\partial z} \right|_{t,v_\parallel,v_\perp} \left. \frac{\partial}{\partial \hat{w}_\parallel} \right|_{t,z,v_\perp}
+    + \left. \frac{\partial v_\perp}{\partial z} \right|_{t,v_\parallel,v_\perp} \left. \frac{\partial}{\partial v_\perp} \right|_{t,z,\hat{w}_\parallel} \\
+
+  &= \left. \frac{\partial}{\partial z} \right|_{t,\hat{w}_\parallel,v_\perp}
+    - \left. \frac{\partial u_{s\parallel}}{\partial z} \right|_{t,v_\parallel,v_\perp} \left. \frac{\partial}{\partial \hat{w}_\parallel} \right|_{t,z,v_\perp} \\
+
+  &\equiv \left. \frac{\partial}{\partial z} \right|_{z,\hat{w}_\parallel,v_\perp}
+    - \frac{\partial u_{s\parallel}}{\partial z} \left. \frac{\partial}{\partial \hat{w}_\parallel} \right|_{t,z,v_\perp} \\
+\end{align}
+```
+ $\partial / \partial v_\parallel |_{t,z,v_\perp} = \partial / \partial \hat{w}_\parallel |_{t,z,v_\perp}$
+and
+$\partial / \partial v_\perp |_{t,z,v_\parallel} = \partial / \partial v_\perp |_{t,z,\hat{w}_\parallel}$
+as $u_{s\parallel}$ does not depend on $v_\parallel$ or $v_\perp$.
+
+```@raw html
+<details>
+<summary style="text-align:center">[ intermediate steps ]</summary>
+```
+The normalisation by $n_s$ to define $F_s$ is the same as for the 'separate
+$n_i$' case, so we can start from the kinetic equation there and then transform
+the coordinates to ${z,\hat{w}_\parallel,v_\perp,t}$
+```math
+\begin{align}
+& \left. \frac{\partial F_i}{\partial t} \right|_{z,v_\parallel,v_\perp}
+  + v_\parallel \left . \frac{\partial F_i}{\partial z} \right|_{t,v_\parallel,v_\perp}
+  - \frac{e}{m_i} \frac{\partial\phi}{\partial z} \left. \frac{\partial F_i}{\partial v_\parallel} \right|_{t,z,v_\perp}
+  + \left( \frac{(v_\parallel - u_{i\parallel})}{n_i} \frac{\partial n_i}{\partial z} - \frac{\partial u_{i\parallel}}{\partial z} + R_\mathrm{ioniz} n_n + \frac{1}{n_i} \int S_i d^3 v \right) F_i \nonumber \\
+&\quad= \frac{1}{n_i} C_{ii}[n_i F_i] - R_\mathrm{CX} n_n (F_i - F_n) + R_\mathrm{ioniz} n_n F_n + \frac{1}{n_i} S_i \\
+
+& \left. \frac{\partial F_i}{\partial t} \right|_{z,\hat{w}_\parallel,v_\perp}
+  - \frac{\partial u_{i\parallel}}{\partial t} \left. \frac{\partial F_i}{\partial \hat{w}_\parallel} \right|_{t,z,v_\perp}
+  + (\hat{w}_\parallel + u_{i\parallel}) \left. \frac{\partial F_i}{\partial z} \right|_{t,\hat{w}_\parallel,v_\perp}
+  - (\hat{w}_\parallel + u_{i\parallel}) \frac{\partial u_{i\parallel}}{\partial z} \left . \frac{\partial F_i}{\partial \hat{w}_\parallel} \right|_{t,z,v_\perp}
+  - \frac{e}{m_i} \frac{\partial\phi}{\partial z} \left. \frac{\partial F_i}{\partial \hat{w}_\parallel} \right|_{t,z,v_\perp} \nonumber \\
+  &\quad+ \left( \frac{(v_\parallel - u_{i\parallel})}{n_i} \frac{\partial n_i}{\partial z} - \frac{\partial u_{i\parallel}}{\partial z} + R_\mathrm{ioniz} n_n + \frac{1}{n_i} \int S_i d^3 v \right) F_i \nonumber \\
+&\quad= \frac{1}{n_i} C_{ii}[n_i F_i] - R_\mathrm{CX} n_n (F_i - F_n) + R_\mathrm{ioniz} n_n F_n + \frac{1}{n_i} S_i \\
+
+& \frac{\partial F_i}{\partial t}
+  + (\hat{w}_\parallel + u_{i\parallel}) \frac{\partial F_i}{\partial z}
+  - \left( \frac{\partial u_{i\parallel}}{\partial t}
+           + (\hat{w}_\parallel + u_{i\parallel}) \frac{\partial u_{i\parallel}}{\partial z} 
+           + \frac{e}{m_i} \frac{\partial\phi}{\partial z} \right) \frac{\partial F_i}{\partial \hat{w}_\parallel} \nonumber \\
+  &\quad+ \left( \frac{(v_\parallel - u_{i\parallel})}{n_i} \frac{\partial n_i}{\partial z} - \frac{\partial u_{i\parallel}}{\partial z} + R_\mathrm{ioniz} n_n + \frac{1}{n_i} \int S_i d^3 v \right) F_i \nonumber \\
+&\quad= \frac{1}{n_i} C_{ii}[n_i F_i] - R_\mathrm{CX} n_n (F_i - F_n) + R_\mathrm{ioniz} n_n F_n + \frac{1}{n_i} S_i \\
+\end{align}
+```
+subsitute from the parallel flow equation
+```math
+\begin{align}
+& \frac{\partial F_i}{\partial t}
+  + (\hat{w}_\parallel + u_{i\parallel}) \frac{\partial F_i}{\partial z}
+  - \left( - \cancel{u_{i\parallel} \frac{\partial u_{i\parallel}}{\partial z}}
+           - \frac{1}{m_i n_i} \frac{\partial p_{i\parallel}}{\partial z}
+           - \cancel{\frac{e}{m_i} \frac{\partial \phi}{\partial z}}
+           + R_\mathrm{CX} n_n (u_{n\parallel} - u_{i\parallel})
+           + R_\mathrm{ioniz} n_n u_{n\parallel}
+           + \frac{1}{n_i} \int v_\parallel S_i d^3 v
+           + (\hat{w}_\parallel + \cancel{u_{i\parallel}}) \frac{\partial u_{i\parallel}}{\partial z} 
+           + \cancel{\frac{e}{m_i} \frac{\partial\phi}{\partial z}} \right) \frac{\partial F_i}{\partial \hat{w}_\parallel} \nonumber \\
+  &\quad+ \left( \frac{(v_\parallel - u_{i\parallel})}{n_i} \frac{\partial n_i}{\partial z} - \frac{\partial u_{i\parallel}}{\partial z} + R_\mathrm{ioniz} n_n + \frac{1}{n_i} \int S_i d^3 v \right) F_i \nonumber \\
+&\quad= \frac{1}{n_i} C_{ii}[n_i F_i] - R_\mathrm{CX} n_n (F_i - F_n) + R_\mathrm{ioniz} n_n F_n + \frac{1}{n_i} S_i \\
+\end{align}
+```
+```@raw html
+</details>
+```
+```math
+\begin{align}
+& \frac{\partial F_i}{\partial t}
+  + (\hat{w}_\parallel + u_{i\parallel}) \frac{\partial F_i}{\partial z} \nonumber \\
+  &\quad- \left( \hat{w}_\parallel \frac{\partial u_{i\parallel}}{\partial z} 
+                 - \frac{1}{m_i n_i} \frac{\partial p_{i\parallel}}{\partial z}
+                 + R_\mathrm{CX} n_n (u_{n\parallel} - u_{i\parallel})
+                 + R_\mathrm{ioniz} n_n u_{n\parallel}
+                 + \frac{1}{n_i} \int v_\parallel S_i d^3 v
+               \right) \frac{\partial F_i}{\partial \hat{w}_\parallel} \nonumber \\
+  &\quad+ \left( \frac{(v_\parallel - u_{i\parallel})}{n_i} \frac{\partial n_i}{\partial z} - \frac{\partial u_{i\parallel}}{\partial z} + R_\mathrm{ioniz} n_n + \frac{1}{n_i} \int S_i d^3 v \right) F_i \nonumber \\
 &\quad= \frac{1}{n_i} C_{ii}[n_i F_i] - R_\mathrm{CX} n_n (F_i - F_n) + R_\mathrm{ioniz} n_n F_n + \frac{1}{n_i} S_i \\
 \end{align}
 ```
@@ -443,6 +551,10 @@ Old 1D1V moment kinetic equations
 
 These were the definitions and normalisations used before PR #?, February 2025.
 
+```@raw html
+<details>
+<summary style="text-align:center">[ notes using old definitions and normalisations ]</summary>
+```
 The following are partial notes on the derivation of the equations being solved
 by moment\_kinetics. It would be useful to expand them with more details from
 the Excalibur/Neptune reports. Equation references give the report number and
@@ -1465,4 +1577,7 @@ and for neutrals where several of the ionization terms cancel
   & = -R_{in}n_{i}\left(g_{n} - \frac{v_{\mathrm{th},n}}{v_{\mathrm{th},i}}g_{i}\right)
       - R_{\mathrm{ion}}n_{i}g_{n} + \frac{v_{\mathrm{th},n}}{n_{n}} S_{n}
 \end{align}
+```
+```@raw html
+</details>
 ```
