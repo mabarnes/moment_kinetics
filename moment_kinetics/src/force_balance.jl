@@ -79,7 +79,9 @@ end
                          spectral, composition, geometry, neutral_source_settings,
                          num_diss_params) = begin
 
-    begin_sn_r_z_region()
+    @begin_sn_r_z_region()
+
+    dnuz_dt = moments.neutral.dnuz_dt
 
     # account for momentum flux contribution to force balance
     density = fvec.density_neutral

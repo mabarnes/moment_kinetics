@@ -100,6 +100,12 @@ function create_moments_ion(nz, nr, n_species, evolve_density, evolve_upar,
         ddens_dz = allocate_shared_float(nz, nr, n_species)
         ddens_dz_upwind = allocate_shared_float(nz, nr, n_species)
         ddens_dt = allocate_shared_float(nz, nr, n_species)
+        @serial_region begin
+            # Initialise time derivatives so that we can use them without errors when
+            # initialising advection speeds. Note the initial values of the speeds are
+            # never actually used, as they are updated again in the first timestep.
+            ddens_dt .= 0.0
+        end
     else
         ddens_dz = nothing
         ddens_dz_upwind = nothing
@@ -120,6 +126,13 @@ function create_moments_ion(nz, nr, n_species, evolve_density, evolve_upar,
         dupar_dz_upwind = allocate_shared_float(nz, nr, n_species)
         dupar_dt = allocate_shared_float(nz, nr, n_species)
         dnupar_dt = allocate_shared_float(nz, nr, n_species)
+        @serial_region begin
+            # Initialise time derivatives so that we can use them without errors when
+            # initialising advection speeds. Note the initial values of the speeds are
+            # never actually used, as they are updated again in the first timestep.
+            dupar_dt .= 0.0
+            dnupar_dt .= 0.0
+        end
     else
         dupar_dz_upwind = nothing
         dupar_dt = nothing
@@ -144,6 +157,13 @@ function create_moments_ion(nz, nr, n_species, evolve_density, evolve_upar,
         dT_dz = allocate_shared_float(nz, nr, n_species)
         dppar_dt = allocate_shared_float(nz, nr, n_species)
         dvth_dt = allocate_shared_float(nz, nr, n_species)
+        @serial_region begin
+            # Initialise time derivatives so that we can use them without errors when
+            # initialising advection speeds. Note the initial values of the speeds are
+            # never actually used, as they are updated again in the first timestep.
+            dppar_dt .= 0.0
+            dvth_dt .= 0.0
+        end
     else
         dppar_dz_upwind = nothing
         d2ppar_dz2 = nothing
@@ -924,7 +944,7 @@ quantities. Moment kinetic equations require in addition some 'derived' time der
 which we can calculate by applying the chain rule.
 """
 function update_derived_ion_moment_time_derivatives!(fvec_in, moments)
-    begin_s_r_z_region()
+    @begin_s_r_z_region()
 
     n = fvec_in.density
     upar = fvec_in.upar
@@ -961,7 +981,7 @@ quantities. Moment kinetic equations require in addition some 'derived' time der
 which we can calculate by applying the chain rule.
 """
 function update_derived_neutral_moment_time_derivatives!(fvec_in, moments)
-    begin_sn_r_z_region()
+    @begin_sn_r_z_region()
 
     n = fvec_in.density_neutral
     uz = fvec_in.uz_neutral

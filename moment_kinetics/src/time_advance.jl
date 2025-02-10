@@ -3451,13 +3451,6 @@ with fvec_in an input and fvec_out the output
     end
 
     # Start advance for moments
-    if moments.evolve_density || moments.evolve_upar || moments.evolve_ppar
-        # Only need to change region type if moment evolution equations will be used.
-        # Exept when using wall boundary conditions, do not actually need to synchronize
-        # here because above we only modify the distribution function and below we only
-        # modify the moments, so there is no possibility of race conditions.
-        @begin_s_r_z_region(no_synchronize=true)
-    end
     if advance.continuity
         continuity_equation!(fvec_out.density, fvec_in, moments, composition, dt,
                              z_spectral, collisions.reactions.ionization_frequency,
@@ -3471,13 +3464,6 @@ with fvec_in an input and fvec_out the output
     if advance.energy
         energy_equation!(fvec_out.ppar, fvec_in, moments, collisions, dt, z_spectral,
                          composition, external_source_settings.ion, num_diss_params)
-    end
-    if moments.evolve_density || moments.evolve_upar || moments.evolve_ppar
-        # Only need to change region type if moment evolution equations will be used.
-        # Exept when using wall boundary conditions, do not actually need to synchronize
-        # here because above we only modify the distribution function and below we only
-        # modify the moments, so there is no possibility of race conditions.
-        @begin_sn_r_z_region(no_synchronize=true)
     end
     if advance.neutral_continuity
         neutral_continuity_equation!(fvec_out.density_neutral, fvec_in, moments,
