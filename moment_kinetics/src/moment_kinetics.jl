@@ -214,7 +214,8 @@ parallel loop ranges, and are only used by the tests in `debug_test/`.
                          debug_loop_type::Union{Nothing,NTuple{N,Symbol} where N}=nothing,
                          debug_loop_parallel_dims::Union{Nothing,NTuple{N,Symbol} where N}=nothing,
                          skip_electron_solve::Bool=false,
-                         write_output::Bool=true) = begin
+                         write_output::Bool=true,
+                         warn_unexpected_input::Bool=false) = begin
 
     setup_start_time = now()
 
@@ -226,7 +227,8 @@ parallel loop ranges, and are only used by the tests in `debug_test/`.
         flush(stdout)
     end
 
-    input = mk_input(input_dict; save_inputs_to_txt=true, ignore_MPI=false)
+    input = mk_input(input_dict; save_inputs_to_txt=true, ignore_MPI=false,
+                     warn_unexpected=warn_unexpected_input)
     # obtain input options from moment_kinetics_input.jl
     # and check input to catch errors
     io_input, evolve_moments, t_input, z, z_spectral, r, r_spectral, vpa, vpa_spectral,
