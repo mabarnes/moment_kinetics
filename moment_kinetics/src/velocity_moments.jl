@@ -12,6 +12,7 @@ export update_upar!
 export update_ppar!
 export update_pperp!
 export update_ion_qpar!
+export update_derived_ion_moment_time_derivatives!
 export update_vth!
 export reset_moments_status!
 export update_neutral_density!
@@ -22,6 +23,7 @@ export update_neutral_pz!
 export update_neutral_pr!
 export update_neutral_pzeta!
 export update_neutral_qz!
+export update_derived_neutral_moment_time_derivatives!
 export update_chodura!
 
 # for testing 
@@ -97,9 +99,11 @@ function create_moments_ion(nz, nr, n_species, evolve_density, evolve_upar,
     if evolve_density
         ddens_dz = allocate_shared_float(nz, nr, n_species)
         ddens_dz_upwind = allocate_shared_float(nz, nr, n_species)
+        ddens_dt = allocate_shared_float(nz, nr, n_species)
     else
         ddens_dz = nothing
         ddens_dz_upwind = nothing
+        ddens_dt = nothing
     end
     if evolve_density && num_diss_params.ion.moment_dissipation_coefficient > 0.0
 
@@ -114,8 +118,12 @@ function create_moments_ion(nz, nr, n_species, evolve_density, evolve_upar,
     end
     if evolve_upar
         dupar_dz_upwind = allocate_shared_float(nz, nr, n_species)
+        dupar_dt = allocate_shared_float(nz, nr, n_species)
+        dnupar_dt = allocate_shared_float(nz, nr, n_species)
     else
         dupar_dz_upwind = nothing
+        dupar_dt = nothing
+        dnupar_dt = nothing
     end
     if evolve_upar && num_diss_params.ion.moment_dissipation_coefficient > 0.0
 
@@ -134,12 +142,16 @@ function create_moments_ion(nz, nr, n_species, evolve_density, evolve_upar,
         dqpar_dz = allocate_shared_float(nz, nr, n_species)
         dvth_dz = allocate_shared_float(nz, nr, n_species)
         dT_dz = allocate_shared_float(nz, nr, n_species)
+        dppar_dt = allocate_shared_float(nz, nr, n_species)
+        dvth_dt = allocate_shared_float(nz, nr, n_species)
     else
         dppar_dz_upwind = nothing
         d2ppar_dz2 = nothing
         dqpar_dz = nothing
         dvth_dz = nothing
         dT_dz = nothing
+        dppar_dt = nothing
+        dvth_dt = nothing
     end
 
     entropy_production = allocate_shared_float(nz, nr, n_species)
@@ -196,7 +208,8 @@ function create_moments_ion(nz, nr, n_species, evolve_density, evolve_upar,
         parallel_heat_flux, parallel_heat_flux_updated, thermal_speed, temperature, 
         chodura_integral_lower, chodura_integral_upper, v_norm_fac,
         ddens_dz, ddens_dz_upwind, d2dens_dz2, dupar_dz, dupar_dz_upwind, d2upar_dz2,
-        dppar_dz, dppar_dz_upwind, d2ppar_dz2, dqpar_dz, dvth_dz, dT_dz, entropy_production,
+        dppar_dz, dppar_dz_upwind, d2ppar_dz2, dqpar_dz, dvth_dz, dT_dz, ddens_dt,
+        dupar_dt, dnupar_dt, dppar_dt, dvth_dt, entropy_production,
         external_source_amplitude, external_source_density_amplitude,
         external_source_momentum_amplitude, external_source_pressure_amplitude,
         external_source_controller_integral, constraints_A_coefficient,
@@ -327,9 +340,11 @@ function create_moments_neutral(nz, nr, n_species, evolve_density, evolve_upar,
     if evolve_density
         ddens_dz = allocate_shared_float(nz, nr, n_species)
         ddens_dz_upwind = allocate_shared_float(nz, nr, n_species)
+        ddens_dt = allocate_shared_float(nz, nr, n_species)
     else
         ddens_dz = nothing
         ddens_dz_upwind = nothing
+        ddens_dt = nothing
     end
     if evolve_density && num_diss_params.neutral.moment_dissipation_coefficient > 0.0
 
@@ -344,8 +359,12 @@ function create_moments_neutral(nz, nr, n_species, evolve_density, evolve_upar,
     end
     if evolve_upar
         duz_dz_upwind = allocate_shared_float(nz, nr, n_species)
+        duz_dt = allocate_shared_float(nz, nr, n_species)
+        dnuz_dt = allocate_shared_float(nz, nr, n_species)
     else
         duz_dz_upwind = nothing
+        duz_dt = nothing
+        dnuz_dt = nothing
     end
     if evolve_upar && num_diss_params.neutral.moment_dissipation_coefficient > 0.0
 
@@ -363,11 +382,15 @@ function create_moments_neutral(nz, nr, n_species, evolve_density, evolve_upar,
         d2pz_dz2 = allocate_shared_float(nz, nr, n_species)
         dqz_dz = allocate_shared_float(nz, nr, n_species)
         dvth_dz = allocate_shared_float(nz, nr, n_species)
+        dpz_dt = allocate_shared_float(nz, nr, n_species)
+        dvth_dt = allocate_shared_float(nz, nr, n_species)
     else
         dpz_dz_upwind = nothing
         d2pz_dz2 = nothing
         dqz_dz = nothing
         dvth_dz = nothing
+        dpz_dt = nothing
+        dvth_dt = nothing
     end
 
     n_sources = length(neutral_source_settings)
@@ -421,7 +444,8 @@ function create_moments_neutral(nz, nr, n_species, evolve_density, evolve_upar,
         ur_updated, uzeta, uzeta_updated, pz, pz_updated, pr, pr_updated, pzeta,
         pzeta_updated, ptot, qz, qz_updated, vth, v_norm_fac, ddens_dz, ddens_dz_upwind,
         d2dens_dz2, duz_dz, duz_dz_upwind, d2uz_dz2, dpz_dz, dpz_dz_upwind, d2pz_dz2,
-        dqz_dz, dvth_dz, external_source_amplitude, external_source_density_amplitude,
+        dqz_dz, dvth_dz, ddens_dt, duz_dt, dnuz_dt, dpz_dt, dvth_dt,
+        external_source_amplitude, external_source_density_amplitude,
         external_source_momentum_amplitude, external_source_pressure_amplitude,
         external_source_controller_integral, constraints_A_coefficient,
         constraints_B_coefficient, constraints_C_coefficient)
@@ -893,11 +917,85 @@ function calculate_ion_qpar_from_coll_krook!(qpar, density, upar, vth, dT_dz, z,
     end
     return nothing
 end
+
+"""
+'Primary' time derivatives are calculated when doing the time advance for moment
+quantities. Moment kinetic equations require in addition some 'derived' time derivatives,
+which we can calculate by applying the chain rule.
+"""
+function update_derived_ion_moment_time_derivatives!(fvec_in, moments)
+    begin_s_r_z_region()
+
+    n = fvec_in.density
+    upar = fvec_in.upar
+    ppar = fvec_in.ppar
+    vth = moments.ion.vth
+    dn_dt = moments.ion.ddens_dt
+    dnupar_dt = moments.ion.dnupar_dt
+    dppar_dt = moments.ion.dppar_dt
+
+    dupar_dt = moments.ion.dupar_dt
+    dvth_dt = moments.ion.dvth_dt
+
+    if dupar_dt !== nothing
+        @loop_s_r_z is ir iz begin
+            dupar_dt[iz,ir,is] = (dnupar_dt[iz,ir,is] - upar[iz,ir,is] * dn_dt[iz,ir,is]) / n[iz,ir,is]
+        end
+    end
+
+    if dvth_dt !== nothing
+        @loop_s_r_z is ir iz begin
+            # vth = sqrt(2*ppar/n)
+            # dvth/dt = 1 / sqrt(2*ppar*n) * dppar/dt - sqrt(ppar/2/n^3) * dn/t
+            dvth_dt[iz,ir,is] = 0.5 * vth[iz,ir,is] *
+                                (dppar_dt[iz,ir,is] / ppar[iz,ir,is] - dn_dt[iz,ir,is] / n[iz,ir,is])
+        end
+    end
+
+    return nothing
+end
+
+"""
+'Primary' time derivatives are calculated when doing the time advance for moment
+quantities. Moment kinetic equations require in addition some 'derived' time derivatives,
+which we can calculate by applying the chain rule.
+"""
+function update_derived_neutral_moment_time_derivatives!(fvec_in, moments)
+    begin_sn_r_z_region()
+
+    n = fvec_in.density_neutral
+    uz = fvec_in.uz_neutral
+    pz = fvec_in.pz_neutral
+    vth = moments.neutral.vth
+    dn_dt = moments.neutral.ddens_dt
+    dnuz_dt = moments.neutral.dnuz_dt
+    dpz_dt = moments.neutral.dpz_dt
+
+    duz_dt = moments.neutral.duz_dt
+    dvth_dt = moments.neutral.dvth_dt
+
+    if duz_dt !== nothing
+        @loop_sn_r_z isn ir iz begin
+            duz_dt[iz,ir,isn] = (dnuz_dt[iz,ir,isn] - uz[iz,ir,isn] * dn_dt[iz,ir,isn]) / n[iz,ir,isn]
+        end
+    end
+
+    if dvth_dt !== nothing
+        @loop_sn_r_z isn ir iz begin
+            # vth = sqrt(2*pz/n)
+            # dvth/dt = 1 / sqrt(2*pz*n) * dpz/dt - sqrt(pz/2/n^3) * dn/t
+            dvth_dt[iz,ir,isn] = 0.5 * vth[iz,ir,isn] *
+                                (dpz_dt[iz,ir,isn] / pz[iz,ir,isn] - dn_dt[iz,ir,isn] / n[iz,ir,isn])
+        end
+    end
+
+    return nothing
+end
+
 """
 runtime diagnostic routine for computing the Chodura ratio
 in a single species plasma with Z = 1
 """
-
 function update_chodura!(moments,ff,vpa,vperp,z,r,r_spectral,composition,geometry,scratch_dummy,z_advect)
     @boundscheck composition.n_ion_species == size(ff, 5) || throw(BoundsError(ff))
     @begin_s_z_vperp_vpa_region()
