@@ -1,5 +1,5 @@
 Magnetic Geometry
-===============================================
+=================
 
 We take the magnetic field $\mathbf{B}$ to have the form 
 ```math
@@ -14,7 +14,7 @@ and $\hat{\mathbf{\zeta}} = r \nabla \zeta$. The unit vectors $\hat{\mathbf{r}}$
 form a right-handed orthonormal basis.
 
 Supported options
-===============================================
+-----------------
 
 To choose the type of geometry, set the value of "option" in the geometry namelist. The namelist will have the following appearance in the TOML file.
 ```
@@ -26,12 +26,12 @@ DeltaB = 0.0
 ```
 If `rhostar` is not set then it is computed from reference parameters.
 
-[geometry] option = "constant-helical"
-===============================================
+### [geometry] option = "constant-helical"
+
 Here $b_\zeta = \sqrt{1 - b_z^2}$ is a constant, $b_z$ is a constant input parameter ("pitch") and $B$ is taken to be 1 with respect to the reference value $B_{\rm ref}$.
 
-[geometry] option = "1D-mirror"
-===============================================
+### [geometry] option = "1D-mirror"
+
 Here $b_\zeta = \sqrt{1 - b_z^2}$ is a constant, $b_z$ is a constant input parameter ("pitch") and $B = B(z)$ is taken to be 
 the function 
 ```math
@@ -51,7 +51,7 @@ only used to test the implementation of the magnetic mirror terms. 2D simulation
 geometry option.
 
 Geometric coefficients
-===============================================
+----------------------
 Here, we write the geometric coefficients appearing in the characteristic equations
 explicitly.
 
