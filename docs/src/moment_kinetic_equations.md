@@ -832,6 +832,90 @@ The moment equations are therefore very similar to those of the ions
        + \frac{1}{2} m_n u_{n\parallel}^2 \int S_n d^3 v \\
 \end{align}
 ```
+as are the 3 variants on the moment-kinetic equation, given in the following subsections.
+
+### Separate $n_n$
+
+```math
+\begin{align}
+& \frac{\partial F_n}{\partial t} + v_\parallel \frac{\partial F_n}{\partial z}
+  + \left( \frac{(v_\parallel - u_{n\parallel})}{n_n} \frac{\partial n_n}{\partial z} - \frac{\partial u_{n\parallel}}{\partial z} - R_\mathrm{ioniz} \frac{n_e n_n}{n_i} + \frac{1}{n_n} \int S_n d^3 v \right) F_n \nonumber \\
+&\quad= R_\mathrm{CX} n_i (F_i - F_n) - R_\mathrm{ioniz} n_e F_n + \frac{1}{n_n} S_n \\
+\end{align}
+```
+
+### Separate $n_n$ and $u_{n\parallel}$
+
+```math
+\begin{align}
+& \frac{\partial F_n}{\partial t}
+  + (\hat{w}_\parallel + u_{n\parallel}) \frac{\partial F_n}{\partial z} \nonumber \\
+  &\quad- \left( \hat{w}_\parallel \frac{\partial u_{n\parallel}}{\partial z}
+                 - \frac{1}{m_n n_n} \frac{\partial p_{n\parallel}}{\partial z}
+                 - R_\mathrm{CX} n_n (u_{n\parallel} - u_{i\parallel})
+                 - R_\mathrm{ioniz} \frac{n_e n_n}{n_i} u_{n\parallel}
+                 + \frac{1}{n_n} \int v_\parallel S_n d^3 v
+               \right) \frac{\partial F_n}{\partial \hat{w}_\parallel} \nonumber \\
+  &\quad+ \left( \frac{(v_\parallel - u_{n\parallel})}{n_n} \frac{\partial n_n}{\partial z} - \frac{\partial u_{n\parallel}}{\partial z} - R_\mathrm{ioniz} \frac{n_e n_n}{n_i} + \frac{1}{n_n} \int S_n d^3 v \right) F_n \nonumber \\
+&\quad= R_\mathrm{CX} n_i (F_i - F_n) - R_\mathrm{ioniz} n_e F_n + \frac{1}{n_n} S_n \\
+\end{align}
+```
+
+### Full moment-kinetics (separate $n_n$, $u_{n\parallel}$ and $p_{n}$)
+
+```math
+\begin{align}
+&\frac{\partial F_n}{\partial t} + \dot{z} \frac{\partial F_n}{\partial z} + \dot{w}_\parallel \frac{\partial F_n}{\partial w_\parallel} + \dot{w}_\perp \frac{\partial F_n}{\partial w_\perp}
+    = \dot{F}_n + \mathcal{C}_n + \frac{v_{Tn}^3}{n_n} S_n \\
+
+\dot{w}_\parallel &= - \left( \frac{1}{v_{Tn}} \frac{\partial u_{n\parallel}}{\partial t} + \left( w_\parallel + \frac{u_{n_\parallel}}{v_{Tn}} \right) \frac{\partial u_{n\parallel}}{\partial z} \right. \nonumber \\
+    &\qquad\quad  \left. + \frac{w_\parallel}{v_{Tn}} \frac{\partial v_{Tn}}{\partial t} + w_\parallel \left( w_\parallel + \frac{u_{n\parallel}}{v_{Tn}} \right) \frac{\partial v_{Tn}}{\partial z} \right) \\
+
+\dot{w}_\perp &= -\left( \frac{w_\perp}{v_{Tn}} \frac{\partial v_{Tn}}{\partial t} + \left( w_\parallel + \frac{u_{n\parallel}}{v_{Tn}} \right) w_\perp \frac{\partial v_{Tn}}{\partial z} \right) \\
+
+\frac{\dot{F}_n}{F_n} &= \frac{3}{v_{Tn}} \frac{\partial v_{Tn}}{\partial t} + \frac{3 (v_{Tn} w_\parallel + u_{n\parallel})}{v_{Tn}} \frac{\partial v_{Tn}}{\partial z}
+                   - \frac{1}{n_n} \frac{\partial n_n}{\partial t} - \frac{(v_{Tn} w_\parallel + u_{n\parallel})}{n_n} \frac{\partial n_n}{\partial z} \\
+
+\mathcal{C}_n &= R_\mathrm{CX} n_i \left( \frac{v_{Tn}^3}{v_{Ti}^3} F_i - F_n \right) - R_\mathrm{ioniz} n_e F_n \\
+\end{align}
+```
+
+Again, we could substitute in the moment equations
+```math
+\begin{align}
+\dot{w}_\parallel &= w_\parallel \frac{\partial u_{n\parallel}}{\partial z}
+                     + \frac{1}{m_n n_n v_{Tn}} \frac{\partial p_{n\parallel}}{\partial z}
+                     + R_\mathrm{CX} \frac{n_i}{v_{Tn}} (u_{n\parallel} - u_{i\parallel})
+                     + R_\mathrm{ioniz} \frac{n_e n_n (u_{n\parallel} - u_{i\parallel})}{n_n v_{Tn}}
+                     - \frac{1}{n_n v_{Tn}} \int (v_\parallel - u_{n\parallel}) S_n d^3 v \nonumber \\
+        &\qquad\quad - w_\parallel^2 \frac{\partial v_{Tn}}{\partial z}
+                     + \frac{w_\parallel}{3 p_n} \frac{\partial q_{n\parallel}}{\partial z}
+                     + \frac{w_\parallel p_{n\parallel}}{3 p_n} \frac{\partial u_{n\parallel}}{\partial z}
+                     - \frac{w_\parallel}{6 p_n} R_\mathrm{CX} n_i n_n \left( 3 T_i - 3 T_n - m_i (u_{i\parallel} - u_{n\parallel})^2 \right)
+                     + \frac{w_\parallel}{6 p_n} R_\mathrm{ioniz} n_e n_n \left( 3 T_n - 3 T_i + m_i (u_{i\parallel} - u_{n\parallel})^2 \right)
+                     - \frac{w_\parallel}{6 p_n} \int m_n v^2 S_n d^3 v
+                     + \frac{w_\parallel u_{n\parallel}}{3 p_n} \int v_\parallel S_n d^3 v
+                     - \frac{w_\parallel}{3 p_n} \left( \frac{1}{2} m_n u_{n\parallel}^2 - \frac{3}{2} T_n \right) \int S_n d^3 v \\
+\dot{w}_\perp &= -w_\parallel w_\perp \frac{\partial v_{Tn}}{\partial z}
+                 + \frac{w_\perp}{3 p_n} \frac{\partial q_{n\parallel}}{\partial z}
+                 + \frac{w_\perp p_{n\parallel}}{3 p_n}
+                 - \frac{w_\perp}{6 p_n} R_\mathrm{CX} n_i n_n \left( 3 T_i - 3 T_n - m_i (u_{i\parallel} - u_{n\parallel})^2 \right)
+                 + \frac{w_\perp}{6 p_n} R_\mathrm{ioniz} n_e n_n \left( 3 T_n - 3 T_i + m_i (u_{i\parallel} - u_{n\parallel})^2 \right)
+                 - \frac{w_\perp}{6 p_n} \int m_n v^2 S_n d^3 v
+                 + \frac{2 w_\perp u_{n\parallel}}{6 p_n} \int v_\parallel S_n d^3 v
+                 - \frac{w_\perp}{3 p_n} \left( \frac{1}{2} m_n u_{n\parallel}^2 - \frac{3}{2} T_n \right) \int S_n d^3 v \\
+\frac{\dot{F}_n}{F_n} &= 3 w_\parallel \frac{\partial v_{Tn}}{\partial z}
+                         - \frac{1}{p_n} \frac{\partial q_{n\parallel}}{\partial z}
+                         - \frac{p_{n\parallel}}{p_n} \frac{\partial u_{n\parallel}}{\partial z}
+                         + \frac{1}{2 p_n} R_\mathrm{CX} n_i n_n \left( 3 T_i - 3 T_n - m_i (u_{i\parallel} - u_{n\parallel})^2 \right)
+                         - \frac{1}{2 p_n} R_\mathrm{ioniz} n_e n_n \left( 3 T_n - 3 T_i + m_i (u_{i\parallel} - u_{n\parallel})^2 \right)
+                         + \frac{1}{2 p_n} \int m_n v^2 S_n d^3 v
+                         - \frac{m_n u_{n\parallel}}{p_n} \int v_\parallel S_n d^3 v
+                         + \frac{1}{p_n} \left( \frac{1}{2} m_n u_{n\parallel}^2 - \frac{3}{2} T_n \right) \int S_n d^3 v \nonumber \\
+            &\qquad\quad - \frac{v_{Tn} w_\parallel}{n_n} \frac{\partial n_n}{\partial z}
+                         + \frac{\partial u_{n\parallel}}{\partial z} - R_\mathrm{ioniz} \frac{n_e n_n}{n_n} - \frac{1}{n_n} \int S_n d^3 v \nonumber \\
+\end{align}
+```
 
 Old 1D1V moment kinetic equations
 ---------------------------------
