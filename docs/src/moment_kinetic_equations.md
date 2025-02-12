@@ -293,8 +293,8 @@ Can integrate the drift kinetic equation to give the moment equations:
   & \frac{3}{2} \frac{\partial p_i}{\partial t}
     + \frac{\partial q_{i\parallel}}{\partial z} + p_{i\parallel} \frac{\partial u_{i\parallel}}{\partial z}
     + \frac{3}{2} u_{i\parallel} \frac{\partial p_i}{\partial z} + \frac{3}{2} p_i \frac{\partial u_{i\parallel}}{\partial z} \nonumber \\
-  &\quad= - \frac{1}{2} R_\mathrm{CX} \left(3 p_i n_n - 3 p_n n_i - m_i n_i n_n (u_{i\parallel} - u_{n\parallel})^2 \right)
-        + \frac{1}{2} R_\mathrm{ioniz} n_e \left(3 p_n + m_i n_n (u_{i\parallel} - u_{n\parallel})^2 \right) \nonumber \\
+  &\quad= - \frac{1}{2} R_\mathrm{CX} n_i n_n \left(3 T_i - 3 T_n - m_i (u_{i\parallel} - u_{n\parallel})^2 \right)
+        + \frac{1}{2} R_\mathrm{ioniz} n_e n_n \left(3 T_n + m_i (u_{i\parallel} - u_{n\parallel})^2 \right) \nonumber \\
   &\qquad+ \frac{1}{2} \int m_i v^2 S_i d^3 v 
          - m_i u_{i\parallel} \int v_\parallel S_i d^3 v
          + \frac{1}{2} m_i u_{i\parallel}^2 \int S_i d^3 v \\
@@ -313,7 +313,7 @@ Can integrate the drift kinetic equation to give the moment equations:
   & \frac{3}{2} \frac{\partial n_i T_i}{\partial t}
     + \frac{\partial q_{i\parallel}}{\partial z} + p_{i\parallel} \frac{\partial u_{i\parallel}}{\partial z}
     + \frac{3}{2} u_{i\parallel} \frac{\partial n_i T_i}{\partial z} + \frac{3}{2} n_i T_i \frac{\partial u_{i\parallel}}{\partial z} \nonumber \\
-  &\quad= - \frac{1}{2} R_\mathrm{CX} \left(3 p_i n_n - 3 p_n n_i - m_i n_i n_n (u_{i\parallel} - u_{n\parallel})^2 \right)
+  &\quad= - \frac{1}{2} R_\mathrm{CX} n_i n_n \left(3 T_i - 3 T_n - m_i (u_{i\parallel} - u_{n\parallel})^2 \right)
         + \frac{1}{2} R_\mathrm{ioniz} n_e n_n \left(3 T_n + m_i (u_{i\parallel} - u_{n\parallel})^2 \right) \nonumber \\
   &\qquad+ \frac{1}{2} \int m_i v^2 S_i d^3 v 
          - m_i u_{i\parallel} \int v_\parallel S_i d^3 v
@@ -322,7 +322,7 @@ Can integrate the drift kinetic equation to give the moment equations:
   & \frac{3}{2} n_i \frac{\partial T_i}{\partial t} + \frac{3}{2} T_i \frac{\partial n_i}{\partial t}
     + \frac{\partial q_{i\parallel}}{\partial z} + p_{i\parallel} \frac{\partial u_{i\parallel}}{\partial z}
     + \frac{3}{2} n_i u_{i\parallel} \frac{\partial T_i}{\partial z} + \frac{3}{2} u_{i\parallel} T_i \frac{\partial n_i}{\partial z} + \frac{3}{2} n_i T_i \frac{\partial u_{i\parallel}}{\partial z} \nonumber \\
-  &\quad= - \frac{1}{2} R_\mathrm{CX} \left(3 p_i n_n - 3 p_n n_i - m_i n_i n_n (u_{i\parallel} - u_{n\parallel})^2 \right)
+  &\quad= - \frac{1}{2} R_\mathrm{CX} n_i n_n \left(3 T_i - 3 T_n - m_i (u_{i\parallel} - u_{n\parallel})^2 \right)
         + \frac{1}{2} R_\mathrm{ioniz} n_e n_n \left(3 T_n + m_i (u_{i\parallel} - u_{n\parallel})^2 \right) \nonumber \\
   &\qquad+ \frac{1}{2} \int m_i v^2 S_i d^3 v 
          - m_i u_{i\parallel} \int v_\parallel S_i d^3 v
@@ -332,7 +332,7 @@ Can integrate the drift kinetic equation to give the moment equations:
     - \frac{3}{2} n_i T_i \frac{\partial u_{i\parallel}}{\partial z} - \frac{3}{2} u_{i\parallel} T_i \frac{\partial n_i}{\partial z} + \frac{3}{2} T_i R_\mathrm{ioniz} n_e n_n + \frac{3}{2} T_i \int S_i d^3 v
     + \frac{\partial q_{i\parallel}}{\partial z} + p_{i\parallel} \frac{\partial u_{i\parallel}}{\partial z}
     + \frac{3}{2} n_i u_{i\parallel} \frac{\partial T_i}{\partial z} + \frac{3}{2} u_{i\parallel} T_i \frac{\partial n_i}{\partial z} + \frac{3}{2} n_i T_i \frac{\partial u_{i\parallel}}{\partial z} \nonumber \\
-  &\quad= - \frac{1}{2} R_\mathrm{CX} \left(3 p_i n_n - 3 p_n n_i - m_i n_i n_n (u_{i\parallel} - u_{n\parallel})^2 \right)
+  &\quad= - \frac{1}{2} R_\mathrm{CX} n_i n_n \left(3 T_i - 3 T_n - m_i (u_{i\parallel} - u_{n\parallel})^2 \right)
         + \frac{1}{2} R_\mathrm{ioniz} n_e n_n \left(3 T_n + m_i (u_{i\parallel} - u_{n\parallel})^2 \right) \nonumber \\
   &\qquad+ \frac{1}{2} \int m_i v^2 S_i d^3 v 
          - m_i u_{i\parallel} \int v_\parallel S_i d^3 v
@@ -347,7 +347,7 @@ Can integrate the drift kinetic equation to give the moment equations:
   & \frac{3}{2} n_i \frac{\partial T_i}{\partial t}
     + \frac{\partial q_{i\parallel}}{\partial z} + p_{i\parallel} \frac{\partial u_{i\parallel}}{\partial z}
     + \frac{3}{2} n_i u_{i\parallel} \frac{\partial T_i}{\partial z} \nonumber \\
-  &\quad= - \frac{1}{2} R_\mathrm{CX} \left(3 p_i n_n - 3 p_n n_i - m_i n_i n_n (u_{i\parallel} - u_{n\parallel})^2 \right)
+  &\quad= - \frac{1}{2} R_\mathrm{CX} n_i n_n \left(3 T_i - 3 T_n - m_i (u_{i\parallel} - u_{n\parallel})^2 \right)
         + \frac{1}{2} R_\mathrm{ioniz} n_e n_n \left(3 T_n - 3 T_i + m_i (u_{i\parallel} - u_{n\parallel})^2 \right) \nonumber \\
   &\qquad+ \frac{1}{2} \int m_i v^2 S_i d^3 v 
          - m_i u_{i\parallel} \int v_\parallel S_i d^3 v
@@ -371,7 +371,7 @@ Can integrate the drift kinetic equation to give the moment equations:
   & \frac{3}{2} m_i n_i v_{Ti} \frac{\partial v_{Ti}}{\partial t}
     + \frac{\partial q_{i\parallel}}{\partial z} + p_{i\parallel} \frac{\partial u_{i\parallel}}{\partial z}
     + \frac{3}{2} m_i n_i u_{i\parallel} v_{Ti} \frac{\partial v_{Ti}}{\partial z} \nonumber \\
-  &\quad= - \frac{1}{2} R_\mathrm{CX} \left(3 p_i n_n - 3 p_n n_i - m_i n_i n_n (u_{i\parallel} - u_{n\parallel})^2 \right)
+  &\quad= - \frac{1}{2} R_\mathrm{CX} n_i n_n \left(3 T_i - 3 T_n - m_i (u_{i\parallel} - u_{n\parallel})^2 \right)
         + \frac{1}{2} R_\mathrm{ioniz} n_e n_n \left(3 T_n - 3 T_i + m_i (u_{i\parallel} - u_{n\parallel})^2 \right) \nonumber \\
   &\qquad+ \frac{1}{2} \int m_i v^2 S_i d^3 v 
          - m_i u_{i\parallel} \int v_\parallel S_i d^3 v
@@ -386,7 +386,7 @@ Can integrate the drift kinetic equation to give the moment equations:
   & \frac{3}{2} m_i n_i v_{Ti} \left( \frac{\partial v_{Ti}}{\partial t} + u_{i\parallel} \frac{\partial v_{Ti}}{\partial z} \right) \nonumber \\
   &\quad= - \frac{\partial q_{i\parallel}}{\partial z} - p_{i\parallel} \frac{\partial u_{i\parallel}}{\partial z}
        \nonumber \\
-  &\qquad- \frac{1}{2} R_\mathrm{CX} \left(3 p_i n_n - 3 p_n n_i - m_i n_i n_n (u_{i\parallel} - u_{n\parallel})^2 \right)
+  &\qquad- \frac{1}{2} R_\mathrm{CX} n_i n_n \left(3 T_i - 3 T_n - m_i (u_{i\parallel} - u_{n\parallel})^2 \right)
         + \frac{1}{2} R_\mathrm{ioniz} n_e n_n \left(3 T_n - 3 T_i + m_i (u_{i\parallel} - u_{n\parallel})^2 \right) \nonumber \\
   &\qquad+ \frac{1}{2} \int m_i v^2 S_i d^3 v 
          - m_i u_{i\parallel} \int v_\parallel S_i d^3 v
@@ -722,7 +722,7 @@ time-derivative-of-moment terms
     &\qquad\quad  \left. - \cancel{\frac{w_\parallel u_{i\parallel}}{v_{Ti}} \frac{\partial v_{Ti}}{\partial z}}
                          - \frac{2 w_\parallel}{3 m_i n_i v_{Ti}^2} \frac{\partial q_{i\parallel}}{\partial z}
                          - \frac{2 w_\parallel p_{i\parallel}}{3 m_i n_i v_{Ti}^2} \frac{\partial u_{i\parallel}}{\partial z}
-                         - \frac{w_\parallel}{3 m_i n_i v_{Ti}^2} R_\mathrm{CX} \left( 3 p_i n_n - 3 p_n n_i - m_i n_i n_n (u_{i\parallel} - u_{n\parallel})^2 \right)
+                         - \frac{w_\parallel}{3 m_i n_i v_{Ti}^2} R_\mathrm{CX} n_i n_n \left( 3 T_i - 3 T_n - m_i (u_{i\parallel} - u_{n\parallel})^2 \right)
                          + \frac{w_\parallel}{3 m_i n_i v_{Ti}^2} R_\mathrm{ioniz} n_e n_n \left( 3 T_n - 3 T_i + m_i (u_{i\parallel} - u_{n\parallel})^2 \right)
                          + \frac{w_\parallel}{3m_i n_i v_{Ti}^2} \int m_i v^2 S_i d^3 v
                          - \frac{2 w_\parallel u_{i\parallel}}{3 m_i n_i v_{Ti}^2} \int v_\parallel S_i d^3 v
@@ -732,7 +732,7 @@ time-derivative-of-moment terms
 \dot{w}_\perp &= -\left( - \cancel{\frac{w_\perp u_{i\parallel}}{v_{Ti}} \frac{\partial v_{Ti}}{\partial z}}
                          - \frac{2 w_\perp}{3 m_i n_i v_{Ti}^2} \frac{\partial q_{i\parallel}}{\partial z}
                          - \frac{2 w_\perp p_{i\parallel}}{3 m_i n_i v_{Ti}^2}
-                         - \frac{w_\perp}{3 m_i n_i v_{Ti}^2} R_\mathrm{CX} \left( 3 p_i n_n - 3 p_n n_i - m_i n_i n_n (u_{i\parallel} - u_{n\parallel})^2 \right)
+                         - \frac{w_\perp}{3 m_i n_i v_{Ti}^2} R_\mathrm{CX} n_i n_n \left( 3 T_i - 3 T_n - m_i (u_{i\parallel} - u_{n\parallel})^2 \right)
                          + \frac{w_\perp}{3 m_i n_i v_{Ti}^2} R_\mathrm{ioniz} n_e n_n \left( 3 T_n - 3 T_i + m_i (u_{i\parallel} - u_{n\parallel})^2 \right)
                          + \frac{w_\perp}{3m_i n_i v_{Ti}^2} \int m_i v^2 S_i d^3 v
                          - \frac{2 w_\perp u_{i\parallel}}{3 m_i n_i v_{Ti}^2} \int v_\parallel S_i d^3 v
@@ -741,7 +741,7 @@ time-derivative-of-moment terms
 \frac{\dot{F}_i}{F_i} &= - \cancel{\frac{3 u_{i\parallel}}{v_{Ti}} \frac{\partial v_{Ti}}{\partial z}}
                          - \frac{2}{m_i n_i v_{Ti}^2} \frac{\partial q_{i\parallel}}{\partial z}
                          - \frac{2 p_{i\parallel}}{m_i n_i v_{Ti}^2} \frac{\partial u_{i\parallel}}{\partial z}
-                         - \frac{1}{m_i n_i v_{Ti}^2} R_\mathrm{CX} \left( 3 p_i n_n - 3 p_n n_i - m_i n_i n_n (u_{i\parallel} - u_{n\parallel})^2 \right)
+                         - \frac{1}{m_i n_i v_{Ti}^2} R_\mathrm{CX} n_i n_n \left( 3 T_i - 3 T_n - m_i (u_{i\parallel} - u_{n\parallel})^2 \right)
                          + \frac{1}{m_i n_i v_{Ti}^2} R_\mathrm{ioniz} n_e n_n \left( 3 T_n - 3 T_i + m_i (u_{i\parallel} - u_{n\parallel})^2 \right)
                          + \frac{1}{m_i n_i v_{Ti}^2} \int m_i v^2 S_i d^3 v
                          - \frac{2 m_i u_{i\parallel}}{m_i n_i v_{Ti}^2} \int v_\parallel S_i d^3 v
@@ -763,7 +763,7 @@ time-derivative-of-moment terms
         &\qquad\quad - w_\parallel^2 \frac{\partial v_{Ti}}{\partial z}
                      + \frac{w_\parallel}{3 p_i} \frac{\partial q_{i\parallel}}{\partial z}
                      + \frac{w_\parallel p_{i\parallel}}{3 p_i} \frac{\partial u_{i\parallel}}{\partial z}
-                     + \frac{w_\parallel}{6 p_i} R_\mathrm{CX} \left( 3 p_i n_n - 3 p_n n_i - m_i n_i n_n (u_{i\parallel} - u_{n\parallel})^2 \right)
+                     + \frac{w_\parallel}{6 p_i} R_\mathrm{CX} n_i n_n \left( 3 T_i - 3 T_n - m_i (u_{i\parallel} - u_{n\parallel})^2 \right)
                      - \frac{w_\parallel}{6 p_i} R_\mathrm{ioniz} n_e n_n \left( 3 T_n - 3 T_i + m_i (u_{i\parallel} - u_{n\parallel})^2 \right)
                      - \frac{w_\parallel}{6 p_i} \int m_i v^2 S_i d^3 v
                      + \frac{w_\parallel u_{i\parallel}}{3 p_i} \int v_\parallel S_i d^3 v
@@ -771,7 +771,7 @@ time-derivative-of-moment terms
 \dot{w}_\perp &= -w_\parallel w_\perp \frac{\partial v_{Ti}}{\partial z}
                  + \frac{w_\perp}{3 p_i} \frac{\partial q_{i\parallel}}{\partial z}
                  + \frac{w_\perp p_{i\parallel}}{3 p_i}
-                 + \frac{w_\perp}{6 p_i} R_\mathrm{CX} \left( 3 p_i n_n - 3 p_n n_i - m_i n_i n_n (u_{i\parallel} - u_{n\parallel})^2 \right)
+                 + \frac{w_\perp}{6 p_i} R_\mathrm{CX} n_i n_n \left( 3 T_i - 3 T_n - m_i (u_{i\parallel} - u_{n\parallel})^2 \right)
                  - \frac{w_\perp}{6 p_i} R_\mathrm{ioniz} n_e n_n \left( 3 T_n - 3 T_i + m_i (u_{i\parallel} - u_{n\parallel})^2 \right)
                  - \frac{w_\perp}{6 p_i} \int m_i v^2 S_i d^3 v
                  + \frac{2 w_\perp u_{i\parallel}}{6 p_i} \int v_\parallel S_i d^3 v
@@ -779,7 +779,7 @@ time-derivative-of-moment terms
 \frac{\dot{F}_i}{F_i} &= 3 w_\parallel \frac{\partial v_{Ti}}{\partial z}
                          - \frac{1}{p_i} \frac{\partial q_{i\parallel}}{\partial z}
                          - \frac{p_{i\parallel}}{p_i} \frac{\partial u_{i\parallel}}{\partial z}
-                         - \frac{1}{2 p_i} R_\mathrm{CX} \left( 3 p_i n_n - 3 p_n n_i - m_i n_i n_n (u_{i\parallel} - u_{n\parallel})^2 \right)
+                         - \frac{1}{2 p_i} R_\mathrm{CX} n_i n_n \left( 3 T_i - 3 T_n - m_i (u_{i\parallel} - u_{n\parallel})^2 \right)
                          + \frac{1}{2 p_i} R_\mathrm{ioniz} n_e n_n \left( 3 T_n - 3 T_i + m_i (u_{i\parallel} - u_{n\parallel})^2 \right)
                          + \frac{1}{2 p_i} \int m_i v^2 S_i d^3 v
                          - \frac{m_i u_{i\parallel}}{p_i} \int v_\parallel S_i d^3 v
@@ -796,6 +796,42 @@ coefficients in terms of $\partial n_i/\partial t$, etc. Especially if/when new
 terms (e.g.  inter-species friction) are added to the model, this approach will
 minimise the number of places in the code that need to be updated.
 
+Neutral equations
+-----------------
+
+Neutrals do not see $\phi$ in their kinetic equation, and signs of ion-neutral
+reaction terms are flipped
+```math
+\begin{align}
+& \frac{\partial f_n}{\partial t} + v_\parallel \frac{\partial f_n}{\partial t}
+    = \mathcal{C}_{ni}[f_n,f_i] + S_n \\
+& \mathcal{C}_{ni}[f_n,f_i] = -\mathcal{C}_{in}[f_i,f_n]
+    = R_\mathrm{CX} (n_n f_i - n_i f_n) - R_\mathrm{ioniz} n_e f_n
+\end{align}
+```
+The moment equations are therefore very similar to those of the ions
+```math
+\begin{align}
+& \frac{\partial n_n}{\partial t} + \frac{\partial}{\partial z}\left( n_n u_{n\parallel} \right)
+    = - R_\mathrm{ioniz} n_e n_n + \int S_n d^3 v \\
+
+& m_n \frac{\partial}{\partial t}(n_n u_{n\parallel})
+  + m_n \frac{\partial}{\partial z}(n_n u_{n\parallel}^2)
+  + \frac{\partial p_{n\parallel}}{\partial z} \nonumber \\
+&= -R_\mathrm{CX} m_n n_i n_n (u_{n\parallel} - u_{i\parallel})
+    - R_\mathrm{ioniz} m_n n_e n_n u_{n\parallel}
+    + m_n \int v_\parallel S_n d^3 v \\
+
+& \frac{3}{2} \frac{\partial p_n}{\partial t}
+  + \frac{\partial q_{n\parallel}}{\partial z} + p_{n\parallel} \frac{\partial u_{n\parallel}}{\partial z}
+  + \frac{3}{2} u_{n\parallel} \frac{\partial p_n}{\partial z} + \frac{3}{2} p_n \frac{\partial u_{n\parallel}}{\partial z} \nonumber \\
+&\quad= \frac{1}{2} R_\mathrm{CX} n_i n_n \left(3 T_i - 3 T_n - m_i (u_{i\parallel} - u_{n\parallel})^2 \right)
+      - \frac{1}{2} R_\mathrm{ioniz} n_e n_n \left(3 T_n + m_i (u_{i\parallel} - u_{n\parallel})^2 \right) \nonumber \\
+&\qquad+ \frac{1}{2} \int m_n v^2 S_n d^3 v
+       - m_n u_{n\parallel} \int v_\parallel S_n d^3 v
+       + \frac{1}{2} m_n u_{n\parallel}^2 \int S_n d^3 v \\
+\end{align}
+```
 
 Old 1D1V moment kinetic equations
 ---------------------------------
