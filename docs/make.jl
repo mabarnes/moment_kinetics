@@ -4,6 +4,7 @@ Pkg.instantiate()
 
 using Documenter, UUIDs
 using moment_kinetics, makie_post_processing, plots_post_processing
+include("../util/MKJacobianUtils.jl")
 
 makedocs(
     sitename = "moment_kinetics",
@@ -18,7 +19,7 @@ makedocs(
                              # that would be used by default by Documenter.jl.
                              inventory_version = Pkg.dependencies()[UUID("b5ff72cc-06fc-4161-ad14-dba1c22ed34e")].version,
                             ),
-    modules = [moment_kinetics, makie_post_processing, plots_post_processing],
+    modules = [moment_kinetics, makie_post_processing, plots_post_processing, MKJacobianUtils],
 )
 
 if get(ENV, "CI", nothing) == "true"

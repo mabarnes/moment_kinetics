@@ -213,7 +213,9 @@ parallel loop ranges, and are only used by the tests in `debug_test/`.
                          restart_time_index::mk_int=-1,
                          debug_loop_type::Union{Nothing,NTuple{N,Symbol} where N}=nothing,
                          debug_loop_parallel_dims::Union{Nothing,NTuple{N,Symbol} where N}=nothing,
-                         skip_electron_solve::Bool=false) = begin
+                         skip_electron_solve::Bool=false,
+                         write_output::Bool=true,
+                         warn_unexpected_input::Bool=false) = begin
 
     setup_start_time = now()
 
@@ -225,7 +227,8 @@ parallel loop ranges, and are only used by the tests in `debug_test/`.
         flush(stdout)
     end
 
-    input = mk_input(input_dict; save_inputs_to_txt=true, ignore_MPI=false)
+    input = mk_input(input_dict; save_inputs_to_txt=true, ignore_MPI=false,
+                     warn_unexpected=warn_unexpected_input)
     # obtain input options from moment_kinetics_input.jl
     # and check input to catch errors
     io_input, evolve_moments, t_input, z, z_spectral, r, r_spectral, vpa, vpa_spectral,
@@ -354,26 +357,34 @@ parallel loop ranges, and are only used by the tests in `debug_test/`.
     # output file
     setup_end_time = now()
     time_for_setup = to_minutes(setup_end_time - setup_start_time)
-    # setup i/o
-    ascii_io, io_moments, io_dfns = setup_file_io(io_input, boundary_distributions, vz,
-        vr, vzeta, vpa, vperp, z, r, composition, collisions, moments.evolve_density,
-        moments.evolve_upar, moments.evolve_ppar, external_source_settings, input_dict,
-        restart_time_index, previous_runs_info, time_for_setup, t_params,
-        nl_solver_params)
-    # write initial data to ascii files
-    write_data_to_ascii(pdf, moments, fields, vz, vr, vzeta, vpa, vperp, z, r,
-        t_params.t[], composition.n_ion_species, composition.n_neutral_species, ascii_io)
-    # write initial data to binary files
 
-    t_params.moments_output_counter[] += 1
-    write_all_moments_data_to_binary(scratch, moments, fields, composition.n_ion_species,
-        composition.n_neutral_species, io_moments, t_params.moments_output_counter[], 0.0,
-        t_params, nl_solver_params, r, z)
-    t_params.dfns_output_counter[] += 1
-    write_all_dfns_data_to_binary(scratch, scratch_electron, moments, fields,
-        composition.n_ion_species, composition.n_neutral_species, io_dfns,
-        t_params.dfns_output_counter[], 0.0, t_params, nl_solver_params, r, z, vperp, vpa,
-        vzeta, vr, vz)
+    if write_output
+        # setup i/o
+        ascii_io, io_moments, io_dfns = setup_file_io(io_input, boundary_distributions,
+            vz, vr, vzeta, vpa, vperp, z, r, composition, collisions,
+            moments.evolve_density, moments.evolve_upar, moments.evolve_ppar,
+            external_source_settings, input_dict, restart_time_index, previous_runs_info,
+            time_for_setup, t_params, nl_solver_params)
+        # write initial data to ascii files
+        write_data_to_ascii(pdf, moments, fields, vz, vr, vzeta, vpa, vperp, z, r,
+            t_params.t[], composition.n_ion_species, composition.n_neutral_species,
+            ascii_io)
+        # write initial data to binary files
+
+        t_params.moments_output_counter[] += 1
+        write_all_moments_data_to_binary(scratch, moments, fields,
+            composition.n_ion_species, composition.n_neutral_species, io_moments,
+            t_params.moments_output_counter[], 0.0, t_params, nl_solver_params, r, z)
+        t_params.dfns_output_counter[] += 1
+        write_all_dfns_data_to_binary(scratch, scratch_electron, moments, fields,
+            composition.n_ion_species, composition.n_neutral_species, io_dfns,
+            t_params.dfns_output_counter[], 0.0, t_params, nl_solver_params, r, z, vperp,
+            vpa, vzeta, vr, vz)
+    else
+        ascii_io = nothing
+        io_moments = nothing
+        io_dfns = nothing
+    end
 
     begin_s_r_z_vperp_region()
 
