@@ -76,7 +76,10 @@ v_{Ts} &= \sqrt{\frac{2T_s}{m_s}}= \sqrt{\frac{2(T_{s\parallel} + 2T_{s\perp})}{
 The parallel heat flux is
 ```math
 \begin{align}
-q_{s\parallel} = \int \frac{m_s}{2} \left( (v_\parallel - u_{s\parallel})^2 + v_\perp^2 \right) (v_\parallel - u_{s\parallel}) f_s d^3 v
+q_{s\parallel} &= \int \frac{m_s}{2} \left( (v_\parallel - u_{s\parallel})^2 + v_\perp^2 \right) (v_\parallel - u_{s\parallel}) f_s d^3 v \\
+    &= \frac{n_s}{v_{Ts}^3} \int \frac{m_s}{2} \left( (v_\parallel - u_{s\parallel})^2 + v_\perp^2 \right) (v_\parallel - u_{s\parallel}) F_s d^3 v \nonumber \\
+    &= n_s \int \frac{m_s}{2} v_{Ts}^2 \left( w_\parallel^2 + w_\perp^2 \right) v_{Ts} w_\parallel F_s d^3 w \nonumber \\
+    &= n_s v_{Ts}^3 \int \frac{m_s}{2} \left( w_\parallel^2 + w_\perp^2 \right) w_\parallel F_s d^3 w \\
 \end{align}
 ```
 
@@ -946,7 +949,94 @@ contributions are from $\partial n_n / \partial t$ that contributes to
 $\dot{F}$ and the explicit term in $\mathcal C_n$, and these will cancel.
 
 Reduction to 1D1V
-=================
+-----------------
+
+To reduce the model to 1D1V, we take the limit $T_{s\perp} \rightarrow 0$, and
+marginalise over $v_\perp$ to remove one velocity space dimension.
+
+One way to do this formally is to assume that
+```math
+\begin{align}
+f_s &= \bar{f}_s(t,z,v_\parallel) f_{s\perp}(v_\perp) \\
+\text{with } f_{s\perp}(v_\perp) &= \frac{\exp(-v_\perp^2/v_{Ts}^2)}{\pi v_{Ts}^2} \\
+\text{and similarly } S_s &= \bar{S}_s(t,z,v_\parallel) f_{s\perp}(v_\perp)
+\end{align}
+```
+ $f_{s\perp}$ is defined so that
+```math
+\begin{align}
+\int f_{s\perp} d^2 v_\perp &= 2\pi \int_0^\infty f_{s\perp} v_\perp dv_\perp \nonumber \\
+  &= 2\pi \int_0^\infty \frac{\exp(-v_\perp^2/v_{Ts}^2)}{\pi v_{Ts}^2} v_\perp dv_\perp \nonumber \\
+  &= 2 \int_0^\infty \exp(-x^2) x dx \nonumber \\
+  &= 2 \left[ -\frac{1}{2} \exp(-x^2) \right]_0^\infty \nonumber \\
+  &= 1 \\
+\int v_\perp f_{s\perp} d^2 v_\perp &= 2\pi \int_0^\infty v_\perp f_{s\perp} v_\perp dv_\perp \nonumber \\
+  &= \lim_{v_{Ts}\rightarrow 0} 2\pi \int_0^\infty v_\perp^2 \frac{\exp(-v_\perp^2/v_{Ts}^2)}{\pi v_{Ts}^2} dv_\perp \nonumber \\
+  &= \lim_{v_{Ts}\rightarrow 0} 2 v_{Ts} \int_0^\infty x^2 \exp(-x^2) dx \nonumber \\
+  &= \lim_{v_{Ts}\rightarrow 0} 2 v_{Ts} \left( \left[ -\frac{1}{2} x \exp(-x^2) \right]_0^\infty + \frac{1}{2} \int_0^\infty \exp(-x^2) \right) \nonumber \\
+  &= \lim_{v_{Ts}\rightarrow 0} 2 v_{Ts} \left( 0 + \frac{1}{2} \frac{\sqrt{\pi}}{2} \right) \nonumber \\
+  &= 0
+\end{align}
+```
+and so
+```math
+\begin{align}
+\int f_s(t,z,v_\parallel,v_\perp) d^2 v_\perp = \bar{f}_s(t,z,v_\parallel) \\
+\int S_s(t,z,v_\parallel,v_\perp) d^2 v_\perp = \bar{S}_s(t,z,v_\parallel) \\
+\end{align}
+```
+Integrals with any higher powers of $v_\perp$ also vanish.
+
+The marginalised shape function must be marginalised over $w_\perp$, not
+$v_\perp$ because $F_s$ is dimensionless, and $\bar F_s$ should be
+dimensionless too.
+```math
+\begin{align}
+\bar{F}_s(t,z,w_\parallel) &= \int F_s(t,z,w_\parallel,w_\perp) d^2 w_\perp \nonumber \\
+  &= \int F_s(t,z,w_\parallel,w_\perp) \frac{1}{v_{Ts}^2} d^2 v_\perp \nonumber \\
+  &= \int \frac{v_{Ts}^3}{n_s} f_s(t,z,v_\parallel,v_\perp) \frac{1}{v_{Ts}^2} d^2 v_\perp \nonumber \\
+  &= \frac{v_{Ts}}{n_s} \int f_s(t,z,v_\parallel,v_\perp) d^2 v_\perp \nonumber \\
+  &= \frac{v_{Ts}}{n_s} \bar{f}_s(t,z,v_\parallel) \\
+\end{align}
+```
+and like the integrals above,
+$\int w_\perp F_s(t,z,w_\parallel,w_\perp) d^2 w_\perp = 0$.
+
+Setting $T_\perp = 0$ in the expressions in section [Moment kinetic
+equations](@ref),
+```math
+\begin{align}
+p_s &= \frac{1}{3}(p_{s\parallel} + 2p_{s\perp}) = \frac{p_{s\parallel}}{3} \\
+T_s &= \frac{1}{3}(T_{s\parallel} + 2T_{s\perp}) = \frac{T_{s\parallel}}{3} \\
+v_{Ts} &= \sqrt{\frac{2(T_{s\parallel} + 2 T_{s\perp})}{3 m_s}} = \sqrt{\frac{2T_{s\parallel}}{3 m_s}} \\
+\end{align}
+```
+The parallel heat flux reduces to
+```math
+\begin{align}
+q_{s\parallel} &= \int \frac{m_s}{2} \left( (v_\parallel - u_{s\parallel})^2 + v_\perp^2 \right) (v_\parallel - u_{s\parallel}) f_s d^3 v \nonumber \\
+    &= \int \frac{m_s}{2} \left( (v_\parallel - u_{s\parallel})^2 \right) (v_\parallel - u_{s\parallel}) \left(\int f_s d^2 v_\perp \right) dv_\parallel \nonumber \\
+    &\quad + \cancel{\int \frac{m_s}{2} (v_\parallel - u_{s\parallel}) \left(\int v_\perp^2 f_s d^2 v_\perp \right) d^3 v} \nonumber \\
+    &= \int \frac{m_s}{2} (v_\parallel - u_{s\parallel})^3 \bar{f}_s dv_\parallel \nonumber \\
+\end{align}
+```
+or in terms of $\bar F_s$
+```math
+\begin{align}
+q_{s\parallel} &= n_s v_{Ts}^3 \int \frac{m_s}{2} \left( w_\parallel^2 + \cancel{w_\perp^2} \right) w_\parallel F_s d^3 w \nonumber \\
+q_{s\parallel} &= n_s v_{Ts}^3 \int \frac{m_s}{2} w_\parallel^3 \left(\int F_s d^2 w_\perp \right) dw_\parallel \\
+q_{s\parallel} &= n_s v_{Ts}^3 \int \frac{m_s}{2} w_\parallel^3 \bar{F}_s dw_\parallel \\
+\end{align}
+```
+
+The moment constraints reduce to
+```math
+\begin{align}
+1 &= \int dw_\parallel \int d^2 w_\perp F_s(t,z,w_\parallel,w_\perp) = \int dw_\parallel \bar{F}_s(t,z,w_\parallel) \\
+0 &= \int dw_\parallel \int d^2 w_\perp w_\parallel F_s(t,z,w_\parallel,w_\perp) = \int dw_\parallel w_\parallel \bar{F}_s(t,z,w_\parallel) \\
+\frac{3}{2} &= \int dw_\parallel \int d^2 w_\perp (w_\parallel^2 + \cancel{w_\perp^2}) F_s(t,z,w_\parallel,w_\perp) = \int dw_\parallel w_\parallel^2 \bar{F}_s(t,z,w_\parallel,w_\perp) \\
+\end{align}
+```
 
 Old 1D1V moment kinetic equations
 ---------------------------------
