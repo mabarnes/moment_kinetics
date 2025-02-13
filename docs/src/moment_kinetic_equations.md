@@ -945,6 +945,9 @@ u_{n\parallel} / \partial t$ or $\partial v_{Tn} / \partial t$ so that the only
 contributions are from $\partial n_n / \partial t$ that contributes to
 $\dot{F}$ and the explicit term in $\mathcal C_n$, and these will cancel.
 
+Reduction to 1D1V
+=================
+
 Old 1D1V moment kinetic equations
 ---------------------------------
 
