@@ -821,7 +821,7 @@ The moment equations are therefore very similar to those of the ions
 & m_n \frac{\partial}{\partial t}(n_n u_{n\parallel})
   + m_n \frac{\partial}{\partial z}(n_n u_{n\parallel}^2)
   + \frac{\partial p_{n\parallel}}{\partial z} \nonumber \\
-&= -R_\mathrm{CX} m_n n_i n_n (u_{n\parallel} - u_{i\parallel})
+&\quad= -R_\mathrm{CX} m_n n_i n_n (u_{n\parallel} - u_{i\parallel})
     - R_\mathrm{ioniz} m_n n_e n_n u_{n\parallel}
     + m_n \int v_\parallel S_n d^3 v \\
 
@@ -868,8 +868,8 @@ subsections, are also very similar to the ion ones.
 ```math
 \begin{align}
 & \frac{\partial F_n}{\partial t} + v_\parallel \frac{\partial F_n}{\partial z}
-  + \left( \frac{(v_\parallel - u_{n\parallel})}{n_n} \frac{\partial n_n}{\partial z} - \frac{\partial u_{n\parallel}}{\partial z} - R_\mathrm{ioniz} \frac{n_e n_n}{n_i} + \frac{1}{n_n} \int S_n d^3 v \right) F_n \nonumber \\
-&\quad= R_\mathrm{CX} n_i (F_i - F_n) - R_\mathrm{ioniz} n_e F_n + \frac{1}{n_n} S_n \\
+  + \left( \frac{(v_\parallel - u_{n\parallel})}{n_n} \frac{\partial n_n}{\partial z} - \frac{\partial u_{n\parallel}}{\partial z} + \frac{1}{n_n} \int S_n d^3 v \right) F_n \nonumber \\
+&\quad= R_\mathrm{CX} n_i (F_i - F_n) + \frac{1}{n_n} S_n \\
 \end{align}
 ```
 
@@ -881,12 +881,11 @@ subsections, are also very similar to the ion ones.
   + (\hat{w}_\parallel + u_{n\parallel}) \frac{\partial F_n}{\partial z} \nonumber \\
   &\quad- \left( \hat{w}_\parallel \frac{\partial u_{n\parallel}}{\partial z}
                  - \frac{1}{m_n n_n} \frac{\partial p_{n\parallel}}{\partial z}
-                 - R_\mathrm{CX} n_n (u_{n\parallel} - u_{i\parallel})
-                 - R_\mathrm{ioniz} \frac{n_e n_n}{n_i} u_{n\parallel}
+                 - R_\mathrm{CX} n_i (u_{n\parallel} - u_{i\parallel})
                  + \frac{1}{n_n} \int v_\parallel S_n d^3 v
                \right) \frac{\partial F_n}{\partial \hat{w}_\parallel} \nonumber \\
-  &\quad+ \left( \frac{(v_\parallel - u_{n\parallel})}{n_n} \frac{\partial n_n}{\partial z} - \frac{\partial u_{n\parallel}}{\partial z} - R_\mathrm{ioniz} \frac{n_e n_n}{n_i} + \frac{1}{n_n} \int S_n d^3 v \right) F_n \nonumber \\
-&\quad= R_\mathrm{CX} n_i (F_i - F_n) - R_\mathrm{ioniz} n_e F_n + \frac{1}{n_n} S_n \\
+  &\quad+ \left( \frac{(v_\parallel - u_{n\parallel})}{n_n} \frac{\partial n_n}{\partial z} - \frac{\partial u_{n\parallel}}{\partial z} + \frac{1}{n_n} \int S_n d^3 v \right) F_n \nonumber \\
+&\quad= R_\mathrm{CX} n_i (F_i - F_n) + \frac{1}{n_n} S_n \\
 \end{align}
 ```
 
@@ -907,7 +906,7 @@ subsections, are also very similar to the ion ones.
 &\frac{\dot{F}_n}{F_n} = \frac{3}{v_{Tn}} \frac{\partial v_{Tn}}{\partial t} + \frac{3 (v_{Tn} w_\parallel + u_{n\parallel})}{v_{Tn}} \frac{\partial v_{Tn}}{\partial z}
                    - \frac{1}{n_n} \frac{\partial n_n}{\partial t} - \frac{(v_{Tn} w_\parallel + u_{n\parallel})}{n_n} \frac{\partial n_n}{\partial z} \\
 
-\mathcal{C}_n &= R_\mathrm{CX} n_i \left( \frac{v_{Tn}^3}{v_{Ti}^3} F_i - F_n \right) - R_\mathrm{ioniz} n_e F_n \\
+\mathcal{C}_n &= R_\mathrm{CX} n_i \left( \frac{v_{Tn}^3}{v_{Ti}^3} F_i - F_n \right) \\
 \end{align}
 ```
 
@@ -958,7 +957,8 @@ One way to do this formally is to assume that
 ```math
 \begin{align}
 f_s &= \bar{f}_s(t,z,v_\parallel) f_{s\perp}(v_\perp) \\
-\text{with } f_{s\perp}(v_\perp) &= \frac{\exp(-v_\perp^2/v_{Ts}^2)}{\pi v_{Ts}^2} \\
+\text{with } f_{s\perp}(v_\perp) &= \frac{\exp(-v_\perp^2/v_{Ts\perp}^2)}{\pi v_{Ts\perp}^2} \\
+\text{where } m_s v_{Ts\perp}^2 &= T_\perp \\
 \text{and similarly } S_s &= \bar{S}_s(t,z,v_\parallel) f_{s\perp}(v_\perp)
 \end{align}
 ```
@@ -966,15 +966,15 @@ f_s &= \bar{f}_s(t,z,v_\parallel) f_{s\perp}(v_\perp) \\
 ```math
 \begin{align}
 \int f_{s\perp} d^2 v_\perp &= 2\pi \int_0^\infty f_{s\perp} v_\perp dv_\perp \nonumber \\
-  &= 2\pi \int_0^\infty \frac{\exp(-v_\perp^2/v_{Ts}^2)}{\pi v_{Ts}^2} v_\perp dv_\perp \nonumber \\
+  &= 2\pi \int_0^\infty \frac{\exp(-v_\perp^2/v_{Ts\perp}^2)}{\pi v_{Ts\perp}^2} v_\perp dv_\perp \nonumber \\
   &= 2 \int_0^\infty \exp(-x^2) x dx \nonumber \\
   &= 2 \left[ -\frac{1}{2} \exp(-x^2) \right]_0^\infty \nonumber \\
   &= 1 \\
 \int v_\perp f_{s\perp} d^2 v_\perp &= 2\pi \int_0^\infty v_\perp f_{s\perp} v_\perp dv_\perp \nonumber \\
-  &= \lim_{v_{Ts}\rightarrow 0} 2\pi \int_0^\infty v_\perp^2 \frac{\exp(-v_\perp^2/v_{Ts}^2)}{\pi v_{Ts}^2} dv_\perp \nonumber \\
-  &= \lim_{v_{Ts}\rightarrow 0} 2 v_{Ts} \int_0^\infty x^2 \exp(-x^2) dx \nonumber \\
-  &= \lim_{v_{Ts}\rightarrow 0} 2 v_{Ts} \left( \left[ -\frac{1}{2} x \exp(-x^2) \right]_0^\infty + \frac{1}{2} \int_0^\infty \exp(-x^2) \right) \nonumber \\
-  &= \lim_{v_{Ts}\rightarrow 0} 2 v_{Ts} \left( 0 + \frac{1}{2} \frac{\sqrt{\pi}}{2} \right) \nonumber \\
+  &= \lim_{v_{Ts\perp}\rightarrow 0} 2\pi \int_0^\infty v_\perp^2 \frac{\exp(-v_\perp^2/v_{Ts\perp}^2)}{\pi v_{Ts\perp}^2} dv_\perp \nonumber \\
+  &= \lim_{v_{Ts\perp}\rightarrow 0} 2 v_{Ts\perp} \int_0^\infty x^2 \exp(-x^2) dx \nonumber \\
+  &= \lim_{v_{Ts\perp}\rightarrow 0} 2 v_{Ts\perp} \left( \left[ -\frac{1}{2} x \exp(-x^2) \right]_0^\infty + \frac{1}{2} \int_0^\infty \exp(-x^2) \right) \nonumber \\
+  &= \lim_{v_{Ts\perp}\rightarrow 0} 2 v_{Ts\perp} \left( 0 + \frac{1}{2} \frac{\sqrt{\pi}}{2} \right) \nonumber \\
   &= 0
 \end{align}
 ```
@@ -1037,6 +1037,269 @@ The moment constraints reduce to
 \frac{3}{2} &= \int dw_\parallel \int d^2 w_\perp (w_\parallel^2 + \cancel{w_\perp^2}) F_s(t,z,w_\parallel,w_\perp) = \int dw_\parallel w_\parallel^2 \bar{F}_s(t,z,w_\parallel,w_\perp) \\
 \end{align}
 ```
+
+### 1D1V ion moment equations
+
+By setting $T_{i\perp} = 0$ in the moment equations for ions
+```math
+\begin{align}
+\frac{\partial n_i}{\partial t} + \frac{\partial}{\partial z}(n_i u_{i\parallel}) &= R_\mathrm{ioniz} n_e n_n + \int S_i d^3 v \nonumber \\
+    &= R_\mathrm{ioniz} n_e n_n + \int \bar{S}_i dv_\parallel \\
+\end{align}
+```
+```math
+\begin{align}
+& m_i \frac{\partial}{\partial t}(n_i u_{i\parallel}) + m_i \frac{\partial}{\partial z}(n_i u_{i_\parallel}^2) + \frac{\partial p_{i\parallel}}{\partial z} + e n_i \frac{\partial \phi}{\partial z} \nonumber \\
+    &\quad = R_\mathrm{CX} m_i n_i n_n (u_{n\parallel} - u_{i\parallel}) + R_\mathrm{ioniz} m_i n_e n_n u_{n\parallel} + m_i \int v_{\parallel} S_i d^3 v \nonumber \\
+    &\quad = R_\mathrm{CX} m_i n_i n_n (u_{n\parallel} - u_{i\parallel}) + R_\mathrm{ioniz} m_i n_e n_n u_{n\parallel} + m_i \int v_{\parallel} \bar{S}_i dv_\parallel
+\end{align}
+```
+```math
+\begin{align}
+& \frac{3}{2} \frac{\partial p_i}{\partial t}
+  + \frac{\partial q_{i\parallel}}{\partial z} + p_{i\parallel} \frac{\partial u_{i\parallel}}{\partial z}
+  + \frac{3}{2} u_{i\parallel} \frac{\partial p_i}{\partial z} + \frac{3}{2} p_i \frac{\partial u_{i\parallel}}{\partial z} \nonumber \\
+&\quad= - \frac{1}{2} R_\mathrm{CX} n_i n_n \left(3 T_i - 3 T_n - m_i (u_{i\parallel} - u_{n\parallel})^2 \right)
+      + \frac{1}{2} R_\mathrm{ioniz} n_e n_n \left(3 T_n + m_i (u_{i\parallel} - u_{n\parallel})^2 \right) \nonumber \\
+&\qquad+ \frac{1}{2} \int m_i v^2 S_i d^3 v 
+       - m_i u_{i\parallel} \int v_\parallel S_i d^3 v
+       + \frac{1}{2} m_i u_{i\parallel}^2 \int S_i d^3 v \\
+&\quad= - \frac{1}{2} R_\mathrm{CX} n_i n_n \left(3 T_i - 3 T_n - m_i (u_{i\parallel} - u_{n\parallel})^2 \right)
+      + \frac{1}{2} R_\mathrm{ioniz} n_e n_n \left(3 T_n + m_i (u_{i\parallel} - u_{n\parallel})^2 \right) \nonumber \\
+&\qquad+ \frac{1}{2} \int m_i v_\parallel^2 \bar{S}_i dv_\parallel
+       - m_i u_{i\parallel} \int v_\parallel \bar{S}_i dv_\parallel
+       + \frac{1}{2} m_i u_{i\parallel}^2 \int \bar{S}_i dv_\parallel \\
+\end{align}
+```
+
+### 1D1V ion kinetic equation
+
+When we marginalise the ion kinetic equation to reduce it to 1D1V form, we note
+that $\dot w_\perp \propto w_\perp$, so the term
+```math
+\begin{align}
+\dot{w}_\perp \frac{\partial F_i}{\partial w_\perp} = -w_\perp \left( \frac{1}{v_{Ti}} \frac{\partial v_{Ti}}{\partial t} + \left( w_\parallel + \frac{u_{i\parallel}}{v_{Ti}} \right) \right) \frac{\partial F_i}{\partial w_\perp}
+\end{align}
+```
+and marginalising
+```@raw html
+<details>
+<summary style="text-align:center">[ intermediate steps ]</summary>
+```
+```math
+\begin{align}
+\int w_\perp \frac{\partial F_i}{\partial w_\perp} d^2 w_\perp
+    &= 2 \pi \int_0^\infty w_\perp \frac{\partial F_i}{\partial w_\perp} w_\perp dw_\perp \nonumber \\
+    &= 2 \pi \int_0^\infty w_\perp^2 \frac{\partial F_i}{\partial w_\perp} dw_\perp \nonumber \\
+    &= 2 \pi \left(
+                   \left[ w_\perp^2 F_i \right]_0^\infty
+                   - \int_0^\infty 2 w_\perp F_i dw_\perp
+             \right) \nonumber \\
+    &= -2 \pi \int_0^\infty 2 w_\perp F_i dw_\perp \nonumber \\
+    &= -2 \pi \int_0^\infty 2 w_\perp \frac{v_{Ti}^3}{n_i} f_i dw_\perp \nonumber \\
+    &= -2 \pi \frac{v_{Ti}^3}{n_i} \frac{1}{v_{Ti}^2} \int_0^\infty 2 v_\perp f_i dv_\perp \nonumber \\
+    &= -2 \pi \frac{v_{Ti}}{n_i} \bar{f}_i \int_0^\infty 2 v_\perp f_{i\perp} dv_\perp \nonumber \\
+    &= -2 \pi \frac{v_{Ti}}{n_i} \bar{f}_i \lim_{v_{Ti\perp} \rightarrow 0} \int_0^\infty 2 v_\perp \frac{\exp(-v_\perp^2/v_{Ti\perp}^2)}{\pi v_{Ti\perp}^2} dv_\perp \nonumber \\
+    &= -2 \pi \frac{v_{Ti}}{n_i} \bar{f}_i \lim_{v_{Ti\perp} \rightarrow 0} \int_0^\infty 2 x \frac{\exp(-x^2)}{\pi} dx \nonumber \\
+    &= -4 \frac{v_{Ti}}{n_i} \bar{f}_i \lim_{v_{Ti\perp} \rightarrow 0} \left[ -\frac{1}{2} \exp(-x^2) \right]_0^\infty \nonumber \\
+    &= 2 \frac{v_{Ti}}{n_i} \bar{f}_i \nonumber \\
+\end{align}
+```
+```@raw html
+</details>
+```
+```math
+\begin{align}
+\int w_\perp \frac{\partial F_i}{\partial w_\perp} d^2 w_\perp
+    &= 2 \bar{F}_i \\
+\end{align}
+```
+This term cancels with the contribution to $\dot F_i$ that was associated with
+having three powers of $v_{Ti}$ in
+$F_s(t,z,w_\parallel,w_\perp) = \frac{v_{Ti}^3}{n_i} f_s(t,z,v_\parallel,v_\perp)$
+rather than the one power of $v_{Ti}$ in
+$\bar{F}_s(t,z,w_\parallel,w_\perp) = \frac{v_{Ti}}{n_i} \bar{f}_s(t,z,v_\parallel,v_\perp)$.
+Finally
+```math
+\begin{align}
+&\frac{\partial \bar{F}_i}{\partial t} + \dot{z} \frac{\partial \bar{F}_i}{\partial z} + \dot{w}_\parallel \frac{\partial \bar{F}_i}{\partial w_\parallel} + \dot{w}_\perp \frac{\partial \bar{F}_i}{\partial w_\perp}
+    = \dot{\bar{F}}_i + \bar{\mathcal{C}}_i + \frac{v_{Ti}}{n_i} \bar{S}_i \\
+\end{align}
+```
+(noting that
+$\int S_i d^2 w_\perp = v_{Ti}^{-2} \int S_i d^2 v_\perp = v_{Ti}^{-2} \bar S_i$),
+where
+```math
+\begin{align}
+\dot{z} &= v_{Ti} w_\parallel + u_{i\parallel} \\
+
+\dot{w}_\parallel &= - \left( \frac{1}{v_{Ti}} \frac{\partial u_{i\parallel}}{\partial t} + \left( w_\parallel + \frac{u_{i_\parallel}}{v_{Ti}} \right) \frac{\partial u_{i\parallel}}{\partial z} + \frac{e}{m_i v_{Ti}} \frac{\partial\phi}{\partial z} \right. \nonumber \\
+    &\qquad\quad  \left. + \frac{w_\parallel}{v_{Ti}} \frac{\partial v_{Ti}}{\partial t} + w_\parallel \left( w_\parallel + \frac{u_{i\parallel}}{v_{Ti}} \right) \frac{\partial v_{Ti}}{\partial z} \right) \\
+
+\frac{\dot{\bar{F}}_i}{\bar{F}_i} &= \frac{3}{v_{Ti}} \frac{\partial v_{Ti}}{\partial t} + \frac{3 (v_{Ti} w_\parallel + u_{i\parallel})}{v_{Ti}} \frac{\partial v_{Ti}}{\partial z}
+                   - \frac{1}{n_i} \frac{\partial n_i}{\partial t} - \frac{(v_{Ti} w_\parallel + u_{i\parallel})}{n_i} \frac{\partial n_i}{\partial z}
+                   - \underbrace{2 \left( \frac{1}{v_{Ti}} \frac{\partial v_{Ti}}{\partial t} + \left( w_\parallel + \frac{u_{i\parallel}}{v_{Ti}} \right) \right)}_\text{term coming from $\dot{w}_\perp \partial F_i / \partial w_\perp$} \nonumber \\
+&= \frac{1}{v_{Ti}} \frac{\partial v_{Ti}}{\partial t} + \frac{(v_{Ti} w_\parallel + u_{i\parallel})}{v_{Ti}} \frac{\partial v_{Ti}}{\partial z}
+                   - \frac{1}{n_i} \frac{\partial n_i}{\partial t} - \frac{(v_{Ti} w_\parallel + u_{i\parallel})}{n_i} \frac{\partial n_i}{\partial z} \\
+
+\bar{\mathcal{C}}_i &= \frac{v_{Ti}}{n_i} \int C_{ii}[f_i] d^2 v_\perp - R_\mathrm{CX} n_n \left( \bar{F}_i - \frac{v_{Ti}}{v_{Tn}} \bar{F}_n \right) + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} \frac{v_{Ti}}{v_{Tn}} \bar{F}_n \\
+\end{align}
+```
+
+The separate-$n_i$ and separate-$n_i$,$u_{i\parallel}$ equations are simpler to
+marginalise, as they contained no $\partial F_i / \partial w_{i\perp}$ term.
+* Separate $n_i$
+  ```math
+  \begin{align}
+  & \frac{\partial \bar{F}_i}{\partial t} + v_\parallel \frac{\partial \bar{F}_i}{\partial z}
+    - \frac{e}{m_i} \frac{\partial\phi}{\partial z} \frac{\partial \bar{F}_i}{\partial v_\parallel}
+    + \left( \frac{(v_\parallel - u_{i\parallel})}{n_i} \frac{\partial n_i}{\partial z} - \frac{\partial u_{i\parallel}}{\partial z} + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} + \frac{1}{n_i} \int \bar{S}_i dv_\parallel \right) \bar{F}_i \nonumber \\
+  &\quad= \frac{1}{n_i} \int C_{ii}[f_i] d^2 v_\perp - R_\mathrm{CX} n_n (\bar{F}_i - \bar{F}_n) + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} \bar{F}_n + \frac{1}{n_i} \bar{S}_i \\
+  \end{align}
+  ```
+* Separate $n_i$ and $u_{i\parallel}$, with again $\hat w_\parallel = v_\parallel - u_{s\parallel}$
+  ```math
+  \begin{align}
+  & \frac{\partial \bar{F}_i}{\partial t}
+    + (\hat{w}_\parallel + u_{i\parallel}) \frac{\partial \bar{F}_i}{\partial z} \nonumber \\
+    &\quad- \left( \hat{w}_\parallel \frac{\partial u_{i\parallel}}{\partial z} 
+                   - \frac{1}{m_i n_i} \frac{\partial p_{i\parallel}}{\partial z}
+                   + R_\mathrm{CX} n_n (u_{n\parallel} - u_{i\parallel})
+                   + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} u_{n\parallel}
+                   + \frac{1}{n_i} \int v_\parallel \bar{S}_i dv_\parallel
+                 \right) \frac{\partial \bar{F}_i}{\partial \hat{w}_\parallel} \nonumber \\
+    &\quad+ \left( \frac{(v_\parallel - u_{i\parallel})}{n_i} \frac{\partial n_i}{\partial z} - \frac{\partial u_{i\parallel}}{\partial z} + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} + \frac{1}{n_i} \int \bar{S}_i dv_\parallel \right) \bar{F}_i \nonumber \\
+  &\quad= \frac{1}{n_i} \int C_{ii}[f_i] d^2 v_\perp - R_\mathrm{CX} n_n (\bar{F}_i - \bar{F}_n) + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} \bar{F}_n + \frac{1}{n_i} \bar{S}_i \\
+  \end{align}
+  ```
+
+### 1D1V neutral equations
+
+Similarly setting $T_{i\perp} = 0$ in the moment equations for neutrals
+```math
+\begin{align}
+\frac{\partial n_n}{\partial t} + \frac{\partial}{\partial z}\left( n_n u_{n\parallel} \right)
+    &= - R_\mathrm{ioniz} n_e n_n + \int S_n d^3 v \nonumber \\
+    &= - R_\mathrm{ioniz} n_e n_n + \int \bar{S}_n dv_\parallel \\
+\end{align}
+```
+```math
+\begin{align}
+& m_n \frac{\partial}{\partial t}(n_n u_{n\parallel})
+  + m_n \frac{\partial}{\partial z}(n_n u_{n\parallel}^2)
+  + \frac{\partial p_{n\parallel}}{\partial z} \nonumber \\
+&\quad= -R_\mathrm{CX} m_n n_i n_n (u_{n\parallel} - u_{i\parallel})
+    - R_\mathrm{ioniz} m_n n_e n_n u_{n\parallel}
+    + m_n \int v_\parallel S_n d^3 v \\
+&\quad= -R_\mathrm{CX} m_n n_i n_n (u_{n\parallel} - u_{i\parallel})
+    - R_\mathrm{ioniz} m_n n_e n_n u_{n\parallel}
+    + m_n \int v_\parallel \bar{S}_n dv_\parallel \\
+
+& \frac{3}{2} \frac{\partial p_n}{\partial t}
+  + \frac{\partial q_{n\parallel}}{\partial z} + p_{n\parallel} \frac{\partial u_{n\parallel}}{\partial z}
+  + \frac{3}{2} u_{n\parallel} \frac{\partial p_n}{\partial z} + \frac{3}{2} p_n \frac{\partial u_{n\parallel}}{\partial z} \nonumber \\
+&\quad= \frac{1}{2} R_\mathrm{CX} n_i n_n \left(3 T_i - 3 T_n + m_i (u_{i\parallel} - u_{n\parallel})^2 \right)
+      - \frac{3}{2} R_\mathrm{ioniz} n_e n_n T_n \nonumber \\
+&\qquad+ \frac{1}{2} \int m_n v^2 S_n d^3 v
+       - m_n u_{n\parallel} \int v_\parallel S_n d^3 v
+       + \frac{1}{2} m_n u_{n\parallel}^2 \int S_n d^3 v \nonumber \\
+&\quad= \frac{1}{2} R_\mathrm{CX} n_i n_n \left(3 T_i - 3 T_n + m_i (u_{i\parallel} - u_{n\parallel})^2 \right)
+      - \frac{3}{2} R_\mathrm{ioniz} n_e n_n T_n \nonumber \\
+&\qquad+ \frac{1}{2} \int m_n v_\parallel^2 \bar{S}_n dv_\parallel
+       - m_n u_{n\parallel} \int v_\parallel \bar{S}_n dv_\parallel
+       + \frac{1}{2} m_n u_{n\parallel}^2 \int \bar{S}_n dv_\parallel \\
+\end{align}
+```
+Marginalising gives the 1D1V moment-kinetic neutral equation in a very similar
+form as for the ions
+```math
+\begin{align}
+&\frac{\partial \bar{F}_n}{\partial t} + \dot{z} \frac{\partial \bar{F}_n}{\partial z} + \dot{w}_\parallel \frac{\partial \bar{F}_n}{\partial w_\parallel} + \dot{w}_\perp \frac{\partial \bar{F}_n}{\partial w_\perp}
+    = \dot{\bar{F}}_n + \bar{\mathcal{C}}_n + \frac{v_{Tn}}{n_n} \bar{S}_n \\
+\end{align}
+```
+where
+```math
+\begin{align}
+\dot{z} &= v_{Tn} w_\parallel + u_{n\parallel} \\
+
+\dot{w}_\parallel &= - \left( \frac{1}{v_{Tn}} \frac{\partial u_{n\parallel}}{\partial t} + \left( w_\parallel + \frac{u_{n_\parallel}}{v_{Tn}} \right) \frac{\partial u_{n\parallel}}{\partial z} \right. \nonumber \\
+    &\qquad\quad  \left. + \frac{w_\parallel}{v_{Tn}} \frac{\partial v_{Tn}}{\partial t} + w_\parallel \left( w_\parallel + \frac{u_{n\parallel}}{v_{Tn}} \right) \frac{\partial v_{Tn}}{\partial z} \right) \\
+
+\frac{\dot{\bar{F}}_n}{\bar{F}_n} &= \frac{1}{v_{Tn}} \frac{\partial v_{Tn}}{\partial t} + \frac{(v_{Tn} w_\parallel + u_{n\parallel})}{v_{Tn}} \frac{\partial v_{Tn}}{\partial z}
+                   - \frac{1}{n_n} \frac{\partial n_n}{\partial t} - \frac{(v_{Tn} w_\parallel + u_{n\parallel})}{n_n} \frac{\partial n_n}{\partial z} \\
+
+\bar{\mathcal{C}}_n &= R_\mathrm{CX} n_i \left( \frac{v_{Tn}}{v_{Ti}} \bar{F}_i - \bar{F}_n \right) \\
+\end{align}
+```
+
+* Separate $n_n$
+  ```math
+  \begin{align}
+  & \frac{\partial \bar{F}_n}{\partial t} + v_\parallel \frac{\partial \bar{F}_n}{\partial z}
+    + \left( \frac{(v_\parallel - u_{n\parallel})}{n_n} \frac{\partial n_n}{\partial z} - \frac{\partial u_{n\parallel}}{\partial z} + \frac{1}{n_n} \int \bar{S}_n dv_\parallel \right) \bar{F}_n \nonumber \\
+  &\quad= R_\mathrm{CX} n_i (\bar{F}_i - \bar{F}_n) + \frac{1}{n_n} \bar{S}_n \\
+  \end{align}
+  ```
+* Separate $n_n$ and $u_{n\parallel}$
+  ```math
+  \begin{align}
+  & \frac{\partial \bar{F}_n}{\partial t}
+    + (\hat{w}_\parallel + u_{n\parallel}) \frac{\partial \bar{F}_n}{\partial z} \nonumber \\
+    &\quad- \left( \hat{w}_\parallel \frac{\partial u_{n\parallel}}{\partial z} 
+                   - \frac{1}{m_n n_n} \frac{\partial p_{n\parallel}}{\partial z}
+                   - R_\mathrm{CX} n_i (u_{n\parallel} - u_{i\parallel})
+                   + \frac{1}{n_n} \int v_\parallel \bar{S}_n dv_\parallel
+                 \right) \frac{\partial \bar{F}_n}{\partial \hat{w}_\parallel} \nonumber \\
+    &\quad+ \left( \frac{(v_\parallel - u_{n\parallel})}{n_n} \frac{\partial n_n}{\partial z} - \frac{\partial u_{n\parallel}}{\partial z} + \frac{1}{n_n} \int \bar{S}_n dv_\parallel \right) \bar{F}_n \nonumber \\
+  &\quad= R_\mathrm{CX} n_i (\bar{F}_i - \bar{F}_n) + \frac{1}{n_n} \bar{S}_n \\
+  \end{align}
+  ```
+
+Conversion to conventions of 1D1V Excalibur reports
+---------------------------------------------------
+
+The notes above follow the conventions of the nD2V systems of equations in the
+Excalibur reports.
+The original version of the 1D1V system as defined in the Excalibur reports had
+some conventions chosen differently. Quantities as defined in that original
+version are denoted by $\check{\cdot}$ where they differ from those defined here.
+
+The thermal speed was defined using the parallel temperature
+```math
+\begin{align}
+\check{v}_{Ts} &= \sqrt{\frac{2 T_{s\parallel}}{m_s}} \nonumber \\
+               &= \sqrt{\frac{2 (3 T_{s})}{m_s}} \nonumber \\
+               &= \sqrt{3} v_{Ts}
+\end{align}
+```
+with a corresponding change in the normalised velocity coordinate
+```math
+\begin{align}
+\check{w}_\parallel &= \frac{v_\parallel - u_{s\parallel}}{\check{v}_{Ts}} \nonumber \\
+                    &= \frac{v_\parallel - u_{s\parallel}}{\sqrt{3} v_{Ts}} \nonumber \\
+                    &= \frac{w_\parallel}{\sqrt{3}}
+\end{align}
+```
+and in the shape function $\check F_s$ (it might be more consistent for the
+symbol for this shape function to have a $\bar{\cdot}$ as well as a
+$\check{\cdot}$, but that would look messy so the $\bar{\cdot}$ is omitted)
+```math
+\begin{align}
+\check{F}_s(t,z,\check{w}_\parallel) &= \frac{\check{v}_{Ts}}{n_s} \bar{f}_s(t,z,v_\parallel) \nonumber \\
+                                           &= \sqrt{3} \frac{v_{Ts}}{n_s} \bar{f}_s(t,z,v_\parallel) \nonumber \\
+                                           &= \sqrt{3} \bar{F}_s(t,z,w_\parallel) \nonumber \\
+\end{align}
+```
+Finally, the parallel heat flux was defined without the factor of $1/2$
+```math
+\begin{align}
+\check{q}_{s\parallel} &= \int m_s (v_\parallel - u_{s\parallel})^3 \bar{f}_s dv_\parallel \nonumber \\
+                       &= 2 q_{s\parallel}
+\end{align}
+```
+These conversions translate the equations as given above into the 1D1V forms in
+the Excalibur reports.
 
 Old 1D1V moment kinetic equations
 ---------------------------------
