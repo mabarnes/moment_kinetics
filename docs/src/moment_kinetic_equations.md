@@ -1408,33 +1408,16 @@ Using these definitions, the old dimensionless variables in terms of the
 physical variables and of the current dimensionless variables (where we assume
 for the conversion that $\check n_\mathrm{ref} = n_\mathrm{ref}$,
 $\check T_\mathrm{ref} = T_\mathrm{ref}$, and
-$\check B_\mathrm{ref} = B_\mathrm{ref}$) are
+$\check B_\mathrm{ref} = B_\mathrm{ref}$) are, listing the ones with
+differences first
 ```math
 \begin{alignat}{2}
-\mathring{n}_s &= \frac{n_s}{\check{n}_\mathrm{ref}} = \hat{n}_s 
-    && \hat{n}_s = \mathring{n}_s \\
 \mathring{T}_s &= \frac{T_s}{m_i \check{c}_\mathrm{ref}^2} = \frac{T_s}{2 \check{T}_\mathrm{ref}} = \frac{\hat{T}_s}{2}
     && \hat{T}_s = 2 \mathring{T}_s \\
-\mathring{L}_z &= \frac{L_z}{\check{L}_\mathrm{ref}} = \hat{L}_z
-    && \hat{L}_z = \mathring{L}_z \\
-\mathring{B} &= \frac{B}{\check{B}_\mathrm{ref}} = \hat{B}
-    && \hat{B} = \mathring{B} \\
-\mathring{m}_i &= \frac{m_i}{m_i} = 1 = \hat{m}_i
-    && \hat{m}_i = \mathring{m}_i \\
-\mathring{m}_e &= \frac{m_e}{m_i} = \hat{m}_e
-    && \hat{m}_e = \mathring{m_e} \\
 \mathring{v}_{Ts} &= \frac{\check{v}_{Ts}}{\check{c}_\mathrm{ref}} = \frac{\sqrt{3} v_{Ts}}{\sqrt{2} c_\mathrm{ref}} = \sqrt{\frac{3}{2}} \hat{v}_{Ts}
     && \hat{v}_{Ts} = \sqrt{\frac{2}{3}} \mathring{v}_{Ts} \\
-\mathring{f}_s &= \frac{\sqrt{\pi} \check{c}_\mathrm{ref}}{\check{n}_\mathrm{ref}} \check{f}_s = \frac{\sqrt{2 \pi} c_\mathrm{ref}}{n_\mathrm{ref}} \bar{f}_s = \hat{\bar{f}}_s
-    && \hat{\bar{f}}_s = \mathring{\bar{f}}_s \\
 \mathring{F}_s &= \sqrt{\pi} \check{F}_s = \sqrt{\pi} \sqrt{3} \bar{F}_s = \sqrt{3} \hat{\bar{F}}_s
     && \hat{\bar{F}}_s = \frac{1}{\sqrt{3}} \mathring{\bar{F}}_s \\
-\mathring{\phi} &= \frac{e \phi}{\check{T}_\mathrm{ref}} = \hat{\phi}
-    && \hat{\phi} = \mathring{\phi} \\
-\mathring{z} &= \frac{z}{\check{L}_\mathrm{ref}} = \hat{z}
-    && \hat{z} = \mathring{z} \\
-\frac{\partial}{\partial \mathring{z}} &= \check{L}_\mathrm{ref} \frac{\partial}{\partial z} = \frac{\partial}{\partial \hat{z}}
-    && \frac{\partial}{\partial \hat{z}} = \frac{\partial}{\partial \mathring{z}} \\
 \mathring{v}_\parallel &= \frac{v_\parallel}{\check{c}_\mathrm{ref}} = \frac{v_\parallel}{\sqrt{2} c_\mathrm{ref}} = \frac{\hat{v}_\parallel}{\sqrt{2}}
     && \hat{v}_\parallel = \sqrt{2} \mathring{v}_\parallel \\
 \frac{\partial}{\partial \mathring{v}_\parallel} &= \check{c}_\mathrm{ref} \frac{\partial}{\partial v_\parallel} = \sqrt{2} c_\mathrm{ref} \frac{\partial}{\partial v_\parallel} = \sqrt{2} \frac{\partial}{\partial \hat{v}_\parallel}
@@ -1447,6 +1430,24 @@ $\check B_\mathrm{ref} = B_\mathrm{ref}$) are
     && \hat{p}_s = 2 \mathring{p}_s \\
 \mathring{q}_{s\parallel} &= \frac{\check{q}_{s\parallel}}{m_i \check{n}_\mathrm{ref} \check{c}_\mathrm{ref}^3} = \frac{2 q_{s\parallel}}{m_i n_\mathrm{ref} 2^{3/2} c_\mathrm{ref}^3} = \frac{\hat{q}_{s\parallel}}{\sqrt{2}} \quad
     && \hat{q}_{s\parallel} = \sqrt{2}\mathring{q}_{s\parallel} \\
+\mathring{n}_s &= \frac{n_s}{\check{n}_\mathrm{ref}} = \hat{n}_s
+    && \hat{n}_s = \mathring{n}_s \\
+\mathring{L}_z &= \frac{L_z}{\check{L}_\mathrm{ref}} = \hat{L}_z
+    && \hat{L}_z = \mathring{L}_z \\
+\mathring{B} &= \frac{B}{\check{B}_\mathrm{ref}} = \hat{B}
+    && \hat{B} = \mathring{B} \\
+\mathring{m}_i &= \frac{m_i}{m_i} = 1 = \hat{m}_i
+    && \hat{m}_i = \mathring{m}_i \\
+\mathring{m}_e &= \frac{m_e}{m_i} = \hat{m}_e
+    && \hat{m}_e = \mathring{m_e} \\
+\mathring{f}_s &= \frac{\sqrt{\pi} \check{c}_\mathrm{ref}}{\check{n}_\mathrm{ref}} \check{f}_s = \frac{\sqrt{2 \pi} c_\mathrm{ref}}{n_\mathrm{ref}} \bar{f}_s = \hat{\bar{f}}_s
+    && \hat{\bar{f}}_s = \mathring{\bar{f}}_s \\
+\mathring{\phi} &= \frac{e \phi}{\check{T}_\mathrm{ref}} = \hat{\phi}
+    && \hat{\phi} = \mathring{\phi} \\
+\mathring{z} &= \frac{z}{\check{L}_\mathrm{ref}} = \hat{z}
+    && \hat{z} = \mathring{z} \\
+\frac{\partial}{\partial \mathring{z}} &= \check{L}_\mathrm{ref} \frac{\partial}{\partial z} = \frac{\partial}{\partial \hat{z}}
+    && \frac{\partial}{\partial \hat{z}} = \frac{\partial}{\partial \mathring{z}} \\
 \end{alignat}
 ```
 
