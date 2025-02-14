@@ -1325,6 +1325,17 @@ de-dimensionalises to
 \end{align}
 ```
 
+The distribution function $f_s$ is de-dimensionalised so that a Maxwellian
+$f_{Ms} = \frac{n_s}{\pi^{3/2} v_{Ts}^3} \exp\left(-v^2 / v_{Ts}^2 \right)$
+would have a maximum value of $\hat n_s / \hat v_{Ts}^3$, and its shape
+function $\hat F_s$ would have a maximum value of 1.
+
+The 1V, marginalised distribution function $\bar f_s$ is de-dimensionalised so
+that a 1V Maxwellian $\bar f_{Ms} = \frac{n_s}{\sqrt{\pi} v_{Ts}}
+\exp\left(-v_\parallel^2 / v_{Ts}^2 \right)$ would have a maximum value of
+$\hat n_s / \hat v_{Ts}$, and its shape function $\hat{\bar{F}}_s$ would have a
+maximum value of 1.
+
 The full set of dimensionless variables are related to the dimensional ones by
 ```math
 \begin{align}
@@ -1335,6 +1346,10 @@ The full set of dimensionless variables are related to the dimensional ones by
 \hat{m}_i &= \frac{m_i}{m_i} = 1 \\
 \hat{m}_e &= \frac{m_e}{m_i} \\
 \hat{v}_{Ts} &= \frac{v_{Ts}}{c_\mathrm{ref}} \\
+\hat{f}_s &= \frac{(2 \pi)^{3/2} c_\mathrm{ref}^3}{n_\mathrm{ref}} f_s \\
+\hat{F}_s &= (\pi)^{3/2} F_s \\
+\hat{\bar{f}}_s &= \frac{\sqrt{2 \pi} c_\mathrm{ref}}{n_\mathrm{ref}} \bar{f}_s \\
+\hat{\bar{F}}_s &= \sqrt{\pi} \bar{F}_s \\
 \hat{\phi} &= \frac{e \phi}{T_\mathrm{ref}} \\
 \hat{z} &= \frac{z}{L_\mathrm{ref}} \\
 \frac{\partial}{\partial \hat{z}} &= L_\mathrm{ref} \frac{\partial}{\partial z} \\
@@ -1345,6 +1360,85 @@ The full set of dimensionless variables are related to the dimensional ones by
 \hat{p}_s &= \hat{n}_s \hat{T_s} = \frac{p_s}{n_\mathrm{ref} T_\mathrm{ref}} \\
 \hat{q}_{s\parallel} &= \frac{q_{s\parallel}}{m_i n_\mathrm{ref} c_\mathrm{ref}^3} = \frac{q_{s\parallel}}{n_\mathrm{ref} T_\mathrm{ref} c_\mathrm{ref}} \\
 \end{align}
+```
+
+### Conversion to old dimensionless equations
+
+In the 1D1V Excalibur reports, and the original version of the code, a
+different set of dimensionless variables were chosen, where
+$\check c_\mathrm{ref} = \sqrt{2 \check T_\mathrm{ref} / m_i}$ was used as the
+primary reference variable, along with a reference density
+$\check n_\mathrm{ref}$, length $\check L_\mathrm{ref}$, and magnetic field
+$\check B_\mathrm{ref}$. In the Excalibur reports where a Boltzmann electron
+response, which implies constant electron temperature, was used the reference
+temperature was taken to be $\check T_\mathrm{ref} = T_e$, but this was later
+generalised in the code to an arbitrary $\check T_\mathrm{ref}$ to allow
+non-constant electron temperature (with Braginskii or kinetic electrons) or for
+varying the constant electron temperature of the Boltzmann response without
+re-scaling the rest of the dimensionless variables.
+
+In this section, denote dimensionless variables of the original version's
+conventions with a $\mathring{\cdot}$.
+
+The 1V, marginalised distribution function $\check f_s$ is de-dimensionalised
+so that a 1V Maxwellian $\check f_{Ms} = \frac{n_s}{\sqrt{\pi} \check v_{Ts}}
+\exp\left(-v_\parallel^2 / \check v_{Ts}^2 \right)$ would have a maximum value
+of $\mathring n_s / \mathring v_{Ts}$, and its shape function $\check F_s$
+would have a maximum value of 1.
+
+Important to note, in the original version, the dimensionless electrostatic
+potential was defined using $\check T_\mathrm{ref}$, as
+$\mathring \phi = e \phi / \check T_\mathrm{ref}$, not using
+$m_i \check c_\mathrm{ref}^2$ that was used for temperatures.
+
+Using these definitions, the old dimensionless variables in terms of the
+physical variables and of the current dimensionless variables (where we assume
+for the conversion that $\check n_\mathrm{ref} = n_\mathrm{ref}$,
+$\check T_\mathrm{ref} = T_\mathrm{ref}$, and
+$\check B_\mathrm{ref} = B_\mathrm{ref}$) are
+```math
+\begin{alignat}{2}
+\mathring{n}_s &= \frac{n_s}{\check{n}_\mathrm{ref}} = \hat{n}_s 
+    && \hat{n}_s = \mathring{n}_s \\
+\mathring{T}_s &= \frac{T_s}{m_i \check{c}_\mathrm{ref}^2} = \frac{T_s}{2 \check{T}_\mathrm{ref}} = \frac{\hat{T}_s}{2}
+    && \hat{T}_s = 2 \mathring{T}_s \\
+\mathring{L}_z &= \frac{L_z}{\check{L}_\mathrm{ref}} = \hat{L}_z
+    && \hat{L}_z = \mathring{L}_z \\
+\mathring{B} &= \frac{B}{\check{B}_\mathrm{ref}} = \hat{B}
+    && \hat{B} = \mathring{B} \\
+\mathring{m}_i &= \frac{m_i}{m_i} = 1 = \hat{m}_i
+    && \hat{m}_i = \mathring{m}_i \\
+\mathring{m}_e &= \frac{m_e}{m_i} = \hat{m}_e
+    && \hat{m}_e = \mathring{m_e} \\
+\mathring{v}_{Ts} &= \frac{\check{v}_{Ts}}{\check{c}_\mathrm{ref}} = \frac{\sqrt{3} v_{Ts}}{\sqrt{2} c_\mathrm{ref}} = \sqrt{\frac{3}{2}} \hat{v}_{Ts}
+    && \hat{v}_{Ts} = \sqrt{\frac{2}{3}} \mathring{v}_{Ts} \\
+\mathring{f}_s &= \frac{\pi^{3/2} \check{c}_\mathrm{ref}^3}{\check{n}_\mathrm{ref}} f_s = \frac{(2 \pi)^{3/2} c_\mathrm{ref}^3}{n_\mathrm{ref}} f_s = \hat{f}_s
+    && \hat{f}_s = \mathring{f}_s \\
+\mathring{F}_s &= (\pi)^{3/2} F_s = \hat{F}_s
+    && \hat{F}_s = \mathring{F}_s \\
+\mathring{\bar{f}}_s &= \frac{\sqrt{\pi} \check{c}_\mathrm{ref}}{\check{n}_\mathrm{ref}} \bar{f}_s = \frac{\sqrt{2 \pi} c_\mathrm{ref}}{n_\mathrm{ref}} \bar{f}_s = \hat{\bar{f}}_s
+    && \hat{\bar{f}}_s = \mathring{\bar{f}}_s \\
+\mathring{\bar{F}}_s &= \sqrt{\pi} \bar{F}_s = \hat{\bar{F}}_s
+    && \hat{\bar{F}}_s = \mathring{\bar{F}}_s \\
+\mathring{\phi} &= \frac{e \phi}{\check{T}_\mathrm{ref}} = \hat{\phi}
+    && \hat{\phi} = \mathring{\phi} \\
+\mathring{z} &= \frac{z}{\check{L}_\mathrm{ref}} = \hat{z}
+    && \hat{z} = \mathring{z} \\
+\frac{\partial}{\partial \mathring{z}} &= \check{L}_\mathrm{ref} \frac{\partial}{\partial z} = \frac{\partial}{\partial \hat{z}}
+    && \frac{\partial}{\partial \hat{z}} = \frac{\partial}{\partial \mathring{z}} \\
+\mathring{v}_\parallel &= \frac{v_\parallel}{\check{c}_\mathrm{ref}} = \frac{v_\parallel}{\sqrt{2} c_\mathrm{ref}} = \frac{\hat{v}_\parallel}{\sqrt{2}}
+    && \hat{v}_\parallel = \sqrt{2} \mathring{v}_\parallel \\
+\frac{\partial}{\partial \mathring{v}_\parallel} &= \check{c}_\mathrm{ref} \frac{\partial}{\partial v_\parallel} = \sqrt{2} c_\mathrm{ref} \frac{\partial}{\partial v_\parallel} = \sqrt{2} \frac{\partial}{\partial \hat{v}_\parallel}
+    && \frac{\partial}{\partial \hat{v}_\parallel} = \frac{1}{\sqrt{2}} \frac{\partial}{\partial \mathring{v}_\parallel} \\
+\mathring{v}_\perp &= \frac{v_\perp}{\check{c}_\mathrm{ref}} = \frac{v_\perp}{\sqrt{2} c_\mathrm{ref}} = \frac{\hat{v}_\perp}{\sqrt{2}}
+    && \hat{v}_\perp = \sqrt{2} \mathring{v}_\perp \\
+\frac{\partial}{\partial \mathring{v}_\perp} &= \check{c}_\mathrm{ref} \frac{\partial}{\partial v_\perp} = \sqrt{2} c_\mathrm{ref} \frac{\partial}{\partial v_\perp} = \sqrt{2} \frac{\partial}{\partial \hat{v}_\perp}
+    && \frac{\partial}{\partial \hat{v}_\perp} = \frac{1}{\sqrt{2}} \frac{\partial}{\partial \mathring{v}_\perp} \\
+\mathring{p}_s &= \frac{p_s}{\check{n}_\mathrm{ref} m_i \check{c}_\mathrm{ref}^2} = \frac{p_s}{\check{n}_\mathrm{ref} m_i 2 \check{T}_\mathrm{ref}} = \frac{\hat{p}_s}{2}
+    && \hat{p}_s = 2 \mathring{p}_s \\
+\mathring{q}_{s\parallel} &= \frac{\check{q}_{s\parallel}}{m_i \check{n}_\mathrm{ref} \check{c}_\mathrm{ref}^3} = \frac{2 q_{s\parallel}}{m_i n_\mathrm{ref} 2^{3/2} c_\mathrm{ref}^3} = \frac{\hat{q}_{s\parallel}}{\sqrt{2}} \quad
+    && \hat{q}_{s\parallel} = \sqrt{2}\mathring{q}_{s\parallel} \\
+\end{alignat}
 ```
 
 Old 1D1V moment kinetic equations
