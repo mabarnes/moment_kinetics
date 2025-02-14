@@ -1298,6 +1298,19 @@ Finally, the parallel heat flux was defined without the factor of $1/2$
                        &= 2 q_{s\parallel}
 \end{align}
 ```
+
+Note that the different definition of $\check w_\parallel$ compared to
+$w_\parallel$ and of $\check F_s$ compared to $\bar F_s$ can change form of the
+moment constraints - actually this only affects the energy constraint
+```math
+\begin{align}
+1 &= \int \bar{F}_s dw_\parallel = \int \frac{1}{\sqrt{3}} \check{F}_s \sqrt{3} d\check{w}_\parallel = \int \check{F}_s d\check{w}_\parallel \\
+0 &= \int w_\parallel \bar{F}_s dw_\parallel = \int \sqrt{3} \check{w}_\parallel \frac{1}{\sqrt{3}} \check{F}_s \sqrt{3} d\check{w}_\parallel = \sqrt{3} \int \check{w}_\parallel \check{F}_s d\check{w}_\parallel \\
+\frac{3}{2} &= \int w_\parallel^2 \bar{F}_s dw_\parallel = \int 3 \check{w}_\parallel^2 \frac{1}{\sqrt{3}} \check{F}_s \sqrt{3} d\check{w}_\parallel = 3 \int \check{w}_\parallel^2 \check{F}_s d\check{w}_\parallel \nonumber \\
+\Rightarrow \frac{1}{2} &= \int \check{w}_\parallel^2 \check{F}_s d\check{w}_\parallel \\
+\end{align}
+```
+
 These conversions translate the equations as given above into the 1D1V forms in
 the Excalibur reports.
 
@@ -1412,14 +1425,10 @@ $\check B_\mathrm{ref} = B_\mathrm{ref}$) are
     && \hat{m}_e = \mathring{m_e} \\
 \mathring{v}_{Ts} &= \frac{\check{v}_{Ts}}{\check{c}_\mathrm{ref}} = \frac{\sqrt{3} v_{Ts}}{\sqrt{2} c_\mathrm{ref}} = \sqrt{\frac{3}{2}} \hat{v}_{Ts}
     && \hat{v}_{Ts} = \sqrt{\frac{2}{3}} \mathring{v}_{Ts} \\
-\mathring{f}_s &= \frac{\pi^{3/2} \check{c}_\mathrm{ref}^3}{\check{n}_\mathrm{ref}} f_s = \frac{(2 \pi)^{3/2} c_\mathrm{ref}^3}{n_\mathrm{ref}} f_s = \hat{f}_s
-    && \hat{f}_s = \mathring{f}_s \\
-\mathring{F}_s &= (\pi)^{3/2} F_s = \hat{F}_s
-    && \hat{F}_s = \mathring{F}_s \\
-\mathring{\bar{f}}_s &= \frac{\sqrt{\pi} \check{c}_\mathrm{ref}}{\check{n}_\mathrm{ref}} \bar{f}_s = \frac{\sqrt{2 \pi} c_\mathrm{ref}}{n_\mathrm{ref}} \bar{f}_s = \hat{\bar{f}}_s
+\mathring{f}_s &= \frac{\sqrt{\pi} \check{c}_\mathrm{ref}}{\check{n}_\mathrm{ref}} \check{f}_s = \frac{\sqrt{2 \pi} c_\mathrm{ref}}{n_\mathrm{ref}} \bar{f}_s = \hat{\bar{f}}_s
     && \hat{\bar{f}}_s = \mathring{\bar{f}}_s \\
-\mathring{\bar{F}}_s &= \sqrt{\pi} \bar{F}_s = \hat{\bar{F}}_s
-    && \hat{\bar{F}}_s = \mathring{\bar{F}}_s \\
+\mathring{F}_s &= \sqrt{\pi} \check{F}_s = \sqrt{\pi} \sqrt{3} \bar{F}_s = \sqrt{3} \hat{\bar{F}}_s
+    && \hat{\bar{F}}_s = \frac{1}{\sqrt{3}} \mathring{\bar{F}}_s \\
 \mathring{\phi} &= \frac{e \phi}{\check{T}_\mathrm{ref}} = \hat{\phi}
     && \hat{\phi} = \mathring{\phi} \\
 \mathring{z} &= \frac{z}{\check{L}_\mathrm{ref}} = \hat{z}
