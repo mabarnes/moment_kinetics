@@ -1301,6 +1301,52 @@ Finally, the parallel heat flux was defined without the factor of $1/2$
 These conversions translate the equations as given above into the 1D1V forms in
 the Excalibur reports.
 
+Dimensionless equations for code
+--------------------------------
+
+To put the equations on a computer, we need to make them dimensionless. We
+choose a reference density $n_\mathrm{ref}$, temperature $T_\mathrm{ref}$,
+length $L_\mathrm{ref}$, and magnetic field $B_\mathrm{ref}$, and use the ion
+mass $m_i$ as the reference value (it might be useful to change this to 1 amu
+in future when we fully implement multi-species?). Denote dimensionless
+variables with a $\hat{\cdot}$ in this section.
+
+We also define a reference speed, derived from the temperature and mass
+$c_\mathrm{ref} = \sqrt{T_\mathrm{ref}/m_i}$, chosen so that the relation
+```math
+\begin{align}
+\frac{1}{2} m_i v_{Ts}^2 = T_s
+\end{align}
+```
+de-dimensionalises to
+```math
+\begin{align}
+\frac{1}{2} \hat{v}_{Ts}^2 = \hat{T}_s
+\end{align}
+```
+
+The full set of dimensionless variables are related to the dimensional ones by
+```math
+\begin{align}
+\hat{n}_s &= \frac{n_s}{n_\mathrm{ref}} \\
+\hat{T}_s &= \frac{T_s}{T_\mathrm{ref}} \\
+\hat{L}_z &= \frac{L_z}{L_\mathrm{ref}} \\
+\hat{B} &= \frac{B}{B_\mathrm{ref}} \\
+\hat{m}_i &= \frac{m_i}{m_i} = 1 \\
+\hat{m}_e &= \frac{m_e}{m_i} \\
+\hat{v}_{Ts} &= \frac{v_{Ts}}{c_\mathrm{ref}} \\
+\hat{\phi} &= \frac{e \phi}{T_\mathrm{ref}} \\
+\hat{z} &= \frac{z}{L_\mathrm{ref}} \\
+\frac{\partial}{\partial \hat{z}} &= L_\mathrm{ref} \frac{\partial}{\partial z} \\
+\hat{v}_\parallel &= \frac{v_\parallel}{c_\mathrm{ref}} \\
+\frac{\partial}{\partial \hat{v}_\parallel} &= c_\mathrm{ref} \frac{\partial}{\partial v_\parallel} \\
+\hat{v}_\perp &= \frac{v_\perp}{c_\mathrm{ref}} \\
+\frac{\partial}{\partial \hat{v}_\perp} &= c_\mathrm{ref} \frac{\partial}{\partial v_\perp} \\
+\hat{p}_s &= \hat{n}_s \hat{T_s} = \frac{p_s}{n_\mathrm{ref} T_\mathrm{ref}} \\
+\hat{q}_{s\parallel} &= \frac{q_{s\parallel}}{m_i n_\mathrm{ref} c_\mathrm{ref}^3} = \frac{q_{s\parallel}}{n_\mathrm{ref} T_\mathrm{ref} c_\mathrm{ref}} \\
+\end{align}
+```
+
 Old 1D1V moment kinetic equations
 ---------------------------------
 
