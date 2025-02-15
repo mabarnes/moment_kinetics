@@ -322,7 +322,7 @@ function mk_input(input_dict=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
     if ignore_MPI
         irank_z = irank_r = 0
         nrank_z = nrank_r = 1
-        comm_sub_z = comm_sub_r = MPI.COMM_NULL
+        comm_sub_z, comm_sub_r = setup_serial_MPI()
     else
         irank_z, nrank_z, comm_sub_z, irank_r, nrank_r, comm_sub_r =
             setup_distributed_memory_MPI(z_coord_input.nelement,

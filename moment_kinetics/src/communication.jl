@@ -18,6 +18,7 @@ export allocate_shared, block_rank, block_size, n_blocks, comm_block, comm_inter
        anyv_subblock_size, anyv_isubblock_index, anyv_nsubblocks_per_block
 export setup_distributed_memory_MPI
 export setup_distributed_memory_MPI_for_weights_precomputation
+export setup_serial_MPI
 export @_block_synchronize, @_anyv_subblock_synchronize
 
 using LinearAlgebra
@@ -256,6 +257,29 @@ function setup_distributed_memory_MPI(z_nelement_global,z_nelement_local,r_nelem
     # if color == nothing then this process is excluded from the communicator
     
     return z_irank, z_nrank_per_group, z_comm, r_irank, r_nrank_per_group, r_comm
+end
+
+"""
+Used for post-processing when we want various communicators to be initialised, but always
+for serial operation.
+"""
+function setup_serial_MPI()
+    # setup some local constants and dummy variables
+    irank_global = global_rank[] # rank index within global processes
+    nrank_global = global_size[] # number of processes
+
+    # set up the global variables
+    iblock_index[] = 0
+    block_rank[] = 0
+    block_size[] = 0
+    n_blocks[] = 1
+    comm_block[] = MPI.COMM_SELF
+
+    comm_inter_block[] = MPI.COMM_SELF
+    r_comm = MPI.COMM_SELF
+    z_comm = MPI.COMM_SELF
+
+    return z_comm, r_comm
 end
 
 """

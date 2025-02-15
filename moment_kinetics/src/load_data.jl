@@ -4116,6 +4116,14 @@ end
 function get_variable(run_info, variable_name; normalize_advection_speed_shape=true,
                       kwargs...)
 
+    # Set up loop macros for serial operation, in case they are used by any functions
+    # below.
+    looping.setup_loop_ranges!(0, 1;
+                               s=run_info.composition.n_ion_species,
+                               sn=run_info.composition.n_neutral_species, r=run_info.r.n,
+                               z=run_info.z.n, vperp=run_info.vperp.n, vpa=run_info.vpa.n,
+                               vzeta=run_info.vzeta.n, vr=run_info.vr.n, vz=run_info.vz.n)
+
     # Select a slice of an time-series sized variable
     function select_slice_of_variable(variable::AbstractVector; it=nothing,
                                       is=nothing, ir=nothing, iz=nothing, ivperp=nothing,
