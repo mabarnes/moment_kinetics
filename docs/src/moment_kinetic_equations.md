@@ -116,7 +116,7 @@ Can integrate the drift kinetic equation to give the moment equations:
   ```
   ```math
   \begin{align}
-  \Rightarrow \frac{\partial n_i}{\partial t} + \frac{\partial}{\partial z}\left( n_i u_{i\parallel} \right)
+  \frac{\partial n_i}{\partial t} + \frac{\partial}{\partial z}\left( n_i u_{i\parallel} \right)
       = R_\mathrm{ioniz} n_e n_n + \int S_i d^3 v
   \end{align}
   ```
@@ -155,9 +155,9 @@ Can integrate the drift kinetic equation to give the moment equations:
     + m_i \frac{\partial}{\partial z}(n_i u_{i\parallel}^2)
     + \frac{\partial p_{i\parallel}}{\partial z}
     + e n_i \frac{\partial \phi}{\partial z} \nonumber \\
-  &= R_\mathrm{CX} m_i n_i n_n (u_{n\parallel} - u_{i\parallel})
-      + R_\mathrm{ioniz} m_i n_e n_n u_{n\parallel}
-      + m_i \int v_\parallel S_i d^3 v \\
+  &\quad= R_\mathrm{CX} m_i n_i n_n (u_{n\parallel} - u_{i\parallel})
+          + R_\mathrm{ioniz} m_i n_e n_n u_{n\parallel}
+          + m_i \int v_\parallel S_i d^3 v \\
   \end{align}
   ```
   which can also be manipulated into an equation for
@@ -1364,6 +1364,8 @@ The full set of dimensionless variables are related to the dimensional ones by
 \hat{\bar{f}}_s &= \frac{\sqrt{2 \pi} c_\mathrm{ref}}{n_\mathrm{ref}} \bar{f}_s \\
 \hat{\bar{F}}_s &= \sqrt{\pi} \bar{F}_s \\
 \hat{\phi} &= \frac{e \phi}{T_\mathrm{ref}} \\
+\hat{t} &= \frac{c_\mathrm{ref} t}{L_\mathrm{ref}} \\
+\frac{\partial}{\partial \hat{t}} &= \frac{L_\mathrm{ref}}{c_\mathrm{ref}} \frac{\partial}{\partial t} \\
 \hat{z} &= \frac{z}{L_\mathrm{ref}} \\
 \frac{\partial}{\partial \hat{z}} &= L_\mathrm{ref} \frac{\partial}{\partial z} \\
 \hat{v}_\parallel &= \frac{v_\parallel}{c_\mathrm{ref}} \\
@@ -1372,6 +1374,10 @@ The full set of dimensionless variables are related to the dimensional ones by
 \frac{\partial}{\partial \hat{v}_\perp} &= c_\mathrm{ref} \frac{\partial}{\partial v_\perp} \\
 \hat{p}_s &= \hat{n}_s \hat{T_s} = \frac{p_s}{n_\mathrm{ref} T_\mathrm{ref}} \\
 \hat{q}_{s\parallel} &= \frac{q_{s\parallel}}{m_i n_\mathrm{ref} c_\mathrm{ref}^3} = \frac{q_{s\parallel}}{n_\mathrm{ref} T_\mathrm{ref} c_\mathrm{ref}} \\
+\hat{R}_\mathrm{CX} &= \frac{L_\mathrm{ref} n_\mathrm{ref} R_\mathrm{CX}}{c_\mathrm{ref}} \\
+\hat{R}_\mathrm{ioniz} &= \frac{L_\mathrm{ref} n_\mathrm{ref} R_\mathrm{ioniz}}{c_\mathrm{ref}} \\
+\hat{S}_s &= \frac{L_\mathrm{ref} c_\mathrm{ref}^2 S_s}{n_\mathrm{ref}} \\
+\hat{\bar{S}}_s &= \frac{L_\mathrm{ref} \bar{S}_s}{n_\mathrm{ref}} \\
 \end{align}
 ```
 
@@ -1418,6 +1424,10 @@ differences first
     && \hat{v}_{Ts} = \sqrt{\frac{2}{3}} \mathring{v}_{Ts} \\
 \mathring{F}_s &= \sqrt{\pi} \check{F}_s = \sqrt{\pi} \sqrt{3} \bar{F}_s = \sqrt{3} \hat{\bar{F}}_s
     && \hat{\bar{F}}_s = \frac{1}{\sqrt{3}} \mathring{\bar{F}}_s \\
+\mathring{t} &= \frac{\check{c}_\mathrm{ref} t}{\check{L}_\mathrm{ref}} = \sqrt{2} \frac{c_\mathrm{ref} t}{L_\mathrm{ref}} = \sqrt{2} \hat{t}
+    && \hat{t} = \frac{1}{\sqrt{2}} \mathring{t} \\
+\frac{\partial}{\partial \mathring{t}} &= \frac{\check{L}_\mathrm{ref}}{\check{c}_\mathrm{ref}} \frac{\partial}{\partial t} = \frac{L_\mathrm{ref}}{\sqrt{2} c_\mathrm{ref}} \frac{\partial}{\partial \hat{t}} = \frac{1}{\sqrt{2}} \frac{\partial}{\partial \hat{t}}
+    && \frac{\partial}{\partial \hat{t}} = \sqrt{2} \frac{\partial}{\partial \mathring{t}} \\
 \mathring{v}_\parallel &= \frac{v_\parallel}{\check{c}_\mathrm{ref}} = \frac{v_\parallel}{\sqrt{2} c_\mathrm{ref}} = \frac{\hat{v}_\parallel}{\sqrt{2}}
     && \hat{v}_\parallel = \sqrt{2} \mathring{v}_\parallel \\
 \frac{\partial}{\partial \mathring{v}_\parallel} &= \check{c}_\mathrm{ref} \frac{\partial}{\partial v_\parallel} = \sqrt{2} c_\mathrm{ref} \frac{\partial}{\partial v_\parallel} = \sqrt{2} \frac{\partial}{\partial \hat{v}_\parallel}
@@ -1428,8 +1438,14 @@ differences first
     && \frac{\partial}{\partial \hat{v}_\perp} = \frac{1}{\sqrt{2}} \frac{\partial}{\partial \mathring{v}_\perp} \\
 \mathring{p}_s &= \frac{p_s}{\check{n}_\mathrm{ref} m_i \check{c}_\mathrm{ref}^2} = \frac{p_s}{\check{n}_\mathrm{ref} m_i 2 \check{T}_\mathrm{ref}} = \frac{\hat{p}_s}{2}
     && \hat{p}_s = 2 \mathring{p}_s \\
-\mathring{q}_{s\parallel} &= \frac{\check{q}_{s\parallel}}{m_i \check{n}_\mathrm{ref} \check{c}_\mathrm{ref}^3} = \frac{2 q_{s\parallel}}{m_i n_\mathrm{ref} 2^{3/2} c_\mathrm{ref}^3} = \frac{\hat{q}_{s\parallel}}{\sqrt{2}} \quad
+\mathring{q}_{s\parallel} &= \frac{\check{q}_{s\parallel}}{m_i \check{n}_\mathrm{ref} \check{c}_\mathrm{ref}^3} = \frac{2 q_{s\parallel}}{m_i n_\mathrm{ref} 2^{3/2} c_\mathrm{ref}^3} = \frac{\hat{q}_{s\parallel}}{\sqrt{2}}
     && \hat{q}_{s\parallel} = \sqrt{2}\mathring{q}_{s\parallel} \\
+\mathring{R}_\mathrm{CX} &= \frac{\check{L}_\mathrm{ref} \check{n}_\mathrm{ref} R_\mathrm{CX}}{\check{c}_\mathrm{ref}} = \frac{L_\mathrm{ref} n_\mathrm{ref} R_\mathrm{CX}}{\sqrt{2} c_\mathrm{ref}} = \frac{1}{\sqrt{2}} \hat{R}_\mathrm{CX}
+    && \hat{R}_\mathrm{CX} = \sqrt{2} \mathring{R}_\mathrm{CX} \\
+\mathring{R}_\mathrm{ioniz} &= \frac{\check{L}_\mathrm{ref} \check{n}_\mathrm{ref} R_\mathrm{ioniz}}{\check{c}_\mathrm{ref}} = \frac{L_\mathrm{ref} n_\mathrm{ref} R_\mathrm{ioniz}}{\sqrt{2} c_\mathrm{ref}} = \frac{1}{\sqrt{2}} \hat{R}_\mathrm{ioniz} \quad
+    && \hat{R}_\mathrm{ioniz} = \sqrt{2} \mathring{R}_\mathrm{ioniz} \\
+\mathring{S}_s &= \frac{\check{L}_\mathrm{ref} \check{c}_\mathrm{ref}^2 S_s}{\check{n}_\mathrm{ref}} = \frac{L_\mathrm{ref} 2 c_\mathrm{ref}^2 S_s}{n_\mathrm{ref}} = 2 \hat{S}_s
+    && \hat{S}_s = \frac{1}{2} \mathring{S}_s \\
 \mathring{n}_s &= \frac{n_s}{\check{n}_\mathrm{ref}} = \hat{n}_s
     && \hat{n}_s = \mathring{n}_s \\
 \mathring{L}_z &= \frac{L_z}{\check{L}_\mathrm{ref}} = \hat{L}_z
@@ -1448,6 +1464,8 @@ differences first
     && \hat{z} = \mathring{z} \\
 \frac{\partial}{\partial \mathring{z}} &= \check{L}_\mathrm{ref} \frac{\partial}{\partial z} = \frac{\partial}{\partial \hat{z}}
     && \frac{\partial}{\partial \hat{z}} = \frac{\partial}{\partial \mathring{z}} \\
+\mathring{\bar{S}}_s &= \frac{\check{L}_\mathrm{ref} \bar{S}_s}{\check{n}_\mathrm{ref}} = \hat{\bar{S}}_s
+    && \hat{\bar{S}}_s = \mathring{\bar{S}}_s \\
 \end{alignat}
 ```
 
