@@ -60,15 +60,25 @@ const ion_moment_variables = ("density", "parallel_flow", "parallel_pressure",
                               "thermal_speed", "temperature", "parallel_heat_flux",
                               "collision_frequency_ii", "sound_speed", "mach_number",
                               "total_energy", "total_energy_flux")
+const ion_moment_gradient_variables = ("ddens_dz", "ddens_dz_upwind", "dupar_dz",
+                                       "dupar_dz_upwind", "dppar_dz", "dppar_dz_upwind",
+                                       "dvth_dz", "dT_dz", "dqpar_dz")
 const electron_moment_variables = ("electron_density", "electron_parallel_flow",
                                    "electron_parallel_pressure", "electron_thermal_speed",
                                    "electron_temperature", "electron_parallel_heat_flux",
-                                   "collision_frequency_ee", "collision_frequency_ei",
-                                   "electron_dudz", "electron_dpdz", "electron_dqdz")
+                                   "collision_frequency_ee", "collision_frequency_ei")
+const electron_moment_gradient_variables = ("electron_ddens_dz", "electron_dupar_dz",
+                                            "electron_dppar_dz", "electron_dvth_dz",
+                                            "electron_dT_dz", "electron_dqpar_dz")
 const neutral_moment_variables = ("density_neutral", "uz_neutral", "pz_neutral",
                                   "thermal_speed_neutral", "temperature_neutral",
                                   "qz_neutral", "total_energy_neutral",
                                   "total_energy_flux_neutral")
+const neutral_moment_gradient_variables = ("neutral_ddens_dz", "neutral_ddens_dz_upwind",
+                                           "neutral_duz_dz", "neutral_duz_dz_upwind",
+                                           "neutral_dpz_dz", "neutral_dpz_dz_upwind",
+                                           "neutral_dvth_dz", "neutral_dT_dz",
+                                           "neutral_dqz_dz")
 const ion_source_variables = ("external_source_amplitude", "external_source_density_amplitude",
                                 "external_source_momentum_amplitude", "external_source_pressure_amplitude",
                                 "external_source_controller_integral")
@@ -80,6 +90,9 @@ const electron_source_variables = ("external_source_electron_amplitude", "extern
 const all_moment_variables = tuple(em_variables..., ion_moment_variables...,
                                    electron_moment_variables...,
                                    neutral_moment_variables...,
+                                   ion_moment_gradient_variables...,
+                                   electron_moment_gradient_variables...,
+                                   neutral_moment_gradient_variables...,
                                    ion_source_variables..., 
                                    electron_source_variables...,
                                    neutral_source_variables...)
@@ -4218,54 +4231,179 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         return variable
     end
 
+    function get_z_derivative(dx_dz, x)
+        if :iz ∈ keys(kwargs) && kwargs[:iz] !== nothing
+            error("Cannot take z-derivative when iz!==nothing")
+        end
+        if :is ∈ keys(kwargs) && isa(kwargs[:is], mk_int) && :ir ∈ keys(kwargs) && isa(kwargs[:ir], mk_int)
+            for it ∈ 1:size(dx_dz, 2)
+                @views derivative!(dx_dz[:,it], x[:,it], run_info.z, run_info.z_spectral)
+            end
+        elseif :ir ∈ keys(kwargs) && isa(kwargs[:ir], mk_int)
+            for it ∈ 1:size(dx_dz, 3), is ∈ 1:size(dx_dz, 2)
+                @views derivative!(dx_dz[:,is,it], x[:,is,it], run_info.z,
+                                   run_info.z_spectral)
+            end
+        elseif :is ∈ keys(kwargs) && isa(kwargs[:is], mk_int)
+            for it ∈ 1:size(dx_dz, 3), ir ∈ 1:run_info.r.n
+                @views derivative!(dx_dz[:,is,it], x[:,is,it], run_info.z,
+                                   run_info.z_spectral)
+            end
+        else
+            for it ∈ 1:size(dx_dz, 4), is ∈ 1:size(dx_dz, 3), ir ∈ 1:run_info.r.n
+                @views derivative!(dx_dz[:,ir,is,it], x[:,ir,is,it], run_info.z,
+                                   run_info.z_spectral)
+            end
+        end
+    end
+
+    function get_upwind_z_derivative(dx_dz, x, upar)
+        if :iz ∈ keys(kwargs) && kwargs[:iz] !== nothing
+            error("Cannot take z-derivative when iz!==nothing")
+        end
+        if :is ∈ keys(kwargs) && isa(kwargs[:is], mk_int) && :ir ∈ keys(kwargs) && isa(kwargs[:ir], mk_int)
+            for it ∈ 1:size(dx_dz, 2)
+                @views derivative!(dx_dz[:,it], x[:,it], run_info.z, .-upar[:,it],
+                                   run_info.z_spectral)
+            end
+        elseif :ir ∈ keys(kwargs) && isa(kwargs[:ir], mk_int)
+            for it ∈ 1:size(dx_dz, 3), is ∈ 1:size(dx_dz, 2)
+                @views derivative!(dx_dz[:,is,it], x[:,is,it], run_info.z,
+                                   .-upar[:,is,it], run_info.z_spectral)
+            end
+        elseif :is ∈ keys(kwargs) && isa(kwargs[:is], mk_int)
+            for it ∈ 1:size(dx_dz, 3), ir ∈ 1:run_info.r.n
+                @views derivative!(dx_dz[:,ir,it], x[:,ir,it], run_info.z,
+                                   .-upar[:,ir,it], run_info.z_spectral)
+            end
+        else
+            for it ∈ 1:size(dx_dz, 4), is ∈ 1:size(dx_dz, 3), ir ∈ 1:run_info.r.n
+                @views derivative!(dx_dz[:,ir,is,it], x[:,ir,is,it], run_info.z,
+                                   .-upar[:,ir,is,it], run_info.z_spectral)
+            end
+        end
+    end
+
+    function get_electron_z_derivative(dx_dz, x)
+        if :iz ∈ keys(kwargs) && kwargs[:iz] !== nothing
+            error("Cannot take z-derivative when iz!==nothing")
+        end
+        if :ir ∈ keys(kwargs) && isa(kwargs[:ir], mk_int)
+            for it ∈ 1:size(dx_dz, 2)
+                @views derivative!(dx_dz[:,it], x[:,:,it], run_info.z,
+                                   run_info.z_spectral)
+            end
+        else
+            for it ∈ 1:size(dx_dz, 3), ir ∈ 1:run_info.r.n
+                @views derivative!(dx_dz[:,ir,it], x[:,:,ir,it], run_info.z,
+                                   run_info.z_spectral)
+            end
+        end
+    end
+
     if variable_name == "temperature"
         vth = get_variable(run_info, "thermal_speed"; kwargs...)
         variable = vth.^2
-    elseif variable_name == "dT_dz"
-        T = get_variable(run_info, "temperature"; kwargs...)
-        variable = similar(T)
-        if :iz ∈ keys(kwargs) && kwargs[:iz] !== nothing
-            error("Cannot take z-derivative when iz!==nothing")
-        end
-        if :ir ∈ keys(kwargs) && isa(kwargs[:ir], mk_int)
-            for it ∈ 1:size(variable, 3)
-                @views derivative!(variable[:,:,it], T[:,:,it], run_info.z, run_info.z_spectral)
-            end
-        else
-            for it ∈ 1:size(variable, 4), ir ∈ 1:run_info.r.n
-                @views derivative!(variable[:,:,ir,it], T[:,:,ir,it], run_info.z, run_info.z_spectral)
-            end
-        end
-    elseif variable_name == "dn_dz"
+    elseif variable_name == "ddens_dz"
         n = get_variable(run_info, "density"; kwargs...)
         variable = similar(n)
-        if :iz ∈ keys(kwargs) && kwargs[:iz] !== nothing
-            error("Cannot take z-derivative when iz!==nothing")
-        end
-        if :ir ∈ keys(kwargs) && isa(kwargs[:ir], mk_int)
-            for it ∈ 1:size(variable, 3)
-                @views derivative!(variable[:,:,it], n[:,:,it], run_info.z, run_info.z_spectral)
-            end
-        else
-            for it ∈ 1:size(variable, 4), ir ∈ 1:run_info.r.n
-                @views derivative!(variable[:,:,ir,it], n[:,:,ir,it], run_info.z, run_info.z_spectral)
-            end
-        end
+        get_z_derivative(variable, n)
+    elseif variable_name == "ddens_dz_upwind"
+        n = get_variable(run_info, "density"; kwargs...)
+        upar = get_variable(run_info, "parallel_flow"; kwargs...)
+        variable = similar(n)
+        get_upwind_z_derivative(variable, n, upar)
     elseif variable_name == "dupar_dz"
         upar = get_variable(run_info, "parallel_flow"; kwargs...)
         variable = similar(upar)
-        if :iz ∈ keys(kwargs) && kwargs[:iz] !== nothing
-            error("Cannot take z-derivative when iz!==nothing")
-        end
-        if :ir ∈ keys(kwargs) && isa(kwargs[:ir], mk_int)
-            for it ∈ 1:size(variable, 3)
-                @views derivative!(variable[:,:,it], upar[:,:,it], run_info.z, run_info.z_spectral)
-            end
-        else
-            for it ∈ 1:size(variable, 4), ir ∈ 1:run_info.r.n
-                @views derivative!(variable[:,:,ir,it], upar[:,:,ir,it], run_info.z, run_info.z_spectral)
-            end
-        end
+        get_z_derivative(variable, upar)
+    elseif variable_name == "dupar_dz_upwind"
+        upar = get_variable(run_info, "parallel_flow"; kwargs...)
+        variable = similar(upar)
+        get_upwind_z_derivative(variable, upar, upar)
+    elseif variable_name == "dppar_dz"
+        ppar = get_variable(run_info, "parallel_pressure"; kwargs...)
+        variable = similar(ppar)
+        get_z_derivative(variable, ppar)
+    elseif variable_name == "dppar_dz_upwind"
+        ppar = get_variable(run_info, "parallel_pressure"; kwargs...)
+        upar = get_variable(run_info, "parallel_flow"; kwargs...)
+        variable = similar(ppar)
+        get_upwind_z_derivative(variable, ppar, upar)
+    elseif variable_name == "dvth_dz"
+        vth = get_variable(run_info, "thermal_speed"; kwargs...)
+        variable = similar(vth)
+        get_z_derivative(variable, vth)
+    elseif variable_name == "dT_dz"
+        T = get_variable(run_info, "temperature"; kwargs...)
+        variable = similar(T)
+        get_z_derivative(variable, T)
+    elseif variable_name == "dqpar_dz"
+        qpar = get_variable(run_info, "parallel_heat_flux"; kwargs...)
+        variable = similar(qpar)
+        get_z_derivative(variable, qpar)
+    elseif variable_name == "electron_ddens_dz"
+        n = get_variable(run_info, "electron_density"; kwargs...)
+        variable = similar(n)
+        get_electron_z_derivative(variable, n)
+    elseif variable_name == "electron_dupar_dz"
+        upar = get_variable(run_info, "electron_parallel_flow"; kwargs...)
+        variable = similar(upar)
+        get_electron_z_derivative(variable, upar)
+    elseif variable_name == "electron_dppar_dz"
+        ppar = get_variable(run_info, "electron_parallel_pressure"; kwargs...)
+        variable = similar(ppar)
+        get_electron_z_derivative(variable, ppar)
+    elseif variable_name == "electron_dvth_dz"
+        vth = get_variable(run_info, "electron_thermal_speed"; kwargs...)
+        variable = similar(vth)
+        get_electron_z_derivative(variable, vth)
+    elseif variable_name == "electron_dT_dz"
+        T = get_variable(run_info, "electron_temperature"; kwargs...)
+        variable = similar(T)
+        get_electron_z_derivative(variable, T)
+    elseif variable_name == "electron_dqpar_dz"
+        qpar = get_variable(run_info, "electron_parallel_heat_flux"; kwargs...)
+        variable = similar(qpar)
+        get_electron_z_derivative(variable, qpar)
+    elseif variable_name == "neutral_ddens_dz"
+        n = get_variable(run_info, "density_neutral"; kwargs...)
+        variable = similar(n)
+        get_z_derivative(variable, n)
+    elseif variable_name == "neutral_ddens_dz_upwind"
+        n = get_variable(run_info, "density_neutral"; kwargs...)
+        uz = get_variable(run_info, "uz_neutral"; kwargs...)
+        variable = similar(n)
+        get_upwind_z_derivative(variable, n, uz)
+    elseif variable_name == "neutral_duz_dz"
+        uz = get_variable(run_info, "uz_neutral"; kwargs...)
+        variable = similar(uz)
+        get_z_derivative(variable, uz)
+    elseif variable_name == "neutral_duz_dz_upwind"
+        uz = get_variable(run_info, "uz_neutral"; kwargs...)
+        variable = similar(uz)
+        get_upwind_z_derivative(variable, uz, uz)
+    elseif variable_name == "neutral_dpz_dz"
+        pz = get_variable(run_info, "pz_neutral"; kwargs...)
+        variable = similar(pz)
+        get_z_derivative(variable, pz)
+    elseif variable_name == "neutral_dpz_dz_upwind"
+        pz = get_variable(run_info, "pz_neutral"; kwargs...)
+        uz = get_variable(run_info, "uz_neutral"; kwargs...)
+        variable = similar(pz)
+        get_upwind_z_derivative(variable, pz, uz)
+    elseif variable_name == "neutral_dvth_dz"
+        vth = get_variable(run_info, "thermal_speed_neutral"; kwargs...)
+        variable = similar(vth)
+        get_electron_z_derivative(variable, vth)
+    elseif variable_name == "neutral_dT_dz"
+        T = get_variable(run_info, "temperature_neutral"; kwargs...)
+        variable = similar(T)
+        get_z_derivative(variable, T)
+    elseif variable_name == "neutral_dqz_dz"
+        qz = get_variable(run_info, "qz_neutral"; kwargs...)
+        variable = similar(qz)
+        get_z_derivative(variable, qz)
     elseif variable_name == "mfp"
         vth = get_variable(run_info, "thermal_speed"; kwargs...)
         nu_ii = get_variable(run_info, "collision_frequency_ii"; kwargs...)
@@ -4280,11 +4418,11 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         # using a hard coded 10.0 tolerance for now
         variable[variable .> 10.0] .= NaN
     elseif variable_name == "L_n"
-        dn_dz = get_variable(run_info, "dn_dz"; kwargs...)
+        ddens_dz = get_variable(run_info, "ddens_dz"; kwargs...)
         n = get_variable(run_info, "density"; kwargs...)
         # We define gradient lengthscale of n as Ln^-1 = dln(n)/dz (ignore negative sign
         # tokamak convention as we're only concerned with comparing magnitudes)
-        variable = abs.(n .* dn_dz.^(-1))
+        variable = abs.(n .* ddens_dz.^(-1))
         # flat points in temperature have diverging Ln, so ignore those with NaN
         # using a hard coded 10.0 tolerance for now
         variable[variable .> 10.0] .= NaN
@@ -4318,53 +4456,6 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
     elseif variable_name == "electron_temperature"
         vth = get_variable(run_info, "electron_thermal_speed"; kwargs...)
         variable = run_info.composition.me_over_mi .* vth.^2
-    elseif variable_name == "electron_dudz"
-        upar = get_variable(run_info, "electron_parallel_flow"; kwargs...)
-        variable = similar(upar)
-        if :iz ∈ keys(kwargs) && kwargs[:iz] !== nothing
-            error("Cannot take z-derivative when iz!==nothing")
-        end
-        if :ir ∈ keys(kwargs) && isa(kwargs[:ir], mk_int)
-            for it ∈ 1:size(variable, 2)
-                @views derivative!(variable[:,it], upar[:,it], run_info.z, run_info.z_spectral)
-            end
-        else
-            for it ∈ 1:size(variable, 3), ir ∈ 1:run_info.r.n
-                @views derivative!(variable[:,ir,it], upar[:,ir,it], run_info.z, run_info.z_spectral)
-            end
-        end
-    elseif variable_name == "electron_dpdz"
-        ppar = get_variable(run_info, "electron_parallel_pressure"; kwargs...)
-        variable = similar(ppar)
-        println("electron_dpdz kwargs ", kwargs)
-        if :iz ∈ keys(kwargs) && kwargs[:iz] !== nothing
-            error("Cannot take z-derivative when iz!==nothing")
-        end
-        if :ir ∈ keys(kwargs) && isa(kwargs[:ir], mk_int)
-            println("check range ", (kwargs[:it] === nothing ? (1:run_info.nt) : (1:length(kwargs[:it]))))
-            for it ∈ 1:size(variable, 2)
-                @views derivative!(variable[:,it], ppar[:,it], run_info.z, run_info.z_spectral)
-            end
-        else
-            for it ∈ 1:size(variable, 3), ir ∈ 1:run_info.r.n
-                @views derivative!(variable[:,ir,it], ppar[:,ir,it], run_info.z, run_info.z_spectral)
-            end
-        end
-    elseif variable_name == "electron_dqdz"
-        qpar = get_variable(run_info, "electron_parallel_heat_flux"; kwargs...)
-        variable = similar(qpar)
-        if :iz ∈ keys(kwargs) && kwargs[:iz] !== nothing
-            error("Cannot take z-derivative when iz!==nothing")
-        end
-        if :ir ∈ keys(kwargs) && isa(kwargs[:ir], mk_int)
-            for it ∈ 1:size(variable, 2)
-                @views derivative!(variable[:,it], qpar[:,it], run_info.z, run_info.z_spectral)
-            end
-        else
-            for it ∈ 1:size(variable, 3), ir ∈ 1:run_info.r.n
-                @views derivative!(variable[:,ir,it], qpar[:,ir,it], run_info.z, run_info.z_spectral)
-            end
-        end
     elseif variable_name == "temperature_neutral"
         vth = get_variable(run_info, "thermal_speed_neutral"; kwargs...)
         variable = vth.^2
