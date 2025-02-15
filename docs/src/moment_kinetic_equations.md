@@ -1381,6 +1381,22 @@ The full set of dimensionless variables are related to the dimensional ones by
 \end{align}
 ```
 
+### Dimensionless 1D2V ion equations
+
+```math
+\begin{align}
+& \frac{\partial \hat{n}_i}{\partial \hat{t}} + \frac{\partial}{\partial \hat{z}}\left( \hat{n}_i \hat{u}_{i\parallel} \right)
+    = \hat{R}_\mathrm{ioniz} \hat{n}_e \hat{n}_n + \int \hat{S}_i d^3 \hat{v} \\
+& \frac{\partial}{\partial \hat{t}}(\hat{n}_i \hat{u}_{i\parallel})
+  + \frac{\partial}{\partial \hat{z}}(\hat{n}_i \hat{u}_{i\parallel}^2)
+  + \frac{\partial \hat{p}_{i\parallel}}{\partial \hat{z}}
+  + \hat{n}_i \frac{\partial \hat{\phi}}{\partial \hat{z}} \nonumber \\
+&\quad= \hat{R}_\mathrm{CX} \hat{n}_i \hat{n}_n (\hat{u}_{n\parallel} - \hat{u}_{i\parallel})
+        + \hat{R}_\mathrm{ioniz} \hat{n}_e \hat{n}_n \hat{u}_{n\parallel}
+        + \int \hat{v}_\parallel \hat{S}_i d^3 \hat{v} \\
+\end{align}
+```
+
 ### Conversion to old dimensionless equations
 
 In the 1D1V Excalibur reports, and the original version of the code, a
