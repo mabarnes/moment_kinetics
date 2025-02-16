@@ -966,7 +966,7 @@ function update_derived_ion_moment_time_derivatives!(fvec_in, moments)
     if dvth_dt !== nothing
         @loop_s_r_z is ir iz begin
             # vth = sqrt(2*ppar/n)
-            # dvth/dt = 1 / sqrt(2*ppar*n) * dppar/dt - sqrt(ppar/2/n^3) * dn/t
+            # dvth/dt = 1 / sqrt(2*ppar*n) * dppar/dt - sqrt(ppar/2/n^3) * dn/dt
             dvth_dt[iz,ir,is] = 0.5 * vth[iz,ir,is] *
                                 (dppar_dt[iz,ir,is] / ppar[iz,ir,is] - dn_dt[iz,ir,is] / n[iz,ir,is])
         end
@@ -1003,7 +1003,7 @@ function update_derived_neutral_moment_time_derivatives!(fvec_in, moments)
     if dvth_dt !== nothing
         @loop_sn_r_z isn ir iz begin
             # vth = sqrt(2*pz/n)
-            # dvth/dt = 1 / sqrt(2*pz*n) * dpz/dt - sqrt(pz/2/n^3) * dn/t
+            # dvth/dt = 1 / sqrt(2*pz*n) * dpz/dt - sqrt(pz/2/n^3) * dn/dt
             dvth_dt[iz,ir,isn] = 0.5 * vth[iz,ir,isn] *
                                 (dpz_dt[iz,ir,isn] / pz[iz,ir,isn] - dn_dt[iz,ir,isn] / n[iz,ir,isn])
         end
