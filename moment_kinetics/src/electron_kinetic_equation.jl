@@ -237,7 +237,7 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
         # Use forward-Euler step (with `ion_dt` as the timestep) as initial guess for
         # updated electron_ppar
         electron_energy_equation!(scratch[t_params.n_rk_stages+1].electron_ppar,
-                                  moments.electron.dens,moments.electron.ppar,
+                                  moments.electron.dens, moments.electron.ppar,
                                   moments.electron.dens, moments.electron.upar,
                                   moments.ion.dens, moments.ion.upar, moments.ion.ppar,
                                   moments.neutral.dens, moments.neutral.uz,
