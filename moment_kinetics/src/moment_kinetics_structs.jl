@@ -241,6 +241,12 @@ struct moments_electron_substruct{ndim_moment_electron_source}
     dT_dz_upwind::Union{MPISharedArray{mk_float,ndim_moment_electron},Nothing}
     # this is the z-derivative of the electron thermal speed vth = sqrt(2*Tpar/m)
     dvth_dz::Union{MPISharedArray{mk_float,ndim_moment_electron},Nothing}
+    # Time derivative of the parallel pressure
+    dppar_dt::Union{MPISharedArray{mk_float,ndim_moment_electron},Nothing}
+    # Time derivative of the parallel temperature
+    dTpar_dt::Union{MPISharedArray{mk_float,ndim_moment_electron},Nothing}
+    # Time derivative of the thermal speed
+    dvth_dt::Union{MPISharedArray{mk_float,ndim_moment_electron},Nothing}
     # Store coefficient 'A' from applying moment constraints so we can write it out as a
     # diagnostic
     constraints_A_coefficient::Union{MPISharedArray{mk_float,ndim_moment_electron},Nothing}
