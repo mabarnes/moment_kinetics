@@ -64,7 +64,8 @@ using ..runge_kutta: rk_update_variable!, rk_loworder_solution!, local_error_nor
                      adaptive_timestep_update_t_params!
 using ..utils: get_minimum_CFL_z, get_minimum_CFL_vpa
 using ..velocity_moments: integrate_over_vspace, calculate_electron_moment_derivatives!,
-                          calculate_electron_moment_derivatives_no_r!
+                          calculate_electron_moment_derivatives_no_r!,
+                          update_derived_electron_moment_time_derivatives!
 
 # Only needed so we can reference it in a docstring
 import ..runge_kutta
@@ -236,9 +237,9 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
         # Use forward-Euler step (with `ion_dt` as the timestep) as initial guess for
         # updated electron_ppar
         electron_energy_equation!(scratch[t_params.n_rk_stages+1].electron_ppar,
-                                  moments.electron.ppar, moments.electron.dens,
-                                  moments.electron.upar, moments.ion.dens,
-                                  moments.ion.upar, moments.ion.ppar,
+                                  moments.electron.dens,moments.electron.ppar,
+                                  moments.electron.dens, moments.electron.upar,
+                                  moments.ion.dens, moments.ion.upar, moments.ion.ppar,
                                   moments.neutral.dens, moments.neutral.uz,
                                   moments.neutral.pz, moments.electron, collisions,
                                   ion_dt, composition, external_source_settings.electron,
@@ -693,9 +694,10 @@ function electron_backward_euler_pseudotimestepping!(scratch, pdf, moments, phi,
         # Use forward-Euler step (with `ion_dt` as the timestep) as initial guess for
         # updated electron_ppar
         ppar_guess = scratch[t_params.n_rk_stages+1].electron_ppar
-        electron_energy_equation!(ppar_guess, moments.electron.ppar,
-                                  moments.electron.dens, moments.electron.upar,
-                                  moments.ion.dens, moments.ion.upar, moments.ion.ppar,
+        electron_energy_equation!(ppar_guess, moments.electron.dens,
+                                  moments.electron.ppar, moments.electron.dens,
+                                  moments.electron.upar, moments.ion.dens,
+                                  moments.ion.upar, moments.ion.ppar,
                                   moments.neutral.dens, moments.neutral.uz,
                                   moments.neutral.pz, moments.electron, collisions,
                                   ion_dt, composition, external_source_settings.electron,
@@ -1917,7 +1919,7 @@ to allow the outer r-loop to be parallelised.
     calculate_electron_moment_derivatives!(moments, fvec_in, scratch_dummy, z, z_spectral,
                                            num_diss_params.electron.moment_dissipation_coefficient,
                                            composition.electron_physics)
-    electron_energy_equation!(electron_ppar_out, fvec_in.electron_ppar,
+    electron_energy_equation!(electron_ppar_out, fvec_in.density, fvec_in.electron_ppar,
                               fvec_in.density, fvec_in.electron_upar, fvec_in.density,
                               fvec_in.upar, fvec_in.ppar, fvec_in.density_neutral,
                               fvec_in.uz_neutral, fvec_in.pz_neutral, moments.electron,
@@ -4724,6 +4726,21 @@ Note that this function operates on a single point in `r`, given by `ir`, and `f
                          soft_force_constraints=false) = begin
     dt = t_params.dt[]
 
+    if evolve_ppar
+        @views electron_energy_equation_no_r!(
+                   ppar_out, moments.electron.dens[:,ir], ppar_in,
+                   moments.electron.dens[:,ir], moments.electron.upar[:,ir],
+                   moments.ion.dens[:,ir,:], moments.ion.upar[:,ir,:],
+                   moments.ion.ppar[:,ir,:], moments.neutral.dens[:,ir,:],
+                   moments.neutral.uz[:,ir,:], moments.neutral.pz[:,ir,:],
+                   moments.electron, collisions, dt, composition,
+                   external_source_settings.electron, num_diss_params, z, ir;
+                   ion_dt=ion_dt)
+
+        update_derived_electron_moment_time_derivatives!(ppar_in, moments,
+                                                         composition.electron_physics)
+    end
+
     # add the contribution from the z advection term
     @views electron_z_advection!(f_out, f_in, moments.electron.upar[:,ir],
                                  moments.electron.vth[:,ir], z_advect, z, vpa.grid,
@@ -4764,35 +4781,6 @@ Note that this function operates on a single point in `r`, given by `ir`, and `f
         electron_implicit_constraint_forcing!(f_out, f_in,
                                               t_params.constraint_forcing_rate, vpa, dt,
                                               ir)
-    end
-
-    if evolve_ppar
-        @views electron_energy_equation_no_r!(
-                   ppar_out, moments.electron.dens[:,ir], ppar_in,
-                   moments.electron.dens[:,ir], moments.electron.upar[:,ir],
-                   moments.ion.dens[:,ir,:], moments.ion.upar[:,ir,:],
-                   moments.ion.ppar[:,ir,:], moments.neutral.dens[:,ir,:],
-                   moments.neutral.uz[:,ir,:], moments.neutral.pz[:,ir,:],
-                   moments.electron, collisions, dt, composition,
-                   external_source_settings.electron, num_diss_params, z, ir)
-
-        if ion_dt !== nothing
-            @timeit global_timer "electron_ppar_ion_dt" begin
-                # Add source term to turn steady state solution into a backward-Euler
-                # update of electron_ppar with the ion timestep `ion_dt`.
-                ppar_previous_ion_step = moments.electron.ppar
-                @begin_z_region()
-                @loop_z iz begin
-                    # At this point, ppar_out = ppar_in + dt*RHS(ppar_in). Here we add a
-                    # source/damping term so that in the steady state of the electron
-                    # pseudo-timestepping iteration,
-                    #   RHS(ppar) - (ppar - ppar_previous_ion_step) / ion_dt = 0,
-                    # resulting in a backward-Euler step (as long as the
-                    # pseudo-timestepping loop converges).
-                    ppar_out[iz] += -dt * (ppar_in[iz] - ppar_previous_ion_step[iz,ir]) / ion_dt
-                end
-            end
-        end
     end
 
     return nothing

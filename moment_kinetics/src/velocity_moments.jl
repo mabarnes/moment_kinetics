@@ -15,6 +15,7 @@ export update_ion_qpar!
 export update_derived_ion_moment_time_derivatives!
 export update_vth!
 export reset_moments_status!
+export update_derived_electron_moment_time_derivatives!
 export update_neutral_density!
 export update_neutral_uz!
 export update_neutral_ur!
@@ -280,9 +281,20 @@ function create_moments_electron(nz, nr, electron_model, num_diss_params, n_sour
                          kinetic_electrons_with_temperature_equation)
         dppar_dz_upwind = allocate_shared_float(nz, nr)
         dT_dz_upwind = allocate_shared_float(nz, nr)
+        if electron_model == kinetic_electrons_with_temperature_equation
+            dppar_dt = nothing
+            dTpar_dt = allocate_shared_float(nz, nr)
+        else
+            dppar_dt = allocate_shared_float(nz, nr)
+            dTpar_dt = nothing
+        end
+        dvth_dt = allocate_shared_float(nz, nr)
     else
         dppar_dz_upwind = nothing
         dT_dz_upwind = nothing
+        dppar_dt = nothing
+        dTpar_dt = nothing
+        dvth_dt = nothing
     end
     if num_diss_params.electron.moment_dissipation_coefficient > 0.0
         d2ppar_dz2 = allocate_shared_float(nz, nr)
@@ -310,8 +322,9 @@ function create_moments_electron(nz, nr, electron_model, num_diss_params, n_sour
         parallel_friction_force, external_source_amplitude,
         external_source_density_amplitude, external_source_momentum_amplitude,
         external_source_pressure_amplitude, v_norm_fac, ddens_dz, dupar_dz, dppar_dz,
-        dppar_dz_upwind, d2ppar_dz2, dqpar_dz, dT_dz, dT_dz_upwind, dvth_dz,
-        constraints_A_coefficient, constraints_B_coefficient, constraints_C_coefficient)
+        dppar_dz_upwind, d2ppar_dz2, dqpar_dz, dT_dz, dT_dz_upwind, dvth_dz, dppar_dt,
+        dTpar_dt, dvth_dt, constraints_A_coefficient, constraints_B_coefficient,
+        constraints_C_coefficient)
 end
 
 # neutral particles have natural mean velocities 
@@ -969,6 +982,65 @@ function update_derived_ion_moment_time_derivatives!(fvec_in, moments)
             # dvth/dt = 1 / sqrt(2*ppar*n) * dppar/dt - sqrt(ppar/2/n^3) * dn/dt
             dvth_dt[iz,ir,is] = 0.5 * vth[iz,ir,is] *
                                 (dppar_dt[iz,ir,is] / ppar[iz,ir,is] - dn_dt[iz,ir,is] / n[iz,ir,is])
+        end
+    end
+
+    return nothing
+end
+
+"""
+'Primary' time derivatives are calculated when doing the time advance for moment
+quantities. Moment kinetic equations require in addition some 'derived' time derivatives,
+which we can calculate by applying the chain rule.
+
+For electrons the kinetic equation that is solved for the shape function is simplified by
+using \$\\sqrt{m_e/m_i}\$ as a small parameter _after_ substituting in the moment
+equations. Therefore it is not possible (or at least not convenient) to use `dppar_dt`
+as calculated from the moment equation. The electron moment time derivatives may still be
+useful as diagnostics, so we calculate them anyway, including the derived versions
+(calculated in this function), similar to the ion moment time derivatives.
+
+Note that due to the implicit/explicit splitting of terms in the timestep, which means
+that the density (which is equal to the ion density) does not update during the implicit
+electron timestep, the time derivative of density dn/dt does not contribute to the chain
+rule calculations in this function, even though analytically it would contribute (although
+the contribution would be small in sqrt(me/mi)). Another way of saying this is that due to
+the operator splitting, the time derivatives during the implicit step are done with the
+explicit variables (density in particular) held fixed, and so
+`dvth_dt|_n = 0.5 * vth * dppar_dt / ppar`.
+"""
+function update_derived_electron_moment_time_derivatives!(ppar, moments, electron_physics)
+    @begin_r_z_region()
+
+    n = moments.electron.dens
+    Tpar = moments.electron.temp
+    vth = moments.electron.vth
+    dppar_dt = moments.electron.dppar_dt
+    dTpar_dt = moments.electron.dTpar_dt
+
+    dvth_dt = moments.electron.dvth_dt
+
+    if electron_physics == kinetic_electrons_with_temperature_equation
+        if dvth_dt !== nothing
+            @loop_s_r_z is ir iz begin
+                # vth = sqrt(2*ppar/n)
+                # dvth/dt = 1 / sqrt(2*ppar*n) * dppar/dt - sqrt(ppar/2/n^3) * dn/dt
+                dvth_dt[iz,ir,is] = 0.5 * vth[iz,ir,is] * dTpar_dt[iz,ir,is] / Tpar[iz,ir,is]
+            end
+        end
+    else
+        if dvth_dt !== nothing
+            @loop_s_r_z is ir iz begin
+                # vth = sqrt(2*ppar/n)
+                # dvth/dt = 1 / sqrt(2*ppar*n) * dppar/dt - sqrt(ppar/2/n^3) * dn/dt
+                # but no dn/dt contribution because due to the implicit/explicit splitting
+                # of terms, the density does not update during the update of the electron
+                # pressure and shape function. Therefore Tpar_out = ppar_out / density_in,
+                # Tpar_in = ppar_in / density_in so that effectively, for the electron
+                # update
+                # dn_dt = (density_in - density_in) / dt_implicit = 0
+                dvth_dt[iz,ir,is] = 0.5 * vth[iz,ir,is] * dppar_dt[iz,ir,is] / ppar[iz,ir,is]
+            end
         end
     end
 
