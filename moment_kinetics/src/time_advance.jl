@@ -3495,9 +3495,10 @@ with fvec_in an input and fvec_out the output
         end
     end
     if advance.electron_energy
-        electron_energy_equation!(fvec_out.electron_ppar, fvec_in.electron_ppar,
-                                  fvec_in.density, fvec_in.electron_upar, fvec_in.density,
-                                  fvec_in.upar, fvec_in.ppar, fvec_in.density_neutral,
+        electron_energy_equation!(fvec_out.electron_ppar, fvec_out.density,
+                                  fvec_in.electron_ppar, fvec_in.density,
+                                  fvec_in.electron_upar, fvec_in.density, fvec_in.upar,
+                                  fvec_in.ppar, fvec_in.density_neutral,
                                   fvec_in.uz_neutral, fvec_in.pz_neutral,
                                   moments.electron, collisions, dt, composition,
                                   external_source_settings.electron, num_diss_params, r,

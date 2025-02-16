@@ -4768,12 +4768,13 @@ Note that this function operates on a single point in `r`, given by `ir`, and `f
 
     if evolve_ppar
         @views electron_energy_equation_no_r!(
-                   ppar_out, ppar_in, moments.electron.dens[:,ir],
-                   moments.electron.upar[:,ir], moments.ion.dens[:,ir,:],
-                   moments.ion.upar[:,ir,:], moments.ion.ppar[:,ir,:],
-                   moments.neutral.dens[:,ir,:], moments.neutral.uz[:,ir,:],
-                   moments.neutral.pz[:,ir,:], moments.electron, collisions, dt,
-                   composition, external_source_settings.electron, num_diss_params, z, ir)
+                   ppar_out, moments.electron.dens[:,ir], ppar_in,
+                   moments.electron.dens[:,ir], moments.electron.upar[:,ir],
+                   moments.ion.dens[:,ir,:], moments.ion.upar[:,ir,:],
+                   moments.ion.ppar[:,ir,:], moments.neutral.dens[:,ir,:],
+                   moments.neutral.uz[:,ir,:], moments.neutral.pz[:,ir,:],
+                   moments.electron, collisions, dt, composition,
+                   external_source_settings.electron, num_diss_params, z, ir)
 
         if ion_dt !== nothing
             @timeit global_timer "electron_ppar_ion_dt" begin
