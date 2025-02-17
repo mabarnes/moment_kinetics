@@ -68,15 +68,16 @@ function custom_plot(run_directory_with_runs::String)
     mean_nu_upar = mean(replace(collisionality_upar[:,1,1,end],NaN=>0.0))
 
     plot_sources = false
-    plot_sources_own = true
+    plot_sources_own = false
     plot_collisionalities = false
     plot_density_comparisons = false
     plot_temperature_comparisons = false
-    plot_f = true
+    plot_f = false
     plot_individual_fs_along_z = false
     plot_qpar = false
     plot_temperature_residuals = false
-    animate_f_diff_and_sources = true
+    animate_f_diff_and_sources = false
+    plot_mk_1D1V_term_size_diagnostics = true
 
     # plot variables
     if plot_sources
@@ -165,7 +166,7 @@ function custom_plot(run_directory_with_runs::String)
         #ax = Axis(fig[1, 1], xlabel=L"\mathrm{z/m}", titlesize = 28, xlabelsize = 28, xticklabelsize = 20, yticklabelsize = 20, limits = (-5.1, 5.1, nothing, nothing), xticks = -5:5:5)
         kinetic_line = lines!(fig[1, 1], run_info_dfns.vpa.grid*10, f_65, label="Kinetic run"; color = :blue, linewidth = 1.8)
 
-        outfile =  custom_plot_dir * "/" * run_directory[7:end] * "dkions_f_65_profile.pdf"
+        outfile =  custom_plot_dir * "plot_f.pdf" #* "/" * run_directory[7:end] * "dkions_f_65_profile.pdf"
         save(outfile, fig)
         if plot_individual_fs_along_z
             for z in 1:2:65
@@ -199,7 +200,7 @@ function custom_plot(run_directory_with_runs::String)
                 end
                 #Legend(fig[1,2], [kinetic_line1, kinetic_line2], [L"\text{Actual } f_i - f_{Mi}", L"\text{Calculated } f_{i1}"], orientation = :horizontal)
 
-                outfile =  custom_plot_dir * "/" * run_directory * "dkions_f_diff_and_f_i1_profile_and_sources_$z.pdf"
+                outfile = custom_plot_dir * " individual_fs_at_z=$z.pdf"#* "/" * run_directory * "dkions_f_diff_and_f_i1_profile_and_sources_$z.pdf"
                 save(outfile, fig)
             end
         end
@@ -302,6 +303,125 @@ function custom_plot(run_directory_with_runs::String)
         scatter!(fig[1, 1], density_list, temperature_residual_list, label="Temperature residuals"; marker = :x, markersize = 10, color = :black)
         outfile =  custom_plot_dir * "/coll_dkions_temperature_residuals_vs_n.pdf"
         save(outfile, fig)
+    end
+
+    if plot_mk_1D1V_term_size_diagnostics
+        run_info_dfns = makie_post_processing.get_run_info_no_setup(run_directory_with_runs, dfns = true)
+        wpa_grid = run_info_dfns.vpa.grid
+        z_grid = run_info_dfns.z.grid
+        vth = get_variable(run_info_dfns, "thermal_speed")[:,1,1,end]
+        ppar = get_variable(run_info_dfns, "parallel_pressure")[:,1,1,end]
+        upar = get_variable(run_info_dfns, "parallel_flow")[:,1,1,end]
+        density = get_variable(run_info_dfns, "density")[:,1,1,end]
+        dn_dz = get_variable(run_info_dfns, "dn_dz")[:,1,1,end]
+        dppar_dz = get_z_derivative(run_info_dfns, "parallel_pressure")[:,1,1,end]
+        dqpar_dz = get_z_derivative(run_info_dfns, "parallel_heat_flux")[:,1,1,end]
+        dvth_dz = get_z_derivative(run_info_dfns, "thermal_speed")[:,1,1,end]
+        dupar_dz = get_z_derivative(run_info_dfns, "parallel_flow")[:,1,1,end]
+        Ez = get_variable(run_info_dfns, "Ez")[:,1,end]
+        f = get_variable(run_info_dfns, "f")
+
+        z = 37
+        r = 1
+        f_sample = f[:,1,z,1,1,end]
+
+
+        # source terms
+        external_source_momentum_amplitude = get_variable(run_info_dfns, "external_source_momentum_amplitude")[:,:,:,end]
+        external_source_density_amplitude = get_variable(run_info_dfns, "external_source_density_amplitude")[:,:,:,end]
+        external_source_pressure_amplitude = get_variable(run_info_dfns, "external_source_pressure_amplitude")[:,:,:,end]
+
+        v_par = zeros(size(wpa_grid))
+        simp_z_i_dot = zeros(size(wpa_grid))
+        simp_w_ipar_dot = zeros(size(wpa_grid))
+        simp_g_i_dot = zeros(size(wpa_grid))
+        z_i_dot = zeros(size(wpa_grid))
+        w_ipar_dot = zeros(size(wpa_grid))
+        g_i_dot = zeros(size(wpa_grid))
+
+        # IMPORTANT! Here I'm going to add the charge and mass, but I believe these are the reference ones for deuterium,
+        # so they are both 1. 
+        charge = 1
+        mass = 1
+
+        @. v_par = vth[z] * wpa_grid + upar[z]
+
+        # calculate advection coefficients with pure time derivatives sitting there.
+        # @. simp_z_i_dot = v_par
+        # @. simp_w_ipar_dot = - (1/(vth[z])) * (dupar_dt[z] + v_par * dupar_dz[z]) + 
+        #                      - (1/(vth[z])) * (dvth_dt[z] + v_par * dvth_dz[z]) * wpa_grid + 
+        #                      - (1/(vth[z])) * (-Ez[z] * charge/mass)
+        # @. simp_g_i_dot = f_sample * (- (1/(vth[z])) * (dvth_dt[z] + v_par * dvth_dz[z]) + 
+        #                                 (1/density[z]) * (dn_dt[z] + v_par * dn_dz[z]))
+
+        # calculate advection coefficients with moment equations subbed in. NOTE: ppar is used here instead of vth for the 
+        # moment derivatives, I believe this would only be a rounding error? Since you can convert from one to the other? 
+        # actually, no. That's not true. I'll probably make sure to only use ppar, since that's what's explicitly evolved in 
+        # time in the energy equation by the code. But I'll try out both versions and see what the differences are...
+
+        # I can imagine that the difference between vth and ppar would be a rounding error (so 10e-15 or something), but 
+        # the difference between dvth_dz and dppar_dz may be much larger. So keep the derivatives the same, but I think it's 
+        # ok to use the actual values where they're needed (ppar instead of n * vth^2, etc.)
+        @. z_i_dot = v_par
+        @. w_ipar_dot = (vth[z]/(2 * density[z])) * dn_dz[z] + (1 - wpa_grid^2) * dvth_dz[z] + 
+                        (wpa_grid/(2 * ppar[z])) * dqpar_dz[z]
+        @. g_i_dot = f_sample * (wpa_grid * (vth[z]/density[z])*dn_dz[z] - wpa_grid*dvth_dz[z] +
+                                 (1/(2 * ppar[z])) * dqpar_dz[z])
+                        
+        # add each source term from each source, note the momentum one has the uipar * Si term subtracted. Page 15 of SP1.
+        for i in 1:length(external_source_amplitude[1][1,1,:,1])
+            @. w_ipar_dot += (1/density[z]) * (((wpa_grid/2) * external_source_density_amplitude[z, r, i]) + 
+                                             - (1/vth[z]) * (external_source_momentum_amplitude[z, r, i] + 
+                                              - upar[z] * external_source_density_amplitude[z, r, i]) + 
+                                             - (wpa_grid)/(vth[z]^2) * external_source_pressure_amplitude[z, r, i])
+            @. g_i_dot += f_sample * (1/density[z]) * (external_source_density_amplitude[z, r, i] + 
+                                                       - 1/(vth[z]^2) * external_source_pressure_amplitude[z, r, i])
+        end
+        
+        fig = Figure(size = (500, 400))
+        ax = Axis(fig[1, 1])
+        lines!(fig[1, 1], wpa_grid, w_ipar_dot, label="w_ipar_dot"; color = :red)
+        display(fig)
+
+
+
+
+        # the following was an experiment to confirm the stuff about density and momentum sources 
+        # on the page 16 etc. of SP1 that I was worrying about. It is indeed true that you must 
+        # subtract uipar times the density source from the momentum source to get the actual
+        # term in the definition of wipar_dot. However, this applies for EACH SOURCE SEPARATELY.
+        # that means the source supplying momentum (the energy source) has nothing subtracted 
+        # because it is a pure energy source with ZERO as its density source. On the other hand, the
+        # density source is applying zero everywhere if you're asking for the source integral over 
+        # vpar as it's a maxwellian with no flow, but that means it IS applying momentum if the actual plasma
+        # has a flow. This means the subtraction of int Si dvpar * upar is important.
+        # fig = Figure(size = (500, 400))
+        # ax = Axis(fig[1, 1])
+        # momentum_source_amplitude1 = external_source_amplitude[1][:,1,1,11]
+        # upar_times_density_source = external_source_amplitude[1][:,1,1,11] .* upar
+        # lines!(fig[1, 1], 1:size(external_source_density_amplitude)[1], external_source_amplitude[1][:,1,1,11], label="thermal speed"; color = :blue)
+        # lines!(fig[1, 1], 1:size(external_source_density_amplitude)[1], momentum_source_amplitude1, label="thermal speed"; color = :blue)
+        # lines!(fig[1, 1], 1:size(external_source_density_amplitude)[1], upar_times_density_source, label="thermal speed"; color = :red)
+        # display(fig)
+
+
+
+
+        # println("wpa_grid = ", wpa_grid)
+        # #println("thermal_speed = ", size(get_variable(run_info, "thermal_speed")))
+        # println("thermal_speed[1] = ", size(get_variable(run_info_dfns, "thermal_speed")))
+        # #println("thermal_speed[2] = ", get_variable(run_info_dfns, "thermal_speed")[2])
+        # println("upar = ", size(get_variable(run_info_dfns, "parallel_flow")))
+        # z_i_dot = vth[65] .* wpa_grid .+ upar[65]
+        # println("z_i_dot = ", z_i_dot)
+        # fig = Figure(size = (500, 400))
+        # ax = Axis(fig[1, 1])
+        # lines!(fig[1, 1], wpa_grid, z_i_dot, label="thermal speed"; color = :blue, linewidth = 1.8)
+        # display(fig)
+        # fig = Figure(size = (500, 400))
+        # ax = Axis(fig[1, 1])
+        # scatter!(fig[1, 1], wpa_grid, ones(size(wpa_grid)), label="thermal speed"; color = :blue, markersize = 1)
+        # display(fig)
     end
 
 

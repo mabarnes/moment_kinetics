@@ -406,6 +406,9 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
         animate_overlay_coll_krook_heat_flux = false,
         animation_ext = "gif"
        )
+    set_defaults_and_check_section!(
+        this_input_dict, "mk_1D1V_term_size_diagnostics";
+        plot=true)
        
     set_defaults_and_check_section!(
         this_input_dict, "timing_data", warn_unexpected;
