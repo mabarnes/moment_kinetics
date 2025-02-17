@@ -7,7 +7,7 @@ $f_i(t, \boldsymbol{r}, \boldsymbol{v})=f_i(t, z, v_\parallel, v_\perp)$ is
 \begin{align}
 \frac{\partial f_i}{\partial t} + v_\parallel \frac{\partial f_i}{\partial z}
     - \frac{e}{m_i} \frac{\partial\phi}{\partial z} \frac{\partial f_i}{\partial v_\parallel}
-    = C_{ii}[f_i] + C_{in}[f_i,f_n] + S_i
+    = C_{ii}[f_i,f_i] + C_{in}[f_i,f_n] + S_i
 \end{align}
 ```
  $C_{ii}$ are ion-ion collisions, $C_{in}$ ion-neutral collisions/reactions, and
@@ -106,7 +106,7 @@ Can integrate the drift kinetic equation to give the moment equations:
   & \int \frac{\partial f_i}{\partial t} d^3 v
       + \underbrace{\int v_\parallel \frac{\partial f_i}{\partial z} d^3 v}_\text{take derivative out of velocity integral}
       - \frac{e}{m_i} \frac{\partial\phi}{\partial z} \underbrace{\int \frac{\partial f_i}{\partial v_\parallel} d^3 v}_\text{total derivative integrates to 0} \nonumber \\
-  &= \underbrace{\int C_{ii}[f_i] d^3 v}_{=0\text{, collisions conserve particles}} +
+  &= \underbrace{\int C_{ii}[f_i,f_i] d^3 v}_{=0\text{, collisions conserve particles}} +
       \int \left[ \underbrace{-R_\mathrm{CX}(n_n f_i - n_i f_n)}_{=0\text{, no particle source from CX}} + R_\mathrm{ioniz} n_e f_n \right] d^3 v
       + \int S_i d^3 v \\
   \end{align}
@@ -131,7 +131,7 @@ Can integrate the drift kinetic equation to give the moment equations:
   & \int v_\parallel \frac{\partial f_i}{\partial t} d^3 v
       + \int v_\parallel^2 \frac{\partial f_i}{\partial z} d^3 v
       - \frac{e}{m_i} \frac{\partial\phi}{\partial z} \int v_\parallel \frac{\partial f_i}{\partial v_\parallel} d^3 v \nonumber \\
-  &= \underbrace{\int v_\parallel C_{ii}[f_i] d^3 v}_{=0\text{, collisions conserve momentum}} +
+  &= \underbrace{\int v_\parallel C_{ii}[f_i,f_i] d^3 v}_{=0\text{, collisions conserve momentum}} +
       \int v_\parallel \left[ -R_\mathrm{CX}(n_n f_i - n_i f_n) + R_\mathrm{ioniz} n_e f_n \right] d^3 v
       + \int v_\parallel S_i d^3 v \\
   & \frac{\partial}{\partial t} \int v_\parallel f_i d^3 v
@@ -217,7 +217,7 @@ Can integrate the drift kinetic equation to give the moment equations:
   & \frac{3}{2} \int v^2 \frac{\partial f_i}{\partial t} d^3 v
       + \frac{3}{2} \int v^2 v_\parallel \frac{\partial f_i}{\partial z} d^3 v
       - \frac{3}{2} \frac{e}{m_i} \frac{\partial\phi}{\partial z} \int v^2 \frac{\partial f_i}{\partial v_\parallel} d^3 v \nonumber \\
-  &\quad= \frac{3}{2} \underbrace{\int v^2 C_{ii}[f_i] d^3 v}_{=0\text{, collisions conserve energy}}
+  &\quad= \frac{3}{2} \underbrace{\int v^2 C_{ii}[f_i,f_i] d^3 v}_{=0\text{, collisions conserve energy}}
         + \frac{3}{2} \int v^2 \left[ -R_\mathrm{CX}(n_n f_i - n_i f_n) + R_\mathrm{ioniz} n_e f_n \right] d^3 v
         + \frac{3}{2} \int v^2 S_i d^3 v \\
 
@@ -420,15 +420,15 @@ F_s(t,z,v_\parallel,v_\perp) = \frac{f_s(t,z,v_\parallel,v_\perp)}{n_s}
 \begin{align}
 & \frac{\partial n_i F_i}{\partial t} + v_\parallel \frac{\partial n_i F_i}{\partial z}
     - \frac{e}{m_i} \frac{\partial\phi}{\partial z} \frac{\partial n_i F_i}{\partial v_\parallel} \nonumber \\
-&\quad= C_{ii}[n_i F_i] - R_\mathrm{CX}(n_n n_i F_i - n_i n_n F_n) + R_\mathrm{ioniz} n_e n_n F_n + S_i \\
+&\quad= C_{ii}[n_i F_i, n_i F_i] - R_\mathrm{CX}(n_n n_i F_i - n_i n_n F_n) + R_\mathrm{ioniz} n_e n_n F_n + S_i \\
 
 & n_i \frac{\partial F_i}{\partial t} + F_i \frac{\partial n_i}{\partial t} + n_i v_\parallel \frac{\partial F_i}{\partial z} + v_\parallel F_i \frac{\partial n_i}{\partial z}
     - n_i \frac{e}{m_i} \frac{\partial\phi}{\partial z} \frac{\partial F_i}{\partial v_\parallel} \nonumber \\
-&\quad= C_{ii}[n_i F_i] - R_\mathrm{CX} n_i n_n (F_i - F_n) + R_\mathrm{ioniz} n_e n_n F_n + S_i \\
+&\quad= C_{ii}[n_i F_i, n_i F_i] - R_\mathrm{CX} n_i n_n (F_i - F_n) + R_\mathrm{ioniz} n_e n_n F_n + S_i \\
 
 & n_i \frac{\partial F_i}{\partial t} - F_i n_i \frac{\partial u_{i\parallel}}{\partial z} - F_i u_{i\parallel} \frac{\partial n_i}{\partial z} + F_i R_\mathrm{ioniz} n_e n_n + F_i \int S_i d^3 v + n_i v_\parallel \frac{\partial F_i}{\partial z} + v_\parallel F_i \frac{\partial n_i}{\partial z}
     - n_i \frac{e}{m_i} \frac{\partial\phi}{\partial z} \frac{\partial F_i}{\partial v_\parallel} \nonumber \\
-&\quad= C_{ii}[n_i F_i] - R_\mathrm{CX} n_i n_n (F_i - F_n) + R_\mathrm{ioniz} n_e n_n F_n + S_i \\
+&\quad= C_{ii}[n_i F_i, n_i F_i] - R_\mathrm{CX} n_i n_n (F_i - F_n) + R_\mathrm{ioniz} n_e n_n F_n + S_i \\
 \end{align}
 ```
 ```@raw html
@@ -439,7 +439,7 @@ F_s(t,z,v_\parallel,v_\perp) = \frac{f_s(t,z,v_\parallel,v_\perp)}{n_s}
 & \frac{\partial F_i}{\partial t} + v_\parallel \frac{\partial F_i}{\partial z}
   - \frac{e}{m_i} \frac{\partial\phi}{\partial z} \frac{\partial F_i}{\partial v_\parallel}
   + \left( \frac{(v_\parallel - u_{i\parallel})}{n_i} \frac{\partial n_i}{\partial z} - \frac{\partial u_{i\parallel}}{\partial z} + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} + \frac{1}{n_i} \int S_i d^3 v \right) F_i \nonumber \\
-&\quad= \frac{1}{n_i} C_{ii}[n_i F_i] - R_\mathrm{CX} n_n (F_i - F_n) + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} F_n + \frac{1}{n_i} S_i \\
+&\quad= \frac{1}{n_i} C_{ii}[n_i F_i, n_i F_i] - R_\mathrm{CX} n_n (F_i - F_n) + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} F_n + \frac{1}{n_i} S_i \\
 \end{align}
 ```
 
@@ -497,7 +497,7 @@ the coordinates to ${z,\hat{w}_\parallel,v_\perp,t}$
   + v_\parallel \left . \frac{\partial F_i}{\partial z} \right|_{t,v_\parallel,v_\perp}
   - \frac{e}{m_i} \frac{\partial\phi}{\partial z} \left. \frac{\partial F_i}{\partial v_\parallel} \right|_{t,z,v_\perp}
   + \left( \frac{(v_\parallel - u_{i\parallel})}{n_i} \frac{\partial n_i}{\partial z} - \frac{\partial u_{i\parallel}}{\partial z} + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} + \frac{1}{n_i} \int S_i d^3 v \right) F_i \nonumber \\
-&\quad= \frac{1}{n_i} C_{ii}[n_i F_i] - R_\mathrm{CX} n_n (F_i - F_n) + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} F_n + \frac{1}{n_i} S_i \\
+&\quad= \frac{1}{n_i} C_{ii}[n_i F_i, n_i F_i] - R_\mathrm{CX} n_n (F_i - F_n) + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} F_n + \frac{1}{n_i} S_i \\
 
 & \left. \frac{\partial F_i}{\partial t} \right|_{z,\hat{w}_\parallel,v_\perp}
   - \frac{\partial u_{i\parallel}}{\partial t} \left. \frac{\partial F_i}{\partial \hat{w}_\parallel} \right|_{t,z,v_\perp}
@@ -505,7 +505,7 @@ the coordinates to ${z,\hat{w}_\parallel,v_\perp,t}$
   - (\hat{w}_\parallel + u_{i\parallel}) \frac{\partial u_{i\parallel}}{\partial z} \left . \frac{\partial F_i}{\partial \hat{w}_\parallel} \right|_{t,z,v_\perp}
   - \frac{e}{m_i} \frac{\partial\phi}{\partial z} \left. \frac{\partial F_i}{\partial \hat{w}_\parallel} \right|_{t,z,v_\perp} \nonumber \\
   &\quad+ \left( \frac{(v_\parallel - u_{i\parallel})}{n_i} \frac{\partial n_i}{\partial z} - \frac{\partial u_{i\parallel}}{\partial z} + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} + \frac{1}{n_i} \int S_i d^3 v \right) F_i \nonumber \\
-&\quad= \frac{1}{n_i} C_{ii}[n_i F_i] - R_\mathrm{CX} n_n (F_i - F_n) + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} F_n + \frac{1}{n_i} S_i \\
+&\quad= \frac{1}{n_i} C_{ii}[n_i F_i, n_i F_i] - R_\mathrm{CX} n_n (F_i - F_n) + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} F_n + \frac{1}{n_i} S_i \\
 
 & \frac{\partial F_i}{\partial t}
   + (\hat{w}_\parallel + u_{i\parallel}) \frac{\partial F_i}{\partial z}
@@ -513,7 +513,7 @@ the coordinates to ${z,\hat{w}_\parallel,v_\perp,t}$
            + (\hat{w}_\parallel + u_{i\parallel}) \frac{\partial u_{i\parallel}}{\partial z} 
            + \frac{e}{m_i} \frac{\partial\phi}{\partial z} \right) \frac{\partial F_i}{\partial \hat{w}_\parallel} \nonumber \\
   &\quad+ \left( \frac{(v_\parallel - u_{i\parallel})}{n_i} \frac{\partial n_i}{\partial z} - \frac{\partial u_{i\parallel}}{\partial z} + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} + \frac{1}{n_i} \int S_i d^3 v \right) F_i \nonumber \\
-&\quad= \frac{1}{n_i} C_{ii}[n_i F_i] - R_\mathrm{CX} n_n (F_i - F_n) + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} F_n + \frac{1}{n_i} S_i \\
+&\quad= \frac{1}{n_i} C_{ii}[n_i F_i, n_i F_i] - R_\mathrm{CX} n_n (F_i - F_n) + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} F_n + \frac{1}{n_i} S_i \\
 \end{align}
 ```
 subsitute from the parallel flow equation
@@ -530,7 +530,7 @@ subsitute from the parallel flow equation
            + (\hat{w}_\parallel + \cancel{u_{i\parallel}}) \frac{\partial u_{i\parallel}}{\partial z} 
            + \cancel{\frac{e}{m_i} \frac{\partial\phi}{\partial z}} \right) \frac{\partial F_i}{\partial \hat{w}_\parallel} \nonumber \\
   &\quad+ \left( \frac{(v_\parallel - u_{i\parallel})}{n_i} \frac{\partial n_i}{\partial z} - \frac{\partial u_{i\parallel}}{\partial z} + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} + \frac{1}{n_i} \int S_i d^3 v \right) F_i \nonumber \\
-&\quad= \frac{1}{n_i} C_{ii}[n_i F_i] - R_\mathrm{CX} n_n (F_i - F_n) + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} F_n + \frac{1}{n_i} S_i \\
+&\quad= \frac{1}{n_i} C_{ii}[n_i F_i, n_i F_i] - R_\mathrm{CX} n_n (F_i - F_n) + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} F_n + \frac{1}{n_i} S_i \\
 \end{align}
 ```
 ```@raw html
@@ -547,7 +547,7 @@ subsitute from the parallel flow equation
                  + \frac{1}{n_i} \int v_\parallel S_i d^3 v
                \right) \frac{\partial F_i}{\partial \hat{w}_\parallel} \nonumber \\
   &\quad+ \left( \frac{(v_\parallel - u_{i\parallel})}{n_i} \frac{\partial n_i}{\partial z} - \frac{\partial u_{i\parallel}}{\partial z} + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} + \frac{1}{n_i} \int S_i d^3 v \right) F_i \nonumber \\
-&\quad= \frac{1}{n_i} C_{ii}[n_i F_i] - R_\mathrm{CX} n_n (F_i - F_n) + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} F_n + \frac{1}{n_i} S_i \\
+&\quad= \frac{1}{n_i} C_{ii}[n_i F_i, n_i F_i] - R_\mathrm{CX} n_n (F_i - F_n) + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} F_n + \frac{1}{n_i} S_i \\
 \end{align}
 ```
 
@@ -560,7 +560,7 @@ kinetic equation for $f_i(t,z,v_\parallel,v_\perp)$
 \left. \frac{\partial f_i}{\partial t} \right|_{z,v_\parallel,v_\perp}
     + v_\parallel \left. \frac{\partial f_i}{\partial z} \right|_{t,v_\parallel,v_\perp}
     - \frac{e}{m_i} \frac{\partial\phi}{\partial z} \left. \frac{\partial f_i}{\partial v_\parallel} \right|_{t,z,v_\perp}
-    = C_{ii}[f_i] - R_\mathrm{CX}(n_n f_i - n_i f_n) + R_\mathrm{ioniz} n_e f_n + S_i
+    = C_{ii}[f_i, f_i] - R_\mathrm{CX}(n_n f_i - n_i f_n) + R_\mathrm{ioniz} n_e f_n + S_i
 \end{align}
 ```
 and using the definitions of the normalised distribution function and
@@ -603,13 +603,13 @@ making the kinetic equation
     + v_\parallel \frac{n_i}{v_{Ti}^3} \left. \frac{\partial F_i}{\partial z} \right|_{t,v_\parallel,v_\perp}
     - \frac{e n_i}{m_i v_{Ti}^3} \frac{\partial\phi}{\partial z} \left. \frac{\partial F_i}{\partial v_\parallel} \right|_{t,z,v_\perp} \nonumber \\
     &\quad + \left( \frac{1}{v_{Ti}^3} \frac{\partial n_i}{\partial t} - \frac{3 n_i}{v_{Ti}^4} \frac{\partial v_{Ti}}{\partial t} + \frac{v_\parallel}{v_{Ti}^3} \frac{\partial n_i}{\partial z} - \frac{3 v_\parallel n_i}{v_{Ti}^4} \frac{\partial v_{Ti}}{\partial z} \right) F_i \nonumber \\
-    &\quad= C_{ii}[\frac{n_i F_i}{v_{Ti}^3}] - R_\mathrm{CX} \left( n_n \frac{n_i F_i}{v_{Ti}^3} - n_i \frac{n_n F_n}{v_{Tn}^3} \right) + R_\mathrm{ioniz} n_e \frac{n_n F_n}{v_{Tn}^3} + S_i \\
+    &\quad= C_{ii}[\frac{n_i F_i}{v_{Ti}^3}, \frac{n_i F_i}{v_{Ti}^3}] - R_\mathrm{CX} \left( n_n \frac{n_i F_i}{v_{Ti}^3} - n_i \frac{n_n F_n}{v_{Tn}^3} \right) + R_\mathrm{ioniz} n_e \frac{n_n F_n}{v_{Tn}^3} + S_i \\
 
 &\left. \frac{\partial F_i}{\partial t} \right|_{z,v_\parallel,v_\perp}
     + v_\parallel \left. \frac{\partial F_i}{\partial z} \right|_{t,v_\parallel,v_\perp}
     - \frac{e}{m_i} \frac{\partial\phi}{\partial z} \left. \frac{\partial F_i}{\partial v_\parallel} \right|_{t,z,v_\perp} \nonumber \\
     &\quad + \left( \frac{1}{n_i} \frac{\partial n_i}{\partial t} - \frac{3}{v_{Ti}} \frac{\partial v_{Ti}}{\partial t} + \frac{v_\parallel}{n_i} \frac{\partial n_i}{\partial z} - \frac{3 v_\parallel}{v_{Ti}} \frac{\partial v_{Ti}}{\partial z} \right) F_i \nonumber \\
-    &\quad= \frac{v_{Ti}^3}{n_i} C_{ii}[\frac{n_i F_i}{v_{Ti}^3}] - R_\mathrm{CX} n_n \left( F_i - \frac{v_{Ti}^3}{v_{Tn}^3} F_n \right) + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} \frac{v_{Ti}^3}{v_{Tn}^3} F_n + \frac{v_{Ti}^3}{n_i} S_i \\
+    &\quad= \frac{v_{Ti}^3}{n_i} C_{ii}[\frac{n_i F_i}{v_{Ti}^3}, \frac{n_i F_i}{v_{Ti}^3}] - R_\mathrm{CX} n_n \left( F_i - \frac{v_{Ti}^3}{v_{Tn}^3} F_n \right) + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} \frac{v_{Ti}^3}{v_{Tn}^3} F_n + \frac{v_{Ti}^3}{n_i} S_i \\
 \end{align}
 ```
 
@@ -670,7 +670,7 @@ and so the kinetic equation becomes
            - v_\parallel \frac{w_\perp}{v_{Ti}} \frac{\partial v_{Ti}}{\partial z} \frac{\partial F_i}{\partial w_\perp} \nonumber \\
     &\quad - \frac{e}{m_i v_{Ti}} \frac{\partial\phi}{\partial z} \frac{\partial F_i}{\partial w_\parallel} \nonumber \\
     &\quad + \left( \frac{1}{n_i} \frac{\partial n_i}{\partial t} - \frac{3}{v_{Ti}} \frac{\partial v_{Ti}}{\partial t} + \frac{v_\parallel}{n_i} \frac{\partial n_i}{\partial z} - \frac{3 v_\parallel}{v_{Ti}} \frac{\partial v_{Ti}}{\partial z} \right) F_i \nonumber \\
-    &\quad= \frac{v_{Ti}^3}{n_i} C_{ii}[\frac{n_i F_i}{v_{Ti}^3}] - R_\mathrm{CX} n_n \left( F_i - \frac{v_{Ti}^3}{v_{Tn}^3} F_n \right) + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} \frac{v_{Ti}^3}{v_{Tn}^3} F_n + \frac{v_{Ti}^3}{n_i} S_i \\
+    &\quad= \frac{v_{Ti}^3}{n_i} C_{ii}[\frac{n_i F_i}{v_{Ti}^3}, \frac{n_i F_i}{v_{Ti}^3}] - R_\mathrm{CX} n_n \left( F_i - \frac{v_{Ti}^3}{v_{Tn}^3} F_n \right) + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} \frac{v_{Ti}^3}{v_{Tn}^3} F_n + \frac{v_{Ti}^3}{n_i} S_i \\
 \end{align}
 ```
 ```@raw html
@@ -684,7 +684,7 @@ and so the kinetic equation becomes
     &\quad - \left( \frac{w_\perp}{v_{Ti}} \frac{\partial v_{Ti}}{\partial t} + \left( w_\parallel + \frac{u_{i\parallel}}{v_{Ti}} \right) w_\perp \frac{\partial v_{Ti}}{\partial z} \right) \frac{\partial F_i}{\partial w_\perp} \nonumber \\
     &\quad + \left( \frac{1}{n_i} \frac{\partial n_i}{\partial t} + \frac{(v_{Ti} w_\parallel + u_{i\parallel})}{n_i} \frac{\partial n_i}{\partial z}
                     - \frac{3}{v_{Ti}} \frac{\partial v_{Ti}}{\partial t} - \frac{3 (v_{Ti} w_\parallel + u_{i\parallel})}{v_{Ti}} \frac{\partial v_{Ti}}{\partial z} \right) F_i \nonumber \\
-    &\quad= \frac{v_{Ti}^3}{n_i} C_{ii}[\frac{n_i F_i}{v_{Ti}^3}] - R_\mathrm{CX} n_n \left( F_i - \frac{v_{Ti}^3}{v_{Tn}^3} F_n \right) + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} \frac{v_{Ti}^3}{v_{Tn}^3} F_n + \frac{v_{Ti}^3}{n_i} S_i \\
+    &\quad= \frac{v_{Ti}^3}{n_i} C_{ii}[\frac{n_i F_i}{v_{Ti}^3}, \frac{n_i F_i}{v_{Ti}^3}] - R_\mathrm{CX} n_n \left( F_i - \frac{v_{Ti}^3}{v_{Tn}^3} F_n \right) + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} \frac{v_{Ti}^3}{v_{Tn}^3} F_n + \frac{v_{Ti}^3}{n_i} S_i \\
 
 &\frac{\partial F_i}{\partial t} + \dot{z} \frac{\partial F_i}{\partial z} + \dot{w}_\parallel \frac{\partial F_i}{\partial w_\parallel} + \dot{w}_\perp \frac{\partial F_i}{\partial w_\perp}
     = \dot{F}_i + \mathcal{C}_i + \frac{v_{Ti}^3}{n_i} S_i \\
@@ -703,7 +703,7 @@ where
 \frac{\dot{F}_i}{F_i} &= \frac{3}{v_{Ti}} \frac{\partial v_{Ti}}{\partial t} + \frac{3 (v_{Ti} w_\parallel + u_{i\parallel})}{v_{Ti}} \frac{\partial v_{Ti}}{\partial z}
                    - \frac{1}{n_i} \frac{\partial n_i}{\partial t} - \frac{(v_{Ti} w_\parallel + u_{i\parallel})}{n_i} \frac{\partial n_i}{\partial z} \\
 
-\mathcal{C}_i &= \frac{v_{Ti}^3}{n_i} C_{ii}[\frac{n_i F_i}{v_{Ti}^3}] - R_\mathrm{CX} n_n \left( F_i - \frac{v_{Ti}^3}{v_{Tn}^3} F_n \right) + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} \frac{v_{Ti}^3}{v_{Tn}^3} F_n \\
+\mathcal{C}_i &= \frac{v_{Ti}^3}{n_i} C_{ii}[\frac{n_i F_i}{v_{Ti}^3}, \frac{n_i F_i}{v_{Ti}^3}] - R_\mathrm{CX} n_n \left( F_i - \frac{v_{Ti}^3}{v_{Tn}^3} F_n \right) + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} \frac{v_{Ti}^3}{v_{Tn}^3} F_n \\
 \end{align}
 ```
 We could substitute in the moment equations to eliminate the
@@ -1142,7 +1142,7 @@ where
 &= \frac{1}{v_{Ti}} \frac{\partial v_{Ti}}{\partial t} + \frac{(v_{Ti} w_\parallel + u_{i\parallel})}{v_{Ti}} \frac{\partial v_{Ti}}{\partial z}
                    - \frac{1}{n_i} \frac{\partial n_i}{\partial t} - \frac{(v_{Ti} w_\parallel + u_{i\parallel})}{n_i} \frac{\partial n_i}{\partial z} \\
 
-\bar{\mathcal{C}}_i &= \frac{v_{Ti}}{n_i} \int C_{ii}[f_i] d^2 v_\perp - R_\mathrm{CX} n_n \left( \bar{F}_i - \frac{v_{Ti}}{v_{Tn}} \bar{F}_n \right) + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} \frac{v_{Ti}}{v_{Tn}} \bar{F}_n \\
+\bar{\mathcal{C}}_i &= \frac{v_{Ti}}{n_i} \int C_{ii}[f_i, f_i] d^2 v_\perp - R_\mathrm{CX} n_n \left( \bar{F}_i - \frac{v_{Ti}}{v_{Tn}} \bar{F}_n \right) + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} \frac{v_{Ti}}{v_{Tn}} \bar{F}_n \\
 \end{align}
 ```
 
@@ -1154,7 +1154,7 @@ marginalise, as they contained no $\partial F_i / \partial w_{i\perp}$ term.
   & \frac{\partial \bar{F}_i}{\partial t} + v_\parallel \frac{\partial \bar{F}_i}{\partial z}
     - \frac{e}{m_i} \frac{\partial\phi}{\partial z} \frac{\partial \bar{F}_i}{\partial v_\parallel}
     + \left( \frac{(v_\parallel - u_{i\parallel})}{n_i} \frac{\partial n_i}{\partial z} - \frac{\partial u_{i\parallel}}{\partial z} + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} + \frac{1}{n_i} \int \bar{S}_i dv_\parallel \right) \bar{F}_i \nonumber \\
-  &\quad= \frac{1}{n_i} \int C_{ii}[f_i] d^2 v_\perp - R_\mathrm{CX} n_n (\bar{F}_i - \bar{F}_n) + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} \bar{F}_n + \frac{1}{n_i} \bar{S}_i \\
+  &\quad= \frac{1}{n_i} \int C_{ii}[f_i, f_i] d^2 v_\perp - R_\mathrm{CX} n_n (\bar{F}_i - \bar{F}_n) + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} \bar{F}_n + \frac{1}{n_i} \bar{S}_i \\
   \end{align}
   ```
 * Separate $n_i$ and $u_{i\parallel}$, with again $\hat w_\parallel = v_\parallel - u_{s\parallel}$
@@ -1169,7 +1169,7 @@ marginalise, as they contained no $\partial F_i / \partial w_{i\perp}$ term.
                    + \frac{1}{n_i} \int v_\parallel \bar{S}_i dv_\parallel
                  \right) \frac{\partial \bar{F}_i}{\partial \hat{w}_\parallel} \nonumber \\
     &\quad+ \left( \frac{(v_\parallel - u_{i\parallel})}{n_i} \frac{\partial n_i}{\partial z} - \frac{\partial u_{i\parallel}}{\partial z} + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} + \frac{1}{n_i} \int \bar{S}_i dv_\parallel \right) \bar{F}_i \nonumber \\
-  &\quad= \frac{1}{n_i} \int C_{ii}[f_i] d^2 v_\perp - R_\mathrm{CX} n_n (\bar{F}_i - \bar{F}_n) + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} \bar{F}_n + \frac{1}{n_i} \bar{S}_i \\
+  &\quad= \frac{1}{n_i} \int C_{ii}[f_i, f_i] d^2 v_\perp - R_\mathrm{CX} n_n (\bar{F}_i - \bar{F}_n) + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} \bar{F}_n + \frac{1}{n_i} \bar{S}_i \\
   \end{align}
   ```
 
