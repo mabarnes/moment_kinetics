@@ -25,7 +25,7 @@ using ..velocity_moments: update_neutral_density!, update_neutral_qz!
 using ..velocity_moments: update_neutral_uzeta!, update_neutral_uz!, update_neutral_ur!
 using ..velocity_moments: update_neutral_pzeta!, update_neutral_pz!, update_neutral_pr!, update_derived_neutral_moment_time_derivatives!
 using ..velocity_moments: calculate_ion_moment_derivatives!, calculate_neutral_moment_derivatives!
-using ..velocity_moments: calculate_electron_moment_derivatives!
+using ..velocity_moments: calculate_electron_moment_derivatives!, update_derived_electron_moment_time_derivatives!
 using ..velocity_grid_transforms: vzvrvzeta_to_vpavperp!, vpavperp_to_vzvrvzeta!
 using ..boundary_conditions: enforce_boundary_conditions!, get_ion_z_boundary_cutoff_indices
 using ..boundary_conditions: enforce_neutral_boundary_conditions!
@@ -3497,13 +3497,16 @@ with fvec_in an input and fvec_out the output
         end
     end
     if advance.electron_energy
-        electron_energy_equation!(fvec_out.electron_ppar, fvec_in.electron_ppar,
-                                  fvec_in.density, fvec_in.electron_upar, fvec_in.density,
-                                  fvec_in.upar, fvec_in.ppar, fvec_in.density_neutral,
+        electron_energy_equation!(fvec_out.electron_ppar, fvec_out.density,
+                                  fvec_in.electron_ppar, fvec_in.density,
+                                  fvec_in.electron_upar, fvec_in.density, fvec_in.upar,
+                                  fvec_in.ppar, fvec_in.density_neutral,
                                   fvec_in.uz_neutral, fvec_in.pz_neutral,
                                   moments.electron, collisions, dt, composition,
                                   external_source_settings.electron, num_diss_params, r,
                                   z; conduction=advance.electron_conduction)
+        update_derived_electron_moment_time_derivatives!(fvec_in.electron_ppar, moments,
+                                                         composition.electron_physics)
     elseif advance.electron_conduction
         # Explicit version of the implicit part of the IMEX timestep, need to evaluate
         # only the conduction term.
