@@ -1383,17 +1383,31 @@ The full set of dimensionless variables are related to the dimensional ones by
 
 ### Dimensionless 1D2V ion equations
 
+For convenience in future extension to multi-ion-species in future, we keep
+$\hat m_i$ in the equations below, even though it is equal to 1 in the
+conventions here.
+
 ```math
 \begin{align}
 & \frac{\partial \hat{n}_i}{\partial \hat{t}} + \frac{\partial}{\partial \hat{z}}\left( \hat{n}_i \hat{u}_{i\parallel} \right)
     = \hat{R}_\mathrm{ioniz} \hat{n}_e \hat{n}_n + \int \hat{S}_i d^3 \hat{v} \\
-& \frac{\partial}{\partial \hat{t}}(\hat{n}_i \hat{u}_{i\parallel})
-  + \frac{\partial}{\partial \hat{z}}(\hat{n}_i \hat{u}_{i\parallel}^2)
+
+& \hat{m} \frac{\partial}{\partial \hat{t}}(\hat{n}_i \hat{u}_{i\parallel})
+  + \hat{m} \frac{\partial}{\partial \hat{z}}(\hat{n}_i \hat{u}_{i\parallel}^2)
   + \frac{\partial \hat{p}_{i\parallel}}{\partial \hat{z}}
   + \hat{n}_i \frac{\partial \hat{\phi}}{\partial \hat{z}} \nonumber \\
-&\quad= \hat{R}_\mathrm{CX} \hat{n}_i \hat{n}_n (\hat{u}_{n\parallel} - \hat{u}_{i\parallel})
-        + \hat{R}_\mathrm{ioniz} \hat{n}_e \hat{n}_n \hat{u}_{n\parallel}
-        + \int \hat{v}_\parallel \hat{S}_i d^3 \hat{v} \\
+&\quad= \hat{m} \hat{R}_\mathrm{CX} \hat{n}_i \hat{n}_n (\hat{u}_{n\parallel} - \hat{u}_{i\parallel})
+        + \hat{m} \hat{R}_\mathrm{ioniz} \hat{n}_e \hat{n}_n \hat{u}_{n\parallel}
+        + \hat{m} \int \hat{v}_\parallel \hat{S}_i d^3 \hat{v} \\
+
+& \frac{3}{2} \frac{\partial \hat{p}_i}{\partial \hat{t}}
+  + \frac{\partial \hat{q}_{i\parallel}}{\partial \hat{z}} + \hat{p}_{i\parallel} \frac{\partial \hat{u}_{i\parallel}}{\partial \hat{z}}
+  + \frac{3}{2} \hat{u}_{i\parallel} \frac{\partial \hat{p}_i}{\partial \hat{z}} + \frac{3}{2} \hat{p}_i \frac{\partial \hat{u}_{i\parallel}}{\partial \hat{z}} \nonumber \\
+&\quad= - \frac{1}{2} \hat{R}_\mathrm{CX} \hat{n}_i \hat{n}_n \left(3 \hat{T}_i - 3 \hat{T}_n - \hat{m} (\hat{u}_{i\parallel} - \hat{u}_{n\parallel})^2 \right)
+      + \frac{1}{2} \hat{R}_\mathrm{ioniz} \hat{n}_e \hat{n}_n \left(3 \hat{T}_n + \hat{m} (\hat{u}_{i\parallel} - \hat{u}_{n\parallel})^2 \right) \nonumber \\
+&\qquad+ \frac{1}{2} \hat{m} \int \hat{v}^2 \hat{S}_i d^3 \hat{v}
+       - \hat{m} \hat{u}_{i\parallel} \int \hat{v}_\parallel \hat{S}_i d^3 \hat{v}
+       + \frac{1}{2} \hat{m} \hat{u}_{i\parallel}^2 \int \hat{S}_i d^3 \hat{v} \\
 \end{align}
 ```
 
