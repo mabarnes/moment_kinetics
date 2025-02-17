@@ -1376,12 +1376,13 @@ The full set of dimensionless variables are related to the dimensional ones by
 \hat{q}_{s\parallel} &= \frac{q_{s\parallel}}{m_i n_\mathrm{ref} c_\mathrm{ref}^3} = \frac{q_{s\parallel}}{n_\mathrm{ref} T_\mathrm{ref} c_\mathrm{ref}} \\
 \hat{R}_\mathrm{CX} &= \frac{L_\mathrm{ref} n_\mathrm{ref} R_\mathrm{CX}}{c_\mathrm{ref}} \\
 \hat{R}_\mathrm{ioniz} &= \frac{L_\mathrm{ref} n_\mathrm{ref} R_\mathrm{ioniz}}{c_\mathrm{ref}} \\
-\hat{S}_s &= \frac{L_\mathrm{ref} c_\mathrm{ref}^2 S_s}{n_\mathrm{ref}} \\
-\hat{\bar{S}}_s &= \frac{L_\mathrm{ref} \bar{S}_s}{n_\mathrm{ref}} \\
+\hat{S}_s &= \frac{(2 \pi)^{3/2} L_\mathrm{ref} c_\mathrm{ref}^2 S_s}{n_\mathrm{ref}} \\
+\hat{\bar{S}}_s &= \frac{\sqrt{2 \pi} L_\mathrm{ref} \bar{S}_s}{n_\mathrm{ref}} \\
+\hat{C}_{ii}(\hat{f_i}, \hat{f_i}) &= \frac{L_\mathrm{ref} n_\mathrm{ref}}{(2\pi)^{3/2} c_\mathrm{ref}^4} C_{ii}(f_i, f_i) \\
 \end{align}
 ```
 
-Moments in the dimensionless system are evaluated as
+Due to the $(2\pi)^{3/2}$ factor in $\hat f_s$, every integral over 3 velocity dimensions $d^3 \hat{v}$ is mulitplied by $1/(2\pi)^{3/2}$ in the dimensionless equations. Due to the $\sqrt{2\pi}$ in $\hat{\bar{f}}_s$ every integral over $\hat v_\parallel$ is multiplied by $1/\sqrt{2\pi}$. So moments in the dimensionless system are evaluated as
 ```math
 \begin{align}
 \hat{n}_s(t,z) &= \frac{1}{\sqrt{2 \pi}} \int_\infty^\infty d\hat{v}_\parallel \int_0^\infty d\hat{v}_\perp \hat{v}_\perp \hat{f}_s(t,z,v_\parallel,v_\perp) \\
@@ -1401,24 +1402,24 @@ conventions here.
 ```math
 \begin{align}
 & \frac{\partial \hat{n}_i}{\partial \hat{t}} + \frac{\partial}{\partial \hat{z}}\left( \hat{n}_i \hat{u}_{i\parallel} \right)
-    = \hat{R}_\mathrm{ioniz} \hat{n}_e \hat{n}_n + \int \hat{S}_i d^3 \hat{v} \\
+    = \hat{R}_\mathrm{ioniz} \hat{n}_e \hat{n}_n + \frac{1}{(2 \pi)^{3/2}} \int \hat{S}_i d^3 \hat{v} \\
 
-& \hat{m} \frac{\partial}{\partial \hat{t}}(\hat{n}_i \hat{u}_{i\parallel})
-  + \hat{m} \frac{\partial}{\partial \hat{z}}(\hat{n}_i \hat{u}_{i\parallel}^2)
+& \hat{m}_i \frac{\partial}{\partial \hat{t}}(\hat{n}_i \hat{u}_{i\parallel})
+  + \hat{m}_i \frac{\partial}{\partial \hat{z}}(\hat{n}_i \hat{u}_{i\parallel}^2)
   + \frac{\partial \hat{p}_{i\parallel}}{\partial \hat{z}}
   + \hat{n}_i \frac{\partial \hat{\phi}}{\partial \hat{z}} \nonumber \\
-&\quad= \hat{m} \hat{R}_\mathrm{CX} \hat{n}_i \hat{n}_n (\hat{u}_{n\parallel} - \hat{u}_{i\parallel})
-        + \hat{m} \hat{R}_\mathrm{ioniz} \hat{n}_e \hat{n}_n \hat{u}_{n\parallel}
-        + \hat{m} \int \hat{v}_\parallel \hat{S}_i d^3 \hat{v} \\
+&\quad= \hat{m}_i \hat{R}_\mathrm{CX} \hat{n}_i \hat{n}_n (\hat{u}_{n\parallel} - \hat{u}_{i\parallel})
+        + \hat{m}_i \hat{R}_\mathrm{ioniz} \hat{n}_e \hat{n}_n \hat{u}_{n\parallel}
+        + \frac{\hat{m}_i}{(2 \pi)^{3/2}}  \int \hat{v}_\parallel \hat{S}_i d^3 \hat{v} \\
 
 & \frac{3}{2} \frac{\partial \hat{p}_i}{\partial \hat{t}}
   + \frac{\partial \hat{q}_{i\parallel}}{\partial \hat{z}} + \hat{p}_{i\parallel} \frac{\partial \hat{u}_{i\parallel}}{\partial \hat{z}}
   + \frac{3}{2} \hat{u}_{i\parallel} \frac{\partial \hat{p}_i}{\partial \hat{z}} + \frac{3}{2} \hat{p}_i \frac{\partial \hat{u}_{i\parallel}}{\partial \hat{z}} \nonumber \\
-&\quad= - \frac{1}{2} \hat{R}_\mathrm{CX} \hat{n}_i \hat{n}_n \left(3 \hat{T}_i - 3 \hat{T}_n - \hat{m} (\hat{u}_{i\parallel} - \hat{u}_{n\parallel})^2 \right)
-      + \frac{1}{2} \hat{R}_\mathrm{ioniz} \hat{n}_e \hat{n}_n \left(3 \hat{T}_n + \hat{m} (\hat{u}_{i\parallel} - \hat{u}_{n\parallel})^2 \right) \nonumber \\
-&\qquad+ \frac{1}{2} \hat{m} \int \hat{v}^2 \hat{S}_i d^3 \hat{v}
-       - \hat{m} \hat{u}_{i\parallel} \int \hat{v}_\parallel \hat{S}_i d^3 \hat{v}
-       + \frac{1}{2} \hat{m} \hat{u}_{i\parallel}^2 \int \hat{S}_i d^3 \hat{v} \\
+&\quad= - \frac{1}{2} \hat{R}_\mathrm{CX} \hat{n}_i \hat{n}_n \left(3 \hat{T}_i - 3 \hat{T}_n - \hat{m}_i (\hat{u}_{i\parallel} - \hat{u}_{n\parallel})^2 \right)
+      + \frac{1}{2} \hat{R}_\mathrm{ioniz} \hat{n}_e \hat{n}_n \left(3 \hat{T}_n + \hat{m}_i (\hat{u}_{i\parallel} - \hat{u}_{n\parallel})^2 \right) \nonumber \\
+&\qquad+ \frac{1}{2} \frac{\hat{m}_i}{(2 \pi)^{3/2}} \int \hat{v}^2 \hat{S}_i d^3 \hat{v}
+       - \frac{\hat{m}_i}{(2 \pi)^{3/2}} \hat{u}_{i\parallel} \int \hat{v}_\parallel \hat{S}_i d^3 \hat{v}
+       + \frac{1}{2} \frac{\hat{m}_i}{(2 \pi)^{3/2}} \hat{u}_{i\parallel}^2 \int \hat{S}_i d^3 \hat{v} \\
 \end{align}
 ```
 
