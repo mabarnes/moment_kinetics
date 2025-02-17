@@ -4131,10 +4131,10 @@ function _get_fake_moments_fields_scratch(all_moments, it; ion_extra::Tuple=(),
         function get_var(variable_name_or_array)
             if isa(variable_name_or_array, Symbol)
                 var = all_moments[variable_name_or_array]
-                return selectdim(var, ndims(var), it)
             else
-                return variable_name_or_array
+                var = variable_name_or_array
             end
+            return selectdim(var, ndims(var), it)
         end
         return (; (field_name=>get_var(variable_name_or_array)
                    for (field_name, variable_name_or_array) ∈ kwargs
