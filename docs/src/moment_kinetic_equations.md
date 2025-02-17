@@ -1381,6 +1381,17 @@ The full set of dimensionless variables are related to the dimensional ones by
 \end{align}
 ```
 
+Moments in the dimensionless system are evaluated as
+```math
+\begin{align}
+\hat{n}_s(t,z) &= \frac{1}{\sqrt{2 \pi}} \int_\infty^\infty d\hat{v}_\parallel \int_0^\infty d\hat{v}_\perp \hat{v}_\perp \hat{f}_s(t,z,v_\parallel,v_\perp) \\
+\hat{u}_{s\parallel}(t,z) &= \frac{1}{\sqrt{2 \pi} n_s} \int_\infty^\infty d\hat{v}_\parallel \int_0^\infty d\hat{v}_\perp \hat{v}_\perp \hat{v}_\parallel \hat{f}_s(t,z,v_\parallel,v_\perp) \\
+\hat{v}_{Ts}(t,z) &= \frac{2}{3 \sqrt{2 \pi} n_s} \int_\infty^\infty d\hat{v}_\parallel \int_0^\infty d\hat{v}_\perp \hat{v}_\perp \left[ \left( \hat{v}_\parallel - \hat{u}_{s\parallel}(t,z) \right)^2 + \hat{v}_\perp \right] \hat{f}_s(t,z,v_\parallel,v_\perp) \\
+\hat{p}_{s\parallel}(t,z) &= \frac{1}{\sqrt{2 \pi}} \int_\infty^\infty d\hat{v}_\parallel \int_0^\infty d\hat{v}_\perp \hat{v}_\perp \left( \hat{v}_\parallel - \hat{u}_{s\parallel}(t,z) \right)^2 \hat{f}_s(t,z,v_\parallel,v_\perp) \\
+\hat{p}_{s\perp}(t,z) &= \frac{1}{\sqrt{2 \pi}} \int_\infty^\infty d\hat{v}_\parallel \int_0^\infty d\hat{v}_\perp \hat{v}_\perp \frac{\hat{v}_\perp^2}{2} \hat{f}_s(t,z,v_\parallel,v_\perp) \\
+\end{align}
+```
+
 ### Dimensionless 1D2V ion equations
 
 For convenience in future extension to multi-ion-species in future, we keep
