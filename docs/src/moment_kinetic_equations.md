@@ -1371,6 +1371,8 @@ The full set of dimensionless variables are related to the dimensional ones by
 \end{align}
 ```
 
+Using these definitions, the dimensionful equations above are converted to dimensionless equations just by putting a $\hat{\cdot}$ on all dimensionful quantities, and dropping the proton charge $e$ (as that is absorbed into $\hat \phi$). This may stop being true in 2D/3D where there are cross-field drifts where dimensionless parameters like $c_\mathrm{ref} m_i / L_\mathrm{ref} e B_\mathrm{ref}$ could enter. The dimensionless equations are written out in full below.
+
 ### Dimensionless 1D2V ion equations
 
 For convenience in future extension to multi-ion-species in future, we keep
@@ -1398,6 +1400,162 @@ conventions here.
 &\qquad+ \frac{1}{2} \hat{m}_i \int \hat{v}^2 \hat{S}_i d^3 \hat{v}
        - \hat{m}_i \hat{u}_{i\parallel} \int \hat{v}_\parallel \hat{S}_i d^3 \hat{v}
        + \frac{1}{2} \hat{m}_i \hat{u}_{i\parallel}^2 \int \hat{S}_i d^3 \hat{v} \\
+\end{align}
+```
+
+#### Full kinetic equation
+
+```math
+\begin{align}
+\frac{\partial \hat{f}_i}{\partial \hat{t}} + \hat{v}_\parallel \frac{\partial \hat{f}_i}{\partial \hat{z}}
+    - \frac{1}{\hat{m}_i} \frac{\partial\hat{\phi}}{\partial \hat{z}} \frac{\partial \hat{f}_i}{\partial \hat{v}_\parallel}
+    = \hat{C}_{ii}[\hat{f}_i, \hat{f}_i] - \hat{R}_\mathrm{CX} (\hat{n}_n \hat{f}_i - \hat{n}_i \hat{f}_n) + \hat{R}_\mathrm{ioniz} \hat{n}_e \hat{f}_n + \hat{S}_i
+\end{align}
+```
+
+#### Separate $\hat n_i$
+
+In this subsection $\hat F_s = c_\mathrm{ref}^3 f_s$.
+
+```math
+\begin{align}
+& \frac{\partial \hat{F}_i}{\partial \hat{t}} + \hat{v}_\parallel \frac{\partial \hat{F}_i}{\partial \hat{z}}
+  - \frac{1}{\hat{m}_i} \frac{\partial\hat{\phi}}{\partial \hat{z}} \frac{\partial \hat{F}_i}{\partial \hat{v}_\parallel}
+  + \left( \frac{(\hat{v}_\parallel - \hat{u}_{i\parallel})}{\hat{n}_i} \frac{\partial \hat{n}_i}{\partial \hat{z}} - \frac{\partial \hat{u}_{i\parallel}}{\partial \hat{z}} + \hat{R}_\mathrm{ioniz} \frac{\hat{n}_e \hat{n}_n}{\hat{n}_i} + \frac{1}{\hat{n}_i} \int \hat{S}_i d^3 \hat{v} \right) \hat{F}_i \nonumber \\
+&\quad= \frac{1}{\hat{n}_i} \hat{C}_{ii}[\hat{n}_i \hat{F}_i, \hat{n}_i \hat{F}_i] - \hat{R}_\mathrm{CX} \hat{n}_n (\hat{F}_i - \hat{F}_n) + \hat{R}_\mathrm{ioniz} \frac{\hat{n}_e \hat{n}_n}{\hat{n}_i} \hat{F}_n + \frac{1}{\hat{n}_i} \hat{S}_i \\
+\end{align}
+```
+
+#### Separate $\hat n_i$ and $\hat u_{i\parallel}$
+
+In this subsection $\hat F_s = c_\mathrm{ref}^3 f_s$ and
+$\hat{\hat{w}}_\parallel = \hat{w}_\parallel / c_\mathrm{ref}$.
+
+```math
+\begin{align}
+& \frac{\partial F_i}{\partial t}
+  + (\hat{\hat{w}}_\parallel + \hat{u}_{i\parallel}) \frac{\partial \hat{F}_i}{\partial \hat{z}} \nonumber \\
+  &\quad- \left( \hat{\hat{w}}_\parallel \frac{\partial \hat{u}_{i\parallel}}{\partial \hat{z}}
+                 - \frac{1}{\hat{m}_i \hat{n}_i} \frac{\partial \hat{p}_{i\parallel}}{\partial \hat{z}}
+                 + \hat{R}_\mathrm{CX} \hat{n}_n (\hat{u}_{n\parallel} - \hat{u}_{i\parallel})
+                 + \hat{R}_\mathrm{ioniz} \frac{\hat{n}_e \hat{n}_n}{\hat{n}_i} \hat{u}_{n\parallel}
+                 + \frac{1}{\hat{n}_i} \int \hat{v}_\parallel \hat{S}_i d^3 \hat{v}
+               \right) \frac{\partial \hat{F}_i}{\partial \hat{\hat{w}}_\parallel} \nonumber \\
+  &\quad+ \left( \frac{\hat{\hat{w}}_\parallel}{\hat{n}_i} \frac{\partial \hat{n}_i}{\partial \hat{z}} - \frac{\partial \hat{u}_{i\parallel}}{\partial \hat{z}} + \hat{R}_\mathrm{ioniz} \frac{\hat{n}_e \hat{n}_n}{\hat{n}_i} + \frac{1}{\hat{n}_i} \int \hat{S}_i d^3 \hat{v} \right) \hat{F}_i \nonumber \\
+&\quad= \frac{1}{\hat{n}_i} \hat{C}_{ii}[\hat{n}_i \hat{F}_i, \hat{n}_i \hat{F}_i] - \hat{R}_\mathrm{CX} \hat{n}_n (\hat{F}_i - \hat{F}_n) + \hat{R}_\mathrm{ioniz} \frac{\hat{n}_e \hat{n}_n}{\hat{n}_i} \hat{F}_n + \frac{1}{\hat{n}_i} \hat{S}_i \\
+\end{align}
+```
+
+#### Full moment-kinetics (separate $\hat n_i$, $\hat u_{i\parallel}$ and $\hat p_i$)
+
+Note that we do not put a $\hat{\cdot}$ on the already dimensionless quantities
+$F_s$, $w_\parallel$, $w_\perp$.
+
+```math
+\begin{align}
+&\frac{\partial F_i}{\partial \hat{t}} + \hat{\dot{z}} \frac{\partial F_i}{\partial \hat{z}} + \hat{\dot{w}}_\parallel \frac{\partial F_i}{\partial w_\parallel} + \hat{\dot{w}}_\perp \frac{\partial F_i}{\partial w_\perp}
+    = \hat{\dot{F}}_i + \hat{\mathcal{C}}_i + \frac{\hat{v}_{Ti}^3}{\hat{n}_i} \hat{S}_i \\
+
+&\hat{\dot{z}} = \hat{v}_{Ti} w_\parallel + \hat{u}_{i\parallel} \\
+
+&\hat{\dot{w}}_\parallel = - \left( \frac{1}{\hat{v}_{Ti}} \frac{\partial \hat{u}_{i\parallel}}{\partial \hat{t}} + \left( w_\parallel + \frac{\hat{u}_{i_\parallel}}{\hat{v}_{Ti}} \right) \frac{\partial \hat{u}_{i\parallel}}{\partial \hat{z}} + \frac{1}{\hat{m}_i \hat{v}_{Ti}} \frac{\partial\hat{\phi}}{\partial \hat{z}} \right. \nonumber \\
+    &\qquad\quad  \left. + \frac{w_\parallel}{\hat{v}_{Ti}} \frac{\partial \hat{v}_{Ti}}{\partial \hat{t}} + w_\parallel \left( w_\parallel + \frac{\hat{u}_{i\parallel}}{\hat{v}_{Ti}} \right) \frac{\partial \hat{v}_{Ti}}{\partial \hat{z}} \right) \\
+
+&\hat{\dot{w}}_\perp = -\left( \frac{w_\perp}{\hat{v}_{Ti}} \frac{\partial \hat{v}_{Ti}}{\partial \hat{t}} + \left( w_\parallel + \frac{\hat{u}_{i\parallel}}{\hat{v}_{Ti}} \right) w_\perp \frac{\partial \hat{v}_{Ti}}{\partial \hat{z}} \right) \\
+
+&\frac{\hat{\dot{F}}_i}{F_i} = \frac{3}{\hat{v}_{Ti}} \frac{\partial \hat{v}_{Ti}}{\partial \hat{t}} + \frac{3 (\hat{v}_{Ti} w_\parallel + \hat{u}_{i\parallel})}{\hat{v}_{Ti}} \frac{\partial \hat{v}_{Ti}}{\partial \hat{z}}
+                   - \frac{1}{\hat{n}_i} \frac{\partial \hat{n}_i}{\partial \hat{t}} - \frac{(\hat{v}_{Ti} w_\parallel + \hat{u}_{i\parallel})}{\hat{n}_i} \frac{\partial \hat{n}_i}{\partial \hat{z}} \\
+
+&\hat{\mathcal{C}}_i = \frac{\hat{v}_{Ti}^3}{\hat{n}_i} \hat{C}_{ii}[\frac{\hat{n}_i F_i}{\hat{v}_{Ti}^3}, \frac{\hat{n}_i F_i}{\hat{v}_{Ti}^3}] - \hat{R}_\mathrm{CX} \hat{n}_n \left( F_i - \frac{\hat{v}_{Ti}^3}{\hat{v}_{Tn}^3} F_n \right) + \hat{R}_\mathrm{ioniz} \frac{\hat{n}_e \hat{n}_n}{\hat{n}_i} \frac{\hat{v}_{Ti}^3}{\hat{v}_{Tn}^3} \hat{F}_n \\
+\end{align}
+```
+
+### Dimensionless 1D2V neutral equations
+
+```math
+\begin{align}
+& \frac{\partial \hat{n}_n}{\partial \hat{t}} + \frac{\partial}{\partial \hat{z}}\left( \hat{n}_n \hat{u}_{n\parallel} \right)
+    = - \hat{R}_\mathrm{ioniz} \hat{n}_e \hat{n}_n + \int \hat{S}_n d^3 \hat{v} \\
+
+& \hat{m}_n \frac{\partial}{\partial \hat{t}}(\hat{n}_n \hat{u}_{n\parallel})
+  + \hat{m}_n \frac{\partial}{\partial \hat{z}}(\hat{n}_n \hat{u}_{n\parallel}^2)
+  + \frac{\partial \hat{p}_{n\parallel}}{\partial \hat{z}} \nonumber \\
+&\quad= -\hat{R}_\mathrm{CX} \hat{m}_n \hat{n}_i \hat{n}_n (\hat{u}_{n\parallel} - \hat{u}_{i\parallel})
+    - \hat{R}_\mathrm{ioniz} \hat{m}_n \hat{n}_e \hat{n}_n \hat{u}_{n\parallel}
+    + \hat{m}_n \int \hat{v}_\parallel \hat{S}_n d^3 \hat{v} \\
+
+& \frac{3}{2} \frac{\partial \hat{p}_n}{\partial \hat{t}}
+  + \frac{\partial \hat{q}_{n\parallel}}{\partial \hat{z}} + \hat{p}_{n\parallel} \frac{\partial \hat{u}_{n\parallel}}{\partial \hat{z}}
+  + \frac{3}{2} \hat{u}_{n\parallel} \frac{\partial \hat{p}_n}{\partial \hat{z}} + \frac{3}{2} \hat{p}_n \frac{\partial \hat{u}_{n\parallel}}{\partial \hat{z}} \nonumber \\
+&\quad= \frac{1}{2} \hat{R}_\mathrm{CX} \hat{n}_i \hat{n}_n \left(3 \hat{T}_i - 3 \hat{T}_n + \hat{m}_i (\hat{u}_{i\parallel} - \hat{u}_{n\parallel})^2 \right)
+      - \frac{3}{2} \hat{R}_\mathrm{ioniz} \hat{n}_e \hat{n}_n \hat{T}_n \nonumber \\
+&\qquad+ \frac{1}{2} \int \hat{m}_n \hat{v}^2 \hat{S}_n d^3 \hat{v}
+       - \hat{m}_n \hat{u}_{n\parallel} \int \hat{v}_\parallel \hat{S}_n d^3 \hat{v}
+       + \frac{1}{2} \hat{m}_n \hat{u}_{n\parallel}^2 \int \hat{S}_n d^3 \hat{v} \\
+\end{align}
+```
+
+#### Full kinetic equation
+
+```math
+\begin{align}
+& \frac{\partial \hat{f}_n}{\partial \hat{t}} + \hat{v}_\parallel \frac{\partial \hat{f}_n}{\partial \hat{t}}
+    = \hat{R}_\mathrm{CX} (\hat{n}_n \hat{f}_i - \hat{n}_i \hat{f}_n) - \hat{R}_\mathrm{ioniz} \hat{n}_e \hat{f}_n + \hat{S}_n \\
+\end{align}
+```
+
+#### Separate $\hat n_n$
+
+In this subsection $\hat F_s = c_\mathrm{ref}^3 f_s$.
+
+```math
+\begin{align}
+& \frac{\partial \hat{F}_n}{\partial \hat{t}} + \hat{v}_\parallel \frac{\partial \hat{F}_n}{\partial \hat{z}}
+  + \left( \frac{(\hat{v}_\parallel - \hat{u}_{n\parallel})}{\hat{n}_n} \frac{\partial \hat{n}_n}{\partial \hat{z}} - \frac{\partial \hat{u}_{n\parallel}}{\partial \hat{z}} + \frac{1}{\hat{n}_n} \int \hat{S}_n d^3 \hat{v} \right) \hat{F}_n \nonumber \\
+&\quad= \hat{R}_\mathrm{CX} \hat{n}_i (\hat{F}_i - \hat{F}_n) + \frac{1}{\hat{n}_n} \hat{S}_n \\
+\end{align}
+```
+
+#### Separate $\hat n_n$ and $\hat u_{n\parallel}$
+
+In this subsection $\hat F_s = c_\mathrm{ref}^3 f_s$ and
+$\hat{\hat{w}}_\parallel = \hat{w}_\parallel / c_\mathrm{ref}$.
+
+```math
+\begin{align}
+& \frac{\partial \hat{F}_n}{\partial \hat{t}}
+  + (\hat{\hat{w}}_\parallel + \hat{u}_{n\parallel}) \frac{\partial \hat{F}_n}{\partial \hat{z}} \nonumber \\
+  &\quad- \left( \hat{\hat{w}}_\parallel \frac{\partial \hat{u}_{n\parallel}}{\partial \hat{z}}
+                 - \frac{1}{\hat{m}_n \hat{n}_n} \frac{\partial \hat{p}_{n\parallel}}{\partial \hat{z}}
+                 - \hat{R}_\mathrm{CX} \hat{n}_i (\hat{u}_{n\parallel} - \hat{u}_{i\parallel})
+                 + \frac{1}{\hat{n}_n} \int \hat{v}_\parallel \hat{S}_n d^3 \hat{v}
+               \right) \frac{\partial \hat{F}_n}{\partial \hat{\hat{w}}_\parallel} \nonumber \\
+  &\quad+ \left( \frac{\hat{\hat{w}}_\parallel}{\hat{n}_n} \frac{\partial \hat{n}_n}{\partial \hat{z}} - \frac{\partial \hat{u}_{n\parallel}}{\partial \hat{z}} + \frac{1}{\hat{n}_n} \int \hat{S}_n d^3 \hat{v} \right) \hat{F}_n \nonumber \\
+&\quad= \hat{R}_\mathrm{CX} \hat{n}_i (\hat{F}_i - \hat{F}_n) + \frac{1}{\hat{n}_n} \hat{S}_n \\
+\end{align}
+```
+
+#### Full moment-kinetics (separate $\hat n_n$, $\hat u_{n\parallel}$ and $\hat p_{n}$)
+
+Note that we do not put a $\hat{\cdot}$ on the already dimensionless quantities
+$F_s$, $w_\parallel$, $w_\perp$.
+
+```math
+\begin{align}
+&\frac{\partial F_n}{\partial \hat{t}} + \hat{\dot{z}} \frac{\partial F_n}{\partial \hat{z}} + \hat{\dot{w}}_\parallel \frac{\partial F_n}{\partial w_\parallel} + \hat{\dot{w}}_\perp \frac{\partial F_n}{\partial w_\perp}
+    = \hat{\dot{F}}_n + \hat{\mathcal{C}}_n + \frac{\hat{v}_{Tn}^3}{\hat{n}_n} \hat{S}_n \\
+
+&\hat{\dot{z}} = \hat{v}_{Tn} w_\parallel + \hat{u}_{n\parallel} \\
+
+&\hat{\dot{w}}_\parallel = - \left( \frac{1}{\hat{v}_{Tn}} \frac{\partial \hat{u}_{n\parallel}}{\partial \hat{t}} + \left( w_\parallel + \frac{\hat{u}_{n_\parallel}}{\hat{v}_{Tn}} \right) \frac{\partial \hat{u}_{n\parallel}}{\partial \hat{z}} \right. \nonumber \\
+    &\qquad\quad  \left. + \frac{w_\parallel}{\hat{v}_{Tn}} \frac{\partial \hat{v}_{Tn}}{\partial \hat{t}} + w_\parallel \left( w_\parallel + \frac{\hat{u}_{n\parallel}}{\hat{v}_{Tn}} \right) \frac{\partial \hat{v}_{Tn}}{\partial \hat{z}} \right) \\
+
+&\hat{\dot{w}}_\perp = -\left( \frac{w_\perp}{\hat{v}_{Tn}} \frac{\partial \hat{v}_{Tn}}{\partial \hat{t}} + \left( w_\parallel + \frac{\hat{u}_{n\parallel}}{\hat{v}_{Tn}} \right) w_\perp \frac{\partial \hat{v}_{Tn}}{\partial \hat{z}} \right) \\
+
+&\frac{\hat{\dot{F}}_n}{F_n} = \frac{3}{\hat{v}_{Tn}} \frac{\partial \hat{v}_{Tn}}{\partial \hat{t}} + \frac{3 (\hat{v}_{Tn} w_\parallel + \hat{u}_{n\parallel})}{\hat{v}_{Tn}} \frac{\partial \hat{v}_{Tn}}{\partial \hat{z}}
+                   - \frac{1}{\hat{n}_n} \frac{\partial \hat{n}_n}{\partial \hat{t}} - \frac{(\hat{v}_{Tn} w_\parallel + \hat{u}_{n\parallel})}{\hat{n}_n} \frac{\partial \hat{n}_n}{\partial \hat{z}} \\
+
+\hat{\mathcal{C}}_n &= \hat{R}_\mathrm{CX} \hat{n}_i \left( \frac{\hat{v}_{Tn}^3}{\hat{v}_{Ti}^3} F_i - F_n \right) \\
 \end{align}
 ```
 
