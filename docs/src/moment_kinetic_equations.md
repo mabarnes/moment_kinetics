@@ -1154,7 +1154,7 @@ marginalise, as they contained no $\partial F_i / \partial w_{i\perp}$ term.
   & \frac{\partial \bar{F}_i}{\partial t} + v_\parallel \frac{\partial \bar{F}_i}{\partial z}
     - \frac{e}{m_i} \frac{\partial\phi}{\partial z} \frac{\partial \bar{F}_i}{\partial v_\parallel}
     + \left( \frac{(v_\parallel - u_{i\parallel})}{n_i} \frac{\partial n_i}{\partial z} - \frac{\partial u_{i\parallel}}{\partial z} + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} + \frac{1}{n_i} \int \bar{S}_i dv_\parallel \right) \bar{F}_i \nonumber \\
-  &\quad= \frac{1}{n_i} \int C_{ii}[f_i, f_i] d^2 v_\perp - R_\mathrm{CX} n_n (\bar{F}_i - \bar{F}_n) + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} \bar{F}_n + \frac{1}{n_i} \bar{S}_i \\
+  &\quad= \frac{1}{n_i} \int C_{ii}[n_i F_i, n_i F_i] d^2 v_\perp - R_\mathrm{CX} n_n (\bar{F}_i - \bar{F}_n) + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} \bar{F}_n + \frac{1}{n_i} \bar{S}_i \\
   \end{align}
   ```
 * Separate $n_i$ and $u_{i\parallel}$, with again $\hat w_\parallel = v_\parallel - u_{s\parallel}$
@@ -1168,8 +1168,8 @@ marginalise, as they contained no $\partial F_i / \partial w_{i\perp}$ term.
                    + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} u_{n\parallel}
                    + \frac{1}{n_i} \int v_\parallel \bar{S}_i dv_\parallel
                  \right) \frac{\partial \bar{F}_i}{\partial \hat{w}_\parallel} \nonumber \\
-    &\quad+ \left( \frac{(v_\parallel - u_{i\parallel})}{n_i} \frac{\partial n_i}{\partial z} - \frac{\partial u_{i\parallel}}{\partial z} + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} + \frac{1}{n_i} \int \bar{S}_i dv_\parallel \right) \bar{F}_i \nonumber \\
-  &\quad= \frac{1}{n_i} \int C_{ii}[f_i, f_i] d^2 v_\perp - R_\mathrm{CX} n_n (\bar{F}_i - \bar{F}_n) + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} \bar{F}_n + \frac{1}{n_i} \bar{S}_i \\
+    &\quad+ \left( \frac{\hat{w}_\parallel}{n_i} \frac{\partial n_i}{\partial z} - \frac{\partial u_{i\parallel}}{\partial z} + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} + \frac{1}{n_i} \int \bar{S}_i dv_\parallel \right) \bar{F}_i \nonumber \\
+  &\quad= \frac{1}{n_i} \int C_{ii}[n_i F_i, n_i F_i] d^2 v_\perp - R_\mathrm{CX} n_n (\bar{F}_i - \bar{F}_n) + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} \bar{F}_n + \frac{1}{n_i} \bar{S}_i \\
   \end{align}
   ```
 
@@ -1251,7 +1251,7 @@ where
                    - R_\mathrm{CX} n_i (u_{n\parallel} - u_{i\parallel})
                    + \frac{1}{n_n} \int v_\parallel \bar{S}_n dv_\parallel
                  \right) \frac{\partial \bar{F}_n}{\partial \hat{w}_\parallel} \nonumber \\
-    &\quad+ \left( \frac{(v_\parallel - u_{n\parallel})}{n_n} \frac{\partial n_n}{\partial z} - \frac{\partial u_{n\parallel}}{\partial z} + \frac{1}{n_n} \int \bar{S}_n dv_\parallel \right) \bar{F}_n \nonumber \\
+    &\quad+ \left( \frac{\hat{w}_\parallel}{n_n} \frac{\partial n_n}{\partial z} - \frac{\partial u_{n\parallel}}{\partial z} + \frac{1}{n_n} \int \bar{S}_n dv_\parallel \right) \bar{F}_n \nonumber \\
   &\quad= R_\mathrm{CX} n_i (\bar{F}_i - \bar{F}_n) + \frac{1}{n_n} \bar{S}_n \\
   \end{align}
   ```
@@ -1556,6 +1556,88 @@ $F_s$, $w_\parallel$, $w_\perp$.
                    - \frac{1}{\hat{n}_n} \frac{\partial \hat{n}_n}{\partial \hat{t}} - \frac{(\hat{v}_{Tn} w_\parallel + \hat{u}_{n\parallel})}{\hat{n}_n} \frac{\partial \hat{n}_n}{\partial \hat{z}} \\
 
 \hat{\mathcal{C}}_n &= \hat{R}_\mathrm{CX} \hat{n}_i \left( \frac{\hat{v}_{Tn}^3}{\hat{v}_{Ti}^3} F_i - F_n \right) \\
+\end{align}
+```
+
+### Dimensionless 1D1V ion equations
+
+```math
+\begin{align}
+&\frac{\partial \hat{n}_i}{\partial \hat{t}} + \frac{\partial}{\partial \hat{z}}(\hat{n}_i \hat{u}_{i\parallel}) = \hat{R}_\mathrm{ioniz} \hat{n}_e \hat{n}_n + \int \hat{\bar{S}}_i d\hat{v}_\parallel \\
+
+& \hat{m}_i \frac{\partial}{\partial \hat{t}}(\hat{n}_i \hat{u}_{i\parallel}) + \hat{m}_i \frac{\partial}{\partial \hat{z}}(\hat{n}_i \hat{u}_{i_\parallel}^2) + \frac{\partial \hat{p}_{i\parallel}}{\partial \hat{z}} + \hat{n}_i \frac{\partial \hat{\phi}}{\partial \hat{z}} \nonumber \\
+    &\quad = \hat{R}_\mathrm{CX} \hat{m}_i \hat{n}_i \hat{n}_n (\hat{u}_{n\parallel} - \hat{u}_{i\parallel}) + \hat{R}_\mathrm{ioniz} \hat{m}_i \hat{n}_e \hat{n}_n \hat{u}_{n\parallel} + \hat{m}_i \int \hat{v}_{\parallel} \hat{\bar{S}}_i d\hat{v}_\parallel \\
+
+& \frac{3}{2} \frac{\partial \hat{p}_i}{\partial \hat{t}}
+  + \frac{\partial \hat{q}_{i\parallel}}{\partial \hat{z}} + \hat{p}_{i\parallel} \frac{\partial \hat{u}_{i\parallel}}{\partial \hat{z}}
+  + \frac{3}{2} \hat{u}_{i\parallel} \frac{\partial \hat{p}_i}{\partial \hat{z}} + \frac{3}{2} \hat{p}_i \frac{\partial \hat{u}_{i\parallel}}{\partial \hat{z}} \nonumber \\
+&\quad= - \frac{1}{2} \hat{R}_\mathrm{CX} \hat{n}_i \hat{n}_n \left(3 \hat{T}_i - 3 \hat{T}_n - \hat{m}_i (\hat{u}_{i\parallel} - \hat{u}_{n\parallel})^2 \right)
+      + \frac{1}{2} \hat{R}_\mathrm{ioniz} \hat{n}_e \hat{n}_n \left(3 \hat{T}_n + \hat{m}_i (\hat{u}_{i\parallel} - \hat{u}_{n\parallel})^2 \right) \nonumber \\
+&\qquad+ \frac{1}{2} \int \hat{m}_i \hat{v}_\parallel^2 \hat{\bar{S}}_i d\hat{v}_\parallel
+       - \hat{m}_i \hat{u}_{i\parallel} \int \hat{v}_\parallel \hat{\bar{S}}_i d\hat{v}_\parallel
+       + \frac{1}{2} \hat{m}_i \hat{u}_{i\parallel}^2 \int \hat{\bar{S}}_i d\hat{v}_\parallel \\
+\end{align}
+```
+
+#### Full kinetic equation
+
+```math
+\begin{align}
+\frac{\partial \hat{\bar{f}}_i}{\partial \hat{t}} + \hat{v}_\parallel \frac{\partial \hat{\bar{f}}_i}{\partial \hat{z}}
+    - \frac{1}{\hat{m}_i} \frac{\partial\hat{\phi}}{\partial \hat{z}} \frac{\partial \hat{\bar{f}}_i}{\partial \hat{v}_\parallel}
+    = \hat{\bar{C}}_{ii}[\hat{\bar{f}}_i, \hat{\bar{f}}_i] - \hat{R}_\mathrm{CX} (\hat{n}_n \hat{\bar{f}}_i - \hat{n}_i \hat{\bar{f}}_n) + \hat{R}_\mathrm{ioniz} \hat{n}_e \hat{\bar{f}}_n + \hat{\bar{S}}_i
+\end{align}
+```
+
+#### Separate $\hat n_i$
+
+In this subsection $\hat{\bar{F}}_s = c_\mathrm{ref} \bar f_s$.
+
+```math
+\begin{align}
+& \frac{\partial \hat{\bar{F}}_i}{\partial \hat{t}} + \hat{v}_\parallel \frac{\partial \hat{\bar{F}}_i}{\partial \hat{z}}
+  - \frac{1}{\hat{m}_i} \frac{\partial\hat{\phi}}{\partial \hat{z}} \frac{\partial \hat{\bar{F}}_i}{\partial \hat{v}_\parallel}
+  + \left( \frac{(\hat{v}_\parallel - \hat{u}_{i\parallel})}{\hat{n}_i} \frac{\partial \hat{n}_i}{\partial \hat{z}} - \frac{\partial \hat{u}_{i\parallel}}{\partial \hat{z}} + \hat{R}_\mathrm{ioniz} \frac{\hat{n}_e \hat{n}_n}{\hat{n}_i} + \frac{1}{\hat{n}_i} \int \hat{\bar{S}}_i d\hat{v}_\parallel \right) \hat{\bar{F}}_i \nonumber \\
+&\quad= \frac{1}{\hat{n}_i} \int \hat{C}_{ii}[\hat{n}_i \hat{F}_i, \hat{n}_i \hat{F}_i] d^2 \hat{v}_\perp - \hat{R}_\mathrm{CX} \hat{n}_n (\hat{\bar{F}}_i - \hat{\bar{F}}_n) + \hat{R}_\mathrm{ioniz} \frac{\hat{n}_e \hat{n}_n}{\hat{n}_i} \hat{\bar{F}}_n + \frac{1}{\hat{n}_i} \hat{\bar{S}}_i \\
+\end{align}
+```
+
+#### Separate $\hat n_i$ and $\hat u_{i\parallel}$
+
+In this subsection $\hat{\bar{F}}_s = c_\mathrm{ref} \bar f_s$ and
+$\hat{\hat{w}}_\parallel = \hat{w}_\parallel / c_\mathrm{ref}$.
+
+```math
+\begin{align}
+& \frac{\partial \hat{\bar{F}}_i}{\partial \hat{t}}
+  + (\hat{\hat{w}}_\parallel + \hat{u}_{i\parallel}) \frac{\partial \hat{\bar{F}}_i}{\partial \hat{z}} \nonumber \\
+  &\quad- \left( \hat{w}_\parallel \frac{\partial \hat{u}_{i\parallel}}{\partial \hat{z}}
+                 - \frac{1}{\hat{m}_i \hat{n}_i} \frac{\partial \hat{p}_{i\parallel}}{\partial \hat{z}}
+                 + \hat{R}_\mathrm{CX} \hat{n}_n (\hat{u}_{n\parallel} - \hat{u}_{i\parallel})
+                 + \hat{R}_\mathrm{ioniz} \frac{\hat{n}_e \hat{n}_n}{\hat{n}_i} \hat{u}_{n\parallel}
+                 + \frac{1}{\hat{n}_i} \int \hat{v}_\parallel \hat{\bar{S}}_i d\hat{v}_\parallel
+               \right) \frac{\partial \hat{\bar{F}}_i}{\partial \hat{\hat{w}}_\parallel} \nonumber \\
+  &\quad+ \left( \frac{\hat{\hat{w}}_\parallel}{\hat{n}_i} \frac{\partial \hat{n}_i}{\partial \hat{z}} - \frac{\partial \hat{u}_{i\parallel}}{\partial \hat{z}} + \hat{R}_\mathrm{ioniz} \frac{\hat{n}_e \hat{n}_n}{\hat{n}_i} + \frac{1}{\hat{n}_i} \int \hat{\bar{S}}_i d\hat{v}_\parallel \right) \hat{\bar{F}}_i \nonumber \\
+&\quad= \frac{1}{\hat{n}_i} \int \hat{C}_{ii}[\hat{n}_i \hat{F}_i, \hat{n}_i \hat{F}_i] d^2 \hat{v}_\perp - \hat{R}_\mathrm{CX} \hat{n}_n (\hat{\bar{F}}_i - \hat{\bar{F}}_n) + \hat{R}_\mathrm{ioniz} \frac{\hat{n}_e \hat{n}_n}{\hat{n}_i} \hat{\bar{F}}_n + \frac{1}{\hat{n}_i} \hat{\bar{S}}_i \\
+\end{align}
+```
+
+#### Full moment-kinetics (separate $\hat n_i$, $\hat u_{i\parallel}$ and $\hat p_i$)
+
+```math
+\begin{align}
+&\frac{\partial \bar{F}_i}{\partial \hat{t}} + \hat{\dot{z}} \frac{\partial \bar{F}_i}{\partial \hat{z}} + \hat{\dot{w}}_\parallel \frac{\partial \bar{F}_i}{\partial w_\parallel} + \hat{\dot{w}}_\perp \frac{\partial \bar{F}_i}{\partial w_\perp}
+    = \hat{\dot{\bar{F}}}_i + \hat{\bar{\mathcal{C}}}_i + \frac{\hat{v}_{Ti}}{\hat{n}_i} \hat{\bar{S}}_i \\
+
+&\hat{\dot{z}} = \hat{v}_{Ti} w_\parallel + \hat{u}_{i\parallel} \\
+
+&\hat{\dot{w}}_\parallel = - \left( \frac{1}{\hat{v}_{Ti}} \frac{\partial \hat{u}_{i\parallel}}{\partial \hat{t}} + \left( w_\parallel + \frac{\hat{u}_{i_\parallel}}{\hat{v}_{Ti}} \right) \frac{\partial \hat{u}_{i\parallel}}{\partial \hat{z}} + \frac{1}{\hat{m}_i \hat{v}_{Ti}} \frac{\partial\hat{\phi}}{\partial \hat{z}} \right. \nonumber \\
+    &\qquad\quad  \left. + \frac{w_\parallel}{\hat{v}_{Ti}} \frac{\partial \hat{v}_{Ti}}{\partial \hat{t}} + w_\parallel \left( w_\parallel + \frac{\hat{u}_{i\parallel}}{\hat{v}_{Ti}} \right) \frac{\partial \hat{v}_{Ti}}{\partial \hat{z}} \right) \\
+
+&\frac{\hat{\dot{\bar{F}}}_i}{\bar{F}_i} = \frac{1}{\hat{v}_{Ti}} \frac{\partial \hat{v}_{Ti}}{\partial \hat{t}} + \frac{(\hat{v}_{Ti} w_\parallel + \hat{u}_{i\parallel})}{\hat{v}_{Ti}} \frac{\partial \hat{v}_{Ti}}{\partial \hat{z}}
+                   - \frac{1}{\hat{n}_i} \frac{\partial \hat{n}_i}{\partial \hat{t}} - \frac{(\hat{v}_{Ti} w_\parallel + \hat{u}_{i\parallel})}{\hat{n}_i} \frac{\partial \hat{n}_i}{\partial \hat{z}} \\
+
+&\hat{\bar{\mathcal{C}}}_i = \frac{\hat{v}_{Ti}}{\hat{n}_i} \int \hat{C}_{ii}\left[\frac{\hat{n}_i}{\hat{v}_{Ti}^3} F_i, \frac{\hat{n}_i}{\hat{v}_{Ti}^3} F_i\right] d^2 \hat{v}_\perp - \hat{R}_\mathrm{CX} \hat{n}_n \left( \bar{F}_i - \frac{\hat{v}_{Ti}}{\hat{v}_{Tn}} \bar{F}_n \right) + \hat{R}_\mathrm{ioniz} \frac{\hat{n}_e \hat{n}_n}{\hat{n}_i} \frac{\hat{v}_{Ti}}{\hat{v}_{Tn}} \bar{F}_n \\
 \end{align}
 ```
 
