@@ -504,7 +504,7 @@ the coordinates to ${z,\hat{w}_\parallel,v_\perp,t}$
   + (\hat{w}_\parallel + u_{i\parallel}) \left. \frac{\partial F_i}{\partial z} \right|_{t,\hat{w}_\parallel,v_\perp}
   - (\hat{w}_\parallel + u_{i\parallel}) \frac{\partial u_{i\parallel}}{\partial z} \left . \frac{\partial F_i}{\partial \hat{w}_\parallel} \right|_{t,z,v_\perp}
   - \frac{e}{m_i} \frac{\partial\phi}{\partial z} \left. \frac{\partial F_i}{\partial \hat{w}_\parallel} \right|_{t,z,v_\perp} \nonumber \\
-  &\quad+ \left( \frac{(v_\parallel - u_{i\parallel})}{n_i} \frac{\partial n_i}{\partial z} - \frac{\partial u_{i\parallel}}{\partial z} + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} + \frac{1}{n_i} \int S_i d^3 v \right) F_i \nonumber \\
+  &\quad+ \left( \frac{\hat{w}_\parallel}{n_i} \frac{\partial n_i}{\partial z} - \frac{\partial u_{i\parallel}}{\partial z} + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} + \frac{1}{n_i} \int S_i d^3 v \right) F_i \nonumber \\
 &\quad= \frac{1}{n_i} C_{ii}[n_i F_i, n_i F_i] - R_\mathrm{CX} n_n (F_i - F_n) + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} F_n + \frac{1}{n_i} S_i \\
 
 & \frac{\partial F_i}{\partial t}
@@ -512,7 +512,7 @@ the coordinates to ${z,\hat{w}_\parallel,v_\perp,t}$
   - \left( \frac{\partial u_{i\parallel}}{\partial t}
            + (\hat{w}_\parallel + u_{i\parallel}) \frac{\partial u_{i\parallel}}{\partial z} 
            + \frac{e}{m_i} \frac{\partial\phi}{\partial z} \right) \frac{\partial F_i}{\partial \hat{w}_\parallel} \nonumber \\
-  &\quad+ \left( \frac{(v_\parallel - u_{i\parallel})}{n_i} \frac{\partial n_i}{\partial z} - \frac{\partial u_{i\parallel}}{\partial z} + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} + \frac{1}{n_i} \int S_i d^3 v \right) F_i \nonumber \\
+  &\quad+ \left( \frac{\hat{w}_\parallel}{n_i} \frac{\partial n_i}{\partial z} - \frac{\partial u_{i\parallel}}{\partial z} + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} + \frac{1}{n_i} \int S_i d^3 v \right) F_i \nonumber \\
 &\quad= \frac{1}{n_i} C_{ii}[n_i F_i, n_i F_i] - R_\mathrm{CX} n_n (F_i - F_n) + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} F_n + \frac{1}{n_i} S_i \\
 \end{align}
 ```
@@ -529,7 +529,7 @@ subsitute from the parallel flow equation
            + \frac{1}{n_i} \int v_\parallel S_i d^3 v
            + (\hat{w}_\parallel + \cancel{u_{i\parallel}}) \frac{\partial u_{i\parallel}}{\partial z} 
            + \cancel{\frac{e}{m_i} \frac{\partial\phi}{\partial z}} \right) \frac{\partial F_i}{\partial \hat{w}_\parallel} \nonumber \\
-  &\quad+ \left( \frac{(v_\parallel - u_{i\parallel})}{n_i} \frac{\partial n_i}{\partial z} - \frac{\partial u_{i\parallel}}{\partial z} + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} + \frac{1}{n_i} \int S_i d^3 v \right) F_i \nonumber \\
+  &\quad+ \left( \frac{\hat{w}_\parallel}{n_i} \frac{\partial n_i}{\partial z} - \frac{\partial u_{i\parallel}}{\partial z} + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} + \frac{1}{n_i} \int S_i d^3 v \right) F_i \nonumber \\
 &\quad= \frac{1}{n_i} C_{ii}[n_i F_i, n_i F_i] - R_\mathrm{CX} n_n (F_i - F_n) + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} F_n + \frac{1}{n_i} S_i \\
 \end{align}
 ```
@@ -546,7 +546,7 @@ subsitute from the parallel flow equation
                  + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} u_{n\parallel}
                  + \frac{1}{n_i} \int v_\parallel S_i d^3 v
                \right) \frac{\partial F_i}{\partial \hat{w}_\parallel} \nonumber \\
-  &\quad+ \left( \frac{(v_\parallel - u_{i\parallel})}{n_i} \frac{\partial n_i}{\partial z} - \frac{\partial u_{i\parallel}}{\partial z} + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} + \frac{1}{n_i} \int S_i d^3 v \right) F_i \nonumber \\
+  &\quad+ \left( \frac{\hat{w}_\parallel}{n_i} \frac{\partial n_i}{\partial z} - \frac{\partial u_{i\parallel}}{\partial z} + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} + \frac{1}{n_i} \int S_i d^3 v \right) F_i \nonumber \\
 &\quad= \frac{1}{n_i} C_{ii}[n_i F_i, n_i F_i] - R_\mathrm{CX} n_n (F_i - F_n) + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} F_n + \frac{1}{n_i} S_i \\
 \end{align}
 ```
@@ -884,7 +884,7 @@ subsections, are also very similar to the ion ones.
                  - R_\mathrm{CX} n_i (u_{n\parallel} - u_{i\parallel})
                  + \frac{1}{n_n} \int v_\parallel S_n d^3 v
                \right) \frac{\partial F_n}{\partial \hat{w}_\parallel} \nonumber \\
-  &\quad+ \left( \frac{(v_\parallel - u_{n\parallel})}{n_n} \frac{\partial n_n}{\partial z} - \frac{\partial u_{n\parallel}}{\partial z} + \frac{1}{n_n} \int S_n d^3 v \right) F_n \nonumber \\
+  &\quad+ \left( \frac{\hat{w}_\parallel}{n_n} \frac{\partial n_n}{\partial z} - \frac{\partial u_{n\parallel}}{\partial z} + \frac{1}{n_n} \int S_n d^3 v \right) F_n \nonumber \\
 &\quad= R_\mathrm{CX} n_i (F_i - F_n) + \frac{1}{n_n} S_n \\
 \end{align}
 ```
