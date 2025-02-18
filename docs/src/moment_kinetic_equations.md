@@ -1338,17 +1338,6 @@ de-dimensionalises to
 \end{align}
 ```
 
-The distribution function $f_s$ is de-dimensionalised so that a Maxwellian
-$f_{Ms} = \frac{n_s}{\pi^{3/2} v_{Ts}^3} \exp\left(-v^2 / v_{Ts}^2 \right)$
-would have a maximum value of $\hat n_s / \hat v_{Ts}^3$, and its shape
-function $\hat F_s$ would have a maximum value of 1.
-
-The 1V, marginalised distribution function $\bar f_s$ is de-dimensionalised so
-that a 1V Maxwellian $\bar f_{Ms} = \frac{n_s}{\sqrt{\pi} v_{Ts}}
-\exp\left(-v_\parallel^2 / v_{Ts}^2 \right)$ would have a maximum value of
-$\hat n_s / \hat v_{Ts}$, and its shape function $\hat{\bar{F}}_s$ would have a
-maximum value of 1.
-
 The full set of dimensionless variables are related to the dimensional ones by
 ```math
 \begin{align}
@@ -1359,10 +1348,10 @@ The full set of dimensionless variables are related to the dimensional ones by
 \hat{m}_i &= \frac{m_i}{m_i} = 1 \\
 \hat{m}_e &= \frac{m_e}{m_i} \\
 \hat{v}_{Ts} &= \frac{v_{Ts}}{c_\mathrm{ref}} \\
-\hat{f}_s &= \frac{(2 \pi)^{3/2} c_\mathrm{ref}^3}{n_\mathrm{ref}} f_s \\
-\hat{F}_s &= (\pi)^{3/2} F_s \\
-\hat{\bar{f}}_s &= \frac{\sqrt{2 \pi} c_\mathrm{ref}}{n_\mathrm{ref}} \bar{f}_s \\
-\hat{\bar{F}}_s &= \sqrt{\pi} \bar{F}_s \\
+\hat{f}_s &= \frac{c_\mathrm{ref}^3}{n_\mathrm{ref}} f_s \\
+\hat{F}_s &= F_s \\
+\hat{\bar{f}}_s &= \frac{c_\mathrm{ref}}{n_\mathrm{ref}} \bar{f}_s \\
+\hat{\bar{F}}_s &= \bar{F}_s \\
 \hat{\phi} &= \frac{e \phi}{T_\mathrm{ref}} \\
 \hat{t} &= \frac{c_\mathrm{ref} t}{L_\mathrm{ref}} \\
 \frac{\partial}{\partial \hat{t}} &= \frac{L_\mathrm{ref}}{c_\mathrm{ref}} \frac{\partial}{\partial t} \\
@@ -1376,20 +1365,9 @@ The full set of dimensionless variables are related to the dimensional ones by
 \hat{q}_{s\parallel} &= \frac{q_{s\parallel}}{m_i n_\mathrm{ref} c_\mathrm{ref}^3} = \frac{q_{s\parallel}}{n_\mathrm{ref} T_\mathrm{ref} c_\mathrm{ref}} \\
 \hat{R}_\mathrm{CX} &= \frac{L_\mathrm{ref} n_\mathrm{ref} R_\mathrm{CX}}{c_\mathrm{ref}} \\
 \hat{R}_\mathrm{ioniz} &= \frac{L_\mathrm{ref} n_\mathrm{ref} R_\mathrm{ioniz}}{c_\mathrm{ref}} \\
-\hat{S}_s &= \frac{(2 \pi)^{3/2} L_\mathrm{ref} c_\mathrm{ref}^2 S_s}{n_\mathrm{ref}} \\
-\hat{\bar{S}}_s &= \frac{\sqrt{2 \pi} L_\mathrm{ref} \bar{S}_s}{n_\mathrm{ref}} \\
-\hat{C}_{ii}(\hat{f_i}, \hat{f_i}) &= \frac{L_\mathrm{ref} n_\mathrm{ref}}{(2\pi)^{3/2} c_\mathrm{ref}^4} C_{ii}(f_i, f_i) \\
-\end{align}
-```
-
-Due to the $(2\pi)^{3/2}$ factor in $\hat f_s$, every integral over 3 velocity dimensions $d^3 \hat{v}$ is mulitplied by $1/(2\pi)^{3/2}$ in the dimensionless equations. Due to the $\sqrt{2\pi}$ in $\hat{\bar{f}}_s$ every integral over $\hat v_\parallel$ is multiplied by $1/\sqrt{2\pi}$. So moments in the dimensionless system are evaluated as
-```math
-\begin{align}
-\hat{n}_s(t,z) &= \frac{1}{\sqrt{2 \pi}} \int_\infty^\infty d\hat{v}_\parallel \int_0^\infty d\hat{v}_\perp \hat{v}_\perp \hat{f}_s(t,z,v_\parallel,v_\perp) \\
-\hat{u}_{s\parallel}(t,z) &= \frac{1}{\sqrt{2 \pi} n_s} \int_\infty^\infty d\hat{v}_\parallel \int_0^\infty d\hat{v}_\perp \hat{v}_\perp \hat{v}_\parallel \hat{f}_s(t,z,v_\parallel,v_\perp) \\
-\hat{v}_{Ts}(t,z) &= \frac{2}{3 \sqrt{2 \pi} n_s} \int_\infty^\infty d\hat{v}_\parallel \int_0^\infty d\hat{v}_\perp \hat{v}_\perp \left[ \left( \hat{v}_\parallel - \hat{u}_{s\parallel}(t,z) \right)^2 + \hat{v}_\perp \right] \hat{f}_s(t,z,v_\parallel,v_\perp) \\
-\hat{p}_{s\parallel}(t,z) &= \frac{1}{\sqrt{2 \pi}} \int_\infty^\infty d\hat{v}_\parallel \int_0^\infty d\hat{v}_\perp \hat{v}_\perp \left( \hat{v}_\parallel - \hat{u}_{s\parallel}(t,z) \right)^2 \hat{f}_s(t,z,v_\parallel,v_\perp) \\
-\hat{p}_{s\perp}(t,z) &= \frac{1}{\sqrt{2 \pi}} \int_\infty^\infty d\hat{v}_\parallel \int_0^\infty d\hat{v}_\perp \hat{v}_\perp \frac{\hat{v}_\perp^2}{2} \hat{f}_s(t,z,v_\parallel,v_\perp) \\
+\hat{S}_s &= \frac{L_\mathrm{ref} c_\mathrm{ref}^2 S_s}{n_\mathrm{ref}} \\
+\hat{\bar{S}}_s &= \frac{L_\mathrm{ref} \bar{S}_s}{n_\mathrm{ref}} \\
+\hat{C}_{ii}(\hat{f_i}, \hat{f_i}) &= \frac{L_\mathrm{ref} n_\mathrm{ref}}{c_\mathrm{ref}^4} C_{ii}(f_i, f_i) \\
 \end{align}
 ```
 
@@ -1402,7 +1380,7 @@ conventions here.
 ```math
 \begin{align}
 & \frac{\partial \hat{n}_i}{\partial \hat{t}} + \frac{\partial}{\partial \hat{z}}\left( \hat{n}_i \hat{u}_{i\parallel} \right)
-    = \hat{R}_\mathrm{ioniz} \hat{n}_e \hat{n}_n + \frac{1}{(2 \pi)^{3/2}} \int \hat{S}_i d^3 \hat{v} \\
+    = \hat{R}_\mathrm{ioniz} \hat{n}_e \hat{n}_n + \int \hat{S}_i d^3 \hat{v} \\
 
 & \hat{m}_i \frac{\partial}{\partial \hat{t}}(\hat{n}_i \hat{u}_{i\parallel})
   + \hat{m}_i \frac{\partial}{\partial \hat{z}}(\hat{n}_i \hat{u}_{i\parallel}^2)
@@ -1410,16 +1388,16 @@ conventions here.
   + \hat{n}_i \frac{\partial \hat{\phi}}{\partial \hat{z}} \nonumber \\
 &\quad= \hat{m}_i \hat{R}_\mathrm{CX} \hat{n}_i \hat{n}_n (\hat{u}_{n\parallel} - \hat{u}_{i\parallel})
         + \hat{m}_i \hat{R}_\mathrm{ioniz} \hat{n}_e \hat{n}_n \hat{u}_{n\parallel}
-        + \frac{\hat{m}_i}{(2 \pi)^{3/2}}  \int \hat{v}_\parallel \hat{S}_i d^3 \hat{v} \\
+        + \hat{m}_i\int \hat{v}_\parallel \hat{S}_i d^3 \hat{v} \\
 
 & \frac{3}{2} \frac{\partial \hat{p}_i}{\partial \hat{t}}
   + \frac{\partial \hat{q}_{i\parallel}}{\partial \hat{z}} + \hat{p}_{i\parallel} \frac{\partial \hat{u}_{i\parallel}}{\partial \hat{z}}
   + \frac{3}{2} \hat{u}_{i\parallel} \frac{\partial \hat{p}_i}{\partial \hat{z}} + \frac{3}{2} \hat{p}_i \frac{\partial \hat{u}_{i\parallel}}{\partial \hat{z}} \nonumber \\
 &\quad= - \frac{1}{2} \hat{R}_\mathrm{CX} \hat{n}_i \hat{n}_n \left(3 \hat{T}_i - 3 \hat{T}_n - \hat{m}_i (\hat{u}_{i\parallel} - \hat{u}_{n\parallel})^2 \right)
       + \frac{1}{2} \hat{R}_\mathrm{ioniz} \hat{n}_e \hat{n}_n \left(3 \hat{T}_n + \hat{m}_i (\hat{u}_{i\parallel} - \hat{u}_{n\parallel})^2 \right) \nonumber \\
-&\qquad+ \frac{1}{2} \frac{\hat{m}_i}{(2 \pi)^{3/2}} \int \hat{v}^2 \hat{S}_i d^3 \hat{v}
-       - \frac{\hat{m}_i}{(2 \pi)^{3/2}} \hat{u}_{i\parallel} \int \hat{v}_\parallel \hat{S}_i d^3 \hat{v}
-       + \frac{1}{2} \frac{\hat{m}_i}{(2 \pi)^{3/2}} \hat{u}_{i\parallel}^2 \int \hat{S}_i d^3 \hat{v} \\
+&\qquad+ \frac{1}{2} \hat{m}_i \int \hat{v}^2 \hat{S}_i d^3 \hat{v}
+       - \hat{m}_i \hat{u}_{i\parallel} \int \hat{v}_\parallel \hat{S}_i d^3 \hat{v}
+       + \frac{1}{2} \hat{m}_i \hat{u}_{i\parallel}^2 \int \hat{S}_i d^3 \hat{v} \\
 \end{align}
 ```
 
@@ -1441,11 +1419,16 @@ re-scaling the rest of the dimensionless variables.
 In this section, denote dimensionless variables of the original version's
 conventions with a $\mathring{\cdot}$.
 
-The 1V, marginalised distribution function $\check f_s$ is de-dimensionalised
-so that a 1V Maxwellian $\check f_{Ms} = \frac{n_s}{\sqrt{\pi} \check v_{Ts}}
+The 2V distribution function $f_s$ is de-dimensionalised
+so that a Maxwellian $\check f_{Ms} = \frac{n_s}{(\pi)^{3/2} \check v_{Ts}}
 \exp\left(-v_\parallel^2 / \check v_{Ts}^2 \right)$ would have a maximum value
-of $\mathring n_s / \mathring v_{Ts}$, and its shape function $\check F_s$
-would have a maximum value of 1.
+of $\mathring n_s / \mathring v_{Ts}^3$.
+
+The 1V, marginalised distribution function $\bar f_s$ is de-dimensionalised
+so that a 1V Maxwellian $\check{\bar{f}}_{Ms} = \frac{n_s}{\sqrt{\pi} \check
+v_{Ts}} \exp\left(-v_\parallel^2 / \check v_{Ts}^2 \right)$ would have a
+maximum value of $\mathring n_s / \mathring v_{Ts}$, and its shape function
+$\check F_s$ would have a maximum value of 1.
 
 Important to note, in the original version, the dimensionless electrostatic
 potential was defined using $\check T_\mathrm{ref}$, as
@@ -1464,6 +1447,10 @@ differences first
     && \hat{T}_s = 2 \mathring{T}_s \\
 \mathring{v}_{Ts} &= \frac{\check{v}_{Ts}}{\check{c}_\mathrm{ref}} = \frac{\sqrt{3} v_{Ts}}{\sqrt{2} c_\mathrm{ref}} = \sqrt{\frac{3}{2}} \hat{v}_{Ts}
     && \hat{v}_{Ts} = \sqrt{\frac{2}{3}} \mathring{v}_{Ts} \\
+\mathring{f}_s &= \frac{\pi^{3/2} \check{c}_\mathrm{ref}^3}{\check{n}_\mathrm{ref}} f_s = \frac{(2 \pi)^{3/2} c_\mathrm{ref}^3}{n_\mathrm{ref}} f_s = (2 \pi)^{3/2} \hat{f}_s
+    && \hat{f}_s = \frac{1}{(2 \pi)^{3/2}} \mathring{f}_s \\
+\mathring{\bar{f}}_s &= \frac{\sqrt{\pi} \check{c}_\mathrm{ref}}{\check{n}_\mathrm{ref}} \bar{f}_s = \frac{\sqrt{2 \pi} c_\mathrm{ref}}{n_\mathrm{ref}} \bar{f}_s = \sqrt{2 \pi} \hat{\bar{f}}_s
+    && \hat{\bar{f}}_s = \frac{1}{\sqrt{2 \pi}} \mathring{\bar{f}}_s \\
 \mathring{F}_s &= \sqrt{\pi} \check{F}_s = \sqrt{\pi} \sqrt{3} \bar{F}_s = \sqrt{3} \hat{\bar{F}}_s
     && \hat{\bar{F}}_s = \frac{1}{\sqrt{3}} \mathring{\bar{F}}_s \\
 \mathring{t} &= \frac{\check{c}_\mathrm{ref} t}{\check{L}_\mathrm{ref}} = \sqrt{2} \frac{c_\mathrm{ref} t}{L_\mathrm{ref}} = \sqrt{2} \hat{t}
@@ -1486,8 +1473,10 @@ differences first
     && \hat{R}_\mathrm{CX} = \sqrt{2} \mathring{R}_\mathrm{CX} \\
 \mathring{R}_\mathrm{ioniz} &= \frac{\check{L}_\mathrm{ref} \check{n}_\mathrm{ref} R_\mathrm{ioniz}}{\check{c}_\mathrm{ref}} = \frac{L_\mathrm{ref} n_\mathrm{ref} R_\mathrm{ioniz}}{\sqrt{2} c_\mathrm{ref}} = \frac{1}{\sqrt{2}} \hat{R}_\mathrm{ioniz} \quad
     && \hat{R}_\mathrm{ioniz} = \sqrt{2} \mathring{R}_\mathrm{ioniz} \\
-\mathring{S}_s &= \frac{\check{L}_\mathrm{ref} \check{c}_\mathrm{ref}^2 S_s}{\check{n}_\mathrm{ref}} = \frac{L_\mathrm{ref} 2 c_\mathrm{ref}^2 S_s}{n_\mathrm{ref}} = 2 \hat{S}_s
-    && \hat{S}_s = \frac{1}{2} \mathring{S}_s \\
+\mathring{S}_s &= \frac{\pi^{3/2} \check{L}_\mathrm{ref} \check{c}_\mathrm{ref}^2 S_s}{\check{n}_\mathrm{ref}} = \frac{\pi^{3/2} L_\mathrm{ref} 2 c_\mathrm{ref}^2 S_s}{n_\mathrm{ref}} = 2 \pi^{3/2} \hat{S}_s
+    && \hat{S}_s = \frac{1}{2 \pi^{3/2}} \mathring{S}_s \\
+\mathring{\bar{S}}_s &= \frac{\sqrt{\pi} \check{L}_\mathrm{ref} \bar{S}_s}{\check{n}_\mathrm{ref}} = \sqrt{\pi} \hat{\bar{S}}_s
+    && \hat{\bar{S}}_s = \frac{1}{\sqrt{\pi}} \mathring{\bar{S}}_s \\
 \mathring{n}_s &= \frac{n_s}{\check{n}_\mathrm{ref}} = \hat{n}_s
     && \hat{n}_s = \mathring{n}_s \\
 \mathring{L}_z &= \frac{L_z}{\check{L}_\mathrm{ref}} = \hat{L}_z
@@ -1498,16 +1487,12 @@ differences first
     && \hat{m}_i = \mathring{m}_i \\
 \mathring{m}_e &= \frac{m_e}{m_i} = \hat{m}_e
     && \hat{m}_e = \mathring{m_e} \\
-\mathring{f}_s &= \frac{\sqrt{\pi} \check{c}_\mathrm{ref}}{\check{n}_\mathrm{ref}} \check{f}_s = \frac{\sqrt{2 \pi} c_\mathrm{ref}}{n_\mathrm{ref}} \bar{f}_s = \hat{\bar{f}}_s
-    && \hat{\bar{f}}_s = \mathring{\bar{f}}_s \\
 \mathring{\phi} &= \frac{e \phi}{\check{T}_\mathrm{ref}} = \hat{\phi}
     && \hat{\phi} = \mathring{\phi} \\
 \mathring{z} &= \frac{z}{\check{L}_\mathrm{ref}} = \hat{z}
     && \hat{z} = \mathring{z} \\
 \frac{\partial}{\partial \mathring{z}} &= \check{L}_\mathrm{ref} \frac{\partial}{\partial z} = \frac{\partial}{\partial \hat{z}}
     && \frac{\partial}{\partial \hat{z}} = \frac{\partial}{\partial \mathring{z}} \\
-\mathring{\bar{S}}_s &= \frac{\check{L}_\mathrm{ref} \bar{S}_s}{\check{n}_\mathrm{ref}} = \hat{\bar{S}}_s
-    && \hat{\bar{S}}_s = \mathring{\bar{S}}_s \\
 \end{alignat}
 ```
 
