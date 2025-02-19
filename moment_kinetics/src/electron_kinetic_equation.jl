@@ -1140,6 +1140,13 @@ pressure \$p_{e∥}\$.
                scratch_dummy, z, z_spectral,
                num_diss_params.electron.moment_dissipation_coefficient, ir)
 
+    if t_params.dt[] > 1.5 * nl_solver_params.precon_dt[] ||
+            t_params.dt[] < 2.0/3.0 * nl_solver_params.precon_dt[]
+
+        # dt has changed significantly, so update the preconditioner
+        nl_solver_params.solves_since_precon_update[] = nl_solver_params.preconditioner_update_interval
+    end
+
     if nl_solver_params.preconditioner_type === Val(:electron_split_lu)
         if nl_solver_params.solves_since_precon_update[] ≥ nl_solver_params.preconditioner_update_interval
             nl_solver_params.solves_since_precon_update[] = 0
@@ -1208,14 +1215,6 @@ pressure \$p_{e∥}\$.
         left_preconditioner = identity
         right_preconditioner = split_precon!
     elseif nl_solver_params.preconditioner_type === Val(:electron_lu)
-
-        if t_params.dt[] > 1.5 * nl_solver_params.precon_dt[] ||
-                t_params.dt[] < 2.0/3.0 * nl_solver_params.precon_dt[]
-
-            # dt has changed significantly, so update the preconditioner
-            nl_solver_params.solves_since_precon_update[] = nl_solver_params.preconditioner_update_interval
-        end
-
         if nl_solver_params.solves_since_precon_update[] ≥ nl_solver_params.preconditioner_update_interval
 global_rank[] == 0 && println("recalculating precon")
             nl_solver_params.solves_since_precon_update[] = 0
@@ -1338,14 +1337,6 @@ global_rank[] == 0 && println("recalculating precon")
         left_preconditioner = identity
         right_preconditioner = lu_precon!
     elseif nl_solver_params.preconditioner_type === Val(:electron_adi)
-
-        if t_params.dt[] > 1.5 * nl_solver_params.precon_dt[] ||
-                t_params.dt[] < 2.0/3.0 * nl_solver_params.precon_dt[]
-
-            # dt has changed significantly, so update the preconditioner
-            nl_solver_params.solves_since_precon_update[] = nl_solver_params.preconditioner_update_interval
-        end
-
         if nl_solver_params.solves_since_precon_update[] ≥ nl_solver_params.preconditioner_update_interval
 global_rank[] == 0 && println("recalculating precon")
             nl_solver_params.solves_since_precon_update[] = 0
