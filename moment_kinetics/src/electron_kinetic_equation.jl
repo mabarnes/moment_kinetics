@@ -2,6 +2,7 @@ module electron_kinetic_equation
 
 using LinearAlgebra
 using MPI
+using MPISchurComplements
 using SparseArrays
 
 export get_electron_critical_velocities
@@ -1342,6 +1343,119 @@ global_rank[] == 0 && println("recalculating precon")
 
         left_preconditioner = identity
         right_preconditioner = lu_precon!
+    elseif nl_solver_params.preconditioner_type === Val(:electron_static_condensation)
+        if nl_solver_params.solves_since_precon_update[] ≥ nl_solver_params.preconditioner_update_interval
+global_rank[] == 0 && println("recalculating precon")
+            nl_solver_params.solves_since_precon_update[] = 0
+            nl_solver_params.precon_dt[] = t_params.dt[]
+
+            static_condensation, precon_matrix, pdf_buffer, ppar_buffer =
+                nl_solver_params.preconditioners[ir]
+
+            # Note must drop 'qpar integral terms' in this branch, because they would make
+            # each point couple to the whole velocity space grid, so we could not put
+            # different velocity space elements into different blocks for the static
+            # condensation decomposition of the matrix.
+            fill_electron_kinetic_equation_Jacobian!(
+                precon_matrix, f_electron_new, electron_ppar_new, moments, phi,
+                collisions, composition, z, vperp, vpa, z_spectral,
+                vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
+                external_source_settings, num_diss_params, t_params, ion_dt,
+                ir, evolve_ppar, :all, false, false)
+
+            begin_serial_region()
+            if block_rank[] == 0
+                # LU decomposition was previously created. The Jacobian always
+                # has the same sparsity pattern, so by using `lu!()` we can
+                # reuse some setup.
+                orig_lu = static_condensation.A_factorization
+                C = static_condensation.C
+                pdf_size = z.n * vperp.n * vpa.n
+                ppar_size = z.n
+                try
+                    @timeit_debug global_timer "lu!" lu!(orig_lu, sparse(@view precon_matrix[1:pdf_size,1:pdf_size]); check=false)
+                catch e
+                    if !isa(e, ArgumentError)
+                        rethrow(e)
+                    end
+                    println("Sparsity pattern of matrix changed, rebuilding "
+                            * " LU from scratch")
+                    @timeit_debug global_timer "lu" orig_lu = lu(sparse(@view precon_matrix[1:pdf_size,1:pdf_size]))
+                end
+                C .= precon_matrix[pdf_size+1:pdf_size+ppar_size,1:pdf_size]
+                @views update_schur_complement!(
+                           static_condensation, orig_lu,
+                           precon_matrix[1:pdf_size,pdf_size+1:pdf_size+ppar_size], C,
+                           precon_matrix[pdf_size+1:pdf_size+ppar_size,pdf_size+1:pdf_size+ppar_size])
+                nl_solver_params.preconditioners[ir] =
+                    (static_condensation, precon_matrix, pdf_buffer, ppar_buffer)
+            else
+                nl_solver_params.preconditioners[ir] =
+                    (static_condensation, precon_matrix, pdf_buffer, ppar_buffer)
+            end
+        end
+
+        @timeit_debug global_timer static_condensation_precon!(x) = begin
+            precon_ppar, precon_f = x
+
+            precon_static_condensation, _, this_pdf_buffer, this_ppar_buffer =
+                nl_solver_params.preconditioners[ir]
+
+            begin_z_vperp_vpa_region()
+            @loop_z_vperp_vpa iz ivperp ivpa begin
+                this_pdf_buffer[ivpa,ivperp,iz] = precon_f[ivpa,ivperp,iz]
+            end
+            begin_z_region()
+            @loop_z iz begin
+                this_ppar_buffer[iz] = precon_ppar[iz]
+            end
+
+            begin_serial_region()
+            @serial_region begin
+                @timeit_debug global_timer "ldiv!" ldiv!(vec(precon_f), precon_ppar, precon_static_condensation, vec(this_pdf_buffer), this_ppar_buffer)
+            end
+
+            # Ensure values of precon_f and precon_ppar are consistent across
+            # distributed-MPI block boundaries. For precon_f take the upwind
+            # value, and for precon_ppar take the average.
+            f_lower_endpoints = @view scratch_dummy.buffer_vpavperpr_1[:,:,ir]
+            f_upper_endpoints = @view scratch_dummy.buffer_vpavperpr_2[:,:,ir]
+            receive_buffer1 = @view scratch_dummy.buffer_vpavperpr_3[:,:,ir]
+            receive_buffer2 = @view scratch_dummy.buffer_vpavperpr_4[:,:,ir]
+            begin_vperp_vpa_region()
+            @loop_vperp_vpa ivperp ivpa begin
+                f_lower_endpoints[ivpa,ivperp] = precon_f[ivpa,ivperp,1]
+                f_upper_endpoints[ivpa,ivperp] = precon_f[ivpa,ivperp,end]
+            end
+            # We upwind the z-derivatives in `electron_z_advection!()`, so would
+            # expect that upwinding the results here in z would make sense.
+            # However, upwinding here makes convergence much slower (~10x),
+            # compared to picking the values from one side or other of the block
+            # boundary, or taking the average of the values on either side.
+            # Neither direction is special, so taking the average seems most
+            # sensible (although in an intial test it does not seem to converge
+            # faster than just picking one or the other).
+            # Maybe this could indicate that it is more important to have a fully
+            # self-consistent Jacobian inversion for the
+            # `electron_vpa_advection()` part rather than taking half(ish) of the
+            # values from one block and the other half(ish) from the other.
+            reconcile_element_boundaries_MPI_z_pdf_vpavperpz!(
+                precon_f, f_lower_endpoints, f_upper_endpoints, receive_buffer1,
+                receive_buffer2, z)
+
+            begin_serial_region()
+            @serial_region begin
+                buffer_1[] = precon_ppar[1]
+                buffer_2[] = precon_ppar[end]
+            end
+            reconcile_element_boundaries_MPI!(
+                precon_ppar, buffer_1, buffer_2, buffer_3, buffer_4, z)
+
+            return nothing
+        end
+
+        left_preconditioner = identity
+        right_preconditioner = static_condensation_precon!
     elseif nl_solver_params.preconditioner_type === Val(:electron_adi)
         if nl_solver_params.solves_since_precon_update[] ≥ nl_solver_params.preconditioner_update_interval
 global_rank[] == 0 && println("recalculating precon")

@@ -39,6 +39,7 @@ using ..type_definitions: mk_float, mk_int
 
 using LinearAlgebra
 using MPI
+using MPISchurComplements
 using SparseArrays
 using StatsBase: mean
 
@@ -187,6 +188,34 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); defa
                                 allocate_shared_float(pdf_plus_ppar_size, pdf_plus_ppar_size),
                                 allocate_shared_float(pdf_plus_ppar_size),
                                 allocate_shared_float(pdf_plus_ppar_size),
+                               ),
+                               reverse(outer_coord_sizes))
+    elseif preconditioner_type === Val(:electron_static_condensation)
+        pdf_size = total_size_coords
+        ppar_size = coords.z.n
+        function get_static_condensation_object()
+            dummy_A = zeros(pdf_size, pdf_size)
+            dummy_A[diagind(dummy_A)] .= 1.0
+            Alu = lu(sparse(dummy_A))
+            Ainv_dot_B = allocate_shared_float(pdf_size, ppar_size)
+            C = allocate_shared_float(ppar_size, pdf_size)
+            schur_complement = allocate_shared_float(ppar_size, ppar_size)
+            schur_complement .= 0.0
+            schur_complement[diagind(schur_complement)] .= 1.0
+            schur_complement_lu = lu(schur_complement)
+            Ainv_dot_u = allocate_shared_float(pdf_size)
+            top_vec_buffer = allocate_shared_float(pdf_size)
+            bottom_vec_buffer = allocate_shared_float(ppar_size)
+            sc = MPISchurComplement(Alu, Ainv_dot_B, C, schur_complement,
+                                    schur_complement_lu, Ainv_dot_u, top_vec_buffer,
+                                    bottom_vec_buffer)
+            return sc
+        end
+        pdf_plus_ppar_size = total_size_coords + coords.z.n
+        preconditioners = fill((get_static_condensation_object(),
+                                allocate_shared_float(pdf_plus_ppar_size, pdf_plus_ppar_size),
+                                allocate_shared_float(coords.vpa.n, coords.vperp.n, coords.z.n),
+                                allocate_shared_float(coords.z.n)
                                ),
                                reverse(outer_coord_sizes))
     elseif preconditioner_type === Val(:electron_adi)
