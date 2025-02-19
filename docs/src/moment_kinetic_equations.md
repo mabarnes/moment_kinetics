@@ -59,16 +59,21 @@ For use later, we also give the definitions of the parallel and perpendicular pr
 ```math
 \begin{align}
 p_{s\parallel}(t,z) &= 2\pi\int_{-\infty}^\infty dv_\parallel \int_0^\infty dv_\perp v_\perp
-    m_s \left( v_\parallel - u_{s\parallel}(t,z) \right)^2 f_s(t,z,v_\parallel,v_\perp) \\
+    m_s \left( v_\parallel - u_{s\parallel}(t,z) \right)^2 f_s(t,z,v_\parallel,v_\perp) \nonumber \\
+    &= m_s n_s v_{Ts}^2 2\pi \int_{-\infty}^\infty dw_\parallel \int_0^\infty dw_\perp w_\perp
+        w_\parallel^2 F_s(t,z,w_\parallel,w_\perp) \\
+
 p_{s\perp}(t,z) &= 2\pi\int_{-\infty}^\infty dv_\parallel \int_0^\infty dv_\perp v_\perp
     m_s \frac{v_\perp^2}{2} f_s(t,z,v_\parallel,v_\perp) \\
+    &= \frac{1}{2} m_s n_s v_{Ts}^2 2\pi \int_{-\infty}^\infty dw_\parallel \int_0^\infty dw_\perp w_\perp
+        w_\perp^2 F_s(t,z,w_\parallel,w_\perp) \\
 \end{align}
 ```
 and $T_{s\parallel} = p_{s\parallel}/n_s$, $T_{s\perp} = p_{s\perp}/n_s$, which
 we can note means that
 ```math
 \begin{align}
-p_s &= n_s T_s = \frac{m_s}{2}n_s v_{Ts}^2 = \frac{1}{3}(p_{s\parallel} + 2p_{s\perp}) \\
+p_s &= n_s T_s = \frac{m_s}{2} n_s v_{Ts}^2 = \frac{1}{3}(p_{s\parallel} + 2p_{s\perp}) \\
 T_s &= \frac{1}{3}(T_{s\parallel} + 2T_{s\perp}) \\
 v_{Ts} &= \sqrt{\frac{2T_s}{m_s}}= \sqrt{\frac{2(T_{s\parallel} + 2T_{s\perp})}{3m_s}} \\
 \end{align}
@@ -1371,7 +1376,38 @@ The full set of dimensionless variables are related to the dimensional ones by
 \end{align}
 ```
 
-Using these definitions, the dimensionful equations above are converted to dimensionless equations just by putting a $\hat{\cdot}$ on all dimensionful quantities, and dropping the proton charge $e$ (as that is absorbed into $\hat \phi$). This may stop being true in 2D/3D where there are cross-field drifts where dimensionless parameters like $c_\mathrm{ref} m_i / L_\mathrm{ref} e B_\mathrm{ref}$ could enter. The dimensionless equations are written out in full below.
+Using these definitions, the dimensionful equations above are converted to
+dimensionless equations just by putting a $\hat{\cdot}$ on all dimensionful
+quantities, and dropping the proton charge $e$ (as that is absorbed into $\hat
+\phi$). This may stop being true in 2D/3D where there are cross-field drifts
+where dimensionless parameters like $c_\mathrm{ref} m_i / L_\mathrm{ref} e
+B_\mathrm{ref}$ could enter. The dimensionless equations are written out in
+full below.
+
+### Definitions for any species
+
+```math
+\begin{align}
+\hat{p}_{s\parallel} &= 2\pi\int_{-\infty}^\infty d\hat{v}_\parallel \int_0^\infty d\hat{v}_\perp \hat{v}_\perp
+    \hat{m}_s \left( \hat{v}_\parallel - \hat{u}_{s\parallel} \right)^2 \hat{f}_s \nonumber \\
+    &= \hat{m}_s \hat{n}_s \hat{v}_{Ts}^2 2\pi \int_{-\infty}^\infty dw_\parallel \int_0^\infty dw_\perp w_\perp
+        w_\parallel^2 F_s \\
+
+\hat{p}_{s\perp} &= 2\pi\int_{-\infty}^\infty d\hat{v}_\parallel \int_0^\infty d\hat{v}_\perp \hat{v}_\perp
+    \hat{m}_s \frac{\hat{v}_\perp^2}{2} \hat{f}_s \\
+    &= \frac{1}{2} \hat{m}_s \hat{n}_s \hat{v}_{Ts}^2 2\pi \int_{-\infty}^\infty dw_\parallel \int_0^\infty dw_\perp w_\perp
+        w_\perp^2 F_s \\
+
+\hat{p}_s &= \hat{n}_s \hat{T}_s = \frac{\hat{m}_s}{2} \hat{n}_s \hat{v}_{Ts}^2 = \frac{1}{3}(\hat{p}_{s\parallel} + 2\hat{p}_{s\perp}) \\
+
+\hat{T}_s &= \frac{1}{3}(\hat{T}_{s\parallel} + 2\hat{T}_{s\perp}) \\
+
+\hat{v}_{Ts} &= \sqrt{\frac{2\hat{T}_s}{\hat{m}_s}}= \sqrt{\frac{2(\hat{T}_{s\parallel} + 2\hat{T}_{s\perp})}{3\hat{m}_s}} \\
+
+\hat{q}_{s\parallel} &= \int \frac{\hat{m}_s}{2} \left( (\hat{v}_\parallel - \hat{u}_{s\parallel})^2 + \hat{v}_\perp^2 \right) (\hat{v}_\parallel - \hat{u}_{s\parallel}) \hat{f}_s d^3 \hat{v} \\
+    &= \hat{n}_s \hat{v}_{Ts}^3 \int \frac{\hat{m}_s}{2} \left( w_\parallel^2 + w_\perp^2 \right) w_\parallel F_s d^3 w \\
+\end{align}
+```
 
 ### Dimensionless 1D2V ion equations
 
