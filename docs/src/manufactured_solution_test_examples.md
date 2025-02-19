@@ -8,7 +8,7 @@ to generate a series of simulations on which the numerical errors
 can be tested and compared to the expected scaling of the 
 numerical method employed.
 
-# 1D1V tests
+## 1D1V tests
 
 There are 1D1V tests which complement the check-in testing suite.
 The example input files in this category are as follows:
@@ -24,7 +24,7 @@ runs/1D-wall_MMS_new_nel_r_1_z_16_vpa_16_vperp_1_diss.toml
 runs/1D-wall_MMS_new_nel_r_1_z_16_vpa_16_vperp_1_krook.toml
 ```
 
-# 1D2V tests
+## 1D2V tests
 
 * 1D2V simulation of kinetic ions (no neutrals) and a krook
   collision operator.
@@ -40,7 +40,7 @@ runs/1D-mirror_MMS_ngrid_9_nel_r_1_z_16_vpa_16_vperp_8_diss.toml
 runs/1D-mirror_MMS_ngrid_9_nel_r_1_z_32_vpa_32_vperp_16_diss.toml
 ```
 
-# 1D2V/1D3V test (with neutrals)
+## 1D2V/1D3V test (with neutrals)
 
 * A test with periodic boundary conditions in 1D, Boltzmann
   electrons, neutrals, and ions.
@@ -60,7 +60,7 @@ runs/1D-wall_cheb-with-neutrals_nel_r_1_z_2_vpa_4_vperp_4.toml
 runs/1D-wall_cheb-with-neutrals-with-sheath_nel_r_1_z_2_vpa_4_vperp_4.toml
 ```
 
-# 2D1V tests
+## 2D1V tests
 
 These tests are used to test the spatial advection in simple cases
 with wall boundary conditions.
@@ -72,7 +72,7 @@ with wall boundary conditions.
 runs/2D-wall_MMS_nel_r_32_z_32_vpa_16_vperp_1_diss.toml
 ```
 
-# 2D2V tests
+## 2D2V tests
 
 These tests are used to test the spatial advection in cases
 with wall boundary conditions or geometrical features where
@@ -92,7 +92,7 @@ runs/2D-mirror_MMS_ngrid_5_nel_r_16_z_16_vpa_16_vperp_8_diss.toml
 runs/2D-mirror_MMS_ngrid_5_nel_r_32_z_32_vpa_16_vperp_16_diss.toml
 ```
 
-# 2D2V/2D3V tests
+## 2D2V/2D3V tests
 
 These tests include a two-dimensional domain, ions, and neutrals 
 (which have three velocity dimensions).
