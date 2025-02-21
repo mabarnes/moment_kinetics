@@ -28,7 +28,7 @@ using ..velocity_moments: calculate_ion_moment_derivatives!, calculate_neutral_m
 using ..velocity_moments: calculate_electron_moment_derivatives!
 using ..velocity_grid_transforms: vzvrvzeta_to_vpavperp!, vpavperp_to_vzvrvzeta!
 using ..boundary_conditions: enforce_boundary_conditions!, get_ion_z_boundary_cutoff_indices
-using ..boundary_conditions: enforce_neutral_boundary_conditions!
+using ..boundary_conditions: enforce_neutral_boundary_conditions!, enforce_vperp_boundary_condition!
 using ..boundary_conditions: vpagrid_to_dzdt, enforce_v_boundary_condition_local!
 using ..input_structs
 using ..moment_constraints: hard_force_moment_constraints!,
@@ -830,7 +830,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
                                                   vzeta.n, composition.n_ion_species,
                                                   n_neutral_species_alloc, t_params)
     # create arrays for Fokker-Planck collisions 
-    if advance.explicit_weakform_fp_collisions
+    if advance.explicit_weakform_fp_collisions || advance_implicit.explicit_weakform_fp_collisions
         if collisions.fkpl.boundary_data_option == direct_integration
             precompute_weights = true
         else
@@ -3927,7 +3927,7 @@ Do a backward-Euler timestep for all terms in the ion kinetic equation.
         if vperp.n > 1
             begin_s_r_z_vpa_region()
             enforce_vperp_boundary_condition!(x, vperp.bc, vperp, vperp_spectral,
-                                              vperp_adv, vperp_diffusion)
+                                              vperp_advect, advance.vperp_diffusion)
         end
 
         if z.bc == "wall" && (z.irank == 0 || z.irank == z.nrank - 1)
@@ -3983,7 +3983,7 @@ Do a backward-Euler timestep for all terms in the ion kinetic equation.
 
         # scratch_pdf struct containing the array passed as f_new
         new_scratch = scratch_pdf(f_new, fvec_out.density, fvec_out.upar, fvec_out.ppar,
-                                  fvec_out.pperp, fvec_out.temp_z_s,
+                                  fvec_out.pperp, fvec_out.temp_z_s, fvec_out.pdf_electron,
                                   fvec_out.electron_density, fvec_out.electron_upar,
                                   fvec_out.electron_ppar, fvec_out.electron_pperp,
                                   fvec_out.electron_temp, fvec_out.pdf_neutral,
@@ -3991,7 +3991,7 @@ Do a backward-Euler timestep for all terms in the ion kinetic equation.
                                   fvec_out.pz_neutral)
         # scratch_pdf struct containing the array passed as residual
         residual_scratch = scratch_pdf(residual, fvec_out.density, fvec_out.upar,
-                                       fvec_out.ppar, fvec_out.pperp, fvec_out.temp_z_s,
+                                       fvec_out.ppar, fvec_out.pperp, fvec_out.temp_z_s, fvec_out.pdf_electron,
                                        fvec_out.electron_density, fvec_out.electron_upar,
                                        fvec_out.electron_ppar, fvec_out.electron_pperp,
                                        fvec_out.electron_temp, fvec_out.pdf_neutral,
