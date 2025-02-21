@@ -3,6 +3,7 @@ module electron_kinetic_equation
 using LinearAlgebra
 using MPI
 using MPISchurComplements
+using MPIStaticCondensation
 using SparseArrays
 
 export get_electron_critical_velocities
@@ -1364,32 +1365,29 @@ global_rank[] == 0 && println("recalculating precon")
                 ir, evolve_ppar, :all, false, false)
 
             begin_serial_region()
-            if block_rank[] == 0
+
+            @timeit_debug global_timer "preconditioner re-factorization" begin
                 # LU decomposition was previously created. The Jacobian always
                 # has the same sparsity pattern, so by using `lu!()` we can
                 # reuse some setup.
-                orig_lu = static_condensation.A_factorization
+                A_factorization = static_condensation.A_factorization
                 C = static_condensation.C
                 pdf_size = z.n * vperp.n * vpa.n
                 ppar_size = z.n
-                try
-                    @timeit_debug global_timer "lu!" lu!(orig_lu, sparse(@view precon_matrix[1:pdf_size,1:pdf_size]); check=false)
-                catch e
-                    if !isa(e, ArgumentError)
-                        rethrow(e)
-                    end
-                    println("Sparsity pattern of matrix changed, rebuilding "
-                            * " LU from scratch")
-                    @timeit_debug global_timer "lu" orig_lu = lu(sparse(@view precon_matrix[1:pdf_size,1:pdf_size]))
+                @timeit_debug global_timer "static condensation factorization" begin
+                    @views update_condensed_factorization!(A_factorization,
+                                                           precon_matrix[1:pdf_size,1:pdf_size],
+                                                           global_timer)
                 end
-                C .= precon_matrix[pdf_size+1:pdf_size+ppar_size,1:pdf_size]
-                @views update_schur_complement!(
-                           static_condensation, orig_lu,
-                           precon_matrix[1:pdf_size,pdf_size+1:pdf_size+ppar_size], C,
-                           precon_matrix[pdf_size+1:pdf_size+ppar_size,pdf_size+1:pdf_size+ppar_size])
-                nl_solver_params.preconditioners[ir] =
-                    (static_condensation, precon_matrix, pdf_buffer, ppar_buffer)
-            else
+                @timeit_debug global_timer "C matrix copy" begin
+                    C .= @view precon_matrix[pdf_size+1:pdf_size+ppar_size,1:pdf_size]
+                end
+                @timeit_debug global_timer "Schur complement factorization" begin
+                    @views update_schur_complement!(
+                               static_condensation, A_factorization,
+                               precon_matrix[1:pdf_size,pdf_size+1:pdf_size+ppar_size], C,
+                               precon_matrix[pdf_size+1:pdf_size+ppar_size,pdf_size+1:pdf_size+ppar_size])
+                end
                 nl_solver_params.preconditioners[ir] =
                     (static_condensation, precon_matrix, pdf_buffer, ppar_buffer)
             end
@@ -1410,10 +1408,8 @@ global_rank[] == 0 && println("recalculating precon")
                 this_ppar_buffer[iz] = precon_ppar[iz]
             end
 
-            begin_serial_region()
-            @serial_region begin
-                @timeit_debug global_timer "ldiv!" ldiv!(vec(precon_f), precon_ppar, precon_static_condensation, vec(this_pdf_buffer), this_ppar_buffer)
-            end
+            _block_synchronize()
+            @timeit_debug global_timer "ldiv!" ldiv!(vec(precon_f), precon_ppar, precon_static_condensation, vec(this_pdf_buffer), this_ppar_buffer, global_timer)
 
             # Ensure values of precon_f and precon_ppar are consistent across
             # distributed-MPI block boundaries. For precon_f take the upwind
