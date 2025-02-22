@@ -1555,7 +1555,7 @@ global_rank[] == 0 && println("recalculating precon")
         @timeit_debug global_timer adi_precon!(x) = begin
             precon_ppar, precon_f = x
 
-            adi_info = nl_solver_params.preconditioners[ir]
+            local adi_info = nl_solver_params.preconditioners[ir]
             precon_iterations = nl_solver_params.precon_iterations
             this_input_buffer = adi_info.input_buffer
             this_intermediate_buffer = adi_info.intermediate_buffer
@@ -1563,8 +1563,8 @@ global_rank[] == 0 && println("recalculating precon")
             global_index_subrange = adi_info.global_index_subrange
             n_extra_iterations = adi_info.n_extra_iterations
 
-            v_size = vperp.n * vpa.n
-            pdf_size = z.n * v_size
+            local v_size = vperp.n * vpa.n
+            local pdf_size = z.n * v_size
 
             # Use these views to communicate block-boundary points
             output_buffer_pdf_view = reshape(@view(this_output_buffer[1:pdf_size]), size(precon_f))
