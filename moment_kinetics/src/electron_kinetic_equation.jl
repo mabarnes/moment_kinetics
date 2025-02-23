@@ -5909,7 +5909,7 @@ function add_contribution_from_electron_pdf_term_to_Jacobian!(
                                               + vpa.grid[ivpa] * vth[iz] * (ddens_dz[iz] / dens[iz]
                                                                             - dvth_dz[iz] / vth[iz]))
         end
-        if include ∈ (:all, :explicit_v)
+        if include ∈ (:all, :explicit_v) && include_qpar_integral_terms
             for icolvperp ∈ 1:vperp.n, icolvpa ∈ 1:vpa.n
                 col = (iz - 1) * v_size + (icolvperp - 1) * vpa.n + icolvpa + f_offset
                 jacobian_matrix[row,col] +=
