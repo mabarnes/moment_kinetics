@@ -1933,7 +1933,7 @@ global_rank[] == 0 && println("recalculating precon")
                     precon_matrix, f_electron, ppar, moments, phi, collisions,
                     composition, z, vperp, vpa, z_spectral, vperp_spectral, vpa_spectral,
                     z_advect, vpa_advect, scratch_dummy, external_source_settings,
-                    num_diss_params, t_params, ion_dt, ir, true, :all, true, false)
+                    num_diss_params, t_params, ion_dt, ir, true, :all, true, true, false)
 
                 begin_serial_region()
                 if block_rank[] == 0
@@ -4811,6 +4811,7 @@ in the time derivative term as it is for the non-boundary points.]
                          vpa_spectral, z_advect, vpa_advect, scratch_dummy,
                          external_source_settings, num_diss_params, t_params, ion_dt, ir,
                          evolve_ppar, include=:all, include_qpar_integral_terms=true,
+                         include_moment_constraint_forcing=true,
                          add_identity=true) = begin
     dt = t_params.dt[]
 
@@ -4941,9 +4942,11 @@ in the time derivative term as it is for the non-boundary points.]
     add_total_external_electron_source_to_Jacobian!(
         jacobian_matrix, f, moments, me, z_speed, external_source_settings.electron, z,
         vperp, vpa, dt, ir, include; ppar_offset=pdf_size)
-    add_electron_implicit_constraint_forcing_to_Jacobian!(
-        jacobian_matrix, f, zeroth_moment, first_moment, second_moment, z_speed, z, vperp,
-        vpa, t_params.constraint_forcing_rate, dt, ir, include)
+    if include_moment_constraint_forcing
+        add_electron_implicit_constraint_forcing_to_Jacobian!(
+            jacobian_matrix, f, zeroth_moment, first_moment, second_moment, z_speed, z,
+            vperp, vpa, t_params.constraint_forcing_rate, dt, ir, include)
+    end
     # Always add the electron energy equation term, even if evolve_ppar=false, so that the
     # Jacobian matrix always has the same shape, meaning that we can always reuse the LU
     # factorization struct.
