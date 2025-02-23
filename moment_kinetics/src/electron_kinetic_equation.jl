@@ -1214,7 +1214,7 @@ pressure \$p_{e∥}\$.
 
         left_preconditioner = identity
         right_preconditioner = split_precon!
-    elseif nl_solver_params.preconditioner_type === Val(:electron_lu)
+    elseif nl_solver_params.preconditioner_type === Val(:electron_lu) || nl_solver_params.preconditioner_type === Val(:electron_lu_no_integral_terms)
         if nl_solver_params.solves_since_precon_update[] ≥ nl_solver_params.preconditioner_update_interval
 global_rank[] == 0 && println("recalculating precon")
             nl_solver_params.solves_since_precon_update[] = 0
@@ -1223,12 +1223,18 @@ global_rank[] == 0 && println("recalculating precon")
             orig_lu, precon_matrix, input_buffer, output_buffer =
                 nl_solver_params.preconditioners[ir]
 
+            if nl_solver_params.preconditioner_type === Val(:electron_lu_no_integral_terms)
+                integral_terms = false
+            else
+                integral_terms = true
+            end
+
             fill_electron_kinetic_equation_Jacobian!(
                 precon_matrix, f_electron_new, electron_ppar_new, moments, phi,
                 collisions, composition, z, vperp, vpa, z_spectral,
                 vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
                 external_source_settings, num_diss_params, t_params, ion_dt,
-                ir, evolve_ppar)
+                ir, evolve_ppar, :all, integral_terms, integral_terms)
 
             begin_serial_region()
             if block_rank[] == 0
