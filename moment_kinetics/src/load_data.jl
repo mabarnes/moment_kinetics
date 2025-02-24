@@ -4122,10 +4122,10 @@ function _get_fake_moments_fields_scratch(all_moments, it; ion_extra::Tuple=(),
         function get_var(variable_name_or_array)
             if isa(variable_name_or_array, Symbol)
                 var = all_moments[variable_name_or_array]
-                return selectdim(var, ndims(var), it)
             else
-                return variable_name_or_array
+                var = variable_name_or_array
             end
+            return selectdim(var, ndims(var), it)
         end
         return (; (field_name=>get_var(variable_name_or_array)
                    for (field_name, variable_name_or_array) ∈ kwargs
@@ -4512,7 +4512,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
             for tind ∈ 1:nt
                 moments, fields, fvec =
                     _get_fake_moments_fields_scratch(all_moments, tind;
-                                                     ion_extra=(:ddens_dt=>selectdim(variable, ndims(variable), tind),))
+                                                     ion_extra=(:ddens_dt=>variable,))
                 # Dummy first argument, because we actually want the 'side effect' of
                 # filling the time derivative array in `moments`.
                 continuity_equation!(dummy, fvec, moments, run_info.composition, 0.0,
@@ -4534,7 +4534,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
             for tind ∈ 1:nt
                 moments, fields, fvec =
                     _get_fake_moments_fields_scratch(all_moments, tind;
-                                                     ion_extra=(:dnupar_dt=>selectdim(variable, ndims(variable), tind),))
+                                                     ion_extra=(:dnupar_dt=>variable,))
                 # Dummy first argument, because we actually want the 'side effect' of
                 # filling the time derivative array in `moments`.
                 force_balance!(dummy, fvec.density, fvec, moments, fields,
@@ -4562,7 +4562,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
             for tind ∈ 1:nt
                 moments, fields, fvec =
                     _get_fake_moments_fields_scratch(all_moments, tind;
-                                                     ion_extra=(:dppar_dt=>selectdim(variable, ndims(variable), tind),))
+                                                     ion_extra=(:dppar_dt=>variable,))
                 # Dummy first argument, because we actually want the 'side effect' of
                 # filling the time derivative array in `moments`.
                 energy_equation!(dummy, fvec, moments, run_info.collisions, 0.0,
