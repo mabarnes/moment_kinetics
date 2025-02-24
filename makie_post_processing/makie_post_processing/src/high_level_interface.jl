@@ -270,6 +270,8 @@ function makie_post_process(run_dir::Union{String,Tuple},
 
     collisionality_plots(run_info, plot_prefix)
 
+    #mk_1D1V_term_size_diagnostics(run_info, run_info_dfns, plot_prefix)
+
     if all(ri === nothing for ri ∈ run_info_dfns)
         nvperp = nothing
     else
