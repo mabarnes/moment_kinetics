@@ -14,6 +14,7 @@ using moment_kinetics.type_definitions: mk_float, mk_int, OptionsDict
 using moment_kinetics.fokker_planck: init_fokker_planck_collisions_weak_form
 using moment_kinetics.fokker_planck: fokker_planck_collision_operator_weak_form!
 using moment_kinetics.fokker_planck: conserving_corrections!
+using moment_kinetics.fokker_planck_calculus: enforce_vpavperp_BCs!
 using moment_kinetics.fokker_planck_test: F_Maxwellian, print_test_data
 using moment_kinetics.calculus: derivative!
 using moment_kinetics.velocity_moments: get_density, get_upar, get_ppar, get_pperp, get_pressure
@@ -194,7 +195,7 @@ function test_implicit_collisions(; ngrid=3,nelement_vpa=8,nelement_vperp=4,
                                 "nonlinear_max_iterations" => 100)),
         coords; serial_solve=serial_solve)
     for it in 1:ntime
-        backward_euler_step!(Fnew, Fold, delta_t, ms, msp, nussp, fkpl_arrays,
+        backward_euler_step!(Fnew, Fold, delta_t, ms, msp, nussp, fkpl_arrays, dummy_vpavperp,
             vperp, vpa, vperp_spectral, vpa_spectral, coords,
             Fdummy1, Fdummy2, Fdummy3, Fdummy4, Fdummy5, nl_solver_params,
             test_numerical_conserving_terms=test_numerical_conserving_terms,
@@ -211,6 +212,10 @@ function test_implicit_collisions(; ngrid=3,nelement_vpa=8,nelement_vperp=4,
         end
         # diagnose Fold
         diagnose_F_Maxwellian(Fold,Fdummy1,Fdummy2,Fdummy3,vpa,vperp,ntime,ms)
+        # update outputs
+        @loop_vperp_vpa ivperp ivpa begin
+            fvpavperp[ivpa,ivperp,it+1] = Fold[ivpa,ivperp] 
+        end
     end
     
     #diagnose_F_Maxwellian(Fold,Fdummy1,Fdummy2,Fdummy3,vpa,vperp,ntime,ms)
@@ -219,7 +224,7 @@ function test_implicit_collisions(; ngrid=3,nelement_vpa=8,nelement_vperp=4,
     end    
 end
 
-function backward_euler_step!(Fnew, Fold, delta_t, ms, msp, nussp, fkpl_arrays,
+function backward_euler_step!(Fnew, Fold, delta_t, ms, msp, nussp, fkpl_arrays, dummy_vpavperp,
     vperp, vpa, vperp_spectral, vpa_spectral, coords,
     Fresidual, F_delta_x, F_rhs_delta, Fv, Fw, nl_solver_params;
     test_numerical_conserving_terms=false,
@@ -247,7 +252,7 @@ function backward_euler_step!(Fnew, Fold, delta_t, ms, msp, nussp, fkpl_arrays,
             # enforce the boundary conditions on CC before it is used for timestepping
             enforce_vpavperp_BCs!(fkpl_arrays.CC,vpa,vperp,vpa_spectral,vperp_spectral)
             # make ad-hoc conserving corrections
-            conserving_corrections!(fkpl_arrays.CC,Fs_M,vpa,vperp,dummy_vpavperp)            
+            conserving_corrections!(fkpl_arrays.CC,Fnew,vpa,vperp,dummy_vpavperp)
         end
         begin_s_r_z_anyv_region()
         @loop_vperp_vpa ivperp ivpa begin
