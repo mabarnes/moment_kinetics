@@ -132,9 +132,9 @@ function test_implicit_collisions(; ngrid=3,nelement_vpa=8,nelement_vperp=4,
                             "discretization"=>discretization,
                             "element_spacing_option"=>element_spacing_option),
     )
-    println("made inputs")
-    println("vpa: ngrid: ",ngrid," nelement: ",nelement_local_vpa, " Lvpa: ",Lvpa)
-    println("vperp: ngrid: ",ngrid," nelement: ",nelement_local_vperp, " Lvperp: ",Lvperp)
+    #println("made inputs")
+    #println("vpa: ngrid: ",ngrid," nelement: ",nelement_local_vpa, " Lvpa: ",Lvpa)
+    #println("vperp: ngrid: ",ngrid," nelement: ",nelement_local_vperp, " Lvperp: ",Lvperp)
     # create the coordinate structs
     vperp, vperp_spectral = define_coordinate(coords_input, "vperp")
     vpa, vpa_spectral = define_coordinate(coords_input, "vpa")
