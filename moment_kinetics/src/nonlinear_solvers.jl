@@ -69,6 +69,7 @@ struct nl_solver_info{TH,TV,Tcsg,Tlig,Tprecon,Tpretype}
     precon_lowerz_vcut_inds::Vector{mk_int}
     precon_upperz_vcut_inds::Vector{mk_int}
     serial_solve::Bool
+    anyv_region::Bool
     max_nonlinear_iterations_this_step::Base.RefValue{mk_int}
     max_linear_iterations_this_step::Base.RefValue{mk_int}
     total_its_soft_limit::mk_int
@@ -87,7 +88,7 @@ The nonlinear solver will be called inside a loop over `outer_coords`, so we mig
 for example a preconditioner object for each point in that outer loop.
 """
 function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); default_rtol=1.0e-5,
-                               default_atol=1.0e-12, serial_solve=false,
+                               default_atol=1.0e-12, serial_solve=false, anyv_region=false,
                                electron_ppar_pdf_solve=false,
                                preconditioner_type=Val(:none), warn_unexpected=false)
     nl_solver_section = set_defaults_and_check_section!(
@@ -280,7 +281,7 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); defa
                           Ref(0), Ref(0), Ref(0),
                           Ref(nl_solver_input.preconditioner_update_interval),
                           Ref(mk_float(0.0)), zeros(mk_int, n_vcut_inds),
-                          zeros(mk_int, n_vcut_inds), serial_solve, Ref(0), Ref(0),
+                          zeros(mk_int, n_vcut_inds), serial_solve, anyv_region, Ref(0), Ref(0),
                           nl_solver_input.total_its_soft_limit, preconditioner_type,
                           nl_solver_input.preconditioner_update_interval, preconditioners)
 end
@@ -457,6 +458,7 @@ old_precon_iterations = nl_solver_params.precon_iterations[]
                                    V=nl_solver_params.V, rhs_delta=rhs_delta,
                                    initial_guess=nl_solver_params.linear_initial_guess,
                                    serial_solve=nl_solver_params.serial_solve,
+                                   anyv_region=nl_solver_params.anyv_region,
                                    initial_delta_x_is_zero=true)
         linear_counter += linear_its
 
@@ -1384,7 +1386,7 @@ MGS-GMRES' in Zou (2023) [https://doi.org/10.1016/j.amc.2023.127869].
                          x, residual_func!, residual0, delta_x, v, w, solver_type::Val,
                          norm_params; coords, rtol, atol, restart, max_restarts,
                          left_preconditioner, right_preconditioner, H, c, s, g, V,
-                         rhs_delta, initial_guess, serial_solve,
+                         rhs_delta, initial_guess, serial_solve, anyv_region,
                          initial_delta_x_is_zero) = begin
     # Solve (approximately?):
     #   J δx = residual0
@@ -1432,10 +1434,17 @@ MGS-GMRES' in Zou (2023) [https://doi.org/10.1016/j.amc.2023.127869].
     if serial_solve
         g[1] = beta
     else
+      if anyv_region
+        begin_anyv_region()
+        @anyv_serial_region begin
+            g[1] = beta
+        end
+      else
         begin_serial_region()
         @serial_region begin
             g[1] = beta
         end
+      end
     end
 
     # Set tolerance for GMRES iteration to rtol times the initial residual, unless this is
@@ -1464,10 +1473,17 @@ MGS-GMRES' in Zou (2023) [https://doi.org/10.1016/j.amc.2023.127869].
                 if serial_solve
                     H[j,i] = w_dot_Vj
                 else
+                  if anyv_region
+                     begin_anyv_region()
+                     @anyv_serial_region begin
+                        H[j,i] = w_dot_Vj
+                     end
+                  else
                     begin_serial_region()
                     @serial_region begin
                         H[j,i] = w_dot_Vj
                     end
+                  end
                 end
                 parallel_map(solver_type, (w, V) -> w - H[j,i] * V, w, w, select_from_V(V, j))
             end
@@ -1475,10 +1491,17 @@ MGS-GMRES' in Zou (2023) [https://doi.org/10.1016/j.amc.2023.127869].
             if serial_solve
                 H[i+1,i] = norm_w
             else
-                begin_serial_region()
-                @serial_region begin
+               if anyv_region
+                  begin_anyv_region()
+                  @anyv_serial_region begin
                     H[i+1,i] = norm_w
-                end
+                  end
+               else
+                  begin_serial_region()
+                  @serial_region begin
+                     H[i+1,i] = norm_w
+                  end
+               end
             end
             parallel_map(solver_type, (w) -> w / H[i+1,i], select_from_V(V, i+1), w)
 
@@ -1496,22 +1519,40 @@ MGS-GMRES' in Zou (2023) [https://doi.org/10.1016/j.amc.2023.127869].
                 g[i+1] = -s[i] * g[i]
                 g[i] = c[i] * g[i]
             else
-                begin_serial_region()
-                @serial_region begin
-                    for j ∈ 1:i-1
+               if anyv_region
+                  begin_anyv_region()
+                  @anyv_serial_region begin
+                     for j ∈ 1:i-1
                         gamma = c[j] * H[j,i] + s[j] * H[j+1,i]
                         H[j+1,i] = -s[j] * H[j,i] + c[j] * H[j+1,i]
                         H[j,i] = gamma
-                    end
-                    delta = sqrt(H[i,i]^2 + H[i+1,i]^2)
-                    s[i] = H[i+1,i] / delta
-                    c[i] = H[i,i] / delta
-                    H[i,i] = c[i] * H[i,i] + s[i] * H[i+1,i]
-                    H[i+1,i] = 0
-                    g[i+1] = -s[i] * g[i]
-                    g[i] = c[i] * g[i]
-                end
-                _block_synchronize()
+                     end
+                     delta = sqrt(H[i,i]^2 + H[i+1,i]^2)
+                     s[i] = H[i+1,i] / delta
+                     c[i] = H[i,i] / delta
+                     H[i,i] = c[i] * H[i,i] + s[i] * H[i+1,i]
+                     H[i+1,i] = 0
+                     g[i+1] = -s[i] * g[i]
+                     g[i] = c[i] * g[i]
+                  end
+               else
+                  begin_serial_region()
+                  @serial_region begin
+                     for j ∈ 1:i-1
+                           gamma = c[j] * H[j,i] + s[j] * H[j+1,i]
+                           H[j+1,i] = -s[j] * H[j,i] + c[j] * H[j+1,i]
+                           H[j,i] = gamma
+                     end
+                     delta = sqrt(H[i,i]^2 + H[i+1,i]^2)
+                     s[i] = H[i+1,i] / delta
+                     c[i] = H[i,i] / delta
+                     H[i,i] = c[i] * H[i,i] + s[i] * H[i+1,i]
+                     H[i+1,i] = 0
+                     g[i+1] = -s[i] * g[i]
+                     g[i] = c[i] * g[i]
+                  end
+               end
+               _block_synchronize()
             end
             residual = abs(g[i+1])
 
