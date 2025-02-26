@@ -1301,6 +1301,26 @@ end
 end
 
 @timeit_debug global_timer parallel_delta_x_calc(
+                  ::Val{:vperpvpa}, delta_x::AbstractArray{mk_float, 2}, V,
+                  y) = begin
+
+    delta_x_pdf = delta_x
+    V_pdf = V
+
+    ny = length(y)
+
+    begin_anyv_vperp_vpa_region()
+
+    @loop_vperp_vpa ivperp ivpa begin
+        for iy ∈ 1:ny
+            delta_x_pdf[ivpa,ivperp] += y[iy] * V_pdf[ivpa,ivperp,iy]
+        end
+    end
+
+    return nothing
+end
+
+@timeit_debug global_timer parallel_delta_x_calc(
                   ::Val{:zvperpvpa}, delta_x::Tuple{AbstractArray{mk_float, 1},AbstractArray{mk_float, 3}}, V,
                   y) = begin
 
