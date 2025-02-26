@@ -150,10 +150,8 @@ function test_implicit_collisions(; ngrid=3,nelement_vpa=8,nelement_vperp=4,
     
     # initial condition
     fvpavperp = allocate_shared_float(vpa.n,vperp.n,ntime+1)
-    for ivperp in 1:vperp.n
-        for ivpa in 1:vpa.n
-            fvpavperp[ivpa,ivperp,1] = exp(-vpa.grid[ivpa]^2 - (vperp.grid[ivperp]-1)^2)
-        end
+    @loop_vperp_vpa ivperp ivpa begin
+        fvpavperp[ivpa,ivperp,1] = exp(-vpa.grid[ivpa]^2 - (vperp.grid[ivperp]-1)^2)
     end
     
     # arrays needed for advance
@@ -166,7 +164,14 @@ function test_implicit_collisions(; ngrid=3,nelement_vpa=8,nelement_vperp=4,
     Fdummy3 = allocate_shared_float(vpa.n,vperp.n)
     Fdummy4 = allocate_shared_float(vpa.n,vperp.n)
     Fdummy5 = allocate_shared_float(vpa.n,vperp.n)
-
+    # zero dummy arrays
+    @loop_vperp_vpa ivperp ivpa begin
+      Fdummy1[ivpa,ivperp] = 0.0
+      Fdummy2[ivpa,ivperp] = 0.0
+      Fdummy3[ivpa,ivperp] = 0.0
+      Fdummy4[ivpa,ivperp] = 0.0
+      Fdummy5[ivpa,ivperp] = 0.0
+    end
     # physics parameters
     ms = 1.0
     msp = 1.0
