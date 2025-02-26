@@ -97,6 +97,7 @@ function test_implicit_collisions(; ngrid=3,nelement_vpa=8,nelement_vperp=4,
     max_restarts = 1,
     atol = 1.0e-10,
     serial_solve = false,
+    anyv_region = true,
     plot_test_output=false,
     test_parallelism=false,test_self_operator=true,
     test_dense_construction=false,standalone=false,
@@ -199,7 +200,7 @@ function test_implicit_collisions(; ngrid=3,nelement_vpa=8,nelement_vperp=4,
                                 "linear_restart" => restart,
                                 "linear_max_restarts" => max_restarts,
                                 "nonlinear_max_iterations" => 100)),
-        coords; serial_solve=serial_solve)
+        coords; serial_solve=serial_solve, anyv_region=anyv_region)
     for it in 1:ntime
         backward_euler_step!(Fnew, Fold, delta_t, ms, msp, nussp, fkpl_arrays, dummy_vpavperp,
             vperp, vpa, vperp_spectral, vpa_spectral, coords,
@@ -277,9 +278,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     using Pkg
     Pkg.activate(".")
     
-    run_assembly_test() # to ensure routines are compiled before plots are made
-    run_assembly_test(ngrid=3,nelement_list=[8,16,32,64,128],plot_scan=true)
-    run_assembly_test(ngrid=5,nelement_list=[4,8,16,32,64],plot_scan=true)
-    run_assembly_test(ngrid=7,nelement_list=[2,4,8,16,32],plot_scan=true)
-    run_assembly_test(ngrid=9,nelement_list=[2,4,8,16],plot_scan=true)
+    test_implicit_collisions(ngrid=3,nelement_vpa=8,nelement_vperp=4,ntime=50,delta_t=1.0,
+      serial_solve=false,anyv_region=true,plot_test_output=true,
+      test_numerical_conserving_terms=true)
 end
