@@ -246,7 +246,7 @@ function backward_euler_step!(Fnew, Fold, delta_t, ms, msp, nussp, fkpl_arrays,
         end
         begin_s_r_z_anyv_region()
         @loop_vperp_vpa ivperp ivpa begin
-            Fresidual[ivpa,ivperp] = Fnew[ivpa,ivperp] - Fold[ivpa,ivperp] + delta_t * fkpl_arrays.CC[ivpa,ivperp]
+            Fresidual[ivpa,ivperp] = -Fnew[ivpa,ivperp] + Fold[ivpa,ivperp] + delta_t * fkpl_arrays.CC[ivpa,ivperp]
         end
         return nothing
     end
