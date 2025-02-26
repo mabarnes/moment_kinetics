@@ -87,7 +87,12 @@ function diagnose_F_gif(pdf,vpa,vperp,ntime)
 end
 
 function test_implicit_collisions(; ngrid=3,nelement_vpa=8,nelement_vperp=4,
-    Lvpa=6.0,Lvperp=3.0,ntime=1,delta_t=1.0,plot_test_output=false,
+    Lvpa=6.0,Lvperp=3.0,ntime=1,delta_t=1.0,
+    restart = 8,
+    max_restarts = 1,
+    atol = 1.0e-10,
+    serial_solve = false,
+    plot_test_output=false,
     test_parallelism=false,test_self_operator=true,
     test_dense_construction=false,standalone=false,
     use_Maxwellian_Rosenbluth_coefficients=false,
@@ -174,10 +179,6 @@ function test_implicit_collisions(; ngrid=3,nelement_vpa=8,nelement_vperp=4,
     diagnose_F_Maxwellian(Fold,Fdummy1,Fdummy2,Fdummy3,vpa,vperp,ntime,ms)
     
     coords = (vperp=vperp,vpa=vpa)
-    restart = 8
-    max_restarts = 1
-    atol = 1.0e-10
-    serial_solve = false
     nl_solver_params = setup_nonlinear_solve(
         true,
         OptionsDict("nonlinear_solver" =>
@@ -204,9 +205,6 @@ function test_implicit_collisions(; ngrid=3,nelement_vpa=8,nelement_vperp=4,
             Fold[ivpa,ivperp] = Fnew[ivpa,ivperp]
         end
         # diagnose Fold
-        @loop_vperp_vpa ivperp ivpa begin
-            Fold[ivpa,ivperp] = fvpavperp[ivpa,ivperp,it+1]
-        end
         diagnose_F_Maxwellian(Fold,Fdummy1,Fdummy2,Fdummy3,vpa,vperp,ntime,ms)
     end
     
