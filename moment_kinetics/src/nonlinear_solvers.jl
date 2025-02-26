@@ -411,7 +411,6 @@ function newton_solve!(x, residual_func!, residual, delta_x, rhs_delta, v, w,
                        nl_solver_params, solver_type::Val; left_preconditioner=nothing,
                        right_preconditioner=nothing, recalculate_preconditioner=nothing,
                        coords)
-
     rtol = nl_solver_params.rtol
     atol = nl_solver_params.atol
 
@@ -614,6 +613,27 @@ end
 end
 
 @timeit_debug global_timer distributed_norm(
+                               ::Val{:vperpvpa},
+                               residual::AbstractArray{mk_float, 2},
+                               coords, rtol, atol, x::AbstractArray{mk_float, 2}) = begin
+    # no distributed memory paralleism required when solving only in (vperp, vpa)
+    # assumed called inside begin_s_r_z_anyv_region()
+    pdf_residual = residual
+    x_pdf = x
+    vperp = coords.vperp
+    vpa = coords.vpa
+
+    begin_anyv_vperp_vpa_region()
+    pdf_norm_square = 0.0
+    @loop_vperp_vpa ivperp ivpa begin
+        pdf_norm_square += (pdf_residual[ivpa,ivperp] / (rtol * abs(x_pdf[ivpa,ivperp]) + atol))^2
+    end
+    residual_norm = sqrt(pdf_norm_square / (vperp.n_global * vpa.n_global))
+    
+    return residual_norm
+end
+
+@timeit_debug global_timer distributed_norm(
                                ::Val{:zvperpvpa},
                                residual::Tuple{AbstractArray{mk_float, 1},AbstractArray{mk_float, 3}},
                                coords, rtol, atol, x) = begin
@@ -770,6 +790,27 @@ end
     end
     local_dot = local_dot / length(v)
     return local_dot
+end
+
+@timeit_debug global_timer distributed_dot(
+                  ::Val{:vperpvpa}, v::AbstractArray{mk_float, 2},
+                  w::AbstractArray{mk_float, 2}, coords,
+                  rtol, atol, x::AbstractArray{mk_float, 2}) = begin
+    v_pdf = v
+    w_pdf = w
+    x_pdf = x
+
+    vperp = coords.vperp
+    vpa = coords.vpa
+
+    begin_anyv_vperp_vpa_region()
+
+    pdf_dot = 0.0
+    @loop_vperp_vpa ivperp ivpa begin
+        pdf_dot += v_pdf[ivpa,ivperp] * w_pdf[ivpa,ivperp] / (rtol * abs(x_pdf[ivpa,ivperp]) + atol)^2
+    end
+    pdf_dot = pdf_dot / (vperp.n_global * vpa.n_global)
+    return pdf_dot
 end
 
 @timeit_debug global_timer distributed_dot(
@@ -981,6 +1022,81 @@ end
             result[i] = func(x1[i], x2[i], x3)
         end
     end
+    return nothing
+end
+
+@timeit_debug global_timer parallel_map(
+                  ::Val{:vperpvpa}, func, result::AbstractArray{mk_float, 2}) = begin
+
+    result_pdf = result
+
+    begin_anyv_vperp_vpa_region()
+
+    @loop_vperp_vpa ivperp ivpa begin
+        result_pdf[ivpa,ivperp] = func()
+    end
+
+    return nothing
+end
+@timeit_debug global_timer parallel_map(
+                  ::Val{:vperpvpa}, func, result::AbstractArray{mk_float, 2},
+                  x1) = begin
+
+    result_pdf = result
+    x1_pdf = x1
+
+    begin_anyv_vperp_vpa_region()
+
+    @loop_vperp_vpa ivperp ivpa begin
+        result_pdf[ivpa,ivperp] = func(x1_pdf[ivpa,ivperp])
+    end
+
+    return nothing
+end
+@timeit_debug global_timer parallel_map(
+                  ::Val{:vperpvpa}, func, result::AbstractArray{mk_float, 2},
+                  x1, x2) = begin
+
+    result_pdf = result
+    x1_pdf = x1
+
+    begin_anyv_vperp_vpa_region()
+
+    if isa(x2, AbstractArray)
+        x2_pdf = x2
+    
+        @loop_vperp_vpa ivperp ivpa begin
+            result_pdf[ivpa,ivperp] = func(x1_pdf[ivpa,ivperp], x2_pdf[ivpa,ivperp])
+        end
+    else
+        @loop_vperp_vpa ivperp ivpa begin
+            result_pdf[ivpa,ivperp] = func(x1_pdf[ivpa,ivperp], x2)
+        end
+    end
+
+    return nothing
+end
+@timeit_debug global_timer parallel_map(
+                  ::Val{:vperpvpa}, func, result::AbstractArray{mk_float, 2},
+                  x1, x2, x3) = begin
+
+    result_pdf = result
+    x1_pdf = x1
+    x2_pdf = x2
+    begin_anyv_vperp_vpa_region()
+
+    if isa(x3, AbstractArray)
+        x3_pdf = x3
+    
+        @loop_vperp_vpa ivperp ivpa begin
+            result_pdf[ivpa,ivperp] = func(x1_pdf[ivpa,ivperp], x2_pdf[ivpa,ivperp], x3_pdf[ivpa,ivperp])
+        end
+    else
+        @loop_vperp_vpa ivperp ivpa begin
+            result_pdf[ivpa,ivperp] = func(x1_pdf[ivpa,ivperp], x2_pdf[ivpa,ivperp], x3)
+        end
+    end
+
     return nothing
 end
 
