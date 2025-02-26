@@ -73,6 +73,9 @@ function diagnose_F_Maxwellian(pdf,pdf_exact,pdf_dummy_1,pdf_dummy_2,vpa,vperp,n
             pdf_exact[ivpa,ivperp] = F_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
         end
         print_test_data(pdf_exact,pdf,pdf_dummy_1,"F",vpa,vperp,pdf_dummy_2;print_to_screen=true)
+        println("dens: ", dens)
+        println("upar: ", upar)
+        println("vth: ", vth)
     end
 end
 
@@ -181,6 +184,7 @@ function test_implicit_collisions(; ngrid=3,nelement_vpa=8,nelement_vperp=4,
     # initial condition 
     @loop_vperp_vpa ivperp ivpa begin
         Fold[ivpa,ivperp] = fvpavperp[ivpa,ivperp,1]
+        Fnew[ivpa,ivperp] = Fold[ivpa,ivperp]
     end
     diagnose_F_Maxwellian(Fold,Fdummy1,Fdummy2,Fdummy3,vpa,vperp,ntime,ms)
     
