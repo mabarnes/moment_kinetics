@@ -60,7 +60,7 @@ function print_vector(vector,name::String,m::mk_int)
     println("\n")
 end 
 
-function diagnose_F_Maxwellian(pdf,pdf_exact,pdf_dummy_1,pdf_dummy_2,vpa,vperp,ntime,mass)
+function diagnose_F_Maxwellian(pdf,pdf_exact,pdf_dummy_1,pdf_dummy_2,vpa,vperp,time,mass,it)
     begin_serial_region()
     @serial_region begin
         dens = get_density(pdf,vpa,vperp)
@@ -72,6 +72,7 @@ function diagnose_F_Maxwellian(pdf,pdf_exact,pdf_dummy_1,pdf_dummy_2,vpa,vperp,n
         @loop_vperp_vpa ivperp ivpa begin
             pdf_exact[ivpa,ivperp] = F_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
         end
+        println("it = ", it, " time: ", time)
         print_test_data(pdf_exact,pdf,pdf_dummy_1,"F",vpa,vperp,pdf_dummy_2;print_to_screen=true)
         println("dens: ", dens)
         println("upar: ", upar)
@@ -182,11 +183,12 @@ function test_implicit_collisions(; ngrid=3,nelement_vpa=8,nelement_vperp=4,
     nussp = 1.0
 
     # initial condition 
+    time = 0.0
     @loop_vperp_vpa ivperp ivpa begin
         Fold[ivpa,ivperp] = fvpavperp[ivpa,ivperp,1]
         Fnew[ivpa,ivperp] = Fold[ivpa,ivperp]
     end
-    diagnose_F_Maxwellian(Fold,Fdummy1,Fdummy2,Fdummy3,vpa,vperp,ntime,ms)
+    diagnose_F_Maxwellian(Fold,Fdummy1,Fdummy2,Fdummy3,vpa,vperp,time,ms,0)
     
     coords = (vperp=vperp,vpa=vpa)
     nl_solver_params = setup_nonlinear_solve(
@@ -215,7 +217,8 @@ function test_implicit_collisions(; ngrid=3,nelement_vpa=8,nelement_vperp=4,
             Fold[ivpa,ivperp] = Fnew[ivpa,ivperp]
         end
         # diagnose Fold
-        diagnose_F_Maxwellian(Fold,Fdummy1,Fdummy2,Fdummy3,vpa,vperp,ntime,ms)
+        time += delta_t
+        diagnose_F_Maxwellian(Fold,Fdummy1,Fdummy2,Fdummy3,vpa,vperp,time,ms,it)
         # update outputs
         @loop_vperp_vpa ivperp ivpa begin
             fvpavperp[ivpa,ivperp,it+1] = Fold[ivpa,ivperp] 
