@@ -225,7 +225,8 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); defa
             vpa_nelement = coords.vpa.nelement_local
 
             # Ensure there are not more blocks than the total number of elements
-            n_blocks = min(n_blocks, z_nelement * vperp_nelement * vpa_nelement)
+            #n_blocks = min(n_blocks, z_nelement * vperp_nelement * vpa_nelement)
+            n_blocks = min(n_blocks, z_nelement)
 
             function get_unique_factors(n)
                 unique_factors = [[1]]
@@ -248,10 +249,20 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); defa
                     if !(vperp_nelement % vperp_nblocks == 0)
                         continue
                     end
+                    if vperp_nblocks != 1
+                        # Temporary hack to only split in z until we upgrade the Jacobian
+                        # matrix calculation to handle dqpar/dz*dg_e/wpa terms better
+                        continue
+                    end
                     n_vperp_subblocks = n_z_subblocks ÷ vperp_nblocks
                     for vpa_split ∈ get_unique_factors(n_vperp_subblocks)
                         vpa_nblocks = prod(vpa_split)
                         if !(vpa_nelement % vpa_nblocks == 0)
+                            continue
+                        end
+                        if vpa_nblocks != 1
+                            # Temporary hack to only split in z until we upgrade the Jacobian
+                            # matrix calculation to handle dqpar/dz*dg_e/wpa terms better
                             continue
                         end
 

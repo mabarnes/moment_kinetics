@@ -1362,7 +1362,7 @@ global_rank[] == 0 && println("recalculating precon")
                 collisions, composition, z, vperp, vpa, z_spectral,
                 vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
                 external_source_settings, num_diss_params, t_params, ion_dt,
-                ir, evolve_ppar, :all, false, false)
+                ir, evolve_ppar, :all, true, true)
 
             begin_serial_region()
 
