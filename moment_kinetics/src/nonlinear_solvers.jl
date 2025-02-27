@@ -394,11 +394,12 @@ iteration is therefore
 As the GMRES solve is only used to get the right `direction' for the next Newton step, it
 is not necessary to have a very tight `linear_rtol` for the GMRES solve.
 """
-@timeit global_timer newton_solve!(
+#@timeit global_timer newton_solve!(
+function newton_solve!(
                          x, residual_func!, residual, delta_x, rhs_delta, v, w,
                          nl_solver_params; left_preconditioner=nothing,
                          right_preconditioner=nothing, recalculate_preconditioner=nothing,
-                         coords) = begin
+                         coords)# = begin
     # This wrapper function constructs the `solver_type` from coords, so that the body of
     # the inner `newton_solve!()` can be fully type-stable
     solver_type = Val(Symbol((c for c ∈ keys(coords))...))
@@ -614,10 +615,11 @@ end
     return residual_norm
 end
 
-@timeit_debug global_timer distributed_norm(
+#@timeit_debug global_timer distributed_norm(
+function distributed_norm(
                                ::Val{:vperpvpa},
                                residual::AbstractArray{mk_float, 2},
-                               coords, rtol, atol, x::AbstractArray{mk_float, 2}) = begin
+                               coords, rtol, atol, x::AbstractArray{mk_float, 2})# = begin
     # no distributed memory paralleism required when solving only in (vperp, vpa)
     # assumed called inside begin_s_r_z_anyv_region()
     pdf_residual = residual
@@ -803,10 +805,11 @@ end
     return local_dot
 end
 
-@timeit_debug global_timer distributed_dot(
+#@timeit_debug global_timer distributed_dot(
+function distributed_dot(
                   ::Val{:vperpvpa}, v::AbstractArray{mk_float, 2},
                   w::AbstractArray{mk_float, 2}, coords,
-                  rtol, atol, x::AbstractArray{mk_float, 2}) = begin
+                  rtol, atol, x::AbstractArray{mk_float, 2})# = begin
     v_pdf = v
     w_pdf = w
     x_pdf = x
@@ -1041,8 +1044,9 @@ end
     return nothing
 end
 
-@timeit_debug global_timer parallel_map(
-                  ::Val{:vperpvpa}, func, result::AbstractArray{mk_float, 2}) = begin
+#@timeit_debug global_timer parallel_map(
+function parallel_map(
+                  ::Val{:vperpvpa}, func, result::AbstractArray{mk_float, 2})# = begin
 
     result_pdf = result
 
@@ -1051,12 +1055,13 @@ end
     @loop_vperp_vpa ivperp ivpa begin
         result_pdf[ivpa,ivperp] = func()
     end
-
+    _anyv_subblock_synchronize()
     return nothing
 end
-@timeit_debug global_timer parallel_map(
+#@timeit_debug global_timer parallel_map(
+function parallel_map(
                   ::Val{:vperpvpa}, func, result::AbstractArray{mk_float, 2},
-                  x1) = begin
+                  x1)# = begin
 
     result_pdf = result
     x1_pdf = x1
@@ -1066,12 +1071,13 @@ end
     @loop_vperp_vpa ivperp ivpa begin
         result_pdf[ivpa,ivperp] = func(x1_pdf[ivpa,ivperp])
     end
-
+    _anyv_subblock_synchronize()
     return nothing
 end
-@timeit_debug global_timer parallel_map(
+#@timeit_debug global_timer parallel_map(
+function parallel_map(
                   ::Val{:vperpvpa}, func, result::AbstractArray{mk_float, 2},
-                  x1, x2) = begin
+                  x1, x2)# = begin
 
     result_pdf = result
     x1_pdf = x1
@@ -1089,12 +1095,13 @@ end
             result_pdf[ivpa,ivperp] = func(x1_pdf[ivpa,ivperp], x2)
         end
     end
-
+    _anyv_subblock_synchronize()
     return nothing
 end
-@timeit_debug global_timer parallel_map(
+#@timeit_debug global_timer parallel_map(
+function parallel_map(
                   ::Val{:vperpvpa}, func, result::AbstractArray{mk_float, 2},
-                  x1, x2, x3) = begin
+                  x1, x2, x3)# = begin
 
     result_pdf = result
     x1_pdf = x1
@@ -1112,7 +1119,7 @@ end
             result_pdf[ivpa,ivperp] = func(x1_pdf[ivpa,ivperp], x2_pdf[ivpa,ivperp], x3)
         end
     end
-
+    _anyv_subblock_synchronize()
     return nothing
 end
 

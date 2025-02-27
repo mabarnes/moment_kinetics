@@ -156,10 +156,11 @@ function test_implicit_collisions(; ngrid=3,nelement_vpa=8,nelement_vperp=4,
     
     # initial condition
     fvpavperp = allocate_shared_float(vpa.n,vperp.n,ntime+1)
-    @loop_vperp_vpa ivperp ivpa begin
-        fvpavperp[ivpa,ivperp,1] = exp(-vpa.grid[ivpa]^2 - (vperp.grid[ivperp]-1)^2)
+    @serial_region begin
+        @loop_vperp_vpa ivperp ivpa begin
+            fvpavperp[ivpa,ivperp,1] = exp(-vpa.grid[ivpa]^2 - (vperp.grid[ivperp]-1)^2)
+        end
     end
-    
     # arrays needed for advance
     dummy_vpavperp = Array{mk_float,2}(undef,vpa.n,vperp.n)
     Fold = allocate_shared_float(vpa.n,vperp.n)
@@ -171,12 +172,14 @@ function test_implicit_collisions(; ngrid=3,nelement_vpa=8,nelement_vperp=4,
     Fdummy4 = allocate_shared_float(vpa.n,vperp.n)
     Fdummy5 = allocate_shared_float(vpa.n,vperp.n)
     # zero dummy arrays
-    @loop_vperp_vpa ivperp ivpa begin
-      Fdummy1[ivpa,ivperp] = 0.0
-      Fdummy2[ivpa,ivperp] = 0.0
-      Fdummy3[ivpa,ivperp] = 0.0
-      Fdummy4[ivpa,ivperp] = 0.0
-      Fdummy5[ivpa,ivperp] = 0.0
+    @serial_region begin
+        @loop_vperp_vpa ivperp ivpa begin
+        Fdummy1[ivpa,ivperp] = 0.0
+        Fdummy2[ivpa,ivperp] = 0.0
+        Fdummy3[ivpa,ivperp] = 0.0
+        Fdummy4[ivpa,ivperp] = 0.0
+        Fdummy5[ivpa,ivperp] = 0.0
+        end
     end
     # physics parameters
     ms = 1.0
@@ -185,9 +188,11 @@ function test_implicit_collisions(; ngrid=3,nelement_vpa=8,nelement_vperp=4,
 
     # initial condition 
     time = 0.0
-    @loop_vperp_vpa ivperp ivpa begin
-        Fold[ivpa,ivperp] = fvpavperp[ivpa,ivperp,1]
-        Fnew[ivpa,ivperp] = Fold[ivpa,ivperp]
+    @serial_region begin
+        @loop_vperp_vpa ivperp ivpa begin
+            Fold[ivpa,ivperp] = fvpavperp[ivpa,ivperp,1]
+            Fnew[ivpa,ivperp] = Fold[ivpa,ivperp]
+        end
     end
     diagnose_F_Maxwellian(Fold,Fdummy1,Fdummy2,Fdummy3,vpa,vperp,time,ms,0)
     
@@ -213,16 +218,21 @@ function test_implicit_collisions(; ngrid=3,nelement_vpa=8,nelement_vperp=4,
             algebraic_solve_for_d2Gdvperp2=algebraic_solve_for_d2Gdvperp2,
             calculate_GG = false, calculate_dGdvperp=false,
             boundary_data_option=boundary_data_option)
+        begin_serial_region()
         # update the pdf
-        @loop_vperp_vpa ivperp ivpa begin
-            Fold[ivpa,ivperp] = Fnew[ivpa,ivperp]
+        @serial_region begin
+            @loop_vperp_vpa ivperp ivpa begin
+                Fold[ivpa,ivperp] = Fnew[ivpa,ivperp]
+            end
         end
         # diagnose Fold
         time += delta_t
         diagnose_F_Maxwellian(Fold,Fdummy1,Fdummy2,Fdummy3,vpa,vperp,time,ms,it)
         # update outputs
-        @loop_vperp_vpa ivperp ivpa begin
-            fvpavperp[ivpa,ivperp,it+1] = Fold[ivpa,ivperp] 
+        @serial_region begin
+            @loop_vperp_vpa ivperp ivpa begin
+                fvpavperp[ivpa,ivperp,it+1] = Fold[ivpa,ivperp] 
+            end
         end
     end
     
@@ -246,7 +256,7 @@ function backward_euler_step!(Fnew, Fold, delta_t, ms, msp, nussp, fkpl_arrays, 
     
     # residual function to be used for Newton-Krylov
     function residual_func!(Fresidual, Fnew; krylov=false)
-        begin_s_r_z_anyv_region()
+        #begin_s_r_z_anyv_region()
         fokker_planck_collision_operator_weak_form!(Fnew, Fnew, ms, msp, nussp,
                                                 fkpl_arrays,
                                                 vperp, vpa, vperp_spectral, vpa_spectral,
@@ -262,7 +272,7 @@ function backward_euler_step!(Fnew, Fold, delta_t, ms, msp, nussp, fkpl_arrays, 
             # make ad-hoc conserving corrections
             conserving_corrections!(fkpl_arrays.CC,Fnew,vpa,vperp,dummy_vpavperp)
         end
-        begin_s_r_z_anyv_region()
+        begin_anyv_vperp_vpa_region()
         @loop_vperp_vpa ivperp ivpa begin
             Fresidual[ivpa,ivperp] = -Fnew[ivpa,ivperp] + Fold[ivpa,ivperp] + delta_t * fkpl_arrays.CC[ivpa,ivperp]
         end
@@ -271,6 +281,8 @@ function backward_euler_step!(Fnew, Fold, delta_t, ms, msp, nussp, fkpl_arrays, 
     begin_s_r_z_anyv_region()
     newton_solve!(Fnew, residual_func!, Fresidual, F_delta_x, F_rhs_delta, Fv, Fw, nl_solver_params;
                       coords)
+    _anyv_subblock_synchronize()
+    begin_serial_region()
 end    
 
     
@@ -278,12 +290,12 @@ if abspath(PROGRAM_FILE) == @__FILE__
     using Pkg
     Pkg.activate(".")
     
-    println("test_numerical_conserving_terms=true")
+#    println("test_numerical_conserving_terms=true")
     test_implicit_collisions(ngrid=3,nelement_vpa=8,nelement_vperp=4,ntime=50,delta_t=1.0,
       serial_solve=false,anyv_region=true,plot_test_output=false,
       test_numerical_conserving_terms=true)
-    println("test_numerical_conserving_terms=false")
-    test_implicit_collisions(ngrid=3,nelement_vpa=8,nelement_vperp=4,ntime=50,delta_t=1.0,
-      serial_solve=false,anyv_region=true,plot_test_output=false,
-      test_numerical_conserving_terms=false)
+#    println("test_numerical_conserving_terms=false")
+#    test_implicit_collisions(ngrid=5,nelement_vpa=16,nelement_vperp=8,ntime=50,delta_t=1.0,
+#      serial_solve=false,anyv_region=true,plot_test_output=false,
+#      test_numerical_conserving_terms=false)
 end
