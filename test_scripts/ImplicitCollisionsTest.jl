@@ -278,7 +278,12 @@ if abspath(PROGRAM_FILE) == @__FILE__
     using Pkg
     Pkg.activate(".")
     
+    println("test_numerical_conserving_terms=true")
     test_implicit_collisions(ngrid=3,nelement_vpa=8,nelement_vperp=4,ntime=50,delta_t=1.0,
-      serial_solve=false,anyv_region=true,plot_test_output=true,
+      serial_solve=false,anyv_region=true,plot_test_output=false,
       test_numerical_conserving_terms=true)
+    println("test_numerical_conserving_terms=false")
+    test_implicit_collisions(ngrid=3,nelement_vpa=8,nelement_vperp=4,ntime=50,delta_t=1.0,
+      serial_solve=false,anyv_region=true,plot_test_output=false,
+      test_numerical_conserving_terms=false)
 end
