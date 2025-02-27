@@ -630,9 +630,18 @@ end
     @loop_vperp_vpa ivperp ivpa begin
         pdf_norm_square += (pdf_residual[ivpa,ivperp] / (rtol * abs(x_pdf[ivpa,ivperp]) + atol))^2
     end
-    residual_norm = sqrt(pdf_norm_square / (vperp.n_global * vpa.n_global))
+    _anyv_subblock_synchronize()
+    global_norm = Ref(pdf_norm_square)
+    @timeit_debug global_timer "MPI.Reduce! comm_block" MPI.Reduce!(global_norm, +, comm_anyv_subblock[]) # global_norm is the norm_square for the block
+
+    if anyv_subblock_rank[] == 0
+        global_norm[] = sqrt(global_norm[] / (vperp.n_global * vpa.n_global))
+    end
+    _anyv_subblock_synchronize()
+
+    @timeit_debug global_timer "MPI.Bcast! comm_block" MPI.Bcast!(global_norm, comm_anyv_subblock[]; root=0)
     
-    return residual_norm
+    return global_norm[]
 end
 
 @timeit_debug global_timer distributed_norm(
@@ -811,8 +820,13 @@ end
     @loop_vperp_vpa ivperp ivpa begin
         pdf_dot += v_pdf[ivpa,ivperp] * w_pdf[ivpa,ivperp] / (rtol * abs(x_pdf[ivpa,ivperp]) + atol)^2
     end
-    pdf_dot = pdf_dot / (vperp.n_global * vpa.n_global)
-    return pdf_dot
+    _anyv_subblock_synchronize()
+    global_dot = Ref(pdf_dot)
+    @timeit_debug global_timer "MPI.Reduce! comm_anyv_subblock" MPI.Reduce!(global_dot, +, comm_anyv_subblock[]) # global_dot is the dot for the block
+    if anyv_subblock_rank[] == 0
+        global_dot[] = global_dot[] / (vperp.n_global * vpa.n_global)
+    end
+    return global_dot[]
 end
 
 @timeit_debug global_timer distributed_dot(
@@ -1535,6 +1549,7 @@ MGS-GMRES' in Zou (2023) [https://doi.org/10.1016/j.amc.2023.127869].
                      g[i+1] = -s[i] * g[i]
                      g[i] = c[i] * g[i]
                   end
+                  _anyv_subblock_synchronize()
                else
                   begin_serial_region()
                   @serial_region begin
@@ -1551,8 +1566,8 @@ MGS-GMRES' in Zou (2023) [https://doi.org/10.1016/j.amc.2023.127869].
                      g[i+1] = -s[i] * g[i]
                      g[i] = c[i] * g[i]
                   end
+                  _block_synchronize()
                end
-               _block_synchronize()
             end
             residual = abs(g[i+1])
 
