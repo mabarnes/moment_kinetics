@@ -37,8 +37,12 @@ using ..looping
 using ..timer_utils
 using ..type_definitions: mk_float, mk_int
 
+using Combinatorics
 using LinearAlgebra
 using MPI
+using MPISchurComplements
+using MPIStaticCondensation
+using Primes
 using SparseArrays
 using StatsBase: mean
 
@@ -181,12 +185,210 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); defa
                            ppar=fill(lu(sparse(1.0*I, coords.z.n, coords.z.n)),
                                      reverse(outer_coord_sizes)),
                           )
-    elseif preconditioner_type === Val(:electron_lu)
+    elseif preconditioner_type === Val(:electron_lu) || preconditioner_type === Val(:electron_lu_no_integral_terms)
         pdf_plus_ppar_size = total_size_coords + coords.z.n
         preconditioners = fill((lu(sparse(1.0*I, 1, 1)),
                                 allocate_shared_float(pdf_plus_ppar_size, pdf_plus_ppar_size),
                                 allocate_shared_float(pdf_plus_ppar_size),
                                 allocate_shared_float(pdf_plus_ppar_size),
+                               ),
+                               reverse(outer_coord_sizes))
+    elseif preconditioner_type === Val(:electron_static_condensation)
+        pdf_size = total_size_coords
+        ppar_size = coords.z.n
+        v_size = coords.vperp.n * coords.vpa.n
+        function get_static_condensation_object()
+            precon_matrix = allocate_shared_float(pdf_plus_ppar_size, pdf_plus_ppar_size)
+
+            # Try to guess a number to avoid making the number of blocks too large or too
+            # small. Too large is probably inefficient as the number of points within the
+            # volume of each block would not be much, if at all, greater than the number
+            # of points on the block boundaries. If there was only one block, this would
+            # be no different than a non-decomposed LU solve. 
+            blocks_per_proc = max(8 ÷ block_size[], 1)
+
+            n_blocks = blocks_per_proc * block_size[]
+            @serial_region begin
+                precon_matrix .= 0.0
+                precon_matrix[diagind(precon_matrix)] .= 1.0
+            end
+            _block_synchronize()
+
+            # Divide up z, vperp, and vpa dimensions into total_blocks blocks in a way
+            # that minimises the number of grid points in the 'join' regions.
+            # For now, assume that the factors of total_blocks will divide up the various
+            # nelement values nicely. In future, could try slightly different values of
+            # total_blocks to see if e.g. 15=3*5 is more optimal than 16=4*4=8*2 for some
+            # grids.
+            z_nelement = coords.z.nelement_local
+            vperp_nelement = coords.vperp.nelement_local
+            vpa_nelement = coords.vpa.nelement_local
+
+            # Ensure there are not more blocks than the total number of elements
+            #n_blocks = min(n_blocks, z_nelement * vperp_nelement * vpa_nelement)
+            n_blocks = min(n_blocks, z_nelement)
+
+            function get_unique_factors(n)
+                unique_factors = [[1]]
+                # If there is only one block, there is no splitting left to do.
+                if n > 1
+                    push!(unique_factors, unique(combinations(factor(Vector, n)))...)
+                end
+                return unique_factors
+            end
+
+            possible_block_splits = Tuple{mk_int,mk_int,mk_int}[]
+            for z_split ∈ get_unique_factors(n_blocks)
+                z_nblocks = prod(z_split)
+                if !(z_nelement % z_nblocks == 0)
+                    continue
+                end
+                n_z_subblocks = n_blocks ÷ z_nblocks
+                for vperp_split ∈ get_unique_factors(n_z_subblocks)
+                    vperp_nblocks = prod(vperp_split)
+                    if !(vperp_nelement % vperp_nblocks == 0)
+                        continue
+                    end
+                    if vperp_nblocks != 1
+                        # Temporary hack to only split in z until we upgrade the Jacobian
+                        # matrix calculation to handle dqpar/dz*dg_e/wpa terms better
+                        continue
+                    end
+                    n_vperp_subblocks = n_z_subblocks ÷ vperp_nblocks
+                    for vpa_split ∈ get_unique_factors(n_vperp_subblocks)
+                        vpa_nblocks = prod(vpa_split)
+                        if !(vpa_nelement % vpa_nblocks == 0)
+                            continue
+                        end
+                        if vpa_nblocks != 1
+                            # Temporary hack to only split in z until we upgrade the Jacobian
+                            # matrix calculation to handle dqpar/dz*dg_e/wpa terms better
+                            continue
+                        end
+
+                        if z_nblocks * vperp_nblocks * vpa_nblocks != n_blocks
+                            # Have not included enough factors, so skip
+                            continue
+                        end
+
+                        push!(possible_block_splits, (z_nblocks, vperp_nblocks, vpa_nblocks))
+                    end
+                end
+            end
+
+            if length(possible_block_splits) == 0
+                error("Failed to find a valid split of the grid into $n_blocks blocks "
+                      * "for z_nelement=$z_nelement, vperp_nelement=$vperp_nelement, "
+                      * "vpa_nelement=$vpa_nelement")
+            end
+
+            function get_num_join_points(block_split)
+                n_z_blocks, n_vperp_blocks, n_vpa_blocks = block_split
+                # Wall boundary points are 'join points', so this is (n_z_blocks + 1)
+                # instead of (n_z_blocks - 1), which it would be if only the interfaces
+                # between blocks were included.
+                # Note: periodic z-dimension not supported here yet!
+                z_boundary_points = (n_z_blocks + 1) * coords.vperp.n * coords.vpa.n
+
+                vperp_boundary_points = (n_vperp_blocks - 1) * coords.z.n * coords.vpa.n
+                # Subtract double-counted points that were already on joins
+                vperp_boundary_points -= (n_z_blocks - 1) * (n_vperp_blocks - 1) * coords.vpa.n
+
+                vpa_boundary_points = (n_vpa_blocks - 1) * coords.z.n * coords.vperp.n
+                # Subtract double-counted points that were already on joins
+                vpa_boundary_points -= (n_z_blocks - 1) * (n_vpa_blocks - 1) * coords.vperp.n
+                vpa_boundary_points -= (n_vperp_blocks - 1) * (n_vpa_blocks - 1) * coords.z.n
+                # Add back triple-intersections that have now been subtracted twice
+                vpa_boundary_points += (n_vperp_blocks - 1) * (n_vperp_blocks - 1) * (n_vpa_blocks - 1)
+
+                return z_boundary_points + vperp_boundary_points + vpa_boundary_points
+            end
+            possible_join_sizes = collect(get_num_join_points(s) for s ∈ possible_block_splits)
+            best_choice = argmin(possible_join_sizes)
+            z_blocks, vperp_blocks, vpa_blocks = possible_block_splits[best_choice]
+
+            # Get flattened indices for the points in each 'local block'
+            function get_1d_inds(nblocks, nelement, ngrid, ntot, include_boundary=true)
+                if include_boundary
+                    firstind = 1
+                    lastind = ntot
+                else
+                    # Wall boundary conditions couple elements that are far apart in
+                    # velocity space, so include the wall boundary points in the 'joining
+                    # elements' instead of the 'local blocks' for the static condensation
+                    # solve.
+                    firstind = 2
+                    lastind = ntot - 1
+                end
+                if nblocks == 1
+                    inds = [firstind:lastind]
+                else
+                    block_size = nelement ÷ nblocks
+                    lastpoint = block_size * (ngrid - 1)
+                    inds = [firstind:lastpoint]
+                    for iblock ∈ 2:nblocks-1
+                        nextpoint = lastpoint + 2
+                        lastpoint = nextpoint + block_size * (ngrid - 1) - 2
+                        push!(inds, nextpoint:lastpoint)
+                    end
+                    nextpoint = lastpoint + 2
+                    push!(inds, nextpoint:lastind)
+                    if nextpoint > ntot
+                        error("Trying to add point with index=$nextpoint greater than ntot=$ntot")
+                    end
+                end
+                return inds
+            end
+            z_inds = get_1d_inds(z_blocks, z_nelement, coords.z.ngrid, coords.z.n, false)
+            vperp_inds = get_1d_inds(vperp_blocks, vperp_nelement, coords.vperp.ngrid, coords.vperp.n)
+            vpa_inds = get_1d_inds(vpa_blocks, vpa_nelement, coords.vpa.ngrid, coords.vpa.n)
+            local_blocks = Vector{Vector{mk_int}}()
+            for z_block_inds ∈ z_inds, vperp_block_inds ∈ vperp_inds, vpa_block_inds ∈ vpa_inds
+                this_block = mk_int[]
+                for iz ∈ z_block_inds, ivperp ∈ vperp_block_inds, ivpa ∈ vpa_block_inds
+                    push!(this_block, (iz-1)*coords.vperp.n*coords.vpa.n + (ivperp-1)*coords.vpa.n + ivpa)
+                end
+                push!(local_blocks, this_block)
+            end
+            if any(maximum(this_block) > coords.z.n * coords.vperp.n * coords.vpa.n
+                   for this_block ∈ local_blocks)
+                error("Created a block with indices greater than the matrix size.")
+            end
+
+            n_local_blocks_points = sum(length(b) for b ∈ local_blocks)
+            n_joining_elements_points = pdf_size - n_local_blocks_points
+            joining_elements_rhs_buffer = allocate_shared_float(n_joining_elements_points)
+            joining_elements_solution_buffer = allocate_shared_float(n_joining_elements_points)
+
+            A_factorization = CondensedFactorization(@view(precon_matrix[1:pdf_size,1:pdf_size]),
+                                                     local_blocks;
+                                                     sparse_local_blocks=true,
+                                                     shared_MPI_comm=comm_block[],
+                                                     joining_elements_rhs_buffer=joining_elements_rhs_buffer,
+                                                     joining_elements_solution_buffer=joining_elements_solution_buffer)
+
+            Ainv_dot_B = allocate_shared_float(pdf_size, ppar_size)
+            C = allocate_shared_float(ppar_size, pdf_size)
+            schur_complement = allocate_shared_float(ppar_size, ppar_size)
+            schur_complement_lu = nothing
+            @serial_region begin
+                schur_complement .= 0.0
+                schur_complement[diagind(schur_complement)] .= 1.0
+                schur_complement_lu = lu(schur_complement)
+            end
+            Ainv_dot_u = allocate_shared_float(pdf_size)
+            top_vec_buffer = allocate_shared_float(pdf_size)
+            bottom_vec_buffer = allocate_shared_float(ppar_size)
+            sc = MPISchurComplement(A_factorization, Ainv_dot_B, C, schur_complement,
+                                    schur_complement_lu, Ainv_dot_u, top_vec_buffer,
+                                    bottom_vec_buffer, comm_block[], block_rank[],
+                                    block_size[])
+            return sc, precon_matrix
+        end
+        pdf_plus_ppar_size = total_size_coords + coords.z.n
+        preconditioners = fill((get_static_condensation_object()...,
+                                allocate_shared_float(coords.vpa.n, coords.vperp.n, coords.z.n),
+                                allocate_shared_float(coords.z.n)
                                ),
                                reverse(outer_coord_sizes))
     elseif preconditioner_type === Val(:electron_adi)

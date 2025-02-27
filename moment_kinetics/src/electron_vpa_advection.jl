@@ -198,7 +198,7 @@ function add_electron_vpa_advection_to_Jacobian!(jacobian_matrix, f, dens, upar,
         # d(w_∥*0.5/p*dq/dz[irowz])/d(p[icolz]) =
         #   (-w_∥*3/4*sqrt(2/n/me)/p^(3/2)*∫dw_∥ w_∥^3 g * dp/dz - w_∥*1/4*sqrt(2/me)/sqrt(p)/n^(3/2)*∫dw_∥ w_∥^3 g * dn/dz + w_∥*1/2*sqrt(2/n/me)/sqrt(p)*∫dw_∥ w_∥^3 dg/dz)[irowz] * delta(irowz,icolz)
         #   + w_∥*(1.5*sqrt(2/p/n/me)*∫dw_∥ w_∥^3 g)[irowz] * z_deriv_matrix[irowz,icolz]
-        if include ∈ (:all, :explicit_v)
+        if include ∈ (:all, :explicit_v) && include_qpar_integral_terms
             for icolvperp ∈ 1:vperp.n, icolvpa ∈ 1:vpa.n
                 col = (iz - 1) * v_size + (icolvperp - 1) * vpa.n + icolvpa + f_offset
                 jacobian_matrix[row,col] += dt * dpdf_dvpa[ivpa,ivperp,iz] *
