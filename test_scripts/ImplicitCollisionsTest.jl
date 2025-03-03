@@ -14,7 +14,7 @@ using moment_kinetics.type_definitions: mk_float, mk_int, OptionsDict
 using moment_kinetics.fokker_planck: init_fokker_planck_collisions_weak_form
 using moment_kinetics.fokker_planck: fokker_planck_collision_operator_weak_form!
 using moment_kinetics.fokker_planck: conserving_corrections!
-using moment_kinetics.fokker_planck_calculus: enforce_vpavperp_BCs!
+using moment_kinetics.fokker_planck_calculus: enforce_vpavperp_BCs!, calculate_test_particle_preconditioner!
 using moment_kinetics.fokker_planck_test: F_Maxwellian, print_test_data
 using moment_kinetics.calculus: derivative!
 using moment_kinetics.velocity_moments: get_density, get_upar, get_ppar, get_pperp, get_pressure
@@ -205,7 +205,10 @@ function test_implicit_collisions(; ngrid=3,nelement_vpa=8,nelement_vperp=4,
                                 "linear_restart" => restart,
                                 "linear_max_restarts" => max_restarts,
                                 "nonlinear_max_iterations" => 100)),
-        coords; serial_solve=serial_solve, anyv_region=anyv_region)
+        coords; serial_solve=serial_solve, anyv_region=anyv_region,
+        preconditioner_type=Val(:lu))
+
+    #println(nl_solver_params.preconditioners)
     for it in 1:ntime
         backward_euler_step!(Fnew, Fold, delta_t, ms, msp, nussp, fkpl_arrays, dummy_vpavperp,
             vperp, vpa, vperp_spectral, vpa_spectral, coords,
@@ -279,6 +282,10 @@ function backward_euler_step!(Fnew, Fold, delta_t, ms, msp, nussp, fkpl_arrays, 
         return nothing
     end
     begin_s_r_z_anyv_region()
+    calculate_test_particle_preconditioner!(Fold,delta_t,ms,msp,nussp,
+        vpa,vperp,vpa_spectral,vperp_spectral,
+        fkpl_arrays,boundary_data_option=boundary_data_option)
+    
     newton_solve!(Fnew, residual_func!, Fresidual, F_delta_x, F_rhs_delta, Fv, Fw, nl_solver_params;
                       coords)
     _anyv_subblock_synchronize()

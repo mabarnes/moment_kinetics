@@ -24,6 +24,8 @@ export fokkerplanck_arrays_direct_integration_struct
 export fokkerplanck_weakform_arrays_struct
 export enforce_vpavperp_BCs!
 export calculate_rosenbluth_potentials_via_elliptic_solve!
+export allocate_preconditioner_matrix
+export calculate_test_particle_preconditioner!
 
 # testing
 export calculate_rosenbluth_potential_boundary_data_exact!
@@ -52,7 +54,7 @@ using Dates
 using SpecialFunctions: ellipk, ellipe
 using SparseArrays: sparse, AbstractSparseArray
 using SuiteSparse
-using LinearAlgebra: ldiv!, mul!, LU
+using LinearAlgebra: ldiv!, mul!, LU, ldiv
 using FastGaussQuadrature
 using Printf
 using MPI
@@ -190,6 +192,10 @@ struct YY_collision_operator_arrays
     YY2par::Array{mk_float,4}
     # YY3par[i,j,k,iel] = \int phi_i(vpa) phi'_j(vpa) phi_k(vpa) vpa d vpa
     YY3par::Array{mk_float,4}
+    # MMpar[i,j,iel]
+    MMpar::Array{mk_float,3}
+    # MMperp[i,j,iel]
+    MMperp::Array{mk_float,3}
 end
 
 """
@@ -243,6 +249,9 @@ struct fokkerplanck_weakform_arrays_struct{M <: AbstractSparseArray{mk_float,mk_
     FF::MPISharedArray{mk_float,2}
     dFdvpa::MPISharedArray{mk_float,2}
     dFdvperp::MPISharedArray{mk_float,2}
+    # matrices for storing preconditioner
+    CC2D_sparse::M
+    Precon2D_sparse::M
 end
 
 """
@@ -2511,6 +2520,180 @@ function assemble_matrix_operators_dirichlet_bc_sparse(vpa,vperp,vpa_spectral,vp
            PPpar2D_sparse, MMparMNperp2D_sparse
 end
 
+function allocate_preconditioner_matrix(vpa,vperp,vpa_spectral,vperp_spectral)
+    # Assemble a 2D mass matrix in the global compound coordinate
+    ngrid_vpa = vpa.ngrid
+    nelement_vpa = vpa.nelement_local
+    ngrid_vperp = vperp.ngrid
+    nelement_vperp = vperp.nelement_local
+    ntot_vpa = (nelement_vpa - 1)*(ngrid_vpa^2 - 1) + ngrid_vpa^2
+    ntot_vperp = (nelement_vperp - 1)*(ngrid_vperp^2 - 1) + ngrid_vperp^2
+    nsparse = ntot_vpa*ntot_vperp
+    
+    Precon2D = allocate_sparse_matrix_constructor(nsparse)
+    for ielement_vperp in 1:nelement_vperp
+        for ielement_vpa in 1:nelement_vpa
+            for ivperpp_local in 1:ngrid_vperp
+                for ivperp_local in 1:ngrid_vperp
+                    for ivpap_local in 1:ngrid_vpa
+                        for ivpa_local in 1:ngrid_vpa
+                            ic_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
+                            icp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpap_local,ivperpp_local)
+                            icsc = icsc_func(ivpa_local,ivpap_local,ielement_vpa::mk_int,
+                                           ngrid_vpa,nelement_vpa,
+                                           ivperp_local,ivperpp_local,
+                                           ielement_vperp,
+                                           ngrid_vperp,nelement_vperp)
+                            # assign zero values everywhere retained in the sparse matrix                                           
+                            assign_constructor_data!(Precon2D,icsc,ic_global,icp_global,0.0)
+                        end
+                    end
+                end
+            end
+        end
+    end
+    Precon2D_sparse = create_sparse_matrix(Precon2D)
+    return Precon2D_sparse
+end
+
+function calculate_test_particle_preconditioner!(pdf,delta_t,ms,msp,nussp,
+    vpa,vperp,vpa_spectral,vperp_spectral,
+    fkpl_arrays::fokkerplanck_weakform_arrays_struct;
+    algebraic_solve_for_d2Gdvperp2=false,calculate_GG=false,calculate_dGdvperp=false,
+             boundary_data_option=direct_integration)
+    
+    Precon2D_sparse = fkpl_arrays.Precon2D_sparse
+    CC2D_sparse = fkpl_arrays.CC2D_sparse
+    YY_arrays = fkpl_arrays.YY_arrays
+    GG = fkpl_arrays.GG
+    HH = fkpl_arrays.HH
+    dHdvpa = fkpl_arrays.dHdvpa
+    dHdvperp = fkpl_arrays.dHdvperp
+    dGdvperp = fkpl_arrays.dGdvperp
+    d2Gdvperp2 = fkpl_arrays.d2Gdvperp2
+    d2Gdvpa2 = fkpl_arrays.d2Gdvpa2
+    d2Gdvperpdvpa = fkpl_arrays.d2Gdvperpdvpa
+    lu_obj_MM = fkpl_arrays.lu_obj_MM
+
+    calculate_rosenbluth_potentials_via_elliptic_solve!(GG,HH,dHdvpa,dHdvperp,
+             d2Gdvpa2,dGdvperp,d2Gdvperpdvpa,d2Gdvperp2,pdf,
+             vpa,vperp,vpa_spectral,vperp_spectral,fkpl_arrays::fokkerplanck_weakform_arrays_struct;
+             algebraic_solve_for_d2Gdvperp2=false,calculate_GG=false,calculate_dGdvperp=false,
+             boundary_data_option=direct_integration)
+
+    # set the values of the matrix to zero before assembly
+    CC2D_sparse.nzval .= 0.0
+    #Precon2D_sparse.nzval .= 0.0
+    # assemble matrix for preconditioning collision operator
+    # loop over collocation points to benefit from shared-memory parallelism
+    # to form matrix operator such that  RHS = dt * Precon2D * pdf
+    ngrid_vpa, ngrid_vperp = vpa.ngrid, vperp.ngrid
+    nelement_vpa, nelement_vperp = vpa.nelement_local, vperp.nelement_local
+    vperp_igrid_full = vperp.igrid_full
+    vpa_igrid_full = vpa.igrid_full
+    @loop_vperp_vpa ivperp_global ivpa_global begin
+        igrid_vpa, ielement_vpax, ielement_vpa_low, ielement_vpa_hi, igrid_vperp, ielement_vperpx, ielement_vperp_low, ielement_vperp_hi = get_element_limit_indices(ivpa_global,ivperp_global,vpa,vperp)
+        # loop over elements belonging to this collocation point
+        for ielement_vperp in ielement_vperp_low:ielement_vperp_hi
+            # correct local ivperp in the case that we on a boundary point
+            ivperp_local = igrid_vperp + (ielement_vperp - ielement_vperp_low)*(1-ngrid_vperp)
+            @views YY0perp = YY_arrays.YY0perp[:,:,ivperp_local,ielement_vperp]
+            @views YY1perp = YY_arrays.YY1perp[:,:,ivperp_local,ielement_vperp]
+            @views YY2perp = YY_arrays.YY2perp[:,:,ivperp_local,ielement_vperp]
+            @views YY3perp = YY_arrays.YY3perp[:,:,ivperp_local,ielement_vperp]
+            # use that MMperp symmetric in i,j to index "wrong" index for speed
+            @views MMperp = YY_arrays.MMperp[:,ivperp_local,ielement_vperp]
+            vperp_igrid_full_view = @view vperp_igrid_full[:,ielement_vperp]
+
+            for ielement_vpa in ielement_vpa_low:ielement_vpa_hi
+                # correct local ivpa in the case that we on a boundary point
+                ivpa_local = igrid_vpa + (ielement_vpa - ielement_vpa_low)*(1-ngrid_vpa)
+                @views YY0par = YY_arrays.YY0par[:,:,ivpa_local,ielement_vpa]
+                @views YY1par = YY_arrays.YY1par[:,:,ivpa_local,ielement_vpa]
+                @views YY2par = YY_arrays.YY2par[:,:,ivpa_local,ielement_vpa]
+                @views YY3par = YY_arrays.YY3par[:,:,ivpa_local,ielement_vpa]
+                # use that MMpar symmetric in i,j to index "wrong" index for speed
+                @views MMpar = YY_arrays.MMpar[:,ivpa_local,ielement_vpa]
+                vpa_igrid_full_view = @view vpa_igrid_full[:,ielement_vpa]
+                # carry out the matrix sum on each 2D element
+                assemble_explicit_collision_operator_matrix_parallel_inner_loop!(CC2D_sparse, delta_t,
+                        nussp, ms, msp, YY0perp, YY0par, YY1perp, YY1par, YY2perp, YY2par,
+                        YY3perp, YY3par, MMpar, MMperp, d2Gdvpa2, d2Gdvperpdvpa, d2Gdvperp2,
+                        dHdvpa, dHdvperp, vperp_igrid_full_view, vpa_igrid_full_view,
+                        ivpa_local,ielement_vpa,
+                        ngrid_vpa,nelement_vpa,
+                        ivperp_local,
+                        ielement_vperp,
+                        ngrid_vperp,nelement_vperp)
+            end
+        end
+    end
+    # now invert mass matrix on this matrix
+    begin_anyv_region()
+    @anyv_serial_region begin
+        # invert mass matrix on CC operator so that Precon2D_sparse contains
+        # I - dt * CC_linearised
+        # note cludge of returning a new matrix
+        Precon2D_sparse = sparse(ldiv(lu_obj_MM, CC2D_sparse))
+    end
+    return nothing
+end
+# functions to modify an existing sparse matrix
+function assign_sparse_matrix_value!(matrix::AbstractSparseArray{mk_float,mk_int,N},value,icsc) where N
+    matrix.nzval[icsc] = value
+    return nothing
+end
+function assemble_sparse_matrix_value!(matrix::AbstractSparseArray{mk_float,mk_int,N},value,icsc) where N
+    matrix.nzval[icsc] += value
+    return nothing
+end
+
+function assemble_explicit_collision_operator_matrix_parallel_inner_loop!(CC2D_sparse, delta_t,
+        nussp, ms, msp, YY0perp, YY0par, YY1perp, YY1par, YY2perp, YY2par, YY3perp,
+        YY3par, MMpar, MMperp, d2Gspdvpa2, d2Gspdvperpdvpa, d2Gspdvperp2, dHspdvpa, dHspdvperp,
+        vperp_igrid_full_view, vpa_igrid_full_view,
+        ivpa_local,ielement_vpa, 
+        ngrid_vpa,nelement_vpa,
+        ivperp_local,ielement_vperp,
+        ngrid_vperp,nelement_vperp)
+    @inbounds begin
+        # carry out the matrix sum on each 2D element
+        for jvperpp_local in 1:ngrid_vperp
+            for kvperpp_local in 1:ngrid_vperp
+                kvperpp = vperp_igrid_full_view[kvperpp_local]
+                YY0perp_kj = YY0perp[kvperpp_local,jvperpp_local]
+                YY1perp_kj = YY1perp[kvperpp_local,jvperpp_local]
+                YY2perp_kj = YY2perp[kvperpp_local,jvperpp_local]
+                YY3perp_kj = YY3perp[kvperpp_local,jvperpp_local]
+                for jvpap_local in 1:ngrid_vpa
+                    icsc = icsc_func(ivpa_local,jvpap_local,ielement_vpa,
+                                           ngrid_vpa,nelement_vpa,
+                                           ivperp_local,jvperpp_local,
+                                           ielement_vperp,
+                                           ngrid_vperp,nelement_vperp)                
+                    for kvpap_local in 1:ngrid_vpa
+                        kvpap = vpa_igrid_full_view[kvpap_local]
+                        YY0par_kj = YY0par[kvpap_local,jvpap_local]
+                        YY1par_kj = YY1par[kvpap_local,jvpap_local]
+                        d2Gspdvperpdvpa_kk = d2Gspdvperpdvpa[kvpap,kvperpp]
+                        # first three lines represent parallel flux terms
+                        # second three lines represent perpendicular flux terms
+                        assemble_sparse_matrix_value!(CC2D_sparse,
+                                           (MMpar[jvpap_local]*MMperp[jvperpp_local] - delta_t *  
+                                           (-nussp*(YY0perp_kj*YY2par[kvpap_local,jvpap_local]*d2Gspdvpa2[kvpap,kvperpp] +
+                                            YY3perp_kj*YY1par_kj*d2Gspdvperpdvpa_kk -
+                                            2.0*(ms/msp)*YY0perp_kj*YY1par_kj*dHspdvpa[kvpap,kvperpp] +
+                                            # end parallel flux, start of perpendicular flux
+                                            YY1perp_kj*YY3par[kvpap_local,jvpap_local]*d2Gspdvperpdvpa_kk +
+                                            YY2perp_kj*YY0par_kj*d2Gspdvperp2[kvpap,kvperpp] -
+                                            2.0*(ms/msp)*YY1perp_kj*YY0par_kj*dHspdvperp[kvpap,kvperpp]))), icsc)
+                    end
+                end
+            end
+        end
+        return nothing
+    end
+end
 """
 Function to allocated an instance of `YY_collision_operator_arrays`.
 Calls `get_QQ_local!()` from `gauss_legendre`. Definitions of these
@@ -2525,22 +2708,28 @@ function calculate_YY_arrays(vpa,vperp,vpa_spectral,vperp_spectral)
     YY1par = Array{mk_float,4}(undef,vpa.ngrid,vpa.ngrid,vpa.ngrid,vpa.nelement_local)
     YY2par = Array{mk_float,4}(undef,vpa.ngrid,vpa.ngrid,vpa.ngrid,vpa.nelement_local)
     YY3par = Array{mk_float,4}(undef,vpa.ngrid,vpa.ngrid,vpa.ngrid,vpa.nelement_local)
-    
+    MMpar = Array{mk_float,3}(undef,vpa.ngrid,vpa.ngrid,vpa.nelement_local)
+    MMperp = Array{mk_float,3}(undef,vperp.ngrid,vperp.ngrid,vperp.nelement_local)
+
     for ielement_vperp in 1:vperp.nelement_local
         @views get_QQ_local!(YY0perp[:,:,:,ielement_vperp],ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"YY0")
         @views get_QQ_local!(YY1perp[:,:,:,ielement_vperp],ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"YY1")
         @views get_QQ_local!(YY2perp[:,:,:,ielement_vperp],ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"YY2")
         @views get_QQ_local!(YY3perp[:,:,:,ielement_vperp],ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"YY3")
-     end
+        @views get_QQ_local!(MMperp[:,:,ielement_vperp],ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"M")
+        
+    end
      for ielement_vpa in 1:vpa.nelement_local
         @views get_QQ_local!(YY0par[:,:,:,ielement_vpa],ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"YY0")
         @views get_QQ_local!(YY1par[:,:,:,ielement_vpa],ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"YY1")
         @views get_QQ_local!(YY2par[:,:,:,ielement_vpa],ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"YY2")
         @views get_QQ_local!(YY3par[:,:,:,ielement_vpa],ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"YY3")
+        @views get_QQ_local!(MMpar[:,:,ielement_vpa],ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"M")
      end
     
     return YY_collision_operator_arrays(YY0perp,YY1perp,YY2perp,YY3perp,
-                                        YY0par,YY1par,YY2par,YY3par)
+                                        YY0par,YY1par,YY2par,YY3par,
+                                        MMpar,MMperp)
 end
 
 """

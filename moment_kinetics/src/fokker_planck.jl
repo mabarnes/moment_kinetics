@@ -68,7 +68,7 @@ using ..fokker_planck_calculus: assemble_explicit_collision_operator_rhs_paralle
 using ..fokker_planck_calculus: assemble_explicit_collision_operator_rhs_parallel_analytical_inputs!
 using ..fokker_planck_calculus: calculate_YY_arrays, enforce_vpavperp_BCs!
 using ..fokker_planck_calculus: calculate_rosenbluth_potential_boundary_data!
-using ..fokker_planck_calculus: elliptic_solve!, algebraic_solve!
+using ..fokker_planck_calculus: elliptic_solve!, algebraic_solve!, allocate_preconditioner_matrix
 using ..fokker_planck_calculus: calculate_rosenbluth_potentials_via_elliptic_solve!
 using ..fokker_planck_test: Cssp_fully_expanded_form, calculate_collisional_fluxes, H_Maxwellian, dGdvperp_Maxwellian
 using ..fokker_planck_test: d2Gdvpa2_Maxwellian, d2Gdvperpdvpa_Maxwellian, d2Gdvperp2_Maxwellian, dHdvpa_Maxwellian, dHdvperp_Maxwellian
@@ -227,7 +227,10 @@ function init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_sp
     FF = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
     dFdvpa = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
     dFdvperp = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
-    
+    # preconditioner matrix
+    CC2D_sparse = allocate_preconditioner_matrix(vpa,vperp,vpa_spectral,vperp_spectral)
+    Precon2D_sparse = allocate_preconditioner_matrix(vpa,vperp,vpa_spectral,vperp_spectral)
+
     fka = fokkerplanck_weakform_arrays_struct(bwgt,rpbd,MM2D_sparse,KKpar2D_sparse,KKperp2D_sparse,
                                            KKpar2D_with_BC_terms_sparse,KKperp2D_with_BC_terms_sparse,
                                            LP2D_sparse,LV2D_sparse,LB2D_sparse,PUperp2D_sparse,PPparPUperp2D_sparse,
@@ -235,7 +238,8 @@ function init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_sp
                                            lu_obj_MM,lu_obj_LP,lu_obj_LV,lu_obj_LB,
                                            YY_arrays, S_dummy, Q_dummy, rhsvpavperp, rhsvpavperp_copy1, rhsvpavperp_copy2, rhsvpavperp_copy3,
                                            CC, GG, HH, dHdvpa, dHdvperp, dGdvperp, d2Gdvperp2, d2Gdvpa2, d2Gdvperpdvpa,
-                                           FF, dFdvpa, dFdvperp)
+                                           FF, dFdvpa, dFdvperp, 
+                                           CC2D_sparse, Precon2D_sparse)
     return fka
 end
 
@@ -279,7 +283,8 @@ where the Rosenbluth potentials are specified using analytical results.
     # for beam ions has unit density
     ns = 1.0 # initial density of evolved ions (hardcode to be the same as initial conditions)
     # get electron density from quasineutrality ne = sum_s Zs ns
-    densp = [fkin.sd_density, fkin.sd_q*fkin.sd_density+ns*Zs] 
+    densp = [fkin.sd_density, fkin.sd_q*fkin.sd_density+ns*Zs]
+ 
     uparsp = [0.0, 0.0]
     vthsp = [sqrt(fkin.sd_temp/msp[1]), sqrt(fkin.sd_temp/msp[2])]
     
@@ -639,7 +644,8 @@ A_{01} & A_{11} & A_{12} \\\\
 A_{02} & A_{12} & A_{22} \\\\
 \\end{array}
 ```
-appropriate for moment numerical conserving terms. 
+appropriate for moment numerical conserving terms.
+ 
 """
 function symmetric_matrix_inverse(A00,A01,A02,A11,A12,A22,b0,b1,b2)
     # matrix determinant
