@@ -5,6 +5,7 @@ using LaTeXStrings
 using MPI
 using Measures
 using Dates
+using LinearAlgebra: lu, ldiv!
 import moment_kinetics
 using moment_kinetics.array_allocation: allocate_float, allocate_shared_float
 using moment_kinetics.coordinates: define_coordinate
@@ -98,6 +99,7 @@ function test_implicit_collisions(; ngrid=3,nelement_vpa=8,nelement_vperp=4,
     atol = 1.0e-10,
     serial_solve = false,
     anyv_region = true,
+    test_particle_preconditioner=false,
     plot_test_output=false,
     test_parallelism=false,test_self_operator=true,
     test_dense_construction=false,standalone=false,
@@ -126,11 +128,13 @@ function test_implicit_collisions(; ngrid=3,nelement_vpa=8,nelement_vperp=4,
         "vperp"=>OptionsDict("ngrid"=>ngrid, "nelement"=>nelement_global_vperp,
                                 "nelement_local"=>nelement_local_vperp, "L"=>Lvperp,
                                 "discretization"=>discretization,
-                                "element_spacing_option"=>element_spacing_option),
+                                "element_spacing_option"=>element_spacing_option,
+                                "bc"=>"none"),
         "vpa"=>OptionsDict("ngrid"=>ngrid, "nelement"=>nelement_global_vpa,
                             "nelement_local"=>nelement_local_vpa, "L"=>Lvpa,
                             "discretization"=>discretization,
-                            "element_spacing_option"=>element_spacing_option),
+                            "element_spacing_option"=>element_spacing_option,
+                            "bc"=>"none"),
     )
     #println("made inputs")
     #println("vpa: ngrid: ",ngrid," nelement: ",nelement_local_vpa, " Lvpa: ",Lvpa)
@@ -214,6 +218,7 @@ function test_implicit_collisions(; ngrid=3,nelement_vpa=8,nelement_vperp=4,
             vperp, vpa, vperp_spectral, vpa_spectral, coords,
             Fdummy1, Fdummy2, Fdummy3, Fdummy4, Fdummy5, nl_solver_params,
             test_numerical_conserving_terms=test_numerical_conserving_terms,
+            test_particle_preconditioner=test_particle_preconditioner,
             test_self_operator=test_self_operator,
             test_assembly_serial=test_parallelism,
             use_Maxwellian_Rosenbluth_coefficients=use_Maxwellian_Rosenbluth_coefficients,
@@ -249,6 +254,7 @@ function backward_euler_step!(Fnew, Fold, delta_t, ms, msp, nussp, fkpl_arrays, 
     vperp, vpa, vperp_spectral, vpa_spectral, coords,
     Fresidual, F_delta_x, F_rhs_delta, Fv, Fw, nl_solver_params;
     test_numerical_conserving_terms=false,
+    test_particle_preconditioner=false,
     test_self_operator=true,
     test_assembly_serial=false,
     use_Maxwellian_Rosenbluth_coefficients=false,
@@ -281,13 +287,31 @@ function backward_euler_step!(Fnew, Fold, delta_t, ms, msp, nussp, fkpl_arrays, 
         end
         return nothing
     end
+    
     begin_s_r_z_anyv_region()
     calculate_test_particle_preconditioner!(Fold,delta_t,ms,msp,nussp,
         vpa,vperp,vpa_spectral,vperp_spectral,
         fkpl_arrays,boundary_data_option=boundary_data_option)
-    
+    lu_precon = lu(fkpl_arrays.Precon2D_sparse) 
+    function test_particle_precon!(x)
+        pdf = x
+        pdf_scratch = fkpl_arrays.rhsvpavperp
+        begin_anyv_region()
+        @anyv_serial_region begin
+            @views @. pdf_scratch = pdf
+            pdf_c = vec(pdf)
+            pdf_scratch_c = vec(pdf_scratch)
+            ldiv!(pdf_c,lu_precon,pdf_scratch_c)
+        end
+        return nothing
+    end
+    if test_particle_preconditioner
+        right_preconditioner = test_particle_precon!
+    else
+        right_preconditioner = nothing
+    end
     newton_solve!(Fnew, residual_func!, Fresidual, F_delta_x, F_rhs_delta, Fv, Fw, nl_solver_params;
-                      coords)
+                      coords, right_preconditioner=right_preconditioner)
     _anyv_subblock_synchronize()
     begin_serial_region()
 end    

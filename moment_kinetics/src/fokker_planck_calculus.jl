@@ -2577,12 +2577,14 @@ function calculate_test_particle_preconditioner!(pdf,delta_t,ms,msp,nussp,
 
     calculate_rosenbluth_potentials_via_elliptic_solve!(GG,HH,dHdvpa,dHdvperp,
              d2Gdvpa2,dGdvperp,d2Gdvperpdvpa,d2Gdvperp2,pdf,
-             vpa,vperp,vpa_spectral,vperp_spectral,fkpl_arrays::fokkerplanck_weakform_arrays_struct;
-             algebraic_solve_for_d2Gdvperp2=false,calculate_GG=false,calculate_dGdvperp=false,
-             boundary_data_option=direct_integration)
-
+             vpa,vperp,vpa_spectral,vperp_spectral,fkpl_arrays,
+             algebraic_solve_for_d2Gdvperp2=false,calculate_GG=false,
+             calculate_dGdvperp=false,
+             boundary_data_option=boundary_data_option)
+    begin_anyv_region()
     # set the values of the matrix to zero before assembly
     CC2D_sparse.nzval .= 0.0
+    #println(CC2D_sparse.nzval)
     #Precon2D_sparse.nzval .= 0.0
     # assemble matrix for preconditioning collision operator
     # loop over collocation points to benefit from shared-memory parallelism
@@ -2591,12 +2593,9 @@ function calculate_test_particle_preconditioner!(pdf,delta_t,ms,msp,nussp,
     nelement_vpa, nelement_vperp = vpa.nelement_local, vperp.nelement_local
     vperp_igrid_full = vperp.igrid_full
     vpa_igrid_full = vpa.igrid_full
-    @loop_vperp_vpa ivperp_global ivpa_global begin
-        igrid_vpa, ielement_vpax, ielement_vpa_low, ielement_vpa_hi, igrid_vperp, ielement_vperpx, ielement_vperp_low, ielement_vperp_hi = get_element_limit_indices(ivpa_global,ivperp_global,vpa,vperp)
-        # loop over elements belonging to this collocation point
-        for ielement_vperp in ielement_vperp_low:ielement_vperp_hi
+    for ielement_vperp in 1:vperp.nelement_local
+        for ivperp_local in 1:vperp.ngrid
             # correct local ivperp in the case that we on a boundary point
-            ivperp_local = igrid_vperp + (ielement_vperp - ielement_vperp_low)*(1-ngrid_vperp)
             @views YY0perp = YY_arrays.YY0perp[:,:,ivperp_local,ielement_vperp]
             @views YY1perp = YY_arrays.YY1perp[:,:,ivperp_local,ielement_vperp]
             @views YY2perp = YY_arrays.YY2perp[:,:,ivperp_local,ielement_vperp]
@@ -2604,19 +2603,19 @@ function calculate_test_particle_preconditioner!(pdf,delta_t,ms,msp,nussp,
             # use that MMperp symmetric in i,j to index "wrong" index for speed
             @views MMperp = YY_arrays.MMperp[:,ivperp_local,ielement_vperp]
             vperp_igrid_full_view = @view vperp_igrid_full[:,ielement_vperp]
-
-            for ielement_vpa in ielement_vpa_low:ielement_vpa_hi
-                # correct local ivpa in the case that we on a boundary point
-                ivpa_local = igrid_vpa + (ielement_vpa - ielement_vpa_low)*(1-ngrid_vpa)
-                @views YY0par = YY_arrays.YY0par[:,:,ivpa_local,ielement_vpa]
-                @views YY1par = YY_arrays.YY1par[:,:,ivpa_local,ielement_vpa]
-                @views YY2par = YY_arrays.YY2par[:,:,ivpa_local,ielement_vpa]
-                @views YY3par = YY_arrays.YY3par[:,:,ivpa_local,ielement_vpa]
-                # use that MMpar symmetric in i,j to index "wrong" index for speed
-                @views MMpar = YY_arrays.MMpar[:,ivpa_local,ielement_vpa]
-                vpa_igrid_full_view = @view vpa_igrid_full[:,ielement_vpa]
-                # carry out the matrix sum on each 2D element
-                assemble_explicit_collision_operator_matrix_parallel_inner_loop!(CC2D_sparse, delta_t,
+            #println(MMperp)
+            for ielement_vpa in 1:vpa.nelement_local
+               for ivpa_local in 1:vpa.ngrid
+                  @views YY0par = YY_arrays.YY0par[:,:,ivpa_local,ielement_vpa]
+                  @views YY1par = YY_arrays.YY1par[:,:,ivpa_local,ielement_vpa]
+                  @views YY2par = YY_arrays.YY2par[:,:,ivpa_local,ielement_vpa]
+                  @views YY3par = YY_arrays.YY3par[:,:,ivpa_local,ielement_vpa]
+                  # use that MMpar symmetric in i,j to index "wrong" index for speed
+                  @views MMpar = YY_arrays.MMpar[:,ivpa_local,ielement_vpa]
+                  vpa_igrid_full_view = @view vpa_igrid_full[:,ielement_vpa]
+                  #println(MMpar)
+                  # carry out the matrix sum on each 2D element
+                  assemble_explicit_collision_operator_matrix_inner_loop!(CC2D_sparse, delta_t,
                         nussp, ms, msp, YY0perp, YY0par, YY1perp, YY1par, YY2perp, YY2par,
                         YY3perp, YY3par, MMpar, MMperp, d2Gdvpa2, d2Gdvperpdvpa, d2Gdvperp2,
                         dHdvpa, dHdvperp, vperp_igrid_full_view, vpa_igrid_full_view,
@@ -2624,18 +2623,24 @@ function calculate_test_particle_preconditioner!(pdf,delta_t,ms,msp,nussp,
                         ngrid_vpa,nelement_vpa,
                         ivperp_local,
                         ielement_vperp,
-                        ngrid_vperp,nelement_vperp)
+                        ngrid_vperp,nelement_vperp) 
+               end
             end
         end
     end
+    #println(pdf)
+    #println(dHdvperp)
     # now invert mass matrix on this matrix
-    begin_anyv_region()
-    @anyv_serial_region begin
-        # invert mass matrix on CC operator so that Precon2D_sparse contains
-        # I - dt * CC_linearised
-        # note cludge of returning a new matrix
-        Precon2D_sparse = sparse(ldiv(lu_obj_MM, CC2D_sparse))
-    end
+    #begin_anyv_region()
+    #@anyv_serial_region begin
+    # invert mass matrix on CC operator so that Precon2D_sparse contains
+    # I - dt * CC_linearised
+    # note cludge of returning a new matrix
+    #println(CC2D_sparse.nzval)
+    #println(CC2D_sparse)
+    fkpl_arrays.Precon2D_sparse .= sparse(ldiv(lu_obj_MM, CC2D_sparse))
+    #println(Precon2D_sparse)
+    #end
     return nothing
 end
 # functions to modify an existing sparse matrix
@@ -2648,7 +2653,7 @@ function assemble_sparse_matrix_value!(matrix::AbstractSparseArray{mk_float,mk_i
     return nothing
 end
 
-function assemble_explicit_collision_operator_matrix_parallel_inner_loop!(CC2D_sparse, delta_t,
+function assemble_explicit_collision_operator_matrix_inner_loop!(CC2D_sparse, delta_t,
         nussp, ms, msp, YY0perp, YY0par, YY1perp, YY1par, YY2perp, YY2par, YY3perp,
         YY3par, MMpar, MMperp, d2Gspdvpa2, d2Gspdvperpdvpa, d2Gspdvperp2, dHspdvpa, dHspdvperp,
         vperp_igrid_full_view, vpa_igrid_full_view,
@@ -2678,8 +2683,9 @@ function assemble_explicit_collision_operator_matrix_parallel_inner_loop!(CC2D_s
                         d2Gspdvperpdvpa_kk = d2Gspdvperpdvpa[kvpap,kvperpp]
                         # first three lines represent parallel flux terms
                         # second three lines represent perpendicular flux terms
+                        # Make P = - M + dt * RHSC to match residual R = -Fnew + Fold + dt * C
                         assemble_sparse_matrix_value!(CC2D_sparse,
-                                           (MMpar[jvpap_local]*MMperp[jvperpp_local] - delta_t *  
+                                           (-MMpar[jvpap_local]*MMperp[jvperpp_local] + delta_t *  
                                            (-nussp*(YY0perp_kj*YY2par[kvpap_local,jvpap_local]*d2Gspdvpa2[kvpap,kvperpp] +
                                             YY3perp_kj*YY1par_kj*d2Gspdvperpdvpa_kk -
                                             2.0*(ms/msp)*YY0perp_kj*YY1par_kj*dHspdvpa[kvpap,kvperpp] +
