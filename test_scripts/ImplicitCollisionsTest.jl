@@ -5,7 +5,7 @@ using LaTeXStrings
 using MPI
 using Measures
 using Dates
-using LinearAlgebra: lu, ldiv!
+using LinearAlgebra: lu, ldiv!, mul!
 import moment_kinetics
 using moment_kinetics.array_allocation: allocate_float, allocate_shared_float
 using moment_kinetics.coordinates: define_coordinate
@@ -100,6 +100,7 @@ function test_implicit_collisions(; ngrid=3,nelement_vpa=8,nelement_vperp=4,
     serial_solve = false,
     anyv_region = true,
     test_particle_preconditioner=false,
+    test_linearised_advance=false,
     plot_test_output=false,
     test_parallelism=false,test_self_operator=true,
     test_dense_construction=false,standalone=false,
@@ -219,6 +220,7 @@ function test_implicit_collisions(; ngrid=3,nelement_vpa=8,nelement_vperp=4,
             Fdummy1, Fdummy2, Fdummy3, Fdummy4, Fdummy5, nl_solver_params,
             test_numerical_conserving_terms=test_numerical_conserving_terms,
             test_particle_preconditioner=test_particle_preconditioner,
+            test_linearised_advance=test_linearised_advance,
             test_self_operator=test_self_operator,
             test_assembly_serial=test_parallelism,
             use_Maxwellian_Rosenbluth_coefficients=use_Maxwellian_Rosenbluth_coefficients,
@@ -254,6 +256,7 @@ function backward_euler_step!(Fnew, Fold, delta_t, ms, msp, nussp, fkpl_arrays, 
     vperp, vpa, vperp_spectral, vpa_spectral, coords,
     Fresidual, F_delta_x, F_rhs_delta, Fv, Fw, nl_solver_params;
     test_numerical_conserving_terms=false,
+    test_linearised_advance=false,
     test_particle_preconditioner=false,
     test_self_operator=true,
     test_assembly_serial=false,
@@ -289,29 +292,51 @@ function backward_euler_step!(Fnew, Fold, delta_t, ms, msp, nussp, fkpl_arrays, 
     end
     
     begin_s_r_z_anyv_region()
-    calculate_test_particle_preconditioner!(Fold,delta_t,ms,msp,nussp,
+    
+    if test_particle_preconditioner
+      calculate_test_particle_preconditioner!(Fold,delta_t,ms,msp,nussp,
         vpa,vperp,vpa_spectral,vperp_spectral,
         fkpl_arrays,boundary_data_option=boundary_data_option)
-    lu_precon = lu(fkpl_arrays.Precon2D_sparse) 
-    function test_particle_precon!(x)
-        pdf = x
-        pdf_scratch = fkpl_arrays.rhsvpavperp
-        begin_anyv_region()
-        @anyv_serial_region begin
-            @views @. pdf_scratch = pdf
-            pdf_c = vec(pdf)
-            pdf_scratch_c = vec(pdf_scratch)
-            ldiv!(pdf_c,lu_precon,pdf_scratch_c)
-        end
-        return nothing
-    end
-    if test_particle_preconditioner
-        right_preconditioner = test_particle_precon!
+      println(fkpl_arrays.CC2D_sparse.nzval)
+      println(fkpl_arrays.MM2D_sparse.nzval)
+      println( abs(maximum(fkpl_arrays.CC2D_sparse.nzval - fkpl_arrays.MM2D_sparse.nzval)))
+      println( fkpl_arrays.CC2D_sparse.nzval - fkpl_arrays.MM2D_sparse.nzval)
+      println(fkpl_arrays.CC2D_sparse.colptr == fkpl_arrays.MM2D_sparse.colptr)
+      println(fkpl_arrays.CC2D_sparse.colptr)
+      println(fkpl_arrays.CC2D_sparse.colptr - fkpl_arrays.MM2D_sparse.colptr)
+      println(fkpl_arrays.CC2D_sparse.rowval == fkpl_arrays.MM2D_sparse.rowval)      
+      println(fkpl_arrays.CC2D_sparse.rowval - fkpl_arrays.MM2D_sparse.rowval)      
+      println(fkpl_arrays.CC2D_sparse.rowval)      
+      
+      #println(fkpl_arrays.MM2D_sparse)
+      
+      lu_CC = lu(fkpl_arrays.CC2D_sparse) 
+      function test_particle_precon!(x)
+         pdf = x
+         pdf_scratch = fkpl_arrays.rhsvpavperp
+         pdf_dummy = fkpl_arrays.S_dummy
+         MM2D_sparse = fkpl_arrays.MM2D_sparse
+         begin_anyv_region()
+         @anyv_serial_region begin
+             @views @. pdf_scratch = pdf
+             pdf_c = vec(pdf)
+             pdf_scratch_c = vec(pdf_scratch)
+             pdf_dummy_c = vec(pdf_dummy)
+             mul!(pdf_dummy_c, MM2D_sparse, pdf_scratch_c)
+             ldiv!(pdf_c,lu_CC,pdf_dummy_c)
+         end
+         return nothing
+      end 
+      right_preconditioner = test_particle_precon!
     else
         right_preconditioner = nothing
     end
-    newton_solve!(Fnew, residual_func!, Fresidual, F_delta_x, F_rhs_delta, Fv, Fw, nl_solver_params;
+    if test_linearised_advance
+      test_particle_precon!(Fnew)
+    else
+      newton_solve!(Fnew, residual_func!, Fresidual, F_delta_x, F_rhs_delta, Fv, Fw, nl_solver_params;
                       coords, right_preconditioner=right_preconditioner)
+    end
     _anyv_subblock_synchronize()
     begin_serial_region()
 end    
