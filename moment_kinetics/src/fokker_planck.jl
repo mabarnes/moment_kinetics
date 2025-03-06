@@ -72,7 +72,7 @@ using ..fokker_planck_calculus: elliptic_solve!, algebraic_solve!, allocate_prec
 using ..fokker_planck_calculus: calculate_rosenbluth_potentials_via_elliptic_solve!,
                                 calculate_rosenbluth_potentials_via_analytical_Maxwellian!
 using ..fokker_planck_test: Cssp_fully_expanded_form, calculate_collisional_fluxes#, H_Maxwellian, dGdvperp_Maxwellian
-#using ..fokker_planck_test: d2Gdvpa2_Maxwellian, d2Gdvperpdvpa_Maxwellian, d2Gdvperp2_Maxwellian, dHdvpa_Maxwellian, dHdvperp_Maxwellian
+using ..fokker_planck_test: d2Gdvpa2_Maxwellian, d2Gdvperpdvpa_Maxwellian, d2Gdvperp2_Maxwellian, dHdvpa_Maxwellian, dHdvperp_Maxwellian
 using ..fokker_planck_test: F_Maxwellian, dFdvpa_Maxwellian, dFdvperp_Maxwellian
 using ..reference_parameters: setup_reference_parameters
 
