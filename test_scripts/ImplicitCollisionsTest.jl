@@ -92,7 +92,7 @@ function diagnose_F_gif(pdf,vpa,vperp,ntime)
     end
 end
 
-function test_implicit_collisions(; vperp0=1.0,vpa0=0.0, ngrid=3,nelement_vpa=8,nelement_vperp=4,
+function test_implicit_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=3,nelement_vpa=8,nelement_vperp=4,
     Lvpa=6.0,Lvperp=3.0,ntime=1,delta_t=1.0,
     restart = 8,
     max_restarts = 1,
@@ -164,7 +164,12 @@ function test_implicit_collisions(; vperp0=1.0,vpa0=0.0, ngrid=3,nelement_vpa=8,
     fvpavperp = allocate_shared_float(vpa.n,vperp.n,ntime+1)
     @serial_region begin
         @loop_vperp_vpa ivperp ivpa begin
-            fvpavperp[ivpa,ivperp,1] = exp(-(vpa.grid[ivpa]-vpa0)^2 - (vperp.grid[ivperp]-vperp0)^2)
+            fvpavperp[ivpa,ivperp,1] = exp(-((vpa.grid[ivpa]-vpa0)^2 + (vperp.grid[ivperp]-vperp0)^2)/(vth0^2))
+        end
+        # normalise to unit density
+        @views densfac = get_density(fvpavperp[:,:,1],vpa,vperp)
+        @loop_vperp_vpa ivperp ivpa begin
+            fvpavperp[ivpa,ivperp,1] /= densfac
         end
     end
     # arrays needed for advance
