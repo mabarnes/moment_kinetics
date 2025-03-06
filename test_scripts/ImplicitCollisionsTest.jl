@@ -92,7 +92,7 @@ function diagnose_F_gif(pdf,vpa,vperp,ntime)
     end
 end
 
-function test_implicit_collisions(; ngrid=3,nelement_vpa=8,nelement_vperp=4,
+function test_implicit_collisions(; vperp0=1.0,vpa0=0.0, ngrid=3,nelement_vpa=8,nelement_vperp=4,
     Lvpa=6.0,Lvperp=3.0,ntime=1,delta_t=1.0,
     restart = 8,
     max_restarts = 1,
@@ -163,7 +163,7 @@ function test_implicit_collisions(; ngrid=3,nelement_vpa=8,nelement_vperp=4,
     fvpavperp = allocate_shared_float(vpa.n,vperp.n,ntime+1)
     @serial_region begin
         @loop_vperp_vpa ivperp ivpa begin
-            fvpavperp[ivpa,ivperp,1] = exp(-vpa.grid[ivpa]^2 - (vperp.grid[ivperp]-1)^2)
+            fvpavperp[ivpa,ivperp,1] = exp(-(vpa.grid[ivpa]-vpa0)^2 - (vperp.grid[ivperp]-vperp0)^2)
         end
     end
     # arrays needed for advance
@@ -297,16 +297,16 @@ function backward_euler_step!(Fnew, Fold, delta_t, ms, msp, nussp, fkpl_arrays, 
       calculate_test_particle_preconditioner!(Fold,delta_t,ms,msp,nussp,
         vpa,vperp,vpa_spectral,vperp_spectral,
         fkpl_arrays,boundary_data_option=boundary_data_option)
-      println(fkpl_arrays.CC2D_sparse.nzval)
-      println(fkpl_arrays.MM2D_sparse.nzval)
-      println( abs(maximum(fkpl_arrays.CC2D_sparse.nzval - fkpl_arrays.MM2D_sparse.nzval)))
-      println( fkpl_arrays.CC2D_sparse.nzval - fkpl_arrays.MM2D_sparse.nzval)
-      println(fkpl_arrays.CC2D_sparse.colptr == fkpl_arrays.MM2D_sparse.colptr)
-      println(fkpl_arrays.CC2D_sparse.colptr)
-      println(fkpl_arrays.CC2D_sparse.colptr - fkpl_arrays.MM2D_sparse.colptr)
-      println(fkpl_arrays.CC2D_sparse.rowval == fkpl_arrays.MM2D_sparse.rowval)      
-      println(fkpl_arrays.CC2D_sparse.rowval - fkpl_arrays.MM2D_sparse.rowval)      
-      println(fkpl_arrays.CC2D_sparse.rowval)      
+      #println(fkpl_arrays.CC2D_sparse.nzval)
+      #println(fkpl_arrays.MM2D_sparse.nzval)
+      #println( abs(maximum(fkpl_arrays.CC2D_sparse.nzval - fkpl_arrays.MM2D_sparse.nzval)))
+      #println( fkpl_arrays.CC2D_sparse.nzval - fkpl_arrays.MM2D_sparse.nzval)
+      #println(fkpl_arrays.CC2D_sparse.colptr == fkpl_arrays.MM2D_sparse.colptr)
+      #println(fkpl_arrays.CC2D_sparse.colptr)
+      #println(fkpl_arrays.CC2D_sparse.colptr - fkpl_arrays.MM2D_sparse.colptr)
+      #println(fkpl_arrays.CC2D_sparse.rowval == fkpl_arrays.MM2D_sparse.rowval)      
+      #println(fkpl_arrays.CC2D_sparse.rowval - fkpl_arrays.MM2D_sparse.rowval)      
+      #println(fkpl_arrays.CC2D_sparse.rowval)      
       
       #println(fkpl_arrays.MM2D_sparse)
       

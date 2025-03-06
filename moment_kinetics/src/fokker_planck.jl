@@ -228,9 +228,7 @@ function init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_sp
     dFdvpa = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
     dFdvperp = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
     # preconditioner matrix
-    CC2D_sparse = allocate_preconditioner_matrix(vpa,vperp,vpa_spectral,vperp_spectral)
-    Precon2D_sparse = allocate_preconditioner_matrix(vpa,vperp,vpa_spectral,vperp_spectral)
-
+    CC2D_sparse, CC2D_sparse_constructor = allocate_preconditioner_matrix(vpa,vperp,vpa_spectral,vperp_spectral)
     fka = fokkerplanck_weakform_arrays_struct(bwgt,rpbd,MM2D_sparse,KKpar2D_sparse,KKperp2D_sparse,
                                            KKpar2D_with_BC_terms_sparse,KKperp2D_with_BC_terms_sparse,
                                            LP2D_sparse,LV2D_sparse,LB2D_sparse,PUperp2D_sparse,PPparPUperp2D_sparse,
@@ -239,7 +237,7 @@ function init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_sp
                                            YY_arrays, S_dummy, Q_dummy, rhsvpavperp, rhsvpavperp_copy1, rhsvpavperp_copy2, rhsvpavperp_copy3,
                                            CC, GG, HH, dHdvpa, dHdvperp, dGdvperp, d2Gdvperp2, d2Gdvpa2, d2Gdvperpdvpa,
                                            FF, dFdvpa, dFdvperp, 
-                                           CC2D_sparse, Precon2D_sparse)
+                                           CC2D_sparse, CC2D_sparse_constructor)
     return fka
 end
 
