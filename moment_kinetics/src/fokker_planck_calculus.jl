@@ -24,6 +24,7 @@ export fokkerplanck_arrays_direct_integration_struct
 export fokkerplanck_weakform_arrays_struct
 export enforce_vpavperp_BCs!
 export calculate_rosenbluth_potentials_via_elliptic_solve!
+export calculate_rosenbluth_potentials_via_analytical_Maxwellian!
 export allocate_preconditioner_matrix
 export calculate_test_particle_preconditioner!
 
@@ -2564,8 +2565,10 @@ end
 function calculate_test_particle_preconditioner!(pdf,delta_t,ms,msp,nussp,
     vpa,vperp,vpa_spectral,vperp_spectral,
     fkpl_arrays::fokkerplanck_weakform_arrays_struct;
-    algebraic_solve_for_d2Gdvperp2=false,calculate_GG=false,calculate_dGdvperp=false,
-             boundary_data_option=direct_integration)
+    use_Maxwellian_Rosenbluth_coefficients=false,
+    algebraic_solve_for_d2Gdvperp2=false,calculate_GG=false,
+    calculate_dGdvperp=false,
+    boundary_data_option=direct_integration)
     
     #Precon2D_sparse = fkpl_arrays.Precon2D_sparse
     #CC2D_sparse = fkpl_arrays.CC2D_sparse
@@ -2580,12 +2583,18 @@ function calculate_test_particle_preconditioner!(pdf,delta_t,ms,msp,nussp,
     d2Gdvpa2 = fkpl_arrays.d2Gdvpa2
     d2Gdvperpdvpa = fkpl_arrays.d2Gdvperpdvpa
     
-    calculate_rosenbluth_potentials_via_elliptic_solve!(GG,HH,dHdvpa,dHdvperp,
+    # consider making a wrapper function for the following block -- repeated in fokker_planck.jl
+    if use_Maxwellian_Rosenbluth_coefficients
+        calculate_rosenbluth_potentials_via_analytical_Maxwellian!(GG,HH,dHdvpa,dHdvperp,
+                 d2Gdvpa2,dGdvperp,d2Gdvperpdvpa,d2Gdvperp2,pdf,vpa,vperp)
+    else
+        calculate_rosenbluth_potentials_via_elliptic_solve!(GG,HH,dHdvpa,dHdvperp,
              d2Gdvpa2,dGdvperp,d2Gdvperpdvpa,d2Gdvperp2,pdf,
              vpa,vperp,vpa_spectral,vperp_spectral,fkpl_arrays,
              algebraic_solve_for_d2Gdvperp2=false,calculate_GG=false,
              calculate_dGdvperp=false,
              boundary_data_option=boundary_data_option)
+    end
     begin_anyv_region()
     # set the values of the matrix to zero before assembly
     CC2D_sparse_constructor.SS .= 0.0
@@ -3318,7 +3327,34 @@ function calculate_rosenbluth_potentials_via_direct_integration!(GG,HH,dHdvpa,dH
     return nothing           
 end
 
-
+"""
+Function to calculate Rosenbluth potentials for shifted Maxwellians
+using an analytical specification
+"""
+function calculate_rosenbluth_potentials_via_analytical_Maxwellian!(GG,HH,dHdvpa,dHdvperp,
+    d2Gdvpa2,dGdvperp,d2Gdvperpdvpa,d2Gdvperp2,ffsp_in,vpa,vperp)
+    begin_anyv_region()
+    dens = get_density(ffsp_in,vpa,vperp)
+    upar = get_upar(ffsp_in, vpa, vperp, dens)
+    ppar = get_ppar(ffsp_in, vpa, vperp, upar)
+    pperp = get_pperp(ffsp_in, vpa, vperp)
+    pressure = get_pressure(ppar,pperp)
+    vth = sqrt(2.0*pressure/dens)
+    begin_anyv_vperp_vpa_region()
+    @loop_vperp_vpa ivperp ivpa begin
+        HH[ivpa,ivperp] = H_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+        d2Gdvpa2[ivpa,ivperp] = d2Gdvpa2_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+        d2Gdvperp2[ivpa,ivperp] = d2Gdvperp2_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+        dGdvperp[ivpa,ivperp] = dGdvperp_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+        d2Gdvperpdvpa[ivpa,ivperp] = d2Gdvperpdvpa_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+        dHdvpa[ivpa,ivperp] = dHdvpa_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+        dHdvperp[ivpa,ivperp] = dHdvperp_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+    end
+    # Need to synchronize as these arrays may be read outside the locally-owned set of
+    # ivperp, ivpa indices in assemble_explicit_collision_operator_rhs_parallel!()
+    _anyv_subblock_synchronize()
+    return nothing
+end
 """
 Function to carry out the integration of the revelant
 distribution functions to form the required coefficients

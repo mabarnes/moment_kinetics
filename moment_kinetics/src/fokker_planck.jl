@@ -69,9 +69,10 @@ using ..fokker_planck_calculus: assemble_explicit_collision_operator_rhs_paralle
 using ..fokker_planck_calculus: calculate_YY_arrays, enforce_vpavperp_BCs!
 using ..fokker_planck_calculus: calculate_rosenbluth_potential_boundary_data!
 using ..fokker_planck_calculus: elliptic_solve!, algebraic_solve!, allocate_preconditioner_matrix
-using ..fokker_planck_calculus: calculate_rosenbluth_potentials_via_elliptic_solve!
-using ..fokker_planck_test: Cssp_fully_expanded_form, calculate_collisional_fluxes, H_Maxwellian, dGdvperp_Maxwellian
-using ..fokker_planck_test: d2Gdvpa2_Maxwellian, d2Gdvperpdvpa_Maxwellian, d2Gdvperp2_Maxwellian, dHdvpa_Maxwellian, dHdvperp_Maxwellian
+using ..fokker_planck_calculus: calculate_rosenbluth_potentials_via_elliptic_solve!,
+                                calculate_rosenbluth_potentials_via_analytical_Maxwellian!
+using ..fokker_planck_test: Cssp_fully_expanded_form, calculate_collisional_fluxes#, H_Maxwellian, dGdvperp_Maxwellian
+#using ..fokker_planck_test: d2Gdvpa2_Maxwellian, d2Gdvperpdvpa_Maxwellian, d2Gdvperp2_Maxwellian, dHdvpa_Maxwellian, dHdvperp_Maxwellian
 using ..fokker_planck_test: F_Maxwellian, dFdvpa_Maxwellian, dFdvperp_Maxwellian
 using ..reference_parameters: setup_reference_parameters
 
@@ -433,26 +434,8 @@ with \$\\gamma_\\mathrm{ref} = 2 \\pi e^4 \\ln \\Lambda_{ii} / (4 \\pi
     dFdvperp = fkpl_arrays.dFdvperp
     
     if use_Maxwellian_Rosenbluth_coefficients
-        begin_anyv_region()
-        dens = get_density(ffsp_in,vpa,vperp)
-        upar = get_upar(ffsp_in, vpa, vperp, dens)
-        ppar = get_ppar(ffsp_in, vpa, vperp, upar)
-        pperp = get_pperp(ffsp_in, vpa, vperp)
-        pressure = get_pressure(ppar,pperp)
-        vth = sqrt(2.0*pressure/dens)
-        begin_anyv_vperp_vpa_region()
-        @loop_vperp_vpa ivperp ivpa begin
-            HH[ivpa,ivperp] = H_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
-            d2Gdvpa2[ivpa,ivperp] = d2Gdvpa2_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
-            d2Gdvperp2[ivpa,ivperp] = d2Gdvperp2_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
-            dGdvperp[ivpa,ivperp] = dGdvperp_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
-            d2Gdvperpdvpa[ivpa,ivperp] = d2Gdvperpdvpa_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
-            dHdvpa[ivpa,ivperp] = dHdvpa_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
-            dHdvperp[ivpa,ivperp] = dHdvperp_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
-        end
-        # Need to synchronize as these arrays may be read outside the locally-owned set of
-        # ivperp, ivpa indices in assemble_explicit_collision_operator_rhs_parallel!()
-        _anyv_subblock_synchronize()
+        calculate_rosenbluth_potentials_via_analytical_Maxwellian!(GG,HH,dHdvpa,dHdvperp,
+                 d2Gdvpa2,dGdvperp,d2Gdvperpdvpa,d2Gdvperp2,ffsp_in,vpa,vperp)
     else
         calculate_rosenbluth_potentials_via_elliptic_solve!(GG,HH,dHdvpa,dHdvperp,
              d2Gdvpa2,dGdvperp,d2Gdvperpdvpa,d2Gdvperp2,ffsp_in,
