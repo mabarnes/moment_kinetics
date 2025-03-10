@@ -94,7 +94,7 @@ function diagnose_F_gif(pdf,vpa,vperp,ntime)
     end
 end
 
-function diagnose_F_gif(pdf,vpa,vperp,z,ntime)
+function diagnose_F_gif(pdf,Ez,phi,density,vpa,vperp,z,ntime)
     begin_serial_region()
     @serial_region begin
         iz = 1
@@ -109,6 +109,24 @@ function diagnose_F_gif(pdf,vpa,vperp,z,ntime)
             @views heatmap(z.grid, vpa.grid, pdf[:,ivperp,:,it], xlabel="z", ylabel="vpa", c = :deep, interpolation = :cubic)
         end
         outfile = string("implicit_collisions_pdf_vs_vpa_z_ivperp_1.gif")
+        gif(anim, outfile, fps=5)
+
+        anim = @animate for it in 1:ntime
+            @views plot(z.grid, Ez[:,it], xlabel="z", ylabel=L"Ez")
+        end
+        outfile = string("implicit_collisions_Ez_z.gif")
+        gif(anim, outfile, fps=5)
+        
+        anim = @animate for it in 1:ntime
+            @views plot(z.grid, phi[:,it], xlabel="z", ylabel=L"Ez")
+        end
+        outfile = string("implicit_collisions_phi_z.gif")
+        gif(anim, outfile, fps=5)
+        
+        anim = @animate for it in 1:ntime
+            @views plot(z.grid, density[:,it], xlabel="z", ylabel=L"Ez")
+        end
+        outfile = string("implicit_collisions_density_z.gif")
         gif(anim, outfile, fps=5)
     end
 end
@@ -365,6 +383,19 @@ function fokker_planck_backward_euler_step!(Fnew, Fold, delta_t, ms, msp, nussp,
     #begin_serial_region()
 end    
 
+function field_solve!(Ez, phi, density, Te, Ne, Fold, vpa, vperp, z, z_spectral)
+    begin_z_region()
+    @loop_z iz begin
+        @views density[iz] = get_density(Fold[:,:,iz],vpa,vperp)
+        phi[iz] = Te * log(density[iz]/Ne)
+    end
+    begin_serial_region()
+    @serial_region begin
+        derivative!(Ez, -phi, z, z_spectral)
+    end
+    return nothing
+end
+
 function test_implicit_standard_dke_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=3,nelement_vpa=8,nelement_vperp=4,ngrid_z=3,nelement_z=2,
     Lvpa=6.0,Lvperp=3.0,Lz=1.0,ntime=1,delta_t=1.0, nu_source = 1.0, nussp = 1.0,
     z_element_spacing_option="uniform",
@@ -446,6 +477,9 @@ function test_implicit_standard_dke_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, n
     
     # initial condition
     fvpavperpz = allocate_shared_float(vpa.n,vperp.n,z.n,ntime+1)
+    Ez_out = allocate_shared_float(z.n,ntime+1)
+    phi_out = allocate_shared_float(z.n,ntime+1)
+    density_out = allocate_shared_float(z.n,ntime+1)
     Hminus = allocate_float(vpa.n)
     Hplus = allocate_float(vpa.n)
     zerovpa = 1.e-10
@@ -506,6 +540,7 @@ function test_implicit_standard_dke_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, n
             FSource[ivpa,ivperp,iz] = nu_source * exp(-((vpa.grid[ivpa]-vpa0)^2 + (vperp.grid[ivperp]-vperp0)^2)/(vth0^2))/(vth0^3)
         end
     end
+    @views field_solve!(Ez_out[:,1], phi_out[:,1], density_out[:,1], Te, Ne, Fold, vpa, vperp, z, z_spectral)
     #diagnose_F_Maxwellian(Fold,Fdummy1,Fdummy2,Fdummy3,vpa,vperp,time,ms,0)
     
     # coords and params for newton_solve!() for collisions only
@@ -531,15 +566,7 @@ function test_implicit_standard_dke_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, n
             end
             z_advection_implicit_advance!(Fold,z,vpa,vperp,streaming_arrays)
             # compute fields
-            begin_z_region()
-            @loop_z iz begin
-                @views density[iz] = get_density(Fold[:,:,iz],vpa,vperp)
-                phi[iz] = Te * log(density[iz]/Ne)
-            end
-            begin_serial_region()
-            @serial_region begin
-                derivative!(Ez, -phi, z, z_spectral)
-            end
+            field_solve!(Ez, phi, density, Te, Ne, Fold, vpa, vperp, z, z_spectral)
         else
             Ez[1] = 1.0
         end
@@ -580,14 +607,17 @@ function test_implicit_standard_dke_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, n
         # update outputs
         @serial_region begin
             @loop_z_vperp_vpa iz ivperp ivpa begin
-                fvpavperpz[ivpa,ivperp,iz,it+1] = Fold[ivpa,ivperp,iz] 
+                fvpavperpz[ivpa,ivperp,iz,it+1] = Fold[ivpa,ivperp,iz]
+                Ez_out[iz,it+1] = Ez[iz]
+                phi_out[iz,it+1] = phi[iz]
+                density_out[iz,it+1] = density[iz]
             end
         end
     end
     
     #diagnose_F_Maxwellian(Fold,Fdummy1,Fdummy2,Fdummy3,vpa,vperp,ntime,ms)
     if plot_test_output
-        diagnose_F_gif(fvpavperpz,vpa,vperp,z,ntime)
+        diagnose_F_gif(fvpavperpz,Ez_out,phi_out,density_out,vpa,vperp,z,ntime)
     end    
 end
     
