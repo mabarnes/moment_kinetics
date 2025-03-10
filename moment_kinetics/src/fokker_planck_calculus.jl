@@ -15,6 +15,7 @@ export assemble_matrix_operators_dirichlet_bc_sparse
 export assemble_explicit_collision_operator_rhs_serial!
 export assemble_explicit_collision_operator_rhs_parallel!
 export assemble_explicit_collision_operator_rhs_parallel_analytical_inputs!
+export assemble_vpavperp_advection_terms!
 export YY_collision_operator_arrays, calculate_YY_arrays
 export calculate_rosenbluth_potential_boundary_data!
 export calculate_rosenbluth_potential_boundary_data_multipole!
@@ -255,6 +256,10 @@ struct YY_collision_operator_arrays
     MMpar::Array{mk_float,3}
     # MMperp[i,j,iel]
     MMperp::Array{mk_float,3}
+    # PPpar[i,j,iel]
+    PPpar::Array{mk_float,3}
+    # PPperp[i,j,iel]
+    PPperp::Array{mk_float,3}
 end
 
 """
@@ -2564,7 +2569,8 @@ end
 
 function calculate_test_particle_preconditioner!(pdf,delta_t,ms,msp,nussp,
     vpa,vperp,vpa_spectral,vperp_spectral,
-    fkpl_arrays::fokkerplanck_weakform_arrays_struct;
+    fkpl_arrays::fokkerplanck_weakform_arrays_struct,
+    dvpadt;
     use_Maxwellian_Rosenbluth_coefficients=false,
     algebraic_solve_for_d2Gdvperp2=false,calculate_GG=false,
     calculate_dGdvperp=false,
@@ -2623,6 +2629,7 @@ function calculate_test_particle_preconditioner!(pdf,delta_t,ms,msp,nussp,
             YY2par = YY_arrays.YY2par[:,:,:,ielement_vpa]
             YY3par = YY_arrays.YY3par[:,:,:,ielement_vpa]
             MMpar = YY_arrays.MMpar[:,:,ielement_vpa]
+            PPpar = YY_arrays.PPpar[:,:,ielement_vpa]
             # loop over field positions in each element
             for ivperp_local in 1:vperp.ngrid
                 for ivpa_local in 1:vpa.ngrid
@@ -2645,7 +2652,11 @@ function calculate_test_particle_preconditioner!(pdf,delta_t,ms,msp,nussp,
                             #                    MMperp[ivperp_local,jvperpp_local]))
                             assemble_constructor_value!(CC2D_sparse_constructor,icsc,
                                                 (MMpar[ivpa_local,jvpap_local]*
-                                                MMperp[ivperp_local,jvperpp_local]))
+                                                MMperp[ivperp_local,jvperpp_local]
+                            # use integration by parts and reverse indexing of PPpar 
+                            # to treat div ( dvpadt F)
+                                                - delta_t * dvpadt * PPpar[jvpap_local,ivpa_local]*
+                                                   MMperp[ivperp_local,jvperpp_local]))
                         end
                         # collision operator contribution
                         jvperpp = vperp.igrid_full[jvperpp_local,ielement_vperp]
@@ -2693,6 +2704,51 @@ function assemble_sparse_matrix_value!(matrix::AbstractSparseArray{mk_float,mk_i
     matrix.nzval[icsc] += value
 
     return nothing
+end
+
+function assemble_vpavperp_advection_terms!(rhsvpavperp,pdfs,dvpadt,
+    vpa,vperp,YY_arrays::YY_collision_operator_arrays)
+    # assume below that dvpadt independent of vpa vperp
+    @inbounds begin
+        begin_anyv_region()
+        @anyv_serial_region begin
+            # assemble RHS of collision operator
+            rhsc = vec(rhsvpavperp)
+            @. rhsc = 0.0
+            
+            # loop over elements
+            for ielement_vperp in 1:vperp.nelement_local
+                MMperp = YY_arrays.MMperp[:,:,ielement_vperp]
+                
+                for ielement_vpa in 1:vpa.nelement_local
+                    MMpar = YY_arrays.MMpar[:,:,:,ielement_vpa]
+                    PPpar = YY_arrays.PPpar[:,:,:,ielement_vpa]
+                    
+                    # loop over field positions in each element
+                    for ivperp_local in 1:vperp.ngrid
+                        for ivpa_local in 1:vpa.ngrid
+                            ic_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
+                            # carry out the matrix sum on each 2D element
+                            for jvperpp_local in 1:vperp.ngrid
+                                jvperpp = vperp.igrid_full[jvperpp_local,ielement_vperp]
+                                for jvpap_local in 1:vpa.ngrid
+                                    jvpap = vpa.igrid_full[jvpap_local,ielement_vpa]
+                                    pdfjj = pdfs[jvpap,jvperpp]
+                                    
+                                    # d  ( dvpadt F) dvpa, after integration by parts, assumming
+                                    # dvpadt independent of vpa, vperp, and using the indexing
+                                    # of PPpar to get derivatives in correct places.
+                                    rhsc[ic_global] += (-dvpadt * PPpar[jvpap_local,ivpa_local]*
+                                                         MMperp[ivperp_local,jvperpp_local]*pdfjj)
+                                end                                
+                            end
+                        end
+                    end 
+                end
+            end
+        end
+        return nothing
+    end
 end
 
 function assemble_explicit_collision_operator_matrix_inner_loop!(CC2D_sparse, delta_t,
@@ -2758,6 +2814,8 @@ function calculate_YY_arrays(vpa,vperp,vpa_spectral,vperp_spectral)
     YY3par = Array{mk_float,4}(undef,vpa.ngrid,vpa.ngrid,vpa.ngrid,vpa.nelement_local)
     MMpar = Array{mk_float,3}(undef,vpa.ngrid,vpa.ngrid,vpa.nelement_local)
     MMperp = Array{mk_float,3}(undef,vperp.ngrid,vperp.ngrid,vperp.nelement_local)
+    PPpar = Array{mk_float,3}(undef,vpa.ngrid,vpa.ngrid,vpa.nelement_local)
+    PPperp = Array{mk_float,3}(undef,vperp.ngrid,vperp.ngrid,vperp.nelement_local)
 
     for ielement_vperp in 1:vperp.nelement_local
         @views get_QQ_local!(YY0perp[:,:,:,ielement_vperp],ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"YY0")
@@ -2765,6 +2823,7 @@ function calculate_YY_arrays(vpa,vperp,vpa_spectral,vperp_spectral)
         @views get_QQ_local!(YY2perp[:,:,:,ielement_vperp],ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"YY2")
         @views get_QQ_local!(YY3perp[:,:,:,ielement_vperp],ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"YY3")
         @views get_QQ_local!(MMperp[:,:,ielement_vperp],ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"M")
+        @views get_QQ_local!(PPperp[:,:,ielement_vperp],ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"P")
         
     end
      for ielement_vpa in 1:vpa.nelement_local
@@ -2773,11 +2832,12 @@ function calculate_YY_arrays(vpa,vperp,vpa_spectral,vperp_spectral)
         @views get_QQ_local!(YY2par[:,:,:,ielement_vpa],ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"YY2")
         @views get_QQ_local!(YY3par[:,:,:,ielement_vpa],ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"YY3")
         @views get_QQ_local!(MMpar[:,:,ielement_vpa],ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"M")
+        @views get_QQ_local!(PPpar[:,:,ielement_vpa],ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"P")
      end
     
     return YY_collision_operator_arrays(YY0perp,YY1perp,YY2perp,YY3perp,
                                         YY0par,YY1par,YY2par,YY3par,
-                                        MMpar,MMperp)
+                                        MMpar,MMperp, PPpar,PPperp)
 end
 
 """

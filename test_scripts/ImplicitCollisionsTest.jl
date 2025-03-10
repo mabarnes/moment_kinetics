@@ -16,6 +16,7 @@ using moment_kinetics.fokker_planck: init_fokker_planck_collisions_weak_form
 using moment_kinetics.fokker_planck: fokker_planck_collision_operator_weak_form!
 using moment_kinetics.fokker_planck: conserving_corrections!
 using moment_kinetics.fokker_planck_calculus: enforce_vpavperp_BCs!, calculate_test_particle_preconditioner!
+using moment_kinetics.fokker_planck_calculus: assemble_vpavperp_advection_terms!
 using moment_kinetics.fokker_planck_test: F_Maxwellian, print_test_data
 using moment_kinetics.calculus: derivative!
 using moment_kinetics.velocity_moments: get_density, get_upar, get_ppar, get_pperp, get_pressure
@@ -281,7 +282,7 @@ end
 
 function fokker_planck_backward_euler_step!(Fnew, Fold, delta_t, ms, msp, nussp, fkpl_arrays, dummy_vpavperp,
     vperp, vpa, vperp_spectral, vpa_spectral, coords,
-    Fresidual, F_delta_x, F_rhs_delta, Fv, Fw, nl_solver_params;
+    Fresidual, F_delta_x, F_rhs_delta, Fv, Fw, nl_solver_params; dvpadt=0.0,
     test_numerical_conserving_terms=false,
     test_linearised_advance=false,
     test_particle_preconditioner=false,
@@ -313,9 +314,11 @@ function fokker_planck_backward_euler_step!(Fnew, Fold, delta_t, ms, msp, nussp,
             # make ad-hoc conserving corrections
             conserving_corrections!(fkpl_arrays.CC,Fnew,vpa,vperp,dummy_vpavperp)
         end
+        assemble_vpavperp_advection_terms!(fkpl_arrays.rhsvpavperp,Fnew,dvpadt,
+                                            vpa,vperp,fkpl_arrays.YY_arrays)
         begin_anyv_vperp_vpa_region()
         @loop_vperp_vpa ivperp ivpa begin
-            Fresidual[ivpa,ivperp] = Fnew[ivpa,ivperp] - Fold[ivpa,ivperp] - delta_t * fkpl_arrays.CC[ivpa,ivperp]
+            Fresidual[ivpa,ivperp] = Fnew[ivpa,ivperp] - Fold[ivpa,ivperp] - delta_t * (fkpl_arrays.CC[ivpa,ivperp] - fkpl_arrays.rhsvpavperp[ivpa,ivperp])
         end
         return nothing
     end
@@ -326,7 +329,7 @@ function fokker_planck_backward_euler_step!(Fnew, Fold, delta_t, ms, msp, nussp,
     if test_particle_preconditioner
       calculate_test_particle_preconditioner!(Fold,delta_t,ms,msp,nussp,
         vpa,vperp,vpa_spectral,vperp_spectral,
-        fkpl_arrays,
+        fkpl_arrays, dvpadt,
         use_Maxwellian_Rosenbluth_coefficients=use_Maxwellian_Rosenbluth_coefficients_in_preconditioner,
         boundary_data_option=boundary_data_option)
       
@@ -536,9 +539,11 @@ function test_implicit_standard_dke_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, n
         if true
             begin_s_r_z_anyv_region()
             @loop_z iz begin
+                dvpadt = 0.5*Ez[iz]
                 @views fokker_planck_backward_euler_step!(Fnew[:,:,iz], Fold[:,:,iz], delta_t, ms, msp, nussp, fkpl_arrays, dummy_vpavperp,
                     vperp, vpa, vperp_spectral, vpa_spectral, coords,
                     Fdummy1, Fdummy2, Fdummy3, Fdummy4, Fdummy5, nl_solver_params,
+                    dvpadt=dvpadt,
                     test_numerical_conserving_terms=test_numerical_conserving_terms,
                     test_particle_preconditioner=test_particle_preconditioner,
                     test_linearised_advance=test_linearised_advance,
