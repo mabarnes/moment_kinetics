@@ -682,6 +682,11 @@ We also normalise $f$ and write the DKEs for
       + \frac{3g_{s}}{2v_{\mathrm{th},s}}\frac{\partial n_{s}}{\partial t}
       - \frac{g_{s}n_{s}}{2v_{\mathrm{th},s}p_{\|,s}}\frac{\partial p_{\|,s}}{\partial t} \\
 %
+  \frac{\partial f_{s}}{\partial z}
+  & = \frac{n_{s}}{v_{\mathrm{th},s}}\frac{\partial g_{s}}{\partial z}
+      + \frac{3g_{s}}{2v_{\mathrm{th},s}}\frac{\partial n_{s}}{\partial z}
+      - \frac{g_{s}n_{s}}{2v_{\mathrm{th},s}p_{\|,s}}\frac{\partial p_{\|,s}}{\partial z} \\
+%
   \frac{\partial f_{s}}{\partial w_{\|,s}}
   & = \frac{n_{s}}{v_{\mathrm{th},s}}\frac{\partial g_{s}}{\partial w_{\|,s}},
 \end{align}
@@ -695,8 +700,10 @@ for the ion DKE and $-$'ve sign for the neutral DKE.
 \begin{align}
   & \frac{n_{s}}{v_{\mathrm{th},s}}\frac{\partial g_{s}}{\partial t}
   + \frac{3g_{s}}{2v_{\mathrm{th},s}}\frac{\partial n_{s}}{\partial t}
-  - \frac{g_{s}n_{s}}{2v_{\mathrm{th},s}p_{\|,s}}\frac{\partial p_{\|,s}}{\partial t}
-  + \left(v_{\mathrm{th},s}w_{\|,s} + u_{s}\right)\frac{\partial f_{s}}{\partial z} \\
+  - \frac{g_{s}n_{s}}{2v_{\mathrm{th},s}p_{\|,s}}\frac{\partial p_{\|,s}}{\partial t} \\
+  & + \frac{n_s}{v_{\mathrm{th},s}} \left(v_{\mathrm{th},s}w_{\|,s} + u_{s}\right)\frac{\partial g_{s}}{\partial z}
+  + \frac{3 g_s}{2 v_{\mathrm{th},s}} \left(v_{\mathrm{th},s}w_{\|,s} + u_{s}\right) \frac{\partial n_s}{\partial z}
+  - \frac{g_s n_s}{2 v_{\mathrm{th},s} p_{\parallel,s}} \left(v_{\mathrm{th},s}w_{\|,s} + u_{s}\right) \frac{\partial p_{\parallel,s}}{\partial z} \\
   & + \left[-\frac{1}{v_{\mathrm{th},s}}\left(\frac{\partial u_{s}}{\partial t}
   + \left(v_{\mathrm{th},s}w_{\|,s} + u_{s}\right)\frac{\partial u_{s}}{\partial z}
   + \frac{q_{s}}{2}\frac{\partial\phi}{\partial z}\right)\right. \\
@@ -720,10 +727,11 @@ for the ion DKE and $-$'ve sign for the neutral DKE.
 ```math
 \begin{align}
   \Rightarrow & \frac{\partial g_{s}}{\partial t}
-  + \frac{v_{\mathrm{th},s}}{n_{s}}\left(v_{\mathrm{th},s}w_{\|,s}
-  + u_{s}\right)\frac{\partial f_{s}}{\partial z}
+  + \left(v_{\mathrm{th},s}w_{\|,s} + u_{s}\right)\frac{\partial g_{s}}{\partial z}
   + \frac{3g_{s}}{2n_{s}}\frac{\partial n_{s}}{\partial t}
-  - \frac{g_{s}}{2p_{\|,s}}\frac{\partial p_{\|,s}}{\partial t} \\
+  - \frac{g_{s}}{2p_{\|,s}}\frac{\partial p_{\|,s}}{\partial t}
+  + \frac{3 g_s}{2 n_s} \left(v_{\mathrm{th},s}w_{\|,s} + u_{s}\right) \frac{\partial n_s}{\partial z}
+  - \frac{g_s}{2 p_{\parallel,s}} \left(v_{\mathrm{th},s}w_{\|,s} + u_{s}\right) \frac{\partial p_{\parallel,s}}{\partial z} \\
   & + \left[-\frac{1}{v_{\mathrm{th},s}}\left(\frac{\partial u_{s}}{\partial t}
   + \left(v_{\mathrm{th},s}w_{\|,s} + u_{s}\right)\frac{\partial u_{s}}{\partial z}
   + \frac{q_{s}}{2}\frac{\partial\phi}{\partial z}\right)
@@ -737,10 +745,11 @@ for the ion DKE and $-$'ve sign for the neutral DKE.
       + \frac{v_{\mathrm{th},s}}{n_{s}} S_{s} \\
 %
   \Rightarrow & \frac{\partial g_{s}}{\partial t}
-  + \frac{v_{\mathrm{th},s}}{n_{s}}\left(v_{\mathrm{th},s}w_{\|,s}
-  + u_{s}\right)\frac{\partial f_{s}}{\partial z}
+  + \left(v_{\mathrm{th},s}w_{\|,s} + u_{s}\right)\frac{\partial g_{s}}{\partial z}
   + \frac{3g_{s}}{2n_{s}}\frac{\partial n_{s}}{\partial t}
-  - \frac{g_{s}}{2p_{\|,s}}\frac{\partial p_{\|,s}}{\partial t} \\
+  - \frac{g_{s}}{2p_{\|,s}}\frac{\partial p_{\|,s}}{\partial t}
+  + \frac{3 g_s}{2 n_s} \left(v_{\mathrm{th},s}w_{\|,s} + u_{s}\right) \frac{\partial n_s}{\partial z}
+  - \frac{g_s}{2 p_{\parallel,s}} \left(v_{\mathrm{th},s}w_{\|,s} + u_{s}\right) \frac{\partial p_{\parallel,s}}{\partial z} \\
   & + \left[-\frac{1}{v_{\mathrm{th},s}}\left(\frac{n_{s}}{n_{s}}\frac{\partial u_{s}}{\partial t}
   + \frac{n_{s}}{n_{s}}\left(v_{\mathrm{th},s}w_{\|,s}
   + u_{s}\right)\frac{\partial u_{s}}{\partial z}
@@ -767,10 +776,11 @@ for the ion DKE and $-$'ve sign for the neutral DKE.
 ```math
 \begin{align}
   \Rightarrow & \frac{\partial g_{s}}{\partial t}
-  + \frac{v_{\mathrm{th},s}}{n_{s}}\left(v_{\mathrm{th},s}w_{\|,s}
-  + u_{s}\right)\frac{\partial f_{s}}{\partial z}
+  + \left(v_{\mathrm{th},s}w_{\|,s} + u_{s}\right)\frac{\partial g_{s}}{\partial z}
   + \frac{3g_{s}}{2n_{s}}\frac{\partial n_{s}}{\partial t}
-  - \frac{g_{s}}{2p_{\|,s}}\frac{\partial p_{\|,s}}{\partial t} \\
+  - \frac{g_{s}}{2p_{\|,s}}\frac{\partial p_{\|,s}}{\partial t}
+  + \frac{3 g_s}{2 n_s} \left(v_{\mathrm{th},s}w_{\|,s} + u_{s}\right) \frac{\partial n_s}{\partial z}
+  - \frac{g_s}{2 p_{\parallel,s}} \left(v_{\mathrm{th},s}w_{\|,s} + u_{s}\right) \frac{\partial p_{\parallel,s}}{\partial z} \\
   & + \left[-\frac{1}{n_{s}v_{\mathrm{th},s}}\left(\frac{\partial n_{s}u_{s}}{\partial t}
   + \left(v_{\mathrm{th},s}w_{\|,s} + u_{s}\right)\left(n_{s}\frac{\partial u_{s}}{\partial z}
   + u_{s}\frac{\partial n_{s}}{\partial z}\right)
@@ -793,10 +803,11 @@ So then if we use the moment equations we can rewrite the DKE as
 ```math
 \begin{align}
   & \frac{\partial g_{s}}{\partial t}
-  + \frac{v_{\mathrm{th},s}}{n_{s}}\left(v_{\mathrm{th},s}w_{\|,s}
-  + u_{s}\right)\frac{\partial f_{s}}{\partial z}
+  + \left(v_{\mathrm{th},s}w_{\|,s} + u_{s}\right)\frac{\partial g_{s}}{\partial z}
   + \frac{3g_{s}}{2n_{s}}\frac{\partial n_{s}}{\partial t}
-  - \frac{g_{s}}{2p_{\|,s}}\frac{\partial p_{\|,s}}{\partial t} \\
+  - \frac{g_{s}}{2p_{\|,s}}\frac{\partial p_{\|,s}}{\partial t}
+  + \frac{3 g_s}{2 n_s} \left(v_{\mathrm{th},s}w_{\|,s} + u_{s}\right) \frac{\partial n_s}{\partial z}
+  - \frac{g_s}{2 p_{\parallel,s}} \left(v_{\mathrm{th},s}w_{\|,s} + u_{s}\right) \frac{\partial p_{\parallel,s}}{\partial z} \\
   & + \left[-\frac{1}{n_{s}v_{\mathrm{th},s}}\left(\frac{\partial n_{s}u_{s}}{\partial t}
   + u_{s}\left(n_{s}\frac{\partial u_{s}}{\partial z}
   + u_{s}\frac{\partial n_{s}}{\partial z}\right)
@@ -826,18 +837,19 @@ So then if we use the moment equations we can rewrite the DKE as
 ```math
 \begin{align*}
   \Rightarrow & \frac{\partial g_{s}}{\partial t}
-  + \frac{v_{\mathrm{th},s}}{n_{s}}\left(v_{\mathrm{th},s}w_{\|,s}
-  + u_{s}\right)\frac{\partial f_{s}}{\partial z}
+  + \left(v_{\mathrm{th},s}w_{\|,s} + u_{s}\right)\frac{\partial g_{s}}{\partial z}
   + \frac{3g_{s}}{2n_{s}}\left(\pm R_{\mathrm{ion}}n_{i}n_{n} + \int dv_\parallel S_{s}
-  - u_{s}\frac{\partial n_{s}}{\partial z}
-  - n_{s}\frac{\partial u_{s}}{\partial z}\right) \\
-  & -\frac{g_{s}}{2p_{\|,s}}\left(-u_{s}\frac{\partial p_{\|,s}}{\partial z}
+  - \cancel{u_{s}\frac{\partial n_{s}}{\partial z}}
+  - n_{s}\frac{\partial u_{s}}{\partial z}
+  + \left(v_{\mathrm{th},s}w_{\|,s} + \cancel{u_{s}}\right) \frac{\partial n_s}{\partial z} \right) \\
+  & -\frac{g_{s}}{2p_{\|,s}}\left(-\cancel{u_{s}\frac{\partial p_{\|,s}}{\partial z}}
   - \frac{\partial q_{\|,s}}{\partial z}
   - 3p_{\|,s}\frac{\partial u_{s}}{\partial z}
   - R_{ss'}\left(n_{s'}p_{\|,s} - n_{s}p_{\|,s'}
   - m_{s}n_{s}n_{s'}\left(u_{s} - u_{s'}\right)^{2}\right)
   \pm R_{\mathrm{ion}}n_{i}\left(p_{\|,n} + m_{s}n_{n}\left(u_{n} - u_{s}\right)^{2}\right)
-  + \int dv_\parallel v_\parallel^2 S_{s} + u_{s}^2 \int dv_\parallel S_{s} \right) \\
+  + \int dv_\parallel v_\parallel^2 S_{s} + u_{s}^2 \int dv_\parallel S_{s}
+  + \left(v_{\mathrm{th},s}w_{\|,s} + \cancel{u_{s}}\right) \frac{\partial p_{\parallel,s}}{\partial z} \right) \\
   & + \left[-\frac{1}{n_{s}v_{\mathrm{th},s}}\left(-\underbrace{\cancel{n_{s}u_{s}\frac{\partial u_{s}}{\partial z}}}_{A}
   - \frac{\partial p_{\|,s}}{\partial z}
   + R_{ss'}n_{s}n_{s'}\left(u_{s'} - u_{s}\right)
@@ -862,11 +874,10 @@ So then if we use the moment equations we can rewrite the DKE as
       + \frac{v_{\mathrm{th},s}}{n_{s}} S_{s} \\
 %
   \Rightarrow & \frac{\partial g_{s}}{\partial t}
-  + \frac{v_{\mathrm{th},s}}{n_{s}}\left(v_{\mathrm{th},s}w_{\|,s}
-  + u_{s}\right)\frac{\partial f_{s}}{\partial z}
+  + \left(v_{\mathrm{th},s}w_{\|,s} + u_{s}\right)\frac{\partial g_{s}}{\partial z}
   + \frac{3g_{s}}{2n_{s}}\left(\pm R_{\mathrm{ion}}n_{i}n_{n} + \int dv_\parallel S_{s}
-  - u_{s}\frac{\partial n_{s}}{\partial z} - n_{s}\frac{\partial u_{s}}{\partial z}\right) \\
-  & -\frac{g_{s}}{2p_{\|,s}}\left(-u_{s}\frac{\partial p_{\|,s}}{\partial z}
+  + v_{\mathrm{th},s} w_{\parallel,s} \frac{\partial n_{s}}{\partial z} - n_{s}\frac{\partial u_{s}}{\partial z}\right) \\
+  & -\frac{g_{s}}{2p_{\|,s}}\left(v_{\mathrm{th},s} w_{\parallel,s}\frac{\partial p_{\|,s}}{\partial z}
   - \frac{\partial q_{\|,s}}{\partial z} - 3p_{\|,s}\frac{\partial u_{s}}{\partial z}
   - R_{ss'}\left(n_{s'}p_{\|,s} - n_{s}p_{\|,s'}
   - m_{s}n_{s}n_{s'}\left(u_{s} - u_{s'}\right)^{2}\right)
@@ -888,12 +899,11 @@ So then if we use the moment equations we can rewrite the DKE as
       + \frac{v_{\mathrm{th},s}}{n_{s}} S_{s}\\
 %
   \Rightarrow & \frac{\partial g_{s}}{\partial t}
-  + \frac{v_{\mathrm{th},s}}{n_{s}}\left(v_{\mathrm{th},s}w_{\|,s}
-  + u_{s}\right)\frac{\partial f_{s}}{\partial z}
+  + \left(v_{\mathrm{th},s}w_{\|,s} + u_{s}\right)\frac{\partial g_{s}}{\partial z}
   + g_{s}\left(\pm\frac{3}{2}R_{\mathrm{ion}}n_{i}\frac{n_{n}}{n_{s}}
   + \frac{3}{2n_{s}}\int dv_\parallel S_{s}
-  - \frac{3u_{s}}{2n_{s}}\frac{\partial n_{s}}{\partial z}\right) \\
-  & + g_{s}\left(\frac{u_{s}}{2p_{\|,s}}\frac{\partial p_{\|,s}}{\partial z}
+  + \frac{3 v_{\mathrm{th},s} w_{\parallel,s}}{2n_{s}}\frac{\partial n_{s}}{\partial z}\right) \\
+  & + g_{s}\left(-\frac{v_{\mathrm{th},s} w_{\parallel,s}}{2p_{\|,s}}\frac{\partial p_{\|,s}}{\partial z}
   + \frac{1}{2p_{\|,s}}\frac{\partial q_{\|,s}}{\partial z}
   + \frac{1}{2p_{\|,s}}R_{ss'}\left(n_{s'}p_{\|,s} - n_{s}p_{\|,s'}
   - n_{s}n_{s'}\left(u_{s} - u_{s'}\right)^{2}\right)
@@ -920,10 +930,11 @@ and finally using
 
 ```math
 \begin{align*}
-  \frac{u_{s}}{v_{\mathrm{th},s}}\frac{\partial v_{\mathrm{th},s}}{\partial z}
-  & =u_{s}\sqrt{\frac{n_{s}}{p_{\|,s}}}\frac{\partial}{\partial z}\sqrt{\frac{p_{\|,s}}{n_{s}}} \\
-  & = \frac{u_{s}}{2}\left(\frac{1}{p_{\|,s}}\frac{\partial p_{\|,s}}{\partial z}
-      - \frac{1}{n_{s}}\frac{\partial n_{s}}{\partial z}\right)
+  -w_{\parallel,s}\frac{\partial v_{\mathrm{th},s}}{\partial z}
+  & =-\frac{v_{\mathrm{th},s} w_{\parallel,s}}{v_{\mathrm{th},s}}\frac{\partial v_{\mathrm{th},s}}{\partial z} \\
+  & =-v_{\mathrm{th},s} w_{\parallel,s}\sqrt{\frac{n_{s}}{p_{\|,s}}}\frac{\partial}{\partial z}\sqrt{\frac{p_{\|,s}}{n_{s}}} \\
+  & = \frac{v_{\mathrm{th},s} w_{\parallel,s}}{2}\left(-\frac{1}{p_{\|,s}}\frac{\partial p_{\|,s}}{\partial z}
+      + \frac{1}{n_{s}}\frac{\partial n_{s}}{\partial z}\right)
 \end{align*}
 ```
 
@@ -936,12 +947,11 @@ gives
 ```math
 \begin{align}
   \Rightarrow & \frac{\partial g_{s}}{\partial t}
-  + \frac{v_{\mathrm{th},s}}{n_{s}}\left(v_{\mathrm{th},s}w_{\|,s}
-  + u_{s}\right)\frac{\partial f_{s}}{\partial z}
+  + \left(v_{\mathrm{th},s}w_{\|,s} + u_{s}\right)\frac{\partial g_{s}}{\partial z}
   + \left(\pm\frac{3}{2}R_{\mathrm{ion}}n_{i}\frac{n_{n}}{n_{s}}
   + \frac{3}{2n_{s}} \int dv_\parallel S_{s}
-  - \frac{u_{s}}{n_{s}}\frac{\partial n_{s}}{\partial z}\right)g_{s} \\
-  & + \left(\frac{u_{s}}{v_{\mathrm{th},s}}\frac{\partial v_{\mathrm{th},s}}{\partial z}
+  + \frac{v_{\mathrm{th},s} w_{\parallel,s}}{n_{s}}\frac{\partial n_{s}}{\partial z}\right)g_{s} \\
+  & + \left(-w_{\parallel,s}\frac{\partial v_{\mathrm{th},s}}{\partial z}
   + \frac{1}{2p_{\|,s}}\frac{\partial q_{\|,s}}{\partial z}\right. \\
   & \qquad + \frac{1}{2p_{\|,s}}R_{ss'}\left(n_{s'}p_{\|,s} - n_{s}p_{\|,s'}
   - n_{s}n_{s'}\left(u_{s} - u_{s'}\right)^{2}\right) \\
@@ -970,11 +980,10 @@ Writing out the final result fully for ions
 ```math
 \begin{align}
   & \frac{\partial g_{i}}{\partial t}
-  + \frac{v_{\mathrm{th},i}}{n_{i}}\left(v_{\mathrm{th},i}w_{\|,i}
-  + u_{i}\right)\frac{\partial f_{i}}{\partial z}
+  + \left(v_{\mathrm{th},i}w_{\|,i} + u_{i}\right)\frac{\partial g_{i}}{\partial z}
   + \left(\frac{3}{2}R_{\mathrm{ion}}n_{n} + \frac{3}{2n_{i}}\int dv_\parallel S_{i}
-  - \frac{u_{i}}{n_{i}}\frac{\partial n_{i}}{\partial z}\right)g_{i} \\
-  & + \left(\frac{u_{i}}{v_{\mathrm{th},i}}\frac{\partial v_{\mathrm{th},i}}{\partial z}
+  + \frac{v_{\mathrm{th},i} w_{\parallel,i}}{n_{i}}\frac{\partial n_{i}}{\partial z}\right)g_{i} \\
+  & + \left(-w_{\parallel,i}\frac{\partial v_{\mathrm{th},i}}{\partial z}
   + \frac{1}{2p_{\|,i}}\frac{\partial q_{\|,i}}{\partial z}\right. \\
   & \qquad + \frac{1}{2p_{\|,i}}R_{in}\left(n_{n}p_{\|,i} - n_{i}p_{\|,n}
   - n_{i}n_{n}\left(u_{i} - u_{n}\right)^{2}\right) \\
@@ -1003,11 +1012,10 @@ and for neutrals where several of the ionization terms cancel
 ```math
 \begin{align}
   \Rightarrow & \frac{\partial g_{n}}{\partial t}
-  + \frac{v_{\mathrm{th},n}}{n_{n}}\left(v_{\mathrm{th},n}w_{\|,n}
-  + u_{n}\right)\frac{\partial f_{n}}{\partial z}
+  + \left(v_{\mathrm{th},n}w_{\|,n} + u_{n}\right)\frac{\partial f_{n}}{\partial z}
   + \left(-\frac{3}{2}R_{\mathrm{ion}}n_{i} + \frac{3}{2n_{n}}\int dv_\parallel S_{n}
-  - \frac{u_{n}}{n_{n}}\frac{\partial n_{n}}{\partial z}\right)g_{n} \\
-  & + \left(\frac{u_{n}}{v_{\mathrm{th},n}}\frac{\partial v_{\mathrm{th},n}}{\partial z}
+  + \frac{v_{\mathrm{th},n} w_{\parallel,n}}{n_{n}}\frac{\partial n_{n}}{\partial z}\right)g_{n} \\
+  & + \left(-w_{\parallel,n}\frac{\partial v_{\mathrm{th},n}}{\partial z}
   + \frac{1}{2p_{\|,n}}\frac{\partial q_{\|,n}}{\partial z}\right. \\
   & \qquad \left. + \frac{1}{2p_{\|,n}}R_{in}\left(n_{i}p_{\|,n} - n_{n}p_{\|,i}
   - n_{n}n_{i}\left(u_{n} - u_{i}\right)^{2}\right)
