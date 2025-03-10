@@ -307,18 +307,6 @@ function backward_euler_step!(Fnew, Fold, delta_t, ms, msp, nussp, fkpl_arrays, 
         fkpl_arrays,
         use_Maxwellian_Rosenbluth_coefficients=use_Maxwellian_Rosenbluth_coefficients_in_preconditioner,
         boundary_data_option=boundary_data_option)
-      #println(fkpl_arrays.CC2D_sparse.nzval)
-      #println(fkpl_arrays.MM2D_sparse.nzval)
-      #println( abs(maximum(fkpl_arrays.CC2D_sparse.nzval - fkpl_arrays.MM2D_sparse.nzval)))
-      #println( fkpl_arrays.CC2D_sparse.nzval - fkpl_arrays.MM2D_sparse.nzval)
-      #println(fkpl_arrays.CC2D_sparse.colptr == fkpl_arrays.MM2D_sparse.colptr)
-      #println(fkpl_arrays.CC2D_sparse.colptr)
-      #println(fkpl_arrays.CC2D_sparse.colptr - fkpl_arrays.MM2D_sparse.colptr)
-      #println(fkpl_arrays.CC2D_sparse.rowval == fkpl_arrays.MM2D_sparse.rowval)      
-      #println(fkpl_arrays.CC2D_sparse.rowval - fkpl_arrays.MM2D_sparse.rowval)      
-      #println(fkpl_arrays.CC2D_sparse.rowval)      
-      
-      #println(fkpl_arrays.MM2D_sparse)
       
       lu_CC = lu(fkpl_arrays.CC2D_sparse) 
       function test_particle_precon!(x)
@@ -356,12 +344,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     using Pkg
     Pkg.activate(".")
     
-#    println("test_numerical_conserving_terms=true")
     test_implicit_collisions(ngrid=3,nelement_vpa=8,nelement_vperp=4,ntime=50,delta_t=1.0,
       serial_solve=false,anyv_region=true,plot_test_output=false,
       test_numerical_conserving_terms=true)
-#    println("test_numerical_conserving_terms=false")
-#    test_implicit_collisions(ngrid=5,nelement_vpa=16,nelement_vperp=8,ntime=50,delta_t=1.0,
-#      serial_solve=false,anyv_region=true,plot_test_output=false,
-#      test_numerical_conserving_terms=false)
 end
