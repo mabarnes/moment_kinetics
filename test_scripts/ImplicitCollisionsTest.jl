@@ -16,7 +16,7 @@ using moment_kinetics.fokker_planck: init_fokker_planck_collisions_weak_form
 using moment_kinetics.fokker_planck: fokker_planck_collision_operator_weak_form!
 using moment_kinetics.fokker_planck: conserving_corrections!
 using moment_kinetics.fokker_planck_calculus: enforce_vpavperp_BCs!, calculate_test_particle_preconditioner!
-using moment_kinetics.fokker_planck_calculus: assemble_vpavperp_advection_terms!
+using moment_kinetics.fokker_planck_calculus: calculate_vpavperp_advection_terms!
 using moment_kinetics.fokker_planck_test: F_Maxwellian, print_test_data
 using moment_kinetics.calculus: derivative!
 using moment_kinetics.velocity_moments: get_density, get_upar, get_ppar, get_pperp, get_pressure
@@ -314,11 +314,12 @@ function fokker_planck_backward_euler_step!(Fnew, Fold, delta_t, ms, msp, nussp,
             # make ad-hoc conserving corrections
             conserving_corrections!(fkpl_arrays.CC,Fnew,vpa,vperp,dummy_vpavperp)
         end
-        assemble_vpavperp_advection_terms!(fkpl_arrays.rhsvpavperp,Fnew,dvpadt,
-                                            vpa,vperp,fkpl_arrays.YY_arrays)
+        calculate_vpavperp_advection_terms!(Fnew,
+            dvpadt,fkpl_arrays,vpa,vperp)
+        #println(vec(fkpl_arrays.rhs_advection))
         begin_anyv_vperp_vpa_region()
         @loop_vperp_vpa ivperp ivpa begin
-            Fresidual[ivpa,ivperp] = Fnew[ivpa,ivperp] - Fold[ivpa,ivperp] - delta_t * (fkpl_arrays.CC[ivpa,ivperp] - fkpl_arrays.rhsvpavperp[ivpa,ivperp])
+            Fresidual[ivpa,ivperp] = Fnew[ivpa,ivperp] - Fold[ivpa,ivperp] - delta_t * (fkpl_arrays.CC[ivpa,ivperp] + fkpl_arrays.rhs_advection[ivpa,ivperp])
         end
         return nothing
     end
@@ -365,7 +366,7 @@ function fokker_planck_backward_euler_step!(Fnew, Fold, delta_t, ms, msp, nussp,
 end    
 
 function test_implicit_standard_dke_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=3,nelement_vpa=8,nelement_vperp=4,ngrid_z=3,nelement_z=2,
-    Lvpa=6.0,Lvperp=3.0,Lz=1.0,ntime=1,delta_t=1.0, nu_source = 1.0,
+    Lvpa=6.0,Lvperp=3.0,Lz=1.0,ntime=1,delta_t=1.0, nu_source = 1.0, nussp = 1.0,
     z_element_spacing_option="uniform",
     restart = 8,
     max_restarts = 1,
@@ -436,7 +437,11 @@ function test_implicit_standard_dke_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, n
     end
     fkpl_arrays = init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_spectral; 
                         precompute_weights=precompute_weights, test_dense_matrix_construction=test_dense_construction)
-    streaming_arrays = init_z_advection_implicit(z,z_spectral,vperp,vpa,delta_t)
+    if z.n > 1
+        streaming_arrays = init_z_advection_implicit(z,z_spectral,vperp,vpa,delta_t)
+    else
+        streaming_arrays = nothing
+    end
     finish_init_time = now()
     
     # initial condition
@@ -489,7 +494,6 @@ function test_implicit_standard_dke_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, n
     # physics parameters
     ms = 1.0
     msp = 1.0
-    nussp = 1.0
     Te = 1.0
     Ne = 1.0
 
@@ -516,24 +520,28 @@ function test_implicit_standard_dke_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, n
                                 "nonlinear_max_iterations" => 100)),
         coords; serial_solve=serial_solve, anyv_region=anyv_region,
         preconditioner_type=Val(:lu))
-
+    
     for it in 1:ntime
-        # use operator splitting
-        # advance due to source and parallel streaming
-        begin_z_vperp_vpa_region()
-        @loop_z_vperp_vpa iz ivperp ivpa begin
-            Fold[ivpa,ivperp,iz] += delta_t * FSource[ivpa,ivperp,iz]
-        end
-        z_advection_implicit_advance!(Fold,z,vpa,vperp,streaming_arrays)
-        # compute fields
-        begin_z_region()
-        @loop_z iz begin
-            @views density[iz] = get_density(Fold[:,:,iz],vpa,vperp)
-            phi[iz] = Te * log(density[iz]/Ne)
-        end
-        begin_serial_region()
-        @serial_region begin
-            derivative!(Ez, -phi, z, z_spectral)
+        if z.n > 1
+            # use operator splitting
+            # advance due to source and parallel streaming
+            begin_z_vperp_vpa_region()
+            @loop_z_vperp_vpa iz ivperp ivpa begin
+                Fold[ivpa,ivperp,iz] += delta_t * FSource[ivpa,ivperp,iz]
+            end
+            z_advection_implicit_advance!(Fold,z,vpa,vperp,streaming_arrays)
+            # compute fields
+            begin_z_region()
+            @loop_z iz begin
+                @views density[iz] = get_density(Fold[:,:,iz],vpa,vperp)
+                phi[iz] = Te * log(density[iz]/Ne)
+            end
+            begin_serial_region()
+            @serial_region begin
+                derivative!(Ez, -phi, z, z_spectral)
+            end
+        else
+            Ez[1] = 1.0
         end
         # advance collisions and velocity advection
         if true

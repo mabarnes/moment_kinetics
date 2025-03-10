@@ -15,7 +15,7 @@ export assemble_matrix_operators_dirichlet_bc_sparse
 export assemble_explicit_collision_operator_rhs_serial!
 export assemble_explicit_collision_operator_rhs_parallel!
 export assemble_explicit_collision_operator_rhs_parallel_analytical_inputs!
-export assemble_vpavperp_advection_terms!
+export calculate_vpavperp_advection_terms!
 export YY_collision_operator_arrays, calculate_YY_arrays
 export calculate_rosenbluth_potential_boundary_data!
 export calculate_rosenbluth_potential_boundary_data_multipole!
@@ -317,6 +317,8 @@ struct fokkerplanck_weakform_arrays_struct{M <: AbstractSparseArray{mk_float,mk_
     # based on I - dt * C[delta F, F]
     CC2D_sparse::M
     CC2D_sparse_constructor::sparse_matrix_constructor
+    # dummy array for vpa vperp advection contributions
+    rhs_advection::MPISharedArray{mk_float,2}
 end
 
 """
@@ -2655,7 +2657,7 @@ function calculate_test_particle_preconditioner!(pdf,delta_t,ms,msp,nussp,
                                                 MMperp[ivperp_local,jvperpp_local]
                             # use integration by parts and reverse indexing of PPpar 
                             # to treat div ( dvpadt F)
-                                                - delta_t * dvpadt * PPpar[jvpap_local,ivpa_local]*
+                                                + delta_t * dvpadt * PPpar[ivpa_local,jvpap_local]*
                                                    MMperp[ivperp_local,jvperpp_local]))
                         end
                         # collision operator contribution
@@ -2706,13 +2708,31 @@ function assemble_sparse_matrix_value!(matrix::AbstractSparseArray{mk_float,mk_i
     return nothing
 end
 
+function calculate_vpavperp_advection_terms!(pdfs,
+    dvpadt,fkpl_arrays::fokkerplanck_weakform_arrays_struct,
+    vpa,vperp)
+
+    rhsvpavperp = fkpl_arrays.rhsvpavperp
+    rhs_advection = fkpl_arrays.rhs_advection
+    lu_obj_MM = fkpl_arrays.lu_obj_MM
+    # compute the stiffness matrix for vpa vperp advection
+    assemble_vpavperp_advection_terms!(rhsvpavperp,pdfs,dvpadt,
+        vpa,vperp,fkpl_arrays.YY_arrays)
+    # make 1D vector views of 2D arrays
+    rhs_advection_c = vec(rhs_advection)
+    rhsc = vec(rhsvpavperp)
+    # solve mass matrix problem
+    ldiv!(rhs_advection_c,lu_obj_MM,rhsc)
+    return nothing
+end
+
 function assemble_vpavperp_advection_terms!(rhsvpavperp,pdfs,dvpadt,
     vpa,vperp,YY_arrays::YY_collision_operator_arrays)
     # assume below that dvpadt independent of vpa vperp
     @inbounds begin
         begin_anyv_region()
         @anyv_serial_region begin
-            # assemble RHS of collision operator
+            # assemble RHS due to vpa vperp advection
             rhsc = vec(rhsvpavperp)
             @. rhsc = 0.0
             
@@ -2721,8 +2741,8 @@ function assemble_vpavperp_advection_terms!(rhsvpavperp,pdfs,dvpadt,
                 MMperp = YY_arrays.MMperp[:,:,ielement_vperp]
                 
                 for ielement_vpa in 1:vpa.nelement_local
-                    MMpar = YY_arrays.MMpar[:,:,:,ielement_vpa]
-                    PPpar = YY_arrays.PPpar[:,:,:,ielement_vpa]
+                    MMpar = YY_arrays.MMpar[:,:,ielement_vpa]
+                    PPpar = YY_arrays.PPpar[:,:,ielement_vpa]
                     
                     # loop over field positions in each element
                     for ivperp_local in 1:vperp.ngrid
@@ -2738,7 +2758,7 @@ function assemble_vpavperp_advection_terms!(rhsvpavperp,pdfs,dvpadt,
                                     # d  ( dvpadt F) dvpa, after integration by parts, assumming
                                     # dvpadt independent of vpa, vperp, and using the indexing
                                     # of PPpar to get derivatives in correct places.
-                                    rhsc[ic_global] += (-dvpadt * PPpar[jvpap_local,ivpa_local]*
+                                    rhsc[ic_global] += (-dvpadt * PPpar[ivpa_local,jvpap_local]*
                                                          MMperp[ivperp_local,jvperpp_local]*pdfjj)
                                 end                                
                             end
