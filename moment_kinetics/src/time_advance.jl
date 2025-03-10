@@ -3499,7 +3499,7 @@ with fvec_in an input and fvec_out the output
         end
 
         if advance.neutral_source_terms
-            source_terms_neutral!(fvec_out.pdf_neutral, fvec_in, moments, vpa, z, r, dt, z_spectral,
+            source_terms_neutral!(fvec_out.pdf_neutral, fvec_in, moments, vz, z, r, dt, z_spectral,
                         composition, collisions, external_source_settings.neutral)
         end
 
