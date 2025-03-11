@@ -2657,7 +2657,7 @@ function calculate_test_particle_preconditioner!(pdf,delta_t,ms,msp,nussp,
                                                 MMperp[ivperp_local,jvperpp_local]
                             # use integration by parts and reverse indexing of PPpar 
                             # to treat div ( dvpadt F)
-                                                - delta_t * dvpadt * PPpar[jvpap_local,ivpa_local]*
+                                                + delta_t * dvpadt * PPpar[ivpa_local,jvpap_local]*
                                                    MMperp[ivperp_local,jvperpp_local]))
                         end
                         # collision operator contribution
@@ -2758,7 +2758,7 @@ function assemble_vpavperp_advection_terms!(rhsvpavperp,pdfs,dvpadt,
                                     # d  ( dvpadt F) dvpa, after integration by parts, assumming
                                     # dvpadt independent of vpa, vperp, and using the indexing
                                     # of PPpar to get derivatives in correct places.
-                                    rhsc[ic_global] += (dvpadt * PPpar[jvpap_local,ivpa_local]*
+                                    rhsc[ic_global] += ( - dvpadt * PPpar[ivpa_local,jvpap_local]*
                                                          MMperp[ivperp_local,jvperpp_local]*pdfjj)
                                 end                                
                             end
@@ -3482,7 +3482,8 @@ Function to enforce boundary conditions on the collision operator
 result to be consistent with the boundary conditions imposed on the
 distribution function.
 """
-function enforce_vpavperp_BCs!(pdf,vpa,vperp,vpa_spectral,vperp_spectral)
+function enforce_vpavperp_BCs!(pdf,vpa,vperp,vpa_spectral,vperp_spectral;
+        lower_wall=false, upper_wall=false)
     nvpa = vpa.n
     nvperp = vperp.n
     ngrid_vperp = vperp.ngrid
@@ -3513,6 +3514,23 @@ function enforce_vpavperp_BCs!(pdf,vpa,vperp,vpa_spectral,vperp_spectral)
             pdf[ivpa,1] = -sum(buffer)/D0[1]
         end
     end
+    if lower_wall
+        # vpa_mask > 1 if -vpa.L < vpa.grid < 0+
+        vpa_mask = vpa.mask_low
+        begin_anyv_vperp_region()
+        @loop_vperp ivperp begin
+            pdf[:,ivperp] .*= vpa_mask
+        end
+    end
+    if upper_wall
+        # vpa_mask > 1 if vpa.L > vpa.grid > -0
+        vpa_mask = vpa.mask_up
+        begin_anyv_vperp_region()
+        @loop_vperp ivperp begin
+            pdf[:,ivperp] .*= vpa_mask
+        end
+    end
+    return nothing
 end
 
 """

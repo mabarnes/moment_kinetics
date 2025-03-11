@@ -548,9 +548,9 @@ old_precon_iterations = nl_solver_params.precon_iterations[]
         max(counter, nl_solver_params.max_nonlinear_iterations_this_step[])
     nl_solver_params.max_linear_iterations_this_step[] =
         max(linear_counter, nl_solver_params.max_linear_iterations_this_step[])
-    println("Newton iterations: ", counter)
-    println("Final residual: ", residual_norm)
-    println("Total linear iterations: ", linear_counter)
+#    println("Newton iterations: ", counter)
+#    println("Final residual: ", residual_norm)
+#    println("Total linear iterations: ", linear_counter)
 #    println("Linear iterations per Newton: ", linear_counter / counter)
 #    precon_count = nl_solver_params.precon_iterations[] - old_precon_iterations
 #    println("Total precon iterations: ", precon_count)

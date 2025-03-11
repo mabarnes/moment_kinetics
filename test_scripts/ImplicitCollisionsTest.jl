@@ -312,7 +312,9 @@ function fokker_planck_backward_euler_step!(Fnew, Fold, delta_t, ms, msp, nussp,
     algebraic_solve_for_d2Gdvperp2=false,
     calculate_GG = false, calculate_dGdvperp=false,
     boundary_data_option=multipole_expansion,
-    standalone=true)
+    standalone=true,
+    upper_wall=false,
+    lower_wall=false)
     
     # residual function to be used for Newton-Krylov
     function residual_func!(Fresidual, Fnew; krylov=false)
@@ -326,15 +328,19 @@ function fokker_planck_backward_euler_step!(Fnew, Fold, delta_t, ms, msp, nussp,
                                                 algebraic_solve_for_d2Gdvperp2=algebraic_solve_for_d2Gdvperp2,
                                                 calculate_GG = false, calculate_dGdvperp=false,
                                                 boundary_data_option=boundary_data_option)
+        # enforce the boundary conditions on CC before it is used for timestepping
+        enforce_vpavperp_BCs!(fkpl_arrays.CC,vpa,vperp,vpa_spectral,vperp_spectral,
+                        upper_wall=upper_wall,lower_wall=lower_wall)
         if test_numerical_conserving_terms && test_self_operator
-            # enforce the boundary conditions on CC before it is used for timestepping
-            enforce_vpavperp_BCs!(fkpl_arrays.CC,vpa,vperp,vpa_spectral,vperp_spectral)
             # make ad-hoc conserving corrections
             conserving_corrections!(fkpl_arrays.CC,Fnew,vpa,vperp,dummy_vpavperp)
         end
+        
         calculate_vpavperp_advection_terms!(Fnew,
             dvpadt,fkpl_arrays,vpa,vperp)
-        #println(vec(fkpl_arrays.rhs_advection))
+        # enforce the boundary conditions on advection terms before it is used for timestepping
+        enforce_vpavperp_BCs!(fkpl_arrays.rhs_advection,vpa,vperp,vpa_spectral,vperp_spectral,
+                        upper_wall=upper_wall,lower_wall=lower_wall)
         begin_anyv_vperp_vpa_region()
         @loop_vperp_vpa ivperp ivpa begin
             Fresidual[ivpa,ivperp] = Fnew[ivpa,ivperp] - Fold[ivpa,ivperp] - delta_t * (fkpl_arrays.CC[ivpa,ivperp] + fkpl_arrays.rhs_advection[ivpa,ivperp])
@@ -495,9 +501,9 @@ function test_implicit_standard_dke_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, n
     end
     @serial_region begin
         @loop_z_vperp_vpa iz ivperp ivpa begin
-            zfac = ((0.5 - z.grid[iz]/z.L)*(vpa.grid[ivpa]^2)*Hminus[ivpa] +
-                        (0.5 + z.grid[iz]/z.L)*(vpa.grid[ivpa]^2)*Hplus[ivpa])
-            fvpavperpz[ivpa,ivperp,iz,1] = zfac*exp(-((vpa.grid[ivpa])^2 + (vperp.grid[ivperp])^2)/(vth0^2))/(vth0^3)
+            zfac = (((0.5 - z.grid[iz]/z.L)^(0.5))*(vpa.grid[ivpa]^2)*Hminus[ivpa] +
+                        ((0.5 + z.grid[iz]/z.L)^(0.5))*(vpa.grid[ivpa]^2)*Hplus[ivpa])
+            fvpavperpz[ivpa,ivperp,iz,1] = 0.01*zfac*exp(-((vpa.grid[ivpa])^2 + (vperp.grid[ivperp])^2)/(vth0^2))/(vth0^3)
         end
     end
     # arrays needed for advance
@@ -590,7 +596,9 @@ function test_implicit_standard_dke_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, n
                     algebraic_solve_for_d2Gdvperp2=algebraic_solve_for_d2Gdvperp2,
                     calculate_GG = false, calculate_dGdvperp=false,
                     boundary_data_option=boundary_data_option,
-                    standalone=false)
+                    standalone=false,
+                    upper_wall=(iz==z.n && z.irank == z.nrank - 1 && z.n > 1),
+                    lower_wall=(iz==1 && z.irank == 0 && z.n > 1),)
             end
             begin_serial_region()
             # update the pdf
