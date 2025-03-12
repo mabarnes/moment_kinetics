@@ -112,19 +112,19 @@ function diagnose_F_gif(pdf,Ez,phi,density,vpa,vperp,z,ntime)
         gif(anim, outfile, fps=5)
 
         anim = @animate for it in 1:ntime
-            @views plot(z.grid, Ez[:,it], xlabel="z", ylabel=L"Ez")
+            @views plot(z.grid, Ez[:,it], xlabel="z", ylabel=L"E_z", label="")
         end
         outfile = string("implicit_collisions_Ez_z.gif")
         gif(anim, outfile, fps=5)
         
         anim = @animate for it in 1:ntime
-            @views plot(z.grid, phi[:,it], xlabel="z", ylabel=L"Ez")
+            @views plot(z.grid, phi[:,it], xlabel="z", ylabel=L"\phi", label="")
         end
         outfile = string("implicit_collisions_phi_z.gif")
         gif(anim, outfile, fps=5)
         
         anim = @animate for it in 1:ntime
-            @views plot(z.grid, density[:,it], xlabel="z", ylabel=L"Ez")
+            @views plot(z.grid, density[:,it], xlabel="z", ylabel=L"n_i", label="")
         end
         outfile = string("implicit_collisions_density_z.gif")
         gif(anim, outfile, fps=5)
@@ -403,7 +403,7 @@ function field_solve!(Ez, phi, density, Te, Ne, Fold, vpa, vperp, z, z_spectral)
 end
 
 function test_implicit_standard_dke_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=3,nelement_vpa=8,nelement_vperp=4,ngrid_z=3,nelement_z=2,
-    Lvpa=6.0,Lvperp=3.0,Lz=1.0,ntime=1,delta_t=1.0, nu_source = 1.0, nussp = 1.0,
+    Lvpa=6.0,Lvperp=3.0,Lz=1.0,ntime=1,delta_t=1.0, nu_source = 1.0, nussp = 1.0, Te = 1.0,
     z_element_spacing_option="uniform",
     restart = 8,
     max_restarts = 1,
@@ -503,7 +503,7 @@ function test_implicit_standard_dke_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, n
         @loop_z_vperp_vpa iz ivperp ivpa begin
             zfac = (((0.5 - z.grid[iz]/z.L)^(0.5))*(vpa.grid[ivpa]^2)*Hminus[ivpa] +
                         ((0.5 + z.grid[iz]/z.L)^(0.5))*(vpa.grid[ivpa]^2)*Hplus[ivpa])
-            fvpavperpz[ivpa,ivperp,iz,1] = 0.01*zfac*exp(-((vpa.grid[ivpa])^2 + (vperp.grid[ivperp])^2)/(vth0^2))/(vth0^3)
+            fvpavperpz[ivpa,ivperp,iz,1] = zfac*exp(-((vpa.grid[ivpa])^2 + (vperp.grid[ivperp])^2)/(vth0^2))/(vth0^3)
         end
     end
     # arrays needed for advance
@@ -534,7 +534,6 @@ function test_implicit_standard_dke_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, n
     # physics parameters
     ms = 1.0
     msp = 1.0
-    Te = 1.0
     Ne = 1.0
 
     # initial condition 
@@ -545,6 +544,14 @@ function test_implicit_standard_dke_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, n
             Fnew[ivpa,ivperp,iz] = Fold[ivpa,ivperp,iz]
             FSource[ivpa,ivperp,iz] = nu_source * exp(-((vpa.grid[ivpa]-vpa0)^2 + (vperp.grid[ivperp]-vperp0)^2)/(vth0^2))/(vth0^3)
         end
+        #@loop_vpa ivpa begin
+        #    if vpa.grid[ivpa] > 0.0
+        #        FSource[ivpa,:,1] .= 0.0
+        #    end
+        #    if vpa.grid[ivpa] < -0.0
+        #        FSource[ivpa,:,end] .= 0.0
+        #    end
+        #end
     end
     @views field_solve!(Ez_out[:,1], phi_out[:,1], density_out[:,1], Te, Ne, Fold, vpa, vperp, z, z_spectral)
     #diagnose_F_Maxwellian(Fold,Fdummy1,Fdummy2,Fdummy3,vpa,vperp,time,ms,0)
@@ -573,6 +580,8 @@ function test_implicit_standard_dke_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, n
             z_advection_implicit_advance!(Fold,z,vpa,vperp,streaming_arrays)
             # compute fields
             field_solve!(Ez, phi, density, Te, Ne, Fold, vpa, vperp, z, z_spectral)
+            #println(vec(Fold[:,3,1]))
+            #println(vec(Fold[:,3,end]))
         else
             Ez[1] = 1.0
         end
