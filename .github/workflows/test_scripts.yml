@@ -3,6 +3,10 @@ name: Check test_scripts
 
 on: [push, pull_request, workflow_dispatch]
 
+permissions:
+  actions: write
+  contents: read
+
 jobs:
   check-test-scripts:
     runs-on: ${{ matrix.os }}
