@@ -221,12 +221,16 @@ function init_z_advection_implicit(z,z_spectral,vperp,vpa,delta_t)
                         dzdt = vpa.grid[ivpa]
                         lower_wall = (ielement == 1 && iz_local == 1 && dzdt > zerovpa)
                         upper_wall = (ielement == nelement_z && iz_local == ngrid_z && dzdt < -zerovpa)
-                        if lower_wall && (iz_local == izp_local)
-                            # set bc row
-                            VV[icsc_z] = 1.0
-                        elseif upper_wall && (iz_local == izp_local)
-                            # set bc row
-                            VV[icsc_z] = 1.0
+                        if lower_wall
+                            if (iz_local == izp_local)
+                                # set bc row
+                                VV[icsc_z] = 1.0
+                            end
+                        elseif upper_wall
+                            if (iz_local == izp_local)
+                                # set bc row
+                                VV[icsc_z] = 1.0
+                            end
                         else
                             # assemble matrix
                             VV[icsc_z] += M0[iz_local,izp_local] + delta_t * dzdt * P0[iz_local,izp_local]
