@@ -227,8 +227,8 @@ function run_test(test_input, analytic_atol, expected_phi, regression_atol; args
         if expected_phi === nothing
             println("values tested would be ", phi[:,end])
         else
-println("check regression inputs\n", phi[:, end], ",\n", expected_phi, ";\nrtol=", 0.0,
-                                       ", atol=", regression_atol)
+println("check regression inputs ", phi[:, end], " ", expected_phi, "rtol=", 0.0,
+                                       "atol=", regression_atol)
             @test elementwise_isapprox(phi[:, end], expected_phi, rtol=0.0,
                                        atol=regression_atol)
         end
