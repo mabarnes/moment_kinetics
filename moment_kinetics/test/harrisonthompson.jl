@@ -224,7 +224,6 @@ function run_test(test_input, analytic_atol, expected_phi, regression_atol; args
                                    rtol=0.0, atol=10.0*analytic_atol)
 
         # Regression test
-println("check regression results ", phi[:, end])
         if expected_phi === nothing
             println("values tested would be ", phi[:,end])
         else
