@@ -3205,7 +3205,7 @@ end
                     max_electron_pdf_iterations, max_electron_sim_time;
                     update_electrons=update_electrons)
                 if bcs_constraints_success != ""
-                    success = bcs_constrains_success
+                    success = bcs_constraints_success
                 end
                 if success != ""
                     # Break out of the istage loop, as passing `success != ""` to the
@@ -3257,7 +3257,7 @@ end
             max_electron_sim_time; pdf_bc_constraints=apply_bc_constraints,
             update_electrons=update_electrons)
         if bcs_constraints_success != ""
-            success = bcs_constrains_success
+            success = bcs_constraints_success
         end
         if success != ""
             # Break out of the istage loop, as passing `success != ""` to the
