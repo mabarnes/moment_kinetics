@@ -385,7 +385,11 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
             end
             # Do a forward-Euler update of the electron pdf, and (if evove_ppar=true) the
             # electron parallel pressure.
-            @loop_r ir begin
+            # electron_kinetic_equation_euler_update!() is parallelised over {z,vperp,vpa}
+            # (so that it can be used inside a loop over r in the implicit solve), so the
+            # outer loop here should _not_ be parallelised (until we have defined an
+            # 'anyzv' region to allow parallelising over r as well).
+            for ir ∈ 1:r.n
                 @views electron_kinetic_equation_euler_update!(
                            scratch[istage+1].pdf_electron[:,:,:,ir],
                            scratch[istage+1].electron_ppar[:,ir],
