@@ -39,6 +39,14 @@ flow and/or pressure, and use them to update the pdf
                 end
             end
         end
+    elseif moments.evolve_upar
+        @loop_s is begin
+            @views source_terms_evolve_upar!(
+                pdf_out[:,:,:,:,is], fvec_in.pdf[:,:,:,:,is], fvec_in.density[:,:,is],
+                fvec_in.upar[:,:,is], moments.ion.ddens_dz[:,:,is],
+                moments.ion.dupar_dz[:,:,is], moments, z, r, vpa, dt, spectral,
+                ion_source_settings)
+        end
     elseif moments.evolve_density
         @loop_s is begin
             @views source_terms_evolve_density!(
@@ -48,6 +56,40 @@ flow and/or pressure, and use them to update the pdf
                 ion_source_settings)
         end
     end
+    return nothing
+end
+
+"""
+"""
+function source_terms_evolve_upar!(pdf_out, pdf_in, dens, upar, ddens_dz, dupar_dz,
+                                   moments, z, r, vpa, dt, spectral, ion_source_settings)
+    vpa_grid = vpa.grid
+
+    # update the density
+    @loop_r_z ir iz begin
+        # calculate dt * d(n*upar)/dz / n
+        factor1 = dt * (dens[iz,ir] * dupar_dz[iz,ir] + upar[iz,ir] * ddens_dz[iz,ir]) /
+                  dens[iz,ir]
+        factor2 = -dt * ddens_dz[iz,ir] / dens[iz,ir]
+        this_upar = upar[iz,ir]
+        @loop_vperp_vpa ivperp ivpa begin
+            pdf_out[ivpa,ivperp,iz,ir] += pdf_in[ivpa,ivperp,iz,ir] *
+                                          (factor1 + factor2 * (vpa_grid[ivpa] + this_upar))
+        end
+    end
+
+    for index ∈ eachindex(ion_source_settings)
+        if ion_source_settings[index].active
+            @views source_density_amplitude = moments.ion.external_source_density_amplitude[:, :, index]
+            @loop_r_z ir iz begin
+                term = dt * source_density_amplitude[iz,ir] / dens[iz,ir]
+                @loop_vperp_vpa ivperp ivpa begin
+                    pdf_out[ivpa,ivperp,iz,ir] -= term * pdf_in[ivpa,ivperp,iz,ir]
+                end
+            end
+        end
+    end
+
     return nothing
 end
 
@@ -177,6 +219,14 @@ flow and/or pressure, and use them to update the pdf
                     dt, z, r)
             end
         end
+    elseif moments.evolve_upar
+        @loop_sn isn begin
+            @views source_terms_evolve_upar_neutral!(
+                pdf_out[:,:,:,:,:,isn], fvec_in.pdf_neutral[:,:,:,:,:,isn],
+                fvec_in.density_neutral[:,:,isn], fvec_in.uz_neutral[:,:,isn],
+                moments.neutral.ddens_dz[:,:,isn], moments.neutral.duz_dz[:,:,isn],
+                moments, z, r, vz, dt, spectral, neutral_source_settings)
+        end
     elseif moments.evolve_density
         @loop_sn isn begin
             @views source_terms_evolve_density_neutral!(
@@ -186,6 +236,40 @@ flow and/or pressure, and use them to update the pdf
                 moments, z, r, vz, dt, spectral, neutral_source_settings)
         end
     end
+    return nothing
+end
+
+"""
+"""
+function source_terms_evolve_upar_neutral!(pdf_out, pdf_in, dens, upar, ddens_dz,
+                                           dupar_dz, moments, z, r, vz, dt, spectral,
+                                           neutral_source_settings)
+    vz_grid = vz.grid
+
+    # update the density
+    @loop_r_z ir iz begin
+        factor1 = dt * (dens[iz,ir] * dupar_dz[iz,ir] + upar[iz,ir] * ddens_dz[iz,ir]) /
+                  dens[iz,ir]
+        factor2 = -dt * ddens_dz[iz,ir] / dens[iz,ir]
+        this_upar = upar[iz,ir]
+        @loop_vzeta_vr_vz ivzeta ivr ivz begin
+            pdf_out[ivz,ivr,ivzeta,iz,ir] += pdf_in[ivz,ivr,ivzeta,iz,ir] *
+                                             (factor1 + factor2 * (vz_grid[ivz] + this_upar))
+        end
+    end
+
+    for index ∈ eachindex(neutral_source_settings)
+        if neutral_source_settings[index].active
+            @views source_density_amplitude = moments.neutral.external_source_density_amplitude[:, :, index]
+            @loop_r_z ir iz begin
+                term = dt * source_density_amplitude[iz,ir] / dens[iz,ir]
+                @loop_vzeta_vr_vz ivzeta ivr ivz begin
+                    pdf_out[ivz,ivr,ivzeta,iz,ir] -= term * pdf_in[ivz,ivr,ivzeta,iz,ir]
+                end
+            end
+        end
+    end
+
     return nothing
 end
 
