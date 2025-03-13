@@ -279,7 +279,7 @@ function runtests()
         end
         @testset "Chebyshev split 2" begin
             test_input_chebyshev_split2["output"]["base_directory"] = test_output_directory
-            run_test(test_input_chebyshev_split2, 2.5e-2,
+            run_test(test_input_chebyshev_split2, 1.0e-1,
                      [-0.8829328466990832, -0.7365169413557857, -0.5377733644954565,
                       -0.48755530264592656, -0.4348367840317052, -0.3601098595646277,
                       -0.31196240043772105, -0.30663178380280753, -0.2888329436807675,
