@@ -572,9 +572,9 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
                 end
             end
             t_params.moments_output_counter[] += 1
+            t_params.write_moments_output[] = false
             @serial_region begin
                 if io_electron !== nothing
-                    t_params.write_moments_output[] = false
                     write_electron_state(scratch, moments, t_params, io_electron,
                                          t_params.moments_output_counter[],
                                          local_pseudotime, residual_norm, r, z, vperp,
