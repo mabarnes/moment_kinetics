@@ -778,6 +778,22 @@ function total_external_ion_sources!(pdf, fvec, moments, ion_sources, vperp,
 end
 
 """
+    total_external_neutral_sources!(pdf, fvec, moments, ion_sources, vperp, vpa, dt, scratch_dummy)
+
+Contribute all of the neutral sources to the neutral pdf, one by one.
+"""
+function total_external_neutral_sources!(pdf, fvec, moments, neutral_sources, vzeta, 
+                                     vr, vz, dt)
+    for index ∈ eachindex(neutral_sources)
+        if neutral_sources[index].active
+            external_neutral_source!(pdf, fvec, moments, neutral_sources[index], 
+                                 index, vzeta, vr, vz, dt)
+        end
+    end
+    return nothing
+end
+
+"""
     external_ion_source!(pdf, fvec, moments, ion_source_settings, vperp, vpa, dt)
 
 Add external source term to the ion kinetic equation.
