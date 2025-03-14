@@ -258,10 +258,7 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
     end
 
     if initial_time !== nothing
-        @serial_region begin
-            t_params.t[] = initial_time
-        end
-        @_block_synchronize()
+        t_params.t[] = initial_time
         # Make sure that output times are set relative to this initial_time (the values in
         # t_params are set relative to 0.0).
         moments_output_times = t_params.moments_output_times .+ initial_time
