@@ -16,7 +16,7 @@ evolve the parallel pressure by solving the energy equation
                          ppar, fvec, moments, collisions, dt, spectral, composition,
                          ion_source_settings, num_diss_params) = begin
 
-    begin_s_r_z_region()
+    @begin_s_r_z_region()
 
     @loop_s_r_z is ir iz begin
         ppar[iz,ir,is] += dt*(-fvec.upar[iz,ir,is]*moments.ion.dppar_dz_upwind[iz,ir,is]
@@ -74,7 +74,7 @@ evolve the neutral parallel pressure by solving the energy equation
                          pz, fvec, moments, collisions, dt, spectral, composition,
                          neutral_source_settings, num_diss_params) = begin
 
-    begin_sn_r_z_region()
+    @begin_sn_r_z_region()
 
     @loop_sn_r_z isn ir iz begin
         pz[iz,ir,isn] += dt*(-fvec.uz_neutral[iz,ir,isn]*moments.neutral.dpz_dz_upwind[iz,ir,isn]

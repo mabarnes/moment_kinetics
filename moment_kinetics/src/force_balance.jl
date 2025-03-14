@@ -18,7 +18,7 @@ to update the parallel particle flux dens*upar for each species
                          spectral, composition, geometry, ion_source_settings,
                          num_diss_params) = begin
 
-    begin_s_r_z_region()
+    @begin_s_r_z_region()
 
     # account for momentum flux contribution to force balance
     density = fvec.density
@@ -78,7 +78,7 @@ end
                          spectral, composition, geometry, neutral_source_settings,
                          num_diss_params) = begin
 
-    begin_sn_r_z_region()
+    @begin_sn_r_z_region()
 
     # account for momentum flux contribution to force balance
     density = fvec.density_neutral

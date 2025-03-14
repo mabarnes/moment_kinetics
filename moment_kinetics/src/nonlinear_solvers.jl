@@ -138,7 +138,7 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); defa
         V_ppar = allocate_shared_float(coords.z.n, linear_restart+1)
         V_pdf = allocate_shared_float(reverse(coord_sizes)..., linear_restart+1)
 
-        begin_serial_region()
+        @begin_serial_region()
         @serial_region begin
             H .= 0.0
             c .= 0.0
@@ -158,7 +158,7 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); defa
         g = allocate_shared_float(linear_restart + 1)
         V = allocate_shared_float(reverse(coord_sizes)..., linear_restart+1)
 
-        begin_serial_region()
+        @begin_serial_region()
         @serial_region begin
             H .= 0.0
             c .= 0.0
@@ -567,7 +567,7 @@ end
                                rtol, atol, x) = begin
     z = coords.z
 
-    begin_z_region()
+    @begin_z_region()
 
     local_norm = 0.0
     if z.irank < z.nrank - 1
@@ -584,7 +584,7 @@ end
         end
     end
 
-    _block_synchronize()
+    @_block_synchronize()
     global_norm = Ref(local_norm)
     @timeit_debug global_timer "MPI.Reduce! comm_block" MPI.Reduce!(global_norm, +, comm_block[]) # global_norm is the norm_square for the block
 
@@ -592,7 +592,7 @@ end
         @timeit_debug global_timer "MPI.Allreduce! comm_inter_block" MPI.Allreduce!(global_norm, +, comm_inter_block[]) # global_norm is the norm_square for the whole grid
         global_norm[] = sqrt(global_norm[] / z.n_global)
     end
-    _block_synchronize()
+    @_block_synchronize()
     @timeit_debug global_timer "MPI.Bcast! comm_block" MPI.Bcast!(global_norm, comm_block[]; root=0)
 
     return global_norm[]
@@ -629,7 +629,7 @@ end
         zend = z.n + 1
     end
 
-    begin_z_region()
+    @begin_z_region()
 
     ppar_local_norm_square = 0.0
     @loop_z iz begin
@@ -639,7 +639,7 @@ end
         ppar_local_norm_square += (ppar_residual[iz] / (rtol * abs(x_ppar[iz]) + atol))^2
     end
 
-    _block_synchronize()
+    @_block_synchronize()
     global_norm_ppar = Ref(ppar_local_norm_square) # global_norm_ppar is the norm_square for ppar in the block
     @timeit_debug global_timer "MPI.Reduce! comm_block" MPI.Reduce!(global_norm_ppar, +, comm_block[])
 
@@ -648,7 +648,7 @@ end
         global_norm_ppar[] = global_norm_ppar[] / z.n_global
     end
 
-    begin_z_vperp_vpa_region()
+    @begin_z_vperp_vpa_region()
 
     pdf_local_norm_square = 0.0
     @loop_z iz begin
@@ -660,7 +660,7 @@ end
         end
     end
 
-    _block_synchronize()
+    @_block_synchronize()
     global_norm = Ref(pdf_local_norm_square)
     @timeit_debug global_timer "MPI.Reduce! comm_block" MPI.Reduce!(global_norm, +, comm_block[]) # global_norm is the norm_square for the block
 
@@ -670,7 +670,7 @@ end
 
         global_norm[] = sqrt(mean((global_norm_ppar[], global_norm[])))
     end
-    _block_synchronize()
+    @_block_synchronize()
 
     @timeit_debug global_timer "MPI.Bcast! comm_block" MPI.Bcast!(global_norm, comm_block[]; root=0)
 
@@ -686,7 +686,7 @@ end
     vperp = coords.vperp
     vpa = coords.vpa
 
-    begin_s_r_z_vperp_vpa_region()
+    @begin_s_r_z_vperp_vpa_region()
 
     local_norm = 0.0
     if r.irank < r.nrank - 1
@@ -708,7 +708,7 @@ end
         end
     end
 
-    _block_synchronize()
+    @_block_synchronize()
     global_norm = Ref(local_norm)
     @timeit_debug global_timer "MPI.Reduce! comm_block" MPI.Reduce!(global_norm, +, comm_block[]) # global_norm is the norm_square for the block
 
@@ -716,7 +716,7 @@ end
         @timeit_debug global_timer "MPI.Allreduce! comm_inter_block" MPI.Allreduce!(global_norm, +, comm_inter_block[]) # global_norm is the norm_square for the whole grid
         global_norm[] = sqrt(global_norm[] / (n_ion_species * r.n_global * z.n_global * vperp.n_global * vpa.n_global))
     end
-    _block_synchronize()
+    @_block_synchronize()
     @timeit_debug global_timer "MPI.Bcast! comm_block" MPI.Bcast!(global_norm, comm_block[]; root=0)
 
     return global_norm[]
@@ -728,7 +728,7 @@ end
 
     z = coords.z
 
-    begin_z_region()
+    @begin_z_region()
 
     z = coords.z
 
@@ -747,7 +747,7 @@ end
         end
     end
 
-    _block_synchronize()
+    @_block_synchronize()
     global_dot = Ref(local_dot)
     @timeit_debug global_timer "MPI.Reduce! comm_block" MPI.Reduce!(global_dot, +, comm_block[]) # global_dot is the dot for the block
 
@@ -790,7 +790,7 @@ end
         zend = z.n + 1
     end
 
-    begin_z_region()
+    @begin_z_region()
 
     ppar_local_dot = 0.0
     @loop_z iz begin
@@ -800,7 +800,7 @@ end
         ppar_local_dot += v_ppar[iz] * w_ppar[iz] / (rtol * abs(x_ppar[iz]) + atol)^2
     end
 
-    _block_synchronize()
+    @_block_synchronize()
     ppar_global_dot = Ref(ppar_local_dot)
     @timeit_debug global_timer "MPI.Reduce! comm_block" MPI.Reduce!(ppar_global_dot, +, comm_block[]) # ppar_global_dot is the ppar_dot for the block
 
@@ -809,7 +809,7 @@ end
         ppar_global_dot[] = ppar_global_dot[] / z.n_global
     end
 
-    begin_z_vperp_vpa_region()
+    @begin_z_vperp_vpa_region()
 
     pdf_local_dot = 0.0
     @loop_z_vperp_vpa iz ivperp ivpa begin
@@ -819,7 +819,7 @@ end
         pdf_local_dot += v_pdf[ivpa,ivperp,iz] * w_pdf[ivpa,ivperp,iz] / (rtol * abs(x_pdf[ivpa,ivperp,iz]) + atol)^2
     end
 
-    _block_synchronize()
+    @_block_synchronize()
     global_dot = Ref(pdf_local_dot)
     @timeit_debug global_timer "MPI.Reduce! comm_block" MPI.Reduce!(global_dot, +, comm_block[]) # global_dot is the dot for the block
 
@@ -842,7 +842,7 @@ end
     vperp = coords.vperp
     vpa = coords.vpa
 
-    begin_s_r_z_vperp_vpa_region()
+    @begin_s_r_z_vperp_vpa_region()
 
     local_dot = 0.0
     if r.irank < r.nrank - 1
@@ -863,7 +863,7 @@ end
         local_dot += v[ivpa,ivperp,iz,ir,is] * w[ivpa,ivperp,iz,ir,is] / (rtol * abs(x[ivpa,ivperp,iz,ir,is]) + atol)^2
     end
 
-    _block_synchronize()
+    @_block_synchronize()
     global_dot = Ref(local_dot)
     @timeit_debug global_timer "MPI.Reduce! comm_block" MPI.Reduce!(global_dot, +, comm_block[]) # global_dot is the dot for the block
 
@@ -881,7 +881,7 @@ end
 @timeit_debug global_timer parallel_map(
                   ::Val{:z}, func, result::AbstractArray{mk_float, 1}) = begin
 
-    begin_z_region()
+    @begin_z_region()
 
     @loop_z iz begin
         result[iz] = func()
@@ -892,7 +892,7 @@ end
 @timeit_debug global_timer parallel_map(
                   ::Val{:z}, func, result::AbstractArray{mk_float, 1}, x1) = begin
 
-    begin_z_region()
+    @begin_z_region()
 
     @loop_z iz begin
         result[iz] = func(x1[iz])
@@ -903,7 +903,7 @@ end
 @timeit_debug global_timer parallel_map(
                   ::Val{:z}, func, result::AbstractArray{mk_float, 1}, x1, x2) = begin
 
-    begin_z_region()
+    @begin_z_region()
 
     if isa(x2, AbstractArray)
         @loop_z iz begin
@@ -920,7 +920,7 @@ end
 @timeit_debug global_timer parallel_map(
                   ::Val{:z}, func, result::AbstractArray{mk_float, 1}, x1, x2, x3) = begin
 
-    begin_z_region()
+    @begin_z_region()
 
     if isa(x3, AbstractArray)
         @loop_z iz begin
@@ -989,13 +989,13 @@ end
 
     result_ppar, result_pdf = result
 
-    begin_z_region()
+    @begin_z_region()
 
     @loop_z iz begin
         result_ppar[iz] = func()
     end
 
-    begin_z_vperp_vpa_region()
+    @begin_z_vperp_vpa_region()
 
     @loop_z_vperp_vpa iz ivperp ivpa begin
         result_pdf[ivpa,ivperp,iz] = func()
@@ -1010,13 +1010,13 @@ end
     result_ppar, result_pdf = result
     x1_ppar, x1_pdf = x1
 
-    begin_z_region()
+    @begin_z_region()
 
     @loop_z iz begin
         result_ppar[iz] = func(x1_ppar[iz])
     end
 
-    begin_z_vperp_vpa_region()
+    @begin_z_vperp_vpa_region()
 
     @loop_z_vperp_vpa iz ivperp ivpa begin
         result_pdf[ivpa,ivperp,iz] = func(x1_pdf[ivpa,ivperp,iz])
@@ -1033,25 +1033,25 @@ end
 
     if isa(x2, Tuple)
         x2_ppar, x2_pdf = x2
-        begin_z_region()
+        @begin_z_region()
 
         @loop_z iz begin
             result_ppar[iz] = func(x1_ppar[iz], x2_ppar[iz])
         end
 
-        begin_z_vperp_vpa_region()
+        @begin_z_vperp_vpa_region()
 
         @loop_z_vperp_vpa iz ivperp ivpa begin
             result_pdf[ivpa,ivperp,iz] = func(x1_pdf[ivpa,ivperp,iz], x2_pdf[ivpa,ivperp,iz])
         end
     else
-        begin_z_region()
+        @begin_z_region()
 
         @loop_z iz begin
             result_ppar[iz] = func(x1_ppar[iz], x2)
         end
 
-        begin_z_vperp_vpa_region()
+        @begin_z_vperp_vpa_region()
 
         @loop_z_vperp_vpa iz ivperp ivpa begin
             result_pdf[ivpa,ivperp,iz] = func(x1_pdf[ivpa,ivperp,iz], x2)
@@ -1070,25 +1070,25 @@ end
 
     if isa(x3, Tuple)
         x3_ppar, x3_pdf = x3
-        begin_z_region()
+        @begin_z_region()
 
         @loop_z iz begin
             result_ppar[iz] = func(x1_ppar[iz], x2_ppar[iz], x3_ppar[iz])
         end
 
-        begin_z_vperp_vpa_region()
+        @begin_z_vperp_vpa_region()
 
         @loop_z_vperp_vpa iz ivperp ivpa begin
             result_pdf[ivpa,ivperp,iz] = func(x1_pdf[ivpa,ivperp,iz], x2_pdf[ivpa,ivperp,iz], x3_pdf[ivpa,ivperp,iz])
         end
     else
-        begin_z_region()
+        @begin_z_region()
 
         @loop_z iz begin
             result_ppar[iz] = func(x1_ppar[iz], x2_ppar[iz], x3)
         end
 
-        begin_z_vperp_vpa_region()
+        @begin_z_vperp_vpa_region()
 
         @loop_z_vperp_vpa iz ivperp ivpa begin
             result_pdf[ivpa,ivperp,iz] = func(x1_pdf[ivpa,ivperp,iz], x2_pdf[ivpa,ivperp,iz], x3)
@@ -1101,7 +1101,7 @@ end
 @timeit_debug global_timer parallel_map(
                   ::Val{:srzvperpvpa}, func, result::AbstractArray{mk_float, 5}) = begin
 
-    begin_s_r_z_vperp_vpa_region()
+    @begin_s_r_z_vperp_vpa_region()
 
     @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
         result[ivpa,ivperp,iz,ir,is] = func()
@@ -1112,7 +1112,7 @@ end
 @timeit_debug global_timer parallel_map(
                   ::Val{:srzvperpvpa}, func, result::AbstractArray{mk_float, 5}, x1) = begin
 
-    begin_s_r_z_vperp_vpa_region()
+    @begin_s_r_z_vperp_vpa_region()
 
     @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
         result[ivpa,ivperp,iz,ir,is] = func(x1[ivpa,ivperp,iz,ir,is])
@@ -1123,7 +1123,7 @@ end
 @timeit_debug global_timer parallel_map(
                   ::Val{:srzvperpvpa}, func, result::AbstractArray{mk_float, 5}, x1, x2) = begin
 
-    begin_s_r_z_vperp_vpa_region()
+    @begin_s_r_z_vperp_vpa_region()
 
     if isa(x2, AbstractArray)
         @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
@@ -1141,7 +1141,7 @@ end
                   ::Val{:srzvperpvpa}, func, result::AbstractArray{mk_float, 5}, x1, x2,
                   x3) = begin
 
-    begin_s_r_z_vperp_vpa_region()
+    @begin_s_r_z_vperp_vpa_region()
 
     if isa(x3, AbstractArray)
         @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
@@ -1159,7 +1159,7 @@ end
 @timeit_debug global_timer parallel_delta_x_calc(
                   ::Val{:z}, delta_x::AbstractArray{mk_float, 1}, V, y) = begin
 
-    begin_z_region()
+    @begin_z_region()
 
     ny = length(y)
     @loop_z iz begin
@@ -1193,7 +1193,7 @@ end
 
     ny = length(y)
 
-    begin_z_region()
+    @begin_z_region()
 
     @loop_z iz begin
         for iy ∈ 1:ny
@@ -1201,7 +1201,7 @@ end
         end
     end
 
-    begin_z_vperp_vpa_region()
+    @begin_z_vperp_vpa_region()
 
     @loop_z_vperp_vpa iz ivperp ivpa begin
         for iy ∈ 1:ny
@@ -1215,7 +1215,7 @@ end
 @timeit_debug global_timer parallel_delta_x_calc(
                   ::Val{:srzvperpvpa}, delta_x::AbstractArray{mk_float, 5}, V, y) = begin
 
-    begin_s_r_z_vperp_vpa_region()
+    @begin_s_r_z_vperp_vpa_region()
 
     ny = length(y)
     @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
@@ -1296,7 +1296,7 @@ MGS-GMRES' in Zou (2023) [https://doi.org/10.1016/j.amc.2023.127869].
     if serial_solve
         g[1] = beta
     else
-        begin_serial_region()
+        @begin_serial_region()
         @serial_region begin
             g[1] = beta
         end
@@ -1328,7 +1328,7 @@ MGS-GMRES' in Zou (2023) [https://doi.org/10.1016/j.amc.2023.127869].
                 if serial_solve
                     H[j,i] = w_dot_Vj
                 else
-                    begin_serial_region()
+                    @begin_serial_region()
                     @serial_region begin
                         H[j,i] = w_dot_Vj
                     end
@@ -1339,7 +1339,7 @@ MGS-GMRES' in Zou (2023) [https://doi.org/10.1016/j.amc.2023.127869].
             if serial_solve
                 H[i+1,i] = norm_w
             else
-                begin_serial_region()
+                @begin_serial_region()
                 @serial_region begin
                     H[i+1,i] = norm_w
                 end
@@ -1360,7 +1360,7 @@ MGS-GMRES' in Zou (2023) [https://doi.org/10.1016/j.amc.2023.127869].
                 g[i+1] = -s[i] * g[i]
                 g[i] = c[i] * g[i]
             else
-                begin_serial_region()
+                @begin_serial_region()
                 @serial_region begin
                     for j ∈ 1:i-1
                         gamma = c[j] * H[j,i] + s[j] * H[j+1,i]
@@ -1375,7 +1375,7 @@ MGS-GMRES' in Zou (2023) [https://doi.org/10.1016/j.amc.2023.127869].
                     g[i+1] = -s[i] * g[i]
                     g[i] = c[i] * g[i]
                 end
-                _block_synchronize()
+                @_block_synchronize()
             end
             residual = abs(g[i+1])
 

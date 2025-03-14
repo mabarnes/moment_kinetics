@@ -148,7 +148,7 @@ function gyroaverage_test(;rhostar=0.1, pitch=0.5, ngrid=5, kr=2, kz=2, phaser=0
         gphi = allocate_shared_float(vperp.n,z.n,r.n)
         gphi_exact = allocate_float(vperp.n,z.n,r.n)
         gphi_err = allocate_float(vperp.n,z.n,r.n)
-        begin_serial_region()
+        @begin_serial_region()
         @serial_region begin 
             fill_test_arrays!(phi,gphi_exact,vperp,z,r,geometry,kz,kr,phasez,phaser)
         end
@@ -157,7 +157,7 @@ function gyroaverage_test(;rhostar=0.1, pitch=0.5, ngrid=5, kr=2, kz=2, phaser=0
         gyroaverage_field!(gphi,phi,gyro,vperp,z,r,composition)
         
         # compute errors
-        begin_serial_region()
+        @begin_serial_region()
         @serial_region begin
             @. gphi_err = abs(gphi - gphi_exact)
             println("Test gyroaverage_field!()")
@@ -189,14 +189,14 @@ function gyroaverage_test(;rhostar=0.1, pitch=0.5, ngrid=5, kr=2, kz=2, phaser=0
         gpdf = allocate_shared_float(nvpa,vperp.n,z.n,r.n,n_ion_species)
         gpdf_exact = allocate_float(nvpa,vperp.n,z.n,r.n,n_ion_species)
         gpdf_err = allocate_float(nvpa,vperp.n,z.n,r.n,n_ion_species)
-        begin_serial_region()
+        @begin_serial_region()
         @serial_region begin
             fill_pdf_test_arrays!(pdf,gpdf_exact,vpa,vperp,z,r,composition,geometry,kz,kr,phasez,phaser)
         end
         
         gyroaverage_pdf!(gpdf,pdf,gyro,vpa,vperp,z,r,composition)
         # compute errors
-        begin_serial_region()
+        @begin_serial_region()
         @serial_region begin
             @. gpdf_err = abs(gpdf - gpdf_exact)
             println("Test gyroaverage_pdf!()")

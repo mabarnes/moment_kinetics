@@ -514,7 +514,7 @@ Initialize the arrays `moments.ion.external_source_amplitude`,
 """
 function initialize_external_source_amplitude!(moments, external_source_settings, vperp,
                                                vzeta, vr, n_neutral_species)
-    begin_r_z_region()
+    @begin_r_z_region()
 
     ion_source_settings = external_source_settings.ion
     # The electron loop must be in the same as the ion loop so that each electron source
@@ -735,7 +735,7 @@ Initialize the arrays `moments.ion.external_source_controller_integral` and
 """
 function initialize_external_source_controller_integral!(
              moments, external_source_settings, n_neutral_species)
-    begin_serial_region()
+    @begin_serial_region()
     @serial_region begin
         ion_source_settings = external_source_settings.ion
         for index ∈ eachindex(ion_source_settings)
@@ -798,7 +798,7 @@ Add external source term to the ion kinetic equation.
     vpa_grid = vpa.grid
     vperp_grid = vperp.grid
     if source_type in ("Maxwellian","energy","density_midpoint_control","density_profile_control","temperature_midpoint_control")
-        begin_s_r_z_vperp_region()
+        @begin_s_r_z_vperp_region()
         if moments.evolve_ppar && moments.evolve_upar && moments.evolve_density
             vth = moments.ion.vth
             density = fvec.density
@@ -877,7 +877,7 @@ Add external source term to the ion kinetic equation.
             end
         end
     elseif source_type == "alphas" || source_type == "alphas-with-losses"
-        begin_s_r_z_region()
+        @begin_s_r_z_region()
         source_v0 = ion_source.source_v0
         if !(source_v0 > 1.0e-8)
             error("source_v0=$source_v0 < 1.0e-8")
@@ -934,7 +934,7 @@ Add external source term to the ion kinetic equation.
                   * "evolve_upar=$(moments.evolve_upar), evolve_ppar=$(moments.evolve_ppar)")
         end
     elseif source_type == "beam" || source_type == "beam-with-losses"
-        begin_s_r_z_region()
+        @begin_s_r_z_region()
         source_vpa0 = ion_source.source_vpa0
         source_vperp0 = ion_source.source_vperp0
         if !(source_vpa0 > 1.0e-8)
@@ -1033,7 +1033,7 @@ Note that this function operates on a single point in `r`, given by `ir`, and `p
 @timeit global_timer external_electron_source!(
                          pdf_out, pdf_in, electron_density, electron_upar, moments,
                          composition, electron_source, index, vperp, vpa, dt, ir) = begin
-    begin_z_vperp_region()
+    @begin_z_vperp_region()
 
     me_over_mi = composition.me_over_mi
 
@@ -1118,7 +1118,7 @@ function add_external_electron_source_to_Jacobian!(jacobian_matrix, f, moments, 
     vpa_grid = vpa.grid
     v_size = vperp.n * vpa.n
 
-    begin_z_vperp_vpa_region()
+    @begin_z_vperp_vpa_region()
     if electron_source.source_type == "energy" && include === :all
         @loop_z_vperp_vpa iz ivperp ivpa begin
             if skip_f_electron_bc_points_in_Jacobian(iz, ivperp, ivpa, z, vperp, vpa,
@@ -1277,7 +1277,7 @@ Add external source term to the neutral kinetic equation.
 @timeit global_timer external_neutral_source!(
                          pdf, fvec, moments, neutral_source, index, vzeta, vr, vz,
                          dt) = begin
-    begin_sn_r_z_vzeta_vr_region()
+    @begin_sn_r_z_vzeta_vr_region()
 
     @views source_amplitude = moments.neutral.external_source_amplitude[:, :, index]
     source_T = neutral_source.source_T
@@ -1387,7 +1387,7 @@ source amplitude.
 """
 @timeit global_timer external_ion_source_controller!(
                          fvec_in, moments, ion_source_settings, index, dt) = begin
-    begin_r_z_region()
+    @begin_r_z_region()
 
     is = 1
     ion_moments = moments.ion
@@ -1423,7 +1423,7 @@ source amplitude.
             end
         end
     elseif ion_source_settings.source_type == "density_midpoint_control"
-        begin_serial_region()
+        @begin_serial_region()
 
         # controller_amplitude error is a shared memory Vector of length 1
         controller_amplitude = ion_source_settings.PI_controller_amplitude
@@ -1452,7 +1452,7 @@ source amplitude.
                           comm_inter_block[])
         end
 
-        begin_r_z_region()
+        @begin_r_z_region()
 
         amplitude = controller_amplitude[1]
         @loop_r_z ir iz begin
@@ -1473,7 +1473,7 @@ source amplitude.
             end
         end
     elseif ion_source_settings.source_type == "temperature_midpoint_control"
-        begin_serial_region()
+        @begin_serial_region()
         ion_moments.temp .= 2 .* ppar ./ density
         # controller_amplitude error is a shared memory Vector of length 1
         controller_amplitude = ion_source_settings.PI_controller_amplitude
@@ -1502,7 +1502,7 @@ source amplitude.
                           comm_inter_block[])
         end
 
-        begin_r_z_region()
+        @begin_r_z_region()
 
         amplitude = controller_amplitude[1]
         @loop_r_z ir iz begin
@@ -1532,7 +1532,7 @@ source amplitude.
         #    end
         #end
     elseif ion_source_settings.source_type == "density_profile_control"
-        begin_r_z_region()
+        @begin_r_z_region()
 
         target = ion_source_settings.PI_density_target
         P = ion_source_settings.PI_density_controller_P
@@ -1600,7 +1600,7 @@ up to date.
 """
 @timeit global_timer external_electron_source_controller!(
                          fvec_in, moments, electron_source_settings, index, dt) = begin
-    begin_r_z_region()
+    @begin_r_z_region()
 
     is = 1
     electron_moments = moments.electron
@@ -1680,7 +1680,7 @@ source amplitude.
 @timeit global_timer external_neutral_source_controller!(
                          fvec_in, moments, neutral_source_settings, index, r, z,
                          dt) = begin
-    begin_r_z_region()
+    @begin_r_z_region()
 
     is = 1
     neutral_moments = moments.neutral
@@ -1714,7 +1714,7 @@ source amplitude.
             end
         end
     elseif neutral_source_settings.source_type == "density_midpoint_control"
-        begin_serial_region()
+        @begin_serial_region()
 
         # controller_amplitude error is a shared memory Vector of length 1
         controller_amplitude = neutral_source_settings.PI_controller_amplitude
@@ -1744,7 +1744,7 @@ source amplitude.
                           comm_inter_block[])
         end
 
-        begin_r_z_region()
+        @begin_r_z_region()
 
         amplitude = controller_amplitude[1]
         @loop_r_z ir iz begin
@@ -1765,7 +1765,7 @@ source amplitude.
             end
         end
     elseif neutral_source_settings.source_type == "density_profile_control"
-        begin_r_z_region()
+        @begin_r_z_region()
 
         density = fvec_in.density_neutral
         target = neutral_source_settings.PI_density_target
@@ -1791,7 +1791,7 @@ source amplitude.
             end
         end
     elseif neutral_source_settings.source_type == "recycling"
-        begin_serial_region()
+        @begin_serial_region()
         target_flux = 0.0
         @boundscheck size(fvec_in.density, 3) == 1
         @boundscheck size(fvec_in.density_neutral, 3) == 1
@@ -1819,7 +1819,7 @@ source amplitude.
         target_flux = MPI.Bcast(target_flux, 0, comm_block[])
 
         # No need to synchronize as MPI.Bcast() synchronized already
-        begin_r_z_region(no_synchronize=true)
+        @begin_r_z_region(true)
 
         amplitude = neutral_moments.external_source_amplitude
         profile = neutral_source_settings.controller_source_profile

@@ -29,7 +29,7 @@ using SparseArrays
                          vpa_spectral, composition, collisions, ion_source_settings,
                          geometry) = begin
 
-    begin_s_r_z_vperp_region()
+    @begin_s_r_z_vperp_region()
 
     # only have a parallel acceleration term for neutrals if using the peculiar velocity
     # wpar = vpar - upar as a variable; i.e., d(wpar)/dt /=0 for neutrals even though d(vpar)/dt = 0.
@@ -72,7 +72,7 @@ end
                                       z_spectral,
                                       num_diss_params.ion.moment_dissipation_coefficient)
 
-    begin_s_r_z_vperp_region()
+    @begin_s_r_z_vperp_region()
 
     coords = (vpa=vpa,)
     vpa_bc = vpa.bc
@@ -335,7 +335,7 @@ function update_speed_vpa!(advect, fields, fvec, moments, vpa, vperp, z, r, comp
         update_speed_default!(advect, fields, fvec, moments, vpa, vperp, z, r, composition,
                               collisions, ion_source_settings, t, geometry)
     elseif vpa.advection.option == "constant"
-        begin_serial_region()
+        @begin_serial_region()
         @serial_region begin
             # Not usually used - just run in serial
             # dvpa/dt = constant
@@ -344,7 +344,7 @@ function update_speed_vpa!(advect, fields, fvec, moments, vpa, vperp, z, r, comp
             end
         end
     elseif vpa.advection.option == "linear"
-        begin_serial_region()
+        @begin_serial_region()
         @serial_region begin
             # Not usually used - just run in serial
             # dvpa/dt = constant ⋅ (vpa + L_vpa/2)

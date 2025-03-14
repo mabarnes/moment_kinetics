@@ -26,7 +26,7 @@ using ..timer_utils
     @boundscheck r.n == size(f_out, 4) || throw(BoundsError(f_out))
     @boundscheck composition.n_neutral_species == size(f_out, 5) || throw(BoundsError(f_out))
 
-    begin_sn_r_z_region()
+    @begin_sn_r_z_region()
     @loop_sn_r_z isn ir iz begin
         bzed = geometry.bzed[iz,ir]
         bzeta = geometry.bzeta[iz,ir]
@@ -82,7 +82,7 @@ end
     @boundscheck r.n == size(f_out, 5) || throw(BoundsError(f_out))
     @boundscheck composition.n_ion_species == size(f_out, 6) || throw(BoundsError(f_out))
     
-    begin_s_r_z_region()
+    @begin_s_r_z_region()
     @loop_s_r_z is ir iz begin
         bzed = geometry.bzed[iz,ir]
         bzeta = geometry.bzeta[iz,ir]

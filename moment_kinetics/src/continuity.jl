@@ -15,7 +15,7 @@ species
 @timeit global_timer continuity_equation!(
                          dens_out, fvec_in, moments, composition, dt, spectral,
                          ionization, ion_source_settings, num_diss_params) = begin
-    begin_s_r_z_region()
+    @begin_s_r_z_region()
 
     @loop_s_r_z is ir iz begin
         # Use ddens_dz is upwinded using upar
@@ -58,7 +58,7 @@ species
 @timeit global_timer neutral_continuity_equation!(
                          dens_out, fvec_in, moments, composition, dt, spectral,
                          ionization, neutral_source_settings, num_diss_params) = begin
-    begin_sn_r_z_region()
+    @begin_sn_r_z_region()
 
     @loop_sn_r_z isn ir iz begin
         # Use ddens_dz is upwinded using uz

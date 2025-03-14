@@ -12,7 +12,7 @@ using ..timer_utils
 using ..type_definitions: mk_float, mk_int
 using MPI
 using ..communication: block_rank
-using ..communication: _block_synchronize
+using ..communication: @_block_synchronize
 using ..looping
 
 using LinearAlgebra
@@ -490,7 +490,7 @@ end
     # synchronize buffers
     # -- this all-to-all block communicate here requires that this function is NOT called from within a parallelised loop
     # -- or from a @serial_region or from an if statment isolating a single rank on a block
-    _block_synchronize()
+    @_block_synchronize()
     #if block_rank[] == 0 # lead process on this shared-memory block
     @serial_region begin
 
@@ -553,7 +553,7 @@ end
 
     end
     # synchronize buffers
-    _block_synchronize()
+    @_block_synchronize()
 end
 
 function apply_adv_fac!(buffer::AbstractArray{mk_float,Ndims},adv_fac::AbstractArray{mk_float,Ndims},endpoints::AbstractArray{mk_float,Ndims},sgn::mk_int) where Ndims
@@ -590,7 +590,7 @@ function apply_adv_fac!(buffer::AbstractArray{mk_float,Ndims},adv_fac::AbstractA
     # synchronize buffers
     # -- this all-to-all block communicate here requires that this function is NOT called from within a parallelised loop
     # -- or from a @serial_region or from an if statment isolating a single rank on a block
-    _block_synchronize()
+    @_block_synchronize()
     #if block_rank[] == 0 # lead process on this shared-memory block
     @serial_region begin
         # now deal with endpoints that are stored across ranks
@@ -654,7 +654,7 @@ function apply_adv_fac!(buffer::AbstractArray{mk_float,Ndims},adv_fac::AbstractA
 
     end
     # synchronize buffers
-    _block_synchronize()
+    @_block_synchronize()
 end
 
 # Special version for pdf_electron with no r-dimension, which has the same number of
@@ -669,7 +669,7 @@ end
     # synchronize buffers
     # -- this all-to-all block communicate here requires that this function is NOT called from within a parallelised loop
     # -- or from a @serial_region or from an if statment isolating a single rank on a block
-    _block_synchronize()
+    @_block_synchronize()
     #if block_rank[] == 0 # lead process on this shared-memory block
     @serial_region begin
 
@@ -732,7 +732,7 @@ end
 
     end
     # synchronize buffers
-    _block_synchronize()
+    @_block_synchronize()
 end
 
 # Special version for pdf_electron with no r-dimension, which has the same number of
@@ -749,7 +749,7 @@ end
     # synchronize buffers
     # -- this all-to-all block communicate here requires that this function is NOT called from within a parallelised loop
     # -- or from a @serial_region or from an if statment isolating a single rank on a block
-    _block_synchronize()
+    @_block_synchronize()
     #if block_rank[] == 0 # lead process on this shared-memory block
     @serial_region begin
         # now deal with endpoints that are stored across ranks
@@ -813,7 +813,7 @@ end
 
     end
     # synchronize buffers
-    _block_synchronize()
+    @_block_synchronize()
 end
 
 """

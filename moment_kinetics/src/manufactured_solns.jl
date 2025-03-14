@@ -82,7 +82,7 @@ end
         # Time independent, so store arrays instead of functions
 
         Source_i_array = allocate_shared_float(vpa_coord.n,vperp_coord.n,z_coord.n,r_coord.n)
-        begin_s_r_z_region()
+        @begin_s_r_z_region()
         #println("here loop thing ", looping.loop_ranges[].s)
         @loop_s is begin
             if is == 1
@@ -94,7 +94,7 @@ end
 
         if composition.n_neutral_species > 0
             Source_n_array = allocate_shared_float(vz_coord.n,vr_coord.n,vzeta_coord.n,z_coord.n,r_coord.n)
-            begin_sn_r_z_region()
+            @begin_sn_r_z_region()
             @loop_sn isn begin
                 if isn == 1
                     @loop_r_z_vzeta_vr_vz ir iz ivzeta ivr ivz begin

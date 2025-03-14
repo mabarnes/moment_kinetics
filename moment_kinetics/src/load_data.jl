@@ -641,7 +641,7 @@ function reload_evolving_fields!(pdf, moments, fields, boundary_distributions,
     electron_dt_before_last_fail = Ref(Inf)
     previous_runs_info = nothing
     restart_electron_physics = nothing
-    begin_serial_region()
+    @begin_serial_region()
     @serial_region begin
         fid = open_readonly_output_file(restart_prefix_iblock[1], "dfns";
                                         iblock=restart_prefix_iblock[2])
@@ -1081,7 +1081,7 @@ function reload_electron_data!(pdf, moments, t_params, restart_prefix_iblock, ti
     code_time = 0.0
     pdf_electron_converged = false
     previous_runs_info = nothing
-    begin_serial_region()
+    @begin_serial_region()
     @serial_region begin
         fid = open_readonly_output_file(restart_prefix_iblock[1], "initial_electron";
                                         iblock=restart_prefix_iblock[2])
@@ -4447,7 +4447,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
                            vperp=nvperp, vpa=nvpa, vzeta=run_info.vzeta.n,
                            vr=run_info.vr.n, vz=run_info.vz.n)
         for it ∈ 1:nt, is ∈ 1:nspecies
-            begin_serial_region()
+            @begin_serial_region()
             # Only need some struct with a 'speed' variable
             advect = (speed=@view(speed[:,:,:,:,is,it]),)
             # Only need Er
@@ -4551,7 +4551,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         end
 
         for it ∈ 1:nt
-            begin_serial_region()
+            @begin_serial_region()
             # Only need some struct with a 'speed' variable
             advect = [(speed=@view(speed[:,:,:,:,is,it]),) for is ∈ 1:nspecies]
             # Only need Ez
@@ -4609,7 +4609,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
                            vr=(run_info.vr === nothing ? 1 : run_info.vr.n),
                            vz=(run_info.vz === nothing ? 1 : run_info.vz.n))
         for it ∈ 1:nt
-            begin_serial_region()
+            @begin_serial_region()
             # Only need some struct with a 'speed' variable
             advect = (speed=@view(speed[:,:,:,:,it]),)
             for ir ∈ 1:run_info.r.n
@@ -4683,7 +4683,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
                            vr=(run_info.vr === nothing ? 1 : run_info.vr.n),
                            vz=(run_info.vz === nothing ? 1 : run_info.vz.n))
         for it ∈ 1:nt
-            begin_serial_region()
+            @begin_serial_region()
             # Only need some struct with a 'speed' variable
             advect = (speed=@view(speed[:,:,:,:,it]),)
             moments = (electron=(vth=vth[:,:,it],
@@ -4721,7 +4721,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
                            vperp=run_info.vperp.n, vpa=run_info.vpa.n, vzeta=nvzeta,
                            vr=nvr, vz=nvz)
         for it ∈ 1:nt, isn ∈ 1:nspecies
-            begin_serial_region()
+            @begin_serial_region()
             # Only need some struct with a 'speed' variable
             advect = (speed=@view(speed[:,:,:,:,:,isn,it]),)
             @views update_speed_neutral_z!(advect, uz[:,:,:,it], vth[:,:,:,it],
@@ -4815,7 +4815,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
                            vperp=run_info.vperp.n, vpa=run_info.vpa.n, vzeta=nvzeta,
                            vr=nvr, vz=nvz)
         for it ∈ 1:nt
-            begin_serial_region()
+            @begin_serial_region()
             # Only need some struct with a 'speed' variable
             advect = [(speed=@view(speed[:,:,:,:,:,isn,it]),) for isn ∈ 1:nspecies]
             # Don't actually use `fields` at the moment
@@ -5000,7 +5000,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         nt = size(speed, 6)
         nspecies = size(speed, 5)
         variable = allocate_float(nt)
-        begin_serial_region()
+        @begin_serial_region()
         for it ∈ 1:nt
             min_CFL = Inf
             for is ∈ 1:nspecies
@@ -5016,7 +5016,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         nt = size(speed, 6)
         nspecies = size(speed, 5)
         variable = allocate_float(nt)
-        begin_serial_region()
+        @begin_serial_region()
         for it ∈ 1:nt
             min_CFL = Inf
             for is ∈ 1:nspecies
@@ -5032,7 +5032,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
                              normalize_advection_speed_shape=false)
         nt = size(speed, 5)
         variable = allocate_float(nt)
-        begin_serial_region()
+        @begin_serial_region()
         for it ∈ 1:nt
             min_CFL = get_minimum_CFL_z(@view(speed[:,:,:,:,it]), run_info.z)
             variable[it] = min_CFL
@@ -5044,7 +5044,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         speed = get_variable(run_info, "electron_vpa_advect_speed")
         nt = size(speed, 5)
         variable = allocate_float(nt)
-        begin_serial_region()
+        @begin_serial_region()
         for it ∈ 1:nt
             min_CFL = get_minimum_CFL_vpa(@view(speed[:,:,:,:,it]), run_info.vpa)
             variable[it] = min_CFL
@@ -5058,7 +5058,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         nt = size(speed, 7)
         nspecies = size(speed, 6)
         variable = allocate_float(nt)
-        begin_serial_region()
+        @begin_serial_region()
         for it ∈ 1:nt
             min_CFL = Inf
             for isn ∈ 1:nspecies
@@ -5074,7 +5074,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         nt = size(speed, 7)
         nspecies = size(speed, 6)
         variable = allocate_float(nt)
-        begin_serial_region()
+        @begin_serial_region()
         for it ∈ 1:nt
             min_CFL = Inf
             for isn ∈ 1:nspecies

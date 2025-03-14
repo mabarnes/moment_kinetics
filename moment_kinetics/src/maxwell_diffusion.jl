@@ -95,7 +95,7 @@ to act as the diffusion operator.
     # the current distribution) using the moments of the distribution (so that the 
     # operator itself conserves the moments), and then this result will be the one 
     # whose second derivative will be added to the RHS (i.e. subtracted from the current)
-    begin_s_r_z_vperp_region()
+    @begin_s_r_z_vperp_region()
 
     # In what follows, there are eight combinations of booleans (though not all have been
     # fully implemented yet). In line with moment kinetics, the Maxwellian is normalised
@@ -206,7 +206,7 @@ to act as the diffusion operator.
     # the current distribution) using the moments of the distribution (so that the 
     # operator itself conserves the moments), and then this result will be the one 
     # whose second derivative will be added to the RHS (i.e. subtracted from the current pdf)
-    begin_sn_r_z_vzeta_vr_region()
+    @begin_sn_r_z_vzeta_vr_region()
 
 
     if moments.evolve_ppar && moments.evolve_upar

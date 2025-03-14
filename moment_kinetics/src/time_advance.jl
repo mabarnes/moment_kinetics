@@ -12,7 +12,7 @@ using Quadmath
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float, allocate_shared_float, allocate_shared_int, allocate_shared_bool
 using ..communication
-using ..communication: _block_synchronize
+using ..communication: @_block_synchronize
 using ..debugging
 using ..file_io: write_data_to_ascii, write_all_moments_data_to_binary,
                  write_all_dfns_data_to_binary, debug_dump, setup_electron_io
@@ -254,22 +254,22 @@ function allocate_advection_structs(composition, z, r, vpa, vperp, vz, vr, vzeta
     # create structure z_advect whose members are the arrays needed to compute
     # the advection term(s) appearing in the part of the ion kinetic equation dealing
     # with advection in z
-    begin_serial_region()
+    @begin_serial_region()
     z_advect = setup_advection(n_ion_species, z, vpa, vperp, r)
     # create structure r_advect whose members are the arrays needed to compute
     # the advection term(s) appearing in the split part of the ion kinetic equation dealing
     # with advection in r
-    begin_serial_region()
+    @begin_serial_region()
     r_advect = setup_advection(n_ion_species, r, vpa, vperp, z)
     # create structure vpa_advect whose members are the arrays needed to compute
     # the advection term(s) appearing in the split part of the ion kinetic equation dealing
     # with advection in vpa
-    begin_serial_region()
+    @begin_serial_region()
     vpa_advect = setup_advection(n_ion_species, vpa, vperp, z, r)
     # create structure vperp_advect whose members are the arrays needed to compute
     # the advection term(s) appearing in the split part of the ion kinetic equation dealing
     # with advection in vperp
-    begin_serial_region()
+    @begin_serial_region()
     vperp_advect = setup_advection(n_ion_species, vperp, vpa, z, r)
     ##                                   ##
     # electron particle advection structs #
@@ -277,24 +277,24 @@ function allocate_advection_structs(composition, z, r, vpa, vperp, vz, vr, vzeta
     # create structure electron_z_advect whose members are the arrays needed to compute
     # the advection term(s) appearing in the part of the electron kinetic equation dealing
     # with advection in z
-    begin_serial_region()
+    @begin_serial_region()
     electron_z_advect = setup_advection(1, z, vpa, vperp, r)
     # create structure vpa_advect whose members are the arrays needed to compute
     # the advection term(s) appearing in the part of the electron kinetic equation dealing
     # with advection in vpa
-    begin_serial_region()
+    @begin_serial_region()
     electron_vpa_advect = setup_advection(1, vpa, vperp, z, r)
     ##                                  ##
     # neutral particle advection structs #
     ##                                  ##
     # create structure neutral_z_advect for neutral particle advection
-    begin_serial_region()
+    @begin_serial_region()
     neutral_z_advect = setup_advection(n_neutral_species_alloc, z, vz, vr, vzeta, r)
     # create structure neutral_r_advect for neutral particle advection
-    begin_serial_region()
+    @begin_serial_region()
     neutral_r_advect = setup_advection(n_neutral_species_alloc, r, vz, vr, vzeta, z)
     # create structure neutral_vz_advect for neutral particle advection
-    begin_serial_region()
+    @begin_serial_region()
     neutral_vz_advect = setup_advection(n_neutral_species_alloc, vz, vr, vzeta, z, r)
     ##                                                                 ##
     # construct named list of advection structs to compactify arguments #
@@ -805,7 +805,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
     # removed by `check_sections!()`).
     check_sections!(input_dict)
 
-    begin_serial_region()
+    @begin_serial_region()
 
     # create an array of structs containing scratch arrays for the pdf and low-order moments
     # that may be evolved separately via fluid equations
@@ -869,7 +869,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
         t_params.electron.moments_output_counter[] = 1
         t_params.electron.dfns_output_counter[] = 1
     elseif composition.electron_physics != restart_electron_physics
-        begin_serial_region()
+        @begin_serial_region()
         @serial_region begin
             # zero-initialise phi here, because the boundary points of phi are used as an
             # effective 'cache' for the sheath-boundary cutoff speed for the electrons, so
@@ -897,7 +897,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
         composition.me_over_mi, collisions.electron_fluid.nu_ei,
         composition.electron_physics)
     # initialize the electrostatic potential
-    begin_serial_region()
+    @begin_serial_region()
     update_phi!(fields, scratch[1], vperp, z, r, composition, collisions, moments,
                 geometry, z_spectral, r_spectral, scratch_dummy, gyroavs)
     @serial_region begin
@@ -927,7 +927,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
 
     if r.n > 1
         # initialise the r advection speed
-        begin_s_z_vperp_vpa_region()
+        @begin_s_z_vperp_vpa_region()
         @loop_s is begin
             @views update_speed_r!(r_advect[is], moments.ion.upar[:,:,is],
                                    moments.ion.vth[:,:,is], fields, moments.evolve_upar,
@@ -938,7 +938,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
 
     if z.n > 1
         # initialise the z advection speed
-        begin_s_r_vperp_vpa_region()
+        @begin_s_r_vperp_vpa_region()
         @loop_s is begin
             @views update_speed_z!(z_advect[is], moments.ion.upar[:,:,is],
                                    moments.ion.vth[:,:,is], moments.evolve_upar,
@@ -948,7 +948,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
     end
 
     # initialise the vpa advection speed
-    begin_s_r_z_vperp_region()
+    @begin_s_r_z_vperp_region()
     update_speed_vpa!(vpa_advect, fields, scratch[1], moments, vpa, vperp, z, r,
                       composition, collisions, external_source_settings.ion, 0.0,
                       geometry)
@@ -959,7 +959,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
     # vperp_advect[is].speed, so z_advect and r_advect must always be updated before
     # vperp_advect is updated and used.
     if vperp.n > 1
-        begin_serial_region()
+        @begin_serial_region()
         @serial_region begin
             for is ∈ 1:n_ion_species
                 @views update_speed_vperp!(vperp_advect[is], vpa, vperp, z, r, z_advect[is], r_advect[is], geometry)
@@ -973,7 +973,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
 
     if n_neutral_species > 0 && r.n > 1
         # initialise the r advection speed
-        begin_sn_z_vzeta_vr_vz_region()
+        @begin_sn_z_vzeta_vr_vz_region()
         @loop_sn isn begin
             @views update_speed_neutral_r!(neutral_r_advect[isn], r, z, vzeta, vr, vz)
         end
@@ -981,7 +981,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
 
     if n_neutral_species > 0 && z.n > 1
         # initialise the z advection speed
-        begin_sn_r_vzeta_vr_vz_region()
+        @begin_sn_r_vzeta_vr_vz_region()
         @loop_sn isn begin
             @views update_speed_neutral_z!(neutral_z_advect[isn],
                                            moments.neutral.uz[:,:,isn],
@@ -1001,7 +1001,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
                 neutral_vz_advect[isn].speed .= 0.0
             end
         end
-        begin_sn_r_z_vzeta_vr_region()
+        @begin_sn_r_z_vzeta_vr_region()
         @views update_speed_neutral_vz!(neutral_vz_advect, fields, scratch[1], moments,
                                         vz, vr, vzeta, z, r, composition, collisions,
                                         external_source_settings.neutral)
@@ -1022,7 +1022,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
     end
 
     if !restarting
-        begin_serial_region()
+        @begin_serial_region()
         # ensure initial pdf has no negative values
         force_minimum_pdf_value!(pdf.ion.norm, num_diss_params.ion.force_minimum_pdf_value)
         force_minimum_pdf_value_neutral!(pdf.neutral.norm, num_diss_params.neutral.force_minimum_pdf_value)
@@ -1036,7 +1036,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
             composition, scratch_dummy, advance.r_diffusion,
             advance.vpa_diffusion, advance.vperp_diffusion)
         # Ensure normalised pdf exactly obeys integral constraints if evolving moments
-        begin_s_r_z_region()
+        @begin_s_r_z_region()
         if moments.evolve_density && moments.enforce_conservation
             A = moments.ion.constraints_A_coefficient
             B = moments.ion.constraints_B_coefficient
@@ -1063,7 +1063,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
                 vr_spectral, vz_spectral, neutral_r_advect, neutral_z_advect, nothing,
                 nothing, neutral_vz_advect, r, z, vzeta, vr, vz, composition, geometry,
                 scratch_dummy, advance.r_diffusion, advance.vz_diffusion)
-            begin_sn_r_z_region()
+            @begin_sn_r_z_region()
             if moments.evolve_density && moments.enforce_conservation
                 A = moments.neutral.constraints_A_coefficient
                 B = moments.neutral.constraints_B_coefficient
@@ -1082,7 +1082,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
         # or constraints to the pdf.
         # Also update scratch[t_params.n_rk_stages+1] as this will be used for the I/O at
         # the initial time.
-        begin_s_r_z_region()
+        @begin_s_r_z_region()
         @loop_s_r_z is ir iz begin
             scratch[1].pdf[:,:,iz,ir,is] .= pdf.ion.norm[:,:,iz,ir,is]
             scratch[1].density[iz,ir,is] = moments.ion.dens[iz,ir,is]
@@ -1103,7 +1103,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
         calculate_electron_upar_from_charge_conservation!(moments.electron.upar, moments.electron.upar_updated,
                                                           moments.electron.dens, moments.ion.upar, moments.ion.dens,
                                                           composition.electron_physics, r, z)
-        begin_serial_region()
+        @begin_serial_region()
         # compute the updated electron temperature
         # NB: not currently necessary, as initial vth is not directly dependent on ion quantities
         @serial_region begin
@@ -1135,7 +1135,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
         # Update the electron moment entries in the scratch array.
         # Also update scratch[t_params.n_rk_stages+1] as this will be used for the I/O at
         # the initial time.
-        begin_r_z_region()
+        @begin_r_z_region()
         @loop_r_z ir iz begin
             scratch[1].electron_density[iz,ir] = moments.electron.dens[iz,ir]
             scratch[1].electron_upar[iz,ir] = moments.electron.upar[iz,ir]
@@ -1147,7 +1147,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
             scratch[t_params.n_rk_stages+1].electron_temp[iz,ir] = moments.electron.temp[iz,ir]
         end
 
-        begin_sn_r_z_region(no_synchronize=true)
+        @begin_sn_r_z_region(true)
         @loop_sn_r_z isn ir iz begin
             scratch[1].pdf_neutral[:,:,:,iz,ir,isn] .= pdf.neutral.norm[:,:,:,iz,ir,isn]
             scratch[1].density_neutral[iz,ir,isn] = moments.neutral.dens[iz,ir,isn]
@@ -1177,7 +1177,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
                 geometry, z_spectral, r_spectral, scratch_dummy, gyroavs)
 
     # Ensure all processes are synchronized at the end of the setup
-    _block_synchronize()
+    @_block_synchronize()
 
     return moments, spectral_objects, scratch, scratch_implicit, scratch_electron,
            scratch_dummy, advance, advance_implicit, t_params, fp_arrays, gyroavs,
@@ -1975,8 +1975,8 @@ function  time_advance!(pdf, scratch, scratch_implicit, scratch_electron, t_para
 
             if write_moments || write_dfns || finish_now
                 # Always synchronise here, regardless of if we changed region or not
-                begin_serial_region(no_synchronize=true)
-                _block_synchronize()
+                @begin_serial_region(true)
+                @_block_synchronize()
 
                 if isfile(t_params.stopfile)
                     # Stop cleanly if a file called 'stop' was created
@@ -2017,7 +2017,7 @@ function  time_advance!(pdf, scratch, scratch_implicit, scratch_electron, t_para
                     # it only runs infrequently
                     debug_detect_redundant_is_active[] = false
                 end
-                begin_serial_region()
+                @begin_serial_region()
                 @serial_region begin
                     if global_rank[] == 0
                         print("writing moments output ",
@@ -2042,7 +2042,7 @@ function  time_advance!(pdf, scratch, scratch_implicit, scratch_electron, t_para
 
                 if t_params.steady_state_residual
                     # Calculate some residuals to see how close simulation is to steady state
-                    begin_r_z_region()
+                    @begin_r_z_region()
                     result_string = ""
                     all_residuals = Vector{mk_float}()
                     @loop_s is begin
@@ -2094,7 +2094,7 @@ function  time_advance!(pdf, scratch, scratch_implicit, scratch_electron, t_para
                     end
                 end
 
-                begin_s_r_z_vperp_region()
+                @begin_s_r_z_vperp_region()
                 @debug_detect_redundant_block_synchronize begin
                     # Reactivate check for redundant _block_synchronize()
                     debug_detect_redundant_is_active[] = true
@@ -2106,7 +2106,7 @@ function  time_advance!(pdf, scratch, scratch_implicit, scratch_electron, t_para
                     # it only runs infrequently
                     debug_detect_redundant_is_active[] = false
                 end
-                begin_serial_region()
+                @begin_serial_region()
                 @serial_region begin
                     if global_rank[] == 0
                         println("writing distribution functions output ",
@@ -2123,7 +2123,7 @@ function  time_advance!(pdf, scratch, scratch_implicit, scratch_electron, t_para
                                               t_params.dfns_output_counter[], time_for_run,
                                               t_params, nl_solver_params, r, z, vperp, vpa,
                                               vzeta, vr, vz)
-                begin_s_r_z_vperp_region()
+                @begin_s_r_z_vperp_region()
                 @debug_detect_redundant_block_synchronize begin
                     # Reactivate check for redundant _block_synchronize()
                     debug_detect_redundant_is_active[] = true
@@ -2399,7 +2399,7 @@ Use the result of the forward-Euler timestep and the previous Runge-Kutta stages
 compute the updated pdfs, and any evolved moments.
 """
 function rk_update!(scratch, scratch_implicit, moments, t_params, istage, composition)
-    begin_s_r_z_region()
+    @begin_s_r_z_region()
 
     new_scratch = scratch[istage+1]
     old_scratch = scratch[istage]
@@ -2443,7 +2443,7 @@ moments and moment derivatives
                          max_electron_sim_time; pdf_bc_constraints=true,
                          update_electrons=true) = begin
 
-    begin_s_r_z_region()
+    @begin_s_r_z_region()
 
     z_spectral, r_spectral, vpa_spectral, vperp_spectral = spectral_objects.z_spectral, spectral_objects.r_spectral, spectral_objects.vpa_spectral, spectral_objects.vperp_spectral
     vzeta_spectral, vr_spectral, vz_spectral = spectral_objects.vzeta_spectral, spectral_objects.vr_spectral, spectral_objects.vz_spectral
@@ -2473,7 +2473,7 @@ moments and moment derivatives
             advance.vperp_diffusion)
 
         if moments.evolve_density && moments.enforce_conservation
-            begin_s_r_z_region()
+            @begin_s_r_z_region()
             A = moments.ion.constraints_A_coefficient
             B = moments.ion.constraints_B_coefficient
             C = moments.ion.constraints_C_coefficient
@@ -2524,7 +2524,7 @@ moments and moment derivatives
 
         # Copy ion and electron moments from `scratch` into `moments` to be used in
         # electron kinetic equation update
-        begin_r_z_region()
+        @begin_r_z_region()
         @loop_s_r_z is ir iz begin
             moments.ion.dens[iz,ir,is] = this_scratch.density[iz,ir,is]
             moments.ion.upar[iz,ir,is] = this_scratch.upar[iz,ir,is]
@@ -2596,7 +2596,7 @@ moments and moment derivatives
                 advance.vz_diffusion)
 
             if moments.evolve_density && moments.enforce_conservation
-                begin_sn_r_z_region()
+                @begin_sn_r_z_region()
                 A = moments.neutral.constraints_A_coefficient
                 B = moments.neutral.constraints_B_coefficient
                 C = moments.neutral.constraints_C_coefficient
@@ -2612,7 +2612,7 @@ moments and moment derivatives
         update_derived_moments_neutral!(this_scratch, moments, vz, vr, vzeta, z, r,
                                         composition)
         # update the thermal speed
-        begin_sn_r_z_region()
+        @begin_sn_r_z_region()
         @loop_sn_r_z isn ir iz begin
             moments.neutral.vth[iz,ir,isn] = sqrt(2.0*this_scratch.pz_neutral[iz,ir,isn]/this_scratch.density_neutral[iz,ir,isn])
         end
@@ -2679,11 +2679,11 @@ appropriate.
     # timestep
     #
     # ion z-advection
-    # No need to synchronize here, as we just called _block_synchronize()
+    # No need to synchronize here, as we just called @_block_synchronize()
     # Don't parallelise over species here, because get_minimum_CFL_*() does an MPI
     # reduction over the shared-memory block, so all processes must calculate the same
     # species at the same time.
-    begin_r_vperp_vpa_region(; no_synchronize=true)
+    @begin_r_vperp_vpa_region(true)
     if !t_params.implicit_ion_advance
         ion_z_CFL = Inf
         @loop_s is begin
@@ -2700,7 +2700,7 @@ appropriate.
 
     if !(t_params.implicit_ion_advance || t_params.implicit_vpa_advection)
         # ion vpa-advection
-        begin_r_z_vperp_region()
+        @begin_r_z_vperp_region()
         ion_vpa_CFL = Inf
         update_speed_vpa!(vpa_advect, fields, scratch[t_params.n_rk_stages+1], moments, vpa, vperp, z, r,
                           composition, collisions, external_source_settings.ion, t_params.t[],
@@ -2724,39 +2724,39 @@ appropriate.
     # Note we store the calculated low-order approxmation in `scratch[2]`.
     rk_loworder_solution!(scratch, scratch_implicit, :pdf, t_params)
     if moments.evolve_density
-        begin_s_r_z_region()
+        @begin_s_r_z_region()
         rk_loworder_solution!(scratch, scratch_implicit, :density, t_params)
     end
     if moments.evolve_upar
-        begin_s_r_z_region()
+        @begin_s_r_z_region()
         rk_loworder_solution!(scratch, scratch_implicit, :upar, t_params)
     end
     if moments.evolve_ppar
-        begin_s_r_z_region()
+        @begin_s_r_z_region()
         rk_loworder_solution!(scratch, scratch_implicit, :ppar, t_params)
     end
     if t_params.implicit_electron_time_evolving
-        begin_r_z_vperp_vpa_region()
+        @begin_r_z_vperp_vpa_region()
         rk_loworder_solution!(scratch, scratch_implicit, :pdf_electron, t_params)
     end
     if composition.electron_physics ∈ (braginskii_fluid, kinetic_electrons,
                                        kinetic_electrons_with_temperature_equation)
-        begin_r_z_region()
+        @begin_r_z_region()
         rk_loworder_solution!(scratch, scratch_implicit, :electron_ppar, t_params)
     end
     if n_neutral_species > 0
-        begin_sn_r_z_vzeta_vr_region()
+        @begin_sn_r_z_vzeta_vr_region()
         rk_loworder_solution!(scratch, scratch_implicit, :pdf_neutral, t_params; neutrals=true)
         if moments.evolve_density
-            begin_sn_r_z_region()
+            @begin_sn_r_z_region()
             rk_loworder_solution!(scratch, scratch_implicit, :density_neutral, t_params; neutrals=true)
         end
         if moments.evolve_upar
-            begin_sn_r_z_region()
+            @begin_sn_r_z_region()
             rk_loworder_solution!(scratch, scratch_implicit, :uz_neutral, t_params; neutrals=true)
         end
         if moments.evolve_ppar
-            begin_sn_r_z_region()
+            @begin_sn_r_z_region()
             rk_loworder_solution!(scratch, scratch_implicit, :pz_neutral, t_params; neutrals=true)
         end
     end
@@ -2802,7 +2802,7 @@ appropriate.
         # this this point may cause unhelpful timestep failures when the cutoff moves from
         # one point to another.
         if z.irank == 0 || z.irank == z.nrank - 1
-            begin_s_r_region()
+            @begin_s_r_region()
             @loop_s_r is ir begin
                 density = @view scratch[t_params.n_rk_stages+1].density[:,ir,is]
                 upar = @view scratch[t_params.n_rk_stages+1].upar[:,ir,is]
@@ -2835,7 +2835,7 @@ appropriate.
 
     # Calculate error for ion moments, if necessary
     if moments.evolve_density
-        begin_s_r_z_region()
+        @begin_s_r_z_region()
         ion_n_err = local_error_norm(scratch[2].density,
                                      scratch[t_params.n_rk_stages+1].density,
                                      t_params.rtol, t_params.atol;
@@ -2846,7 +2846,7 @@ appropriate.
         push!(total_points, z.n_global * r.n_global * n_ion_species)
     end
     if moments.evolve_upar
-        begin_s_r_z_region()
+        @begin_s_r_z_region()
         ion_u_err = local_error_norm(scratch[2].upar,
                                      scratch[t_params.n_rk_stages+1].upar, t_params.rtol,
                                      t_params.atol; method=error_norm_method,
@@ -2856,7 +2856,7 @@ appropriate.
         push!(total_points, z.n_global * r.n_global * n_ion_species)
     end
     if moments.evolve_ppar
-        begin_s_r_z_region()
+        @begin_s_r_z_region()
         ion_p_err = local_error_norm(scratch[2].ppar,
                                      scratch[t_params.n_rk_stages+1].ppar, t_params.rtol,
                                      t_params.atol; method=error_norm_method,
@@ -2868,7 +2868,7 @@ appropriate.
 
     if composition.electron_physics ∈ (braginskii_fluid, kinetic_electrons,
                                        kinetic_electrons_with_temperature_equation)
-        begin_r_z_region()
+        @begin_r_z_region()
         electron_p_err = local_error_norm(scratch[2].electron_ppar,
                                           scratch[t_params.n_rk_stages+1].electron_ppar,
                                           t_params.rtol, t_params.atol;
@@ -2885,7 +2885,7 @@ appropriate.
         # Don't parallelise over species here, because get_minimum_CFL_*() does an MPI
         # reduction over the shared-memory block, so all processes must calculate the same
         # species at the same time.
-        begin_r_vzeta_vr_vz_region()
+        @begin_r_vzeta_vr_vz_region()
         neutral_z_CFL = Inf
         @loop_sn isn begin
             update_speed_neutral_z!(neutral_z_advect[isn], moments.neutral.uz,
@@ -2899,7 +2899,7 @@ appropriate.
         push!(CFL_limits, t_params.CFL_prefactor * neutral_z_CFL)
 
         # neutral vz-advection
-        begin_r_z_vzeta_vr_region()
+        @begin_r_z_vzeta_vr_region()
         neutral_vz_CFL = Inf
         update_speed_neutral_vz!(neutral_vz_advect, fields,
                                  scratch[t_params.n_rk_stages+1], moments, vz, vr, vzeta,
@@ -2928,7 +2928,7 @@ appropriate.
 
         # Calculate error for neutral moments, if necessary
         if moments.evolve_density
-            begin_sn_r_z_region()
+            @begin_sn_r_z_region()
             neut_n_err = local_error_norm(scratch[2].density_neutral,
                                           scratch[t_params.n_rk_stages+1].density_neutral,
                                           t_params.rtol, t_params.atol, true;
@@ -2940,7 +2940,7 @@ appropriate.
             push!(total_points, z.n_global * r.n_global * n_neutral_species)
         end
         if moments.evolve_upar
-            begin_sn_r_z_region()
+            @begin_sn_r_z_region()
             neut_u_err = local_error_norm(scratch[2].uz_neutral,
                                           scratch[t_params.n_rk_stages+1].uz_neutral,
                                           t_params.rtol, t_params.atol, true;
@@ -2952,7 +2952,7 @@ appropriate.
             push!(total_points, z.n_global * r.n_global * n_neutral_species)
         end
         if moments.evolve_ppar
-            begin_sn_r_z_region()
+            @begin_sn_r_z_region()
             neut_p_err = local_error_norm(scratch[2].pz_neutral,
                                           scratch[t_params.n_rk_stages+1].pz_neutral,
                                           t_params.rtol, t_params.atol, true;
@@ -2974,7 +2974,7 @@ appropriate.
                                        kinetic_electrons_with_temperature_equation)
         if t_params.previous_dt[] == 0.0
             # Reset electron pdf to its value at the beginning of this step.
-            begin_r_z_vperp_vpa_region()
+            @begin_r_z_vperp_vpa_region()
             @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
                 pdf.electron.norm[ivpa,ivperp,iz,ir] =
                     pdf.electron.pdf_before_ion_timestep[ivpa,ivperp,iz,ir]
@@ -2984,7 +2984,7 @@ appropriate.
         else
             # Store the current value, which will be the value at the beginning of the
             # next step.
-            begin_r_z_vperp_vpa_region()
+            @begin_r_z_vperp_vpa_region()
             @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
                 pdf.electron.pdf_before_ion_timestep[ivpa,ivperp,iz,ir] =
                     pdf.electron.norm[ivpa,ivperp,iz,ir]
@@ -2994,7 +2994,7 @@ appropriate.
         istage = t_params.n_rk_stages+1
 
         # update the pdf.norm and moments arrays as needed
-        begin_s_r_z_region()
+        @begin_s_r_z_region()
         final_scratch = scratch[istage]
         @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
             pdf.ion.norm[ivpa,ivperp,iz,ir,is] = final_scratch.pdf[ivpa,ivperp,iz,ir,is]
@@ -3007,7 +3007,7 @@ appropriate.
         end
         # No need to synchronize here as we only change electron quantities and previous
         # region only changed ion quantities.
-        begin_r_z_region(no_synchronize=true)
+        @begin_r_z_region(true)
         @loop_r_z ir iz begin
             moments.electron.dens[iz,ir] = final_scratch.electron_density[iz,ir]
             moments.electron.upar[iz,ir] = final_scratch.electron_upar[iz,ir]
@@ -3017,7 +3017,7 @@ appropriate.
         if composition.n_neutral_species > 0
             # No need to synchronize here as we only change neutral quantities and previous
             # region only changed plasma quantities.
-            begin_sn_r_z_region(no_synchronize=true)
+            @begin_sn_r_z_region(true)
             @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
                 pdf.neutral.norm[ivz,ivr,ivzeta,iz,ir,isn] = final_scratch.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn]
             end
@@ -3082,7 +3082,7 @@ end
                              advance, advance_implicit, fp_arrays, scratch_dummy,
                              manufactured_source_list,diagnostic_checks, istep) = begin
 
-    begin_s_r_z_region()
+    @begin_s_r_z_region()
 
     n_rk_stages = t_params.n_rk_stages
 
@@ -3106,12 +3106,12 @@ end
     end
 
     if length(first_scratch.pdf_electron) > 0
-        begin_r_z_vperp_vpa_region()
+        @begin_r_z_vperp_vpa_region()
         @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
             first_scratch.pdf_electron[ivpa,ivperp,iz,ir] = pdf.electron.norm[ivpa,ivperp,iz,ir]
         end
     end
-    begin_r_z_region()
+    @begin_r_z_region()
     @loop_r_z ir iz begin
         first_scratch.electron_density[iz,ir] = moments.electron.dens[iz,ir]
         first_scratch.electron_upar[iz,ir] = moments.electron.upar[iz,ir]
@@ -3120,7 +3120,7 @@ end
     end
 
     if composition.n_neutral_species > 0
-        begin_sn_r_z_region()
+        @begin_sn_r_z_region()
         @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
             first_scratch.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn] = pdf.neutral.norm[ivz,ivr,ivzeta,iz,ir,isn]
         end
@@ -3134,7 +3134,7 @@ end
     if moments.evolve_upar
         # moments may be read on all ranks, even though loop type is z_s, so need to
         # synchronize here
-        _block_synchronize()
+        @_block_synchronize()
     end
 
     # success is set to false if an iteration failed to converge in an implicit solve
@@ -3333,7 +3333,7 @@ end
         istage = n_rk_stages+1
 
         # update the pdf.norm and moments arrays as needed
-        begin_s_r_z_region()
+        @begin_s_r_z_region()
         final_scratch = scratch[istage]
         @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
             pdf.ion.norm[ivpa,ivperp,iz,ir,is] = final_scratch.pdf[ivpa,ivperp,iz,ir,is]
@@ -3347,12 +3347,12 @@ end
         # No need to synchronize here as we only change electron quantities and previous
         # region only changed ion quantities.
         if length(final_scratch.pdf_electron) > 0
-            begin_r_z_vperp_vpa_region()
+            @begin_r_z_vperp_vpa_region()
             @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
                 pdf.electron.norm[ivpa,ivperp,iz,ir] = final_scratch.pdf_electron[ivpa,ivperp,iz,ir]
             end
         end
-        begin_r_z_region(no_synchronize=true)
+        @begin_r_z_region(true)
         @loop_r_z ir iz begin
             moments.electron.dens[iz,ir] = final_scratch.electron_density[iz,ir]
             moments.electron.upar[iz,ir] = final_scratch.electron_upar[iz,ir]
@@ -3362,7 +3362,7 @@ end
         if composition.n_neutral_species > 0
             # No need to synchronize here as we only change neutral quantities and previous
             # region only changed plasma quantities.
-            begin_sn_r_z_region(no_synchronize=true)
+            @begin_sn_r_z_region(true)
             @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
                 pdf.neutral.norm[ivz,ivr,ivzeta,iz,ir,isn] = final_scratch.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn]
             end
@@ -3624,7 +3624,7 @@ with fvec_in an input and fvec_out the output
         # Exept when using wall boundary conditions, do not actually need to synchronize
         # here because above we only modify the distribution function and below we only
         # modify the moments, so there is no possibility of race conditions.
-        begin_s_r_z_region(no_synchronize=true)
+        @begin_s_r_z_region(true)
     end
     if advance.continuity
         continuity_equation!(fvec_out.density, fvec_in, moments, composition, dt,
@@ -3646,7 +3646,7 @@ with fvec_in an input and fvec_out the output
         # Exept when using wall boundary conditions, do not actually need to synchronize
         # here because above we only modify the distribution function and below we only
         # modify the moments, so there is no possibility of race conditions.
-        begin_sn_r_z_region(no_synchronize=true)
+        @begin_sn_r_z_region(true)
     end
     if advance.neutral_continuity
         neutral_continuity_equation!(fvec_out.density_neutral, fvec_in, moments,
@@ -3760,7 +3760,7 @@ end
                                                 ion_dt=dt)
 
         # Update `fvec_out.electron_ppar` with the new electron pressure
-        begin_r_z_region()
+        @begin_r_z_region()
         fvec_out_electron_ppar = fvec_out.electron_ppar
         moments_electron_ppar = moments.electron.ppar
         @loop_r_z ir iz begin
@@ -3826,7 +3826,7 @@ Do a backward-Euler timestep for all terms in the ion kinetic equation.
     # Make a copy of fvec_in.pdf so we can apply boundary conditions at the 'new'
     # timestep, as these are the boundary conditions we need to apply the residual.
     f_old = scratch_dummy.implicit_buffer_vpavperpzrs_1
-    begin_s_r_z_vperp_vpa_region()
+    @begin_s_r_z_vperp_vpa_region()
     @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
         f_old[ivpa,ivperp,iz,ir,is] = fvec_in.pdf[ivpa,ivperp,iz,ir,is]
     end
@@ -3839,12 +3839,12 @@ Do a backward-Euler timestep for all terms in the ion kinetic equation.
     rtol = nl_solver_params.rtol
     atol = nl_solver_params.atol
 
-    begin_s_r_z_region()
+    @begin_s_r_z_region()
     @loop_s_r_z is ir iz begin
         @views hard_force_moment_constraints!(f_old[:,:,iz,ir,is], moments, vpa)
     end
 
-    begin_s_r_region()
+    @begin_s_r_region()
     @loop_s_r is ir begin
         if z.irank == 0
             iz = 1
@@ -3906,7 +3906,7 @@ Do a backward-Euler timestep for all terms in the ion kinetic equation.
     if vperp.n > 1
         # calculate the vpa advection speed, to ensure it is correct when used to apply the
         # boundary condition
-        begin_s_r_z_vpa_region()
+        @begin_s_r_z_vpa_region()
         @loop_s is begin
             # get the updated speed along the r direction using the current f
             @views update_speed_vperp!(vperp_advect[is], vpa, vperp, z, r, z_advect[is],
@@ -3916,7 +3916,7 @@ Do a backward-Euler timestep for all terms in the ion kinetic equation.
 
     function apply_bc!(x)
         if vpa.n > 1
-            begin_s_r_z_vperp_region()
+            @begin_s_r_z_vperp_region()
             @loop_s_r_z_vperp is ir iz ivperp begin
                 @views enforce_v_boundary_condition_local!(x[:,ivperp,iz,ir,is], vpa.bc,
                                                            vpa_advect[is].speed[:,ivperp,iz,ir],
@@ -3925,7 +3925,7 @@ Do a backward-Euler timestep for all terms in the ion kinetic equation.
             end
         end
         if vperp.n > 1
-            begin_s_r_z_vpa_region()
+            @begin_s_r_z_vpa_region()
             enforce_vperp_boundary_condition!(x, vperp.bc, vperp, vperp_spectral,
                                               vperp_adv, vperp_diffusion)
         end
@@ -3938,7 +3938,7 @@ Do a backward-Euler timestep for all terms in the ion kinetic equation.
             # this after subtracting f_old in case rounding errors, etc. mean that
             # at some point f_old had a different boundary condition cut-off
             # index.
-            begin_s_r_vperp_region()
+            @begin_s_r_vperp_region()
             if z.irank == 0
                 iz = 1
                 @loop_s_r_vperp is ir ivperp begin
@@ -3976,7 +3976,7 @@ Do a backward-Euler timestep for all terms in the ion kinetic equation.
     #   (f_new - f_old) / dt = RHS(f_new)
     # ⇒ f_new - f_old - dt*RHS(f_new) = 0
     function residual_func!(residual, f_new; krylov=false)
-        begin_s_r_z_vperp_vpa_region()
+        @begin_s_r_z_vperp_vpa_region()
         @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
             residual[ivpa,ivperp,iz,ir,is] = f_old[ivpa,ivperp,iz,ir,is]
         end
@@ -4019,14 +4019,14 @@ Do a backward-Euler timestep for all terms in the ion kinetic equation.
         # Now
         #   residual = f_old + dt*RHS(f_new)
         # so update to desired residual
-        begin_s_r_z_vperp_vpa_region()
+        @begin_s_r_z_vperp_vpa_region()
         @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
             residual[ivpa,ivperp,iz,ir,is] = f_new[ivpa,ivperp,iz,ir,is] - residual[ivpa,ivperp,iz,ir,is]
         end
 
         apply_bc!(residual)
 
-        begin_s_r_z_region()
+        @begin_s_r_z_region()
         @loop_s_r_z is ir iz begin
             @views moment_constraints_on_residual!(residual[:,:,iz,ir,is],
                                                    f_new[:,:,iz,ir,is], moments, vpa)
@@ -4066,7 +4066,7 @@ update the vector containing the pdf and any evolved moments of the pdf
 for use in the Runge-Kutta time advance
 """
 function update_solution_vector!(new_evolved, old_evolved, moments, composition, vpa, vperp, z, r)
-    begin_s_r_z_region()
+    @begin_s_r_z_region()
     @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
         new_evolved.pdf[ivpa,ivperp,iz,ir,is] = old_evolved.pdf[ivpa,ivperp,iz,ir,is]
     end
@@ -4076,12 +4076,12 @@ function update_solution_vector!(new_evolved, old_evolved, moments, composition,
         new_evolved.ppar[iz,ir,is] = old_evolved.ppar[iz,ir,is]
     end
     if length(new_evolved.pdf_electron) > 0
-        begin_r_z_vperp_vpa_region()
+        @begin_r_z_vperp_vpa_region()
         @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
             new_evolved.pdf_electron[ivpa,ivperp,iz,ir] = old_evolved.pdf_electron[ivpa,ivperp,iz,ir]
         end
     end
-    begin_r_z_region()
+    @begin_r_z_region()
     @loop_r_z ir iz begin
         new_evolved.electron_density[iz,ir] = old_evolved.electron_density[iz,ir]
         new_evolved.electron_upar[iz,ir] = old_evolved.electron_upar[iz,ir]
@@ -4089,7 +4089,7 @@ function update_solution_vector!(new_evolved, old_evolved, moments, composition,
         new_evolved.electron_temp[iz,ir] = old_evolved.electron_temp[iz,ir]
     end
     if composition.n_neutral_species > 0
-        begin_sn_r_z_region()
+        @begin_sn_r_z_region()
         @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
             new_evolved.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn] = old_evolved.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn]
         end
