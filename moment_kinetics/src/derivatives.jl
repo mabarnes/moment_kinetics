@@ -35,7 +35,7 @@ function derivative_r!(dfdr::AbstractArray{mk_float,2}, f::AbstractArray{mk_floa
         r_receive_buffer1::AbstractArray{mk_float,1},
         r_receive_buffer2::AbstractArray{mk_float,1}, r_spectral, r)
 
-        begin_z_region()
+        @begin_z_region()
 
 	# differentiate f w.r.t r
 	@loop_z iz begin
@@ -100,7 +100,7 @@ function derivative_r!(dfdr::AbstractArray{mk_float,5}, f::AbstractArray{mk_floa
         r_receive_buffer1::AbstractArray{mk_float,4},
         r_receive_buffer2::AbstractArray{mk_float,4}, r_spectral, r)
 
-        begin_s_z_vperp_vpa_region()
+        @begin_s_z_vperp_vpa_region()
 
 	# differentiate f w.r.t r
 	@loop_s_z_vperp_vpa is iz ivperp ivpa begin
@@ -126,7 +126,7 @@ function derivative_r!(dfdr::AbstractArray{mk_float,6}, f::AbstractArray{mk_floa
         r_receive_buffer1::AbstractArray{mk_float,5},
         r_receive_buffer2::AbstractArray{mk_float,5}, r_spectral, r)
 
-        begin_sn_z_vzeta_vr_vz_region()
+        @begin_sn_z_vzeta_vr_vz_region()
 
 	# differentiate f w.r.t r
 	@loop_sn_z_vzeta_vr_vz isn iz ivzeta ivr ivz begin
@@ -161,7 +161,7 @@ function derivative_z!(dfdz::AbstractArray{mk_float,1}, f::AbstractArray{mk_floa
         z_send_buffer::AbstractArray{mk_float,0},
         z_receive_buffer::AbstractArray{mk_float,0}, z_spectral, z)
 
-    begin_serial_region()
+    @begin_serial_region()
 
     @serial_region begin
         # differentiate f w.r.t z
@@ -188,7 +188,7 @@ function derivative_z!(dfdz::AbstractArray{mk_float,2}, f::AbstractArray{mk_floa
         z_send_buffer::AbstractArray{mk_float,1},
         z_receive_buffer::AbstractArray{mk_float,1}, z_spectral, z)
 
-        begin_r_region()
+        @begin_r_region()
 
 	# differentiate f w.r.t z
 	@loop_r ir begin
@@ -278,7 +278,7 @@ function derivative_z!(dfdz::AbstractArray{mk_float,5}, f::AbstractArray{mk_floa
         z_send_buffer::AbstractArray{mk_float,4},
         z_receive_buffer::AbstractArray{mk_float,4}, z_spectral, z)
 
-        begin_s_r_vperp_vpa_region()
+        @begin_s_r_vperp_vpa_region()
 
 	# differentiate f w.r.t z
 	@loop_s_r_vperp_vpa is ir ivperp ivpa begin
@@ -304,7 +304,7 @@ function derivative_z!(dfdz::AbstractArray{mk_float,4}, f::AbstractArray{mk_floa
 	z_send_buffer::AbstractArray{mk_float,3},
 	z_receive_buffer::AbstractArray{mk_float,3}, z_spectral, z)
 
-        begin_r_vperp_vpa_region()
+        @begin_r_vperp_vpa_region()
 
 	# differentiate f w.r.t z
 	@loop_r_vperp_vpa ir ivperp ivpa begin
@@ -330,7 +330,7 @@ function derivative_z!(dfdz::AbstractArray{mk_float,6}, f::AbstractArray{mk_floa
         z_send_buffer::AbstractArray{mk_float,5},
         z_receive_buffer::AbstractArray{mk_float,5}, z_spectral, z)
 
-        begin_sn_r_vzeta_vr_vz_region()
+        @begin_sn_r_vzeta_vr_vz_region()
 
 	# differentiate f w.r.t z
 	@loop_sn_r_vzeta_vr_vz isn ir ivzeta ivr ivz begin
@@ -365,7 +365,7 @@ function second_derivative_r!(d2fdr2::AbstractArray{mk_float,2}, f::AbstractArra
         r_receive_buffer1::AbstractArray{mk_float,1},
         r_receive_buffer2::AbstractArray{mk_float,1}, r_spectral, r)
 
-    begin_z_region()
+    @begin_z_region()
 
     # differentiate f w.r.t r
     @loop_z iz begin
@@ -429,7 +429,7 @@ function second_derivative_r!(d2fdr2::AbstractArray{mk_float,5}, f::AbstractArra
         r_receive_buffer1::AbstractArray{mk_float,4},
         r_receive_buffer2::AbstractArray{mk_float,4}, r_spectral, r)
 
-    begin_s_z_vperp_vpa_region()
+    @begin_s_z_vperp_vpa_region()
 
     # differentiate f w.r.t r
     @loop_s_z_vperp_vpa is iz ivperp ivpa begin
@@ -454,7 +454,7 @@ function second_derivative_r!(d2fdr2::AbstractArray{mk_float,6}, f::AbstractArra
         r_receive_buffer1::AbstractArray{mk_float,5},
         r_receive_buffer2::AbstractArray{mk_float,5}, r_spectral, r)
 
-    begin_sn_z_vzeta_vr_vz_region()
+    @begin_sn_z_vzeta_vr_vz_region()
 
     # differentiate f w.r.t r
     @loop_sn_z_vzeta_vr_vz isn iz ivzeta ivr ivz begin
@@ -488,7 +488,7 @@ function second_derivative_z!(d2fdz2::AbstractArray{mk_float,2}, f::AbstractArra
         z_send_buffer::AbstractArray{mk_float,1},
         z_receive_buffer::AbstractArray{mk_float,1}, z_spectral, z)
 
-    begin_r_region()
+    @begin_r_region()
 
     # differentiate f w.r.t z
     @loop_r ir begin
@@ -551,7 +551,7 @@ function second_derivative_z!(d2fdz2::AbstractArray{mk_float,5}, f::AbstractArra
         z_send_buffer::AbstractArray{mk_float,4},
         z_receive_buffer::AbstractArray{mk_float,4}, z_spectral, z)
 
-    begin_s_r_vperp_vpa_region()
+    @begin_s_r_vperp_vpa_region()
 
     # differentiate f w.r.t z
     @loop_s_r_vperp_vpa is ir ivperp ivpa begin
@@ -576,7 +576,7 @@ function second_derivative_z!(d2fdz2::AbstractArray{mk_float,6}, f::AbstractArra
         z_send_buffer::AbstractArray{mk_float,5},
         z_receive_buffer::AbstractArray{mk_float,5}, z_spectral, z)
 
-    begin_sn_r_vzeta_vr_vz_region()
+    @begin_sn_r_vzeta_vr_vz_region()
 
     # differentiate f w.r.t z
     @loop_sn_r_vzeta_vr_vz isn ir ivzeta ivr ivz begin
@@ -612,7 +612,7 @@ function derivative_r!(dfdr::AbstractArray{mk_float,2}, f::AbstractArray{mk_floa
         r_receive_buffer1::AbstractArray{mk_float,1},
         r_receive_buffer2::AbstractArray{mk_float,1}, r_spectral, r)
 
-    begin_z_region()
+    @begin_z_region()
 
     # differentiate f w.r.t r
     @loop_z iz begin
@@ -686,7 +686,7 @@ function derivative_r!(dfdr::AbstractArray{mk_float,5}, f::AbstractArray{mk_floa
         r_receive_buffer1::AbstractArray{mk_float,4},
         r_receive_buffer2::AbstractArray{mk_float,4}, r_spectral, r)
 
-        begin_s_z_vperp_vpa_region()
+        @begin_s_z_vperp_vpa_region()
 
 	# differentiate f w.r.t r
 	@loop_s_z_vperp_vpa is iz ivperp ivpa begin
@@ -717,7 +717,7 @@ function derivative_r!(dfdr::AbstractArray{mk_float,6}, f::AbstractArray{mk_floa
         r_receive_buffer1::AbstractArray{mk_float,5},
         r_receive_buffer2::AbstractArray{mk_float,5}, r_spectral, r)
 
-        begin_sn_z_vzeta_vr_vz_region()
+        @begin_sn_z_vzeta_vr_vz_region()
 
 	# differentiate f w.r.t r
 	@loop_sn_z_vzeta_vr_vz isn iz ivzeta ivr ivz begin
@@ -757,7 +757,7 @@ function derivative_z!(dfdz::AbstractArray{mk_float,2}, f::AbstractArray{mk_floa
         z_send_buffer::AbstractArray{mk_float,1},
         z_receive_buffer::AbstractArray{mk_float,1}, z_spectral, z)
 
-    begin_r_region()
+    @begin_r_region()
 
     # differentiate f w.r.t z
     @loop_r ir begin
@@ -859,7 +859,7 @@ function derivative_z!(dfdz::AbstractArray{mk_float,5}, f::AbstractArray{mk_floa
         z_send_buffer::AbstractArray{mk_float,4},
         z_receive_buffer::AbstractArray{mk_float,4}, z_spectral, z)
 
-        begin_s_r_vperp_vpa_region()
+        @begin_s_r_vperp_vpa_region()
 
 	# differentiate f w.r.t z
 	@loop_s_r_vperp_vpa is ir ivperp ivpa begin
@@ -890,7 +890,7 @@ function derivative_z!(dfdz::AbstractArray{mk_float,4}, f::AbstractArray{mk_floa
 	z_send_buffer::AbstractArray{mk_float,3},
 	z_receive_buffer::AbstractArray{mk_float,3}, z_spectral, z)
 
-    begin_r_vperp_vpa_region()
+    @begin_r_vperp_vpa_region()
 
     # differentiate the pdf f w.r.t z
     @loop_r_vperp_vpa ir ivperp ivpa begin
@@ -921,7 +921,7 @@ function derivative_z!(dfdz::AbstractArray{mk_float,6}, f::AbstractArray{mk_floa
         z_send_buffer::AbstractArray{mk_float,5},
         z_receive_buffer::AbstractArray{mk_float,5}, z_spectral, z)
 
-        begin_sn_r_vzeta_vr_vz_region()
+        @begin_sn_r_vzeta_vr_vz_region()
 
 	# differentiate f w.r.t z
 	@loop_sn_r_vzeta_vr_vz isn ir ivzeta ivr ivz begin

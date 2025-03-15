@@ -18,7 +18,7 @@ do a single stage time advance (potentially as part of a multi-stage RK scheme)
                          f_out, fvec_in, moments, fields, advect, z, vpa, vperp, r, dt, t,
                          spectral, composition, geometry, scratch_dummy) = begin
 
-    begin_s_r_vperp_vpa_region()
+    @begin_s_r_vperp_vpa_region()
 
     @loop_s is begin
         # get the updated speed along the z direction using the current f

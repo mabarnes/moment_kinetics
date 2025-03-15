@@ -17,7 +17,7 @@ flow and/or pressure, and use them to update the pdf
                          pdf_out, fvec_in, moments, vpa, z, r, dt, spectral, composition,
                          collisions, ion_source_settings) = begin
 
-    begin_s_r_z_vperp_vpa_region()
+    @begin_s_r_z_vperp_vpa_region()
 
     #n_species = size(pdf_out,3)
     if moments.evolve_ppar
@@ -152,7 +152,7 @@ flow and/or pressure, and use them to update the pdf
                          pdf_out, fvec_in, moments, vpa, z, r, dt, spectral, composition,
                          collisions, neutral_source_settings) = begin
 
-    begin_sn_r_z_vzeta_vr_vz_region()
+    @begin_sn_r_z_vzeta_vr_vz_region()
 
     #n_species = size(pdf_out,3)
     if moments.evolve_ppar
@@ -284,7 +284,7 @@ advance the dfn with an arbitrary source function
         Source_i = manufactured_source_list.Source_i_array
         Source_n = manufactured_source_list.Source_n_array
 
-        begin_s_r_z_region()
+        @begin_s_r_z_region()
 
         @loop_s is begin
             @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
@@ -293,7 +293,7 @@ advance the dfn with an arbitrary source function
         end
 
         if composition.n_neutral_species > 0
-            begin_sn_r_z_region()
+            @begin_sn_r_z_region()
             @loop_sn isn begin
                 @loop_r_z_vzeta_vr_vz ir iz ivzeta ivr ivz begin
                     pdf_neutral_out[ivz,ivr,ivzeta,iz,ir,isn] += dt*Source_n[ivz,ivr,ivzeta,iz,ir]
@@ -305,7 +305,7 @@ advance the dfn with an arbitrary source function
         Source_i_func = manufactured_source_list.Source_i_func
         Source_n_func = manufactured_source_list.Source_n_func
 
-        begin_s_r_z_region()
+        @begin_s_r_z_region()
 
         @loop_s is begin
             @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
@@ -314,7 +314,7 @@ advance the dfn with an arbitrary source function
         end
 
         if composition.n_neutral_species > 0
-            begin_sn_r_z_region()
+            @begin_sn_r_z_region()
             @loop_sn isn begin
                 @loop_r_z_vzeta_vr_vz ir iz ivzeta ivr ivz begin
                     pdf_neutral_out[ivz,ivr,ivzeta,iz,ir,isn] += dt*Source_n_func(vz.grid[ivz],vr.grid[ivr],vzeta.grid[ivzeta],z.grid[iz],r.grid[ir],t)

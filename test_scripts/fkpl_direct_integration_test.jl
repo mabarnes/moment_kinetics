@@ -182,7 +182,7 @@ function test_Lagrange_Rosenbluth_potentials(ngrid,nelement; standalone=true)
     fokkerplanck_arrays = init_fokker_planck_collisions_direct_integration(vperp,vpa; precompute_weights=true)
     fka = fokkerplanck_arrays
 
-    begin_s_r_z_anyv_region()
+    @begin_s_r_z_anyv_region()
 
     # calculate the potentials by direct integration
     calculate_rosenbluth_potentials_via_direct_integration!(fka.GG,fka.HH,fka.dHdvpa,fka.dHdvperp,
@@ -190,7 +190,7 @@ function test_Lagrange_Rosenbluth_potentials(ngrid,nelement; standalone=true)
              vpa,vperp,vpa_spectral,vperp_spectral,fka)
             
     # error analysis of distribution function
-    begin_serial_region()
+    @begin_serial_region()
     @serial_region begin
         println("finished integration   ", Dates.format(now(), dateformat"H:MM:SS"))
         @. dfsdvpa_err = abs(fka.dfdvpa - dfsdvpa_Maxwell)
@@ -333,7 +333,7 @@ function test_Lagrange_Rosenbluth_potentials(ngrid,nelement; standalone=true)
         end
         
     end
-    _block_synchronize()
+    @_block_synchronize()
     if standalone 
         finalize_comms!()
     end

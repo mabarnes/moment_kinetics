@@ -23,7 +23,7 @@ begin
         return nothing
     end
 
-    begin_sn_r_z_vzeta_vr_region()
+    @begin_sn_r_z_vzeta_vr_region()
 
     # calculate the advection speed corresponding to current f
     update_speed_neutral_vz!(advect, fields, fvec_in, moments, vz, vr, vzeta, z, r,
@@ -52,7 +52,7 @@ function update_speed_neutral_vz!(advect, fields, fvec, moments, vz, vr, vzeta, 
         update_speed_default_neutral!(advect, fields, fvec, moments, vz, z, r,
                                       composition, collisions, neutral_source_settings)
     elseif vz.advection.option == "constant"
-        begin_serial_region()
+        @begin_serial_region()
         @serial_region begin
             # Not usually used - just run in serial
             # dvpa/dt = constant
@@ -61,7 +61,7 @@ function update_speed_neutral_vz!(advect, fields, fvec, moments, vz, vr, vzeta, 
             end
         end
     elseif vpa.advection.option == "linear"
-        begin_serial_region()
+        @begin_serial_region()
         @serial_region begin
             # Not usually used - just run in serial
             # dvpa/dt = constant ⋅ (vpa + L_vpa/2)

@@ -20,7 +20,7 @@ between ions and neutrals
     # nvz = nvpa and identical vz and vpa grids 
 
     if moments.evolve_density
-        begin_s_r_z_region()
+        @begin_s_r_z_region()
         @loop_s is begin
             # apply CX collisions to all ion species
             # for each ion species, obtain affect of charge exchange collisions
@@ -34,7 +34,7 @@ between ions and neutrals
                 vz_spectral, dt; neutrals=false)
         end
     else
-        begin_s_r_z_region()
+        @begin_s_r_z_region()
         @loop_s is begin
             # apply CX collisions to all ion species
             # for each ion species, obtain affect of charge exchange collisions
@@ -66,7 +66,7 @@ between ions and neutrals
     # nvz = nvpa and identical vz and vpa grids
 
     if moments.evolve_density
-        begin_sn_r_z_region()
+        @begin_sn_r_z_region()
         @loop_sn isn begin
             # apply CX collisions to all neutral species
             # for each neutral species, obtain affect of charge exchange collisions
@@ -79,7 +79,7 @@ between ions and neutrals
                 vz, vpa, charge_exchange_frequency, vpa_spectral, dt; neutrals=true)
         end
     else
-        begin_sn_r_z_region()
+        @begin_sn_r_z_region()
         @loop_sn isn begin
             # apply CX collisions to all neutral species
             # for each neutral species, obtain affect of charge exchange collisions
@@ -181,7 +181,7 @@ end
     @boundscheck r.n == size(f_neutral_gav_in,4) || throw(BoundsError(f_neutral_gav_in))
     @boundscheck composition.n_neutral_species == size(f_neutral_gav_in,5) || throw(BoundsError(f_neutral_gav_in))
 
-    begin_s_r_z_vperp_vpa_region()
+    @begin_s_r_z_vperp_vpa_region()
     @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
         # apply CX collisions to all ion species
         # for each ion species, obtain affect of charge exchange collisions
@@ -212,7 +212,7 @@ end
     @boundscheck r.n == size(f_ion_vrvzvzeta_in,5) || throw(BoundsError(f_ion_vrvzvzeta_in))
     @boundscheck composition.n_neutral_species == size(f_ion_vrvzvzeta_in,6) || throw(BoundsError(f_ion_vrvzvzeta_in))
 
-    begin_sn_r_z_vzeta_vr_vz_region()
+    @begin_sn_r_z_vzeta_vr_vz_region()
     @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
         # apply CX collisions to all neutral species
         # for each neutral species, obtain affect of charge exchange collisions

@@ -553,7 +553,7 @@ function rk_update_loop_low_storage!(rk_coefs, rk_coefs_implicit,
                                      old_implicit, first_implicit; output=new)
     @boundscheck length(rk_coefs) == 3
 
-    begin_s_r_z_vperp_vpa_region()
+    @begin_s_r_z_vperp_vpa_region()
     if rk_coefs_implicit === nothing
         @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
             output[ivpa,ivperp,iz,ir,is] = rk_coefs[1]*first[ivpa,ivperp,iz,ir,is] +
@@ -577,7 +577,7 @@ function rk_update_loop!(rk_coefs, rk_coefs_implicit,
                          var_arrays_implicit; output=var_arrays[N]) where N
     @boundscheck length(rk_coefs) ≥ N
 
-    begin_s_r_z_vperp_vpa_region()
+    @begin_s_r_z_vperp_vpa_region()
     if rk_coefs_implicit === nothing
         @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
             output[ivpa,ivperp,iz,ir,is] =
@@ -602,7 +602,7 @@ function rk_update_loop_low_storage!(rk_coefs, rk_coefs_implicit,
                                      old_implicit, first_implicit; output=new)
     @boundscheck length(rk_coefs) == 3
 
-    begin_s_r_z_region()
+    @begin_s_r_z_region()
     if rk_coefs_implicit === nothing
         @loop_s_r_z is ir iz begin
             output[iz,ir,is] = rk_coefs[1]*first[iz,ir,is] +
@@ -626,7 +626,7 @@ function rk_update_loop!(rk_coefs, rk_coefs_implicit,
                          var_arrays_implicit; output=var_arrays[N]) where N
     @boundscheck length(rk_coefs) ≥ N
 
-    begin_s_r_z_region()
+    @begin_s_r_z_region()
     if rk_coefs_implicit === nothing
         @loop_s_r_z is ir iz begin
             output[iz,ir,is] = sum(rk_coefs[i] * var_arrays[i][iz,ir,is] for i ∈ 1:N)
@@ -649,7 +649,7 @@ function rk_update_loop_low_storage!(rk_coefs, rk_coefs_implicit,
                                      old_implicit, first_implicit; output=new)
     @boundscheck length(rk_coefs) == 3
 
-    begin_r_z_vperp_vpa_region()
+    @begin_r_z_vperp_vpa_region()
     if rk_coefs_implicit === nothing
         @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
             output[ivpa,ivperp,iz,ir] = rk_coefs[1]*first[ivpa,ivperp,iz,ir] +
@@ -673,7 +673,7 @@ function rk_update_loop!(rk_coefs, rk_coefs_implicit,
                          var_arrays_implicit; output=var_arrays[N]) where N
     @boundscheck length(rk_coefs) ≥ N
 
-    begin_r_z_vperp_vpa_region()
+    @begin_r_z_vperp_vpa_region()
     if rk_coefs_implicit === nothing
         @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
             output[ivpa,ivperp,iz,ir] =
@@ -699,7 +699,7 @@ function rk_update_loop_low_storage!(rk_coefs, rk_coefs_implicit,
                                      old_implicit, first_implicit; output=new)
     @boundscheck length(rk_coefs) == 3
 
-    begin_r_z_region()
+    @begin_r_z_region()
     if rk_coefs_implicit === nothing
         @loop_r_z ir iz begin
             output[iz,ir] = rk_coefs[1]*first[iz,ir] +
@@ -724,7 +724,7 @@ function rk_update_loop!(rk_coefs, rk_coefs_implicit,
                          output=var_arrays[N]) where N
     @boundscheck length(rk_coefs) ≥ N
 
-    begin_r_z_region()
+    @begin_r_z_region()
     if rk_coefs_implicit === nothing
         @loop_r_z ir iz begin
             output[iz,ir] = sum(rk_coefs[i] * var_arrays[i][iz,ir] for i ∈ 1:N)
@@ -749,7 +749,7 @@ function rk_update_loop_neutrals_low_storage!(rk_coefs, rk_coefs_implicit,
                                               output=new)
     @boundscheck length(rk_coefs) == 3
 
-    begin_sn_r_z_vzeta_vr_vz_region()
+    @begin_sn_r_z_vzeta_vr_vz_region()
     if rk_coefs_implicit === nothing
         @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
             output[ivz,ivr,ivzeta,iz,ir,isn] = rk_coefs[1]*first[ivz,ivr,ivzeta,iz,ir,isn] +
@@ -773,7 +773,7 @@ function rk_update_loop_neutrals!(rk_coefs, rk_coefs_implicit,
                                   var_arrays_implicit; output=var_arrays[N]) where N
     @boundscheck length(rk_coefs) ≥ N
 
-    begin_sn_r_z_vzeta_vr_vz_region()
+    @begin_sn_r_z_vzeta_vr_vz_region()
     if rk_coefs_implicit === nothing
         @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
             output[ivz,ivr,ivzeta,iz,ir,isn] =
@@ -800,7 +800,7 @@ function rk_update_loop_neutrals_low_storage!(rk_coefs, rk_coefs_implicit,
                                               output=new)
     @boundscheck length(rk_coefs) == 3
 
-    begin_sn_r_z_region()
+    @begin_sn_r_z_region()
     if rk_coefs_implicit === nothing
         @loop_sn_r_z isn ir iz begin
             output[iz,ir,isn] = rk_coefs[1]*first[iz,ir,isn] +
@@ -824,7 +824,7 @@ function rk_update_loop_neutrals!(rk_coefs, rk_coefs_implicit,
                                   var_arrays_implicit; output=var_arrays[N]) where N
     @boundscheck length(rk_coefs) ≥ N
 
-    begin_sn_r_z_region()
+    @begin_sn_r_z_region()
     if rk_coefs_implicit === nothing
         @loop_sn_r_z isn ir iz begin
             output[iz,ir,isn] = sum(rk_coefs[i] * var_arrays[i][iz,ir,isn] for i ∈ 1:N)

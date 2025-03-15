@@ -20,7 +20,7 @@ calculate the wpa-advection term for the electron kinetic equation
                          pdf_out, pdf_in, density, upar, ppar, moments, advect, vpa,
                          spectral, scratch_dummy, dt, electron_source_settings,
                          ir) = begin
-    begin_z_vperp_region()
+    @begin_z_vperp_region()
 
     adv_fac = advect[1].adv_fac
     speed = advect[1].speed
@@ -131,7 +131,7 @@ function add_electron_vpa_advection_to_Jacobian!(jacobian_matrix, f, dens, upar,
     vpa_Dmat = vpa_spectral.lobatto.Dmat
     vpa_element_scale = vpa.element_scale
 
-    begin_z_vperp_vpa_region()
+    @begin_z_vperp_vpa_region()
     @loop_z_vperp_vpa iz ivperp ivpa begin
         if skip_f_electron_bc_points_in_Jacobian(iz, ivperp, ivpa, z, vperp, vpa, z_speed)
             continue

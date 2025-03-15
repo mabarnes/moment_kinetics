@@ -387,7 +387,7 @@ function setup_io_input(input_dict, timestepping_section, warn_unexpected::Bool;
         if global_rank[] == 0
             mkpath(io_settings["output_dir"])
         end
-        _block_synchronize()
+        @_block_synchronize()
     end
 
     return io_input_struct(; (Symbol(k) => v for (k,v) ∈ io_settings)...)
@@ -439,7 +439,7 @@ function setup_file_io(io_input, boundary_distributions, vz, vr, vzeta, vpa, vpe
                        external_source_settings, input_dict, restart_time_index,
                        previous_runs_info, time_for_setup, t_params, nl_solver_params)
 
-    begin_serial_region()
+    @begin_serial_region()
     @serial_region begin
         # Only read/write from first process in each 'block'
 
@@ -487,7 +487,7 @@ function setup_electron_io(io_input, vpa, vperp, z, r, composition, collisions,
                            evolve_density, evolve_upar, evolve_ppar,
                            external_source_settings, t_params, input_dict,
                            restart_time_index, previous_runs_info, prefix_label)
-    begin_serial_region()
+    @begin_serial_region()
     @serial_region begin
         # Only read/write from first process in each 'block'
 
@@ -3720,7 +3720,7 @@ function debug_dump(vz::coordinate, vr::coordinate, vzeta::coordinate, vpa::coor
     global debug_output_file
 
     # Only read/write from first process in each 'block'
-    _block_synchronize()
+    @_block_synchronize()
     @serial_region begin
         if debug_output_file === nothing
             # Open the file the first time`debug_dump()` is called
@@ -3879,7 +3879,7 @@ function debug_dump(vz::coordinate, vr::coordinate, vzeta::coordinate, vpa::coor
 
     debug_output_counter[] += 1
 
-    _block_synchronize()
+    @_block_synchronize()
 
     return nothing
 end

@@ -681,7 +681,7 @@ function steady_state_square_residuals(variable, variable_at_previous_time, dt,
         t_dim = ndims(variable)
     end
     if use_mpi
-        begin_r_z_region()
+        @begin_r_z_region()
         if !only_max_abs && variable_max === nothing
             local_max = 0.0
             @loop_r_z ir iz begin

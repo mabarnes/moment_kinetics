@@ -441,7 +441,7 @@ function update_moments!(moments, ff_in, gyroavs::gyro_operators, vpa, vperp, z,
     else
         ff = ff_in
     end
-    begin_s_r_z_region()
+    @begin_s_r_z_region()
     n_species = size(ff,5)
     @boundscheck n_species == size(moments.ion.dens,3) || throw(BoundsError(moments))
     @loop_s is begin
@@ -496,7 +496,7 @@ the incoming pdf is the un-normalized pdf that satisfies int dv pdf = density
 """
 function update_density!(dens, dens_updated, pdf, vpa, vperp, z, r, composition)
 
-    begin_s_r_z_region()
+    @begin_s_r_z_region()
 
     n_species = size(pdf,5)
     @boundscheck n_species == size(dens,3) || throw(BoundsError(dens))
@@ -539,7 +539,7 @@ the incoming pdf is the un-normalized pdf that satisfies int dv pdf = density
 """
 function update_upar!(upar, upar_updated, density, ppar, pdf, vpa, vperp, z, r,
                       composition, evolve_density, evolve_ppar)
-    begin_s_r_z_region()
+    @begin_s_r_z_region()
 
     n_species = size(pdf,5)
     @boundscheck n_species == size(upar,3) || throw(BoundsError(upar))
@@ -617,7 +617,7 @@ function update_ppar!(ppar, ppar_updated, density, upar, pdf, vpa, vperp, z, r, 
     @boundscheck r.n == size(ppar,2) || throw(BoundsError(ppar))
     @boundscheck z.n == size(ppar,1) || throw(BoundsError(ppar))
 
-    begin_s_r_z_region()
+    @begin_s_r_z_region()
 
     @loop_s is begin
         if ppar_updated[is] == false
@@ -682,7 +682,7 @@ function update_pperp!(pperp, pdf, vpa, vperp, z, r, composition)
     @boundscheck r.n == size(pperp,2) || throw(BoundsError(pperp))
     @boundscheck z.n == size(pperp,1) || throw(BoundsError(pperp))
     
-    begin_s_r_z_region()
+    @begin_s_r_z_region()
     
     @loop_s is begin
         @views update_pperp_species!(pperp[:,:,is], pdf[:,:,:,:,is], vpa, vperp, z, r)
@@ -716,7 +716,7 @@ function update_vth!(vth, ppar, pperp, dens, vperp, z, r, composition)
     @boundscheck r.n == size(vth,2) || throw(BoundsError(vth))
     @boundscheck z.n == size(vth,1) || throw(BoundsError(vth))
     
-    begin_s_r_z_region()
+    @begin_s_r_z_region()
     normfac = 2.0 # if ppar normalised to 2*nref Tref = mref cref^2
     #normfac = 1.0 # if ppar normalised to nref Tref = 0.5 * mref cref^2
     if vperp.n > 1 #2V definition
@@ -746,7 +746,7 @@ function update_ion_qpar!(qpar, qpar_updated, density, upar, vth, dT_dz, pdf, vp
                           composition, ion_physics, collisions, evolve_density, evolve_upar, evolve_ppar)
     @boundscheck composition.n_ion_species == size(qpar,3) || throw(BoundsError(qpar))
 
-    begin_s_r_z_region()
+    @begin_s_r_z_region()
 
     @loop_s is begin
         if qpar_updated[is] == false
@@ -828,7 +828,7 @@ function calculate_ion_qpar_from_coll_krook!(qpar, density, upar, vth, dT_dz, z,
 
     # calculate coll_krook heat flux. Currently only works for one ion species! (hence the 1 in dT_dz[iz,ir,1])
     if evolve_density && evolve_upar && evolve_ppar
-        begin_r_z_region()
+        @begin_r_z_region()
         @loop_r_z ir iz begin
             nu_ii = get_collision_frequency_ii(collisions, density[iz,ir], vth[iz,ir])
             qpar[iz,ir] = -(1/2) * 3/2 * density[iz,ir] * vth[iz,ir]^2 /nu_ii * dT_dz[iz,ir,1]
@@ -847,7 +847,7 @@ function calculate_ion_qpar_from_coll_krook!(qpar, density, upar, vth, dT_dz, z,
         return nothing
     end
 
-    begin_r_region()
+    @begin_r_region()
 
     if z.irank == 0 && (z.irank == z.nrank - 1)
         z_indices = (1, z.n)
@@ -900,7 +900,7 @@ in a single species plasma with Z = 1
 
 function update_chodura!(moments,ff,vpa,vperp,z,r,r_spectral,composition,geometry,scratch_dummy,z_advect)
     @boundscheck composition.n_ion_species == size(ff, 5) || throw(BoundsError(ff))
-    begin_s_z_vperp_vpa_region()
+    @begin_s_z_vperp_vpa_region()
     # use buffer_vpavperpzrs_2 here as buffer_vpavperpzrs_1 is in use storing ff
     dffdr = scratch_dummy.buffer_vpavperpzrs_2 
     ff_dummy = scratch_dummy.dummy_vpavperp
@@ -917,7 +917,7 @@ function update_chodura!(moments,ff,vpa,vperp,z,r,r_spectral,composition,geometr
     end 
     
     del_vpa = minimum(vpa.grid[2:vpa.ngrid].-vpa.grid[1:vpa.ngrid-1])
-    begin_s_r_region()
+    @begin_s_r_region()
     if z.irank == 0
         @loop_s_r is ir begin
             @views moments.ion.chodura_integral_lower[ir,is] = update_chodura_integral_species!(ff[:,:,1,ir,is],dffdr[:,:,1,ir,is],
@@ -985,7 +985,7 @@ Pre-calculate spatial derivatives of the moments that will be needed for the tim
 """
 function calculate_ion_moment_derivatives!(moments, scratch, scratch_dummy, z, z_spectral,
                                            ion_mom_diss_coeff)
-    begin_s_r_region()
+    @begin_s_r_region()
 
     density = scratch.density
     upar = scratch.upar
@@ -1074,7 +1074,7 @@ Pre-calculate spatial derivatives of the electron moments that will be needed fo
 """
 function calculate_electron_moment_derivatives!(moments, scratch, scratch_dummy, z, z_spectral,
                                                 electron_mom_diss_coeff, electron_model)
-    begin_r_region()
+    @begin_r_region()
 
     dens = scratch.electron_density
     upar = scratch.electron_upar
@@ -1126,7 +1126,7 @@ given by `ir`.
 function calculate_electron_moment_derivatives_no_r!(moments, scratch, scratch_dummy, z,
                                                      z_spectral, electron_mom_diss_coeff,
                                                      ir)
-    begin_serial_region()
+    @begin_serial_region()
 
     dens = @view scratch.electron_density[:,ir]
     upar = @view scratch.electron_upar[:,ir]
@@ -1159,12 +1159,12 @@ function calculate_electron_moment_derivatives_no_r!(moments, scratch, scratch_d
     @views derivative_z!(moments.electron.dvth_dz[:,ir], vth, buffer_1, buffer_2,
                          buffer_3, buffer_4, z_spectral, z)
     # calculate the zed derivative of the electron temperature
-    begin_z_region()
+    @begin_z_region()
     @loop_z iz begin
         # store the temperature in dummy_zr
         dummy_z[iz] = 2*ppar[iz,ir]/dens[iz,ir]
     end
-    begin_serial_region()
+    @begin_serial_region()
     @views derivative_z!(moments.electron.dT_dz[:,ir], dummy_z, buffer_1, buffer_2,
                          buffer_3, buffer_4, z_spectral, z)
     @views derivative_z!(moments.electron.dvth_dz[:,ir], moments.electron.vth[:,ir],
@@ -1175,7 +1175,7 @@ end
 update velocity moments of the evolved neutral pdf
 """
 function update_moments_neutral!(moments, pdf, vz, vr, vzeta, z, r, composition)
-    begin_sn_r_z_region()
+    @begin_sn_r_z_region()
     n_species = size(pdf,6)
     @boundscheck n_species == size(moments.neutral.dens,3) || throw(BoundsError(moments))
     @loop_sn isn begin
@@ -1271,7 +1271,7 @@ calculate the neutral density from the neutral pdf
 function update_neutral_density!(dens, dens_updated, pdf, vz, vr, vzeta, z, r,
                                  composition)
     
-    begin_sn_r_z_region()
+    @begin_sn_r_z_region()
     @boundscheck composition.n_neutral_species == size(pdf, 6) || throw(BoundsError(pdf))
     @boundscheck composition.n_neutral_species == size(dens, 3) || throw(BoundsError(dens))
     @loop_sn isn begin
@@ -1303,7 +1303,7 @@ end
 function update_neutral_uz!(uz, uz_updated, density, pz, pdf, vz, vr, vzeta, z, r,
                             composition, evolve_density, evolve_ppar)
     
-    begin_sn_r_z_region()
+    @begin_sn_r_z_region()
     @boundscheck composition.n_neutral_species == size(pdf, 6) || throw(BoundsError(pdf))
     @boundscheck composition.n_neutral_species == size(uz, 3) || throw(BoundsError(uz))
     @loop_sn isn begin
@@ -1369,7 +1369,7 @@ end
 function update_neutral_ur!(ur, ur_updated, density, pdf, vz, vr, vzeta, z, r,
                             composition)
     
-    begin_sn_r_z_region()
+    @begin_sn_r_z_region()
     @boundscheck composition.n_neutral_species == size(pdf, 6) || throw(BoundsError(pdf))
     @boundscheck composition.n_neutral_species == size(ur, 3) || throw(BoundsError(ur))
     @loop_sn isn begin
@@ -1403,7 +1403,7 @@ end
 function update_neutral_uzeta!(uzeta, uzeta_updated, density, pdf, vz, vr, vzeta, z, r,
                                composition)
     
-    begin_sn_r_z_region()
+    @begin_sn_r_z_region()
     @boundscheck composition.n_neutral_species == size(pdf, 6) || throw(BoundsError(pdf))
     @boundscheck composition.n_neutral_species == size(uzeta, 3) || throw(BoundsError(uzeta))
     @loop_sn isn begin
@@ -1439,7 +1439,7 @@ function update_neutral_pz!(pz, pz_updated, density, uz, pdf, vz, vr, vzeta, z, 
     @boundscheck r.n == size(pz,2) || throw(BoundsError(pz))
     @boundscheck z.n == size(pz,1) || throw(BoundsError(pz))
     
-    begin_sn_r_z_region()
+    @begin_sn_r_z_region()
     @boundscheck composition.n_neutral_species == size(pdf, 6) || throw(BoundsError(pdf))
     @boundscheck composition.n_neutral_species == size(pz, 3) || throw(BoundsError(pz))
     
@@ -1509,7 +1509,7 @@ function update_neutral_pr!(pr, pr_updated, pdf, vz, vr, vzeta, z, r, compositio
     @boundscheck r.n == size(pr,2) || throw(BoundsError(pr))
     @boundscheck z.n == size(pr,1) || throw(BoundsError(pr))
     
-    begin_sn_r_z_region()
+    @begin_sn_r_z_region()
     @boundscheck composition.n_neutral_species == size(pdf, 6) || throw(BoundsError(pdf))
     @boundscheck composition.n_neutral_species == size(pr, 3) || throw(BoundsError(pr))
     
@@ -1543,7 +1543,7 @@ function update_neutral_pzeta!(pzeta, pzeta_updated, pdf, vz, vr, vzeta, z, r, c
     @boundscheck r.n == size(pzeta,2) || throw(BoundsError(pzeta))
     @boundscheck z.n == size(pzeta,1) || throw(BoundsError(pzeta))
     
-    begin_sn_r_z_region()
+    @begin_sn_r_z_region()
     @boundscheck composition.n_neutral_species == size(pdf, 6) || throw(BoundsError(pdf))
     @boundscheck composition.n_neutral_species == size(pzeta, 3) || throw(BoundsError(pzeta))
     
@@ -1578,7 +1578,7 @@ function update_neutral_qz!(qz, qz_updated, density, uz, vth, pdf, vz, vr, vzeta
     @boundscheck r.n == size(qz,2) || throw(BoundsError(qz))
     @boundscheck z.n == size(qz,1) || throw(BoundsError(qz))
     
-    begin_sn_r_z_region()
+    @begin_sn_r_z_region()
     @boundscheck composition.n_neutral_species == size(pdf, 6) || throw(BoundsError(pdf))
     @boundscheck composition.n_neutral_species == size(qz, 3) || throw(BoundsError(qz))
     
@@ -1647,7 +1647,7 @@ advance
 """
 function calculate_neutral_moment_derivatives!(moments, scratch, scratch_dummy, z,
                                                z_spectral, neutral_mom_diss_coeff)
-    begin_sn_r_region()
+    @begin_sn_r_region()
 
     density = scratch.density_neutral
     uz = scratch.uz_neutral
@@ -1767,7 +1767,7 @@ function update_derived_moments!(new_scratch, moments, vpa, vperp, z, r, composi
         update_chodura!(moments,ff,vpa,vperp,z,r,r_spectral,composition,geometry,scratch_dummy,z_advect)
     end
     # update the thermal speed
-    begin_s_r_z_region()
+    @begin_s_r_z_region()
     try #below block causes DomainError if ppar < 0 or density, so exit cleanly if possible
         update_vth!(moments.ion.vth, new_scratch.ppar, new_scratch.pperp, new_scratch.density, vperp, z, r, composition)
     catch e

@@ -21,7 +21,7 @@ calculate the z-advection term for the electron kinetic equation = wpa * vthe * 
 @timeit global_timer electron_z_advection!(
                          pdf_out, pdf_in, upar, vth, advect, z, vpa, spectral,
                          scratch_dummy, dt, ir) = begin
-    begin_vperp_vpa_region()
+    @begin_vperp_vpa_region()
 
     adv_fac = advect[1].adv_fac
     speed = advect[1].speed
@@ -29,7 +29,7 @@ calculate the z-advection term for the electron kinetic equation = wpa * vthe * 
     # create a pointer to a scratch_dummy array to store the z-derivative of the electron pdf
     dpdf_dz = @view scratch_dummy.buffer_vpavperpzr_1[:,:,:,ir]
     d2pdf_dz2 = @view scratch_dummy.buffer_vpavperpzr_2[:,:,:,ir]
-    begin_vperp_vpa_region()
+    @begin_vperp_vpa_region()
     # get the updated speed along the z direction using the current pdf
     @views update_electron_speed_z!(advect[1], upar, vth, vpa, ir)
     # update adv_fac -- note that there is no factor of dt here because
@@ -50,7 +50,7 @@ calculate the z-advection term for the electron kinetic equation = wpa * vthe * 
     #    @views second_derivative!(d2pdf_dz2[ivpa,ivperp,:], pdf_in[ivpa,ivperp,:], z, spectral)
     #end
     # calculate the advection term
-    begin_z_vperp_vpa_region()
+    @begin_z_vperp_vpa_region()
     @loop_z_vperp_vpa iz ivperp ivpa begin
         pdf_out[ivpa,ivperp,iz] += dt * adv_fac[iz,ivpa,ivperp,ir] * dpdf_dz[ivpa,ivperp,iz]
         #pdf_out[ivpa,ivperp,iz] += dt * adv_fac[iz,ivpa,ivperp,ir] * dpdf_dz[ivpa,ivperp,iz] + 0.0001*d2pdf_dz2[ivpa,ivperp,iz]
@@ -101,7 +101,7 @@ function add_electron_z_advection_to_Jacobian!(jacobian_matrix, f, dens, upar, p
     z_Dmat = z_spectral.lobatto.Dmat
     z_element_scale = z.element_scale
 
-    begin_z_vperp_vpa_region()
+    @begin_z_vperp_vpa_region()
     @loop_z_vperp_vpa iz ivperp ivpa begin
         if skip_f_electron_bc_points_in_Jacobian(iz, ivperp, ivpa, z, vperp, vpa, z_speed)
             continue

@@ -125,7 +125,7 @@ end
                                        r=1, z=1, vperp=vperp.n, vpa=vpa.n,
                                        vzeta=1, vr=1, vz=1)
         nc_global = vpa.n*vperp.n
-        begin_serial_region()
+        @begin_serial_region()
         start_init_time = now()
         if boundary_data_option == direct_integration
             precompute_weights = true
@@ -251,7 +251,7 @@ end
         end
         rpbd_exact = allocate_rosenbluth_potential_boundary_data(vpa,vperp)
 
-        begin_s_r_z_anyv_region()
+        @begin_s_r_z_anyv_region()
 
         # use known test function to provide exact data
         calculate_rosenbluth_potential_boundary_data_exact!(rpbd_exact,
@@ -284,8 +284,8 @@ end
              algebraic_solve_for_d2Gdvperp2=false,calculate_GG=true,calculate_dGdvperp=true,boundary_data_option=boundary_data_option)
         # extract C[Fs,Fs'] result
         # and Rosenbluth potentials for testing
-        begin_s_r_z_anyv_region()
-        begin_anyv_vperp_vpa_region()
+        @begin_s_r_z_anyv_region()
+        @begin_anyv_vperp_vpa_region()
         @loop_vperp_vpa ivperp ivpa begin
             C_M_num[ivpa,ivperp] = fkpl_arrays.CC[ivpa,ivperp]
             G_M_num[ivpa,ivperp] = fkpl_arrays.GG[ivpa,ivperp]
@@ -300,7 +300,7 @@ end
         
         init_time = Dates.value(finish_init_time - start_init_time)
         calculate_time = Dates.value(now() - finish_init_time)
-        begin_serial_region()
+        @begin_serial_region()
         fkerr = allocate_error_data()
         @serial_region begin
             println("finished C calculation   ", Dates.format(now(), dateformat"H:MM:SS"))

@@ -18,7 +18,7 @@ export allocate_shared, block_rank, block_size, n_blocks, comm_block, comm_inter
        anyv_subblock_size, anyv_isubblock_index, anyv_nsubblocks_per_block
 export setup_distributed_memory_MPI
 export setup_distributed_memory_MPI_for_weights_precomputation
-export _block_synchronize, _anyv_subblock_synchronize
+export @_block_synchronize, @_anyv_subblock_synchronize
 
 using LinearAlgebra
 using MPI
@@ -815,16 +815,29 @@ Call an MPI Barrier for all processors in a block.
 Used to synchronise processors that are working on the same shared-memory array(s)
 between operations, to avoid race conditions. Should be (much) cheaper than a global MPI
 Barrier because it only requires communication within a single node.
+"""
+macro _block_synchronize()
+    id_hash = @debug_block_synchronize_quick_ifelse(
+                   hash(string(@__FILE__, @__LINE__)),
+                   nothing
+                  )
+    return :( _block_synchronize($id_hash) )
+end
+
+"""
+Internal function to be called by @_block_synchronize() and @begin_*_region().
+`call_site` will be either `nothing` or a hash of the file and line number of the calling
+site of the function.
 
 Note: some debugging code currently assumes that if _block_synchronize() is called on one
-block, it is called simultaneously on all blocks. It seems likely that this will always
-be true, but if it ever changes (i.e. different blocks doing totally different work),
-the debugging routines need to be updated.
+block, it is called simultaneously on all blocks. It seems likely that this will always be
+true, but if it ever changes (i.e. different blocks doing totally different work), the
+debugging routines need to be updated.
 """
-@timeit_debug global_timer _block_synchronize() = begin
+@timeit_debug global_timer _block_synchronize(call_site::Union{Nothing,UInt64}) = begin
     MPI.Barrier(comm_block[])
 
-    @debug_block_synchronize begin
+    @debug_block_synchronize_backtrace begin
         st = stacktrace()
         stackstring = string([string(s, "\n") for s ∈ st]...)
 
@@ -844,6 +857,17 @@ the debugging routines need to be updated.
                       "rank $(block_rank[]) called from:\n",
                       stackstring)
             end
+        end
+    end
+
+    @debug_block_synchronize_quick begin
+        if call_site === nothing
+            error("Got call_site=nothing. This should not happen when debugging with "
+                  * "@debug_block_synchronize_quick.")
+        end
+        all_hashes = MPI.Allgather(call_site, comm_block[])
+        if !all(h -> h == all_hashes[1], all_hashes)
+            error("_block_synchronize() called inconsistently")
         end
     end
 
@@ -937,7 +961,7 @@ The 'anyv' region is used to parallelise the collision operator. See
 
 Used to synchronise processors that are working on the same shared-memory array(s)
 between operations, to avoid race conditions. Should be even cheaper than
-[`_block_synchronize`](@ref) because it only requires communication on a smaller
+[`@_block_synchronize`](@ref) because it only requires communication on a smaller
 communicator.
 
 Note: `_anyv_subblock_synchronize()` may be called different numbers of times on different
@@ -945,7 +969,18 @@ sub-blocks, depending on how the species and spatial dimensions are split up.
 `@debug_detect_redundant_block_synchronize` is not implemented (yet?) for
 `_anyv_subblock_synchronize()`.
 """
-function _anyv_subblock_synchronize()
+macro _anyv_subblock_synchronize()
+    id_hash = @debug_block_synchronize_quick_ifelse(
+                   hash(string(@__FILE__, @__LINE__)),
+                   nothing
+                  )
+    return :( _anyv_subblock_synchronize($id_hash) )
+end
+
+"""
+Internal function called by `anyv` synchronization macros.
+"""
+function _anyv_subblock_synchronize(call_site::Union{Nothing,UInt64})
     if comm_anyv_subblock[] == MPI.COMM_NULL
         # No synchronization to do for a null communicator
         return nothing
@@ -953,7 +988,7 @@ function _anyv_subblock_synchronize()
 
     MPI.Barrier(comm_anyv_subblock[])
 
-    @debug_block_synchronize begin
+    @debug_block_synchronize_backtrace begin
         st = stacktrace()
         stackstring = string([string(s, "\n") for s ∈ st]...)
 
@@ -973,6 +1008,17 @@ function _anyv_subblock_synchronize()
                       "rank $(block_rank[]) called from:\n",
                       stackstring)
             end
+        end
+    end
+
+    @debug_block_synchronize_quick begin
+        if call_site === nothing
+            error("Got call_site=nothing. This should not happen when debugging with "
+                  * "@debug_block_synchronize_quick.")
+        end
+        all_hashes = MPI.Allgather(call_site, comm_block[])
+        if !all(h -> h == all_hashes[1], all_hashes)
+            error("_anyv_subblock_synchronize() called inconsistently")
         end
     end
 

@@ -284,7 +284,7 @@ where the Rosenbluth potentials are specified using analytical results.
     vthsp = [sqrt(fkin.sd_temp/msp[1]), sqrt(fkin.sd_temp/msp[2])]
     
     # N.B. parallelisation using special 'anyv' region
-    begin_s_r_z_anyv_region()
+    @begin_s_r_z_anyv_region()
     @loop_s_r_z is ir iz begin
         # computes sum over s' of  C[Fs,Fs'] with Fs' an assumed Maxwellian 
         @views fokker_planck_collision_operator_weak_form_Maxwellian_Fsp!(pdf_in[:,:,iz,ir,is],
@@ -298,7 +298,7 @@ where the Rosenbluth potentials are specified using analytical results.
                                 fkpl_arrays.S_dummy)
         end
         # advance this part of s,r,z with the resulting sum_s' C[Fs,Fs']
-        begin_anyv_vperp_vpa_region()
+        @begin_anyv_vperp_vpa_region()
         CC = fkpl_arrays.CC
         @loop_vperp_vpa ivperp ivpa begin
             pdf_out[ivpa,ivperp,iz,ir,is] += dt*CC[ivpa,ivperp]
@@ -343,7 +343,7 @@ Function for advancing with the explicit, weak-form, self-collision operator.
     use_conserving_corrections = collisions.fkpl.use_conserving_corrections
     boundary_data_option = collisions.fkpl.boundary_data_option
     # N.B. parallelisation using special 'anyv' region
-    begin_s_r_z_anyv_region()
+    @begin_s_r_z_anyv_region()
     @loop_s_r_z is ir iz begin
         # first argument is Fs, and second argument is Fs' in C[Fs,Fs'] 
         @views fokker_planck_collision_operator_weak_form!(
@@ -358,7 +358,7 @@ Function for advancing with the explicit, weak-form, self-collision operator.
                                 fkpl_arrays.S_dummy)
         end
         # advance this part of s,r,z with the resulting C[Fs,Fs]
-        begin_anyv_vperp_vpa_region()
+        @begin_anyv_vperp_vpa_region()
         CC = fkpl_arrays.CC
         @loop_vperp_vpa ivperp ivpa begin
             pdf_out[ivpa,ivperp,iz,ir,is] += dt*CC[ivpa,ivperp]
@@ -369,7 +369,7 @@ Function for advancing with the explicit, weak-form, self-collision operator.
             @loop_vperp_vpa ivperp ivpa begin
                 lnfC[ivpa,ivperp] = log(abs(pdf_in[ivpa,ivperp,iz,ir,is]) + 1.0e-15)*CC[ivpa,ivperp]
             end
-            begin_anyv_region()
+            @begin_anyv_region()
             @anyv_serial_region begin
                 dSdt[iz,ir,is] = -get_density(lnfC,vpa,vperp)
             end
@@ -430,14 +430,14 @@ with \$\\gamma_\\mathrm{ref} = 2 \\pi e^4 \\ln \\Lambda_{ii} / (4 \\pi
     dFdvperp = fkpl_arrays.dFdvperp
     
     if use_Maxwellian_Rosenbluth_coefficients
-        begin_anyv_region()
+        @begin_anyv_region()
         dens = get_density(ffsp_in,vpa,vperp)
         upar = get_upar(ffsp_in, vpa, vperp, dens)
         ppar = get_ppar(ffsp_in, vpa, vperp, upar)
         pperp = get_pperp(ffsp_in, vpa, vperp)
         pressure = get_pressure(ppar,pperp)
         vth = sqrt(2.0*pressure/dens)
-        begin_anyv_vperp_vpa_region()
+        @begin_anyv_vperp_vpa_region()
         @loop_vperp_vpa ivperp ivpa begin
             HH[ivpa,ivperp] = H_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
             d2Gdvpa2[ivpa,ivperp] = d2Gdvpa2_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
@@ -449,7 +449,7 @@ with \$\\gamma_\\mathrm{ref} = 2 \\pi e^4 \\ln \\Lambda_{ii} / (4 \\pi
         end
         # Need to synchronize as these arrays may be read outside the locally-owned set of
         # ivperp, ivpa indices in assemble_explicit_collision_operator_rhs_parallel!()
-        _anyv_subblock_synchronize()
+        @_anyv_subblock_synchronize()
     else
         calculate_rosenbluth_potentials_via_elliptic_solve!(GG,HH,dHdvpa,dHdvperp,
              d2Gdvpa2,dGdvperp,d2Gdvperpdvpa,d2Gdvperp2,ffsp_in,
@@ -460,14 +460,14 @@ with \$\\gamma_\\mathrm{ref} = 2 \\pi e^4 \\ln \\Lambda_{ii} / (4 \\pi
     end
     # assemble the RHS of the collision operator matrix eq
     if use_Maxwellian_field_particle_distribution
-        begin_anyv_region()
+        @begin_anyv_region()
         dens = get_density(ffs_in,vpa,vperp)
         upar = get_upar(ffs_in, vpa, vperp, dens)
         ppar = get_ppar(ffs_in, vpa, vperp, upar)
         pperp = get_pperp(ffs_in, vpa, vperp)
         pressure = get_pressure(ppar,pperp)
         vth = sqrt(2.0*pressure/dens)
-        begin_anyv_vperp_vpa_region()
+        @begin_anyv_vperp_vpa_region()
         @loop_vperp_vpa ivperp ivpa begin
             FF[ivpa,ivperp] = F_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
             dFdvpa[ivpa,ivperp] = dFdvpa_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
@@ -476,7 +476,7 @@ with \$\\gamma_\\mathrm{ref} = 2 \\pi e^4 \\ln \\Lambda_{ii} / (4 \\pi
         # Need to synchronize as FF, dFdvpa, dFdvperp may be read outside the
         # locally-owned set of ivperp, ivpa indices in
         # assemble_explicit_collision_operator_rhs_parallel_analytical_inputs!()
-        _anyv_subblock_synchronize()
+        @_anyv_subblock_synchronize()
         assemble_explicit_collision_operator_rhs_parallel_analytical_inputs!(rhsvpavperp,
           FF,dFdvpa,dFdvperp,
           d2Gdvpa2,d2Gdvperpdvpa,d2Gdvperp2,
@@ -488,14 +488,14 @@ with \$\\gamma_\\mathrm{ref} = 2 \\pi e^4 \\ln \\Lambda_{ii} / (4 \\pi
           dHdvpa,dHdvperp,ms,msp,nussp,
           vpa,vperp,YY_arrays)
     else
-        _anyv_subblock_synchronize()
+        @_anyv_subblock_synchronize()
         assemble_explicit_collision_operator_rhs_parallel!(rhsvpavperp,ffs_in,
           d2Gdvpa2,d2Gdvperpdvpa,d2Gdvperp2,
           dHdvpa,dHdvperp,ms,msp,nussp,
           vpa,vperp,YY_arrays)
     end
     # solve the collision operator matrix eq
-    begin_anyv_region()
+    @begin_anyv_region()
     @anyv_serial_region begin
         # sc and rhsc are 1D views of the data in CC and rhsc, created so that we can use
         # the 'matrix solve' functionality of ldiv!() from the LinearAlgebra package
@@ -548,7 +548,7 @@ are specified using analytical results.
     # number of primed species
     nsp = size(msp,1)
     
-    begin_anyv_vperp_vpa_region()
+    @begin_anyv_vperp_vpa_region()
     # fist set dummy arrays for coefficients to zero
     @loop_vperp_vpa ivperp ivpa begin
         d2Gdvpa2[ivpa,ivperp] = 0.0
@@ -579,14 +579,14 @@ are specified using analytical results.
     # ivperp, ivpa indices in assemble_explicit_collision_operator_rhs_parallel!()
     # assemble the RHS of the collision operator matrix eq
 
-    _anyv_subblock_synchronize()
+    @_anyv_subblock_synchronize()
     assemble_explicit_collision_operator_rhs_parallel!(rhsvpavperp,ffs_in,
       d2Gdvpa2,d2Gdvperpdvpa,d2Gdvperp2,
       dHdvpa,dHdvperp,1.0,1.0,nuref,
       vpa,vperp,YY_arrays)
 
     # solve the collision operator matrix eq
-    begin_anyv_region()
+    @begin_anyv_region()
     @anyv_serial_region begin
         # sc and rhsc are 1D views of the data in CC and rhsc, created so that we can use
         # the 'matrix solve' functionality of ldiv!() from the LinearAlgebra package
@@ -674,7 +674,7 @@ and \$x_0,x_1,x_2\$ are parameters that are chosen so that \$C_{ss}\$
 conserves density, parallel velocity and pressure of \$F_s\$.
 """
 function conserving_corrections!(CC,pdf_in,vpa,vperp,dummy_vpavperp)
-    begin_anyv_region()
+    @begin_anyv_region()
     x0, x1, x2, upar = 0.0, 0.0, 0.0, 0.0
     @anyv_serial_region begin
         # In principle the integrations here could be shared among the processes in the
@@ -713,7 +713,7 @@ function conserving_corrections!(CC,pdf_in,vpa,vperp,dummy_vpavperp)
     (x0, x1, x2, upar) = param_vec
     
     # correct CC
-    begin_anyv_vperp_vpa_region()
+    @begin_anyv_vperp_vpa_region()
     @loop_vperp_vpa ivperp ivpa begin
         wpar = vpa.grid[ivpa] - upar
         CC[ivpa,ivperp] -= (x0 + x1*wpar + x2*(vperp.grid[ivperp]^2 + wpar^2) )*pdf_in[ivpa,ivperp]
@@ -730,7 +730,7 @@ where \$C^\\ast_{ss}[F_s,F_{s^\\prime}]\$ is the weak-form collision operator co
 the finite-element implementation.
 """
 function density_conserving_correction!(CC,pdf_in,vpa,vperp,dummy_vpavperp)
-    begin_anyv_region()
+    @begin_anyv_region()
     x0 = 0.0
     @anyv_serial_region begin
         # In principle the integrations here could be shared among the processes in the
@@ -755,7 +755,7 @@ function density_conserving_correction!(CC,pdf_in,vpa,vperp,dummy_vpavperp)
     x0 = param_vec[1]
     
     # correct CC
-    begin_anyv_vperp_vpa_region()
+    @begin_anyv_vperp_vpa_region()
     @loop_vperp_vpa ivperp ivpa begin
         CC[ivpa,ivperp] -= x0*pdf_in[ivpa,ivperp]
     end

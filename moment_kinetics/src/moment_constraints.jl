@@ -6,7 +6,6 @@ function.
 module moment_constraints
 
 using ..boundary_conditions: skip_f_electron_bc_points_in_Jacobian
-using ..communication: _block_synchronize
 using ..looping
 using ..timer_utils
 using ..type_definitions: mk_float
@@ -95,7 +94,7 @@ end
     A = moments.electron.constraints_A_coefficient
     B = moments.electron.constraints_B_coefficient
     C = moments.electron.constraints_C_coefficient
-    begin_r_z_region()
+    @begin_r_z_region()
     @loop_r_z ir iz begin
         A[iz,ir], B[iz,ir], C[iz,ir] =
             hard_force_moment_constraints!(@view(f[:,:,iz,ir]), moments, vpa)
@@ -106,7 +105,7 @@ end
     A = moments.ion.constraints_A_coefficient
     B = moments.ion.constraints_B_coefficient
     C = moments.ion.constraints_C_coefficient
-    begin_s_r_z_region()
+    @begin_s_r_z_region()
     @loop_s_r_z is ir iz begin
         A[iz,ir,is], B[iz,ir,is], C[iz,ir,is] =
             hard_force_moment_constraints!(@view(f[:,:,iz,ir,is]), moments, vpa)
@@ -171,7 +170,7 @@ end
     A = moments.neutral.constraints_A_coefficient
     B = moments.neutral.constraints_B_coefficient
     C = moments.neutral.constraints_C_coefficient
-    begin_sn_r_z_region()
+    @begin_sn_r_z_region()
     @loop_sn_r_z isn ir iz begin
         A[iz,ir,isn], B[iz,ir,isn], C[iz,ir,isn] =
             hard_force_moment_constraints_neutral!(@view(f[:,:,:,iz,ir,is]), moments, vz)
@@ -256,7 +255,7 @@ timesteps that do not guarantee accurate time evolution.
 """
 @timeit global_timer electron_implicit_constraint_forcing!(
                          f_out, f_in, constraint_forcing_rate, vpa, dt, ir) = begin
-    begin_z_region()
+    @begin_z_region()
     vpa_grid = vpa.grid
     @loop_z iz begin
         @views zeroth_moment = integrate_over_vspace(f_in[:,1,iz], vpa.wgts)
@@ -297,7 +296,7 @@ function add_electron_implicit_constraint_forcing_to_Jacobian!(
     vpa_wgts = vpa.wgts
     v_size = vperp.n * vpa.n
 
-    begin_z_vperp_vpa_region()
+    @begin_z_vperp_vpa_region()
     @loop_z_vperp_vpa iz ivperp ivpa begin
         if skip_f_electron_bc_points_in_Jacobian(iz, ivperp, ivpa, z, vperp, vpa, z_speed)
             continue
