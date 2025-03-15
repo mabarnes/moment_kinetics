@@ -99,14 +99,14 @@ function timing_data(run_info::Tuple; plot_prefix=nothing, threshold=nothing,
         display(backend.Screen(), times_fig)
 
         if include_legend
-            Legend(ncalls_fig[2,1], times_ax; tellheight=true, tellwidth=false,
+            Legend(ncalls_fig[2,1], ncalls_ax; tellheight=true, tellwidth=false,
                    merge=true)
         end
         DataInspector(ncalls_fig)
         display(backend.Screen(), ncalls_fig)
 
         if include_legend
-            Legend(allocs_fig[2,1], times_ax; tellheight=true, tellwidth=false,
+            Legend(allocs_fig[2,1], allocs_ax; tellheight=true, tellwidth=false,
                    merge=true)
         end
         DataInspector(allocs_fig)
@@ -387,14 +387,14 @@ function timing_data(run_info; plot_prefix=nothing, threshold=nothing,
         display(backend.Screen(), times_fig)
 
         if include_legend
-            Legend(ncalls_fig[2,1], times_ax; tellheight=true, tellwidth=false,
+            Legend(ncalls_fig[2,1], ncalls_ax; tellheight=true, tellwidth=false,
                    merge=true)
         end
         DataInspector(ncalls_fig)
         display(backend.Screen(), ncalls_fig)
 
         if include_legend
-            Legend(allocs_fig[2,1], times_ax; tellheight=true, tellwidth=false,
+            Legend(allocs_fig[2,1], allocs_ax; tellheight=true, tellwidth=false,
                    merge=true)
         end
         DataInspector(allocs_fig)
