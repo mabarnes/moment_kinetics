@@ -607,12 +607,6 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
                                       backup_prefix_iblock, -1, geometry, r, z, vpa,
                                       vperp, vzeta, vr, vz)
 
-            # Broadcast code_time and pdf_electron_converged from the root process of each
-            # shared-memory block (on which it might have been loaded from a restart
-            # file).
-            code_time = MPI.Bcast(code_time, 0, comm_block[])::mk_float
-            pdf_electron_converged = MPI.Bcast(pdf_electron_converged, 0, comm_block[])
-
             if pdf_electron_converged
                 if global_rank[] == 0
                     println("Reading initial electron state from $restart_filename")

@@ -1078,8 +1078,8 @@ Reload electron pdf and moments from an existing output file.
 """
 function reload_electron_data!(pdf, moments, t_params, restart_prefix_iblock, time_index,
                                geometry, r, z, vpa, vperp, vzeta, vr, vz)
-    code_time = 0.0
-    pdf_electron_converged = false
+    code_time = Ref(0.0)
+    pdf_electron_converged = Ref(false)
     previous_runs_info = nothing
     @begin_serial_region()
     @serial_region begin
@@ -1114,9 +1114,9 @@ function reload_electron_data!(pdf, moments, t_params, restart_prefix_iblock, ti
                 for (x, restart_x) ∈ ((z, restart_z), (r, restart_r),
                                       (vperp, restart_vperp), (vpa, restart_vpa)))
 
-            code_time = load_slice(dynamic, "time", time_index)
+            code_time[] = load_slice(dynamic, "time", time_index)
 
-            pdf_electron_converged = get_attribute(fid, "pdf_electron_converged")
+            pdf_electron_converged[] = get_attribute(fid, "pdf_electron_converged")
 
             r_range, z_range, vperp_range, vpa_range, vzeta_range, vr_range, vz_range =
                 get_reload_ranges(parallel_io, restart_r, restart_z, restart_vperp,
@@ -1157,8 +1157,6 @@ function reload_electron_data!(pdf, moments, t_params, restart_prefix_iblock, ti
                 # positive
                 t_params.dt[] = new_dt
             end
-            t_params.previous_dt[] = t_params.dt[]
-            t_params.dt_before_output[] = t_params.dt[]
             t_params.dt_before_last_fail[] =
                 load_slice(dynamic, "electron_dt_before_last_fail", time_index)
         finally
@@ -1166,7 +1164,18 @@ function reload_electron_data!(pdf, moments, t_params, restart_prefix_iblock, ti
         end
     end
 
-    return code_time, pdf_electron_converged, previous_runs_info, time_index
+    # Broadcast dt, dt_before_last_fail, code_time and pdf_electron_converged from the
+    # root process of each shared-memory block (on which it might have been loaded from a
+    # restart file).
+    MPI.Bcast!(t_params.dt, comm_block[]; root=0)
+    MPI.Bcast!(t_params.dt_before_last_fail, comm_block[]; root=0)
+    MPI.Bcast!(code_time, comm_block[]; root=0)
+    MPI.Bcast!(pdf_electron_converged, comm_block[]; root=0)
+
+    t_params.previous_dt[] = t_params.dt[]
+    t_params.dt_before_output[] = t_params.dt[]
+
+    return code_time[], pdf_electron_converged[], previous_runs_info, time_index
 end
 
 function load_restart_coordinates(fid, r, z, vperp, vpa, vzeta, vr, vz, parallel_io)
