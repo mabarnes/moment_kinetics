@@ -258,10 +258,7 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
     end
 
     if initial_time !== nothing
-        @serial_region begin
-            t_params.t[] = initial_time
-        end
-        @_block_synchronize()
+        t_params.t[] = initial_time
         # Make sure that output times are set relative to this initial_time (the values in
         # t_params are set relative to 0.0).
         moments_output_times = t_params.moments_output_times .+ initial_time
@@ -385,7 +382,11 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
             end
             # Do a forward-Euler update of the electron pdf, and (if evove_ppar=true) the
             # electron parallel pressure.
-            @loop_r ir begin
+            # electron_kinetic_equation_euler_update!() is parallelised over {z,vperp,vpa}
+            # (so that it can be used inside a loop over r in the implicit solve), so the
+            # outer loop here should _not_ be parallelised (until we have defined an
+            # 'anyzv' region to allow parallelising over r as well).
+            for ir ∈ 1:r.n
                 @views electron_kinetic_equation_euler_update!(
                            scratch[istage+1].pdf_electron[:,:,:,ir],
                            scratch[istage+1].electron_ppar[:,ir],
@@ -571,9 +572,9 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
                 end
             end
             t_params.moments_output_counter[] += 1
+            t_params.write_moments_output[] = false
             @serial_region begin
                 if io_electron !== nothing
-                    t_params.write_moments_output[] = false
                     write_electron_state(scratch, moments, t_params, io_electron,
                                          t_params.moments_output_counter[],
                                          local_pseudotime, residual_norm, r, z, vperp,
