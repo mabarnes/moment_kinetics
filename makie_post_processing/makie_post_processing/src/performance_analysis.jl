@@ -69,6 +69,9 @@ function timing_data(run_info::Tuple; plot_prefix=nothing, threshold=nothing,
         end
     end
 
+    run_time_fig, run_time_ax, run_time_legend_place =
+        get_1d_ax(; xlabel="time", ylabel="execution time per output step (minutes)", get_legend_place=:below,
+                    size=figsize)
     times_fig, times_ax, times_legend_place =
         get_1d_ax(; xlabel="time", ylabel="execution time per output step (s)", get_legend_place=:below,
                     size=figsize)
@@ -82,14 +85,22 @@ function timing_data(run_info::Tuple; plot_prefix=nothing, threshold=nothing,
     for (irun,ri) ∈ enumerate(run_info)
         timing_data(ri; plot_prefix=plot_prefix, threshold=threshold,
                     include_patterns=include_patterns, exclude_patterns=exclude_patterns,
-                    ranks=ranks, this_input_dict=this_input_dict, times_ax=times_ax,
-                    ncalls_ax=ncalls_ax, allocs_ax=allocs_ax, irun=irun, figsize=figsize)
+                    ranks=ranks, this_input_dict=this_input_dict, run_time_ax=run_time_ax,
+                    times_ax=times_ax, ncalls_ax=ncalls_ax, allocs_ax=allocs_ax,
+                    irun=irun, figsize=figsize)
     end
 
     if string(Makie.current_backend()) == "GLMakie"
         # Can make interactive plots
 
         backend = Makie.current_backend()
+
+        if include_legend
+            Legend(run_time_fig[2,1], run_time_ax; tellheight=true, tellwidth=false,
+                   merge=true)
+        end
+        DataInspector(run_time_fig)
+        display(backend.Screen(), run_time_fig)
 
         if include_legend
             Legend(times_fig[2,1], times_ax; tellheight=true, tellwidth=false,
@@ -112,6 +123,12 @@ function timing_data(run_info::Tuple; plot_prefix=nothing, threshold=nothing,
         DataInspector(allocs_fig)
         display(backend.Screen(), allocs_fig)
     elseif plot_prefix !== nothing
+        if include_legend
+            Legend(run_time_fig[2,1], run_time_ax; tellheight=true, tellwidth=true, merge=true)
+        end
+        outfile = plot_prefix * "run_time.pdf"
+        save(outfile, run_time_fig)
+
         if include_legend
             Legend(times_fig[2,1], times_ax; tellheight=true, tellwidth=true, merge=true)
         end
@@ -148,8 +165,8 @@ end
 
 function timing_data(run_info; plot_prefix=nothing, threshold=nothing,
                      include_patterns=nothing, exclude_patterns=nothing, ranks=nothing,
-                     this_input_dict=nothing, times_ax=nothing, ncalls_ax=nothing,
-                     allocs_ax=nothing, irun=1, figsize=nothing,
+                     this_input_dict=nothing, run_time_ax=nothing, times_ax=nothing,
+                     ncalls_ax=nothing, allocs_ax=nothing, irun=1, figsize=nothing,
                      include_legend=true)
 
     if this_input_dict !== nothing
@@ -199,6 +216,13 @@ function timing_data(run_info; plot_prefix=nothing, threshold=nothing,
         ranks = input.ranks
     end
 
+    if run_time_ax === nothing
+        run_time_fig, run_time_ax, run_time_legend_place =
+            get_1d_ax(; xlabel="time", ylabel="execution time per output step (minutes)",
+                      get_legend_place=:below, size=figsize)
+    else
+        run_time_fig = nothing
+    end
     if times_ax === nothing
         times_fig, times_ax, times_legend_place =
             get_1d_ax(; xlabel="time", ylabel="execution time per output step (s)",
@@ -255,6 +279,13 @@ function timing_data(run_info; plot_prefix=nothing, threshold=nothing,
         end
         return excluded, explicitly_included
     end
+
+    # Plot the run time per output step
+    total_time_variable_name = "time_for_run"
+    run_time = get_variable(run_info, total_time_variable_name * "_per_step",
+                            group=timing_group)
+    lines!(run_time_ax, run_info.time, run_time;
+           label=run_info.run_name)
 
     # Plot the total time
     time_unit_conversion = 1.0e-9 # ns to s
@@ -380,6 +411,13 @@ function timing_data(run_info; plot_prefix=nothing, threshold=nothing,
         backend = Makie.current_backend()
 
         if include_legend
+            Legend(run_time_fig[2,1], run_time_ax; tellheight=true, tellwidth=false,
+                   merge=true)
+        end
+        DataInspector(run_time_fig)
+        display(backend.Screen(), run_time_fig)
+
+        if include_legend
             Legend(times_fig[2,1], times_ax; tellheight=true, tellwidth=false,
                    merge=true)
         end
@@ -400,6 +438,16 @@ function timing_data(run_info; plot_prefix=nothing, threshold=nothing,
         DataInspector(allocs_fig)
         display(backend.Screen(), allocs_fig)
     else
+        if run_time_fig !== nothing
+            if include_legend
+                Legend(run_time_fig[2,1], run_time_ax; tellheight=true, tellwidth=true, merge=true)
+            end
+            if plot_prefix !== nothing
+                outfile = plot_prefix * "run_time.pdf"
+                save(outfile, run_time_fig)
+            end
+        end
+
         if times_fig !== nothing
             if include_legend
                 Legend(times_fig[2,1], times_ax; tellheight=true, tellwidth=true, merge=true)
