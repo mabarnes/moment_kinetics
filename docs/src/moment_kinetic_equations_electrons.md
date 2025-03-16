@@ -116,3 +116,102 @@ Energy equation
        + \underbrace{\frac{1}{2} m_e u_{e\parallel}^2 \int S_e d^3 v}_{\sim \frac{n_e T_e v_{Ti}}{L_\parallel}} \\
 \end{align}
 ```
+
+Implemented, dimensionless, 1D1V equations
+------------------------------------------
+
+These are the equations as currently implemented in the code for kinetic electrons (16/3/2025).
+
+[`moment_kinetics.electron_fluid_equations.calculate_electron_density!`](@ref)
+```math
+\begin{align}
+n_e &= n_i \\
+\end{align}
+```
+
+[`moment_kinetics.electron_fluid_equations.calculate_electron_upar_from_charge_conservation!`](@ref)
+```math
+\begin{align}
+\Gamma_{\parallel,\mathrm{net}}(z=-L_z/2) &= (n_i(z=-L_z/2) u_{i\parallel}(z=-L_z/2) - n_e(z=-L_z/2) u_{e\parallel}(z=-L_z/2)) = 0 \\
+u_{e\parallel} &= \frac{\left( -\Gamma_{\parallel,\mathrm{net}}(z=-L_z/2) + n_i u_i \right)}{n_e} \\
+\end{align}
+```
+
+[`moment_kinetics.electron_fluid_equations.calculate_Epar_from_electron_force_balance!`](@ref)
+```math
+\begin{align}
+E_\parallel &= - \frac{2}{n_e} \frac{\partial p_{e\parallel}}{\partial z} \\
+\end{align}
+```
+
+[`moment_kinetics.electron_fluid_equations.electron_energy_equation_no_r!`](@ref)
+```math
+\begin{align}
+\frac{\partial p_{e\parallel}}{\partial t}
+  &= u_{e\parallel} \frac{\partial p_{e\parallel}}{\partial z}
+     + 3 p_{e\parallel} \frac{\partial u_{e\parallel}}{\partial z}
+     - \frac{\partial q_{e\parallel}}{\partial z}
+     + D_{p_e,z} \frac{\partial^2 p_{e\parallel}}{\partial z^2} + S_{p,e} \\
+\end{align}
+```
+where $D_{p_e,z}$ is a numerical diffusion coefficient, which we usually leave as 0.
+
+[`moment_kinetics.electron_kinetic_equation.electron_kinetic_equation_euler_update!`](@ref)
+```math
+\begin{align}
+\frac{\partial g_e}{\partial t}
+  + \dot{z} \frac{\partial g_e}{\partial z}
+  + \dot{w}_\parallel \frac{\partial g_e}{\partial w_\parallel}
+&= \dot{g} + \mathcal{D}_\mathrm{num} + \mathcal{C}_{K,e} + \mathcal{S}_e
+\end{align}
+```
+where
+[`moment_kinetics.electron_z_advection.update_electron_speed_z!`](@ref)
+```math
+\begin{align}
+\dot{z} &= v_{Te} w_\parallel + u_{e\parallel} \\
+\end{align}
+```
+[`moment_kinetics.electron_vpa_advection.update_electron_speed_vpa!`](@ref)
+```math
+\begin{align}
+\dot{w}_\parallel
+&= \frac{v_{Te}}{2 p_{e\parallel}} \frac{\partial p_{e\parallel}}{\partial z} + \frac{w_\parallel}{2 p_{e\parallel}} \frac{\partial q_{e\parallel}}{\partial z}
+   - w_\parallel^2 \frac{\partial v_{Te}}{\partial z}
+   + \frac{S_{n,e} u_{e\parallel}}{n_e v_{Te}}
+   - w_\parallel \frac{S_{p,e} + 2 u_{e\parallel} S_{\mathrm{mom},e}}{2 p_{e\parallel}}
+   + w_\parallel \frac{S_n}{2 n_e}
+\end{align}
+```
+[`moment_kinetics.electron_kinetic_equation.add_contribution_from_pdf_term!`](@ref)
+```math
+\begin{align}
+\frac{\dot{g}_e}{g_e}
+&= -\frac{1}{2 p_{e\parallel}} \frac{\partial q_{e\parallel}}{\partial z}
+   - w_\parallel v_{Te} \left( \frac{1}{n_e} \frac{\partial n_e}{\partial z}
+                               - \frac{1}{v_{Te}} \frac{\partial v_{Te}}{\partial z} \right)
+   - \frac{3 S_n}{2 n_e} + \frac{S_{p,e}/2 + S_{\mathrm{mom},e}}{p_{e\parallel}}
+\end{align}
+```
+[`moment_kinetics.electron_kinetic_equation.add_dissipation_term!`](@ref)
+```math
+\begin{align}
+\mathcal{D}_\mathrm{num}
+&= D_{w_\parallel,e} \frac{\partial^2 g_e}{\partial w_\parallel^2}
+\end{align}
+```
+[`moment_kinetics.krook_collisions.electron_krook_collisions!`](@ref)
+```math
+\begin{align}
+\mathcal{C}_{K,e}
+&= \nu_{ee} (g_e - \exp\left( -w_\parallel^2 \right)
+   + \nu_{ei} (g_e - \exp\left( -\left( w_\parallel + (u_{i\parallel} - u_{e\parallel})/v_{Te} \right)^2 \right)
+\end{align}
+```
+[`moment_kinetics.external_sources.external_electron_source!`](@ref)
+```math
+\begin{align}
+\mathcal{S}_e
+&= \frac{v_{Te}}{n_e} S_e
+\end{align}
+```
