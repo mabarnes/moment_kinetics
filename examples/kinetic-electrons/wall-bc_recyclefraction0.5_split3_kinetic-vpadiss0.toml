@@ -89,6 +89,7 @@ temperature_phase = 0.0
 
 [timestepping]
 type = "Fekete4(3)"
+kinetic_electron_solver = "explicit_pseudotimestep"
 #nstep = 50000
 nstep = 10000000
 dt = 1.0e-6

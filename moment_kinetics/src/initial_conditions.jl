@@ -732,7 +732,7 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
             end
             if skip_electron_solve
                 success = ""
-            elseif t_params.implicit_electron_advance
+            elseif t_params.kinetic_electron_solver == implicit_steady_state
                 # Create new nl_solver_info ojbect with higher maximum iterations for
                 # initialisation.
                 initialisation_nl_solver_params =

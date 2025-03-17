@@ -29,6 +29,24 @@ using OrderedCollections: OrderedDict
 using TOML
 
 """
+"""
+@enum kinetic_electron_solver_type begin
+    implicit_time_evolving
+    implicit_ppar_implicit_pseudotimestep
+    implicit_steady_state
+    explicit_pseudotimestep
+    null_kinetic_electrons
+end
+export kinetic_electron_solver_type
+export implicit_time_evolving
+export implicit_ppar_implicit_pseudotimestep
+export implicit_steady_state
+export explicit_time_evolving
+export implicit_ppar_explicit_pseudotimestep
+export explicit_pseudotimestep
+export null_kinetic_electrons
+
+"""
 `t_error_sum` is included so that a type which might be mk_float or Float128 can be set by
 an option but known at compile time when a `time_info` struct is passed as a function
 argument.
@@ -78,12 +96,10 @@ struct time_info{Terrorsum <: Real, T_debug_output, T_electron, Trkimp, Timpzero
     minimum_dt::mk_float
     maximum_dt::mk_float
     implicit_braginskii_conduction::Bool
-    implicit_electron_advance::Bool
-    implicit_electron_time_evolving::Bool
+    kinetic_electron_solver::kinetic_electron_solver_type
+    electron_preconditioner_type::Telectronprecon
     implicit_ion_advance::Bool
     implicit_vpa_advection::Bool
-    implicit_electron_ppar::Bool
-    electron_preconditioner_type::Telectronprecon
     constraint_forcing_rate::mk_float
     decrease_dt_iteration_threshold::mk_int
     increase_dt_iteration_threshold::mk_int
@@ -185,6 +201,7 @@ export ion_physics_type
 export gyrokinetic_ions
 export drift_kinetic_ions
 export coll_krook_ions
+
 """
 """
 Base.@kwdef struct spatial_initial_condition_input
