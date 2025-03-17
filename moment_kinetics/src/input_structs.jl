@@ -34,6 +34,7 @@ using TOML
     implicit_time_evolving
     implicit_ppar_implicit_pseudotimestep
     implicit_steady_state
+    implicit_ppar_explicit_pseudotimestep
     explicit_pseudotimestep
     null_kinetic_electrons
 end
