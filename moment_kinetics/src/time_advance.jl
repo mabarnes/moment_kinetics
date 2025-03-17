@@ -51,6 +51,8 @@ using ..electron_kinetic_equation: update_electron_pdf!, implicit_electron_advan
                                    electron_backward_euler!,
                                    electron_kinetic_equation_euler_update!,
                                    apply_electron_bc_and_constraints_no_r!
+using ..electron_vpa_advection: update_electron_speed_vpa!
+using ..electron_z_advection: update_electron_speed_z!
 using ..ionization: ion_ionization_collisions_1V!, neutral_ionization_collisions_1V!,
                     ion_ionization_collisions_3V!, neutral_ionization_collisions_3V!
 using ..krook_collisions: krook_collisions!
@@ -672,6 +674,11 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
         if t_params.kinetic_electron_solver == implicit_time_evolving
             t_params.limit_caused_by["electron_pdf_accuracy"] = 0
             t_params.failure_caused_by["electron_pdf_accuracy"] = 0
+        elseif t_params.kinetic_electron_solver == explicit_time_evolving
+            t_params.limit_caused_by["electron_pdf_accuracy"] = 0
+            t_params.limit_caused_by["electron_CFL_z"] = 0
+            t_params.limit_caused_by["electron_CFL_vpa"] = 0
+            t_params.failure_caused_by["electron_pdf_accuracy"] = 0
         end
         if composition.electron_physics ∈ (kinetic_electrons,
                                            kinetic_electrons_with_temperature_equation)
@@ -784,10 +791,10 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
     # create an array of structs containing scratch arrays for the pdf and low-order moments
     # that may be evolved separately via fluid equations
     scratch = setup_scratch_arrays(moments, pdf, t_params.n_rk_stages + 1,
-                                   t_params.kinetic_electron_solver == implicit_time_evolving)
+                                   t_params.kinetic_electron_solver ∈ (implicit_time_evolving, explicit_time_evolving))
     if t_params.rk_coefs_implicit !== nothing
         scratch_implicit = setup_scratch_arrays(moments, pdf, t_params.n_rk_stages,
-                                                t_params.kinetic_electron_solver == implicit_time_evolving)
+                                                t_params.kinetic_electron_solver ∈ (implicit_time_evolving, explicit_time_evolving))
     else
         scratch_implicit = nothing
     end
@@ -1317,6 +1324,7 @@ function setup_advance_flags(moments, composition, t_params, collisions,
             if !(t_params.kinetic_electron_solver ∈ (implicit_time_evolving,
                                                      implicit_ppar_implicit_pseudotimestep,
                                                      implicit_steady_state,
+                                                     explicit_time_evolving,
                                                      implicit_ppar_explicit_pseudotimestep))
                 advance_electron_energy = true
                 advance_electron_conduction = true
@@ -1333,6 +1341,9 @@ function setup_advance_flags(moments, composition, t_params, collisions,
                 advance_electron_energy = true
                 advance_electron_conduction = true
             end
+        end
+        if t_params.kinetic_electron_solver == explicit_time_evolving
+            advance_electron_pdf = true
         end
 
         # *_diffusion flags are set regardless of whether diffusion is included in explicit or
@@ -2654,6 +2665,7 @@ appropriate.
     n_ion_species = composition.n_ion_species
     n_neutral_species = composition.n_neutral_species
     vpa_advect, r_advect, z_advect = advect_objects.vpa_advect, advect_objects.r_advect, advect_objects.z_advect
+    electron_z_advect, electron_vpa_advect = advect_objects.electron_z_advect, advect_objects.electron_vpa_advect
     neutral_z_advect, neutral_r_advect, neutral_vz_advect = advect_objects.neutral_z_advect, advect_objects.neutral_r_advect, advect_objects.neutral_vz_advect
     evolve_density, evolve_upar, evolve_ppar = moments.evolve_density, moments.evolve_upar, moments.evolve_ppar
 
@@ -2701,6 +2713,31 @@ appropriate.
         CFL_limits["CFL_vpa"] = t_params.CFL_prefactor * ion_vpa_CFL
     end
 
+    if t_params.kinetic_electron_solver == explicit_time_evolving
+        # Need to check electron CFL limits
+        @begin_r_vperp_vpa_region()
+        update_electron_speed_z!(electron_z_advect[1], moments.electron.upar,
+                                 moments.electron.vth, vpa.grid)
+        electron_z_CFL = get_minimum_CFL_z(electron_z_advect[1].speed, z)
+        if block_rank[] == 0
+            CFL_limits["electron_CFL_z"] = t_params.CFL_prefactor * electron_z_CFL
+        else
+            CFL_limits["electron_CFL_z"] = Inf
+        end
+
+        @begin_r_z_vperp_region()
+        update_electron_speed_vpa!(electron_vpa_advect[1], moments.electron.dens,
+                                   moments.electron.upar,
+                                   scratch[t_params.n_rk_stages+1].electron_ppar, moments,
+                                   vpa.grid, external_source_settings.electron)
+        electron_vpa_CFL = get_minimum_CFL_vpa(electron_vpa_advect[1].speed, vpa)
+        if block_rank[] == 0
+            CFL_limits["electron_CFL_vpa"] = t_params.CFL_prefactor * electron_vpa_CFL
+        else
+            CFL_limits["electron_CFL_vpa"] = Inf
+        end
+    end
+
     # To avoid double counting points when we use distributed-memory MPI, skip the
     # inner/lower point in r and z if this process is not the first block in that
     # dimension.
@@ -2722,7 +2759,7 @@ appropriate.
         @begin_s_r_z_region()
         rk_loworder_solution!(scratch, scratch_implicit, :ppar, t_params)
     end
-    if t_params.kinetic_electron_solver == implicit_time_evolving
+    if t_params.kinetic_electron_solver ∈ (implicit_time_evolving, explicit_time_evolving)
         @begin_r_z_vperp_vpa_region()
         rk_loworder_solution!(scratch, scratch_implicit, :pdf_electron, t_params)
     end
@@ -2865,6 +2902,21 @@ appropriate.
                                           error_sum_zero=t_params.error_sum_zero)
         error_norms["electron_ppar_accuracy"] = electron_p_err
         push!(total_points, z.n_global * r.n_global)
+
+        if t_params.kinetic_electron_solver == explicit_time_evolving
+            # Need to have an accurate electron_pdf solution to avoid crashing an
+            # explicit-timestepping simulation.
+            electron_pdf_error = local_error_norm(scratch[2].pdf_electron,
+                                                  scratch[t_params.n_rk_stages+1].pdf_electron,
+                                                  t_params.rtol, t_params.atol;
+                                                  method=error_norm_method,
+                                                  skip_r_inner=skip_r_inner,
+                                                  skip_z_lower=skip_z_lower,
+                                                  error_sum_zero=t_params.error_sum_zero)
+            error_norms["electron_pdf_accuracy"] = electron_pdf_error
+            push!(total_points,
+                  vpa.n_global * vperp.n_global * z.n_global * r.n_global)
+        end
     end
 
     if n_neutral_species > 0
@@ -3183,6 +3235,7 @@ end
                 update_electrons = t_params.kinetic_electron_solver ∉ (implicit_time_evolving,
                                                                        implicit_ppar_implicit_pseudotimestep,
                                                                        implicit_steady_state,
+                                                                       explicit_time_evolving,
                                                                        implicit_ppar_explicit_pseudotimestep)
                 bcs_constraints_success = apply_all_bcs_constraints_update_moments!(
                     scratch_implicit[istage], pdf, moments, fields,
@@ -3231,10 +3284,11 @@ end
                                 || !t_params.implicit_ion_advance
                                 || (istage == n_rk_stages && t_params.implicit_coefficient_is_zero[1])
                                 || t_params.implicit_coefficient_is_zero[istage+1])
-        update_electrons = (t_params.rk_coefs_implicit === nothing
+        update_electrons = ((t_params.rk_coefs_implicit === nothing && t_params.kinetic_electron_solver !== explicit_time_evolving)
                             || t_params.kinetic_electron_solver ∉ (implicit_time_evolving,
                                                                    implicit_ppar_implicit_pseudotimestep,
                                                                    implicit_steady_state,
+                                                                   explicit_time_evolving,
                                                                    implicit_ppar_explicit_pseudotimestep))
         diagnostic_moments = diagnostic_checks && istage == n_rk_stages
         bcs_constraints_success = apply_all_bcs_constraints_update_moments!(

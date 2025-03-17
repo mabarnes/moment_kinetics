@@ -2316,47 +2316,49 @@ function apply_electron_bc_and_constraints_no_r!(f_electron, phi, moments, r, z,
                composition.me_over_mi, ir; lowerz_vcut_ind=new_lowerz_vcut_ind,
                upperz_vcut_ind=new_upperz_vcut_ind)
 
-    # Check if either vcut_ind has changed - if either has, recalculate the
-    # preconditioner because the response at the grid point before the cutoff is
-    # sharp, so the preconditioner could be significantly wrong when it was
-    # calculated using the wrong vcut_ind.
-    lower_vcut_changed = @view z.scratch_shared_int[1:1]
-    upper_vcut_changed = @view z.scratch_shared_int[2:2]
-    @serial_region begin
-        if z.irank == 0
-            precon_lowerz_vcut_inds = nl_solver_params.precon_lowerz_vcut_inds
-            if new_lowerz_vcut_ind[] == precon_lowerz_vcut_inds[ir]
-                lower_vcut_changed[] = 0
-            else
-                lower_vcut_changed[] = 1
-                precon_lowerz_vcut_inds[ir] = new_lowerz_vcut_ind[]
+    if nl_solver_params !== nothing
+        # Check if either vcut_ind has changed - if either has, recalculate the
+        # preconditioner because the response at the grid point before the cutoff is
+        # sharp, so the preconditioner could be significantly wrong when it was
+        # calculated using the wrong vcut_ind.
+        lower_vcut_changed = @view z.scratch_shared_int[1:1]
+        upper_vcut_changed = @view z.scratch_shared_int[2:2]
+        @serial_region begin
+            if z.irank == 0
+                precon_lowerz_vcut_inds = nl_solver_params.precon_lowerz_vcut_inds
+                if new_lowerz_vcut_ind[] == precon_lowerz_vcut_inds[ir]
+                    lower_vcut_changed[] = 0
+                else
+                    lower_vcut_changed[] = 1
+                    precon_lowerz_vcut_inds[ir] = new_lowerz_vcut_ind[]
+                end
             end
-        end
-        MPI.Bcast!(lower_vcut_changed, comm_inter_block[]; root=0)
-        #req1 = MPI.Ibcast!(lower_vcut_changed, comm_inter_block[]; root=0)
+            MPI.Bcast!(lower_vcut_changed, comm_inter_block[]; root=0)
+            #req1 = MPI.Ibcast!(lower_vcut_changed, comm_inter_block[]; root=0)
 
-        if z.irank == z.nrank - 1
-            precon_upperz_vcut_inds = nl_solver_params.precon_upperz_vcut_inds
-            if new_upperz_vcut_ind[] == precon_upperz_vcut_inds[ir]
-                upper_vcut_changed[] = 0
-            else
-                upper_vcut_changed[] = 1
-                precon_upperz_vcut_inds[ir] = new_upperz_vcut_ind[]
+            if z.irank == z.nrank - 1
+                precon_upperz_vcut_inds = nl_solver_params.precon_upperz_vcut_inds
+                if new_upperz_vcut_ind[] == precon_upperz_vcut_inds[ir]
+                    upper_vcut_changed[] = 0
+                else
+                    upper_vcut_changed[] = 1
+                    precon_upperz_vcut_inds[ir] = new_upperz_vcut_ind[]
+                end
             end
-        end
-        MPI.Bcast!(upper_vcut_changed, comm_inter_block[]; root=n_blocks[]-1)
-        #req2 = MPI.Ibcast!(upper_vcut_changed, comm_inter_block[]; root=n_blocks[]-1)
+            MPI.Bcast!(upper_vcut_changed, comm_inter_block[]; root=n_blocks[]-1)
+            #req2 = MPI.Ibcast!(upper_vcut_changed, comm_inter_block[]; root=n_blocks[]-1)
 
-        # Eventually can use Ibcast!() to make the two broadcasts run
-        # simultaneously, but need the function to be merged into MPI.jl (see
-        # https://github.com/JuliaParallel/MPI.jl/pull/882).
-        #MPI.Waitall([req1, req2])
-    end
-    @_block_synchronize()
-    if lower_vcut_changed[] == 1 || upper_vcut_changed[] == 1
-        # One or both of the indices changed for some `ir`, so force the
-        # preconditioner to be recalculated next time.
-        nl_solver_params.solves_since_precon_update[] = nl_solver_params.preconditioner_update_interval
+            # Eventually can use Ibcast!() to make the two broadcasts run
+            # simultaneously, but need the function to be merged into MPI.jl (see
+            # https://github.com/JuliaParallel/MPI.jl/pull/882).
+            #MPI.Waitall([req1, req2])
+        end
+        @_block_synchronize()
+        if lower_vcut_changed[] == 1 || upper_vcut_changed[] == 1
+            # One or both of the indices changed for some `ir`, so force the
+            # preconditioner to be recalculated next time.
+            nl_solver_params.solves_since_precon_update[] = nl_solver_params.preconditioner_update_interval
+        end
     end
 
     @begin_z_region()
