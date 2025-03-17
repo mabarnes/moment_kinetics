@@ -388,7 +388,8 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
         t_input["implicit_braginskii_conduction"] = false
         if electron !== nothing && t_input["kinetic_electron_solver"] ∈ (implicit_time_evolving,
                                                                          implicit_ppar_implicit_pseudotimestep,
-                                                                         implicit_steady_state)
+                                                                         implicit_steady_state,
+                                                                         implicit_ppar_explicit_pseudotimestep)
             error("kinetic_electron_solver=$(t_input["kinetic_electron_solver"]) "
                   * "not supported when using a fully explicit timestep")
         end
@@ -1302,7 +1303,8 @@ function setup_advance_flags(moments, composition, t_params, collisions,
                                            kinetic_electrons_with_temperature_equation)
             if !(t_params.kinetic_electron_solver ∈ (implicit_time_evolving,
                                                      implicit_ppar_implicit_pseudotimestep,
-                                                     implicit_steady_state))
+                                                     implicit_steady_state,
+                                                     implicit_ppar_explicit_pseudotimestep))
                 advance_electron_energy = true
                 advance_electron_conduction = true
             end
@@ -1464,7 +1466,8 @@ function setup_implicit_advance_flags(moments, composition, t_params, collisions
 
     if (t_params.kinetic_electron_solver ∈ (implicit_time_evolving,
                                             implicit_ppar_implicit_pseudotimestep,
-                                            implicit_steady_state))
+                                            implicit_steady_state,
+                                            implicit_ppar_explicit_pseudotimestep))
         advance_electron_energy = true
         advance_electron_conduction = true
     end
@@ -3166,7 +3169,8 @@ end
                 old_scratch = scratch_implicit[istage]
                 update_electrons = t_params.kinetic_electron_solver ∉ (implicit_time_evolving,
                                                                        implicit_ppar_implicit_pseudotimestep,
-                                                                       implicit_steady_state)
+                                                                       implicit_steady_state,
+                                                                       implicit_ppar_explicit_pseudotimestep)
                 bcs_constraints_success = apply_all_bcs_constraints_update_moments!(
                     scratch_implicit[istage], pdf, moments, fields,
                     boundary_distributions, scratch_electron, vz, vr, vzeta, vpa, vperp,
@@ -3217,7 +3221,8 @@ end
         update_electrons = (t_params.rk_coefs_implicit === nothing
                             || t_params.kinetic_electron_solver ∉ (implicit_time_evolving,
                                                                    implicit_ppar_implicit_pseudotimestep,
-                                                                   implicit_steady_state))
+                                                                   implicit_steady_state,
+                                                                   implicit_ppar_explicit_pseudotimestep))
         diagnostic_moments = diagnostic_checks && istage == n_rk_stages
         bcs_constraints_success = apply_all_bcs_constraints_update_moments!(
             scratch[istage+1], pdf, moments, fields, boundary_distributions,
@@ -3721,6 +3726,32 @@ end
                                                 max_electron_pdf_iterations,
                                                 max_electron_sim_time; evolve_ppar=true,
                                                 ion_dt=dt)
+
+        # Update `fvec_out.electron_ppar` with the new electron pressure
+        @begin_r_z_region()
+        fvec_out_electron_ppar = fvec_out.electron_ppar
+        moments_electron_ppar = moments.electron.ppar
+        @loop_r_z ir iz begin
+            fvec_out_electron_ppar[iz,ir] = moments_electron_ppar[iz,ir]
+        end
+
+        success = success && (electron_success == "")
+
+    elseif t_params.kinetic_electron_solver == implicit_ppar_explicit_pseudotimestep
+        max_electron_pdf_iterations = t_params.electron.max_pseudotimesteps
+        max_electron_sim_time = t_params.electron.max_pseudotime
+        electron_success = update_electron_pdf!(scratch_electron, pdf.electron.norm,
+                                                moments, fields.phi, r, z, vperp, vpa,
+                                                z_spectral, vperp_spectral, vpa_spectral,
+                                                electron_z_advect, electron_vpa_advect,
+                                                scratch_dummy, t_params.electron,
+                                                collisions, composition,
+                                                external_source_settings, num_diss_params,
+                                                nl_solver_params.electron_advance,
+                                                max_electron_pdf_iterations,
+                                                max_electron_sim_time;
+                                                solution_method="artificial_time_derivative",
+                                                evolve_ppar=true, ion_dt=dt)
 
         # Update `fvec_out.electron_ppar` with the new electron pressure
         @begin_r_z_region()
