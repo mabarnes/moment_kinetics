@@ -8,6 +8,7 @@ export allocate_advection_structs
 export setup_dummy_and_buffer_arrays
 
 using MPI
+using OrderedCollections
 using Quadmath
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float, allocate_shared_float, allocate_shared_int, allocate_shared_bool
@@ -495,7 +496,8 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
                      dt_before_output, dt_before_last_fail, mk_float(CFL_prefactor),
                      step_to_moments_output, step_to_dfns_output, write_moments_output,
                      write_dfns_output, Ref(0), Ref(0), Ref{mk_float}(0.0), Ref(0),
-                     Ref(0), Ref(0), mk_int[], mk_int[], t_input["nwrite"],
+                     Ref(0), Ref(0), OrderedDict{String,mk_int}(),
+                     OrderedDict{String,mk_int}(), t_input["nwrite"],
                      t_input["nwrite_dfns"], moments_output_times, dfns_output_times,
                      t_input["type"], rk_coefs, rk_coefs_implicit,
                      implicit_coefficient_is_zero, n_rk_stages, rk_order,
@@ -563,23 +565,25 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
                                             electron_dt_before_last_fail_reload,
                                             composition, manufactured_solns_input,
                                             io_input, input_dict)
-        # Make Vectors that count which variable caused timestep limits and timestep failures
-        # the right length. Do this setup even when not using adaptive timestepping, because
-        # it is easier than modifying the file I/O according to whether we are using adaptive
-        # timestepping.
-        #
-        # Entries for limit by accuracy (which is an average over all variables),
-        # max_increase_factor, max_increase_factor_near_last_fail, minimum_dt, maximum_dt
-        # and high_nl_iterations.
-        push!(electron_t_params.limit_caused_by, 0, 0, 0, 0, 0)
+        # Set up entries for counters for which variable caused timestep limits and
+        # timestep failures the right length. Do this setup even when not using adaptive
+        # timestepping, because it is easier than modifying the file I/O according to
+        # whether we are using adaptive timestepping.
+        electron_t_params.limit_caused_by["max_increase_factor"] = 0
+        electron_t_params.limit_caused_by["max_increase_factor_near_last_fail"] = 0
+        electron_t_params.limit_caused_by["minimum_dt"] = 0
+        electron_t_params.limit_caused_by["maximum_dt"] = 0
+        electron_t_params.limit_caused_by["high_nl_iterations"] = 0
 
         # electron pdf
-        push!(electron_t_params.limit_caused_by, 0, 0, 0) # RK accuracy plus 2 CFL limits
-        push!(electron_t_params.failure_caused_by, 0)
+        electron_t_params.limit_caused_by["pdf_accuracy"] = 0
+        electron_t_params.limit_caused_by["CFL_z"] = 0
+        electron_t_params.limit_caused_by["CFL_vpa"] = 0
+        electron_t_params.failure_caused_by["pdf_accuracy"] = 0
 
         # electron ppar
-        push!(electron_t_params.limit_caused_by, 0) # RK accuracy
-        push!(electron_t_params.failure_caused_by, 0)
+        electron_t_params.limit_caused_by["ppar_accuracy"] = 0
+        electron_t_params.failure_caused_by["ppar_accuracy"] = 0
     else
         # Pass `false` rather than `nothing` to `setup_time_info()` call for ions, which
         # indicates that 'debug_io' should never be set up for ions.
@@ -624,71 +628,80 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
                                manufactured_solns_input, io_input, input_dict;
                                electron=electron_t_params)
 
-    # Make Vectors that count which variable caused timestep limits and timestep failures
-    # the right length. Do this setup even when not using adaptive timestepping, because
-    # it is easier than modifying the file I/O according to whether we are using adaptive
-    # timestepping.
-    #
-    # Entries for limit by max_increase_factor, max_increase_factor_near_last_fail,
-    # minimum_dt, maximum_dt and high_nl_iterations.
-    push!(t_params.limit_caused_by, 0, 0, 0, 0, 0)
+    # Set up entries for counters for which variable caused timestep limits and
+    # timestep failures the right length. Do this setup even when not using adaptive
+    # timestepping, because it is easier than modifying the file I/O according to
+    # whether we are using adaptive timestepping.
+    t_params.limit_caused_by["max_increase_factor"] = 0
+    t_params.limit_caused_by["max_increase_factor_near_last_fail"] = 0
+    t_params.limit_caused_by["minimum_dt"] = 0
+    t_params.limit_caused_by["maximum_dt"] = 0
+    t_params.limit_caused_by["high_nl_iterations"] = 0
 
     # ion pdf
-    push!(t_params.limit_caused_by, 0) # RK accuracy
+    t_params.limit_caused_by["pdf_accuracy"] = 0
     if !t_params.implicit_ion_advance
-        push!(t_params.limit_caused_by, 0) # z-advection CFL limit
+        t_params.limit_caused_by["CFL_z"] = 0
     end
     if !(t_params.implicit_ion_advance || t_params.implicit_vpa_advection)
-        push!(t_params.limit_caused_by, 0) # vpa-advection CFL limit
+        t_params.limit_caused_by["CFL_vpa"] = 0
     end
-    push!(t_params.failure_caused_by, 0)
+    t_params.failure_caused_by["pdf_accuracy"] = 0
+
     if moments.evolve_density
         # ion density
-        push!(t_params.limit_caused_by, 0) # RK accuracy
-        push!(t_params.failure_caused_by, 0)
+        t_params.limit_caused_by["density_accuracy"] = 0
+        t_params.failure_caused_by["density_accuracy"] = 0
     end
     if moments.evolve_upar
         # ion flow
-        push!(t_params.limit_caused_by, 0) # RK accuracy
-        push!(t_params.failure_caused_by, 0)
+        t_params.limit_caused_by["upar_accuracy"] = 0
+        t_params.failure_caused_by["upar_accuracy"] = 0
     end
-    if moments.evolve_ppar
+    if moments.evolve_density
         # ion pressure
-        push!(t_params.limit_caused_by, 0) # RK accuracy
-        push!(t_params.failure_caused_by, 0)
+        t_params.limit_caused_by["ppar_accuracy"] = 0
+        t_params.failure_caused_by["ppar_accuracy"] = 0
     end
+
     if composition.electron_physics ∈ (braginskii_fluid, kinetic_electrons,
                                        kinetic_electrons_with_temperature_equation)
         # electron pressure
-        push!(t_params.limit_caused_by, 0) # RK accuracy
-        push!(t_params.failure_caused_by, 0) # RK accuracy for electron_ppar
+        t_params.limit_caused_by["electron_ppar_accuracy"] = 0
+        t_params.failure_caused_by["electron_ppar_accuracy"] = 0
+        if t_params.kinetic_electron_solver == implicit_time_evolving
+            t_params.limit_caused_by["electron_pdf_accuracy"] = 0
+            t_params.failure_caused_by["electron_pdf_accuracy"] = 0
+        end
         if composition.electron_physics ∈ (kinetic_electrons,
                                            kinetic_electrons_with_temperature_equation)
-            push!(t_params.failure_caused_by, 0) # Convergence failure for kinetic electron solve
+            t_params.failure_caused_by["kinetic_electron_convergence"] = 0
         end
     end
     if composition.n_neutral_species > 0
-        # neutral pdf
-        push!(t_params.limit_caused_by, 0, 0, 0) # RK accuracy plus 2 CFL limits
-        push!(t_params.failure_caused_by, 0)
+        t_params.limit_caused_by["neutral_pdf_accuracy"] = 0
+        t_params.limit_caused_by["neutral_CFL_z"] = 0
+        t_params.limit_caused_by["neutral_CFL_vpa"] = 0
+        t_params.failure_caused_by["neutral_pdf_accuracy"] = 0
+
         if moments.evolve_density
             # neutral density
-            push!(t_params.limit_caused_by, 0) # RK accuracy
-            push!(t_params.failure_caused_by, 0)
+            t_params.limit_caused_by["neutral_density_accuracy"] = 0
+            t_params.failure_caused_by["neutral_density_accuracy"] = 0
         end
         if moments.evolve_upar
             # neutral flow
-            push!(t_params.limit_caused_by, 0) # RK accuracy
-            push!(t_params.failure_caused_by, 0)
+            t_params.limit_caused_by["neutral_uz_accuracy"] = 0
+            t_params.failure_caused_by["neutral_uz_accuracy"] = 0
         end
-        if moments.evolve_ppar
+        if moments.evolve_density
             # neutral pressure
-            push!(t_params.limit_caused_by, 0) # RK accuracy
-            push!(t_params.failure_caused_by, 0)
+            t_params.limit_caused_by["neutral_pz_accuracy"] = 0
+            t_params.failure_caused_by["neutral_pz_accuracy"] = 0
         end
     end
     if t_params.rk_coefs_implicit !== nothing
-        push!(t_params.failure_caused_by, 0) # Nonlinear iteration fails to converge
+        t_params.failure_caused_by["nonlinear_solver_convergence"] = 0
     end
 
     # create the 'advance' struct to be used in later Euler advance to
@@ -2644,9 +2657,9 @@ appropriate.
     neutral_z_advect, neutral_r_advect, neutral_vz_advect = advect_objects.neutral_z_advect, advect_objects.neutral_r_advect, advect_objects.neutral_vz_advect
     evolve_density, evolve_upar, evolve_ppar = moments.evolve_density, moments.evolve_upar, moments.evolve_ppar
 
-    CFL_limits = mk_float[]
+    CFL_limits = OrderedDict{String,mk_float}()
     error_norm_type = typeof(t_params.error_sum_zero)
-    error_norms = error_norm_type[]
+    error_norms = OrderedDict{String,error_norm_type}()
     total_points = mk_int[]
 
     # Test CFL conditions for advection in kinetic equation to give stability limit for
@@ -2669,7 +2682,7 @@ appropriate.
                 ion_z_CFL = min(ion_z_CFL, this_minimum)
             end
         end
-        push!(CFL_limits, t_params.CFL_prefactor * ion_z_CFL)
+        CFL_limits["CFL_z"] = t_params.CFL_prefactor * ion_z_CFL
     end
 
     if !(t_params.implicit_ion_advance || t_params.implicit_vpa_advection)
@@ -2685,7 +2698,7 @@ appropriate.
                 ion_vpa_CFL = min(ion_vpa_CFL, this_minimum)
             end
         end
-        push!(CFL_limits, t_params.CFL_prefactor * ion_vpa_CFL)
+        CFL_limits["CFL_vpa"] = t_params.CFL_prefactor * ion_vpa_CFL
     end
 
     # To avoid double counting points when we use distributed-memory MPI, skip the
@@ -2803,7 +2816,7 @@ appropriate.
                                      method=error_norm_method, skip_r_inner=skip_r_inner,
                                      skip_z_lower=skip_z_lower,
                                      error_sum_zero=t_params.error_sum_zero)
-    push!(error_norms, ion_pdf_error)
+    error_norms["pdf_accuracy"] = ion_pdf_error
     push!(total_points,
           vpa.n_global * vperp.n_global * z.n_global * r.n_global * n_ion_species)
 
@@ -2816,7 +2829,7 @@ appropriate.
                                      method=error_norm_method, skip_r_inner=skip_r_inner,
                                      skip_z_lower=skip_z_lower,
                                      error_sum_zero=t_params.error_sum_zero)
-        push!(error_norms, ion_n_err)
+        error_norms["density_accuracy"] = ion_n_err
         push!(total_points, z.n_global * r.n_global * n_ion_species)
     end
     if moments.evolve_upar
@@ -2826,7 +2839,7 @@ appropriate.
                                      t_params.atol; method=error_norm_method,
                                      skip_r_inner=skip_r_inner, skip_z_lower=skip_z_lower,
                                      error_sum_zero=t_params.error_sum_zero)
-        push!(error_norms, ion_u_err)
+        error_norms["upar_accuracy"] = ion_u_err
         push!(total_points, z.n_global * r.n_global * n_ion_species)
     end
     if moments.evolve_ppar
@@ -2836,7 +2849,7 @@ appropriate.
                                      t_params.atol; method=error_norm_method,
                                      skip_r_inner=skip_r_inner, skip_z_lower=skip_z_lower,
                                      error_sum_zero=t_params.error_sum_zero)
-        push!(error_norms, ion_p_err)
+        error_norms["ppar_accuracy"] = ion_p_err
         push!(total_points, z.n_global * r.n_global * n_ion_species)
     end
 
@@ -2850,7 +2863,7 @@ appropriate.
                                           skip_r_inner=skip_r_inner,
                                           skip_z_lower=skip_z_lower,
                                           error_sum_zero=t_params.error_sum_zero)
-        push!(error_norms, electron_p_err)
+        error_norms["electron_ppar_accuracy"] = electron_p_err
         push!(total_points, z.n_global * r.n_global)
     end
 
@@ -2870,7 +2883,7 @@ appropriate.
                 neutral_z_CFL = min(neutral_z_CFL, this_minimum)
             end
         end
-        push!(CFL_limits, t_params.CFL_prefactor * neutral_z_CFL)
+        CFL_limits["neutral_CFL_z"] = t_params.CFL_prefactor * neutral_z_CFL
 
         # neutral vz-advection
         @begin_r_z_vzeta_vr_region()
@@ -2885,7 +2898,7 @@ appropriate.
                 neutral_vz_CFL = min(neutral_vz_CFL, this_minimum)
             end
         end
-        push!(CFL_limits, t_params.CFL_prefactor * neutral_vz_CFL)
+        CFL_limits["neutral_CFL_vz"] = t_params.CFL_prefactor * neutral_vz_CFL
 
         # Calculate error for neutral distribution functions
         neut_pdf_error = local_error_norm(scratch[2].pdf_neutral,
@@ -2895,7 +2908,7 @@ appropriate.
                                           skip_r_inner=skip_r_inner,
                                           skip_z_lower=skip_z_lower,
                                           error_sum_zero=t_params.error_sum_zero)
-        push!(error_norms, neut_pdf_error)
+        error_norms["neutral_pdf_accuracy"] = neut_pdf_error
         push!(total_points,
               vz.n_global * vr.n_global * vzeta.n_global * z.n_global * r.n_global *
               n_neutral_species)
@@ -2910,7 +2923,7 @@ appropriate.
                                           skip_r_inner=skip_r_inner,
                                           skip_z_lower=skip_z_lower,
                                           error_sum_zero=t_params.error_sum_zero)
-            push!(error_norms, neut_n_err)
+            error_norms["neutral_density_accuracy"] = neut_n_err
             push!(total_points, z.n_global * r.n_global * n_neutral_species)
         end
         if moments.evolve_upar
@@ -2922,7 +2935,7 @@ appropriate.
                                           skip_r_inner=skip_r_inner,
                                           skip_z_lower=skip_z_lower,
                                           error_sum_zero=t_params.error_sum_zero)
-            push!(error_norms, neut_u_err)
+            error_norms["neutral_uz_accuracy"] = neut_u_err
             push!(total_points, z.n_global * r.n_global * n_neutral_species)
         end
         if moments.evolve_ppar
@@ -2934,7 +2947,7 @@ appropriate.
                                           skip_r_inner=skip_r_inner,
                                           skip_z_lower=skip_z_lower,
                                           error_sum_zero=t_params.error_sum_zero)
-            push!(error_norms, neut_p_err)
+            error_norms["neutral_pz_accuracy"] = neut_p_err
             push!(total_points, z.n_global * r.n_global * n_neutral_species)
         end
     end

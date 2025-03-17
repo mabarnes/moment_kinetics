@@ -2,6 +2,7 @@ module electron_kinetic_equation
 
 using LinearAlgebra
 using MPI
+using OrderedCollections
 using SparseArrays
 
 export get_electron_critical_velocities
@@ -4405,9 +4406,9 @@ appropriate.
         error("adaptive timestep needs a buffer scratch array")
     end
 
-    CFL_limits = mk_float[]
+    CFL_limits = OrderedDict{String,mk_float}()
     error_norm_type = typeof(t_params.error_sum_zero)
-    error_norms = error_norm_type[]
+    error_norms = OrderedDict{String,error_norm_type}()
     total_points = mk_int[]
 
     # Test CFL conditions for advection in electron kinetic equation to give stability
@@ -4420,9 +4421,9 @@ appropriate.
                              vpa.grid)
     z_CFL = get_minimum_CFL_z(z_advect[1].speed, z)
     if block_rank[] == 0
-        push!(CFL_limits, t_params.CFL_prefactor * z_CFL)
+        CFL_limits["CFL_z"] = t_params.CFL_prefactor * z_CFL
     else
-        push!(CFL_limits, Inf)
+        CFL_limits["CFL_z"] = Inf
     end
 
     # vpa-advection
@@ -4433,9 +4434,9 @@ appropriate.
                                vpa.grid, external_source_settings.electron)
     vpa_CFL = get_minimum_CFL_vpa(vpa_advect[1].speed, vpa)
     if block_rank[] == 0
-        push!(CFL_limits, t_params.CFL_prefactor * vpa_CFL)
+        CFL_limits["CFL_vpa"] = t_params.CFL_prefactor * vpa_CFL
     else
-        push!(CFL_limits, Inf)
+        CFL_limits["CFL_vpa"] = Inf
     end
 
     # To avoid double counting points when we use distributed-memory MPI, skip the
@@ -4473,7 +4474,7 @@ appropriate.
                                  t_params.rtol, t_params.atol; method=error_norm_method,
                                  skip_r_inner=skip_r_inner, skip_z_lower=skip_z_lower,
                                  error_sum_zero=t_params.error_sum_zero)
-    push!(error_norms, pdf_error)
+    error_norms["pdf_accuracy"] = pdf_error
     push!(total_points, vpa.n_global * vperp.n_global * z.n_global * r.n_global)
 
     # Calculate error for moments, if necessary
@@ -4484,7 +4485,7 @@ appropriate.
                                  t_params.rtol, t_params.atol; method=error_norm_method,
                                  skip_r_inner=skip_r_inner, skip_z_lower=skip_z_lower,
                                  error_sum_zero=t_params.error_sum_zero)
-        push!(error_norms, p_err)
+        error_norms["ppar_accuracy"] = p_err
         push!(total_points, z.n_global * r.n_global)
     end
 

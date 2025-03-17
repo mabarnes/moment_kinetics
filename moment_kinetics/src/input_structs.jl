@@ -72,8 +72,8 @@ struct time_info{Terrorsum <: Real, T_debug_output, T_electron, Trkimp, Timpzero
     moments_output_counter::Base.RefValue{mk_int}
     dfns_output_counter::Base.RefValue{mk_int}
     failure_counter::Base.RefValue{mk_int}
-    failure_caused_by::Vector{mk_int}
-    limit_caused_by::Vector{mk_int}
+    failure_caused_by::OrderedDict{String,mk_int}
+    limit_caused_by::OrderedDict{String,mk_int}
     nwrite_moments::mk_int
     nwrite_dfns::mk_int
     moments_output_times::Vector{mk_float}
