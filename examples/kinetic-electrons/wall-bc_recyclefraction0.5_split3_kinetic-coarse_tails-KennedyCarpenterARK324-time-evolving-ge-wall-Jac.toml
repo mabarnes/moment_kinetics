@@ -94,9 +94,7 @@ initial_density = 1.0
 
 [timestepping]
 type = "KennedyCarpenterARK324"
-implicit_electron_advance = false
-implicit_electron_time_evolving=true
-implicit_electron_ppar = false
+kinetic_electron_solver = "implicit_time_evolving"
 implicit_ion_advance = false
 implicit_vpa_advection = false
 nstep = 1000000

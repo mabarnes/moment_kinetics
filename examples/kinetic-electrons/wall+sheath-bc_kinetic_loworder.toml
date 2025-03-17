@@ -106,6 +106,7 @@ vpa_dissipation_coefficient = 2.0
 #vpa_dissipation_coefficient = 20.0
 
 [timestepping]
+kinetic_electron_solver = "explicit_pseudotimestep"
 nstep = 40000
 #nstep = 1
 dt = 5.0e-5

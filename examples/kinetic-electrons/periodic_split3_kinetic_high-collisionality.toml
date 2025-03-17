@@ -89,6 +89,7 @@ Tref = 20.0
 [timestepping]
 #type = "KennedyCarpenterARK324"
 type = "Fekete4(3)"
+kinetic_electron_solver = "explicit_pseudotimestep"
 implicit_ion_advance = false
 implicit_vpa_advection = false
 nstep = 1000000

@@ -3292,7 +3292,7 @@ binary output file
         # add the distribution function data at this time slice to the output file
         write_ion_dfns_data_to_binary(scratch, t_params, n_ion_species, io_dfns, t_idx, r,
                                       z, vperp, vpa)
-        if t_params.implicit_electron_time_evolving || scratch_electron !== nothing
+        if t_params.kinetic_electron_solver == implicit_time_evolving || scratch_electron !== nothing
             write_electron_dfns_data_to_binary(scratch, scratch_electron, t_params,
                                                io_dfns, t_idx, r, z, vperp, vpa)
         end
@@ -3342,7 +3342,7 @@ function write_electron_dfns_data_to_binary(scratch, scratch_electron, t_params,
         parallel_io = io_dfns.io_input.parallel_io
 
         if io_dfns.f_electron !== nothing
-            if t_params.implicit_electron_time_evolving
+            if t_params.kinetic_electron_solver == implicit_time_evolving
                 n_rk_stages = t_params.n_rk_stages
                 this_scratch = scratch
             elseif t_params.electron === nothing

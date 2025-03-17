@@ -48,6 +48,7 @@ test_input = OptionsDict("composition" => OptionsDict("n_ion_species" => 1,
                          "reactions" => OptionsDict("charge_exchange_frequency" => 0.75,
                                                     "ionization_frequency" => 0.5),
                          "timestepping" => OptionsDict("type" => "PareschiRusso2(2,2,2)",
+                                                       "kinetic_electron_solver" => "implicit_ppar_implicit_pseudotimestep",
                                                        "nstep" => 3,
                                                        "dt" => 1.0e-9,
                                                        "nwrite" => 2,),
@@ -93,7 +94,7 @@ test_input = OptionsDict("composition" => OptionsDict("n_ion_species" => 1,
 
 test_input_adi = deepcopy(test_input)
 test_input_adi["output"]["run_name"] = "kinetic_electron_adi"
-test_input_adi["timestepping"]["implicit_electron_ppar"] = "adi"
+test_input_adi["timestepping"]["kinetic_electron_preconditioner"] = "adi"
 
 
 test_input_list = [
