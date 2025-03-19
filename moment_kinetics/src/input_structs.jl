@@ -94,6 +94,7 @@ struct time_info{Terrorsum <: Real, T_debug_output, T_electron, Trkimp, Timpzero
     write_after_fixed_step_count::Bool
     error_sum_zero::Terrorsum
     split_operators::Bool
+    print_nT_live::Bool
     steady_state_residual::Bool
     converged_residual_value::mk_float
     use_manufactured_solns_for_advance::Bool
