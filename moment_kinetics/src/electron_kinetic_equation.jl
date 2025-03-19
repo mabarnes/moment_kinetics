@@ -30,6 +30,7 @@ using ..electron_fluid_equations: calculate_electron_moments!,
 using ..electron_fluid_equations: electron_energy_equation!,
                                   electron_energy_equation_no_r!,
                                   add_electron_energy_equation_to_Jacobian!,
+                                  add_third_moment_equation_to_Jacobian!,
                                   add_electron_energy_equation_to_v_only_Jacobian!,
                                   add_electron_energy_equation_to_z_only_Jacobian!,
                                   electron_energy_residual!
@@ -1276,6 +1277,8 @@ global_rank[] == 0 && println("recalculating precon")
                 this_input_buffer[counter] = precon_f[ivpa,ivperp,iz]
                 counter += 1
             end
+            # Skip third_moment entries, as these should stay set to 0.0
+            counter += z.n
             @loop_z iz begin
                 this_input_buffer[counter] = precon_ppar[iz]
                 counter += 1
@@ -1292,6 +1295,9 @@ global_rank[] == 0 && println("recalculating precon")
                 precon_f[ivpa,ivperp,iz] = this_output_buffer[counter]
                 counter += 1
             end
+            # Skip third_moment entries, as these are not needed (third_moment is just an
+            # auxiliary variable used for the preconditioner solve).
+            counter += z.n
             @loop_z iz begin
                 precon_ppar[iz] = this_output_buffer[counter]
                 counter += 1
@@ -1431,7 +1437,7 @@ global_rank[] == 0 && println("recalculating precon")
                     phi, collisions, composition, z, vperp, vpa, z_spectral,
                     vperp_spectral, vpa_spectral, z_advect, vpa_advect,
                     scratch_dummy, external_source_settings, num_diss_params,
-                    t_params, ion_dt, ir, evolve_ppar, :explicit_z, false)
+                    t_params, ion_dt, ir, evolve_ppar, :explicit_z, false, false)
             end
             @begin_z_region()
             @loop_z iz begin
@@ -1485,7 +1491,7 @@ global_rank[] == 0 && println("recalculating precon")
                 collisions, composition, z, vperp, vpa, z_spectral,
                 vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
                 external_source_settings, num_diss_params, t_params, ion_dt, ir,
-                evolve_ppar, :explicit_v, false)
+                evolve_ppar, :explicit_v, false, false)
             @begin_vperp_vpa_region()
             @loop_vperp_vpa ivperp ivpa begin
                 z_solve_counter += 1
@@ -4814,6 +4820,10 @@ produce the Jacobian for a steady-state solve, rather than a backward-Euler time
 solve. [Note that rows representing boundary points still need the 1 added to their
 diagonal, as that 1 is used to impose the boundary condition, not to represent the 'new f'
 in the time derivative term as it is for the non-boundary points.]
+
+When `separate_third_moment=true`, the third \$w_\\parallel\$ moment of the shape function
+is treated as a separate, auxiliary variable. This makes the Jacobian matrix as a whole
+more sparse, which should help efficiency of solves.
 """
 @timeit global_timer fill_electron_kinetic_equation_Jacobian!(
                          jacobian_matrix, f, ppar, moments, phi_global, collisions,
@@ -4821,7 +4831,7 @@ in the time derivative term as it is for the non-boundary points.]
                          vpa_spectral, z_advect, vpa_advect, scratch_dummy,
                          external_source_settings, num_diss_params, t_params, ion_dt, ir,
                          evolve_ppar, include=:all, include_qpar_integral_terms=true,
-                         add_identity=true) = begin
+                         separate_third_moment=true, add_identity=true) = begin
     dt = t_params.dt[]
 
     buffer_1 = @view scratch_dummy.buffer_rs_1[ir,1]
@@ -4855,6 +4865,7 @@ in the time derivative term as it is for the non-boundary points.]
 
     pdf_size = z.n * vperp.n * vpa.n
     v_size = vperp.n * vpa.n
+    nz = z.n
 
     z_speed = @view z_advect[1].speed[:,:,:,ir]
 
@@ -4874,9 +4885,25 @@ in the time derivative term as it is for the non-boundary points.]
         end
     end
     @begin_z_region()
+    if separate_third_moment
+        third_moment_offset = pdf_size
+        @loop_z iz begin
+            # Rows corresponding to third_moment
+            row = third_moment_offset + iz
+
+            jacobian_matrix[row,:] .= 0.0
+            if include === :all && add_identity
+                jacobian_matrix[row,row] += 1.0
+            end
+        end
+        ppar_offset = pdf_size + nz
+    else
+        third_moment_offset = nothing
+        ppar_offset = pdf_size
+    end
     @loop_z iz begin
         # Rows corresponding to electron_ppar
-        row = pdf_size + iz
+        row = ppar_offset + iz
 
         jacobian_matrix[row,:] .= 0.0
         if include === :all && add_identity
@@ -4931,26 +4958,28 @@ in the time derivative term as it is for the non-boundary points.]
 
     add_electron_z_advection_to_Jacobian!(
         jacobian_matrix, f, dens, upar, ppar, vth, dpdf_dz, me, z, vperp, vpa, z_spectral,
-        z_advect, z_speed, scratch_dummy, dt, ir, include; ppar_offset=pdf_size)
+        z_advect, z_speed, scratch_dummy, dt, ir, include; ppar_offset=ppar_offset)
     add_electron_vpa_advection_to_Jacobian!(
         jacobian_matrix, f, dens, upar, ppar, vth, third_moment, dpdf_dvpa, ddens_dz,
         dppar_dz, dthird_moment_dz, moments, me, z, vperp, vpa, z_spectral, vpa_spectral,
         vpa_advect, z_speed, scratch_dummy, external_source_settings, dt, ir, include,
-        include_qpar_integral_terms; ppar_offset=pdf_size)
+        include_qpar_integral_terms, separate_third_moment;
+        third_moment_offset=third_moment_offset, ppar_offset=ppar_offset)
     add_contribution_from_electron_pdf_term_to_Jacobian!(
         jacobian_matrix, f, dens, upar, ppar, vth, third_moment, ddens_dz, dppar_dz,
         dvth_dz, dqpar_dz, dthird_moment_dz, moments, me, external_source_settings, z,
         vperp, vpa, z_spectral, z_speed, scratch_dummy, dt, ir, include,
-        include_qpar_integral_terms; ppar_offset=pdf_size)
+        include_qpar_integral_terms, separate_third_moment;
+        third_moment_offset=third_moment_offset, ppar_offset=ppar_offset)
     add_electron_dissipation_term_to_Jacobian!(
         jacobian_matrix, f, num_diss_params, z, vperp, vpa, vpa_spectral, z_speed, dt, ir,
         include)
     add_electron_krook_collisions_to_Jacobian!(
         jacobian_matrix, f, dens, upar, ppar, vth, upar_ion, collisions, z, vperp, vpa,
-        z_speed, dt, ir, include; ppar_offset=pdf_size)
+        z_speed, dt, ir, include; ppar_offset=ppar_offset)
     add_total_external_electron_source_to_Jacobian!(
         jacobian_matrix, f, moments, me, z_speed, external_source_settings.electron, z,
-        vperp, vpa, dt, ir, include; ppar_offset=pdf_size)
+        vperp, vpa, dt, ir, include; ppar_offset=ppar_offset)
     add_electron_implicit_constraint_forcing_to_Jacobian!(
         jacobian_matrix, f, zeroth_moment, first_moment, second_moment, z_speed, z, vperp,
         vpa, t_params.constraint_forcing_rate, dt, ir, include)
@@ -4960,17 +4989,22 @@ in the time derivative term as it is for the non-boundary points.]
     add_electron_energy_equation_to_Jacobian!(
         jacobian_matrix, f, dens, upar, ppar, vth, third_moment, ddens_dz, dupar_dz,
         dppar_dz, dthird_moment_dz, collisions, composition, z, vperp, vpa, z_spectral,
-        num_diss_params, dt, ir, include; ppar_offset=pdf_size)
+        num_diss_params, dt, ir, include, separate_third_moment;
+        third_moment_offset=third_moment_offset, ppar_offset=ppar_offset)
+    if separate_third_moment
+        add_third_moment_equation_to_Jacobian!(jacobian_matrix, z, vperp, vpa, include;
+                                               third_moment_offset=third_moment_offset)
+    end
     if ion_dt !== nothing
         add_ion_dt_forcing_of_electron_ppar_to_Jacobian!(
-            jacobian_matrix, z, dt, ion_dt, ir, include; ppar_offset=pdf_size)
+            jacobian_matrix, z, dt, ion_dt, ir, include; ppar_offset=ppar_offset)
     end
     if t_params.include_wall_bc_in_preconditioner
         add_wall_boundary_condition_to_Jacobian!(
             jacobian_matrix, phi, f, ppar, vth, upar, z, vperp, vpa, vperp_spectral,
             vpa_spectral, vpa_advect, moments,
             num_diss_params.electron.vpa_dissipation_coefficient, me, ir, include;
-            ppar_offset=pdf_size)
+            ppar_offset=ppar_offset)
     end
 
     return nothing
@@ -5853,14 +5887,24 @@ function add_contribution_from_electron_pdf_term_to_Jacobian!(
         jacobian_matrix, f, dens, upar, ppar, vth, third_moment, ddens_dz, dppar_dz,
         dvth_dz, dqpar_dz, dthird_moment_dz, moments, me, external_source_settings, z,
         vperp, vpa, z_spectral, z_speed, scratch_dummy, dt, ir, include=:all,
-        include_qpar_integral_terms=true; f_offset=0, ppar_offset=0)
+        include_qpar_integral_terms=true, separate_third_moment=true; f_offset=0,
+        third_moment_offset=0, ppar_offset=0)
 
-    if f_offset == ppar_offset
+    @boundscheck if f_offset == ppar_offset
         error("Got f_offset=$f_offset the same as ppar_offset=$ppar_offset. f and ppar "
               * "cannot be in same place in state vector.")
     end
+    @boundscheck if separate_third_moment && (f_offset == third_moment_offset)
+        error("Got f_offset=$f_offset the same as third_moment_offset=$third_moment_offset. "
+              * "f and third_moment cannot be in same place in state vector.")
+    end
+    @boundscheck if separate_third_moment && (ppar_offset == third_moment_offset)
+        error("Got ppar_offset=$ppar_offset the same as third_moment_offset=$third_moment_offset. "
+              * "ppar and third_moment cannot be in same place in state vector.")
+    end
     @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
     @boundscheck size(jacobian_matrix, 1) ≥ f_offset + z.n * vperp.n * vpa.n || error("f_offset=$f_offset is too big")
+    @boundscheck !separate_third_moment || size(jacobian_matrix, 1) ≥ third_moment_offset + z.n || error("ppar_offset=$ppar_offset is too big")
     @boundscheck size(jacobian_matrix, 1) ≥ ppar_offset + z.n || error("ppar_offset=$ppar_offset is too big")
     @boundscheck include ∈ (:all, :explicit_z, :explicit_v) || error("Unexpected value for include=$include")
 
@@ -5920,19 +5964,32 @@ function add_contribution_from_electron_pdf_term_to_Jacobian!(
                                                                             - dvth_dz[iz] / vth[iz]))
         end
         if include ∈ (:all, :explicit_v)
-            for icolvperp ∈ 1:vperp.n, icolvpa ∈ 1:vpa.n
-                col = (iz - 1) * v_size + (icolvperp - 1) * vpa.n + icolvpa + f_offset
+            if separate_third_moment
+                col = iz + third_moment_offset
                 jacobian_matrix[row,col] +=
                     dt * f[ivpa,ivperp,iz] *
-                    (1.5*sqrt(2.0/ppar[iz]/dens[iz]/me)*dppar_dz[iz] - 0.5*sqrt(2.0*ppar[iz]/me)/dens[iz]^1.5*ddens_dz[iz]) *
-                    vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^3
+                    (1.5*sqrt(2.0/ppar[iz]/dens[iz]/me)*dppar_dz[iz] - 0.5*sqrt(2.0*ppar[iz]/me)/dens[iz]^1.5*ddens_dz[iz])
+            else
+                for icolvperp ∈ 1:vperp.n, icolvpa ∈ 1:vpa.n
+                    col = (iz - 1) * v_size + (icolvperp - 1) * vpa.n + icolvpa + f_offset
+                    jacobian_matrix[row,col] +=
+                        dt * f[ivpa,ivperp,iz] *
+                        (1.5*sqrt(2.0/ppar[iz]/dens[iz]/me)*dppar_dz[iz] - 0.5*sqrt(2.0*ppar[iz]/me)/dens[iz]^1.5*ddens_dz[iz]) *
+                        vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^3
+                end
             end
         end
         z_deriv_row_startind = z_deriv_matrix.rowptr[iz]
         z_deriv_row_endind = z_deriv_matrix.rowptr[iz+1] - 1
         z_deriv_colinds = @view z_deriv_matrix.colval[z_deriv_row_startind:z_deriv_row_endind]
         z_deriv_row_nonzeros = @view z_deriv_matrix.nzval[z_deriv_row_startind:z_deriv_row_endind]
-        if include_qpar_integral_terms
+        if separate_third_moment
+            for (icolz, z_deriv_entry) ∈ zip(z_deriv_colinds, z_deriv_row_nonzeros)
+                col = icolz + third_moment_offset
+                jacobian_matrix[row,col] +=
+                    dt * f[ivpa,ivperp,iz] * vth[iz] * z_deriv_entry
+            end
+        elseif include_qpar_integral_terms
             for (icolz, z_deriv_entry) ∈ zip(z_deriv_colinds, z_deriv_row_nonzeros), icolvperp ∈ 1:vperp.n, icolvpa ∈ 1:vpa.n
                 col = (icolz - 1) * v_size + (icolvperp - 1) * vpa.n + icolvpa + f_offset
                 jacobian_matrix[row,col] +=

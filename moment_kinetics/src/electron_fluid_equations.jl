@@ -6,6 +6,7 @@ export calculate_electron_moments!
 export electron_energy_equation!
 export electron_energy_equation_no_r!
 export add_electron_energy_equation_to_Jacobian!
+export add_third_moment_equation_to_Jacobian!
 export calculate_electron_qpar!
 export calculate_electron_parallel_friction_force!
 export calculate_electron_qpar_from_pdf!
@@ -364,14 +365,25 @@ function add_electron_energy_equation_to_Jacobian!(jacobian_matrix, f, dens, upa
                                                    vth, third_moment, ddens_dz, dupar_dz,
                                                    dppar_dz, dthird_moment_dz, collisions,
                                                    composition, z, vperp, vpa, z_spectral,
-                                                   num_diss_params, dt, ir, include=:all;
-                                                   f_offset=0, ppar_offset=0)
-    if f_offset == ppar_offset
+                                                   num_diss_params, dt, ir, include=:all,
+                                                   separate_third_moment=true;
+                                                   f_offset=0, third_moment_offset=0,
+                                                   ppar_offset=0)
+    @boundscheck if f_offset == ppar_offset
         error("Got f_offset=$f_offset the same as ppar_offset=$ppar_offset. f and ppar "
               * "cannot be in same place in state vector.")
     end
+    @boundscheck if separate_third_moment && (f_offset == third_moment_offset)
+        error("Got f_offset=$f_offset the same as third_moment_offset=$third_moment_offset. "
+              * "f and third_moment cannot be in same place in state vector.")
+    end
+    @boundscheck if separate_third_moment && (ppar_offset == third_moment_offset)
+        error("Got ppar_offset=$ppar_offset the same as third_moment_offset=$third_moment_offset. "
+              * "ppar and third_moment cannot be in same place in state vector.")
+    end
     @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
     @boundscheck size(jacobian_matrix, 1) ≥ f_offset + z.n * vperp.n * vpa.n || error("f_offset=$f_offset is too big")
+    @boundscheck !separate_third_moment || size(jacobian_matrix, 1) ≥ third_moment_offset + z.n || error("ppar_offset=$ppar_offset is too big")
     @boundscheck size(jacobian_matrix, 1) ≥ ppar_offset + z.n || error("ppar_offset=$ppar_offset is too big")
     @boundscheck include ∈ (:all, :explicit_z, :explicit_v) || error("Unexpected value for include=$include")
 
@@ -444,30 +456,55 @@ function add_electron_energy_equation_to_Jacobian!(jacobian_matrix, f, dens, upa
         end
 
         # terms from d(qpar)/dz
-        if include === :all
-            jacobian_matrix[row,row] +=
-                dt * (3.0 * sqrt(2.0 * ppar[iz] / dens[iz] / me) * dthird_moment_dz[iz]
-                      - 1.5 * sqrt(2.0 * ppar[iz] / me) / dens[iz]^1.5 * third_moment[iz] * ddens_dz[iz]
-                      + 1.5 * sqrt(2.0 / ppar[iz] / dens[iz] / me) * third_moment[iz] * dppar_dz[iz])
-        end
-        if include ∈ (:all, :explicit_z)
-            for (icolz, z_deriv_entry) ∈ zip(z_deriv_colinds, z_deriv_row_nonzeros)
-                col = ppar_offset + icolz
-                jacobian_matrix[row,col] += dt * 3.0 * sqrt(2.0 * ppar[iz] / dens[iz] / me) * third_moment[iz] * z_deriv_entry
+        if separate_third_moment
+            if include === :all
+                jacobian_matrix[row,row] +=
+                    dt * (3.0 * sqrt(2.0 * ppar[iz] / dens[iz] / me) * dthird_moment_dz[iz]
+                          - 1.5 * sqrt(2.0 * ppar[iz] / me) / dens[iz]^1.5 * third_moment[iz] * ddens_dz[iz]
+                          + 1.5 * sqrt(2.0 / ppar[iz] / dens[iz] / me) * third_moment[iz] * dppar_dz[iz])
             end
-        end
-        if include ∈ (:all, :explicit_v)
-            for icolvperp ∈ 1:vperp.n, icolvpa ∈ 1:vpa.n
-                col = (iz - 1) * v_size + (icolvperp - 1) * vpa.n + icolvpa + f_offset
+            if include ∈ (:all, :explicit_z)
+                for (icolz, z_deriv_entry) ∈ zip(z_deriv_colinds, z_deriv_row_nonzeros)
+                    col = ppar_offset + icolz
+                    jacobian_matrix[row,col] += dt * 3.0 * sqrt(2.0 * ppar[iz] / dens[iz] / me) * third_moment[iz] * z_deriv_entry
+                end
+            end
+            if include ∈ (:all, :explicit_v)
+                col = iz + third_moment_offset
                 jacobian_matrix[row,col] += dt * (-(ppar[iz]/dens[iz])^1.5*sqrt(2.0/me)*ddens_dz[iz]
-                                                  + 3.0*sqrt(2.0*ppar[iz]/dens[iz]/me)*dppar_dz[iz]) *
-                                                 vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^3
+                                                  + 3.0*sqrt(2.0*ppar[iz]/dens[iz]/me)*dppar_dz[iz])
             end
-        end
-        for (icolz, z_deriv_entry) ∈ zip(z_deriv_colinds, z_deriv_row_nonzeros), icolvperp ∈ 1:vperp.n, icolvpa ∈ 1:vpa.n
-            col = (icolz - 1) * v_size + (icolvperp - 1) * vpa.n + icolvpa + f_offset
-            jacobian_matrix[row,col] += dt * 2.0*ppar[iz]^1.5*sqrt(2.0/dens[iz]/me) *
-                                             vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^3 * z_deriv_entry
+            for (icolz, z_deriv_entry) ∈ zip(z_deriv_colinds, z_deriv_row_nonzeros)
+                col = icolz + third_moment_offset
+                jacobian_matrix[row,col] += dt * 2.0*ppar[iz]^1.5*sqrt(2.0/dens[iz]/me) *
+                                                 z_deriv_entry
+            end
+        else
+            if include === :all
+                jacobian_matrix[row,row] +=
+                    dt * (3.0 * sqrt(2.0 * ppar[iz] / dens[iz] / me) * dthird_moment_dz[iz]
+                          - 1.5 * sqrt(2.0 * ppar[iz] / me) / dens[iz]^1.5 * third_moment[iz] * ddens_dz[iz]
+                          + 1.5 * sqrt(2.0 / ppar[iz] / dens[iz] / me) * third_moment[iz] * dppar_dz[iz])
+            end
+            if include ∈ (:all, :explicit_z)
+                for (icolz, z_deriv_entry) ∈ zip(z_deriv_colinds, z_deriv_row_nonzeros)
+                    col = ppar_offset + icolz
+                    jacobian_matrix[row,col] += dt * 3.0 * sqrt(2.0 * ppar[iz] / dens[iz] / me) * third_moment[iz] * z_deriv_entry
+                end
+            end
+            if include ∈ (:all, :explicit_v)
+                for icolvperp ∈ 1:vperp.n, icolvpa ∈ 1:vpa.n
+                    col = (iz - 1) * v_size + (icolvperp - 1) * vpa.n + icolvpa + f_offset
+                    jacobian_matrix[row,col] += dt * (-(ppar[iz]/dens[iz])^1.5*sqrt(2.0/me)*ddens_dz[iz]
+                                                      + 3.0*sqrt(2.0*ppar[iz]/dens[iz]/me)*dppar_dz[iz]) *
+                                                     vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^3
+                end
+            end
+            for (icolz, z_deriv_entry) ∈ zip(z_deriv_colinds, z_deriv_row_nonzeros), icolvperp ∈ 1:vperp.n, icolvpa ∈ 1:vpa.n
+                col = (icolz - 1) * v_size + (icolvperp - 1) * vpa.n + icolvpa + f_offset
+                jacobian_matrix[row,col] += dt * 2.0*ppar[iz]^1.5*sqrt(2.0/dens[iz]/me) *
+                                                 vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^3 * z_deriv_entry
+            end
         end
     end
 
@@ -587,6 +624,46 @@ function add_electron_energy_equation_to_v_only_Jacobian!(
         jacobian_matrix[end,col] += dt * (-(ppar/dens)^1.5*sqrt(2.0/me)*ddens_dz
                                           + 3.0*sqrt(2.0*ppar/dens/me)*dppar_dz) *
                                          vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^3
+    end
+
+    return nothing
+end
+
+function add_third_moment_equation_to_Jacobian!(jacobian_matrix,
+                                                   z, vperp, vpa,
+                                                   include=:all;
+                                                   f_offset=0, third_moment_offset=0)
+    if f_offset == third_moment_offset
+        error("Got f_offset=$f_offset the same as third_moment_offset=$third_moment_offset. "
+              * " f and third_moment cannot be in same place in state vector.")
+    end
+    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
+    @boundscheck size(jacobian_matrix, 1) ≥ f_offset + z.n * vperp.n * vpa.n || error("f_offset=$f_offset is too big")
+    @boundscheck size(jacobian_matrix, 1) ≥ third_moment_offset + z.n || error("third_moment_offset=$third_moment_offset is too big")
+    @boundscheck include ∈ (:all, :explicit_z, :explicit_v) || error("Unexpected value for include=$include")
+
+    v_size = vperp.n * vpa.n
+
+    @begin_z_region()
+    @loop_z iz begin
+        # Rows corresponding to third_moment
+        row = third_moment_offset + iz
+
+        # Note that as
+        #   third_moment = ∫dw_∥ w_∥^3 g
+        #   third_moment - ∫dw_∥ w_∥^3 g = 0
+        # so for the Jacobian
+        #   d(third_moment)[irowz])/d(third_moment[icolz]) = I
+        #   d(-∫dw_∥ w_∥^3 g)[irowz])/d(third_moment[icolz]) = 0
+        #   d(-∫dw_∥ w_∥^3 g)[irowz])/d(g[icol])
+        #     = - vpa.wgts[icolz] / sqrt(π) * vpa.grid[icolvpa]^3
+
+        if include ∈ (:all, :explicit_v)
+            for icolvperp ∈ 1:vperp.n, icolvpa ∈ 1:vpa.n
+                col = (iz - 1) * v_size + (icolvperp - 1) * vpa.n + icolvpa + f_offset
+                jacobian_matrix[row,col] += -vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^3
+            end
+        end
     end
 
     return nothing
