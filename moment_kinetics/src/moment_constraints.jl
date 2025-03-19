@@ -286,10 +286,23 @@ Add the contributions corresponding to [`electron_implicit_constraint_forcing!`]
 """
 function add_electron_implicit_constraint_forcing_to_Jacobian!(
         jacobian_matrix, f, zeroth_moment, first_moment, second_moment, z_speed, z, vperp,
-        vpa, constraint_forcing_rate, dt, ir, include=:all; f_offset=0)
+        vpa, constraint_forcing_rate, dt, ir, include=:all, separate_moments=true;
+        f_offset=0, zeroth_moment_offset=0, first_moment_offset=0, second_moment_offset=0)
 
+    @boundscheck if separate_moments && !allunique((f_offset, zeroth_moment_offset,
+                                                    first_moment_offset,
+                                                    second_moment_offset))
+        error("Some offsets are the same. Two variables cannot be in the same place in "
+              * "the state vector. Got f_offset=$f_offset, "
+              * "zeroth_moment_offset=$zeroth_moment_offset, "
+              * "first_moment_offset=$first_moment_offset, "
+              * "second_moment_offset=$second_moment_offset.")
+    end
     @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
     @boundscheck size(jacobian_matrix, 1) ≥ f_offset + z.n * vperp.n * vpa.n || error("f_offset=$f_offset is too big")
+    @boundscheck !separate_moments || size(jacobian_matrix, 1) ≥ zeroth_moment_offset + z.n || error("third_moment_offset=$third_moment_offset is too big")
+    @boundscheck !separate_moments || size(jacobian_matrix, 1) ≥ first_moment_offset + z.n || error("third_moment_offset=$third_moment_offset is too big")
+    @boundscheck !separate_moments || size(jacobian_matrix, 1) ≥ second_moment_offset + z.n || error("third_moment_offset=$third_moment_offset is too big")
     @boundscheck include ∈ (:all, :explicit_z, :explicit_v) || error("Unexpected value for include=$include")
 
     vpa_grid = vpa.grid
@@ -314,15 +327,34 @@ function add_electron_implicit_constraint_forcing_to_Jacobian!(
         end
 
         if include ∈ (:all, :explicit_v)
-            # Integral terms
-            # d(∫dw_∥ w_∥^n g[irow])/d(g[icol]) = vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^n
-            for icolvperp ∈ 1:vperp.n, icolvpa ∈ 1:vpa.n
-                col = (iz - 1) * v_size + (icolvperp - 1) * vpa.n + icolvpa + f_offset
-                jacobian_matrix[row,col] += dt * constraint_forcing_rate *
-                                                 (1.0
-                                                  + vpa_grid[icolvpa]*vpa_grid[ivpa]
-                                                  + vpa_grid[icolvpa]^2*vpa_grid[ivpa]^2) *
-                                                 vpa_wgts[icolvpa]/sqrt(π) * f[ivpa,ivperp,iz]
+            if separate_moments
+                # Moments are included in the Jacobian matrix as separate auxiliary
+                # variables
+
+                this_f = f[ivpa,ivperp,iz]
+
+                # Zeroth moment
+                # Forcing term is like dg/dt + ... + constraint_forcing_rate*zeroth_moment*g = 0
+                jacobian_matrix[row,zeroth_moment_offset+iz] += dt * constraint_forcing_rate * this_f
+
+                # First moment
+                # Forcing term is like dg/dt + ... + constraint_forcing_rate*first_moment*wpa*g = 0
+                jacobian_matrix[row,first_moment_offset+iz] += dt * constraint_forcing_rate * vpa_grid[ivpa] * this_f
+
+                # Second moment
+                # Forcing term is like dg/dt + ... + constraint_forcing_rate*second_moment*wpa^2*g = 0
+                jacobian_matrix[row,second_moment_offset+iz] += dt * constraint_forcing_rate * vpa_grid[ivpa]^2 * this_f
+            else
+                # Integral terms
+                # d(∫dw_∥ w_∥^n g[irow])/d(g[icol]) = vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^n
+                for icolvperp ∈ 1:vperp.n, icolvpa ∈ 1:vpa.n
+                    col = (iz - 1) * v_size + (icolvperp - 1) * vpa.n + icolvpa + f_offset
+                    jacobian_matrix[row,col] += dt * constraint_forcing_rate *
+                                                     (1.0
+                                                      + vpa_grid[icolvpa]*vpa_grid[ivpa]
+                                                      + vpa_grid[icolvpa]^2*vpa_grid[ivpa]^2) *
+                                                     vpa_wgts[icolvpa]/sqrt(π) * f[ivpa,ivperp,iz]
+                end
             end
         end
     end

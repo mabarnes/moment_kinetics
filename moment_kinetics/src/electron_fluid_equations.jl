@@ -366,24 +366,25 @@ function add_electron_energy_equation_to_Jacobian!(jacobian_matrix, f, dens, upa
                                                    dppar_dz, dthird_moment_dz, collisions,
                                                    composition, z, vperp, vpa, z_spectral,
                                                    num_diss_params, dt, ir, include=:all,
-                                                   separate_third_moment=true;
+                                                   separate_moments=true;
                                                    f_offset=0, third_moment_offset=0,
                                                    ppar_offset=0)
-    @boundscheck if f_offset == ppar_offset
-        error("Got f_offset=$f_offset the same as ppar_offset=$ppar_offset. f and ppar "
-              * "cannot be in same place in state vector.")
-    end
-    @boundscheck if separate_third_moment && (f_offset == third_moment_offset)
-        error("Got f_offset=$f_offset the same as third_moment_offset=$third_moment_offset. "
-              * "f and third_moment cannot be in same place in state vector.")
-    end
-    @boundscheck if separate_third_moment && (ppar_offset == third_moment_offset)
-        error("Got ppar_offset=$ppar_offset the same as third_moment_offset=$third_moment_offset. "
-              * "ppar and third_moment cannot be in same place in state vector.")
+    if separate_moments
+        @boundscheck if !allunique((f_offset, third_moment_offset, ppar_offset))
+            error("Some offsets are the same. Two variables cannot be in the same place in "
+                  * "the state vector. Got f_offset=$f_offset, "
+                  * "third_moment_offset=$third_moment_offset, "
+                  * "ppar_offset=$ppar_offset.")
+        end
+    else
+        @boundscheck if f_offset == ppar_offset
+            error("Got f_offset=$f_offset the same as ppar_offset=$ppar_offset. f and ppar "
+                  * "cannot be in same place in state vector.")
+        end
     end
     @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
     @boundscheck size(jacobian_matrix, 1) ≥ f_offset + z.n * vperp.n * vpa.n || error("f_offset=$f_offset is too big")
-    @boundscheck !separate_third_moment || size(jacobian_matrix, 1) ≥ third_moment_offset + z.n || error("ppar_offset=$ppar_offset is too big")
+    @boundscheck !separate_moments || size(jacobian_matrix, 1) ≥ third_moment_offset + z.n || error("ppar_offset=$ppar_offset is too big")
     @boundscheck size(jacobian_matrix, 1) ≥ ppar_offset + z.n || error("ppar_offset=$ppar_offset is too big")
     @boundscheck include ∈ (:all, :explicit_z, :explicit_v) || error("Unexpected value for include=$include")
 
@@ -456,7 +457,7 @@ function add_electron_energy_equation_to_Jacobian!(jacobian_matrix, f, dens, upa
         end
 
         # terms from d(qpar)/dz
-        if separate_third_moment
+        if separate_moments
             if include === :all
                 jacobian_matrix[row,row] +=
                     dt * (3.0 * sqrt(2.0 * ppar[iz] / dens[iz] / me) * dthird_moment_dz[iz]
@@ -629,39 +630,51 @@ function add_electron_energy_equation_to_v_only_Jacobian!(
     return nothing
 end
 
-function add_third_moment_equation_to_Jacobian!(jacobian_matrix,
-                                                   z, vperp, vpa,
-                                                   include=:all;
-                                                   f_offset=0, third_moment_offset=0)
-    if f_offset == third_moment_offset
-        error("Got f_offset=$f_offset the same as third_moment_offset=$third_moment_offset. "
-              * " f and third_moment cannot be in same place in state vector.")
+function add_moment_expressions_to_Jacobian!(jacobian_matrix, z, vperp, vpa, include=:all;
+                                             f_offset=0, zeroth_moment_offset=0,
+                                             first_moment_offset=0,
+                                             second_moment_offset=0,
+                                             third_moment_offset=0)
+    @boundscheck if !allunique((f_offset, zeroth_moment_offset, first_moment_offset,
+                                second_moment_offset, third_moment_offset))
+        error("Some offsets are the same. Two variables cannot be in the same place in "
+              * "the state vector. Got f_offset=$f_offset, "
+              * "zeroth_moment_offset=$zeroth_moment_offset, "
+              * "first_moment_offset=$first_moment_offset, "
+              * "second_moment_offset=$second_moment_offset, "
+              * "third_moment_offset=$third_moment_offset.")
     end
     @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
     @boundscheck size(jacobian_matrix, 1) ≥ f_offset + z.n * vperp.n * vpa.n || error("f_offset=$f_offset is too big")
+    @boundscheck size(jacobian_matrix, 1) ≥ zeroth_moment_offset + z.n || error("third_moment_offset=$third_moment_offset is too big")
+    @boundscheck size(jacobian_matrix, 1) ≥ first_moment_offset + z.n || error("third_moment_offset=$third_moment_offset is too big")
+    @boundscheck size(jacobian_matrix, 1) ≥ second_moment_offset + z.n || error("third_moment_offset=$third_moment_offset is too big")
     @boundscheck size(jacobian_matrix, 1) ≥ third_moment_offset + z.n || error("third_moment_offset=$third_moment_offset is too big")
     @boundscheck include ∈ (:all, :explicit_z, :explicit_v) || error("Unexpected value for include=$include")
 
     v_size = vperp.n * vpa.n
 
     @begin_z_region()
-    @loop_z iz begin
-        # Rows corresponding to third_moment
-        row = third_moment_offset + iz
+    for (n, nth_moment_offset) ∈ ((0, zeroth_moment_offset), (1, first_moment_offset),
+                                  (2, second_moment_offset), (3, third_moment_offset))
+        @loop_z iz begin
+            # Rows corresponding to third_moment
+            row = nth_moment_offset + iz
 
-        # Note that as
-        #   third_moment = ∫dw_∥ w_∥^3 g
-        #   third_moment - ∫dw_∥ w_∥^3 g = 0
-        # so for the Jacobian
-        #   d(third_moment)[irowz])/d(third_moment[icolz]) = I
-        #   d(-∫dw_∥ w_∥^3 g)[irowz])/d(third_moment[icolz]) = 0
-        #   d(-∫dw_∥ w_∥^3 g)[irowz])/d(g[icol])
-        #     = - vpa.wgts[icolz] / sqrt(π) * vpa.grid[icolvpa]^3
+            # Note that as
+            #   nth_moment = ∫dw_∥ w_∥^n g
+            #   nth_moment - ∫dw_∥ w_∥^n g = 0
+            # so for the Jacobian
+            #   d(nth_moment)[irowz])/d(third_moment[icolz]) = I
+            #   d(-∫dw_∥ w_∥^n g)[irowz])/d(third_moment[icolz]) = 0
+            #   d(-∫dw_∥ w_∥^n g)[irowz])/d(g[icol])
+            #     = - vpa.wgts[icolz] / sqrt(π) * vpa.grid[icolvpa]^n
 
-        if include ∈ (:all, :explicit_v)
-            for icolvperp ∈ 1:vperp.n, icolvpa ∈ 1:vpa.n
-                col = (iz - 1) * v_size + (icolvperp - 1) * vpa.n + icolvpa + f_offset
-                jacobian_matrix[row,col] += -vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^3
+            if include ∈ (:all, :explicit_v)
+                for icolvperp ∈ 1:vperp.n, icolvpa ∈ 1:vpa.n
+                    col = (iz - 1) * v_size + (icolvperp - 1) * vpa.n + icolvpa + f_offset
+                    jacobian_matrix[row,col] += -vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^n
+                end
             end
         end
     end

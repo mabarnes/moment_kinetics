@@ -182,17 +182,18 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); defa
                                      reverse(outer_coord_sizes)),
                           )
     elseif preconditioner_type === Val(:electron_lu)
-        pdf_plus_third_moment_plus_ppar_size = total_size_coords + 2 * coords.z.n
+        pdf_plus_moments_size = total_size_coords + 5 * coords.z.n
         preconditioners = fill((lu(sparse(1.0*I, 1, 1)),
-                                allocate_shared_float(pdf_plus_third_moment_plus_ppar_size, pdf_plus_third_moment_plus_ppar_size),
-                                allocate_shared_float(pdf_plus_third_moment_plus_ppar_size),
-                                allocate_shared_float(pdf_plus_third_moment_plus_ppar_size),
+                                allocate_shared_float(pdf_plus_moments_size, pdf_plus_moments_size),
+                                allocate_shared_float(pdf_plus_moments_size),
+                                allocate_shared_float(pdf_plus_moments_size),
                                ),
                                reverse(outer_coord_sizes))
         @serial_region begin
             for p ∈ preconditioners
                 # Zero the input buffer so that RHS entries corresponding to the
-                # 'third_moment' lines are always zero.
+                # 'zeroth_moment', 'first_moments', 'second_moment' and 'third_moment'
+                # lines are always zero.
                 p[3] .= 0.0
             end
         end
