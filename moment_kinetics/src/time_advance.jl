@@ -553,7 +553,8 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
                      mk_float(cap_factor_ion_dt), mk_int(max_pseudotimesteps),
                      mk_float(max_pseudotime), include_wall_bc_in_preconditioner,
                      t_input["write_after_fixed_step_count"], error_sum_zero,
-                     t_input["split_operators"], t_input["steady_state_residual"],
+                     t_input["split_operators"], t_input["print_nT_live"], 
+                     t_input["steady_state_residual"], 
                      mk_float(t_input["converged_residual_value"]),
                      manufactured_solns_input.use_for_advance, t_input["stopfile_name"],
                      debug_io, electron_t_params)
@@ -2114,6 +2115,14 @@ function  time_advance!(pdf, scratch, scratch_implicit, scratch_electron, t_para
                                 "t = ", rpad(string(round(t_params.t[], sigdigits=6)), 7), "  ",
                                 "nstep = ", rpad(string(t_params.step_counter[]), 7), "  ",
                                 Dates.format(now(), dateformat"H:MM:SS"))
+                        if t_params.print_nT_live
+                            midpoint = Int64(round(size(moments.ion.dens)[1]/2))
+                            print("midpoint density: ", 
+                            rpad(string(round(moments.ion.dens[midpoint,1,1], sigdigits = 4)), 7))
+                            print("   midpoint temperature: ", 
+                            rpad(string(round(moments.ion.ppar[midpoint,1,1]*2/(
+                            moments.ion.dens[midpoint,1,1]), sigdigits = 4)), 7), "\n")
+                        end
                         flush(stdout)
                     end
                 end

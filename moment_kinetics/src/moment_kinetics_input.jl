@@ -150,6 +150,7 @@ function mk_input(input_dict=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
         exact_output_times=false,
         type="SSPRK4",
         split_operators=false,
+        print_nT_live=false,
         steady_state_residual=false,
         converged_residual_value=-1.0,
         rtol=1.0e-5,
@@ -235,6 +236,7 @@ function mk_input(input_dict=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
     electron_timestepping_section = copy(electron_timestepping_section)
     electron_timestepping_section["atol_upar"] = NaN
     electron_timestepping_section["steady_state_residual"] = true
+    electron_timestepping_section["print_nT_live"] = false
     if !(0.0 < electron_timestepping_section["step_update_prefactor"] < 1.0)
         error("[electron_timestepping] step_update_prefactor="
               * "$(electron_timestepping_section["step_update_prefactor"]) must be between "
