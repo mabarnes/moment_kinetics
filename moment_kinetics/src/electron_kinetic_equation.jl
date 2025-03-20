@@ -4984,7 +4984,7 @@ Jacobian matrix as a whole more sparse, which should help efficiency of solves.
         third_moment_offset=third_moment_offset, ppar_offset=ppar_offset)
     add_electron_dissipation_term_to_Jacobian!(
         jacobian_matrix, f, num_diss_params, z, vperp, vpa, vpa_spectral, z_speed, dt, ir,
-        include)
+        include, separate_moments)
     add_electron_krook_collisions_to_Jacobian!(
         jacobian_matrix, f, dens, upar, ppar, vth, upar_ion, collisions, z, vperp, vpa,
         z_speed, dt, ir, include; ppar_offset=ppar_offset)
@@ -5591,7 +5591,8 @@ end
 
 function add_electron_dissipation_term_to_Jacobian!(jacobian_matrix, f, num_diss_params,
                                                     z, vperp, vpa, vpa_spectral, z_speed,
-                                                    dt, ir, include=:all; f_offset=0)
+                                                    dt, ir, include=:all,
+                                                    separate_moments=true; f_offset=0)
     @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
     @boundscheck size(jacobian_matrix, 1) ≥ f_offset + z.n * vperp.n * vpa.n || error("f_offset=$f_offset is too big")
     @boundscheck include ∈ (:all, :explicit_z, :explicit_v) || error("Unexpected value for include=$include")
@@ -5603,7 +5604,18 @@ function add_electron_dissipation_term_to_Jacobian!(jacobian_matrix, f, num_diss
     end
 
     v_size = vperp.n * vpa.n
-    vpa_dense_second_deriv_matrix = vpa_spectral.dense_second_deriv_matrix
+    if separate_moments
+        # Use `incomplete_second_deriv_matrix` to make this contribution to the
+        # preconditioner matrix sparse. This is inexact but hopefully OK for a
+        # preconditioner because the element-off-diagonal components that are dropped
+        # should be small, and this numerical dissipation term is always used with a small
+        # coefficient. In other situations (e.g. a diffusive collision operator, which
+        # might be the dominant term in the electron kinetic equation), a more careful
+        # approach than zero-ing out inconvenient elements might be needed.
+        vpa_dense_second_deriv_matrix = vpa_spectral.incomplete_second_deriv_matrix
+    else
+        vpa_dense_second_deriv_matrix = vpa_spectral.dense_second_deriv_matrix
+    end
 
     @begin_z_vperp_vpa_region()
     @loop_z_vperp_vpa iz ivperp ivpa begin

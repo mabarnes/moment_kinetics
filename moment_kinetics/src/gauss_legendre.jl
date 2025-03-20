@@ -110,6 +110,10 @@ struct gausslegendre_info{TSparse, TSparseCSR, TLU, TLmat, TLmatLU} <: weak_disc
     # global (1D) weak second derivative matrix, with inverse mass matrix included (so
     # matrix is dense)
     dense_second_deriv_matrix::Array{mk_float,2}
+    # copy of dense_second_deriv_matrix with the entries that couple different elements
+    # together (apart from the ones corresponding to the boundary points shared by 2
+    # elements) zero-ed out to make the matrix more sparse.
+    incomplete_second_deriv_matrix::Array{mk_float,2}
     # global (1D) weak Laplacian derivative matrix with boundary conditions - might be
     # `nothing` if boundary conditions are not supported
     L_matrix_with_bc::TLmat
@@ -147,6 +151,42 @@ function setup_gausslegendre_pseudospectral(coord; collision_operator_dim=true)
     setup_global_weak_form_matrix!(L_matrix, lobatto, radau, coord, "L_with_BC_terms")
     setup_global_strong_form_matrix!(D_matrix, lobatto, radau, coord, "D"; periodic_bc=periodic_bc)
     dense_second_deriv_matrix = inv(mass_matrix) * K_matrix
+
+    # In incomplete_second_deriv_matrix, drop the 'off-diagonal element' terms to make the
+    # matrix more sparse. This matrix should only be used for a preconditioner or
+    # preconditioners where the inexactness can be toleranted.
+    incomplete_second_deriv_matrix = copy(dense_second_deriv_matrix)
+    for ielement ∈ 1:coord.nelement_local
+        if ielement == 1
+            imin_element = coord.imin[ielement]
+        else
+            imin_element = coord.imin[ielement] - 1
+        end
+        imax_element = coord.imax[ielement]
+
+        # element lower boundary on first element (other 'lower boundaries' are the upper
+        # boundary of the previous element, so handled below).
+        if ielement == 1
+            irow = imin_element
+            # There are no points below imin_element to zero, as this is the first
+            # element.
+            incomplete_second_deriv_matrix[irow,imax_element+1:end] .= 0.0
+        end
+        # Non-element-boundary points
+        for igrid ∈ 2:coord.ngrid-1
+            irow = imin_element - 1 + igrid
+            incomplete_second_deriv_matrix[irow,1:imin_element-1] .= 0.0
+            incomplete_second_deriv_matrix[irow,imax_element+1:end] .= 0.0
+        end
+        # element upper boundary
+        irow = imax_element
+        incomplete_second_deriv_matrix[irow,1:imin_element-1] .= 0.0
+        if ielement < coord.nelement_local
+            imax_next_element = coord.imax[ielement+1]
+            incomplete_second_deriv_matrix[irow,imax_next_element+1:end] .= 0.0
+        end
+    end
+
     mass_matrix_lu = lu(sparse(mass_matrix))
     if dirichlet_bc || periodic_bc
         L_matrix_with_bc = allocate_float(coord.n,coord.n)
@@ -160,8 +200,11 @@ function setup_gausslegendre_pseudospectral(coord; collision_operator_dim=true)
 
     Qmat = allocate_float(coord.ngrid,coord.ngrid)
 
-    return gausslegendre_info(lobatto,radau,mass_matrix,sparse(S_matrix),sparse(K_matrix),sparse(L_matrix),sparse(D_matrix),convert(SparseMatrixCSR{1,mk_float,mk_int},D_matrix),dense_second_deriv_matrix,L_matrix_with_bc,
-                              mass_matrix_lu,L_matrix_lu,Qmat)
+    return gausslegendre_info(lobatto, radau, mass_matrix, sparse(S_matrix),
+                              sparse(K_matrix), sparse(L_matrix), sparse(D_matrix),
+                              convert(SparseMatrixCSR{1,mk_float,mk_int},D_matrix),
+                              dense_second_deriv_matrix, incomplete_second_deriv_matrix,
+                              L_matrix_with_bc, mass_matrix_lu, L_matrix_lu, Qmat)
 end
 
 """

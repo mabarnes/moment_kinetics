@@ -1397,12 +1397,12 @@ function test_contribution_from_electron_pdf_term(test_input; rtol=(4.0e2*epsilo
     return nothing
 end
 
-function test_electron_dissipation_term(test_input; rtol=(3.0e0*epsilon)^2)
+function test_electron_dissipation_term(test_input; rtol=(3.0e0*epsilon)^2, separate_moments)
     test_input = deepcopy(test_input)
-    test_input["output"]["run_name"] *= "_electron_dissipation_term"
-    println("    - electron_dissipation_term")
+    test_input["output"]["run_name"] *= "_electron_dissipation_term_$separate_moments"
+    println("    - electron_dissipation_term, separate_moments=$separate_moments")
 
-    @testset "electron_dissipation_term" begin
+    @testset "electron_dissipation_term, separate_moments=$separate_moments" begin
         # Suppress console output while running
         pdf, scratch, scratch_implicit, scratch_electron, t_params, vz, vr, vzeta, vpa,
             vperp, gyrophase, z, r, moments, fields, spectral_objects, advection_structs,
@@ -1466,68 +1466,70 @@ function test_electron_dissipation_term(test_input; rtol=(3.0e0*epsilon)^2)
 
         add_electron_dissipation_term_to_Jacobian!(
             jacobian_matrix, f, num_diss_params, z, vperp, vpa, vpa_spectral, z_speed, dt,
-            ir)
+            ir, :all, separate_moments)
 
-        # Test 'ADI Jacobians' before other tests, because residual_func() may modify some
-        # variables (vth, etc.).
+        if !separate_moments
+            # Test 'ADI Jacobians' before other tests, because residual_func() may modify some
+            # variables (vth, etc.).
 
-        jacobian_matrix_ADI_check = allocate_shared_float(total_size, total_size)
+            jacobian_matrix_ADI_check = allocate_shared_float(total_size, total_size)
 
-        @testset "ADI Jacobians - implicit z" begin
-            # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
-            @begin_serial_region()
-            @serial_region begin
-                jacobian_matrix_ADI_check .= 0.0
-                for row ∈ 1:total_size
-                    # Initialise identity matrix
-                    jacobian_matrix_ADI_check[row,row] = 1.0
+            @testset "ADI Jacobians - implicit z" begin
+                # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
+                @begin_serial_region()
+                @serial_region begin
+                    jacobian_matrix_ADI_check .= 0.0
+                    for row ∈ 1:total_size
+                        # Initialise identity matrix
+                        jacobian_matrix_ADI_check[row,row] = 1.0
+                    end
+                end
+
+                # There is no 'implicit z' contribution for electron dissipation
+
+                # Add 'explicit' contribution
+                add_electron_dissipation_term_to_Jacobian!(
+                    jacobian_matrix_ADI_check, f, num_diss_params, z, vperp, vpa,
+                    vpa_spectral, z_speed, dt, ir, :explicit_v, false)
+
+                @begin_serial_region()
+                @serial_region begin
+                    @test elementwise_isapprox(jacobian_matrix_ADI_check, jacobian_matrix; rtol=0.0, atol=1.0e-15)
                 end
             end
 
-            # There is no 'implicit z' contribution for electron dissipation
-
-            # Add 'explicit' contribution
-            add_electron_dissipation_term_to_Jacobian!(
-                jacobian_matrix_ADI_check, f, num_diss_params, z, vperp, vpa,
-                vpa_spectral, z_speed, dt, ir, :explicit_v)
-
-            @begin_serial_region()
-            @serial_region begin
-                @test elementwise_isapprox(jacobian_matrix_ADI_check, jacobian_matrix; rtol=0.0, atol=1.0e-15)
-            end
-        end
-
-        @testset "ADI Jacobians - implicit v" begin
-            # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
-            @begin_serial_region()
-            @serial_region begin
-                jacobian_matrix_ADI_check .= 0.0
-                for row ∈ 1:total_size
-                    # Initialise identity matrix
-                    jacobian_matrix_ADI_check[row,row] = 1.0
+            @testset "ADI Jacobians - implicit v" begin
+                # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
+                @begin_serial_region()
+                @serial_region begin
+                    jacobian_matrix_ADI_check .= 0.0
+                    for row ∈ 1:total_size
+                        # Initialise identity matrix
+                        jacobian_matrix_ADI_check[row,row] = 1.0
+                    end
                 end
-            end
 
-            v_size = vperp.n * vpa.n
+                v_size = vperp.n * vpa.n
 
-            # Add 'implicit' contribution
-            @begin_z_region()
-            @loop_z iz begin
-                this_slice = collect((iz - 1)*v_size + 1:iz*v_size)
-                push!(this_slice, iz + pdf_size)
-                @views add_electron_dissipation_term_to_v_only_Jacobian!(
-                    jacobian_matrix_ADI_check[this_slice,this_slice], f[:,:,iz],
-                    num_diss_params, z, vperp, vpa, vpa_spectral, z_speed, dt, ir, iz)
-            end
+                # Add 'implicit' contribution
+                @begin_z_region()
+                @loop_z iz begin
+                    this_slice = collect((iz - 1)*v_size + 1:iz*v_size)
+                    push!(this_slice, iz + pdf_size)
+                    @views add_electron_dissipation_term_to_v_only_Jacobian!(
+                        jacobian_matrix_ADI_check[this_slice,this_slice], f[:,:,iz],
+                        num_diss_params, z, vperp, vpa, vpa_spectral, z_speed, dt, ir, iz)
+                end
 
-            # Add 'explicit' contribution
-            add_electron_dissipation_term_to_Jacobian!(
-                jacobian_matrix_ADI_check, f, num_diss_params, z, vperp, vpa,
-                vpa_spectral, z_speed, dt, ir, :explicit_z)
+                # Add 'explicit' contribution
+                add_electron_dissipation_term_to_Jacobian!(
+                    jacobian_matrix_ADI_check, f, num_diss_params, z, vperp, vpa,
+                    vpa_spectral, z_speed, dt, ir, :explicit_z, false)
 
-            @begin_serial_region()
-            @serial_region begin
-                @test elementwise_isapprox(jacobian_matrix_ADI_check, jacobian_matrix; rtol=0.0, atol=1.0e-15)
+                @begin_serial_region()
+                @serial_region begin
+                    @test elementwise_isapprox(jacobian_matrix_ADI_check, jacobian_matrix; rtol=0.0, atol=1.0e-15)
+                end
             end
         end
 
@@ -1622,6 +1624,15 @@ function test_electron_dissipation_term(test_input; rtol=(3.0e0*epsilon)^2)
         original_residual = allocate_shared_float(size(f)...)
         perturbed_residual = allocate_shared_float(size(f)...)
 
+        if separate_moments
+            # The Jacobian matrix for the dissipation term in this case is incomplete -
+            # most off-diagonal terms are dropped to make the matrix more sparse - so a
+            # high enough tolerance to ignore these dropped terms is needed.
+            test_tol = 2.5e-4
+        else
+            test_tol = rtol
+        end
+
         @testset "δf only" begin
             residual_func!(original_residual, f, ppar)
             residual_func!(perturbed_residual, f.+delta_f, ppar)
@@ -1640,7 +1651,7 @@ function test_electron_dissipation_term(test_input; rtol=(3.0e0*epsilon)^2)
                 norm_factor = generate_norm_factor(perturbed_residual)
                 @test elementwise_isapprox(perturbed_residual ./ norm_factor,
                                            reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n) ./ norm_factor;
-                                           rtol=0.0, atol=rtol)
+                                           rtol=0.0, atol=test_tol)
             end
         end
 
@@ -1662,7 +1673,7 @@ function test_electron_dissipation_term(test_input; rtol=(3.0e0*epsilon)^2)
                 norm_factor = generate_norm_factor(perturbed_residual)
                 @test elementwise_isapprox(perturbed_residual ./ norm_factor,
                                            reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n) ./ norm_factor;
-                                           rtol=0.0, atol=rtol)
+                                           rtol=0.0, atol=test_tol)
             end
         end
 
@@ -1685,7 +1696,7 @@ function test_electron_dissipation_term(test_input; rtol=(3.0e0*epsilon)^2)
                 norm_factor = generate_norm_factor(perturbed_residual)
                 @test elementwise_isapprox(perturbed_residual ./ norm_factor,
                                            reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n) ./ norm_factor;
-                                           rtol=0.0, atol=rtol)
+                                           rtol=0.0, atol=test_tol)
             end
         end
 
@@ -3735,6 +3746,20 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2, sepa
             p_plus_delta_p[iz] = ppar[iz] + delta_p[iz]
         end
 
+        if separate_moments
+            # The Jacobian matrix for the dissipation term in this case is incomplete -
+            # most off-diagonal terms are dropped to make its preconditioner contribution
+            # more sparse - so a high enough tolerance to ignore these dropped terms is
+            # needed.
+            if bc == "wall"
+                pdf_tol = 2.0e-5
+            else
+                pdf_tol = 1.0e-4
+            end
+        else
+            pdf_tol = rtol
+        end
+
         @testset "δf only" begin
             residual_func!(original_residual_f, original_residual_p, f, ppar)
             residual_func!(perturbed_residual_f, perturbed_residual_p, f_plus_delta_f, ppar)
@@ -3774,7 +3799,7 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2, sepa
                 norm_factor_f = generate_norm_factor(perturbed_residual_f)
                 @test elementwise_isapprox(perturbed_residual_f ./ norm_factor_f,
                                            reshape(perturbed_with_Jacobian_f, vpa.n, vperp.n, z.n) ./ norm_factor_f;
-                                           rtol=0.0, atol=rtol)
+                                           rtol=0.0, atol=pdf_tol)
                 norm_factor_p = generate_norm_factor(perturbed_residual_p)
                 @test elementwise_isapprox(perturbed_residual_p ./ norm_factor_p,
                                            perturbed_with_Jacobian_p ./ norm_factor_p;
@@ -3870,7 +3895,7 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2, sepa
                 norm_factor_f = generate_norm_factor(perturbed_residual_f)
                 @test elementwise_isapprox(perturbed_residual_f ./ norm_factor_f,
                                            reshape(perturbed_with_Jacobian_f, vpa.n, vperp.n, z.n) ./ norm_factor_f;
-                                           rtol=0.0, atol=rtol)
+                                           rtol=0.0, atol=pdf_tol)
                 norm_factor_p = generate_norm_factor(perturbed_residual_p)
                 @test elementwise_isapprox(perturbed_residual_p ./ norm_factor_p,
                                            perturbed_with_Jacobian_p ./ norm_factor_p;
@@ -4304,7 +4329,8 @@ function runtests()
         test_electron_vpa_advection(test_input; separate_moments=true)
         test_contribution_from_electron_pdf_term(test_input; separate_moments=false)
         test_contribution_from_electron_pdf_term(test_input; separate_moments=true)
-        test_electron_dissipation_term(test_input)
+        test_electron_dissipation_term(test_input; separate_moments=false)
+        test_electron_dissipation_term(test_input; separate_moments=true)
         test_electron_krook_collisions(test_input)
         test_external_electron_source(test_input)
         test_electron_implicit_constraint_forcing(test_input; separate_moments=false)
