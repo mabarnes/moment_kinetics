@@ -1223,8 +1223,21 @@ global_rank[] == 0 && println("recalculating precon")
             nl_solver_params.solves_since_precon_update[] = 0
             nl_solver_params.precon_dt[] = t_params.dt[]
 
-            orig_lu, precon_matrix, input_buffer, output_buffer =
+            orig_lu, precon_matrix, sparse_precon_matrix, input_buffer, output_buffer =
                 nl_solver_params.preconditioners[ir]
+
+            if size(sparse_precon_matrix) == (1, 1) && sparse_precon_matrix[1,1] == 1.0
+                # Set up sparse_precon_matrix with the maximal pattern of non-zeros that
+                # fill_electron_kinetic_equation_Jacobian!() might ever produce.
+                set_electron_kinetic_equation_Jacobian_nonzeros!(precon_matrix, z, vperp,
+                                                                 vpa, t_params,
+                                                                 evolve_ppar)
+                if block_rank[] == 0
+                    sparse_precon_matrix = sparse(precon_matrix)
+                else
+                    sparse_precon_matrix[1,1] = -1.0
+                end
+            end
 
             fill_electron_kinetic_equation_Jacobian!(
                 precon_matrix, f_electron_new, electron_ppar_new, moments, phi,
@@ -1234,33 +1247,30 @@ global_rank[] == 0 && println("recalculating precon")
                 ir, evolve_ppar)
 
             @begin_serial_region()
+            @serial_region begin
+                refill_sparse_matrix!(sparse_precon_matrix, precon_matrix)
+            end
+
             if block_rank[] == 0
                 if size(orig_lu) == (1, 1)
                     # Have not properly created the LU decomposition before, so
                     # cannot reuse it.
                     @timeit_debug global_timer "lu" nl_solver_params.preconditioners[ir] =
-                        (lu(sparse(precon_matrix)), precon_matrix, input_buffer,
-                         output_buffer)
+                        (lu(sparse_precon_matrix), precon_matrix, sparse_precon_matrix,
+                         input_buffer, output_buffer)
                 else
                     # LU decomposition was previously created. The Jacobian always
                     # has the same sparsity pattern, so by using `lu!()` we can
                     # reuse some setup.
-                    try
-                        @timeit_debug global_timer "lu!" lu!(orig_lu, sparse(precon_matrix); check=false)
-                    catch e
-                        if !isa(e, ArgumentError)
-                            rethrow(e)
-                        end
-                        println("Sparsity pattern of matrix changed, rebuilding "
-                                * " LU from scratch")
-                        @timeit_debug global_timer "lu" orig_lu = lu(sparse(precon_matrix))
-                    end
+                    @timeit_debug global_timer "lu!" lu!(orig_lu, sparse_precon_matrix; check=false)
                     nl_solver_params.preconditioners[ir] =
-                        (orig_lu, precon_matrix, input_buffer, output_buffer)
+                        (orig_lu, precon_matrix, sparse_precon_matrix, input_buffer,
+                         output_buffer)
                 end
             else
                 nl_solver_params.preconditioners[ir] =
-                    (orig_lu, precon_matrix, input_buffer, output_buffer)
+                    (orig_lu, precon_matrix, sparse_precon_matrix, input_buffer,
+                     output_buffer)
             end
         end
 
@@ -1268,7 +1278,7 @@ global_rank[] == 0 && println("recalculating precon")
         @timeit_debug global_timer lu_precon!(x) = begin
             precon_ppar, precon_f = x
 
-            precon_lu, _, this_input_buffer, this_output_buffer =
+            precon_lu, _, _, this_input_buffer, this_output_buffer =
                 nl_solver_params.preconditioners[ir]
 
             @begin_serial_region()
@@ -5025,6 +5035,260 @@ Jacobian matrix as a whole more sparse, which should help efficiency of solves.
     end
 
     return nothing
+end
+
+"""
+    set_electron_kinetic_equation_Jacobian_nonzeros!(jacobian_matrix, z, vperp, vpa,
+                                                     t_params, evolve_ppar,
+                                                     separate_moments=true)
+
+Set to 1 potentially non-zero elements of the Jacobian matrix. Allows us to build a sparse
+matrix with a fixed non-zero pattern, to allow more efficient updating of the sparse
+matrix and matrix factorizations.
+"""
+function set_electron_kinetic_equation_Jacobian_nonzeros!(jacobian_matrix, z, vperp, vpa,
+                                                          t_params, evolve_ppar,
+                                                          separate_moments=true)
+    v_size = vperp.n * vpa.n
+    pdf_size = z.n * v_size
+    nz = z.n
+    f_offset = 0
+    if separate_moments
+        zeroth_moment_offset = pdf_size
+        first_moment_offset = zeroth_moment_offset + nz
+        second_moment_offset = first_moment_offset + nz
+        third_moment_offset = second_moment_offset + nz
+        ppar_offset = third_moment_offset + nz
+    else
+        zeroth_moment_offset = nothing
+        first_moment_offset = nothing
+        second_moment_offset = nothing
+        third_moment_offset = nothing
+        ppar_offset = pdf_size
+    end
+
+    # Rows corresponding to shape function
+    @begin_z_vperp_vpa_region()
+    @loop_z_vperp_vpa iz ivperp ivpa begin
+        # Depending on the sizes of electron_upar and vthe, any grid point could be part
+        # of the 'outgoing' grid points that are not set by the boundary condition so do
+        # not use
+        # skip_f_electron_bc_points_in_Jacobian(iz, ivperp, ivpa, z, vperp, vpa, z_speed)
+        # here.
+        # This is an extreme choice, we could probaably apply some heuristic to cut off at
+        # least some grid points, like assuming |electron_upar|<vthe.
+
+        # Rows corresponding to pdf_electron
+        row = (iz - 1) * v_size + (ivperp - 1) * vpa.n + ivpa + f_offset
+
+        jacobian_matrix[row,:] .= 0.0
+        jacobian_matrix[row,row] = 1.0
+
+        ielement_z = z.ielement[iz]
+        igrid_z = z.igrid[iz]
+        if igrid_z == 1
+            # Lower boundary of first element
+            iz_min = 1
+            iz_max = z.imax[ielement_z]
+        elseif igrid_z == z.ngrid
+            # Upper boundary of element
+            iz_min = z.imin[ielement_z] - (ielement_z != 1)
+            # Include points from neighbouring element, as these affect derivatives (or at
+            # least may do, depending on upwinding).
+            iz_max = z.imax[min(ielement_z+1, z.nelement_local)]
+        else
+            # Points within element
+            iz_min = z.imin[ielement_z] - (ielement_z != 1)
+            iz_max = z.imax[ielement_z]
+        end
+
+        ielement_vperp = vperp.ielement[ivperp]
+        igrid_vperp = vperp.igrid[ivperp]
+        if igrid_vperp == 1
+            # Lower boundary of first element
+            ivperp_min = 1
+            ivperp_max = vperp.imax[ielement_vperp]
+        elseif igrid_vperp == vperp.ngrid
+            # Upper boundary of element
+            ivperp_min = vperp.imin[ielement_vperp] - (ielement_vperp != 1)
+            # Include points from neighbouring element, as these affect derivatives (or at
+            # least may do, depending on upwinding).
+            ivperp_max = vperp.imax[min(ielement_vperp+1, vperp.nelement_local)]
+        else
+            # Points within element
+            ivperp_min = vperp.imin[ielement_vperp] - (ielement_vperp != 1)
+            ivperp_max = vperp.imax[ielement_vperp]
+        end
+
+        ielement_vpa = vpa.ielement[ivpa]
+        igrid_vpa = vpa.igrid[ivpa]
+        if igrid_vpa == 1
+            # Lower boundary of first element
+            ivpa_min = 1
+            ivpa_max = vpa.imax[ielement_vpa]
+        elseif igrid_vpa == vpa.ngrid
+            # Upper boundary of element
+            ivpa_min = vpa.imin[ielement_vpa] - (ielement_vpa != 1)
+            # Include points from neighbouring element, as these affect derivatives (or at
+            # least may do, depending on upwinding).
+            ivpa_max = vpa.imax[min(ielement_vpa+1, vpa.nelement_local)]
+        else
+            # Points within element
+            ivpa_min = vpa.imin[ielement_vpa] - (ielement_vpa != 1)
+            ivpa_max = vpa.imax[ielement_vpa]
+        end
+
+        if t_params.include_wall_bc_in_preconditioner
+            if z.irank == 0 && iz == 1
+                # All "incoming" grid points (the ones set by the boundary condition) can
+                # be influenced by all "outgoing" _and_ "incoming" grid points (due to the
+                # integral constraints imposed). Can assume that electron_upar < 0 on the
+                # lower boundary, so at most half of the grid points are the "incoming"
+                # grid points.
+                ivpa_min_incoming = (vpa.n + 1) ÷ 2 + 1
+                if ivpa ≥ ivpa_min_incoming
+                    # Want to couple to whole of velocity space at iz=1
+                    jacobian_matrix[row,1:v_size] .= 1.0
+
+                    if evolve_ppar
+                        # The "incoming" grid points are also inflenced by the electron
+                        # pressure at iz=1.
+                        jacobian_matrix[row,ppar_offset+1] = 1.0
+                    end
+                end
+            end
+
+            if z.irank == z.nrank-1 && iz == nz
+                # All "incoming" grid points (the ones set by the boundary condition) can
+                # be influenced by all "outgoing" _and_ "incoming" grid points (due to the
+                # integral constraints imposed). Can assume that electron_upar > 0 on the
+                # upper boundary, so at most half of the grid points are the "incoming"
+                # grid points.
+                ivpa_max_incoming = vpa.n ÷ 2
+                if ivpa ≤ ivpa_max_incoming
+                    last_z_offset = (nz - 1) * v_size
+                    jacobian_matrix[row,last_z_offset+1:last_z_offset+v_size] .= 1.0
+
+                    if evolve_ppar
+                        # The "incoming" grid points are also inflenced by the electron
+                        # pressure at iz=1.
+                        jacobian_matrix[row,ppar_offset+nz] = 1.0
+                    end
+                end
+            end
+        end
+
+        if separate_moments
+            # Points for z-derivative
+            for icolz ∈ iz_min:iz_max
+                col = (icolz - 1) * v_size + (ivperp - 1) * vpa.n + ivpa + f_offset
+                jacobian_matrix[row,col] = 1.0
+            end
+            # Points for vperp-derivative
+            for icolvperp ∈ ivperp_min:ivperp_max
+                col = (iz - 1) * v_size + (icolvperp - 1) * vpa.n + ivpa + f_offset
+                jacobian_matrix[row,col] = 1.0
+            end
+            # Points for vpa-derivative
+            for icolvpa ∈ ivpa_min:ivpa_max
+                col = (iz - 1) * v_size + (ivperp - 1) * vpa.n + icolvpa + f_offset
+                jacobian_matrix[row,col] = 1.0
+            end
+
+            # Couples to zero'th, first, second, and third moments at this z only
+            jacobian_matrix[row,iz+zeroth_moment_offset] = 1.0
+            jacobian_matrix[row,iz+first_moment_offset] = 1.0
+            jacobian_matrix[row,iz+second_moment_offset] = 1.0
+            jacobian_matrix[row,iz+third_moment_offset] = 1.0
+
+            # Also couples to z-derivative of third_moment
+            for icolz ∈ iz_min:iz_max
+                col = icolz + third_moment_offset
+                jacobian_matrix[row,col] = 1.0
+            end
+        else
+            # dqpar/dz * dg/wpa term couples every point in v and every z within the same
+            # element. All other terms in the kinetic equation will fit within this.
+            for icolz ∈ iz_min:iz_max, icolvperp ∈ 1:vperp.n, icolvpa ∈ 1:vpa.n
+                col = (icolz - 1) * v_size + (icolvperp - 1) * vpa.n + icolvpa + f_offset
+                jacobian_matrix[row,col] = 1.0
+            end
+        end
+
+        if evolve_ppar
+            # Couples to z-derivative of electron_ppar
+            for icolz ∈ iz_min:iz_max
+                col = icolz + ppar_offset
+                jacobian_matrix[row,col] = 1.0
+            end
+        end
+    end
+
+    if separate_moments
+        # Rows corresponding to moments of shape function
+        for nth_moment_offset ∈ (zeroth_moment_offset, first_moment_offset,
+                                 second_moment_offset, third_moment_offset)
+            # Couples to all points in g_e at the same z
+            @begin_z_region()
+            @loop_z iz begin
+                row = iz + nth_moment_offset
+                jacobian_matrix[row,:] .= 0.0
+                jacobian_matrix[row,row] = 1.0
+                for icolvperp ∈ 1:vperp.n, icolvpa ∈ 1:vpa.n
+                    col = (iz - 1) * v_size + (icolvperp - 1) * vpa.n + icolvpa + f_offset
+                    jacobian_matrix[row,col] = 1.0
+                end
+            end
+        end
+    end
+
+    if evolve_ppar
+        # Rows corresponding to electron_ppar
+        @begin_z_region()
+        @loop_z iz begin
+            row = iz + ppar_offset
+            jacobian_matrix[row,:] .= 0.0
+            jacobian_matrix[row,row] = 1.0
+
+            ielement_z = z.ielement[iz]
+            igrid_z = z.igrid[iz]
+            if igrid_z == 1
+                # Lower boundary of first element
+                iz_min = 1
+                iz_max = z.imax[ielement_z]
+            elseif igrid_z == z.ngrid
+                # Upper boundary of element
+                iz_min = z.imin[ielement_z] - (ielement_z != 1)
+                # Include points from neighbouring element, as these affect derivatives
+                # (or at least may do, depending on upwinding).
+                iz_max = z.imax[min(ielement_z+1, z.nelement_local)]
+            else
+                # Points within element
+                iz_min = z.imin[ielement_z] - (ielement_z != 1)
+                iz_max = z.imax[ielement_z]
+            end
+
+            # Couples to own z-derivative
+            for icolz ∈ iz_min:iz_max
+                col = icolz + ppar_offset
+                jacobian_matrix[row,col] = 1.0
+            end
+
+            if separate_moments
+                # Couples to z-derivative of third_moment because of dqpar/dz term.
+                for icolz ∈ iz_min:iz_max
+                    col = icolz + third_moment_offset
+                    jacobian_matrix[row,col] = 1.0
+                end
+            else
+                # Couples to z-derivative of g_e at every vpa because of dqpar/dz term.
+                for icolz ∈ iz_min:iz_max, icolvperp ∈ 1:vperp.n, icolvpa ∈ 1:vpa.n
+                    col = (icolz - 1) * v_size + (icolvperp - 1) * vpa.n + icolvpa + f_offset
+                    jacobian_matrix[row,col] = 1.0
+                end
+            end
+        end
+    end
 end
 
 """

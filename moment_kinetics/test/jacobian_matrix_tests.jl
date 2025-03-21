@@ -32,6 +32,7 @@ using moment_kinetics.electron_kinetic_equation: add_contribution_from_pdf_term!
                                                  electron_kinetic_equation_euler_update!,
                                                  enforce_boundary_condition_on_electron_pdf!,
                                                  fill_electron_kinetic_equation_Jacobian!,
+                                                 set_electron_kinetic_equation_Jacobian_nonzeros!,
                                                  fill_electron_kinetic_equation_v_only_Jacobian!,
                                                  fill_electron_kinetic_equation_z_only_Jacobian_f!,
                                                  fill_electron_kinetic_equation_z_only_Jacobian_ppar!,
@@ -60,6 +61,7 @@ using moment_kinetics.moment_constraints: electron_implicit_constraint_forcing!,
                                           add_electron_implicit_constraint_forcing_to_z_only_Jacobian!,
                                           add_electron_implicit_constraint_forcing_to_v_only_Jacobian!,
                                           hard_force_moment_constraints!
+using moment_kinetics.nonlinear_solvers: refill_sparse_matrix!
 using moment_kinetics.timer_utils: reset_mk_timers!
 using moment_kinetics.type_definitions: mk_float
 using moment_kinetics.velocity_moments: calculate_electron_moment_derivatives_no_r!,
@@ -3902,6 +3904,27 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2, sepa
                                            rtol=0.0, atol=rtol)
             end
         end
+
+        @testset "set_electron_kinetic_equation_Jacobian_nonzeros!" begin
+            jacobian_matrix_sparsity_pattern = allocate_shared_float(size(jacobian_matrix)...)
+            set_electron_kinetic_equation_Jacobian_nonzeros!(jacobian_matrix_sparsity_pattern,
+                                                             z, vperp, vpa, t_params,
+                                                             true, separate_moments)
+            sparse_jacobian = nothing
+            @begin_serial_region()
+            @serial_region begin
+                sparse_jacobian = sparse(jacobian_matrix_sparsity_pattern)
+
+                # Fill sparse_jacobian from jacobian_matrix, checking there are no
+                # incorrect zeros.
+                refill_sparse_matrix!(sparse_jacobian, jacobian_matrix, true)
+
+                jacobian_from_sparse = Matrix(sparse_jacobian)
+
+                @test all(jacobian_from_sparse .== jacobian_matrix)
+            end
+        end
+
 
         cleanup_mk_state!(ascii_io, io_moments, io_dfns)
     end

@@ -27,11 +27,12 @@ Useful references:
 module nonlinear_solvers
 
 export setup_nonlinear_solve, gather_nonlinear_solver_counters!,
-       reset_nonlinear_per_stage_counters!, newton_solve!
+       reset_nonlinear_per_stage_counters!, newton_solve!, refill_sparse_matrix!
 
 using ..array_allocation: allocate_float, allocate_shared_float
 using ..communication
 using ..coordinates: coordinate
+using ..debugging
 using ..input_structs
 using ..looping
 using ..timer_utils
@@ -185,6 +186,7 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); defa
         pdf_plus_moments_size = total_size_coords + 5 * coords.z.n
         preconditioners = fill((lu(sparse(1.0*I, 1, 1)),
                                 allocate_shared_float(pdf_plus_moments_size, pdf_plus_moments_size),
+                                sparse(1.0*I, 1, 1),
                                 allocate_shared_float(pdf_plus_moments_size),
                                 allocate_shared_float(pdf_plus_moments_size),
                                ),
@@ -194,7 +196,7 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); defa
                 # Zero the input buffer so that RHS entries corresponding to the
                 # 'zeroth_moment', 'first_moments', 'second_moment' and 'third_moment'
                 # lines are always zero.
-                p[3] .= 0.0
+                p[4] .= 0.0
             end
         end
     elseif preconditioner_type === Val(:electron_adi)
@@ -1424,6 +1426,50 @@ MGS-GMRES' in Zou (2023) [https://doi.org/10.1016/j.amc.2023.127869].
     end
 
     return counter
+end
+
+"""
+    refill_sparse_matrix!(sparse_matrix, matrix, check_zeros::Bool=false)
+
+Assuming that all the non-zeros of `matrix` are in the structural non-zeros of
+`sparse_matrix`, update the entries of `sparse_matrix` from `matrix`.
+
+If `check_zeros` is set to `true`, then checks that all entries of `matrix` that are
+not copied into `sparse_matrix` are actually zero.
+"""
+function refill_sparse_matrix!(sparse_matrix::SparseMatrixCSC, matrix,
+                               check_zeros::Bool=false)
+    @debug_sparse_matrix_zeros begin
+        # When @debug_sparse_matrix_zeros is active, always check zeros are actually zero.
+        check_zeros = true
+    end
+
+    @boundscheck size(sparse_matrix) == size(matrix)
+
+    ncol = size(sparse_matrix, 2)
+    this_colptr = sparse_matrix.colptr
+    this_rowvals = rowvals(sparse_matrix)
+    this_nzvals = nonzeros(sparse_matrix)
+
+    for icol ∈ 1:ncol
+        colbegin = this_colptr[icol]
+        colend = this_colptr[icol+1]
+        for i ∈ colbegin:colend-1
+            irow = this_rowvals[i]
+            this_nzvals[i] = matrix[irow,icol]
+        end
+
+        if check_zeros
+            zerorows = setdiff(1:ncol, @view(this_rowvals[colbegin:colend-1]))
+            if any(@view(matrix[zerorows,icol]) .!= 0.0)
+                nonzero_inds = (@view (1:ncol)[zerorows])[@view(matrix[zerorows,icol]) .!= 0.0]
+                nonzeros = @view matrix[nonzero_inds, icol]
+                error("refill_sparse_matrix!() found unexpected non-zero in `matrix`."
+                      * "In column $icol got non-zero values $nonzeros at row indices "
+                      * "$nonzero_inds.")
+            end
+        end
+    end
 end
 
 end

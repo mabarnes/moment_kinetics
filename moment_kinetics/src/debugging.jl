@@ -26,6 +26,9 @@ import ..moment_kinetics
 macronames = [
     ("debug_initialize_NaN", 1, "Initialize arrays with NaN."),
 
+    ("debug_sparse_matrix_zeros", 1,
+     "Check in refill_sparse_matrix!() that all entries of `matrix` that are supposed to be zero are actually zero."),
+
     ("debug_shared_array", 2,
      "Check for incorrect reads/writes to shared-memory arrays"),
 
