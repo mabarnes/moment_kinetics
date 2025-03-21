@@ -27,7 +27,7 @@ Useful references:
 module nonlinear_solvers
 
 export setup_nonlinear_solve, gather_nonlinear_solver_counters!,
-       reset_nonlinear_per_stage_counters!, newton_solve!
+       reset_nonlinear_per_stage_counters!, newton_solve!, refill_sparse_matrix!
 
 using ..array_allocation: allocate_float, allocate_shared_float
 using ..communication
@@ -185,6 +185,7 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); defa
         pdf_plus_moments_size = total_size_coords + 5 * coords.z.n
         preconditioners = fill((lu(sparse(1.0*I, 1, 1)),
                                 allocate_shared_float(pdf_plus_moments_size, pdf_plus_moments_size),
+                                sparse(1.0*I, 1, 1),
                                 allocate_shared_float(pdf_plus_moments_size),
                                 allocate_shared_float(pdf_plus_moments_size),
                                ),
@@ -1424,6 +1425,15 @@ MGS-GMRES' in Zou (2023) [https://doi.org/10.1016/j.amc.2023.127869].
     end
 
     return counter
+end
+
+"""
+    refill_sparse_matrix!(sparse_matrix, matrix)
+
+Assuming that all the non-zeros of `matrix` are in the structural non-zeros of
+`sparse_matrix`, update the entries of `sparse_matrix` from `matrix`.
+"""
+function refill_sparse_matrix!(sparse_matrix, matrix)
 end
 
 end
