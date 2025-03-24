@@ -27,25 +27,15 @@ do a single stage time advance (potentially as part of a multi-stage RK scheme)
                                moments.evolve_ppar, fields, vpa, vperp, z, r, t, geometry, is)
         # update adv_fac
         @loop_r_vperp_vpa ir ivperp ivpa begin
-            @views adjust_advection_speed!(advect[is].speed[:,ivpa,ivperp,ir],
-                                           fvec_in.density[:,ir,is],
-                                           moments.ion.vth[:,ir,is],
-                                           moments.evolve_density, moments.evolve_ppar)
             @views @. advect[is].adv_fac[:,ivpa,ivperp,ir] = -dt*advect[is].speed[:,ivpa,ivperp,ir]
-            # take the normalized pdf contained in fvec_in.pdf and remove the normalization,
-            # returning the true (un-normalized) particle distribution function in z.scratch
-            @views unnormalize_pdf!(
-                scratch_dummy.buffer_vpavperpzrs_2[ivpa,ivperp,:,ir,is],
-                fvec_in.pdf[ivpa,ivperp,:,ir,is], fvec_in.density[:,ir,is],
-                moments.ion.vth[:,ir,is], moments.evolve_density, moments.evolve_ppar)
         end
     end
     #calculate the upwind derivative
-    derivative_z!(scratch_dummy.buffer_vpavperpzrs_1, scratch_dummy.buffer_vpavperpzrs_2,
-                  advect, scratch_dummy.buffer_vpavperprs_1,
-                  scratch_dummy.buffer_vpavperprs_2, scratch_dummy.buffer_vpavperprs_3,
-                  scratch_dummy.buffer_vpavperprs_4, scratch_dummy.buffer_vpavperprs_5,
-                  scratch_dummy.buffer_vpavperprs_6, spectral, z)
+    derivative_z!(scratch_dummy.buffer_vpavperpzrs_1, fvec_in.pdf, advect,
+                  scratch_dummy.buffer_vpavperprs_1, scratch_dummy.buffer_vpavperprs_2,
+                  scratch_dummy.buffer_vpavperprs_3, scratch_dummy.buffer_vpavperprs_4,
+                  scratch_dummy.buffer_vpavperprs_5, scratch_dummy.buffer_vpavperprs_6,
+                  spectral, z)
 
     # advance z-advection equation
     @loop_s_r_vperp_vpa is ir ivperp ivpa begin
@@ -53,34 +43,6 @@ do a single stage time advance (potentially as part of a multi-stage RK scheme)
         @views advance_f_df_precomputed!(f_out[ivpa,ivperp,:,ir,is], z.scratch,
                                          advect[is], ivpa, ivperp, ir, z, dt)
     end
-end
-
-"""
-"""
-function adjust_advection_speed!(speed, dens, vth, evolve_density, evolve_ppar)
-    if evolve_ppar
-        for i in eachindex(speed)
-            speed[i] *= vth[i]/dens[i]
-        end
-    elseif evolve_density
-        for i in eachindex(speed)
-            speed[i] /= dens[i]
-        end
-    end
-    return nothing
-end
-
-"""
-"""
-function unnormalize_pdf!(unnorm, norm, dens, vth, evolve_density, evolve_ppar)
-    if evolve_ppar
-        @. unnorm = norm * dens/vth
-    elseif evolve_density
-        @. unnorm = norm * dens
-    else
-        @. unnorm = norm
-    end
-    return nothing
 end
 
 """
