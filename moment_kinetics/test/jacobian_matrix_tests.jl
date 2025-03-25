@@ -2764,7 +2764,7 @@ function test_electron_energy_equation(test_input; rtol=(6.0e2*epsilon)^2)
                 residual[iz] = ppar[iz]
             end
             @views electron_energy_equation_no_r!(
-                       residual, this_p, dens, upar, moments.ion.dens[:,ir],
+                       residual, dens, this_p, dens, upar, moments.ion.dens[:,ir],
                        moments.ion.upar[:,ir], moments.ion.ppar[:,ir],
                        moments.neutral.dens[:,ir], moments.neutral.uz[:,ir],
                        moments.neutral.pz[:,ir], moments.electron, collisions, dt,

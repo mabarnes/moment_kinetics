@@ -19,10 +19,14 @@ export read_distributed_zr_data!
 using ..array_allocation: allocate_float, allocate_int
 using ..calculus: derivative!
 using ..communication
+using ..continuity: continuity_equation!, neutral_continuity_equation!
 using ..coordinates: coordinate, define_coordinate
+using ..electron_fluid_equations: electron_energy_equation!
 using ..electron_vpa_advection: update_electron_speed_vpa!
 using ..electron_z_advection: update_electron_speed_z!
+using ..energy_equation: energy_equation!, neutral_energy_equation!
 using ..file_io: check_io_implementation, get_group, get_subgroup_keys, get_variable_keys
+using ..force_balance: force_balance!, neutral_force_balance!
 using ..input_structs
 using ..interpolation: interpolate_to_grid_1d!
 using ..krook_collisions
@@ -60,15 +64,25 @@ const ion_moment_variables = ("density", "parallel_flow", "parallel_pressure",
                               "thermal_speed", "temperature", "parallel_heat_flux",
                               "collision_frequency_ii", "sound_speed", "mach_number",
                               "total_energy", "total_energy_flux")
+const ion_moment_gradient_variables = ("ddens_dz", "ddens_dz_upwind", "dupar_dz",
+                                       "dupar_dz_upwind", "dppar_dz", "dppar_dz_upwind",
+                                       "dvth_dz", "dT_dz", "dqpar_dz")
 const electron_moment_variables = ("electron_density", "electron_parallel_flow",
                                    "electron_parallel_pressure", "electron_thermal_speed",
                                    "electron_temperature", "electron_parallel_heat_flux",
-                                   "collision_frequency_ee", "collision_frequency_ei",
-                                   "electron_dudz", "electron_dpdz", "electron_dqdz")
+                                   "collision_frequency_ee", "collision_frequency_ei")
+const electron_moment_gradient_variables = ("electron_ddens_dz", "electron_dupar_dz",
+                                            "electron_dppar_dz", "electron_dvth_dz",
+                                            "electron_dT_dz", "electron_dqpar_dz")
 const neutral_moment_variables = ("density_neutral", "uz_neutral", "pz_neutral",
                                   "thermal_speed_neutral", "temperature_neutral",
                                   "qz_neutral", "total_energy_neutral",
                                   "total_energy_flux_neutral")
+const neutral_moment_gradient_variables = ("neutral_ddens_dz", "neutral_ddens_dz_upwind",
+                                           "neutral_duz_dz", "neutral_duz_dz_upwind",
+                                           "neutral_dpz_dz", "neutral_dpz_dz_upwind",
+                                           "neutral_dvth_dz", "neutral_dT_dz",
+                                           "neutral_dqz_dz")
 const ion_source_variables = ("external_source_amplitude", "external_source_density_amplitude",
                                 "external_source_momentum_amplitude", "external_source_pressure_amplitude",
                                 "external_source_controller_integral")
@@ -80,6 +94,9 @@ const electron_source_variables = ("external_source_electron_amplitude", "extern
 const all_moment_variables = tuple(em_variables..., ion_moment_variables...,
                                    electron_moment_variables...,
                                    neutral_moment_variables...,
+                                   ion_moment_gradient_variables...,
+                                   electron_moment_gradient_variables...,
+                                   neutral_moment_gradient_variables...,
                                    ion_source_variables..., 
                                    electron_source_variables...,
                                    neutral_source_variables...)
@@ -4082,6 +4099,100 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
 end
 
 """
+Load all the moment variables, returning them in a NamedTuple.
+
+Intended for internal use inside [`get_variable`](@ref).
+"""
+function _get_all_moment_variables(run_info; it=nothing, kwargs...)
+    if isa(it, Integer)
+        # Actually load a length-1 slice so that we can use the results in a loop over
+        # `it`.
+        it = it:it
+    end
+    pairs = Pair{Symbol,Any}[]
+    for v ∈ all_moment_variables
+        println("getting ", v)
+        try
+            push!(pairs, Symbol(v)=>get_variable(run_info, v; it=it, kwargs...))
+        catch KeyError
+        end
+    end
+    return (; pairs...)
+end
+
+"""
+Create fake scratch and moments structs at time index `it` from the variables in
+`all_moments`.
+"""
+function _get_fake_moments_fields_scratch(all_moments, it; ion_extra::Tuple=(),
+                                          electron_extra::Tuple=(),
+                                          neutral_extra::Tuple=())
+    function make_struct(; kwargs...)
+        function get_var(variable_name_or_array)
+            if isa(variable_name_or_array, Symbol)
+                var = all_moments[variable_name_or_array]
+            else
+                var = variable_name_or_array
+            end
+            return selectdim(var, ndims(var), it)
+        end
+        return (; (field_name=>get_var(variable_name_or_array)
+                   for (field_name, variable_name_or_array) ∈ kwargs
+                   if !isa(variable_name_or_array, Symbol)
+                      || variable_name_or_array ∈ keys(all_moments)
+                  )...)
+    end
+
+    ion_moments = make_struct(; dens=:density, upar=:parallel_flow,
+        ppar=:parallel_pressure, qpar=:parallel_heat_flux, vth=:thermal_speed,
+        temp=:temperature, ddens_dz=:ddens_dz, ddens_dz_upwind=:ddens_dz_upwind,
+        dupar_dz=:dupar_dz, dupar_dz_upwind=:dupar_dz_upwind, dppar_dz=:dppar_dz,
+        dppar_dz_upwind=:dppar_dz_upwind, dvth_dz=:dvth_dz, dT_dz=:dT_dz,
+        dqpar_dz=:dqpar_dz, external_source_amplitude=:external_source_amplitude,
+        external_source_density_amplitude=:external_source_density_amplitude,
+        external_source_momentum_amplitude=:external_source_momentum_amplitude,
+        external_source_pressure_amplitude=:external_source_pressure_amplitude,
+        external_source_controller_integral=:external_source_controller_integral,
+        ion_extra...)
+
+    electron_moments = make_struct(; dens=:electron_density, upar=:electron_parallel_flow,
+        ppar=:electron_parallel_pressure, qpar=:electron_parallel_heat_flux,
+        vth=:electron_thermal_speed, temp=:electron_temperature,
+        ddens_dz=:electron_ddens_dz, dupar_dz=:electron_dupar_dz,
+        dppar_dz=:electron_dppar_dz, dvth_dz=:electron_dvth_dz, dT_dz=:electron_dT_dz,
+        dqpar_dz=:electron_dqpar_dz, external_source_amplitude=:external_source_electron_amplitude,
+        external_source_density_amplitude=:external_source_electron_density_amplitude,
+        external_source_momentum_amplitude=:external_source_electron_momentum_amplitude,
+        external_source_pressure_amplitude=:external_source_electron_pressure_amplitude,
+        external_source_controller_integral=:external_electron_source_controller_integral,
+        electron_extra...)
+
+    neutral_moments = make_struct(; dens=:density_neutral, uz=:uz_neutral, pz=:pz_neutral,
+        qz=:qz_neutral, vth=:thermal_speed_neutral, temp=:temperature_neutral,
+        ddens_dz=:neutral_ddens_dz, ddens_dz_upwind=:neutral_ddens_dz_upwind,
+        duz_dz=:neutral_duz_dz, duz_dz_upwind=:neutral_duz_dz_upwind,
+        dpz_dz=:neutral_dpz_dz, dpz_dz_upwind=:neutral_dpz_dz_upwind,
+        dvth_dz=:neutral_dvth_dz, dT_dz=:neutral_dT_dz, dqz_dz=:neutral_dqz_dz,
+        external_source_amplitude=:external_source_neutral_amplitude,
+        external_source_density_amplitude=:external_source_neutral_density_amplitude,
+        external_source_momentum_amplitude=:external_source_neutral_momentum_amplitude,
+        external_source_pressure_amplitude=:external_source_neutral_pressure_amplitude,
+        external_source_controller_integral=:external_source_neutral_controller_integral,
+        neutral_extra...)
+
+    moments = (; ion=ion_moments, electron=electron_moments, neutral=neutral_moments)
+
+    fields = make_struct(; phi=:phi, Er=:Er, Ez=:Ez)
+
+    fvec = make_struct(; density=:density, upar=:parallel_flow, ppar=:parallel_pressure,
+        electron_density=:electron_density, electron_upar=:electron_parallel_flow,
+        electron_ppar=:electron_parallel_pressure, electron_temp=:electron_temperature,
+        density_neutral=:density_neutral, uz_neutral=:uz_neutral, pz_neutral=:pz_neutral)
+
+    return moments, fields, fvec
+end
+
+"""
     get_variable(run_info::Tuple, variable_name; kwargs...)
     get_variable(run_info, variable_name; kwargs...)
 
@@ -4102,6 +4213,14 @@ end
 
 function get_variable(run_info, variable_name; normalize_advection_speed_shape=true,
                       kwargs...)
+
+    # Set up loop macros for serial operation, in case they are used by any functions
+    # below.
+    looping.setup_loop_ranges!(0, 1;
+                               s=run_info.composition.n_ion_species,
+                               sn=run_info.composition.n_neutral_species, r=run_info.r.n,
+                               z=run_info.z.n, vperp=run_info.vperp.n, vpa=run_info.vpa.n,
+                               vzeta=run_info.vzeta.n, vr=run_info.vr.n, vz=run_info.vz.n)
 
     # Select a slice of an time-series sized variable
     function select_slice_of_variable(variable::AbstractVector; it=nothing,
@@ -4218,54 +4337,375 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         return variable
     end
 
+    function get_z_derivative(dx_dz, x)
+        if :iz ∈ keys(kwargs) && kwargs[:iz] !== nothing
+            error("Cannot take z-derivative when iz!==nothing")
+        end
+        if :is ∈ keys(kwargs) && isa(kwargs[:is], mk_int) && :ir ∈ keys(kwargs) && isa(kwargs[:ir], mk_int)
+            for it ∈ 1:size(dx_dz, 2)
+                @views derivative!(dx_dz[:,it], x[:,it], run_info.z, run_info.z_spectral)
+            end
+        elseif :ir ∈ keys(kwargs) && isa(kwargs[:ir], mk_int)
+            for it ∈ 1:size(dx_dz, 3), is ∈ 1:size(dx_dz, 2)
+                @views derivative!(dx_dz[:,is,it], x[:,is,it], run_info.z,
+                                   run_info.z_spectral)
+            end
+        elseif :is ∈ keys(kwargs) && isa(kwargs[:is], mk_int)
+            for it ∈ 1:size(dx_dz, 3), ir ∈ 1:run_info.r.n
+                @views derivative!(dx_dz[:,is,it], x[:,is,it], run_info.z,
+                                   run_info.z_spectral)
+            end
+        else
+            for it ∈ 1:size(dx_dz, 4), is ∈ 1:size(dx_dz, 3), ir ∈ 1:run_info.r.n
+                @views derivative!(dx_dz[:,ir,is,it], x[:,ir,is,it], run_info.z,
+                                   run_info.z_spectral)
+            end
+        end
+    end
+
+    function get_upwind_z_derivative(dx_dz, x, upar)
+        if :iz ∈ keys(kwargs) && kwargs[:iz] !== nothing
+            error("Cannot take z-derivative when iz!==nothing")
+        end
+        if :is ∈ keys(kwargs) && isa(kwargs[:is], mk_int) && :ir ∈ keys(kwargs) && isa(kwargs[:ir], mk_int)
+            for it ∈ 1:size(dx_dz, 2)
+                @views derivative!(dx_dz[:,it], x[:,it], run_info.z, .-upar[:,it],
+                                   run_info.z_spectral)
+            end
+        elseif :ir ∈ keys(kwargs) && isa(kwargs[:ir], mk_int)
+            for it ∈ 1:size(dx_dz, 3), is ∈ 1:size(dx_dz, 2)
+                @views derivative!(dx_dz[:,is,it], x[:,is,it], run_info.z,
+                                   .-upar[:,is,it], run_info.z_spectral)
+            end
+        elseif :is ∈ keys(kwargs) && isa(kwargs[:is], mk_int)
+            for it ∈ 1:size(dx_dz, 3), ir ∈ 1:run_info.r.n
+                @views derivative!(dx_dz[:,ir,it], x[:,ir,it], run_info.z,
+                                   .-upar[:,ir,it], run_info.z_spectral)
+            end
+        else
+            for it ∈ 1:size(dx_dz, 4), is ∈ 1:size(dx_dz, 3), ir ∈ 1:run_info.r.n
+                @views derivative!(dx_dz[:,ir,is,it], x[:,ir,is,it], run_info.z,
+                                   .-upar[:,ir,is,it], run_info.z_spectral)
+            end
+        end
+    end
+
+    function get_electron_z_derivative(dx_dz, x)
+        if :iz ∈ keys(kwargs) && kwargs[:iz] !== nothing
+            error("Cannot take z-derivative when iz!==nothing")
+        end
+        if :ir ∈ keys(kwargs) && isa(kwargs[:ir], mk_int)
+            for it ∈ 1:size(dx_dz, 2)
+                @views derivative!(dx_dz[:,it], x[:,:,it], run_info.z,
+                                   run_info.z_spectral)
+            end
+        else
+            for it ∈ 1:size(dx_dz, 3), ir ∈ 1:run_info.r.n
+                @views derivative!(dx_dz[:,ir,it], x[:,:,ir,it], run_info.z,
+                                   run_info.z_spectral)
+            end
+        end
+    end
+
     if variable_name == "temperature"
         vth = get_variable(run_info, "thermal_speed"; kwargs...)
         variable = vth.^2
-    elseif variable_name == "dT_dz"
-        T = get_variable(run_info, "temperature"; kwargs...)
-        variable = similar(T)
-        if :iz ∈ keys(kwargs) && kwargs[:iz] !== nothing
-            error("Cannot take z-derivative when iz!==nothing")
-        end
-        if :ir ∈ keys(kwargs) && isa(kwargs[:ir], mk_int)
-            for it ∈ 1:size(variable, 3)
-                @views derivative!(variable[:,:,it], T[:,:,it], run_info.z, run_info.z_spectral)
-            end
-        else
-            for it ∈ 1:size(variable, 4), ir ∈ 1:run_info.r.n
-                @views derivative!(variable[:,:,ir,it], T[:,:,ir,it], run_info.z, run_info.z_spectral)
-            end
-        end
-    elseif variable_name == "dn_dz"
+    elseif variable_name == "ddens_dz"
         n = get_variable(run_info, "density"; kwargs...)
         variable = similar(n)
-        if :iz ∈ keys(kwargs) && kwargs[:iz] !== nothing
-            error("Cannot take z-derivative when iz!==nothing")
-        end
-        if :ir ∈ keys(kwargs) && isa(kwargs[:ir], mk_int)
-            for it ∈ 1:size(variable, 3)
-                @views derivative!(variable[:,:,it], n[:,:,it], run_info.z, run_info.z_spectral)
-            end
-        else
-            for it ∈ 1:size(variable, 4), ir ∈ 1:run_info.r.n
-                @views derivative!(variable[:,:,ir,it], n[:,:,ir,it], run_info.z, run_info.z_spectral)
-            end
-        end
+        get_z_derivative(variable, n)
+    elseif variable_name == "ddens_dz_upwind"
+        n = get_variable(run_info, "density"; kwargs...)
+        upar = get_variable(run_info, "parallel_flow"; kwargs...)
+        variable = similar(n)
+        get_upwind_z_derivative(variable, n, upar)
     elseif variable_name == "dupar_dz"
         upar = get_variable(run_info, "parallel_flow"; kwargs...)
         variable = similar(upar)
-        if :iz ∈ keys(kwargs) && kwargs[:iz] !== nothing
-            error("Cannot take z-derivative when iz!==nothing")
-        end
-        if :ir ∈ keys(kwargs) && isa(kwargs[:ir], mk_int)
-            for it ∈ 1:size(variable, 3)
-                @views derivative!(variable[:,:,it], upar[:,:,it], run_info.z, run_info.z_spectral)
+        get_z_derivative(variable, upar)
+    elseif variable_name == "dupar_dz_upwind"
+        upar = get_variable(run_info, "parallel_flow"; kwargs...)
+        variable = similar(upar)
+        get_upwind_z_derivative(variable, upar, upar)
+    elseif variable_name == "dppar_dz"
+        ppar = get_variable(run_info, "parallel_pressure"; kwargs...)
+        variable = similar(ppar)
+        get_z_derivative(variable, ppar)
+    elseif variable_name == "dppar_dz_upwind"
+        ppar = get_variable(run_info, "parallel_pressure"; kwargs...)
+        upar = get_variable(run_info, "parallel_flow"; kwargs...)
+        variable = similar(ppar)
+        get_upwind_z_derivative(variable, ppar, upar)
+    elseif variable_name == "dvth_dz"
+        vth = get_variable(run_info, "thermal_speed"; kwargs...)
+        variable = similar(vth)
+        get_z_derivative(variable, vth)
+    elseif variable_name == "dT_dz"
+        T = get_variable(run_info, "temperature"; kwargs...)
+        variable = similar(T)
+        get_z_derivative(variable, T)
+    elseif variable_name == "dqpar_dz"
+        qpar = get_variable(run_info, "parallel_heat_flux"; kwargs...)
+        variable = similar(qpar)
+        get_z_derivative(variable, qpar)
+    elseif variable_name == "electron_ddens_dz"
+        n = get_variable(run_info, "electron_density"; kwargs...)
+        variable = similar(n)
+        get_electron_z_derivative(variable, n)
+    elseif variable_name == "electron_dupar_dz"
+        upar = get_variable(run_info, "electron_parallel_flow"; kwargs...)
+        variable = similar(upar)
+        get_electron_z_derivative(variable, upar)
+    elseif variable_name == "electron_dppar_dz"
+        ppar = get_variable(run_info, "electron_parallel_pressure"; kwargs...)
+        variable = similar(ppar)
+        get_electron_z_derivative(variable, ppar)
+    elseif variable_name == "electron_dvth_dz"
+        vth = get_variable(run_info, "electron_thermal_speed"; kwargs...)
+        variable = similar(vth)
+        get_electron_z_derivative(variable, vth)
+    elseif variable_name == "electron_dT_dz"
+        T = get_variable(run_info, "electron_temperature"; kwargs...)
+        variable = similar(T)
+        get_electron_z_derivative(variable, T)
+    elseif variable_name == "electron_dqpar_dz"
+        qpar = get_variable(run_info, "electron_parallel_heat_flux"; kwargs...)
+        variable = similar(qpar)
+        get_electron_z_derivative(variable, qpar)
+    elseif variable_name == "neutral_ddens_dz"
+        n = get_variable(run_info, "density_neutral"; kwargs...)
+        variable = similar(n)
+        get_z_derivative(variable, n)
+    elseif variable_name == "neutral_ddens_dz_upwind"
+        n = get_variable(run_info, "density_neutral"; kwargs...)
+        uz = get_variable(run_info, "uz_neutral"; kwargs...)
+        variable = similar(n)
+        get_upwind_z_derivative(variable, n, uz)
+    elseif variable_name == "neutral_duz_dz"
+        uz = get_variable(run_info, "uz_neutral"; kwargs...)
+        variable = similar(uz)
+        get_z_derivative(variable, uz)
+    elseif variable_name == "neutral_duz_dz_upwind"
+        uz = get_variable(run_info, "uz_neutral"; kwargs...)
+        variable = similar(uz)
+        get_upwind_z_derivative(variable, uz, uz)
+    elseif variable_name == "neutral_dpz_dz"
+        pz = get_variable(run_info, "pz_neutral"; kwargs...)
+        variable = similar(pz)
+        get_z_derivative(variable, pz)
+    elseif variable_name == "neutral_dpz_dz_upwind"
+        pz = get_variable(run_info, "pz_neutral"; kwargs...)
+        uz = get_variable(run_info, "uz_neutral"; kwargs...)
+        variable = similar(pz)
+        get_upwind_z_derivative(variable, pz, uz)
+    elseif variable_name == "neutral_dvth_dz"
+        vth = get_variable(run_info, "thermal_speed_neutral"; kwargs...)
+        variable = similar(vth)
+        get_electron_z_derivative(variable, vth)
+    elseif variable_name == "neutral_dT_dz"
+        T = get_variable(run_info, "temperature_neutral"; kwargs...)
+        variable = similar(T)
+        get_z_derivative(variable, T)
+    elseif variable_name == "neutral_dqz_dz"
+        qz = get_variable(run_info, "qz_neutral"; kwargs...)
+        variable = similar(qz)
+        get_z_derivative(variable, qz)
+    elseif variable_name == "ddens_dt"
+        all_moments = _get_all_moment_variables(run_info; kwargs...)
+        variable = similar(all_moments.density)
+        # Define function here to minimise effect type instability due to
+        # get_all_moment_variables returning NamedTuples
+        function get_ddens_dt!(variable, all_moments)
+            nt = size(variable, ndims(variable))
+            dummy = similar(variable, size(variable)[1:end-1])
+            for tind ∈ 1:nt
+                moments, fields, fvec =
+                    _get_fake_moments_fields_scratch(all_moments, tind;
+                                                     ion_extra=(:ddens_dt=>variable,))
+                # Dummy first argument, because we actually want the 'side effect' of
+                # filling the time derivative array in `moments`.
+                continuity_equation!(dummy, fvec, moments, run_info.composition, 0.0,
+                                     run_info.z_spectral,
+                                     run_info.collisions.reactions.ionization_frequency,
+                                     run_info.external_source_settings.ion,
+                                     run_info.num_diss_params)
             end
-        else
-            for it ∈ 1:size(variable, 4), ir ∈ 1:run_info.r.n
-                @views derivative!(variable[:,:,ir,it], upar[:,:,ir,it], run_info.z, run_info.z_spectral)
+        end
+        get_ddens_dt!(variable, all_moments)
+    elseif variable_name == "dnupar_dt"
+        all_moments = _get_all_moment_variables(run_info; kwargs...)
+        variable = similar(all_moments.parallel_flow)
+        # Define function here to minimise effect type instability due to
+        # get_all_moment_variables returning NamedTuples
+        function get_dnupar_dt!(variable, all_moments)
+            nt = size(variable, ndims(variable))
+            dummy = similar(variable, size(variable)[1:end-1])
+            for tind ∈ 1:nt
+                moments, fields, fvec =
+                    _get_fake_moments_fields_scratch(all_moments, tind;
+                                                     ion_extra=(:dnupar_dt=>variable,))
+                # Dummy first argument, because we actually want the 'side effect' of
+                # filling the time derivative array in `moments`.
+                force_balance!(dummy, fvec.density, fvec, moments, fields,
+                               run_info.collisions, 0.0, run_info.z_spectral,
+                               run_info.composition, run_info.geometry,
+                               run_info.external_source_settings.ion,
+                               run_info.num_diss_params)
             end
         end
+        get_dnupar_dt!(variable, all_moments)
+    elseif variable_name == "dupar_dt"
+        dn_dt = get_variable(run_info, "ddens_dt"; kwargs...)
+        dnupar_dt = get_variable(run_info, "dnupar_dt"; kwargs...)
+        n = get_variable(run_info, "density"; kwargs...)
+        upar = get_variable(run_info, "parallel_flow"; kwargs...)
+        variable = @. dnupar_dt / n - upar / n * dn_dt
+    elseif variable_name == "dppar_dt"
+        all_moments = _get_all_moment_variables(run_info; kwargs...)
+        variable = similar(all_moments.parallel_pressure)
+        # Define function here to minimise effect type instability due to
+        # get_all_moment_variables returning NamedTuples
+        function get_dppar_dt!(variable, all_moments)
+            nt = size(variable, ndims(variable))
+            dummy = similar(variable, size(variable)[1:end-1])
+            for tind ∈ 1:nt
+                moments, fields, fvec =
+                    _get_fake_moments_fields_scratch(all_moments, tind;
+                                                     ion_extra=(:dppar_dt=>variable,))
+                # Dummy first argument, because we actually want the 'side effect' of
+                # filling the time derivative array in `moments`.
+                energy_equation!(dummy, fvec, moments, run_info.collisions, 0.0,
+                                 run_info.z_spectral, run_info.composition,
+                                 run_info.external_source_settings.ion,
+                                 run_info.num_diss_params)
+            end
+        end
+        get_dppar_dt!(variable, all_moments)
+    elseif variable_name == "dvth_dt"
+        dn_dt = get_variable(run_info, "ddens_dt"; kwargs...)
+        dppar_dt = get_variable(run_info, "dppar_dt"; kwargs...)
+        n = get_variable(run_info, "density"; kwargs...)
+        ppar = get_variable(run_info, "parallel_pressure"; kwargs...)
+        vth = get_variable(run_info, "thermal_speed"; kwargs...)
+        variable = @. 0.5 * vth * (dppar_dt / ppar - dn_dt / n)
+    elseif variable_name == "electron_dppar_dt"
+        all_moments = _get_all_moment_variables(run_info; kwargs...)
+        variable = similar(all_moments.electron_parallel_pressure)
+        # Define function here to minimise effect type instability due to
+        # get_all_moment_variables returning NamedTuples
+        function get_electron_dppar_dt!(variable, all_moments)
+            nt = size(variable, ndims(variable))
+            dummy = similar(variable, size(variable)[1:end-1])
+            for tind ∈ 1:nt
+                moments, fields, fvec =
+                    _get_fake_moments_fields_scratch(all_moments, tind;
+                                                     electron_extra=(:dppar_dt=>variable,))
+                # Dummy first argument, because we actually want the 'side effect' of
+                # filling the time derivative array in `moments`.
+                electron_energy_equation!(dummy, moments.electron.dens,
+                                          moments.electron.ppar, moments.electron.dens,
+                                          moments.electron.upar, moments.ion.dens,
+                                          moments.ion.upar, moments.ion.ppar,
+                                          moments.neutral.dens, moments.neutral.uz,
+                                          moments.neutral.pz, moments.electron,
+                                          run_info.collisions, 0.0, run_info.composition,
+                                          run_info.external_source_settings.electron,
+                                          run_info.num_diss_params, run_info.r,
+                                          run_info.z)
+            end
+        end
+        get_electron_dppar_dt!(variable, all_moments)
+    elseif variable_name == "electron_dvth_dt"
+        # Note that this block neglects any contribution of dn/dt to dvth/dt because the
+        # operator splitting between implicit/explicit operators in the code means that
+        # when dvth/dt is calculated for electrons, the (ion) density does not change in
+        # the same step, so does not contribute to the dvth/dt used internally. This
+        # post-processing function replicates that behaviour, guessing that that will
+        # usually be what we want, e.g. if we want recalculate the coefficients used in
+        # the electron kinetic equation.
+        dppar_dt = get_variable(run_info, "electron_dppar_dt"; kwargs...)
+        n = get_variable(run_info, "electron_density"; kwargs...)
+        ppar = get_variable(run_info, "electron_parallel_pressure"; kwargs...)
+        vth = get_variable(run_info, "electron_thermal_speed"; kwargs...)
+        variable = @. 0.5 * vth * dppar_dt / ppar
+    elseif variable_name == "neutral_ddens_dt"
+        all_moments = _get_all_moment_variables(run_info; kwargs...)
+        variable = similar(all_moments.density)
+        # Define function here to minimise effect type instability due to
+        # get_all_moment_variables returning NamedTuples
+        function get_neutral_ddens_dt!(variable, all_moments)
+            nt = size(variable, ndims(variable))
+            dummy = similar(variable, size(variable)[1:end-1])
+            for tind ∈ 1:nt
+                moments, fields, fvec =
+                    _get_fake_moments_fields_scratch(all_moments, tind;
+                                                     neutral_extra=(:ddens_dt=>variable,))
+                # Dummy first argument, because we actually want the 'side effect' of
+                # filling the time derivative array in `moments`.
+                neutral_continuity_equation!(dummy, fvec, moments, run_info.composition,
+                                             0.0, run_info.z_spectral,
+                                             run_info.collisions.reactions.ionization_frequency,
+                                             run_info.external_source_settings.neutral,
+                                             run_info.num_diss_params)
+            end
+        end
+        get_neutral_ddens_dt!(variable, all_moments)
+    elseif variable_name == "neutral_dnuz_dt"
+        all_moments = _get_all_moment_variables(run_info; kwargs...)
+        variable = similar(all_moments.uz_neutral)
+        # Define function here to minimise effect type instability due to
+        # get_all_moment_variables returning NamedTuples
+        function get_neutral_dnuz_dt!(variable, all_moments)
+            nt = size(variable, ndims(variable))
+            dummy = similar(variable, size(variable)[1:end-1])
+            for tind ∈ 1:nt
+                moments, fields, fvec =
+                    _get_fake_moments_fields_scratch(all_moments, tind;
+                                                     neutral_extra=(:dnuz_dt=>variable,))
+                # Dummy first argument, because we actually want the 'side effect' of
+                # filling the time derivative array in `moments`.
+                neutral_force_balance!(dummy, fvec.density_neutral, fvec, moments, fields,
+                                       run_info.collisions, 0.0, run_info.z_spectral,
+                                       run_info.composition, run_info.geometry,
+                                       run_info.external_source_settings.neutral,
+                                       run_info.num_diss_params)
+            end
+        end
+        get_neutral_dnuz_dt!(variable, all_moments)
+    elseif variable_name == "neutral_duz_dt"
+        dn_dt = get_variable(run_info, "neutral_ddens_dt"; kwargs...)
+        dnuz_dt = get_variable(run_info, "neutral_dnuz_dt"; kwargs...)
+        n = get_variable(run_info, "density_neutral"; kwargs...)
+        uz = get_variable(run_info, "uz_neutral"; kwargs...)
+        variable = @. dnuz_dt / n - uz / n * dn_dt
+    elseif variable_name == "neutral_dpz_dt"
+        all_moments = _get_all_moment_variables(run_info; kwargs...)
+        variable = similar(all_moments.pz_neutral)
+        # Define function here to minimise effect type instability due to
+        # get_all_moment_variables returning NamedTuples
+        function get_neutral_duz_dt!(variable, all_moments)
+            nt = size(variable, ndims(variable))
+            dummy = similar(variable, size(variable)[1:end-1])
+            for tind ∈ 1:nt
+                moments, fields, fvec =
+                    _get_fake_moments_fields_scratch(all_moments, tind;
+                                                     neutral_extra=(:dpz_dt=>variable,))
+                # Dummy first argument, because we actually want the 'side effect' of
+                # filling the time derivative array in `moments`.
+                neutral_energy_equation!(dummy, fvec, moments, run_info.collisions, 0.0,
+                                         run_info.z_spectral, run_info.composition,
+                                         run_info.external_source_settings.neutral,
+                                         run_info.num_diss_params)
+            end
+        end
+        get_neutral_duz_dt!(variable, all_moments)
+    elseif variable_name == "neutral_dvth_dt"
+        dn_dt = get_variable(run_info, "neutral_ddens_dt"; kwargs...)
+        dpz_dt = get_variable(run_info, "neutral_dpz_dt"; kwargs...)
+        n = get_variable(run_info, "density_neutral"; kwargs...)
+        pz = get_variable(run_info, "pz_neutral"; kwargs...)
+        vth = get_variable(run_info, "thermal_speed_neutral"; kwargs...)
+        variable = @. 0.5 * vth * (dpz_dt / pz - dn_dt / n)
     elseif variable_name == "mfp"
         vth = get_variable(run_info, "thermal_speed"; kwargs...)
         nu_ii = get_variable(run_info, "collision_frequency_ii"; kwargs...)
@@ -4280,11 +4720,11 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         # using a hard coded 10.0 tolerance for now
         variable[variable .> 10.0] .= NaN
     elseif variable_name == "L_n"
-        dn_dz = get_variable(run_info, "dn_dz"; kwargs...)
+        ddens_dz = get_variable(run_info, "ddens_dz"; kwargs...)
         n = get_variable(run_info, "density"; kwargs...)
         # We define gradient lengthscale of n as Ln^-1 = dln(n)/dz (ignore negative sign
         # tokamak convention as we're only concerned with comparing magnitudes)
-        variable = abs.(n .* dn_dz.^(-1))
+        variable = abs.(n .* ddens_dz.^(-1))
         # flat points in temperature have diverging Ln, so ignore those with NaN
         # using a hard coded 10.0 tolerance for now
         variable[variable .> 10.0] .= NaN
@@ -4318,53 +4758,6 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
     elseif variable_name == "electron_temperature"
         vth = get_variable(run_info, "electron_thermal_speed"; kwargs...)
         variable = run_info.composition.me_over_mi .* vth.^2
-    elseif variable_name == "electron_dudz"
-        upar = get_variable(run_info, "electron_parallel_flow"; kwargs...)
-        variable = similar(upar)
-        if :iz ∈ keys(kwargs) && kwargs[:iz] !== nothing
-            error("Cannot take z-derivative when iz!==nothing")
-        end
-        if :ir ∈ keys(kwargs) && isa(kwargs[:ir], mk_int)
-            for it ∈ 1:size(variable, 2)
-                @views derivative!(variable[:,it], upar[:,it], run_info.z, run_info.z_spectral)
-            end
-        else
-            for it ∈ 1:size(variable, 3), ir ∈ 1:run_info.r.n
-                @views derivative!(variable[:,ir,it], upar[:,ir,it], run_info.z, run_info.z_spectral)
-            end
-        end
-    elseif variable_name == "electron_dpdz"
-        ppar = get_variable(run_info, "electron_parallel_pressure"; kwargs...)
-        variable = similar(ppar)
-        println("electron_dpdz kwargs ", kwargs)
-        if :iz ∈ keys(kwargs) && kwargs[:iz] !== nothing
-            error("Cannot take z-derivative when iz!==nothing")
-        end
-        if :ir ∈ keys(kwargs) && isa(kwargs[:ir], mk_int)
-            println("check range ", (kwargs[:it] === nothing ? (1:run_info.nt) : (1:length(kwargs[:it]))))
-            for it ∈ 1:size(variable, 2)
-                @views derivative!(variable[:,it], ppar[:,it], run_info.z, run_info.z_spectral)
-            end
-        else
-            for it ∈ 1:size(variable, 3), ir ∈ 1:run_info.r.n
-                @views derivative!(variable[:,ir,it], ppar[:,ir,it], run_info.z, run_info.z_spectral)
-            end
-        end
-    elseif variable_name == "electron_dqdz"
-        qpar = get_variable(run_info, "electron_parallel_heat_flux"; kwargs...)
-        variable = similar(qpar)
-        if :iz ∈ keys(kwargs) && kwargs[:iz] !== nothing
-            error("Cannot take z-derivative when iz!==nothing")
-        end
-        if :ir ∈ keys(kwargs) && isa(kwargs[:ir], mk_int)
-            for it ∈ 1:size(variable, 2)
-                @views derivative!(variable[:,it], qpar[:,it], run_info.z, run_info.z_spectral)
-            end
-        else
-            for it ∈ 1:size(variable, 3), ir ∈ 1:run_info.r.n
-                @views derivative!(variable[:,ir,it], qpar[:,ir,it], run_info.z, run_info.z_spectral)
-            end
-        end
     elseif variable_name == "temperature_neutral"
         vth = get_variable(run_info, "thermal_speed_neutral"; kwargs...)
         variable = vth.^2

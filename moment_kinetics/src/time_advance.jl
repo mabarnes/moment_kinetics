@@ -20,12 +20,12 @@ using ..initial_conditions: initialize_electrons!
 using ..looping
 using ..moment_kinetics_structs: scratch_pdf, scratch_electron_pdf
 using ..velocity_moments: update_moments!, update_moments_neutral!, reset_moments_status!, update_derived_moments!, update_derived_moments_neutral!
-using ..velocity_moments: update_density!, update_upar!, update_ppar!, update_pperp!, update_ion_qpar!, update_vth!
+using ..velocity_moments: update_density!, update_upar!, update_ppar!, update_pperp!, update_ion_qpar!, update_vth!, update_derived_ion_moment_time_derivatives!
 using ..velocity_moments: update_neutral_density!, update_neutral_qz!
 using ..velocity_moments: update_neutral_uzeta!, update_neutral_uz!, update_neutral_ur!
-using ..velocity_moments: update_neutral_pzeta!, update_neutral_pz!, update_neutral_pr!
+using ..velocity_moments: update_neutral_pzeta!, update_neutral_pz!, update_neutral_pr!, update_derived_neutral_moment_time_derivatives!
 using ..velocity_moments: calculate_ion_moment_derivatives!, calculate_neutral_moment_derivatives!
-using ..velocity_moments: calculate_electron_moment_derivatives!
+using ..velocity_moments: calculate_electron_moment_derivatives!, update_derived_electron_moment_time_derivatives!
 using ..velocity_grid_transforms: vzvrvzeta_to_vpavperp!, vpavperp_to_vzvrvzeta!
 using ..boundary_conditions: enforce_boundary_conditions!, get_ion_z_boundary_cutoff_indices
 using ..boundary_conditions: enforce_neutral_boundary_conditions!
@@ -3450,6 +3450,78 @@ with fvec_in an input and fvec_out the output
                                             external_source_settings.neutral, r, z, dt)
     end
 
+    # Start advance for moments
+    if advance.continuity
+        continuity_equation!(fvec_out.density, fvec_in, moments, composition, dt,
+                             z_spectral, collisions.reactions.ionization_frequency,
+                             external_source_settings.ion, num_diss_params)
+    end
+    if advance.force_balance
+        force_balance!(fvec_out.upar, fvec_out.density, fvec_in, moments, fields,
+                       collisions, dt, z_spectral, composition, geometry,
+                       external_source_settings.ion, num_diss_params)
+    end
+    if advance.energy
+        energy_equation!(fvec_out.ppar, fvec_in, moments, collisions, dt, z_spectral,
+                         composition, external_source_settings.ion, num_diss_params)
+    end
+    if advance.neutral_continuity
+        neutral_continuity_equation!(fvec_out.density_neutral, fvec_in, moments,
+                                     composition, dt, z_spectral,
+                                     collisions.reactions.ionization_frequency,
+                                     external_source_settings.neutral, num_diss_params)
+    end
+    if advance.neutral_force_balance
+        neutral_force_balance!(fvec_out.uz_neutral, fvec_out.density_neutral, fvec_in,
+                               moments, fields, collisions, dt, z_spectral, composition,
+                               geometry, external_source_settings.neutral,
+                               num_diss_params)
+    end
+    if advance.neutral_energy
+        neutral_energy_equation!(fvec_out.pz_neutral, fvec_in, moments, collisions, dt,
+                                 z_spectral, composition,
+                                 external_source_settings.neutral, num_diss_params)
+    end
+
+    if advance.electron_pdf
+        electron_t_params = (dt=Ref(dt),)
+        for ir ∈ 1:r.n
+            @views electron_kinetic_equation_euler_update!(
+                       fvec_out.pdf_electron[:,:,:,ir], fvec_out.electron_ppar[:,ir],
+                       fvec_in.pdf_electron[:,:,:,ir], fvec_in.electron_ppar[:,ir],
+                       moments, z, vperp, vpa, z_spectral, vpa_spectral, z_advect,
+                       vpa_advect, scratch_dummy, collisions, composition,
+                       external_source_settings, num_diss_params, electron_t_params, ir)
+        end
+    end
+    if advance.electron_energy
+        electron_energy_equation!(fvec_out.electron_ppar, fvec_out.density,
+                                  fvec_in.electron_ppar, fvec_in.density,
+                                  fvec_in.electron_upar, fvec_in.density, fvec_in.upar,
+                                  fvec_in.ppar, fvec_in.density_neutral,
+                                  fvec_in.uz_neutral, fvec_in.pz_neutral,
+                                  moments.electron, collisions, dt, composition,
+                                  external_source_settings.electron, num_diss_params, r,
+                                  z; conduction=advance.electron_conduction)
+        update_derived_electron_moment_time_derivatives!(fvec_in.electron_ppar, moments,
+                                                         composition.electron_physics)
+    elseif advance.electron_conduction
+        # Explicit version of the implicit part of the IMEX timestep, need to evaluate
+        # only the conduction term.
+        for ir ∈ 1:r.n
+            @views electron_braginskii_conduction!(
+                fvec_out.electron_ppar[:,ir], fvec_in.electron_ppar[:,ir],
+                fvec_in.electron_density[:,ir], fvec_in.electron_upar[:,ir],
+                fvec_in.upar[:,ir], moments.electron, collisions, composition, z,
+                z_spectral, scratch_dummy, dt, ir)
+        end
+    end
+
+    update_derived_ion_moment_time_derivatives!(fvec_in, moments)
+    update_derived_neutral_moment_time_derivatives!(fvec_in, moments)
+    # End advance for moments
+
+    # Start advance for distribution functions
     if composition.ion_physics ∈ (drift_kinetic_ions, gyrokinetic_ions)
         if advance.vpa_advection
             vpa_advection!(fvec_out.pdf, fvec_in, fields, moments, vpa_advect, vpa, vperp, z, r, dt, t,
@@ -3615,88 +3687,8 @@ with fvec_in an input and fvec_out the output
             end
         end
     end
-    
     # End of advance for distribution function
 
-    # Start advancing moments
-    if moments.evolve_density || moments.evolve_upar || moments.evolve_ppar
-        # Only need to change region type if moment evolution equations will be used.
-        # Exept when using wall boundary conditions, do not actually need to synchronize
-        # here because above we only modify the distribution function and below we only
-        # modify the moments, so there is no possibility of race conditions.
-        @begin_s_r_z_region(true)
-    end
-    if advance.continuity
-        continuity_equation!(fvec_out.density, fvec_in, moments, composition, dt,
-                             z_spectral, collisions.reactions.ionization_frequency,
-                             external_source_settings.ion, num_diss_params)
-    end
-    if advance.force_balance
-        # fvec_out.upar is over-written in force_balance! and contains the particle flux
-        force_balance!(fvec_out.upar, fvec_out.density, fvec_in, moments, fields,
-                       collisions, dt, z_spectral, composition, geometry,
-                       external_source_settings.ion, num_diss_params)
-    end
-    if advance.energy
-        energy_equation!(fvec_out.ppar, fvec_in, moments, collisions, dt, z_spectral,
-                         composition, external_source_settings.ion, num_diss_params)
-    end
-    if moments.evolve_density || moments.evolve_upar || moments.evolve_ppar
-        # Only need to change region type if moment evolution equations will be used.
-        # Exept when using wall boundary conditions, do not actually need to synchronize
-        # here because above we only modify the distribution function and below we only
-        # modify the moments, so there is no possibility of race conditions.
-        @begin_sn_r_z_region(true)
-    end
-    if advance.neutral_continuity
-        neutral_continuity_equation!(fvec_out.density_neutral, fvec_in, moments,
-                                     composition, dt, z_spectral,
-                                     collisions.reactions.ionization_frequency,
-                                     external_source_settings.neutral, num_diss_params)
-    end
-    if advance.neutral_force_balance
-        # fvec_out.upar is over-written in force_balance! and contains the particle flux
-        neutral_force_balance!(fvec_out.uz_neutral, fvec_out.density_neutral, fvec_in,
-                               moments, fields, collisions, dt, z_spectral, composition,
-                               geometry, external_source_settings.neutral,
-                               num_diss_params)
-    end
-    if advance.neutral_energy
-        neutral_energy_equation!(fvec_out.pz_neutral, fvec_in, moments, collisions, dt,
-                                 z_spectral, composition,
-                                 external_source_settings.neutral, num_diss_params)
-    end
-
-    if advance.electron_pdf
-        electron_t_params = (dt=Ref(dt),)
-        for ir ∈ 1:r.n
-            @views electron_kinetic_equation_euler_update!(
-                       fvec_out.pdf_electron[:,:,:,ir], fvec_out.electron_ppar[:,ir],
-                       fvec_in.pdf_electron[:,:,:,ir], fvec_in.electron_ppar[:,ir],
-                       moments, z, vperp, vpa, z_spectral, vpa_spectral, z_advect,
-                       vpa_advect, scratch_dummy, collisions, composition,
-                       external_source_settings, num_diss_params, electron_t_params, ir)
-        end
-    end
-    if advance.electron_energy
-        electron_energy_equation!(fvec_out.electron_ppar, fvec_in.electron_ppar,
-                                  fvec_in.density, fvec_in.electron_upar, fvec_in.density,
-                                  fvec_in.upar, fvec_in.ppar, fvec_in.density_neutral,
-                                  fvec_in.uz_neutral, fvec_in.pz_neutral,
-                                  moments.electron, collisions, dt, composition,
-                                  external_source_settings.electron, num_diss_params, r,
-                                  z; conduction=advance.electron_conduction)
-    elseif advance.electron_conduction
-        # Explicit version of the implicit part of the IMEX timestep, need to evaluate
-        # only the conduction term.
-        for ir ∈ 1:r.n
-            @views electron_braginskii_conduction!(
-                fvec_out.electron_ppar[:,ir], fvec_in.electron_ppar[:,ir],
-                fvec_in.electron_density[:,ir], fvec_in.electron_upar[:,ir],
-                fvec_in.upar[:,ir], moments.electron, collisions, composition, z,
-                z_spectral, scratch_dummy, dt, ir)
-        end
-    end
     # reset "xx.updated" flags to false since ff has been updated
     # and the corresponding moments have not
     reset_moments_status!(moments)
