@@ -2025,6 +2025,14 @@ function  time_advance!(pdf, scratch, scratch_implicit, scratch_electron, t_para
                               rpad(string(t_params.moments_output_counter[]), 4), "  ",
                               "t = ", rpad(string(round(t_params.t[], sigdigits=6)), 7), "  ",
                               "nstep = ", rpad(string(t_params.step_counter[]), 7), "  ")
+                        if t_params.print_nT_live
+                            midpoint = Int64(round(size(moments.ion.dens)[1]/2))
+                            print("midpoint density: ", 
+                            rpad(string(round(moments.ion.dens[midpoint,1,1], sigdigits = 4)), 7))
+                            print("   midpoint temperature: ", 
+                            rpad(string(round(moments.ion.ppar[midpoint,1,1]*2/(
+                            moments.ion.dens[midpoint,1,1]), sigdigits = 4)), 7), "\n")
+                        end
                         if t_params.adaptive
                             print("nfail = ", rpad(string(t_params.failure_counter[]), 7), "  ",
                                   "dt = ", rpad(string(t_params.dt_before_output[]), 7), "  ")
@@ -2115,14 +2123,6 @@ function  time_advance!(pdf, scratch, scratch_implicit, scratch_electron, t_para
                                 "t = ", rpad(string(round(t_params.t[], sigdigits=6)), 7), "  ",
                                 "nstep = ", rpad(string(t_params.step_counter[]), 7), "  ",
                                 Dates.format(now(), dateformat"H:MM:SS"))
-                        if t_params.print_nT_live
-                            midpoint = Int64(round(size(moments.ion.dens)[1]/2))
-                            print("midpoint density: ", 
-                            rpad(string(round(moments.ion.dens[midpoint,1,1], sigdigits = 4)), 7))
-                            print("   midpoint temperature: ", 
-                            rpad(string(round(moments.ion.ppar[midpoint,1,1]*2/(
-                            moments.ion.dens[midpoint,1,1]), sigdigits = 4)), 7), "\n")
-                        end
                         flush(stdout)
                     end
                 end
