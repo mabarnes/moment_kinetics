@@ -548,7 +548,7 @@ subsitute from the parallel flow equation
 \end{align}
 ```
 
-### Full moment-kinetics (separate $n_i$, $u_{i\parallel}$ and $p_i$)
+### [Full moment-kinetics (separate $n_i$, $u_{i\parallel}$ and $p_i$)](@id ion_full_moment_kinetic_equation)
 
 Form evolution equation for $F_i(t,z,w_\parallel,w_\perp)$, starting from
 kinetic equation for $f_i(t,z,v_\parallel,v_\perp)$
@@ -928,8 +928,8 @@ u_{n\parallel} / \partial t$ or $\partial v_{Tn} / \partial t$ so that the only
 contributions are from $\partial n_n / \partial t$ that contributes to
 $\dot{F}$ and the explicit term in $\mathcal C_n$, and these will cancel.
 
-Reduction to 1D1V
------------------
+[Reduction to 1D1V](@id ion_reduction_to_1d1v)
+----------------------------------------------
 
 To reduce the model to 1D1V, we take the limit $T_{s\perp} \rightarrow 0$, and
 marginalise over $v_\perp$ to remove one velocity space dimension.
@@ -1321,6 +1321,7 @@ The full set of dimensionless variables are related to the dimensional ones by
 \hat{\bar{f}}_s &= \frac{c_\mathrm{ref}}{n_\mathrm{ref}} \bar{f}_s \\
 \hat{\bar{F}}_s &= \bar{F}_s \\
 \hat{\phi} &= \frac{e \phi}{T_\mathrm{ref}} \\
+\hat{E}_\parallel &= \frac{\partial \hat{\phi}}{\partial \hat z} = \frac{e L_\mathrm{ref}}{T_\mathrm{ref}} E_\parallel \\
 \hat{t} &= \frac{c_\mathrm{ref} t}{L_\mathrm{ref}} \\
 \frac{\partial}{\partial \hat{t}} &= \frac{L_\mathrm{ref}}{c_\mathrm{ref}} \frac{\partial}{\partial t} \\
 \hat{z} &= \frac{z}{L_\mathrm{ref}} \\
@@ -1834,6 +1835,8 @@ differences first
     && \hat{m}_e = \mathring{m_e} \\
 \mathring{\phi} &= \frac{e \phi}{\check{T}_\mathrm{ref}} = \hat{\phi}
     && \hat{\phi} = \mathring{\phi} \\
+\mathring{E}_\parallel &= \frac{e \check{L}_\mathrm{ref} E_\parallel}{\check{T}_\mathrm{ref}} = \hat{E}_\parallel
+    && \hat{E}_\parallel = \mathring{E}_\parallel \\
 \mathring{z} &= \frac{z}{\check{L}_\mathrm{ref}} = \hat{z}
     && \hat{z} = \mathring{z} \\
 \frac{\partial}{\partial \mathring{z}} &= \check{L}_\mathrm{ref} \frac{\partial}{\partial z} = \frac{\partial}{\partial \hat{z}}
