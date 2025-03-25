@@ -5600,6 +5600,8 @@ function add_source_term!(source_term, vpa, z, dvth_dz)
     return nothing
 end
 
+"""
+"""
 @timeit global_timer add_dissipation_term!(pdf_out, pdf_in, scratch_dummy, z_spectral, z,
                                            vpa, vpa_spectral, num_diss_params, dt) = begin
     if num_diss_params.electron.vpa_dissipation_coefficient ≤ 0.0
@@ -5881,7 +5883,9 @@ function calculate_pdf_dot_prefactor!(pdf_dot_prefactor, ppar, vth, dens, ddens_
     return nothing
 end
 
-# add contribution to the residual coming from the term proporational to the pdf
+"""
+add contribution to the kinetic equation coming from the term proportional to the pdf
+"""
 @timeit global_timer add_contribution_from_pdf_term!(pdf_out, pdf_in, ppar, dens, upar,
                                                      moments, vpa, z, dt,
                                                      electron_source_settings, ir) = begin
