@@ -556,7 +556,7 @@ subsitute from the parallel flow equation
 \end{align}
 ```
 
-### Full moment-kinetics (separate $n_i$, $u_{i\parallel}$ and $p_i$)
+### [Full moment-kinetics (separate $n_i$, $u_{i\parallel}$ and $p_i$)](@id ion_full_moment_kinetic_equation)
 
 Form evolution equation for $F_i(t,z,w_\parallel,w_\perp)$, starting from
 kinetic equation for $f_i(t,z,v_\parallel,v_\perp)$

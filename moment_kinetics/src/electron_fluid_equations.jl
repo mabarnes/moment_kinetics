@@ -187,6 +187,8 @@ function electron_energy_equation!(ppar_out, ppar_in, electron_density, electron
     return nothing
 end
 
+"""
+"""
 @timeit global_timer electron_energy_equation_no_r!(
                          ppar_out, ppar_in, electron_density, electron_upar, ion_density,
                          ion_upar, ion_ppar, density_neutral, uz_neutral, pz_neutral,
