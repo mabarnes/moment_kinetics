@@ -65,8 +65,7 @@ function update_electron_speed_z!(advect, upar, vth, vpa, ir)
     # the electron advection speed in z is v_par = w_par * v_the
     speed = advect.speed
     @loop_vperp_vpa ivperp ivpa begin
-        #@. @views advect.speed[:,ivpa,ivperp,ir] = vpa[ivpa] * vth
-        @. speed[:,ivpa,ivperp,ir] = vpa[ivpa] * vth + upar
+        @. speed[:,ivpa,ivperp,ir] = vpa[ivpa] * vth
     end
     return nothing
 end
