@@ -1802,11 +1802,13 @@ differences first
 \mathring{\bar{S}}_s &= \frac{\sqrt{\pi} \check{L}_\mathrm{ref} \bar{S}_s}{\check{n}_\mathrm{ref}} = \sqrt{\pi} \hat{\bar{S}}_s
     && \hat{\bar{S}}_s = \frac{1}{\sqrt{\pi}} \mathring{\bar{S}}_s \\
 \mathring{S}_{s,n} &= \frac{\check{L}_\mathrm{ref} S_{s,n}}{\check{c}_\mathrm{ref} \check{n}_\mathrm{ref}} = \frac{L_\mathrm{ref} S_{s,n}}{\sqrt{2} c_\mathrm{ref} n_\mathrm{ref}} = \frac{1}{\sqrt{2}} S_{s,n}
-    && S_{s,n} = \sqrt{2} \mathring{S}_{s,n}
+    && S_{s,n} = \sqrt{2} \mathring{S}_{s,n} \\
 \mathring{S}_{s,\mathrm{mom}} &= \frac{\check{L}_\mathrm{ref} S_{s,\mathrm{mom}}}{\check{m}_\mathrm{ref} \check{n}_\mathrm{ref} \check{c}_\mathrm{ref}^2} = \frac{L_\mathrm{ref} S_{s,\mathrm{mom}}}{2 m_\mathrm{ref} n_\mathrm{ref} c_\mathrm{ref}^2} = \frac{1}{2} S_{s,\mathrm{mom}}
-    && S_{s,\mathrm{mom}} = 2 \mathring{S}_{s,\mathrm{mom}}
+    && S_{s,\mathrm{mom}} = 2 \mathring{S}_{s,\mathrm{mom}} \\
 \mathring{S}_{s,E} &= \frac{\check{L}_\mathrm{ref} S_{s,E}}{\check{m}_\mathrm{ref} \check{n}_\mathrm{ref} \check{c}_\mathrm{ref}^3} = \frac{L_\mathrm{ref} S_{s,E}}{2^{3/2} m_\mathrm{ref} n_\mathrm{ref} c_\mathrm{ref}^2} = \frac{1}{2 \sqrt{2}} S_{s,E}
-    && S_{s,E} = 2 \sqrt{2} \mathring{S}_{s,E}
+    && S_{s,E} = 2 \sqrt{2} \mathring{S}_{s,E} \\
+\mathring{S}_{s,p} &= \frac{\check{L}_\mathrm{ref} S_{s,p}}{\check{m}_\mathrm{ref} \check{n}_\mathrm{ref} \check{c}_\mathrm{ref}^3} = \frac{L_\mathrm{ref} S_{s,p}}{2^{3/2} m_\mathrm{ref} n_\mathrm{ref} c_\mathrm{ref}^2} = \frac{1}{2 \sqrt{2}} S_{s,p}
+    && S_{s,p} = 2 \sqrt{2} \mathring{S}_{s,p} \\
 \mathring{n}_s &= \frac{n_s}{\check{n}_\mathrm{ref}} = \hat{n}_s
     && \hat{n}_s = \mathring{n}_s \\
 \mathring{L}_z &= \frac{L_z}{\check{L}_\mathrm{ref}} = \hat{L}_z
