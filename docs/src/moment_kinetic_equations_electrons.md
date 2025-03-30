@@ -31,7 +31,7 @@ $u_{e\parallel} = u_{i\parallel} + u_0$ assuming in addition (at least for the
 moment) that there is no current through the sheath sets $u_0 = 0$ so that
 ```math
 \begin{align}
-u_{e\parallel} = u_{i\parallel}
+u_{e\parallel} &= u_{i\parallel}
 \end{align}
 ```
 
@@ -51,13 +51,13 @@ see [Electron collisions](@ref)), which gives an equation for
 $E_\parallel = -\partial \phi/\partial z$
 ```math
 \begin{align}
-e E_\parallel &= -\frac{\partial p_{e\parallel}}{\partial z}
-                 + F_{ei\parallel}
-                 + m_e \int v_\parallel C_{en} d^3 v
-                 + m_e \int v_\parallel S_e d^3 v
-e E_\parallel &= -\frac{\partial p_{e\parallel}}{\partial z}
-                 + m_e n_e \nu_{ei} \left( u_{i\parallel} - u_{e\parallel} \right)
-                 + m_e \int v_\parallel S_e d^3 v
+e E_\parallel &= -\frac{1}{n_e} \frac{\partial p_{e\parallel}}{\partial z}
+                 + \frac{F_{ei\parallel}}{n_e}
+                 + \frac{m_e}{n_e} \int v_\parallel C_{en} d^3 v
+                 + \frac{m_e}{n_e} \int v_\parallel S_e d^3 v \\
+e E_\parallel &= -\frac{1}{n_e} \frac{\partial p_{e\parallel}}{\partial z}
+                 + m_e \nu_{ei} \left( u_{i\parallel} - u_{e\parallel} \right)
+                 + \frac{m_e}{n_e} \int v_\parallel S_e d^3 v \\
 \end{align}
 ```
 where the second line assumes the current Krook collision operator and neglects
@@ -69,7 +69,7 @@ The energy equation is similar to [the ion one](@ref "Ion moment equations")
 &\frac{3}{2} \frac{\partial p_e}{\partial t}
 + \frac{\partial q_{e\parallel}}{\partial z}
 + p_{e\parallel} \frac{\partial u_{e\parallel}}{\partial z}
-+ \frac{3}{2} u_{e\parallel} \frac{\partial{p_e}}{\partial z}
++ \frac{3}{2} u_{e\parallel} \frac{\partial p_e}{\partial z}
 + \frac{3}{2} p_e \frac{\partial u_{e\parallel}}{\partial z} \nonumber \\
 &\quad= -E_\mathrm{ioniz} n_e n_n R_\mathrm{ioniz}
         + \int \frac{1}{2} m_e |\boldsymbol{v} - u_{e\parallel} \hat{\boldsymbol{z}}|^2 C_{ei} d^3 v
@@ -81,7 +81,7 @@ The energy equation is similar to [the ion one](@ref "Ion moment equations")
 &\frac{3}{2} \frac{\partial p_e}{\partial t}
 + \frac{\partial q_{e\parallel}}{\partial z}
 + p_{e\parallel} \frac{\partial u_{e\parallel}}{\partial z}
-+ \frac{3}{2} u_{e\parallel} \frac{\partial{p_e}}{\partial z}
++ \frac{3}{2} u_{e\parallel} \frac{\partial p_e}{\partial z}
 + \frac{3}{2} p_e \frac{\partial u_{e\parallel}}{\partial z} \nonumber \\
 &\quad= -E_\mathrm{ioniz} n_e n_n R_\mathrm{ioniz}
         + 3 n_e \frac{m_e}{m_i} \nu_{ei} \left( T_i - T_e \right)
@@ -181,22 +181,21 @@ where
 \dot{z}_e &= v_{Te} w_\parallel \\
 
 \dot{w}_{\parallel,e} &= \frac{1}{n_e m_e v_{Te}} \frac{\partial p_{e\parallel}}{\partial z}
-                         + \frac{2 w_\parallel}{3 n_e m_e v_Te^2} \frac{\partial q_{e\parallel}}{\partial z}
+                         + \frac{w_\parallel}{3 p_e} \frac{\partial q_{e\parallel}}{\partial z}
                          - w_\parallel^2 \frac{\partial v_{T_e}}{\partial z} \nonumber \\
                   &\quad - \frac{1}{n_e v_{Te}} \int v_\parallel S_e d^3 v
                          - \frac{w_\parallel}{6 p_e} \int m_e v^2 S_e d^3 v
-                         + \frac{w_\parallel}{3 p_e} \frac{3}{2} T_e \int S_e d^3 v \\
+                         + \frac{w_\parallel}{2 n_e} \int S_e d^3 v \\
 
-\dot{w}_{\perp,e} &= \frac{2 w_\perp}{3 m_e n_e v_{Te}^2} \frac{\partial q_{e\parallel}}{\partial z}
+\dot{w}_{\perp,e} &= \frac{w_\perp}{3 p_e} \frac{\partial q_{e\parallel}}{\partial z}
                      - w_\perp w_\parallel \frac{\partial v_{Te}}{\partial z} \nonumber \\
               &\quad - \frac{w_\perp}{6 p_e} \int m_e v^2 S_e d^3 v
-                     + \frac{w_\perp}{3 p_e} \frac{3}{2} T_e \int S_e d^3 v \\
+                     + \frac{w_\perp}{2 n_e} \int S_e d^3 v \\
 
 \frac{\dot{F}_e}{F_e} &= w_\parallel \left( 3 \frac{\partial v_{Te}}{\partial z} - \frac{v_{Te}}{n_e} \frac{\partial n_e}{\partial z} \right)
-                         - \frac{2}{m_e n_e v_{Te}^2} \frac{\partial q_{e\parallel}}{\partial z} \nonumber \\
+                         - \frac{1}{p_e} \frac{\partial q_{e\parallel}}{\partial z} \nonumber \\
                   &\quad + \frac{1}{2 p_e} \int m_e v^2 S_e d^3 v
-                         - \frac{1}{p_e} \frac{3}{2} T_e \int S_e d^3 v
-                         - \frac{1}{n_e} \int S_e d^3 v \\
+                         - \frac{5}{2 n_e} \int S_e d^3 v \\
 
 \mathcal{C}_{ee} &= \frac{v_{Te}^3}{n_e} C_{K,ee} \\
                  &= -\frac{v_{Te}^3}{n_e} \nu_{ee} \left( f_e - \frac{n_e}{\pi^{3/2} v_{Te}^3} \exp\left( -\frac{|\boldsymbol{v} - u_{e\parallel}\hat{\boldsymbol{z}}|^2}{v_{Te}^2} \right) \right) \\
@@ -219,6 +218,257 @@ to ensure that the first 3 moments of the shape function equation vanish, we
 must also keep the source contributions to $\dot w_{\parallel,e}$, $\dot
 w_{\perp,e}$, and $\dot F_e/F_e$ in the same form as the ion equations,
 although we can drop the terms that would be multiplied by $u_{e\parallel}$.
+
+Reduction to 1D1V
+-----------------
+
+We can take the $T_{e\perp}=0$ limit of the equations and marginalise over
+$v_\perp$/$w_\perp$ to reduce to 1D1V in a very similar way [as for the
+ions](@ref ion_reduction_to_1d1v).
+
+Quasineutrality and force balance keep the same form, and the energy equation
+becomes
+```math
+\begin{align}
+&\frac{3}{2} \frac{\partial p_e}{\partial t}
++ \frac{\partial q_{e\parallel}}{\partial z}
++ p_{e\parallel} \frac{\partial u_{e\parallel}}{\partial z}
++ \frac{3}{2} u_{e\parallel} \frac{\partial p_e}{\partial z}
++ \frac{3}{2} p_e \frac{\partial u_{e\parallel}}{\partial z} \nonumber \\
+&\quad= -E_\mathrm{ioniz} n_e n_n R_\mathrm{ioniz}
+        + \int \frac{1}{2} m_e (v_\parallel - u_{e\parallel})^2 \bar{C}_{ei} dv_\parallel
+        + \int \frac{1}{2} m_e (v_\parallel - u_{e\parallel})^2 \bar{C}_{en} dv_\parallel \nonumber \\
+&\qquad + \frac{1}{2} \int m_e v_\parallel^2 \bar{S}_e dv_\parallel
+        - m_e u_{e\parallel} \int v_\parallel \bar{S}_e dv_\parallel
+        + \frac{1}{2} m_e u_{e\parallel}^2 \int \bar{S}_e dv_\parallel \\
+
+&\frac{3}{2} \frac{\partial p_e}{\partial t}
++ \frac{\partial q_{e\parallel}}{\partial z}
++ p_{e\parallel} \frac{\partial u_{e\parallel}}{\partial z}
++ \frac{3}{2} u_{e\parallel} \frac{\partial p_e}{\partial z}
++ \frac{3}{2} p_e \frac{\partial u_{e\parallel}}{\partial z} \nonumber \\
+&\quad= -E_\mathrm{ioniz} n_e n_n R_\mathrm{ioniz}
+        + 3 n_e \frac{m_e}{m_i} \nu_{ei} \left( T_i - T_e \right)
+        + m_e n_e \nu_{ei} \left( u_{i\parallel} - u_{e_\parallel} \right)^2 \nonumber \\
+&\qquad + \frac{1}{2} \int m_e v_\parallel^2 \bar{S}_e dv_\parallel
+        - m_e u_{e\parallel} \int v_\parallel \bar{S}_e dv_\parallel
+        + \frac{1}{2} m_e u_{e\parallel}^2 \int \bar{S}_e dv_\parallel \\
+\end{align}
+```
+
+The kinetic equation for $\bar F_e = \int F_e d^2 w_\perp$ is
+```math
+\begin{align}
+\dot{z}_e \frac{\partial \bar{F}_e}{\partial z}
++ \dot{w}_{\parallel,e} \frac{\partial \bar{F}_e}{\partial w_\parallel}
+&= \dot{\bar{F}}_e
+   + \bar{\mathcal{C}}_{ee} + \bar{\mathcal{C}}_{ei} + \bar{\mathcal{C}}_{en}
+   + \bar{\mathcal{S}}_e
+\end{align}
+```
+```math
+\begin{align}
+\dot{z}_e &= v_{Te} w_\parallel \\
+
+\dot{w}_{\parallel,e} &= \frac{1}{n_e m_e v_{Te}} \frac{\partial p_{e\parallel}}{\partial z}
+                         + \frac{w_\parallel}{3 p_e} \frac{\partial q_{e\parallel}}{\partial z}
+                         - w_\parallel^2 \frac{\partial v_{T_e}}{\partial z} \nonumber \\
+                  &\quad - \frac{1}{n_e v_{Te}} \int v_\parallel \bar{S}_e dv_\parallel
+                         - \frac{w_\parallel}{6 p_e} \int m_e v_\parallel^2 \bar{S}_e dv_\parallel
+                         + \frac{w_\parallel}{2 n_e} \int \bar{S}_e dv_\parallel \\
+
+\frac{\dot{\bar{F}}_e}{\bar{F}_e} &= w_\parallel \left( \frac{\partial v_{Te}}{\partial z} - \frac{v_{Te}}{n_e} \frac{\partial n_e}{\partial z} \right)
+                                     - \frac{1}{3 p_e} \frac{\partial q_{e\parallel}}{\partial z} \nonumber \\
+                              &\quad + \frac{1}{6 p_e} \int m_e v_\parallel^2 \bar{S}_e dv_\parallel
+                                     - \frac{3}{2 n_e} \int \bar{S}_e dv_\parallel \\
+
+\bar{\mathcal{C}}_{ee} &= \frac{v_{Te}}{n_e} \bar{C}_{K,ee} \\
+                       &= -\frac{v_{Te}}{n_e} \nu_{ee} \left( \bar{f}_e - \frac{n_e}{\sqrt{\pi} \sqrt{2 T_{e\parallel}/m_e}} \exp\left( -\frac{m_e (v_\parallel - u_{e\parallel})^2}{2 T_{e\parallel}} \right) \right) \\
+                       &= - \nu_{ee} \left( \bar{F}_e - \sqrt{\frac{3}{\pi}} \exp\left( -3 w_\parallel^2 \right) \right) \\
+
+\bar{\mathcal{C}}_{ei} &= \frac{v_{Te}}{n_e} \bar{C}_{K,ei} \\
+                       &= -\frac{v_{Te}}{n_e} \nu_{ei} \left( \bar{f}_e - \frac{n_e}{\sqrt{\pi} \sqrt{2 T_{e\parallel}/m_e}} \exp\left( -\frac{m_e (v_\parallel - u_{i\parallel})^2}{2 T_{e\parallel}} \right) \right) \\
+                       &= - \nu_{ei} \left( \bar{F}_e - \sqrt{\frac{3}{\pi}} \exp\left( -3 \left( w_\parallel - \frac{(u_{i\parallel} - u_{e\parallel})}{v_{Te}} \right)^2 \right) \right) \\
+
+\bar{\mathcal{C}}_{en} &= \text{not implemented yet} \\
+
+\bar{\mathcal{S}}_{e} &= \frac{v_{Te}}{n_e} \bar{S}_e = \frac{v_{Te}}{n_e} \int S_e d^2 v_\perp \\
+\end{align}
+```
+recalling that $\int w_\perp \frac{\partial F_e}{\partial w_\perp} d^2 w_\perp
+= 2 \bar F_e$ as for the ions, and noting that in the $T_{e,\perp} = 0$ limit,
+$T_{e\parallel} = T_e/3$ so that $v_{Te}^2 = 2T_e/m_e = 6 T_{e\parallel}/m_e$.
+
+Dimensionless equations
+-----------------------
+
+We make the equations dimensionless using the [conversions defined here](@ref
+"Dimensionless equations for code").
+
+### 1D2V
+
+The moment equations become
+```math
+\begin{align}
+\hat{n}_e &= \hat{n}_i \\
+
+\hat{u}_{e\parallel} &= \hat{u}_{i\parallel} \\
+
+\hat{E}_\parallel &= -\frac{1}{\hat{n}_e} \frac{\partial \hat{p}_{e\parallel}}{\partial \hat{z}}
+                     + \frac{\hat{F}_{ei\parallel}}{\hat{n}_e}
+                     + \frac{\hat{m}_e}{\hat{n}_e} \int \hat{v}_\parallel \hat{C}_{en} d^3 \hat{v}
+                     + \frac{\hat{m}_e}{\hat{n}_e} \int \hat{v}_\parallel \hat{S}_e d^3 \hat{v} \\
+\hat{E}_\parallel &= -\frac{1}{\hat{n}_e} \frac{\partial \hat{p}_{e\parallel}}{\partial \hat{z}}
+                     + \hat{m}_e \hat{\nu}_{ei} \left( \hat{u}_{i\parallel} - \hat{u}_{e\parallel} \right)
+                     + \frac{\hat{m}_e}{\hat{n}_e} \int \hat{v}_\parallel \hat{S}_e d^3 \hat{v} \\
+\end{align}
+```
+
+```math
+\begin{align}
+&\frac{3}{2} \frac{\partial \hat{p}_e}{\partial \hat{t}}
++ \frac{\partial \hat{q}_{e\parallel}}{\partial \hat{z}}
++ \hat{p}_{e\parallel} \frac{\partial \hat{u}_{e\parallel}}{\partial \hat{z}}
++ \frac{3}{2} \hat{u}_{e\parallel} \frac{\partial \hat{p}_e}{\partial \hat{z}}
++ \frac{3}{2} \hat{p}_e \frac{\partial \hat{u}_{e\parallel}}{\partial \hat{z}} \nonumber \\
+&\quad= -\hat{E}_\mathrm{ioniz} \hat{n}_e \hat{n}_n \hat{R}_\mathrm{ioniz}
+        + \int \frac{1}{2} \hat{m}_e |\hat{\boldsymbol{v}} - \hat{u}_{e\parallel} \hat{\boldsymbol{z}}|^2 \hat{C}_{ei} d^3 v
+        + \int \frac{1}{2} \hat{m}_e |\hat{\boldsymbol{v}} - \hat{u}_{e\parallel} \hat{\boldsymbol{z}}|^2 \hat{C}_{en} d^3 v \nonumber \\
+&\qquad + \frac{1}{2} \int \hat{m}_e \hat{v}^2 \hat{S}_e d^3 \hat{v}
+        - \hat{m}_e \hat{u}_{e\parallel} \int \hat{v}_\parallel \hat{S}_e d^3 \hat{v}
+        + \frac{1}{2} \hat{m}_e \hat{u}_{e\parallel}^2 \int \hat{S}_e d^3 \hat{v} \\
+
+&\frac{3}{2} \frac{\partial \hat{p}_e}{\partial \hat{t}}
++ \frac{\partial \hat{q}_{e\parallel}}{\partial \hat{z}}
++ \hat{p}_{e\parallel} \frac{\partial \hat{u}_{e\parallel}}{\partial \hat{z}}
++ \frac{3}{2} \hat{u}_{e\parallel} \frac{\partial \hat{p}_e}{\partial \hat{z}}
++ \frac{3}{2} \hat{p}_e \frac{\partial \hat{u}_{e\parallel}}{\partial \hat{z}} \nonumber \\
+&\quad= -\hat{E}_\mathrm{ioniz} \hat{n}_e \hat{n}_n \hat{R}_\mathrm{ioniz}
+        + 3 \hat{n}_e \frac{\hat{m}_e}{\hat{m}_i} \hat{\nu}_{ei} \left( \hat{T}_i - \hat{T}_e \right)
+        + \hat{m}_e \hat{n}_e \hat{\nu}_{ei} \left( \hat{u}_{i\parallel} - \hat{u}_{e_\parallel} \right)^2 \nonumber \\
+&\qquad + \frac{1}{2} \int \hat{m}_e \hat{v}^2 \hat{S}_e d^3 \hat{v}
+        - \hat{m}_e \hat{u}_{e\parallel} \int \hat{v}_\parallel \hat{S}_e d^3 \hat{v}
+        + \frac{1}{2} \hat{m}_e \hat{u}_{e\parallel}^2 \int \hat{S}_e d^3 \hat{v} \\
+\end{align}
+```
+
+and the dimensionless kinetic equation is
+```math
+\begin{align}
+\hat{\dot{z}}_e \frac{\partial F_e}{\partial \hat{z}}
++ \hat{\dot{w}}_{\parallel,e} \frac{\partial F_e}{\partial w_\parallel}
++ \hat{\dot{w}}_{\perp,e} \frac{\partial F_e}{\partial w_\perp}
+&= \hat{\dot{F}}_e + \hat{\mathcal{C}}_{ee} + \hat{\mathcal{C}}_{ei} + \hat{\mathcal{C}}_{en} + \hat{\mathcal{S}}_e
+\end{align}
+```
+where
+```math
+\begin{align}
+\hat{\dot{z}}_e &= \hat{v}_{Te} w_\parallel \\
+
+\hat{\dot{w}}_{\parallel,e} &= \frac{1}{\hat{n}_e \hat{m}_e \hat{v}_{Te}} \frac{\partial \hat{p}_{e\parallel}}{\partial \hat{z}}
+                               + \frac{w_\parallel}{3 \hat{p}_e} \frac{\partial \hat{q}_{e\parallel}}{\partial \hat{z}}
+                               - w_\parallel^2 \frac{\partial \hat{v}_{T_e}}{\partial \hat{z}} \nonumber \\
+                        &\quad - \frac{1}{\hat{n}_e \hat{v}_{Te}} \int \hat{v}_\parallel \hat{S}_e d^3 \hat{v}
+                               - \frac{w_\parallel}{6 \hat{p}_e} \int \hat{m}_e \hat{v}^2 \hat{S}_e d^3 \hat{v}
+                               + \frac{w_\parallel}{2 \hat{n}_e} \int \hat{S}_e d^3 \hat{v} \\
+
+\hat{\dot{w}}_{\perp,e} &= \frac{w_\perp}{3 \hat{p}_e} \frac{\partial \hat{q}_{e\parallel}}{\partial \hat{z}}
+                           - w_\perp w_\parallel \frac{\partial \hat{v}_{Te}}{\partial \hat{z}} \nonumber \\
+                    &\quad - \frac{w_\perp}{6 \hat{p}_e} \int \hat{m}_e \hat{v}^2 \hat{S}_e d^3 \hat{v}
+                           + \frac{w_\perp}{2 \hat{n}_e} \int \hat{S}_e d^3 \hat{v} \\
+
+\frac{\hat{\dot{F}}_e}{F_e} &= w_\parallel \left( 3 \frac{\partial \hat{v}_{Te}}{\partial \hat{z}} - \frac{\hat{v}_{Te}}{\hat{n}_e} \frac{\partial \hat{n}_e}{\partial \hat{z}} \right)
+                               - \frac{1}{\hat{p}_e} \frac{\partial \hat{q}_{e\parallel}}{\partial \hat{z}} \nonumber \\
+                        &\quad + \frac{1}{2 \hat{p}_e} \int \hat{m}_e \hat{v}^2 \hat{S}_e d^3 \hat{v}
+                               - \frac{5}{2 \hat{n}_e} \int \hat{S}_e d^3 \hat{v} \\
+
+\hat{\mathcal{C}}_{ee} &= \frac{\hat{v}_{Te}^3}{\hat{n}_e} \hat{C}_{K,ee} \\
+                       &= -\frac{\hat{v}_{Te}^3}{\hat{n}_e} \hat{\nu}_{ee} \left( \hat{f}_e - \frac{\hat{n}_e}{\pi^{3/2} \hat{v}_{Te}^3} \exp\left( -\frac{|\hat{\boldsymbol{v}} - \hat{u}_{e\parallel}\hat{\boldsymbol{z}}|^2}{\hat{v}_{Te}^2} \right) \right) \\
+                       &= - \hat{\nu}_{ee} \left( F_e - \frac{1}{\pi^{3/2}} \exp\left( -w^2 \right) \right) \\
+
+\hat{\mathcal{C}}_{ei} &= \frac{\hat{v}_{Te}^3}{\hat{n}_e} \hat{C}_{K,ei} \\
+                       &= -\frac{\hat{v}_{Te}^3}{\hat{n}_e} \hat{\nu}_{ei} \left( \hat{f}_e - \frac{\hat{n}_e}{\pi^{3/2} \hat{v}_{Te}^3} \exp\left( -\frac{|\hat{\boldsymbol{v}} - \hat{u}_{i\parallel}\hat{\boldsymbol{z}}|^2}{\hat{v}_{Te}^2} \right) \right) \\
+                       &= - \hat{\nu}_{ei} \left( F_e - \frac{1}{\pi^{3/2}} \exp\left( -\left( w_\parallel - \frac{(\hat{u}_{i\parallel} - \hat{u}_{e\parallel})}{\hat{v}_{Te}} \right)^2 - w_\perp^2 \right) \right) \\
+
+\hat{\mathcal{C}}_{en} &= \text{not implemented yet} \\
+
+\hat{\mathcal{S}}_{e} &= \frac{\hat{v}_{Te}^3}{\hat{n}_e} \hat{S}_e \\
+\end{align}
+```
+
+### 1D1V
+
+In 1D1V the dimsionless energy equation is
+```math
+\begin{align}
+&\frac{3}{2} \frac{\partial \hat{p}_e}{\partial \hat{t}}
++ \frac{\partial \hat{q}_{e\parallel}}{\partial \hat{z}}
++ \hat{p}_{e\parallel} \frac{\partial \hat{u}_{e\parallel}}{\partial \hat{z}}
++ \frac{3}{2} \hat{u}_{e\parallel} \frac{\partial \hat{p}_e}{\partial \hat{z}}
++ \frac{3}{2} \hat{p}_e \frac{\partial \hat{u}_{e\parallel}}{\partial \hat{z}} \nonumber \\
+&\quad= -\hat{E}_\mathrm{ioniz} \hat{n}_e \hat{n}_n \hat{R}_\mathrm{ioniz}
+        + \int \frac{1}{2} \hat{m}_e (\hat{v}_\parallel - \hat{u}_{e\parallel})^2 \hat{\bar{C}}_{ei} d\hat{v}_\parallel
+        + \int \frac{1}{2} \hat{m}_e (\hat{v}_\parallel - \hat{u}_{e\parallel})^2 \hat{\bar{C}}_{en} d\hat{v}_\parallel \nonumber \\
+&\qquad + \frac{1}{2} \int \hat{m}_e \hat{v}_\parallel^2 \hat{\bar{S}}_e d\hat{v}_\parallel
+        - \hat{m}_e \hat{u}_{e\parallel} \int \hat{v}_\parallel \hat{\bar{S}}_e d\hat{v}_\parallel
+        + \frac{1}{2} \hat{m}_e \hat{u}_{e\parallel}^2 \int \hat{\bar{S}}_e d\hat{v}_\parallel \\
+
+&\frac{3}{2} \frac{\partial \hat{p}_e}{\partial \hat{t}}
++ \frac{\partial \hat{q}_{e\parallel}}{\partial \hat{z}}
++ \hat{p}_{e\parallel} \frac{\partial \hat{u}_{e\parallel}}{\partial \hat{z}}
++ \frac{3}{2} \hat{u}_{e\parallel} \frac{\partial \hat{p}_e}{\partial \hat{z}}
++ \frac{3}{2} \hat{p}_e \frac{\partial \hat{u}_{e\parallel}}{\partial \hat{z}} \nonumber \\
+&\quad= -\hat{E}_\mathrm{ioniz} \hat{n}_e \hat{n}_n \hat{R}_\mathrm{ioniz}
+        + 3 \hat{n}_e \frac{\hat{m}_e}{\hat{m}_i} \hat{\nu}_{ei} \left( \hat{T}_i - \hat{T}_e \right)
+        + \hat{m}_e \hat{n}_e \hat{\nu}_{ei} \left( \hat{u}_{i\parallel} - \hat{u}_{e_\parallel} \right)^2 \nonumber \\
+&\qquad + \frac{1}{2} \int \hat{m}_e \hat{v}_\parallel^2 \hat{\bar{S}}_e d\hat{v}_\parallel
+        - \hat{m}_e \hat{u}_{e\parallel} \int \hat{v}_\parallel \hat{\bar{S}}_e d\hat{v}_\parallel
+        + \frac{1}{2} \hat{m}_e \hat{u}_{e\parallel}^2 \int \hat{\bar{S}}_e d\hat{v}_\parallel \\
+\end{align}
+```
+
+and the dimensionless kinetic equation is
+```math
+\begin{align}
+\hat{\dot{z}}_e \frac{\partial \bar{F}_e}{\partial \hat{z}}
++ \hat{\dot{w}}_{\parallel,e} \frac{\partial \bar{F}_e}{\partial w_\parallel}
+&= \hat{\dot{\bar{F}}}_e
+   + \hat{\bar{\mathcal{C}}}_{ee} + \hat{\bar{\mathcal{C}}}_{ei} + \hat{\bar{\mathcal{C}}}_{en}
+   + \hat{\bar{\mathcal{S}}}_e
+\end{align}
+```
+```math
+\begin{align}
+\hat{\dot{z}}_e &= \hat{v}_{Te} w_\parallel \\
+
+\hat{\dot{w}}_{\parallel,e} &= \frac{1}{\hat{n}_e \hat{m}_e \hat{v}_{Te}} \frac{\partial \hat{p}_{e\parallel}}{\partial \hat{z}}
+                               + \frac{w_\parallel}{3 \hat{p}_e} \frac{\partial \hat{q}_{e\parallel}}{\partial \hat{z}}
+                               - w_\parallel^2 \frac{\partial \hat{v}_{T_e}}{\partial \hat{z}} \nonumber \\
+                        &\quad - \frac{1}{\hat{n}_e \hat{v}_{Te}} \int \hat{v}_\parallel \hat{\bar{S}}_e d\hat{v}_\parallel
+                               - \frac{w_\parallel}{6 \hat{p}_e} \int \hat{m}_e \hat{v}_\parallel^2 \hat{\bar{S}}_e dv_\parallel
+                               + \frac{w_\parallel}{2 \hat{n}_e} \int \hat{\bar{S}}_e d\hat{v}_\parallel \\
+
+\frac{\hat{\dot{\bar{F}}}_e}{\bar{F}_e} &= w_\parallel \left( \frac{\partial \hat{v}_{Te}}{\partial \hat{z}} - \frac{\hat{v}_{Te}}{\hat{n}_e} \frac{\partial \hat{n}_e}{\partial \hat{z}} \right)
+                                     - \frac{1}{3 \hat{p}_e} \frac{\partial \hat{q}_{e\parallel}}{\partial \hat{z}} \nonumber \\
+                              &\quad + \frac{1}{6 \hat{p}_e} \int \hat{m}_e \hat{v}_\parallel^2 \hat{\bar{S}}_e d\hat{v}_\parallel
+                                     - \frac{3}{2 \hat{n}_e} \int \hat{\bar{S}}_e d\hat{v}_\parallel \\
+
+\hat{\bar{\mathcal{C}}}_{ee} &= \frac{\hat{v}_{Te}}{\hat{n}_e} \hat{\bar{C}}_{K,ee} \\
+                             &= - \hat{\nu}_{ee} \left( \bar{F}_e - \sqrt{\frac{3}{\pi}} \exp\left( -3 w_\parallel^2 \right) \right) \\
+
+\hat{\bar{\mathcal{C}}}_{ei} &= \frac{\hat{v}_{Te}}{\hat{n}_e} \hat{\bar{C}}_{K,ei} \\
+                             &= - \hat{\nu}_{ei} \left( \bar{F}_e - \sqrt{\frac{3}{\pi}} \exp\left( -3 \left( w_\parallel - \frac{(\hat{u}_{i\parallel} - \hat{u}_{e\parallel})}{\hat{v}_{Te}} \right)^2 \right) \right) \\
+
+\hat{\bar{\mathcal{C}}}_{en} &= \text{not implemented yet} \\
+
+\hat{\bar{\mathcal{S}}}_{e} &= \frac{\hat{v}_{Te}}{\hat{n}_e} \hat{\bar{S}}_e = \frac{\hat{v}_{Te}}{\hat{n}_e} \int \hat{S}_e d^2 \hat{v}_\perp \\
+\end{align}
+```
+
+The conversion to the dimensionless equations in the 1D1V Excalibur reports,
+and the original version of the code, uses the [conversions given here](@ref
+"Conversion to old dimensionless equations").
 
 Implemented, dimensionless, 1D1V equations
 ------------------------------------------
