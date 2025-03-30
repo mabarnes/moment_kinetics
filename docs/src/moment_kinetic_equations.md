@@ -1773,8 +1773,8 @@ differences first
     && \hat{f}_s = \frac{1}{(2 \pi)^{3/2}} \mathring{f}_s \\
 \mathring{\bar{f}}_s &= \frac{\sqrt{\pi} \check{c}_\mathrm{ref}}{\check{n}_\mathrm{ref}} \bar{f}_s = \frac{\sqrt{2 \pi} c_\mathrm{ref}}{n_\mathrm{ref}} \bar{f}_s = \sqrt{2 \pi} \hat{\bar{f}}_s
     && \hat{\bar{f}}_s = \frac{1}{\sqrt{2 \pi}} \mathring{\bar{f}}_s \\
-\mathring{F}_s &= \sqrt{\pi} \check{F}_s = \sqrt{\pi} \sqrt{3} \bar{F}_s = \sqrt{3} \hat{\bar{F}}_s
-    && \hat{\bar{F}}_s = \frac{1}{\sqrt{3}} \mathring{\bar{F}}_s \\
+\mathring{F}_s &= \sqrt{\pi} \check{F}_s = \sqrt{\pi} \sqrt{3} \bar{F}_s
+    && \bar{F}_s = \frac{1}{\sqrt{\pi} \sqrt{3}} \mathring{\bar{F}}_s \\
 \mathring{t} &= \frac{\check{c}_\mathrm{ref} t}{\check{L}_\mathrm{ref}} = \sqrt{2} \frac{c_\mathrm{ref} t}{L_\mathrm{ref}} = \sqrt{2} \hat{t}
     && \hat{t} = \frac{1}{\sqrt{2}} \mathring{t} \\
 \frac{\partial}{\partial \mathring{t}} &= \frac{\check{L}_\mathrm{ref}}{\check{c}_\mathrm{ref}} \frac{\partial}{\partial t} = \frac{L_\mathrm{ref}}{\sqrt{2} c_\mathrm{ref}} \frac{\partial}{\partial \hat{t}} = \frac{1}{\sqrt{2}} \frac{\partial}{\partial \hat{t}}
