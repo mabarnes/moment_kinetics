@@ -1107,7 +1107,7 @@ and marginalising
     &= -2 \pi \frac{v_{Ti}}{n_i} \bar{f}_i \lim_{v_{Ti\perp} \rightarrow 0} \int_0^\infty 2 v_\perp \frac{\exp(-v_\perp^2/v_{Ti\perp}^2)}{\pi v_{Ti\perp}^2} dv_\perp \nonumber \\
     &= -2 \pi \frac{v_{Ti}}{n_i} \bar{f}_i \lim_{v_{Ti\perp} \rightarrow 0} \int_0^\infty 2 x \frac{\exp(-x^2)}{\pi} dx \nonumber \\
     &= -4 \frac{v_{Ti}}{n_i} \bar{f}_i \lim_{v_{Ti\perp} \rightarrow 0} \left[ -\frac{1}{2} \exp(-x^2) \right]_0^\infty \nonumber \\
-    &= 2 \frac{v_{Ti}}{n_i} \bar{f}_i \nonumber \\
+    &= -2 \frac{v_{Ti}}{n_i} \bar{f}_i \nonumber \\
 \end{align}
 ```
 ```@raw html
@@ -1116,7 +1116,7 @@ and marginalising
 ```math
 \begin{align}
 \int w_\perp \frac{\partial F_i}{\partial w_\perp} d^2 w_\perp
-    &= 2 \bar{F}_i \\
+    &= -2 \bar{F}_i \\
 \end{align}
 ```
 This term cancels with the contribution to $\dot F_i$ that was associated with
@@ -1827,6 +1827,8 @@ differences first
     && \hat{v}_\perp = \sqrt{2} \mathring{v}_\perp \\
 \frac{\partial}{\partial \mathring{v}_\perp} &= \check{c}_\mathrm{ref} \frac{\partial}{\partial v_\perp} = \sqrt{2} c_\mathrm{ref} \frac{\partial}{\partial v_\perp} = \sqrt{2} \frac{\partial}{\partial \hat{v}_\perp}
     && \frac{\partial}{\partial \hat{v}_\perp} = \frac{1}{\sqrt{2}} \frac{\partial}{\partial \mathring{v}_\perp} \\
+\mathring{u}_{s\parallel} &= \frac{u_{s\parallel}}{\check{c}_\mathrm{ref}} = \frac{u_{s\parallel}}{\sqrt{2} c_\mathrm{ref}} = \frac{\hat{u}_{s\parallel}}{\sqrt{2}}
+    && \hat{u}_{s\parallel} = \sqrt{2} \mathring{u}_{s\parallel} \\
 \mathring{p}_s &= \frac{p_s}{\check{n}_\mathrm{ref} m_i \check{c}_\mathrm{ref}^2} = \frac{p_s}{\check{n}_\mathrm{ref} m_i 2 \check{T}_\mathrm{ref}} = \frac{\hat{p}_s}{2}
     && \hat{p}_s = 2 \mathring{p}_s \\
 \mathring{q}_{s\parallel} &= \frac{\check{q}_{s\parallel}}{m_i \check{n}_\mathrm{ref} \check{c}_\mathrm{ref}^3} = \frac{2 q_{s\parallel}}{m_i n_\mathrm{ref} 2^{3/2} c_\mathrm{ref}^3} = \frac{\hat{q}_{s\parallel}}{\sqrt{2}}
