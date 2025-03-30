@@ -1787,6 +1787,8 @@ differences first
     && \hat{v}_\perp = \sqrt{2} \mathring{v}_\perp \\
 \frac{\partial}{\partial \mathring{v}_\perp} &= \check{c}_\mathrm{ref} \frac{\partial}{\partial v_\perp} = \sqrt{2} c_\mathrm{ref} \frac{\partial}{\partial v_\perp} = \sqrt{2} \frac{\partial}{\partial \hat{v}_\perp}
     && \frac{\partial}{\partial \hat{v}_\perp} = \frac{1}{\sqrt{2}} \frac{\partial}{\partial \mathring{v}_\perp} \\
+\mathring{w}_\parallel &= \frac{\mathring{v}_\parallel}{\mathring{v}_{Ts}} = \frac{v_\parallel}{\check{v}_{Ts}} = \frac{v_\parallel}{\sqrt{3}v_{Ts}} = \frac{w_\parallel}{\sqrt{3}}
+    && w_\parallel = \sqrt{3} \mathring{w}_\parallel \\
 \mathring{u}_{s\parallel} &= \frac{u_{s\parallel}}{\check{c}_\mathrm{ref}} = \frac{u_{s\parallel}}{\sqrt{2} c_\mathrm{ref}} = \frac{\hat{u}_{s\parallel}}{\sqrt{2}}
     && \hat{u}_{s\parallel} = \sqrt{2} \mathring{u}_{s\parallel} \\
 \mathring{p}_s &= \frac{p_s}{\check{n}_\mathrm{ref} m_i \check{c}_\mathrm{ref}^2} = \frac{p_s}{\check{n}_\mathrm{ref} m_i 2 \check{T}_\mathrm{ref}} = \frac{\hat{p}_s}{2}
