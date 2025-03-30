@@ -422,7 +422,7 @@ and the dimensionless kinetic equation is
 \hat{\dot{w}}_{\parallel,e} &= \frac{1}{\hat{n}_e \hat{m}_e \hat{v}_{Te}} \frac{\partial \hat{p}_{e\parallel}}{\partial \hat{z}}
                                + \frac{w_\parallel}{3 \hat{p}_e} \frac{\partial \hat{q}_{e\parallel}}{\partial \hat{z}}
                                - w_\parallel^2 \frac{\partial \hat{v}_{T_e}}{\partial \hat{z}} \nonumber \\
-                        &\quad - \frac{1}{\hat{m}_e \hat{n}_e \hat{v}_{Te}} (\hat{S}_{e,\mathrm{mom}} - \hat{m}_e \hat{u}_{e\parallel} S_{e,n})
+                        &\quad - \frac{1}{\hat{m}_e \hat{n}_e \hat{v}_{Te}} (\hat{S}_{e,\mathrm{mom}} - \hat{m}_e \hat{u}_{e\parallel} \hat{S}_{e,n})
                                - \frac{w_\parallel}{3 \hat{p}_e} (\hat{S}_{e,p} - \hat{T}_e \hat{S}_{e,n}) \\
 
 \frac{\hat{\dot{\bar{F}}}_e}{\bar{F}_e} &= w_\parallel \left( \frac{\partial \hat{v}_{Te}}{\partial \hat{z}} - \frac{\hat{v}_{Te}}{\hat{n}_e} \frac{\partial \hat{n}_e}{\partial \hat{z}} \right)
