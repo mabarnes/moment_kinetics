@@ -1803,14 +1803,16 @@ differences first
     && \hat{S}_s = \frac{1}{2 \pi^{3/2}} \mathring{S}_s \\
 \mathring{\bar{S}}_s &= \frac{\sqrt{\pi} \check{L}_\mathrm{ref} \bar{S}_s}{\check{n}_\mathrm{ref}} = \sqrt{\pi} \hat{\bar{S}}_s
     && \hat{\bar{S}}_s = \frac{1}{\sqrt{\pi}} \mathring{\bar{S}}_s \\
-\mathring{S}_{s,n} &= \frac{\check{L}_\mathrm{ref} S_{s,n}}{\check{c}_\mathrm{ref} \check{n}_\mathrm{ref}} = \frac{L_\mathrm{ref} S_{s,n}}{\sqrt{2} c_\mathrm{ref} n_\mathrm{ref}} = \frac{1}{\sqrt{2}} S_{s,n}
-    && S_{s,n} = \sqrt{2} \mathring{S}_{s,n} \\
-\mathring{S}_{s,\mathrm{mom}} &= \frac{\check{L}_\mathrm{ref} S_{s,\mathrm{mom}}}{\check{m}_\mathrm{ref} \check{n}_\mathrm{ref} \check{c}_\mathrm{ref}^2} = \frac{L_\mathrm{ref} S_{s,\mathrm{mom}}}{2 m_\mathrm{ref} n_\mathrm{ref} c_\mathrm{ref}^2} = \frac{1}{2} S_{s,\mathrm{mom}}
-    && S_{s,\mathrm{mom}} = 2 \mathring{S}_{s,\mathrm{mom}} \\
-\mathring{S}_{s,E} &= \frac{\check{L}_\mathrm{ref} S_{s,E}}{\check{m}_\mathrm{ref} \check{n}_\mathrm{ref} \check{c}_\mathrm{ref}^3} = \frac{L_\mathrm{ref} S_{s,E}}{2^{3/2} m_\mathrm{ref} n_\mathrm{ref} c_\mathrm{ref}^2} = \frac{1}{2 \sqrt{2}} S_{s,E}
-    && S_{s,E} = 2 \sqrt{2} \mathring{S}_{s,E} \\
-\mathring{S}_{s,p} &= \frac{\check{L}_\mathrm{ref} S_{s,p}}{\check{m}_\mathrm{ref} \check{n}_\mathrm{ref} \check{c}_\mathrm{ref}^3} = \frac{L_\mathrm{ref} S_{s,p}}{2^{3/2} m_\mathrm{ref} n_\mathrm{ref} c_\mathrm{ref}^2} = \frac{1}{2 \sqrt{2}} S_{s,p}
-    && S_{s,p} = 2 \sqrt{2} \mathring{S}_{s,p} \\
+\mathring{S}_{s,n} &= \frac{\check{L}_\mathrm{ref} S_{s,n}}{\check{c}_\mathrm{ref} \check{n}_\mathrm{ref}} = \frac{L_\mathrm{ref} S_{s,n}}{\sqrt{2} c_\mathrm{ref} n_\mathrm{ref}} = \frac{1}{\sqrt{2}} \hat{S}_{s,n}
+    && \hat{S}_{s,n} = \sqrt{2} \mathring{S}_{s,n} \\
+\mathring{S}_{s,\mathrm{mom}} &= \frac{\check{L}_\mathrm{ref} S_{s,\mathrm{mom}}}{\check{m}_\mathrm{ref} \check{n}_\mathrm{ref} \check{c}_\mathrm{ref}^2} = \frac{L_\mathrm{ref} S_{s,\mathrm{mom}}}{2 m_\mathrm{ref} n_\mathrm{ref} c_\mathrm{ref}^2} = \frac{1}{2} \hat{S}_{s,\mathrm{mom}}
+    && \hat{S}_{s,\mathrm{mom}} = 2 \mathring{S}_{s,\mathrm{mom}} \\
+\mathring{S}_{s,E} &= \frac{\check{L}_\mathrm{ref} S_{s,E}}{\check{m}_\mathrm{ref} \check{n}_\mathrm{ref} \check{c}_\mathrm{ref}^3} = \frac{L_\mathrm{ref} S_{s,E}}{2^{3/2} m_\mathrm{ref} n_\mathrm{ref} c_\mathrm{ref}^2} = \frac{1}{2 \sqrt{2}} \hat{S}_{s,E}
+    && \hat{S}_{s,E} = 2 \sqrt{2} \mathring{S}_{s,E} \\
+\mathring{S}_{s,p} &= \frac{\check{L}_\mathrm{ref} S_{s,p}}{\check{m}_\mathrm{ref} \check{n}_\mathrm{ref} \check{c}_\mathrm{ref}^3} = \frac{L_\mathrm{ref} S_{s,p}}{2^{3/2} m_\mathrm{ref} n_\mathrm{ref} c_\mathrm{ref}^2} = \frac{1}{2 \sqrt{2}} \hat{S}_{s,p}
+    && \hat{S}_{s,p} = 2 \sqrt{2} \mathring{S}_{s,p} \\
+\mathring{S}_{s,p_\parallel} &= \frac{1}{2 \sqrt{2}} \hat{S}_{s,p_\parallel} = \frac{3}{2 \sqrt{2}} \hat{S}_{s,p}
+    && \hat{S}_{s,p} = \frac{2 \sqrt{2}}{3} \mathring{S}_{s,p_\parallel} \\
 \mathring{n}_s &= \frac{n_s}{\check{n}_\mathrm{ref}} = \hat{n}_s
     && \hat{n}_s = \mathring{n}_s \\
 \mathring{L}_z &= \frac{L_z}{\check{L}_\mathrm{ref}} = \hat{L}_z
@@ -1831,6 +1833,10 @@ differences first
     && \frac{\partial}{\partial \hat{z}} = \frac{\partial}{\partial \mathring{z}} \\
 \end{alignat}
 ```
+In the 'old' equations a parallel-pressure source term
+$S_{s,p_\parallel} = \int m_s (v_\parallel - u_{s\parallel})^2 \bar S_s dv_\parallel$
+was used in the parallel pressure equation. In the 1D1V limit the pressure source is
+$S_{s,p} = \int \frac{1}{3} m_s (v_\parallel - u_{s\parallel})^2 \bar S_s dv_\parallel = S_{s,p_\parallel}/3$.
 
 Old 1D1V moment kinetic equations
 ---------------------------------
