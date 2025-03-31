@@ -262,7 +262,7 @@ The kinetic equation for $\bar F_e = \int F_e d^2 w_\perp$ is
                          + \frac{w_\parallel}{3 p_e} \frac{\partial q_{e\parallel}}{\partial z}
                          - w_\parallel^2 \frac{\partial v_{T_e}}{\partial z} \nonumber \\
                   &\quad - \frac{1}{m_e n_e v_{Te}} (S_{e,\mathrm{mom}} - m_e u_{e\parallel} S_{e,n})
-                         - \frac{w_\parallel}{3 p_e} (S_{i,p} - T_e S_{e,n}) \\
+                         - \frac{w_\parallel}{2 p_e} (S_{i,p} - T_e S_{e,n}) \\
 
 \frac{\dot{\bar{F}}_e}{\bar{F}_e} &= w_\parallel \left( \frac{\partial v_{Te}}{\partial z} - \frac{v_{Te}}{n_e} \frac{\partial n_e}{\partial z} \right)
                                      - \frac{1}{3 p_e} \frac{\partial q_{e\parallel}}{\partial z} \nonumber \\
@@ -423,7 +423,7 @@ and the dimensionless kinetic equation is
                                + \frac{w_\parallel}{3 \hat{p}_e} \frac{\partial \hat{q}_{e\parallel}}{\partial \hat{z}}
                                - w_\parallel^2 \frac{\partial \hat{v}_{T_e}}{\partial \hat{z}} \nonumber \\
                         &\quad - \frac{1}{\hat{m}_e \hat{n}_e \hat{v}_{Te}} (\hat{S}_{e,\mathrm{mom}} - \hat{m}_e \hat{u}_{e\parallel} \hat{S}_{e,n})
-                               - \frac{w_\parallel}{3 \hat{p}_e} (\hat{S}_{e,p} - \hat{T}_e \hat{S}_{e,n}) \\
+                               - \frac{w_\parallel}{2 \hat{p}_e} (\hat{S}_{e,p} - \hat{T}_e \hat{S}_{e,n}) \\
 
 \frac{\hat{\dot{\bar{F}}}_e}{\bar{F}_e} &= w_\parallel \left( \frac{\partial \hat{v}_{Te}}{\partial \hat{z}} - \frac{\hat{v}_{Te}}{\hat{n}_e} \frac{\partial \hat{n}_e}{\partial \hat{z}} \right)
                                      - \frac{1}{3 \hat{p}_e} \frac{\partial \hat{q}_{e\parallel}}{\partial \hat{z}} \nonumber \\
@@ -512,6 +512,10 @@ where
    + w_\parallel \frac{S_n}{2 n_e}
 \end{align}
 ```
+Think this is missing a $S_{\mathrm{mom},e}$ term that is not multiplied by
+$w_\parallel$ and has an extra one that is multiplied by $w_\parallel$, but so
+far $S_{\mathrm{mom},s}$ is always zero anyway, so this doesn't matter.
+
 [`moment_kinetics.electron_kinetic_equation.add_contribution_from_pdf_term!`](@ref)
 ```math
 \begin{align}
