@@ -271,11 +271,11 @@ The kinetic equation for $\bar F_e = \int F_e d^2 w_\perp$ is
 
 \bar{\mathcal{C}}_{ee} &= \frac{v_{Te}}{n_e} \bar{C}_{K,ee} \\
                        &= -\frac{v_{Te}}{n_e} \nu_{ee} \left( \bar{f}_e - \frac{n_e}{\sqrt{\pi} \sqrt{2 T_{e\parallel}/m_e}} \exp\left( -\frac{m_e (v_\parallel - u_{e\parallel})^2}{2 T_{e\parallel}} \right) \right) \\
-                       &= - \nu_{ee} \left( \bar{F}_e - \sqrt{\frac{3}{\pi}} \exp\left( -3 w_\parallel^2 \right) \right) \\
+                       &= - \nu_{ee} \left( \bar{F}_e - \frac{1}{\sqrt{3 \pi}} \exp\left( - \frac{w_\parallel^2}{3} \right) \right) \\
 
 \bar{\mathcal{C}}_{ei} &= \frac{v_{Te}}{n_e} \bar{C}_{K,ei} \\
                        &= -\frac{v_{Te}}{n_e} \nu_{ei} \left( \bar{f}_e - \frac{n_e}{\sqrt{\pi} \sqrt{2 T_{e\parallel}/m_e}} \exp\left( -\frac{m_e (v_\parallel - u_{i\parallel})^2}{2 T_{e\parallel}} \right) \right) \\
-                       &= - \nu_{ei} \left( \bar{F}_e - \sqrt{\frac{3}{\pi}} \exp\left( -3 \left( w_\parallel - \frac{(u_{i\parallel} - u_{e\parallel})}{v_{Te}} \right)^2 \right) \right) \\
+                       &= - \nu_{ei} \left( \bar{F}_e - \frac{1}{\sqrt{3 \pi}} \exp\left( - \frac{\left( w_\parallel - \frac{(u_{i\parallel} - u_{e\parallel})}{v_{Te}} \right)^2}{3} \right) \right) \\
 
 \bar{\mathcal{C}}_{en} &= \text{not implemented yet} \\
 
@@ -431,10 +431,10 @@ and the dimensionless kinetic equation is
                                      - \frac{3}{2 \hat{n}_e} \hat{S}_{e,n} \\
 
 \hat{\bar{\mathcal{C}}}_{ee} &= \frac{\hat{v}_{Te}}{\hat{n}_e} \hat{\bar{C}}_{K,ee} \\
-                             &= - \hat{\nu}_{ee} \left( \bar{F}_e - \sqrt{\frac{3}{\pi}} \exp\left( -3 w_\parallel^2 \right) \right) \\
+                             &= - \hat{\nu}_{ee} \left( \bar{F}_e - \frac{1}{\sqrt{3 \pi}} \exp\left( - \frac{w_\parallel^2}{3} \right) \right) \\
 
 \hat{\bar{\mathcal{C}}}_{ei} &= \frac{\hat{v}_{Te}}{\hat{n}_e} \hat{\bar{C}}_{K,ei} \\
-                             &= - \hat{\nu}_{ei} \left( \bar{F}_e - \sqrt{\frac{3}{\pi}} \exp\left( -3 \left( w_\parallel - \frac{(\hat{u}_{i\parallel} - \hat{u}_{e\parallel})}{\hat{v}_{Te}} \right)^2 \right) \right) \\
+                             &= - \hat{\nu}_{ei} \left( \bar{F}_e - \frac{1}{\sqrt{3 \pi}} \exp\left( - \frac{\left( w_\parallel - \frac{(\hat{u}_{i\parallel} - \hat{u}_{e\parallel})}{\hat{v}_{Te}} \right)^2}{3} \right) \right) \\
 
 \hat{\bar{\mathcal{C}}}_{en} &= \text{not implemented yet} \\
 
