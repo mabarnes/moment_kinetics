@@ -53,8 +53,8 @@ false for other situations (e.g. when post-processing).
 `ignore_MPI` should be false when actually running a simulation, but defaults to true for
 other situations (e.g. when post-processing).
 """
-function mk_input(input_dict=OptionsDict(); save_inputs_to_txt=false, ignore_MPI=true,
-                  warn_unexpected=false)
+function mk_input(input_dict=OptionsDict("output" => OptionsDict("run_name" => "default"));
+                  save_inputs_to_txt=false, ignore_MPI=true, warn_unexpected=false)
 
     # Check for input options that used to exist, but do not any more. If these are
     # present, the user probably needs to update their input file.
