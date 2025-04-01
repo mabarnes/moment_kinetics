@@ -17,7 +17,7 @@ using moment_kinetics.utils: merge_dict_with_kwargs!
 
 # Useful parameters
 const z_L = 1.0 # always 1 in normalized units?
-const vpa_L = 8.0
+const vpa_L = sqrt(2) * 8.0
 
 # Use very small number of points in vpa_expected to reduce the amount of entries we
 # need to store. First and last entries are within the grid (rather than at the ends) in
@@ -46,37 +46,37 @@ const expected =
                 0.2977457518173809 0.3053947164796483; 0.42274575172974477 0.4096911330301402;
                 0.5772542482702551 0.5582976228204486; 0.7022542481826195 0.705686714081075;
                 0.7499999999999997 0.7736771072214454],
-     upar_ion=[5.1613576111288053e-17 1.7824283715661693e-16; 9.511571498528484e-18 -0.18246293837210678;
+     upar_ion=sqrt(2) .* [5.1613576111288053e-17 1.7824283715661693e-16; 9.511571498528484e-18 -0.18246293837210678;
                3.467873011283547e-17 -0.19666573102552073; 3.1268365433125454e-17 -0.11128036402813761;
                -7.85680226742028e-17 -0.03317981976875931; 3.0405822071006615e-17 -4.294965262347655e-17;
                -4.6330440535052126e-17 0.03317981976875943; 7.978031114543488e-18 0.11128036402813778;
                -9.42922075719305e-18 0.19666573102552032; 4.905041261528767e-18 0.18246293837210653;
                5.161357611128805e-17 1.6437677472493942e-16],
-     upar_neutral=[-5.25681128612874e-18 8.998878031629687e-17; -2.1410327957680203e-17 -0.036209944927282176;
+     upar_neutral=sqrt(2) .* [-5.25681128612874e-18 8.998878031629687e-17; -2.1410327957680203e-17 -0.036209944927282176;
                    -3.323217164475685e-17 -0.009156342266174351; 4.966838011974837e-17 0.05452637956260735;
                    6.9299624525258045e-18 0.07608073432552652; -1.391317598583754e-17 -1.2322635316655561e-16;
                    4.654198359544338e-19 -0.0760807343255267; 2.1256669382510767e-17 -0.05452637956260749;
                    2.1970070136117582e-17 0.009156342266174294; -8.263186521090134e-18 0.036209944927282155;
                    -5.256811286128741e-18 8.865786794476116e-17],
-     ppar_ion=[0.18750000000000008 0.23302774299822557; 0.20909325514551103 0.21936769787415103;
+     p_ion=(2/3) .* [0.18750000000000008 0.23302774299822557; 0.20909325514551103 0.21936769787415103;
                0.24403180771238261 0.20856277641657595; 0.24403180771238275 0.2154268106106535;
                0.2090932551455112 0.2206184395140329; 0.1875 0.21979740311704793;
                0.2090932551455112 0.22061843951403276; 0.24403180771238273 0.21542681061065366;
                0.24403180771238245 0.20856277641657608; 0.20909325514551103 0.21936769787415114;
                0.18750000000000008 0.23302774299822557],
-     ppar_neutral=[0.18750000000000006 0.24802927638746003; 0.20909325514551114 0.2440126345473401;
+     p_neutral=(2/3) .* [0.18750000000000006 0.24802927638746003; 0.20909325514551114 0.2440126345473401;
                    0.24403180771238295 0.2286179898140519; 0.2440318077123829 0.20589247230117314;
                    0.20909325514551147 0.19263091603124238; 0.18750000000000006 0.1909059116301176;
                    0.20909325514551147 0.19263091603124244; 0.24403180771238278 0.20589247230117316;
                    0.2440318077123828 0.22861798981405207; 0.2090932551455111 0.24401263454734015;
                    0.18750000000000006 0.24802927638746008],
-     f_ion=[0.03704633061445434 0.040599341664601864 0.04284314970873867 0.030398267056148856 0.012360459027428135 0.006338529470381567 0.012360459027428118 0.030398267056148832 0.04284314970873862 0.04059934166460186 0.03704633061445434;
+     f_ion=(1 / sqrt(2 * π)) .* [0.03704633061445434 0.040599341664601864 0.04284314970873867 0.030398267056148856 0.012360459027428135 0.006338529470381567 0.012360459027428118 0.030398267056148832 0.04284314970873862 0.04059934166460186 0.03704633061445434;
             0.2041161581761397 0.2512319184948212 0.3934412241088816 0.6277900647663583 0.9100364506644036 1.0606601717797792 0.9100364506644041 0.6277900647663586 0.3934412241088818 0.25123191849482107 0.20411615817613982;
             0.03704633061445434 0.040599341664601864 0.04284314970873867 0.030398267056148856 0.012360459027428135 0.006338529470381567 0.012360459027428118 0.030398267056148832 0.04284314970873862 0.04059934166460186 0.03704633061445434;;;
             0.05390003952306185 0.060668903632275895 0.037468714568864685 0.014783443991530101 0.010917696554920737 0.018422975159286537 0.027170955317800925 0.027269141882307273 0.026567530213466868 0.03561275246167625 0.053900039523061834;
             0.21183314018321575 0.24917189857143243 0.37345407790645385 0.597221918072211 0.8859681875060791 1.0485989094790735 0.8859681875060792 0.5972219180722116 0.3734540779064541 0.24917189857143285 0.21183314018321578;
             0.05390003952306177 0.0356127524616763 0.026567530213466896 0.02726914188230729 0.027170955317800928 0.018422975159286543 0.010917696554920774 0.014783443991530103 0.037468714568864664 0.060668903632275964 0.053900039523061806],
-     f_neutral=[0.006338529470381577 0.012360459027428073 0.03039826705614889 0.042843149708738676 0.04059934166460194 0.03704633061445434 0.040599341664601926 0.04284314970873865 0.03039826705614885 0.012360459027428083 0.006338529470381584;
+     f_neutral=(1 / sqrt(2 * π)) .* [0.006338529470381577 0.012360459027428073 0.03039826705614889 0.042843149708738676 0.04059934166460194 0.03704633061445434 0.040599341664601926 0.04284314970873865 0.03039826705614885 0.012360459027428083 0.006338529470381584;
                 1.0606601717797781 0.9100364506644045 0.6277900647663583 0.39344122410888155 0.2512319184948211 0.20411615817613965 0.2512319184948211 0.3934412241088815 0.6277900647663583 0.9100364506644045 1.0606601717797786;
                 0.006338529470381577 0.012360459027428073 0.03039826705614889 0.042843149708738676 0.04059934166460194 0.03704633061445434 0.040599341664601926 0.04284314970873865 0.03039826705614885 0.012360459027428083 0.006338529470381584;;;
                 0.024284901305335987 0.04071460848299759 0.04191393294584067 0.03638224538383874 0.03692291383553763 0.04164451713956093 0.03671950659707693 0.0192811926383855 0.008423252942010866 0.010011399856724638 0.02428490130533598;
@@ -88,9 +88,9 @@ test_input_full_f = OptionsDict("composition" => OptionsDict("n_ion_species" => 
                                                              "n_neutral_species" => 1,
                                                              "electron_physics" => "boltzmann_electron_response",
                                                              "T_e" => 1.0,
-                                                             "T_wall" => 1.0),
+                                                             "T_wall" => 0.3333333333333333),
                                 "ion_species_1" => OptionsDict("initial_density" => 0.5,
-                                                               "initial_temperature" => 1.0),
+                                                               "initial_temperature" => 0.3333333333333333),
                                 "z_IC_ion_species_1" => OptionsDict("initialization_option" => "sinusoid",
                                                                     "density_amplitude" => 0.5,
                                                                     "density_phase" => 0.0,
@@ -99,24 +99,25 @@ test_input_full_f = OptionsDict("composition" => OptionsDict("n_ion_species" => 
                                                                     "temperature_amplitude" => 0.5,
                                                                     "temperature_phase" => mk_float(π)),
                                 "neutral_species_1" => OptionsDict("initial_density" => 0.5,
-                                                                   "initial_temperature" => 1.0),
+                                                                   "initial_temperature" => 0.3333333333333333),
                                 "z_IC_neutral_species_1" => OptionsDict("initialization_option" => "sinusoid",
                                                                         "density_amplitude" => 0.5,
                                                                         "density_phase" => mk_float(π),
                                                                         "upar_amplitude" => 0.0,
                                                                         "upar_phase" => 0.0,
                                                                         "temperature_amplitude" => 0.5,
-                                                                        "temperature_phase" => 0.0),  
+                                                                        "temperature_phase" => 0.0),
                                 "output" => OptionsDict("run_name" => "full_f"),
                                 "evolve_moments" => OptionsDict("density" => false,
                                                                 "parallel_flow" => false,
-                                                                "parallel_pressure" => false,
+                                                                "pressure" => false,
                                                                 "moments_conservation" => true),
-                                "krook_collisions" => OptionsDict("use_krook" => true,"frequency_option" => "reference_parameters"),
-                                "reactions" => OptionsDict("charge_exchange_frequency" => 2*π*0.1,
+                                "krook_collisions" => OptionsDict("use_krook" => true,
+                                                                  "frequency_option" => "reference_parameters"),
+                                "reactions" => OptionsDict("charge_exchange_frequency" => 0.8885765876316732,
                                                            "ionization_frequency" => 0.0),
                                 "timestepping" => OptionsDict("nstep" => 100,
-                                                              "dt" => 0.001,
+                                                              "dt" => 0.0007071067811865475,
                                                               "nwrite" => 100,
                                                               "nwrite_dfns" => 100,
                                                               "split_operators" => false),
@@ -137,7 +138,7 @@ test_input_full_f = OptionsDict("composition" => OptionsDict("n_ion_species" => 
                                                     "nelement" => 8,
                                                     "L" => vpa_L,
                                                     "bc" => "periodic",
-                                                    "discretization" => "chebyshev_pseudospectral")
+                                                    "discretization" => "chebyshev_pseudospectral"),
                                )
 
 test_input_split_1_moment =
@@ -153,9 +154,9 @@ test_input_split_2_moments =
 test_input_split_3_moments =
     recursive_merge(test_input_split_2_moments,
                     OptionsDict("output" => OptionsDict("run_name" => "split_3_moments"),
-                                "evolve_moments" => OptionsDict("parallel_pressure" => true),
-                                "vpa" => OptionsDict("L" => 12.0),
-                                "vz" => OptionsDict("L" => 12.0),
+                                "evolve_moments" => OptionsDict("pressure" => true),
+                                "vpa" => OptionsDict("L" => 20.784609690826528),
+                                "vz" => OptionsDict("L" => 20.784609690826528),
                                ))
 
 
@@ -196,11 +197,11 @@ function run_test(test_input, rtol, atol; args...)
     phi = nothing
     n_ion = nothing
     upar_ion = nothing
-    ppar_ion = nothing
+    p_ion = nothing
     f_ion = nothing
     n_neutral = nothing
     upar_neutral = nothing
-    ppar_neutral = nothing
+    p_neutral = nothing
     f_neutral = nothing
     z, z_spectral = nothing, nothing
     vpa, vpa_spectral = nothing, nothing
@@ -225,8 +226,8 @@ function run_test(test_input, rtol, atol; args...)
             phi_zrt, Er_zrt, Ez_zrt = load_fields_data(fid)
 
             # load velocity moments data
-            n_ion_zrst, upar_ion_zrst, ppar_ion_zrst, qpar_ion_zrst, v_t_ion_zrst = load_ion_moments_data(fid)
-            n_neutral_zrst, upar_neutral_zrst, ppar_neutral_zrst, qpar_neutral_zrst, v_t_neutral_zrst = load_neutral_particle_moments_data(fid)
+            n_ion_zrst, upar_ion_zrst, p_ion_zrst, ppar_ion_zrst, qpar_ion_zrst, v_t_ion_zrst = load_ion_moments_data(fid)
+            n_neutral_zrst, upar_neutral_zrst, p_neutral_zrst, pz_neutral_zrst, qpar_neutral_zrst, v_t_neutral_zrst = load_neutral_particle_moments_data(fid)
             z, z_spectral = load_coordinate_data(fid, "z"; ignore_MPI=true)
 
             close(fid)
@@ -244,13 +245,13 @@ function run_test(test_input, rtol, atol; args...)
             phi = phi_zrt[:,1,:]
             n_ion = n_ion_zrst[:,1,:,:]
             upar_ion = upar_ion_zrst[:,1,:,:]
-            ppar_ion = ppar_ion_zrst[:,1,:,:]
+            p_ion = p_ion_zrst[:,1,:,:]
             qpar_ion = qpar_ion_zrst[:,1,:,:]
             v_t_ion = v_t_ion_zrst[:,1,:,:]
             f_ion = f_ion_vpavperpzrst[:,1,:,1,:,:]
             n_neutral = n_neutral_zrst[:,1,:,:]
             upar_neutral = upar_neutral_zrst[:,1,:,:]
-            ppar_neutral = ppar_neutral_zrst[:,1,:,:]
+            p_neutral = p_neutral_zrst[:,1,:,:]
             qpar_neutral = qpar_neutral_zrst[:,1,:,:]
             v_t_neutral = v_t_neutral_zrst[:,1,:,:]
             f_neutral = f_neutral_vzvrvzetazrst[:,1,1,:,1,:,:]
@@ -264,7 +265,7 @@ function run_test(test_input, rtol, atol; args...)
                     f_neutral[:,iz,isn,it] .*= n_neutral[iz,isn,it]
                 end
             end
-            if input["evolve_moments"]["parallel_pressure"]
+            if input["evolve_moments"]["pressure"]
                 for it ∈ 1:length(time), is ∈ 1:n_ion_species, iz ∈ 1:z.n
                     f_ion[:,iz,is,it] ./= v_t_ion[iz,is,it]
                 end
@@ -308,17 +309,17 @@ function run_test(test_input, rtol, atol; args...)
         #println("upar_neutral ", size(newgrid_upar_neutral))
         #println(newgrid_upar_neutral)
         #println()
-        #newgrid_ppar_ion = cat(interpolate_to_grid_z(expected.z, ppar_ion[:, :, 1], z, z_spectral)[:,1],
-        #                           interpolate_to_grid_z(expected.z, ppar_ion[:, :, 2], z, z_spectral)[:,1];
-        #                           dims=2)
-        #println("ppar_ion ", size(newgrid_ppar_ion))
-        #println(newgrid_ppar_ion)
+        #newgrid_p_ion = cat(interpolate_to_grid_z(expected.z, p_ion[:, :, 1], z, z_spectral)[:,1],
+        #                    interpolate_to_grid_z(expected.z, p_ion[:, :, 2], z, z_spectral)[:,1];
+        #                    dims=2)
+        #println("p_ion ", size(newgrid_p_ion))
+        #println(newgrid_p_ion)
         #println()
-        #newgrid_ppar_neutral = cat(interpolate_to_grid_z(expected.z, ppar_neutral[:, :, 1], z, z_spectral)[:,1],
-        #                           interpolate_to_grid_z(expected.z, ppar_neutral[:, :, 2], z, z_spectral)[:,1];
-        #                           dims=2)
-        #println("ppar_neutral ", size(newgrid_ppar_neutral))
-        #println(newgrid_ppar_neutral)
+        #newgrid_p_neutral = cat(interpolate_to_grid_z(expected.z, p_neutral[:, :, 1], z, z_spectral)[:,1],
+        #                        interpolate_to_grid_z(expected.z, p_neutral[:, :, 2], z, z_spectral)[:,1];
+        #                        dims=2)
+        #println("p_neutral ", size(newgrid_p_neutral))
+        #println(newgrid_p_neutral)
         #println()
         #newgrid_f_ion = cat(interpolate_to_grid_vpa(expected.vpa, interpolate_to_grid_z(expected.z, f_ion[:, :, :, 1], z, z_spectral), vpa, vpa_spectral)[:,:,1],
         #                        interpolate_to_grid_vpa(expected.vpa, interpolate_to_grid_z(expected.z, f_ion[:, :, :, 2], z, z_spectral), vpa, vpa_spectral)[:,:,1];
@@ -346,10 +347,10 @@ function run_test(test_input, rtol, atol; args...)
                 newgrid_upar_ion = interpolate_to_grid_z(expected.z, upar_ion[:, :, tind], z, z_spectral)
                 @test isapprox(expected.upar_ion[:, tind], newgrid_upar_ion[:,1], rtol=rtol, atol=atol)
 
-                newgrid_ppar_ion = interpolate_to_grid_z(expected.z, ppar_ion[:, :, tind], z, z_spectral)
-                @test isapprox(expected.ppar_ion[:, tind], newgrid_ppar_ion[:,1], rtol=rtol)
+                newgrid_p_ion = interpolate_to_grid_z(expected.z, p_ion[:, :, tind], z, z_spectral)
+                @test isapprox(expected.p_ion[:, tind], newgrid_p_ion[:,1], rtol=rtol)
 
-                newgrid_vth_ion = @. sqrt(2.0*newgrid_ppar_ion/newgrid_n_ion)
+                newgrid_vth_ion = @. sqrt(2.0*newgrid_p_ion/newgrid_n_ion)
                 newgrid_f_ion = interpolate_to_grid_z(expected.z, f_ion[:, :, :, tind], z, z_spectral)
                 temp = newgrid_f_ion
                 newgrid_f_ion = fill(NaN, length(expected.vpa),
@@ -361,7 +362,7 @@ function run_test(test_input, rtol, atol; args...)
                     if input["evolve_moments"]["parallel_flow"]
                         wpa .-= newgrid_upar_ion[iz,1]
                     end
-                    if input["evolve_moments"]["parallel_pressure"]
+                    if input["evolve_moments"]["pressure"]
                         wpa ./= newgrid_vth_ion[iz,1]
                     end
                     newgrid_f_ion[:,iz,1] = interpolate_to_grid_vpa(wpa, temp[:,iz,1], vpa, vpa_spectral)
@@ -377,10 +378,10 @@ function run_test(test_input, rtol, atol; args...)
                 newgrid_upar_neutral = interpolate_to_grid_z(expected.z, upar_neutral[:, :, tind], z, z_spectral)
                 @test isapprox(expected.upar_neutral[:, tind], newgrid_upar_neutral[:,:,1], rtol=rtol, atol=atol)
 
-                newgrid_ppar_neutral = interpolate_to_grid_z(expected.z, ppar_neutral[:, :, tind], z, z_spectral)
-                @test isapprox(expected.ppar_neutral[:, tind], newgrid_ppar_neutral[:,:,1], rtol=rtol)
+                newgrid_p_neutral = interpolate_to_grid_z(expected.z, p_neutral[:, :, tind], z, z_spectral)
+                @test isapprox(expected.p_neutral[:, tind], newgrid_p_neutral[:,:,1], rtol=rtol)
 
-                newgrid_vth_neutral = @. sqrt(2.0*newgrid_ppar_neutral/newgrid_n_neutral)
+                newgrid_vth_neutral = @. sqrt(2.0*newgrid_p_neutral/newgrid_n_neutral)
                 newgrid_f_neutral = interpolate_to_grid_z(expected.z, f_neutral[:, :, :, tind], z, z_spectral)
                 temp = newgrid_f_neutral
                 newgrid_f_neutral = fill(NaN, length(expected.vpa),
@@ -392,7 +393,7 @@ function run_test(test_input, rtol, atol; args...)
                     if input["evolve_moments"]["parallel_flow"]
                         wpa .-= newgrid_upar_neutral[iz,1]
                     end
-                    if input["evolve_moments"]["parallel_pressure"]
+                    if input["evolve_moments"]["pressure"]
                         wpa ./= newgrid_vth_neutral[iz,1]
                     end
                     newgrid_f_neutral[:,iz,1] = interpolate_to_grid_vpa(wpa, temp[:,iz,1], vpa, vpa_spectral)
