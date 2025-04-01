@@ -21,11 +21,7 @@ jobs:
       - uses: julia-actions/cache@v2
       - run: |
           touch Project.toml
-          # Pin versions of HDF5_jll for now because HDF5_jll@1.14.6+0 causes
-          # linker errors, when also using MPI. Should remove this pin when the
-          # latest version is fixed, see
-          # https://github.com/JuliaIO/HDF5.jl/issues/1191.
-          julia --project -O3 -e 'import Pkg; Pkg.add(name="HDF5_jll", version="1.14.2"); Pkg.add(["MPI", "MPIPreferences", "PackageCompiler"]); using MPIPreferences; MPIPreferences.use_jll_binary("OpenMPI_jll")'
+          julia --project -O3 -e 'import Pkg; Pkg.add(["MPI", "MPIPreferences", "PackageCompiler"]); using MPIPreferences; MPIPreferences.use_jll_binary("OpenMPI_jll")'
           julia --project -O3 -e 'using MPI; MPI.install_mpiexecjl(; destdir=".")'
           julia --project -O3 -e 'import Pkg; Pkg.add(["NCDatasets", "Random", "SpecialFunctions", "StatsBase", "Test"]); Pkg.develop(path="moment_kinetics/")'
           julia --project -O3 -e 'import Pkg; Pkg.precompile()'
