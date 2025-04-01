@@ -732,7 +732,7 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
             end
             if skip_electron_solve
                 success = ""
-            elseif t_params.implicit_electron_advance
+            elseif t_params.kinetic_electron_solver == implicit_steady_state
                 # Create new nl_solver_info ojbect with higher maximum iterations for
                 # initialisation.
                 initialisation_nl_solver_params =
@@ -1596,7 +1596,7 @@ function init_electron_pdf_over_density_and_boundary_phi!(pdf, phi, density, upa
                        pdf[:,:,:,ir], phi[:,ir], vth[:,ir], upar[:,ir], z, vperp, vpa,
                        vperp_spectral, vpa_spectral, vpa_advect, moments,
                        num_diss_params.electron.vpa_dissipation_coefficient > 0.0,
-                       me_over_mi, ir)
+                       me_over_mi, ir; allow_failure=false)
         end
 
         # Distribute the z-boundary pdf values to every process

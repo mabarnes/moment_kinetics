@@ -81,8 +81,8 @@ moments & fields only
 struct io_moments_info{Tfile, Ttime, Tphi, Tmomi, Tmome, Tmomn, Tchodura_lower,
                        Tchodura_upper, Texti1, Texti2, Texti3, Texti4,
                        Texti5, Textn1, Textn2, Textn3, Textn4, Textn5, Texte1, Texte2,
-                       Texte3, Texte4, Tconstri, Tconstrn, Tconstre, Tint, Tfailcause,
-                       Telectrontime, Telectronint, Telectronfailcause, Tnldiagnostics}
+                       Texte3, Texte4, Tconstri, Tconstrn, Tconstre, Tint, Telectrontime,
+                       Telectronint, Tnldiagnostics}
     # file identifier for the binary file to which data is written
     fid::Tfile
     # handle for the time variable
@@ -206,10 +206,6 @@ struct io_moments_info{Tfile, Ttime, Tphi, Tmomi, Tmome, Tmomn, Tchodura_lower,
     previous_dt::Ttime
     # cumulative number of timestep failures
     failure_counter::Tint
-    # cumulative count of which variable caused a timstep failure
-    failure_caused_by::Tfailcause
-    # cumulative count of which factors limited the timestep at each step
-    limit_caused_by::Tfailcause
     # Last successful timestep before most recent timestep failure, used by adaptve
     # timestepping algorithm
     dt_before_last_fail::Ttime
@@ -223,10 +219,6 @@ struct io_moments_info{Tfile, Ttime, Tphi, Tmomi, Tmome, Tmomn, Tchodura_lower,
     electron_previous_dt::Telectrontime
     # cumulative number of electron pseudo-timestep failures
     electron_failure_counter::Telectronint
-    # cumulative count of which variable caused a electron pseudo-timstep failure
-    electron_failure_caused_by::Telectronfailcause
-    # cumulative count of which factors limited the electron pseudo-timestep at each step
-    electron_limit_caused_by::Telectronfailcause
     # Last successful timestep before most recent electron pseudo-timestep failure, used
     # by adaptive timestepping algorithm
     electron_dt_before_last_fail::Telectrontime
@@ -277,7 +269,7 @@ structure containing the data/metadata needed for binary file i/o
 for electron initialization
 """
 struct io_initial_electron_info{Tfile, Tfe, Tmom, Texte1, Texte2, Texte3, Texte4,
-                                Tconstr, Telectrontime, Telectronint, Telectronfailcause}
+                                Tconstr, Telectrontime, Telectronint}
     # file identifier for the binary file to which data is written
     fid::Tfile
     time::Telectrontime
@@ -332,10 +324,6 @@ struct io_initial_electron_info{Tfile, Tfe, Tmom, Texte1, Texte2, Texte3, Texte4
     electron_previous_dt::Telectrontime
     # cumulative number of electron pseudo-timestep failures
     electron_failure_counter::Telectronint
-    # cumulative count of which variable caused a electron pseudo-timstep failure
-    electron_failure_caused_by::Telectronfailcause
-    # cumulative count of which factors limited the electron pseudo-timestep at each step
-    electron_limit_caused_by::Telectronfailcause
     # Last successful timestep before most recent electron pseudo-timestep failure, used
     # by adaptve timestepping algorithm
     electron_dt_before_last_fail::Telectrontime
@@ -576,7 +564,6 @@ function setup_electron_io(io_input, vpa, vperp, z, r, composition, collisions,
         electron_constraints_A_coefficient, electron_constraints_B_coefficient,
         electron_constraints_C_coefficient, io_electron_step_counter, io_electron_dt,
         io_electron_previous_dt, io_electron_failure_counter,
-        io_electron_failure_caused_by, io_electron_limit_caused_by,
         io_electron_dt_before_last_fail =
             define_dynamic_electron_moment_variables!(fid, r, z, parallel_io,
                                                       external_source_settings,
@@ -657,8 +644,6 @@ function reopen_initial_electron_io(file_info)
                                         getvar("electron_dt"),
                                         getvar("electron_previous_dt"),
                                         getvar("electron_failure_counter"),
-                                        getvar("electron_failure_caused_by"),
-                                        getvar("electron_limit_caused_by"),
                                         getvar("electron_dt_before_last_fail"),
                                         io_input)
     end
@@ -1136,8 +1121,7 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
         electron_constraints_A_coefficient, electron_constraints_B_coefficient,
         electron_constraints_C_coefficient, io_electron_step_counter,
         io_electron_cumulative_pseudotime, io_electron_dt, io_electron_previous_dt,
-        io_electron_failure_counter, io_electron_failure_caused_by,
-        io_electron_limit_caused_by, io_electron_dt_before_last_fail =
+        io_electron_failure_counter, io_electron_dt_before_last_fail =
             define_dynamic_electron_moment_variables!(fid, r, z, parallel_io,
                                                       external_source_settings,
                                                       evolve_density, evolve_upar,
@@ -1184,18 +1168,20 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
             dynamic, "failure_counter", mk_int; parallel_io=parallel_io,
             description="cumulative number of timestep failures for the run")
 
-        n_failure_vars = length(t_params.failure_caused_by)
-        io_failure_caused_by = create_dynamic_variable!(
-            dynamic, "failure_caused_by", mk_int, (name="n_failure_vars", n=n_failure_vars);
-            parallel_io=parallel_io,
-            description="cumulative count of how many times each variable caused a "
-                        * "timestep failure for the run")
-        n_limit_vars = length(t_params.limit_caused_by)
-        io_limit_caused_by = create_dynamic_variable!(
-            dynamic, "limit_caused_by", mk_int, (name="n_limit_vars", n=n_limit_vars);
-            parallel_io=parallel_io,
-            description="cumulative count of how many times each factor limited the "
-                        * "timestep for the run")
+        for failure_var ∈ keys(t_params.failure_caused_by)
+            create_dynamic_variable!(
+                dynamic, "failure_caused_by_$failure_var", mk_int;
+                parallel_io=parallel_io,
+                description="cumulative count of how many times $failure_var caused a "
+                            * "timestep failure for the run")
+        end
+        for limit_var ∈ keys(t_params.limit_caused_by)
+            create_dynamic_variable!(
+                dynamic, "limit_caused_by_$limit_var", mk_int;
+                parallel_io=parallel_io,
+                description="cumulative count of how many times $limit_var limited the "
+                            * "timestep for the run")
+        end
 
         io_dt_before_last_fail = create_dynamic_variable!(
             dynamic, "dt_before_last_fail", mk_float; parallel_io=parallel_io,
@@ -1265,12 +1251,10 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
                                electron_constraints_B_coefficient,
                                electron_constraints_C_coefficient,
                                io_time_for_run, io_step_counter, io_dt, io_previous_dt,
-                               io_failure_counter, io_failure_caused_by,
-                               io_limit_caused_by, io_dt_before_last_fail,
+                               io_failure_counter, io_dt_before_last_fail,
                                io_electron_step_counter,
                                io_electron_cumulative_pseudotime, io_electron_dt,
                                io_electron_previous_dt, io_electron_failure_counter,
-                               io_electron_failure_caused_by, io_electron_limit_caused_by,
                                io_electron_dt_before_last_fail, io_nl_solver_diagnostics,
                                io_input)
     end
@@ -1706,19 +1690,21 @@ function define_dynamic_electron_moment_variables!(fid, r::coordinate, z::coordi
             dynamic, "electron_failure_counter", mk_int; parallel_io=parallel_io,
             description="cumulative number of electron pseudo-timestep failures for the run")
 
-        n_failure_vars = length(t_params.failure_caused_by)
-        io_electron_failure_caused_by = create_dynamic_variable!(
-            dynamic, "electron_failure_caused_by", mk_int,
-            (name="n_failure_vars", n=n_failure_vars); parallel_io=parallel_io,
-            description="cumulative count of how many times each variable caused an "
-                        * "electron pseudo-timestep failure for the run")
+        for failure_var ∈ keys(t_params.failure_caused_by)
+            create_dynamic_variable!(
+                dynamic, "electron_failure_caused_by_$failure_var", mk_int;
+                parallel_io=parallel_io,
+                description="cumulative count of how many times $failure_var caused an "
+                            * "electron pseudo-timestep failure for the run")
+        end
 
-        n_limit_vars = length(t_params.limit_caused_by)
-        io_electron_limit_caused_by = create_dynamic_variable!(
-            dynamic, "electron_limit_caused_by", mk_int,
-            (name="n_limit_vars", n=n_limit_vars); parallel_io=parallel_io,
-            description="cumulative count of how many times each factor limited the "
-                        * "electron pseudo-timestep for the run")
+        for limit_var ∈ keys(t_params.limit_caused_by)
+            create_dynamic_variable!(
+                dynamic, "electron_limit_caused_by_$limit_var", mk_int;
+                parallel_io=parallel_io,
+                description="cumulative count of how many times $limit_var limited the "
+                            * "electron pseudo-timestep for the run")
+        end
 
         io_electron_dt_before_last_fail = create_dynamic_variable!(
             dynamic, "electron_dt_before_last_fail", mk_float; parallel_io=parallel_io,
@@ -1731,8 +1717,6 @@ function define_dynamic_electron_moment_variables!(fid, r::coordinate, z::coordi
         io_electron_dt = nothing
         io_electron_previous_dt = nothing
         io_electron_failure_counter = nothing
-        io_electron_failure_caused_by = nothing
-        io_electron_limit_caused_by = nothing
         io_electron_dt_before_last_fail = nothing
     end
 
@@ -1747,8 +1731,7 @@ function define_dynamic_electron_moment_variables!(fid, r::coordinate, z::coordi
            electron_constraints_A_coefficient, electron_constraints_B_coefficient,
            electron_constraints_C_coefficient, io_electron_step_counter,
            io_electron_cumulative_pseudotime, io_electron_dt, io_electron_previous_dt,
-           io_electron_failure_counter, io_electron_failure_caused_by,
-           io_electron_limit_caused_by, io_electron_dt_before_last_fail
+           io_electron_failure_counter, io_electron_dt_before_last_fail
 end
 
 """
@@ -2237,13 +2220,10 @@ function reopen_moments_io(file_info)
                                getvar("electron_constraints_C_coefficient"),
                                timing["time_for_run"], getvar("step_counter"),
                                getvar("dt"), getvar("previous_dt"), getvar("failure_counter"),
-                               getvar("failure_caused_by"), getvar("limit_caused_by"),
                                getvar("dt_before_last_fail"),getvar("electron_step_counter"),
                                getvar("electron_cumulative_pseudotime"),
                                getvar("electron_dt"), getvar("electron_previous_dt"),
                                getvar("electron_failure_counter"),
-                               getvar("electron_failure_caused_by"),
-                               getvar("electron_limit_caused_by"),
                                getvar("electron_dt_before_last_fail"),
                                getvar("nl_solver_diagnostics"), io_input)
     end
@@ -2402,16 +2382,12 @@ function reopen_dfns_io(file_info)
                                      timing["time_for_run"], getvar("step_counter"),
                                      getvar("dt"), getvar("previous_dt"),
                                      getvar("failure_counter"),
-                                     getvar("failure_caused_by"),
-                                     getvar("limit_caused_by"),
                                      getvar("dt_before_last_fail"),
                                      getvar("electron_step_counter"),
                                      getvar("electron_cumulative_pseudotime"),
                                      getvar("electron_dt"),
                                      getvar("electron_previous_dt"),
                                      getvar("electron_failure_counter"),
-                                     getvar("electron_failure_caused_by"),
-                                     getvar("electron_limit_caused_by"),
                                      getvar("electron_dt_before_last_fail"),
                                      getvar("nl_solver_diagnostics"), io_input)
 
@@ -2476,6 +2452,7 @@ file
         end
 
         parallel_io = io_moments.io_input.parallel_io
+        dynamic = get_group(io_moments.fid, "dynamic_data")
 
         # add the time for this time slice to the hdf5 file
         append_to_dynamic_var(io_moments.time, t_params.t[], t_idx, parallel_io)
@@ -2496,12 +2473,14 @@ file
         append_to_dynamic_var(io_moments.dt, t_params.dt_before_output[], t_idx, parallel_io)
         append_to_dynamic_var(io_moments.previous_dt, t_params.previous_dt[], t_idx, parallel_io)
         append_to_dynamic_var(io_moments.failure_counter, t_params.failure_counter[], t_idx, parallel_io)
-        append_to_dynamic_var(io_moments.failure_caused_by, t_params.failure_caused_by,
-                              t_idx, parallel_io, length(t_params.failure_caused_by);
-                              only_root=true)
-        append_to_dynamic_var(io_moments.limit_caused_by, t_params.limit_caused_by, t_idx,
-                              parallel_io, length(t_params.limit_caused_by);
-                              only_root=true)
+        for (k,v) ∈ pairs(t_params.failure_caused_by)
+            io_var = dynamic["failure_caused_by_$k"]
+            append_to_dynamic_var(io_var, v, t_idx, parallel_io; only_root=true)
+        end
+        for (k,v) ∈ pairs(t_params.limit_caused_by)
+            io_var = dynamic["limit_caused_by_$k"]
+            append_to_dynamic_var(io_var, v, t_idx, parallel_io; only_root=true)
+        end
         append_to_dynamic_var(io_moments.dt_before_last_fail,
                               t_params.dt_before_last_fail[], t_idx, parallel_io)
         for (k,v) ∈ pairs(nl_solver_params)
@@ -3055,6 +3034,7 @@ function write_electron_moments_data_to_binary(scratch, moments, t_params, elect
         # Only read/write from first process in each 'block'
 
         parallel_io = io_moments.io_input.parallel_io
+        dynamic = get_group(io_moments.fid, "dynamic_data")
 
         if io_moments.electron_density !== nothing
             append_to_dynamic_var(io_moments.electron_density,
@@ -3133,14 +3113,14 @@ function write_electron_moments_data_to_binary(scratch, moments, t_params, elect
                                   electron_t_params.previous_dt[], t_idx, parallel_io)
             append_to_dynamic_var(io_moments.electron_failure_counter,
                                   electron_t_params.failure_counter[], t_idx, parallel_io)
-            append_to_dynamic_var(io_moments.electron_failure_caused_by,
-                                  electron_t_params.failure_caused_by, t_idx, parallel_io,
-                                  length(electron_t_params.failure_caused_by);
-                                  only_root=true)
-            append_to_dynamic_var(io_moments.electron_limit_caused_by,
-                                  electron_t_params.limit_caused_by, t_idx, parallel_io,
-                                  length(electron_t_params.limit_caused_by);
-                                  only_root=true)
+            for (k,v) ∈ pairs(electron_t_params.failure_caused_by)
+                io_var = dynamic["electron_failure_caused_by_$k"]
+                append_to_dynamic_var(io_var, v, t_idx, parallel_io; only_root=true)
+            end
+            for (k,v) ∈ pairs(electron_t_params.limit_caused_by)
+                io_var = dynamic["electron_limit_caused_by_$k"]
+                append_to_dynamic_var(io_var, v, t_idx, parallel_io; only_root=true)
+            end
             append_to_dynamic_var(io_moments.electron_dt_before_last_fail,
                                   electron_t_params.dt_before_last_fail[], t_idx,
                                   parallel_io)
@@ -3292,7 +3272,7 @@ binary output file
         # add the distribution function data at this time slice to the output file
         write_ion_dfns_data_to_binary(scratch, t_params, n_ion_species, io_dfns, t_idx, r,
                                       z, vperp, vpa)
-        if t_params.implicit_electron_time_evolving || scratch_electron !== nothing
+        if t_params.kinetic_electron_solver == implicit_time_evolving || scratch_electron !== nothing
             write_electron_dfns_data_to_binary(scratch, scratch_electron, t_params,
                                                io_dfns, t_idx, r, z, vperp, vpa)
         end
@@ -3342,7 +3322,7 @@ function write_electron_dfns_data_to_binary(scratch, scratch_electron, t_params,
         parallel_io = io_dfns.io_input.parallel_io
 
         if io_dfns.f_electron !== nothing
-            if t_params.implicit_electron_time_evolving
+            if t_params.kinetic_electron_solver == implicit_time_evolving
                 n_rk_stages = t_params.n_rk_stages
                 this_scratch = scratch
             elseif t_params.electron === nothing

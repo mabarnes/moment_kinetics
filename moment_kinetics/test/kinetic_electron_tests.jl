@@ -105,8 +105,7 @@ kinetic_input = deepcopy(boltzmann_input)
 kinetic_input["output"]["run_name"] = "kinetic_electron_test"
 kinetic_input["composition"]["electron_physics"] = "kinetic_electrons"
 kinetic_input["timestepping"] = OptionsDict("type" => "PareschiRusso2(2,2,2)",
-                                            "implicit_electron_advance" => false,
-                                            "implicit_electron_ppar" => true,
+                                            "kinetic_electron_solver" => "implicit_ppar_implicit_pseudotimestep",
                                             "implicit_ion_advance" => false,
                                             "implicit_vpa_advection" => false,
                                             "nstep" => 100,

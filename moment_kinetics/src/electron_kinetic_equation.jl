@@ -2,6 +2,7 @@ module electron_kinetic_equation
 
 using LinearAlgebra
 using MPI
+using OrderedCollections
 using SparseArrays
 
 export get_electron_critical_velocities
@@ -822,12 +823,17 @@ function electron_backward_euler_pseudotimestepping!(scratch, pdf, moments, phi,
                                ion_dt=ion_dt)
 
             if step_success
-                apply_electron_bc_and_constraints_no_r!(f_electron_new, phi, moments, r,
-                                                        z, vperp, vpa, vperp_spectral,
-                                                        vpa_spectral, vpa_advect,
-                                                        num_diss_params, composition, ir,
-                                                        nl_solver_params)
+                bc_constraints_converged = apply_electron_bc_and_constraints_no_r!(
+                                               f_electron_new, phi, moments, r, z, vperp,
+                                               vpa, vperp_spectral, vpa_spectral,
+                                               vpa_advect, num_diss_params, composition,
+                                               ir, nl_solver_params)
+                if bc_constraints_converged != ""
+                    step_success = false
+                end
+            end
 
+            if step_success
                 if !evolve_ppar
                     # update the electron heat flux
                     moments.electron.qpar_updated[] = false
@@ -902,6 +908,12 @@ function electron_backward_euler_pseudotimestepping!(scratch, pdf, moments, phi,
 
                 first_step = false
             else
+                if !t_params.adaptive
+                    # Timestep not allowed to change, so errors are fatal
+                    error("Electron pseudotimestep failed. Electron pseudotimestep size "
+                          * "is fixed, so cannot reduce timestep to re-try.")
+                end
+
                 t_params.dt[] *= 0.5
 
                 # Force the preconditioner to be recalculated, because we have just
@@ -928,11 +940,17 @@ function electron_backward_euler_pseudotimestepping!(scratch, pdf, moments, phi,
 
                 new_lowerz_vcut_ind = @view r.scratch_shared_int[ir:ir]
                 new_upperz_vcut_ind = @view r.scratch_shared_int2[ir:ir]
-                apply_electron_bc_and_constraints_no_r!(f_electron_new, phi, moments, r,
-                                                        z, vperp, vpa, vperp_spectral,
-                                                        vpa_spectral, vpa_advect,
-                                                        num_diss_params, composition, ir,
-                                                        nl_solver_params)
+                bc_constraints_converged = apply_electron_bc_and_constraints_no_r!(
+                                               f_electron_new, phi, moments, r, z, vperp,
+                                               vpa, vperp_spectral, vpa_spectral,
+                                               vpa_advect, num_diss_params, composition,
+                                               ir, nl_solver_params)
+                if bc_constraints_converged != ""
+                    error("apply_electron_bc_and_constraints_no_r!() failed, but this "
+                          * "should not happen here, because we are re-applying the "
+                          * "function to a previously successful result while resetting "
+                          * "after a failed step.")
+                end
 
                 if !evolve_ppar
                     # update the electron heat flux
@@ -2308,54 +2326,67 @@ function apply_electron_bc_and_constraints_no_r!(f_electron, phi, moments, r, z,
     new_upperz_vcut_ind = @view r.scratch_shared_int2[ir:ir]
 
     # enforce the boundary condition(s) on the electron pdf
-    @views enforce_boundary_condition_on_electron_pdf!(
-               f_electron, phi, moments.electron.vth[:,ir], moments.electron.upar[:,ir],
-               z, vperp, vpa, vperp_spectral, vpa_spectral, vpa_advect, moments,
-               num_diss_params.electron.vpa_dissipation_coefficient > 0.0,
-               composition.me_over_mi, ir; lowerz_vcut_ind=new_lowerz_vcut_ind,
-               upperz_vcut_ind=new_upperz_vcut_ind)
-
-    # Check if either vcut_ind has changed - if either has, recalculate the
-    # preconditioner because the response at the grid point before the cutoff is
-    # sharp, so the preconditioner could be significantly wrong when it was
-    # calculated using the wrong vcut_ind.
-    lower_vcut_changed = @view z.scratch_shared_int[1:1]
-    upper_vcut_changed = @view z.scratch_shared_int[2:2]
+    bc_converged = Ref(true)
+    bc_converged[] = @views enforce_boundary_condition_on_electron_pdf!(
+                              f_electron, phi, moments.electron.vth[:,ir],
+                              moments.electron.upar[:,ir], z, vperp, vpa, vperp_spectral,
+                              vpa_spectral, vpa_advect, moments,
+                              num_diss_params.electron.vpa_dissipation_coefficient > 0.0,
+                              composition.me_over_mi, ir;
+                              lowerz_vcut_ind=new_lowerz_vcut_ind,
+                              upperz_vcut_ind=new_upperz_vcut_ind)
     @serial_region begin
-        if z.irank == 0
-            precon_lowerz_vcut_inds = nl_solver_params.precon_lowerz_vcut_inds
-            if new_lowerz_vcut_ind[] == precon_lowerz_vcut_inds[ir]
-                lower_vcut_changed[] = 0
-            else
-                lower_vcut_changed[] = 1
-                precon_lowerz_vcut_inds[ir] = new_lowerz_vcut_ind[]
-            end
-        end
-        MPI.Bcast!(lower_vcut_changed, comm_inter_block[]; root=0)
-        #req1 = MPI.Ibcast!(lower_vcut_changed, comm_inter_block[]; root=0)
-
-        if z.irank == z.nrank - 1
-            precon_upperz_vcut_inds = nl_solver_params.precon_upperz_vcut_inds
-            if new_upperz_vcut_ind[] == precon_upperz_vcut_inds[ir]
-                upper_vcut_changed[] = 0
-            else
-                upper_vcut_changed[] = 1
-                precon_upperz_vcut_inds[ir] = new_upperz_vcut_ind[]
-            end
-        end
-        MPI.Bcast!(upper_vcut_changed, comm_inter_block[]; root=n_blocks[]-1)
-        #req2 = MPI.Ibcast!(upper_vcut_changed, comm_inter_block[]; root=n_blocks[]-1)
-
-        # Eventually can use Ibcast!() to make the two broadcasts run
-        # simultaneously, but need the function to be merged into MPI.jl (see
-        # https://github.com/JuliaParallel/MPI.jl/pull/882).
-        #MPI.Waitall([req1, req2])
+        # Only the return value from rank-0 of each shared memory block matters
+        MPI.Allreduce!(bc_converged, &, comm_inter_block[])
     end
-    @_block_synchronize()
-    if lower_vcut_changed[] == 1 || upper_vcut_changed[] == 1
-        # One or both of the indices changed for some `ir`, so force the
-        # preconditioner to be recalculated next time.
-        nl_solver_params.solves_since_precon_update[] = nl_solver_params.preconditioner_update_interval
+    MPI.Bcast!(bc_converged, comm_block[]; root=0)
+    if !bc_converged[]
+        return "electron_bc"
+    end
+
+    if nl_solver_params !== nothing
+        # Check if either vcut_ind has changed - if either has, recalculate the
+        # preconditioner because the response at the grid point before the cutoff is
+        # sharp, so the preconditioner could be significantly wrong when it was
+        # calculated using the wrong vcut_ind.
+        lower_vcut_changed = @view z.scratch_shared_int[1:1]
+        upper_vcut_changed = @view z.scratch_shared_int[2:2]
+        @serial_region begin
+            if z.irank == 0
+                precon_lowerz_vcut_inds = nl_solver_params.precon_lowerz_vcut_inds
+                if new_lowerz_vcut_ind[] == precon_lowerz_vcut_inds[ir]
+                    lower_vcut_changed[] = 0
+                else
+                    lower_vcut_changed[] = 1
+                    precon_lowerz_vcut_inds[ir] = new_lowerz_vcut_ind[]
+                end
+            end
+            MPI.Bcast!(lower_vcut_changed, comm_inter_block[]; root=0)
+            #req1 = MPI.Ibcast!(lower_vcut_changed, comm_inter_block[]; root=0)
+
+            if z.irank == z.nrank - 1
+                precon_upperz_vcut_inds = nl_solver_params.precon_upperz_vcut_inds
+                if new_upperz_vcut_ind[] == precon_upperz_vcut_inds[ir]
+                    upper_vcut_changed[] = 0
+                else
+                    upper_vcut_changed[] = 1
+                    precon_upperz_vcut_inds[ir] = new_upperz_vcut_ind[]
+                end
+            end
+            MPI.Bcast!(upper_vcut_changed, comm_inter_block[]; root=n_blocks[]-1)
+            #req2 = MPI.Ibcast!(upper_vcut_changed, comm_inter_block[]; root=n_blocks[]-1)
+
+            # Eventually can use Ibcast!() to make the two broadcasts run
+            # simultaneously, but need the function to be merged into MPI.jl (see
+            # https://github.com/JuliaParallel/MPI.jl/pull/882).
+            #MPI.Waitall([req1, req2])
+        end
+        @_block_synchronize()
+        if lower_vcut_changed[] == 1 || upper_vcut_changed[] == 1
+            # One or both of the indices changed for some `ir`, so force the
+            # preconditioner to be recalculated next time.
+            nl_solver_params.solves_since_precon_update[] = nl_solver_params.preconditioner_update_interval
+        end
     end
 
     @begin_z_region()
@@ -2374,6 +2405,8 @@ function apply_electron_bc_and_constraints_no_r!(f_electron, phi, moments, r, z,
                                                    evolve_upar=true,
                                                    evolve_ppar=true), vpa)
     end
+
+    return ""
 end
 
 function get_cutoff_params_lower(upar, vthe, phi, me_over_mi, vpa)
@@ -2840,7 +2873,7 @@ end
                          pdf, phi, vthe, upar, z, vperp, vpa, vperp_spectral,
                          vpa_spectral, vpa_adv, moments, vpa_diffusion, me_over_mi, ir;
                          bc_constraints=true, update_vcut=true, lowerz_vcut_ind=nothing,
-                         upperz_vcut_ind=nothing) = begin
+                         upperz_vcut_ind=nothing, allow_failure=true) = begin
 
     @boundscheck bc_constraints && !update_vcut && error("update_vcut is not used when bc_constraints=true, but update_vcut has non-default value")
 
@@ -2864,7 +2897,7 @@ end
 
     if z.bc == "periodic"
         # Nothing more to do for z-periodic boundary conditions
-        return nothing
+        return true
     elseif z.bc == "constant"
         @begin_r_vperp_vpa_region()
         density_offset = 1.0
@@ -2890,7 +2923,7 @@ end
                 end
             end
         end
-        return nothing
+        return true
     end
 
     # first enforce the boundary condition at z_min.
@@ -3000,8 +3033,14 @@ end
                     end
 
                     if counter ≥ newton_max_its
-                        error("Newton iteration for electron lower-z boundary failed to "
-                              * "converge after $counter iterations")
+                        # Newton iteration for electron lower-z boundary failed to
+                        # converge after `counter` iterations
+                        if allow_failure
+                            return false
+                        else
+                            error("Newton iteration for electron lower-z boundary failed "
+                                  * "to converge after $counter iterations")
+                        end
                     end
                     counter += 1
                 end
@@ -3196,8 +3235,14 @@ end
                     end
 
                     if counter ≥ newton_max_its
-                        error("Newton iteration for electron upper-z boundary failed to "
-                              * "converge after $counter iterations")
+                        # Newton iteration for electron upper-z boundary failed to
+                        # converge after `counter` iterations
+                        if allow_failure
+                            return false
+                        else
+                            error("Newton iteration for electron lower-z boundary failed "
+                                  * "to converge after $counter iterations")
+                        end
                     end
                     counter += 1
                 end
@@ -3294,7 +3339,7 @@ end
         end
     end
 
-    return nothing
+    return true
 end
 
 # In several places it is useful to zero out (in residuals, etc.) the points that would be
@@ -4405,9 +4450,9 @@ appropriate.
         error("adaptive timestep needs a buffer scratch array")
     end
 
-    CFL_limits = mk_float[]
+    CFL_limits = OrderedDict{String,mk_float}()
     error_norm_type = typeof(t_params.error_sum_zero)
-    error_norms = error_norm_type[]
+    error_norms = OrderedDict{String,error_norm_type}()
     total_points = mk_int[]
 
     # Test CFL conditions for advection in electron kinetic equation to give stability
@@ -4420,9 +4465,9 @@ appropriate.
                              vpa.grid)
     z_CFL = get_minimum_CFL_z(z_advect[1].speed, z)
     if block_rank[] == 0
-        push!(CFL_limits, t_params.CFL_prefactor * z_CFL)
+        CFL_limits["CFL_z"] = t_params.CFL_prefactor * z_CFL
     else
-        push!(CFL_limits, Inf)
+        CFL_limits["CFL_z"] = Inf
     end
 
     # vpa-advection
@@ -4433,9 +4478,9 @@ appropriate.
                                vpa.grid, external_source_settings.electron)
     vpa_CFL = get_minimum_CFL_vpa(vpa_advect[1].speed, vpa)
     if block_rank[] == 0
-        push!(CFL_limits, t_params.CFL_prefactor * vpa_CFL)
+        CFL_limits["CFL_vpa"] = t_params.CFL_prefactor * vpa_CFL
     else
-        push!(CFL_limits, Inf)
+        CFL_limits["CFL_vpa"] = Inf
     end
 
     # To avoid double counting points when we use distributed-memory MPI, skip the
@@ -4473,7 +4518,7 @@ appropriate.
                                  t_params.rtol, t_params.atol; method=error_norm_method,
                                  skip_r_inner=skip_r_inner, skip_z_lower=skip_z_lower,
                                  error_sum_zero=t_params.error_sum_zero)
-    push!(error_norms, pdf_error)
+    error_norms["pdf_accuracy"] = pdf_error
     push!(total_points, vpa.n_global * vperp.n_global * z.n_global * r.n_global)
 
     # Calculate error for moments, if necessary
@@ -4484,7 +4529,7 @@ appropriate.
                                  t_params.rtol, t_params.atol; method=error_norm_method,
                                  skip_r_inner=skip_r_inner, skip_z_lower=skip_z_lower,
                                  error_sum_zero=t_params.error_sum_zero)
-        push!(error_norms, p_err)
+        error_norms["ppar_accuracy"] = p_err
         push!(total_points, z.n_global * r.n_global)
     end
 

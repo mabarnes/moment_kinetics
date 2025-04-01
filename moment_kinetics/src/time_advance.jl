@@ -8,6 +8,7 @@ export allocate_advection_structs
 export setup_dummy_and_buffer_arrays
 
 using MPI
+using OrderedCollections
 using Quadmath
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float, allocate_shared_float, allocate_shared_int, allocate_shared_bool
@@ -50,6 +51,8 @@ using ..electron_kinetic_equation: update_electron_pdf!, implicit_electron_advan
                                    electron_backward_euler!,
                                    electron_kinetic_equation_euler_update!,
                                    apply_electron_bc_and_constraints_no_r!
+using ..electron_vpa_advection: update_electron_speed_vpa!
+using ..electron_z_advection: update_electron_speed_z!
 using ..ionization: ion_ionization_collisions_1V!, neutral_ionization_collisions_1V!,
                     ion_ionization_collisions_3V!, neutral_ionization_collisions_3V!
 using ..krook_collisions: krook_collisions!
@@ -386,20 +389,18 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
     if rk_coefs_implicit === nothing
         # Not an IMEX scheme, so cannot have any implicit terms
         t_input["implicit_braginskii_conduction"] = false
-        t_input["implicit_electron_advance"] = false
-        t_input["implicit_electron_time_evolving"] = false
+        if electron !== nothing && t_input["kinetic_electron_solver"] ∈ (implicit_time_evolving,
+                                                                         implicit_ppar_implicit_pseudotimestep,
+                                                                         implicit_steady_state,
+                                                                         implicit_ppar_explicit_pseudotimestep)
+            error("kinetic_electron_solver=$(t_input["kinetic_electron_solver"]) "
+                  * "not supported when using a fully explicit timestep")
+        end
         t_input["implicit_ion_advance"] = false
         t_input["implicit_vpa_advection"] = false
-        t_input["implicit_electron_ppar"] = false
     else
         if composition.electron_physics != braginskii_fluid
             t_input["implicit_braginskii_conduction"] = false
-        end
-        if composition.electron_physics ∉ (kinetic_electrons,
-                                           kinetic_electrons_with_temperature_equation)
-            t_input["implicit_electron_advance"] = false
-            t_input["implicit_electron_time_evolving"] = false
-            t_input["implicit_electron_ppar"] = false
         end
     end
 
@@ -429,9 +430,7 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
             debug_io = nothing
         end
 
-        implicit_electron_ppar = false
-        implicit_electron_advance = false
-        implicit_electron_time_evolving = false
+        kinetic_electron_solver = null_kinetic_electrons # This option is only used from the ion time_info struct
         electron_preconditioner_type = nothing
         decrease_dt_iteration_threshold = t_input["decrease_dt_iteration_threshold"]
         increase_dt_iteration_threshold = t_input["increase_dt_iteration_threshold"]
@@ -442,9 +441,7 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
         electron_t_params = nothing
     elseif electron === false
         debug_io = nothing
-        implicit_electron_ppar = false
-        implicit_electron_advance = false
-        implicit_electron_time_evolving = false
+        kinetic_electron_solver = null_kinetic_electrons
         electron_preconditioner_type = nothing
         decrease_dt_iteration_threshold = -1
         increase_dt_iteration_threshold = typemax(mk_int)
@@ -456,56 +453,26 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
     else
         debug_io = nothing
 
-        implicit_electron_ppar = (t_input["implicit_electron_ppar"] !== false)
-        implicit_electron_advance = (t_input["implicit_electron_advance"] !== false)
-        implicit_electron_time_evolving = (t_input["implicit_electron_time_evolving"] !== false)
-        electron_precon_types = Dict("lu" => :electron_lu, "adi" => :electron_adi)
-        if implicit_electron_ppar
-            if t_input["implicit_electron_ppar"] === true
+        kinetic_electron_solver = t_input["kinetic_electron_solver"]
+        if kinetic_electron_solver ∈ (implicit_time_evolving,
+                                      implicit_ppar_implicit_pseudotimestep,
+                                      implicit_steady_state)
+            electron_precon_types = Dict("lu" => :electron_lu, "adi" => :electron_adi)
+            if t_input["kinetic_electron_preconditioner"] == "default"
                 if block_size[] == 1
-                    # No need to parallelise, so un-split LU solver should be most efficient.
-                    electron_preconditioner_type = Val(:electron_lu)
+                    electron_precon_option = "lu"
                 else
-                    # Want to parallelise preconditioner, so use ADI method.
-                    electron_preconditioner_type = Val(:electron_adi)
+                    electron_precon_option = "adi"
                 end
             else
-                if t_input["implicit_electron_ppar"] ∈ keys(electron_precon_types)
-                    electron_preconditioner_type = Val(electron_precon_types[t_input["implicit_electron_ppar"]])
-                else
-                    precon_keys = collect(keys(electron_precon_types))
-                    error("Unrecognised option implicit_electron_ppar="
-                          * "\"$(t_input["implicit_electron_ppar"])\"  which should be "
-                          * "either false/true or a string giving the type of "
-                          * "preconditioner to use - one of $precon_keys.")
-                end
+                electron_precon_option = t_input["kinetic_electron_preconditioner"]
             end
-        elseif implicit_electron_advance
-            if t_input["implicit_electron_advance"] !== true
-                error("No options other than `true` supported yet for "
-                      * "implicit_electron_advance.")
+            if kinetic_electron_solver === implicit_steady_state && electron_precon_option != "lu"
+                error("Only LU preconditioner currently supported for "
+                      * "kinetic_electron_solver=\"implicit_steady_state\". Got "
+                      * "kinetic_electron_preconditioner=$electron_precon_option")
             end
-            electron_preconditioner_type = Val(:electron_lu)
-        elseif implicit_electron_time_evolving
-            if t_input["implicit_electron_time_evolving"] === true
-                if block_size[] == 1
-                    # No need to parallelise, so un-split LU solver should be most efficient.
-                    electron_preconditioner_type = Val(:electron_lu)
-                else
-                    # Want to parallelise preconditioner, so use ADI method.
-                    electron_preconditioner_type = Val(:electron_adi)
-                end
-            else
-                if t_input["implicit_electron_time_evolving"] ∈ keys(electron_precon_types)
-                    electron_preconditioner_type = Val(electron_precon_types[t_input["implicit_electron_time_evolving"]])
-                else
-                    precon_keys = collect(keys(electron_precon_types))
-                    error("Unrecognised option implicit_electron_time_evolving="
-                          * "\"$(t_input["implicit_electron_time_evolving"])\"  which "
-                          * "should be either false/true or a string giving the type of "
-                          * "preconditioner to use - one of $precon_keys.")
-                end
-            end
+            electron_preconditioner_type = Val(electron_precon_types[electron_precon_option])
         else
             electron_preconditioner_type = Val(:none)
         end
@@ -531,7 +498,8 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
                      dt_before_output, dt_before_last_fail, mk_float(CFL_prefactor),
                      step_to_moments_output, step_to_dfns_output, write_moments_output,
                      write_dfns_output, Ref(0), Ref(0), Ref{mk_float}(0.0), Ref(0),
-                     Ref(0), Ref(0), mk_int[], mk_int[], t_input["nwrite"],
+                     Ref(0), Ref(0), OrderedDict{String,mk_int}(),
+                     OrderedDict{String,mk_int}(), t_input["nwrite"],
                      t_input["nwrite_dfns"], moments_output_times, dfns_output_times,
                      t_input["type"], rk_coefs, rk_coefs_implicit,
                      implicit_coefficient_is_zero, n_rk_stages, rk_order,
@@ -544,10 +512,9 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
                      mk_float(t_input["last_fail_proximity_factor"]),
                      mk_float(t_input["minimum_dt"]), mk_float(t_input["maximum_dt"]),
                      electron !== nothing && t_input["implicit_braginskii_conduction"],
-                     implicit_electron_advance, implicit_electron_time_evolving,
+                     kinetic_electron_solver, electron_preconditioner_type,
                      electron !== nothing && t_input["implicit_ion_advance"],
                      electron !== nothing && t_input["implicit_vpa_advection"],
-                     implicit_electron_ppar, electron_preconditioner_type,
                      mk_float(t_input["constraint_forcing_rate"]),
                      decrease_dt_iteration_threshold, increase_dt_iteration_threshold,
                      mk_float(cap_factor_ion_dt), mk_int(max_pseudotimesteps),
@@ -600,23 +567,25 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
                                             electron_dt_before_last_fail_reload,
                                             composition, manufactured_solns_input,
                                             io_input, input_dict)
-        # Make Vectors that count which variable caused timestep limits and timestep failures
-        # the right length. Do this setup even when not using adaptive timestepping, because
-        # it is easier than modifying the file I/O according to whether we are using adaptive
-        # timestepping.
-        #
-        # Entries for limit by accuracy (which is an average over all variables),
-        # max_increase_factor, max_increase_factor_near_last_fail, minimum_dt, maximum_dt
-        # and high_nl_iterations.
-        push!(electron_t_params.limit_caused_by, 0, 0, 0, 0, 0)
+        # Set up entries for counters for which variable caused timestep limits and
+        # timestep failures the right length. Do this setup even when not using adaptive
+        # timestepping, because it is easier than modifying the file I/O according to
+        # whether we are using adaptive timestepping.
+        electron_t_params.limit_caused_by["max_increase_factor"] = 0
+        electron_t_params.limit_caused_by["max_increase_factor_near_last_fail"] = 0
+        electron_t_params.limit_caused_by["minimum_dt"] = 0
+        electron_t_params.limit_caused_by["maximum_dt"] = 0
+        electron_t_params.limit_caused_by["high_nl_iterations"] = 0
 
         # electron pdf
-        push!(electron_t_params.limit_caused_by, 0, 0, 0) # RK accuracy plus 2 CFL limits
-        push!(electron_t_params.failure_caused_by, 0)
+        electron_t_params.limit_caused_by["pdf_accuracy"] = 0
+        electron_t_params.limit_caused_by["CFL_z"] = 0
+        electron_t_params.limit_caused_by["CFL_vpa"] = 0
+        electron_t_params.failure_caused_by["pdf_accuracy"] = 0
 
         # electron ppar
-        push!(electron_t_params.limit_caused_by, 0) # RK accuracy
-        push!(electron_t_params.failure_caused_by, 0)
+        electron_t_params.limit_caused_by["ppar_accuracy"] = 0
+        electron_t_params.failure_caused_by["ppar_accuracy"] = 0
     else
         # Pass `false` rather than `nothing` to `setup_time_info()` call for ions, which
         # indicates that 'debug_io' should never be set up for ions.
@@ -661,71 +630,85 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
                                manufactured_solns_input, io_input, input_dict;
                                electron=electron_t_params)
 
-    # Make Vectors that count which variable caused timestep limits and timestep failures
-    # the right length. Do this setup even when not using adaptive timestepping, because
-    # it is easier than modifying the file I/O according to whether we are using adaptive
-    # timestepping.
-    #
-    # Entries for limit by max_increase_factor, max_increase_factor_near_last_fail,
-    # minimum_dt, maximum_dt and high_nl_iterations.
-    push!(t_params.limit_caused_by, 0, 0, 0, 0, 0)
+    # Set up entries for counters for which variable caused timestep limits and
+    # timestep failures the right length. Do this setup even when not using adaptive
+    # timestepping, because it is easier than modifying the file I/O according to
+    # whether we are using adaptive timestepping.
+    t_params.limit_caused_by["max_increase_factor"] = 0
+    t_params.limit_caused_by["max_increase_factor_near_last_fail"] = 0
+    t_params.limit_caused_by["minimum_dt"] = 0
+    t_params.limit_caused_by["maximum_dt"] = 0
+    t_params.limit_caused_by["high_nl_iterations"] = 0
 
     # ion pdf
-    push!(t_params.limit_caused_by, 0) # RK accuracy
+    t_params.limit_caused_by["pdf_accuracy"] = 0
     if !t_params.implicit_ion_advance
-        push!(t_params.limit_caused_by, 0) # z-advection CFL limit
+        t_params.limit_caused_by["CFL_z"] = 0
     end
     if !(t_params.implicit_ion_advance || t_params.implicit_vpa_advection)
-        push!(t_params.limit_caused_by, 0) # vpa-advection CFL limit
+        t_params.limit_caused_by["CFL_vpa"] = 0
     end
-    push!(t_params.failure_caused_by, 0)
+    t_params.failure_caused_by["pdf_accuracy"] = 0
+
     if moments.evolve_density
         # ion density
-        push!(t_params.limit_caused_by, 0) # RK accuracy
-        push!(t_params.failure_caused_by, 0)
+        t_params.limit_caused_by["density_accuracy"] = 0
+        t_params.failure_caused_by["density_accuracy"] = 0
     end
     if moments.evolve_upar
         # ion flow
-        push!(t_params.limit_caused_by, 0) # RK accuracy
-        push!(t_params.failure_caused_by, 0)
+        t_params.limit_caused_by["upar_accuracy"] = 0
+        t_params.failure_caused_by["upar_accuracy"] = 0
     end
-    if moments.evolve_ppar
+    if moments.evolve_density
         # ion pressure
-        push!(t_params.limit_caused_by, 0) # RK accuracy
-        push!(t_params.failure_caused_by, 0)
+        t_params.limit_caused_by["ppar_accuracy"] = 0
+        t_params.failure_caused_by["ppar_accuracy"] = 0
     end
+
     if composition.electron_physics ∈ (braginskii_fluid, kinetic_electrons,
                                        kinetic_electrons_with_temperature_equation)
         # electron pressure
-        push!(t_params.limit_caused_by, 0) # RK accuracy
-        push!(t_params.failure_caused_by, 0) # RK accuracy for electron_ppar
+        t_params.limit_caused_by["electron_ppar_accuracy"] = 0
+        t_params.failure_caused_by["electron_ppar_accuracy"] = 0
+        if t_params.kinetic_electron_solver == implicit_time_evolving
+            t_params.limit_caused_by["electron_pdf_accuracy"] = 0
+            t_params.failure_caused_by["electron_pdf_accuracy"] = 0
+        elseif t_params.kinetic_electron_solver == explicit_time_evolving
+            t_params.limit_caused_by["electron_pdf_accuracy"] = 0
+            t_params.limit_caused_by["electron_CFL_z"] = 0
+            t_params.limit_caused_by["electron_CFL_vpa"] = 0
+            t_params.failure_caused_by["electron_pdf_accuracy"] = 0
+        end
         if composition.electron_physics ∈ (kinetic_electrons,
                                            kinetic_electrons_with_temperature_equation)
-            push!(t_params.failure_caused_by, 0) # Convergence failure for kinetic electron solve
+            t_params.failure_caused_by["kinetic_electron_convergence"] = 0
         end
     end
     if composition.n_neutral_species > 0
-        # neutral pdf
-        push!(t_params.limit_caused_by, 0, 0, 0) # RK accuracy plus 2 CFL limits
-        push!(t_params.failure_caused_by, 0)
+        t_params.limit_caused_by["neutral_pdf_accuracy"] = 0
+        t_params.limit_caused_by["neutral_CFL_z"] = 0
+        t_params.limit_caused_by["neutral_CFL_vpa"] = 0
+        t_params.failure_caused_by["neutral_pdf_accuracy"] = 0
+
         if moments.evolve_density
             # neutral density
-            push!(t_params.limit_caused_by, 0) # RK accuracy
-            push!(t_params.failure_caused_by, 0)
+            t_params.limit_caused_by["neutral_density_accuracy"] = 0
+            t_params.failure_caused_by["neutral_density_accuracy"] = 0
         end
         if moments.evolve_upar
             # neutral flow
-            push!(t_params.limit_caused_by, 0) # RK accuracy
-            push!(t_params.failure_caused_by, 0)
+            t_params.limit_caused_by["neutral_uz_accuracy"] = 0
+            t_params.failure_caused_by["neutral_uz_accuracy"] = 0
         end
-        if moments.evolve_ppar
+        if moments.evolve_density
             # neutral pressure
-            push!(t_params.limit_caused_by, 0) # RK accuracy
-            push!(t_params.failure_caused_by, 0)
+            t_params.limit_caused_by["neutral_pz_accuracy"] = 0
+            t_params.failure_caused_by["neutral_pz_accuracy"] = 0
         end
     end
     if t_params.rk_coefs_implicit !== nothing
-        push!(t_params.failure_caused_by, 0) # Nonlinear iteration fails to converge
+        t_params.failure_caused_by["nonlinear_solver_convergence"] = 0
     end
 
     # create the 'advance' struct to be used in later Euler advance to
@@ -759,7 +742,9 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
                                                                     default_rtol=t_params.rtol / 10.0,
                                                                     default_atol=t_params.atol / 10.0)
     nl_solver_electron_advance_params =
-        setup_nonlinear_solve(t_params.implicit_electron_advance || t_params.implicit_electron_time_evolving || t_params.implicit_electron_ppar,
+        setup_nonlinear_solve(t_params.kinetic_electron_solver ∈ (implicit_time_evolving,
+                                                                  implicit_ppar_implicit_pseudotimestep,
+                                                                  implicit_steady_state),
                               input_dict,
                               (z=z, vperp=vperp, vpa=vpa),
                               (r,);
@@ -788,11 +773,6 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
         error("Cannot use implicit_ion_advance and implicit_vpa_advection at the same "
               * "time")
     end
-    if (t_params.implicit_electron_advance + t_params.implicit_electron_time_evolving +
-        t_params.implicit_electron_ppar) > 1
-        error("Can only use one of implicit_electron_advance, "
-              * "implicit_electron_time_evolving, and implicit_electron_ppar.")
-    end
     nl_solver_params = (electron_conduction=electron_conduction_nl_solve_parameters,
                         electron_advance=nl_solver_electron_advance_params,
                         ion_advance=nl_solver_ion_advance_params,
@@ -811,10 +791,10 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
     # create an array of structs containing scratch arrays for the pdf and low-order moments
     # that may be evolved separately via fluid equations
     scratch = setup_scratch_arrays(moments, pdf, t_params.n_rk_stages + 1,
-                                   t_params.implicit_electron_time_evolving)
+                                   t_params.kinetic_electron_solver ∈ (implicit_time_evolving, explicit_time_evolving))
     if t_params.rk_coefs_implicit !== nothing
         scratch_implicit = setup_scratch_arrays(moments, pdf, t_params.n_rk_stages,
-                                                t_params.implicit_electron_time_evolving)
+                                                t_params.kinetic_electron_solver ∈ (implicit_time_evolving, explicit_time_evolving))
     else
         scratch_implicit = nothing
     end
@@ -1341,9 +1321,11 @@ function setup_advance_flags(moments, composition, t_params, collisions,
         # moment-kinetically then advance the electron energy equation
         if composition.electron_physics ∈ (kinetic_electrons,
                                            kinetic_electrons_with_temperature_equation)
-            if !(t_params.implicit_electron_advance ||
-                 t_params.implicit_electron_time_evolving ||
-                 t_params.implicit_electron_ppar)
+            if !(t_params.kinetic_electron_solver ∈ (implicit_time_evolving,
+                                                     implicit_ppar_implicit_pseudotimestep,
+                                                     implicit_steady_state,
+                                                     explicit_time_evolving,
+                                                     implicit_ppar_explicit_pseudotimestep))
                 advance_electron_energy = true
                 advance_electron_conduction = true
             end
@@ -1359,6 +1341,9 @@ function setup_advance_flags(moments, composition, t_params, collisions,
                 advance_electron_energy = true
                 advance_electron_conduction = true
             end
+        end
+        if t_params.kinetic_electron_solver == explicit_time_evolving
+            advance_electron_pdf = true
         end
 
         # *_diffusion flags are set regardless of whether diffusion is included in explicit or
@@ -1503,12 +1488,14 @@ function setup_implicit_advance_flags(moments, composition, t_params, collisions
         advance_electron_conduction = true
     end
 
-    if (t_params.implicit_electron_advance || t_params.implicit_electron_time_evolving ||
-            t_params.implicit_electron_ppar)
+    if (t_params.kinetic_electron_solver ∈ (implicit_time_evolving,
+                                            implicit_ppar_implicit_pseudotimestep,
+                                            implicit_steady_state,
+                                            implicit_ppar_explicit_pseudotimestep))
         advance_electron_energy = true
         advance_electron_conduction = true
     end
-    if t_params.implicit_electron_time_evolving
+    if t_params.kinetic_electron_solver == implicit_time_evolving
         advance_electron_pdf = true
     end
 
@@ -1609,7 +1596,9 @@ function setup_dummy_and_buffer_arrays(nr, nz, nvpa, nvperp, nvz, nvr, nvzeta,
     buffer_vpavperpr_5 = allocate_shared_float(nvpa,nvperp,nr)
     buffer_vpavperpr_6 = allocate_shared_float(nvpa,nvperp,nr)
 
-    if t_params.implicit_electron_advance || true
+    if t_params.kinetic_electron_solver ∈ (implicit_time_evolving,
+                                           implicit_ppar_implicit_pseudotimestep,
+                                           implicit_steady_state)
         implicit_buffer_z_1 = allocate_shared_float(nz)
         implicit_buffer_z_2 = allocate_shared_float(nz)
         implicit_buffer_z_3 = allocate_shared_float(nz)
@@ -2558,7 +2547,7 @@ moments and moment derivatives
         # to the beginning of the ion/neutral timestep, so the electron solution
         # calculated here would be discarded - we might as well skip calculating it in
         # that case.
-        if update_electrons && !(t_params.implicit_electron_advance) && success == ""
+        if update_electrons && success == ""
             kinetic_electron_success = update_electron_pdf!(
                scratch_electron, pdf.electron.norm, moments, fields.phi, r, z, vperp, vpa,
                z_spectral, vperp_spectral, vpa_spectral, electron_z_advect,
@@ -2676,12 +2665,13 @@ appropriate.
     n_ion_species = composition.n_ion_species
     n_neutral_species = composition.n_neutral_species
     vpa_advect, r_advect, z_advect = advect_objects.vpa_advect, advect_objects.r_advect, advect_objects.z_advect
+    electron_z_advect, electron_vpa_advect = advect_objects.electron_z_advect, advect_objects.electron_vpa_advect
     neutral_z_advect, neutral_r_advect, neutral_vz_advect = advect_objects.neutral_z_advect, advect_objects.neutral_r_advect, advect_objects.neutral_vz_advect
     evolve_density, evolve_upar, evolve_ppar = moments.evolve_density, moments.evolve_upar, moments.evolve_ppar
 
-    CFL_limits = mk_float[]
+    CFL_limits = OrderedDict{String,mk_float}()
     error_norm_type = typeof(t_params.error_sum_zero)
-    error_norms = error_norm_type[]
+    error_norms = OrderedDict{String,error_norm_type}()
     total_points = mk_int[]
 
     # Test CFL conditions for advection in kinetic equation to give stability limit for
@@ -2704,7 +2694,7 @@ appropriate.
                 ion_z_CFL = min(ion_z_CFL, this_minimum)
             end
         end
-        push!(CFL_limits, t_params.CFL_prefactor * ion_z_CFL)
+        CFL_limits["CFL_z"] = t_params.CFL_prefactor * ion_z_CFL
     end
 
     if !(t_params.implicit_ion_advance || t_params.implicit_vpa_advection)
@@ -2720,7 +2710,32 @@ appropriate.
                 ion_vpa_CFL = min(ion_vpa_CFL, this_minimum)
             end
         end
-        push!(CFL_limits, t_params.CFL_prefactor * ion_vpa_CFL)
+        CFL_limits["CFL_vpa"] = t_params.CFL_prefactor * ion_vpa_CFL
+    end
+
+    if t_params.kinetic_electron_solver == explicit_time_evolving
+        # Need to check electron CFL limits
+        @begin_r_vperp_vpa_region()
+        update_electron_speed_z!(electron_z_advect[1], moments.electron.upar,
+                                 moments.electron.vth, vpa.grid)
+        electron_z_CFL = get_minimum_CFL_z(electron_z_advect[1].speed, z)
+        if block_rank[] == 0
+            CFL_limits["electron_CFL_z"] = t_params.CFL_prefactor * electron_z_CFL
+        else
+            CFL_limits["electron_CFL_z"] = Inf
+        end
+
+        @begin_r_z_vperp_region()
+        update_electron_speed_vpa!(electron_vpa_advect[1], moments.electron.dens,
+                                   moments.electron.upar,
+                                   scratch[t_params.n_rk_stages+1].electron_ppar, moments,
+                                   vpa.grid, external_source_settings.electron)
+        electron_vpa_CFL = get_minimum_CFL_vpa(electron_vpa_advect[1].speed, vpa)
+        if block_rank[] == 0
+            CFL_limits["electron_CFL_vpa"] = t_params.CFL_prefactor * electron_vpa_CFL
+        else
+            CFL_limits["electron_CFL_vpa"] = Inf
+        end
     end
 
     # To avoid double counting points when we use distributed-memory MPI, skip the
@@ -2744,7 +2759,7 @@ appropriate.
         @begin_s_r_z_region()
         rk_loworder_solution!(scratch, scratch_implicit, :ppar, t_params)
     end
-    if t_params.implicit_electron_time_evolving
+    if t_params.kinetic_electron_solver ∈ (implicit_time_evolving, explicit_time_evolving)
         @begin_r_z_vperp_vpa_region()
         rk_loworder_solution!(scratch, scratch_implicit, :pdf_electron, t_params)
     end
@@ -2838,7 +2853,7 @@ appropriate.
                                      method=error_norm_method, skip_r_inner=skip_r_inner,
                                      skip_z_lower=skip_z_lower,
                                      error_sum_zero=t_params.error_sum_zero)
-    push!(error_norms, ion_pdf_error)
+    error_norms["pdf_accuracy"] = ion_pdf_error
     push!(total_points,
           vpa.n_global * vperp.n_global * z.n_global * r.n_global * n_ion_species)
 
@@ -2851,7 +2866,7 @@ appropriate.
                                      method=error_norm_method, skip_r_inner=skip_r_inner,
                                      skip_z_lower=skip_z_lower,
                                      error_sum_zero=t_params.error_sum_zero)
-        push!(error_norms, ion_n_err)
+        error_norms["density_accuracy"] = ion_n_err
         push!(total_points, z.n_global * r.n_global * n_ion_species)
     end
     if moments.evolve_upar
@@ -2861,7 +2876,7 @@ appropriate.
                                      t_params.atol; method=error_norm_method,
                                      skip_r_inner=skip_r_inner, skip_z_lower=skip_z_lower,
                                      error_sum_zero=t_params.error_sum_zero)
-        push!(error_norms, ion_u_err)
+        error_norms["upar_accuracy"] = ion_u_err
         push!(total_points, z.n_global * r.n_global * n_ion_species)
     end
     if moments.evolve_ppar
@@ -2871,7 +2886,7 @@ appropriate.
                                      t_params.atol; method=error_norm_method,
                                      skip_r_inner=skip_r_inner, skip_z_lower=skip_z_lower,
                                      error_sum_zero=t_params.error_sum_zero)
-        push!(error_norms, ion_p_err)
+        error_norms["ppar_accuracy"] = ion_p_err
         push!(total_points, z.n_global * r.n_global * n_ion_species)
     end
 
@@ -2885,8 +2900,23 @@ appropriate.
                                           skip_r_inner=skip_r_inner,
                                           skip_z_lower=skip_z_lower,
                                           error_sum_zero=t_params.error_sum_zero)
-        push!(error_norms, electron_p_err)
+        error_norms["electron_ppar_accuracy"] = electron_p_err
         push!(total_points, z.n_global * r.n_global)
+
+        if t_params.kinetic_electron_solver == explicit_time_evolving
+            # Need to have an accurate electron_pdf solution to avoid crashing an
+            # explicit-timestepping simulation.
+            electron_pdf_error = local_error_norm(scratch[2].pdf_electron,
+                                                  scratch[t_params.n_rk_stages+1].pdf_electron,
+                                                  t_params.rtol, t_params.atol;
+                                                  method=error_norm_method,
+                                                  skip_r_inner=skip_r_inner,
+                                                  skip_z_lower=skip_z_lower,
+                                                  error_sum_zero=t_params.error_sum_zero)
+            error_norms["electron_pdf_accuracy"] = electron_pdf_error
+            push!(total_points,
+                  vpa.n_global * vperp.n_global * z.n_global * r.n_global)
+        end
     end
 
     if n_neutral_species > 0
@@ -2905,7 +2935,7 @@ appropriate.
                 neutral_z_CFL = min(neutral_z_CFL, this_minimum)
             end
         end
-        push!(CFL_limits, t_params.CFL_prefactor * neutral_z_CFL)
+        CFL_limits["neutral_CFL_z"] = t_params.CFL_prefactor * neutral_z_CFL
 
         # neutral vz-advection
         @begin_r_z_vzeta_vr_region()
@@ -2920,7 +2950,7 @@ appropriate.
                 neutral_vz_CFL = min(neutral_vz_CFL, this_minimum)
             end
         end
-        push!(CFL_limits, t_params.CFL_prefactor * neutral_vz_CFL)
+        CFL_limits["neutral_CFL_vz"] = t_params.CFL_prefactor * neutral_vz_CFL
 
         # Calculate error for neutral distribution functions
         neut_pdf_error = local_error_norm(scratch[2].pdf_neutral,
@@ -2930,7 +2960,7 @@ appropriate.
                                           skip_r_inner=skip_r_inner,
                                           skip_z_lower=skip_z_lower,
                                           error_sum_zero=t_params.error_sum_zero)
-        push!(error_norms, neut_pdf_error)
+        error_norms["neutral_pdf_accuracy"] = neut_pdf_error
         push!(total_points,
               vz.n_global * vr.n_global * vzeta.n_global * z.n_global * r.n_global *
               n_neutral_species)
@@ -2945,7 +2975,7 @@ appropriate.
                                           skip_r_inner=skip_r_inner,
                                           skip_z_lower=skip_z_lower,
                                           error_sum_zero=t_params.error_sum_zero)
-            push!(error_norms, neut_n_err)
+            error_norms["neutral_density_accuracy"] = neut_n_err
             push!(total_points, z.n_global * r.n_global * n_neutral_species)
         end
         if moments.evolve_upar
@@ -2957,7 +2987,7 @@ appropriate.
                                           skip_r_inner=skip_r_inner,
                                           skip_z_lower=skip_z_lower,
                                           error_sum_zero=t_params.error_sum_zero)
-            push!(error_norms, neut_u_err)
+            error_norms["neutral_uz_accuracy"] = neut_u_err
             push!(total_points, z.n_global * r.n_global * n_neutral_species)
         end
         if moments.evolve_ppar
@@ -2969,7 +2999,7 @@ appropriate.
                                           skip_r_inner=skip_r_inner,
                                           skip_z_lower=skip_z_lower,
                                           error_sum_zero=t_params.error_sum_zero)
-            push!(error_norms, neut_p_err)
+            error_norms["neutral_pz_accuracy"] = neut_p_err
             push!(total_points, z.n_global * r.n_global * n_neutral_species)
         end
     end
@@ -3174,7 +3204,7 @@ end
                 # rk_coefs_implicit[istage,istage]=a[istage,istage].
                 if scratch_electron === nothing
                     this_scratch_electron = nothing
-                elseif t_params.implicit_electron_advance
+                elseif t_params.kinetic_electron_solver == implicit_steady_state
                     this_scratch_electron = scratch_electron[t_params.electron.n_rk_stages+1]
                 else
                     this_scratch_electron = scratch_electron
@@ -3202,9 +3232,11 @@ end
                 # The result of the implicit solve gives the state vector at 'istage'
                 # which is used as input to the explicit part of the IMEX time step.
                 old_scratch = scratch_implicit[istage]
-                update_electrons = !(t_params.implicit_electron_advance ||
-                                     t_params.implicit_electron_time_evolving ||
-                                     t_params.implicit_electron_ppar)
+                update_electrons = t_params.kinetic_electron_solver ∉ (implicit_time_evolving,
+                                                                       implicit_ppar_implicit_pseudotimestep,
+                                                                       implicit_steady_state,
+                                                                       explicit_time_evolving,
+                                                                       implicit_ppar_explicit_pseudotimestep)
                 bcs_constraints_success = apply_all_bcs_constraints_update_moments!(
                     scratch_implicit[istage], pdf, moments, fields,
                     boundary_distributions, scratch_electron, vz, vr, vzeta, vpa, vperp,
@@ -3252,10 +3284,12 @@ end
                                 || !t_params.implicit_ion_advance
                                 || (istage == n_rk_stages && t_params.implicit_coefficient_is_zero[1])
                                 || t_params.implicit_coefficient_is_zero[istage+1])
-        update_electrons = (t_params.rk_coefs_implicit === nothing
-                            || !(t_params.implicit_electron_advance ||
-                                 t_params.implicit_electron_time_evolving ||
-                                 t_params.implicit_electron_ppar))
+        update_electrons = ((t_params.rk_coefs_implicit === nothing && t_params.kinetic_electron_solver !== explicit_time_evolving)
+                            || t_params.kinetic_electron_solver ∉ (implicit_time_evolving,
+                                                                   implicit_ppar_implicit_pseudotimestep,
+                                                                   implicit_steady_state,
+                                                                   explicit_time_evolving,
+                                                                   implicit_ppar_explicit_pseudotimestep))
         diagnostic_moments = diagnostic_checks && istage == n_rk_stages
         bcs_constraints_success = apply_all_bcs_constraints_update_moments!(
             scratch[istage+1], pdf, moments, fields, boundary_distributions,
@@ -3280,7 +3314,7 @@ end
         nl_max_its_fraction = 0.0
         nl_total_its_soft_limit = false
         nl_total_its_soft_limit_reduce_dt = false
-        if t_params.implicit_electron_advance || t_params.implicit_electron_time_evolving
+        if t_params.kinetic_electron_solver ∈ (implicit_steady_state, implicit_time_evolving)
             params_to_check = (nl_solver_params.ion_advance,
                                nl_solver_params.vpa_advection,
                                nl_solver_params.electron_conduction,
@@ -3329,11 +3363,11 @@ end
     reset_nonlinear_per_stage_counters!(nl_solver_params.ion_advance)
     reset_nonlinear_per_stage_counters!(nl_solver_params.vpa_advection)
     reset_nonlinear_per_stage_counters!(nl_solver_params.electron_conduction)
-    if !t_params.implicit_electron_advance && t_params.electron !== nothing
+    if t_params.kinetic_electron_solver != implicit_steady_state && t_params.electron !== nothing
         t_params.electron.max_step_count_this_ion_step[] = 0
         t_params.electron.max_t_increment_this_ion_step[] = 0.0
     end
-    if t_params.implicit_electron_time_evolving
+    if t_params.kinetic_electron_solver == implicit_time_evolving
         reset_nonlinear_per_stage_counters!(nl_solver_params.electron_advance)
     end
 
@@ -3719,7 +3753,7 @@ end
     neutral_z_advect, neutral_r_advect, neutral_vz_advect = advect_objects.neutral_z_advect, advect_objects.neutral_r_advect, advect_objects.neutral_vz_advect
 
     success = true
-    if t_params.implicit_electron_advance
+    if t_params.kinetic_electron_solver == implicit_steady_state
         electron_success = implicit_electron_advance!(fvec_out, fvec_in, pdf,
                                                       scratch_electron, moments, fields,
                                                       collisions, composition, geometry,
@@ -3734,7 +3768,7 @@ end
                                                       nl_solver_params.electron_advance)
 
         success = success && (electron_success == "")
-    elseif t_params.implicit_electron_time_evolving
+    elseif t_params.kinetic_electron_solver == implicit_time_evolving
         t_params.electron.dt[] = dt
         for ir ∈ 1:r.n
             electron_success = electron_backward_euler!(
@@ -3745,7 +3779,7 @@ end
                           nl_solver_params.electron_advance, ir; evolve_ppar=true)
             success = success && electron_success
         end
-    elseif t_params.implicit_electron_ppar
+    elseif t_params.kinetic_electron_solver == implicit_ppar_implicit_pseudotimestep
         max_electron_pdf_iterations = t_params.electron.max_pseudotimesteps
         max_electron_sim_time = t_params.electron.max_pseudotime
         electron_success = update_electron_pdf!(scratch_electron, pdf.electron.norm,
@@ -3759,6 +3793,32 @@ end
                                                 max_electron_pdf_iterations,
                                                 max_electron_sim_time; evolve_ppar=true,
                                                 ion_dt=dt)
+
+        # Update `fvec_out.electron_ppar` with the new electron pressure
+        @begin_r_z_region()
+        fvec_out_electron_ppar = fvec_out.electron_ppar
+        moments_electron_ppar = moments.electron.ppar
+        @loop_r_z ir iz begin
+            fvec_out_electron_ppar[iz,ir] = moments_electron_ppar[iz,ir]
+        end
+
+        success = success && (electron_success == "")
+
+    elseif t_params.kinetic_electron_solver == implicit_ppar_explicit_pseudotimestep
+        max_electron_pdf_iterations = t_params.electron.max_pseudotimesteps
+        max_electron_sim_time = t_params.electron.max_pseudotime
+        electron_success = update_electron_pdf!(scratch_electron, pdf.electron.norm,
+                                                moments, fields.phi, r, z, vperp, vpa,
+                                                z_spectral, vperp_spectral, vpa_spectral,
+                                                electron_z_advect, electron_vpa_advect,
+                                                scratch_dummy, t_params.electron,
+                                                collisions, composition,
+                                                external_source_settings, num_diss_params,
+                                                nl_solver_params.electron_advance,
+                                                max_electron_pdf_iterations,
+                                                max_electron_sim_time;
+                                                solution_method="artificial_time_derivative",
+                                                evolve_ppar=true, ion_dt=dt)
 
         # Update `fvec_out.electron_ppar` with the new electron pressure
         @begin_r_z_region()
