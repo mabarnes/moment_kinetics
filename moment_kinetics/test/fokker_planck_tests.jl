@@ -10,7 +10,7 @@ using moment_kinetics.looping
 using moment_kinetics.array_allocation: allocate_float, allocate_shared_float
 using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.type_definitions: mk_float, mk_int
-using moment_kinetics.velocity_moments: get_density, get_upar, get_ppar, get_pperp, get_pressure
+using moment_kinetics.velocity_moments: get_density, get_upar, get_p, get_ppar, get_pperp
 using moment_kinetics.input_structs: direct_integration, multipole_expansion, delta_f_multipole
 
 using moment_kinetics.fokker_planck: init_fokker_planck_collisions_weak_form, fokker_planck_collision_operator_weak_form!
@@ -452,7 +452,7 @@ function runtests()
                     # enforce the boundary conditions on CC before it is used for timestepping
                     enforce_vpavperp_BCs!(fkpl_arrays.CC,vpa,vperp,vpa_spectral,vperp_spectral)
                     # make ad-hoc conserving corrections
-                    conserving_corrections!(fkpl_arrays.CC,Fs_M,vpa,vperp,dummy_array)
+                    conserving_corrections!(fkpl_arrays.CC,Fs_M,vpa,vperp)
                 end
                 # extract C[Fs,Fs'] result
                 @begin_s_r_z_anyv_region()
@@ -495,10 +495,11 @@ function runtests()
                         end
                         @test isapprox(dSdt, rtol ; atol=atol)
                         delta_n = get_density(C_M_num, vpa, vperp)
-                        delta_upar = get_upar(C_M_num, vpa, vperp, dens)
-                        delta_ppar = msp*get_ppar(C_M_num, vpa, vperp, upar)
-                        delta_pperp = msp*get_pperp(C_M_num, vpa, vperp)
-                        delta_pressure = get_pressure(delta_ppar,delta_pperp)
+                        delta_upar = get_upar(C_M_num, dens, vpa, vperp, false)
+                        delta_pressure = msp*get_p(C_M_num, dens, upar, vpa, vperp, false, false)
+                        delta_ppar = msp*get_ppar(dens, upar, nothing, vth, C_M_num,
+                                                  vpa, vperp, false, false, false)
+                        delta_pperp = get_pperp(delta_pressure, delta_ppar)
                         rtol, atol = 0.0, 1.0e-12
                         @test isapprox(delta_n, rtol ; atol=atol)
                         rtol, atol = 0.0, 1.0e-9
@@ -519,10 +520,11 @@ function runtests()
                         rtol, atol = 0.0, 6.0e-7
                         @test isapprox(dSdt, rtol ; atol=atol)
                         delta_n = get_density(C_M_num, vpa, vperp)
-                        delta_upar = get_upar(C_M_num, vpa, vperp, dens)
-                        delta_ppar = msp*get_ppar(C_M_num, vpa, vperp, upar)
-                        delta_pperp = msp*get_pperp(C_M_num, vpa, vperp)
-                        delta_pressure = get_pressure(delta_ppar,delta_pperp)
+                        delta_upar = get_upar(C_M_num, dens, vpa, vperp, false)
+                        delta_pressure = msp*get_p(C_M_num, dens, upar, vpa, vperp, false, false)
+                        delta_ppar = msp*get_ppar(dens, upar, nothing, vth, C_M_num, vpa, vperp, false,
+                                              false, false)
+                        delta_pperp = get_pperp(delta_pressure, delta_ppar)
                         rtol, atol = 0.0, 1.0e-15
                         @test isapprox(delta_n, rtol ; atol=atol)
                         rtol, atol = 0.0, 1.0e-15
