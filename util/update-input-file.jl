@@ -9,12 +9,18 @@
 #
 # The original input file is not deleted, but is renamed with a '.unmodified' suffix.
 
+using moment_kinetics.type_definitions: OptionsDict, OrderedDict
+using moment_kinetics.utils: recursive_merge
 using TOML
+
+# Overload printing for type-alias OptionsDict to make it easier to copy-paste printed
+# output of update_input_dict().
+Base.show(io::IO, ::Type{OptionsDict}) = print(io, "OptionsDict")
 
 # Define the map of old name to new section and name.
 # Note, a couple of options have some special handling that is defined within the
 # update_input_file() function.
-const top_level_update_map = Dict(
+const top_level_update_map = OptionsDict(
     "n_ion_species" => ("composition", "n_ion_species"),
     "n_neutral_species" => ("composition", "n_neutral_species"),
     "electron_physics" => ("composition", "electron_physics"),
@@ -184,33 +190,204 @@ const top_level_update_map = Dict(
     "force_Er_zero_at_wall" => ("em_fields", "force_Er_zero_at_wall"),
    )
 
-# If the "new option name" is a Dict, it gives a map from the original
-# option values to new option names and values. If the new value is `nothing` it is
-# replaced by the old value.
-const sections_update_map = Dict(
-    "timestepping" => Dict("implicit_electron_advance" => Dict(true => Dict("timestepping" => Dict("kinetic_electron_solver" => "implicit_steady_state"),),
-                                                               "lu" => Dict("timestepping" => Dict("kinetic_electron_solver" => "implicit_steady_state", "kinetic_electron_preconditioner" => "lu"),),
-                                                               "adi" => Dict("timestepping" => Dict("kinetic_electron_solver" => "implicit_steady_state", "kinetic_electron_preconditioner" => "adi"),),
-                                                               "static_condensation" => Dict("timestepping" => Dict("kinetic_electron_solver" => "implicit_steady_state", "kinetic_electron_preconditioner" => "static_condensation"),),
-                                                              ),
-                           "implicit_electron_time_evolving" => Dict(true => Dict("timestepping" => Dict("kinetic_electron_solver" => "implicit_time_evolving"),),
-                                                                     "lu" => Dict("timestepping" => Dict("kinetic_electron_solver" => "implicit_time_evolving", "kinetic_electron_preconditioner" => "lu"),),
-                                                                     "adi" => Dict("timestepping" => Dict("kinetic_electron_solver" => "implicit_time_evolving", "kinetic_electron_preconditioner" => "adi"),),
-                                                                     "static_condensation" => Dict("timestepping" => Dict("kinetic_electron_solver" => "implicit_time_evolving", "kinetic_electron_preconditioner" => "static_condensation"),),
-                                                              ),
-                           "implicit_electron_ppar" => Dict(true => Dict("timestepping" => Dict("kinetic_electron_solver" => "implicit_ppar_implicit_pseudotimestep"),),
-                                                            "lu" => Dict("timestepping" => Dict("kinetic_electron_solver" => "implicit_ppar_implicit_pseudotimestep", "kinetic_electron_preconditioner" => "lu"),),
-                                                            "adi" => Dict("timestepping" => Dict("kinetic_electron_solver" => "implicit_ppar_implicit_pseudotimestep", "kinetic_electron_preconditioner" => "adi"),),
-                                                            "static_condensation" => Dict("timestepping" => Dict("kinetic_electron_solver" => "implicit_ppar_implicit_pseudotimestep", "kinetic_electron_preconditioner" => "static_condensation"),),
-                                                              ),
-                          ),
+# If the "new option" is a String, it is the name of the option within the same section
+# that should replace the "old option".
+# If the "new option" is an OptionsDict, it gives a map from the original option values to
+# new option names and values. If the new value is `nothing` it is replaced by the old
+# value.
+# If the "new option" is a Function, the option is not renamed, instead the function is
+# applied to the value.
+const sections_update_map = OptionsDict(
+    "timestepping" => OptionsDict("implicit_electron_advance" => OrderedDict{Any,Any}(true => OptionsDict("timestepping" => OptionsDict("kinetic_electron_solver" => "implicit_steady_state"),),
+                                                                                      "lu" => OptionsDict("timestepping" => OptionsDict("kinetic_electron_solver" => "implicit_steady_state", "kinetic_electron_preconditioner" => "lu"),),
+                                                                                      "adi" => OptionsDict("timestepping" => OptionsDict("kinetic_electron_solver" => "implicit_steady_state", "kinetic_electron_preconditioner" => "adi"),),
+                                                                                      "static_condensation" => OptionsDict("timestepping" => OptionsDict("kinetic_electron_solver" => "implicit_steady_state", "kinetic_electron_preconditioner" => "static_condensation"),),
+                                                                                     ),
+                                  "implicit_electron_time_evolving" => OrderedDict{Any,Any}(true => OptionsDict("timestepping" => OptionsDict("kinetic_electron_solver" => "implicit_time_evolving"),),
+                                                                                            "lu" => OptionsDict("timestepping" => OptionsDict("kinetic_electron_solver" => "implicit_time_evolving", "kinetic_electron_preconditioner" => "lu"),),
+                                                                                            "adi" => OptionsDict("timestepping" => OptionsDict("kinetic_electron_solver" => "implicit_time_evolving", "kinetic_electron_preconditioner" => "adi"),),
+                                                                                            "static_condensation" => OptionsDict("timestepping" => OptionsDict("kinetic_electron_solver" => "implicit_time_evolving", "kinetic_electron_preconditioner" => "static_condensation"),),
+                                                                                           ),
+                                  "implicit_electron_ppar" => OrderedDict{Any,Any}(true => OptionsDict("timestepping" => OptionsDict("kinetic_electron_solver" => "implicit_ppar_implicit_pseudotimestep"),),
+                                                                                   "lu" => OptionsDict("timestepping" => OptionsDict("kinetic_electron_solver" => "implicit_ppar_implicit_pseudotimestep", "kinetic_electron_preconditioner" => "lu"),),
+                                                                                   "adi" => OptionsDict("timestepping" => OptionsDict("kinetic_electron_solver" => "implicit_ppar_implicit_pseudotimestep", "kinetic_electron_preconditioner" => "adi"),),
+                                                                                   "static_condensation" => OptionsDict("timestepping" => OptionsDict("kinetic_electron_solver" => "implicit_ppar_implicit_pseudotimestep", "kinetic_electron_preconditioner" => "static_condensation"),),
+                                                                                  ),
+                                 ),
    )
 
-function update_input_dict(original_input)
-    updated_input = Dict{String,Any}()
+PR322_T = (x) -> 2*x
+PR322_T_1V = (x) -> 2*x/3 # Inputs before PR322 were T_∥ values, but after are T values (for 1D1V T=T_∥/3)
+PR322_v = (x) -> sqrt(2)*x
+PR322_t = (x) -> x/sqrt(2)
+PR322_omega = (x) -> x ≥ 0.0 ? sqrt(2)*x : x
+PR322_v_diffusion_coefficient = (x) -> 2^1.5*x
+const PR322_definitions_update_map_2V = OptionsDict(
+    "composition" => OptionsDict("T_e" => PR322_T,
+                                 "T_wall" => PR322_T,
+                                ),
+    "ion_species_1" => OptionsDict("initial_temperature" => PR322_T,),
+    "z_IC_ion_species_1" => OptionsDict("temperature_amplitude" => PR322_T,
+                                        "upar_amplitude" => PR322_v,
+                                       ),
+    "r_IC_ion_species_1" => OptionsDict("temperature_amplitude" => PR322_T,
+                                        "upar_amplitude" => PR322_v,
+                                       ),
+    "vpa_IC_ion_species_1" => OptionsDict("temperature_amplitude" => PR322_T,
+                                          "upar_amplitude" => PR322_v,
+                                          "v0" => PR322_v,
+                                          "vth0" => PR322_v,
+                                          "vpa0" => PR322_v,
+                                          "vperp0" => PR322_v,
+                                         ),
+    "neutral_species_1" => OptionsDict("initial_temperature" => PR322_T,),
+    "z_IC_neutral_species_1" => OptionsDict("temperature_amplitude" => PR322_T,
+                                            "upar_amplitude" => PR322_v,
+                                           ),
+    "r_IC_neutral_species_1" => OptionsDict("temperature_amplitude" => PR322_T,
+                                            "upar_amplitude" => PR322_v,
+                                           ),
+    "vz_IC_neutral_species_1" => OptionsDict("temperature_amplitude" => PR322_T,
+                                             "upar_amplitude" => PR322_v,
+                                             "v0" => PR322_v,
+                                             "vth0" => PR322_v,
+                                             "vpa0" => PR322_v,
+                                             "vperp0" => PR322_v,
+                                            ),
+    "reactions" => OptionsDict("charge_exchange_frequency" => PR322_omega,
+                               "electron_charge_exchange_frequency" => PR322_omega,
+                               "ionization_frequency" => PR322_omega,
+                               "electron_ionization_frequency" => PR322_omega,
+                               "ionization_energy" => PR322_T,
+                              ),
+    "electron_fluid_collisions" => OptionsDict("nu_ei" => PR322_omega,),
+    "krook_collisions" => OptionsDict("nuii0" => PR322_omega,
+                                      "nuee0" => PR322_omega,
+                                      "nuei0" => PR322_omega,
+                                     ),
+    "fokker_planck_collisions" => OptionsDict("nuii0" => PR322_omega,
+                                              "sd_temp" => PR322_T,
+                                             ),
+    "maxwell_diffusion_collisions" => OptionsDict("D_ii" => PR322_v_diffusion_coefficient,
+                                                  "D_nn" => PR322_v_diffusion_coefficient,
+                                                 ),
+    "ion_numerical_dissipation" => OptionsDict("vpa_boundary_buffer_damping_rate" => PR322_omega,
+                                               "vpa_boundary_buffer_diffusion_coefficient" => PR322_v_diffusion_coefficient,
+                                               "vpa_dissipation_coefficient" => PR322_v_diffusion_coefficient,
+                                               "vperp_dissipation_coefficient" => PR322_v_diffusion_coefficient,
+                                               "z_dissipation_coefficient" => PR322_omega,
+                                               "r_dissipation_coefficient" => PR322_omega,
+                                               "moment_dissipation_coefficient" => PR322_omega,
+                                              ),
+    "electron_numerical_dissipation" => OptionsDict("vpa_boundary_buffer_damping_rate" => PR322_omega,
+                                                    "vpa_boundary_buffer_diffusion_coefficient" => PR322_v_diffusion_coefficient,
+                                                    "vpa_dissipation_coefficient" => PR322_v_diffusion_coefficient,
+                                                    "vperp_dissipation_coefficient" => PR322_v_diffusion_coefficient,
+                                                    "z_dissipation_coefficient" => PR322_omega,
+                                                    "r_dissipation_coefficient" => PR322_omega,
+                                                    "moment_dissipation_coefficient" => PR322_omega,
+                                                   ),
+    "neutral_numerical_dissipation" => OptionsDict("vz_dissipation_coefficient" => PR322_v_diffusion_coefficient,
+                                                   "z_dissipation_coefficient" => PR322_omega,
+                                                   "r_dissipation_coefficient" => PR322_omega,
+                                                   "moment_dissipation_coefficient" => PR322_omega,
+                                                  ),
+    "timestepping" => OptionsDict("dt" => PR322_t,
+                                  "minimum_dt" => PR322_t,
+                                  "maximum_dt" => PR322_t,
+                                  "constraint_forcing_rate" => PR322_omega,
+                                  "converged_residual_value" => PR322_omega,
+                                 ),
+    "electron_timestepping" => OptionsDict("dt" => PR322_t,
+                                           "minimum_dt" => PR322_t,
+                                           "maximum_dt" => PR322_t,
+                                           "constraint_forcing_rate" => PR322_omega,
+                                           "converged_residual_value" => PR322_omega,
+                                          ),
+    "vpa" => OptionsDict("L" => PR322_v,),
+    "vperp" => OptionsDict("L" => PR322_v,),
+    "vz" => OptionsDict("L" => PR322_v,),
+    "vr" => OptionsDict("L" => PR322_v,),
+    "vzeta" => OptionsDict("L" => PR322_v,),
+    "ion_source_1" => OptionsDict("source_strength" => PR322_omega,
+                                  "source_T" => PR322_T, # This should be PR322_T even for 1V case, not PR322_T_1V, because we still implement the source T_∥=source_T for 1V in the updated code.
+                                  "source_v0" => PR322_v,
+                                  "source_vpa0" => PR322_v,
+                                  "source_vperp0" => PR322_v,
+                                  "sink_vth" => PR322_v,
+                                  "PI_density_controller_P" => PR322_omega,
+                                  "PI_density_controller_I" => PR322_omega,
+                                  "PI_temperature_controller_P" => PR322_omega,
+                                  "PI_temperature_controller_I" => PR322_omega,
+                                  "PI_temperature_target_amplitude" => PR322_T,
+                                 ),
+    "ion_source_2" => OptionsDict("source_strength" => PR322_omega,
+                                  "source_T" => PR322_T, # This should be PR322_T even for 1V case, not PR322_T_1V, because we still implement the source T_∥=source_T for 1V in the updated code.
+                                  "source_v0" => PR322_v,
+                                  "source_vpa0" => PR322_v,
+                                  "source_vperp0" => PR322_v,
+                                  "sink_vth" => PR322_v,
+                                  "PI_density_controller_P" => PR322_omega,
+                                  "PI_density_controller_I" => PR322_omega,
+                                  "PI_temperature_controller_P" => PR322_omega,
+                                  "PI_temperature_controller_I" => PR322_omega,
+                                  "PI_temperature_target_amplitude" => PR322_T,
+                                 ),
+    "ion_source_3" => OptionsDict("source_strength" => PR322_omega,
+                                  "source_T" => PR322_T, # This should be PR322_T even for 1V case, not PR322_T_1V, because we still implement the source T_∥=source_T for 1V in the updated code.
+                                  "source_v0" => PR322_v,
+                                  "source_vpa0" => PR322_v,
+                                  "source_vperp0" => PR322_v,
+                                  "sink_vth" => PR322_v,
+                                  "PI_density_controller_P" => PR322_omega,
+                                  "PI_density_controller_I" => PR322_omega,
+                                  "PI_temperature_controller_P" => PR322_omega,
+                                  "PI_temperature_controller_I" => PR322_omega,
+                                  "PI_temperature_target_amplitude" => PR322_T,
+                                 ),
+    "electron_source_1" => OptionsDict("source_strength" => PR322_omega,
+                                       "source_T" => PR322_T, # This should be PR322_T even for 1V case, not PR322_T_1V, because we still implement the source T_∥=source_T for 1V in the updated code.
+                                      ),
+    "neutral_source_1" => OptionsDict("source_strength" => PR322_omega,
+                                      "source_T" => PR322_T, # This should be PR322_T even for 1V case, not PR322_T_1V, because we still implement the source T_∥=source_T for 1V in the updated code.
+                                      "source_v0" => PR322_v,
+                                      "source_vpa0" => PR322_v,
+                                      "source_vperp0" => PR322_v,
+                                      "sink_vth" => PR322_v,
+                                      "PI_density_controller_P" => PR322_omega,
+                                      "PI_density_controller_I" => PR322_omega,
+                                      "PI_temperature_controller_P" => PR322_omega,
+                                      "PI_temperature_controller_I" => PR322_omega,
+                                      "PI_temperature_target_amplitude" => PR322_T,
+                                     ),
+   )
+const PR322_definitions_update_map_1V = recursive_merge(
+    PR322_definitions_update_map_2V,
+    OptionsDict("composition" => OptionsDict("T_e" => PR322_T_1V,
+                                             "T_wall" => PR322_T_1V,
+                                            ),
+                "ion_species_1" => OptionsDict("initial_temperature" => PR322_T_1V,),
+                "z_IC_ion_species_1" => OptionsDict("temperature_amplitude" => PR322_T_1V,),
+                "r_IC_ion_species_1" => OptionsDict("temperature_amplitude" => PR322_T_1V,),
+                "vpa_IC_ion_species_1" => OptionsDict("temperature_amplitude" => PR322_T_1V,),
+                "neutral_species_1" => OptionsDict("initial_temperature" => PR322_T_1V,),
+                "z_IC_neutral_species_1" => OptionsDict("temperature_amplitude" => PR322_T_1V),
+                "r_IC_neutral_species_1" => OptionsDict("temperature_amplitude" => PR322_T_1V,),
+                "vz_IC_neutral_species_1" => OptionsDict("temperature_amplitude" => PR322_T_1V,),
+                "reactions" => OptionsDict("ionization_energy" => PR322_T_1V,),
+                "fokker_planck_collisions" => OptionsDict("sd_temp" => PR322_T_1V,),
+                "ion_source_1" => OptionsDict("PI_temperature_target_amplitude" => PR322_T_1V,)
+               )
+   )
+
+function update_input_dict(original_input::DictType;
+                           update_definitions_322=false) where DictType <: AbstractDict
+    original_input = deepcopy(original_input)
+    updated_input = DictType()
 
     # Get the existing sections first
-    for (k,v) ∈ original_input
+    for k ∈ collect(keys(original_input))
+        v = original_input[k]
         if isa(v, AbstractDict)
             updated_input[k] = v
             pop!(original_input, k)
@@ -233,39 +410,53 @@ function update_input_dict(original_input)
                 println("constant_ionization_rate is no longer supported. It was set to `false`, so just dropping it")
             end
         elseif k == "krook_collisions_option"
-            section = get(updated_input, "krook_collisions", Dict{String,Any}())
+            section = get(updated_input, "krook_collisions", DictType())
             section["use_krook"] = true
             section["frequency_option"] = v
         elseif k == "nuii"
-            section = get(updated_input, "fokker_planck_collisions", Dict{String,Any}())
+            section = get(updated_input, "fokker_planck_collisions", DictType())
             section["use_fokker_planck"] = true
             section[k] = v
         else
             new_section_name, new_key = top_level_update_map[k]
-            updated_input[new_section_name] = get(updated_input, new_section_name, Dict{String,Any}())
+            updated_input[new_section_name] = get(updated_input, new_section_name, DictType())
             updated_input[new_section_name][new_key] = v
+        end
+    end
+
+    combined_update_map = sections_update_map
+    if update_definitions_322
+        is_2V = ("vperp" ∈ keys(updated_input)
+                 && (("ngrid" ∈ keys(updated_input["vperp"]) && updated_input["vperp"]["ngrid"] > 1)
+                     || ("nelement" ∈ keys(updated_input["vperp"]) && updated_input["vperp"]["nelement"] > 1)
+                    )
+                )
+        if is_2V
+            combined_update_map = merge(combined_update_map, PR322_definitions_update_map_2V)
+        else
+            combined_update_map = merge(combined_update_map, PR322_definitions_update_map_1V)
         end
     end
 
     # Fix updated options in the sections
     existing_sections = keys(updated_input)
-    for (section_name, section_update_map) ∈ sections_update_map
+    for (section_name, section_update_map) ∈ combined_update_map
         if section_name ∉ existing_sections
             continue
         end
         section = updated_input[section_name]
         existing_keys = keys(section)
-        for (old_key, new_key_or_map) ∈ section_update_map
+        for (old_key, new_option_setting) ∈ section_update_map
             if old_key ∉ existing_keys
                 continue
             end
-            old_value = pop!(section, old_key)
-            if new_key_or_map isa AbstractDict
-                if old_value ∉ keys(new_key_or_map)
+            old_value = section[old_key]
+            if new_option_setting isa AbstractDict
+                if old_value ∉ keys(new_option_setting)
                     continue
                 end
-                for (new_section_name, new_section_map) ∈ new_key_or_map[old_value]
-                    new_section = get(updated_input, new_section_name, Dict{String,Any}())
+                for (new_section_name, new_section_map) ∈ new_option_setting[old_value]
+                    new_section = get(updated_input, new_section_name, DictType())
                     for (k,v) ∈ new_section_map
                         if k ∈ keys(new_section)
                             error("Trying to add new key \"$k\" to $new_section_name, but \"$k\" already exists")
@@ -277,9 +468,10 @@ function update_input_dict(original_input)
                         end
                     end
                 end
+            elseif new_option_setting isa Function
+                section[old_key] = new_option_setting(old_value)
             else
-println("check $new_key_or_map, ", section[old_key])
-                section[new_key_or_map] = old_value
+                section[new_option_setting] = old_value
             end
         end
     end
@@ -312,13 +504,29 @@ function update_input_file(filename)
     # Write the updated file. We have moved the original file, so this does not need to
     # overwrite. Pass `truncate=false` to ensure we never accidentally delete a file, even
     # though this should never happen anyway.
-    open(filename; write=true, truncate=false) do io
+    if isfile(filename)
+        error("$filename already exists")
+    end
+    open(filename; write=true) do io
         TOML.print(io, updated_input)
     end
 
     return nothing
 end
 
+using moment_kinetics.command_line_options.ArgParse
 if abspath(PROGRAM_FILE) == @__FILE__
-    update_input_file(ARGS[1])
+    s = ArgParseSettings()
+    @add_arg_table! s begin
+        "inputfile"
+            help = "Name of TOML input file to update."
+            arg_type = String
+            default = nothing
+        "--update-definitions-322"
+            help = "Update definitions and dimensionless variables according to the changes in PR #322 (April 2025)"
+            action = :store_true
+    end
+    args = parse_args(s)
+
+    update_input_file(args.inputfile; update_definitions_322=args.update_definitions_322)
 end
