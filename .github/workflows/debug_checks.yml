@@ -32,7 +32,11 @@ jobs:
           sed -i -e "s/_debug_level = get_options.*/_debug_level = 2/" moment_kinetics/src/debugging.jl
 
           touch Project.toml
-          julia --project -O3 --check-bounds=yes -e 'using Pkg; Pkg.add(["MPI", "MPIPreferences", "NCDatasets", "PackageCompiler", "Symbolics"]); using MPIPreferences; MPIPreferences.use_jll_binary("OpenMPI_jll")'
+          # Pin versions of HDF5_jll for now because HDF5_jll@1.14.6+0 causes
+          # linker errors, when also using MPI. Should remove this pin when the
+          # latest version is fixed, see
+          # https://github.com/JuliaIO/HDF5.jl/issues/1191.
+          julia --project -O3 --check-bounds=yes -e 'using Pkg; Pkg.add(name="HDF5_jll", version="1.14.2"); Pkg.add(["MPI", "MPIPreferences", "NCDatasets", "PackageCompiler", "Symbolics"]); using MPIPreferences; MPIPreferences.use_jll_binary("OpenMPI_jll")'
           julia --project -O3 --check-bounds=yes -e 'using MPI; MPI.install_mpiexecjl(; destdir=".")'
           julia --project -O3 --check-bounds=yes -e 'using Pkg; Pkg.develop(path="moment_kinetics/"); Pkg.precompile()'
           julia --project -O3 --check-bounds=yes precompile-with-check-bounds.jl --debug 2
