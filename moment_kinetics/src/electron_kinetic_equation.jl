@@ -823,12 +823,17 @@ function electron_backward_euler_pseudotimestepping!(scratch, pdf, moments, phi,
                                ion_dt=ion_dt)
 
             if step_success
-                apply_electron_bc_and_constraints_no_r!(f_electron_new, phi, moments, r,
-                                                        z, vperp, vpa, vperp_spectral,
-                                                        vpa_spectral, vpa_advect,
-                                                        num_diss_params, composition, ir,
-                                                        nl_solver_params)
+                bc_constraints_converged = apply_electron_bc_and_constraints_no_r!(
+                                               f_electron_new, phi, moments, r, z, vperp,
+                                               vpa, vperp_spectral, vpa_spectral,
+                                               vpa_advect, num_diss_params, composition,
+                                               ir, nl_solver_params)
+                if bc_constraints_converged != ""
+                    step_success = false
+                end
+            end
 
+            if step_success
                 if !evolve_ppar
                     # update the electron heat flux
                     moments.electron.qpar_updated[] = false
@@ -903,6 +908,12 @@ function electron_backward_euler_pseudotimestepping!(scratch, pdf, moments, phi,
 
                 first_step = false
             else
+                if !t_params.adaptive
+                    # Timestep not allowed to change, so errors are fatal
+                    error("Electron pseudotimestep failed. Electron pseudotimestep size "
+                          * "is fixed, so cannot reduce timestep to re-try.")
+                end
+
                 t_params.dt[] *= 0.5
 
                 # Force the preconditioner to be recalculated, because we have just
@@ -929,11 +940,17 @@ function electron_backward_euler_pseudotimestepping!(scratch, pdf, moments, phi,
 
                 new_lowerz_vcut_ind = @view r.scratch_shared_int[ir:ir]
                 new_upperz_vcut_ind = @view r.scratch_shared_int2[ir:ir]
-                apply_electron_bc_and_constraints_no_r!(f_electron_new, phi, moments, r,
-                                                        z, vperp, vpa, vperp_spectral,
-                                                        vpa_spectral, vpa_advect,
-                                                        num_diss_params, composition, ir,
-                                                        nl_solver_params)
+                bc_constraints_converged = apply_electron_bc_and_constraints_no_r!(
+                                               f_electron_new, phi, moments, r, z, vperp,
+                                               vpa, vperp_spectral, vpa_spectral,
+                                               vpa_advect, num_diss_params, composition,
+                                               ir, nl_solver_params)
+                if bc_constraints_converged != ""
+                    error("apply_electron_bc_and_constraints_no_r!() failed, but this "
+                          * "should not happen here, because we are re-applying the "
+                          * "function to a previously successful result while resetting "
+                          * "after a failed step.")
+                end
 
                 if !evolve_ppar
                     # update the electron heat flux
@@ -2309,12 +2326,23 @@ function apply_electron_bc_and_constraints_no_r!(f_electron, phi, moments, r, z,
     new_upperz_vcut_ind = @view r.scratch_shared_int2[ir:ir]
 
     # enforce the boundary condition(s) on the electron pdf
-    @views enforce_boundary_condition_on_electron_pdf!(
-               f_electron, phi, moments.electron.vth[:,ir], moments.electron.upar[:,ir],
-               z, vperp, vpa, vperp_spectral, vpa_spectral, vpa_advect, moments,
-               num_diss_params.electron.vpa_dissipation_coefficient > 0.0,
-               composition.me_over_mi, ir; lowerz_vcut_ind=new_lowerz_vcut_ind,
-               upperz_vcut_ind=new_upperz_vcut_ind)
+    bc_converged = Ref(true)
+    bc_converged[] = @views enforce_boundary_condition_on_electron_pdf!(
+                              f_electron, phi, moments.electron.vth[:,ir],
+                              moments.electron.upar[:,ir], z, vperp, vpa, vperp_spectral,
+                              vpa_spectral, vpa_advect, moments,
+                              num_diss_params.electron.vpa_dissipation_coefficient > 0.0,
+                              composition.me_over_mi, ir;
+                              lowerz_vcut_ind=new_lowerz_vcut_ind,
+                              upperz_vcut_ind=new_upperz_vcut_ind)
+    @serial_region begin
+        # Only the return value from rank-0 of each shared memory block matters
+        MPI.Allreduce!(bc_converged, &, comm_inter_block[])
+    end
+    MPI.Bcast!(bc_converged, comm_block[]; root=0)
+    if !bc_converged[]
+        return "electron_bc"
+    end
 
     if nl_solver_params !== nothing
         # Check if either vcut_ind has changed - if either has, recalculate the
@@ -2377,6 +2405,8 @@ function apply_electron_bc_and_constraints_no_r!(f_electron, phi, moments, r, z,
                                                    evolve_upar=true,
                                                    evolve_ppar=true), vpa)
     end
+
+    return ""
 end
 
 function get_cutoff_params_lower(upar, vthe, phi, me_over_mi, vpa)
@@ -2843,7 +2873,7 @@ end
                          pdf, phi, vthe, upar, z, vperp, vpa, vperp_spectral,
                          vpa_spectral, vpa_adv, moments, vpa_diffusion, me_over_mi, ir;
                          bc_constraints=true, update_vcut=true, lowerz_vcut_ind=nothing,
-                         upperz_vcut_ind=nothing) = begin
+                         upperz_vcut_ind=nothing, allow_failure=true) = begin
 
     @boundscheck bc_constraints && !update_vcut && error("update_vcut is not used when bc_constraints=true, but update_vcut has non-default value")
 
@@ -2867,7 +2897,7 @@ end
 
     if z.bc == "periodic"
         # Nothing more to do for z-periodic boundary conditions
-        return nothing
+        return true
     elseif z.bc == "constant"
         @begin_r_vperp_vpa_region()
         density_offset = 1.0
@@ -2893,7 +2923,7 @@ end
                 end
             end
         end
-        return nothing
+        return true
     end
 
     # first enforce the boundary condition at z_min.
@@ -3003,8 +3033,14 @@ end
                     end
 
                     if counter ≥ newton_max_its
-                        error("Newton iteration for electron lower-z boundary failed to "
-                              * "converge after $counter iterations")
+                        # Newton iteration for electron lower-z boundary failed to
+                        # converge after `counter` iterations
+                        if allow_failure
+                            return false
+                        else
+                            error("Newton iteration for electron lower-z boundary failed "
+                                  * "to converge after $counter iterations")
+                        end
                     end
                     counter += 1
                 end
@@ -3199,8 +3235,14 @@ end
                     end
 
                     if counter ≥ newton_max_its
-                        error("Newton iteration for electron upper-z boundary failed to "
-                              * "converge after $counter iterations")
+                        # Newton iteration for electron upper-z boundary failed to
+                        # converge after `counter` iterations
+                        if allow_failure
+                            return false
+                        else
+                            error("Newton iteration for electron lower-z boundary failed "
+                                  * "to converge after $counter iterations")
+                        end
                     end
                     counter += 1
                 end
@@ -3297,7 +3339,7 @@ end
         end
     end
 
-    return nothing
+    return true
 end
 
 # In several places it is useful to zero out (in residuals, etc.) the points that would be
