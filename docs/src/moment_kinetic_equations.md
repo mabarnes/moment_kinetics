@@ -1841,11 +1841,11 @@ $S_{s,p} = \int \frac{1}{3} m_s (v_\parallel - u_{s\parallel})^2 \bar S_s dv_\pa
 Old 1D1V moment kinetic equations
 ---------------------------------
 
-These were the definitions and normalisations used before PR #322, April 2025.
+These were the definitions and dimensionless variables used before PR #322, April 2025.
 
 ```@raw html
 <details>
-<summary style="text-align:center">[ notes using old definitions and normalisations ]</summary>
+<summary style="text-align:center">[ notes using old definitions and dimensionless variables ]</summary>
 ```
 The following are partial notes on the derivation of the equations being solved
 by moment\_kinetics. It would be useful to expand them with more details from
