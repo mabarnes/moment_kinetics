@@ -28,9 +28,9 @@ const binary_format = (force_optional_dependencies || io_has_implementation(netc
 test_input_finite_difference = OptionsDict("composition" => OptionsDict("n_ion_species" => 1,
                                                                         "n_neutral_species" => 1,
                                                                         "electron_physics" => "boltzmann_electron_response",
-                                                                        "T_e" => 1.0),
+                                                                        "T_e" => 0.6666666666666666),
                                            "ion_species_1" => OptionsDict("initial_density" => 0.5,
-                                                                          "initial_temperature" => 1.0),
+                                                                          "initial_temperature" => 0.6666666666666666),
                                            "z_IC_ion_species_1" => OptionsDict("initialization_option" => "sinusoid",
                                                                                "density_amplitude" => 0.001,
                                                                                "density_phase" => 0.0,
@@ -39,24 +39,24 @@ test_input_finite_difference = OptionsDict("composition" => OptionsDict("n_ion_s
                                                                                "temperature_amplitude" => 0.0,
                                                                                "temperature_phase" => 0.0),
                                            "neutral_species_1" => OptionsDict("initial_density" => 0.5,
-                                                                              "initial_temperature" => 1.0),
+                                                                              "initial_temperature" => 0.6666666666666666),
                                            "z_IC_neutral_species_1" => OptionsDict("initialization_option" => "sinusoid",
                                                                                    "density_amplitude" => 0.001,
                                                                                    "density_phase" => 0.0,
                                                                                    "upar_amplitude" => 0.0,
                                                                                    "upar_phase" => 0.0,
                                                                                    "temperature_amplitude" => 0.0,
-                                                                                   "temperature_phase" => 0.0),                                                                        
+                                                                                   "temperature_phase" => 0.0),
                                            "output" => OptionsDict("run_name" => "finite_difference",
                                                                    "binary_format" => binary_format),
                                            "evolve_moments" => OptionsDict("density" => false,
                                                                            "parallel_flow" => false,
                                                                            "parallel_pressure" => false,
                                                                            "moments_conservation" => true),
-                                           "reactions" => OptionsDict("charge_exchange_frequency" => 2*π*0.1,
+                                           "reactions" => OptionsDict("charge_exchange_frequency" => 0.8885765876316732,
                                                                       "ionization_frequency" => 0.0),
                                            "timestepping" => OptionsDict("nstep" => 1500,
-                                                                         "dt" => 0.002,
+                                                                         "dt" => 0.001414213562373095,
                                                                          "nwrite" => 20,
                                                                          "split_operators" => false),
                                            "r" => OptionsDict("ngrid" => 1,
@@ -69,16 +69,16 @@ test_input_finite_difference = OptionsDict("composition" => OptionsDict("n_ion_s
                                                               "discretization" => "finite_difference"),
                                            "vperp" => OptionsDict("ngrid" => 1,
                                                                   "nelement" => 1,
-                                                                  "L" => 1.0,
+                                                                  "L" => 1.4142135623730951,
                                                                   "discretization" => "finite_difference"),
                                            "vpa" => OptionsDict("ngrid" => 180,
                                                                 "nelement" => 1,
-                                                                "L" => 8.0,
+                                                                "L" => 11.313708498984761,
                                                                 "bc" => "periodic",
                                                                 "discretization" => "finite_difference"),
                                            "vz" => OptionsDict("ngrid" => 180,
                                                                "nelement" => 1,
-                                                               "L" => 8.0,
+                                                               "L" => 11.313708498984761,
                                                                "bc" => "periodic",
                                                                "discretization" => "finite_difference"),
                                           )
@@ -93,16 +93,16 @@ test_input_finite_difference_split_2_moments =
     recursive_merge(test_input_finite_difference_split_1_moment,
                     OptionsDict("output" => OptionsDict("run_name" => "finite_difference_split_2_moments"),
                                 "evolve_moments" => OptionsDict("parallel_flow" => true),
-                                "vpa" => OptionsDict("ngrid" => 270, "L" => 12.0),
-                                "vz" => OptionsDict("ngrid" => 270, "L" => 12.0))
+                                "vpa" => OptionsDict("ngrid" => 270, "L" => 16.970562748477143),
+                                "vz" => OptionsDict("ngrid" => 270, "L" => 16.970562748477143))
                    )
 
 test_input_finite_difference_split_3_moments =
     recursive_merge(test_input_finite_difference_split_2_moments,
                     OptionsDict("output" => OptionsDict("run_name" => "finite_difference_split_3_moments"),
                                 "evolve_moments" => OptionsDict("parallel_pressure" => true),
-                                "vpa" => OptionsDict("ngrid" => 270, "L" => 12.0),
-                                "vz" => OptionsDict("ngrid" => 270, "L" => 12.0))
+                                "vpa" => OptionsDict("ngrid" => 270, "L" => 16.970562748477143),
+                                "vz" => OptionsDict("ngrid" => 270, "L" => 16.970562748477143))
                    )
 
 test_input_chebyshev = recursive_merge(test_input_finite_difference,
@@ -253,535 +253,535 @@ end
 
 function run_test_set_finite_difference()
     #n_i=n_n, T_e=1
-    @long run_test(test_input_finite_difference, 2*π*1.4467, -2*π*0.6020,
+    @long run_test(test_input_finite_difference, 2*π*1.4467 * sqrt(2), -2*π*0.6020 * sqrt(2),
                    [-0.6941155980262039, -0.6940977032813103, -0.6940759796933667,
                     -0.6940505149819431, -0.6940214119659553, -0.6939887881451088];
                    reactions=OptionsDict("charge_exchange_frequency"=>2*π*0.0))
-    run_test(test_input_finite_difference, 2*π*1.4240, -2*π*0.6379,
+    run_test(test_input_finite_difference, 2*π*1.4240 * sqrt(2), -2*π*0.6379 * sqrt(2),
              [-0.6941155980262039, -0.6940977032813103, -0.6940759796933667,
               -0.6940505149819431, -0.6940214119659553, -0.6939887881451088])
-    @long run_test(test_input_finite_difference, 2*π*0.0, -2*π*0.3235,
+    @long run_test(test_input_finite_difference, 2*π*0.0 * sqrt(2), -2*π*0.3235 * sqrt(2),
                    [-0.6941155980262039, -0.6940977032813103, -0.6940759796933667,
                     -0.6940505149819431, -0.6940214119659553, -0.6939887881451088];
-                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*1.8))
-    @long run_test(test_input_finite_difference, 2*π*0.0, -2*π*0.2963,
+                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*1.8 * sqrt(2)))
+    @long run_test(test_input_finite_difference, 2*π*0.0 * sqrt(2), -2*π*0.2963 * sqrt(2),
                    [-0.6941155980262039, -0.6940977032813103, -0.6940759796933667,
                     -0.6940505149819431, -0.6940214119659553, -0.6939887881451088];
-                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0))
+                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0 * sqrt(2)))
 
     # n_i>>n_n T_e=1
-    @long run_test(test_input_finite_difference, 2*π*1.4467, -2*π*0.6020,
+    @long run_test(test_input_finite_difference, 2*π*1.4467 * sqrt(2), -2*π*0.6020 * sqrt(2),
                    [-0.001068422466592656, -0.001050527721698838, -0.0010288041337549816,
                     -0.0010033394223323698, -0.0009742364063442995,
                     -0.000941612585497573];
                    ion_species_1 = OptionsDict("initial_density" => 0.9999), 
                    neutral_species_1 = OptionsDict("initial_density" => 0.0001))
-    @long run_test(test_input_finite_difference, 2*π*1.4467, -2*π*0.6020,
+    @long run_test(test_input_finite_difference, 2*π*1.4467 * sqrt(2), -2*π*0.6020 * sqrt(2),
                    [-0.001068422466592656, -0.001050527721698838, -0.0010288041337549816,
                     -0.0010033394223323698, -0.0009742364063442995,
                     -0.000941612585497573]; 
                    ion_species_1 = OptionsDict("initial_density" => 0.9999), 
                    neutral_species_1 = OptionsDict("initial_density" => 0.0001),
-                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0))
+                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0 * sqrt(2)))
 
     # n_i<<n_n T_e=1
-    @long run_test(test_input_finite_difference, 2*π*1.3954, -2*π*0.6815,
+    @long run_test(test_input_finite_difference, 2*π*1.3954 * sqrt(2), -2*π*0.6815 * sqrt(2),
                    [-9.211308789442441, -9.211290894697548, -9.211269171109604,
                     -9.21124370639818, -9.211214603382192, -9.211181979561346];
                    ion_species_1 = OptionsDict("initial_density" => 0.0001), 
                    neutral_species_1 = OptionsDict("initial_density" => 0.9999))
-    @long run_test(test_input_finite_difference, 2*π*0.0, -2*π*0.5112,
+    @long run_test(test_input_finite_difference, 2*π*0.0 * sqrt(2), -2*π*0.5112 * sqrt(2),
                    [-9.211308789442441, -9.211290894697548, -9.211269171109604,
                     -9.21124370639818, -9.211214603382192, -9.211181979561346];
                    ion_species_1 = OptionsDict("initial_density" => 0.0001), 
                    neutral_species_1 = OptionsDict("initial_density" => 0.9999),
-                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0))
+                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0 * sqrt(2)))
 
     # n_i=n_n T_e=0.5
-    @long run_test(test_input_finite_difference, 2*π*1.2671, -2*π*0.8033,
+    @long run_test(test_input_finite_difference, 2*π*1.2671 * sqrt(2), -2*π*0.8033 * sqrt(2),
                    [-0.34705779901310196, -0.34704885164065513, -0.3470379898466833,
                     -0.3470252574909716, -0.3470107059829777, -0.3469943940725544], 30;
                    composition = OptionsDict("T_e" => 0.5), 
                    timestepping = OptionsDict("nstep" => 1300),
                    reactions=OptionsDict("charge_exchange_frequency"=>2*π*0.0))
-    @long run_test(test_input_finite_difference, 2*π*0.0, -2*π*0.2727,
+    @long run_test(test_input_finite_difference, 2*π*0.0 * sqrt(2), -2*π*0.2727 * sqrt(2),
                    [-0.34705779901310196, -0.34704885164065513, -0.3470379898466833,
                     -0.3470252574909716, -0.3470107059829777, -0.3469943940725544];
-                   composition = OptionsDict("T_e" => 0.5),
-                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0))
+                   composition = OptionsDict("T_e" => 2.0 * 0.5),
+                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0 * sqrt(2)))
 
     # n_i=n_n T_e=4
-    @long run_test(test_input_finite_difference, 2*π*1.9919, -2*π*0.2491,
+    @long run_test(test_input_finite_difference, 2*π*1.9919 * sqrt(2), -2*π*0.2491 * sqrt(2),
                    [-2.7764623921048157, -2.776390813125241, -2.7763039187734666,
                     -2.7762020599277726, -2.7760856478638214, -2.775955152580435];
-                   composition = OptionsDict("T_e" => 4.0))
+                   composition = OptionsDict("T_e" => 2.0 * 4.0))
     # CX=2*π*2.0 case with T_e=4 is too hard to converge, so skip
 end
 
 function run_test_set_finite_difference_split_1_moment()
     #n_i=n_n, T_e=1
-    run_test(test_input_finite_difference_split_1_moment, 2*π*1.4467, -2*π*0.6020,
+    run_test(test_input_finite_difference_split_1_moment, 2*π*1.4467 * sqrt(2), -2*π*0.6020 * sqrt(2),
              [-0.6941155980262039, -0.6940977032813103, -0.6940759796933667,
               -0.6940505149819431, -0.6940214119659553, -0.6939887881451088];
              reactions=OptionsDict("charge_exchange_frequency"=>2*π*0.0))
-    run_test(test_input_finite_difference_split_1_moment, 2*π*1.4240, -2*π*0.6379,
+    run_test(test_input_finite_difference_split_1_moment, 2*π*1.4240 * sqrt(2), -2*π*0.6379 * sqrt(2),
              [-0.6941155980262039, -0.6940977032813103, -0.6940759796933667,
               -0.6940505149819431, -0.6940214119659553, -0.6939887881451088])
-    run_test(test_input_finite_difference_split_1_moment, 2*π*0.0, -2*π*0.3235,
+    run_test(test_input_finite_difference_split_1_moment, 2*π*0.0, -2*π*0.3235 * sqrt(2),
              [-0.6941155980262039, -0.6940977032813103, -0.6940759796933667,
               -0.6940505149819431, -0.6940214119659553, -0.6939887881451088];
-             reactions=OptionsDict("charge_exchange_frequency"=>2*π*1.8))
-    run_test(test_input_finite_difference_split_1_moment, 2*π*0.0, -2*π*0.2963,
+             reactions=OptionsDict("charge_exchange_frequency"=>2*π*1.8 * sqrt(2)))
+    run_test(test_input_finite_difference_split_1_moment, 2*π*0.0, -2*π*0.2963 * sqrt(2),
              [-0.6941155980262039, -0.6940977032813103, -0.6940759796933667,
               -0.6940505149819431, -0.6940214119659553, -0.6939887881451088];
-             reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0))
+             reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0 * sqrt(2)))
 
     # n_i>>n_n T_e=1
-    run_test(test_input_finite_difference_split_1_moment, 2*π*1.4467, -2*π*0.6020,
+    run_test(test_input_finite_difference_split_1_moment, 2*π*1.4467 * sqrt(2), -2*π*0.6020 * sqrt(2),
              [-0.0010684224665919893, -0.0010505277216983934, -0.0010288041337547594,
               -0.0010033394223312585, -0.0009742364063434105, -0.0009416125854969064];
              ion_species_1 = OptionsDict("initial_density" => 0.9999), 
              neutral_species_1 = OptionsDict("initial_density" => 0.0001))
-    run_test(test_input_finite_difference_split_1_moment, 2*π*1.4467, -2*π*0.6020,
+    run_test(test_input_finite_difference_split_1_moment, 2*π*1.4467 * sqrt(2), -2*π*0.6020 * sqrt(2),
              [-0.0010684224665919893, -0.0010505277216983934, -0.0010288041337547594,
               -0.0010033394223312585, -0.0009742364063434105, -0.0009416125854969064];
              ion_species_1 = OptionsDict("initial_density" => 0.9999), 
              neutral_species_1 = OptionsDict("initial_density" => 0.0001),
-             reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0))
+             reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0 * sqrt(2)))
 
     # n_i<<n_n T_e=1
-    run_test(test_input_finite_difference_split_1_moment, 2*π*1.3954, -2*π*0.6815,
+    run_test(test_input_finite_difference_split_1_moment, 2*π*1.3954 * sqrt(2), -2*π*0.6815 * sqrt(2),
              [-9.211308789442441, -9.211290894697548, -9.211269171109604,
               -9.21124370639818, -9.211214603382192, -9.211181979561346];
              ion_species_1 = OptionsDict("initial_density" => 0.0001), 
              neutral_species_1 = OptionsDict("initial_density" => 0.9999))
-    run_test(test_input_finite_difference_split_1_moment, 2*π*0.0, -2*π*0.5112,
+    run_test(test_input_finite_difference_split_1_moment, 2*π*0.0, -2*π*0.5112 * sqrt(2),
              [-9.211308789442441, -9.211290894697548, -9.211269171109604,
               -9.21124370639818, -9.211214603382192, -9.211181979561346];
              ion_species_1 = OptionsDict("initial_density" => 0.0001), 
              neutral_species_1 = OptionsDict("initial_density" => 0.9999),
-             reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0))
+             reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0 * sqrt(2)))
 
     # n_i=n_n T_e=0.5
-    run_test(test_input_finite_difference_split_1_moment, 2*π*1.2671, -2*π*0.8033,
+    run_test(test_input_finite_difference_split_1_moment, 2*π*1.2671 * sqrt(2), -2*π*0.8033 * sqrt(2),
              [-0.34705779901310196, -0.34704885164065513, -0.3470379898466833,
               -0.3470252574909716, -0.3470107059829777, -0.3469943940725544], 30;
-             composition = OptionsDict("T_e" => 0.5),
+             composition = OptionsDict("T_e" => 2.0 * 0.5),
              timestepping = OptionsDict("nstep" => 1300),
              reactions=OptionsDict("charge_exchange_frequency"=>2*π*0.0))
-    run_test(test_input_finite_difference_split_1_moment, 2*π*0.0, -2*π*0.2727,
+    run_test(test_input_finite_difference_split_1_moment, 2*π*0.0, -2*π*0.2727 * sqrt(2),
              [-0.34705779901310196, -0.34704885164065513, -0.3470379898466833,
               -0.3470252574909716, -0.3470107059829777, -0.3469943940725544];
-             composition = OptionsDict("T_e" => 0.5),
-             reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0))
+             composition = OptionsDict("T_e" => 2.0 * 0.5),
+             reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0 * sqrt(2)))
 
     # n_i=n_n T_e=4
-    run_test(test_input_finite_difference_split_1_moment, 2*π*1.9919, -2*π*0.2491,
+    run_test(test_input_finite_difference_split_1_moment, 2*π*1.9919 * sqrt(2), -2*π*0.2491 * sqrt(2),
              [-2.7764623921048157, -2.776390813125241, -2.7763039187734666,
               -2.7762020599277726, -2.7760856478638214, -2.775955152580435];
-              composition = OptionsDict("T_e" => 4.0))
+              composition = OptionsDict("T_e" => 2.0 * 4.0))
     # CX=2*π*2.0 case with T_e=4 is too hard to converge, so skip
 end
 
 function run_test_set_finite_difference_split_2_moments()
     #n_i=n_n, T_e=1
-    run_test(test_input_finite_difference_split_2_moments, 2*π*1.4467, -2*π*0.6020,
+    run_test(test_input_finite_difference_split_2_moments, 2*π*1.4467 * sqrt(2), -2*π*0.6020 * sqrt(2),
              [-0.6941155980262039, -0.6940977032813103, -0.6940759796933667,
               -0.6940505149819431, -0.6940214119659553, -0.6939887881451088];
              reactions=OptionsDict("charge_exchange_frequency"=>2*π*0.0))
-    run_test(test_input_finite_difference_split_2_moments, 2*π*1.4240, -2*π*0.6379,
+    run_test(test_input_finite_difference_split_2_moments, 2*π*1.4240 * sqrt(2), -2*π*0.6379 * sqrt(2),
              [-0.6941155980262039, -0.6940977032813103, -0.6940759796933667,
               -0.6940505149819431, -0.6940214119659553, -0.6939887881451088])
-    run_test(test_input_finite_difference_split_2_moments, 2*π*0.0, -2*π*0.3235,
+    run_test(test_input_finite_difference_split_2_moments, 2*π*0.0, -2*π*0.3235 * sqrt(2),
              [-0.6941155980262039, -0.6940977032813103, -0.6940759796933667,
               -0.6940505149819431, -0.6940214119659553, -0.6939887881451088];
-             reactions=OptionsDict("charge_exchange_frequency"=>2*π*1.8))
-    run_test(test_input_finite_difference_split_2_moments, 2*π*0.0, -2*π*0.2963,
+             reactions=OptionsDict("charge_exchange_frequency"=>2*π*1.8 * sqrt(2)))
+    run_test(test_input_finite_difference_split_2_moments, 2*π*0.0, -2*π*0.2963 * sqrt(2),
              [-0.6941155980262039, -0.6940977032813103, -0.6940759796933667,
               -0.6940505149819431, -0.6940214119659553, -0.6939887881451088];
-             reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0))
+             reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0 * sqrt(2)))
 
     # n_i>>n_n T_e=1
-    run_test(test_input_finite_difference_split_2_moments, 2*π*1.4467, -2*π*0.6020,
+    run_test(test_input_finite_difference_split_2_moments, 2*π*1.4467 * sqrt(2), -2*π*0.6020 * sqrt(2),
              [-0.0010684224665919893, -0.0010505277216983934, -0.0010288041337547594,
               -0.0010033394223312585, -0.0009742364063434105, -0.0009416125854969064];
              ion_species_1 = OptionsDict("initial_density" => 0.9999), 
              neutral_species_1 = OptionsDict("initial_density" => 0.0001))
-    run_test(test_input_finite_difference_split_2_moments, 2*π*1.4467, -2*π*0.6020,
+    run_test(test_input_finite_difference_split_2_moments, 2*π*1.4467 * sqrt(2), -2*π*0.6020 * sqrt(2),
              [-0.0010684224665919893, -0.0010505277216983934, -0.0010288041337547594,
               -0.0010033394223312585, -0.0009742364063434105, -0.0009416125854969064];
              ion_species_1 = OptionsDict("initial_density" => 0.9999), 
              neutral_species_1 = OptionsDict("initial_density" => 0.0001),
-             reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0))
+             reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0 * sqrt(2)))
 
     # n_i<<n_n T_e=1
-    run_test(test_input_finite_difference_split_2_moments, 2*π*1.3954, -2*π*0.6815,
+    run_test(test_input_finite_difference_split_2_moments, 2*π*1.3954 * sqrt(2), -2*π*0.6815 * sqrt(2),
              [-9.211308789442441, -9.211290894697548, -9.211269171109604,
               -9.21124370639818, -9.211214603382192, -9.211181979561346];
              ion_species_1 = OptionsDict("initial_density" => 0.0001), 
              neutral_species_1 = OptionsDict("initial_density" => 0.9999))
-    run_test(test_input_finite_difference_split_2_moments, 2*π*0.0, -2*π*0.5112,
+    run_test(test_input_finite_difference_split_2_moments, 2*π*0.0, -2*π*0.5112 * sqrt(2),
              [-9.211308789442441, -9.211290894697548, -9.211269171109604,
               -9.21124370639818, -9.211214603382192, -9.211181979561346];
              ion_species_1 = OptionsDict("initial_density" => 0.0001), 
              neutral_species_1 = OptionsDict("initial_density" => 0.9999),
-             reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0))
+             reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0 * sqrt(2)))
 
     # n_i=n_n T_e=0.5
-    run_test(test_input_finite_difference_split_2_moments, 2*π*1.2671, -2*π*0.8033,
+    run_test(test_input_finite_difference_split_2_moments, 2*π*1.2671 * sqrt(2), -2*π*0.8033 * sqrt(2),
              [-0.34706673733456106, -0.3470627566790802, -0.3470579059173919,
               -0.347052193699157, -0.34704563020982493, -0.3470382271523149], 30;
-             composition = OptionsDict("T_e" => 0.5),
+             composition = OptionsDict("T_e" => 2.0 * 0.5),
              timestepping = OptionsDict("nstep" => 1300), z = OptionsDict("ngrid" => 150),
              reactions=OptionsDict("charge_exchange_frequency"=>2*π*0.0))
-    run_test(test_input_finite_difference_split_2_moments, 2*π*0.0, -2*π*0.2727,
+    run_test(test_input_finite_difference_split_2_moments, 2*π*0.0, -2*π*0.2727 * sqrt(2),
              [-0.34705779901310196, -0.34704885164065513, -0.3470379898466833,
               -0.3470252574909716, -0.3470107059829777, -0.3469943940725544];
-             composition = OptionsDict("T_e" => 0.5),
-             reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0))
+             composition = OptionsDict("T_e" => 2.0 * 0.5),
+             reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0 * sqrt(2)))
 
     # n_i=n_n T_e=4
-    run_test(test_input_finite_difference_split_2_moments, 2*π*1.9919, -2*π*0.2491,
+    run_test(test_input_finite_difference_split_2_moments, 2*π*1.9919 * sqrt(2), -2*π*0.2491 * sqrt(2),
              [-2.7764623921048157, -2.776390813125241, -2.7763039187734666,
               -2.7762020599277726, -2.7760856478638214, -2.775955152580435];
-              composition = OptionsDict("T_e" => 4.0))
+              composition = OptionsDict("T_e" => 2.0 * 4.0))
     # CX=2*π*2.0 case with T_e=4 is too hard to converge, so skip
 end
 
 function run_test_set_finite_difference_split_3_moments()
     #n_i=n_n, T_e=1
-    @long run_test(test_input_finite_difference_split_3_moments, 2*π*1.4467,
+    @long run_test(test_input_finite_difference_split_3_moments, 2*π*1.4467 * sqrt(2),
                    -2*π*0.6020, [-0.6941155980262039, -0.6940977032813103,
                                  -0.6940759796933667, -0.6940505149819431,
                                  -0.6940214119659553, -0.6939887881451088];
                    reactions=OptionsDict("charge_exchange_frequency"=>2*π*0.0))
-    run_test(test_input_finite_difference_split_3_moments, 2*π*1.4240, -2*π*0.6379,
+    run_test(test_input_finite_difference_split_3_moments, 2*π*1.4240 * sqrt(2), -2*π*0.6379 * sqrt(2),
              [-0.6941155980262039, -0.6940977032813103, -0.6940759796933667,
               -0.6940505149819431, -0.6940214119659553, -0.6939887881451088])
-    @long run_test(test_input_finite_difference_split_3_moments, 2*π*0.0, -2*π*0.3235,
+    @long run_test(test_input_finite_difference_split_3_moments, 2*π*0.0, -2*π*0.3235 * sqrt(2),
                    [-0.6941155980262039, -0.6940977032813103, -0.6940759796933667,
                     -0.6940505149819431, -0.6940214119659553, -0.6939887881451088];
-                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*1.8))
-    @long run_test(test_input_finite_difference_split_3_moments, 2*π*0.0, -2*π*0.2963,
+                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*1.8 * sqrt(2)))
+    @long run_test(test_input_finite_difference_split_3_moments, 2*π*0.0, -2*π*0.2963 * sqrt(2),
                    [-0.6941155980262039, -0.6940977032813103, -0.6940759796933667,
                     -0.6940505149819431, -0.6940214119659553, -0.6939887881451088];
-                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0))
+                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0 * sqrt(2)))
 
     # n_i>>n_n T_e=1
-    @long run_test(test_input_finite_difference_split_3_moments, 2*π*1.4467,
-                   -2*π*0.6020, [-0.0010684224665919893, -0.0010505277216983934,
+    @long run_test(test_input_finite_difference_split_3_moments, 2*π*1.4467 * sqrt(2),
+                   -2*π*0.6020 * sqrt(2), [-0.0010684224665919893, -0.0010505277216983934,
                                  -0.0010288041337547594, -0.0010033394223312585,
                                  -0.0009742364063434105, -0.0009416125854969064];
                    ion_species_1 = OptionsDict("initial_density" => 0.9999), 
                    neutral_species_1 = OptionsDict("initial_density" => 0.0001))
-    @long run_test(test_input_finite_difference_split_3_moments, 2*π*1.4467,
-                   -2*π*0.6020, [-0.0010684224665919893, -0.0010505277216983934,
+    @long run_test(test_input_finite_difference_split_3_moments, 2*π*1.4467 * sqrt(2),
+                   -2*π*0.6020 * sqrt(2), [-0.0010684224665919893, -0.0010505277216983934,
                                  -0.0010288041337547594, -0.0010033394223312585,
                                  -0.0009742364063434105, -0.0009416125854969064];
                    ion_species_1 = OptionsDict("initial_density" => 0.9999), 
                    neutral_species_1 = OptionsDict("initial_density" => 0.0001),
-                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0))
+                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0 * sqrt(2)))
 
     # n_i<<n_n T_e=1
-    @long run_test(test_input_finite_difference_split_3_moments, 2*π*1.3954,
-                   -2*π*0.6815, [-9.211308789442441, -9.211290894697548,
+    @long run_test(test_input_finite_difference_split_3_moments, 2*π*1.3954 * sqrt(2),
+                   -2*π*0.6815 * sqrt(2), [-9.211308789442441, -9.211290894697548,
                                  -9.211269171109604, -9.21124370639818,
                                  -9.211214603382192, -9.211181979561346];
                    ion_species_1 = OptionsDict("initial_density" => 0.0001), 
                    neutral_species_1 = OptionsDict("initial_density" => 0.9999))
-    @long run_test(test_input_finite_difference_split_3_moments, 2*π*0.0, -2*π*0.5112,
+    @long run_test(test_input_finite_difference_split_3_moments, 2*π*0.0, -2*π*0.5112 * sqrt(2),
                    [-9.211308789442441, -9.211290894697548, -9.211269171109604,
                     -9.21124370639818, -9.211214603382192, -9.211181979561346];
                    ion_species_1 = OptionsDict("initial_density" => 0.0001), 
                    neutral_species_1 = OptionsDict("initial_density" => 0.9999),
-                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0))
+                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0 * sqrt(2)))
 
     # n_i=n_n T_e=0.5
-    @long run_test(test_input_finite_difference_split_3_moments, 2*π*1.2671,
-                   -2*π*0.8033, [-0.34705779901310196, -0.34704885164065513,
+    @long run_test(test_input_finite_difference_split_3_moments, 2*π*1.2671 * sqrt(2),
+                   -2*π*0.8033 * sqrt(2), [-0.34705779901310196, -0.34704885164065513,
                                  -0.3470379898466833, -0.3470252574909716,
                                  -0.3470107059829777, -0.3469943940725544], 30;
-                   composition = OptionsDict("T_e" => 0.5),
+                   composition = OptionsDict("T_e" => 2.0 * 0.5),
                    timestepping = OptionsDict("nstep" => 1300),
                    reactions=OptionsDict("charge_exchange_frequency"=>2*π*0.0))
-    @long run_test(test_input_finite_difference_split_3_moments, 2*π*0.0, -2*π*0.2727,
+    @long run_test(test_input_finite_difference_split_3_moments, 2*π*0.0, -2*π*0.2727 * sqrt(2),
                    [-0.34705779901310196, -0.34704885164065513, -0.3470379898466833,
                     -0.3470252574909716, -0.3470107059829777, -0.3469943940725544];
-                   composition = OptionsDict("T_e" => 0.5),
-                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0))
+                   composition = OptionsDict("T_e" => 2.0 * 0.5),
+                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0 * sqrt(2)))
 
     # n_i=n_n T_e=4
-    @long run_test(test_input_finite_difference_split_3_moments, 2*π*1.9919,
-                   -2*π*0.2491, [-2.7764623921048157, -2.776390813125241,
+    @long run_test(test_input_finite_difference_split_3_moments, 2*π*1.9919 * sqrt(2),
+                   -2*π*0.2491 * sqrt(2), [-2.7764623921048157, -2.776390813125241,
                                  -2.7763039187734666, -2.7762020599277726,
                                  -2.7760856478638214, -2.775955152580435];
-                                 composition = OptionsDict("T_e" => 4.0))
+                                 composition = OptionsDict("T_e" => 2.0 * 4.0))
     # CX=2*π*2.0 case with T_e=4 is too hard to converge, so skip
 end
 
 function run_test_set_chebyshev()
     #n_i=n_n, T_e=1
-    @long run_test(test_input_chebyshev, 2*π*1.4467, -2*π*0.6020,
+    @long run_test(test_input_chebyshev, 2*π*1.4467 * sqrt(2), -2*π*0.6020 * sqrt(2),
                    [-0.6931471805599453, -0.6925817758085663, -0.6922515628093567,
                     -0.6921548130694323, -0.6921476802268619, -0.6921548130694323];
                    reactions=OptionsDict("charge_exchange_frequency"=>2*π*0.0))
-    run_test(test_input_chebyshev, 2*π*1.4240, -2*π*0.6379,
+    run_test(test_input_chebyshev, 2*π*1.4240 * sqrt(2), -2*π*0.6379 * sqrt(2),
              [-0.6931471805599453, -0.6925817758085663, -0.6922515628093567,
               -0.6921548130694323, -0.6921476802268619, -0.6921548130694323])
-    @long run_test(test_input_chebyshev, 2*π*0.0, -2*π*0.3235,
+    @long run_test(test_input_chebyshev, 2*π*0.0, -2*π*0.3235 * sqrt(2),
                    [-0.6931471805599453, -0.6925817758085663, -0.6922515628093567,
                     -0.6921548130694323, -0.6921476802268619, -0.6921548130694323];
-                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*1.8))
-    @long run_test(test_input_chebyshev, 2*π*0.0, -2*π*0.2963,
+                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*1.8 * sqrt(2)))
+    @long run_test(test_input_chebyshev, 2*π*0.0, -2*π*0.2963 * sqrt(2),
                    [-0.6931471805599453, -0.6925817758085663, -0.6922515628093567,
                     -0.6921548130694323, -0.6921476802268619, -0.6921548130694323];
-                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0))
+                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0 * sqrt(2)))
 
     # n_i>>n_n T_e=1
-    @long run_test(test_input_chebyshev, 2*π*1.4467, -2*π*0.6020,
+    @long run_test(test_input_chebyshev, 2*π*1.4467 * sqrt(2), -2*π*0.6020 * sqrt(2),
                    [-0.00010000500033334732, 0.0004653997510461739, 0.0007956127502558478,
                     0.0008923624901804128, 0.0008994953327500175, 0.0008923624901804128];
                    ion_species_1 = OptionsDict("initial_density" => 0.9999), 
                    neutral_species_1 = OptionsDict("initial_density" => 0.0001))
-    @long run_test(test_input_chebyshev, 2*π*1.4467, -2*π*0.6020,
+    @long run_test(test_input_chebyshev, 2*π*1.4467 * sqrt(2), -2*π*0.6020 * sqrt(2),
                    [-0.00010000500033334732, 0.0004653997510461739, 0.0007956127502558478,
                     0.0008923624901804128, 0.0008994953327500175, 0.0008923624901804128];
                    ion_species_1 = OptionsDict("initial_density" => 0.9999), 
                    neutral_species_1 = OptionsDict("initial_density" => 0.0001),
-                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0))
+                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0 * sqrt(2)))
 
     # n_i<<n_n T_e=1
-    @long run_test(test_input_chebyshev, 2*π*1.3954, -2*π*0.6815,
+    @long run_test(test_input_chebyshev, 2*π*1.3954 * sqrt(2), -2*π*0.6815 * sqrt(2),
                    [-9.210340371976182, -9.209774967224805, -9.209444754225593,
                     -9.209348004485669, -9.2093408716431, -9.209348004485669];
                    ion_species_1 = OptionsDict("initial_density" => 0.0001), 
                    neutral_species_1 = OptionsDict("initial_density" => 0.9999))
-    @long run_test(test_input_chebyshev, 2*π*0.0, -2*π*0.5112,
+    @long run_test(test_input_chebyshev, 2*π*0.0, -2*π*0.5112 * sqrt(2),
                    [-9.210340371976182, -9.209774967224805, -9.209444754225593,
                     -9.209348004485669, -9.2093408716431, -9.209348004485669];
                    ion_species_1 = OptionsDict("initial_density" => 0.0001), 
                    neutral_species_1 = OptionsDict("initial_density" => 0.9999),
-                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0))
+                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0 * sqrt(2)))
 
     # n_i=n_n T_e=0.5
-    @long run_test(test_input_chebyshev, 2*π*1.2671, -2*π*0.8033,
+    @long run_test(test_input_chebyshev, 2*π*1.2671 * sqrt(2), -2*π*0.8033 * sqrt(2),
                    [-0.34657359027997264, -0.34629088790428314, -0.34612578140467837,
                     -0.34607740653471614, -0.34607384011343095, -0.34607740653471614],
-                   30; composition = OptionsDict("T_e" => 0.5),
+                   30; composition = OptionsDict("T_e" => 2.0 * 0.5),
                    timestepping = OptionsDict("nstep" => 1300),
                    reactions=OptionsDict("charge_exchange_frequency"=>2*π*0.0))
-    @long run_test(test_input_chebyshev, 2*π*0.0, -2*π*0.2727,
+    @long run_test(test_input_chebyshev, 2*π*0.0, -2*π*0.2727 * sqrt(2),
                    [-0.34657359027997264, -0.34629088790428314, -0.34612578140467837,
                     -0.34607740653471614, -0.34607384011343095, -0.34607740653471614];
-                   composition = OptionsDict("T_e" => 0.5),
-                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0))
+                   composition = OptionsDict("T_e" => 2.0 * 0.5),
+                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0 * sqrt(2)))
 
     # n_i=n_n T_e=4
-    @long run_test(test_input_chebyshev, 2*π*1.9919, -2*π*0.2491,
+    @long run_test(test_input_chebyshev, 2*π*1.9919 * sqrt(2), -2*π*0.2491 * sqrt(2),
                    [-2.772588722239781, -2.770327103234265, -2.769006251237427,
                     -2.768619252277729, -2.7685907209074476, -2.768619252277729];
-                   composition = OptionsDict("T_e" => 4.0))
+                   composition = OptionsDict("T_e" => 2.0 * 4.0))
     # CX=2*π*2.0 case with T_e=4 is too hard to converge, so skip
 end
 
 function run_test_set_chebyshev_split_1_moment()
     #n_i=n_n, T_e=1
-    @long run_test(test_input_chebyshev_split_1_moment, 2*π*1.4467, -2*π*0.6020,
+    @long run_test(test_input_chebyshev_split_1_moment, 2*π*1.4467 * sqrt(2), -2*π*0.6020 * sqrt(2),
                    [-0.6931471805599453, -0.6925817758085663, -0.6922515628093567,
                     -0.6921548130694323, -0.6921476802268619, -0.6921548130694323];
                    reactions=OptionsDict("charge_exchange_frequency"=>2*π*0.0))
-    run_test(test_input_chebyshev_split_1_moment, 2*π*1.4240, -2*π*0.6379,
+    run_test(test_input_chebyshev_split_1_moment, 2*π*1.4240 * sqrt(2), -2*π*0.6379 * sqrt(2),
              [-0.6931471805599453, -0.6925817758085663, -0.6922515628093567,
               -0.6921548130694323, -0.6921476802268619, -0.6921548130694323])
-    @long run_test(test_input_chebyshev_split_1_moment, 2*π*0.0, -2*π*0.3235,
+    @long run_test(test_input_chebyshev_split_1_moment, 2*π*0.0, -2*π*0.3235 * sqrt(2),
                    [-0.6931471805599453, -0.6925817758085663, -0.6922515628093567,
                     -0.6921548130694323, -0.6921476802268619, -0.6921548130694323];
-                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*1.8))
-    @long run_test(test_input_chebyshev_split_1_moment, 2*π*0.0, -2*π*0.2963,
+                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*1.8 * sqrt(2)))
+    @long run_test(test_input_chebyshev_split_1_moment, 2*π*0.0, -2*π*0.2963 * sqrt(2),
                    [-0.6931471805599453, -0.6925817758085663, -0.6922515628093567,
                     -0.6921548130694323, -0.6921476802268619, -0.6921548130694323];
-                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0))
+                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0 * sqrt(2)))
 
     # n_i>>n_n T_e=1
-    @long run_test(test_input_chebyshev_split_1_moment, 2*π*1.4467, -2*π*0.6020,
+    @long run_test(test_input_chebyshev_split_1_moment, 2*π*1.4467 * sqrt(2), -2*π*0.6020 * sqrt(2),
                    [-0.00010000500033334732, 0.00046539975104573, 0.0007956127502551822,
                     0.0008923624901797472, 0.0008994953327500175,
                     0.0008923624901797472];
                    ion_species_1 = OptionsDict("initial_density" => 0.9999), 
                    neutral_species_1 = OptionsDict("initial_density" => 0.0001))
-    @long run_test(test_input_chebyshev_split_1_moment, 2*π*1.4467, -2*π*0.6020,
+    @long run_test(test_input_chebyshev_split_1_moment, 2*π*1.4467 * sqrt(2), -2*π*0.6020 * sqrt(2),
                    [-0.00010000500033334732, 0.00046539975104573, 0.0007956127502551822,
                     0.0008923624901797472, 0.0008994953327500175,
                     0.0008923624901797472];
                    ion_species_1 = OptionsDict("initial_density" => 0.9999), 
                    neutral_species_1 = OptionsDict("initial_density" => 0.0001),
-                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0))
+                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0 * sqrt(2)))
 
     # n_i<<n_n T_e=1
-    @long run_test(test_input_chebyshev_split_1_moment, 2*π*1.3954, -2*π*0.6815,
+    @long run_test(test_input_chebyshev_split_1_moment, 2*π*1.3954 * sqrt(2), -2*π*0.6815 * sqrt(2),
                    [-9.210340371976182, -9.209774967224805, -9.209444754225593,
                     -9.209348004485669, -9.2093408716431, -9.209348004485669];
                    ion_species_1 = OptionsDict("initial_density" => 0.0001), 
                    neutral_species_1 = OptionsDict("initial_density" => 0.9999))
-    @long run_test(test_input_chebyshev_split_1_moment, 2*π*0.0, -2*π*0.5112,
+    @long run_test(test_input_chebyshev_split_1_moment, 2*π*0.0, -2*π*0.5112 * sqrt(2),
                    [-9.210340371976182, -9.209774967224805, -9.209444754225593,
                     -9.209348004485669, -9.2093408716431, -9.209348004485669];
                    ion_species_1 = OptionsDict("initial_density" => 0.0001), 
                    neutral_species_1 = OptionsDict("initial_density" => 0.9999),
-                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0))
+                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0 * sqrt(2)))
 
     # n_i=n_n T_e=0.5
-    @long run_test(test_input_chebyshev_split_1_moment, 2*π*1.2671, -2*π*0.8033,
+    @long run_test(test_input_chebyshev_split_1_moment, 2*π*1.2671 * sqrt(2), -2*π*0.8033 * sqrt(2),
                    [-0.34657359027997264, -0.34629088790428314, -0.34612578140467837,
                     -0.34607740653471614, -0.34607384011343095, -0.34607740653471614],
-                   30; composition = OptionsDict("T_e" => 0.5),
+                   30; composition = OptionsDict("T_e" => 2.0 * 0.5),
                    timestepping = OptionsDict("nstep" => 1300),
                    reactions=OptionsDict("charge_exchange_frequency"=>2*π*0.0))
-    @long run_test(test_input_chebyshev_split_1_moment, 2*π*0.0, -2*π*0.2727,
+    @long run_test(test_input_chebyshev_split_1_moment, 2*π*0.0, -2*π*0.2727 * sqrt(2),
                    [-0.34657359027997264, -0.34629088790428314, -0.34612578140467837,
                     -0.34607740653471614, -0.34607384011343095, -0.34607740653471614];
-                   composition = OptionsDict("T_e" => 0.5),
-                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0))
+                   composition = OptionsDict("T_e" => 2.0 * 0.5),
+                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0 * sqrt(2)))
 
     # n_i=n_n T_e=4
-    @long run_test(test_input_chebyshev_split_1_moment, 2*π*1.9919, -2*π*0.2491,
+    @long run_test(test_input_chebyshev_split_1_moment, 2*π*1.9919 * sqrt(2), -2*π*0.2491 * sqrt(2),
                    [-2.772588722239781, -2.770327103234265, -2.769006251237427,
                     -2.768619252277729, -2.7685907209074476, -2.768619252277729];
-                   composition = OptionsDict("T_e" => 4.0))
+                   composition = OptionsDict("T_e" => 2.0 * 4.0))
     # CX=2*π*2.0 case with T_e=4 is too hard to converge, so skip
 end
 
 function run_test_set_chebyshev_split_2_moments()
     #n_i=n_n, T_e=1
-    @long run_test(test_input_chebyshev_split_2_moments, 2*π*1.4467, -2*π*0.6020,
+    @long run_test(test_input_chebyshev_split_2_moments, 2*π*1.4467 * sqrt(2), -2*π*0.6020 * sqrt(2),
                    [-0.6931471805599453, -0.6925817758085663, -0.6922515628093567,
                     -0.6921548130694323, -0.6921476802268619, -0.6921548130694323];
                    reactions=OptionsDict("charge_exchange_frequency"=>2*π*0.0))
-    run_test(test_input_chebyshev_split_2_moments, 2*π*1.4240, -2*π*0.6379,
+    run_test(test_input_chebyshev_split_2_moments, 2*π*1.4240 * sqrt(2), -2*π*0.6379 * sqrt(2),
              [-0.6931471805599453, -0.6925817758085663, -0.6922515628093567,
               -0.6921548130694323, -0.6921476802268619, -0.6921548130694323])
-    @long run_test(test_input_chebyshev_split_2_moments, 2*π*0.0, -2*π*0.3235,
+    @long run_test(test_input_chebyshev_split_2_moments, 2*π*0.0, -2*π*0.3235 * sqrt(2),
                    [-0.6931471805599453, -0.6925817758085663, -0.6922515628093567,
                     -0.6921548130694323, -0.6921476802268619, -0.6921548130694323];
-                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*1.8))
-    @long run_test(test_input_chebyshev_split_2_moments, 2*π*0.0, -2*π*0.2963,
+                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*1.8 * sqrt(2)))
+    @long run_test(test_input_chebyshev_split_2_moments, 2*π*0.0, -2*π*0.2963 * sqrt(2),
                    [-0.6931471805599453, -0.6925817758085663, -0.6922515628093567,
                     -0.6921548130694323, -0.6921476802268619, -0.6921548130694323];
-                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0))
+                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0 * sqrt(2)))
 
     # n_i>>n_n T_e=1
-    @long run_test(test_input_chebyshev_split_2_moments, 2*π*1.4467, -2*π*0.6020,
+    @long run_test(test_input_chebyshev_split_2_moments, 2*π*1.4467 * sqrt(2), -2*π*0.6020 * sqrt(2),
                    [-0.00010000500033334732, 0.00046539975104573, 0.0007956127502551822,
                     0.0008923624901797472, 0.0008994953327500175,
                     0.0008923624901797472]; 
                    ion_species_1 = OptionsDict("initial_density" => 0.9999), 
                    neutral_species_1 = OptionsDict("initial_density" => 0.0001))
-    @long run_test(test_input_chebyshev_split_2_moments, 2*π*1.4467, -2*π*0.6020,
+    @long run_test(test_input_chebyshev_split_2_moments, 2*π*1.4467 * sqrt(2), -2*π*0.6020 * sqrt(2),
                    [-0.00010000500033334732, 0.00046539975104573, 0.0007956127502551822,
                     0.0008923624901797472, 0.0008994953327500175,
                     0.0008923624901797472];
                    ion_species_1 = OptionsDict("initial_density" => 0.9999), 
                    neutral_species_1 = OptionsDict("initial_density" => 0.0001),
-                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0))
+                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0 * sqrt(2)))
 
     # n_i<<n_n T_e=1
-    @long run_test(test_input_chebyshev_split_2_moments, 2*π*1.3954, -2*π*0.6815,
+    @long run_test(test_input_chebyshev_split_2_moments, 2*π*1.3954 * sqrt(2), -2*π*0.6815 * sqrt(2),
                    [-9.210340371976182, -9.209774967224805, -9.209444754225593,
                     -9.209348004485669, -9.2093408716431, -9.209348004485669];
                    ion_species_1 = OptionsDict("initial_density" => 0.0001), 
                    neutral_species_1 = OptionsDict("initial_density" => 0.9999))
-    @long run_test(test_input_chebyshev_split_2_moments, 2*π*0.0, -2*π*0.5112,
+    @long run_test(test_input_chebyshev_split_2_moments, 2*π*0.0, -2*π*0.5112 * sqrt(2),
                    [-9.210340371976182, -9.209774967224805, -9.209444754225593,
                     -9.209348004485669, -9.2093408716431, -9.209348004485669];
                    ion_species_1 = OptionsDict("initial_density" => 0.0001), 
                    neutral_species_1 = OptionsDict("initial_density" => 0.9999),
-                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0))
+                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0 * sqrt(2)))
 
     # n_i=n_n T_e=0.5
-    @long run_test(test_input_chebyshev_split_2_moments, 2*π*1.2671, -2*π*0.8033,
+    @long run_test(test_input_chebyshev_split_2_moments, 2*π*1.2671 * sqrt(2), -2*π*0.8033 * sqrt(2),
                    [-0.34657359027997264, -0.34629088790428314, -0.34612578140467837,
                     -0.34607740653471614, -0.34607384011343095, -0.34607740653471614],
-                   40; composition = OptionsDict("T_e" => 0.5),
+                   40; composition = OptionsDict("T_e" => 2.0 * 0.5),
                    timestepping = OptionsDict("nstep" => 1300, "nwrite" => 10),
-                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*0.0))
-    @long run_test(test_input_chebyshev_split_2_moments, 2*π*0.0, -2*π*0.2727,
+                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*0.0 * sqrt(2)))
+    @long run_test(test_input_chebyshev_split_2_moments, 2*π*0.0, -2*π*0.2727 * sqrt(2),
                    [-0.34657359027997264, -0.34629088790428314, -0.34612578140467837,
                     -0.34607740653471614, -0.34607384011343095, -0.34607740653471614];
-                   composition = OptionsDict("T_e" => 0.5),
-                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0))
+                   composition = OptionsDict("T_e" => 2.0 * 0.5),
+                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0 * sqrt(2)))
 
     # n_i=n_n T_e=4
-    @long run_test(test_input_chebyshev_split_2_moments, 2*π*1.9919, -2*π*0.2491,
+    @long run_test(test_input_chebyshev_split_2_moments, 2*π*1.9919 * sqrt(2), -2*π*0.2491 * sqrt(2),
                    [-2.772588722239781, -2.770327103234265, -2.769006251237427,
                     -2.768619252277729, -2.7685907209074476, -2.768619252277729];
-                   composition = OptionsDict("T_e" => 4.0))
+                   composition = OptionsDict("T_e" => 2.0 * 4.0))
     # CX=2*π*2.0 case with T_e=4 is too hard to converge, so skip
 end
 
 function run_test_set_chebyshev_split_3_moments()
     #n_i=n_n, T_e=1
-    @long run_test(test_input_chebyshev_split_3_moments, 2*π*1.4467, -2*π*0.6020,
+    @long run_test(test_input_chebyshev_split_3_moments, 2*π*1.4467 * sqrt(2), -2*π*0.6020 * sqrt(2),
                    [-0.6931471805599453, -0.6925817758085663, -0.6922515628093567,
                     -0.6921548130694323, -0.6921476802268619, -0.6921548130694323];
                    reactions=OptionsDict("charge_exchange_frequency"=>2*π*0.0))
-    run_test(test_input_chebyshev_split_3_moments, 2*π*1.4240, -2*π*0.6379,
+    run_test(test_input_chebyshev_split_3_moments, 2*π*1.4240 * sqrt(2), -2*π*0.6379 * sqrt(2),
              [-0.6931471805599453, -0.6925817758085663, -0.6922515628093567,
               -0.6921548130694323, -0.6921476802268619, -0.6921548130694323])
-    @long run_test(test_input_chebyshev_split_3_moments, 2*π*0.0, -2*π*0.3235,
+    @long run_test(test_input_chebyshev_split_3_moments, 2*π*0.0, -2*π*0.3235 * sqrt(2),
                    [-0.6931471805599453, -0.6925817758085663, -0.6922515628093567,
                     -0.6921548130694323, -0.6921476802268619, -0.6921548130694323];
-                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*1.8))
-    @long run_test(test_input_chebyshev_split_3_moments, 2*π*0.0, -2*π*0.2963,
+                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*1.8 * sqrt(2)))
+    @long run_test(test_input_chebyshev_split_3_moments, 2*π*0.0, -2*π*0.2963 * sqrt(2),
                    [-0.6931471805599453, -0.6925817758085663, -0.6922515628093567,
                     -0.6921548130694323, -0.6921476802268619, -0.6921548130694323];
-                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0))
+                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0 * sqrt(2)))
 
     # n_i>>n_n T_e=1
-    @long run_test(test_input_chebyshev_split_3_moments, 2*π*1.4467, -2*π*0.6020,
+    @long run_test(test_input_chebyshev_split_3_moments, 2*π*1.4467 * sqrt(2), -2*π*0.6020 * sqrt(2),
                    [-0.00010000500033334732, 0.00046539975104573, 0.0007956127502551822,
                     0.0008923624901797472, 0.0008994953327500175,
                     0.0008923624901797472];
                    ion_species_1 = OptionsDict("initial_density" => 0.9999), 
                    neutral_species_1 = OptionsDict("initial_density" => 0.0001))
-    @long run_test(test_input_chebyshev_split_3_moments, 2*π*1.4467, -2*π*0.6020,
+    @long run_test(test_input_chebyshev_split_3_moments, 2*π*1.4467 * sqrt(2), -2*π*0.6020 * sqrt(2),
                    [-0.00010000500033334732, 0.00046539975104573, 0.0007956127502551822,
                     0.0008923624901797472, 0.0008994953327500175,
                     0.0008923624901797472];
                    ion_species_1 = OptionsDict("initial_density" => 0.9999), 
                    neutral_species_1 = OptionsDict("initial_density" => 0.0001),
-                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0))
+                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0 * sqrt(2)))
 
     # n_i<<n_n T_e=1
-    @long run_test(test_input_chebyshev_split_3_moments, 2*π*1.3954, -2*π*0.6815,
+    @long run_test(test_input_chebyshev_split_3_moments, 2*π*1.3954 * sqrt(2), -2*π*0.6815 * sqrt(2),
                    [-9.210340371976182, -9.209774967224805, -9.209444754225593,
                     -9.209348004485669, -9.2093408716431, -9.209348004485669];
                    ion_species_1 = OptionsDict("initial_density" => 0.0001), 
                    neutral_species_1 = OptionsDict("initial_density" => 0.9999))
-    @long run_test(test_input_chebyshev_split_3_moments, 2*π*0.0, -2*π*0.5112,
+    @long run_test(test_input_chebyshev_split_3_moments, 2*π*0.0, -2*π*0.5112 * sqrt(2),
                    [-9.210340371976182, -9.209774967224805, -9.209444754225593,
                     -9.209348004485669, -9.2093408716431, -9.209348004485669];
                    ion_species_1 = OptionsDict("initial_density" => 0.0001), 
                    neutral_species_1 = OptionsDict("initial_density" => 0.9999),
-                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0))
+                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0 * sqrt(2)))
 
     # n_i=n_n T_e=0.5
-    @long run_test(test_input_chebyshev_split_3_moments, 2*π*1.2671, -2*π*0.8033,
+    @long run_test(test_input_chebyshev_split_3_moments, 2*π*1.2671 * sqrt(2), -2*π*0.8033 * sqrt(2),
                    [-0.34657359027997264, -0.34629088790428314, -0.34612578140467837,
                     -0.34607740653471614, -0.34607384011343095, -0.34607740653471614],
-                   80; composition = OptionsDict("T_e" => 0.5),
+                   80; composition = OptionsDict("T_e" => 2.0 * 0.5),
                    timestepping = OptionsDict("nstep" => 1300, "nwrite" => 5),
                    reactions=OptionsDict("charge_exchange_frequency"=>2*π*0.0))
-    @long run_test(test_input_chebyshev_split_3_moments, 2*π*0.0, -2*π*0.2727,
+    @long run_test(test_input_chebyshev_split_3_moments, 2*π*0.0, -2*π*0.2727 * sqrt(2),
                    [-0.34657359027997264, -0.34629088790428314, -0.34612578140467837,
                     -0.34607740653471614, -0.34607384011343095, -0.34607740653471614];
-                   composition = OptionsDict("T_e" => 0.5),
-                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0))
+                   composition = OptionsDict("T_e" => 2.0 * 0.5),
+                   reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0 * sqrt(2)))
 
     # n_i=n_n T_e=4
-    @long run_test(test_input_chebyshev_split_3_moments, 2*π*1.9919, -2*π*0.2491,
+    @long run_test(test_input_chebyshev_split_3_moments, 2*π*1.9919 * sqrt(2), -2*π*0.2491 * sqrt(2),
                    [-2.772588722239781, -2.770327103234265, -2.769006251237427,
                     -2.768619252277729, -2.7685907209074476, -2.768619252277729];
-                   composition = OptionsDict("T_e" => 4.0))
+                   composition = OptionsDict("T_e" => 2.0 * 4.0))
     # CX=2*π*2.0 case with T_e=4 is too hard to converge, so skip
 end
 

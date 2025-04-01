@@ -13,7 +13,7 @@ using moment_kinetics.load_data: load_fields_data, load_time_data
 using moment_kinetics.load_data: load_species_data, load_coordinate_data
 using moment_kinetics.utils: merge_dict_with_kwargs!
 
-ionization_frequency = 0.688
+ionization_frequency = sqrt(2) * 0.688
 
 # Analytic solution given by implicit equation
 #   z = 1/2 ± 2/(π R_ion) * D(sqrt(-phi))
@@ -46,11 +46,11 @@ function newton(f, fprime, z, args...)
 end
 
 # want to find phi such that f(phi) is zero
-fnegative(phi, z, R_ion) = - z - 2.0 / π / R_ion * dawson(sqrt(-phi))
-fpositive(phi, z, R_ion) = - z + 2.0 / π / R_ion * dawson(sqrt(-phi))
+fnegative(phi, z, R_ion) = - z - 2.0 / π * sqrt(2) / R_ion * dawson(sqrt(-phi))
+fpositive(phi, z, R_ion) = - z + 2.0 / π * sqrt(2) / R_ion * dawson(sqrt(-phi))
 # derivative of f for Newton iteration
-fprimenegative(phi, z, R_ion) = 1.0 / π / R_ion / sqrt(-phi) * Dprime(sqrt(-phi))
-fprimepositive(phi, z, R_ion) = - 1.0 / π / R_ion / sqrt(-phi) * Dprime(sqrt(-phi))
+fprimenegative(phi, z, R_ion) = 1.0 / π * sqrt(2) / R_ion / sqrt(-phi) * Dprime(sqrt(-phi))
+fprimepositive(phi, z, R_ion) = - 1.0 / π * sqrt(2) / R_ion / sqrt(-phi) * Dprime(sqrt(-phi))
 function findphi(z, R_ion)
     if z < - eps()
         return newton(fnegative, fprimenegative, z, R_ion)
@@ -65,10 +65,10 @@ end
 test_input_finite_difference = OptionsDict("composition" => OptionsDict("n_ion_species" => 1,
                                                                         "n_neutral_species" => 0,
                                                                         "electron_physics" => "boltzmann_electron_response",
-                                                                        "T_e" => 1.0,
-                                                                        "T_wall" => 1.0),
+                                                                        "T_e" => 0.6666666666666666,
+                                                                        "T_wall" => 0.6666666666666666),
                                            "ion_species_1" => OptionsDict("initial_density" => 1.0,
-                                                                          "initial_temperature" => 1.0),
+                                                                          "initial_temperature" => 0.6666666666666666),
                                            "z_IC_ion_species_1" => OptionsDict("initialization_option" => "gaussian",
                                                                                "density_amplitude" => 0.0,
                                                                                "density_phase" => 0.0,
@@ -92,7 +92,7 @@ test_input_finite_difference = OptionsDict("composition" => OptionsDict("n_ion_s
                                            "reactions" => OptionsDict("charge_exchange_frequency" => 0.0,
                                                                       "ionization_frequency" => 0.0),
                                            "timestepping" => OptionsDict("nstep" => 25000,
-                                                                         "dt" => 0.0002,
+                                                                         "dt" => 0.0001414213562373095,
                                                                          "nwrite" => 25000,
                                                                          "split_operators" => false),
                                            "r" => OptionsDict("ngrid" => 1,
@@ -105,20 +105,19 @@ test_input_finite_difference = OptionsDict("composition" => OptionsDict("n_ion_s
                                                               "discretization" => "finite_difference"),
                                            "vpa" => OptionsDict("ngrid" => 200,
                                                                 "nelement" => 1,
-                                                                "L" => 4.0,
+                                                                "L" => 5.656854249492381,
                                                                 "bc" => "zero",
                                                                 "discretization" => "finite_difference"),
                                            "vz" => OptionsDict("ngrid" => 200,
                                                                "nelement" => 1,
-                                                               "L" => 4.0,
+                                                               "L" => 5.656854249492381,
                                                                "bc" => "zero",
                                                                "discretization" => "finite_difference"),
                                            "ion_source_1" => OptionsDict("active" => true,
                                                                          "source_strength" => ionization_frequency,
-                                                                         "source_T" => 0.25,
+                                                                         "source_T" => 0.5,
                                                                          "z_profile" => "constant",
-                                                                         "r_profile" => "constant"),
-                                          )
+                                                                         "r_profile" => "constant"))
 
 test_input_chebyshev = recursive_merge(test_input_finite_difference,
                                        OptionsDict("output" => OptionsDict("run_name" => "chebyshev_pseudospectral"),
@@ -149,8 +148,8 @@ test_input_chebyshev_split2 = recursive_merge(test_input_chebyshev_split1,
 test_input_chebyshev_split3 = recursive_merge(test_input_chebyshev_split2,
                                               OptionsDict("output" => OptionsDict("run_name" => "chebyshev_pseudospectral_split3"),
                                                           "evolve_moments" => OptionsDict("parallel_pressure" => true),
-                                                          "vpa" => OptionsDict("L" => 8.0),
-                                                          "vz" => OptionsDict("L" => 8.0),
+                                                          "vpa" => OptionsDict("L" => 11.313708498984761),
+                                                          "vz" => OptionsDict("L" => 11.313708498984761),
                                                          ))
 
 """
