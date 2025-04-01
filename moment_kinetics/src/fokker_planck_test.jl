@@ -34,7 +34,7 @@ Function computing G, defined by
 ```
 with 
 ```math
-F = c_{\\rm ref}^3 \\pi^{3/2} F_{\\rm Maxwellian} / n_{\\rm ref} 
+F = c_{\\rm ref}^3 F_{\\rm Maxwellian} / n_{\\rm ref}
 ```
 the normalised Maxwellian. 
 See Plasma Confinement, R. D. Hazeltine & J. D. Meiss, 2003, Dover Publications, pg 184, Chpt 5.2, Eqn (5.49).
@@ -44,10 +44,10 @@ function G_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
     eta = eta_func(upar,vth,vpa,vperp,ivpa,ivperp)
     zero = 1.0e-10
     if eta < zero
-        G = 2.0/sqrt(pi)
+        G = 2.0/π^2
     else 
         # G_M = (1/2 eta)*( eta erf'(eta) + (1 + 2 eta^2) erf(eta))
-        G = (1.0/sqrt(pi))*exp(-eta^2) + ((0.5/eta) + eta)*erf(eta)
+        G = (1.0/π^2)*exp(-eta^2) + ((0.5/eta) + eta)*erf(eta)
     end
     return G*dens*vth
 end
@@ -59,7 +59,7 @@ Function computing H, defined by
 ```
 with 
 ```math
-F = c_{\\rm ref}^3 \\pi^{3/2} F_{\\rm Maxwellian} / n_{\\rm ref} 
+F = c_{\\rm ref}^3 F_{\\rm Maxwellian} / n_{\\rm ref}
 ```
 the normalised Maxwellian. 
 See Plasma Confinement, R. D. Hazeltine & J. D. Meiss, 2003, Dover Publications, pg 184, Chpt 5.2, Eqn (5.49).
@@ -69,11 +69,11 @@ function H_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
     eta = eta_func(upar,vth,vpa,vperp,ivpa,ivperp)
     zero = 1.0e-10
     if eta < zero
-        # erf(eta)/eta ~ 2/sqrt(pi) + O(eta^2) for eta << 1 
-        H = 2.0/sqrt(pi)
+        # erf(eta)/eta/π^1.5 ~ 2/sqrt(π) + O(eta^2) for eta << 1
+        H = 2.0/π^2
     else 
         # H_M =  erf(eta)/eta
-        H = erf(eta)/eta
+        H = erf(eta)/eta/π^1.5
     end
     return H*dens/vth
 end
@@ -82,24 +82,24 @@ end
 
 function dGdeta(eta::mk_float)
     # d \tilde{G} / d eta
-    dGdeta_fac = (1.0/sqrt(pi))*exp(-eta^2)/eta + (1.0 - 0.5/(eta^2))*erf(eta)
+    dGdeta_fac = (1.0/π^2)*exp(-eta^2)/eta + (1.0 - 0.5/(eta^2))*erf(eta)
     return dGdeta_fac
 end
 
 function d2Gdeta2(eta::mk_float)
     # d \tilde{G} / d eta
-    d2Gdeta2_fac = erf(eta)/(eta^3) - (2.0/sqrt(pi))*exp(-eta^2)/(eta^2)
+    d2Gdeta2_fac = erf(eta)/(eta^3)/π^1.5 - (2.0/π^2)*exp(-eta^2)/(eta^2)
     return d2Gdeta2_fac
 end
 
 function ddGddeta(eta::mk_float)
     # d / d eta ( (1/ eta) d \tilde{G} d eta 
-    ddGddeta_fac = (1.5/(eta^2) - 1.0)*erf(eta)/(eta^2) - (3.0/sqrt(pi))*exp(-eta^2)/(eta^3)
+    ddGddeta_fac = (1.5/(eta^2) - 1.0)*erf(eta)/(eta^2)/π^1.5 - (3.0/π^2)*exp(-eta^2)/(eta^3)
     return ddGddeta_fac
 end
 
 function dHdeta(eta::mk_float)
-    dHdeta_fac = (2.0/sqrt(pi))*(exp(-eta^2))/eta - erf(eta)/(eta^2)
+    dHdeta_fac = (2.0/π^2)*(exp(-eta^2))/eta - erf(eta)/(eta^2)/π^1.5
     return dHdeta_fac
 end
 
@@ -210,7 +210,7 @@ Function computing \$ F_{\\rm Maxwellian} \$.
 function F_Maxwellian(dens::mk_float,upar::mk_float,vth::mk_float,
                         vpa,vperp,ivpa,ivperp)
     eta = eta_func(upar,vth,vpa,vperp,ivpa,ivperp)
-    fac = (dens/(vth^3))*exp(-eta^2)
+    fac = (dens/(vth^3)/π^1.5)*exp(-eta^2)
     return fac
 end
 
@@ -224,7 +224,7 @@ for \$ F = F_{\\rm Maxwellian}\$.
 function dFdvpa_Maxwellian(dens::mk_float,upar::mk_float,vth::mk_float,
                         vpa,vperp,ivpa,ivperp)
     eta = eta_func(upar,vth,vpa,vperp,ivpa,ivperp)
-    fac = -2.0*(dens/(vth^4))*((vpa.grid[ivpa] - upar)/vth)*exp(-eta^2)
+    fac = -2.0*(dens/(vth^4)/π^1.5)*((vpa.grid[ivpa] - upar)/vth)*exp(-eta^2)
     return fac
 end
 
@@ -238,7 +238,7 @@ for \$ F = F_{\\rm Maxwellian}\$.
 function dFdvperp_Maxwellian(dens::mk_float,upar::mk_float,vth::mk_float,
                         vpa,vperp,ivpa,ivperp)
     eta = eta_func(upar,vth,vpa,vperp,ivpa,ivperp)
-    fac = -2.0*(dens/(vth^4))*(vperp.grid[ivperp]/vth)*exp(-eta^2)
+    fac = -2.0*(dens/(vth^4)/π^1.5)*(vperp.grid[ivperp]/vth)*exp(-eta^2)
     return fac
 end
 
@@ -252,7 +252,7 @@ for \$ F = F_{\\rm Maxwellian}\$.
 function d2Fdvperpdvpa_Maxwellian(dens::mk_float,upar::mk_float,vth::mk_float,
                         vpa,vperp,ivpa,ivperp)
     eta = eta_func(upar,vth,vpa,vperp,ivpa,ivperp)
-    fac = 4.0*(dens/(vth^5))*(vperp.grid[ivperp]/vth)*((vpa.grid[ivpa] - upar)/vth)*exp(-eta^2)
+    fac = 4.0*(dens/(vth^5)/π^1.5)*(vperp.grid[ivperp]/vth)*((vpa.grid[ivpa] - upar)/vth)*exp(-eta^2)
     return fac
 end
 
@@ -266,7 +266,7 @@ for \$ F = F_{\\rm Maxwellian}\$.
 function d2Fdvpa2_Maxwellian(dens::mk_float,upar::mk_float,vth::mk_float,
                         vpa,vperp,ivpa,ivperp)
     eta = eta_func(upar,vth,vpa,vperp,ivpa,ivperp)
-    fac = 4.0*(dens/(vth^5))*( ((vpa.grid[ivpa] - upar)/vth)^2 - 0.5 )*exp(-eta^2)
+    fac = 4.0*(dens/(vth^5)/π^1.5)*( ((vpa.grid[ivpa] - upar)/vth)^2 - 0.5 )*exp(-eta^2)
     return fac
 end
 
@@ -280,7 +280,7 @@ for \$ F = F_{\\rm Maxwellian}\$.
 function d2Fdvperp2_Maxwellian(dens::mk_float,upar::mk_float,vth::mk_float,
                         vpa,vperp,ivpa,ivperp)
     eta = eta_func(upar,vth,vpa,vperp,ivpa,ivperp)
-    fac = 4.0*(dens/(vth^5))*((vperp.grid[ivperp]/vth)^2 - 0.5)*exp(-eta^2)
+    fac = 4.0*(dens/(vth^5)/π^1.5)*((vperp.grid[ivperp]/vth)^2 - 0.5)*exp(-eta^2)
     return fac
 end
 

@@ -464,20 +464,20 @@ function runtests()
                 @serial_region begin
                     C_M_max, C_M_L2 = print_test_data(C_M_exact,C_M_num,C_M_err,"C_M",vpa,vperp,dummy_array,print_to_screen=print_to_screen)
                     if test_self_operator && !test_numerical_conserving_terms && !use_Maxwellian_Rosenbluth_coefficients && !use_Maxwellian_field_particle_distribution
-                        atol_max = 6.0e-4
-                        atol_L2 = 7.0e-6
+                        atol_max = 6.0e-4/π^1.5
+                        atol_L2 = 7.0e-6/π^1.5
                     elseif test_self_operator && test_numerical_conserving_terms && !use_Maxwellian_Rosenbluth_coefficients && !use_Maxwellian_field_particle_distribution
-                        atol_max = 7.0e-4
-                        atol_L2 = 7.0e-6
+                        atol_max = 7.0e-4/π^1.5
+                        atol_L2 = 7.0e-6/π^1.5
                     elseif test_self_operator && !test_numerical_conserving_terms && use_Maxwellian_Rosenbluth_coefficients && !use_Maxwellian_field_particle_distribution
-                        atol_max = 8.0e-4
-                        atol_L2 = 8.1e-6
+                        atol_max = 8.0e-4/π^1.5
+                        atol_L2 = 8.1e-6/π^1.5
                     elseif test_self_operator && !test_numerical_conserving_terms && !use_Maxwellian_Rosenbluth_coefficients && use_Maxwellian_field_particle_distribution
-                        atol_max = 1.1e-3
-                        atol_L2 = 9.0e-6
+                        atol_max = 1.1e-3/π^1.5
+                        atol_L2 = 9.0e-6/π^1.5
                     else
-                        atol_max = 7.0e-2
-                        atol_L2 = 6.0e-4
+                        atol_max = 7.0e-2/π^1.5
+                        atol_L2 = 6.0e-4/π^1.5
                     end
                     @test C_M_max < atol_max
                     @test C_M_L2 < atol_L2
@@ -504,9 +504,9 @@ function runtests()
                         rtol, atol = 0.0, 1.0e-9
                         @test isapprox(delta_upar, rtol ; atol=atol)
                         if algebraic_solve_for_d2Gdvperp2
-                            rtol, atol = 0.0, 1.0e-7
+                            rtol, atol = 0.0, 1.0e-7*2
                         else
-                            rtol, atol = 0.0, 1.0e-8
+                            rtol, atol = 0.0, 1.0e-8*2
                         end
                         @test isapprox(delta_pressure, rtol ; atol=atol)
                         if print_to_screen
@@ -527,7 +527,7 @@ function runtests()
                         @test isapprox(delta_n, rtol ; atol=atol)
                         rtol, atol = 0.0, 1.0e-15
                         @test isapprox(delta_upar, rtol ; atol=atol)
-                        rtol, atol = 0.0, 1.0e-15
+                        rtol, atol = 0.0, 1.0e-15*2
                         @test isapprox(delta_pressure, rtol ; atol=atol)
                         if print_to_screen
                             println("dSdt: $dSdt should be >0.0")
@@ -537,7 +537,7 @@ function runtests()
                         end
                     else
                         atol = 1.0e-4
-                        @test isapprox(dSdt, 2.543251178128757 ; atol=atol)
+                        @test isapprox(dSdt, 2.543251178128757 / pi^1.5 ; atol=atol)
                         delta_n = get_density(C_M_num, vpa, vperp)
                         rtol, atol = 0.0, 1.0e-12
                         @test isapprox(delta_n, rtol ; atol=atol)
@@ -624,8 +624,8 @@ function runtests()
                 @begin_serial_region()
                 @serial_region begin
                     C_M_max, C_M_L2 = print_test_data(C_M_exact,C_M_num,C_M_err,"C_M",vpa,vperp,dummy_array,print_to_screen=print_to_screen)
-                    atol_max = 7.0e-2
-                    atol_L2 = 6.0e-4
+                    atol_max = 7.0e-2/π^1.5
+                    atol_L2 = 6.0e-4/π^1.5
                     @test C_M_max < atol_max
                     @test C_M_L2 < atol_L2
                     if !test_numerical_conserving_terms
