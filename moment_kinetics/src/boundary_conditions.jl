@@ -8,15 +8,14 @@ export enforce_neutral_boundary_conditions!
 
 using SpecialFunctions: erfc
 
-using ..calculus: reconcile_element_boundaries_MPI!
+using ..calculus: integral, reconcile_element_boundaries_MPI!
 using ..coordinates: coordinate
 using ..interpolation: interpolate_to_grid_1d!
 using ..looping
 using ..timer_utils
 using ..moment_kinetics_structs: scratch_pdf, em_fields_struct
 using ..type_definitions: mk_float, mk_int
-using ..velocity_moments: integrate_over_vspace, integrate_over_neutral_vspace,
-                          integrate_over_positive_vz, integrate_over_negative_vz
+using ..velocity_moments: integrate_over_positive_vz, integrate_over_negative_vz
 
 """
 enforce boundary conditions in vpa and z on the evolved pdf;
@@ -148,11 +147,16 @@ function enforce_z_boundary_condition!(pdf, density, upar, ppar, phi, moments, b
         @begin_s_r_vperp_vpa_region()
         density_offset = 1.0
         vwidth = 1.0
+        if vperp.n == 1
+            constant_prefactor = density_offset / sqrt(π)
+        else
+            constant_prefactor = density_offset / π^1.5
+        end
         if z.irank == 0
             @loop_s is begin
                 speed = adv[is].speed
                 @loop_r ir begin
-                    prefactor = density_offset
+                    prefactor = constant_prefactor
                     if moments.evolve_density
                         prefactor /= density[1,ir,is]
                     end
@@ -171,7 +175,7 @@ function enforce_z_boundary_condition!(pdf, density, upar, ppar, phi, moments, b
             @loop_s is begin
                 speed = adv[is].speed
                 @loop_r ir begin
-                    prefactor = density_offset
+                    prefactor = constant_prefactor
                     if moments.evolve_density
                         prefactor /= density[end,ir,is]
                     end
@@ -357,11 +361,16 @@ function enforce_neutral_z_boundary_condition!(pdf, density, uz, pz, moments, de
         @begin_sn_r_vzeta_vr_vz_region()
         density_offset = 1.0
         vwidth = 1.0
+        if vperp.n == 1
+            constant_prefactor = density_offset / sqrt(π)
+        else
+            constant_prefactor = density_offset / π^1.5
+        end
         if z.irank == 0
             @loop_sn isn begin
                 speed = adv[isn].speed
                 @loop_r ir begin
-                    prefactor = density_offset
+                    prefactor = constant_prefactor
                     if moments.evolve_density
                         prefactor /= density[1,ir,isn]
                     end
@@ -381,7 +390,7 @@ function enforce_neutral_z_boundary_condition!(pdf, density, uz, pz, moments, de
             @loop_sn isn begin
                 speed = adv[isn].speed
                 @loop_r ir begin
-                    prefactor = density_offset
+                    prefactor = constant_prefactor
                     if moments.evolve_density
                         prefactor /= density[end,ir,isn]
                     end
@@ -420,12 +429,12 @@ function enforce_neutral_z_boundary_condition!(pdf, density, uz, pz, moments, de
                 # Note, have already calculated moments of ion distribution function(s),
                 # so can use the moments here to get the flux
                 if z.irank == 0
-                    ion_flux_0 = -density_ion[1,ir,isn] * (upar_ion[1,ir,isn]*geometry.bzed[1,ir] - 0.5*geometry.rhostar*Er[1,ir])
+                    ion_flux_0 = -density_ion[1,ir,isn] * (upar_ion[1,ir,isn]*geometry.bzed[1,ir] - geometry.rhostar*Er[1,ir])
                 else
                     ion_flux_0 = NaN
                 end
                 if z.irank == z.nrank - 1
-                    ion_flux_L = density_ion[end,ir,isn] * (upar_ion[end,ir,isn]*geometry.bzed[end,ir] - 0.5*geometry.rhostar*Er[end,ir])
+                    ion_flux_L = density_ion[end,ir,isn] * (upar_ion[end,ir,isn]*geometry.bzed[end,ir] - geometry.rhostar*Er[end,ir])
                 else
                     ion_flux_L = NaN
                 end
@@ -453,10 +462,13 @@ function enforce_zero_incoming_bc!(pdf, speed, z, zero, phi, epsz)
     #
     # epsz is the ratio |z - z_wall|/|delta z|, with delta z the grid spacing at the wall
     # for epsz < 1, the cut off below would be imposed for particles travelling
-    # out to a distance z = epsz * delta z from the wall before returning
+    # out to a distance z = epsz * delta z from the wall before returning, as the cutoff
+    # is imposed when v_∥<vcut, where 0.5*m*vcut^2 = sqrt(epsz)*delta_phi and assuming
+    # that phi ∝ sqrt(z) near the wall, so that z = epsz * delta_z corresponds to
+    # phi = sqrt(epsz) * delta_phi.
     if z.irank == 0
         deltaphi = phi[2] - phi[1]
-        vcut = deltaphi > 0 ? sqrt(deltaphi)*(epsz^0.25) : 0.0
+        vcut = deltaphi > 0 ? sqrt(2.0 * deltaphi)*(epsz^0.25) : 0.0
         @loop_vperp_vpa ivperp ivpa begin
             # for left boundary in zed (z = -Lz/2), want
             # f(z=-Lz/2, v_parallel > 0) = 0
@@ -467,7 +479,7 @@ function enforce_zero_incoming_bc!(pdf, speed, z, zero, phi, epsz)
     end
     if z.irank == z.nrank - 1
         deltaphi = phi[end-1] - phi[end]
-        vcut = deltaphi > 0 ? sqrt(deltaphi)*(epsz^0.25) : 0.0
+        vcut = deltaphi > 0 ? sqrt(2.0 * deltaphi)*(epsz^0.25) : 0.0
         @loop_vperp_vpa ivperp ivpa begin
             # for right boundary in zed (z = Lz/2), want
             # f(z=Lz/2, v_parallel < 0) = 0
@@ -482,7 +494,7 @@ function get_ion_z_boundary_cutoff_indices(density, upar, ppar, evolve_upar, evo
     epsz = z.boundary_parameters.epsz
     if z.irank == 0
         deltaphi = phi[2] - phi[1]
-        vcut = deltaphi > 0 ? sqrt(deltaphi)*(epsz^0.25) : 0.0
+        vcut = deltaphi > 0 ? sqrt(2.0 * deltaphi)*(epsz^0.25) : 0.0
         vth = sqrt(2.0*(ppar[1]/density[1]))
         @. vpa.scratch = vpagrid_to_dzdt(vpa.grid, vth,
                                          upar[1], evolve_ppar, evolve_upar)
@@ -492,7 +504,7 @@ function get_ion_z_boundary_cutoff_indices(density, upar, ppar, evolve_upar, evo
     end
     if z.irank == z.nrank - 1
         deltaphi = phi[end-1] - phi[end]
-        vcut = deltaphi > 0 ? sqrt(deltaphi)*(epsz^0.25) : 0.0
+        vcut = deltaphi > 0 ? sqrt(2.0 * deltaphi)*(epsz^0.25) : 0.0
         vth = sqrt(2.0*(ppar[end]/density[end]))
         @. vpa.scratch2 = vpagrid_to_dzdt(vpa.grid, vth,
                                           upar[end], evolve_ppar, evolve_upar)
@@ -544,9 +556,9 @@ function enforce_zero_incoming_bc!(pdf, z::coordinate, vpa::coordinate, density,
 
         f = @view pdf[:,1,iz]
         if evolve_ppar && evolve_upar
-            I0 = integrate_over_vspace(f, vpa.wgts)
-            I1 = integrate_over_vspace(f, vpa.grid, vpa.wgts)
-            I2 = integrate_over_vspace(f, vpa.grid, 2, vpa.wgts)
+            I0 = integral(f, vpa.wgts)
+            I1 = integral(f, vpa.grid, vpa.wgts)
+            I2 = integral(f, vpa.grid, 2, vpa.wgts)
 
             # Store v_parallel with upar shift removed in vpa.scratch
             vth = sqrt(2.0*ppar[iz]/density[iz])
@@ -557,10 +569,10 @@ function enforce_zero_incoming_bc!(pdf, z::coordinate, vpa::coordinate, density,
             # timestepping unstable when the cut-off point jumps from one grid point to
             # another.
             @. vpa.scratch2 = f * abs(vpa.scratch) / (1.0 + abs(vpa.scratch)) / (1.0 + (4.0 * vpa.scratch / vpa.L)^4)
-            J1 = integrate_over_vspace(vpa.scratch2, vpa.grid, vpa.wgts)
-            J2 = integrate_over_vspace(vpa.scratch2, vpa.grid, 2, vpa.wgts)
-            J3 = integrate_over_vspace(vpa.scratch2, vpa.grid, 3, vpa.wgts)
-            J4 = integrate_over_vspace(vpa.scratch2, vpa.grid, 4, vpa.wgts)
+            J1 = integral(vpa.scratch2, vpa.grid, vpa.wgts)
+            J2 = integral(vpa.scratch2, vpa.grid, 2, vpa.wgts)
+            J3 = integral(vpa.scratch2, vpa.grid, 3, vpa.wgts)
+            J4 = integral(vpa.scratch2, vpa.grid, 4, vpa.wgts)
 
             A = (J3^2 - J2*J4 + 0.5*(J2^2 - J1*J3)) /
                 (I0*(J3^2 - J2*J4) + I1*(J1*J4 - J2*J3) + I2*(J2^2 - J1*J3))
@@ -569,8 +581,8 @@ function enforce_zero_incoming_bc!(pdf, z::coordinate, vpa::coordinate, density,
 
             @. f = A*f + B*vpa.grid*vpa.scratch2 + C*vpa.grid*vpa.grid*vpa.scratch2
         elseif evolve_upar
-            I0 = integrate_over_vspace(f, vpa.wgts)
-            I1 = integrate_over_vspace(f, vpa.grid, vpa.wgts)
+            I0 = integral(f, vpa.wgts)
+            I1 = integral(f, vpa.grid, vpa.wgts)
 
             # Store v_parallel with upar shift removed in vpa.scratch
             @. vpa.scratch = vpa.grid + upar[iz]
@@ -580,15 +592,15 @@ function enforce_zero_incoming_bc!(pdf, z::coordinate, vpa::coordinate, density,
             # timestepping unstable when the cut-off point jumps from one grid point to
             # another.
             @. vpa.scratch2 = f * abs(vpa.scratch) / (1.0 + abs(vpa.scratch)) / (1.0 + (4.0 * vpa.scratch / vpa.L)^4)
-            J1 = integrate_over_vspace(vpa.scratch2, vpa.grid, vpa.wgts)
-            J2 = integrate_over_vspace(vpa.scratch2, vpa.grid, 2, vpa.wgts)
+            J1 = integral(vpa.scratch2, vpa.grid, vpa.wgts)
+            J2 = integral(vpa.scratch2, vpa.grid, 2, vpa.wgts)
 
             A = 1.0 / (I0 - I1*J1/J2)
             B = -A*I1/J2
 
             @. f = A*f + B*vpa.grid*vpa.scratch2
         elseif evolve_density
-            I0 = integrate_over_vspace(f, vpa.wgts)
+            I0 = integral(f, vpa.wgts)
             @. f = f / I0
         end
     end
