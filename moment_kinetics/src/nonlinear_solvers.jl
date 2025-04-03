@@ -88,7 +88,7 @@ for example a preconditioner object for each point in that outer loop.
 """
 function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); default_rtol=1.0e-5,
                                default_atol=1.0e-12, serial_solve=false,
-                               electron_ppar_pdf_solve=false,
+                               electron_p_pdf_solve=false,
                                preconditioner_type=Val(:none), warn_unexpected=false)
     nl_solver_section = set_defaults_and_check_section!(
         input_dict, "nonlinear_solver", warn_unexpected;
@@ -130,7 +130,7 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); defa
         s .= 0.0
         g .= 0.0
         V .= 0.0
-    elseif electron_ppar_pdf_solve
+    elseif electron_p_pdf_solve
         H = allocate_shared_float(linear_restart + 1, linear_restart)
         c = allocate_shared_float(linear_restart + 1)
         s = allocate_shared_float(linear_restart + 1)
