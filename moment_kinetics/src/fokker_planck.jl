@@ -39,6 +39,8 @@ export get_local_Cssp_coefficients!, init_fokker_planck_collisions
 # testing
 export symmetric_matrix_inverse
 export fokker_planck_collision_operator_weak_form!
+# implicit advance
+export setup_fp_nl_solve
 
 using SpecialFunctions: ellipk, ellipe, erf
 using FastGaussQuadrature
@@ -46,7 +48,7 @@ using Dates
 using LinearAlgebra: lu, ldiv!
 using MPI
 using OrderedCollections: OrderedDict
-using ..type_definitions: mk_float, mk_int
+using ..type_definitions: mk_float, mk_int, OptionsDict
 using ..array_allocation: allocate_float, allocate_shared_float
 using ..communication
 using ..velocity_moments: integrate_over_vspace
@@ -75,6 +77,7 @@ using ..fokker_planck_test: Cssp_fully_expanded_form, calculate_collisional_flux
 using ..fokker_planck_test: d2Gdvpa2_Maxwellian, d2Gdvperpdvpa_Maxwellian, d2Gdvperp2_Maxwellian, dHdvpa_Maxwellian, dHdvperp_Maxwellian
 using ..fokker_planck_test: F_Maxwellian, dFdvpa_Maxwellian, dFdvperp_Maxwellian
 using ..reference_parameters: setup_reference_parameters
+using ..nonlinear_solvers: setup_nonlinear_solve
 
 """
 Function for reading Fokker Planck collision operator input parameters. 
@@ -831,5 +834,18 @@ function init_fokker_planck_collisions_direct_integration(vperp,vpa; precompute_
     return fka
 end
 
+function setup_fp_nl_solve(implicit_ion_fp_collisions, coords)
+    #coords = (vperp=vperp,vpa=vpa)
+    return setup_nonlinear_solve(
+        implicit_ion_fp_collisions,
+        OptionsDict("nonlinear_solver" =>
+                    OptionsDict("rtol" => 0.0,
+                                "atol" => 1.0e-10,
+                                "linear_restart" => 8,
+                                "linear_max_restarts" => 1,
+                                "nonlinear_max_iterations" => 100)),
+        coords; serial_solve=false, anyv_region=true,
+        preconditioner_type=Val(:lu))
+end
 
 end

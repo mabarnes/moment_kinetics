@@ -14,7 +14,7 @@ using moment_kinetics.gauss_legendre: setup_gausslegendre_pseudospectral, get_QQ
 using moment_kinetics.type_definitions: mk_float, mk_int, OptionsDict
 using moment_kinetics.fokker_planck: init_fokker_planck_collisions_weak_form
 using moment_kinetics.fokker_planck: fokker_planck_collision_operator_weak_form!
-using moment_kinetics.fokker_planck: conserving_corrections!
+using moment_kinetics.fokker_planck: conserving_corrections!, setup_fp_nl_solve
 using moment_kinetics.fokker_planck_calculus: enforce_vpavperp_BCs!, calculate_test_particle_preconditioner!
 using moment_kinetics.fokker_planck_calculus: calculate_vpavperp_advection_terms!
 using moment_kinetics.fokker_planck_test: F_Maxwellian, print_test_data
@@ -246,17 +246,9 @@ function test_implicit_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=3,neleme
     end
     diagnose_F_Maxwellian(Fold,Fdummy1,Fdummy2,Fdummy3,vpa,vperp,time,ms,0)
     
+    implicit_ion_fp_collisions = true
     coords = (vperp=vperp,vpa=vpa)
-    nl_solver_params = setup_nonlinear_solve(
-        true,
-        OptionsDict("nonlinear_solver" =>
-                    OptionsDict("rtol" => 0.0,
-                                "atol" => atol,
-                                "linear_restart" => restart,
-                                "linear_max_restarts" => max_restarts,
-                                "nonlinear_max_iterations" => 100)),
-        coords; serial_solve=serial_solve, anyv_region=anyv_region,
-        preconditioner_type=Val(:lu))
+    nl_solver_params = setup_fp_nl_solve(implicit_ion_fp_collisions, coords)
 
     #println(nl_solver_params.preconditioners)
     for it in 1:ntime
