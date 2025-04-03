@@ -102,6 +102,7 @@ struct time_info{Terrorsum <: Real, T_debug_output, T_electron, Trkimp, Timpzero
     electron_preconditioner_type::Telectronprecon
     implicit_ion_advance::Bool
     implicit_vpa_advection::Bool
+    implicit_ion_fp_collisions::Bool
     constraint_forcing_rate::mk_float
     decrease_dt_iteration_threshold::mk_int
     increase_dt_iteration_threshold::mk_int

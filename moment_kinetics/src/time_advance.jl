@@ -73,6 +73,7 @@ using ..energy_equation: energy_equation!, neutral_energy_equation!
 using ..em_fields: setup_em_fields, update_phi!
 using ..fokker_planck: init_fokker_planck_collisions_weak_form, explicit_fokker_planck_collisions_weak_form!
 using ..fokker_planck: explicit_fp_collisions_weak_form_Maxwellian_cross_species!
+using ..fokker_planck: setup_fp_nl_solve
 using ..gyroaverages: init_gyro_operators, gyroaverage_pdf!
 using ..manufactured_solns: manufactured_sources
 using ..timer_utils
@@ -515,6 +516,7 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
                      kinetic_electron_solver, electron_preconditioner_type,
                      electron !== nothing && t_input["implicit_ion_advance"],
                      electron !== nothing && t_input["implicit_vpa_advection"],
+                     t_input["implicit_ion_fp_collisions"],
                      mk_float(t_input["constraint_forcing_rate"]),
                      decrease_dt_iteration_threshold, increase_dt_iteration_threshold,
                      mk_float(cap_factor_ion_dt), mk_int(max_pseudotimesteps),
@@ -773,10 +775,13 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
         error("Cannot use implicit_ion_advance and implicit_vpa_advection at the same "
               * "time")
     end
+    nl_solver_ion_fp_collisions = setup_fp_nl_solve(t_params.implicit_ion_fp_collisions, (vperp=vperp, vpa=vpa))
+
     nl_solver_params = (electron_conduction=electron_conduction_nl_solve_parameters,
                         electron_advance=nl_solver_electron_advance_params,
                         ion_advance=nl_solver_ion_advance_params,
-                        vpa_advection=nl_solver_vpa_advection_params,)
+                        vpa_advection=nl_solver_vpa_advection_params,
+                        ion_fp_collisions=nl_solver_ion_fp_collisions)
 
     # Check that no unexpected sections or top-level options were passed (helps to catch
     # typos in input files). Needs to be called after calls to `setup_nonlinear_solve()`

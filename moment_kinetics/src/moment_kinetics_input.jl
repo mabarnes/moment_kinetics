@@ -187,6 +187,7 @@ function mk_input(input_dict=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
         kinetic_electron_preconditioner="default",
         implicit_ion_advance=false,
         implicit_vpa_advection=false,
+        implicit_ion_fp_collisions=false,
         constraint_forcing_rate=0.0,
         write_after_fixed_step_count=false,
         write_error_diagnostics=false,
