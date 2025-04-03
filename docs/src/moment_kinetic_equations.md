@@ -311,7 +311,7 @@ Can integrate the drift kinetic equation to give the moment equations:
   ```
   where the energy source is $S_{s,E} = \frac{1}{2} m_s \int v^2 S_s d^3 v$,
   and the pressure source is
-  $S_{s,p} = \frac{2}{3} S_{s,E} - \frac{2}{3} u_{s\parallel} S_{s,\mathrm{mom}} + \frac{1}{3} m_s u_{s\parallel}^2 S_{s,n}$.
+  $S_{s,p} = \frac{1}{3} m_s \int |\boldsymbol{v} - u_{s\parallel}\hat{\boldsymbol{z}}|^2 S_s d^3 v = \frac{2}{3} S_{s,E} - \frac{2}{3} u_{s\parallel} S_{s,\mathrm{mom}} + \frac{1}{3} m_s u_{s\parallel}^2 S_{s,n}$.
   We use the pressure as an evolving variable in the code, so this is the
   energy equation used. It is also useful to subsitute in the continuity
   equation to convert this to a temperature equation and then a $v_{Ti}$
