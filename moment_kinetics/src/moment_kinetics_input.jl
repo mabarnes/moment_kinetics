@@ -80,13 +80,31 @@ function mk_input(input_dict=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
                             "electron_ionization_frequency", "ionization_energy", "nu_ei",
                             "run_name", "base_directory",
                            )
+    input_keys = keys(input_dict)
     for opt in removed_options_list
-        if opt ∈ keys(input_dict)
+        if opt ∈ input_keys
             error("Option '$opt' is no longer used. Please update your input file. The "
                   * "option may have been moved into an input file section - there are "
                   * "no longer any top-level options (i.e. ones not in a section). You "
                   * "may need to set some new options to replicate the effect of the "
                   * "removed ones.")
+        end
+    end
+    # Check for input options that used to exist in some section, but do not any more. If
+    # these are present, the user probably needs to update their input file.
+    removed_section_options_list = Dict("timestepping" => ("implicit_electron_advance",
+                                                           "implicit_electron_time_evolving",
+                                                           "implicit_electron_ppar",),
+                                       )
+    for (section_name, removed_options) ∈ pairs(removed_section_options_list)
+        section = get(input_dict, section_name, OptionsDict())
+        section_keys = keys(section)
+        for opt ∈ removed_options
+            if opt ∈ section_keys
+                error("Option '$opt' in section [$section_name] is no longer used. "
+                      * "Please update your input file. You may need to set some new "
+                      * "option(s) to replicate the effect of the removed ones.")
+            end
         end
     end
     
@@ -150,6 +168,7 @@ function mk_input(input_dict=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
         exact_output_times=false,
         type="SSPRK4",
         split_operators=false,
+        print_nT_live=false,
         steady_state_residual=false,
         converged_residual_value=-1.0,
         rtol=1.0e-5,
@@ -162,11 +181,12 @@ function mk_input(input_dict=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
         minimum_dt=0.0,
         maximum_dt=Inf,
         implicit_braginskii_conduction=true,
-        implicit_electron_advance=false,
-        implicit_electron_time_evolving=false,
+        kinetic_electron_solver=(composition.electron_physics ∈ (kinetic_electrons,
+                                                                 kinetic_electrons_with_temperature_equation)
+                                 ? implicit_ppar_implicit_pseudotimestep : null_kinetic_electrons),
+        kinetic_electron_preconditioner="default",
         implicit_ion_advance=false,
         implicit_vpa_advection=false,
-        implicit_electron_ppar=true,
         constraint_forcing_rate=0.0,
         write_after_fixed_step_count=false,
         write_error_diagnostics=false,
@@ -235,6 +255,7 @@ function mk_input(input_dict=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
     electron_timestepping_section = copy(electron_timestepping_section)
     electron_timestepping_section["atol_upar"] = NaN
     electron_timestepping_section["steady_state_residual"] = true
+    electron_timestepping_section["print_nT_live"] = false
     if !(0.0 < electron_timestepping_section["step_update_prefactor"] < 1.0)
         error("[electron_timestepping] step_update_prefactor="
               * "$(electron_timestepping_section["step_update_prefactor"]) must be between "
@@ -322,7 +343,7 @@ function mk_input(input_dict=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
     if ignore_MPI
         irank_z = irank_r = 0
         nrank_z = nrank_r = 1
-        comm_sub_z = comm_sub_r = MPI.COMM_NULL
+        comm_sub_z, comm_sub_r = setup_serial_MPI()
     else
         irank_z, nrank_z, comm_sub_z, irank_r, nrank_r, comm_sub_r =
             setup_distributed_memory_MPI(z_coord_input.nelement,

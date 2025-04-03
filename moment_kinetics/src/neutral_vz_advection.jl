@@ -23,7 +23,7 @@ begin
         return nothing
     end
 
-    begin_sn_r_z_vzeta_vr_region()
+    @begin_sn_r_z_vzeta_vr_region()
 
     # calculate the advection speed corresponding to current f
     update_speed_neutral_vz!(advect, fields, fvec_in, moments, vz, vr, vzeta, z, r,
@@ -52,7 +52,7 @@ function update_speed_neutral_vz!(advect, fields, fvec, moments, vz, vr, vzeta, 
         update_speed_default_neutral!(advect, fields, fvec, moments, vz, z, r,
                                       composition, collisions, neutral_source_settings)
     elseif vz.advection.option == "constant"
-        begin_serial_region()
+        @begin_serial_region()
         @serial_region begin
             # Not usually used - just run in serial
             # dvpa/dt = constant
@@ -61,7 +61,7 @@ function update_speed_neutral_vz!(advect, fields, fvec, moments, vz, vr, vzeta, 
             end
         end
     elseif vpa.advection.option == "linear"
-        begin_serial_region()
+        @begin_serial_region()
         @serial_region begin
             # Not usually used - just run in serial
             # dvpa/dt = constant ⋅ (vpa + L_vpa/2)
@@ -100,62 +100,28 @@ velocity wpahat = (vpa - upar)/vth
 function update_speed_n_u_p_evolution_neutral!(advect, fvec, moments, vz, z, r,
                                                composition, collisions,
                                                neutral_source_settings)
+    uz = fvec.uz_neutral
+    vth = moments.neutral.vth
+    duz_dz = moments.neutral.duz_dz
+    dvth_dz = moments.neutral.dvth_dz
+    duz_dt = moments.neutral.duz_dt
+    dvth_dt = moments.neutral.dvth_dt
+    wz = vz.grid
     @loop_sn isn begin
+        speed = advect[isn].speed
         @loop_r ir begin
             # update parallel acceleration to account for:
-            # • parallel derivative of parallel pressure
-            # • (wpar/2*ppar)*dqpar/dz
-            # • -wpar^2 * d(vth)/dz term
             @loop_z_vzeta_vr iz ivzeta ivr begin
-                @views @. advect[isn].speed[:,ivr,ivzeta,iz,ir] =
-                    moments.neutral.dpz_dz[iz,ir,isn]/(fvec.density_neutral[iz,ir,isn]*moments.neutral.vth[iz,ir,isn]) +
-                    0.5*vz.grid*moments.neutral.dqz_dz[iz,ir,isn]/fvec.pz_neutral[iz,ir,isn] -
-                    vz.grid^2*moments.neutral.dvth_dz[iz,ir,isn]
-            end
-        end
-        # add in contributions from charge exchange and ionization collisions
-        charge_exchange = collisions.reactions.charge_exchange_frequency
-        ionization = collisions.reactions.ionization_frequency
-        if abs(charge_exchange) > 0.0 || abs(ionization) > 0.0
-            @loop_r_z_vzeta_vr ir iz ivzeta ivr begin
-                @views @. advect[isn].speed[:,ivr,ivzeta,iz,ir] +=
-                    charge_exchange *
-                    (0.5*vz.grid/fvec.pz_neutral[iz,ir,isn]
-                     * (fvec.density[iz,ir,isn]*fvec.pz_neutral[iz,ir,isn]
-                        - fvec.density_neutral[iz,ir,isn]*fvec.ppar[iz,ir,isn]
-                        - fvec.density_neutral[iz,ir,isn]*fvec.density[iz,ir,isn]
-                          * (fvec.uz_neutral[iz,ir,isn]-fvec.upar[iz,ir,isn])^2)
-                     - fvec.density[iz,ir,isn]
-                       * (fvec.upar[iz,ir,isn]-fvec.uz_neutral[iz,ir,isn])
-                       / moments.neutral.vth[iz,ir,isn])
+                @. speed[:,ivr,ivzeta,iz,ir] =
+                    (
+                     - (duz_dt[iz,ir,isn] + (vth[iz,ir,isn] * wz + uz[iz,ir,isn]) * duz_dz[iz,ir,isn])
+                     - wz * (dvth_dt[iz,ir,isn] + (vth[iz,ir,isn] * wz + uz[iz,ir,isn]) * dvth_dz[iz,ir,isn])
+                    ) / vth[iz,ir,isn]
             end
         end
     end
 
-    for index ∈ eachindex(neutral_source_settings)
-        if neutral_source_settings[index].active
-            @views source_density_amplitude = moments.neutral.external_source_density_amplitude[:, :, index]
-            @views source_momentum_amplitude = moments.neutral.external_source_momentum_amplitude[:, :, index]
-            @views source_pressure_amplitude = moments.neutral.external_source_pressure_amplitude[:, :, index]
-            density = fvec.density_neutral
-            uz = fvec.uz_neutral
-            pz = fvec.pz_neutral
-            vth = moments.neutral.vth
-            vz_grid = vz.grid
-            @loop_s_r_z is ir iz begin
-                term1 = source_density_amplitude[iz,ir] * uz[iz,ir,is]/(density[iz,ir,is]*vth[iz,ir,is])
-                term2_over_vpa =
-                    -0.5 * (source_pressure_amplitude[iz,ir] +
-                            2.0 * uz[iz,ir,is] * source_momentum_amplitude[iz,ir]) /
-                        pz[iz,ir,is] +
-                    0.5 * source_density_amplitude[iz,ir] / density[iz,ir,is]
-                @loop_vzeta_vr_vz ivzeta ivr ivz begin
-                    advect[is].speed[ivz,ivr,ivzeta,iz,ir] += term1 +
-                                                            vz_grid[ivz] * term2_over_vpa
-                end
-            end
-        end
-    end
+    return nothing
 end
 
 """
@@ -167,35 +133,24 @@ vpahat = vpa/vth
 function update_speed_n_p_evolution_neutral!(advect, fields, fvec, moments, vz, z, r,
                                              composition, collisions,
                                              neutral_source_settings)
+    vth = moments.neutral.vth
+    dvth_dz = moments.neutral.dvth_dz
+    dvth_dt = moments.neutral.dvth_dt
+    wz = vz.grid
     @loop_sn isn begin
-        # include contributions common to both ion and neutral species
+        speed = advect[isn].speed
         @loop_r ir begin
             # update parallel acceleration to account for:
-            # • (vpahat/2*ppar)*dqpar/dz
-            # • vpahat*(upar/vth-vpahat) * d(vth)/dz term
-            # • vpahat*d(upar)/dz
             @loop_z_vzeta_vr iz ivzeta ivr begin
-                @views @. advect[isn].speed[:,ivr,ivzeta,iz,ir] =
-                    0.5*vz.grid*moments.neutral.dqz_dz[iz,ir,isn]/fvec.pz_neutral[iz,ir,isn] +
-                    vz.grid*moments.neutral.dvth_dz[iz] * (fvec.uz_neutral[iz,ir,isn]/moments.neutral.vth[iz,ir,isn] - vz.grid) +
-                    vz.grid*moments.neutral.duz_dz[iz,ir,isn]
-            end
-        end
-        charge_exchange = collisions.reactions.charge_exchange_frequency
-        if abs(charge_exchange) > 0.0
-            # add in contributions from charge exchange and ionization collisions
-            error("suspect the charge exchange and ionization contributions here may be "
-                  * "wrong because (upar[is]-upar[isp])^2 type terms were missed in the "
-                  * "energy equation when it was substituted in to derive them.")
-            @loop_r_z_vzeta_vr ir iz ivzeta ivr begin
-                @views @. advect[is].speed[:,ivr,ivzeta,iz,ir] += charge_exchange *
-                        0.5*vz.grid*fvec.density_neutral[iz,ir,is] * (1.0-fvec.ppar[iz,ir,is]/fvec.pz_neutral[iz,ir,is])
+                @. speed[:,ivr,ivzeta,iz,ir] =
+                    (
+                     - wz * (dvth_dt[iz,ir,isn] + vth[iz,ir,isn] * wz * dvth_dz[iz,ir,isn])
+                    ) / vth[iz,ir,isn]
             end
         end
     end
-    if any(x -> x.active, neutral_source_settings)
-        error("External source not implemented for evolving n and ppar case")
-    end
+
+    return nothing
 end
 
 """
@@ -206,43 +161,22 @@ wpa = vpa-upar
 """
 function update_speed_n_u_evolution_neutral!(advect, fvec, moments, vz, z, r, composition,
                                              collisions, neutral_source_settings)
+    uz = fvec.uz_neutral
+    duz_dz = moments.neutral.duz_dz
+    duz_dt = moments.neutral.duz_dt
+    wz = vz.grid
     @loop_sn isn begin
+        speed = advect[isn].speed
         @loop_r ir begin
             # update parallel acceleration to account for:
-            # • parallel derivative of parallel pressure
-            # • -wpar*dupar/dz
             @loop_z_vzeta_vr iz ivzeta ivr begin
-                @views @. advect[isn].speed[:,ivr,ivzeta,iz,ir] =
-                    moments.neutral.dpz_dz[iz,ir,isn]/fvec.density_neutral[iz,ir,isn] -
-                    vz.grid*moments.neutral.duz_dz[iz,ir,isn]
-            end
-        end
-
-        # if neutrals present compute contribution to parallel acceleration due to charge exchange
-        # and/or ionization collisions betweens ions and neutrals
-
-        charge_exchange = collisions.reactions.charge_exchange_frequency
-        if abs(charge_exchange) > 0.0
-            # include contribution to neutral acceleration due to collisional friction with ions
-            @loop_r_z_vzeta_vr ir iz ivzeta ivr begin
-                @views @. advect[isn].speed[:,ivr,ivzeta,iz,ir] -= charge_exchange*fvec.density[iz,ir,isn]*(fvec.upar[iz,ir,isn]-fvec.uz_neutral[iz,ir,isn])
+                @. speed[:,ivr,ivzeta,iz,ir] =
+                     - (duz_dt[iz,ir,isn] + (wz + uz[iz,ir,isn]) * duz_dz[iz,ir,isn])
             end
         end
     end
-    for index ∈ eachindex(neutral_source_settings)
-        if neutral_source_settings[index].active
-            @views source_density_amplitude = moments.neutral.external_source_density_amplitude[:, :, index]
-            density = fvec.density_neutral
-            uz = fvec.uz_neutral
-            vth = moments.neutral.vth
-            @loop_sn_r_z isn ir iz begin
-                term = source_density_amplitude[iz,ir] * uz[iz,ir,isn] / density[iz,ir,isn]
-                @loop_vzeta_vr_vz ivzeta ivr ivz begin
-                    advect[isn].speed[ivz,ivr,ivzeta,iz,ir] += term
-                end
-            end
-        end
-    end
+
+    return nothing
 end
 
 """

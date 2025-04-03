@@ -553,7 +553,7 @@ function rk_update_loop_low_storage!(rk_coefs, rk_coefs_implicit,
                                      old_implicit, first_implicit; output=new)
     @boundscheck length(rk_coefs) == 3
 
-    begin_s_r_z_vperp_vpa_region()
+    @begin_s_r_z_vperp_vpa_region()
     if rk_coefs_implicit === nothing
         @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
             output[ivpa,ivperp,iz,ir,is] = rk_coefs[1]*first[ivpa,ivperp,iz,ir,is] +
@@ -577,7 +577,7 @@ function rk_update_loop!(rk_coefs, rk_coefs_implicit,
                          var_arrays_implicit; output=var_arrays[N]) where N
     @boundscheck length(rk_coefs) ≥ N
 
-    begin_s_r_z_vperp_vpa_region()
+    @begin_s_r_z_vperp_vpa_region()
     if rk_coefs_implicit === nothing
         @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
             output[ivpa,ivperp,iz,ir,is] =
@@ -602,7 +602,7 @@ function rk_update_loop_low_storage!(rk_coefs, rk_coefs_implicit,
                                      old_implicit, first_implicit; output=new)
     @boundscheck length(rk_coefs) == 3
 
-    begin_s_r_z_region()
+    @begin_s_r_z_region()
     if rk_coefs_implicit === nothing
         @loop_s_r_z is ir iz begin
             output[iz,ir,is] = rk_coefs[1]*first[iz,ir,is] +
@@ -626,7 +626,7 @@ function rk_update_loop!(rk_coefs, rk_coefs_implicit,
                          var_arrays_implicit; output=var_arrays[N]) where N
     @boundscheck length(rk_coefs) ≥ N
 
-    begin_s_r_z_region()
+    @begin_s_r_z_region()
     if rk_coefs_implicit === nothing
         @loop_s_r_z is ir iz begin
             output[iz,ir,is] = sum(rk_coefs[i] * var_arrays[i][iz,ir,is] for i ∈ 1:N)
@@ -649,7 +649,7 @@ function rk_update_loop_low_storage!(rk_coefs, rk_coefs_implicit,
                                      old_implicit, first_implicit; output=new)
     @boundscheck length(rk_coefs) == 3
 
-    begin_r_z_vperp_vpa_region()
+    @begin_r_z_vperp_vpa_region()
     if rk_coefs_implicit === nothing
         @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
             output[ivpa,ivperp,iz,ir] = rk_coefs[1]*first[ivpa,ivperp,iz,ir] +
@@ -673,7 +673,7 @@ function rk_update_loop!(rk_coefs, rk_coefs_implicit,
                          var_arrays_implicit; output=var_arrays[N]) where N
     @boundscheck length(rk_coefs) ≥ N
 
-    begin_r_z_vperp_vpa_region()
+    @begin_r_z_vperp_vpa_region()
     if rk_coefs_implicit === nothing
         @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
             output[ivpa,ivperp,iz,ir] =
@@ -699,7 +699,7 @@ function rk_update_loop_low_storage!(rk_coefs, rk_coefs_implicit,
                                      old_implicit, first_implicit; output=new)
     @boundscheck length(rk_coefs) == 3
 
-    begin_r_z_region()
+    @begin_r_z_region()
     if rk_coefs_implicit === nothing
         @loop_r_z ir iz begin
             output[iz,ir] = rk_coefs[1]*first[iz,ir] +
@@ -724,7 +724,7 @@ function rk_update_loop!(rk_coefs, rk_coefs_implicit,
                          output=var_arrays[N]) where N
     @boundscheck length(rk_coefs) ≥ N
 
-    begin_r_z_region()
+    @begin_r_z_region()
     if rk_coefs_implicit === nothing
         @loop_r_z ir iz begin
             output[iz,ir] = sum(rk_coefs[i] * var_arrays[i][iz,ir] for i ∈ 1:N)
@@ -749,7 +749,7 @@ function rk_update_loop_neutrals_low_storage!(rk_coefs, rk_coefs_implicit,
                                               output=new)
     @boundscheck length(rk_coefs) == 3
 
-    begin_sn_r_z_vzeta_vr_vz_region()
+    @begin_sn_r_z_vzeta_vr_vz_region()
     if rk_coefs_implicit === nothing
         @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
             output[ivz,ivr,ivzeta,iz,ir,isn] = rk_coefs[1]*first[ivz,ivr,ivzeta,iz,ir,isn] +
@@ -773,7 +773,7 @@ function rk_update_loop_neutrals!(rk_coefs, rk_coefs_implicit,
                                   var_arrays_implicit; output=var_arrays[N]) where N
     @boundscheck length(rk_coefs) ≥ N
 
-    begin_sn_r_z_vzeta_vr_vz_region()
+    @begin_sn_r_z_vzeta_vr_vz_region()
     if rk_coefs_implicit === nothing
         @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
             output[ivz,ivr,ivzeta,iz,ir,isn] =
@@ -800,7 +800,7 @@ function rk_update_loop_neutrals_low_storage!(rk_coefs, rk_coefs_implicit,
                                               output=new)
     @boundscheck length(rk_coefs) == 3
 
-    begin_sn_r_z_region()
+    @begin_sn_r_z_region()
     if rk_coefs_implicit === nothing
         @loop_sn_r_z isn ir iz begin
             output[iz,ir,isn] = rk_coefs[1]*first[iz,ir,isn] +
@@ -824,7 +824,7 @@ function rk_update_loop_neutrals!(rk_coefs, rk_coefs_implicit,
                                   var_arrays_implicit; output=var_arrays[N]) where N
     @boundscheck length(rk_coefs) ≥ N
 
-    begin_sn_r_z_region()
+    @begin_sn_r_z_region()
     if rk_coefs_implicit === nothing
         @loop_sn_r_z isn ir iz begin
             output[iz,ir,isn] = sum(rk_coefs[i] * var_arrays[i][iz,ir,isn] for i ∈ 1:N)
@@ -1076,50 +1076,52 @@ function adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms,
     this_limit_caused_by = nothing
     @serial_region begin
         # Get maximum error over all blocks
-        CFL_limits = MPI.Allreduce(CFL_limits, min, comm_inter_block[])
-        CFL_limit_caused_by = argmin(CFL_limits)
-        CFL_limit[] = CFL_limits[CFL_limit_caused_by]
-        # Reserve first four entries of t_params.limit_caused_by for max_increase_factor,
-        # max_increase_factor_near_fail, minimum_dt, maximum_dt limits and
-        # high_nl_iterations, then the next `n_variables` for RK accuracy limits.
-        this_limit_caused_by = CFL_limit_caused_by + 5 + t_params.n_variables
+        CFL_limits_vec = [l for l ∈ values(CFL_limits)]
+        MPI.Allreduce!(CFL_limits_vec, min, comm_inter_block[])
+        CFL_limit_caused_by = argmin(CFL_limits_vec)
+        CFL_limit[] = CFL_limits_vec[CFL_limit_caused_by]
+        this_limit_caused_by = CFL_limits.keys[CFL_limit_caused_by]
     end
     MPI.Bcast!(CFL_limit, comm_block[])
 
     if error_norm_method == "Linf"
         # Get overall maximum error on the shared-memory block
-        MPI.Reduce!(error_norms, max, comm_block[]; root=0)
+        error_norms_vec = [l for l ∈ values(error_norms)]
+        MPI.Reduce!(error_norms_vec, max, comm_block[]; root=0)
 
         error_norm = Ref{mk_float}(0.0)
         max_error_variable_index = -1
         @serial_region begin
             # Get maximum error over all blocks
-            MPI.Allreduce!(error_norms, max, comm_inter_block[])
+            MPI.Allreduce!(error_norms_vec, max, comm_inter_block[])
             max_error_variable_index = argmax(error_norms)
-            error_norm[] = error_norms[max_error_variable_index]
+            error_norm[] = error_norms_vec[max_error_variable_index]
+            max_error_variable = error_norms.keys[max_error_variable_index]
         end
         MPI.Bcast!(error_norm, 0, comm_block[])
     elseif error_norm_method == "L2"
         # Get overall maximum error on the shared-memory block
-        MPI.Reduce!(error_norms, +, comm_block[]; root=0)
+        error_norms_vec = [l for l ∈ values(error_norms)]
+        MPI.Reduce!(error_norms_vec, +, comm_block[]; root=0)
 
         error_norm = Ref{mk_float}(0.0)
         max_error_variable_index = -1
         @serial_region begin
             # Get maximum error over all blocks
-            MPI.Allreduce!(error_norms, +, comm_inter_block[])
+            MPI.Allreduce!(error_norms_vec, +, comm_inter_block[])
 
-            # So far `error_norms` is the sum of squares of the errors. Now that summation
+            # So far `error_norms_vec` is the sum of squares of the errors. Now that summation
             # is finished, need to divide by total number of points and take square-root.
-            error_norms .= sqrt.(error_norms ./ total_points)
+            error_norms_vec .= sqrt.(error_norms_vec ./ total_points)
 
             # Weight the error from each variable equally by taking the mean, so the
             # larger number of points in the distribution functions does not mean that
             # error on the moments is ignored.
-            error_norm[] = mean(error_norms)
+            error_norm[] = mean(error_norms_vec)
 
             # Record which variable had the maximum error
-            max_error_variable_index = argmax(error_norms)
+            max_error_variable_index = argmax(error_norms_vec)
+            max_error_variable = error_norms.keys[max_error_variable_index]
         end
 
         MPI.Bcast!(error_norm, 0, comm_block[])
@@ -1160,14 +1162,14 @@ function adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms,
                 composition.electron_physics ∈ (kinetic_electrons,
                                                 kinetic_electrons_with_temperature_equation)
             if success == "nonlinear-solver"
-                t_params.failure_caused_by[end-1] += 1
+                t_params.failure_caused_by["nonlinear_solver_convergence"] += 1
             elseif success == "kinetic-electrons"
-                t_params.failure_caused_by[end] += 1
+                t_params.failure_caused_by["kinetic_electron_convergence"] += 1
             else
                 error("Unrecognised cause of convergence failure: \"$success\"")
             end
         else
-            t_params.failure_caused_by[end] += 1
+            t_params.failure_caused_by["nonlinear_solver_convergence"] += 1
         end
 
         if t_params.exact_output_times
@@ -1215,7 +1217,7 @@ function adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms,
         # Call the 'cause' of the timestep failure the variable that has the biggest
         # error norm here
         @serial_region begin
-            t_params.failure_caused_by[max_error_variable_index] += 1
+            t_params.failure_caused_by[max_error_variable] += 1
         end
 
         if t_params.exact_output_times
@@ -1279,13 +1281,13 @@ function adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms,
                 # max_increase_factor, max_increase_factor_near_fail, minimum_dt and
                 # maximum_dt limits, high_nl_iterations.
                 @serial_region begin
-                    this_limit_caused_by = 5 + max_error_variable_index
+                    this_limit_caused_by = max_error_variable
                 end
             end
 
             # Limit so timestep cannot increase by a large factor, which might lead to
             # numerical instability in some cases.
-            max_cap_limit_caused_by = 1
+            max_cap_limit_caused_by = "max_increase_factor"
             if isinf(t_params.max_increase_factor_near_last_fail)
                 # Not using special timestep limiting near last failed dt value
                 max_cap = t_params.max_increase_factor * t_params.previous_dt[]
@@ -1302,7 +1304,7 @@ function adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms,
                     max_cap = max(slow_increase_threshold,
                                   t_params.max_increase_factor_near_last_fail *
                                   t_params.previous_dt[])
-                    max_cap_limit_caused_by = 2
+                    max_cap_limit_caused_by = "max_increase_factor_near_last_fail"
                 end
             end
             if t_params.dt[] > max_cap
@@ -1316,7 +1318,7 @@ function adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms,
             if t_params.dt[] < t_params.minimum_dt
                 t_params.dt[] = t_params.minimum_dt
                 @serial_region begin
-                    this_limit_caused_by = 3
+                    this_limit_caused_by = "minimum_dt"
                 end
             end
 
@@ -1325,7 +1327,7 @@ function adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms,
             if t_params.dt[] > max_dt
                 t_params.dt[] = max_dt
                 @serial_region begin
-                    this_limit_caused_by = 4
+                    this_limit_caused_by = "maximum_dt"
                 end
             end
 
@@ -1338,7 +1340,7 @@ function adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms,
                 if t_params.dt[] > iteration_limited_dt
                     t_params.dt[] = iteration_limited_dt
                     @serial_region begin
-                        this_limit_caused_by = 5
+                        this_limit_caused_by = "high_nl_iterations"
                     end
                 end
             elseif (nl_max_its_fraction > 0.5 || nl_total_its_soft_limit) && t_params.previous_dt[] > 0.0
@@ -1349,7 +1351,7 @@ function adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms,
                 if t_params.dt[] > t_params.previous_dt[]
                     t_params.dt[] = t_params.previous_dt[]
                     @serial_region begin
-                        this_limit_caused_by = 5
+                        this_limit_caused_by = "high_nl_iterations"
                     end
                 end
             end

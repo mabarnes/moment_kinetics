@@ -350,7 +350,7 @@ function define_coordinate(coord_input::NamedTuple; parallel_io::Bool=false,
         scratch_shared_int2 .= typemin(mk_int)
     end
     if !ignore_MPI
-        _block_synchronize()
+        @_block_synchronize()
     end
     # scratch_2d is an array used for intermediate calculations requiring ngrid x nelement entries
     scratch_2d = allocate_float(coord_input.ngrid, coord_input.nelement_local)

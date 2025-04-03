@@ -91,9 +91,9 @@ test_input_finite_difference = OptionsDict("composition" => OptionsDict("n_ion_s
                                                                            "moments_conservation" => false),
                                            "reactions" => OptionsDict("charge_exchange_frequency" => 0.0,
                                                                       "ionization_frequency" => 0.0),
-                                           "timestepping" => OptionsDict("nstep" => 9000,
-                                                                         "dt" => 0.0005,
-                                                                         "nwrite" => 9000,
+                                           "timestepping" => OptionsDict("nstep" => 25000,
+                                                                         "dt" => 0.0002,
+                                                                         "nwrite" => 25000,
                                                                          "split_operators" => false),
                                            "r" => OptionsDict("ngrid" => 1,
                                                               "nelement" => 1,
@@ -105,12 +105,12 @@ test_input_finite_difference = OptionsDict("composition" => OptionsDict("n_ion_s
                                                               "discretization" => "finite_difference"),
                                            "vpa" => OptionsDict("ngrid" => 200,
                                                                 "nelement" => 1,
-                                                                "L" => 8.0,
+                                                                "L" => 4.0,
                                                                 "bc" => "zero",
                                                                 "discretization" => "finite_difference"),
                                            "vz" => OptionsDict("ngrid" => 200,
                                                                "nelement" => 1,
-                                                               "L" => 8.0,
+                                                               "L" => 4.0,
                                                                "bc" => "zero",
                                                                "discretization" => "finite_difference"),
                                            "ion_source_1" => OptionsDict("active" => true,
@@ -123,14 +123,15 @@ test_input_finite_difference = OptionsDict("composition" => OptionsDict("n_ion_s
 test_input_chebyshev = recursive_merge(test_input_finite_difference,
                                        OptionsDict("output" => OptionsDict("run_name" => "chebyshev_pseudospectral"),
                                                    "z" => OptionsDict("discretization" => "chebyshev_pseudospectral",
-                                                                       "ngrid" => 9,
-                                                                       "nelement" => 2),
+                                                                      "element_spacing_option" => "sqrt",
+                                                                      "ngrid" => 9,
+                                                                      "nelement" => 4),
                                                    "vpa" => OptionsDict("discretization" => "chebyshev_pseudospectral",
-                                                                        "ngrid" => 17,
-                                                                        "nelement" => 10),
+                                                                        "ngrid" => 5,
+                                                                        "nelement" => 40),
                                                    "vz" => OptionsDict("discretization" => "chebyshev_pseudospectral",
-                                                                       "ngrid" => 17,
-                                                                       "nelement" => 10),
+                                                                       "ngrid" => 5,
+                                                                       "nelement" => 40),
                                                   ))
 
 test_input_chebyshev_split1 = recursive_merge(test_input_chebyshev,
@@ -148,14 +149,15 @@ test_input_chebyshev_split2 = recursive_merge(test_input_chebyshev_split1,
 test_input_chebyshev_split3 = recursive_merge(test_input_chebyshev_split2,
                                               OptionsDict("output" => OptionsDict("run_name" => "chebyshev_pseudospectral_split3"),
                                                           "evolve_moments" => OptionsDict("parallel_pressure" => true),
+                                                          "vpa" => OptionsDict("L" => 8.0),
+                                                          "vz" => OptionsDict("L" => 8.0),
                                                          ))
 
 """
 Run a test for a single set of parameters
 """
 # Note 'name' should not be shared by any two tests in this file
-function run_test(test_input, analytic_rtol, analytic_atol, expected_phi,
-                  regression_rtol, regression_atol; args...)
+function run_test(test_input, analytic_atol, expected_phi, regression_atol; args...)
     # by passing keyword arguments to run_test, args becomes a Dict which can be used to
     # update the default inputs
 
@@ -218,16 +220,17 @@ function run_test(test_input, analytic_rtol, analytic_atol, expected_phi,
         # Analytic solution defines phi=0 at mid-point, so need to offset the code solution
         offset = phi[(z.n+1)÷2, end]
         # Error is large on the boundary points, so test those separately
-        @test isapprox(phi[2:end-1, end] .- offset, analytic_phi[2:end-1],
-                       rtol=analytic_rtol, atol=analytic_atol)
-        @test isapprox(phi[[1, end], end] .- offset, analytic_phi[[1, end]],
-                       rtol=10.0*analytic_rtol, atol=analytic_atol)
+        @test elementwise_isapprox(phi[2:end-1, end] .- offset, analytic_phi[2:end-1],
+                                   rtol=0.0, atol=analytic_atol)
+        @test elementwise_isapprox(phi[[1, end], end] .- offset, analytic_phi[[1, end]],
+                                   rtol=0.0, atol=10.0*analytic_atol)
 
         # Regression test
         if expected_phi === nothing
             println("values tested would be ", phi[:,end])
         else
-            @test isapprox(phi[:, end], expected_phi, rtol=regression_rtol, atol=regression_atol)
+            @test elementwise_isapprox(phi[:, end], expected_phi, rtol=0.0,
+                                       atol=regression_atol)
         end
     end
 end
@@ -246,45 +249,69 @@ function runtests()
 
         @testset "Chebyshev" begin
             test_input_chebyshev["output"]["base_directory"] = test_output_directory
-            run_test(test_input_chebyshev, 3.e-2, 3.e-3,
-                     [-0.8270506736528097, -0.6647482045160528, -0.43595102198197894,
-                      -0.2930090302314022, -0.19789542449264944, -0.14560099229503182,
-                      -0.12410802088624982, -0.11657014266155726, -0.1176184662051167,
-                      -0.11657014266155688, -0.1241080208862487, -0.14560099229503298,
-                      -0.1978954244926481, -0.2930090302313995, -0.4359510219819795,
-                      -0.6647482045160534, -0.8270506736528144], 5.0e-9, 1.e-15)
+            run_test(test_input_chebyshev, 2.5e-2,
+                     [-0.8545358193502869, -0.774407964023825, -0.6480964317972056,
+                      -0.5437138090271466, -0.46526043489110663, -0.40062308723846,
+                      -0.3642888155225684, -0.336194221384609, -0.3309510526846082,
+                      -0.2965979559778681, -0.2619290551264873, -0.1899520777383056,
+                      -0.1640083179440505, -0.11857363623485638, -0.12466820204956786,
+                      -0.10270584477435529, -0.12038738056547979, -0.10270584478046563,
+                      -0.12466820202523383, -0.11857363627205779, -0.16400831794981355,
+                      -0.18995207771777678, -0.261929055133569, -0.29659795589271487,
+                      -0.3309510526748036, -0.3361942213575321, -0.36428881552364273,
+                      -0.4006230872120763, -0.4652604348890475, -0.5437138089946042,
+                      -0.6480964317876803, -0.7744079639913641, -0.8545358193124721],
+                     1.e-9)
         end
         @testset "Chebyshev split 1" begin
             test_input_chebyshev_split1["output"]["base_directory"] = test_output_directory
-            run_test(test_input_chebyshev_split1, 3.e-2, 3.e-3,
-                     [-0.8089566460734486, -0.6619131832543634, -0.43082918688434424,
-                      -0.29582033972847016, -0.1934419000612522, -0.14925142084423915,
-                      -0.11977511930743077, -0.12060863604650167, -0.11342106824863019,
-                      -0.1206086360464999, -0.11977511930742751, -0.14925142084423915,
-                      -0.19344190006124898, -0.2958203397284666, -0.43082918688435656,
-                      -0.6619131832543697, -0.808956646073445], 5.0e-9, 1.e-15)
+            run_test(test_input_chebyshev_split1, 2.5e-2,
+                     [-0.8495387120142548, -0.7730614072089261, -0.6423249745637797,
+                      -0.5439845515727656, -0.46017601700430133, -0.4010759555447904,
+                      -0.35906454544106475, -0.33543873617744024, -0.32714335255000815,
+                      -0.30730783436438147, -0.2544323665238994, -0.19976725793967,
+                      -0.15431155950788109, -0.12791189186386567, -0.11474684427953777,
+                      -0.11198377608223004, -0.11075949946220108, -0.1119837760881712,
+                      -0.11474684429796035, -0.12791189186188173, -0.1543115595235915,
+                      -0.1997672579692011, -0.25443236652528606, -0.3073078343163545,
+                      -0.32714335251821103, -0.3354387361492995, -0.3590645454332056,
+                      -0.40107595550897873, -0.4601760169864081, -0.5439845515523102,
+                      -0.6423249745313947, -0.773061407191348, -0.8495387119894827],
+                     1.e-9)
         end
         @testset "Chebyshev split 2" begin
             test_input_chebyshev_split2["output"]["base_directory"] = test_output_directory
-            run_test(test_input_chebyshev_split2, 6.e-2, 3.e-3,
-                     [-0.7798736739831602, -0.661568214314525, -0.409872886370737,
-                      -0.24444487132869974, -0.17244646306807737, -0.11761557291772232,
-                      -0.09113439652298189, -0.09025928800454038, -0.08814925970784306,
-                      -0.09025928800449955, -0.0911343965228694, -0.1176155729185088,
-                      -0.1724464630676158, -0.24444487132881484, -0.40987288637069097,
-                      -0.6615682143148902, -0.7798736739849054], 5.0e-9, 1.e-15)
+            run_test(test_input_chebyshev_split2, 1.0e-1,
+                     [-0.8342777186033496, -0.769878727433516, -0.641982842664368,
+                      -0.5380384218360059, -0.45889874587050933, -0.39807155031220376,
+                      -0.35765940559579507, -0.33397094568809443, -0.3264506607380896,
+                      -0.3052034117107722, -0.2546495401700432, -0.1997389847343175,
+                      -0.15432601725684672, -0.1260728604002081, -0.11448123528034684,
+                      -0.11187870253742047, -0.11151473033292825, -0.11187870253742047,
+                      -0.1144812352803461, -0.12607286040020482, -0.15432601725684672,
+                      -0.19973898473431914, -0.2546495401700432, -0.30520341171077403,
+                      -0.32645066073809237, -0.333970945688096, -0.35765940559579695,
+                      -0.3980715503122051, -0.45889874587050794, -0.5380384218360059,
+                      -0.6419828426643654, -0.7698787274335136, -0.8342777186033492],
+                     1.e-9)
         end
         # The 'split 3' test is pretty badly resolved, but don't want to increase
         # run-time!
         @testset "Chebyshev split 3" begin
             test_input_chebyshev_split3["output"]["base_directory"] = test_output_directory
-            run_test(test_input_chebyshev_split3, 2.5e-1, 3.e-3,
-                     [-0.5012994554414933, -0.4624277373138882, -0.35356695432752266,
-                      -0.22371207174875177, -0.14096934539193717, -0.10082423314545275,
-                      -0.07938834260378662, -0.07480364283744717, -0.07316256734281283,
-                      -0.07480364283744836, -0.07938834260380849, -0.10082423314551169,
-                      -0.14096934539196504, -0.22371207174878788, -0.35356695432739504,
-                      -0.4624277373114037, -0.5012994554370094], 5.0e-9, 1.e-15)
+            run_test(test_input_chebyshev_split3, 1.0e-1,
+                     [-0.7232296953570133, -0.6952973513842783, -0.6131203040859244,
+                      -0.5110494278110927, -0.43761378146894003, -0.3857134432894148,
+                      -0.3443539060182329, -0.32166031809153106, -0.3139313599752215,
+                      -0.29235088061738523, -0.24310196593395336, -0.1894187622530218,
+                      -0.14639633794259743, -0.11912387999091979, -0.106707535780958,
+                      -0.10384296982291022, -0.10363754941991882, -0.10384297744204946,
+                      -0.10670753960995882, -0.1191238682244125, -0.14639632447443418,
+                      -0.18941874422124974, -0.24310194877551866, -0.2923508598976605,
+                      -0.3139313328108186, -0.3216602915351209, -0.3443538770552116,
+                      -0.3857134098892386, -0.4376137421113842, -0.5110494117277229,
+                      -0.613120273686937, -0.6952972820147638, -0.7232296174482871],
+                     1.e-9)
         end
     end
 

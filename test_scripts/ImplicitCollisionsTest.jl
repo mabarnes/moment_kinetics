@@ -64,7 +64,7 @@ function print_vector(vector,name::String,m::mk_int)
 end 
 
 function diagnose_F_Maxwellian(pdf,pdf_exact,pdf_dummy_1,pdf_dummy_2,vpa,vperp,time,mass,it)
-    begin_serial_region()
+    @begin_serial_region()
     @serial_region begin
         dens = get_density(pdf,vpa,vperp)
         upar = get_upar(pdf,vpa,vperp,dens)
@@ -84,7 +84,7 @@ function diagnose_F_Maxwellian(pdf,pdf_exact,pdf_dummy_1,pdf_dummy_2,vpa,vperp,t
 end
 
 function diagnose_F_gif(pdf,vpa,vperp,ntime)
-    begin_serial_region()
+    @begin_serial_region()
     @serial_region begin
         anim = @animate for it in 1:ntime
             @views heatmap(vperp.grid, vpa.grid, pdf[:,:,it], xlabel="vperp", ylabel="vpa", c = :deep, interpolation = :cubic)
@@ -95,7 +95,7 @@ function diagnose_F_gif(pdf,vpa,vperp,ntime)
 end
 
 function diagnose_F_gif(pdf,Ez,phi,density,vpa,vperp,z,ntime)
-    begin_serial_region()
+    @begin_serial_region()
     @serial_region begin
         iz = 1
         anim = @animate for it in 1:ntime
@@ -188,7 +188,7 @@ function test_implicit_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=3,neleme
                                     r=1, z=1, vperp=vperp.n, vpa=vpa.n,
                                     vzeta=1, vr=1, vz=1)
     nc_global = vpa.n*vperp.n
-    begin_serial_region()
+    @begin_serial_region()
     start_init_time = now()
     if boundary_data_option == direct_integration
         precompute_weights = true
@@ -274,7 +274,7 @@ function test_implicit_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=3,neleme
             algebraic_solve_for_d2Gdvperp2=algebraic_solve_for_d2Gdvperp2,
             calculate_GG = false, calculate_dGdvperp=false,
             boundary_data_option=boundary_data_option)
-        begin_serial_region()
+        @begin_serial_region()
         # update the pdf
         @serial_region begin
             @loop_vperp_vpa ivperp ivpa begin
@@ -341,7 +341,7 @@ function fokker_planck_backward_euler_step!(Fnew, Fold, delta_t, ms, msp, nussp,
         # enforce the boundary conditions on advection terms before it is used for timestepping
         enforce_vpavperp_BCs!(fkpl_arrays.rhs_advection,vpa,vperp,vpa_spectral,vperp_spectral,
                         upper_wall=upper_wall,lower_wall=lower_wall)
-        begin_anyv_vperp_vpa_region()
+        @begin_anyv_vperp_vpa_region()
         @loop_vperp_vpa ivperp ivpa begin
             Fresidual[ivpa,ivperp] = Fnew[ivpa,ivperp] - Fold[ivpa,ivperp] - delta_t * (fkpl_arrays.CC[ivpa,ivperp] + fkpl_arrays.rhs_advection[ivpa,ivperp])
         end
@@ -349,7 +349,7 @@ function fokker_planck_backward_euler_step!(Fnew, Fold, delta_t, ms, msp, nussp,
     end
     
     if standalone
-        begin_s_r_z_anyv_region()
+        @begin_s_r_z_anyv_region()
     end
     if test_particle_preconditioner
       calculate_test_particle_preconditioner!(Fold,delta_t,ms,msp,nussp,
@@ -364,7 +364,7 @@ function fokker_planck_backward_euler_step!(Fnew, Fold, delta_t, ms, msp, nussp,
          pdf_scratch = fkpl_arrays.rhsvpavperp
          pdf_dummy = fkpl_arrays.S_dummy
          MM2D_sparse = fkpl_arrays.MM2D_sparse
-         begin_anyv_region()
+         @begin_anyv_region()
          @anyv_serial_region begin
              @views @. pdf_scratch = pdf
              pdf_c = vec(pdf)
@@ -385,17 +385,17 @@ function fokker_planck_backward_euler_step!(Fnew, Fold, delta_t, ms, msp, nussp,
       newton_solve!(Fnew, residual_func!, Fresidual, F_delta_x, F_rhs_delta, Fv, Fw, nl_solver_params;
                       coords, right_preconditioner=right_preconditioner)
     end
-    _anyv_subblock_synchronize()
+    @_anyv_subblock_synchronize()
     #begin_serial_region()
 end    
 
 function field_solve!(Ez, phi, density, Te, Ne, Fold, vpa, vperp, z, z_spectral)
-    begin_z_region()
+    @begin_z_region()
     @loop_z iz begin
         @views density[iz] = get_density(Fold[:,:,iz],vpa,vperp)
         phi[iz] = Te * log(density[iz]/Ne)
     end
-    begin_serial_region()
+    @begin_serial_region()
     @serial_region begin
         derivative!(Ez, -phi, z, z_spectral)
     end
@@ -465,7 +465,7 @@ function test_implicit_standard_dke_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, n
                                     s=1, sn=1,
                                     r=1, z=z.n, vperp=vperp.n, vpa=vpa.n,
                                     vzeta=1, vr=1, vz=1)
-    begin_serial_region()
+    @begin_serial_region()
     start_init_time = now()
     if boundary_data_option == direct_integration
         precompute_weights = true
@@ -573,7 +573,7 @@ function test_implicit_standard_dke_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, n
         if z.n > 1
             # use operator splitting
             # advance due to source and parallel streaming
-            begin_z_vperp_vpa_region()
+            @begin_z_vperp_vpa_region()
             @loop_z_vperp_vpa iz ivperp ivpa begin
                 Fold[ivpa,ivperp,iz] += delta_t * FSource[ivpa,ivperp,iz]
             end
@@ -587,7 +587,7 @@ function test_implicit_standard_dke_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, n
         end
         # advance collisions and velocity advection
         if true
-            begin_s_r_z_anyv_region()
+            @begin_s_r_z_anyv_region()
             @loop_z iz begin
                 dvpadt = 0.5*Ez[iz]
                 @views fokker_planck_backward_euler_step!(Fnew[:,:,iz], Fold[:,:,iz], delta_t, ms, msp, nussp, fkpl_arrays, dummy_vpavperp,
@@ -609,7 +609,7 @@ function test_implicit_standard_dke_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, n
                     upper_wall=(iz==z.n && z.irank == z.nrank - 1 && z.n > 1),
                     lower_wall=(iz==1 && z.irank == 0 && z.n > 1),)
             end
-            begin_serial_region()
+            @begin_serial_region()
             # update the pdf
             @serial_region begin
                 @loop_z_vperp_vpa iz ivperp ivpa begin

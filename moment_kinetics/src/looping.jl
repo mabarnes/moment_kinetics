@@ -401,7 +401,7 @@ function get_anyv_ranges(block_rank, split, anyv_dims, dim_sizes)
     end
 
     if !(:vpa ∈ anyv_dims || :vperp ∈ anyv_dims)
-        # For a 'serial' 'anyv' region, following begin_anyv_region(), only loop over
+        # For a 'serial' 'anyv' region, following @begin_anyv_region(), only loop over
         # velocity space on the rank-0 process of the anyv subblock
         #
         # Calculate the rank in the subblock from block_rank rather than using
@@ -425,7 +425,7 @@ export loop_ranges
 
 """
 module variable used to store LoopRanges that are swapped into the loop_ranges
-variable in begin_*_region() functions
+variable in @begin_*_region() functions
 """
 const loop_ranges_store = Dict{Tuple{Vararg{Symbol}}, LoopRanges}()
 
@@ -712,29 +712,43 @@ for dims ∈ dimension_combinations
 
     # Create a function for beginning regions where 'dims' are parallelized
     sync_name = Symbol(:begin_, dims_symb, :_region)
+    sync_macro_name = Symbol("@", sync_name)
+    sync_name_internal = Symbol(sync_name, :_internal)
     eval(quote
              """
              Begin region in which $($dims) dimensions are parallelized by being split
              between processes.
 
              Returns immediately if loop_ranges[] is already set to the parallel
-             dimensions being requested. This allows the begin_*_region() calls to be
+             dimensions being requested. This allows the @begin_*_region() calls to be
              placed where they make logical sense, with no cost if a call happens to be
              repeated (e.g. in different functions).
 
              Calls `_block_synchronize()` to synchronize the processes operating on a
-             shared-memory block, unless `no_synchronize=true` is passed as an argument.
+             shared-memory block, unless `true` is passed as the `no_synchronize`
+             argument.
              """
-             function $sync_name(; no_synchronize::Bool=false)
+             macro $sync_name(no_synchronize::Bool=false)
+                 id_hash = @debug_block_synchronize_quick_ifelse(
+                                hash(string(@__FILE__, @__LINE__)),
+                                nothing
+                               )
+                 return quote
+                     $($sync_name_internal)($id_hash, $(esc(no_synchronize)))
+                 end
+             end
+
+             function $sync_name_internal(call_site::Union{Nothing,UInt64},
+                                          no_synchronize::Bool)
                  if !loop_ranges[].is_anyv && loop_ranges[].parallel_dims == $dims
                      return
                  end
                  if !no_synchronize
-                     _block_synchronize()
+                     _block_synchronize(call_site)
                  end
                  loop_ranges[] = loop_ranges_store[$dims]
              end
-             export $sync_name
+             export $sync_macro_name
          end)
 end
 
@@ -746,25 +760,34 @@ for use in the collision operator.
 
 Returns immediately if loop_ranges[] is already
 set to the parallel
-dimensions being requested. This allows the begin_*_region() calls to be
+dimensions being requested. This allows the @begin_*_region() calls to be
 placed where they make logical sense, with no cost if a call happens to be
 repeated (e.g. in different functions).
 
 Calls `_block_synchronize()` to synchronize the processes operating on a
 shared-memory block, unless `no_synchronize=true` is passed as an argument.
 """
-function begin_s_r_z_anyv_region(; no_synchronize::Bool=false)
+macro begin_s_r_z_anyv_region(no_synchronize::Bool=false)
+    id_hash = @debug_block_synchronize_quick_ifelse(
+                   hash(string(@__FILE__, @__LINE__)),
+                   nothing
+                  )
+    return quote
+        begin_s_r_z_anyv_region_internal($id_hash, $(esc(no_synchronize)))
+    end
+end
+function begin_s_r_z_anyv_region_internal(call_site, no_synchronize::Bool)
     if loop_ranges[].is_anyv
         return
     end
     if !no_synchronize
-        _block_synchronize()
+        _block_synchronize(call_site)
     end
     loop_ranges[] = loop_ranges_store[(:anyv,)]
 end
-export begin_s_r_z_anyv_region
+export @begin_s_r_z_anyv_region
 
-# Create begin_anyv_*_region() functions to use within a begin_s_r_z_anyv_region() region.
+# Create @begin_anyv_*_region() functions to use within a @begin_s_r_z_anyv_region() region.
 for dims ∈ anyv_dimension_combinations
     # Create an expression-function/macro combination for each level of the
     # loop
@@ -772,21 +795,33 @@ for dims ∈ anyv_dimension_combinations
 
     # Create a function for beginning regions where 'dims' are parallelized
     sync_name = Symbol(:begin_, dims_symb, :_region)
+    sync_macro_name = Symbol("@", sync_name)
+    sync_name_internal = Symbol(sync_name, :_internal)
     eval(quote
              """
              Begin 'anyv' sub-region in which $($dims[2:end]) velocity space dimensions
              are parallelized by being split between processes.
 
              Returns immediately if loop_ranges[] is already set to the parallel
-             dimensions being requested. This allows the begin_anyv_*_region() calls to be
+             dimensions being requested. This allows the @begin_anyv_*_region() calls to be
              placed where they make logical sense, with no cost if a call happens to be
              repeated (e.g. in different functions).
 
              Calls `_anyv_subblock_synchronize()` to synchronize the processes operating on
-             an 'anyv' shared-memory sub-block, unless `no_synchronize=true` is passed as
-             an argument.
+             an 'anyv' shared-memory sub-block, unless `true` is passed as the
+             `no_synchronize` argument.
              """
-             function $sync_name(; no_synchronize::Bool=false)
+             macro $sync_name(no_synchronize::Bool=false)
+                 id_hash = @debug_block_synchronize_quick_ifelse(
+                                hash(string(@__FILE__, @__LINE__)),
+                                nothing
+                               )
+                 return quote
+                     $($sync_name_internal)($id_hash, $(esc(no_synchronize)))
+                 end
+             end
+
+             function $sync_name_internal(call_site, no_synchronize::Bool=false)
                  if loop_ranges[].parallel_dims == $dims
                      return
                  end
@@ -795,11 +830,11 @@ for dims ∈ anyv_dimension_combinations
                            * "region")
                  end
                  if !no_synchronize
-                     _anyv_subblock_synchronize()
+                     _anyv_subblock_synchronize(call_site)
                  end
                  loop_ranges[] = loop_ranges_store[$dims]
              end
-             export $sync_name
+             export $sync_macro_name
          end)
 end
 
@@ -821,22 +856,31 @@ Begin region in which only rank-0 in each group of processes operating on a
 shared-memory block operates on shared-memory arrays.
 
 Returns immediately if loop_ranges[] is already set for a serial region. This allows the
-begin_*_region() calls to be placed where they make logical sense, with no cost if a
+@begin_*_region() calls to be placed where they make logical sense, with no cost if a
 call happens to be repeated (e.g. in different functions).
 
 Calls `_block_synchronize()` to synchronize the processes operating on a shared-memory
-block, unless `no_synchronize=true` is passed as an argument.
+block, unless `true` is passed as the `no_synchronize` argument.
 """
-function begin_serial_region(; no_synchronize::Bool=false)
+macro begin_serial_region(no_synchronize::Bool=false)
+    id_hash = @debug_block_synchronize_quick_ifelse(
+                   hash(string(@__FILE__, @__LINE__)),
+                   nothing
+                  )
+    return quote
+        begin_serial_region_internal($id_hash, $(esc(no_synchronize)))
+    end
+end
+function begin_serial_region_internal(call_site, no_synchronize::Bool)
     if loop_ranges[].parallel_dims == ()
         return
     end
     if !no_synchronize
-        _block_synchronize()
+        _block_synchronize(call_site)
     end
     loop_ranges[] = loop_ranges_store[()]
 end
-export begin_serial_region
+export @begin_serial_region
 
 """
 Run a block of code on only anyv-subblock-rank-0 of each group of processes operating on

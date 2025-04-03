@@ -28,7 +28,7 @@ also enforce boundary conditions in z on all separately evolved velocity space m
                          vperp_adv, z_adv, r_adv, composition, scratch_dummy, r_diffusion,
                          vpa_diffusion, vperp_diffusion) = begin
     if vpa.n > 1
-        begin_s_r_z_vperp_region()
+        @begin_s_r_z_vperp_region()
         @loop_s_r_z_vperp is ir iz ivperp begin
             # enforce the vpa BC
             # use that adv.speed independent of vpa
@@ -38,12 +38,12 @@ also enforce boundary conditions in z on all separately evolved velocity space m
         end
     end
     if vperp.n > 1
-        begin_s_r_z_vpa_region()
+        @begin_s_r_z_vpa_region()
         enforce_vperp_boundary_condition!(f, vperp.bc, vperp, vperp_spectral,
                              vperp_adv, vperp_diffusion)
     end
     if z.n > 1
-        begin_s_r_vperp_vpa_region()
+        @begin_s_r_vperp_vpa_region()
         # enforce the z BC on the evolved velocity space moments of the pdf
         enforce_z_boundary_condition_moments!(density, moments, z_bc)
         enforce_z_boundary_condition!(f, density, upar, ppar, phi, moments, z_bc, z_adv, z,
@@ -55,7 +55,7 @@ also enforce boundary conditions in z on all separately evolved velocity space m
 
     end
     if r.n > 1
-        begin_s_z_vperp_vpa_region()
+        @begin_s_z_vperp_vpa_region()
         enforce_r_boundary_condition!(f, f_r_bc, r_bc, r_adv, vpa, vperp, z, r,
                                       composition, scratch_dummy.buffer_vpavperpzs_1,
                                       scratch_dummy.buffer_vpavperpzs_2,
@@ -145,7 +145,7 @@ function enforce_z_boundary_condition!(pdf, density, upar, ppar, phi, moments, b
     # 'constant' BC is time-independent f at upwind boundary
     # and constant f beyond boundary
     if bc == "constant"
-        begin_s_r_vperp_vpa_region()
+        @begin_s_r_vperp_vpa_region()
         density_offset = 1.0
         vwidth = 1.0
         if z.irank == 0
@@ -188,7 +188,7 @@ function enforce_z_boundary_condition!(pdf, density, upar, ppar, phi, moments, b
         end
     # 'periodic' BC enforces periodicity by taking the average of the boundary points
     elseif bc == "periodic" && z.nelement_global == z.nelement_local
-        begin_s_r_vperp_vpa_region()
+        @begin_s_r_vperp_vpa_region()
         @loop_s_r_vperp_vpa is ir ivperp ivpa begin
             pdf[ivpa,ivperp,1,ir,is] = 0.5*(pdf[ivpa,ivperp,z.n,ir,is]+pdf[ivpa,ivperp,1,ir,is])
             pdf[ivpa,ivperp,z.n,ir,is] = pdf[ivpa,ivperp,1,ir,is]
@@ -197,7 +197,7 @@ function enforce_z_boundary_condition!(pdf, density, upar, ppar, phi, moments, b
     elseif bc == "wall"
         # Need integrals over vpa at wall boundaries in z, so cannot parallelize over z
         # or vpa.
-        begin_s_r_region()
+        @begin_s_r_region()
         @loop_s is begin
             # zero incoming BC for ions, as they recombine at the wall
             if moments.evolve_upar
@@ -233,7 +233,7 @@ enforce boundary conditions on neutral particle distribution function
     # advection or diffusion in these coordinates
 
     if vzeta_adv !== nothing && vzeta.n_global > 1 && vzeta.bc != "none"
-        begin_sn_r_z_vr_vz_region()
+        @begin_sn_r_z_vr_vz_region()
         @loop_sn_r_z_vr_vz isn ir iz ivr ivz begin
             # enforce the vz BC
             @views enforce_v_boundary_condition_local!(f_neutral[ivz,ivr,:,iz,ir,isn],
@@ -243,7 +243,7 @@ enforce boundary conditions on neutral particle distribution function
         end
     end
     if vr_adv !== nothing && vr.n_global > 1 && vr.bc != "none"
-        begin_sn_r_z_vzeta_vz_region()
+        @begin_sn_r_z_vzeta_vz_region()
         @loop_sn_r_z_vzeta_vz isn ir iz ivzeta ivz begin
             # enforce the vz BC
             @views enforce_v_boundary_condition_local!(f_neutral[ivz,:,ivzeta,iz,ir,isn],
@@ -253,7 +253,7 @@ enforce boundary conditions on neutral particle distribution function
         end
     end
     if vz_adv !== nothing && vz.n_global > 1 && vz.bc != "none"
-        begin_sn_r_z_vzeta_vr_region()
+        @begin_sn_r_z_vzeta_vr_region()
         @loop_sn_r_z_vzeta_vr isn ir iz ivzeta ivr begin
             # enforce the vz BC
             @views enforce_v_boundary_condition_local!(f_neutral[:,ivr,ivzeta,iz,ir,isn],
@@ -264,7 +264,7 @@ enforce boundary conditions on neutral particle distribution function
     end
     # f_initial contains the initial condition for enforcing a fixed-boundary-value condition
     if z.n > 1
-        begin_sn_r_vzeta_vr_vz_region()
+        @begin_sn_r_vzeta_vr_vz_region()
         enforce_neutral_z_boundary_condition!(f_neutral, density_neutral, uz_neutral,
             pz_neutral, moments, density_ion, upar_ion, Er, boundary_distributions,
             z_adv, z, vzeta, vr, vz, composition, geometry,
@@ -272,7 +272,7 @@ enforce boundary conditions on neutral particle distribution function
             scratch_dummy.buffer_vzvrvzetarsn_3, scratch_dummy.buffer_vzvrvzetarsn_4)
     end
     if r.n > 1
-        begin_sn_z_vzeta_vr_vz_region()
+        @begin_sn_z_vzeta_vr_vz_region()
         enforce_neutral_r_boundary_condition!(f_neutral, boundary_distributions.pdf_rboundary_neutral,
                                     r_adv, vz, vr, vzeta, z, r, composition,
                                     scratch_dummy.buffer_vzvrvzetazsn_1, scratch_dummy.buffer_vzvrvzetazsn_2,
@@ -354,7 +354,7 @@ function enforce_neutral_z_boundary_condition!(pdf, density, uz, pz, moments, de
     # 'constant' BC is time-independent f at upwind boundary
     # and constant f beyond boundary
     if z.bc == "constant"
-        begin_sn_r_vzeta_vr_vz_region()
+        @begin_sn_r_vzeta_vr_vz_region()
         density_offset = 1.0
         vwidth = 1.0
         if z.irank == 0
@@ -399,7 +399,7 @@ function enforce_neutral_z_boundary_condition!(pdf, density, uz, pz, moments, de
         end
     # 'periodic' BC enforces periodicity by taking the average of the boundary points
     elseif z.bc == "periodic" && z.nelement_global == z.nelement_local
-        begin_sn_r_vzeta_vr_vz_region()
+        @begin_sn_r_vzeta_vr_vz_region()
         @loop_sn_r_vzeta_vr_vz isn ir ivzeta ivr ivz begin
             pdf[ivz,ivr,ivzeta,1,ir,isn] = 0.5*(pdf[ivz,ivr,ivzeta,1,ir,isn] +
                                                 pdf[ivz,ivr,ivzeta,end,ir,isn])
@@ -409,7 +409,7 @@ function enforce_neutral_z_boundary_condition!(pdf, density, uz, pz, moments, de
     elseif z.bc == "wall"
         # Need integrals over vpa at wall boundaries in z, so cannot parallelize over z
         # or vpa.
-        begin_sn_r_region()
+        @begin_sn_r_region()
         @loop_sn isn begin
             # BC for neutrals
             @loop_r ir begin
@@ -1006,7 +1006,7 @@ enforce the z boundary condition on the evolved velocity space moments of f
 """
 function enforce_z_boundary_condition_moments!(density, moments, bc::String)
     ## TODO: parallelise
-    #begin_serial_region()
+    #@begin_serial_region()
     #@serial_region begin
     #    # enforce z boundary condition on density if it is evolved separately from f
     #	if moments.evolve_density

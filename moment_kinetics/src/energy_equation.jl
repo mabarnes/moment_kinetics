@@ -13,13 +13,15 @@ using ..timer_utils
 evolve the parallel pressure by solving the energy equation
 """
 @timeit global_timer energy_equation!(
-                         ppar, fvec, moments, collisions, dt, spectral, composition,
+                         ppar_out, fvec, moments, collisions, dt, spectral, composition,
                          ion_source_settings, num_diss_params) = begin
 
-    begin_s_r_z_region()
+    @begin_s_r_z_region()
+
+    dppar_dt = moments.ion.dppar_dt
 
     @loop_s_r_z is ir iz begin
-        ppar[iz,ir,is] += dt*(-fvec.upar[iz,ir,is]*moments.ion.dppar_dz_upwind[iz,ir,is]
+        dppar_dt[iz,ir,is] = (-fvec.upar[iz,ir,is]*moments.ion.dppar_dz_upwind[iz,ir,is]
                               - moments.ion.dqpar_dz[iz,ir,is]
                               - 3.0*fvec.ppar[iz,ir,is]*moments.ion.dupar_dz[iz,ir,is])
     end
@@ -29,7 +31,7 @@ evolve the parallel pressure by solving the energy equation
         if ion_source_settings[index].active
             @views source_amplitude = moments.ion.external_source_pressure_amplitude[:, :, index]
             @loop_s_r_z is ir iz begin
-                ppar[iz,ir,is] += dt * source_amplitude[iz,ir]
+                dppar_dt[iz,ir,is] += source_amplitude[iz,ir]
             end
         end
     end
@@ -37,7 +39,7 @@ evolve the parallel pressure by solving the energy equation
     diffusion_coefficient = num_diss_params.ion.moment_dissipation_coefficient
     if diffusion_coefficient > 0.0
         @loop_s_r_z is ir iz begin
-            ppar[iz,ir,is] += dt*diffusion_coefficient*moments.ion.d2ppar_dz2[iz,ir,is]
+            dppar_dt[iz,ir,is] += diffusion_coefficient*moments.ion.d2ppar_dz2[iz,ir,is]
         end
     end
 
@@ -47,8 +49,8 @@ evolve the parallel pressure by solving the energy equation
         ionization = collisions.reactions.ionization_frequency
         if abs(charge_exchange) > 0.0
             @loop_s_r_z is ir iz begin
-                ppar[iz,ir,is] -=
-                    dt*charge_exchange*(
+                dppar_dt[iz,ir,is] -=
+                    charge_exchange*(
                         fvec.density_neutral[iz,ir,is]*fvec.ppar[iz,ir,is] -
                         fvec.density[iz,ir,is]*fvec.pz_neutral[iz,ir,is] -
                         fvec.density[iz,ir,is]*fvec.density_neutral[iz,ir,is] *
@@ -57,27 +59,35 @@ evolve the parallel pressure by solving the energy equation
         end
         if abs(ionization) > 0.0
             @loop_s_r_z is ir iz begin
-                ppar[iz,ir,is] +=
-                    dt*ionization*fvec.density[iz,ir,is] * (
+                dppar_dt[iz,ir,is] +=
+                    ionization*fvec.density[iz,ir,is] * (
                         fvec.pz_neutral[iz,ir,is] +
                         fvec.density_neutral[iz,ir,is] *
                             (fvec.upar[iz,ir,is]-fvec.uz_neutral[iz,ir,is])^2)
             end
         end
     end
+
+    @loop_s_r_z is ir iz begin
+        ppar_out[iz,ir,is] += dt * dppar_dt[iz,ir,is]
+    end
+
+    return nothing
 end
 
 """
 evolve the neutral parallel pressure by solving the energy equation
 """
 @timeit global_timer neutral_energy_equation!(
-                         pz, fvec, moments, collisions, dt, spectral, composition,
+                         pz_out, fvec, moments, collisions, dt, spectral, composition,
                          neutral_source_settings, num_diss_params) = begin
 
-    begin_sn_r_z_region()
+    @begin_sn_r_z_region()
+
+    dpz_dt = moments.neutral.dpz_dt
 
     @loop_sn_r_z isn ir iz begin
-        pz[iz,ir,isn] += dt*(-fvec.uz_neutral[iz,ir,isn]*moments.neutral.dpz_dz_upwind[iz,ir,isn]
+        dpz_dt[iz,ir,isn] = (-fvec.uz_neutral[iz,ir,isn]*moments.neutral.dpz_dz_upwind[iz,ir,isn]
                              - moments.neutral.dqz_dz[iz,ir,isn]
                              - 3.0*fvec.pz_neutral[iz,ir,isn]*moments.neutral.duz_dz[iz,ir,isn])
     end
@@ -86,7 +96,7 @@ evolve the neutral parallel pressure by solving the energy equation
         if neutral_source_settings[index].active
             @views source_amplitude = moments.neutral.external_source_pressure_amplitude[:, :, index]
             @loop_s_r_z isn ir iz begin
-                pz[iz,ir,isn] += dt * source_amplitude[iz,ir]
+                dpz_dt[iz,ir,isn] += source_amplitude[iz,ir]
             end
         end
     end
@@ -94,7 +104,7 @@ evolve the neutral parallel pressure by solving the energy equation
     diffusion_coefficient = num_diss_params.neutral.moment_dissipation_coefficient
     if diffusion_coefficient > 0.0
         @loop_sn_r_z isn ir iz begin
-            pz[iz,ir,isn] += dt*diffusion_coefficient*moments.neutral.d2pz_dz2[iz,ir,isn]
+            dpz_dt[iz,ir,isn] += diffusion_coefficient*moments.neutral.d2pz_dz2[iz,ir,isn]
         end
     end
 
@@ -104,8 +114,8 @@ evolve the neutral parallel pressure by solving the energy equation
         ionization = collisions.reactions.ionization_frequency
         if abs(charge_exchange) > 0.0
             @loop_sn_r_z isn ir iz begin
-                pz[iz,ir,isn] -=
-                    dt*charge_exchange*(
+                dpz_dt[iz,ir,isn] -=
+                    charge_exchange*(
                         fvec.density[iz,ir,isn]*fvec.pz_neutral[iz,ir,isn] -
                         fvec.density_neutral[iz,ir,isn]*fvec.ppar[iz,ir,isn] -
                         fvec.density_neutral[iz,ir,isn]*fvec.density[iz,ir,isn] *
@@ -114,11 +124,17 @@ evolve the neutral parallel pressure by solving the energy equation
         end
         if abs(ionization) > 0.0
             @loop_sn_r_z isn ir iz begin
-                pz[iz,ir,isn] -=
-                    dt*ionization*fvec.density[iz,ir,isn]*fvec.pz_neutral[iz,ir,isn]
+                dpz_dt[iz,ir,isn] -=
+                    ionization*fvec.density[iz,ir,isn]*fvec.pz_neutral[iz,ir,isn]
             end
         end
     end
+
+    @loop_sn_r_z isn ir iz begin
+        pz_out[iz,ir,isn] += dt * dpz_dt[iz,ir,isn]
+    end
+
+    return nothing
 end
 
 end

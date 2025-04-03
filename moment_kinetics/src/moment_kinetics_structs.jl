@@ -145,6 +145,16 @@ struct moments_ion_substruct{ndim_moment_wall}
     dvth_dz::Union{MPISharedArray{mk_float,ndim_moment},Nothing}
     # this is the z-derivative of the temperature
     dT_dz::Union{MPISharedArray{mk_float,3},Nothing}
+    # Time derivative of the density
+    ddens_dt::Union{MPISharedArray{mk_float,ndim_moment},Nothing}
+    # Time derivative of the parallel flow
+    dupar_dt::Union{MPISharedArray{mk_float,ndim_moment},Nothing}
+    # Time derivative of the parallel particle flux
+    dnupar_dt::Union{MPISharedArray{mk_float,ndim_moment},Nothing}
+    # Time derivative of the parallel pressure
+    dppar_dt::Union{MPISharedArray{mk_float,ndim_moment},Nothing}
+    # Time derivative of the thermal speed
+    dvth_dt::Union{MPISharedArray{mk_float,ndim_moment},Nothing}
     # this is the entropy production dS/dt = - int (ln f sum_s' C_ss' [f_s,f_s']) d^3 v
     dSdt::MPISharedArray{mk_float,ndim_moment}
     # Spatially varying amplitude of the external source term (third index is for different sources)
@@ -231,6 +241,12 @@ struct moments_electron_substruct{ndim_moment_electron_source}
     dT_dz_upwind::Union{MPISharedArray{mk_float,ndim_moment_electron},Nothing}
     # this is the z-derivative of the electron thermal speed vth = sqrt(2*Tpar/m)
     dvth_dz::Union{MPISharedArray{mk_float,ndim_moment_electron},Nothing}
+    # Time derivative of the parallel pressure
+    dppar_dt::Union{MPISharedArray{mk_float,ndim_moment_electron},Nothing}
+    # Time derivative of the parallel temperature
+    dTpar_dt::Union{MPISharedArray{mk_float,ndim_moment_electron},Nothing}
+    # Time derivative of the thermal speed
+    dvth_dt::Union{MPISharedArray{mk_float,ndim_moment_electron},Nothing}
     # Store coefficient 'A' from applying moment constraints so we can write it out as a
     # diagnostic
     constraints_A_coefficient::Union{MPISharedArray{mk_float,ndim_moment_electron},Nothing}
@@ -311,6 +327,16 @@ struct moments_neutral_substruct
     dvth_dz::Union{MPISharedArray{mk_float,ndim_moment},Nothing}
     # this is the z-derivative of the heat flux along z
     dqz_dz::Union{MPISharedArray{mk_float,ndim_moment},Nothing}
+    # Time derivative of the density
+    ddens_dt::Union{MPISharedArray{mk_float,ndim_moment},Nothing}
+    # Time derivative of the particle mean velocity in z
+    duz_dt::Union{MPISharedArray{mk_float,ndim_moment},Nothing}
+    # Time derivative of the particle mean flux in z
+    dnuz_dt::Union{MPISharedArray{mk_float,ndim_moment},Nothing}
+    # Time derivative of the zz particle pressure tensor component
+    dpz_dt::Union{MPISharedArray{mk_float,ndim_moment},Nothing}
+    # Time derivative of the thermal speed
+    dvth_dt::Union{MPISharedArray{mk_float,ndim_moment},Nothing}
     # Spatially varying amplitude of the external source term
     external_source_amplitude::MPISharedArray{mk_float,ndim_moment}
     # Spatially varying amplitude of the density moment of the external source term

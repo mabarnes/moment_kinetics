@@ -74,109 +74,130 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                         get_variable(ri, "$(electron_prefix)failures_per_output"; it=it);
                         label=prefix * "failures", ax=ax_failures)
 
-                failure_caused_by_per_output =
-                    get_variable(ri, "$(electron_prefix)failure_caused_by_per_output";
-                                 it=it)
-                counter = 0
-                # pdf failure counter
-                counter += 1
-                if electron
-                    label = prefix * "failures caused by f_electron"
-                else
-                    label = prefix * "failures caused by f_ion"
-                end
-                plot_1d(time, @view failure_caused_by_per_output[counter,:];
-                        label=label, ax=ax_failures)
-                if !electron && ri.evolve_density
-                    # Ion density failure counter
+                if "$(electron_prefix)failure_caused_by" ∈ ri.variable_names
+                    # Old version, where "failure_caused_by" was written out as an array,
+                    # requiring a counter to get the correct variable to plot.
+                    failure_caused_by_per_output =
+                        get_variable(ri, "$(electron_prefix)failure_caused_by_per_output";
+                                     it=it)
+                    counter = 0
+                    # pdf failure counter
                     counter += 1
+                    if electron
+                        label = prefix * "failures caused by f_electron"
+                    else
+                        label = prefix * "failures caused by f_ion"
+                    end
                     plot_1d(time, @view failure_caused_by_per_output[counter,:];
-                            linestyle=:dash, label=prefix * "failures caused by n_ion",
-                            ax=ax_failures)
-                end
-                if !electron && ri.evolve_upar
-                    # Ion flow failure counter
-                    counter += 1
-                    plot_1d(time, @view failure_caused_by_per_output[counter,:];
-                            linestyle=:dash, label=prefix * "failures caused by u_ion",
-                            ax=ax_failures)
-                end
-                if !electron && ri.evolve_ppar
-                    # Ion parallel pressure failure counter
-                    counter += 1
-                    plot_1d(time, @view failure_caused_by_per_output[counter,:];
-                            linestyle=:dash, label=prefix * "failures caused by p_ion",
-                            ax=ax_failures)
-                end
-                if electron || ri.composition.electron_physics ∈ (braginskii_fluid,
-                                                                  kinetic_electrons,
-                                                                  kinetic_electrons_with_temperature_equation)
-                    # Electron parallel pressure failure counter
-                    counter += 1
-                    plot_1d(time, @view failure_caused_by_per_output[counter,:];
-                            linestyle=:dash, label=prefix * "failures caused by p_electron",
-                            ax=ax_failures)
-                    if !electron && ri.composition.electron_physics ∈ (kinetic_electrons,
-                                                                       kinetic_electrons_with_temperature_equation)
-                        # Kinetic electron nonlinear solver failure
+                            label=label, ax=ax_failures)
+                    if !electron && ri.evolve_density
+                        # Ion density failure counter
                         counter += 1
                         plot_1d(time, @view failure_caused_by_per_output[counter,:];
-                                linestyle=:dash, label=prefix * "failures caused by kinetic electron solve",
+                                linestyle=:dash, label=prefix * "failures caused by n_ion",
                                 ax=ax_failures)
                     end
-                end
-                if !electron && ri.n_neutral_species > 0
-                    # Neutral pdf failure counter
-                    counter += 1
-                    plot_1d(time, @view failure_caused_by_per_output[counter,:];
-                            label=prefix * "failures caused by f_neutral", ax=ax_failures)
-                    if ri.evolve_density
-                        # Neutral density failure counter
+                    if !electron && ri.evolve_upar
+                        # Ion flow failure counter
                         counter += 1
                         plot_1d(time, @view failure_caused_by_per_output[counter,:];
-                                linestyle=:dash,
-                                label=prefix * "failures caused by n_neutral", ax=ax_failures)
+                                linestyle=:dash, label=prefix * "failures caused by u_ion",
+                                ax=ax_failures)
                     end
-                    if ri.evolve_upar
-                        # Neutral flow failure counter
+                    if !electron && ri.evolve_ppar
+                        # Ion parallel pressure failure counter
                         counter += 1
                         plot_1d(time, @view failure_caused_by_per_output[counter,:];
-                                linestyle=:dash,
-                                label=prefix * "failures caused by u_neutral", ax=ax_failures)
+                                linestyle=:dash, label=prefix * "failures caused by p_ion",
+                                ax=ax_failures)
                     end
-                    if ri.evolve_ppar
-                        # Neutral flow failure counter
+                    if electron || ri.composition.electron_physics ∈ (braginskii_fluid,
+                                                                      kinetic_electrons,
+                                                                      kinetic_electrons_with_temperature_equation)
+                        # Electron parallel pressure failure counter
                         counter += 1
                         plot_1d(time, @view failure_caused_by_per_output[counter,:];
-                                linestyle=:dash,
-                                label=prefix * "failures caused by p_neutral", ax=ax_failures)
+                                linestyle=:dash, label=prefix * "failures caused by p_electron",
+                                ax=ax_failures)
+                        if !electron && ri.composition.electron_physics ∈ (kinetic_electrons,
+                                                                           kinetic_electrons_with_temperature_equation)
+                            # Kinetic electron nonlinear solver failure
+                            counter += 1
+                            plot_1d(time, @view failure_caused_by_per_output[counter,:];
+                                    linestyle=:dash, label=prefix * "failures caused by kinetic electron solve",
+                                    ax=ax_failures)
+                        end
                     end
-                    if occursin("ARK", ri.t_input["type"])
-                        # Nonlinear iteration failed to converge in implicit part of
-                        # timestep
+                    if !electron && ri.n_neutral_species > 0
+                        # Neutral pdf failure counter
                         counter += 1
                         plot_1d(time, @view failure_caused_by_per_output[counter,:];
-                                linestyle=:dot,
-                                label=prefix * "nonlinear iteration convergence failure", ax=ax_failures)
+                                label=prefix * "failures caused by f_neutral", ax=ax_failures)
+                        if ri.evolve_density
+                            # Neutral density failure counter
+                            counter += 1
+                            plot_1d(time, @view failure_caused_by_per_output[counter,:];
+                                    linestyle=:dash,
+                                    label=prefix * "failures caused by n_neutral", ax=ax_failures)
+                        end
+                        if ri.evolve_upar
+                            # Neutral flow failure counter
+                            counter += 1
+                            plot_1d(time, @view failure_caused_by_per_output[counter,:];
+                                    linestyle=:dash,
+                                    label=prefix * "failures caused by u_neutral", ax=ax_failures)
+                        end
+                        if ri.evolve_ppar
+                            # Neutral flow failure counter
+                            counter += 1
+                            plot_1d(time, @view failure_caused_by_per_output[counter,:];
+                                    linestyle=:dash,
+                                    label=prefix * "failures caused by p_neutral", ax=ax_failures)
+                        end
+                        if occursin("ARK", ri.t_input["type"])
+                            # Nonlinear iteration failed to converge in implicit part of
+                            # timestep
+                            counter += 1
+                            plot_1d(time, @view failure_caused_by_per_output[counter,:];
+                                    linestyle=:dot,
+                                    label=prefix * "nonlinear iteration convergence failure", ax=ax_failures)
+                        end
+                        if ri.composition.electron_physics ∈ (kinetic_electrons,
+                                                              kinetic_electrons_with_temperature_equation)
+                            # Kinetic electron iteration failed to converge
+                            counter += 1
+                            plot_1d(time, @view failure_caused_by_per_output[counter,:];
+                                    linestyle=:dot,
+                                    label=prefix * "nonlinear iteration convergence failure", ax=ax_failures)
+                        end
                     end
-                    if ri.composition.electron_physics ∈ (kinetic_electrons,
-                                                          kinetic_electrons_with_temperature_equation)
-                        # Kinetic electron iteration failed to converge
-                        counter += 1
-                        plot_1d(time, @view failure_caused_by_per_output[counter,:];
-                                linestyle=:dot,
-                                label=prefix * "nonlinear iteration convergence failure", ax=ax_failures)
-                    end
-                end
 
-                if counter > size(failure_caused_by_per_output, 1)
-                    error("Tried to plot non-existent variables in "
-                          * "failure_caused_by_per_output. Settings not understood "
-                          * "correctly.")
-                end
-                if counter < size(failure_caused_by_per_output, 1)
-                    error("Some variables in failure_caused_by_per_output not plotted. "
-                          * "Settings not understood correctly.")
+                    if counter > size(failure_caused_by_per_output, 1)
+                        error("Tried to plot non-existent variables in "
+                              * "failure_caused_by_per_output. Settings not understood "
+                              * "correctly.")
+                    end
+                    if counter < size(failure_caused_by_per_output, 1)
+                        error("Some variables in failure_caused_by_per_output not plotted. "
+                              * "Settings not understood correctly.")
+                    end
+                else
+                    # New version, where "failure_caused_by_*" are written as separate
+                    # variables, which we can loop over.
+                    failure_vars = [v for v ∈ ri.variable_names
+                                    if startswith(v, "$(electron_prefix)failure_caused_by")]
+                    for v ∈ failure_vars
+                        label = prefix * v
+                        if occursin("neutral", v)
+                            linestyle = :dash
+                        elseif occursin("convergence", v)
+                            linestyle = :dot
+                        else
+                            linestyle = :solid
+                        end
+                        plot_vs_t(ri, "$(v)_per_step"; linestyle=linestyle, label=label,
+                                  ax=ax_failures)
+                    end
                 end
             end
 
@@ -310,146 +331,168 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                 else
                     prefix = ri.run_name * " "
                 end
-                if it !== nothing
-                    time = ri.time[it]
-                else
-                    time = ri.time
-                end
 
-                limit_caused_by_per_output =
-                    get_variable(ri, "$(electron_prefix)limit_caused_by_per_output";
-                                 it=it)
-                counter = 0
-
-                # Maximum timestep increase limit counter
-                counter += 1
-                plot_1d(time, @view limit_caused_by_per_output[counter,:];
-                        label=prefix * "max timestep increase", ax=ax)
-
-                # Slower maximum timestep increase near last failure limit counter
-                counter += 1
-                plot_1d(time, @view limit_caused_by_per_output[counter,:];
-                        label=prefix * "max timestep increase near last fail", ax=ax)
-
-                # Minimum timestep limit counter
-                counter += 1
-                plot_1d(time, @view limit_caused_by_per_output[counter,:];
-                        label=prefix * "min timestep", ax=ax)
-
-                # Maximum timestep limit counter
-                counter += 1
-                plot_1d(time, @view limit_caused_by_per_output[counter,:];
-                        label=prefix * "max timestep", ax=ax)
-
-                # High nonlinear iterations count
-                counter += 1
-                plot_1d(time, @view limit_caused_by_per_output[counter,:];
-                        label=prefix * "high nl iterations", ax=ax)
-
-                # Accuracy limit counters
-                counter += 1
-                if electron
-                    label = prefix * "electron pdf RK accuracy"
-                else
-                    label = prefix * "ion pdf RK accuracy"
-                end
-                plot_1d(time, @view limit_caused_by_per_output[counter,:];
-                        label=label, ax=ax, linestyle=:dash)
-                if !electron && ri.evolve_density
-                    counter += 1
-                    plot_1d(time, @view limit_caused_by_per_output[counter,:];
-                            label=prefix * "ion density RK accuracy", ax=ax,
-                            linestyle=:dash)
-                end
-                if !electron && ri.evolve_upar
-                    counter += 1
-                    plot_1d(time, @view limit_caused_by_per_output[counter,:];
-                            label=prefix * "ion upar RK accuracy", ax=ax,
-                            linestyle=:dash)
-                end
-                if !electron && ri.evolve_ppar
-                    counter += 1
-                    plot_1d(time, @view limit_caused_by_per_output[counter,:];
-                            label=prefix * "ion ppar RK accuracy", ax=ax,
-                            linestyle=:dash)
-                end
-                if electron || ri.composition.electron_physics ∈ (braginskii_fluid,
-                                                                  kinetic_electrons,
-                                                                  kinetic_electrons_with_temperature_equation)
-                    counter += 1
-                    plot_1d(time, @view limit_caused_by_per_output[counter,:];
-                            label=prefix * "electron ppar RK accuracy", ax=ax,
-                            linestyle=:dash)
-                end
-                if !electron && ri.n_neutral_species > 0
-                    counter += 1
-                    plot_1d(time, @view limit_caused_by_per_output[counter,:];
-                            label=prefix * "neutral pdf RK accuracy", ax=ax,
-                            linestyle=:dash)
-                    if ri.evolve_density
-                        counter += 1
-                        plot_1d(time, @view limit_caused_by_per_output[counter,:];
-                                label=prefix * "neutral density RK accuracy", ax=ax,
-                                linestyle=:dash)
+                if "$(electron_prefix)limit_caused_by_per_output" ∈ ri.variable_names
+                    # Old version, where "limit_caused_by" was written out as an array,
+                    # requiring a counter to get the correct variable to plot.
+                    if it !== nothing
+                        time = ri.time[it]
+                    else
+                        time = ri.time
                     end
-                    if ri.evolve_upar
-                        counter += 1
-                        plot_1d(time, @view limit_caused_by_per_output[counter,:];
-                                label=prefix * "neutral uz RK accuracy", ax=ax,
-                                linestyle=:dash)
-                    end
-                    if ri.evolve_ppar
-                        counter += 1
-                        plot_1d(time, @view limit_caused_by_per_output[counter,:];
-                                label=prefix * "neutral pz RK accuracy", ax=ax,
-                                linestyle=:dash)
-                    end
-                end
 
-                if electron || !(occursin("ARK", ri.t_input["type"]) && ri.t_input["implicit_ion_advance"])
-                    # Ion z advection
+                    limit_caused_by_per_output =
+                        get_variable(ri, "$(electron_prefix)limit_caused_by_per_output";
+                                     it=it)
+                    counter = 0
+
+                    # Maximum timestep increase limit counter
+                    counter += 1
+                    plot_1d(time, @view limit_caused_by_per_output[counter,:];
+                            label=prefix * "max timestep increase", ax=ax)
+
+                    # Slower maximum timestep increase near last failure limit counter
+                    counter += 1
+                    plot_1d(time, @view limit_caused_by_per_output[counter,:];
+                            label=prefix * "max timestep increase near last fail", ax=ax)
+
+                    # Minimum timestep limit counter
+                    counter += 1
+                    plot_1d(time, @view limit_caused_by_per_output[counter,:];
+                            label=prefix * "min timestep", ax=ax)
+
+                    # Maximum timestep limit counter
+                    counter += 1
+                    plot_1d(time, @view limit_caused_by_per_output[counter,:];
+                            label=prefix * "max timestep", ax=ax)
+
+                    # High nonlinear iterations count
+                    counter += 1
+                    plot_1d(time, @view limit_caused_by_per_output[counter,:];
+                            label=prefix * "high nl iterations", ax=ax)
+
+                    # Accuracy limit counters
                     counter += 1
                     if electron
-                        label = prefix * "electron z advect"
+                        label = prefix * "electron pdf RK accuracy"
                     else
-                        label = prefix * "ion z advect"
+                        label = prefix * "ion pdf RK accuracy"
                     end
                     plot_1d(time, @view limit_caused_by_per_output[counter,:];
-                            label=label, ax=ax, linestyle=:dot)
-                end
-
-                if electron || !(occursin("ARK", ri.t_input["type"]) && (ri.t_input["implicit_ion_advance"] || ri.t_input["implicit_vpa_advection"]))
-                    # Ion vpa advection
-                    counter += 1
-                    if electron
-                        label = prefix * "electron vpa advect"
-                    else
-                        label = prefix * "ion vpa advect"
+                            label=label, ax=ax, linestyle=:dash)
+                    if !electron && ri.evolve_density
+                        counter += 1
+                        plot_1d(time, @view limit_caused_by_per_output[counter,:];
+                                label=prefix * "ion density RK accuracy", ax=ax,
+                                linestyle=:dash)
                     end
-                    plot_1d(time, @view limit_caused_by_per_output[counter,:];
-                            label=label, ax=ax, linestyle=:dot)
-                end
+                    if !electron && ri.evolve_upar
+                        counter += 1
+                        plot_1d(time, @view limit_caused_by_per_output[counter,:];
+                                label=prefix * "ion upar RK accuracy", ax=ax,
+                                linestyle=:dash)
+                    end
+                    if !electron && ri.evolve_ppar
+                        counter += 1
+                        plot_1d(time, @view limit_caused_by_per_output[counter,:];
+                                label=prefix * "ion ppar RK accuracy", ax=ax,
+                                linestyle=:dash)
+                    end
+                    if electron || ri.composition.electron_physics ∈ (braginskii_fluid,
+                                                                      kinetic_electrons,
+                                                                      kinetic_electrons_with_temperature_equation)
+                        counter += 1
+                        plot_1d(time, @view limit_caused_by_per_output[counter,:];
+                                label=prefix * "electron ppar RK accuracy", ax=ax,
+                                linestyle=:dash)
+                    end
+                    if !electron && ri.n_neutral_species > 0
+                        counter += 1
+                        plot_1d(time, @view limit_caused_by_per_output[counter,:];
+                                label=prefix * "neutral pdf RK accuracy", ax=ax,
+                                linestyle=:dash)
+                        if ri.evolve_density
+                            counter += 1
+                            plot_1d(time, @view limit_caused_by_per_output[counter,:];
+                                    label=prefix * "neutral density RK accuracy", ax=ax,
+                                    linestyle=:dash)
+                        end
+                        if ri.evolve_upar
+                            counter += 1
+                            plot_1d(time, @view limit_caused_by_per_output[counter,:];
+                                    label=prefix * "neutral uz RK accuracy", ax=ax,
+                                    linestyle=:dash)
+                        end
+                        if ri.evolve_ppar
+                            counter += 1
+                            plot_1d(time, @view limit_caused_by_per_output[counter,:];
+                                    label=prefix * "neutral pz RK accuracy", ax=ax,
+                                    linestyle=:dash)
+                        end
+                    end
 
-                if !electron && ri.n_neutral_species > 0
-                    # Neutral z advection
-                    counter += 1
-                    plot_1d(time, @view limit_caused_by_per_output[counter,:];
-                            label=prefix * "neutral z advect", ax=ax, linestyle=:dot)
+                    if electron || !(occursin("ARK", ri.t_input["type"]) && ri.t_input["implicit_ion_advance"])
+                        # Ion z advection
+                        counter += 1
+                        if electron
+                            label = prefix * "electron z advect"
+                        else
+                            label = prefix * "ion z advect"
+                        end
+                        plot_1d(time, @view limit_caused_by_per_output[counter,:];
+                                label=label, ax=ax, linestyle=:dot)
+                    end
 
-                    # Neutral vz advection
-                    counter += 1
-                    plot_1d(time, @view limit_caused_by_per_output[counter,:];
-                            label=prefix * "neutral vz advect", ax=ax, linestyle=:dot)
-                end
+                    if electron || !(occursin("ARK", ri.t_input["type"]) && (ri.t_input["implicit_ion_advance"] || ri.t_input["implicit_vpa_advection"]))
+                        # Ion vpa advection
+                        counter += 1
+                        if electron
+                            label = prefix * "electron vpa advect"
+                        else
+                            label = prefix * "ion vpa advect"
+                        end
+                        plot_1d(time, @view limit_caused_by_per_output[counter,:];
+                                label=label, ax=ax, linestyle=:dot)
+                    end
 
-                if counter > size(limit_caused_by_per_output, 1)
-                    error("Tried to plot non-existent variables in "
-                          * "limit_caused_by_per_output. Settings not understood "
-                          * "correctly.")
-                end
-                if counter < size(limit_caused_by_per_output, 1)
-                    error("Some variables in limit_caused_by_per_output not plotted. "
-                          * "Settings not understood correctly.")
+                    if !electron && ri.n_neutral_species > 0
+                        # Neutral z advection
+                        counter += 1
+                        plot_1d(time, @view limit_caused_by_per_output[counter,:];
+                                label=prefix * "neutral z advect", ax=ax, linestyle=:dot)
+
+                        # Neutral vz advection
+                        counter += 1
+                        plot_1d(time, @view limit_caused_by_per_output[counter,:];
+                                label=prefix * "neutral vz advect", ax=ax, linestyle=:dot)
+                    end
+
+                    if counter > size(limit_caused_by_per_output, 1)
+                        error("Tried to plot non-existent variables in "
+                              * "limit_caused_by_per_output. Settings not understood "
+                              * "correctly.")
+                    end
+                    if counter < size(limit_caused_by_per_output, 1)
+                        error("Some variables in limit_caused_by_per_output not plotted. "
+                              * "Settings not understood correctly.")
+                    end
+                else
+                    # New version, where "limit_caused_by_*" are written as separate
+                    # variables, which we can loop over.
+                    limit_vars = [v for v ∈ ri.variable_names
+                                  if startswith(v, "$(electron_prefix)limit_caused_by")]
+                    for v ∈ limit_vars
+                        label = prefix * v
+                        if occursin("accuracy", v)
+                            linestyle = :dash
+                        elseif occursin("CFL", v)
+                            linestyle = :dot
+                        else
+                            linestyle = :solid
+                        end
+                        plot_vs_t(ri, "$(v)_per_step"; linestyle=linestyle, label=label,
+                                  ax=ax)
+                    end
                 end
             end
 

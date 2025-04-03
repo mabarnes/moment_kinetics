@@ -7,7 +7,7 @@ export allocate_float, allocate_int, allocate_complex, allocate_bool, allocate_s
 using ..type_definitions: mk_float, mk_int
 using ..communication
 using ..debugging
-@debug_initialize_NaN using ..communication: block_rank, _block_synchronize
+@debug_initialize_NaN using ..communication: block_rank
 
 using MPI
 

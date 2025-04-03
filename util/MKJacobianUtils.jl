@@ -185,7 +185,7 @@ function get_electron_Jacobian_matrix(run_directory; restart_time_index=1,
     buffer_2 = @view scratch_dummy.buffer_rs_2[ir,1]
     buffer_3 = @view scratch_dummy.buffer_rs_3[ir,1]
     buffer_4 = @view scratch_dummy.buffer_rs_4[ir,1]
-    begin_z_region()
+    @begin_z_region()
     @loop_z iz begin
         third_moment[iz] = 0.5 * qpar[iz] / ppar[iz] / vth[iz]
     end
@@ -205,7 +205,7 @@ function get_electron_Jacobian_matrix(run_directory; restart_time_index=1,
 
         z_speed = @view z_advect[1].speed[:,:,:,ir]
         dpdf_dz = @view scratch_dummy.buffer_vpavperpzr_1[:,:,:,ir]
-        begin_vperp_vpa_region()
+        @begin_vperp_vpa_region()
         update_electron_speed_z!(z_advect[1], upar, vth, vpa.grid, ir)
         @loop_vperp_vpa ivperp ivpa begin
             @views z_advect[1].adv_fac[:,ivpa,ivperp,ir] = -z_speed[:,ivpa,ivperp]

@@ -150,13 +150,13 @@ Simpler nested loops can (optionally) be written more compactly
     f[ivpa,iz,is] = ...
 end
 ```
-Which dimensions are actually parallelized by these macros is controlled by the 'region' that the code is currently in, as set by the `begin_<dims>_region()` functions, where <dims> are the dimensions that will be parallelized in the following region. For example, after calling `begin_s_z_region()` loops over species and z will be divided up over the processes in a 'block' (currently there is only one block, which contains the whole grid and all the processes being used, as we have not yet implemented distributed-memory parallelism). Every process will loop over all points in the remaining dimensions if the loop macros for those dimensions are called.
-* The recommended place to put `begin_*_region()` calls is at the beginning of a function whose contents should use loops parallelised according to the settings for that region.
-    * Each `begin_*_region()` function checks if the region it would set is already active, and if so returns immediately (doing nothing). This means that `begin_*_region()` can (and should) be used to mark a block of code as belonging to that region, and if `moment_kinetics` is already in that region type, the call will have essentially zero cost.
+Which dimensions are actually parallelized by these macros is controlled by the 'region' that the code is currently in, as set by the `@begin_<dims>_region()` macros, where <dims> are the dimensions that will be parallelized in the following region. For example, after calling `@begin_s_z_region()` loops over species and z will be divided up over the processes in a 'block' (currently there is only one block, which contains the whole grid and all the processes being used, as we have not yet implemented distributed-memory parallelism). Every process will loop over all points in the remaining dimensions if the loop macros for those dimensions are called.
+* The recommended place to put `@begin_*_region()` calls is at the beginning of a function whose contents should use loops parallelised according to the settings for that region.
+    * Each `@begin_*_region()` function checks if the region it would set is already active, and if so returns immediately (doing nothing). This means that `@begin_*_region()` can (and should) be used to mark a block of code as belonging to that region, and if `moment_kinetics` is already in that region type, the call will have essentially zero cost.
     * In some places it may be necessary to change the region type half way through a function, etc. This is fine.
     * When choosing which region type to select, note that all 'parallelised dimensions' must be looped over for each operation (otherwise some points may be written more than once), unless some special handling is used (e.g. species dimension `s` is parallelised, but a conditional like `if 1 in loop_ranges[].s` is wrapped around code to be executed so that only processes which should handle the point at `s=1` do anything). It may be more optimal in some places to choose region types that do not parallelise all possible dimensions, to reduce the number of synchronisations that are needed.
-    * As a matter of style, it is recommended to place `begin_*_region()` calls within functions where the loops are (or at most one level above), so that it is not necessary to search back along the execution path of the code to find the most recent `begin_*_region()` call, and therefore know what region type is active.
-* In a region after `begin_serial_region()`, the rank 0 process in each block will loop over all points in every dimension, and all other ranks will not loop over any.
+    * As a matter of style, it is recommended to place `@begin_*_region()` calls within functions where the loops are (or at most one level above), so that it is not necessary to search back along the execution path of the code to find the most recent `@begin_*_region()` call, and therefore know what region type is active.
+* In a region after `@begin_serial_region()`, the rank 0 process in each block will loop over all points in every dimension, and all other ranks will not loop over any.
 * Inside serial regions, the macro `@serial_region` can also be used to wrap blocks of code so that they only run on rank 0 of the block. This is useful for example to allow the use of array-broadcast expressions during initialization where performance is not critical.
 * To help show how these macros work, a script is provided that print a set of examples where the loop macros are expanded. It can be run from the Julia REPL
   ```
@@ -191,7 +191,9 @@ It is also possible to run a block of code in serial (on just the rank-0 member 
 end
 ```
 
-Internally, when the `begin_*_region()` functions need to change the region type (i.e. the requested region is not already active), they call `_block_synchronize()`, which calls `MPI.Barrier()`. They also switch over the `LoopRanges` struct contained in `looping.loop_ranges` as noted above. For optimization, the `_block_synchronize()` call can be skipped - when it is correct to do so - by passing the argument `no_synchronize=true` (or some more complicated conditional expression if synchronization is necessary when using some options but not for others).
+Internally, when the `@begin_*_region()` macros need to change the region type (i.e. the requested region is not already active), they call `_block_synchronize()`, which calls `MPI.Barrier()`. They also switch over the `LoopRanges` struct contained in `looping.loop_ranges` as noted above. For optimization, the `_block_synchronize()` call can be skipped - when it is correct to do so - by passing the argument `no_synchronize=true` (or some more complicated conditional expression if synchronization is necessary when using some options but not for others).
+
+If for some reason it is necessary to synchronize explicitly, not by using an `@begin_*_region()` call, use the `@_block_synchronize()` macro. This calls `_block_synchronize()`, but when debugging can also pass in some information (a hash of the file an line number) about the calling site that is used for consistency checking.
 
 ### Collision operator and `anyv` region
 
@@ -207,21 +209,21 @@ velocity space.
 
 The mechanism introduced to allow the type of parallelization just described is
 the 'anyv' (read any-$v$) region. Before the outer loop of the collision
-operator `begin_s_r_z_anyv_region()` is used to start the 'anyv'
+operator `@begin_s_r_z_anyv_region()` is used to start the 'anyv'
 parallelization. Then within the `@loop is ir iz begin...` the functions
-`begin_anyv_region()` (for no parallelization over velocity space),
-`begin_anyv_vperp_region()`, `begin_anyv_vpa_region()` and
-`begin_anyv_vperp_vpa_region()` can be used to parallelize over neither
+`@begin_anyv_region()` (for no parallelization over velocity space),
+`@begin_anyv_vperp_region()`, `@begin_anyv_vpa_region()` and
+`@begin_anyv_vperp_vpa_region()` can be used to parallelize over neither
 velocity space dimension, either velocity space dimension individually, or over
 both velocity space dimensions together. This is possible because 'subblocks'
 of processes are defined. Each subblock shares the same range of species and
-spatial indices, which stay the same throughout the `begin_s_r_z_anyv_region()`
+spatial indices, which stay the same throughout the `@begin_s_r_z_anyv_region()`
 section, and are not shared with any other subblock of processes. Because the
 subblock has an independent set of species- and spatial-indices, when changing
 the velocity-space parallelization only the processes in the sub-block need to
 be synchronized which is done by
 [`moment_kinetics.communication._anyv_subblock_synchronize`](@ref), which is
-called when necessary within the `begin_anyv*_region()` functions (the whole
+called when necessary within the `@begin_anyv*_region()` functions (the whole
 shared-memory block does not need to be synchronized at once, as would be done
 by [`moment_kinetics.communication._block_synchronize`](@ref)). The processes
 that share an anyv subblock are all part of the `comm_anyv_subblock[]`

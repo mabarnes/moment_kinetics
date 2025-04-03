@@ -40,7 +40,7 @@ bc = "zero"
 ngrid = 5
 discretization = "gausslegendre_pseudospectral"
 nelement = 32
-nelement_local = 4
+#nelement_local = 8
 bc = "wall"
 element_spacing_option = "sqrt"
 
@@ -97,10 +97,10 @@ type = "KennedyCarpenterARK324"
 kinetic_electron_solver = "implicit_ppar_implicit_pseudotimestep"
 implicit_ion_advance = false
 implicit_vpa_advection = false
-nstep = 1000000
+nstep = 100000
 dt = 1.0e-5
-nwrite = 1000
-nwrite_dfns = 1000
+nwrite = 10000
+nwrite_dfns = 10000
 steady_state_residual = true
 converged_residual_value = 1.0e-3
 
@@ -121,11 +121,12 @@ type = "Fekete4(3)"
 rtol = 1.0e-3
 atol = 1.0e-14
 minimum_dt = 1.0e-9
-decrease_dt_iteration_threshold = 100
+decrease_dt_iteration_threshold = 50
 increase_dt_iteration_threshold = 20
 cap_factor_ion_dt = 10.0
 initialization_residual_value = 2.5
 converged_residual_value = 1.0e-2
+include_wall_bc_in_preconditioner = true
 
 #debug_io = 1
 

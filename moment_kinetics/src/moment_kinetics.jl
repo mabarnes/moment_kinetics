@@ -92,7 +92,7 @@ using .file_io: write_all_moments_data_to_binary, write_all_dfns_data_to_binary,
                 write_final_timing_data_to_binary
 using .command_line_options: get_options
 using .communication
-using .communication: _block_synchronize
+using .communication: @_block_synchronize
 using .debugging
 using .external_sources
 using .input_structs
@@ -312,14 +312,14 @@ parallel loop ranges, and are only used by the tests in `debug_test/`.
                                     composition, geometry, r, z, vpa, vperp, vzeta, vr,
                                     vz)
 
-        begin_serial_region()
+        @begin_serial_region()
         @serial_region begin
             @. moments.electron.temp = composition.me_over_mi * moments.electron.vth^2
             @. moments.electron.ppar = 0.5 * moments.electron.dens * moments.electron.temp
         end
         if composition.electron_physics ∈ (kinetic_electrons,
                                            kinetic_electrons_with_temperature_equation)
-            begin_r_z_vperp_vpa_region()
+            @begin_r_z_vperp_vpa_region()
             @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
                 pdf.electron.pdf_before_ion_timestep[ivpa,ivperp,iz,ir] =
                     pdf.electron.norm[ivpa,ivperp,iz,ir]
@@ -331,7 +331,7 @@ parallel loop ranges, and are only used by the tests in `debug_test/`.
         initialize_external_source_amplitude!(moments, external_source_settings, vperp,
                                               vzeta, vr, composition.n_neutral_species)
 
-        _block_synchronize()
+        @_block_synchronize()
     end
 
     # Broadcast code_time from the root process of each shared-memory block (on which it
@@ -386,7 +386,7 @@ parallel loop ranges, and are only used by the tests in `debug_test/`.
         io_dfns = nothing
     end
 
-    begin_s_r_z_vperp_region()
+    @begin_s_r_z_vperp_region()
 
     return pdf, scratch, scratch_implicit, scratch_electron, t_params, vz, vr,
            vzeta, vpa, vperp, gyrophase, z, r, moments, fields, spectral_objects,
@@ -406,7 +406,7 @@ function cleanup_moment_kinetics!(ascii_io, io_moments, io_dfns)
         debug_detect_redundant_is_active[] = false
     end
 
-    begin_serial_region()
+    @begin_serial_region()
 
     # finish i/o
     finish_file_io(ascii_io, io_moments, io_dfns)

@@ -85,8 +85,7 @@ upar_phase = 0.0
 
 [timestepping]
 type = "KennedyCarpenterARK324"
-implicit_electron_advance = true
-implicit_electron_ppar = false
+kinetic_electron_solver = "implicit_ppar_implicit_pseudotimestep"
 implicit_ion_advance = false
 implicit_vpa_advection = false
 nstep = 1000000

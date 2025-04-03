@@ -139,7 +139,7 @@ vpa_boundary_buffer_damping_rate = 0.1
         vpa_inds = flatten((1:nbuffer, vpa.n-nbuffer+1:vpa.n))
     end
 
-    begin_s_r_z_region()
+    @begin_s_r_z_region()
 
     if moments.evolve_upar && moments.evolve_ppar
         @loop_s_r_z is ir iz begin
@@ -238,7 +238,7 @@ vpa_boundary_buffer_diffusion_coefficient = 0.1
         vpa_inds = flatten((1:nbuffer, vpa.n-nbuffer+1:vpa.n))
     end
 
-    begin_s_r_z_region()
+    @begin_s_r_z_region()
 
     @loop_s_r_z is ir iz begin
         # Calculate second derivative
@@ -260,7 +260,7 @@ the boundaries, so this should be an OK thing to force.
 Note: not currently used.
 """
 @timeit global_timer vpa_boundary_force_decreasing!(f_out, vpa) = begin
-    begin_s_r_z_region()
+    @begin_s_r_z_region()
 
     ngrid = vpa.ngrid
     n = vpa.n
@@ -301,7 +301,7 @@ vpa_dissipation_coefficient = 0.1
         return nothing
     end
 
-    begin_s_r_z_vperp_region()
+    @begin_s_r_z_vperp_region()
 
     # if T_spectral <: Bool
     #     # Scale diffusion coefficient like square of grid spacing, so convergence will
@@ -358,7 +358,7 @@ vperp_dissipation_coefficient = 0.1
 @timeit global_timer vperp_dissipation!(
                          f_out, f_in, vperp, spectral, dt, diffusion_coefficient) = begin
     
-    begin_s_r_z_vpa_region()
+    @begin_s_r_z_vpa_region()
 
     if diffusion_coefficient <= 0.0 || vperp.n == 1
         return nothing
@@ -396,7 +396,7 @@ on internal or external element boundaries
         return nothing
     end
 
-    begin_s_r_vperp_vpa_region()
+    @begin_s_r_vperp_vpa_region()
 
     # calculate d^2 f / d z^2 using distributed memory compatible routines
     second_derivative_z!(scratch_dummy.buffer_vpavperpzrs_1, f_in,
@@ -437,7 +437,7 @@ on internal or external element boundaries
         return nothing
     end
 
-    begin_s_z_vperp_vpa_region()
+    @begin_s_z_vperp_vpa_region()
 
     # calculate d^2 f / d r^2 using distributed memory compatible routines
     second_derivative_r!(scratch_dummy.buffer_vpavperpzrs_1, f_in,
@@ -471,7 +471,7 @@ vz_dissipation_coefficient = 0.1
         return nothing
     end
 
-    begin_sn_r_z_vzeta_vr_region()
+    @begin_sn_r_z_vzeta_vr_region()
 
     @loop_sn_r_z_vzeta_vr isn ir iz ivzeta ivr begin
         @views second_derivative!(vz.scratch, f_in[:,ivr,ivzeta,iz,ir,isn], vz, spectral)
@@ -505,7 +505,7 @@ on internal or external element boundaries
         return nothing
     end
 
-    begin_sn_r_vzeta_vr_vz_region()
+    @begin_sn_r_vzeta_vr_vz_region()
 
     # calculate d^2 f / d z^2  using distributed memory compatible routines
     second_derivative_z!(scratch_dummy.buffer_vzvrvzetazrsn_1, f_in,
@@ -546,7 +546,7 @@ on internal or external element boundaries
         return nothing
     end
 
-    begin_sn_z_vzeta_vr_vz_region()
+    @begin_sn_z_vzeta_vr_vz_region()
 
     # calculate d^2 f/ d r^2 using distributed memory compatible routines
     second_derivative_r!(scratch_dummy.buffer_vzvrvzetazrsn_1, f_in,

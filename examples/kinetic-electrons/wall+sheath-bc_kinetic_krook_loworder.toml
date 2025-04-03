@@ -109,6 +109,7 @@ vpa_dissipation_coefficient = 20.0
 use_krook = true
 
 [timestepping]
+kinetic_electron_solver = "explicit_pseudotimestep"
 nstep = 40000
 #nstep = 1
 dt = 0.0005

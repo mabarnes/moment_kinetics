@@ -3,6 +3,10 @@ name: Debug checks for correctness
 
 on: [push, pull_request, workflow_dispatch]
 
+permissions:
+  actions: write
+  contents: read
+
 jobs:
   debug-checks:
     runs-on: ${{ matrix.os }}
