@@ -97,7 +97,8 @@ function mk_input(input_dict=OptionsDict("output" => OptionsDict("run_name" => "
     end
     # Check for input options that used to exist in some section, but do not any more. If
     # these are present, the user probably needs to update their input file.
-    removed_section_options_list = Dict("timestepping" => ("implicit_electron_advance",
+    removed_section_options_list = Dict("evolve_moments" => ("parallel_pressure",),
+                                        "timestepping" => ("implicit_electron_advance",
                                                            "implicit_electron_time_evolving",
                                                            "implicit_electron_ppar",),
                                        )
@@ -129,7 +130,7 @@ function mk_input(input_dict=OptionsDict("output" => OptionsDict("run_name" => "
         input_dict, "evolve_moments", warn_unexpected;
         density=false,
         parallel_flow=false,
-        parallel_pressure=false,
+        pressure=false,
         moments_conservation=false,
        )
     evolve_moments = Dict_to_NamedTuple(evolve_moments_settings)
@@ -171,7 +172,7 @@ function mk_input(input_dict=OptionsDict("output" => OptionsDict("run_name" => "
     timestepping_section = set_defaults_and_check_section!(
         input_dict, "timestepping", warn_unexpected;
         nstep=5,
-        dt=0.00025/sqrt(composition.ion[1].initial_temperature),
+        dt=0.00025/sqrt(2.0*composition.ion[1].initial_temperature),
         CFL_prefactor=-1.0,
         nwrite=1,
         nwrite_dfns=-1,
@@ -193,7 +194,7 @@ function mk_input(input_dict=OptionsDict("output" => OptionsDict("run_name" => "
         implicit_braginskii_conduction=true,
         kinetic_electron_solver=(composition.electron_physics ∈ (kinetic_electrons,
                                                                  kinetic_electrons_with_temperature_equation)
-                                 ? implicit_ppar_implicit_pseudotimestep : null_kinetic_electrons),
+                                 ? implicit_p_implicit_pseudotimestep : null_kinetic_electrons),
         kinetic_electron_preconditioner="default",
         implicit_ion_advance=false,
         implicit_vpa_advection=false,
@@ -424,7 +425,7 @@ function mk_input(input_dict=OptionsDict("output" => OptionsDict("run_name" => "
     geometry = init_magnetic_geometry(geometry_in,z,r)
     if any(geometry.dBdz .!= 0.0) &&
             (evolve_moments.density || evolve_moments.parallel_flow ||
-             evolve_moments.parallel_pressure)
+             evolve_moments.pressure)
         error("Mirror terms not yet implemented for moment-kinetic modes")
     end
 
@@ -626,7 +627,7 @@ function check_input_initialization(composition, species, io)
         end
         if species[is].vpa_IC.initialization_option == "gaussian"
             print(io,">vpa_intialization_option = 'gaussian'.")
-            println(io,"  setting G(vpa) = exp(-(vpa/vpa_width)^2).")
+            println(io,"  setting G(vpa) = Maxwellian_prefactor*exp(-(vpa/vpa_width)^2).")
         elseif species[is].vpa_IC.initialization_option == "monomial"
             print(io,">vpa_intialization_option = 'monomial'.")
             println(io,"  setting G(vpa) = (vpa + L_vpa/2)^", species[is].vpa_IC._monomial_degree, ".")
@@ -638,7 +639,7 @@ function check_input_initialization(composition, species, io)
             println(io,"  setting F(z,vpa) = F(vpa^2 + phi), with phi_max = 0.")
         elseif species[is].vpa_IC.initialization_option == "vpagaussian"
             print(io,">vpa_initialization_option = 'vpagaussian'.")
-            println(io,"  setting G(vpa) = vpa^2*exp(-(vpa/vpa_width)^2).")
+            println(io,"  setting G(vpa) = vpa^2*Maxwellian_prefactor*exp(-(vpa/vpa_width)^2).")
         else
             input_option_error("vpa_initialization_option", species[is].vpa_IC.initialization_option)
         end

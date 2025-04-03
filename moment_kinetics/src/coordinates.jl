@@ -17,7 +17,8 @@ using ..gauss_legendre: scaled_gauss_legendre_lobatto_grid, scaled_gauss_legendr
 using ..input_structs
 using ..quadrature: composite_simpson_weights
 using ..input_structs
-using ..moment_kinetics_structs: null_spatial_dimension_info, null_velocity_dimension_info
+using ..moment_kinetics_structs: null_spatial_dimension_info,
+                                 null_velocity_dimension_info, null_vperp_dimension_info
 
 using MPI
 using OrderedCollections: OrderedDict
@@ -416,7 +417,10 @@ function define_coordinate(coord_input::NamedTuple; parallel_io::Bool=false,
         coord_input.element_spacing_option, element_boundaries, radau_first_element,
         other_nodes, one_over_denominator)
 
-    if coord.n == 1 && occursin("v", coord.name)
+    if coord.n == 1 && coord.name == "vperp"
+        spectral = null_vperp_dimension_info()
+        coord.duniform_dgrid .= 1.0
+    elseif coord.n == 1 && occursin("v", coord.name)
         spectral = null_velocity_dimension_info()
         coord.duniform_dgrid .= 1.0
     elseif coord.n == 1
@@ -660,18 +664,15 @@ function init_grid(ngrid, nelement_local, n_global, n_local, irank, L, element_s
         grid = allocate_float(n_local)
         grid[1] = 0.0
         wgts = allocate_float(n_local)
-        if name == "vr" || name == "vzeta"
-            wgts[1] = sqrt(pi) # to cancel factor of 1/sqrt{pi} in integrate_over_neutral_vspace, velocity_moments.jl
-                               # in the case that the code runs in 1V mode
-        else
-            wgts[1] = 1.0
-        end
+        wgts[1] = 1.0
     elseif discretization == "chebyshev_pseudospectral"
         if name == "vperp"
             # initialize chebyshev grid defined on [-L/2,L/2]
             grid, wgts = scaled_chebyshev_radau_grid(ngrid, nelement_local, n_local, element_scale, element_shift, imin, imax, irank)
-            wgts = 2.0 .* wgts .* grid # to include 2 vperp in jacobian of integral
-                                       # see note above on normalisation
+            # Integrals over vperp are actually 2d integrals
+            #   ∫d^2(v_⟂)=∫dv_⟂ v_⟂∫dϕ=2π∫dv_⟂ v_⟂
+            # so need to multiply the weight by 2*π*v_⟂
+            @. wgts = 2.0 * π * grid * wgts
             radau_first_element = true
         else
             # initialize chebyshev grid defined on [-L/2,L/2]
@@ -686,8 +687,10 @@ function init_grid(ngrid, nelement_local, n_global, n_local, irank, L, element_s
         if name == "vperp"
             # use a radau grid for the 1st element near the origin
             grid, wgts = scaled_gauss_legendre_radau_grid(ngrid, nelement_local, n_local, element_scale, element_shift, imin, imax, irank)
-            wgts = 2.0 .* wgts .* grid # to include 2 vperp in jacobian of integral
-                                       # see note above on normalisation
+            # Integrals over vperp are actually 2d integrals
+            #   ∫d^2(v_⟂)=∫dv_⟂ v_⟂∫dϕ=2π∫dv_⟂ v_⟂
+            # so need to multiply the weight by 2*π*v_⟂
+            @. wgts = 2.0 * π * grid * wgts
             radau_first_element = true
         else
             grid, wgts = scaled_gauss_legendre_lobatto_grid(ngrid, nelement_local, n_local, element_scale, element_shift, imin, imax)
@@ -698,9 +701,10 @@ function init_grid(ngrid, nelement_local, n_global, n_local, irank, L, element_s
             grid = uniform_grid_shifted
             # use composite Simpson's rule to obtain integration weights associated with this coordinate
             wgts = composite_simpson_weights(grid)
-            wgts = 2.0 .* wgts .* grid # to include 2 vperp in jacobian of integral
-                                     # assumes pdf normalised like 
-                                     # f^N = Pi^{3/2} c_s^3 f / n_ref         
+            # Integrals over vperp are actually 2d integrals
+            #   ∫d^2(v_⟂)=∫dv_⟂ v_⟂∫dϕ=2π∫dv_⟂ v_⟂
+            # so need to multiply the weight by 2*π*v_⟂
+            @. wgts = 2.0 * π * grid * wgts
         else #default case 
             # initialize equally spaced grid defined on [-L/2,L/2]
             grid = uniform_grid

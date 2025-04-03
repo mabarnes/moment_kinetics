@@ -44,10 +44,10 @@ function G_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
     eta = eta_func(upar,vth,vpa,vperp,ivpa,ivperp)
     zero = 1.0e-10
     if eta < zero
-        G = 2.0/π^2
+        G = 2.0/sqrt(pi)
     else 
         # G_M = (1/2 eta)*( eta erf'(eta) + (1 + 2 eta^2) erf(eta))
-        G = (1.0/π^2)*exp(-eta^2) + ((0.5/eta) + eta)*erf(eta)
+        G = (1.0/sqrt(pi))*exp(-eta^2) + ((0.5/eta) + eta)*erf(eta)
     end
     return G*dens*vth
 end
@@ -69,11 +69,11 @@ function H_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
     eta = eta_func(upar,vth,vpa,vperp,ivpa,ivperp)
     zero = 1.0e-10
     if eta < zero
-        # erf(eta)/eta/π^1.5 ~ 2/sqrt(π) + O(eta^2) for eta << 1
-        H = 2.0/π^2
+        # erf(eta)/eta ~ 2/sqrt(π) + O(eta^2) for eta << 1
+        H = 2.0/sqrt(pi)
     else 
         # H_M =  erf(eta)/eta
-        H = erf(eta)/eta/π^1.5
+        H = erf(eta)/eta
     end
     return H*dens/vth
 end
@@ -82,24 +82,24 @@ end
 
 function dGdeta(eta::mk_float)
     # d \tilde{G} / d eta
-    dGdeta_fac = (1.0/π^2)*exp(-eta^2)/eta + (1.0 - 0.5/(eta^2))*erf(eta)
+    dGdeta_fac = (1.0/sqrt(pi))*exp(-eta^2)/eta + (1.0 - 0.5/(eta^2))*erf(eta)
     return dGdeta_fac
 end
 
 function d2Gdeta2(eta::mk_float)
     # d \tilde{G} / d eta
-    d2Gdeta2_fac = erf(eta)/(eta^3)/π^1.5 - (2.0/π^2)*exp(-eta^2)/(eta^2)
+    d2Gdeta2_fac = erf(eta)/(eta^3) - (2.0/sqrt(pi))*exp(-eta^2)/(eta^2)
     return d2Gdeta2_fac
 end
 
 function ddGddeta(eta::mk_float)
     # d / d eta ( (1/ eta) d \tilde{G} d eta 
-    ddGddeta_fac = (1.5/(eta^2) - 1.0)*erf(eta)/(eta^2)/π^1.5 - (3.0/π^2)*exp(-eta^2)/(eta^3)
+    ddGddeta_fac = (1.5/(eta^2) - 1.0)*erf(eta)/(eta^2) - (3.0/sqrt(pi))*exp(-eta^2)/(eta^3)
     return ddGddeta_fac
 end
 
 function dHdeta(eta::mk_float)
-    dHdeta_fac = (2.0/π^2)*(exp(-eta^2))/eta - erf(eta)/(eta^2)/π^1.5
+    dHdeta_fac = (2.0/sqrt(pi))*(exp(-eta^2))/eta - erf(eta)/(eta^2)
     return dHdeta_fac
 end
 
@@ -313,7 +313,7 @@ function Cssp_Maxwellian_inputs(denss::mk_float,upars::mk_float,vths::mk_float,m
         2.0*d2Fsdvperpdvpa*d2Gspdvperpdvpa + 
         (1.0/(vperp.grid[ivperp]^2))*dFsdvperp*dGspdvperp +
         2.0*(1.0 - (ms/msp))*(dFsdvpa*dHspdvpa + dFsdvperp*dHspdvperp) +
-        (8.0/sqrt(pi))*(ms/msp)*Fs*Fsp ) 
+        (8.0*pi)*(ms/msp)*Fs*Fsp)
         
     Cssp_Maxwellian *= nussp
     return Cssp_Maxwellian
