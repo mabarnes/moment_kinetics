@@ -39,6 +39,7 @@ export get_local_Cssp_coefficients!, init_fokker_planck_collisions
 # testing
 export symmetric_matrix_inverse
 export fokker_planck_collision_operator_weak_form!
+export fokker_planck_self_collision_operator_weak_form!
 # implicit advance
 export setup_fp_nl_solve
 
@@ -326,7 +327,6 @@ Function for advancing with the explicit, weak-form, self-collision operator.
                          pdf_out, pdf_in, dSdt, composition, collisions, dt,
                          fkpl_arrays::fokkerplanck_weakform_arrays_struct, r, z, vperp,
                          vpa, vperp_spectral, vpa_spectral, scratch_dummy;
-                         test_assembly_serial=false, impose_zero_gradient_BC=false,
                          diagnose_entropy_production=false) = begin
     # N.B. only self-collisions are currently supported
     # This can be modified by adding a loop over s' below
@@ -349,24 +349,18 @@ Function for advancing with the explicit, weak-form, self-collision operator.
     ms, msp = 1.0, 1.0 # generalise!
     nuref = collisions.fkpl.nuii # generalise!
     Zi = collisions.fkpl.Zi # generalise!
-    nussp = nuref*(Zi^4) # include charge number factor for self collisions
+    nuss = nuref*(Zi^4) # include charge number factor for self collisions
     use_conserving_corrections = collisions.fkpl.use_conserving_corrections
     boundary_data_option = collisions.fkpl.boundary_data_option
     # N.B. parallelisation using special 'anyv' region
     @begin_s_r_z_anyv_region()
     @loop_s_r_z is ir iz begin
         # first argument is Fs, and second argument is Fs' in C[Fs,Fs'] 
-        @views fokker_planck_collision_operator_weak_form!(
-            pdf_in[:,:,iz,ir,is], pdf_in[:,:,iz,ir,is], ms, msp, nussp, fkpl_arrays,
+        @views fokker_planck_self_collision_operator_weak_form!(
+            pdf_in[:,:,iz,ir,is], ms, nuss, fkpl_arrays,
             vperp, vpa, vperp_spectral, vpa_spectral, 
-            boundary_data_option = boundary_data_option)
-        # enforce the boundary conditions on CC before it is used for timestepping
-        enforce_vpavperp_BCs!(fkpl_arrays.CC,vpa,vperp,vpa_spectral,vperp_spectral)
-        # make ad-hoc conserving corrections
-        if use_conserving_corrections
-            conserving_corrections!(fkpl_arrays.CC, pdf_in[:,:,iz,ir,is], vpa, vperp,
-                                fkpl_arrays.S_dummy)
-        end
+            boundary_data_option = boundary_data_option,
+            use_conserving_corrections = use_conserving_corrections)
         # advance this part of s,r,z with the resulting C[Fs,Fs]
         @begin_anyv_vperp_vpa_region()
         CC = fkpl_arrays.CC
@@ -388,6 +382,27 @@ Function for advancing with the explicit, weak-form, self-collision operator.
     return nothing
 end
 
+@timeit fokker_planck_self_collision_operator_weak_form!(
+                         pdf_in, ms, nuss,
+                         fkpl_arrays::fokkerplanck_weakform_arrays_struct, vperp, vpa,
+                         vperp_spectral, vpa_spectral; 
+                         boundary_data_option=direct_integration,
+                         use_conserving_corrections=false) = begin
+    # first argument is Fs, and second argument is Fs' in C[Fs,Fs'] 
+    @views fokker_planck_collision_operator_weak_form!(
+        pdf_in, pdf_in, ms, ms, nuss, fkpl_arrays,
+        vperp, vpa, vperp_spectral, vpa_spectral,
+        boundary_data_option = boundary_data_option)
+    CC = fkpl_arrays.CC
+    # enforce the boundary conditions on CC before it is used for timestepping
+    enforce_vpavperp_BCs!(CC,vpa,vperp,vpa_spectral,vperp_spectral)
+    # make ad-hoc conserving corrections appropriate only for the self operator
+    if use_conserving_corrections
+        conserving_corrections!(CC, pdf_in, vpa, vperp,
+                            fkpl_arrays.S_dummy)
+    end
+    return nothing
+end
 
 """
 Function for evaluating \$C_{ss'} = C_{ss'}[F_s,F_{s'}]\$

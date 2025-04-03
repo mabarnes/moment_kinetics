@@ -13,8 +13,8 @@ using moment_kinetics.chebyshev: setup_chebyshev_pseudospectral
 using moment_kinetics.gauss_legendre: setup_gausslegendre_pseudospectral, get_QQ_local!
 using moment_kinetics.type_definitions: mk_float, mk_int, OptionsDict
 using moment_kinetics.fokker_planck: init_fokker_planck_collisions_weak_form
-using moment_kinetics.fokker_planck: fokker_planck_collision_operator_weak_form!
-using moment_kinetics.fokker_planck: conserving_corrections!, setup_fp_nl_solve
+using moment_kinetics.fokker_planck: fokker_planck_self_collision_operator_weak_form!
+using moment_kinetics.fokker_planck: setup_fp_nl_solve
 using moment_kinetics.fokker_planck_calculus: enforce_vpavperp_BCs!, calculate_test_particle_preconditioner!
 using moment_kinetics.fokker_planck_calculus: calculate_vpavperp_advection_terms!
 using moment_kinetics.fokker_planck_test: F_Maxwellian, print_test_data
@@ -142,7 +142,7 @@ function test_implicit_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=3,neleme
     test_linearised_advance=false,
     use_Maxwellian_Rosenbluth_coefficients_in_preconditioner=false,
     plot_test_output=false,
-    test_parallelism=false,test_self_operator=true,
+    test_parallelism=false,
     test_dense_construction=false,standalone=false,
     use_Maxwellian_Rosenbluth_coefficients=false,
     use_Maxwellian_field_particle_distribution=false,
@@ -259,7 +259,6 @@ function test_implicit_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=3,neleme
             test_particle_preconditioner=test_particle_preconditioner,
             test_linearised_advance=test_linearised_advance,
             use_Maxwellian_Rosenbluth_coefficients_in_preconditioner=use_Maxwellian_Rosenbluth_coefficients_in_preconditioner,
-            test_self_operator=test_self_operator,
             test_assembly_serial=test_parallelism,
             use_Maxwellian_Rosenbluth_coefficients=use_Maxwellian_Rosenbluth_coefficients,
             use_Maxwellian_field_particle_distribution=use_Maxwellian_field_particle_distribution,
@@ -297,7 +296,6 @@ function fokker_planck_backward_euler_step!(Fnew, Fold, delta_t, ms, msp, nussp,
     test_linearised_advance=false,
     test_particle_preconditioner=false,
     use_Maxwellian_Rosenbluth_coefficients_in_preconditioner=false,
-    test_self_operator=true,
     test_assembly_serial=false,
     use_Maxwellian_Rosenbluth_coefficients=false,
     use_Maxwellian_field_particle_distribution=false,
@@ -311,22 +309,12 @@ function fokker_planck_backward_euler_step!(Fnew, Fold, delta_t, ms, msp, nussp,
     # residual function to be used for Newton-Krylov
     function residual_func!(Fresidual, Fnew; krylov=false)
         #begin_s_r_z_anyv_region()
-        fokker_planck_collision_operator_weak_form!(Fnew, Fnew, ms, msp, nussp,
-                                                fkpl_arrays,
-                                                vperp, vpa, vperp_spectral, vpa_spectral,
-                                                test_assembly_serial=test_assembly_serial,
-                                                use_Maxwellian_Rosenbluth_coefficients=use_Maxwellian_Rosenbluth_coefficients,
-                                                use_Maxwellian_field_particle_distribution=use_Maxwellian_field_particle_distribution,
-                                                algebraic_solve_for_d2Gdvperp2=algebraic_solve_for_d2Gdvperp2,
-                                                calculate_GG = false, calculate_dGdvperp=false,
-                                                boundary_data_option=boundary_data_option)
-        # enforce the boundary conditions on CC before it is used for timestepping
-        enforce_vpavperp_BCs!(fkpl_arrays.CC,vpa,vperp,vpa_spectral,vperp_spectral,
-                        upper_wall=upper_wall,lower_wall=lower_wall)
-        if test_numerical_conserving_terms && test_self_operator
-            # make ad-hoc conserving corrections
-            conserving_corrections!(fkpl_arrays.CC,Fnew,vpa,vperp,dummy_vpavperp)
-        end
+        fokker_planck_self_collision_operator_weak_form!(
+                         Fnew, ms, nussp,
+                         fkpl_arrays, vperp, vpa,
+                         vperp_spectral, vpa_spectral; 
+                         boundary_data_option=boundary_data_option,
+                         use_conserving_corrections=test_numerical_conserving_terms)
         
         calculate_vpavperp_advection_terms!(Fnew,
             dvpadt,fkpl_arrays,vpa,vperp)
@@ -406,7 +394,7 @@ function test_implicit_standard_dke_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, n
     test_linearised_advance=false,
     use_Maxwellian_Rosenbluth_coefficients_in_preconditioner=false,
     plot_test_output=false,
-    test_parallelism=false,test_self_operator=true,
+    test_parallelism=false,
     test_dense_construction=false,standalone=false,
     use_Maxwellian_Rosenbluth_coefficients=false,
     use_Maxwellian_field_particle_distribution=false,
@@ -590,7 +578,6 @@ function test_implicit_standard_dke_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, n
                     test_particle_preconditioner=test_particle_preconditioner,
                     test_linearised_advance=test_linearised_advance,
                     use_Maxwellian_Rosenbluth_coefficients_in_preconditioner=use_Maxwellian_Rosenbluth_coefficients_in_preconditioner,
-                    test_self_operator=test_self_operator,
                     test_assembly_serial=test_parallelism,
                     use_Maxwellian_Rosenbluth_coefficients=use_Maxwellian_Rosenbluth_coefficients,
                     use_Maxwellian_field_particle_distribution=use_Maxwellian_field_particle_distribution,
