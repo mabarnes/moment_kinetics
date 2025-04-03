@@ -68,7 +68,7 @@ end
 Calculate the normalised ion gyroradius at reference parameters
 """
 function get_default_rhostar(reference_params)
-    return reference_params.cref / reference_params.Omegaref / reference_params.Lref
+    return sqrt(2) * reference_params.cref / reference_params.Omegaref / reference_params.Lref
 end
 
 """

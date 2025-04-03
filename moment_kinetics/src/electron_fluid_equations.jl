@@ -933,45 +933,6 @@ function calculate_electron_qpar_from_pdf_no_r!(qpar, ppar, vth, pdf, vpa, ir)
     end
 end
 
-function calculate_electron_heat_source!(heat_source, ppar_e, dupar_dz, dens_n, ionization, ionization_energy,
-                                         dens_e, ppar_i, nu_ei, me_over_mi, T_wall, z)
-    @begin_r_z_region()
-    # heat_source currently only used for testing                                         
-    # @loop_r_z ir iz begin
-    #     heat_source[iz,ir] = (2/3) * ppar_e[iz,ir] * dupar_dz[iz,ir]
-    # end
-    # if nu_ei > 0.0
-    #     @loop_s_r_z is ir iz begin
-    #         heat_source[iz,ir] -= 2 * me_over_mi * nu_ei * (ppar_i[iz,ir,is] - ppar_e[iz,ir])
-    #     end
-    # end
-    # n_neutral_species = size(dens_n, 3)
-    # if n_neutral_species > 0 && ionization > 0.0
-    #    @loop_s_r_z is ir iz begin
-    #        heat_source[iz,ir] += (2/3) * dens_n[iz,ir,is] * dens_e[iz,ir] * ionization * ionization_energy
-    #    end
-    # end
-    # @loop_r ir begin
-    #     heat_source[1,ir] += 20 * 0.5 * (T_wall * dens_e[1,ir] - ppar_e[1,ir])
-    #     heat_source[end,ir] += 20 * (0.5 * T_wall * dens_e[end,ir] - ppar_e[end,ir])
-    # end
-    # Gaussian heat deposition profile, with a decay of 5 e-foldings at the ends of the domain in z
-    @loop_r_z ir iz begin
-        heat_source[iz,ir] = 50*exp(-5*(2.0*z.grid[iz]/z.L)^2)
-    end
-    return nothing
-end
-
-#function enforce_parallel_BC_on_electron_pressure!(ppar, dens, T_wall, ppar_i)
-#    # assume T_e = T_i at boundaries in z
-#    @loop_r ir begin
-#        #ppar[1,ir] = 0.5 * dens[1,ir] * T_wall
-#        #ppar[end,ir] = 0.5 * dens[end,ir] * T_wall
-#        ppar[1,ir] = ppar_i[1,ir,1]
-#        ppar[end,ir] = ppar_i[end,ir,1]
-#    end
-#end
-
 function update_electron_vth_temperature!(moments, ppar, dens, composition)
     @begin_r_z_region()
 
