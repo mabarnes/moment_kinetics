@@ -319,6 +319,12 @@ struct fokkerplanck_weakform_arrays_struct{M <: AbstractSparseArray{mk_float,mk_
     CC2D_sparse_constructor::sparse_matrix_constructor
     # dummy array for vpa vperp advection contributions
     rhs_advection::MPISharedArray{mk_float,2}
+    # dummy arrays for Jacobian-Free-Newton-Krylov solver
+    Fresidual::MPISharedArray{mk_float,2}
+    F_delta_x::MPISharedArray{mk_float,2}
+    F_rhs_delta::MPISharedArray{mk_float,2}
+    Fv::MPISharedArray{mk_float,2}
+    Fw::MPISharedArray{mk_float,2}
 end
 
 """

@@ -254,7 +254,8 @@ function test_implicit_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=3,neleme
     for it in 1:ntime
         fokker_planck_backward_euler_step!(Fnew, Fold, delta_t, ms, msp, nussp, fkpl_arrays, dummy_vpavperp,
             vperp, vpa, vperp_spectral, vpa_spectral, coords,
-            Fdummy1, Fdummy2, Fdummy3, Fdummy4, Fdummy5, nl_solver_params,
+            #Fdummy1, Fdummy2, Fdummy3, Fdummy4, Fdummy5,
+            nl_solver_params,
             test_numerical_conserving_terms=test_numerical_conserving_terms,
             test_particle_preconditioner=test_particle_preconditioner,
             test_linearised_advance=test_linearised_advance,
@@ -291,7 +292,8 @@ end
 
 function fokker_planck_backward_euler_step!(Fnew, Fold, delta_t, ms, msp, nussp, fkpl_arrays, dummy_vpavperp,
     vperp, vpa, vperp_spectral, vpa_spectral, coords,
-    Fresidual, F_delta_x, F_rhs_delta, Fv, Fw, nl_solver_params; dvpadt=0.0,
+    #Fresidual, F_delta_x, F_rhs_delta, Fv, Fw, 
+    nl_solver_params; dvpadt=0.0,
     test_numerical_conserving_terms=false,
     test_linearised_advance=false,
     test_particle_preconditioner=false,
@@ -362,7 +364,12 @@ function fokker_planck_backward_euler_step!(Fnew, Fold, delta_t, ms, msp, nussp,
     if test_linearised_advance
       test_particle_precon!(Fnew)
     else
-      newton_solve!(Fnew, residual_func!, Fresidual, F_delta_x, F_rhs_delta, Fv, Fw, nl_solver_params;
+        Fresidual = fkpl_arrays.Fresidual
+        F_delta_x = fkpl_arrays.F_delta_x
+        F_rhs_delta = fkpl_arrays.F_rhs_delta
+        Fv = fkpl_arrays.Fv
+        Fw = fkpl_arrays.Fw
+        newton_solve!(Fnew, residual_func!, Fresidual, F_delta_x, F_rhs_delta, Fv, Fw, nl_solver_params;
                       coords, right_preconditioner=right_preconditioner)
     end
     @_anyv_subblock_synchronize()
@@ -572,7 +579,8 @@ function test_implicit_standard_dke_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, n
                 dvpadt = 0.5*Ez[iz]
                 @views fokker_planck_backward_euler_step!(Fnew[:,:,iz], Fold[:,:,iz], delta_t, ms, msp, nussp, fkpl_arrays, dummy_vpavperp,
                     vperp, vpa, vperp_spectral, vpa_spectral, coords,
-                    Fdummy1, Fdummy2, Fdummy3, Fdummy4, Fdummy5, nl_solver_params,
+                    #Fdummy1, Fdummy2, Fdummy3, Fdummy4, Fdummy5, 
+                    nl_solver_params,
                     dvpadt=dvpadt,
                     test_numerical_conserving_terms=test_numerical_conserving_terms,
                     test_particle_preconditioner=test_particle_preconditioner,
