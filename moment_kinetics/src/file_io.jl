@@ -1329,13 +1329,13 @@ function define_dynamic_ion_moment_variables!(fid, n_ion_species, r::coordinate,
     io_upar = create_dynamic_variable!(dynamic, "parallel_flow", mk_float, z, r,
                                        n_ion_species_coord; parallel_io=parallel_io,
                                        description="ion species parallel flow",
-                                       units="c_ref = sqrt(2*T_ref/mi)")
+                                       units="c_ref = sqrt(T_ref/m_ref)")
     if write_error_diagnostics
         io_upar_loworder =
             create_dynamic_variable!(dynamic, "parallel_flow_loworder", mk_float, z, r,
                                      n_ion_species_coord; parallel_io=parallel_io,
                                      description="low-order approximation to ion species parallel flow, used to diagnose timestepping error",
-                                     units="c_ref = sqrt(2*T_ref/mi)")
+                                     units="c_ref = sqrt(T_ref/m_ref)")
     else
         io_upar_loworder = nothing
     end
@@ -1345,7 +1345,7 @@ function define_dynamic_ion_moment_variables!(fid, n_ion_species, r::coordinate,
                                      mk_float, z, r, n_ion_species_coord;
                                      parallel_io=parallel_io,
                                      description="ion species parallel flow at the start of the last timestep before output, used to measure steady state residual",
-                                     units="c_ref = sqrt(2*T_ref/mi)")
+                                     units="c_ref = sqrt(T_ref/m_ref)")
     else
         io_upar_start_last_timestep = nothing
     end
@@ -1354,13 +1354,13 @@ function define_dynamic_ion_moment_variables!(fid, n_ion_species, r::coordinate,
     io_ppar = create_dynamic_variable!(dynamic, "parallel_pressure", mk_float, z, r,
                                        n_ion_species_coord; parallel_io=parallel_io,
                                        description="ion species parallel pressure",
-                                       units="n_ref*m_ref*c_ref^2")
+                                       units="n_ref*T_ref")
     if write_error_diagnostics
         io_ppar_loworder =
             create_dynamic_variable!(dynamic, "parallel_pressure_loworder", mk_float, z, r,
                                      n_ion_species_coord; parallel_io=parallel_io,
                                      description="low-order approximation to ion species parallel pressure, used to diagnose timestepping error",
-                                     units="n_ref*m_ref*c_ref^2")
+                                     units="n_ref*T_ref")
     else
         io_ppar_loworder = nothing
     end
@@ -1370,7 +1370,7 @@ function define_dynamic_ion_moment_variables!(fid, n_ion_species, r::coordinate,
                                      mk_float, z, r, n_ion_species_coord;
                                      parallel_io=parallel_io,
                                      description="ion species parallel pressure at the start of the last timestep before output, used to measure steady state residual",
-                                     units="n_ref*m_ref*c_ref^2")
+                                     units="n_ref*T_ref")
     else
         io_ppar_start_last_timestep = nothing
     end
@@ -1379,13 +1379,13 @@ function define_dynamic_ion_moment_variables!(fid, n_ion_species, r::coordinate,
     io_pperp = create_dynamic_variable!(dynamic, "perpendicular_pressure", mk_float, z, r,
                                         n_ion_species_coord; parallel_io=parallel_io,
                                         description="ion species perpendicular pressure",
-                                        units="n_ref*m_ref*c_ref^2")
+                                        units="n_ref*T_ref")
     if write_error_diagnostics
         io_pperp_loworder =
             create_dynamic_variable!(dynamic, "perpendicular_pressure_loworder", mk_float,
                                      z, r, n_ion_species_coord; parallel_io=parallel_io,
                                      description="low-order approximation to ion species perpendicular pressure, used to diagnose timestepping error",
-                                     units="n_ref*m_ref*c_ref^2")
+                                     units="n_ref*T_ref")
     else
         io_pperp_loworder = nothing
     end
@@ -1395,7 +1395,7 @@ function define_dynamic_ion_moment_variables!(fid, n_ion_species, r::coordinate,
                                      mk_float, z, r, n_ion_species_coord;
                                      parallel_io=parallel_io,
                                      description="ion species perpendicular pressure at the start of the last timestep before output, used to measure steady state residual",
-                                     units="n_ref*m_ref*c_ref^2")
+                                     units="n_ref*T_ref")
     else
         io_pperp_start_last_timestep = nothing
     end
@@ -1404,7 +1404,7 @@ function define_dynamic_ion_moment_variables!(fid, n_ion_species, r::coordinate,
     io_qpar = create_dynamic_variable!(dynamic, "parallel_heat_flux", mk_float, z, r,
                                        n_ion_species_coord; parallel_io=parallel_io,
                                        description="ion species parallel heat flux",
-                                       units="n_ref*m_ref*c_ref^3")
+                                       units="n_ref*T_ref*c_ref")
 
     # io_vth is the handle for the ion thermal speed
     io_vth = create_dynamic_variable!(dynamic, "thermal_speed", mk_float, z, r,
@@ -1445,7 +1445,7 @@ function define_dynamic_ion_moment_variables!(fid, n_ion_species, r::coordinate,
             external_source_pressure_amplitude = create_dynamic_variable!(
                 dynamic, "external_source_pressure_amplitude", mk_float, z, r, n_sources;
                 parallel_io=parallel_io, description="Amplitude of the external pressure source for ions",
-                units="m_ref*n_ref*c_ref^2*c_ref/L_ref")
+                units="n_ref*T_ref*c_ref/L_ref")
         else
             external_source_pressure_amplitude = nothing
         end
@@ -1565,13 +1565,13 @@ function define_dynamic_electron_moment_variables!(fid, r::coordinate, z::coordi
         io_electron_upar = create_dynamic_variable!(dynamic, "electron_parallel_flow", mk_float, z, r;
                                                     parallel_io=parallel_io,
                                                     description="electron species parallel flow",
-                                                    units="c_ref = sqrt(2*T_ref/mi)")
+                                                    units="c_ref = sqrt(T_ref/mi)")
         if write_error_diagnostics
             io_electron_upar_loworder =
                 create_dynamic_variable!(dynamic, "electron_parallel_flow_loworder", mk_float, z,
                                          r; parallel_io=parallel_io,
                                          description="low-order approximation to electron species parallel flow, used to diagnose timestepping error",
-                                         units="c_ref = sqrt(2*T_ref/mi)")
+                                         units="c_ref = sqrt(T_ref/mi)")
         else
             io_electron_upar_loworder = nothing
         end
@@ -1580,7 +1580,7 @@ function define_dynamic_electron_moment_variables!(fid, r::coordinate, z::coordi
                 create_dynamic_variable!(dynamic, "electron_parallel_flow_start_last_timestep",
                                          mk_float, z, r; parallel_io=parallel_io,
                                          description="electron species parallel flow at the start of the last timestep before output, used to measure steady state residual",
-                                         units="c_ref = sqrt(2*T_ref/mi)")
+                                         units="c_ref = sqrt(T_ref/mi)")
         else
             io_electron_upar_start_last_timestep = nothing
         end
@@ -1597,13 +1597,13 @@ function define_dynamic_electron_moment_variables!(fid, r::coordinate, z::coordi
     io_electron_ppar = create_dynamic_variable!(dynamic, "electron_parallel_pressure", mk_float, z, r;
                                        parallel_io=parallel_io,
                                        description="electron species parallel pressure",
-                                       units="n_ref*m_ref*c_ref^2")
+                                       units="n_ref*T_ref")
     if write_error_diagnostics
         io_electron_ppar_loworder =
             create_dynamic_variable!(dynamic, "electron_parallel_pressure_loworder", mk_float,
                                      z, r; parallel_io=parallel_io,
                                      description="low-order approximation to electron species parallel pressure, used to diagnose timestepping error",
-                                     units="n_ref*m_ref*c_ref^2")
+                                     units="n_ref*T_ref")
     else
         io_electron_ppar_loworder = nothing
     end
@@ -1613,7 +1613,7 @@ function define_dynamic_electron_moment_variables!(fid, r::coordinate, z::coordi
                                      "electron_parallel_pressure_start_last_timestep",
                                      mk_float, z, r; parallel_io=parallel_io,
                                      description="electron species parallel pressure at the start of the last timestep before output, used to measure steady state residual",
-                                     units="n_ref*m_ref*c_ref^2")
+                                     units="n_ref*T_ref")
     else
         io_electron_ppar_start_last_timestep = nothing
     end
@@ -1622,7 +1622,7 @@ function define_dynamic_electron_moment_variables!(fid, r::coordinate, z::coordi
     io_electron_qpar = create_dynamic_variable!(dynamic, "electron_parallel_heat_flux", mk_float, z, r;
                                                 parallel_io=parallel_io,
                                                 description="electron species parallel heat flux",
-                                                units="n_ref*m_ref*c_ref^3")
+                                                units="n_ref*T_ref*c_ref")
 
     # io_electron_vth is the handle for the electron thermal speed
     io_electron_vth = create_dynamic_variable!(dynamic, "electron_thermal_speed", mk_float, z, r;
@@ -1648,7 +1648,7 @@ function define_dynamic_electron_moment_variables!(fid, r::coordinate, z::coordi
         external_source_electron_pressure_amplitude = create_dynamic_variable!(
             dynamic, "external_source_electron_pressure_amplitude", mk_float, z, r, n_sources;
             parallel_io=parallel_io, description="Amplitude of the external pressure source for electrons",
-            units="m_ref*n_ref*c_ref^2*c_ref/L_ref")
+            units="n_ref*T_ref*c_ref/L_ref")
     else
         external_source_electron_amplitude = nothing
         external_source_electron_density_amplitude = nothing
@@ -1774,13 +1774,13 @@ function define_dynamic_neutral_moment_variables!(fid, n_neutral_species, r::coo
                                              n_neutral_species_coord;
                                              parallel_io=parallel_io,
                                              description="neutral species mean z velocity",
-                                             units="c_ref = sqrt(2*T_ref/mi)")
+                                             units="c_ref = sqrt(T_ref/mi)")
     if write_error_diagnostics
         io_uz_neutral_loworder =
             create_dynamic_variable!(dynamic, "uz_neutral_loworder", mk_float, z, r,
                                      n_neutral_species_coord; parallel_io=parallel_io,
                                      description="low-order approximation to neutral species mean z velocity, used to diagnose timestepping error",
-                                     units="c_ref = sqrt(2*T_ref/mi)")
+                                     units="c_ref = sqrt(T_ref/mi)")
     else
         io_uz_neutral_loworder = nothing
     end
@@ -1790,7 +1790,7 @@ function define_dynamic_neutral_moment_variables!(fid, n_neutral_species, r::coo
                                      z, r, n_neutral_species_coord;
                                      parallel_io=parallel_io,
                                      description="neutral species mean z velocity at the start of the last timestep before output, used to measure steady state residual",
-                                     units="c_ref = sqrt(2*T_ref/mi)")
+                                     units="c_ref = sqrt(T_ref/mi)")
     else
         io_uz_neutral_start_last_timestep = nothing
     end
@@ -1800,13 +1800,13 @@ function define_dynamic_neutral_moment_variables!(fid, n_neutral_species, r::coo
                                              n_neutral_species_coord;
                                              parallel_io=parallel_io,
                                              description="neutral species mean zz pressure",
-                                             units="n_ref*m_ref*c_ref^2")
+                                             units="n_ref*T_ref")
     if write_error_diagnostics
         io_pz_neutral_loworder =
             create_dynamic_variable!(dynamic, "pz_neutral_loworder", mk_float, z, r,
                                      n_neutral_species_coord; parallel_io=parallel_io,
                                      description="low-order approximation to neutral species mean zz pressure, used to diagnose timestepping error",
-                                     units="n_ref*m_ref*c_ref^2")
+                                     units="n_ref*T_ref")
     else
         io_pz_neutral_loworder = nothing
     end
@@ -1816,7 +1816,7 @@ function define_dynamic_neutral_moment_variables!(fid, n_neutral_species, r::coo
                                      z, r, n_neutral_species_coord;
                                      parallel_io=parallel_io,
                                      description="neutral species mean zz pressure at the start of the last timestep before output, used to measure steady state residual",
-                                     units="n_ref*m_ref*c_ref^2")
+                                     units="n_ref*T_ref")
     else
         io_pz_neutral_start_last_timestep = nothing
     end
@@ -1826,7 +1826,7 @@ function define_dynamic_neutral_moment_variables!(fid, n_neutral_species, r::coo
                                              n_neutral_species_coord;
                                              parallel_io=parallel_io,
                                              description="neutral species z heat flux",
-                                             units="n_ref*m_ref*c_ref^3")
+                                             units="n_ref*T_ref*c_ref")
 
     # io_thermal_speed_neutral is the handle for the neutral thermal speed
     io_thermal_speed_neutral = create_dynamic_variable!(
@@ -1861,7 +1861,7 @@ function define_dynamic_neutral_moment_variables!(fid, n_neutral_species, r::coo
             external_source_neutral_pressure_amplitude = create_dynamic_variable!(
                 dynamic, "external_source_neutral_pressure_amplitude", mk_float, z, r, n_sources;
                 parallel_io=parallel_io, description="Amplitude of the external pressure source for neutrals",
-                units="m_ref*n_ref*c_ref^2*c_ref/L_ref")
+                units="n_ref*T_ref*c_ref/L_ref")
         else
             external_source_neutral_pressure_amplitude = nothing
         end
