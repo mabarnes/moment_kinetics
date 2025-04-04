@@ -291,7 +291,7 @@ using IfElse
             Bmag = geometry.Bmag
             rhostar = geometry.rhostar
             jacobian = geometry.jacobian
-            ExBgeofac = 0.5*rhostar*Bzeta*jacobian/Bmag^2
+            ExBgeofac = rhostar*Bzeta*jacobian/Bmag^2
             bzed = geometry.bzed
             epsilon = manufactured_solns_input.epsilon_offset
             alpha = manufactured_solns_input.alpha_switch
@@ -374,7 +374,7 @@ using IfElse
             Bmag = geometry.Bmag
             rhostar = geometry.rhostar
             jacobian = geometry.jacobian
-            ExBgeofac = 0.5*rhostar*Bzeta*jacobian/Bmag^2
+            ExBgeofac = rhostar*Bzeta*jacobian/Bmag^2
             epsilon = manufactured_solns_input.epsilon_offset
             alpha = manufactured_solns_input.alpha_switch
             if z_bc == "periodic"
@@ -596,7 +596,7 @@ using IfElse
         dBdr = geometry.dBdr
         rhostar = geometry.rhostar
         jacobian = geometry.jacobian
-        ExBgeofac = 0.5*rhostar*Bzeta*jacobian/Bmag^2
+        ExBgeofac = rhostar*Bzeta*jacobian/Bmag^2
         #exceptions for cases with missing terms 
         if composition.n_neutral_species > 0
             cx_frequency = collisions.reactions.charge_exchange_frequency
