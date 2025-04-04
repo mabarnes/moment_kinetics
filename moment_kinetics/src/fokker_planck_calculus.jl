@@ -320,6 +320,7 @@ struct fokkerplanck_weakform_arrays_struct{M <: AbstractSparseArray{mk_float,mk_
     # dummy array for vpa vperp advection contributions
     rhs_advection::MPISharedArray{mk_float,2}
     # dummy arrays for Jacobian-Free-Newton-Krylov solver
+    Fnew::MPISharedArray{mk_float,2}
     Fresidual::MPISharedArray{mk_float,2}
     F_delta_x::MPISharedArray{mk_float,2}
     F_rhs_delta::MPISharedArray{mk_float,2}

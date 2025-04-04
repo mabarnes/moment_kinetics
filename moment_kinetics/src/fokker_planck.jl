@@ -236,6 +236,7 @@ function init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_sp
     CC2D_sparse, CC2D_sparse_constructor = allocate_preconditioner_matrix(vpa,vperp,vpa_spectral,vperp_spectral)
     rhs_advection = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
     # dummy arrays for JFNK
+    Fnew = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
     Fresidual = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
     F_delta_x = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
     F_rhs_delta = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
@@ -260,7 +261,7 @@ function init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_sp
                                            CC, GG, HH, dHdvpa, dHdvperp, dGdvperp, d2Gdvperp2, d2Gdvpa2, d2Gdvperpdvpa,
                                            FF, dFdvpa, dFdvperp, 
                                            CC2D_sparse, CC2D_sparse_constructor,
-                                           rhs_advection, Fresidual, F_delta_x, F_rhs_delta, Fv, Fw)
+                                           rhs_advection, Fnew, Fresidual, F_delta_x, F_rhs_delta, Fv, Fw)
     return fka
 end
 

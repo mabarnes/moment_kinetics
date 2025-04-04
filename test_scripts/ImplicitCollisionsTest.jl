@@ -223,7 +223,6 @@ function test_implicit_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=3,neleme
     @serial_region begin
         @loop_vperp_vpa ivperp ivpa begin
             Fold[ivpa,ivperp] = fvpavperp[ivpa,ivperp,1]
-            Fnew[ivpa,ivperp] = Fold[ivpa,ivperp]
         end
     end
     diagnose_F_Maxwellian(Fold,Fdummy1,Fdummy2,Fdummy3,vpa,vperp,time,ms,0)
@@ -235,7 +234,7 @@ function test_implicit_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=3,neleme
 
     #println(nl_solver_params.preconditioners)
     for it in 1:ntime
-        fokker_planck_self_collisions_backward_euler_step!(Fnew, Fold, delta_t, ms, nuss, fkpl_arrays,
+        fokker_planck_self_collisions_backward_euler_step!(Fold, delta_t, ms, nuss, fkpl_arrays,
             coords, spectral,
             nl_solver_params,
             test_numerical_conserving_terms=test_numerical_conserving_terms,
@@ -246,6 +245,7 @@ function test_implicit_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=3,neleme
         @begin_serial_region()
         # update the pdf
         @serial_region begin
+            Fnew = fkpl_arrays.Fnew
             @loop_vperp_vpa ivperp ivpa begin
                 Fold[ivpa,ivperp] = Fnew[ivpa,ivperp]
             end
@@ -267,7 +267,76 @@ function test_implicit_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=3,neleme
     end    
 end
 
-function fokker_planck_self_collisions_backward_euler_step!(Fnew, Fold, delta_t, ms, nuss, fkpl_arrays,
+function implicit_ion_fokker_planck_self_collisions(pdf_out, pdf_in, dSdt, 
+        composition, collisions, fkpl_arrays, 
+        vpa, vperp, z, r, delta_t, spectral_objects,
+        nl_solver_params; diagnose_entropy_production=false)
+    # bounds checking
+    n_ion_species = composition.n_ion_species
+    @boundscheck vpa.n == size(pdf_out,1) || throw(BoundsError(pdf_out))
+    @boundscheck vperp.n == size(pdf_out,2) || throw(BoundsError(pdf_out))
+    @boundscheck z.n == size(pdf_out,3) || throw(BoundsError(pdf_out))
+    @boundscheck r.n == size(pdf_out,4) || throw(BoundsError(pdf_out))
+    @boundscheck n_ion_species == size(pdf_out,5) || throw(BoundsError(pdf_out))
+    @boundscheck vpa.n == size(pdf_in,1) || throw(BoundsError(pdf_in))
+    @boundscheck vperp.n == size(pdf_in,2) || throw(BoundsError(pdf_in))
+    @boundscheck z.n == size(pdf_in,3) || throw(BoundsError(pdf_in))
+    @boundscheck r.n == size(pdf_in,4) || throw(BoundsError(pdf_in))
+    @boundscheck n_ion_species == size(pdf_in,5) || throw(BoundsError(pdf_in))
+    @boundscheck z.n == size(dSdt,1) || throw(BoundsError(dSdt))
+    @boundscheck r.n == size(dSdt,2) || throw(BoundsError(dSdt))
+    @boundscheck n_ion_species == size(dSdt,3) || throw(BoundsError(dSdt))
+
+    # diagnostic parameter for user
+    success = true
+    
+    # masses and collision frequencies
+    ms, msp = 1.0, 1.0 # generalise!
+    nuref = collisions.fkpl.nuii # generalise!
+    Zi = collisions.fkpl.Zi # generalise!
+    nuss = nuref*(Zi^4) # include charge number factor for self collisions
+    use_conserving_corrections = collisions.fkpl.use_conserving_corrections
+    boundary_data_option = collisions.fkpl.boundary_data_option
+
+    # coords for vperp vpa newton_solve!
+    coords = (vperp=vperp,vpa=vpa)
+    # N.B. parallelisation using special 'anyv' region
+    @begin_s_r_z_anyv_region()
+    @loop_s_r_z is ir iz begin
+        @views local_success = fokker_planck_self_collisions_backward_euler_step!(pdf_in[:,:,iz,ir,is], delta_t, ms, nuss, fkpl_arrays,
+                            coords, spectral_objects,
+                            nl_solver_params;
+                            test_numerical_conserving_terms=use_conserving_corrections,
+                            test_linearised_advance=false,
+                            test_particle_preconditioner=false,
+                            use_Maxwellian_Rosenbluth_coefficients_in_preconditioner=false,
+                            boundary_data_option=boundary_data_option)
+        # global success true only if local_success true
+        success = success && local_success
+        # store Fnew = F^n+1 in the appropriate distribution function array
+        @begin_anyv_vperp_vpa_region()
+        CC = fkpl_arrays.CC
+        Fnew = fkpl_arrays.Fnew
+        @loop_vperp_vpa ivperp ivpa begin
+            pdf_out[ivpa,ivperp,iz,ir,is] = Fnew[ivpa,ivperp]
+        end
+
+        if diagnose_entropy_production
+            # assign dummy array
+            lnfC = fkpl_arrays.rhsvpavperp
+            @loop_vperp_vpa ivperp ivpa begin
+                lnfC[ivpa,ivperp] = log(abs(pdf_out[ivpa,ivperp,iz,ir,is]) + 1.0e-15)*CC[ivpa,ivperp]
+            end
+            @begin_anyv_region()
+            @anyv_serial_region begin
+                dSdt[iz,ir,is] = -get_density(lnfC,vpa,vperp)
+            end
+        end
+    end
+    return success
+end
+
+function fokker_planck_self_collisions_backward_euler_step!(Fold, delta_t, ms, nuss, fkpl_arrays,
     coords, spectral,
     nl_solver_params;
     test_numerical_conserving_terms=false,
@@ -335,6 +404,12 @@ function fokker_planck_self_collisions_backward_euler_step!(Fnew, Fold, delta_t,
     else
         right_preconditioner = nothing
     end
+    # initial condition for Fnew for JFNK or linearised advance below
+    Fnew = fkpl_arrays.Fnew
+    @begin_anyv_vperp_vpa_region()
+    @loop_vperp_vpa ivperp ivpa begin
+        Fnew[ivpa,ivperp] = Fold[ivpa,ivperp]
+    end
     if test_linearised_advance
         test_particle_precon!(Fnew)
     else
@@ -343,11 +418,12 @@ function fokker_planck_self_collisions_backward_euler_step!(Fnew, Fold, delta_t,
         F_rhs_delta = fkpl_arrays.F_rhs_delta
         Fv = fkpl_arrays.Fv
         Fw = fkpl_arrays.Fw
-        newton_solve!(Fnew, residual_func!, Fresidual, F_delta_x, F_rhs_delta, Fv, Fw, nl_solver_params;
+        success = newton_solve!(Fnew, residual_func!, Fresidual, F_delta_x, F_rhs_delta, Fv, Fw, nl_solver_params;
                     coords, right_preconditioner=right_preconditioner)
     end
     @_anyv_subblock_synchronize()
     #begin_serial_region()
+    return success
 end    
 
 function field_solve!(Ez, phi, density, Te, Ne, Fold, vpa, vperp, z, z_spectral)
