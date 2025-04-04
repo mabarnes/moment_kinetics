@@ -18,6 +18,7 @@ using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float, allocate_shared_float
 using ..bgk: init_bgk_pdf!
 using ..boundary_conditions: vpagrid_to_dzdt
+using ..calculus: integral
 using ..communication
 using ..external_sources
 using ..interpolation: interpolate_to_grid_1d!
@@ -30,9 +31,9 @@ using ..moment_constraints: hard_force_moment_constraints!
 using ..moment_kinetics_structs: scratch_pdf, pdf_substruct, electron_pdf_substruct,
                                  pdf_struct, moments_struct, boundary_distributions_struct
 using ..nonlinear_solvers: nl_solver_info
-using ..velocity_moments: integrate_over_vspace, integrate_over_neutral_vspace
 using ..velocity_moments: integrate_over_positive_vz, integrate_over_negative_vz
 using ..velocity_moments: create_moments_ion, create_moments_electron, create_moments_neutral
+using ..velocity_moments: get_density, get_upar, get_p, get_neutral_density, get_neutral_uz, get_neutral_p
 using ..velocity_moments: update_ion_qpar!
 using ..velocity_moments: update_neutral_density!, update_neutral_pz!, update_neutral_pr!, update_neutral_pzeta!
 using ..velocity_moments: update_neutral_uz!, update_neutral_ur!, update_neutral_uzeta!, update_neutral_qz!
@@ -153,10 +154,16 @@ function init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geo
             init_upar!(moments.ion.upar, z, r, species.ion, n_ion_species)
             # initialise the ion parallel thermal speed profile
             init_vth!(moments.ion.vth, z, r, species.ion, n_ion_species)
-            @. moments.ion.ppar = 0.5 * moments.ion.dens * moments.ion.vth^2
+            @. moments.ion.p = 0.5 * moments.ion.dens * moments.ion.vth^2
             # initialise pressures assuming isotropic distribution
-            @. moments.ion.ppar = 0.5 * moments.ion.dens * moments.ion.vth^2
-            @. moments.ion.pperp = moments.ion.ppar
+            @. moments.ion.p = 0.5 * moments.ion.dens * moments.ion.vth^2
+            if vperp.n == 1
+                @. moments.ion.ppar = 3.0 * moments.ion.p
+                @. moments.ion.pperp = 0.0
+            else
+                @. moments.ion.ppar = moments.ion.p
+                @. moments.ion.pperp = moments.ion.p
+            end
             if moments.evolve_density || moments.evolve_upar || moments.evolve_ppar
                 @. moments.ion.constraints_A_coefficient = 1.0
                 @. moments.ion.constraints_B_coefficient = 0.0
@@ -174,9 +181,16 @@ function init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geo
                 # initialise the neutral thermal speed
                 init_vth!(moments.neutral.vth, z, r, species.neutral, n_neutral_species)
                 # calculate the z-component of the neutral pressure
-                @. moments.neutral.pz = 0.5 * moments.neutral.dens * moments.neutral.vth^2
-                # calculate the total neutral pressure
-                @. moments.neutral.ptot = 1.5 * moments.neutral.dens * moments.neutral.vth^2
+                @. moments.neutral.p = 0.5 * moments.neutral.dens * moments.neutral.vth^2
+                if vperp.n == 1
+                    @. moments.neutral.pz = 3.0 * moments.neutral.p
+                    @. moments.neutral.pr = 0.0
+                    @. moments.neutral.pzeta = 0.0
+                else
+                    @. moments.neutral.pz = moments.neutral.p
+                    @. moments.neutral.pr = moments.neutral.p
+                    @. moments.neutral.pzeta = moments.neutral.p
+                end
                 if moments.evolve_density || moments.evolve_upar || moments.evolve_ppar
                     @. moments.neutral.constraints_A_coefficient = 1.0
                     @. moments.neutral.constraints_B_coefficient = 0.0
@@ -215,7 +229,9 @@ function init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geo
             # (when @debug_track_initialized is active).
             moments.electron.dens .= 0.0
             moments.electron.upar .= 0.0
+            moments.electron.p .= 0.0
             moments.electron.ppar .= 0.0
+            moments.electron.pperp .= 0.0
             moments.electron.qpar .= 0.0
             moments.electron.temp .= 0.0
             moments.electron.constraints_A_coefficient .= 1.0
@@ -287,11 +303,22 @@ function initialize_electrons!(pdf, moments, fields, geometry, composition, r, z
         @begin_r_z_region()
         # calculate the electron temperature from the thermal speed
         @loop_r_z ir iz begin
-            moments.electron.temp[iz,ir] = composition.me_over_mi * moments.electron.vth[iz,ir]^2
+            moments.electron.temp[iz,ir] = 0.5 * composition.me_over_mi * moments.electron.vth[iz,ir]^2
         end
         # calculate the electron parallel pressure from the density and temperature
         @loop_r_z ir iz begin
-            moments.electron.ppar[iz,ir] = 0.5 * moments.electron.dens[iz,ir] * moments.electron.temp[iz,ir]
+            moments.electron.p[iz,ir] = moments.electron.dens[iz,ir] * moments.electron.temp[iz,ir]
+        end
+        if vperp.n == 1
+            @loop_r_z ir iz begin
+                moments.electron.ppar[iz,ir] = 3.0 * moments.electron.p[iz,ir]
+                moments.electron.pperp[iz,ir] = 0.0
+            end
+        else
+            @loop_r_z ir iz begin
+                moments.electron.ppar[iz,ir] = moments.electron.p[iz,ir]
+                moments.electron.pperp[iz,ir] = moments.electron.p[iz,ir]
+            end
         end
     elseif restart_electron_physics ∉ (braginskii_fluid, kinetic_electrons,
                                        kinetic_electrons_with_temperature_equation)
@@ -302,10 +329,17 @@ function initialize_electrons!(pdf, moments, fields, geometry, composition, r, z
             # if restarting from a simulations where Boltzmann electrons were used, then the assumption is
             # that the electron parallel temperature is constant along the field line and equal to T_e
             moments.electron.temp .= composition.T_e
-            # the thermal speed is related to the temperature by vth_e / v_ref = sqrt((T_e/T_ref) / (m_e/m_ref))
-            moments.electron.vth .= sqrt(composition.T_e / composition.me_over_mi)
-            # ppar = 0.5 * n * T, so we can calculate the parallel pressure from the density and T_e
-            moments.electron.ppar .= 0.5 * moments.electron.dens * composition.T_e
+            # the thermal speed is related to the temperature by vth_e / c_ref = sqrt(2.0 * (T_e/T_ref) / (m_e/m_ref))
+            moments.electron.vth .= sqrt(2.0 * composition.T_e / composition.me_over_mi)
+            # p = n * T, so we can calculate the pressure from the density and T_e
+            moments.electron.p .= moments.electron.dens * composition.T_e
+            if vperp.n == 1
+                moments.electron.ppar .= 3.0 .* moments.electron.p
+                moments.electron.pperp .= 0.0
+            else
+                moments.electron.ppar .= moments.electron.p
+                moments.electron.pperp .= moments.electron.p
+            end
         end
     end # else, we are restarting from `braginskii_fluid` or `kinetic_electrons`, so keep the reloaded electron pressure/temperature profiles.
 
@@ -367,7 +401,7 @@ function initialize_electrons!(pdf, moments, fields, geometry, composition, r, z
                 nu_ei = collisions.electron_fluid.nu_ei
                 dTe_dz_lower = Ref{mk_float}(0.0)
                 if z.irank == 0
-                    dTe_dz_lower[] = @. -moments.electron.qpar[1,:] * 2.0 / 3.16 /
+                    dTe_dz_lower[] = @. -moments.electron.qpar[1,:] / 3.16 /
                                          moments.electron.ppar[1,:] *
                                          composition.me_over_mi * nu_ei
                 end
@@ -375,7 +409,7 @@ function initialize_electrons!(pdf, moments, fields, geometry, composition, r, z
 
                 dTe_dz_upper = Ref{mk_float}(0.0)
                 if z.irank == z.nrank - 1
-                    dTe_dz_upper[] = @. -moments.electron.qpar[end,:] * 2.0 / 3.16 /
+                    dTe_dz_upper[] = @. -moments.electron.qpar[end,:] / 3.16 /
                                          moments.electron.ppar[end,:] *
                                          composition.me_over_mi * nu_ei
                 end
@@ -409,9 +443,9 @@ function initialize_electrons!(pdf, moments, fields, geometry, composition, r, z
                                                       D[ir]*zg^3
                 end
 
-                @. moments.electron.vth = sqrt(moments.electron.temp /
+                @. moments.electron.vth = sqrt(2.0 * moments.electron.temp /
                                                composition.me_over_mi)
-                @. moments.electron.ppar = 0.5 * moments.electron.dens * moments.electron.temp
+                @. moments.electron.ppar = moments.electron.dens * moments.electron.temp
             end
             @views derivative_z!(moments.electron.dT_dz, moments.electron.temp,
                                  scratch_dummy.buffer_rs_1[:,1],
@@ -448,20 +482,16 @@ function initialize_electrons!(pdf, moments, fields, geometry, composition, r, z
     @serial_region begin
         scratch[1].electron_density .= moments.electron.dens
         scratch[1].electron_upar .= moments.electron.upar
-        scratch[1].electron_ppar .= moments.electron.ppar
-        scratch[1].electron_pperp .= 0.0 #moments.electron.pperp
-        scratch[1].electron_temp .= moments.electron.temp
+        scratch[1].electron_p .= moments.electron.p
         n_rk_stages = t_params.n_rk_stages
         scratch[n_rk_stages+1].electron_density .= moments.electron.dens
         scratch[n_rk_stages+1].electron_upar .= moments.electron.upar
-        scratch[n_rk_stages+1].electron_ppar .= moments.electron.ppar
-        scratch[n_rk_stages+1].electron_pperp .= 0.0 #moments.electron.pperp
-        scratch[n_rk_stages+1].electron_temp .= moments.electron.temp
+        scratch[n_rk_stages+1].electron_p .= moments.electron.p
     end
     if scratch_electron !== nothing
         @begin_serial_region()
         @serial_region begin
-            scratch_electron[1].electron_ppar .= moments.electron.ppar
+            scratch_electron[1].electron_p .= moments.electron.p
         end
     end
 
@@ -834,7 +864,7 @@ end
 
 """
 for now the only initialisation option for the temperature is constant in z
-returns vth0 = sqrt(2Ts/ms) / sqrt(2Te/ms) = sqrt(Ts/Te)
+returns vth0 = sqrt(2Ts/ms) / sqrt(T_ref/m_ref) = sqrt(2Ts/T_ref)
 """
 function init_vth!(vth, z, r, spec, n_species)
     for is ∈ 1:n_species
@@ -883,7 +913,7 @@ function init_vth!(vth, z, r, spec, n_species)
             end
         end
     end
-    @. vth = sqrt(vth)
+    @. vth = sqrt(2.0 * vth)
     return nothing
 end
 
@@ -1080,20 +1110,19 @@ end
 
 """
 initialise the electron thermal speed profile.
-for now the only initialisation option for the temperature is constant in z.
-returns vth0 = sqrt(2*Ts/Te)
+For Boltzmann electrons returns vth0 = sqrt(2*Ts/T_ref/me_over_mi)
+For Braginskii or kinetic electrons, sets T_e=T_i, so returns vth_i/sqrt(me_over_mi).
 """
 function init_electron_vth!(vth_e, vth_i, composition, z)
     @begin_r_z_region()
     if composition.electron_physics ∈ (boltzmann_electron_response,
                                        boltzmann_electron_response_with_simple_sheath)
         @loop_r_z ir iz begin
-            vth_e[iz,ir] = sqrt(composition.T_e / composition.me_over_mi)
+            vth_e[iz,ir] = sqrt(2.0 * composition.T_e / composition.me_over_mi)
         end
     else
         @loop_r_z ir iz begin
             vth_e[iz,ir] = vth_i[iz,ir,1] / sqrt(composition.me_over_mi)
-            #vth_e[iz,ir] = exp(-5*(z[iz]/z[end])^2)/sqrt(composition.me_over_mi)
         end
     end
 end
@@ -1104,6 +1133,12 @@ function init_ion_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
         vpa_spectral, density, upar, ppar, vth, v_norm_fac, evolve_density, evolve_upar,
         evolve_ppar)
 
+    # Prefactor for Maxwellian distribution functions
+    if vperp.n == 1
+        Maxwellian_prefactor = 1.0 / sqrt(π)
+    else
+        Maxwellian_prefactor = 1.0 / π^1.5
+    end
     if spec.vpa_IC.initialization_option == "gaussian"
         # initial condition is a Gaussian in the peculiar velocity
         if z.bc != "wall"
@@ -1127,9 +1162,14 @@ function init_ion_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
 
                 @. vperp.scratch = vperp.grid/vth[iz]
 
+                if vperp.n == 1
+                    vth_factor = vth[iz]
+                else
+                    vth_factor = vth[iz]^3
+                end
                 @loop_vperp_vpa ivperp ivpa begin
-                    pdf[ivpa,ivperp,iz] = exp(-vpa.scratch[ivpa]^2 -
-                                              vperp.scratch[ivperp]^2) / vth[iz]
+                    pdf[ivpa,ivperp,iz] = Maxwellian_prefactor * exp(-vpa.scratch[ivpa]^2 -
+                                                                   vperp.scratch[ivperp]^2) / vth_factor
                 end
             end
 
@@ -1139,38 +1179,47 @@ function init_ion_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
             for iz ∈ 1:z.n
                 # densfac = the integral of the pdf over v-space, which should be unity,
                 # but may not be exactly unity due to quadrature errors
-                densfac = integrate_over_vspace(view(pdf,:,:,iz), vpa.grid, 0, vpa.wgts, vperp.grid, 0, vperp.wgts)
+                densfac = integral(view(pdf,:,:,iz), vpa.grid, 0, vpa.wgts, vperp.grid, 0, vperp.wgts)
                 # Save w_s = vpa - upar_s in vpa.scratch
                 if evolve_upar
                     vpa.scratch .= vpa.grid
                 else
                     @. vpa.scratch = vpa.grid - upar[iz]
                 end
-                # pparfac = the integral of the pdf over v-space, weighted by m_s w_s^2 / vths^2,
-                # where w_s = vpa - upar_s;
-                # should be equal to 1/2, but may not be exactly 1/2 due to quadrature errors
-                pparfac = @views (v_norm_fac[iz]/vth[iz])^2 *
-                                 integrate_over_vspace(pdf[:,:,iz], vpa.scratch, 2, vpa.wgts,
-                                                       vperp.grid, 0, vperp.wgts)
-                # pparfac2 = the integral of the pdf over v-space, weighted by m_s w_s^2 (w_s^2 - vths^2 / 2) / vth^4
-                @views @. vpa.scratch2 = vpa.scratch^2 *(vpa.scratch^2/pparfac - (vth[iz]/v_norm_fac[iz])^2/densfac)
-                pparfac2 = @views (v_norm_fac[iz]/vth[iz])^4 * integrate_over_vspace(pdf[:,:,iz], vpa.scratch2, 1, vpa.wgts, vperp.grid, 0, vperp.wgts)
+                # pfac = the integral of the pdf over v-space, weighted by m_s w_s^2 / vths^2,
+                # where w_s^2 = (vpa - upar_s)^2 + vperp^2;
+                # In moment-kinetic case, the velocity grids are already scaled by vths -
+                # v_norm_fac takes care of this (it is 1 when velocity grids are not
+                # normalised by vths, or vths when velocity grids are normalised by vths).
+                # pfac should be equal to 3/2, but may not be exactly 3/2 due to quadrature errors
+                pfac = @views (v_norm_fac[iz]/vth[iz])^2 *
+                              (integral(pdf[:,:,iz], vpa.scratch, 2, vpa.wgts, vperp.grid,
+                                        0, vperp.wgts)
+                               + integral(pdf[:,:,iz], vpa.scratch, 0, vpa.wgts, vperp.grid,
+                                          2, vperp.wgts))
+                # pfac2 = the integral of the pdf over v-space, weighted by m_s w_s^2 (w_s^2 - vths^2 / 2) / vth^4
+                @views @. vpa.scratch2 = vpa.scratch^2 * (vpa.scratch^2/pfac - 1.0/densfac)
+                @views @. vpa.scratch3 = (vpa.scratch^2/pfac - 1.0/densfac)
+                pfac2 = @views (v_norm_fac[iz]/vth[iz])^4 * (integral(pdf[:,:,iz], vpa.scratch2, 1, vpa.wgts, vperp.grid, 0, vperp.wgts)
+                                                             + integral(pdf[:,:,iz], vpa.scratch3, 1, vpa.wgts, vperp.grid, 2, vperp.wgts)
+                                                             + 2.0 * integral(pdf[:,:,iz], vpa.scratch, 2, vpa.wgts, vperp.grid, 2, vperp.wgts)
+                                                             + integral(pdf[:,:,iz], vpa.scratch, 0, vpa.wgts, vperp.grid, 4, vperp.wgts))
 
                 # The following update ensures the density and pressure moments of pdf
                 # have the expected values. The velocity moment is always exactly zero
                 # from symmetry, so does not need correcting.
                 # The corrected version has the correct moments because
                 #   ∫d^3v pdf_before = densfac
-                #   ∫d^3v m_s w_s^2 / vths^2 * pdf_before = pparfac
-                #   ∫d^3v m_s w_s^2 (m_s*w_s^2/vths^2/pparfac - 1/densfac) / vths^2 pdf = pparfac2
+                #   ∫d^3v m_s w_s^2 / vths^2 * pdf_before = pfac
+                #   ∫d^3v m_s w_s^2 (m_s*w_s^2/vths^2/pfac - 1/densfac) / vths^2 pdf_before = pfac2
                 # so
-                #   ∫d^3v ( 1/densfac + (0.5 - pparfac/densfac)/pparfac2 * (m_s*w_s^2/vths^2/pparfac - 1/densfac) / vths^2 ) * pdf
-                #   = 1 + (0.5 - pparfac / densfac) / pparfac2 * (pparfac/pparfac - densfac/densfac) / vths^2
+                #   ∫d^3v ( 1/densfac + (1.5 - pfac/densfac)/pfac2 * (m_s*w_s^2/vths^2/pfac - 1/densfac) / vths^2 ) * pdf_before
+                #   = 1 + (1.5 - pfac / densfac) / pfac2 * (pfac/pfac - densfac/densfac) / vths^2
                 #   = 1
                 # and
-                #   ∫d^3v m_s w_s^2 / vths^2 * ( 1/densfac + (0.5 - pparfac/densfac)/pparfac2 * (m_s*w_s^2/vths^2/pparfac - 1/densfac) / vths^2 ) * pdf
-                #   = pparfac/densfac + (0.5 - pparfac/densfac)/pparfac2 * pparfac2
-                #   = 0.5
+                #   ∫d^3v m_s w_s^2 / vths^2 * ( 1/densfac + (1.5 - pfac/densfac)/pfac2 * (m_s*w_s^2/vths^2/pfac - 1/densfac) / vths^2 ) * pdf_before
+                #   = pfac/densfac + (1.5 - pfac/densfac)/pfac2 * pfac2
+                #   = 1.5
                 @loop_vperp ivperp begin
                     @views @. pdf[:,ivperp,iz] = pdf[:,ivperp,iz]/densfac +
                                                  (0.5 - pparfac/densfac)/pparfac2 *
@@ -1205,7 +1254,7 @@ function init_ion_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
                     # normalise/interpolate (if necessary). This makes it easier to
                     # initialise a normalised pdf consistent with the moments, although it
                     # modifies the moments from the 'input' values.
-                    @. pdf[:,ivperp,iz] = density[iz] *
+                    @. pdf[:,ivperp,iz] = density[iz] * Maxwellian_prefactor *
                                           exp(-((vpa.scratch - upar[iz])^2 + vperp.scratch[ivperp]^2)
                                                / vth[iz]^2) / vth[iz]
 
@@ -1217,7 +1266,7 @@ function init_ion_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
                     #
                     # Implemented by multiplying by a smooth 'notch' function
                     # notch(v,u0,width) = 1 - exp(-(v-u0)^2/width)
-                    width = sqrt(0.1) * vth[iz]
+                    width = sqrt(0.1) * sqrt(2.0 * ppar[iz] / density[iz])
                     inverse_width_squared = 1.0 / width^2
 
                     @. pdf[:,ivperp,iz] *= 1.0 - exp(-vpa.scratch^2*inverse_width_squared)
@@ -1268,7 +1317,7 @@ function init_ion_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
             @loop_z_vperp iz ivperp begin
                 @. vpa.scratch = vpa.grid * vgrid_scale_factor[iz]
                 vperp.scratch[ivperp] = vperp.grid[ivperp] * vgrid_scale_factor[iz]
-                @. pdf[:,ivperp,iz] += spec.z_IC.density_amplitude *
+                @. pdf[:,ivperp,iz] += spec.z_IC.density_amplitude * Maxwellian_prefactor *
                                        (1.0 - (2.0 * z.grid[iz] / z.L)^2) *
                                        exp(-(vpa.scratch^2 + vperp.scratch[ivperp]^2)
                                            / vth[iz]^2) / vth[iz]
@@ -1290,7 +1339,7 @@ function init_ion_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
     elseif spec.vpa_IC.initialization_option == "vpagaussian"
         @loop_z_vperp iz ivperp begin
             #@. pdf[:,iz] = vpa.grid^2*exp(-(vpa.grid*(v_norm_fac[iz]/vth[iz]))^2) / vth[iz]
-            @. pdf[:,ivperp,iz] = vpa.grid^2*exp(-(vpa.grid)^2 - vperp.grid[ivperp]^2) / vth[iz]
+            @. pdf[:,ivperp,iz] = Maxwellian_prefactor*vpa.grid^2*exp(-(vpa.grid)^2 - vperp.grid[ivperp]^2) / vth[iz]
         end
     elseif spec.vpa_IC.initialization_option == "sinusoid"
         # initial condition is sinusoid in vpa
@@ -1310,9 +1359,9 @@ function init_ion_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
         @loop_z iz begin
             @loop_vperp_vpa ivperp ivpa begin
                 v2 = (vpa.grid[ivpa])^2 + vperp.grid[ivperp]^2 - v0^2
-                pdf[ivpa,ivperp,iz] = exp(-(v2^2)/v4norm)
+                pdf[ivpa,ivperp,iz] = Maxwellian_prefactor * exp(-(v2^2)/v4norm)
             end
-            normfac = integrate_over_vspace(view(pdf,:,:,iz), vpa.grid, 0, vpa.wgts, vperp.grid, 0, vperp.wgts)
+            normfac = integral(view(pdf,:,:,iz), vpa.grid, 0, vpa.wgts, vperp.grid, 0, vperp.wgts)
             @. pdf[:,:,iz] /= normfac
         end
     elseif spec.vpa_IC.initialization_option == "directed-beam"
@@ -1323,9 +1372,9 @@ function init_ion_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
             @loop_vperp_vpa ivperp ivpa begin
                 v2 = (vpa.grid[ivpa] - vpa0)^2 + (vperp.grid[ivperp] - vperp0)^2
                 v2norm = vth0^2
-                pdf[ivpa,ivperp,iz] = exp(-v2/v2norm)
+                pdf[ivpa,ivperp,iz] = Maxwellian_prefactor * exp(-v2/v2norm)
             end
-            normfac = integrate_over_vspace(view(pdf,:,:,iz), vpa.grid, 0, vpa.wgts, vperp.grid, 0, vperp.wgts)
+            normfac = integral(view(pdf,:,:,iz), vpa.grid, 0, vpa.wgts, vperp.grid, 0, vperp.wgts)
             @. pdf[:,:,iz] /= normfac
         end
     end
@@ -1345,8 +1394,11 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
     wall_flux_0 *= composition.recycling_fraction
     wall_flux_L *= composition.recycling_fraction
 
-    #if spec.vz_IC.initialization_option == "gaussian"
-    # For now, continue to use 'vpa' initialization options for neutral species
+    if vperp.n == 1
+        Maxwellian_prefactor = 1.0 / sqrt(π)
+    else
+        Maxwellian_prefactor = 1.0 / π^1.5
+    end
     if spec.vz_IC.initialization_option == "gaussian"
         # initial condition is a Gaussian in the peculiar velocity
         if z.bc != "wall"
@@ -1372,7 +1424,8 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
                 @. vr.scratch = vr.grid/vth[iz]
 
                 @loop_vzeta_vr_vz ivzeta ivr ivz begin
-                    pdf[ivz,ivr,ivzeta,iz] = exp(-vz.scratch[ivz]^2 - vr.scratch[ivr]^2
+                    pdf[ivz,ivr,ivzeta,iz] = Maxwellian_prefactor *
+                                             exp(-vz.scratch[ivz]^2 - vr.scratch[ivr]^2
                                                  - vzeta.scratch[ivzeta]^2) / vth[iz]
                 end
             end
@@ -1383,30 +1436,54 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
             for iz ∈ 1:z.n
                 # densfac = the integral of the pdf over v-space, which should be unity,
                 # but may not be exactly unity due to quadrature errors
-                densfac = integrate_over_neutral_vspace(view(pdf,:,:,:,iz), vz.grid, 0,
-                                                        vz.wgts, vr.grid, 0, vr.wgts,
-                                                        vzeta.grid, 0, vzeta.wgts)
+                densfac = integral(view(pdf,:,:,:,iz), vz.grid, 0, vz.wgts, vr.grid, 0,
+                                   vr.wgts, vzeta.grid, 0, vzeta.wgts)
                 # Save w_s = vz - upar_s in vz.scratch
                 if evolve_upar
                     vz.scratch .= vz.grid
                 else
                     @. vz.scratch = vz.grid - uz[iz]
                 end
-                # pzfac = the integral of the pdf over v-space, weighted by m_s w_s^2 / vths^2,
-                # where w_s = vz - uz_s;
-                # should be equal to 1/2, but may not be exactly 1/2 due to quadrature errors
-                @views @. vz.scratch2 = vz.scratch^2 * (v_norm_fac[iz]/vth[iz])^2
-                pzfac = integrate_over_neutral_vspace(pdf[:,:,:,iz], vz.scratch2, 1,
-                                                      vz.wgts, vr.grid, 0, vr.wgts,
-                                                      vzeta.grid, 0, vzeta.wgts)
-                # pzfac2 = the integral of the pdf over v-space, weighted by m_s w_s^2 (w_s^2 - vths^2 / 2) / vth^4
-                @views @. vz.scratch2 = vz.scratch^2 *(vz.scratch^2/pzfac - (vth[iz]/v_norm_fac[iz])^2/densfac) *
-                                        (v_norm_fac[iz]/vth[iz])^4
-                pzfac2 = @views integrate_over_neutral_vspace(pdf[:,:,:,iz], vz.scratch2,
-                                                              1, vz.wgts, vr.grid, 0,
-                                                              vr.wgts, vzeta.grid, 0,
-                                                              vzeta.wgts)
+                # pfac = the integral of the pdf over v-space, weighted by m_s w_s^2 / vths^2,
+                # where w_s^2 = (vz - uz_s)^2 + vr^2 + vzeta^2;
+                # In moment-kinetic case, the velocity grids are already scaled by vths -
+                # v_norm_fac takes care of this (it is 1 when velocity grids are not
+                # normalised by vths, or vths when velocity grids are normalised by vths).
+                # pfac should be equal to 3/2, but may not be exactly 3/2 due to quadrature errors
+                pfac = @views (v_norm_fac[iz]/vth[iz])^2 *
+                              (integral(pdf[:,:,:,iz], vz.scratch, 2, vz.wgts, vr.grid, 0,
+                                        vr.wgts, vzeta.scratch, 0, vzeta.wgts)
+                               + integral(pdf[:,:,:,iz], vz.scratch, 0, vz.wgts, vr.grid, 2,
+                                          vr.wgts, vzeta.scratch, 0, vzeta.wgts)
+                               + integral(pdf[:,:,:,iz], vz.scratch, 0, vz.wgts, vr.grid, 0,
+                                          vr.wgts, vzeta.grid, 2, vzeta.wgts))
+                # pfac2 = the integral of the pdf over v-space, weighted by m_s w_s^2 (w_s^2 - vths^2 / 2) / vth^4
+                @views @. vz.scratch2 = vz.scratch^2 * (vz.scratch^2/pfac - 1.0/densfac)
+                @views @. vz.scratch3 = (vz.scratch^2/pfac - 1.0/densfac)
+                pfac2 = @views (v_norm_fac[iz]/vth[iz])^4 * (integral(pdf[:,:,:,iz], vz.scratch2, 1, vz.wgts, vr.grid, 0, vr.wgts, vzeta.grid, 0, vzeta.wgts)
+                                                             + integral(pdf[:,:,:,iz], vz.scratch3, 1, vz.wgts, vr.grid, 2, vr.wgts, vzeta.grid, 0, vzeta.wgts)
+                                                             + integral(pdf[:,:,:,iz], vz.scratch3, 1, vz.wgts, vr.grid, 0, vr.wgts, vzeta.grid, 2, vzeta.wgts)
+                                                             + 2.0 * integral(pdf[:,:,:,iz], vz.scratch, 2, vz.wgts, vr.grid, 2, vr.wgts, vzeta.grid, 0, vzeta.wgts)
+                                                             + 2.0 * integral(pdf[:,:,:,iz], vz.scratch, 2, vz.wgts, vr.grid, 0, vr.wgts, vzeta.grid, 2, vzeta.wgts)
+                                                             + integral(pdf[:,:,:,iz], vpa.scratch, 0, vpa.wgts, vr.grid, 4, vr.wgts, vzeta.grid, 0, vzeta.wgts)
+                                                             + 2.0 * integral(pdf[:,:,:,iz], vpa.scratch, 0, vpa.wgts, vr.grid, 2, vr.wgts, vzeta.grid, 2, vzeta.wgts)
+                                                             + integral(pdf[:,:,:,iz], vpa.scratch, 0, vpa.wgts, vr.grid, 0, vr.wgts, vzeta.grid, 4, vzeta.wgts))
 
+                # The following update ensures the density and pressure moments of pdf
+                # have the expected values. The velocity moment is always exactly zero
+                # from symmetry, so does not need correcting.
+                # The corrected version has the correct moments because
+                #   ∫d^3v pdf_before = densfac
+                #   ∫d^3v m_s w_s^2 / vths^2 * pdf_before = pfac
+                #   ∫d^3v m_s w_s^2 (m_s*w_s^2/vths^2/pfac - 1/densfac) / vths^2 pdf_before = pfac2
+                # so
+                #   ∫d^3v ( 1/densfac + (1.5 - pfac/densfac)/pfac2 * (m_s*w_s^2/vths^2/pfac - 1/densfac) / vths^2 ) * pdf_before
+                #   = 1 + (1.5 - pfac / densfac) / pfac2 * (pfac/pfac - densfac/densfac) / vths^2
+                #   = 1
+                # and
+                #   ∫d^3v m_s w_s^2 / vths^2 * ( 1/densfac + (1.5 - pfac/densfac)/pfac2 * (m_s*w_s^2/vths^2/pfac - 1/densfac) / vths^2 ) * pdf_before
+                #   = pfac/densfac + (1.5 - pfac/densfac)/pfac2 * pfac2
+                #   = 1.5
                 @loop_vzeta_vr ivzeta ivr begin
                     @views @. pdf[:,ivr,ivzeta,iz] = pdf[:,ivr,ivzeta,iz]/densfac + (0.5 - pzfac/densfac)/pzfac2*(vz.scratch^2*(v_norm_fac[iz]/vth[iz])^2/pzfac - 1.0/densfac)*pdf[:,ivr,ivzeta,iz]
                 end
@@ -1439,7 +1516,7 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
                     # normalise/interpolate (if necessary). This makes it easier to
                     # initialise a normalised pdf consistent with the moments, although it
                     # modifies the moments from the 'input' values.
-                    @. pdf[:,ivr,ivzeta,iz] = density[iz] *
+                    @. pdf[:,ivr,ivzeta,iz] = density[iz] * Maxwellian_prefactor *
                                               exp(-((vz.scratch - uz[iz])^2 +
                                                     vzeta.scratch[ivzeta]^2 + vr.scratch[ivr]^2)
                                                   / vth[iz]^2) / vth[iz]
@@ -1452,7 +1529,13 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
                     #
                     # Implemented by multiplying by a smooth 'notch' function
                     # notch(v,u0,width) = 1 - exp(-(v-u0)^2/width)
-                    width = sqrt(0.1) * vth[iz]
+                    if evolve_ppar
+                        # Initialization grid scaled by 1/vth already, so don't need to
+                        # scale `width`.
+                        width = sqrt(0.1)
+                    else
+                        width = sqrt(0.1) * vth[iz]
+                    end
                     inverse_width_squared = 1.0 / width^2
 
                     @. pdf[:,ivr,ivzeta,iz] *= 1.0 - exp(-vz.scratch^2*inverse_width_squared)
@@ -1495,7 +1578,7 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
             # here.
             knudsen_pdf_lower = allocate_float(vz.n, vr.n, vzeta.n)
             knudsen_pdf_upper = allocate_float(vz.n, vr.n, vzeta.n)
-            knudsen_vtfac = sqrt(composition.T_wall * composition.mn_over_mi)
+            knudsen_vtfac = sqrt(2.0 * composition.T_wall * composition.mn_over_mi)
             if vzeta.n > 1 && vr.n > 1
                 # 3V specification of neutral wall emission distribution for boundary condition
                 # get the true Knudsen cosine distribution for neutral particle wall emission
@@ -1541,10 +1624,10 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
                 # get the marginalised Knudsen cosine distribution after integrating over
                 # vperp appropriate for 1V model
                 @. vz.scratch = vz.grid * vgrid_scale_factor0
-                @. knudsen_pdf_lower[:,1,1] = (3.0*pi/knudsen_vtfac^3)*abs(vz.scratch)*erfc(abs(vz.scratch) / knudsen_vtfac)
+                @. knudsen_pdf_lower[:,1,1] = (3.0*pi/knudsen_vtfac^3)*Maxwellian_prefactor*abs(vz.scratch)*erfc(abs(vz.scratch) / knudsen_vtfac)
 
                 @. vz.scratch = vz.grid * vgrid_scale_factorL
-                @. knudsen_pdf_upper[:,1,1] = (3.0*pi/knudsen_vtfac^3)*abs(vz.scratch)*erfc(abs(vz.scratch) / knudsen_vtfac)
+                @. knudsen_pdf_upper[:,1,1] = (3.0*pi/knudsen_vtfac^3)*Maxwellian_prefactor*abs(vz.scratch)*erfc(abs(vz.scratch) / knudsen_vtfac)
             end
 
             # add this species' contribution to the combined ion/neutral particle flux
@@ -1625,20 +1708,17 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
                 end
             end
         end
-    #elseif spec.vz_IC.initialization_option == "vzgaussian"
     elseif spec.vz_IC.initialization_option == "vzgaussian"
         @loop_z_vzeta_vr iz ivzeta ivr begin
-            @. pdf[:,ivr,ivzeta,iz] = vz.grid^2*exp(-vz.scratch^2 - vr[ivr]^2 -
-                                                    vzeta[ivzeta]^2) / vth[iz]
+            @. pdf[:,ivr,ivzeta,iz] = vz.grid^2*Maxwellian_prefactor*exp(-vz.scratch^2 - vr[ivr]^2 -
+                                                                       vzeta[ivzeta]^2) / vth[iz]
         end
-    #elseif spec.vz_IC.initialization_option == "sinusoid"
     elseif spec.vz_IC.initialization_option == "sinusoid"
         # initial condition is sinusoid in vz
         @loop_z_vzeta_vr iz ivzeta ivr begin
             @. pdf[:,ivr,ivzeta,iz] =
                 spec.vz_IC.amplitude*cospi(2.0*spec.vz_IC.wavenumber*vz.grid/vz.L)
         end
-    #elseif spec.vz_IC.initialization_option == "monomial"
     elseif spec.vz_IC.initialization_option == "monomial"
         # linear variation in vz, with offset so that
         # function passes through zero at upwind boundary
@@ -1660,6 +1740,11 @@ function init_electron_pdf_over_density_and_boundary_phi!(pdf, phi, density, upa
         z, vpa, vperp, vperp_spectral, vpa_spectral, vpa_advect, moments, num_diss_params,
         me_over_mi, scratch_dummy; restart_from_boltzmann=false)
 
+    if vperp.n == 1
+        Maxwellian_prefactor = 1.0 / sqrt(π)
+    else
+        Maxwellian_prefactor = 1.0 / π^1.5
+    end
     if z.bc == "wall"
         @begin_r_region()
         @loop_r ir begin
@@ -1667,7 +1752,7 @@ function init_electron_pdf_over_density_and_boundary_phi!(pdf, phi, density, upa
             @loop_z iz begin
                 vpa_over_vth = @. vpa.scratch3 = vpa.grid + upar[iz,ir] / vth[iz,ir]
                 @loop_vperp ivperp begin
-                    @. pdf[:,ivperp,iz,ir] = exp(-vpa_over_vth^2)
+                    @. pdf[:,ivperp,iz,ir] = Maxwellian_prefactor * exp(-vpa_over_vth^2)
                 end
             end
         end
@@ -1724,7 +1809,7 @@ function init_electron_pdf_over_density_and_boundary_phi!(pdf, phi, density, upa
                                         #exp(-((vpa.grid - upar[iz])^2 + vperp.grid[ivperp]^2) / vth[iz]^2)
 
                 # ensure that the normalised electron pdf integrates to unity
-                norm_factor = integrate_over_vspace(pdf[:,ivperp,iz,ir], vpa.wgts)
+                norm_factor = integral(pdf[:,ivperp,iz,ir], vpa.wgts)
                 @. pdf[:,ivperp,iz,ir] /= norm_factor
                 #println("TMP FOR TESTING -- init electron pdf")
                 #@. pdf[:,ivperp,iz] = exp(-2*vpa.grid[:]^2)*exp(-z.grid[iz]^2)
@@ -1736,7 +1821,7 @@ function init_electron_pdf_over_density_and_boundary_phi!(pdf, phi, density, upa
             # Initialise an unshifted Maxwellian as a first step
             @loop_z iz begin
                 @loop_vperp ivperp begin
-                    @. pdf[:,ivperp,iz,ir] = exp(-vpa.grid^2)
+                    @. pdf[:,ivperp,iz,ir] = Maxwellian_prefactor * exp(-vpa.grid^2)
                 end
             end
         end
@@ -1825,11 +1910,16 @@ end
 
 function init_knudsen_cosine!(knudsen_cosine, vz, vr, vzeta, vpa, vperp, composition, zero)
 
+    if vperp.n == 1
+        Maxwellian_prefactor = 1.0 / sqrt(π)
+    else
+        Maxwellian_prefactor = 1.0 / π^1.5
+    end
     @begin_serial_region()
     @serial_region begin
         integrand = zeros(mk_float, vz.n, vr.n, vzeta.n)
 
-        vtfac = sqrt(composition.T_wall * composition.mn_over_mi)
+        vtfac = sqrt(2.0 * composition.T_wall * composition.mn_over_mi)
 
         if vzeta.n > 1 && vr.n > 1
             # 3V specification of neutral wall emission distribution for boundary condition
@@ -1840,7 +1930,7 @@ function init_knudsen_cosine!(knudsen_cosine, vz, vr, vzeta, vpa, vperp, composi
                         for ivz in 1:vz.n
                             v_transverse = sqrt(vzeta.grid[ivzeta]^2 + vr.grid[ivr]^2)
                             v_normal = abs(vz.grid[ivz])
-                            knudsen_cosine[ivz,ivr,ivzeta] = (4.0/vtfac^5)*v_normal*exp( - (v_normal/vtfac)^2 - (v_transverse/vtfac)^2 )
+                            knudsen_cosine[ivz,ivr,ivzeta] = (4.0/vtfac^5)*v_normal*Maxwellian_prefactor*exp( - (v_normal/vtfac)^2 - (v_transverse/vtfac)^2 )
                             integrand[ivz,ivr,ivzeta] = vz.grid[ivz]*knudsen_cosine[ivz,ivr,ivzeta]
                         end
                     end
@@ -1857,7 +1947,7 @@ function init_knudsen_cosine!(knudsen_cosine, vz, vr, vzeta, vpa, vperp, composi
                             else
                                 prefac = 0.0
                             end
-                            knudsen_cosine[ivz,ivr,ivzeta] = (3.0*sqrt(pi)/vtfac^4)*prefac*exp( - (v_normal/vtfac)^2 - (v_transverse/vtfac)^2 )
+                            knudsen_cosine[ivz,ivr,ivzeta] = (3.0*sqrt(pi)/vtfac^4)*prefac*Maxwellian_prefactor*exp( - (v_normal/vtfac)^2 - (v_transverse/vtfac)^2 )
                             integrand[ivz,ivr,ivzeta] = vz.grid[ivz]*knudsen_cosine[ivz,ivr,ivzeta]
                         end
                     end
@@ -1873,7 +1963,7 @@ function init_knudsen_cosine!(knudsen_cosine, vz, vr, vzeta, vpa, vperp, composi
         elseif vzeta.n == 1 && vr.n == 1
             # get the marginalised Knudsen cosine distribution after integrating over vperp
             # appropriate for 1V model
-            @. vz.scratch = (3.0*pi/vtfac^3)*abs(vz.grid)*erfc(abs(vz.grid)/vtfac)
+            @. vz.scratch = (3.0*pi/vtfac^3)*Maxwellian_prefactor*abs(vz.grid)*erfc(abs(vz.grid)/vtfac)
             normalisation = integrate_over_positive_vz(vz.grid .* vz.scratch, vz.grid, vz.wgts, vz.scratch2,
                                                        vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
             # uncomment this line to test:
@@ -1943,7 +2033,7 @@ Take the full ion distribution function, calculate the moments, then
 normalise and shift to the moment-kinetic grid.
 
 Uses input value of `f` and modifies in place to the normalised distribution functions.
-Input `density`, `upar`, `ppar`, and `vth` are not used, the values are overwritten with
+Input `density`, `upar`, `p`, and `vth` are not used, the values are overwritten with
 the moments of `f`.
 
 Inputs/outputs depend on z, vperp, and vpa (should be inside loops over species, r).
@@ -1952,9 +2042,9 @@ The velocity grid that the input `f` is defined on can be scaled by `vgrid_scale
 `f` is given on a velocity grid `vperp.grid .* vgrid_scale_factor` and
 `vpa.grid .* vgrid_scale_factor`.
 """
-function convert_full_f_ion_to_normalised!(f, density, upar, ppar, vth, vperp, vpa,
+function convert_full_f_ion_to_normalised!(f, density, upar, p, vth, vperp, vpa,
                                            vpa_spectral, evolve_density, evolve_upar,
-                                           evolve_ppar, vgrid_scale_factor=ones(size(vth)))
+                                           evolve_p, vgrid_scale_factor=ones(size(vth)))
 
     @loop_z iz begin
         vpa_grid_input = vpa.grid .* vgrid_scale_factor[iz]
@@ -1967,31 +2057,30 @@ function convert_full_f_ion_to_normalised!(f, density, upar, ppar, vth, vperp, v
         end
 
         # Calculate moments
-        @views density[iz] = integrate_over_vspace(f[:,:,iz], vpa_grid_input, 0,
-                                                   vpa_wgts_input, vperp_grid_input, 0,
-                                                   vperp_wgts_input)
-        @views upar[iz] = integrate_over_vspace(f[:,:,iz], vpa_grid_input, 1,
-                                                vpa_wgts_input, vperp_grid_input, 0,
-                                                vperp_wgts_input) /
+        @views density[iz] = integrate(f[:,:,iz], vpa_grid_input, 0, vpa_wgts_input,
+                                       vperp_grid_input, 0, vperp_wgts_input)
+        @views upar[iz] = integrate(f[:,:,iz], vpa_grid_input, 1, vpa_wgts_input,
+                                    vperp_grid_input, 0, vperp_wgts_input) /
                           density[iz]
-        @views ppar[iz] = integrate_over_vspace(f[:,:,iz], vpa_grid_input, 2,
-                                                vpa_wgts_input, vperp_grid_input, 0,
-                                                vperp_wgts_input) -
-                          density[iz]*upar[iz]^2
-        vth[iz] = sqrt(2.0*ppar[iz]/density[iz])
+        @views p[iz] = (integrate(f[:,:,iz], vpa_grid_input, 2, vpa_wgts_input,
+                                    vperp_grid_input, 0, vperp_wgts_input)
+                        + integrate(f[:,:,iz], vpa_grid_input, 0, vpa_wgts_input,
+                                    vperp_grid_input, 2, vperp_wgts_input)) -
+                       density[iz]*upar[iz]^2
+        vth[iz] = sqrt(2.0*p[iz]/density[iz])
 
         # Normalise f
-        if evolve_ppar
+        if evolve_p
             f[:,:,iz] .*= vth[iz] / density[iz]
         elseif evolve_density
             f[:,:,iz] ./= density[iz]
         end
 
         # Interpolate f to moment kinetic grid
-        if evolve_ppar || evolve_upar
+        if evolve_p || evolve_upar
             # The values to interpolate *to* are the v_parallel values corresponding to
             # the w_parallel grid
-            vpa.scratch .= vpagrid_to_dzdt(vpa.grid, vth[iz], upar[iz], evolve_ppar,
+            vpa.scratch .= vpagrid_to_dzdt(vpa.grid, vth[iz], upar[iz], evolve_p,
                                            evolve_upar)
             # It would be inconvienient to create a coordinate object corresponding to
             # vpa_grid_input just to do this interpolation. Instead we can use vpa, but
@@ -2013,7 +2102,7 @@ Take the full neutral-particle distribution function, calculate the moments, the
 normalise and shift to the moment-kinetic grid.
 
 Uses input value of `f` and modifies in place to the normalised distribution functions.
-Input `density`, `upar`, `ppar`, and `vth` are not used, the values are overwritten with
+Input `density`, `uz`, `p`, and `vth` are not used, the values are overwritten with
 the moments of `f`.
 
 Inputs/outputs depend on z, vzeta, vr and vz (should be inside loops over species, r).
@@ -2024,7 +2113,7 @@ The velocity grid that the input `f` is defined on can be scaled by `vgrid_scale
 """
 function convert_full_f_neutral_to_normalised!(f, density, uz, pz, vth, vzeta, vr, vz,
                                                vz_spectral, evolve_density, evolve_upar,
-                                               evolve_ppar,
+                                               evolve_p,
                                                vgrid_scale_factor=ones(size(vth)))
 
     @loop_z iz begin
@@ -2049,24 +2138,24 @@ function convert_full_f_neutral_to_normalised!(f, density, uz, pz, vth, vzeta, v
                             f[:,:,:,iz], vz_grid_input, 1, vz_wgts_input, vr_grid_input,
                             0, vr_wgts_input, vzeta_grid_input, 0, vzeta_wgts_input) /
                         density[iz]
-        @views pz[iz] = integrate_over_neutral_vspace(
+        @views p[iz] = (integrate_over_neutral_vspace(
                             f[:,:,:,iz], vz_grid_input, 2, vz_wgts_input, vr_grid_input,
                             0, vr_wgts_input, vzeta_grid_input, 0, vzeta_wgts_input) -
                         density[iz]*uz[iz]^2
-        vth[iz] = sqrt(2.0*pz[iz]/density[iz])
+        vth[iz] = sqrt(2.0*p[iz]/density[iz])
 
         # Normalise f
-        if evolve_ppar
+        if evolve_p
             f[:,:,:,iz] .*= vth[iz] / density[iz]
         elseif evolve_density
             f[:,:,:,iz] ./= density[iz]
         end
 
         # Interpolate f to moment kinetic grid
-        if evolve_ppar || evolve_upar
+        if evolve_p || evolve_upar
             # The values to interpolate *to* are the v_parallel values corresponding to
             # the w_parallel grid
-            vz.scratch .= vpagrid_to_dzdt(vz.grid, vth[iz], uz[iz], evolve_ppar,
+            vz.scratch .= vpagrid_to_dzdt(vz.grid, vth[iz], uz[iz], evolve_p,
                                           evolve_upar)
             # It would be inconvienient to create a coordinate object corresponding to
             # vpa_grid_input just to do this interpolation. Instead we can use vpa, but
