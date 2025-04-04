@@ -26,7 +26,7 @@ function setup_reference_parameters(input_dict, warn_unexpected::Bool)
         Tref=100.0,
         mref=deuteron_mass,
        ))
-    reference_parameter_section["cref"] = sqrt(2.0 * proton_charge * reference_parameter_section["Tref"] / (reference_parameter_section["mref"]))
+    reference_parameter_section["cref"] = sqrt(proton_charge * reference_parameter_section["Tref"] / (reference_parameter_section["mref"]))
     reference_parameter_section["timeref"] = reference_parameter_section["Lref"] / reference_parameter_section["cref"]
     reference_parameter_section["Omegaref"] = proton_charge * reference_parameter_section["Bref"] / reference_parameter_section["mref"]
 
