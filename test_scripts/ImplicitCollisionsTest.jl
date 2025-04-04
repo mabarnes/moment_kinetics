@@ -142,12 +142,8 @@ function test_implicit_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=3,neleme
     test_linearised_advance=false,
     use_Maxwellian_Rosenbluth_coefficients_in_preconditioner=false,
     plot_test_output=false,
-    test_parallelism=false,
     test_dense_construction=false,standalone=false,
-    use_Maxwellian_Rosenbluth_coefficients=false,
-    use_Maxwellian_field_particle_distribution=false,
     test_numerical_conserving_terms=false,
-    algebraic_solve_for_d2Gdvperp2=false,
     boundary_data_option=multipole_expansion)
     
     nelement_local_vpa = nelement_vpa # number of elements per rank
@@ -212,7 +208,6 @@ function test_implicit_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=3,neleme
         end
     end
     # arrays needed for advance
-    dummy_vpavperp = Array{mk_float,2}(undef,vpa.n,vperp.n)
     Fold = allocate_shared_float(vpa.n,vperp.n)
     Fnew = allocate_shared_float(vpa.n,vperp.n)
     # dummy arrays
@@ -221,8 +216,7 @@ function test_implicit_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=3,neleme
     Fdummy3 = allocate_shared_float(vpa.n,vperp.n)
     # physics parameters
     ms = 1.0
-    msp = 1.0
-    nussp = 1.0
+    nuss = 1.0
 
     # initial condition 
     time = 0.0
@@ -236,23 +230,18 @@ function test_implicit_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=3,neleme
     
     implicit_ion_fp_collisions = true
     coords = (vperp=vperp,vpa=vpa)
+    spectral = (vperp_spectral=vperp_spectral, vpa_spectral=vpa_spectral)
     nl_solver_params = setup_fp_nl_solve(implicit_ion_fp_collisions, coords)
 
     #println(nl_solver_params.preconditioners)
     for it in 1:ntime
-        fokker_planck_backward_euler_step!(Fnew, Fold, delta_t, ms, msp, nussp, fkpl_arrays, dummy_vpavperp,
-            vperp, vpa, vperp_spectral, vpa_spectral, coords,
-            #Fdummy1, Fdummy2, Fdummy3, Fdummy4, Fdummy5,
+        fokker_planck_self_collisions_backward_euler_step!(Fnew, Fold, delta_t, ms, nuss, fkpl_arrays,
+            coords, spectral,
             nl_solver_params,
             test_numerical_conserving_terms=test_numerical_conserving_terms,
             test_particle_preconditioner=test_particle_preconditioner,
             test_linearised_advance=test_linearised_advance,
             use_Maxwellian_Rosenbluth_coefficients_in_preconditioner=use_Maxwellian_Rosenbluth_coefficients_in_preconditioner,
-            test_assembly_serial=test_parallelism,
-            use_Maxwellian_Rosenbluth_coefficients=use_Maxwellian_Rosenbluth_coefficients,
-            use_Maxwellian_field_particle_distribution=use_Maxwellian_field_particle_distribution,
-            algebraic_solve_for_d2Gdvperp2=algebraic_solve_for_d2Gdvperp2,
-            calculate_GG = false, calculate_dGdvperp=false,
             boundary_data_option=boundary_data_option)
         @begin_serial_region()
         # update the pdf
@@ -278,42 +267,31 @@ function test_implicit_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=3,neleme
     end    
 end
 
-function fokker_planck_backward_euler_step!(Fnew, Fold, delta_t, ms, msp, nussp, fkpl_arrays, dummy_vpavperp,
-    vperp, vpa, vperp_spectral, vpa_spectral, coords,
-    #Fresidual, F_delta_x, F_rhs_delta, Fv, Fw, 
-    nl_solver_params; #dvpadt=0.0,
+function fokker_planck_self_collisions_backward_euler_step!(Fnew, Fold, delta_t, ms, nuss, fkpl_arrays,
+    coords, spectral,
+    nl_solver_params;
     test_numerical_conserving_terms=false,
     test_linearised_advance=false,
     test_particle_preconditioner=false,
     use_Maxwellian_Rosenbluth_coefficients_in_preconditioner=false,
-    test_assembly_serial=false,
-    use_Maxwellian_Rosenbluth_coefficients=false,
-    use_Maxwellian_field_particle_distribution=false,
-    algebraic_solve_for_d2Gdvperp2=false,
-    calculate_GG = false, calculate_dGdvperp=false,
     boundary_data_option=multipole_expansion,
-    standalone=true,
-    upper_wall=false,
-    lower_wall=false)
+    standalone=true)
+    
+    vperp, vperp_spectral = coords.vperp, spectral.vperp_spectral
+    vpa, vpa_spectral = coords.vpa, spectral.vpa_spectral
     
     # residual function to be used for Newton-Krylov
+    # residual(vpa, vperp) = F^(n+1) - F^n - dt * C[F^n+1,F^n+1]
     function residual_func!(Fresidual, Fnew; krylov=false)
-        #begin_s_r_z_anyv_region()
         fokker_planck_self_collision_operator_weak_form!(
-                         Fnew, ms, nussp,
+                         Fnew, ms, nuss,
                          fkpl_arrays, vperp, vpa,
                          vperp_spectral, vpa_spectral; 
                          boundary_data_option=boundary_data_option,
                          use_conserving_corrections=test_numerical_conserving_terms)
-        
-        # calculate_vpavperp_advection_terms!(Fnew,
-        #     dvpadt,fkpl_arrays,vpa,vperp)
-        # # enforce the boundary conditions on advection terms before it is used for timestepping
-        # enforce_vpavperp_BCs!(fkpl_arrays.rhs_advection,vpa,vperp,vpa_spectral,vperp_spectral,
-        #                 upper_wall=upper_wall,lower_wall=lower_wall)
+
         @begin_anyv_vperp_vpa_region()
         @loop_vperp_vpa ivperp ivpa begin
-            # Fresidual[ivpa,ivperp] = Fnew[ivpa,ivperp] - Fold[ivpa,ivperp] - delta_t * (fkpl_arrays.CC[ivpa,ivperp] + fkpl_arrays.rhs_advection[ivpa,ivperp])
             Fresidual[ivpa,ivperp] = Fnew[ivpa,ivperp] - Fold[ivpa,ivperp] - delta_t * (fkpl_arrays.CC[ivpa,ivperp])
         end
         return nothing
@@ -323,34 +301,42 @@ function fokker_planck_backward_euler_step!(Fnew, Fold, delta_t, ms, msp, nussp,
         @begin_s_r_z_anyv_region()
     end
     if test_particle_preconditioner
-      calculate_test_particle_preconditioner!(Fold,delta_t,ms,msp,nussp,
-        vpa,vperp,vpa_spectral,vperp_spectral,fkpl_arrays, 
-        use_Maxwellian_Rosenbluth_coefficients=use_Maxwellian_Rosenbluth_coefficients_in_preconditioner,
-        boundary_data_option=boundary_data_option)
+        # test particle preconditioner CC2D_sparse is the matrix
+        # K_ijkl = int phi_i(vpa)phi_j(vperp) ( phi_k(vpa)phi_l(vperp) - dt C[ phi_k(vpa)phi_l(vperp) , F^n(vpa,vperp) ])  vperp d vperp d vpa,
+        # such that K * F^n+1 = M * F^n advances the linearised collision operator due
+        # to test particle collisions only (differential piece of C).
+        # CC2D_sparse is the approximate Jacobian for the residual Fresidual.
+        calculate_test_particle_preconditioner!(Fold,delta_t,ms,ms,nuss,
+            vpa,vperp,vpa_spectral,vperp_spectral,fkpl_arrays, 
+            use_Maxwellian_Rosenbluth_coefficients=use_Maxwellian_Rosenbluth_coefficients_in_preconditioner,
+            boundary_data_option=boundary_data_option)
       
-      lu_CC = lu(fkpl_arrays.CC2D_sparse) 
-      function test_particle_precon!(x)
-         pdf = x
-         pdf_scratch = fkpl_arrays.rhsvpavperp
-         pdf_dummy = fkpl_arrays.S_dummy
-         MM2D_sparse = fkpl_arrays.MM2D_sparse
-         @begin_anyv_region()
-         @anyv_serial_region begin
-             @views @. pdf_scratch = pdf
-             pdf_c = vec(pdf)
-             pdf_scratch_c = vec(pdf_scratch)
-             pdf_dummy_c = vec(pdf_dummy)
-             mul!(pdf_dummy_c, MM2D_sparse, pdf_scratch_c)
-             ldiv!(pdf_c,lu_CC,pdf_dummy_c)
-         end
-         return nothing
-      end 
-      right_preconditioner = test_particle_precon!
+        # LU decomposition of the approximate Jacobian
+        lu_CC = lu(fkpl_arrays.CC2D_sparse) 
+        function test_particle_precon!(x)
+            # function to solve K * F^n+1 = M * F^n
+            # and return F^n+1 in place in x
+            pdf = x
+            pdf_scratch = fkpl_arrays.rhsvpavperp
+            pdf_dummy = fkpl_arrays.S_dummy
+            MM2D_sparse = fkpl_arrays.MM2D_sparse
+            @begin_anyv_region()
+            @anyv_serial_region begin
+                @views @. pdf_scratch = pdf
+                pdf_c = vec(pdf)
+                pdf_scratch_c = vec(pdf_scratch)
+                pdf_dummy_c = vec(pdf_dummy)
+                mul!(pdf_dummy_c, MM2D_sparse, pdf_scratch_c)
+                ldiv!(pdf_c,lu_CC,pdf_dummy_c)
+            end
+            return nothing
+        end 
+        right_preconditioner = test_particle_precon!
     else
         right_preconditioner = nothing
     end
     if test_linearised_advance
-      test_particle_precon!(Fnew)
+        test_particle_precon!(Fnew)
     else
         Fresidual = fkpl_arrays.Fresidual
         F_delta_x = fkpl_arrays.F_delta_x
@@ -358,7 +344,7 @@ function fokker_planck_backward_euler_step!(Fnew, Fold, delta_t, ms, msp, nussp,
         Fv = fkpl_arrays.Fv
         Fw = fkpl_arrays.Fw
         newton_solve!(Fnew, residual_func!, Fresidual, F_delta_x, F_rhs_delta, Fv, Fw, nl_solver_params;
-                      coords, right_preconditioner=right_preconditioner)
+                    coords, right_preconditioner=right_preconditioner)
     end
     @_anyv_subblock_synchronize()
     #begin_serial_region()
