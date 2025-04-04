@@ -1148,6 +1148,21 @@ function init_ion_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
                 @views @. vpa.scratch2 = vpa.scratch^2 *(vpa.scratch^2/pparfac - (vth[iz]/v_norm_fac[iz])^2/densfac)
                 pparfac2 = @views (v_norm_fac[iz]/vth[iz])^4 * integrate_over_vspace(pdf[:,:,iz], vpa.scratch2, 1, vpa.wgts, vperp.grid, 0, vperp.wgts)
 
+                # The following update ensures the density and pressure moments of pdf
+                # have the expected values. The velocity moment is always exactly zero
+                # from symmetry, so does not need correcting.
+                # The corrected version has the correct moments because
+                #   ∫d^3v pdf_before = densfac
+                #   ∫d^3v m_s w_s^2 / vths^2 * pdf_before = pparfac
+                #   ∫d^3v m_s w_s^2 (m_s*w_s^2/vths^2/pparfac - 1/densfac) / vths^2 pdf = pparfac2
+                # so
+                #   ∫d^3v ( 1/densfac + (0.5 - pparfac/densfac)/pparfac2 * (m_s*w_s^2/vths^2/pparfac - 1/densfac) / vths^2 ) * pdf
+                #   = 1 + (0.5 - pparfac / densfac) / pparfac2 * (pparfac/pparfac - densfac/densfac) / vths^2
+                #   = 1
+                # and
+                #   ∫d^3v m_s w_s^2 / vths^2 * ( 1/densfac + (0.5 - pparfac/densfac)/pparfac2 * (m_s*w_s^2/vths^2/pparfac - 1/densfac) / vths^2 ) * pdf
+                #   = pparfac/densfac + (0.5 - pparfac/densfac)/pparfac2 * pparfac2
+                #   = 0.5
                 @loop_vperp ivperp begin
                     @views @. pdf[:,ivperp,iz] = pdf[:,ivperp,iz]/densfac +
                                                  (0.5 - pparfac/densfac)/pparfac2 *
