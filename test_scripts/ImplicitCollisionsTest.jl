@@ -14,7 +14,7 @@ using moment_kinetics.gauss_legendre: setup_gausslegendre_pseudospectral, get_QQ
 using moment_kinetics.type_definitions: mk_float, mk_int, OptionsDict
 using moment_kinetics.fokker_planck: init_fokker_planck_collisions_weak_form
 using moment_kinetics.fokker_planck: fokker_planck_self_collision_operator_weak_form!
-using moment_kinetics.fokker_planck: setup_fp_nl_solve
+using moment_kinetics.fokker_planck: setup_fp_nl_solve, setup_fkpl_collisions_input
 using moment_kinetics.fokker_planck_calculus: enforce_vpavperp_BCs!, calculate_test_particle_preconditioner!
 using moment_kinetics.fokker_planck_calculus: calculate_vpavperp_advection_terms!
 using moment_kinetics.fokker_planck_test: F_Maxwellian, print_test_data
@@ -26,6 +26,7 @@ using moment_kinetics.looping
 using moment_kinetics.input_structs: direct_integration, multipole_expansion
 using moment_kinetics.nonlinear_solvers
 using moment_kinetics.z_advection: init_z_advection_implicit, z_advection_implicit_advance!
+using moment_kinetics.species_input: get_species_input
 
 function plot_test_data(func_exact,func_num,func_err,func_name,vpa,vperp)
     @views heatmap(vperp.grid, vpa.grid, func_num[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
@@ -142,7 +143,7 @@ function test_implicit_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=3,neleme
     test_linearised_advance=false,
     use_Maxwellian_Rosenbluth_coefficients_in_preconditioner=false,
     plot_test_output=false,
-    test_dense_construction=false,standalone=false,
+    test_dense_construction=false,standalone=true,
     test_numerical_conserving_terms=false,
     boundary_data_option=multipole_expansion)
     
@@ -209,7 +210,6 @@ function test_implicit_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=3,neleme
     end
     # arrays needed for advance
     Fold = allocate_shared_float(vpa.n,vperp.n)
-    Fnew = allocate_shared_float(vpa.n,vperp.n)
     # dummy arrays
     Fdummy1 = allocate_shared_float(vpa.n,vperp.n)
     Fdummy2 = allocate_shared_float(vpa.n,vperp.n)
@@ -234,6 +234,7 @@ function test_implicit_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=3,neleme
 
     #println(nl_solver_params.preconditioners)
     for it in 1:ntime
+        @begin_s_r_z_anyv_region()
         fokker_planck_self_collisions_backward_euler_step!(Fold, delta_t, ms, nuss, fkpl_arrays,
             coords, spectral,
             nl_solver_params,
@@ -267,10 +268,175 @@ function test_implicit_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=3,neleme
     end    
 end
 
-function implicit_ion_fokker_planck_self_collisions(pdf_out, pdf_in, dSdt, 
+function test_implicit_collisions_wrapper(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=3,nelement_vpa=8,nelement_vperp=4,
+    Lvpa=6.0,Lvperp=3.0,ntime=1,delta_t=1.0,
+    restart = 8,
+    max_restarts = 1,
+    atol = 1.0e-10,
+    serial_solve = false,
+    anyv_region = true,
+    test_particle_preconditioner=false,
+    test_linearised_advance=false,
+    use_Maxwellian_Rosenbluth_coefficients_in_preconditioner=false,
+    plot_test_output=false,
+    test_dense_construction=false,standalone=true,
+    test_numerical_conserving_terms=false,
+    boundary_data_option=multipole_expansion)
+    
+    nelement_local_vpa = nelement_vpa # number of elements per rank
+    nelement_global_vpa = nelement_local_vpa # total number of elements 
+    nelement_local_vperp = nelement_vperp # number of elements per rank
+    nelement_global_vperp = nelement_local_vperp # total number of elements 
+    bc = "" #not required to take a particular value, not used 
+    # fd_option and adv_input not actually used so given values unimportant
+    #discretization = "chebyshev_pseudospectral"
+    discretization = "gausslegendre_pseudospectral"
+    element_spacing_option = "uniform"
+    
+    # Set up MPI
+    if standalone
+        initialize_comms!()
+    end
+    setup_distributed_memory_MPI(1,1,1,1)
+    coords_input = OptionsDict(
+        "vperp"=>OptionsDict("ngrid"=>ngrid, "nelement"=>nelement_global_vperp,
+                                "nelement_local"=>nelement_local_vperp, "L"=>Lvperp,
+                                "discretization"=>discretization,
+                                "element_spacing_option"=>element_spacing_option,
+                                "bc"=>"none"),
+        "vpa"=>OptionsDict("ngrid"=>ngrid, "nelement"=>nelement_global_vpa,
+                            "nelement_local"=>nelement_local_vpa, "L"=>Lvpa,
+                            "discretization"=>discretization,
+                            "element_spacing_option"=>element_spacing_option,
+                            "bc"=>"none"),
+        "z"=>OptionsDict("ngrid"=> 1, "nelement"=> 1,
+                            "nelement_local"=> 1, "bc"=>"none"),
+        "r"=>OptionsDict("ngrid"=> 1, "nelement"=> 1,
+                            "nelement_local"=> 1, "bc"=>"none"),
+    )
+    #println("made inputs")
+    #println("vpa: ngrid: ",ngrid," nelement: ",nelement_local_vpa, " Lvpa: ",Lvpa)
+    #println("vperp: ngrid: ",ngrid," nelement: ",nelement_local_vperp, " Lvperp: ",Lvperp)
+    # create the coordinate structs
+    vperp, vperp_spectral = define_coordinate(coords_input, "vperp")
+    vpa, vpa_spectral = define_coordinate(coords_input, "vpa")
+    r, r_spectral = define_coordinate(coords_input, "r")
+    z, z_spectral = define_coordinate(coords_input, "z")
+    composition = get_species_input(OptionsDict("composition" => OptionsDict("n_ion_species" => 1, "n_neutral_species" => 0) ), true)
+    looping.setup_loop_ranges!(block_rank[], block_size[];
+                                    s=composition.n_ion_species, sn=1,
+                                    r=r.n, z=z.n, vperp=vperp.n, vpa=vpa.n,
+                                    vzeta=1, vr=1, vz=1)
+    nc_global = vpa.n*vperp.n
+    @begin_serial_region()
+    start_init_time = now()
+    if boundary_data_option == direct_integration
+        precompute_weights = true
+    else
+        precompute_weights = false
+    end
+    fkpl_arrays = init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_spectral; 
+                        precompute_weights=precompute_weights, test_dense_matrix_construction=test_dense_construction)
+    input_toml = OptionsDict("fokker_planck_collisions" => OptionsDict( "use_fokker_planck" => true,
+                                                                        "nuii" => 1.0,
+                                                                        "frequency_option" => "manual",
+                                                                        "self_collisions" => true,
+                                                                        "use_conserving_corrections" => test_numerical_conserving_terms,
+                                                                        "boundary_data_option" => boundary_data_option,
+                                                                        ))
+    collisions = (fkpl = setup_fkpl_collisions_input(input_toml, true), krook=nothing)
+    finish_init_time = now()
+    
+    # initial condition
+    nr = r.n
+    nz = z.n
+    ns = composition.n_ion_species
+    fvpavperpzrst = allocate_shared_float(vpa.n,vperp.n,nz,nr,ns,ntime+1)
+    fvpavperpzrs_old = allocate_shared_float(vpa.n,vperp.n,nz,nr,ns)
+    fvpavperpzrs_new = allocate_shared_float(vpa.n,vperp.n,nz,nr,ns)
+    dSdt = allocate_shared_float(nz,nr,ns)
+    @serial_region begin
+        @loop_s_r_z is ir iz begin
+            @loop_vperp_vpa ivperp ivpa begin
+                fvpavperpzrst[ivpa,ivperp,iz,ir,is,1] = exp(-((vpa.grid[ivpa]-vpa0)^2 + (vperp.grid[ivperp]-vperp0)^2)/(vth0^2))
+            end
+            # normalise to unit density
+            @views densfac = get_density(fvpavperpzrst[:,:,iz,ir,is,1],vpa,vperp)
+            @loop_vperp_vpa ivperp ivpa begin
+                fvpavperpzrst[ivpa,ivperp,iz,ir,is,1] /= densfac
+            end
+            dSdt[iz,ir,is] = 0.0
+        end
+    end
+    # arrays needed for advance
+    Fold = allocate_shared_float(vpa.n,vperp.n)
+    # dummy arrays
+    Fdummy1 = allocate_shared_float(vpa.n,vperp.n)
+    Fdummy2 = allocate_shared_float(vpa.n,vperp.n)
+    Fdummy3 = allocate_shared_float(vpa.n,vperp.n)
+    # physics parameters
+    ms = 1.0
+    nuss = 1.0
+
+    # initial condition 
+    time = 0.0
+    @serial_region begin
+        @loop_s_r_z is ir iz begin
+            @loop_vperp_vpa ivperp ivpa begin
+                fvpavperpzrs_old[ivpa,ivperp,iz,ir,is] = fvpavperpzrst[ivpa,ivperp,iz,ir,is,1]
+            end
+        end
+    end
+    @views diagnose_F_Maxwellian(fvpavperpzrs_old[:,:,1,1,1],Fdummy1,Fdummy2,Fdummy3,vpa,vperp,time,ms,0)
+    
+    implicit_ion_fp_collisions = true
+    coords = (vperp=vperp,vpa=vpa)
+    spectral_objects = (vperp_spectral=vperp_spectral, vpa_spectral=vpa_spectral)
+    nl_solver_params = setup_fp_nl_solve(implicit_ion_fp_collisions, coords)
+
+    #println(nl_solver_params.preconditioners)
+    for it in 1:ntime
+        success = implicit_ion_fokker_planck_self_collisions!(fvpavperpzrs_new, fvpavperpzrs_old, dSdt, 
+                                        composition, collisions, fkpl_arrays, 
+                                        vpa, vperp, z, r, delta_t, spectral_objects,
+                                        nl_solver_params; diagnose_entropy_production=true,
+                                        test_linearised_advance=test_linearised_advance,
+                                        test_particle_preconditioner=test_particle_preconditioner,
+                                        use_Maxwellian_Rosenbluth_coefficients_in_preconditioner=use_Maxwellian_Rosenbluth_coefficients_in_preconditioner)
+        @begin_serial_region()
+        # update the pdf
+        @serial_region begin
+            @loop_s_r_z is ir iz begin
+                @loop_vperp_vpa ivperp ivpa begin
+                    fvpavperpzrs_old[ivpa,ivperp,iz,ir,is] = fvpavperpzrs_new[ivpa,ivperp,iz,ir,is]
+                end
+            end
+        end
+        # diagnose Fold
+        time += delta_t
+        @views diagnose_F_Maxwellian(fvpavperpzrs_old[:,:,1,1,1],Fdummy1,Fdummy2,Fdummy3,vpa,vperp,time,ms,it)
+        # update outputs
+        @serial_region begin
+            @loop_s_r_z is ir iz begin
+                @loop_vperp_vpa ivperp ivpa begin
+                    fvpavperpzrst[ivpa,ivperp,iz,ir,is,it+1] = fvpavperpzrs_old[ivpa,ivperp,iz,ir,is]
+                end
+            end
+        end
+    end
+    
+    if plot_test_output
+        @views diagnose_F_gif(fvpavperpzrst[:,:,1,1,1,:],vpa,vperp,ntime)
+    end    
+end
+
+function implicit_ion_fokker_planck_self_collisions!(pdf_out, pdf_in, dSdt, 
         composition, collisions, fkpl_arrays, 
         vpa, vperp, z, r, delta_t, spectral_objects,
-        nl_solver_params; diagnose_entropy_production=false)
+        nl_solver_params; diagnose_entropy_production=false,
+        test_linearised_advance=false,
+        test_particle_preconditioner=false,
+        use_Maxwellian_Rosenbluth_coefficients_in_preconditioner=false)
     # bounds checking
     n_ion_species = composition.n_ion_species
     @boundscheck vpa.n == size(pdf_out,1) || throw(BoundsError(pdf_out))
@@ -303,13 +469,14 @@ function implicit_ion_fokker_planck_self_collisions(pdf_out, pdf_in, dSdt,
     # N.B. parallelisation using special 'anyv' region
     @begin_s_r_z_anyv_region()
     @loop_s_r_z is ir iz begin
-        @views local_success = fokker_planck_self_collisions_backward_euler_step!(pdf_in[:,:,iz,ir,is], delta_t, ms, nuss, fkpl_arrays,
+        @views Fold = pdf_in[:,:,iz,ir,is]
+        local_success = fokker_planck_self_collisions_backward_euler_step!(Fold, delta_t, ms, nuss, fkpl_arrays,
                             coords, spectral_objects,
                             nl_solver_params;
                             test_numerical_conserving_terms=use_conserving_corrections,
-                            test_linearised_advance=false,
-                            test_particle_preconditioner=false,
-                            use_Maxwellian_Rosenbluth_coefficients_in_preconditioner=false,
+                            test_linearised_advance=test_linearised_advance,
+                            test_particle_preconditioner=test_particle_preconditioner,
+                            use_Maxwellian_Rosenbluth_coefficients_in_preconditioner=use_Maxwellian_Rosenbluth_coefficients_in_preconditioner,
                             boundary_data_option=boundary_data_option)
         # global success true only if local_success true
         success = success && local_success
@@ -343,8 +510,7 @@ function fokker_planck_self_collisions_backward_euler_step!(Fold, delta_t, ms, n
     test_linearised_advance=false,
     test_particle_preconditioner=false,
     use_Maxwellian_Rosenbluth_coefficients_in_preconditioner=false,
-    boundary_data_option=multipole_expansion,
-    standalone=true)
+    boundary_data_option=multipole_expansion)
     
     vperp, vperp_spectral = coords.vperp, spectral.vperp_spectral
     vpa, vpa_spectral = coords.vpa, spectral.vpa_spectral
@@ -366,9 +532,6 @@ function fokker_planck_self_collisions_backward_euler_step!(Fold, delta_t, ms, n
         return nothing
     end
     
-    if standalone
-        @begin_s_r_z_anyv_region()
-    end
     if test_particle_preconditioner
         # test particle preconditioner CC2D_sparse is the matrix
         # K_ijkl = int phi_i(vpa)phi_j(vperp) ( phi_k(vpa)phi_l(vperp) - dt C[ phi_k(vpa)phi_l(vperp) , F^n(vpa,vperp) ])  vperp d vperp d vpa,
@@ -422,7 +585,6 @@ function fokker_planck_self_collisions_backward_euler_step!(Fold, delta_t, ms, n
                     coords, right_preconditioner=right_preconditioner)
     end
     @_anyv_subblock_synchronize()
-    #begin_serial_region()
     return success
 end    
 
