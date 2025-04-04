@@ -2577,8 +2577,7 @@ end
 
 function calculate_test_particle_preconditioner!(pdf,delta_t,ms,msp,nussp,
     vpa,vperp,vpa_spectral,vperp_spectral,
-    fkpl_arrays::fokkerplanck_weakform_arrays_struct,
-    dvpadt;
+    fkpl_arrays::fokkerplanck_weakform_arrays_struct;
     use_Maxwellian_Rosenbluth_coefficients=false,
     algebraic_solve_for_d2Gdvperp2=false,calculate_GG=false,
     calculate_dGdvperp=false,
@@ -2660,11 +2659,10 @@ function calculate_test_particle_preconditioner!(pdf,delta_t,ms,msp,nussp,
                             #                    MMperp[ivperp_local,jvperpp_local]))
                             assemble_constructor_value!(CC2D_sparse_constructor,icsc,
                                                 (MMpar[ivpa_local,jvpap_local]*
-                                                MMperp[ivperp_local,jvperpp_local]
-                            # use integration by parts and reverse indexing of PPpar 
-                            # to treat div ( dvpadt F)
-                                                + delta_t * dvpadt * PPpar[ivpa_local,jvpap_local]*
-                                                   MMperp[ivperp_local,jvperpp_local]))
+                                                MMperp[ivperp_local,jvperpp_local]))
+                            # treat div ( dvpadt F) without integration by parts
+                            #                    + delta_t * dvpadt * PPpar[ivpa_local,jvpap_local]*
+                            #                       MMperp[ivperp_local,jvperpp_local]))
                         end
                         # collision operator contribution
                         jvperpp = vperp.igrid_full[jvperpp_local,ielement_vperp]

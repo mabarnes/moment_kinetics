@@ -281,7 +281,7 @@ end
 function fokker_planck_backward_euler_step!(Fnew, Fold, delta_t, ms, msp, nussp, fkpl_arrays, dummy_vpavperp,
     vperp, vpa, vperp_spectral, vpa_spectral, coords,
     #Fresidual, F_delta_x, F_rhs_delta, Fv, Fw, 
-    nl_solver_params; dvpadt=0.0,
+    nl_solver_params; #dvpadt=0.0,
     test_numerical_conserving_terms=false,
     test_linearised_advance=false,
     test_particle_preconditioner=false,
@@ -306,14 +306,15 @@ function fokker_planck_backward_euler_step!(Fnew, Fold, delta_t, ms, msp, nussp,
                          boundary_data_option=boundary_data_option,
                          use_conserving_corrections=test_numerical_conserving_terms)
         
-        calculate_vpavperp_advection_terms!(Fnew,
-            dvpadt,fkpl_arrays,vpa,vperp)
-        # enforce the boundary conditions on advection terms before it is used for timestepping
-        enforce_vpavperp_BCs!(fkpl_arrays.rhs_advection,vpa,vperp,vpa_spectral,vperp_spectral,
-                        upper_wall=upper_wall,lower_wall=lower_wall)
+        # calculate_vpavperp_advection_terms!(Fnew,
+        #     dvpadt,fkpl_arrays,vpa,vperp)
+        # # enforce the boundary conditions on advection terms before it is used for timestepping
+        # enforce_vpavperp_BCs!(fkpl_arrays.rhs_advection,vpa,vperp,vpa_spectral,vperp_spectral,
+        #                 upper_wall=upper_wall,lower_wall=lower_wall)
         @begin_anyv_vperp_vpa_region()
         @loop_vperp_vpa ivperp ivpa begin
-            Fresidual[ivpa,ivperp] = Fnew[ivpa,ivperp] - Fold[ivpa,ivperp] - delta_t * (fkpl_arrays.CC[ivpa,ivperp] + fkpl_arrays.rhs_advection[ivpa,ivperp])
+            # Fresidual[ivpa,ivperp] = Fnew[ivpa,ivperp] - Fold[ivpa,ivperp] - delta_t * (fkpl_arrays.CC[ivpa,ivperp] + fkpl_arrays.rhs_advection[ivpa,ivperp])
+            Fresidual[ivpa,ivperp] = Fnew[ivpa,ivperp] - Fold[ivpa,ivperp] - delta_t * (fkpl_arrays.CC[ivpa,ivperp])
         end
         return nothing
     end
@@ -323,8 +324,7 @@ function fokker_planck_backward_euler_step!(Fnew, Fold, delta_t, ms, msp, nussp,
     end
     if test_particle_preconditioner
       calculate_test_particle_preconditioner!(Fold,delta_t,ms,msp,nussp,
-        vpa,vperp,vpa_spectral,vperp_spectral,
-        fkpl_arrays, dvpadt,
+        vpa,vperp,vpa_spectral,vperp_spectral,fkpl_arrays, 
         use_Maxwellian_Rosenbluth_coefficients=use_Maxwellian_Rosenbluth_coefficients_in_preconditioner,
         boundary_data_option=boundary_data_option)
       
