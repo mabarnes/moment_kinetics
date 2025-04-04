@@ -219,18 +219,6 @@ function test_implicit_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=3,neleme
     Fdummy1 = allocate_shared_float(vpa.n,vperp.n)
     Fdummy2 = allocate_shared_float(vpa.n,vperp.n)
     Fdummy3 = allocate_shared_float(vpa.n,vperp.n)
-    Fdummy4 = allocate_shared_float(vpa.n,vperp.n)
-    Fdummy5 = allocate_shared_float(vpa.n,vperp.n)
-    # zero dummy arrays
-    @serial_region begin
-        @loop_vperp_vpa ivperp ivpa begin
-        Fdummy1[ivpa,ivperp] = 0.0
-        Fdummy2[ivpa,ivperp] = 0.0
-        Fdummy3[ivpa,ivperp] = 0.0
-        Fdummy4[ivpa,ivperp] = 0.0
-        Fdummy5[ivpa,ivperp] = 0.0
-        end
-    end
     # physics parameters
     ms = 1.0
     msp = 1.0
