@@ -6,7 +6,7 @@ test_input = OptionsDict(
     "manufactured_solns" => OptionsDict("use_for_advance"=>true),
     "evolve_moments" => OptionsDict("density" => false,
                                     "parallel_flow" => false,
-                                    "parallel_pressure" => false,
+                                    "pressure" => false,
                                     "moments_conservation" => false),
     "composition" => OptionsDict("n_ion_species" => 1,
                           "n_neutral_species" => 1,
