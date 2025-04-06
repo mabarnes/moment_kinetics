@@ -65,9 +65,9 @@ function check_moment_constraints(run_info, is_neutral; input, plot_prefix)
                     run_info.vr.grid, 0, run_info.vr.wgts, run_info.vzeta.grid, 0,
                     run_info.vzeta.wgts)
             end
-            error = moment .- 0.5
-            animate_vs_z(run_info, "parallel pressure neutral"; data=error, input=input,
-                         outfile=plot_prefix * "parallel_pressure_moment_neutral_check.gif")
+            error = moment .- 1.5
+            animate_vs_z(run_info, "pressure neutral"; data=error, input=input,
+                         outfile=plot_prefix * "pressure_moment_neutral_check.gif")
         end
     else
         f = get_variable(run_info, "f")
@@ -102,9 +102,9 @@ function check_moment_constraints(run_info, is_neutral; input, plot_prefix)
                     @view(f[:,:,iz,ir,is,it]), run_info.vpa.grid, 2, run_info.vpa.wgts,
                     run_info.vperp.grid, 0, run_info.vperp.wgts)
             end
-            error = moment .- 0.5
-            animate_vs_z(run_info, "parallel pressure moment"; data=error, input=input,
-                         outfile=plot_prefix * "parallel_pressure_moment_check.gif")
+            error = moment .- 1.5
+            animate_vs_z(run_info, "pressure moment"; data=error, input=input,
+                         outfile=plot_prefix * "pressure_moment_check.gif")
         end
     end
 
