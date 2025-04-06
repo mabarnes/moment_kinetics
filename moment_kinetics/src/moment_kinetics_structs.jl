@@ -203,6 +203,8 @@ struct moments_electron_substruct{ndim_moment_electron_source}
     p_updated::Base.RefValue{Bool}
     # this is the parallel pressure
     ppar::MPISharedArray{mk_float,ndim_moment_electron}
+    # this is the perpendicular pressure
+    pperp::MPISharedArray{mk_float,ndim_moment_electron}
     # this is the temperature
     temp::MPISharedArray{mk_float,ndim_moment_electron}
     # flag that keeps track of whether or not temp needs updating before use
