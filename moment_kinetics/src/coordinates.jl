@@ -655,12 +655,7 @@ function init_grid(ngrid, nelement_local, n_global, n_local, irank, L, element_s
         grid = allocate_float(n_local)
         grid[1] = 0.0
         wgts = allocate_float(n_local)
-        if name == "vr" || name == "vzeta"
-            wgts[1] = sqrt(pi) # to cancel factor of 1/sqrt{pi} in integrate_over_neutral_vspace, velocity_moments.jl
-                               # in the case that the code runs in 1V mode
-        else
-            wgts[1] = 1.0
-        end
+        wgts[1] = 1.0
     elseif discretization == "chebyshev_pseudospectral"
         if name == "vperp"
             # initialize chebyshev grid defined on [-L/2,L/2]
