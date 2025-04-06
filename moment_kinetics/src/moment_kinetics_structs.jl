@@ -291,10 +291,12 @@ struct moments_neutral_substruct
     uzeta_updated::Vector{Bool}
     # this is the pressure
     p::MPISharedArray{mk_float,ndim_moment}
-    # flag that keeps track of if pz needs updating before use
+    # flag that keeps track of if p needs updating before use
     p_updated::Vector{Bool}
     # this is the zz particle pressure tensor component
     pz::MPISharedArray{mk_float,ndim_moment}
+    # flag that keeps track of if pz needs updating before use
+    pz_updated::Vector{Bool}
     # this is the rr particle pressure tensor component
     pr::MPISharedArray{mk_float,ndim_moment}
     # flag that keeps track of if pr needs updating before use
