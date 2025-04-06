@@ -4100,7 +4100,7 @@ function update_solution_vector!(new_evolved, old_evolved, moments, composition,
         @loop_sn_r_z isn ir iz begin
             new_evolved.density_neutral[iz,ir,isn] = old_evolved.density_neutral[iz,ir,isn]
             new_evolved.uz_neutral[iz,ir,isn] = old_evolved.uz_neutral[iz,ir,isn]
-            new_evolved.pz_neutral[iz,ir,isn] = old_evolved.pz_neutral[iz,ir,isn]
+            new_evolved.p_neutral[iz,ir,isn] = old_evolved.p_neutral[iz,ir,isn]
         end
     end
     return nothing
