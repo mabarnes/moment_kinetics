@@ -2036,8 +2036,8 @@ function convert_full_f_neutral_to_normalised!(f, density, uz, pz, vth, vzeta, v
     @loop_z iz begin
         # Calculate moments
         @views density[iz] = get_neutral_density(f[:,:,:,iz], vz, vr, vzeta)
-        @views uz[iz] = get_neutral_uz(f[:,:,:,iz], vz, vr, vzeta)
-        @views p[iz] = get_neutral_p(f[:,:,:,iz], vz, vr, vzeta)
+        @views uz[iz] = get_neutral_uz(f[:,:,:,iz], vz, vr, vzeta, false)
+        @views p[iz] = get_neutral_p(f[:,:,:,iz], vz, vr, vzeta, false, false)
         vth[iz] = sqrt(2.0*p[iz]/density[iz])
 
         # Normalise f
