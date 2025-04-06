@@ -1866,7 +1866,7 @@ function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, 
                  moments.ion.vth, moments.ion.dT_dz, pdf.ion.norm, vpa, vperp, z, r,
                  composition, drift_kinetic_ions, collisions, moments.evolve_density, moments.evolve_upar,
                  moments.evolve_ppar)
-    update_vth!(moments.ion.vth, moments.ion.ppar, moments.ion.pperp, moments.ion.dens, vperp, z, r, composition)
+    update_vth!(moments.ion.vth, moments.ion.p, moments.ion.dens, vperp, z, r, composition)
 
     if n_neutral_species > 0
         @begin_sn_r_z_region()
@@ -1883,17 +1883,19 @@ function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, 
         update_neutral_pr!(moments.neutral.pr, pdf.neutral.norm, vz, vr, vzeta, z, r, composition)
         update_neutral_pzeta!(moments.neutral.pzeta, pdf.neutral.norm, vz, vr, vzeta, z, r, composition)
         #update ptot (isotropic pressure)
-        if r.n > 1 #if 2D geometry
-            @begin_sn_r_z_region()
-            @loop_sn_r_z isn ir iz begin
-                moments.neutral.ptot[iz,ir,isn] = (moments.neutral.pz[iz,ir,isn] + moments.neutral.pr[iz,ir,isn] + moments.neutral.pzeta[iz,ir,isn])/3.0
-            end
-        else #1D model
-            moments.neutral.ptot .= moments.neutral.pz
+        @begin_sn_r_z_region()
+        @loop_sn_r_z isn ir iz begin
+            moments.neutral.p[iz,ir,isn] = (moments.neutral.pz[iz,ir,isn] + moments.neutral.pr[iz,ir,isn] + moments.neutral.pzeta[iz,ir,isn])/3.0
         end
         # nb bad naming convention uz -> n uz below
-        update_neutral_uz!(moments.neutral.uz, pdf.neutral.norm, vz, vr, vzeta, z, r, composition)
-        update_neutral_ur!(moments.neutral.ur, pdf.neutral.norm, vz, vr, vzeta, z, r, composition)
+        update_neutral_uz!(moments.neutral.uz, moments.neutral.uz_updated,
+                           moments.neutral.dens, moments.neutral.vth, pdf.neutral.norm,
+                           vz, vr, vzeta, z, r, composition, moments.evolve_density,
+                           moments.evolve_p)
+        update_neutral_ur!(moments.neutral.ur, moments.neutral.ur_updated,
+                           moments.neutral.dens, moments.neutral.vth, pdf.neutral.norm,
+                           vz, vr, vzeta, z, r, composition, moments.evolve_density,
+                           moments.evolve_p)
         update_neutral_uzeta!(moments.neutral.uzeta, pdf.neutral.norm, vz, vr, vzeta, z, r, composition)
         # now convert from particle particle flux to parallel flow
         @begin_sn_r_z_region()
