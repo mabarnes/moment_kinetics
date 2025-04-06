@@ -13,7 +13,7 @@ test_input_finite_difference_1D1V = OptionsDict("output" => OptionsDict("run_nam
                                                                              "T_e" => 1.0),
                                                 "evolve_moments" => OptionsDict("density" => false,
                                                                                 "parallel_flow" => false,
-                                                                                "parallel_pressure" => false,
+                                                                                "pressure" => false,
                                                                                 "moments_conservation" => true),
                                                 "reactions" => OptionsDict("charge_exchange_frequency" => 2*π*0.1,
                                                                            "ionization_frequency" => 0.0),
@@ -59,7 +59,7 @@ recursive_merge(test_input_finite_difference_1D1V_split_1_moment,
 test_input_finite_difference_1D1V_split_3_moments =
 recursive_merge(test_input_finite_difference_1D1V_split_2_moments,
                 OptionsDict("output" => OptionsDict("run_name" => "finite_difference_1D1V_split_3_moments"),
-                            "evolve_moments" => OptionsDict("parallel_pressure" => true)))
+                            "evolve_moments" => OptionsDict("pressure" => true)))
 
 test_input_finite_difference_cx0_1D1V =
 recursive_merge(test_input_finite_difference_1D1V,
@@ -79,7 +79,7 @@ recursive_merge(test_input_finite_difference_cx0_1D1V_split_1_moment,
 test_input_finite_difference_cx0_1D1V_split_3_moments =
 recursive_merge(test_input_finite_difference_cx0_1D1V_split_2_moments,
                 OptionsDict("output" => OptionsDict("run_name" => "finite_difference_cx0_1D1V_split_3_moments"),
-                            "evolve_moments" => OptionsDict("parallel_pressure" => true)))
+                            "evolve_moments" => OptionsDict("pressure" => true)))
 
 test_input_finite_difference =
 recursive_merge(test_input_finite_difference_1D1V,
@@ -114,7 +114,7 @@ recursive_merge(test_input_finite_difference_split_1_moment,
 test_input_finite_difference_split_3_moments =
 recursive_merge(test_input_finite_difference_split_2_moments,
                 OptionsDict("output" => OptionsDict("run_name" => "finite_difference_split_3_moments"),
-                            "evolve_moments" => OptionsDict("parallel_pressure" => true)))
+                            "evolve_moments" => OptionsDict("pressure" => true)))
 
 test_input_finite_difference_cx0 =
 recursive_merge(test_input_finite_difference,
@@ -134,7 +134,7 @@ recursive_merge(test_input_finite_difference_cx0_split_1_moment,
 test_input_finite_difference_cx0_split_3_moments =
 recursive_merge(test_input_finite_difference_cx0_split_2_moments,
                 OptionsDict("output" => OptionsDict("run_name" => "finite_difference_cx0_split_3_moments"),
-                            "evolve_moments" => OptionsDict("parallel_pressure" => true)))
+                            "evolve_moments" => OptionsDict("pressure" => true)))
 
 test_input_chebyshev = recursive_merge(test_input_finite_difference,
                                        OptionsDict("output" => OptionsDict("run_name" => "chebyshev_pseudospectral"),
@@ -174,7 +174,7 @@ recursive_merge(test_input_chebyshev_split_1_moment,
 test_input_chebyshev_split_3_moments =
 recursive_merge(test_input_chebyshev_split_2_moments,
                 OptionsDict("output" => OptionsDict("run_name" => "chebyshev_pseudospectral_split_3_moments"),
-                            "evolve_moments" => OptionsDict("parallel_pressure" => true)))
+                            "evolve_moments" => OptionsDict("pressure" => true)))
 
 test_input_chebyshev_cx0 =
 recursive_merge(test_input_chebyshev,
@@ -194,7 +194,7 @@ recursive_merge(test_input_chebyshev_cx0_split_1_moment,
 test_input_chebyshev_cx0_split_3_moments =
 recursive_merge(test_input_chebyshev_cx0_split_2_moments,
                 OptionsDict("output" => OptionsDict("run_name" => "chebyshev_pseudospectral_cx0_split_3_moments"),
-                            "evolve_moments" => OptionsDict("parallel_pressure" => true)))
+                            "evolve_moments" => OptionsDict("pressure" => true)))
 
 test_input_chebyshev_1D1V =
 recursive_merge(test_input_finite_difference_1D1V,
@@ -224,7 +224,7 @@ recursive_merge(test_input_chebyshev_1D1V_split_1_moment,
 test_input_chebyshev_1D1V_split_3_moments =
 recursive_merge(test_input_chebyshev_1D1V_split_2_moments,
                 OptionsDict("output" => OptionsDict("run_name" => "chebyshev_pseudospectral_1D1V_split_3_moments"),
-                            "evolve_moments" => OptionsDict("parallel_pressure" => true)))
+                            "evolve_moments" => OptionsDict("pressure" => true)))
 
 # Use "netcdf" for a few tests to test the NetCDF I/O if it is available.
 const binary_format = io_has_implementation(netcdf) ? "netcdf" : "hdf5"
@@ -248,7 +248,7 @@ recursive_merge(test_input_chebyshev_cx0_1D1V_split_1_moment,
 test_input_chebyshev_cx0_1D1V_split_3_moments =
 recursive_merge(test_input_chebyshev_cx0_1D1V_split_2_moments,
                 OptionsDict("output" => OptionsDict("run_name" => "chebyshev_pseudospectral_cx0_1D1V_split_3_moments"),
-                            "evolve_moments" => OptionsDict("parallel_pressure" => true)))
+                            "evolve_moments" => OptionsDict("pressure" => true)))
 
 test_input_list = [
      test_input_finite_difference,
