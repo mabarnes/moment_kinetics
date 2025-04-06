@@ -16,7 +16,6 @@ using ..load_data: open_readonly_output_file, get_nranks, load_pdf_data, load_ra
 using ..load_data: load_distributed_ion_pdf_slice
 using ..looping
 using ..type_definitions: mk_int, mk_float
-using ..velocity_moments: integrate_over_vspace
 
 using FFTW
 using LsqFit
@@ -197,8 +196,8 @@ function check_Chodura_condition(r, z, vperp, vpa, dens, upar, vth, temp_e, comp
         end
 
         @views lower_result[ir,it] =
-            integrate_over_vspace(f_lower[:,:,ir,is,it], vpabar, -2, vpa.wgts, vperp.grid,
-                                  0, vperp.wgts)
+            integral(f_lower[:,:,ir,is,it], vpabar, -2, vpa.wgts, vperp.grid, 0,
+                     vperp.wgts)
         if it == ntime
             println("check vpabar lower", vpabar)
             println("result lower ", lower_result[ir,it])
@@ -212,9 +211,7 @@ function check_Chodura_condition(r, z, vperp, vpa, dens, upar, vth, temp_e, comp
             else
                 integrand = f_lower[:,:,ir,is,it]
                 for ivperp ∈ 1:nvperp
-                    # 1/sqrt(π) factor to correspond with behaviour of
-                    # `integrate_over_vspace()`.
-                    @. integrand[:,ivperp] *= vpabar^(-2) * vpa.wgts * vperp.wgts[ivperp] / sqrt(π)
+                    @. integrand[:,ivperp] *= vpabar^(-2) * vpa.wgts * vperp.wgts[ivperp]
                 end
                 vperp_integral = @view sum(integrand; dims=2)[:,1]
                 cumulative_vpa_integral = cumsum(vperp_integral)
@@ -241,8 +238,8 @@ function check_Chodura_condition(r, z, vperp, vpa, dens, upar, vth, temp_e, comp
         end
 
         @views upper_result[ir,it] =
-            integrate_over_vspace(f_upper[:,:,ir,is,it], vpabar, -2, vpa.wgts, vperp.grid,
-                                  0, vperp.wgts)
+            integral(f_upper[:,:,ir,is,it], vpabar, -2, vpa.wgts, vperp.grid, 0,
+                     vperp.wgts)
         if it == ntime
             println("check vpabar upper ", vpabar)
             println("result upper ", upper_result[ir,it])
@@ -256,9 +253,7 @@ function check_Chodura_condition(r, z, vperp, vpa, dens, upar, vth, temp_e, comp
             else
                 integrand = f_upper[:,:,ir,is,it]
                 for ivperp ∈ 1:nvperp
-                    # 1/sqrt(π) factor to correspond with behaviour of
-                    # `integrate_over_vspace()`.
-                    @. integrand[:,ivperp] *= vpabar^(-2) * vpa.wgts * vperp.wgts[ivperp] / sqrt(π)
+                    @. integrand[:,ivperp] *= vpabar^(-2) * vpa.wgts * vperp.wgts[ivperp]
                 end
                 vperp_integral = @view sum(integrand; dims=2)[:,1]
                 cumulative_vpa_integral = reverse(cumsum(reverse(vperp_integral)))
@@ -392,9 +387,9 @@ function analyze_pdf_data(ff, n_species, ntime, z, vpa, vth, evolve_ppar)
     for i ∈ 1:ntime
         for is ∈ 1:n_species
             for iz ∈ 1:z.n
-                @views dens_moment[iz,is,i] = integrate_over_vspace(ff[:,iz,is,i], vpa.wgts)
-                @views upar_moment[iz,is,i] = integrate_over_vspace(ff[:,iz,is,i], vpa.grid, vpa.wgts)
-                @views ppar_moment[iz,is,i] = integrate_over_vspace(ff[:,iz,is,i], vpa.grid, 2, vpa.wgts)
+                @views dens_moment[iz,is,i] = integral(ff[:,iz,is,i], vpa.wgts)
+                @views upar_moment[iz,is,i] = integral(ff[:,iz,is,i], vpa.grid, vpa.wgts)
+                @views ppar_moment[iz,is,i] = integral(ff[:,iz,is,i], vpa.grid, 2, vpa.wgts)
             end
         end
     end
