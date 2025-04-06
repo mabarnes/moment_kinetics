@@ -90,7 +90,7 @@ function run_test(test_input, rtol, atol, upar_rtol=nothing; args...)
             # load velocity moments data
             n_ion_zrst = postproc_load_variable(run_info, "density")
             upar_ion_zrst = postproc_load_variable(run_info, "parallel_flow")
-            ppar_ion_zrst = postproc_load_variable(run_info, "parallel_pressure")
+            ppar_ion_zrst = postproc_load_variable(run_info, "pressure")
             qpar_ion_zrst = postproc_load_variable(run_info, "parallel_heat_flux")
             v_t_ion_zrst = postproc_load_variable(run_info, "thermal_speed")
             n_neutral_zrst = postproc_load_variable(run_info, "density_neutral")
@@ -229,7 +229,7 @@ function run_test(test_input, rtol, atol, upar_rtol=nothing; args...)
                     if input["evolve_moments"]["parallel_flow"]
                         wpa .-= newgrid_upar_ion[iz,1]
                     end
-                    if input["evolve_moments"]["parallel_pressure"]
+                    if input["evolve_moments"]["pressure"]
                         wpa ./= newgrid_vth_ion[iz,1]
                     end
                     newgrid_f_ion[:,iz,1] = interpolate_to_grid_vpa(wpa, temp[:,iz,1], vpa, vpa_spectral)
@@ -260,7 +260,7 @@ function run_test(test_input, rtol, atol, upar_rtol=nothing; args...)
                     if input["evolve_moments"]["parallel_flow"]
                         wpa .-= newgrid_upar_neutral[iz,1]
                     end
-                    if input["evolve_moments"]["parallel_pressure"]
+                    if input["evolve_moments"]["pressure"]
                         wpa ./= newgrid_vth_neutral[iz,1]
                     end
                     newgrid_f_neutral[:,iz,1] = interpolate_to_grid_vpa(wpa, temp[:,iz,1], vpa, vpa_spectral)

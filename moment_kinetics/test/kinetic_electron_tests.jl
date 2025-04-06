@@ -17,7 +17,7 @@ using moment_kinetics.Glob
 boltzmann_input = OptionsDict(
     "output" => OptionsDict("run_name" => "kinetic_electron_test_boltzmann_initialisation",
                            ),
-    "evolve_moments" => OptionsDict("parallel_pressure" => true,
+    "evolve_moments" => OptionsDict("pressure" => true,
                                     "density" => true,
                                     "moments_conservation" => true,
                                     "parallel_flow" => true,
