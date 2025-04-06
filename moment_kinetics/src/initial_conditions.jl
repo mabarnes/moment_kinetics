@@ -201,11 +201,11 @@ function init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geo
         # reflect the fact that the ion moments have now been updated
         moments.ion.dens_updated .= true
         moments.ion.upar_updated .= true
-        moments.ion.ppar_updated .= true
+        moments.ion.p_updated .= true
         # account for the fact that the neutral moments have now been updated
         moments.neutral.dens_updated .= true
         moments.neutral.uz_updated .= true
-        moments.neutral.pz_updated .= true
+        moments.neutral.p_updated .= true
         # create and initialise the normalised, ion particle distribution function (pdf)
         # such that ∫dwpa pdf.norm = 1, ∫dwpa wpa * pdf.norm = 0, and ∫dwpa wpa^2 * pdf.norm = 1/2
         # note that wpa = vpa - upar, unless moments.evolve_p = true, in which case wpa = (vpa - upar)/vth
@@ -256,12 +256,19 @@ function init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geo
                                moments.evolve_upar, moments.evolve_p)
             update_neutral_pz!(moments.neutral.pz, moments.neutral.pz_updated,
                                moments.neutral.dens, moments.neutral.uz,
-                               pdf.neutral.norm, vz, vr, vzeta, z, r, composition,
-                               moments.evolve_density, moments.evolve_upar)
+                               moments.neutral.p, moments.neutral.vth, pdf.neutral.norm,
+                               vz, vr, vzeta, z, r, composition, moments.evolve_density,
+                               moments.evolve_upar, moments.evolve_p)
             update_neutral_pr!(moments.neutral.pr, moments.neutral.pr_updated,
-                               pdf.neutral.norm, vz, vr, vzeta, z, r, composition)
+                               moments.neutral.dens, moments.neutral.ur,
+                               moments.neutral.vth, pdf.neutral.norm, vz, vr, vzeta, z, r,
+                               composition, moments.evolve_density, moments.evolve_upar,
+                               moments.evolve_p)
             update_neutral_pzeta!(moments.neutral.pzeta, moments.neutral.pzeta_updated,
-                                  pdf.neutral.norm, vz, vr, vzeta, z, r, composition)
+                                  moments.neutral.dens, moments.neutral.uzeta,
+                                  moments.neutral.vth, pdf.neutral.norm, vz, vr, vzeta, z,
+                                  r, composition, moments.evolve_density,
+                                  moments.evolve_upar, moments.evolve_p)
         end
     end
 
@@ -1394,7 +1401,7 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
     wall_flux_0 *= composition.recycling_fraction
     wall_flux_L *= composition.recycling_fraction
 
-    if vperp.n == 1
+    if vzeta.n == 1 && vr.n == 1
         Maxwellian_prefactor = 1.0 / sqrt(π)
     else
         Maxwellian_prefactor = 1.0 / π^1.5
@@ -1465,9 +1472,9 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
                                                              + integral(pdf[:,:,:,iz], vz.scratch3, 1, vz.wgts, vr.grid, 0, vr.wgts, vzeta.grid, 2, vzeta.wgts)
                                                              + 2.0 * integral(pdf[:,:,:,iz], vz.scratch, 2, vz.wgts, vr.grid, 2, vr.wgts, vzeta.grid, 0, vzeta.wgts)
                                                              + 2.0 * integral(pdf[:,:,:,iz], vz.scratch, 2, vz.wgts, vr.grid, 0, vr.wgts, vzeta.grid, 2, vzeta.wgts)
-                                                             + integral(pdf[:,:,:,iz], vpa.scratch, 0, vpa.wgts, vr.grid, 4, vr.wgts, vzeta.grid, 0, vzeta.wgts)
-                                                             + 2.0 * integral(pdf[:,:,:,iz], vpa.scratch, 0, vpa.wgts, vr.grid, 2, vr.wgts, vzeta.grid, 2, vzeta.wgts)
-                                                             + integral(pdf[:,:,:,iz], vpa.scratch, 0, vpa.wgts, vr.grid, 0, vr.wgts, vzeta.grid, 4, vzeta.wgts))
+                                                             + integral(pdf[:,:,:,iz], vz.scratch, 0, vz.wgts, vr.grid, 4, vr.wgts, vzeta.grid, 0, vzeta.wgts)
+                                                             + 2.0 * integral(pdf[:,:,:,iz], vz.scratch, 0, vz.wgts, vr.grid, 2, vr.wgts, vzeta.grid, 2, vzeta.wgts)
+                                                             + integral(pdf[:,:,:,iz], vz.scratch, 0, vz.wgts, vr.grid, 0, vr.wgts, vzeta.grid, 4, vzeta.wgts))
 
                 # The following update ensures the density and pressure moments of pdf
                 # have the expected values. The velocity moment is always exactly zero
