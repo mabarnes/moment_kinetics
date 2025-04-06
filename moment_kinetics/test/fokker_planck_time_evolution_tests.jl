@@ -251,7 +251,7 @@ test_input_gauss_legendre = OptionsDict("output" => OptionsDict("run_name" => "g
                                         "fokker_planck_collisions" => OptionsDict("use_fokker_planck" => true,
                                                                                   "nuii" => 1.0,
                                                                                   "frequency_option" => "manual"),
-                                        "evolve_moments" => OptionsDict("parallel_pressure" => false,
+                                        "evolve_moments" => OptionsDict("pressure" => false,
                                                                         "moments_conservation" => false,
                                                                         "parallel_flow" => false,
                                                                         "density" => false),

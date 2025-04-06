@@ -56,7 +56,7 @@ test_input = OptionsDict("composition" => OptionsDict("n_ion_species" => 1,
                          "output" => OptionsDict("run_name" => "full-f"),
                          "evolve_moments" => OptionsDict("density" => false,
                                                          "parallel_flow" => false,
-                                                         "parallel_pressure" => false,
+                                                         "pressure" => false,
                                                          "moments_conservation" => false),
                          "reactions" => OptionsDict("charge_exchange_frequency" => 1.0606601717798214,
                                                     "ionization_frequency" => 0.7071067811865476),
@@ -108,7 +108,7 @@ test_input_split3 = recursive_merge(test_input_split2,
                                                                    "nelement" => 32),
                                                 "vpa" => OptionsDict("nelement" => 31),
                                                 "vz" => OptionsDict("nelement" => 31),
-                                                "evolve_moments" => OptionsDict("parallel_pressure" => true),
+                                                "evolve_moments" => OptionsDict("pressure" => true),
                                                 "ion_numerical_dissipation" => OptionsDict("force_minimum_pdf_value" => 0.0),
                                                 "neutral_numerical_dissipation" => OptionsDict("force_minimum_pdf_value" => 0.0)
                                                ))
@@ -155,7 +155,7 @@ test_input_adaptive_split2["timestepping"] = recursive_merge(test_input_adaptive
                                                              OptionsDict("step_update_prefactor" => 0.4))
 test_input_adaptive_split3 = recursive_merge(test_input_adaptive_split2,
                                              OptionsDict("output" => OptionsDict("run_name" => "adaptive split3"),
-                                                         "evolve_moments" => OptionsDict("parallel_pressure" => true),
+                                                         "evolve_moments" => OptionsDict("pressure" => true),
                                                          "ion_numerical_dissipation" => OptionsDict("force_minimum_pdf_value" => 0.0),
                                                          "neutral_numerical_dissipation" => OptionsDict("force_minimum_pdf_value" => 0.0)))
 # The initial conditions seem to make the split3 case hard to advance without any

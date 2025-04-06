@@ -62,7 +62,7 @@ restart_test_input_chebyshev_split_2_moments =
 restart_test_input_chebyshev_split_3_moments =
     recursive_merge(deepcopy(restart_test_input_chebyshev_split_2_moments),
                     OptionsDict("output" => OptionsDict("run_name" => "restart_chebyshev_pseudospectral_split_3_moments"),
-                                "evolve_moments" => OptionsDict("parallel_pressure" => true),
+                                "evolve_moments" => OptionsDict("pressure" => true),
                                 "vpa" => OptionsDict("L" => 1.5*vpa_L), "vz" => OptionsDict("L" => 1.5*vpa_L)),
                    )
 
@@ -170,7 +170,7 @@ function run_test(test_input, base, message, rtol, atol; tol_3V, args...)
             n_neutral_species = run_info.n_neutral_species
             n_ion_zrst = postproc_load_variable(run_info, "density")
             upar_ion_zrst = postproc_load_variable(run_info, "parallel_flow")
-            ppar_ion_zrst = postproc_load_variable(run_info, "parallel_pressure")
+            ppar_ion_zrst = postproc_load_variable(run_info, "pressure")
             qpar_ion_zrst = postproc_load_variable(run_info, "parallel_heat_flux")
             v_t_ion_zrst = postproc_load_variable(run_info, "thermal_speed")
             f_ion_vpavperpzrst  = postproc_load_variable(run_info, "f")
@@ -216,7 +216,7 @@ function run_test(test_input, base, message, rtol, atol; tol_3V, args...)
                     f_neutral[:,iz,isn,it] .*= n_neutral[iz,isn,it]
                 end
             end
-            if input["evolve_moments"]["parallel_pressure"]
+            if input["evolve_moments"]["pressure"]
                 for it ∈ 1:length(time), is ∈ 1:n_ion_species, iz ∈ 1:z.n
                     f_ion[:,iz,is,it] ./= v_t_ion[iz,is,it]
                 end
@@ -253,7 +253,7 @@ function run_test(test_input, base, message, rtol, atol; tol_3V, args...)
             if input["evolve_moments"]["parallel_flow"]
                 wpa .-= newgrid_upar_ion[iz,1]
             end
-            if input["evolve_moments"]["parallel_pressure"]
+            if input["evolve_moments"]["pressure"]
                 wpa ./= newgrid_vth_ion[iz,1]
             end
             newgrid_f_ion[:,iz,1] = interpolate_to_grid_vpa(wpa, temp[:,iz,1], vpa, vpa_spectral)
@@ -287,7 +287,7 @@ function run_test(test_input, base, message, rtol, atol; tol_3V, args...)
             if input["evolve_moments"]["parallel_flow"]
                 wpa .-= newgrid_upar_neutral[iz,1]
             end
-            if input["evolve_moments"]["parallel_pressure"]
+            if input["evolve_moments"]["pressure"]
                 wpa ./= newgrid_vth_neutral[iz,1]
             end
             newgrid_f_neutral[:,iz,1] = interpolate_to_grid_vpa(wpa, temp[:,iz,1], vz, vz_spectral)
@@ -318,7 +318,7 @@ function runtests()
                                                              "vz" => OptionsDict("L" => 1.5*vpa_L)),
                                                 )
         base_input_evolve_ppar = recursive_merge(base_input_evolve_upar,
-                                                 OptionsDict("evolve_moments" => OptionsDict("parallel_pressure" => true),
+                                                 OptionsDict("evolve_moments" => OptionsDict("pressure" => true),
                                                              "vpa" => OptionsDict("L" => 1.5*vpa_L),
                                                              "vz" => OptionsDict("L" => 1.5*vpa_L)),
                                                 )

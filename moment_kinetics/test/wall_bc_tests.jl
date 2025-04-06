@@ -57,7 +57,7 @@ test_input_finite_difference = OptionsDict("composition" => OptionsDict("n_ion_s
                                            "output" => OptionsDict("run_name" => "finite_difference"),
                                            "evolve_moments" => OptionsDict("density" => false,
                                                                            "parallel_flow" => false,
-                                                                           "parallel_pressure" => false,
+                                                                           "pressure" => false,
                                                                            "moments_conservation" => false),
                                            "reactions" => OptionsDict("charge_exchange_frequency" => 2.8284271247461903,
                                                                       "ionization_frequency" => 2.8284271247461903),

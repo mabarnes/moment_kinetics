@@ -51,7 +51,7 @@ test_input_finite_difference = OptionsDict("composition" => OptionsDict("n_ion_s
                                                                    "binary_format" => binary_format),
                                            "evolve_moments" => OptionsDict("density" => false,
                                                                            "parallel_flow" => false,
-                                                                           "parallel_pressure" => false,
+                                                                           "pressure" => false,
                                                                            "moments_conservation" => true),
                                            "reactions" => OptionsDict("charge_exchange_frequency" => 0.8885765876316732,
                                                                       "ionization_frequency" => 0.0),
@@ -100,7 +100,7 @@ test_input_finite_difference_split_2_moments =
 test_input_finite_difference_split_3_moments =
     recursive_merge(test_input_finite_difference_split_2_moments,
                     OptionsDict("output" => OptionsDict("run_name" => "finite_difference_split_3_moments"),
-                                "evolve_moments" => OptionsDict("parallel_pressure" => true),
+                                "evolve_moments" => OptionsDict("pressure" => true),
                                 "vpa" => OptionsDict("ngrid" => 270, "L" => 16.970562748477143),
                                 "vz" => OptionsDict("ngrid" => 270, "L" => 16.970562748477143))
                    )
@@ -131,7 +131,7 @@ test_input_chebyshev_split_2_moments =
 test_input_chebyshev_split_3_moments =
     recursive_merge(test_input_chebyshev_split_2_moments,
                     OptionsDict("output" => OptionsDict("run_name" => "chebyshev_pseudospectral_split_3_moments"),
-                                "evolve_moments" => OptionsDict("parallel_pressure" => true)))
+                                "evolve_moments" => OptionsDict("pressure" => true)))
 
 
 """

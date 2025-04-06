@@ -92,7 +92,7 @@ test_input = OptionsDict("output" => OptionsDict("run_name" => "jacobian_matrix"
                                                       "T_wall" => 0.06666666666666667),
                          "evolve_moments" => OptionsDict("density" => true,
                                                          "parallel_flow" => true,
-                                                         "parallel_pressure" => true,
+                                                         "pressure" => true,
                                                          "moments_conservation" => true),
                          "ion_species_1" => OptionsDict("initial_density" => 1.0,
                                                         "initial_temperature" => 0.6666666666666666),

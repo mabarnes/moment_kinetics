@@ -21,7 +21,7 @@ test_input = OptionsDict("composition" => OptionsDict("n_ion_species" => 1,
                          "output" => OptionsDict("run_name" => "braginskii-electrons-imex"),
                          "evolve_moments" => OptionsDict("density" => true,
                                                          "parallel_flow" => true,
-                                                         "parallel_pressure" => true,
+                                                         "pressure" => true,
                                                          "moments_conservation" => true),
                          "ion_species_1" => OptionsDict("initial_density" => 1.0,
                                                         "initial_temperature" => 0.6666666666666666),
@@ -144,13 +144,13 @@ function run_test(test_input, expected_p, expected_q, expected_vt; rtol=1.e-6,
             # open the output file
             run_info = get_run_info_no_setup(path)
 
-            parallel_pressure_zrt = get_variable(run_info, "electron_parallel_pressure")
+            pressure_zrt = get_variable(run_info, "electron_pressure")
             parallel_heat_flux_zrt = get_variable(run_info, "electron_parallel_heat_flux")
             thermal_speed_zrt = get_variable(run_info, "electron_thermal_speed")
 
             close_run_info(run_info)
 
-            p = parallel_pressure_zrt[:,1,:]
+            p = pressure_zrt[:,1,:]
             q = parallel_heat_flux_zrt[:,1,:]
             vt = thermal_speed_zrt[:,1,:]
         end
