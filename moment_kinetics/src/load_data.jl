@@ -4191,9 +4191,10 @@ function _get_fake_moments_fields_scratch(all_moments, it; ion_extra::Tuple=(),
         p=:pressure, ppar=:parallel_pressure, qpar=:parallel_heat_flux,
         vth=:thermal_speed, temp=:temperature, ddens_dz=:ddens_dz,
         ddens_dz_upwind=:ddens_dz_upwind, dupar_dz=:dupar_dz,
-        dupar_dz_upwind=:dupar_dz_upwind, dppar_dz=:dppar_dz,
-        dppar_dz_upwind=:dppar_dz_upwind, dvth_dz=:dvth_dz, dT_dz=:dT_dz,
-        dqpar_dz=:dqpar_dz, external_source_amplitude=:external_source_amplitude,
+        dupar_dz_upwind=:dupar_dz_upwind, dp_dz=:dp_dz, dp_dz_upwind=:dp_dz_upwind,
+        dppar_dz=:dppar_dz, dppar_dz_upwind=:dppar_dz_upwind, dvth_dz=:dvth_dz,
+        dT_dz=:dT_dz, dqpar_dz=:dqpar_dz,
+        external_source_amplitude=:external_source_amplitude,
         external_source_density_amplitude=:external_source_density_amplitude,
         external_source_momentum_amplitude=:external_source_momentum_amplitude,
         external_source_pressure_amplitude=:external_source_pressure_amplitude,
@@ -5110,8 +5111,10 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         density = get_variable(run_info, "electron_density")
         upar = get_variable(run_info, "electron_parallel_flow")
         p = get_variable(run_info, "electron_pressure")
+        ppar = get_variable(run_info, "electron_parallel_pressure")
         vth = get_variable(run_info, "electron_thermal_speed")
         dp_dz = get_z_derivative(run_info, "electron_pressure")
+        dppar_dz = get_z_derivative(run_info, "electron_parallel_pressure")
         dvth_dz = get_z_derivative(run_info, "electron_thermal_speed")
         dqpar_dz = get_z_derivative(run_info, "electron_parallel_heat_flux")
         if any(x -> x.active, run_info.external_source_settings.electron)
@@ -5145,20 +5148,21 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
             @begin_serial_region()
             # Only need some struct with a 'speed' variable
             advect = (speed=@view(speed[:,:,:,:,it]),)
-            moments = (electron=(vth=vth[:,:,it],
+            moments = (electron=(ppar=ppar[:,:,it],
+                                 vth=vth[:,:,it],
                                  dp_dz=dp_dz[:,:,it],
+                                 dppar_dz=dppar_dz[:,:,it],
                                  dqpar_dz=dqpar_dz[:,:,it],
                                  dvth_dz=dvth_dz[:,:,it],
                                  external_source_amplitude=external_source_amplitude[:,:,:,it],
                                  external_source_density_amplitude=external_source_density_amplitude[:,:,:,it],
                                  external_source_momentum_amplitude=external_source_momentum_amplitude[:,:,:,it],
                                  external_source_pressure_amplitude=external_source_pressure_amplitude[:,:,:,it]),)
-            for ir ∈ 1:run_info.r.n
-                @views update_electron_speed_vpa!(advect, density[:,ir,it], upar[:,ir,it],
-                                                  p[:,ir,it], moments, run_info.vpa.grid,
-                                                  run_info.external_source_settings.electron,
-                                                  ir)
-            end
+            @views update_electron_speed_vpa!(advect, density[:,:,it], upar[:,:,it],
+                                              p[:,:,it], moments,
+                                              run_info.composition.me_over_mi,
+                                              run_info.vpa.grid,
+                                              run_info.external_source_settings.electron)
         end
 
         variable = speed
