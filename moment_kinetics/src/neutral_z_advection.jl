@@ -24,7 +24,7 @@ do a single stage time advance (potentially as part of a multi-stage RK scheme)
         # get the updated speed along the z direction using the current f
         @views update_speed_neutral_z!(advect[isn], fvec_in.uz_neutral[:,:,isn],
                                        moments.neutral.vth[:,:,isn], moments.evolve_upar,
-                                       moments.evolve_ppar, vz, vr, vzeta, z, r, t)
+                                       moments.evolve_p, vz, vr, vzeta, z, r, t)
         # update adv_fac
         @loop_r_vzeta_vr_vz ir ivzeta ivr ivz begin
             @views @. advect[isn].adv_fac[:,ivz,ivr,ivzeta,ir] = -dt*advect[isn].speed[:,ivz,ivr,ivzeta,ir]
@@ -48,7 +48,7 @@ end
 """
 calculate the advection speed in the z-direction at each grid point
 """
-function update_speed_neutral_z!(advect, uz, vth, evolve_upar, evolve_ppar, vz, vr, vzeta,
+function update_speed_neutral_z!(advect, uz, vth, evolve_upar, evolve_p, vz, vr, vzeta,
                                  z, r, t)
     @boundscheck r.n == size(advect.speed,5) || throw(BoundsError(advect))
     @boundscheck vzeta.n == size(advect.speed,4) || throw(BoundsError(advect))
@@ -60,7 +60,7 @@ function update_speed_neutral_z!(advect, uz, vth, evolve_upar, evolve_ppar, vz, 
             @loop_r_vzeta_vr_vz ir ivzeta ivr ivz begin
                 @. advect.speed[:,ivz,ivr,ivzeta,ir] = vz.grid[ivz]
             end
-            if evolve_ppar
+            if evolve_p
                 @loop_r_vzeta_vr_vz ir ivzeta ivr ivz begin
                     @views @. advect.speed[:,ivz,ivr,ivzeta,ir] *= vth[:,ir]
                 end
