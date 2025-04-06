@@ -1604,11 +1604,17 @@ function update_neutral_density_species!(dens, ff, vz, vr, vzeta, z, r)
     @boundscheck z.n == size(dens, 1) || throw(BoundsError(dens))
     @boundscheck r.n == size(dens, 2) || throw(BoundsError(dens))
     @loop_r_z ir iz begin
-        dens[iz,ir] = integrate(@view(ff[:,:,:,iz,ir]), vz.grid, 0, vz.wgts, vr.grid, 0,
-                                vr.wgts, vzeta.grid, 0, vzeta.wgts)
+        dens[iz,ir] = integral(@view(ff[:,:,:,iz,ir]), vz.grid, 0, vz.wgts, vr.grid, 0,
+                               vr.wgts, vzeta.grid, 0, vzeta.wgts)
     end
     return nothing
 end
+
+function get_neutral_density(ff, vz, vr, vzeta)
+    return integral(ff, vz.grid, 0, vz.wgts, vr.grid, 0, vr.wgts, vzeta.grid, 0,
+                    vzeta.wgts)
+end
+
 
 function update_neutral_uz!(uz, uz_updated, density, vth, pdf, vz, vr, vzeta, z, r,
                             composition, evolve_density, evolve_p)
@@ -1646,8 +1652,8 @@ function update_neutral_uz_species!(uz, density, vth, ff, vz, vr, vzeta, z, r,
         # (upar_s / vth_s) = (1/√π)∫d(vz/vth_s) * (vz/vth_s) * (√π f_s vth_s / n_s)
         # so convert from upar_s / vth_s to upar_s / c_s
         @loop_r_z ir iz begin
-            uz[iz,ir] = integrate(@view(ff[:,:,:,iz,ir]), vz.grid, 1, vz.wgts, vr.grid, 0,
-                                  vr.wgts, vzeta.grid, 0, vzeta.wgts) * vth[iz,ir]
+            uz[iz,ir] = integral(@view(ff[:,:,:,iz,ir]), vz.grid, 1, vz.wgts, vr.grid, 0,
+                                 vr.wgts, vzeta.grid, 0, vzeta.wgts) * vth[iz,ir]
         end
     elseif evolve_density
         # corresponds to case where only the density is evolved separately from the
@@ -1656,8 +1662,8 @@ function update_neutral_uz_species!(uz, density, vth, ff, vz, vr, vzeta, z, r,
         # Integrating calculates
         # (upar_s / c_s) = (1/√π)∫d(vz/c_s) * (vz/c_s) * (√π f_s c_s / n_s)
         @loop_r_z ir iz begin
-            uz[iz,ir] = integrate(@view(ff[:,:,:,iz,ir]), vz.grid, 1, vz.wgts, vr.grid, 0,
-                                  vr.wgts, vzeta.grid, 0, vzeta.wgts)
+            uz[iz,ir] = integral(@view(ff[:,:,:,iz,ir]), vz.grid, 1, vz.wgts, vr.grid, 0,
+                                 vr.wgts, vzeta.grid, 0, vzeta.wgts)
         end
     else
         # When evolve_density = false, the evolved pdf is the 'true' pdf,
@@ -1665,11 +1671,20 @@ function update_neutral_uz_species!(uz, density, vth, ff, vz, vr, vzeta, z, r,
         # Integrating calculates
         # (n_s / N_e) * (uz / c_s) = (1/√π)∫d(vz/c_s) * (vz/c_s) * (√π f_s c_s / N_e)
         @loop_r_z ir iz begin
-            uz[iz,ir] = integrate(@view(ff[:,:,:,iz,ir]), vz.grid, 1, vz.wgts, vr.grid, 0,
-                                  vr.wgts, vzeta.grid, 0, vzeta.wgts) / density[iz,ir]
+            uz[iz,ir] = integral(@view(ff[:,:,:,iz,ir]), vz.grid, 1, vz.wgts, vr.grid, 0,
+                                 vr.wgts, vzeta.grid, 0, vzeta.wgts) / density[iz,ir]
         end
     end
     return nothing
+end
+
+function get_neutral_uz(ff, vzeta, vr, vz, density, evolve_density)
+    upar = integral(ff, vz.grid, 1, vz.wgts, vr.grid, 0, vr.wgts, vzeta.grid, 0,
+                    vzeta.wgts)
+    if !evolve_density
+        upar /= density
+    end
+    return upar
 end
 
 function update_neutral_ur!(ur, ur_updated, density, vth, pdf, vz, vr, vzeta, z, r,
@@ -1702,18 +1717,18 @@ function update_neutral_ur_species!(ur, density, vth, ff, vz, vr, vzeta, z, r,
     @boundscheck r.n == size(ur, 2) || throw(BoundsError(ur))
     if evolve_p
         @loop_r_z ir iz begin
-            ur[iz,ir] = integrate(@view(ff[:,:,:,iz,ir]), vz.grid, 0, vz.wgts, vr.grid, 1,
-                                  vr.wgts, vzeta.grid, 0, vzeta.wgts) * vth[iz,ir]
+            ur[iz,ir] = integral(@view(ff[:,:,:,iz,ir]), vz.grid, 0, vz.wgts, vr.grid, 1,
+                                 vr.wgts, vzeta.grid, 0, vzeta.wgts) * vth[iz,ir]
         end
     elseif evolve_density
         @loop_r_z ir iz begin
-            ur[iz,ir] = integrate(@view(ff[:,:,:,iz,ir]), vz.grid, 0, vz.wgts, vr.grid, 1,
-                                  vr.wgts, vzeta.grid, 0, vzeta.wgts)
+            ur[iz,ir] = integral(@view(ff[:,:,:,iz,ir]), vz.grid, 0, vz.wgts, vr.grid, 1,
+                                 vr.wgts, vzeta.grid, 0, vzeta.wgts)
         end
     else
         @loop_r_z ir iz begin
-            ur[iz,ir] = integrate(@view(ff[:,:,:,iz,ir]), vz.grid, 0, vz.wgts, vr.grid, 1,
-                                  vr.wgts, vzeta.grid, 0, vzeta.wgts) / density[iz,ir]
+            ur[iz,ir] = integral(@view(ff[:,:,:,iz,ir]), vz.grid, 0, vz.wgts, vr.grid, 1,
+                                 vr.wgts, vzeta.grid, 0, vzeta.wgts) / density[iz,ir]
         end
     end
     return nothing
@@ -1721,7 +1736,7 @@ end
 
 function update_neutral_uzeta!(uzeta, uzeta_updated, density, pdf, vz, vr, vzeta, z, r,
                                composition, evolve_density, evolve_p)
-    
+
     @begin_r_z_region()
     @boundscheck composition.n_neutral_species == size(pdf, 6) || throw(BoundsError(pdf))
     @boundscheck composition.n_neutral_species == size(uzeta, 3) || throw(BoundsError(uzeta))
@@ -1749,18 +1764,18 @@ function update_neutral_uzeta_species!(uzeta, density, ff, vz, vr, vzeta, z, r,
     @boundscheck r.n == size(uzeta, 2) || throw(BoundsError(uzeta))
     if evolve_p
         @loop_r_z ir iz begin
-            uzeta[iz,ir] = integrate(@view(ff[:,:,:,iz,ir]), vz.grid, 0, vz.wgts, vr.grid,
-                                     0, vr.wgts, vzeta.grid, 1, vzeta.wgts) * vth[iz,ir]
+            uzeta[iz,ir] = integral(@view(ff[:,:,:,iz,ir]), vz.grid, 0, vz.wgts, vr.grid,
+                                    0, vr.wgts, vzeta.grid, 1, vzeta.wgts) * vth[iz,ir]
         end
     elseif evolve_density
         @loop_r_z ir iz begin
-            uzeta[iz,ir] = integrate(@view(ff[:,:,:,iz,ir]), vz.grid, 0, vz.wgts, vr.grid,
-                                     0, vr.wgts, vzeta.grid, 1, vzeta.wgts)
+            uzeta[iz,ir] = integral(@view(ff[:,:,:,iz,ir]), vz.grid, 0, vz.wgts, vr.grid,
+                                    0, vr.wgts, vzeta.grid, 1, vzeta.wgts)
         end
     else
         @loop_r_z ir iz begin
-            uzeta[iz,ir] = integrate(@view(ff[:,:,:,iz,ir]), vz.grid, 0, vz.wgts, vr.grid,
-                                     0, vr.wgts, vzeta.grid, 1, vzeta.wgts) / density[iz,ir]
+            uzeta[iz,ir] = integral(@view(ff[:,:,:,iz,ir]), vz.grid, 0, vz.wgts, vr.grid,
+                                    0, vr.wgts, vzeta.grid, 1, vzeta.wgts) / density[iz,ir]
         end
     end
     return nothing
@@ -1816,8 +1831,8 @@ function update_neutral_pz_species!(pz, density, uz, vth, ff, vz, vr, vzeta, z, 
         # Integrating calculates pz_s/n_s/vth_s^2 = ∫d^3w wz^2 * g_s
         # so convert from pz_s/n_s/vth_s^2 to pz_s.
         @loop_r_z ir iz begin
-            pz[iz,ir] = integrate(@view(ff[:,:,:,iz,ir]), vz.grid, 2, vz.wgts, vr.grid, 0,
-                                  vr.wgts, vzeta.grid, 0, vzeta.wgts) *
+            pz[iz,ir] = integral(@view(ff[:,:,:,iz,ir]), vz.grid, 2, vz.wgts, vr.grid, 0,
+                                 vr.wgts, vzeta.grid, 0, vzeta.wgts) *
                         density[iz,ir] * vth[iz,ir]^2
         end
     elseif evolve_upar
@@ -1828,8 +1843,8 @@ function update_neutral_pz_species!(pz, density, uz, vth, ff, vz, vr, vzeta, z, 
         # so convert from pz_s/n_s to pz_s.
 
         @loop_r_z ir iz begin
-            pz[iz,ir] = integrate(@view(ff[:,:,:,iz,ir]), vz.grid, 2, vz.wgts, vr.grid, 0,
-                                  vr.wgts, vzeta.grid, 0, vzeta.wgts) *
+            pz[iz,ir] = integral(@view(ff[:,:,:,iz,ir]), vz.grid, 2, vz.wgts, vr.grid, 0,
+                                 vr.wgts, vzeta.grid, 0, vzeta.wgts) *
                         density[iz,ir]
         end
     elseif evolve_density
@@ -1899,8 +1914,8 @@ function update_neutral_pr_species!(pr, density, ur, vth, ff, vz, vr, vzeta, z, 
         # Integrating calculates pr_s/n_s/vth_s^2 + ur_s^2/vth_s^2 = ∫d^3w wr^2 * g_s
         # so convert from pr_s/n_s/vth_s^2+ur_s^2/vth_s^2 to pr_s.
         @loop_r_z ir iz begin
-            pr[iz,ir] = (integrate(@view(ff[:,:,:,iz,ir]), vz.grid, 0, vz.wgts, vr.grid, 2,
-                                   vr.wgts, vzeta.grid, 0, vzeta.wgts) * vth[iz,ir]^2 -
+            pr[iz,ir] = (integral(@view(ff[:,:,:,iz,ir]), vz.grid, 0, vz.wgts, vr.grid, 2,
+                                  vr.wgts, vzeta.grid, 0, vzeta.wgts) * vth[iz,ir]^2 -
                          ur[iz,ir]^2) *
                         density[iz,ir]
         end
@@ -1971,8 +1986,8 @@ function update_neutral_pzeta_species!(pzeta, density, ur, vth, ff, vz, vr, vzet
         # Integrating calculates pzeta_s/n_s/vth_s^2 + uzeta_s^2/vth_s^2 = ∫d^3w wzeta^2 * g_s
         # so convert from pzeta_s/n_s/vth_s^2+uzeta_s^2/vth_s^2 to pzeta_s.
         @loop_r_z ir iz begin
-            pzeta[iz,ir] = (integrate(@view(ff[:,:,:,iz,ir]), vz.grid, 0, vz.wgts,
-                                      vr.grid, 0, vr.wgts, vzeta.grid, 2, vzeta.wgts) *
+            pzeta[iz,ir] = (integral(@view(ff[:,:,:,iz,ir]), vz.grid, 0, vz.wgts,
+                                     vr.grid, 0, vr.wgts, vzeta.grid, 2, vzeta.wgts) *
                             vth[iz,ir]^2
                             - uzeta[iz,ir]^2) *
                            density[iz,ir]
@@ -2004,6 +2019,16 @@ function update_neutral_pzeta_species!(pzeta, density, ur, vth, ff, vz, vr, vzet
         end
     end
     return nothing
+end
+
+function get_neutral_p(ff, vzeta, vr, vz, density, upar, evolve_density, evolve_upar)
+    if evolve_upar
+        return density * integral((vzeta,vr,vz)->(vz^2 + vzeta^2 + vr^2), ff, vz, vr, vzeta)
+    elseif evolve_density
+        return density * integral((vzeta,vr,vz)->((vz-upar)^2 + vzeta^2 + vr^2), ff, vz, vr, vzeta)
+    else
+        return integral((vzeta,vr,vz)->((vz-upar)^2 + vzeta^2 + vr^2), ff, vz, vr, vzeta)
+    end
 end
 
 function update_neutral_qz!(qz, qz_updated, density, uz, vth, pdf, vz, vr, vzeta, z, r,
