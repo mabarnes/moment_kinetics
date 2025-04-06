@@ -2692,6 +2692,7 @@ If the symbol has not been defined, just return `variable_name`.
 function get_variable_symbol(variable_name)
     symbols_for_variables = Dict("phi"=>"ϕ", "Er"=>"Er", "Ez"=>"Ez", "density"=>"n",
                                  "parallel_flow"=>"u∥", "parallel_pressure"=>"p∥",
+                                 "pressure"=>"p",
                                  "parallel_heat_flux"=>"q∥", "thermal_speed"=>"vth",
                                  "temperature"=>"T", "density_neutral"=>"nn",
                                  "uzeta_neutral"=>"unζ", "ur_neutral"=>"unr",
