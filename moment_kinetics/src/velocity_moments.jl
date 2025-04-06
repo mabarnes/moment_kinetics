@@ -545,10 +545,13 @@ function update_moments!(moments, ff_in, gyroavs::gyro_operators, vpa, vperp, z,
                                      z, r, moments.evolve_density, moments.evolve_upar)
             moments.ion.p_updated[is] = true
         end
-        @views update_ppar_species!(moments.ion.ppar[:,:,is], ff[:,:,:,:,is], vpa, vperp,
-                                    z, r)
+        @views update_ppar_species!(moments.ion.ppar[:,:,is], moments.ion.dens[:,:,is],
+                                    moments.ion.upar[:,:,is], moments.ion.p[:,:,is],
+                                    ff[:,:,:,:,is], vpa, vperp, z, r,
+                                    moments.evolve_density, moments.evolve_upar,
+                                    moments.evolve_p)
         @views update_pperp_species!(moments.ion.pperp[:,:,is], moments.ion.p[:,:,is],
-                                     moments.ion.ppar[:,:,is], vpa, vperp, z, r)
+                                     moments.ion.ppar[:,:,is], z, r)
         if moments.ion.qpar_updated[is] == false
             @views update_ion_qpar_species!(moments.ion.qpar[:,:,is],
                                             moments.ion.dens[:,:,is],
@@ -562,7 +565,7 @@ function update_moments!(moments, ff_in, gyroavs::gyro_operators, vpa, vperp, z,
         end
     end
 
-    update_vth!(moments.ion.vth, moments.ion.p, moments.ion.dens, vperp, z, r, composition)
+    update_vth!(moments.ion.vth, moments.ion.p, moments.ion.dens, z, r, composition)
     # update the Chodura diagnostic -- note that the pdf should be the unnormalised one
     # so this will break for the split moments cases
     update_chodura!(moments,ff,vpa,vperp,z,r,r_spectral,composition,geometry,scratch_dummy,z_advect)
@@ -655,7 +658,8 @@ function update_upar_species!(upar, density, ppar, ff, vpa, vperp, z, r, evolve_
         # we set the input density to get_upar = 1.0 as the normalised distribution has density of 1.0
         @loop_r_z ir iz begin
             vth = sqrt(2.0*p[iz,ir]/density[iz,ir])
-            upar[iz,ir] = vth*get_upar(@view(ff[:,:,iz,ir]), vpa, vperp, 1.0)
+            upar[iz,ir] = vth*get_upar(@view(ff[:,:,iz,ir]), vpa, vperp, 1.0,
+                                       evolve_density)
         end
     elseif evolve_density
         # corresponds to case where only the density is evolved separately from the
@@ -665,7 +669,7 @@ function update_upar_species!(upar, density, ppar, ff, vpa, vperp, z, r, evolve_
         # (upar_s / c_s) = (1/√π)∫d(vpa/c_s) * (vpa/c_s) * (√π f_s c_s / n_s)
         # we set the input density to get_upar = 1.0 as the normalised distribution has density of 1.0
         @loop_r_z ir iz begin
-            upar[iz,ir] = get_upar(@view(ff[:,:,iz,ir]), vpa, vperp, 1.0)
+            upar[iz,ir] = get_upar(@view(ff[:,:,iz,ir]), vpa, vperp, 1.0, evolve_density)
         end
     else
         # When evolve_density = false, the evolved pdf is the 'true' pdf,
@@ -673,7 +677,8 @@ function update_upar_species!(upar, density, ppar, ff, vpa, vperp, z, r, evolve_
         # Integrating calculates
         # (n_s / N_e) * (upar_s / c_s) = (1/√π)∫d(vpa/c_s) * (vpa/c_s) * (√π f_s c_s / N_e)
         @loop_r_z ir iz begin
-            upar[iz,ir] = get_upar(@view(ff[:,:,iz,ir]), vpa, vperp, density[iz,ir])
+            upar[iz,ir] = get_upar(@view(ff[:,:,iz,ir]), vpa, vperp, density[iz,ir],
+                                   evolve_density)
         end
     end
     return nothing
@@ -716,13 +721,14 @@ end
 calculate the updated energy density (or pressure, p) for a given species;
 which of these is calculated depends on the definition of the vpa coordinate
 """
-function update_p_species!(ppar, density, upar, ff, vpa, vperp, z, r, evolve_density, evolve_upar)
+function update_p_species!(p, density, upar, ff, vpa, vperp, z, r, evolve_density,
+                           evolve_upar)
     @boundscheck vpa.n == size(ff, 1) || throw(BoundsError(ff))
     @boundscheck vperp.n == size(ff, 2) || throw(BoundsError(ff))
     @boundscheck z.n == size(ff, 3) || throw(BoundsError(ff))
     @boundscheck r.n == size(ff, 4) || throw(BoundsError(ff))
-    @boundscheck z.n == size(ppar, 1) || throw(BoundsError(ppar))
-    @boundscheck r.n == size(ppar, 2) || throw(BoundsError(ppar))
+    @boundscheck z.n == size(p, 1) || throw(BoundsError(p))
+    @boundscheck r.n == size(p, 2) || throw(BoundsError(p))
     if evolve_upar
         # this is the case where the parallel flow and density are evolved separately
         # from the normalised distribution function; the vpa coordinate is
@@ -844,7 +850,7 @@ function get_vpa2_moment(ff, vpa, vperp, upar)
     # modify input vpa.grid to account for the mean flow
     @. vpa.scratch = (vpa.grid - upar)^2
 
-    return integrate_over_vspace(ff, vpa.scratch, 1, vpa.wgts, vperp.grid, 0, vperp.wgts)
+    return integral(ff, vpa.scratch, 1, vpa.wgts, vperp.grid, 0, vperp.wgts)
 end
 
 function get_ppar(density, upar, p, vth, ff, vpa, vperp, evolve_density, evolve_upar,
@@ -1534,6 +1540,7 @@ function update_moments_neutral!(moments, pdf, vz, vr, vzeta, z, r, composition)
         if moments.neutral.ur_updated[isn] == false
             @views update_neutral_ur_species!(moments.neutral.ur[:,:,isn],
                                               moments.neutral.dens[:,:,isn],
+                                              moments.neutral.vth[:,:,isn],
                                               pdf[:,:,:,:,:,isn], vz, vr, vzeta, z, r,
                                               moments.evolve_density, moments.evolve_p)
             moments.neutral.ur_updated[isn] = true
@@ -1557,12 +1564,22 @@ function update_moments_neutral!(moments, pdf, vz, vr, vzeta, z, r, composition)
         end
         if moments.neutral.pr_updated[isn] == false
             @views update_neutral_pr_species!(moments.neutral.pr[:,:,isn],
-                                              pdf[:,:,:,:,:,isn], vz, vr, vzeta, z, r)
+                                              moments.neutral.dens[:,:,isn],
+                                              moments.neutral.ur[:,:,isn],
+                                              moments.neutral.vth[:,:,isn],
+                                              pdf[:,:,:,:,:,isn], vz, vr, vzeta, z, r,
+                                              moments.evolve_density, moments.evolve_upar,
+                                              moments.evolve_p)
             moments.neutral.pr_updated[isn] = true
         end
         if moments.neutral.pzeta_updated[isn] == false
             @views update_neutral_pzeta_species!(moments.neutral.pzeta[:,:,isn],
-                                                 pdf[:,:,:,:,:,isn], vz, vr, vzeta, z, r)
+                                                 moments.neutral.dens[:,:,isn],
+                                                 moments.neutral.uzeta[:,:,isn],
+                                                 moments.neutral.vth[:,:,isn],
+                                                 pdf[:,:,:,:,:,isn], vz, vr, vzeta, z, r,
+                                                 moments.evolve_density,
+                                                 moments.evolve_upar, moments.evolve_p)
             moments.neutral.pr_updated[isn] = true
         end
         if !moments.evolve_p
@@ -2508,9 +2525,11 @@ function reset_moments_status!(moments)
     moments.neutral.pzeta_updated .= false
     moments.neutral.pr_updated .= false
     moments.neutral.qz_updated .= false
-    moments.electron.dens_updated[] = false
-    moments.electron.upar_updated[] = false
-    moments.electron.ppar_updated[] = false
+    if false
+        moments.electron.dens_updated[] = false
+        moments.electron.upar_updated[] = false
+        moments.electron.p_updated[] = false
+    end
     moments.electron.qpar_updated[] = false
 end
 
