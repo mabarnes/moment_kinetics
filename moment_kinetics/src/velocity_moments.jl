@@ -609,7 +609,7 @@ end
 NB: if this function is called and if upar_updated is false, then
 the incoming pdf is the un-normalized pdf that satisfies int dv pdf = density
 """
-function update_upar!(upar, upar_updated, density, ppar, pdf, vpa, vperp, z, r,
+function update_upar!(upar, upar_updated, density, vth, pdf, vpa, vperp, z, r,
                       composition, evolve_density, evolve_p)
     @begin_r_z_region()
 
@@ -617,7 +617,7 @@ function update_upar!(upar, upar_updated, density, ppar, pdf, vpa, vperp, z, r,
     @boundscheck n_species == size(upar,3) || throw(BoundsError(upar))
     @loop_s is begin
         if upar_updated[is] == false
-            @views update_upar_species!(upar[:,:,is], density[:,:,is], ppar[:,:,is],
+            @views update_upar_species!(upar[:,:,is], density[:,:,is], vth[:,:,is],
                                         pdf[:,:,:,:,is], vpa, vperp, z, r, evolve_density,
                                         evolve_p)
             upar_updated[is] = true
@@ -628,7 +628,7 @@ end
 """
 calculate the updated parallel flow (upar) for a given species
 """
-function update_upar_species!(upar, density, ppar, ff, vpa, vperp, z, r, evolve_density,
+function update_upar_species!(upar, density, vth, ff, vpa, vperp, z, r, evolve_density,
                               evolve_p)
     @boundscheck vpa.n == size(ff, 1) || throw(BoundsError(ff))
     @boundscheck vperp.n == size(ff, 2) || throw(BoundsError(ff))
@@ -645,9 +645,8 @@ function update_upar_species!(upar, density, ppar, ff, vpa, vperp, z, r, evolve_
         # so convert from upar_s / vth_s to upar_s / c_s
         # we set the input density to get_upar = 1.0 as the normalised distribution has density of 1.0
         @loop_r_z ir iz begin
-            vth = sqrt(2.0*p[iz,ir]/density[iz,ir])
-            upar[iz,ir] = vth*get_upar(@view(ff[:,:,iz,ir]), vpa, vperp, 1.0,
-                                       evolve_density)
+            upar[iz,ir] = vth[iz,ir]*get_upar(@view(ff[:,:,iz,ir]), vpa, vperp, 1.0,
+                                              evolve_density)
         end
     elseif evolve_density
         # corresponds to case where only the density is evolved separately from the
@@ -689,7 +688,7 @@ the incoming pdf is the un-normalized pdf that satisfies int dv pdf = density
 """
 function update_p!(p, p_updated, density, upar, pdf, vpa, vperp, z, r, composition,
                    evolve_density, evolve_upar)
-    @boundscheck composition.n_ion_species == size(ppar,3) || throw(BoundsError(p))
+    @boundscheck composition.n_ion_species == size(p,3) || throw(BoundsError(p))
     @boundscheck r.n == size(p,2) || throw(BoundsError(p))
     @boundscheck z.n == size(p,1) || throw(BoundsError(p))
 
@@ -2229,7 +2228,7 @@ function update_derived_moments!(new_scratch, moments, vpa, vperp, z, r, composi
     end
     if !moments.evolve_upar
         update_upar!(new_scratch.upar, moments.ion.upar_updated, new_scratch.density,
-                     new_scratch.ppar, ff, vpa, vperp, z, r, composition,
+                     moments.ion.vth, ff, vpa, vperp, z, r, composition,
                      moments.evolve_density, moments.evolve_p)
     end
     if !moments.evolve_p
