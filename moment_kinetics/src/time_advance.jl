@@ -1053,12 +1053,10 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
             scratch[1].density[iz,ir,is] = moments.ion.dens[iz,ir,is]
             scratch[1].upar[iz,ir,is] = moments.ion.upar[iz,ir,is]
             scratch[1].p[iz,ir,is] = moments.ion.p[iz,ir,is]
-            scratch[1].pperp[iz,ir,is] = moments.ion.pperp[iz,ir,is]
             scratch[t_params.n_rk_stages+1].pdf[:,:,iz,ir,is] .= pdf.ion.norm[:,:,iz,ir,is]
             scratch[t_params.n_rk_stages+1].density[iz,ir,is] = moments.ion.dens[iz,ir,is]
             scratch[t_params.n_rk_stages+1].upar[iz,ir,is] = moments.ion.upar[iz,ir,is]
             scratch[t_params.n_rk_stages+1].p[iz,ir,is] = moments.ion.p[iz,ir,is]
-            scratch[t_params.n_rk_stages+1].pperp[iz,ir,is] = moments.ion.pperp[iz,ir,is]
         end
 
         # update the electron density, parallel flow and parallel pressure (and temperature)
