@@ -264,6 +264,8 @@ function create_moments_electron(nz, nr, electron_model, num_diss_params, n_sour
     pressure_updated = Ref(false)
     # allocate array used for the parallel pressure
     parallel_pressure = allocate_shared_float(nz, nr)
+    # allocate array used for the perpendicular pressure
+    perpendicular_pressure = allocate_shared_float(nz, nr)
     # allocate array used for the temperature
     temperature = allocate_shared_float(nz, nr)
     # allocate Bool variable that indicates if the temperature is updated for each species
@@ -329,14 +331,14 @@ function create_moments_electron(nz, nr, electron_model, num_diss_params, n_sour
 
     # return struct containing arrays needed to update moments
     return moments_electron_substruct(density, density_updated, parallel_flow,
-        parallel_flow_updated, pressure, pressure_updated, parallel_pressure, temperature,
-        temperature_updated, parallel_heat_flux, parallel_heat_flux_updated,
-        thermal_speed, parallel_friction_force, external_source_amplitude,
-        external_source_density_amplitude, external_source_momentum_amplitude,
-        external_source_pressure_amplitude, v_norm_fac, ddens_dz, dupar_dz, dp_dz,
-        dp_dz_upwind, d2p_dz2, dppar_dz, dqpar_dz, dT_dz, dT_dz_upwind, dvth_dz, dp_dt,
-        dT_dt, dvth_dt, constraints_A_coefficient, constraints_B_coefficient,
-        constraints_C_coefficient)
+        parallel_flow_updated, pressure, pressure_updated, parallel_pressure,
+        perpendicular_pressure, temperature, temperature_updated, parallel_heat_flux,
+        parallel_heat_flux_updated, thermal_speed, parallel_friction_force,
+        external_source_amplitude, external_source_density_amplitude,
+        external_source_momentum_amplitude, external_source_pressure_amplitude,
+        v_norm_fac, ddens_dz, dupar_dz, dp_dz, dp_dz_upwind, d2p_dz2, dppar_dz, dqpar_dz,
+        dT_dz, dT_dz_upwind, dvth_dz, dp_dt, dT_dt, dvth_dt, constraints_A_coefficient,
+        constraints_B_coefficient, constraints_C_coefficient)
 end
 
 # neutral particles have natural mean velocities 
