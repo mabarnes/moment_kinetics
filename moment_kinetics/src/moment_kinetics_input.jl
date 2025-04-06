@@ -92,7 +92,8 @@ function mk_input(input_dict=OptionsDict("output" => OptionsDict("run_name" => "
     end
     # Check for input options that used to exist in some section, but do not any more. If
     # these are present, the user probably needs to update their input file.
-    removed_section_options_list = Dict("timestepping" => ("implicit_electron_advance",
+    removed_section_options_list = Dict("evolve_moments" => ("parallel_pressure",),
+                                        "timestepping" => ("implicit_electron_advance",
                                                            "implicit_electron_time_evolving",
                                                            "implicit_electron_ppar",),
                                        )
@@ -412,7 +413,7 @@ function mk_input(input_dict=OptionsDict("output" => OptionsDict("run_name" => "
     geometry = init_magnetic_geometry(geometry_in,z,r)
     if any(geometry.dBdz .!= 0.0) &&
             (evolve_moments.density || evolve_moments.parallel_flow ||
-             evolve_moments.parallel_pressure)
+             evolve_moments.pressure)
         error("Mirror terms not yet implemented for moment-kinetic modes")
     end
 
