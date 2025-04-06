@@ -105,18 +105,16 @@ struct io_moments_info{Tfile, Ttime, Tphi, Tmomi, Tmome, Tmomn, Tchodura_lower,
     parallel_flow_loworder::Union{Tmomi,Nothing}
     # start of the last timestep before output, used to measure steady state residual
     parallel_flow_start_last_timestep::Union{Tmomi,Nothing}
+    # handle for the ion species pressure
+    pressure::Tmomi
+    # low-order approximation, used to diagnose timestepping error
+    pressure_loworder::Union{Tmomi,Nothing}
+    # start of the last timestep before output, used to measure steady state residual
+    pressure_start_last_timestep::Union{Tmomi,Nothing}
     # handle for the ion species parallel pressure
     parallel_pressure::Tmomi
-    # low-order approximation, used to diagnose timestepping error
-    parallel_pressure_loworder::Union{Tmomi,Nothing}
-    # start of the last timestep before output, used to measure steady state residual
-    parallel_pressure_start_last_timestep::Union{Tmomi,Nothing}
     # handle for the ion species perpendicular pressure
     perpendicular_pressure::Tmomi
-    # low-order approximation, used to diagnose timestepping error
-    perpendicular_pressure_loworder::Union{Tmomi,Nothing}
-    # start of the last timestep before output, used to measure steady state residual
-    perpendicular_pressure_start_last_timestep::Union{Tmomi,Nothing}
     # handle for the ion species parallel heat flux
     parallel_heat_flux::Tmomi
     # handle for the ion species thermal speed
@@ -139,12 +137,14 @@ struct io_moments_info{Tfile, Ttime, Tphi, Tmomi, Tmome, Tmomn, Tchodura_lower,
     electron_parallel_flow_loworder::Union{Tmome,Nothing}
     # start of the last timestep before output, used to measure steady state residual
     electron_parallel_flow_start_last_timestep::Union{Tmome,Nothing}
+    # handle for the electron species pressure
+    electron_pressure::Tmome
+    # low-order approximation, used to diagnose timestepping error
+    electron_pressure_loworder::Union{Tmome,Nothing}
+    # start of the last timestep before output, used to measure steady state residual
+    electron_pressure_start_last_timestep::Union{Tmome,Nothing}
     # handle for the electron species parallel pressure
     electron_parallel_pressure::Tmome
-    # low-order approximation, used to diagnose timestepping error
-    electron_parallel_pressure_loworder::Union{Tmome,Nothing}
-    # start of the last timestep before output, used to measure steady state residual
-    electron_parallel_pressure_start_last_timestep::Union{Tmome,Nothing}
     # handle for the electron species parallel heat flux
     electron_parallel_heat_flux::Tmome
     # handle for the electron species thermal speed
@@ -291,12 +291,14 @@ struct io_initial_electron_info{Tfile, Tfe, Tmom, Texte1, Texte2, Texte3, Texte4
     electron_parallel_flow_loworder::Union{Tmom,Nothing}
     # start of the last timestep before output, used to measure steady state residual
     electron_parallel_flow_start_last_timestep::Union{Tmom,Nothing}
+    # handle for the electron pressure variable
+    electron_pressure::Tmom
+    # low-order approximation, used to diagnose timestepping error
+    electron_pressure_loworder::Union{Tmom,Nothing}
+    # start of the last timestep before output, used to measure steady state residual
+    electron_pressure_start_last_timestep::Union{Tmom,Nothing}
     # handle for the electron parallel pressure variable
     electron_parallel_pressure::Tmom
-    # low-order approximation, used to diagnose timestepping error
-    electron_parallel_pressure_loworder::Union{Tmom,Nothing}
-    # start of the last timestep before output, used to measure steady state residual
-    electron_parallel_pressure_start_last_timestep::Union{Tmom,Nothing}
     # handle for the electron parallel heat flux variable
     electron_parallel_heat_flux::Tmom
     # handle for the electron thermal speed variable
@@ -625,9 +627,10 @@ function reopen_initial_electron_io(file_info)
                                         getvar("electron_parallel_flow"),
                                         getvar("electron_parallel_flow_loworder"),
                                         getvar("electron_parallel_flow_start_last_timestep"),
+                                        getvar("electron_pressure"),
+                                        getvar("electron_pressure_loworder"),
+                                        getvar("electron_pressure_start_last_timestep"),
                                         getvar("electron_parallel_pressure"),
-                                        getvar("electron_parallel_pressure_loworder"),
-                                        getvar("electron_parallel_pressure_start_last_timestep"),
                                         getvar("electron_parallel_heat_flux"),
                                         getvar("electron_thermal_speed"),
                                         getvar("external_source_electron_amplitude"),
@@ -1350,30 +1353,36 @@ function define_dynamic_ion_moment_variables!(fid, n_ion_species, r::coordinate,
         io_upar_start_last_timestep = nothing
     end
 
-    # io_ppar is the handle for the ion parallel pressure
-    io_ppar = create_dynamic_variable!(dynamic, "parallel_pressure", mk_float, z, r,
-                                       n_ion_species_coord; parallel_io=parallel_io,
-                                       description="ion species parallel pressure",
-                                       units="n_ref*T_ref")
+    # io_p is the handle for the ion pressure
+    io_p = create_dynamic_variable!(dynamic, "pressure", mk_float, z, r,
+                                    n_ion_species_coord; parallel_io=parallel_io,
+                                    description="ion species pressure",
+                                    units="n_ref*T_ref")
     if write_error_diagnostics
-        io_ppar_loworder =
-            create_dynamic_variable!(dynamic, "parallel_pressure_loworder", mk_float, z, r,
+        io_p_loworder =
+            create_dynamic_variable!(dynamic, "pressure_loworder", mk_float, z, r,
                                      n_ion_species_coord; parallel_io=parallel_io,
-                                     description="low-order approximation to ion species parallel pressure, used to diagnose timestepping error",
+                                     description="low-order approximation to ion species pressure, used to diagnose timestepping error",
                                      units="n_ref*T_ref")
     else
         io_ppar_loworder = nothing
     end
     if write_steady_state_diagnostics
-        io_ppar_start_last_timestep =
-            create_dynamic_variable!(dynamic, "parallel_pressure_start_last_timestep",
+        io_p_start_last_timestep =
+            create_dynamic_variable!(dynamic, "pressure_start_last_timestep",
                                      mk_float, z, r, n_ion_species_coord;
                                      parallel_io=parallel_io,
-                                     description="ion species parallel pressure at the start of the last timestep before output, used to measure steady state residual",
+                                     description="ion species pressure at the start of the last timestep before output, used to measure steady state residual",
                                      units="n_ref*T_ref")
     else
-        io_ppar_start_last_timestep = nothing
+        io_p_start_last_timestep = nothing
     end
+
+    # io_ppar is the handle for the ion parallel pressure
+    io_ppar = create_dynamic_variable!(dynamic, "parallel_pressure", mk_float, z, r,
+                                       n_ion_species_coord; parallel_io=parallel_io,
+                                       description="ion species parallel pressure",
+                                       units="n_ref*T_ref")
 
     # io_pperp is the handle for the ion parallel pressure
     io_pperp = create_dynamic_variable!(dynamic, "perpendicular_pressure", mk_float, z, r,
@@ -1516,8 +1525,8 @@ function define_dynamic_ion_moment_variables!(fid, n_ion_species, r::coordinate,
     end
 
     return io_density, io_density_loworder, io_density_start_last_timestep, io_upar,
-           io_upar_loworder, io_upar_start_last_timestep, io_ppar, io_ppar_loworder,
-           io_ppar_start_last_timestep, io_pperp, io_pperp_loworder,
+           io_upar_loworder, io_upar_start_last_timestep, io_p, io_p_loworder,
+           io_p_start_last_timestep, io_ppar, io_pperp, io_pperp_loworder,
            io_pperp_start_last_timestep, io_qpar, io_vth, io_dSdt,
            external_source_amplitude, external_source_density_amplitude,
            external_source_momentum_amplitude, external_source_pressure_amplitude,
@@ -1594,29 +1603,34 @@ function define_dynamic_electron_moment_variables!(fid, r::coordinate, z::coordi
     end
 
     # io_electron_ppar is the handle for the electron parallel pressure
+    io_electron_p = create_dynamic_variable!(dynamic, "electron_pressure", mk_float, z, r;
+                                             parallel_io=parallel_io,
+                                             description="electron species pressure",
+                                             units="n_ref*T_ref")
+    if write_error_diagnostics
+        io_electron_p_loworder =
+            create_dynamic_variable!(dynamic, "electron_pressure_loworder", mk_float,
+                                     z, r; parallel_io=parallel_io,
+                                     description="low-order approximation to electron species pressure, used to diagnose timestepping error",
+                                     units="n_ref*T_ref")
+    else
+        io_electron_p_loworder = nothing
+    end
+    if write_steady_state_diagnostics
+        io_electron_p_start_last_timestep =
+            create_dynamic_variable!(dynamic,
+                                     "electron_pressure_start_last_timestep",
+                                     mk_float, z, r; parallel_io=parallel_io,
+                                     description="electron species pressure at the start of the last timestep before output, used to measure steady state residual",
+                                     units="n_ref*T_ref")
+    else
+        io_electron_p_start_last_timestep = nothing
+    end
+
     io_electron_ppar = create_dynamic_variable!(dynamic, "electron_parallel_pressure", mk_float, z, r;
                                        parallel_io=parallel_io,
                                        description="electron species parallel pressure",
                                        units="n_ref*T_ref")
-    if write_error_diagnostics
-        io_electron_ppar_loworder =
-            create_dynamic_variable!(dynamic, "electron_parallel_pressure_loworder", mk_float,
-                                     z, r; parallel_io=parallel_io,
-                                     description="low-order approximation to electron species parallel pressure, used to diagnose timestepping error",
-                                     units="n_ref*T_ref")
-    else
-        io_electron_ppar_loworder = nothing
-    end
-    if write_steady_state_diagnostics
-        io_electron_ppar_start_last_timestep =
-            create_dynamic_variable!(dynamic,
-                                     "electron_parallel_pressure_start_last_timestep",
-                                     mk_float, z, r; parallel_io=parallel_io,
-                                     description="electron species parallel pressure at the start of the last timestep before output, used to measure steady state residual",
-                                     units="n_ref*T_ref")
-    else
-        io_electron_ppar_start_last_timestep = nothing
-    end
 
     # io_electron_qpar is the handle for the electron parallel heat flux
     io_electron_qpar = create_dynamic_variable!(dynamic, "electron_parallel_heat_flux", mk_float, z, r;
@@ -1723,8 +1737,8 @@ function define_dynamic_electron_moment_variables!(fid, r::coordinate, z::coordi
     return io_electron_density, io_electron_density_loworder,
            io_electron_density_start_last_timestep, io_electron_upar,
            io_electron_upar_loworder, io_electron_upar_start_last_timestep,
-           io_electron_ppar, io_electron_ppar_loworder,
-           io_electron_ppar_start_last_timestep, io_electron_qpar, io_electron_vth,
+           io_electron_p, io_electron_p_loworder, io_electron_p_start_last_timestep,
+           io_electron_ppar, io_electron_qpar, io_electron_vth,
            external_source_electron_amplitude, external_source_electron_density_amplitude,
            external_source_electron_momentum_amplitude,
            external_source_electron_pressure_amplitude,
@@ -2165,12 +2179,11 @@ function reopen_moments_io(file_info)
                                getvar("density_start_last_timestep"),
                                getvar("parallel_flow"), getvar("parallel_flow_loworder"),
                                getvar("parallel_flow_start_last_timestep"),
+                               getvar("pressure"),
+                               getvar("pressure_loworder"),
+                               getvar("pressure_start_last_timestep"),
                                getvar("parallel_pressure"),
-                               getvar("parallel_pressure_loworder"),
-                               getvar("parallel_pressure_start_last_timestep"),
                                getvar("perpendicular_pressure"),
-                               getvar("perpendicular_pressure_loworder"),
-                               getvar("perpendicular_pressure_start_last_timestep"),
                                getvar("parallel_heat_flux"),
                                getvar("thermal_speed"), getvar("entropy_production"),
                                getvar("chodura_integral_lower"),
@@ -2181,9 +2194,10 @@ function reopen_moments_io(file_info)
                                getvar("electron_parallel_flow"),
                                getvar("electron_parallel_flow_loworder"),
                                getvar("electron_parallel_flow_start_last_timestep"),
+                               getvar("electron_pressure"),
+                               getvar("electron_pressure_loworder"),
+                               getvar("electron_pressure_start_last_timestep"),
                                getvar("electron_parallel_pressure"),
-                               getvar("electron_parallel_pressure_loworder"),
-                               getvar("electron_parallel_pressure_start_last_timestep"),
                                getvar("electron_parallel_heat_flux"),
                                getvar("electron_thermal_speed"),
                                getvar("density_neutral"),
@@ -2325,9 +2339,10 @@ function reopen_dfns_io(file_info)
                                      getvar("parallel_flow"),
                                      getvar("parallel_flow_loworder"),
                                      getvar("parallel_flow_start_last_timestep"),
+                                     getvar("pressure"),
+                                     getvar("pressure_loworder"),
+                                     getvar("pressure_start_last_timestep"),
                                      getvar("parallel_pressure"),
-                                     getvar("parallel_pressure_loworder"),
-                                     getvar("parallel_pressure_start_last_timestep"),
                                      getvar("perpendicular_pressure"),
                                      getvar("perpendicular_pressure_loworder"),
                                      getvar("perpendicular_pressure_start_last_timestep"),
@@ -2342,9 +2357,10 @@ function reopen_dfns_io(file_info)
                                      getvar("electron_parallel_flow"),
                                      getvar("electron_parallel_flow_loworder"),
                                      getvar("electron_parallel_flow_start_last_timestep"),
+                                     getvar("electron_pressure"),
+                                     getvar("electron_pressure_loworder"),
+                                     getvar("electron_pressure_start_last_timestep"),
                                      getvar("electron_parallel_pressure"),
-                                     getvar("electron_parallel_pressure_loworder"),
-                                     getvar("electron_parallel_pressure_start_last_timestep"),
                                      getvar("electron_parallel_heat_flux"),
                                      getvar("electron_thermal_speed"),
                                      getvar("density_neutral"),
@@ -2929,25 +2945,20 @@ function write_ion_moments_data_to_binary(scratch, moments, n_ion_species, t_par
         append_to_dynamic_var(io_moments.parallel_flow_start_last_timestep,
                               scratch[1].upar, t_idx, parallel_io, z, r, n_ion_species)
 
-        append_to_dynamic_var(io_moments.parallel_pressure,
-                              scratch[t_params.n_rk_stages+1].ppar, t_idx, parallel_io, z,
-                              r, n_ion_species)
-        # If options were not set to select the following outputs, then the io variables
-        # will be `nothing` and nothing will be written.
-        append_to_dynamic_var(io_moments.parallel_pressure_loworder, scratch[2].ppar,
+        append_to_dynamic_var(io_moments.pressure, scratch[t_params.n_rk_stages+1].p,
                               t_idx, parallel_io, z, r, n_ion_species)
-        append_to_dynamic_var(io_moments.parallel_pressure_start_last_timestep,
-                              scratch[1].ppar, t_idx, parallel_io, z, r, n_ion_species)
-
-        append_to_dynamic_var(io_moments.perpendicular_pressure,
-                              scratch[t_params.n_rk_stages+1].pperp, t_idx, parallel_io,
-                              z, r, n_ion_species)
         # If options were not set to select the following outputs, then the io variables
         # will be `nothing` and nothing will be written.
-        append_to_dynamic_var(io_moments.perpendicular_pressure_loworder,
-                              scratch[2].pperp, t_idx, parallel_io, z, r, n_ion_species)
-        append_to_dynamic_var(io_moments.perpendicular_pressure_start_last_timestep,
-                              scratch[1].pperp, t_idx, parallel_io, z, r, n_ion_species)
+        append_to_dynamic_var(io_moments.pressure_loworder, scratch[2].p,
+                              t_idx, parallel_io, z, r, n_ion_species)
+        append_to_dynamic_var(io_moments.pressure_start_last_timestep, scratch[1].p,
+                              t_idx, parallel_io, z, r, n_ion_species)
+
+        append_to_dynamic_var(io_moments.parallel_pressure, moments.ion.ppar, t_idx,
+                              parallel_io, z, r, n_ion_species)
+
+        append_to_dynamic_var(io_moments.perpendicular_pressure, moments.ion.pperp, t_idx,
+                              parallel_io, z, r, n_ion_species)
 
         append_to_dynamic_var(io_moments.parallel_heat_flux, moments.ion.qpar, t_idx,
                               parallel_io, z, r, n_ion_species)
@@ -3060,15 +3071,18 @@ function write_electron_moments_data_to_binary(scratch, moments, t_params, elect
                                   scratch[1].electron_upar, t_idx, parallel_io, z, r)
         end
 
-        append_to_dynamic_var(io_moments.electron_parallel_pressure,
-                              scratch[t_params.n_rk_stages+1].electron_ppar, t_idx,
+        append_to_dynamic_var(io_moments.electron_parallel,
+                              scratch[t_params.n_rk_stages+1].electron_p, t_idx,
                               parallel_io, z, r)
         # If options were not set to select the following outputs, then the io variables
         # will be `nothing` and nothing will be written.
-        append_to_dynamic_var(io_moments.electron_parallel_pressure_loworder,
-                              scratch[2].electron_ppar, t_idx, parallel_io, z, r)
-        append_to_dynamic_var(io_moments.electron_parallel_pressure_start_last_timestep,
-                              scratch[1].electron_ppar, t_idx, parallel_io, z, r)
+        append_to_dynamic_var(io_moments.electron_pressure_loworder,
+                              scratch[2].electron_p, t_idx, parallel_io, z, r)
+        append_to_dynamic_var(io_moments.electron_pressure_start_last_timestep,
+                              scratch[1].electron_p, t_idx, parallel_io, z, r)
+
+        append_to_dynamic_var(io_moments.electron_parallel_pressure,
+                              moments.electron.ppar, t_idx, parallel_io, z, r)
 
         append_to_dynamic_var(io_moments.electron_parallel_heat_flux,
                               moments.electron.qpar, t_idx, parallel_io, z, r)
@@ -3686,11 +3700,11 @@ function debug_dump end
 function debug_dump(vz::coordinate, vr::coordinate, vzeta::coordinate, vpa::coordinate,
                     vperp::coordinate, z::coordinate, r::coordinate, t::mk_float;
                     evolve_density, evolve_upar, evolve_ppar,
-                    ff=nothing, dens=nothing, upar=nothing, ppar=nothing, pperp=nothing, qpar=nothing,
+                    ff=nothing, dens=nothing, upar=nothing, p=nothing, ppar=nothing, pperp=nothing, qpar=nothing,
                     vth=nothing,
                     ff_neutral=nothing, dens_neutral=nothing, uz_neutral=nothing,
                     #ur_neutral=nothing, uzeta_neutral=nothing,
-                    pz_neutral=nothing,
+                    p_neutral=nothing, pz_neutral=nothing,
                     #pr_neutral=nothing, pzeta_neutral=nothing,
                     qz_neutral=nothing,
                     #qr_neutral=nothing, qzeta_neutral=nothing,
@@ -3785,6 +3799,11 @@ function debug_dump(vz::coordinate, vr::coordinate, vzeta::coordinate, vpa::coor
         else
             debug_output_file.moments.parallel_flow[:,:,:,debug_output_counter[]] = upar
         end
+        if p === nothing
+            debug_output_file.moments.pressure[:,:,:,debug_output_counter[]] = 0.0
+        else
+            debug_output_file.moments.pressure[:,:,:,debug_output_counter[]] = p
+        end
         if ppar === nothing
             debug_output_file.moments.parallel_pressure[:,:,:,debug_output_counter[]] = 0.0
         else
@@ -3822,6 +3841,11 @@ function debug_dump(vz::coordinate, vr::coordinate, vzeta::coordinate, vpa::coor
             debug_output_file.moments.uz_neutral[:,:,:,debug_output_counter[]] = 0.0
         else
             debug_output_file.moments.uz_neutral[:,:,:,debug_output_counter[]] = uz_neutral
+        end
+        if p_neutral === nothing
+            debug_output_file.moments.p_neutral[:,:,:,debug_output_counter[]] = 0.0
+        else
+            debug_output_file.moments.p_neutral[:,:,:,debug_output_counter[]] = p_neutral
         end
         if pz_neutral === nothing
             debug_output_file.moments.pz_neutral[:,:,:,debug_output_counter[]] = 0.0

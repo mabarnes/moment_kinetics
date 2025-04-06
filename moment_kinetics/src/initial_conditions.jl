@@ -65,16 +65,16 @@ function allocate_pdf_and_moments(composition, r, z, vperp, vpa, vzeta, vr, vz,
     # the time-dependent entries are not initialised.
     # moments arrays have same r and z grids for both ion and neutral species
     # and so are included in the same struct
-    ion = create_moments_ion(z.n, r.n, composition.n_ion_species,
-        evolve_moments.density, evolve_moments.parallel_flow,
-        evolve_moments.parallel_pressure, external_source_settings.ion,
-        num_diss_params)
-    electron = create_moments_electron(z.n, r.n, composition.electron_physics, 
-        num_diss_params, length(external_source_settings.electron))
+    ion = create_moments_ion(z.n, r.n, composition.n_ion_species, evolve_moments.density,
+                             evolve_moments.parallel_flow, evolve_moments.pressure,
+                             external_source_settings.ion, num_diss_params)
+    electron = create_moments_electron(z.n, r.n, composition.electron_physics,
+                                       num_diss_params,
+                                       length(external_source_settings.electron))
     neutral = create_moments_neutral(z.n, r.n, composition.n_neutral_species,
-        evolve_moments.density, evolve_moments.parallel_flow,
-        evolve_moments.parallel_pressure, external_source_settings.neutral,
-        num_diss_params)
+                                     evolve_moments.density, evolve_moments.parallel_flow,
+                                     evolve_moments.pressure,
+                                     external_source_settings.neutral, num_diss_params)
 
     if abs(collisions.reactions.ionization_frequency) > 0.0 || z.bc == "wall"
         # if ionization collisions are included or wall BCs are enforced, then particle
@@ -89,7 +89,7 @@ function allocate_pdf_and_moments(composition, r, z, vperp, vpa, vzeta, vr, vz,
                              particle_number_conserved,
                              evolve_moments.moments_conservation,
                              evolve_moments.parallel_flow,
-                             evolve_moments.parallel_pressure)
+                             evolve_moments.pressure)
 
     boundary_distributions = create_boundary_distributions(vz, vr, vzeta, vpa, vperp, z,
                                                            composition)
