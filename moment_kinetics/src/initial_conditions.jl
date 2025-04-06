@@ -353,7 +353,7 @@ function initialize_electrons!(pdf, moments, fields, geometry, composition, r, z
     # the electron temperature has now been updated
     moments.electron.temp_updated[] = true
     # the electron parallel pressure now been updated
-    moments.electron.ppar_updated[] = true
+    moments.electron.p_updated[] = true
 
     # calculate the zed derivative of the initial electron density
     @views derivative_z!(moments.electron.ddens_dz, moments.electron.dens, 
@@ -1803,7 +1803,7 @@ function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, 
                  moments.ion.dens, moments.ion.ppar, pdf.ion.norm,
                  vpa, vperp, z, r, composition, moments.evolve_density,
                  moments.evolve_p)
-    update_ppar!(moments.ion.ppar, moments.ion.ppar_updated,
+    update_ppar!(moments.ion.ppar, moments.ion.p_updated,
                  moments.ion.dens, moments.ion.upar, pdf.ion.norm,
                  vpa, vperp, z, r, composition, moments.evolve_density,
                  moments.evolve_upar)
