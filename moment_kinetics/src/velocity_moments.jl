@@ -284,10 +284,9 @@ function create_moments_electron(nz, nr, electron_model, num_diss_params, n_sour
     # need dupar/dz to obtain, e.g., the updated electron temperature
     dupar_dz = allocate_shared_float(nz, nr)
     dppar_dz = allocate_shared_float(nz, nr)
+    dp_dz = allocate_shared_float(nz, nr)
     if electron_model ∈ (braginskii_fluid, kinetic_electrons,
                          kinetic_electrons_with_temperature_equation)
-        dp_dz = allocate_shared_float(nz, nr)
-        dp_dz_upwind = allocate_shared_float(nz, nr)
         dT_dz_upwind = allocate_shared_float(nz, nr)
         if electron_model == kinetic_electrons_with_temperature_equation
             dp_dt = nothing
@@ -298,8 +297,6 @@ function create_moments_electron(nz, nr, electron_model, num_diss_params, n_sour
         end
         dvth_dt = allocate_shared_float(nz, nr)
     else
-        dp_dz = nothing
-        dp_dz_upwind = nothing
         dT_dz_upwind = nothing
         dp_dt = nothing
         dT_dt = nothing
@@ -330,8 +327,8 @@ function create_moments_electron(nz, nr, electron_model, num_diss_params, n_sour
         parallel_heat_flux_updated, thermal_speed, parallel_friction_force,
         external_source_amplitude, external_source_density_amplitude,
         external_source_momentum_amplitude, external_source_pressure_amplitude,
-        v_norm_fac, ddens_dz, dupar_dz, dp_dz, dp_dz_upwind, d2p_dz2, dppar_dz, dqpar_dz,
-        dT_dz, dT_dz_upwind, dvth_dz, dp_dt, dT_dt, dvth_dt, constraints_A_coefficient,
+        v_norm_fac, ddens_dz, dupar_dz, dp_dz, d2p_dz2, dppar_dz, dqpar_dz, dT_dz,
+        dT_dz_upwind, dvth_dz, dp_dt, dT_dt, dvth_dt, constraints_A_coefficient,
         constraints_B_coefficient, constraints_C_coefficient)
 end
 
@@ -1412,7 +1409,7 @@ function calculate_electron_moment_derivatives!(moments, scratch, scratch_dummy,
     dens = scratch.electron_density
     upar = scratch.electron_upar
     p = scratch.electron_p
-    ppar = scratch.electron_ppar
+    ppar = moments.electron.ppar
     qpar = moments.electron.qpar
     vth = moments.electron.vth
     dummy_zr = @view scratch_dummy.dummy_zrs[:,:,1]
@@ -1787,7 +1784,7 @@ function update_neutral_uzeta_species!(uzeta, density, ff, vz, vr, vzeta, z, r,
     return nothing
 end
 
-function update_neutral_pz!(pz, pz_updated, density, uz, p, pdf, vz, vr, vzeta, z, r,
+function update_neutral_pz!(pz, pz_updated, density, uz, p, vth, pdf, vz, vr, vzeta, z, r,
                             composition, evolve_density, evolve_upar, evolve_p)
     @boundscheck r.n == size(pz,2) || throw(BoundsError(pz))
     @boundscheck z.n == size(pz,1) || throw(BoundsError(pz))
@@ -1882,7 +1879,7 @@ function update_neutral_pz_species!(pz, density, uz, vth, ff, vz, vr, vzeta, z, 
     return nothing
 end
 
-function update_neutral_pr!(pr, pr_updated, density, ur, pdf, vz, vr, vzeta, z, r,
+function update_neutral_pr!(pr, pr_updated, density, ur, vth, pdf, vz, vr, vzeta, z, r,
                             composition, evolve_density, evolve_upar, evolve_p)
     @boundscheck r.n == size(pr,2) || throw(BoundsError(pr))
     @boundscheck z.n == size(pr,1) || throw(BoundsError(pr))
@@ -1954,8 +1951,9 @@ function update_neutral_pr_species!(pr, density, ur, vth, ff, vz, vr, vzeta, z, 
     return nothing
 end
 
-function update_neutral_pzeta!(pzeta, pzeta_updated, density, uzeta, pdf, vz, vr, vzeta,
-                               z, r, composition, evolve_density, evolve_upar, evolve_p)
+function update_neutral_pzeta!(pzeta, pzeta_updated, density, uzeta, vth, pdf, vz, vr,
+                               vzeta, z, r, composition, evolve_density, evolve_upar,
+                               evolve_p)
     @boundscheck r.n == size(pzeta,2) || throw(BoundsError(pzeta))
     @boundscheck z.n == size(pzeta,1) || throw(BoundsError(pzeta))
     
@@ -1977,8 +1975,8 @@ end
 """
 calculate the updated pressure in zeta-zeta direction (pzeta) for a given species
 """
-function update_neutral_pzeta_species!(pzeta, density, ur, vth, ff, vz, vr, vzeta, z, r,
-                                       evolve_density, evolve_upar, evolve_p)
+function update_neutral_pzeta_species!(pzeta, density, uzeta, vth, ff, vz, vr, vzeta, z,
+                                       r, evolve_density, evolve_upar, evolve_p)
     @boundscheck vz.n == size(ff, 1) || throw(BoundsError(ff))
     @boundscheck vr.n == size(ff, 2) || throw(BoundsError(ff))
     @boundscheck vzeta.n == size(ff, 3) || throw(BoundsError(ff))
@@ -2073,31 +2071,31 @@ function update_neutral_qz_species!(qz, density, uz, vth, ff, vz, vr, vzeta, z, 
         @loop_r_z ir iz begin
             qz[iz,ir] = 0.5 * density[iz,ir] * vth[iz,ir]^3 *
                         integral((vzeta,vr,vz)->(vz*(vz^2+vzeta^2+vr^2)),
-                                 @view(ff[:,:,:,iz,ir]), vz, vr, vzeta)
+                                 @view(ff[:,:,:,iz,ir]), vzeta, vr, vz)
         end
     elseif evolve_upar
         @loop_r_z ir iz begin
             qz[iz,ir] = 0.5 * density[iz,ir]
                         integral((vzeta,vr,vz)->(vz*(vz^2+vzeta^2+vr^2)),
-                                 @view(ff[:,:,:,iz,ir]), vz, vr, vzeta)
+                                 @view(ff[:,:,:,iz,ir]), vzeta, vr, vz)
         end
     elseif evolve_p
         @loop_r_z ir iz begin
             qz[iz,ir] = 0.5 * density[iz,ir] * vth[iz,ir]^3 *
                         integral((vzeta,vr,vz)->((vz-uz[iz,ir])*((vz-uz[iz,ir])^2+vzeta^2+vr^2)),
-                                 @view(ff[:,:,:,iz,ir]), vz, vr, vzeta)
+                                 @view(ff[:,:,:,iz,ir]), vzeta, vr, vz)
         end
     elseif evolve_density
         @loop_r_z ir iz begin
             qz[iz,ir] = 0.5 * density[iz,ir]
                         integral((vzeta,vr,vz)->((vz-uz[iz,ir])*((vz-uz[iz,ir])^2+vzeta^2+vr^2)),
-                                 @view(ff[:,:,:,iz,ir]), vz, vr, vzeta)
+                                 @view(ff[:,:,:,iz,ir]), vzeta, vr, vz)
         end
     else
         @loop_r_z ir iz begin
             qz[iz,ir] = 0.5
                         integral((vzeta,vr,vz)->((vz-uz[iz,ir])*((vz-uz[iz,ir])^2+vzeta^2+vr^2)),
-                                 @view(ff[:,:,:,iz,ir]), vz, vr, vzeta)
+                                 @view(ff[:,:,:,iz,ir]), vzeta, vr, vz)
         end
     end
     return nothing
