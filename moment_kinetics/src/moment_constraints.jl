@@ -241,7 +241,7 @@ end
     @begin_sn_r_z_region()
     @loop_sn_r_z isn ir iz begin
         A[iz,ir,isn], B[iz,ir,isn], C[iz,ir,isn] =
-            hard_force_moment_constraints_neutral!(@view(f[:,:,:,iz,ir,is]), moments, vz)
+            hard_force_moment_constraints_neutral!(@view(f[:,:,:,iz,ir,isn]), moments, vz)
     end
 end
 
