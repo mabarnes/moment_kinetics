@@ -198,6 +198,7 @@ const top_level_update_map = OptionsDict(
 # If the "new option" is a Function, the option is not renamed, instead the function is
 # applied to the value.
 const sections_update_map = OptionsDict(
+    "evolve_moments" => OptionsDict("parallel_pressure" => "pressure"),
     "timestepping" => OptionsDict("implicit_electron_advance" => OrderedDict{Any,Any}(true => OptionsDict("timestepping" => OptionsDict("kinetic_electron_solver" => "implicit_steady_state"),),
                                                                                       "lu" => OptionsDict("timestepping" => OptionsDict("kinetic_electron_solver" => "implicit_steady_state", "kinetic_electron_preconditioner" => "lu"),),
                                                                                       "adi" => OptionsDict("timestepping" => OptionsDict("kinetic_electron_solver" => "implicit_steady_state", "kinetic_electron_preconditioner" => "adi"),),
