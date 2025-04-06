@@ -3469,6 +3469,7 @@ end
             # pz can be calculated from p, pzeta, and pr
             @loop_sn_r_z isn ir iz begin
                 moments.neutral.pz[iz,ir,isn] = (3.0 * moments.neutral.p[iz,ir,isn] - moments.neutral.pr[iz,ir,isn] - moments.neutral.pzeta[iz,ir,isn])
+            end
             # get particle fluxes (n.b. bad naming convention uz -> means -> n uz here)
             update_neutral_ur!(moments.neutral.ur, moments.neutral.ur_updated,
                                moments.neutral.dens, pdf.neutral.norm, vz, vr, vzeta, z, r,
