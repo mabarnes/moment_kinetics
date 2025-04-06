@@ -37,7 +37,7 @@ for input ∈ [base_input, cheb_input, wall_bc_input, wall_bc_cheb_input]
     push!(inputs_list, x)
     x = recursive_merge(x, OptionsDict("evolve_moments" => OptionsDict("parallel_flow" => true)))
     push!(inputs_list, x)
-    x = recursive_merge(x, OptionsDict("evolve_moments" => OptionsDict("parallel_pressure" => true)))
+    x = recursive_merge(x, OptionsDict("evolve_moments" => OptionsDict("pressure" => true)))
     push!(inputs_list, x)
 end
 
