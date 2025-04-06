@@ -70,9 +70,6 @@ function create_moments_ion(nz, nr, n_species, evolve_density, evolve_upar,
     parallel_flow_updated .= false
     # allocate array used for the parallel pressure
     parallel_pressure = allocate_shared_float(nz, nr, n_species)
-    # allocate array of Bools that indicate if the parallel pressure is updated for each species
-    parallel_pressure_updated = allocate_bool(n_species)
-    parallel_pressure_updated .= false
     # allocate array used for the perpendicular pressure
     perpendicular_pressure = allocate_shared_float(nz, nr, n_species)
     # allocate array used for the temperature
@@ -232,7 +229,7 @@ function create_moments_ion(nz, nr, n_species, evolve_density, evolve_upar,
 
     # return struct containing arrays needed to update moments
     return moments_ion_substruct(density, density_updated, parallel_flow,
-        parallel_flow_updated, parallel_pressure, parallel_pressure_updated,perpendicular_pressure,
+        parallel_flow_updated, parallel_pressure, perpendicular_pressure,
         parallel_heat_flux, parallel_heat_flux_updated, thermal_speed, temperature, 
         chodura_integral_lower, chodura_integral_upper, v_norm_fac,
         ddens_dz, ddens_dz_upwind, d2dens_dz2, dupar_dz, dupar_dz_upwind, d2upar_dz2,
@@ -258,8 +255,6 @@ function create_moments_electron(nz, nr, electron_model, num_diss_params, n_sour
     parallel_flow_updated = Ref(false)
     # allocate array used for the parallel pressure
     parallel_pressure = allocate_shared_float(nz, nr)
-    # allocate Bool variable that indicates if the parallel pressure is updated for each species
-    parallel_pressure_updated = Ref(false)
     # allocate array used for the temperature
     temperature = allocate_shared_float(nz, nr)
     # allocate Bool variable that indicates if the temperature is updated for each species
@@ -325,9 +320,9 @@ function create_moments_electron(nz, nr, electron_model, num_diss_params, n_sour
 
     # return struct containing arrays needed to update moments
     return moments_electron_substruct(density, density_updated, parallel_flow,
-        parallel_flow_updated, parallel_pressure, parallel_pressure_updated, temperature,
-        temperature_updated, parallel_heat_flux, parallel_heat_flux_updated,
-        thermal_speed, parallel_friction_force, external_source_amplitude,
+        parallel_flow_updated, parallel_pressure, temperature, temperature_updated,
+        parallel_heat_flux, parallel_heat_flux_updated, thermal_speed,
+        parallel_friction_force, external_source_amplitude,
         external_source_density_amplitude, external_source_momentum_amplitude,
         external_source_pressure_amplitude, v_norm_fac, ddens_dz, dupar_dz, dp_dz,
         dp_dz_upwind, d2p_dz2, dppar_dz, dqpar_dz, dT_dz, dT_dz_upwind, dvth_dz, dp_dt,
