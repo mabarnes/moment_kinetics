@@ -378,7 +378,7 @@ function update_speed_default!(advect, fields, fvec, moments, vpa, vperp, z, r, 
                 # mu, the adiabatic invariant
                 mu = 0.5*(vperp.grid[ivperp]^2)/Bmag[iz,ir]
                 # bzed = B_z/B
-                advect[is].speed[ivpa,ivperp,iz,ir] = (0.5*bzed[iz,ir]*fields.gEz[ivperp,iz,ir,is] - 
+                advect[is].speed[ivpa,ivperp,iz,ir] = (bzed[iz,ir]*fields.gEz[ivperp,iz,ir,is] -
                                                        mu*bzed[iz,ir]*dBdz[iz,ir])
             end
         end
@@ -407,7 +407,7 @@ function update_speed_n_u_p_evolution!(advect, fields, fvec, moments, vpa, z, r,
             # update parallel acceleration to account for:
             @loop_z_vperp iz ivperp begin
                 @. speed[:,ivperp,iz,ir] =
-                    (0.5 * Ez[iz,ir]
+                    (Ez[iz,ir]
                      - (dupar_dt[iz,ir,is] + (vth[iz,ir,is] * wpa + upar[iz,ir,is]) * dupar_dz[iz,ir,is])
                      - wpa * (dvth_dt[iz,ir,is] + (vth[iz,ir,is] * wpa + upar[iz,ir,is]) * dvth_dz[iz,ir,is])
                     ) / vth[iz,ir,is]
@@ -437,7 +437,7 @@ function update_speed_n_p_evolution!(advect, fields, fvec, moments, vpa, z, r,
             # update parallel acceleration to account for:
             @loop_z_vperp iz ivperp begin
                 @. speed[:,ivperp,iz,ir] =
-                    (0.5 * Ez[iz,ir]
+                    (Ez[iz,ir]
                      - wpa * (dvth_dt[iz,ir,is] + vth[iz,ir,is] * wpa * dvth_dz[iz,ir,is])
                     ) / vth[iz,ir,is]
             end
@@ -466,7 +466,7 @@ function update_speed_n_u_evolution!(advect, fields, fvec, moments, vpa, z, r,
             # update parallel acceleration to account for:
             @loop_z_vperp iz ivperp begin
                 @. speed[:,ivperp,iz,ir] =
-                    (0.5 * Ez[iz,ir]
+                    (Ez[iz,ir]
                      - (dupar_dt[iz,ir,is] + (wpa + upar[iz,ir,is]) * dupar_dz[iz,ir,is])
                     )
             end
