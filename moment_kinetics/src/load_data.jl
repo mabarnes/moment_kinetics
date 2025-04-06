@@ -529,6 +529,9 @@ function load_ion_moments_data(fid; printout=false, extended_moments = false)
     # Read ion species parallel flow
     parallel_flow = load_variable(group, "parallel_flow")
 
+    # Read ion species pressure
+    pressure = load_variable(group, "pressure")
+
     # Read ion species parallel pressure
     parallel_pressure = load_variable(group, "parallel_pressure")
 
@@ -550,9 +553,9 @@ function load_ion_moments_data(fid; printout=false, extended_moments = false)
         println("done.")
     end
     if extended_moments
-        return density, parallel_flow, parallel_pressure, perpendicular_pressure, parallel_heat_flux, thermal_speed, entropy_production
+        return density, parallel_flow, pressure, parallel_pressure, perpendicular_pressure, parallel_heat_flux, thermal_speed, entropy_production
     else
-        return density, parallel_flow, parallel_pressure, parallel_heat_flux, thermal_speed
+        return density, parallel_flow, pressure, parallel_pressure, parallel_heat_flux, thermal_speed
     end
 end
 
@@ -564,6 +567,9 @@ function load_electron_moments_data(fid; printout=false)
     end
 
     group = get_group(fid, "dynamic_data")
+
+    # Read electron pressure
+    pressure = load_variable(group, "electron_pressure")
 
     # Read electron parallel pressure
     parallel_pressure = load_variable(group, "electron_parallel_pressure")
@@ -578,7 +584,7 @@ function load_electron_moments_data(fid; printout=false)
         println("done.")
     end
 
-    return parallel_pressure, parallel_heat_flux, thermal_speed
+    return pressure, parallel_pressure, parallel_heat_flux, thermal_speed
 end
 
 function load_neutral_particle_moments_data(fid; printout=false)
@@ -3630,7 +3636,7 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
         end
         if composition.electron_physics ∈ (braginskii_fluid, kinetic_electrons,
                                            kinetic_electrons_with_temperature_equation)
-            push!(evolving_variables, "electron_parallel_pressure")
+            push!(evolving_variables, "electron_pressure")
         end
         if composition.n_neutral_species > 0
             push!(evolving_variables, "f_neutral")
@@ -4457,7 +4463,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         variable = similar(p)
         get_z_derivative(variable, p)
     elseif variable_name == "dp_dz_upwind"
-        p = get_variable(run_info, "parallel_pressure"; kwargs...)
+        p = get_variable(run_info, "parallel"; kwargs...)
         upar = get_variable(run_info, "parallel_flow"; kwargs...)
         variable = similar(p)
         get_upwind_z_derivative(variable, p, upar)
@@ -4486,7 +4492,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         variable = similar(upar)
         get_electron_z_derivative(variable, upar)
     elseif variable_name == "electron_dp_dz"
-        p = get_variable(run_info, "electron_parallel_pressure"; kwargs...)
+        p = get_variable(run_info, "electron_pressure"; kwargs...)
         variable = similar(p)
         get_electron_z_derivative(variable, p)
     elseif variable_name == "electron_dppar_dz"
@@ -4599,7 +4605,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         variable = @. dnupar_dt / n - upar / n * dn_dt
     elseif variable_name == "dp_dt"
         all_moments = _get_all_moment_variables(run_info; kwargs...)
-        variable = similar(all_moments.parallel_pressure)
+        variable = similar(all_moments.pressure)
         # Define function here to minimise effect type instability due to
         # get_all_moment_variables returning NamedTuples
         function get_dp_dt!(variable, all_moments)
@@ -4627,7 +4633,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         variable = @. 0.5 * vth * (dp_dt / p - dn_dt / n)
     elseif variable_name == "electron_dp_dt"
         all_moments = _get_all_moment_variables(run_info; kwargs...)
-        variable = similar(all_moments.electron_parallel_pressure)
+        variable = similar(all_moments.electron_pressure)
         # Define function here to minimise effect type instability due to
         # get_all_moment_variables returning NamedTuples
         function get_electron_dp_dt!(variable, all_moments)
@@ -4931,7 +4937,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         p = get_variable(run_info, "pressure")
         vth = get_variable(run_info, "thermal_speed")
         dupar_dz = get_z_derivative(run_info, "parallel_flow")
-        dp_dz = get_z_derivative(run_info, "parallel_pressure")
+        dp_dz = get_z_derivative(run_info, "pressure")
         dvth_dz = get_z_derivative(run_info, "thermal_speed")
         dqpar_dz = get_z_derivative(run_info, "parallel_heat_flux")
         if any(x -> x.active, run_info.external_source_settings.ion)
@@ -5089,7 +5095,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         upar = get_variable(run_info, "electron_parallel_flow")
         p = get_variable(run_info, "electron_pressure")
         vth = get_variable(run_info, "electron_thermal_speed")
-        dp_dz = get_z_derivative(run_info, "electron_parallel_pressure")
+        dp_dz = get_z_derivative(run_info, "electron_pressure")
         dvth_dz = get_z_derivative(run_info, "electron_thermal_speed")
         dqpar_dz = get_z_derivative(run_info, "electron_parallel_heat_flux")
         if any(x -> x.active, run_info.external_source_settings.electron)
