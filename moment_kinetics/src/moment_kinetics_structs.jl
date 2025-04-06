@@ -238,8 +238,6 @@ struct moments_electron_substruct{ndim_moment_electron_source}
     dupar_dz::Union{MPISharedArray{mk_float,ndim_moment_electron},Nothing}
     # this is the z-derivative of the pressure
     dp_dz::Union{MPISharedArray{mk_float,ndim_moment_electron},Nothing}
-    # this is the upwinded z-derivative of the pressure
-    dp_dz_upwind::Union{MPISharedArray{mk_float,ndim_moment_electron},Nothing}
     # this is the second-z-derivative of the pressure
     d2p_dz2::Union{MPISharedArray{mk_float,ndim_moment_electron},Nothing}
     # this is the z-derivative of the parallel pressure
