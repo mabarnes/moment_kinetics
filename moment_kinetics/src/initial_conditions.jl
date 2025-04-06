@@ -164,7 +164,7 @@ function init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geo
                 @. moments.ion.ppar = moments.ion.p
                 @. moments.ion.pperp = moments.ion.p
             end
-            if moments.evolve_density || moments.evolve_upar || moments.evolve_ppar
+            if moments.evolve_density || moments.evolve_upar || moments.evolve_p
                 @. moments.ion.constraints_A_coefficient = 1.0
                 @. moments.ion.constraints_B_coefficient = 0.0
                 @. moments.ion.constraints_C_coefficient = 0.0
@@ -191,7 +191,7 @@ function init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geo
                     @. moments.neutral.pr = moments.neutral.p
                     @. moments.neutral.pzeta = moments.neutral.p
                 end
-                if moments.evolve_density || moments.evolve_upar || moments.evolve_ppar
+                if moments.evolve_density || moments.evolve_upar || moments.evolve_p
                     @. moments.neutral.constraints_A_coefficient = 1.0
                     @. moments.neutral.constraints_B_coefficient = 0.0
                     @. moments.neutral.constraints_C_coefficient = 0.0
@@ -208,9 +208,9 @@ function init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geo
         moments.neutral.pz_updated .= true
         # create and initialise the normalised, ion particle distribution function (pdf)
         # such that ∫dwpa pdf.norm = 1, ∫dwpa wpa * pdf.norm = 0, and ∫dwpa wpa^2 * pdf.norm = 1/2
-        # note that wpa = vpa - upar, unless moments.evolve_ppar = true, in which case wpa = (vpa - upar)/vth
+        # note that wpa = vpa - upar, unless moments.evolve_p = true, in which case wpa = (vpa - upar)/vth
         # the definition of pdf.norm changes accordingly from pdf_unnorm / density to pdf_unnorm * vth / density
-        # when evolve_ppar = true.
+        # when evolve_p = true.
         initialize_pdf!(pdf, moments, boundary_distributions, composition, r, z, vperp,
                         vpa, vzeta, vr, vz, vpa_spectral, vz_spectral, species)
 
@@ -220,7 +220,7 @@ function init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geo
         update_ion_qpar!(moments.ion.qpar, moments.ion.qpar_updated,
                      moments.ion.dens, moments.ion.upar, moments.ion.vth, moments.ion.dT_dz,
                      pdf.ion.norm, vpa, vperp, z, r, composition, drift_kinetic_ions, collisions,
-                     moments.evolve_density, moments.evolve_upar, moments.evolve_ppar)
+                     moments.evolve_density, moments.evolve_upar, moments.evolve_p)
 
         @begin_serial_region()
         @serial_region begin
@@ -253,7 +253,7 @@ function init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geo
                                moments.neutral.dens, moments.neutral.uz,
                                moments.neutral.vth, pdf.neutral.norm, vz, vr, vzeta, z,
                                r, composition, moments.evolve_density,
-                               moments.evolve_upar, moments.evolve_ppar)
+                               moments.evolve_upar, moments.evolve_p)
             update_neutral_pz!(moments.neutral.pz, moments.neutral.pz_updated,
                                moments.neutral.dens, moments.neutral.uz,
                                pdf.neutral.norm, vz, vr, vzeta, z, r, composition,
@@ -531,7 +531,7 @@ function initialize_pdf!(pdf, moments, boundary_distributions, composition, r, z
                     moments.ion.upar[:,ir,is], moments.ion.ppar[:,ir,is],
                     moments.ion.vth[:,ir,is],
                     moments.ion.v_norm_fac[:,ir,is], moments.evolve_density,
-                    moments.evolve_upar, moments.evolve_ppar)
+                    moments.evolve_upar, moments.evolve_p)
             end
             @views wall_flux_0[ir,is] = -(moments.ion.dens[1,ir,is] *
                                           moments.ion.upar[1,ir,is])
@@ -557,7 +557,7 @@ function initialize_pdf!(pdf, moments, boundary_distributions, composition, r, z
                 moments.neutral.dens[:,ir,isn], moments.neutral.uz[:,ir,isn],
                 moments.neutral.pz[:,ir,isn], moments.neutral.vth[:,ir,isn],
                 moments.neutral.v_norm_fac[:,ir,isn], moments.evolve_density,
-                moments.evolve_upar, moments.evolve_ppar,
+                moments.evolve_upar, moments.evolve_p,
                 wall_flux_0[ir,min(isn,composition.n_ion_species)],
                 wall_flux_L[ir,min(isn,composition.n_ion_species)])
             @loop_z iz begin
@@ -681,7 +681,7 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
         # now that we have our initial guess for the electron pdf, we iterate
         # using the time-independent electron kinetic equation to find a self-consistent
         # solution for the electron pdf.
-        # First run with evolve_ppar=true to get electron_ppar close to steady state.
+        # First run with evolve_p=true to get electron_ppar close to steady state.
         # electron_ppar does not have to be exactly steady state as it will be
         # time-evolved along with the ions.
         #max_electron_pdf_iterations = 2000000
@@ -694,7 +694,7 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
             io_electron = setup_electron_io(t_params.electron.debug_io[1], vpa, vperp, z,
                                             r, composition, collisions,
                                             moments.evolve_density, moments.evolve_upar,
-                                            moments.evolve_ppar, external_source_settings,
+                                            moments.evolve_p, external_source_settings,
                                             t_params.electron,
                                             t_params.electron.debug_io[2], -1, nothing,
                                             "electron_debug")
@@ -717,7 +717,7 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
                                                     composition, collisions,
                                                     moments.evolve_density,
                                                     moments.evolve_upar,
-                                                    moments.evolve_ppar,
+                                                    moments.evolve_p,
                                                     external_source_settings,
                                                     t_params.electron, input_dict,
                                                     restart_time_index,
@@ -743,7 +743,7 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
                                                 io_electron=io_initial_electron,
                                                 initial_time=code_time,
                                                 residual_tolerance=t_input["initialization_residual_value"],
-                                                evolve_ppar=true,
+                                                evolve_p=true,
                                                 solution_method=electron_solution_method)
                 if success != ""
                     error("!!!max number of iterations for electron pdf update exceeded!!!\n"
@@ -751,7 +751,7 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
                 end
             end
 
-            # Now run without evolve_ppar=true to get pdf_electron fully to steady state,
+            # Now run without evolve_p=true to get pdf_electron fully to steady state,
             # ready for the start of the ion time advance.
             if global_rank[] == 0
                 println("Initializing electrons - evolving pdf_electron only to steady state")
@@ -819,7 +819,7 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
                                          max_electron_pdf_iterations,
                                          max_electron_sim_time;
                                          io_electron=io_initial_electron,
-                                         evolve_ppar=true, ion_dt=t_params.dt[],
+                                         evolve_p=true, ion_dt=t_params.dt[],
                                          solution_method=electron_solution_method)
             end
             if success != ""
@@ -1131,7 +1131,7 @@ end
 """
 function init_ion_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
         vpa_spectral, density, upar, ppar, vth, v_norm_fac, evolve_density, evolve_upar,
-        evolve_ppar)
+        evolve_p)
 
     # Prefactor for Maxwellian distribution functions
     if vperp.n == 1
@@ -1144,18 +1144,18 @@ function init_ion_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
         if z.bc != "wall"
             for iz ∈ 1:z.n
                 # obtain (vpa - upar)/vth
-                if evolve_ppar
-                    # if evolve_upar = true and evolve_ppar = true, then vpa coordinate is (vpa-upar)/vth;
+                if evolve_p
+                    # if evolve_upar = true and evolve_p = true, then vpa coordinate is (vpa-upar)/vth;
                     if evolve_upar
                         @. vpa.scratch = vpa.grid
-                        # if evolve_upar = false and evolve_ppar = true, then vpa coordinate is vpa/vth;
+                        # if evolve_upar = false and evolve_p = true, then vpa coordinate is vpa/vth;
                     else
                         @. vpa.scratch = vpa.grid - upar[iz]/vth[iz]
                     end
-                    # if evolve_upar = true and evolve_ppar = false, then vpa coordinate is vpa-upar;
+                    # if evolve_upar = true and evolve_p = false, then vpa coordinate is vpa-upar;
                 elseif evolve_upar
                     @. vpa.scratch = vpa.grid/vth[iz]
-                    # if evolve_upar = false and evolve_ppar = false, then vpa coordinate is vpa;
+                    # if evolve_upar = false and evolve_p = false, then vpa coordinate is vpa;
                 else
                     @. vpa.scratch = (vpa.grid - upar[iz])/vth[iz]
                 end
@@ -1327,7 +1327,7 @@ function init_ion_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
             # distribution function (which will be modified from the input moments).
             convert_full_f_ion_to_normalised!(pdf, density, upar, ppar, vth, vperp, vpa,
                                               vpa_spectral, evolve_density, evolve_upar,
-                                              evolve_ppar, vgrid_scale_factor)
+                                              evolve_p, vgrid_scale_factor)
 
             if !evolve_density
                 # Need to divide out density to return pdf/density
@@ -1385,7 +1385,7 @@ end
 """
 function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, composition,
         vz, vr, vzeta, z, vz_spectral, density, uz, pz, vth, v_norm_fac, evolve_density,
-        evolve_upar, evolve_ppar, wall_flux_0, wall_flux_L)
+        evolve_upar, evolve_p, wall_flux_0, wall_flux_L)
 
     zero = 1.0e-14
 
@@ -1404,18 +1404,18 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
         if z.bc != "wall"
             for iz ∈ 1:z.n
                 # obtain (vz - uz)/vth
-                if evolve_ppar
-                    # if evolve_upar = true and evolve_ppar = true, then vz coordinate is (vz-uz)/vth;
+                if evolve_p
+                    # if evolve_upar = true and evolve_p = true, then vz coordinate is (vz-uz)/vth;
                     if evolve_upar
                         @. vz.scratch = vz.grid
-                        # if evolve_upar = false and evolve_ppar = true, then vz coordinate is vz/vth;
+                        # if evolve_upar = false and evolve_p = true, then vz coordinate is vz/vth;
                     else
                         @. vz.scratch = vz.grid - uz[iz]/vth[iz]
                     end
-                    # if evolve_upar = true and evolve_ppar = false, then vz coordinate is vz-uz;
+                    # if evolve_upar = true and evolve_p = false, then vz coordinate is vz-uz;
                 elseif evolve_upar
                     @. vz.scratch = vz.grid/vth[iz]
-                    # if evolve_upar = false and evolve_ppar = false, then vz coordinate is vz;
+                    # if evolve_upar = false and evolve_p = false, then vz coordinate is vz;
                 else
                     @. vz.scratch = (vz.grid - uz[iz])/vth[iz]
                 end
@@ -1698,7 +1698,7 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
             # distribution function (which will be modified from the input moments).
             convert_full_f_neutral_to_normalised!(pdf, density, uz, pz, vth, vzeta, vr,
                                                   vz, vz_spectral, evolve_density,
-                                                  evolve_upar, evolve_ppar,
+                                                  evolve_upar, evolve_p,
                                                   vgrid_scale_factor)
 
             if !evolve_density
@@ -1855,7 +1855,7 @@ function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, 
     update_upar!(moments.ion.upar, moments.ion.upar_updated,
                  moments.ion.dens, moments.ion.ppar, pdf.ion.norm,
                  vpa, vperp, z, r, composition, moments.evolve_density,
-                 moments.evolve_ppar)
+                 moments.evolve_p)
     update_ppar!(moments.ion.ppar, moments.ion.ppar_updated,
                  moments.ion.dens, moments.ion.upar, pdf.ion.norm,
                  vpa, vperp, z, r, composition, moments.evolve_density,
@@ -1865,7 +1865,7 @@ function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, 
                  moments.ion.dens, moments.ion.upar,
                  moments.ion.vth, moments.ion.dT_dz, pdf.ion.norm, vpa, vperp, z, r,
                  composition, drift_kinetic_ions, collisions, moments.evolve_density, moments.evolve_upar,
-                 moments.evolve_ppar)
+                 moments.evolve_p)
     update_vth!(moments.ion.vth, moments.ion.p, moments.ion.dens, vperp, z, r, composition)
 
     if n_neutral_species > 0
