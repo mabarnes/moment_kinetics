@@ -1317,7 +1317,7 @@ function calculate_ion_moment_derivatives!(moments, scratch, scratch_dummy, z, z
     density = scratch.density
     upar = scratch.upar
     p = scratch.p
-    ppar = scratch.ppar
+    ppar = moments.ion.ppar
     qpar = moments.ion.qpar
     vth = moments.ion.vth
     dummy_zrs = scratch_dummy.dummy_zrs
@@ -2112,7 +2112,7 @@ function calculate_neutral_moment_derivatives!(moments, scratch, scratch_dummy, 
     density = scratch.density_neutral
     uz = scratch.uz_neutral
     p = scratch.p_neutral
-    pz = scratch.pz_neutral
+    pz = moments.neutral.pz
     qz = moments.neutral.qz
     vth = moments.neutral.vth
     dummy_zrsn = scratch_dummy.dummy_zrsn
