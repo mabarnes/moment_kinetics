@@ -750,7 +750,7 @@ function get_v2_moment(ff, vpa, vperp, upar)
     return integral((vperp,vpa)->((vpa - upar)^2 + vperp^2), ff, vperp, vpa )
 end
 
-function get_p(ff, density, upar, vpa, vperp, upar, evolve_density, evolve_upar)
+function get_p(ff, density, upar, vpa, vperp, evolve_density, evolve_upar)
     # Integrating calculates
     # (p/mref nref Tref) = ∫d^3(v/cref) (1/3 * (vpa-upar)/cref)^2 * (f_s cref^3 / nref)
     # the internal energy density (aka pressure of f_s)
@@ -781,7 +781,6 @@ function update_ppar!(ppar, density, upar, p, pdf, vpa, vperp, z, r, composition
         @views update_ppar_species!(ppar[:,:,is], density[:,:,is], upar[:,:,is],
                                     p[:,:,is], pdf[:,:,:,:,is], vpa, vperp, z, r,
                                     evolve_density, evolve_upar, evolve_p)
-        end
     end
 end
 
@@ -1077,8 +1076,8 @@ function calculate_ion_qpar_from_coll_krook!(qpar, density, upar, vth, dT_dz, z,
     return nothing
 end
 
-function get_qpar(ff, density, upar, p, vth, vpa, vperp, upar, dummy_vpavperp,
-                  evolve_density, evolve_upar, evolve_p)
+function get_qpar(ff, density, upar, p, vth, vpa, vperp, dummy_vpavperp, evolve_density,
+                  evolve_upar, evolve_p)
     if evolve_p
         return 0.5 * density * vth^3
                integral((vperp,vpa) -> vpa*(vpa^2 + vperp^2), ff, vperp, vpa)
@@ -1276,8 +1275,8 @@ function update_chodura!(moments,ff,vpa,vperp,z,r,r_spectral,composition,geometr
         end
     end
 end
-"""
 
+"""
 compute the integral needed for the generalised Chodura condition
 
  IChodura = (Z^2 vBohm^2 / cref^2) * int ( f bz^2 / vz^2 + dfdr*rhostar/vz )
