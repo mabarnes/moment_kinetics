@@ -234,7 +234,7 @@ function create_moments_ion(nz, nr, n_species, evolve_density, evolve_upar,
         chodura_integral_lower, chodura_integral_upper, v_norm_fac,
         ddens_dz, ddens_dz_upwind, d2dens_dz2, dupar_dz, dupar_dz_upwind, d2upar_dz2,
         dp_dz, dp_dz_upwind, d2p_dz2, dppar_dz, dqpar_dz, dvth_dz, dT_dz, ddens_dt,
-        dupar_dt, dnupar_dt, dppar_dt, dvth_dt, entropy_production,
+        dupar_dt, dnupar_dt, dp_dt, dvth_dt, entropy_production,
         external_source_amplitude, external_source_density_amplitude,
         external_source_momentum_amplitude, external_source_pressure_amplitude,
         external_source_controller_integral, constraints_A_coefficient,
@@ -1137,7 +1137,7 @@ which we can calculate by applying the chain rule.
 
 For electrons the kinetic equation that is solved for the shape function is simplified by
 using \$\\sqrt{m_e/m_i}\$ as a small parameter _after_ substituting in the moment
-equations. Therefore it is not possible (or at least not convenient) to use `dppar_dt`
+equations. Therefore it is not possible (or at least not convenient) to use `dp_dt`
 as calculated from the moment equation. The electron moment time derivatives may still be
 useful as diagnostics, so we calculate them anyway, including the derived versions
 (calculated in this function), similar to the ion moment time derivatives.
@@ -1149,7 +1149,7 @@ rule calculations in this function, even though analytically it would contribute
 the contribution would be small in sqrt(me/mi)). Another way of saying this is that due to
 the operator splitting, the time derivatives during the implicit step are done with the
 explicit variables (density in particular) held fixed, and so
-`dvth_dt|_n = 0.5 * vth * dppar_dt / ppar`.
+`dvth_dt|_n = 0.5 * vth * dp_dt / ppar`.
 """
 function update_derived_electron_moment_time_derivatives!(ppar, moments, electron_physics)
     @begin_r_z_region()
