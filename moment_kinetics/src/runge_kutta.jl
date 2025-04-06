@@ -380,7 +380,7 @@ function rk_update_evolved_moments!(scratch, scratch_implicit, moments, t_params
     end
 
     # if separately evolving the parallel pressure, update using RK;
-    if moments.evolve_ppar
+    if moments.evolve_p
         rk_update_variable!(scratch, scratch_implicit, :ppar, t_params, istage)
     end
 
@@ -423,7 +423,7 @@ function rk_update_evolved_moments_neutral!(scratch, scratch_implicit, moments, 
     end
 
     # if separately evolving the parallel pressure, update using RK;
-    if moments.evolve_ppar
+    if moments.evolve_p
         rk_update_variable!(scratch, scratch_implicit, :pz_neutral, t_params, istage;
                             neutrals=true)
     end
