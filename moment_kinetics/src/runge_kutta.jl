@@ -381,7 +381,7 @@ function rk_update_evolved_moments!(scratch, scratch_implicit, moments, t_params
 
     # if separately evolving the parallel pressure, update using RK;
     if moments.evolve_p
-        rk_update_variable!(scratch, scratch_implicit, :ppar, t_params, istage)
+        rk_update_variable!(scratch, scratch_implicit, :p, t_params, istage)
     end
 end
 
@@ -393,7 +393,7 @@ function rk_update_evolved_moments_electron!(scratch, scratch_implicit, moments,
                                              istage)
     # For now, electrons always fully moment kinetic, and ppar is the only evolving moment
     # (density and upar are calculated from quasineutrality and ambipolarity constraints).
-    rk_update_variable!(scratch, scratch_implicit, :ppar_electron, t_params, istage)
+    rk_update_variable!(scratch, scratch_implicit, :p_electron, t_params, istage)
 end
 
 """
@@ -416,7 +416,7 @@ function rk_update_evolved_moments_neutral!(scratch, scratch_implicit, moments, 
 
     # if separately evolving the parallel pressure, update using RK;
     if moments.evolve_p
-        rk_update_variable!(scratch, scratch_implicit, :pz_neutral, t_params, istage;
+        rk_update_variable!(scratch, scratch_implicit, :p_neutral, t_params, istage;
                             neutrals=true)
     end
 end
