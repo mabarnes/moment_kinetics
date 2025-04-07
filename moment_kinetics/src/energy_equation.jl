@@ -24,7 +24,7 @@ evolve the parallel pressure by solving the energy equation
         dp_dt[iz,ir,is] = (-fvec.upar[iz,ir,is]*moments.ion.dp_dz_upwind[iz,ir,is]
                            -fvec.p[iz,ir,is]*moments.ion.dupar_dz[iz,ir,is]
                            - 2.0/3.0*moments.ion.dqpar_dz[iz,ir,is]
-                           - 2.0/3.0*fvec.ppar[iz,ir,is]*moments.ion.dupar_dz[iz,ir,is])
+                           - 2.0/3.0*moments.ion.ppar[iz,ir,is]*moments.ion.dupar_dz[iz,ir,is])
     end
 
 
@@ -91,7 +91,7 @@ evolve the neutral parallel pressure by solving the energy equation
         dp_dt[iz,ir,isn] = (-fvec.uz_neutral[iz,ir,isn]*moments.neutral.dp_dz_upwind[iz,ir,isn]
                             -fvec.p_neutral[iz,ir,isn]*moments.neutral.duz_dz_upwind[iz,ir,isn]
                             - 2.0/3.0*moments.neutral.dqz_dz[iz,ir,isn]
-                            - 2.0/3.0*fvec.pz_neutral[iz,ir,isn]*moments.neutral.duz_dz[iz,ir,isn])
+                            - 2.0/3.0*moments.neutral.pz[iz,ir,isn]*moments.neutral.duz_dz[iz,ir,isn])
     end
 
     for index ∈ eachindex(neutral_source_settings)
