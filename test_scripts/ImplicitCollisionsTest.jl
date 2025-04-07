@@ -9,14 +9,12 @@ using LinearAlgebra: lu, ldiv!, mul!
 import moment_kinetics
 using moment_kinetics.array_allocation: allocate_float, allocate_shared_float
 using moment_kinetics.coordinates: define_coordinate
-using moment_kinetics.chebyshev: setup_chebyshev_pseudospectral
 using moment_kinetics.gauss_legendre: setup_gausslegendre_pseudospectral, get_QQ_local!
 using moment_kinetics.type_definitions: mk_float, mk_int, OptionsDict
 using moment_kinetics.fokker_planck: init_fokker_planck_collisions_weak_form
-using moment_kinetics.fokker_planck: fokker_planck_self_collision_operator_weak_form!
-using moment_kinetics.fokker_planck: setup_fp_nl_solve, setup_fkpl_collisions_input
-using moment_kinetics.fokker_planck_calculus: enforce_vpavperp_BCs!, calculate_test_particle_preconditioner!
-using moment_kinetics.fokker_planck_calculus: calculate_vpavperp_advection_terms!
+using moment_kinetics.fokker_planck: setup_fp_nl_solve, setup_fkpl_collisions_input,
+                                     implicit_ion_fokker_planck_self_collisions!,
+                                     fokker_planck_self_collisions_backward_euler_step!
 using moment_kinetics.fokker_planck_test: F_Maxwellian, print_test_data
 using moment_kinetics.calculus: derivative!
 using moment_kinetics.velocity_moments: get_density, get_upar, get_ppar, get_pperp, get_pressure
@@ -428,164 +426,6 @@ function test_implicit_collisions_wrapper(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=
     if plot_test_output
         @views diagnose_F_gif(fvpavperpzrst[:,:,1,1,1,:],vpa,vperp,ntime)
     end    
-end
-
-function implicit_ion_fokker_planck_self_collisions!(pdf_out, pdf_in, dSdt, 
-        composition, collisions, fkpl_arrays, 
-        vpa, vperp, z, r, delta_t, spectral_objects,
-        nl_solver_params; diagnose_entropy_production=false,
-        test_linearised_advance=false,
-        test_particle_preconditioner=false,
-        use_Maxwellian_Rosenbluth_coefficients_in_preconditioner=false)
-    # bounds checking
-    n_ion_species = composition.n_ion_species
-    @boundscheck vpa.n == size(pdf_out,1) || throw(BoundsError(pdf_out))
-    @boundscheck vperp.n == size(pdf_out,2) || throw(BoundsError(pdf_out))
-    @boundscheck z.n == size(pdf_out,3) || throw(BoundsError(pdf_out))
-    @boundscheck r.n == size(pdf_out,4) || throw(BoundsError(pdf_out))
-    @boundscheck n_ion_species == size(pdf_out,5) || throw(BoundsError(pdf_out))
-    @boundscheck vpa.n == size(pdf_in,1) || throw(BoundsError(pdf_in))
-    @boundscheck vperp.n == size(pdf_in,2) || throw(BoundsError(pdf_in))
-    @boundscheck z.n == size(pdf_in,3) || throw(BoundsError(pdf_in))
-    @boundscheck r.n == size(pdf_in,4) || throw(BoundsError(pdf_in))
-    @boundscheck n_ion_species == size(pdf_in,5) || throw(BoundsError(pdf_in))
-    @boundscheck z.n == size(dSdt,1) || throw(BoundsError(dSdt))
-    @boundscheck r.n == size(dSdt,2) || throw(BoundsError(dSdt))
-    @boundscheck n_ion_species == size(dSdt,3) || throw(BoundsError(dSdt))
-
-    # diagnostic parameter for user
-    success = true
-    
-    # masses and collision frequencies
-    ms, msp = 1.0, 1.0 # generalise!
-    nuref = collisions.fkpl.nuii # generalise!
-    Zi = collisions.fkpl.Zi # generalise!
-    nuss = nuref*(Zi^4) # include charge number factor for self collisions
-    use_conserving_corrections = collisions.fkpl.use_conserving_corrections
-    boundary_data_option = collisions.fkpl.boundary_data_option
-
-    # coords for vperp vpa newton_solve!
-    coords = (vperp=vperp,vpa=vpa)
-    # N.B. parallelisation using special 'anyv' region
-    @begin_s_r_z_anyv_region()
-    @loop_s_r_z is ir iz begin
-        @views Fold = pdf_in[:,:,iz,ir,is]
-        local_success = fokker_planck_self_collisions_backward_euler_step!(Fold, delta_t, ms, nuss, fkpl_arrays,
-                            coords, spectral_objects,
-                            nl_solver_params;
-                            test_numerical_conserving_terms=use_conserving_corrections,
-                            test_linearised_advance=test_linearised_advance,
-                            test_particle_preconditioner=test_particle_preconditioner,
-                            use_Maxwellian_Rosenbluth_coefficients_in_preconditioner=use_Maxwellian_Rosenbluth_coefficients_in_preconditioner,
-                            boundary_data_option=boundary_data_option)
-        # global success true only if local_success true
-        success = success && local_success
-        # store Fnew = F^n+1 in the appropriate distribution function array
-        @begin_anyv_vperp_vpa_region()
-        CC = fkpl_arrays.CC
-        Fnew = fkpl_arrays.Fnew
-        @loop_vperp_vpa ivperp ivpa begin
-            pdf_out[ivpa,ivperp,iz,ir,is] = Fnew[ivpa,ivperp]
-        end
-
-        if diagnose_entropy_production
-            # assign dummy array
-            lnfC = fkpl_arrays.rhsvpavperp
-            @loop_vperp_vpa ivperp ivpa begin
-                lnfC[ivpa,ivperp] = log(abs(pdf_out[ivpa,ivperp,iz,ir,is]) + 1.0e-15)*CC[ivpa,ivperp]
-            end
-            @begin_anyv_region()
-            @anyv_serial_region begin
-                dSdt[iz,ir,is] = -get_density(lnfC,vpa,vperp)
-            end
-        end
-    end
-    return success
-end
-
-function fokker_planck_self_collisions_backward_euler_step!(Fold, delta_t, ms, nuss, fkpl_arrays,
-    coords, spectral,
-    nl_solver_params;
-    test_numerical_conserving_terms=false,
-    test_linearised_advance=false,
-    test_particle_preconditioner=false,
-    use_Maxwellian_Rosenbluth_coefficients_in_preconditioner=false,
-    boundary_data_option=multipole_expansion)
-    
-    vperp, vperp_spectral = coords.vperp, spectral.vperp_spectral
-    vpa, vpa_spectral = coords.vpa, spectral.vpa_spectral
-    
-    # residual function to be used for Newton-Krylov
-    # residual(vpa, vperp) = F^(n+1) - F^n - dt * C[F^n+1,F^n+1]
-    function residual_func!(Fresidual, Fnew; krylov=false)
-        fokker_planck_self_collision_operator_weak_form!(
-                         Fnew, ms, nuss,
-                         fkpl_arrays, vperp, vpa,
-                         vperp_spectral, vpa_spectral; 
-                         boundary_data_option=boundary_data_option,
-                         use_conserving_corrections=test_numerical_conserving_terms)
-
-        @begin_anyv_vperp_vpa_region()
-        @loop_vperp_vpa ivperp ivpa begin
-            Fresidual[ivpa,ivperp] = Fnew[ivpa,ivperp] - Fold[ivpa,ivperp] - delta_t * (fkpl_arrays.CC[ivpa,ivperp])
-        end
-        return nothing
-    end
-    
-    if test_particle_preconditioner
-        # test particle preconditioner CC2D_sparse is the matrix
-        # K_ijkl = int phi_i(vpa)phi_j(vperp) ( phi_k(vpa)phi_l(vperp) - dt C[ phi_k(vpa)phi_l(vperp) , F^n(vpa,vperp) ])  vperp d vperp d vpa,
-        # such that K * F^n+1 = M * F^n advances the linearised collision operator due
-        # to test particle collisions only (differential piece of C).
-        # CC2D_sparse is the approximate Jacobian for the residual Fresidual.
-        calculate_test_particle_preconditioner!(Fold,delta_t,ms,ms,nuss,
-            vpa,vperp,vpa_spectral,vperp_spectral,fkpl_arrays, 
-            use_Maxwellian_Rosenbluth_coefficients=use_Maxwellian_Rosenbluth_coefficients_in_preconditioner,
-            boundary_data_option=boundary_data_option)
-      
-        # LU decomposition of the approximate Jacobian
-        lu_CC = lu(fkpl_arrays.CC2D_sparse) 
-        function test_particle_precon!(x)
-            # function to solve K * F^n+1 = M * F^n
-            # and return F^n+1 in place in x
-            pdf = x
-            pdf_scratch = fkpl_arrays.rhsvpavperp
-            pdf_dummy = fkpl_arrays.S_dummy
-            MM2D_sparse = fkpl_arrays.MM2D_sparse
-            @begin_anyv_region()
-            @anyv_serial_region begin
-                @views @. pdf_scratch = pdf
-                pdf_c = vec(pdf)
-                pdf_scratch_c = vec(pdf_scratch)
-                pdf_dummy_c = vec(pdf_dummy)
-                mul!(pdf_dummy_c, MM2D_sparse, pdf_scratch_c)
-                ldiv!(pdf_c,lu_CC,pdf_dummy_c)
-            end
-            return nothing
-        end 
-        right_preconditioner = test_particle_precon!
-    else
-        right_preconditioner = nothing
-    end
-    # initial condition for Fnew for JFNK or linearised advance below
-    Fnew = fkpl_arrays.Fnew
-    @begin_anyv_vperp_vpa_region()
-    @loop_vperp_vpa ivperp ivpa begin
-        Fnew[ivpa,ivperp] = Fold[ivpa,ivperp]
-    end
-    if test_linearised_advance
-        test_particle_precon!(Fnew)
-    else
-        Fresidual = fkpl_arrays.Fresidual
-        F_delta_x = fkpl_arrays.F_delta_x
-        F_rhs_delta = fkpl_arrays.F_rhs_delta
-        Fv = fkpl_arrays.Fv
-        Fw = fkpl_arrays.Fw
-        success = newton_solve!(Fnew, residual_func!, Fresidual, F_delta_x, F_rhs_delta, Fv, Fw, nl_solver_params;
-                    coords, right_preconditioner=right_preconditioner)
-    end
-    @_anyv_subblock_synchronize()
-    return success
 end    
 
 function field_solve!(Ez, phi, density, Te, Ne, Fold, vpa, vperp, z, z_spectral)
