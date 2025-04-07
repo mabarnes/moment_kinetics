@@ -3373,6 +3373,7 @@ function calculate_rosenbluth_potentials_via_elliptic_solve!(GG,HH,dHdvpa,dHdvpe
                             vperp)
         end
     end
+    @_anyv_subblock_synchronize
     return nothing
 end
 
