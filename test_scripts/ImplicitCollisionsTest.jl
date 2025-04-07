@@ -415,9 +415,9 @@ function test_implicit_collisions_wrapper(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=
         # diagnose Fold
         time += delta_t
         @views diagnose_F_Maxwellian(fvpavperpzrs_old[:,:,1,1,1],Fdummy1,Fdummy2,Fdummy3,vpa,vperp,time,ms,it)
-        println("dSdt = ", dSdt[1,1,1])
         # update outputs
         @serial_region begin
+            println("dSdt = ", dSdt[1,1,1])
             @loop_s_r_z is ir iz begin
                 @loop_vperp_vpa ivperp ivpa begin
                     fvpavperpzrst[ivpa,ivperp,iz,ir,is,it+1] = fvpavperpzrs_old[ivpa,ivperp,iz,ir,is]
@@ -684,7 +684,10 @@ if abspath(PROGRAM_FILE) == @__FILE__
     using Pkg
     Pkg.activate(".")
     
-    test_implicit_collisions(ngrid=3,nelement_vpa=8,nelement_vperp=4,ntime=50,delta_t=1.0,
-      serial_solve=false,anyv_region=true,plot_test_output=false,
-      test_numerical_conserving_terms=true)
+    # test_implicit_collisions(ngrid=3,nelement_vpa=8,nelement_vperp=4,ntime=50,delta_t=1.0,
+    #   serial_solve=false,anyv_region=true,plot_test_output=false,
+    #   test_numerical_conserving_terms=true)
+    test_implicit_collisions_wrapper(test_particle_preconditioner=true,test_numerical_conserving_terms=true,
+    vth0=0.5,vperp0=1.0,vpa0=1.0, nelement_vpa=8,nelement_vperp=4,Lvpa=8.0,Lvperp=4.0,
+     ntime=1, delta_t = 1.0, ngrid=5, test_linearised_advance=false, use_end_of_step_corrections=true)
 end
