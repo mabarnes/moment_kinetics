@@ -1736,7 +1736,9 @@ temperature was taken to be $\check T_\mathrm{ref} = T_e$, but this was later
 generalised in the code to an arbitrary $\check T_\mathrm{ref}$ to allow
 non-constant electron temperature (with Braginskii or kinetic electrons) or for
 varying the constant electron temperature of the Boltzmann response without
-re-scaling the rest of the dimensionless variables.
+re-scaling the rest of the dimensionless variables. Temperatures were
+de-dimensionalised using $\check T_\mathrm{ref}$, not $\check m_\mathrm{ref}
+\check c_\mathrm{ref}^2$.
 
 In this section, denote dimensionless variables of the original version's
 conventions with a $\mathring{\cdot}$.
@@ -1757,6 +1759,14 @@ potential was defined using $\check T_\mathrm{ref}$, as
 $\mathring \phi = e \phi / \check T_\mathrm{ref}$, not using
 $m_i \check c_\mathrm{ref}^2$ that was used for temperatures.
 
+In the original, for 1D1V runs the input temperatures were $T_{s\parallel}$ not
+$T_s$, whereas in the updated version the input temperatures are always $T_s$,
+which for 1D1V is $T_s = T_{s\parallel}/3$. However the electron temperature
+$T_e$, which is used when calculating the electrostatic potential using the
+Boltzmann response, is constant and is effectively always $T_{e\parallel}$
+which is assumed equal to $T_e$ for Boltzmann response (i.e. do not assume
+$T_{e\perp}=0$ for Boltzmann electrons in 1D1V).
+
 Using these definitions, the old dimensionless variables in terms of the
 physical variables and of the current dimensionless variables (where we assume
 for the conversion that $\check n_\mathrm{ref} = n_\mathrm{ref}$,
@@ -1765,8 +1775,6 @@ $\check B_\mathrm{ref} = B_\mathrm{ref}$) are, listing the ones with
 differences first
 ```math
 \begin{alignat}{2}
-\mathring{T}_s &= \frac{T_s}{m_i \check{c}_\mathrm{ref}^2} = \frac{T_s}{2 \check{T}_\mathrm{ref}} = \frac{\hat{T}_s}{2}
-    && \hat{T}_s = 2 \mathring{T}_s \\
 \mathring{v}_{Ts} &= \frac{\check{v}_{Ts}}{\check{c}_\mathrm{ref}} = \frac{\sqrt{3} v_{Ts}}{\sqrt{2} c_\mathrm{ref}} = \sqrt{\frac{3}{2}} \hat{v}_{Ts}
     && \hat{v}_{Ts} = \sqrt{\frac{2}{3}} \mathring{v}_{Ts} \\
 \mathring{f}_s &= \frac{\pi^{3/2} \check{c}_\mathrm{ref}^3}{\check{n}_\mathrm{ref}} f_s = \frac{(2 \pi)^{3/2} c_\mathrm{ref}^3}{n_\mathrm{ref}} f_s = (2 \pi)^{3/2} \hat{f}_s
@@ -1815,6 +1823,8 @@ differences first
     && \hat{S}_{s,p} = \frac{2 \sqrt{2}}{3} \mathring{S}_{s,p_\parallel} \\
 \mathring{n}_s &= \frac{n_s}{\check{n}_\mathrm{ref}} = \hat{n}_s
     && \hat{n}_s = \mathring{n}_s \\
+\mathring{T}_s &= \frac{T_s}{\check{T}_\mathrm{ref}} = \frac{T_s}{\check{T}_\mathrm{ref}} = \hat{T}_s
+    && \hat{T}_s = \mathring{T}_s \\
 \mathring{L}_z &= \frac{L_z}{\check{L}_\mathrm{ref}} = \hat{L}_z
     && \hat{L}_z = \mathring{L}_z \\
 \mathring{B} &= \frac{B}{\check{B}_\mathrm{ref}} = \hat{B}
