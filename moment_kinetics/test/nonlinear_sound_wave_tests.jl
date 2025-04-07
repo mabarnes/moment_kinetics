@@ -90,7 +90,7 @@ function run_test(test_input, rtol, atol, upar_rtol=nothing; args...)
             # load velocity moments data
             n_ion_zrst = postproc_load_variable(run_info, "density")
             upar_ion_zrst = postproc_load_variable(run_info, "parallel_flow")
-            ppar_ion_zrst = postproc_load_variable(run_info, "pressure")
+            ppar_ion_zrst = postproc_load_variable(run_info, "parallel_pressure")
             qpar_ion_zrst = postproc_load_variable(run_info, "parallel_heat_flux")
             v_t_ion_zrst = postproc_load_variable(run_info, "thermal_speed")
             n_neutral_zrst = postproc_load_variable(run_info, "density_neutral")
@@ -217,7 +217,7 @@ function run_test(test_input, rtol, atol, upar_rtol=nothing; args...)
                 newgrid_ppar_ion = interpolate_to_grid_z(expected.z, ppar_ion[:, :, tind], z, z_spectral)
                 @test isapprox(expected.ppar_ion[:, tind], newgrid_ppar_ion[:,1], rtol=rtol)
 
-                newgrid_vth_ion = @. sqrt(2.0*newgrid_ppar_ion/newgrid_n_ion)
+                newgrid_vth_ion = @. sqrt(2.0*newgrid_ppar_ion/3.0/newgrid_n_ion) # Divide by 3 because vth is defined with the full pressure, which for 1D1V where T_⟂=0 is T=T_∥/3
                 newgrid_f_ion = interpolate_to_grid_z(expected.z, f_ion[:, :, :, tind], z, z_spectral)
                 temp = newgrid_f_ion
                 newgrid_f_ion = fill(NaN, length(expected.vpa),
