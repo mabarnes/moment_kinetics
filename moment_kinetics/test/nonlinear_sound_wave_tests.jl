@@ -132,7 +132,7 @@ function run_test(test_input, rtol, atol, upar_rtol=nothing; args...)
                     f_neutral[:,iz,isn,it] .*= n_neutral[iz,isn,it]
                 end
             end
-            if input["evolve_moments"]["parallel_pressure"]
+            if input["evolve_moments"]["pressure"]
                 for it ∈ 1:length(time), is ∈ 1:n_ion_species, iz ∈ 1:z.n
                     f_ion[:,iz,is,it] ./= v_t_ion[iz,is,it]
                 end
