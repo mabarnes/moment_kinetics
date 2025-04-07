@@ -217,40 +217,19 @@ const sections_update_map = OptionsDict(
                                  ),
    )
 
-PR322_T = (x) -> 2*x
-PR322_T_1V = (x) -> 2*x/3 # Inputs before PR322 were T_∥ values, but after are T values (for 1D1V T=T_∥/3)
+PR322_p = (x) -> 2 * x
+PR322_T_1V = (x) -> x/3 # Inputs before PR322 were T_∥ values, but after are T values (for 1D1V T=T_∥/3)
 PR322_v = (x) -> sqrt(2)*x
 PR322_t = (x) -> x/sqrt(2)
 PR322_omega = (x) -> x ≥ 0.0 ? sqrt(2)*x : x
 PR322_v_diffusion_coefficient = (x) -> 2^1.5*x
 const PR322_definitions_update_map_2V = OptionsDict(
-    "composition" => OptionsDict("T_e" => PR322_T,
-                                 "T_wall" => PR322_T,
-                                ),
-    "ion_species_1" => OptionsDict("initial_temperature" => PR322_T,),
-    "z_IC_ion_species_1" => OptionsDict("temperature_amplitude" => PR322_T,
-                                        "upar_amplitude" => PR322_v,
-                                       ),
-    "r_IC_ion_species_1" => OptionsDict("temperature_amplitude" => PR322_T,
-                                        "upar_amplitude" => PR322_v,
-                                       ),
-    "vpa_IC_ion_species_1" => OptionsDict("temperature_amplitude" => PR322_T,
-                                          "upar_amplitude" => PR322_v,
-                                          "v0" => PR322_v,
+    "vpa_IC_ion_species_1" => OptionsDict("v0" => PR322_v,
                                           "vth0" => PR322_v,
                                           "vpa0" => PR322_v,
                                           "vperp0" => PR322_v,
                                          ),
-    "neutral_species_1" => OptionsDict("initial_temperature" => PR322_T,),
-    "z_IC_neutral_species_1" => OptionsDict("temperature_amplitude" => PR322_T,
-                                            "upar_amplitude" => PR322_v,
-                                           ),
-    "r_IC_neutral_species_1" => OptionsDict("temperature_amplitude" => PR322_T,
-                                            "upar_amplitude" => PR322_v,
-                                           ),
-    "vz_IC_neutral_species_1" => OptionsDict("temperature_amplitude" => PR322_T,
-                                             "upar_amplitude" => PR322_v,
-                                             "v0" => PR322_v,
+    "vz_IC_neutral_species_1" => OptionsDict("v0" => PR322_v,
                                              "vth0" => PR322_v,
                                              "vpa0" => PR322_v,
                                              "vperp0" => PR322_v,
@@ -259,7 +238,7 @@ const PR322_definitions_update_map_2V = OptionsDict(
                                "electron_charge_exchange_frequency" => PR322_omega,
                                "ionization_frequency" => PR322_omega,
                                "electron_ionization_frequency" => PR322_omega,
-                               "ionization_energy" => PR322_T,
+                               "ionization_energy" => PR322_p,
                               ),
     "electron_fluid_collisions" => OptionsDict("nu_ei" => PR322_omega,),
     "krook_collisions" => OptionsDict("nuii0" => PR322_omega,
@@ -267,7 +246,6 @@ const PR322_definitions_update_map_2V = OptionsDict(
                                       "nuei0" => PR322_omega,
                                      ),
     "fokker_planck_collisions" => OptionsDict("nuii0" => PR322_omega,
-                                              "sd_temp" => PR322_T,
                                              ),
     "maxwell_diffusion_collisions" => OptionsDict("D_ii" => PR322_v_diffusion_coefficient,
                                                   "D_nn" => PR322_v_diffusion_coefficient,
@@ -311,7 +289,6 @@ const PR322_definitions_update_map_2V = OptionsDict(
     "vr" => OptionsDict("L" => PR322_v,),
     "vzeta" => OptionsDict("L" => PR322_v,),
     "ion_source_1" => OptionsDict("source_strength" => PR322_omega,
-                                  "source_T" => PR322_T, # This should be PR322_T even for 1V case, not PR322_T_1V, because we still implement the source T_∥=source_T for 1V in the updated code.
                                   "source_v0" => PR322_v,
                                   "source_vpa0" => PR322_v,
                                   "source_vperp0" => PR322_v,
@@ -320,10 +297,8 @@ const PR322_definitions_update_map_2V = OptionsDict(
                                   "PI_density_controller_I" => PR322_omega,
                                   "PI_temperature_controller_P" => PR322_omega,
                                   "PI_temperature_controller_I" => PR322_omega,
-                                  "PI_temperature_target_amplitude" => PR322_T,
                                  ),
     "ion_source_2" => OptionsDict("source_strength" => PR322_omega,
-                                  "source_T" => PR322_T, # This should be PR322_T even for 1V case, not PR322_T_1V, because we still implement the source T_∥=source_T for 1V in the updated code.
                                   "source_v0" => PR322_v,
                                   "source_vpa0" => PR322_v,
                                   "source_vperp0" => PR322_v,
@@ -332,10 +307,8 @@ const PR322_definitions_update_map_2V = OptionsDict(
                                   "PI_density_controller_I" => PR322_omega,
                                   "PI_temperature_controller_P" => PR322_omega,
                                   "PI_temperature_controller_I" => PR322_omega,
-                                  "PI_temperature_target_amplitude" => PR322_T,
                                  ),
     "ion_source_3" => OptionsDict("source_strength" => PR322_omega,
-                                  "source_T" => PR322_T, # This should be PR322_T even for 1V case, not PR322_T_1V, because we still implement the source T_∥=source_T for 1V in the updated code.
                                   "source_v0" => PR322_v,
                                   "source_vpa0" => PR322_v,
                                   "source_vperp0" => PR322_v,
@@ -344,13 +317,10 @@ const PR322_definitions_update_map_2V = OptionsDict(
                                   "PI_density_controller_I" => PR322_omega,
                                   "PI_temperature_controller_P" => PR322_omega,
                                   "PI_temperature_controller_I" => PR322_omega,
-                                  "PI_temperature_target_amplitude" => PR322_T,
                                  ),
     "electron_source_1" => OptionsDict("source_strength" => PR322_omega,
-                                       "source_T" => PR322_T, # This should be PR322_T even for 1V case, not PR322_T_1V, because we still implement the source T_∥=source_T for 1V in the updated code.
                                       ),
     "neutral_source_1" => OptionsDict("source_strength" => PR322_omega,
-                                      "source_T" => PR322_T, # This should be PR322_T even for 1V case, not PR322_T_1V, because we still implement the source T_∥=source_T for 1V in the updated code.
                                       "source_v0" => PR322_v,
                                       "source_vpa0" => PR322_v,
                                       "source_vperp0" => PR322_v,
@@ -359,22 +329,15 @@ const PR322_definitions_update_map_2V = OptionsDict(
                                       "PI_density_controller_I" => PR322_omega,
                                       "PI_temperature_controller_P" => PR322_omega,
                                       "PI_temperature_controller_I" => PR322_omega,
-                                      "PI_temperature_target_amplitude" => PR322_T,
                                      ),
    )
 const PR322_definitions_update_map_1V = recursive_merge(
     PR322_definitions_update_map_2V,
-    OptionsDict("composition" => OptionsDict("T_e" => PR322_T_1V,
+    OptionsDict("composition" => OptionsDict(# Note T_e should not get updated.
                                              "T_wall" => PR322_T_1V,
                                             ),
                 "ion_species_1" => OptionsDict("initial_temperature" => PR322_T_1V,),
-                "z_IC_ion_species_1" => OptionsDict("temperature_amplitude" => PR322_T_1V,),
-                "r_IC_ion_species_1" => OptionsDict("temperature_amplitude" => PR322_T_1V,),
-                "vpa_IC_ion_species_1" => OptionsDict("temperature_amplitude" => PR322_T_1V,),
                 "neutral_species_1" => OptionsDict("initial_temperature" => PR322_T_1V,),
-                "z_IC_neutral_species_1" => OptionsDict("temperature_amplitude" => PR322_T_1V),
-                "r_IC_neutral_species_1" => OptionsDict("temperature_amplitude" => PR322_T_1V,),
-                "vz_IC_neutral_species_1" => OptionsDict("temperature_amplitude" => PR322_T_1V,),
                 "reactions" => OptionsDict("ionization_energy" => PR322_T_1V,),
                 "fokker_planck_collisions" => OptionsDict("sd_temp" => PR322_T_1V,),
                 "ion_source_1" => OptionsDict("PI_temperature_target_amplitude" => PR322_T_1V,)
