@@ -1547,6 +1547,7 @@ function update_moments_neutral!(moments, pdf, vz, vr, vzeta, z, r, composition)
         if moments.neutral.uzeta_updated[isn] == false
             @views update_neutral_uzeta_species!(moments.neutral.uzeta[:,:,isn],
                                                  moments.neutral.dens[:,:,isn],
+                                                 moments.neutral.vth[:,:,isn],
                                                  pdf[:,:,:,:,:,isn], vz, vr, vzeta, z, r,
                                                  moments.evolve_density, moments.evolve_p)
             moments.neutral.uzeta_updated[isn] = true
@@ -1765,8 +1766,8 @@ function update_neutral_ur_species!(ur, density, vth, ff, vz, vr, vzeta, z, r,
     return nothing
 end
 
-function update_neutral_uzeta!(uzeta, uzeta_updated, density, pdf, vz, vr, vzeta, z, r,
-                               composition, evolve_density, evolve_p)
+function update_neutral_uzeta!(uzeta, uzeta_updated, density, vth, pdf, vz, vr, vzeta, z,
+                               r, composition, evolve_density, evolve_p)
 
     @begin_r_z_region()
     @boundscheck composition.n_neutral_species == size(pdf, 6) || throw(BoundsError(pdf))
@@ -1774,8 +1775,8 @@ function update_neutral_uzeta!(uzeta, uzeta_updated, density, pdf, vz, vr, vzeta
     @loop_sn isn begin
         if uzeta_updated[isn] == false
             @views update_neutral_uzeta_species!(uzeta[:,:,isn], density[:,:,isn],
-                                                 pdf[:,:,:,:,:,isn], vz, vr, vzeta, z, r,
-                                                 evolve_density, evolve_p)
+                                                 vth[:,:,isn], pdf[:,:,:,:,:,isn], vz, vr,
+                                                 vzeta, z, r, evolve_density, evolve_p)
             uzeta_updated[isn] = true
         end
     end
@@ -1784,7 +1785,7 @@ end
 """
 calculate the updated uzeta (mean velocity in zeta) for a given species
 """
-function update_neutral_uzeta_species!(uzeta, density, ff, vz, vr, vzeta, z, r,
+function update_neutral_uzeta_species!(uzeta, density, vth, ff, vz, vr, vzeta, z, r,
                                        evolve_density, evolve_p)
     @boundscheck vz.n == size(ff, 1) || throw(BoundsError(ff))
     @boundscheck vr.n == size(ff, 2) || throw(BoundsError(ff))
@@ -2304,10 +2305,11 @@ function update_derived_moments_neutral!(new_scratch, moments, vz, vr, vzeta, z,
     end
     # pz is needed for the neutral parallel momentum equation if evolving uz and the
     # neutral pressure equation if evolving p.
-    update_neutral_pz!(new_scratch.pz_neutral, moments.neutral.pz_updated,
+    update_neutral_pz!(moments.neutral.pz, moments.neutral.pz_updated,
                        new_scratch.density_neutral, new_scratch.uz_neutral,
-                       new_scratch.p_neutral, new_scratch.pdf_neutral, vz, vr, vzeta, z,
-                       r, composition, moments.evolve_density, moments.evolve_upar)
+                       new_scratch.p_neutral, moments.neutral.vth,
+                       new_scratch.pdf_neutral, vz, vr, vzeta, z, r, composition,
+                       moments.evolve_density, moments.evolve_upar, moments.evolve_p)
 end
 
 """
