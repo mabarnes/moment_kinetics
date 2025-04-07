@@ -387,15 +387,8 @@ Function for advancing with the explicit, weak-form, self-collision operator.
             pdf_out[ivpa,ivperp,iz,ir,is] += dt*CC[ivpa,ivperp]
         end
         if diagnose_entropy_production
-            # assign dummy array
-            lnfC = fkpl_arrays.rhsvpavperp
-            @loop_vperp_vpa ivperp ivpa begin
-                lnfC[ivpa,ivperp] = log(abs(pdf_in[ivpa,ivperp,iz,ir,is]) + 1.0e-15)*CC[ivpa,ivperp]
-            end
-            @begin_anyv_region()
-            @anyv_serial_region begin
-                dSdt[iz,ir,is] = -get_density(lnfC,vpa,vperp)
-            end
+            calculate_entropy_production!(dSdt, pdf_in, fkpl_arrays, vpa, vperp,
+                                        iz, ir, is)
         end
     end
     return nothing
@@ -788,6 +781,29 @@ function density_conserving_correction!(CC,pdf_in,vpa,vperp,dummy_vpavperp)
     end
 end
 
+"""
+Function to calculate entropy production, in place.
+"""
+function calculate_entropy_production!(dSdt,pdf,fkpl_arrays,vpa,vperp,
+                                iz::mk_int,ir::mk_int,is::mk_int)
+    # Note that we pass spatial indices here to permit
+    # use of the shared-memory parallelism to calculate
+    # and return a float value in an array
+    @begin_anyv_vperp_vpa_region()
+
+    CC = fkpl_arrays.CC
+    # assign dummy array
+    lnfC = fkpl_arrays.rhsvpavperp
+    @loop_vperp_vpa ivperp ivpa begin
+        lnfC[ivpa,ivperp] = log(abs(pdf[ivpa,ivperp,iz,ir,is]) + 1.0e-15)*CC[ivpa,ivperp]
+    end
+    @begin_anyv_region()
+    @anyv_serial_region begin
+        dSdt[iz,ir,is] = -get_density(lnfC,vpa,vperp)
+    end
+    return nothing
+end
+
 
 ######################################################
 # end functions associated with the weak-form operator
@@ -945,15 +961,8 @@ function implicit_ion_fokker_planck_self_collisions!(pdf_out, pdf_in, dSdt,
         end
 
         if diagnose_entropy_production
-            # assign dummy array
-            lnfC = fkpl_arrays.rhsvpavperp
-            @loop_vperp_vpa ivperp ivpa begin
-                lnfC[ivpa,ivperp] = log(abs(pdf_out[ivpa,ivperp,iz,ir,is]) + 1.0e-15)*CC[ivpa,ivperp]
-            end
-            @begin_anyv_region()
-            @anyv_serial_region begin
-                dSdt[iz,ir,is] = -get_density(lnfC,vpa,vperp)
-            end
+            calculate_entropy_production!(dSdt, pdf_out, fkpl_arrays, vpa, vperp,
+                                        iz, ir, is)
         end
     end
     return success
