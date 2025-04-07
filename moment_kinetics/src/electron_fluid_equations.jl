@@ -11,6 +11,7 @@ export calculate_electron_parallel_friction_force!
 export calculate_electron_qpar_from_pdf!
 export update_electron_vth_temperature!
 
+using ..calculus: integral
 using ..communication
 using ..derivatives: derivative_z!
 using ..looping
@@ -19,7 +20,6 @@ using ..timer_utils
 using ..moment_kinetics_structs: electron_pdf_substruct, moments_electron_substruct
 using ..nonlinear_solvers
 using ..type_definitions: mk_float
-using ..velocity_moments: integrate_over_vspace
 
 using MPI
 
@@ -132,7 +132,7 @@ function calculate_electron_moments!(scratch, pdf, moments, composition, collisi
     else
         pdf_electron = pdf.electron
     end
-    electron_ppar = scratch.electron_ppar
+    electron_p = scratch.electron_p
     calculate_electron_density!(scratch.electron_density, moments.electron.dens_updated,
                                 scratch.density)
     calculate_electron_upar_from_charge_conservation!(
@@ -142,20 +142,20 @@ function calculate_electron_moments!(scratch, pdf, moments, composition, collisi
                                        kinetic_electrons_with_temperature_equation)
         @begin_r_z_region()
         @loop_r_z ir iz begin
-            electron_ppar[iz,ir] = 0.5 * composition.me_over_mi *
-                                   scratch.electron_density[iz,ir] *
-                                   moments.electron.vth[iz,ir]^2
+            electron_p[iz,ir] = 0.5 * composition.me_over_mi *
+                                scratch.electron_density[iz,ir] *
+                                moments.electron.vth[iz,ir]^2
         end
-        moments.electron.ppar_updated[] = true
+        moments.electron.p_updated[] = true
     end
-    update_electron_vth_temperature!(moments, electron_ppar, scratch.electron_density,
+    update_electron_vth_temperature!(moments, electron_p, scratch.electron_density,
                                      composition)
-    calculate_electron_qpar!(moments.electron, pdf_electron, electron_ppar,
+    calculate_electron_qpar!(moments.electron, pdf_electron, electron_p,
                              scratch.electron_upar, scratch.upar,
                              collisions.electron_fluid.nu_ei, composition.me_over_mi,
                              composition.electron_physics, vpa)
     if composition.electron_physics == braginskii_fluid
-        electron_fluid_qpar_boundary_condition!(electron_ppar,
+        electron_fluid_qpar_boundary_condition!(electron_p,
                                                 scratch.electron_upar,
                                                 scratch.electron_density,
                                                 moments.electron, z)
@@ -166,25 +166,24 @@ end
 """
 use the electron energy or temperature equation to evolve the electron temperature via an
 explicit time advance.
-NB: so far, this is only set up for 1D problem, where we can assume
-an isotropic distribution in f_e so that p_e = n_e T_e = ppar_e
+NB: so far, this is only set up for 1D problem.
 """
-function electron_energy_equation!(ppar_out, electron_density_out, ppar_in,
-                                   electron_density_in, electron_upar, ion_density,
-                                   ion_upar, ion_ppar, density_neutral, uz_neutral,
-                                   pz_neutral, moments, collisions, dt, composition,
+function electron_energy_equation!(p_out, electron_density_out, p_in, electron_density_in,
+                                   electron_upar, electron_p, ion_density, ion_upar,
+                                   ion_p, density_neutral, uz_neutral, p_neutral,
+                                   moments, collisions, dt, composition,
                                    electron_source_settings, num_diss_params, r, z;
                                    conduction=true)
     for ir ∈ 1:r.n
-        @views electron_energy_equation_no_r!(ppar_out[:,ir], electron_density_out[:,ir],
-                                              ppar_in[:,ir], electron_density_in[:,ir],
-                                              electron_upar[:,ir], ion_density[:,ir,:],
-                                              ion_upar[:,ir,:], ion_ppar[:,ir,:],
-                                              density_neutral[:,ir,:], uz_neutral[:,ir,:],
-                                              pz_neutral[:,ir,:], moments, collisions, dt,
-                                              composition, electron_source_settings,
-                                              num_diss_params, z, ir;
-                                              conduction=conduction)
+        @views electron_energy_equation_no_r!(p_out[:,ir], electron_density_out[:,ir],
+                                              p_in[:,ir], electron_density_in[:,ir],
+                                              electron_upar[:,ir], electron_p[:,ir],
+                                              ion_density[:,ir,:], ion_upar[:,ir,:],
+                                              ion_p[:,ir,:], density_neutral[:,ir,:],
+                                              uz_neutral[:,ir,:], p_neutral[:,ir,:],
+                                              moments, collisions, dt, composition,
+                                              electron_source_settings, num_diss_params,
+                                              z, ir; conduction=conduction)
     end
     return nothing
 end
@@ -192,16 +191,16 @@ end
 """
 """
 @timeit global_timer electron_energy_equation_no_r!(
-                         ppar_out, electron_density_out, ppar_in, electron_density_in,
-                         electron_upar, ion_density, ion_upar, ion_ppar, density_neutral,
-                         uz_neutral, pz_neutral, moments, collisions, dt, composition,
-                         electron_source_settings, num_diss_params, z, ir;
+                         p_out, electron_density_out, p_in, electron_density_in,
+                         electron_upar, electron_p, ion_density, ion_upar, ion_p,
+                         density_neutral, uz_neutral, p_neutral, moments, collisions, dt,
+                         composition, electron_source_settings, num_diss_params, z, ir;
                          conduction=true, ion_dt=nothing) = begin
     if composition.electron_physics == kinetic_electrons_with_temperature_equation
         # Hacky way to implement temperature equation:
-        #  - convert ppar to T by dividing by density
+        #  - convert p to T by dividing by density
         #  - update T with a forward-Euler step using the temperature equation
-        #  - multiply by density to get back to ppar (should this be new density rather than
+        #  - multiply by density to get back to p (should this be new density rather than
         #    old density? For initial testing, only looking at the electron initialisation
         #    where density is not updated, this does not matter).
 
@@ -212,7 +211,7 @@ end
         T_in = @view moments.temp[:,ir]
         dT_dt = @view moments.dTpar_dt[:,ir]
         # calculate contribution to rhs of energy equation (formulated in terms of pressure)
-        # arising from derivatives of ppar, qpar and upar
+        # arising from derivatives of p, qpar and upar
         @loop_z iz begin
             dT_dt[iz] = -(electron_upar[iz]*moments.dT_dz[iz,ir]
                           + 2.0*T_in[iz]*moments.dupar_dz[iz,ir])
@@ -235,9 +234,9 @@ end
         # arising from electron-ion collisions
         if nu_ei > 0.0
             @loop_s_z is iz begin
-                dT_dt[iz] += 2.0 * (2 * me_over_mi * nu_ei * (2.0*ion_ppar[iz,is]/ion_density[iz,is] - T_in[iz]))
-                dT_dt[iz] += 2.0 * ((2/3) * moments.parallel_friction[iz,ir]
-                                            * (ion_upar[iz,is]-electron_upar[iz])) / electron_density_in[iz]
+                dT_dt[iz] += (2 * me_over_mi * nu_ei * (ion_p[iz,is]/ion_density[iz,is] - T_in[iz]))
+                dT_dt[iz] += ((2/3) * moments.parallel_friction[iz,ir]
+                                    * (ion_upar[iz,is]-electron_upar[iz])) / electron_density_in[iz]
             end
         end
         # add in contributions due to charge exchange/ionization collisions
@@ -248,9 +247,9 @@ end
             if abs(charge_exchange_electron) > 0.0
                 @loop_sn_z isn iz begin
                     dT_dt[iz] +=
-                        2.0 * me_over_mi * charge_exchange_electron * (
+                        me_over_mi * charge_exchange_electron * (
                             2*(pz_neutral[iz,isn] -
-                               density_neutral[iz,isn]*ppar_in[iz]/electron_density_in[iz]) +
+                               density_neutral[iz,isn]*p_in[iz]/electron_density_in[iz]) +
                             (2/3)*density_neutral[iz,isn] *
                             (uz_neutral[iz,isn] - electron_upar[iz])^2)
                 end
@@ -258,8 +257,8 @@ end
             if abs(ionization_electron) > 0.0
                 @loop_sn_z isn iz begin
                     dT_dt[iz] +=
-                        2.0 * ionization_electron * density_neutral[iz,isn] * (
-                            ppar_in[iz] / electron_density_in[iz]  -
+                        ionization_electron * density_neutral[iz,isn] * (
+                            p_in[iz] / electron_density_in[iz]  -
                             ionization_energy)
                 end
             end
@@ -279,38 +278,39 @@ end
 
         if ion_dt !== nothing
             # Add source term to turn steady state solution into a backward-Euler
-            # update of electron_ppar with the ion timestep `ion_dt`.
-            ppar_previous_ion_step = @view moments.electron.ppar[:,ir]
+            # update of electron_p with the ion timestep `ion_dt`.
+            p_previous_ion_step = @view moments.electron.p[:,ir]
             @loop_z iz begin
-                # At this point, ppar_out = ppar_in + dt*RHS(ppar_in). Here we add a
+                # At this point, p_out = p_in + dt*RHS(p_in). Here we add a
                 # source/damping term so that in the steady state of the electron
                 # pseudo-timestepping iteration,
-                #   RHS(ppar) - (ppar - ppar_previous_ion_step) / ion_dt = 0,
+                #   RHS(p) - (p - p_previous_ion_step) / ion_dt = 0,
                 # resulting in a backward-Euler step (as long as the
                 # pseudo-timestepping loop converges).
-                dT_dt[iz] += -(ppar_in[iz] - ppar_previous_ion_step[iz]) / electron_density_in[iz] / ion_dt
+                dT_dt[iz] += -(p_in[iz] - p_previous_ion_step[iz]) / electron_density_in[iz] / ion_dt
             end
         end
 
         # Now that the time derivative for temperature is calculated, convert to an update
-        # of pressure, ppar_out.
+        # of pressure, p_out.
         @loop_z iz begin
             # The following is equivalent to converting to temperature, adding time
             # derivative, converting back to pressure, like
-            # ppar_out[iz] *= 2.0 / electron_density_in[iz]
-            # ppar_out[iz] += dt * dT_dt[iz]
-            # ppar_out[iz] *= 0.5 * electron_density_out[iz]
-            ppar_out[iz] += 0.5 * electron_density_out[iz] * dt * dT_dt[iz]
+            # p_out[iz] *= 1.0 / electron_density_in[iz]
+            # p_out[iz] += dt * dT_dt[iz]
+            # p_out[iz] *= electron_density_out[iz]
+            p_out[iz] += electron_density_out[iz] * dt * dT_dt[iz]
         end
     else
         @begin_z_region()
         # define some abbreviated variables for convenient use in rest of function
         me_over_mi = composition.me_over_mi
         nu_ei = collisions.electron_fluid.nu_ei
-        dp_dt = @view moments.dppar_dt[:,ir]
+        dp_dt = @view moments.dp_dt[:,ir]
         # calculate contribution to rhs of energy equation (formulated in terms of pressure)
-        # arising from derivatives of ppar, qpar and upar
+        # arising from derivatives of p, qpar and upar
         @loop_z iz begin
+            error("update electron energy equation")
             dp_dt[iz] = -(electron_upar[iz]*moments.dppar_dz[iz,ir]
                           + 3*ppar_in[iz]*moments.dupar_dz[iz,ir])
         end
@@ -667,7 +667,7 @@ function electron_energy_residual!(residual, electron_ppar_out, electron_ppar, i
                                           fvec_in.ppar[:,ir,:],
                                           fvec_in.density_neutral[:,ir,:],
                                           fvec_in.uz_neutral[:,ir,:],
-                                          fvec_in.pz_neutral[:,ir,:], moments.electron,
+                                          fvec_in.p_neutral[:,ir,:], moments.electron,
                                           collisions, dt, composition,
                                           external_source_settings.electron,
                                           num_diss_params, z, ir)
@@ -682,11 +682,11 @@ end
 
 """
 Add just the braginskii conduction contribution to the electron pressure, and assume that
-we have to calculate qpar and dqpar_dz from ppar within this function (they are not
+we have to calculate qpar and dqpar_dz from p within this function (they are not
 pre-calculated).
 """
-function electron_braginskii_conduction!(ppar_out::AbstractVector{mk_float},
-                                         ppar_in::AbstractVector{mk_float},
+function electron_braginskii_conduction!(p_out::AbstractVector{mk_float},
+                                         p_in::AbstractVector{mk_float},
                                          dens::AbstractVector{mk_float},
                                          upar_e::AbstractVector{mk_float},
                                          upar_i::AbstractVector{mk_float},
@@ -703,19 +703,19 @@ function electron_braginskii_conduction!(ppar_out::AbstractVector{mk_float},
     qpar = @view electron_moments.qpar[:,ir]
     dqpar_dz = @view electron_moments.dqpar_dz[:,ir]
 
-    update_electron_temperature!(temp, ppar_in, dens, composition)
+    update_electron_temperature!(temp, p_in, dens, composition)
     derivative_z!(dT_dz, temp, buffer_r_1, buffer_r_2, buffer_r_3, buffer_r_4, z_spectral,
                   z)
     electron_moments.qpar_updated[] = false
-    calculate_electron_qpar!(electron_moments, nothing, ppar_in, upar_e, upar_i,
+    calculate_electron_qpar!(electron_moments, nothing, p_in, upar_e, upar_i,
                              collisions.electron_fluid.nu_ei, composition.me_over_mi,
                              composition.electron_physics, nothing)
-    electron_fluid_qpar_boundary_condition!(ppar_in, upar_e, dens, electron_moments, z)
+    electron_fluid_qpar_boundary_condition!(p_in, upar_e, dens, electron_moments, z)
     derivative_z!(dqpar_dz, qpar, buffer_r_1, buffer_r_2, buffer_r_3, buffer_r_4,
                   z_spectral, z)
 
     @loop_r_z ir iz begin
-        ppar_out[iz,ir] -= dt*electron_moments.dqpar_dz[iz,ir]
+        p_out[iz,ir] -= dt*electron_moments.dqpar_dz[iz,ir]
     end
 
     return nothing
@@ -727,27 +727,27 @@ end
     @begin_z_region()
 
     for ir ∈ 1:r.n
-        ppar_out = @view fvec_out.electron_ppar[:,ir]
-        ppar_in = @view fvec_in.electron_ppar[:,ir]
+        p_out = @view fvec_out.electron_p[:,ir]
+        p_in = @view fvec_in.electron_p[:,ir]
         dens = @view fvec_in.electron_density[:,ir]
         upar_e = @view fvec_in.electron_upar[:,ir]
         upar_i = @view fvec_in.upar[:,ir]
 
         # Explicit timestep to give initial guess for implicit solve
-        electron_braginskii_conduction!(ppar_out, ppar_in, dens, upar_e, upar_i,
+        electron_braginskii_conduction!(p_out, p_in, dens, upar_e, upar_i,
                                         moments.electron, collisions, composition, z,
                                         z_spectral, scratch_dummy, dt, ir)
 
-        # Define a function whose input is `electron_ppar`, so that when it's output
-        # `residual` is zero, electron_ppar is the result of a backward-Euler timestep:
+        # Define a function whose input is `electron_p`, so that when it's output
+        # `residual` is zero, electron_p is the result of a backward-Euler timestep:
         #   (f_new - f_old) / dt = RHS(f_new)
         # ⇒ (f_new - f_old)/dt - RHS(f_new) = 0
-        function residual_func!(residual, electron_ppar; krylov=false)
+        function residual_func!(residual, electron_p; krylov=false)
             @begin_z_region()
             @loop_z iz begin
-                residual[iz] = ppar_in[iz]
+                residual[iz] = p_in[iz]
             end
-            electron_braginskii_conduction!(residual, electron_ppar, dens, upar_e,
+            electron_braginskii_conduction!(residual, electron_p, dens, upar_e,
                                             upar_i, moments.electron, collisions,
                                             composition, z, z_spectral, scratch_dummy,
                                             dt, ir)
@@ -756,7 +756,7 @@ end
             # so update to desired residual
             @begin_z_region()
             @loop_z iz begin
-                residual[iz] = (electron_ppar[iz] - residual[iz])
+                residual[iz] = (electron_p[iz] - residual[iz])
             end
         end
 
@@ -767,7 +767,7 @@ end
         v = @view scratch_dummy.buffer_zs_4[:,1]
         w = @view scratch_dummy.buffer_zrs_1[:,1,1]
 
-        success = newton_solve!(ppar_out, residual_func!, residual, delta_x, rhs_delta, v,
+        success = newton_solve!(p_out, residual_func!, residual, delta_x, rhs_delta, v,
                                 w, nl_solver_params; left_preconditioner=nothing,
                                 right_preconditioner=nothing, coords=(z=z,))
         if !success
@@ -842,13 +842,13 @@ end
 """
 calculate the parallel component of the electron heat flux.
 there are currently two supported options for the parallel heat flux:
-    Braginskii collisional closure - qpar_e = -3.16*ppar_e/(m_e*nu_ei)*dT/dz - 0.71*ppar_e*(upar_i-upar_e)
+    Braginskii collisional closure - qpar_e = -3.16*p_e/(m_e*nu_ei)*dT/dz - 0.71*p_e*(upar_i-upar_e)
     collisionless closure - d(qpar_e)/dz = 0 ==> qpar_e = constant
 inputs:
     qpar_e = parallel electron heat flux at the previous time level
     qpar_updated = flag indicating whether qpar is updated already
     pdf = electron pdf
-    ppar_e = electron parallel pressure
+    p_e = electron pressure
     upar_e = electron parallel flow
     vth_e = electron thermal speed
     dTe_dz = zed derivative of electron temperature
@@ -861,7 +861,7 @@ output:
     qpar_e = updated parallel electron heat flux
     qpar_updated = flag indicating that the parallel electron heat flux is updated
 """
-function calculate_electron_qpar!(electron_moments, pdf, ppar_e, upar_e, upar_i, nu_ei,
+function calculate_electron_qpar!(electron_moments, pdf, p_e, upar_e, upar_i, nu_ei,
                                   me_over_mi, electron_model, vpa)
     # only calculate qpar_e if needs updating
     qpar_updated = electron_moments.qpar_updated
@@ -875,12 +875,12 @@ function calculate_electron_qpar!(electron_moments, pdf, ppar_e, upar_e, upar_i,
             @loop_r_z ir iz begin
                 qpar_e[iz,ir] = 0.0
                 @loop_s is begin
-                    qpar_e[iz,ir] -= 0.71 * ppar_e[iz,ir] * (upar_i[iz,ir,is] - upar_e[iz,ir])
+                    qpar_e[iz,ir] -= 0.71 * p_e[iz,ir] * (upar_i[iz,ir,is] - upar_e[iz,ir])
                 end
             end
             if nu_ei > 0.0
                 @loop_r_z ir iz begin
-                    qpar_e[iz,ir] -= (1/2) * 3.16 * ppar_e[iz,ir] / (me_over_mi * nu_ei) * dTe_dz[iz,ir] 
+                    qpar_e[iz,ir] -= (1/2) * 3.16 * p_e[iz,ir] / (me_over_mi * nu_ei) * dTe_dz[iz,ir]
                 end
             end
         elseif electron_model ∈ (kinetic_electrons,
@@ -891,7 +891,7 @@ function calculate_electron_qpar!(electron_moments, pdf, ppar_e, upar_e, upar_i,
             else
                 electron_pdf = pdf
             end
-            calculate_electron_qpar_from_pdf!(qpar_e, ppar_e, vth_e, electron_pdf, vpa)
+            calculate_electron_qpar_from_pdf!(qpar_e, dens_e, vth_e, electron_pdf, vpa)
         else
             @begin_r_z_region()
             # qpar_e is not used. Initialize to 0.0 to avoid failure of
@@ -908,52 +908,53 @@ end
 
 """
 calculate the parallel component of the electron heat flux,
-defined as qpar = 2 * ppar * vth * int dwpa (pdf * wpa^3)
+defined as qpar = 0.5 * dens * vth^3 * int dwpa (pdf * wpa * (wpa^2 + wperp^2))
 """
 function calculate_electron_qpar_from_pdf!(qpar, ppar, vth, pdf, vpa)
     # specialise to 1D for now
     @begin_r_z_region()
     ivperp = 1
     @loop_r_z ir iz begin
-        @views qpar[iz, ir] = 2*ppar[iz,ir]*vth[iz,ir]*integrate_over_vspace(pdf[:, ivperp, iz, ir], vpa.grid, 3, vpa.wgts)
+        @views qpar[iz, ir] = 0.5*dens[iz,ir]*vth[iz,ir]^3*integral((vperp,vpa)->(vpa*(vpa^2-vperp^2)), pdf[:, :, iz, ir], vperp, vpa)
     end
 end
 
 """
-Calculate the parallel component of the electron heat flux, defined as qpar = 2 * ppar *
-vth * int dwpa (pdf * wpa^3). This version of the function does not loop over `r`. `pdf`
-should have no r-dimension, while the moment variables are indexed at `ir`.
+Calculate the parallel component of the electron heat flux, defined as qpar = 0.5 * dens *
+vth^3 * int dwpa (pdf * wpa * (wpa^2 + wperp^2)). This version of the function does not
+loop over `r`. `pdf` should have no r-dimension, while the moment variables are indexed at
+`ir`.
 """
-function calculate_electron_qpar_from_pdf_no_r!(qpar, ppar, vth, pdf, vpa, ir)
+function calculate_electron_qpar_from_pdf_no_r!(qpar, dens, vth, pdf, vpa, ir)
     # specialise to 1V for now
     @begin_z_region()
     ivperp = 1
     @loop_z iz begin
-        @views qpar[iz] = 2*ppar[iz]*vth[iz]*integrate_over_vspace(pdf[:, ivperp, iz], vpa.grid, 3, vpa.wgts)
+        @views qpar[iz] = 0.5*dens[iz]*vth[iz]^3*integral((vperp,vpa)->(vpa*(vpa^2-vperp^2)), pdf[:, :, iz], vperp, vpa)
     end
 end
 
-function update_electron_vth_temperature!(moments, ppar, dens, composition)
+function update_electron_vth_temperature!(moments, p, dens, composition)
     @begin_r_z_region()
 
     temp = moments.electron.temp
     vth = moments.electron.vth
     @loop_r_z ir iz begin
-        p = max(ppar[iz,ir], 0.0)
-        temp[iz,ir] = 2 * p / dens[iz,ir]
-        vth[iz,ir] = sqrt(temp[iz,ir] / composition.me_over_mi)
+        this_p = max(p[iz,ir], 0.0)
+        temp[iz,ir] = this_p / dens[iz,ir]
+        vth[iz,ir] = sqrt(2.0 * temp[iz,ir] / composition.me_over_mi)
     end
     moments.electron.temp_updated[] = true
 
     return nothing
 end
 
-function update_electron_temperature!(temp, ppar, dens, composition)
+function update_electron_temperature!(temp, p, dens, composition)
     @begin_z_region()
 
     @loop_z iz begin
-        p = max(ppar[iz], 0.0)
-        temp[iz] = 2 * p / dens[iz]
+        this_p = max(p[iz], 0.0)
+        temp[iz] = this_p / dens[iz]
     end
 
     return nothing
@@ -965,7 +966,7 @@ end
 Impose fluid approximation to electron sheath boundary condition on the parallel heat
 flux. See Stangeby textbook, equations (2.89) and (2.90).
 """
-function electron_fluid_qpar_boundary_condition!(ppar, upar, dens, electron_moments, z)
+function electron_fluid_qpar_boundary_condition!(p, upar, dens, electron_moments, z)
     if z.bc == "periodic"
         # Nothing to do as z-derivative used to calculate qpar already imposed
         # periodicity.
@@ -986,7 +987,7 @@ function electron_fluid_qpar_boundary_condition!(ppar, upar, dens, electron_mome
 
     @loop_r ir begin
         for iz ∈ z_indices
-            this_ppar = ppar[iz,ir]
+            this_p = p[iz,ir]
             this_upar = electron_moments.upar[iz,ir]
             this_dens = electron_moments.dens[iz,ir]
             particle_flux = this_dens * this_upar
@@ -1000,7 +1001,7 @@ function electron_fluid_qpar_boundary_condition!(ppar, upar, dens, electron_mome
 
             # E.g. Helander&Sigmar (2.14), neglecting electron viscosity and kinetic
             # energy fluxes due to small mass ratio
-            conductive_heat_flux = total_heat_flux - 2.5 * this_ppar * this_upar
+            conductive_heat_flux = total_heat_flux - 2.5 * this_p * this_upar
 
             electron_moments.qpar[iz,ir] = conductive_heat_flux
         end

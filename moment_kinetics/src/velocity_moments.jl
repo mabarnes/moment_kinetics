@@ -696,9 +696,9 @@ function update_p!(p, p_updated, density, upar, pdf, vpa, vperp, z, r, compositi
 
     @loop_s is begin
         if p_updated[is] == false
-            @views update_ppar_species!(p[:,:,is], density[:,:,is], upar[:,:,is],
-                                        pdf[:,:,:,:,is], vpa, vperp, z, r, evolve_density,
-                                        evolve_upar)
+            @views update_p_species!(p[:,:,is], density[:,:,is], upar[:,:,is],
+                                     pdf[:,:,:,:,is], vpa, vperp, z, r, evolve_density,
+                                     evolve_upar)
             p_updated[is] = true
         end
     end
