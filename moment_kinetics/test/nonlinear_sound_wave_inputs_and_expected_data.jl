@@ -135,8 +135,8 @@ test_input_finite_difference_split_3_moments =
     recursive_merge(test_input_finite_difference_split_2_moments,
                     OptionsDict("output" => OptionsDict("run_name" => "finite_difference_split_3_moments"),
                                 "evolve_moments" => OptionsDict("pressure" => true),
-                                "vpa" => OptionsDict("L" => 16.970562748477143),
-                                "vz" => OptionsDict("L" => 16.970562748477143),
+                                "vpa" => OptionsDict("L" => 20.784609690826528),
+                                "vz" => OptionsDict("L" => 20.784609690826528),
                                ))
 
 test_input_chebyshev = recursive_merge(test_input_finite_difference,
@@ -171,6 +171,6 @@ test_input_chebyshev_split_3_moments =
     recursive_merge(test_input_chebyshev_split_2_moments,
                     OptionsDict("output" => OptionsDict("run_name" => "chebyshev_pseudospectral_split_3_moments"),
                                 "evolve_moments" => OptionsDict("pressure" => true),
-                                "vpa" => OptionsDict("L" => 16.970562748477143),
-                                "vz" => OptionsDict("L" => 16.970562748477143),
+                                "vpa" => OptionsDict("L" => 20.784609690826528),
+                                "vz" => OptionsDict("L" => 20.784609690826528),
                                ))
