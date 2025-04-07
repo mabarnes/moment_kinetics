@@ -1170,13 +1170,23 @@ function init_ion_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
                 @. vperp.scratch = vperp.grid/vth[iz]
 
                 if vperp.n == 1
-                    vth_factor = vth[iz]
+                    # Need to initialise using Maxwellian defined using T_∥ = 3*T as T_⟂=0
+                    vth_factor = sqrt(3.0)
+                    if !evolve_p
+                        vth_factor *= vth[iz]
+                    end
+                    vpa.scratch ./= sqrt(3.0)
+                    vperp.scratch ./= sqrt(3.0)
                 else
-                    vth_factor = vth[iz]^3
+                    if !evolve_p
+                        vth_factor = vth[iz]^3
+                    else
+                        vth_factor = 1.0
+                    end
                 end
                 @loop_vperp_vpa ivperp ivpa begin
                     pdf[ivpa,ivperp,iz] = Maxwellian_prefactor * exp(-vpa.scratch[ivpa]^2 -
-                                                                   vperp.scratch[ivperp]^2) / vth_factor
+                                                                     vperp.scratch[ivperp]^2) / vth_factor
                 end
             end
 
@@ -1205,12 +1215,14 @@ function init_ion_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
                                + integral(pdf[:,:,iz], vpa.scratch, 0, vpa.wgts, vperp.grid,
                                           2, vperp.wgts))
                 # pfac2 = the integral of the pdf over v-space, weighted by m_s w_s^2 (w_s^2 - vths^2 / 2) / vth^4
-                @views @. vpa.scratch2 = vpa.scratch^2 * (vpa.scratch^2/pfac - 1.0/densfac)
-                @views @. vpa.scratch3 = (vpa.scratch^2/pfac - 1.0/densfac)
-                pfac2 = @views (v_norm_fac[iz]/vth[iz])^4 * (integral(pdf[:,:,iz], vpa.scratch2, 1, vpa.wgts, vperp.grid, 0, vperp.wgts)
-                                                             + integral(pdf[:,:,iz], vpa.scratch3, 1, vpa.wgts, vperp.grid, 2, vperp.wgts)
-                                                             + 2.0 * integral(pdf[:,:,iz], vpa.scratch, 2, vpa.wgts, vperp.grid, 2, vperp.wgts)
-                                                             + integral(pdf[:,:,iz], vpa.scratch, 0, vpa.wgts, vperp.grid, 4, vperp.wgts))
+                if evolve_upar
+                    upar_offset = 0.0
+                else
+                    upar_offset = upar[iz]
+                end
+                pfac2 = @views (v_norm_fac[iz]/vth[iz])^2 *
+                               integral((vperp,vpa)->(((vpa - upar_offset)^2 + vperp^2) * (((vpa - upar_offset)^2 + vperp^2) * (v_norm_fac[iz] / vth[iz])^2 / pfac - 1.0/densfac)),
+                                        pdf[:,:,iz], vperp, vpa)
 
                 # The following update ensures the density and pressure moments of pdf
                 # have the expected values. The velocity moment is always exactly zero
@@ -1229,9 +1241,9 @@ function init_ion_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
                 #   = 1.5
                 @loop_vperp ivperp begin
                     @views @. pdf[:,ivperp,iz] = pdf[:,ivperp,iz]/densfac +
-                                                 (0.5 - pparfac/densfac)/pparfac2 *
-                                                 (vpa.scratch^2*(v_norm_fac[iz]/vth[iz])^2/pparfac - 1.0/densfac) *
-                                                 pdf[:,ivperp,iz]
+                                                 (1.5 - pfac/densfac)/pfac2 *
+                                                 ((vperp.grid[ivperp]^2 + vpa.scratch^2)*(v_norm_fac[iz]/vth[iz])^2/pfac - 1.0/densfac) *
+                                                 pdf[:,ivperp,iz]*(v_norm_fac[iz]/vth[iz])^2
                 end
             end
         else
@@ -1430,10 +1442,26 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
                 @. vzeta.scratch = vzeta.grid/vth[iz]
                 @. vr.scratch = vr.grid/vth[iz]
 
+                if vzeta.n == 1 && vr.n == 1
+                    # Need to initialise using Maxwellian defined using T_∥ = 3*T as T_⟂=0
+                    vth_factor = sqrt(3.0)
+                    if !evolve_p
+                        vth_factor *= vth[iz]
+                    end
+                    vz.scratch ./= sqrt(3.0)
+                    vzeta.scratch ./= sqrt(3.0)
+                    vr.scratch ./= sqrt(3.0)
+                else
+                    if !evolve_p
+                        vth_factor = vth[iz]^3
+                    else
+                        vth_factor = 1.0
+                    end
+                end
                 @loop_vzeta_vr_vz ivzeta ivr ivz begin
                     pdf[ivz,ivr,ivzeta,iz] = Maxwellian_prefactor *
                                              exp(-vz.scratch[ivz]^2 - vr.scratch[ivr]^2
-                                                 - vzeta.scratch[ivzeta]^2) / vth[iz]
+                                                 - vzeta.scratch[ivzeta]^2) / vth_factor
                 end
             end
 
@@ -1465,16 +1493,14 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
                                + integral(pdf[:,:,:,iz], vz.scratch, 0, vz.wgts, vr.grid, 0,
                                           vr.wgts, vzeta.grid, 2, vzeta.wgts))
                 # pfac2 = the integral of the pdf over v-space, weighted by m_s w_s^2 (w_s^2 - vths^2 / 2) / vth^4
-                @views @. vz.scratch2 = vz.scratch^2 * (vz.scratch^2/pfac - 1.0/densfac)
-                @views @. vz.scratch3 = (vz.scratch^2/pfac - 1.0/densfac)
-                pfac2 = @views (v_norm_fac[iz]/vth[iz])^4 * (integral(pdf[:,:,:,iz], vz.scratch2, 1, vz.wgts, vr.grid, 0, vr.wgts, vzeta.grid, 0, vzeta.wgts)
-                                                             + integral(pdf[:,:,:,iz], vz.scratch3, 1, vz.wgts, vr.grid, 2, vr.wgts, vzeta.grid, 0, vzeta.wgts)
-                                                             + integral(pdf[:,:,:,iz], vz.scratch3, 1, vz.wgts, vr.grid, 0, vr.wgts, vzeta.grid, 2, vzeta.wgts)
-                                                             + 2.0 * integral(pdf[:,:,:,iz], vz.scratch, 2, vz.wgts, vr.grid, 2, vr.wgts, vzeta.grid, 0, vzeta.wgts)
-                                                             + 2.0 * integral(pdf[:,:,:,iz], vz.scratch, 2, vz.wgts, vr.grid, 0, vr.wgts, vzeta.grid, 2, vzeta.wgts)
-                                                             + integral(pdf[:,:,:,iz], vz.scratch, 0, vz.wgts, vr.grid, 4, vr.wgts, vzeta.grid, 0, vzeta.wgts)
-                                                             + 2.0 * integral(pdf[:,:,:,iz], vz.scratch, 0, vz.wgts, vr.grid, 2, vr.wgts, vzeta.grid, 2, vzeta.wgts)
-                                                             + integral(pdf[:,:,:,iz], vz.scratch, 0, vz.wgts, vr.grid, 0, vr.wgts, vzeta.grid, 4, vzeta.wgts))
+                if evolve_upar
+                    uz_offset = 0.0
+                else
+                    uz_offset = uz[iz]
+                end
+                pfac2 = @views (v_norm_fac[iz]/vth[iz])^2 *
+                               integral((vzeta,vr,vz)->(((vz - uz_offset)^2 + vzeta^2 + vr^2) * (((vz - uz_offset)^2 + vzeta^2 + vr^2) * (v_norm_fac[iz] / vth[iz])^2 / pfac - 1.0/densfac)),
+                                        pdf[:,:,iz], vzeta, vr, vz)
 
                 # The following update ensures the density and pressure moments of pdf
                 # have the expected values. The velocity moment is always exactly zero
@@ -1492,7 +1518,10 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
                 #   = pfac/densfac + (1.5 - pfac/densfac)/pfac2 * pfac2
                 #   = 1.5
                 @loop_vzeta_vr ivzeta ivr begin
-                    @views @. pdf[:,ivr,ivzeta,iz] = pdf[:,ivr,ivzeta,iz]/densfac + (0.5 - pzfac/densfac)/pzfac2*(vz.scratch^2*(v_norm_fac[iz]/vth[iz])^2/pzfac - 1.0/densfac)*pdf[:,ivr,ivzeta,iz]
+                    @views @. pdf[:,ivr,ivzeta,iz] = pdf[:,ivr,ivzeta,iz]/densfac +
+                                                     (1.5 - pfac/densfac)/pfac2 *
+                                                     ((vr.grid[ivr]^2 + vzeta.grid[ivzeta]^2 + vz.scratch^2)*(v_norm_fac[iz]/vth[iz])^2/pfac - 1.0/densfac) *
+                                                     pdf[:,ivr,ivzeta,iz]*(v_norm_fac[iz]/vth[iz])^2
                 end
             end
         else
