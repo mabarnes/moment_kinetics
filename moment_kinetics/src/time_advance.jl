@@ -3366,19 +3366,29 @@ end
             end
             # for now update moments.neutral object directly for diagnostic moments
             # that are not used in Runga-Kutta steps
-            update_neutral_pr!(moments.neutral.pr, moments.neutral.pr_updated, pdf.neutral.norm, vz, vr, vzeta, z, r, composition)
-            update_neutral_pzeta!(moments.neutral.pzeta, moments.neutral.pzeta_updated, pdf.neutral.norm, vz, vr, vzeta, z, r, composition)
+            update_neutral_pr!(moments.neutral.pr, moments.neutral.pr_updated,
+                               moments.neutral.dens, moments.neutral.ur,
+                               moments.neutral.vth, pdf.neutral.norm, vz, vr, vzeta, z, r,
+                               composition, moments.evolve_density, moments.evolve_upar,
+                               moments.evolve_p)
+            update_neutral_pzeta!(moments.neutral.pzeta, moments.neutral.pzeta_updated,
+                                  moments.neutral.dens, moments.neutral.uzeta,
+                                  moments.neutral.vth, pdf.neutral.norm, vz, vr, vzeta, z,
+                                  r, composition, moments.evolve_density,
+                                  moments.evolve_upar, moments.evolve_p)
             # pz can be calculated from p, pzeta, and pr
             @loop_sn_r_z isn ir iz begin
                 moments.neutral.pz[iz,ir,isn] = (3.0 * moments.neutral.p[iz,ir,isn] - moments.neutral.pr[iz,ir,isn] - moments.neutral.pzeta[iz,ir,isn])
             end
             # get particle fluxes (n.b. bad naming convention uz -> means -> n uz here)
             update_neutral_ur!(moments.neutral.ur, moments.neutral.ur_updated,
-                               moments.neutral.dens, pdf.neutral.norm, vz, vr, vzeta, z, r,
-                               composition)
+                               moments.neutral.dens, moments.neutral.vth,
+                               pdf.neutral.norm, vz, vr, vzeta, z, r, composition,
+                               moments.evolve_density, moments.evolve_p)
             update_neutral_uzeta!(moments.neutral.uzeta, moments.neutral.uzeta_updated,
-                                  moments.neutral.dens, pdf.neutral.norm, vz, vr, vzeta, z,
-                                  r, composition)
+                                  moments.neutral.dens, moments.neutral.vth,
+                                  pdf.neutral.norm, vz, vr, vzeta, z, r, composition,
+                                  moments.evolve_density, moments.evolve_p)
             try #below loop can cause DomainError if p < 0 or density < 0, so exit cleanly if possible
                 @loop_sn_r_z isn ir iz begin
                     # update density using last density from Runga-Kutta stages
