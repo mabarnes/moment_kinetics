@@ -3608,7 +3608,7 @@ implementation), a call needs to be made with `dt` scaled by some coefficient.
         write_debug_IO("neutral_force_balance!")
     end
     if advance.neutral_energy
-        neutral_energy_equation!(fvec_out.pz_neutral, fvec_in, moments, collisions, dt,
+        neutral_energy_equation!(fvec_out.p_neutral, fvec_in, moments, collisions, dt,
                                  z_spectral, composition,
                                  external_source_settings.neutral, num_diss_params)
         write_debug_IO("neutral_energy_equation!")
