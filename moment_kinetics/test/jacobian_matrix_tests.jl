@@ -403,7 +403,7 @@ function test_electron_z_advection(test_input; rtol=(2.5e2*epsilon)^2)
                                    (dens[iz] * composition.me_over_mi)))
             end
             # Calculate heat flux and derivatives using new_variables
-            calculate_electron_qpar_from_pdf_no_r!(qpar, this_p, vth, this_f, vpa, ir)
+            calculate_electron_qpar_from_pdf_no_r!(qpar, this_n, vth, this_f, vpa, ir)
 
             calculate_electron_moment_derivatives_no_r!(
                 moments,
@@ -741,7 +741,7 @@ function test_electron_vpa_advection(test_input; rtol=(3.0e2*epsilon)^2)
                                    (dens[iz] * composition.me_over_mi)))
             end
             # Calculate heat flux and derivatives using new_variables
-            calculate_electron_qpar_from_pdf_no_r!(qpar, this_p, vth, this_f, vpa, ir)
+            calculate_electron_qpar_from_pdf_no_r!(qpar, this_n, vth, this_f, vpa, ir)
 
             calculate_electron_moment_derivatives_no_r!(
                 moments,
@@ -1094,7 +1094,7 @@ function test_contribution_from_electron_pdf_term(test_input; rtol=(4.0e2*epsilo
                                    (dens[iz] * composition.me_over_mi)))
             end
             # Calculate heat flux and derivatives using new_variables
-            calculate_electron_qpar_from_pdf_no_r!(qpar, this_p, vth, this_f, vpa, ir)
+            calculate_electron_qpar_from_pdf_no_r!(qpar, this_n, vth, this_f, vpa, ir)
 
             calculate_electron_moment_derivatives_no_r!(
                 moments,
@@ -1393,7 +1393,7 @@ function test_electron_dissipation_term(test_input; rtol=(3.0e0*epsilon)^2)
                                    (dens[iz] * composition.me_over_mi)))
             end
             # Calculate heat flux and derivatives using new_variables
-            calculate_electron_qpar_from_pdf_no_r!(qpar, this_p, vth, this_f, vpa, ir)
+            calculate_electron_qpar_from_pdf_no_r!(qpar, this_n, vth, this_f, vpa, ir)
 
             calculate_electron_moment_derivatives_no_r!(
                 moments,
@@ -1709,7 +1709,7 @@ function test_electron_krook_collisions(test_input; rtol=(2.0e1*epsilon)^2)
                                    (dens[iz] * composition.me_over_mi)))
             end
             # Calculate heat flux and derivatives using new_variables
-            calculate_electron_qpar_from_pdf_no_r!(qpar, this_p, vth, this_f, vpa, ir)
+            calculate_electron_qpar_from_pdf_no_r!(qpar, this_n, vth, this_f, vpa, ir)
 
             calculate_electron_moment_derivatives_no_r!(
                 moments,
@@ -2039,7 +2039,7 @@ function test_external_electron_source(test_input; rtol=(3.0e1*epsilon)^2)
                                    (dens[iz] * composition.me_over_mi)))
             end
             # Calculate heat flux and derivatives using new_variables
-            calculate_electron_qpar_from_pdf_no_r!(qpar, this_p, vth, this_f, vpa, ir)
+            calculate_electron_qpar_from_pdf_no_r!(qpar, this_n, vth, this_f, vpa, ir)
 
             calculate_electron_moment_derivatives_no_r!(
                 moments,
@@ -2385,7 +2385,7 @@ function test_electron_implicit_constraint_forcing(test_input; rtol=(1.5e0*epsil
                                    (dens[iz] * composition.me_over_mi)))
             end
             # Calculate heat flux and derivatives using new_variables
-            calculate_electron_qpar_from_pdf_no_r!(qpar, this_p, vth, this_f, vpa, ir)
+            calculate_electron_qpar_from_pdf_no_r!(qpar, this_n, vth, this_f, vpa, ir)
 
             calculate_electron_moment_derivatives_no_r!(
                 moments,
@@ -2722,7 +2722,7 @@ function test_electron_energy_equation(test_input; rtol=(6.0e2*epsilon)^2)
                                    (dens[iz] * composition.me_over_mi)))
             end
             # Calculate heat flux and derivatives using new_variables
-            calculate_electron_qpar_from_pdf_no_r!(qpar, this_p, vth, this_f, vpa, ir)
+            calculate_electron_qpar_from_pdf_no_r!(qpar, this_n, vth, this_f, vpa, ir)
 
             calculate_electron_moment_derivatives_no_r!(
                 moments,
@@ -2981,7 +2981,7 @@ function test_ion_dt_forcing_of_electron_ppar(test_input; rtol=(1.5e1*epsilon)^2
                                    (dens[iz] * composition.me_over_mi)))
             end
             # Calculate heat flux and derivatives using new_variables
-            calculate_electron_qpar_from_pdf_no_r!(qpar, this_p, vth, this_f, vpa, ir)
+            calculate_electron_qpar_from_pdf_no_r!(qpar, this_n, vth, this_f, vpa, ir)
 
             calculate_electron_moment_derivatives_no_r!(
                 moments,
@@ -3370,7 +3370,7 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
                                    (dens[iz] * composition.me_over_mi)))
             end
             # Calculate heat flux and derivatives using new_variables
-            calculate_electron_qpar_from_pdf_no_r!(qpar, this_p, vth, this_f, vpa, ir)
+            calculate_electron_qpar_from_pdf_no_r!(qpar, this_n, vth, this_f, vpa, ir)
 
             calculate_electron_moment_derivatives_no_r!(
                 moments,

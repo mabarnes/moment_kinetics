@@ -421,7 +421,7 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
                 # update the electron heat flux
                 moments.electron.qpar_updated[] = false
                 calculate_electron_qpar_from_pdf!(moments.electron.qpar,
-                                                  scratch[istage+1].electron_ppar,
+                                                  scratch[istage+1].electron_density,
                                                   moments.electron.vth, latest_pdf, vpa)
 
                 if evolve_ppar
@@ -675,7 +675,7 @@ function electron_backward_euler_pseudotimestepping!(scratch, pdf, moments, phi,
                                                  composition.me_over_mi)))
         scratch[t_params.n_rk_stages+1].electron_ppar[iz,ir] = moments.electron.ppar[iz,ir]
     end
-    calculate_electron_qpar_from_pdf!(moments.electron.qpar, moments.electron.ppar,
+    calculate_electron_qpar_from_pdf!(moments.electron.qpar, moments.electron.dens,
                                       moments.electron.vth,
                                       scratch[t_params.n_rk_stages+1].pdf_electron, vpa)
     calculate_electron_moment_derivatives!(moments,
@@ -711,7 +711,7 @@ function electron_backward_euler_pseudotimestepping!(scratch, pdf, moments, phi,
                                                    (moments.electron.dens[iz,ir] *
                                                     composition.me_over_mi)))
         end
-        calculate_electron_qpar_from_pdf!(moments.electron.qpar, ppar_guess,
+        calculate_electron_qpar_from_pdf!(moments.electron.qpar, density_guess,
                                           moments.electron.vth,
                                           scratch[t_params.n_rk_stages+1].pdf_electron,
                                           vpa)
@@ -838,7 +838,7 @@ function electron_backward_euler_pseudotimestepping!(scratch, pdf, moments, phi,
                     # update the electron heat flux
                     moments.electron.qpar_updated[] = false
                     @views calculate_electron_qpar_from_pdf_no_r!(moments.electron.qpar[:,ir],
-                                                                  electron_ppar_new,
+                                                                  electron_density_new,
                                                                   moments.electron.vth[:,ir],
                                                                   f_electron_new, vpa, ir)
 
@@ -956,7 +956,7 @@ function electron_backward_euler_pseudotimestepping!(scratch, pdf, moments, phi,
                     # update the electron heat flux
                     moments.electron.qpar_updated[] = false
                     @views calculate_electron_qpar_from_pdf_no_r!(moments.electron.qpar[:,ir],
-                                                                  electron_ppar_new,
+                                                                  electron_density_new,
                                                                   moments.electron.vth[:,ir],
                                                                   f_electron_new, vpa, ir)
 
@@ -1031,7 +1031,7 @@ function electron_backward_euler_pseudotimestepping!(scratch, pdf, moments, phi,
                     # convenient way to include that calculation in this debug output.
                     moments.electron.qpar_updated[] = false
                     @views calculate_electron_qpar_from_pdf_no_r!(moments.electron.qpar[:,ir],
-                                                                  electron_ppar_new,
+                                                                  electron_density_new,
                                                                   moments.electron.vth[:,ir],
                                                                   f_electron_new, vpa, ir)
                     @begin_serial_region()
@@ -1150,7 +1150,7 @@ pressure \$p_{e∥}\$.
 
     # Calculate heat flux and derivatives using updated f_electron
     @views calculate_electron_qpar_from_pdf_no_r!(moments.electron.qpar[:,ir],
-                                                  electron_ppar_new,
+                                                  electron_density_new,
                                                   moments.electron.vth[:,ir],
                                                   f_electron_new, vpa, ir)
     @views calculate_electron_moment_derivatives_no_r!(
@@ -1788,7 +1788,7 @@ global_rank[] == 0 && println("recalculating precon")
         if evolve_ppar
             # Calculate heat flux and derivatives using new_variables
             @views calculate_electron_qpar_from_pdf_no_r!(moments.electron.qpar[:,ir],
-                                                          electron_ppar_newvar,
+                                                          electron_density_newvar,
                                                           moments.electron.vth[:,ir],
                                                           f_electron_newvar, vpa,
                                                           ir)
@@ -1803,7 +1803,7 @@ global_rank[] == 0 && println("recalculating precon")
         else
             # Calculate heat flux and derivatives using new_variables
             @views calculate_electron_qpar_from_pdf_no_r!(moments.electron.qpar[:,ir],
-                                                          electron_ppar_newvar,
+                                                          electron_density_newvar,
                                                           moments.electron.vth[:,ir],
                                                           f_electron_newvar, vpa,
                                                           ir)
@@ -2120,7 +2120,7 @@ global_rank[] == 0 && println("recalculating precon")
 
             # Calculate heat flux and derivatives using new_variables
             @views calculate_electron_qpar_from_pdf_no_r!(moments.electron.qpar[:,ir],
-                                                          electron_ppar_new,
+                                                          electron_density_new,
                                                           moments.electron.vth[:,ir],
                                                           f_electron_new, vpa, ir)
 
@@ -4641,7 +4641,7 @@ function update_electron_pdf_with_shooting_method!(pdf, dens, vthe, ppar, qpar, 
     # the electron parallel heat flux is no longer consistent with the electron pdf
     qpar_updated = false
     # calculate the updated electron parallel heat flux
-    calculate_electron_qpar_from_pdf!(qpar, ppar, vthe, pdf, vpa)
+    calculate_electron_qpar_from_pdf!(qpar, density, vthe, pdf, vpa)
     for iz ∈ 1:z.n
         for ivpa ∈ 1:vpa.n
             println("z: ", z.grid[iz], " vpa: ", vpa.grid[ivpa], " pdf: ", pdf[ivpa, 1, iz, 1], " qpar: ", qpar[iz, 1], 
