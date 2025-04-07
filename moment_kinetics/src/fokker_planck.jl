@@ -908,7 +908,8 @@ function implicit_ion_fokker_planck_self_collisions!(pdf_out, pdf_in, dSdt,
                     nl_solver_params; diagnose_entropy_production=false,
                     test_linearised_advance=false,
                     test_particle_preconditioner=false,
-                    use_Maxwellian_Rosenbluth_coefficients_in_preconditioner=false)
+                    use_Maxwellian_Rosenbluth_coefficients_in_preconditioner=false,
+                    use_end_of_step_corrections=true)
     # bounds checking
     n_ion_species = composition.n_ion_species
     @boundscheck vpa.n == size(pdf_out,1) || throw(BoundsError(pdf_out))
@@ -952,10 +953,28 @@ function implicit_ion_fokker_planck_self_collisions!(pdf_out, pdf_in, dSdt,
                             boundary_data_option=boundary_data_option)
         # global success true only if local_success true
         success = success && local_success
+        Fnew = fkpl_arrays.Fnew
+        if use_conserving_corrections && use_end_of_step_corrections
+            # ad-hoc end-of-step corrections
+            @begin_anyv_vperp_vpa_region()
+            deltaF = fkpl_arrays.rhsvpavperp
+            @loop_vperp_vpa ivperp ivpa begin
+                deltaF[ivpa,ivperp] = Fnew[ivpa,ivperp] - Fold[ivpa,ivperp]
+            end
+            # correct deltaF = F^n+1 - F^n so it has no change in moments n, u, p
+            # this introduces errors of the size of the distance between F^n+1 and the 
+            # "correct" root that should have been found by the iterative solve, i.e.,
+            # errors of size ~ atol.
+            conserving_corrections!(deltaF, Fold, vpa, vperp,
+                                fkpl_arrays.S_dummy)
+            # update Fnew
+            @loop_vperp_vpa ivperp ivpa begin
+                Fnew[ivpa,ivperp] = deltaF[ivpa,ivperp] + Fold[ivpa,ivperp]
+            end
+        end
+        
         # store Fnew = F^n+1 in the appropriate distribution function array
         @begin_anyv_vperp_vpa_region()
-        CC = fkpl_arrays.CC
-        Fnew = fkpl_arrays.Fnew
         @loop_vperp_vpa ivperp ivpa begin
             pdf_out[ivpa,ivperp,iz,ir,is] = Fnew[ivpa,ivperp]
         end

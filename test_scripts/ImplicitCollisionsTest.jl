@@ -279,7 +279,8 @@ function test_implicit_collisions_wrapper(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=
     plot_test_output=false,
     test_dense_construction=false,standalone=true,
     test_numerical_conserving_terms=false,
-    boundary_data_option=multipole_expansion)
+    boundary_data_option=multipole_expansion,
+    use_end_of_step_corrections=true)
     
     nelement_local_vpa = nelement_vpa # number of elements per rank
     nelement_global_vpa = nelement_local_vpa # total number of elements 
@@ -400,7 +401,8 @@ function test_implicit_collisions_wrapper(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=
                                         nl_solver_params; diagnose_entropy_production=true,
                                         test_linearised_advance=test_linearised_advance,
                                         test_particle_preconditioner=test_particle_preconditioner,
-                                        use_Maxwellian_Rosenbluth_coefficients_in_preconditioner=use_Maxwellian_Rosenbluth_coefficients_in_preconditioner)
+                                        use_Maxwellian_Rosenbluth_coefficients_in_preconditioner=use_Maxwellian_Rosenbluth_coefficients_in_preconditioner,
+                                        use_end_of_step_corrections=use_end_of_step_corrections)
         @begin_serial_region()
         # update the pdf
         @serial_region begin
