@@ -3475,7 +3475,7 @@ with fvec_in an input and fvec_out the output
                                num_diss_params)
     end
     if advance.neutral_energy
-        neutral_energy_equation!(fvec_out.pz_neutral, fvec_in, moments, collisions, dt,
+        neutral_energy_equation!(fvec_out.p_neutral, fvec_in, moments, collisions, dt,
                                  z_spectral, composition,
                                  external_source_settings.neutral, num_diss_params)
     end
