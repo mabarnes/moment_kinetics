@@ -413,6 +413,7 @@ function test_implicit_collisions_wrapper(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=
         # diagnose Fold
         time += delta_t
         @views diagnose_F_Maxwellian(fvpavperpzrs_old[:,:,1,1,1],Fdummy1,Fdummy2,Fdummy3,vpa,vperp,time,ms,it)
+        println("dSdt = ", dSdt[1,1,1])
         # update outputs
         @serial_region begin
             @loop_s_r_z is ir iz begin
