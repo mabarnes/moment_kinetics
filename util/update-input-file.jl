@@ -223,6 +223,7 @@ PR322_v = (x) -> sqrt(2)*x
 PR322_t = (x) -> x/sqrt(2)
 PR322_omega = (x) -> x ≥ 0.0 ? sqrt(2)*x : x
 PR322_v_diffusion_coefficient = (x) -> 2^1.5*x
+PR322_w_evolve_ppar = (x) -> sqrt(3)*x
 const PR322_definitions_update_map_2V = OptionsDict(
     "vpa_IC_ion_species_1" => OptionsDict("v0" => PR322_v,
                                           "vth0" => PR322_v,
@@ -343,6 +344,13 @@ const PR322_definitions_update_map_1V = recursive_merge(
                 "ion_source_1" => OptionsDict("PI_temperature_target_amplitude" => PR322_T_1V,)
                )
    )
+const PR322_definitions_update_map_1V_evolve_ppar = recursive_merge(
+    PR322_definitions_update_map_1V,
+    OptionsDict("vpa" => OptionsDict("L" => PR322_w_evolve_ppar,),
+                "vz" => OptionsDict("L" => PR322_w_evolve_ppar,),
+               )
+   )
+
 
 function update_input_dict(original_input::DictType;
                            update_definitions_322=false) where DictType <: AbstractDict
@@ -395,10 +403,21 @@ function update_input_dict(original_input::DictType;
                      || ("nelement" ∈ keys(updated_input["vperp"]) && updated_input["vperp"]["nelement"] > 1)
                     )
                 )
+        evolve_moments_section = get(updated_input, "evolve_moments", OptionsDict())
+        if "pressure" ∈ keys(evolve_moments_section)
+            error("Updating for changes in PR #322, but \"pressure\" is present in "
+                  * "[evolve_moments] section, which means input file must have been "
+                  * "created after PR #322 was merged.")
+        end
+        evolve_ppar = get(evolve_moments_section, "parallel_pressure", false)
         if is_2V
             combined_update_map = merge(combined_update_map, PR322_definitions_update_map_2V)
         else
-            combined_update_map = merge(combined_update_map, PR322_definitions_update_map_1V)
+            if evolve_ppar
+                combined_update_map = merge(combined_update_map, PR322_definitions_update_map_1V_evolve_ppar)
+            else
+                combined_update_map = merge(combined_update_map, PR322_definitions_update_map_1V)
+            end
         end
     end
 
