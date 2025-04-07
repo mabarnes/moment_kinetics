@@ -53,7 +53,7 @@ using OrderedCollections: OrderedDict
 using ..type_definitions: mk_float, mk_int, OptionsDict
 using ..array_allocation: allocate_float, allocate_shared_float
 using ..communication
-using ..velocity_moments: integrate_over_vspace
+using ..velocity_moments: integrate_over_vspace,
                           get_density, get_upar, get_ppar, 
                           get_pperp, get_qpar, get_pressure, get_rmom
 using ..looping
@@ -61,7 +61,7 @@ using ..timer_utils
 using ..input_structs: fkpl_collisions_input, set_defaults_and_check_section!
 using ..input_structs: multipole_expansion, direct_integration
 using ..reference_parameters: get_reference_collision_frequency_ii
-using ..fokker_planck_calculus: init_Rosenbluth_potential_integration_weights!
+using ..fokker_planck_calculus: init_Rosenbluth_potential_integration_weights!,
                                 init_Rosenbluth_potential_boundary_integration_weights!,
                                 allocate_boundary_integration_weights,
                                 allocate_rosenbluth_potential_boundary_data,
