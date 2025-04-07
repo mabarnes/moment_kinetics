@@ -152,6 +152,21 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); defa
         V = (V_ppar, V_pdf)
 
         n_vcut_inds = prod(outer_coord_sizes)
+    elseif anyv_region
+        H = allocate_shared_float(linear_restart + 1, linear_restart; comm=comm_anyv_subblock[])
+        c = allocate_shared_float(linear_restart + 1; comm=comm_anyv_subblock[])
+        s = allocate_shared_float(linear_restart + 1; comm=comm_anyv_subblock[])
+        g = allocate_shared_float(linear_restart + 1; comm=comm_anyv_subblock[])
+        V = allocate_shared_float(reverse(coord_sizes)..., linear_restart+1; comm=comm_anyv_subblock[])
+
+        @begin_serial_region()
+        @serial_region begin
+            H .= 0.0
+            c .= 0.0
+            s .= 0.0
+            g .= 0.0
+            V .= 0.0
+        end
     else
         H = allocate_shared_float(linear_restart + 1, linear_restart)
         c = allocate_shared_float(linear_restart + 1)
