@@ -3,7 +3,7 @@ module VelocityIntegralTests
 include("setup.jl")
 
 using moment_kinetics.coordinates: define_coordinate
-using moment_kinetics.velocity_moments: get_density, get_upar, get_ppar, get_pperp, get_pressure
+using moment_kinetics.velocity_moments: get_density, get_upar, get_ppar, get_p
 using moment_kinetics.array_allocation: allocate_float
 
 using MPI
@@ -67,7 +67,7 @@ function runtests()
             upar = 2.0/3.0
             ppar = 2.0/3.0
             pperp = 2.0/3.0
-            pres = get_pressure(ppar,pperp) 
+            pres = pressure(ppar,pperp)
             mass = 1.0
             vth = sqrt(2.0*pres/(dens*mass))
             for ivperp in 1:vperp.n
@@ -81,10 +81,8 @@ function runtests()
             # now check that we can extract the correct moments from the distribution
 
             dens_test = get_density(dfn,vpa,vperp)
-            upar_test = get_upar(dfn,vpa,vperp,dens_test)
-            ppar_test = get_ppar(dfn,vpa,vperp,upar_test)
-            pperp_test = get_pperp(dfn,vpa,vperp)
-            pres_test = pressure(ppar_test,pperp_test)
+            upar_test = get_upar(dfn,dens_test,vpa,vperp,false)
+            pres_test = get_p(dfn,dens_test,upar_test,vpa,vperp,false,false)
             @test isapprox(dens_test, dens; atol=atol)
             @test isapprox(upar_test, upar; atol=atol)
             @test isapprox(pres_test, pres; atol=atol)
@@ -103,8 +101,8 @@ function runtests()
                 end
             end
             dens_test = get_density(dfn1D,vz,vr)
-            upar_test = get_upar(dfn1D,vz,vr,dens_test)
-            ppar_test = get_ppar(dfn1D,vz,vr,upar_test)
+            upar_test = get_upar(dfn1D,dens_test,vz,vr,false)
+            ppar_test = get_ppar(nothing,upar_test,nothing,nothing,dfn1D,vz,vr,false,false,false)
             @test isapprox(dens_test, dens; atol=atol)
             @test isapprox(upar_test, upar; atol=atol)
             @test isapprox(ppar_test, ppar; atol=atol)
@@ -130,9 +128,8 @@ function runtests()
             # now check that we can extract the correct moments from the distribution
 
             dens_test = get_density(dfn,vpa,vperp)
-            upar_test = get_upar(dfn,vpa,vperp,dens_test)
-            ppar_test = get_ppar(dfn,vpa,vperp,upar_test)
-            pperp_test = get_pperp(dfn,vpa,vperp)
+            upar_test = get_upar(dfn,dens_test,vpa,vperp,false)
+            ppar_test = get_ppar(nothing,upar_test,nothing,nothing,dfn,vpa,vperp,false,false,false)
 
             @test isapprox(dens_test, dens; atol=atol)
             @test isapprox(upar_test, upar; atol=atol)
