@@ -96,11 +96,22 @@ Currently Krook collisions
         @loop_s_r_z is ir iz begin
             n = fvec_in.density[iz,ir,is]
             vth = moments.ion.vth[iz,ir,is]
-            nu_ii = get_collision_frequency_ii(collisions, n, vth)
+            if vperp.n == 1
+                # For 1V need to use parallel temperature for Maxwellian in Krook
+                # operator, and for consistency with old 1D1V results also calculate
+                # collision frequency using parallel temperature.
+                Krook_vth = sqrt(3.0) * vth
+                adjust_1V = 1.0 / sqrt(3.0)
+            else
+                Krook_vth = vth
+                adjust_1V = 1.0
+            end
+            nu_ii = get_collision_frequency_ii(collisions, n, Krook_vth)
             @loop_vperp_vpa ivperp ivpa begin
                 pdf_out[ivpa,ivperp,iz,ir,is] -= dt * nu_ii *
                     (fvec_in.pdf[ivpa,ivperp,iz,ir,is]
-                     - Maxwellian_prefactor * exp(-vpa.grid[ivpa]^2 - vperp.grid[ivperp]^2))
+                     - Maxwellian_prefactor * adjust_1V * exp(-(vpa.grid[ivpa]*adjust_1V)^2
+                                                              - (vperp.grid[ivperp]*adjust_1V)^2))
             end
         end
     elseif moments.evolve_p
@@ -109,12 +120,22 @@ Currently Krook collisions
         @loop_s_r_z is ir iz begin
             n = fvec_in.density[iz,ir,is]
             vth = moments.ion.vth[iz,ir,is]
-            nu_ii = get_collision_frequency_ii(collisions, n, vth)
+            if vperp.n == 1
+                # For 1V need to use parallel temperature for Maxwellian in Krook
+                # operator, and for consistency with old 1D1V results also calculate
+                # collision frequency using parallel temperature.
+                Krook_vth = sqrt(3.0) * vth
+                adjust_1V = 1.0 / sqrt(3.0)
+            else
+                Krook_vth = vth
+                adjust_1V = 1.0
+            end
+            nu_ii = get_collision_frequency_ii(collisions, n, Krook_vth)
             @loop_vperp_vpa ivperp ivpa begin
                 pdf_out[ivpa,ivperp,iz,ir,is] -= dt * nu_ii *
                     (fvec_in.pdf[ivpa,ivperp,iz,ir,is]
-                     - Maxwellian_prefactor * exp(-((vpa.grid[ivpa] - fvec_in.upar[iz,ir,is]))^2
-                                                  - (vperp.grid[ivperp])^2))
+                     - Maxwellian_prefactor * adjust_1V * exp(-((vpa.grid[ivpa] - fvec_in.upar[iz,ir,is])*adjust_1V)^2
+                                                              - (vperp.grid[ivperp])^2)*adjust_1V)
             end
         end
     elseif moments.evolve_upar
@@ -122,12 +143,22 @@ Currently Krook collisions
         @loop_s_r_z is ir iz begin
             n = fvec_in.density[iz,ir,is]
             vth = moments.ion.vth[iz,ir,is]
-            nu_ii = get_collision_frequency_ii(collisions, n, vth)
+            if vperp.n == 1
+                # For 1V need to use parallel temperature for Maxwellian in Krook
+                # operator, and for consistency with old 1D1V results also calculate
+                # collision frequency using parallel temperature.
+                Krook_vth = sqrt(3.0) * vth
+                vth_prefactor = 1.0 / Krook_vth
+            else
+                Krook_vth = vth
+                vth_prefactor = 1.0 / Krook_vth^3
+            end
+            nu_ii = get_collision_frequency_ii(collisions, n, Krook_vth)
             @loop_vperp_vpa ivperp ivpa begin
                 pdf_out[ivpa,ivperp,iz,ir,is] -= dt * nu_ii *
                     (fvec_in.pdf[ivpa,ivperp,iz,ir,is]
-                     - 1.0 / vth * Maxwellian_prefactor * exp(-(vpa.grid[ivpa] / vth)^2
-                                                              - (vperp.grid[ivperp] / vth)^2))
+                     - vth_prefactor * Maxwellian_prefactor * exp(-(vpa.grid[ivpa]/Krook_vth)^2
+                                                                  - (vperp.grid[ivperp]/Krook_vth)^2))
             end
         end
     elseif moments.evolve_density
@@ -136,13 +167,23 @@ Currently Krook collisions
         @loop_s_r_z is ir iz begin
             n = fvec_in.density[iz,ir,is]
             vth = moments.ion.vth[iz,ir,is]
-            nu_ii = get_collision_frequency_ii(collisions, n, vth)
+            if vperp.n == 1
+                # For 1V need to use parallel temperature for Maxwellian in Krook
+                # operator, and for consistency with old 1D1V results also calculate
+                # collision frequency using parallel temperature.
+                Krook_vth = sqrt(3.0) * vth
+                vth_prefactor = 1.0 / Krook_vth
+            else
+                Krook_vth = vth
+                vth_prefactor = 1.0 / Krook_vth^3
+            end
+            nu_ii = get_collision_frequency_ii(collisions, n, Krook_vth)
             @loop_vperp_vpa ivperp ivpa begin
                 pdf_out[ivpa,ivperp,iz,ir,is] -= dt * nu_ii *
                 (fvec_in.pdf[ivpa,ivperp,iz,ir,is]
-                 - 1.0 / vth * Maxwellian_prefactor
-                 * exp(-((vpa.grid[ivpa] - fvec_in.upar[iz,ir,is]) / vth)^2
-                           - (vperp.grid[ivperp]/vth)^2))
+                 - vth_prefactor * Maxwellian_prefactor
+                 * exp(-((vpa.grid[ivpa] - fvec_in.upar[iz,ir,is])/Krook_vth)^2
+                           - (vperp.grid[ivperp]/Krook_vth)^2))
             end
         end
     else
@@ -150,17 +191,21 @@ Currently Krook collisions
             n = fvec_in.density[iz,ir,is]
             vth = moments.ion.vth[iz,ir,is]
             if vperp.n == 1
-                vth_prefactor = 1.0 / vth
+                # For 1V need to use parallel temperature for Maxwellian in Krook
+                # operator.
+                Krook_vth = sqrt(3.0) * vth
+                vth_prefactor = 1.0 / Krook_vth
             else
-                vth_prefactor = 1.0 / vth^3
+                Krook_vth = vth
+                vth_prefactor = 1.0 / Krook_vth^3
             end
-            nu_ii = get_collision_frequency_ii(collisions, n, vth)
+            nu_ii = get_collision_frequency_ii(collisions, n, Krook_vth)
             @loop_vperp_vpa ivperp ivpa begin
                 pdf_out[ivpa,ivperp,iz,ir,is] -= dt * nu_ii *
                     (fvec_in.pdf[ivpa,ivperp,iz,ir,is]
                      - n * vth_prefactor * Maxwellian_prefactor
-                     * exp(-((vpa.grid[ivpa] - fvec_in.upar[iz,ir,is])/vth)^2
-                           - (vperp.grid[ivperp]/vth)^2))
+                     * exp(-((vpa.grid[ivpa] - fvec_in.upar[iz,ir,is])/Krook_vth)^2
+                           - (vperp.grid[ivperp]/Krook_vth)^2))
             end
         end
     end
