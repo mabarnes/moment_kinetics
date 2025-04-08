@@ -917,7 +917,7 @@ function integral(prefactor::Function, integrand, vzeta, vr, vz)
     integral = 0.0
     for ivzeta ∈ eachindex(vzeta_grid), ivr ∈ eachindex(vr_grid), ivz ∈ eachindex(vz_grid)
         integral += prefactor(vzeta_grid[ivzeta], vr_grid[ivr], vz_grid[ivz]) *
-                    integrand[ivr, ivzeta] * vzeta_wgts[ivzeta] * vr_wgts[ivr] *
+                    integrand[ivz, ivr, ivzeta] * vzeta_wgts[ivzeta] * vr_wgts[ivr] *
                     vz_wgts[ivz]
     end
     return integral
