@@ -603,6 +603,9 @@ function load_neutral_particle_moments_data(fid; printout=false)
     # Read neutral species p
     neutral_p = load_variable(group, "p_neutral")
 
+    # Read neutral species pz
+    neutral_pz = load_variable(group, "pz_neutral")
+
     # Read neutral species qz
     neutral_qz = load_variable(group, "qz_neutral")
 
@@ -613,7 +616,8 @@ function load_neutral_particle_moments_data(fid; printout=false)
         println("done.")
     end
 
-    return neutral_density, neutral_uz, neutral_p, neutral_qz, neutral_thermal_speed
+    return neutral_density, neutral_uz, neutral_p, neutral_pz, neutral_qz,
+           neutral_thermal_speed
 end
 
 """
