@@ -897,6 +897,7 @@ Add external source term to the ion kinetic equation.
                     this_vth_factor = vth[iz,ir,is]^3
                 end
                 this_upar = upar[iz,ir,is]
+                this_vth = vth[iz,ir,is]
                 this_prefactor = dt * this_vth_factor / density[iz,ir,is] *
                                  constant_prefactor * source_vth_factor *
                                  source_amplitude[iz,ir]
@@ -1154,6 +1155,7 @@ Note that this function operates on a single point in `r`, given by `ir`, and `p
             this_vth_factor = vth[iz]^3
         end
         this_upar = electron_upar[iz]
+        this_vth = vth[iz]
         this_prefactor = dt * this_vth_factor / electron_density[iz] *
                          constant_prefactor * source_vth_factor * source_amplitude[iz]
         @loop_vperp ivperp begin
@@ -1420,6 +1422,7 @@ Add external source term to the neutral kinetic equation.
                 this_vth_factor = vth[iz,ir,isn]^3
             end
             this_uz = uz[iz,ir,isn]
+            this_vth = vth[iz,ir,isn]
             this_prefactor = dt * this_vth_factor / density[iz,ir,isn] *
                              constant_prefactor * source_vth_factor *
                              source_amplitude[iz,ir]
@@ -1524,29 +1527,29 @@ source amplitude.
 
     is = 1
     ion_moments = moments.ion
-    density = fvec_in.density
-    upar = fvec_in.upar
-    p= fvec_in.p
+    density = @view fvec_in.density[:,:,1]
+    upar = @view fvec_in.upar[:,:,1]
+    p = @view fvec_in.p[:,:,1]
 
     if ion_source_settings.source_type == "Maxwellian"
         if moments.evolve_p
             if vperp.n == 1
                 @loop_r_z ir iz begin
                     moments.ion.external_source_pressure_amplitude[iz,ir,index] =
-                        (1.0/3.0 * ion_source_settings[index].source_T +
-                         1.0/3.0 * moments.ion.upar[iz,ir]^2) *
-                        ion_source_settings[index].source_strength *
-                        ion_source_settings[index].r_amplitude[ir] *
-                        ion_source_settings[index].z_amplitude[iz]
+                        (1.0/3.0 * ion_source_settings.source_T +
+                         1.0/3.0 * upar[iz,ir]^2) *
+                        ion_source_settings.source_strength *
+                        ion_source_settings.r_amplitude[ir] *
+                        ion_source_settings.z_amplitude[iz]
                 end
             else
                 @loop_r_z ir iz begin
                     moments.ion.external_source_pressure_amplitude[iz,ir,index] =
-                        (ion_source_settings[index].source_T +
-                         1.0/3.0 * moments.ion.upar[iz,ir]^2) *
-                        ion_source_settings[index].source_strength *
-                        ion_source_settings[index].r_amplitude[ir] *
-                        ion_source_settings[index].z_amplitude[iz]
+                        (ion_source_settings.source_T +
+                         1.0/3.0 * upar[iz,ir]^2) *
+                        ion_source_settings.source_strength *
+                        ion_source_settings.r_amplitude[ir] *
+                        ion_source_settings.z_amplitude[iz]
                 end
             end
         end
@@ -1564,20 +1567,20 @@ source amplitude.
             if vperp.n == 1
                 @loop_r_z ir iz begin
                     moments.ion.external_source_pressure_amplitude[iz,ir,index] =
-                        (1.0/3.0 * ion_source_settings[index].source_T +
+                        (1.0/3.0 * ion_source_settings.source_T +
                          1.0/3.0 * moments.ion.upar[iz,ir]^2 - moments.ion.p[iz,ir]) *
-                        ion_source_settings[index].source_strength *
-                        ion_source_settings[index].r_amplitude[ir] *
-                        ion_source_settings[index].z_amplitude[iz]
+                        ion_source_settings.source_strength *
+                        ion_source_settings.r_amplitude[ir] *
+                        ion_source_settings.z_amplitude[iz]
                 end
             else
                 @loop_r_z ir iz begin
                     moments.ion.external_source_pressure_amplitude[iz,ir,index] =
-                        (ion_source_settings[index].source_T +
+                        (ion_source_settings.source_T +
                          1.0/3.0 * moments.ion.upar[iz,ir]^2 - moments.ion.p[iz,ir]) *
-                        ion_source_settings[index].source_strength *
-                        ion_source_settings[index].r_amplitude[ir] *
-                        ion_source_settings[index].z_amplitude[iz]
+                        ion_source_settings.source_strength *
+                        ion_source_settings.r_amplitude[ir] *
+                        ion_source_settings.z_amplitude[iz]
                 end
             end
         end
@@ -1629,14 +1632,14 @@ source amplitude.
             if vperp.n == 1
                 @loop_r_z ir iz begin
                     moments.ion.external_source_pressure_amplitude[iz,ir,index] =
-                        (1.0/3.0 * ion_source_settings[index].source_T +
+                        (1.0/3.0 * ion_source_settings.source_T +
                          1.0/3.0 * moments.ion.upar[iz,ir]^2) *
                         amplitude * ion_source_settings.controller_source_profile[iz,ir]
                 end
             else
                 @loop_r_z ir iz begin
                     moments.ion.external_source_pressure_amplitude[iz,ir,index] =
-                        (ion_source_settings[index].source_T +
+                        (ion_source_settings.source_T +
                          1.0/3.0 * moments.ion.upar[iz,ir]^2) *
                         amplitude * ion_source_settings.controller_source_profile[iz,ir]
                 end
@@ -1692,14 +1695,14 @@ source amplitude.
             if vperp.n == 1
                 @loop_r_z ir iz begin
                     moments.ion.external_source_pressure_amplitude[iz,ir,index] =
-                        (1.0/3.0 * ion_source_settings[index].source_T +
+                        (1.0/3.0 * ion_source_settings.source_T +
                          1.0/3.0 * moments.ion.upar[iz,ir]^2 - moments.ion.p[iz,ir]) *
                         amplitude * ion_source_settings.controller_source_profile[iz,ir]
                 end
             else
                 @loop_r_z ir iz begin
                     moments.ion.external_source_pressure_amplitude[iz,ir,index] =
-                        (ion_source_settings[index].source_T +
+                        (ion_source_settings.source_T +
                          1.0/3.0 * moments.ion.upar[iz,ir]^2 - moments.ion.p[iz,ir]) *
                         amplitude * ion_source_settings.controller_source_profile[iz,ir]
                 end
@@ -1728,14 +1731,14 @@ source amplitude.
             if vperp.n == 1
                 @loop_r_z ir iz begin
                     moments.ion.external_source_pressure_amplitude[iz,ir,index] =
-                        (1.0/3.0 * ion_source_settings[index].source_T +
+                        (1.0/3.0 * ion_source_settings.source_T +
                          1.0/3.0 * moments.ion.upar[iz,ir]^2) *
                         amplitude[iz,ir,index]
                 end
             else
                 @loop_r_z ir iz begin
                     moments.ion.external_source_pressure_amplitude[iz,ir,index] =
-                        (ion_source_settings[index].source_T +
+                        (ion_source_settings.source_T +
                          1.0/3.0 * moments.ion.upar[iz,ir]^2) *
                         amplitude[iz,ir,index]
                 end
