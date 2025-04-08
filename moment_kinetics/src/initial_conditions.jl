@@ -1230,20 +1230,22 @@ function init_ion_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
                 # The corrected version has the correct moments because
                 #   ∫d^3v pdf_before = densfac
                 #   ∫d^3v m_s w_s^2 / vths^2 * pdf_before = pfac
-                #   ∫d^3v m_s w_s^2 (m_s*w_s^2/vths^2/pfac - 1/densfac) / vths^2 pdf_before = pfac2
-                # so
-                #   ∫d^3v ( 1/densfac + (1.5 - pfac/densfac)/pfac2 * (m_s*w_s^2/vths^2/pfac - 1/densfac) / vths^2 ) * pdf_before
-                #   = 1 + (1.5 - pfac / densfac) / pfac2 * (pfac/pfac - densfac/densfac) / vths^2
+                #   ∫d^3v m_s w_s^2 / vths^2 (m_s*w_s^2/vths^2/pfac - 1/densfac) pdf_before = pfac2
+                # so if
+                #   pdf = ( 1/densfac + (1.5 - pfac/densfac)/pfac2 * (m_s*w_s^2/vths^2/pfac - 1/densfac) ) * pdf_before
+                # then
+                #   ∫d^3v ( 1/densfac + (1.5 - pfac/densfac)/pfac2 * (m_s*w_s^2/vths^2/pfac - 1/densfac) ) * pdf_before
+                #   = 1 + (1.5 - pfac / densfac) / pfac2 * (pfac/pfac - densfac/densfac)
                 #   = 1
                 # and
-                #   ∫d^3v m_s w_s^2 / vths^2 * ( 1/densfac + (1.5 - pfac/densfac)/pfac2 * (m_s*w_s^2/vths^2/pfac - 1/densfac) / vths^2 ) * pdf_before
+                #   ∫d^3v m_s w_s^2 / vths^2 * ( 1/densfac + (1.5 - pfac/densfac)/pfac2 * (m_s*w_s^2/vths^2/pfac - 1/densfac) ) * pdf_before
                 #   = pfac/densfac + (1.5 - pfac/densfac)/pfac2 * pfac2
                 #   = 1.5
                 @loop_vperp ivperp begin
                     @views @. pdf[:,ivperp,iz] = pdf[:,ivperp,iz]/densfac +
                                                  (1.5 - pfac/densfac)/pfac2 *
                                                  ((vperp.grid[ivperp]^2 + vpa.scratch^2)*(v_norm_fac[iz]/vth[iz])^2/pfac - 1.0/densfac) *
-                                                 pdf[:,ivperp,iz]*(v_norm_fac[iz]/vth[iz])^2
+                                                 pdf[:,ivperp,iz]
                 end
             end
         else
@@ -1489,7 +1491,7 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
                 end
                 pfac2 = @views (v_norm_fac[iz]/vth[iz])^2 *
                                integral((vzeta,vr,vz)->(((vz - uz_offset)^2 + vzeta^2 + vr^2) * (((vz - uz_offset)^2 + vzeta^2 + vr^2) * (v_norm_fac[iz] / vth[iz])^2 / pfac - 1.0/densfac)),
-                                        pdf[:,:,iz], vzeta, vr, vz)
+                                        pdf[:,:,:,iz], vzeta, vr, vz)
 
                 # The following update ensures the density and pressure moments of pdf
                 # have the expected values. The velocity moment is always exactly zero
@@ -1498,19 +1500,21 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
                 #   ∫d^3v pdf_before = densfac
                 #   ∫d^3v m_s w_s^2 / vths^2 * pdf_before = pfac
                 #   ∫d^3v m_s w_s^2 (m_s*w_s^2/vths^2/pfac - 1/densfac) / vths^2 pdf_before = pfac2
-                # so
-                #   ∫d^3v ( 1/densfac + (1.5 - pfac/densfac)/pfac2 * (m_s*w_s^2/vths^2/pfac - 1/densfac) / vths^2 ) * pdf_before
-                #   = 1 + (1.5 - pfac / densfac) / pfac2 * (pfac/pfac - densfac/densfac) / vths^2
+                # so if
+                #   pdf = ( 1/densfac + (1.5 - pfac/densfac)/pfac2 * (m_s*w_s^2/vths^2/pfac - 1/densfac) ) * pdf_before
+                # then
+                #   ∫d^3v ( 1/densfac + (1.5 - pfac/densfac)/pfac2 * (m_s*w_s^2/vths^2/pfac - 1/densfac) ) * pdf_before
+                #   = 1 + (1.5 - pfac / densfac) / pfac2 * (pfac/pfac - densfac/densfac)
                 #   = 1
                 # and
-                #   ∫d^3v m_s w_s^2 / vths^2 * ( 1/densfac + (1.5 - pfac/densfac)/pfac2 * (m_s*w_s^2/vths^2/pfac - 1/densfac) / vths^2 ) * pdf_before
+                #   ∫d^3v m_s w_s^2 / vths^2 * ( 1/densfac + (1.5 - pfac/densfac)/pfac2 * (m_s*w_s^2/vths^2/pfac - 1/densfac) ) * pdf_before
                 #   = pfac/densfac + (1.5 - pfac/densfac)/pfac2 * pfac2
                 #   = 1.5
                 @loop_vzeta_vr ivzeta ivr begin
                     @views @. pdf[:,ivr,ivzeta,iz] = pdf[:,ivr,ivzeta,iz]/densfac +
                                                      (1.5 - pfac/densfac)/pfac2 *
                                                      ((vr.grid[ivr]^2 + vzeta.grid[ivzeta]^2 + vz.scratch^2)*(v_norm_fac[iz]/vth[iz])^2/pfac - 1.0/densfac) *
-                                                     pdf[:,ivr,ivzeta,iz]*(v_norm_fac[iz]/vth[iz])^2
+                                                     pdf[:,ivr,ivzeta,iz]
                 end
             end
         else
