@@ -1855,7 +1855,7 @@ function update_neutral_p_species!(p, density, uz, ur, uzeta, vth, ff, vz, vr, v
         @loop_r_z ir iz begin
             p[iz,ir] = 1.0/3.0 * (integral((vzeta,vr,vz)->(vz^2 + vzeta^2 + vr^2),
                                            @view(ff[:,:,:,iz,ir]), vzeta, vr, vz)
-                                  - u_zeta[iz,ir]^2 - u_r[iz,ir]^2) *
+                                  - uzeta[iz,ir]^2 - ur[iz,ir]^2) *
                        density[iz,ir]
         end
     elseif evolve_density
@@ -1868,7 +1868,7 @@ function update_neutral_p_species!(p, density, uz, ur, uzeta, vth, ff, vz, vr, v
         @loop_r_z ir iz begin
             p[iz,ir] = 1.0/3.0 * (integral((vzeta,vr,vz)->(vz^2 + vzeta^2 + vr^2),
                                            @view(ff[:,:,:,iz,ir]), vzeta, vr, vz)
-                                  - u_z[iz,ir]^2 - u_zeta[iz,ir]^2 - u_r[iz,ir]^2) *
+                                  - uz[iz,ir]^2 - uzeta[iz,ir]^2 - ur[iz,ir]^2) *
                        density[iz,ir]
         end
     else
@@ -2138,6 +2138,17 @@ function update_neutral_pzeta_species!(pzeta, density, uzeta, vth, ff, vz, vr, v
     return nothing
 end
 
+function update_neutral_vth!(vth, p, dens, z, r, composition)
+    @boundscheck composition.n_neutral_species == size(vth,3) || throw(BoundsError(vth))
+    @boundscheck r.n == size(vth,2) || throw(BoundsError(vth))
+    @boundscheck z.n == size(vth,1) || throw(BoundsError(vth))
+
+    @begin_sn_r_z_region()
+    @loop_sn_r_z isn ir iz begin
+        vth[iz,ir,isn] = sqrt(2.0 * p[iz,ir,isn] / dens[iz,ir,isn])
+    end
+end
+
 function update_neutral_qz!(qz, qz_updated, density, uz, vth, pdf, vz, vr, vzeta, z, r,
                             composition, evolve_density, evolve_upar, evolve_p)
     @boundscheck r.n == size(qz,2) || throw(BoundsError(qz))
@@ -2400,6 +2411,8 @@ function update_derived_moments_neutral!(new_scratch, moments, vz, vr, vzeta, z,
                        new_scratch.p_neutral, moments.neutral.vth,
                        new_scratch.pdf_neutral, vz, vr, vzeta, z, r, composition,
                        moments.evolve_density, moments.evolve_upar, moments.evolve_p)
+    update_neutral_vth!(moments.neutral.vth, new_scratch.p_neutral,
+                        new_scratch.density_neutral, z, r, composition)
 end
 
 """
