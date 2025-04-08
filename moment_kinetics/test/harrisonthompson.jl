@@ -65,10 +65,10 @@ end
 test_input_finite_difference = OptionsDict("composition" => OptionsDict("n_ion_species" => 1,
                                                                         "n_neutral_species" => 0,
                                                                         "electron_physics" => "boltzmann_electron_response",
-                                                                        "T_e" => 0.6666666666666666,
-                                                                        "T_wall" => 0.6666666666666666),
+                                                                        "T_e" => 1.0,
+                                                                        "T_wall" => 0.3333333333333333),
                                            "ion_species_1" => OptionsDict("initial_density" => 1.0,
-                                                                          "initial_temperature" => 0.6666666666666666),
+                                                                          "initial_temperature" => 0.3333333333333333),
                                            "z_IC_ion_species_1" => OptionsDict("initialization_option" => "gaussian",
                                                                                "density_amplitude" => 0.0,
                                                                                "density_phase" => 0.0,
@@ -115,7 +115,7 @@ test_input_finite_difference = OptionsDict("composition" => OptionsDict("n_ion_s
                                                                "discretization" => "finite_difference"),
                                            "ion_source_1" => OptionsDict("active" => true,
                                                                          "source_strength" => ionization_frequency,
-                                                                         "source_T" => 0.5,
+                                                                         "source_T" => 0.25,
                                                                          "z_profile" => "constant",
                                                                          "r_profile" => "constant"))
 
@@ -148,8 +148,8 @@ test_input_chebyshev_split2 = recursive_merge(test_input_chebyshev_split1,
 test_input_chebyshev_split3 = recursive_merge(test_input_chebyshev_split2,
                                               OptionsDict("output" => OptionsDict("run_name" => "chebyshev_pseudospectral_split3"),
                                                           "evolve_moments" => OptionsDict("pressure" => true),
-                                                          "vpa" => OptionsDict("L" => 11.313708498984761),
-                                                          "vz" => OptionsDict("L" => 11.313708498984761),
+                                                          "vpa" => OptionsDict("L" => 13.856406460551018),
+                                                          "vz" => OptionsDict("L" => 13.856406460551018),
                                                          ))
 
 """
