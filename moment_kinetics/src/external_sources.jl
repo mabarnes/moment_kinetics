@@ -1497,10 +1497,11 @@ end
 
 Contribute all of the ion source controllers to fvec_in, one by one.
 """
-function total_external_ion_source_controllers!(fvec_in, moments, ion_sources, dt)
+function total_external_ion_source_controllers!(fvec_in, moments, ion_sources, vperp, dt)
     for index ∈ eachindex(ion_sources)
         if ion_sources[index].active
-            external_ion_source_controller!(fvec_in, moments, ion_sources[index], index, dt)
+            external_ion_source_controller!(fvec_in, moments, ion_sources[index], index,
+                                            vperp, dt)
         end
     end
     return nothing
@@ -1513,14 +1514,14 @@ Calculate the amplitude when using a PI controller for the density to set the ex
 source amplitude.
 """
 @timeit global_timer external_ion_source_controller!(
-                         fvec_in, moments, ion_source_settings, index, dt) = begin
+                         fvec_in, moments, ion_source_settings, index, vperp, dt) = begin
     @begin_r_z_region()
 
     is = 1
     ion_moments = moments.ion
     density = fvec_in.density
     upar = fvec_in.upar
-    ppar = fvec_in.ppar
+    p= fvec_in.p
 
     if ion_source_settings.source_type == "Maxwellian"
         if moments.evolve_p
@@ -1637,7 +1638,7 @@ source amplitude.
         end
     elseif ion_source_settings.source_type == "temperature_midpoint_control"
         @begin_serial_region()
-        ion_moments.temp .= 2 .* ppar ./ density
+        ion_moments.temp .= p ./ density
         # controller_amplitude error is a shared memory Vector of length 1
         controller_amplitude = ion_source_settings.PI_controller_amplitude
         @serial_region begin
@@ -1859,11 +1860,12 @@ end
 
 Contribute all of the neutral source controllers to fvec_in, one by one.
 """
-function total_external_neutral_source_controllers!(fvec_in, moments, neutral_sources, r, z, dt)
+function total_external_neutral_source_controllers!(fvec_in, moments, neutral_sources, r,
+                                                    z, vzeta, vr, dt)
     for index ∈ eachindex(neutral_sources)
         if neutral_sources[index].active
-            external_neutral_source_controller!(fvec_in, moments, neutral_sources[index], 
-                                                index, r, z, dt)
+            external_neutral_source_controller!(fvec_in, moments, neutral_sources[index],
+                                                index, r, z, vzeta, vr, dt)
         end
     end
     return nothing
@@ -1877,8 +1879,8 @@ Calculate the amplitude when using a PI controller for the density to set the ex
 source amplitude.
 """
 @timeit global_timer external_neutral_source_controller!(
-                         fvec_in, moments, neutral_source_settings, index, r, z,
-                         dt) = begin
+                         fvec_in, moments, neutral_source_settings, index, r, z, vzeta,
+                         vr, dt) = begin
     @begin_r_z_region()
 
     is = 1
@@ -1886,7 +1888,7 @@ source amplitude.
 
     if neutral_source_settings.source_type == "Maxwellian"
         if moments.evolve_p
-            if vperp.n == 1
+            if vzeta.n == 1 && vr.n == 1
                 @loop_r_z ir iz begin
                     moments.neutral.external_source_pressure_amplitude[iz,ir,index] =
                         (1.0/3.0 * neutral_source_settings[index].source_T +
