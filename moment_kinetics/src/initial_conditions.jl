@@ -535,8 +535,8 @@ function initialize_pdf!(pdf, moments, boundary_distributions, composition, r, z
                 @views init_ion_pdf_over_density!(
                     pdf.ion.norm[:,:,:,ir,is], species.ion[is], composition, vpa, vperp,
                     z, vpa_spectral, moments.ion.dens[:,ir,is],
-                    moments.ion.upar[:,ir,is], moments.ion.ppar[:,ir,is],
-                    moments.ion.vth[:,ir,is],
+                    moments.ion.upar[:,ir,is], moments.ion.p[:,ir,is],
+                    moments.ion.ppar[:,ir,is], moments.ion.vth[:,ir,is],
                     moments.ion.v_norm_fac[:,ir,is], moments.evolve_density,
                     moments.evolve_upar, moments.evolve_p)
             end
@@ -562,7 +562,7 @@ function initialize_pdf!(pdf, moments, boundary_distributions, composition, r, z
                 pdf.neutral.norm[:,:,:,:,ir,isn], boundary_distributions,
                 species.neutral[isn], composition, vz, vr, vzeta, z, vz_spectral,
                 moments.neutral.dens[:,ir,isn], moments.neutral.uz[:,ir,isn],
-                moments.neutral.pz[:,ir,isn], moments.neutral.vth[:,ir,isn],
+                moments.neutral.p[:,ir,isn], moments.neutral.vth[:,ir,isn],
                 moments.neutral.v_norm_fac[:,ir,isn], moments.evolve_density,
                 moments.evolve_upar, moments.evolve_p,
                 wall_flux_0[ir,min(isn,composition.n_ion_species)],
@@ -1137,8 +1137,8 @@ end
 """
 """
 function init_ion_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
-        vpa_spectral, density, upar, ppar, vth, v_norm_fac, evolve_density, evolve_upar,
-        evolve_p)
+        vpa_spectral, density, upar, p, ppar, vth, v_norm_fac, evolve_density,
+        evolve_upar, evolve_p)
 
     # Prefactor for Maxwellian distribution functions
     if vperp.n == 1
@@ -1335,7 +1335,7 @@ function init_ion_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
 
             # Get the unnormalised pdf and the moments of the constructed full-f
             # distribution function (which will be modified from the input moments).
-            convert_full_f_ion_to_normalised!(pdf, density, upar, ppar, vth, vperp, vpa,
+            convert_full_f_ion_to_normalised!(pdf, density, upar, p, vth, vperp, vpa,
                                               vpa_spectral, evolve_density, evolve_upar,
                                               evolve_p)
 
@@ -1394,7 +1394,7 @@ end
 """
 """
 function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, composition,
-        vz, vr, vzeta, z, vz_spectral, density, uz, pz, vth, v_norm_fac, evolve_density,
+        vz, vr, vzeta, z, vz_spectral, density, uz, p, vth, v_norm_fac, evolve_density,
         evolve_upar, evolve_p, wall_flux_0, wall_flux_L)
 
     zero = 1.0e-14
@@ -1676,7 +1676,7 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
 
             # Get the unnormalised pdf and the moments of the constructed full-f
             # distribution function (which will be modified from the input moments).
-            convert_full_f_neutral_to_normalised!(pdf, density, uz, pz, vth, vzeta, vr,
+            convert_full_f_neutral_to_normalised!(pdf, density, uz, p, vth, vzeta, vr,
                                                   vz, vz_spectral, vth_init,
                                                   evolve_density, evolve_upar,
                                                   evolve_p)
@@ -2026,8 +2026,8 @@ function convert_full_f_ion_to_normalised!(f, density, upar, p, vth, vperp, vpa,
     @loop_z iz begin
         # Calculate moments
         @views density[iz] = get_density(f[:,:,iz], vpa, vperp)
-        @views upar[iz] = get_upar(f[:,:,iz], vpa, vperp)
-        @views p[iz] = get_p(f[:,:,iz], vpa, vperp)
+        @views upar[iz] = get_upar(f[:,:,iz], density[iz], vpa, vperp, false)
+        @views p[iz] = get_p(f[:,:,iz], density[iz], upar[iz], vpa, vperp, false, false)
 
         vth[iz] = sqrt(2.0*p[iz]/density[iz])
 
@@ -2065,7 +2065,7 @@ the moments of `f`.
 
 Inputs/outputs depend on z, vzeta, vr and vz (should be inside loops over species, r)
 """
-function convert_full_f_neutral_to_normalised!(f, density, uz, pz, vth, vzeta, vr, vz,
+function convert_full_f_neutral_to_normalised!(f, density, uz, p, vth, vzeta, vr, vz,
         vz_spectral, vth_init, evolve_density, evolve_upar, evolve_p)
 
     if vzeta.n > 1 || vr.n > 1
@@ -2076,8 +2076,8 @@ function convert_full_f_neutral_to_normalised!(f, density, uz, pz, vth, vzeta, v
     @loop_z iz begin
         # Calculate moments
         @views density[iz] = get_neutral_density(f[:,:,:,iz], vz, vr, vzeta)
-        @views uz[iz] = get_neutral_uz(f[:,:,:,iz], vz, vr, vzeta, false)
-        @views p[iz] = get_neutral_p(f[:,:,:,iz], vz, vr, vzeta, false, false)
+        @views uz[iz] = get_neutral_uz(f[:,:,:,iz], density[:,iz], vz, vr, vzeta, false)
+        @views p[iz] = get_neutral_p(f[:,:,:,iz], density[:,iz], uz[:,iz], vz, vr, vzeta, false, false)
         vth[iz] = sqrt(2.0*p[iz]/density[iz])
 
         # Normalise f
