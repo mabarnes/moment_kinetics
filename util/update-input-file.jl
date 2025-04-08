@@ -435,6 +435,7 @@ function update_input_dict(original_input::DictType;
             end
             old_value = section[old_key]
             if new_option_setting isa AbstractDict
+                pop!(section, old_key)
                 if old_value ∉ keys(new_option_setting)
                     continue
                 end
@@ -454,6 +455,7 @@ function update_input_dict(original_input::DictType;
             elseif new_option_setting isa Function
                 section[old_key] = new_option_setting(old_value)
             else
+                pop!(section, old_key)
                 section[new_option_setting] = old_value
             end
         end
