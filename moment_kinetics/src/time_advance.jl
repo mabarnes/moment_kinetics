@@ -3439,12 +3439,13 @@ with fvec_in an input and fvec_out the output
     neutral_z_advect, neutral_r_advect, neutral_vz_advect = advect_objects.neutral_z_advect, advect_objects.neutral_r_advect, advect_objects.neutral_vz_advect
 
     if advance.external_source
-        total_external_ion_source_controllers!(fvec_in, moments, external_source_settings.ion,
-                                        dt)
+        total_external_ion_source_controllers!(fvec_in, moments,
+                                               external_source_settings.ion, vperp, dt)
     end
     if advance.neutral_external_source
         total_external_neutral_source_controllers!(fvec_in, moments,
-                                            external_source_settings.neutral, r, z, dt)
+                                                   external_source_settings.neutral, r, z,
+                                                   vzeta, vr, dt)
     end
 
     # Start advance for moments
