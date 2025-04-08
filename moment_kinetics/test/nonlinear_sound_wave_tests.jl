@@ -208,13 +208,13 @@ function run_test(test_input, rtol, atol, upar_rtol=nothing; args...)
                 # Check ion particle moments and f
                 ######################################
 
-                newgrid_n_ion = interpolate_to_grid_z(expected.z, n_ion[:, :, tind], z, z_spectral)
+                newgrid_n_ion = interpolate_to_grid_z(expected.z, n_ion[:, 1, tind], z, z_spectral)
                 @test isapprox(expected.n_ion[:, tind], newgrid_n_ion[:,1], rtol=rtol)
 
-                newgrid_upar_ion = interpolate_to_grid_z(expected.z, upar_ion[:, :, tind], z, z_spectral)
+                newgrid_upar_ion = interpolate_to_grid_z(expected.z, upar_ion[:, 1, tind], z, z_spectral)
                 @test isapprox(expected.upar_ion[:, tind], newgrid_upar_ion[:,1], rtol=upar_rtol, atol=atol)
 
-                newgrid_ppar_ion = interpolate_to_grid_z(expected.z, ppar_ion[:, :, tind], z, z_spectral)
+                newgrid_ppar_ion = interpolate_to_grid_z(expected.z, ppar_ion[:, 1, tind], z, z_spectral)
                 @test isapprox(expected.ppar_ion[:, tind], newgrid_ppar_ion[:,1], rtol=rtol)
 
                 newgrid_vth_ion = @. sqrt(2.0*newgrid_ppar_ion/3.0/newgrid_n_ion) # Divide by 3 because vth is defined with the full pressure, which for 1D1V where T_⟂=0 is T=T_∥/3
@@ -240,13 +240,13 @@ function run_test(test_input, rtol, atol, upar_rtol=nothing; args...)
                 ######################################
 
                 newgrid_n_neutral = interpolate_to_grid_z(expected.z, n_neutral[:, :, tind], z, z_spectral)
-                @test isapprox(expected.n_neutral[:, tind], newgrid_n_neutral[:,:,1], rtol=rtol)
+                @test isapprox(expected.n_neutral[:, tind], newgrid_n_neutral[:,1,1], rtol=rtol)
 
                 newgrid_upar_neutral = interpolate_to_grid_z(expected.z, upar_neutral[:, :, tind], z, z_spectral)
-                @test isapprox(expected.upar_neutral[:, tind], newgrid_upar_neutral[:,:,1], rtol=upar_rtol, atol=atol)
+                @test isapprox(expected.upar_neutral[:, tind], newgrid_upar_neutral[:,1,1], rtol=upar_rtol, atol=atol)
 
                 newgrid_ppar_neutral = interpolate_to_grid_z(expected.z, ppar_neutral[:, :, tind], z, z_spectral)
-                @test isapprox(expected.ppar_neutral[:, tind], newgrid_ppar_neutral[:,:,1], rtol=rtol)
+                @test isapprox(expected.ppar_neutral[:, tind], newgrid_ppar_neutral[:,1,1], rtol=rtol)
 
                 newgrid_vth_neutral = @. sqrt(2.0*newgrid_ppar_neutral/newgrid_n_neutral)
                 newgrid_f_neutral = interpolate_to_grid_z(expected.z, f_neutral[:, :, :, tind], z, z_spectral)
