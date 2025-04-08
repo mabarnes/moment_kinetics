@@ -3564,14 +3564,14 @@ implementation), a call needs to be made with `dt` scaled by some coefficient.
     if advance.external_source
         total_external_ion_source_controllers!(fvec_out.ion_external_source_controller_integral,
                                                fvec_in, moments,
-                                               external_source_settings.ion, dt)
+                                               external_source_settings.ion, vperp, dt)
         write_debug_IO("total_external_ion_source_controllers!")
     end
     if advance.neutral_external_source
         total_external_neutral_source_controllers!(fvec_out.neutral_external_source_controller_integral,fvec_in,
                                                    moments,
-                                                   external_source_settings.neutral, r, z,
-                                                   dt)
+                                                   external_source_settings.neutral, r,
+                                                   z, vzeta, vr, dt)
         write_debug_IO("total_external_neutral_source_controllers!")
     end
 
