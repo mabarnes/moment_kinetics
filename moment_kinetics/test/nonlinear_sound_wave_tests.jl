@@ -61,6 +61,7 @@ function run_test(test_input, rtol, atol, upar_rtol=nothing; args...)
     n_neutral = nothing
     upar_neutral = nothing
     ppar_neutral = nothing
+    v_t_neutral = nothing
     f_neutral = nothing
     z, z_spectral = nothing, nothing
     vpa, vpa_spectral = nothing, nothing
@@ -248,7 +249,7 @@ function run_test(test_input, rtol, atol, upar_rtol=nothing; args...)
                 newgrid_ppar_neutral = interpolate_to_grid_z(expected.z, ppar_neutral[:, :, tind], z, z_spectral)
                 @test isapprox(expected.ppar_neutral[:, tind], newgrid_ppar_neutral[:,1,1], rtol=rtol)
 
-                newgrid_vth_neutral = @. sqrt(2.0*newgrid_ppar_neutral/newgrid_n_neutral)
+                newgrid_vth_neutral = interpolate_to_grid_z(expected.z, v_t_neutral[:, :, tind], z, z_spectral)
                 newgrid_f_neutral = interpolate_to_grid_z(expected.z, f_neutral[:, :, :, tind], z, z_spectral)
                 temp = newgrid_f_neutral
                 newgrid_f_neutral = fill(NaN, length(expected.vpa),
