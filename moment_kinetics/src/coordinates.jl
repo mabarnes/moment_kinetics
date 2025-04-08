@@ -660,8 +660,10 @@ function init_grid(ngrid, nelement_local, n_global, n_local, irank, L, element_s
         if name == "vperp"
             # initialize chebyshev grid defined on [-L/2,L/2]
             grid, wgts = scaled_chebyshev_radau_grid(ngrid, nelement_local, n_local, element_scale, element_shift, imin, imax, irank)
-            wgts = 2.0 .* wgts .* grid # to include 2 vperp in jacobian of integral
-                                       # see note above on normalisation
+            # Integrals over vperp are actually 2d integrals
+            #   ∫d^2(v_⟂)=∫dv_⟂ v_⟂∫dϕ=2π∫dv_⟂ v_⟂
+            # so need to multiply the weight by 2*π*v_⟂
+            @. wgts = 2.0 * π * grid * wgts
             radau_first_element = true
         else
             # initialize chebyshev grid defined on [-L/2,L/2]
@@ -676,8 +678,10 @@ function init_grid(ngrid, nelement_local, n_global, n_local, irank, L, element_s
         if name == "vperp"
             # use a radau grid for the 1st element near the origin
             grid, wgts = scaled_gauss_legendre_radau_grid(ngrid, nelement_local, n_local, element_scale, element_shift, imin, imax, irank)
-            wgts = 2.0 .* wgts .* grid # to include 2 vperp in jacobian of integral
-                                       # see note above on normalisation
+            # Integrals over vperp are actually 2d integrals
+            #   ∫d^2(v_⟂)=∫dv_⟂ v_⟂∫dϕ=2π∫dv_⟂ v_⟂
+            # so need to multiply the weight by 2*π*v_⟂
+            @. wgts = 2.0 * π * grid * wgts
             radau_first_element = true
         else
             grid, wgts = scaled_gauss_legendre_lobatto_grid(ngrid, nelement_local, n_local, element_scale, element_shift, imin, imax)
@@ -688,9 +692,10 @@ function init_grid(ngrid, nelement_local, n_global, n_local, irank, L, element_s
             grid = uniform_grid_shifted
             # use composite Simpson's rule to obtain integration weights associated with this coordinate
             wgts = composite_simpson_weights(grid)
-            wgts = 2.0 .* wgts .* grid # to include 2 vperp in jacobian of integral
-                                     # assumes pdf normalised like 
-                                     # f^N = Pi^{3/2} c_s^3 f / n_ref         
+            # Integrals over vperp are actually 2d integrals
+            #   ∫d^2(v_⟂)=∫dv_⟂ v_⟂∫dϕ=2π∫dv_⟂ v_⟂
+            # so need to multiply the weight by 2*π*v_⟂
+            @. wgts = 2.0 * π * grid * wgts
         else #default case 
             # initialize equally spaced grid defined on [-L/2,L/2]
             grid = uniform_grid
