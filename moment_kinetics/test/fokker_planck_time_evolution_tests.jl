@@ -205,7 +205,7 @@ for k in 1:ntind
      end
 end
 # a moment
-n_ion_zrst, upar_ion_zrst, ppar_ion_zrst, pperp_ion_zrst, qpar_ion_zrst, v_t_ion_zrst, dSdt_zrst = load_ion_moments_data(fid,extended_moments=true)
+n_ion_zrst, upar_ion_zrst, p_ion_zrst, ppar_ion_zrst, pperp_ion_zrst, qpar_ion_zrst, v_t_ion_zrst, dSdt_zrst = load_ion_moments_data(fid,extended_moments=true)
 for k in 1:ntind
    @printf("%.15f", n_ion_zrst[1,1,1,k])
    if k < ntind
@@ -345,7 +345,7 @@ function run_test(test_input, expected, rtol, atol, upar_rtol=nothing; args...)
             phi_zrt, Er_zrt, Ez_zrt = load_fields_data(fid)
 
             # load velocity moments data
-            n_ion_zrst, upar_ion_zrst, ppar_ion_zrst, 
+            n_ion_zrst, upar_ion_zrst, p_ion_zrst,  ppar_ion_zrst,
             pperp_ion_zrst, qpar_ion_zrst, v_t_ion_zrst, dSdt_zrst = load_ion_moments_data(fid,extended_moments=true)
             
             close(fid)
