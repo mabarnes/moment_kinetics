@@ -87,25 +87,25 @@ const expected =
 test_input_full_f = OptionsDict("composition" => OptionsDict("n_ion_species" => 1,
                                                              "n_neutral_species" => 1,
                                                              "electron_physics" => "boltzmann_electron_response",
-                                                             "T_e" => 0.6666666666666666,
-                                                             "T_wall" => 0.6666666666666666),
+                                                             "T_e" => 1.0,
+                                                             "T_wall" => 0.3333333333333333),
                                 "ion_species_1" => OptionsDict("initial_density" => 0.5,
-                                                               "initial_temperature" => 0.6666666666666666),
+                                                               "initial_temperature" => 0.3333333333333333),
                                 "z_IC_ion_species_1" => OptionsDict("initialization_option" => "sinusoid",
                                                                     "density_amplitude" => 0.5,
                                                                     "density_phase" => 0.0,
                                                                     "upar_amplitude" => 0.0,
                                                                     "upar_phase" => 0.0,
-                                                                    "temperature_amplitude" => 0.3333333333333333,
+                                                                    "temperature_amplitude" => 0.5,
                                                                     "temperature_phase" => mk_float(π)),
                                 "neutral_species_1" => OptionsDict("initial_density" => 0.5,
-                                                                   "initial_temperature" => 0.6666666666666666),
+                                                                   "initial_temperature" => 0.3333333333333333),
                                 "z_IC_neutral_species_1" => OptionsDict("initialization_option" => "sinusoid",
                                                                         "density_amplitude" => 0.5,
                                                                         "density_phase" => mk_float(π),
                                                                         "upar_amplitude" => 0.0,
                                                                         "upar_phase" => 0.0,
-                                                                        "temperature_amplitude" => 0.3333333333333333,
+                                                                        "temperature_amplitude" => 0.5,
                                                                         "temperature_phase" => 0.0),
                                 "output" => OptionsDict("run_name" => "full_f"),
                                 "evolve_moments" => OptionsDict("density" => false,
@@ -138,7 +138,7 @@ test_input_full_f = OptionsDict("composition" => OptionsDict("n_ion_species" => 
                                                     "nelement" => 8,
                                                     "L" => vpa_L,
                                                     "bc" => "periodic",
-                                                    "discretization" => "chebyshev_pseudospectral")
+                                                    "discretization" => "chebyshev_pseudospectral"),
                                )
 
 test_input_split_1_moment =
@@ -155,8 +155,8 @@ test_input_split_3_moments =
     recursive_merge(test_input_split_2_moments,
                     OptionsDict("output" => OptionsDict("run_name" => "split_3_moments"),
                                 "evolve_moments" => OptionsDict("pressure" => true),
-                                "vpa" => OptionsDict("L" => 16.970562748477143),
-                                "vz" => OptionsDict("L" => 16.970562748477143),
+                                "vpa" => OptionsDict("L" => 20.784609690826528),
+                                "vz" => OptionsDict("L" => 20.784609690826528),
                                ))
 
 
