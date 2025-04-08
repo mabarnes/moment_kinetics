@@ -28,9 +28,9 @@ const binary_format = (force_optional_dependencies || io_has_implementation(netc
 test_input_finite_difference = OptionsDict("composition" => OptionsDict("n_ion_species" => 1,
                                                                         "n_neutral_species" => 1,
                                                                         "electron_physics" => "boltzmann_electron_response",
-                                                                        "T_e" => 0.6666666666666666),
+                                                                        "T_e" => 1.0),
                                            "ion_species_1" => OptionsDict("initial_density" => 0.5,
-                                                                          "initial_temperature" => 0.6666666666666666),
+                                                                          "initial_temperature" => 0.3333333333333333),
                                            "z_IC_ion_species_1" => OptionsDict("initialization_option" => "sinusoid",
                                                                                "density_amplitude" => 0.001,
                                                                                "density_phase" => 0.0,
@@ -39,7 +39,7 @@ test_input_finite_difference = OptionsDict("composition" => OptionsDict("n_ion_s
                                                                                "temperature_amplitude" => 0.0,
                                                                                "temperature_phase" => 0.0),
                                            "neutral_species_1" => OptionsDict("initial_density" => 0.5,
-                                                                              "initial_temperature" => 0.6666666666666666),
+                                                                              "initial_temperature" => 0.3333333333333333),
                                            "z_IC_neutral_species_1" => OptionsDict("initialization_option" => "sinusoid",
                                                                                    "density_amplitude" => 0.001,
                                                                                    "density_phase" => 0.0,
@@ -101,8 +101,8 @@ test_input_finite_difference_split_3_moments =
     recursive_merge(test_input_finite_difference_split_2_moments,
                     OptionsDict("output" => OptionsDict("run_name" => "finite_difference_split_3_moments"),
                                 "evolve_moments" => OptionsDict("pressure" => true),
-                                "vpa" => OptionsDict("ngrid" => 270, "L" => 16.970562748477143),
-                                "vz" => OptionsDict("ngrid" => 270, "L" => 16.970562748477143))
+                                "vpa" => OptionsDict("ngrid" => 270, "L" => 20.784609690826528),
+                                "vz" => OptionsDict("ngrid" => 270, "L" => 20.784609690826528))
                    )
 
 test_input_chebyshev = recursive_merge(test_input_finite_difference,
@@ -131,7 +131,8 @@ test_input_chebyshev_split_2_moments =
 test_input_chebyshev_split_3_moments =
     recursive_merge(test_input_chebyshev_split_2_moments,
                     OptionsDict("output" => OptionsDict("run_name" => "chebyshev_pseudospectral_split_3_moments"),
-                                "evolve_moments" => OptionsDict("pressure" => true)))
+                                "evolve_moments" => OptionsDict("pressure" => true),
+                                "vpa" => OptionsDict("L" => 13.856406460551018)))
 
 
 """
