@@ -58,13 +58,13 @@ const expected =
                    4.654198359544338e-19 -0.0760807343255267; 2.1256669382510767e-17 -0.05452637956260749;
                    2.1970070136117582e-17 0.009156342266174294; -8.263186521090134e-18 0.036209944927282155;
                    -5.256811286128741e-18 8.865786794476116e-17],
-     ppar_ion=2 .* [0.18750000000000008 0.23302774299822557; 0.20909325514551103 0.21936769787415103;
+     p_ion=(2/3) .* [0.18750000000000008 0.23302774299822557; 0.20909325514551103 0.21936769787415103;
                0.24403180771238261 0.20856277641657595; 0.24403180771238275 0.2154268106106535;
                0.2090932551455112 0.2206184395140329; 0.1875 0.21979740311704793;
                0.2090932551455112 0.22061843951403276; 0.24403180771238273 0.21542681061065366;
                0.24403180771238245 0.20856277641657608; 0.20909325514551103 0.21936769787415114;
                0.18750000000000008 0.23302774299822557],
-     ppar_neutral=2 .* [0.18750000000000006 0.24802927638746003; 0.20909325514551114 0.2440126345473401;
+     p_neutral=(2/3) .* [0.18750000000000006 0.24802927638746003; 0.20909325514551114 0.2440126345473401;
                    0.24403180771238295 0.2286179898140519; 0.2440318077123829 0.20589247230117314;
                    0.20909325514551147 0.19263091603124238; 0.18750000000000006 0.1909059116301176;
                    0.20909325514551147 0.19263091603124244; 0.24403180771238278 0.20589247230117316;
@@ -197,11 +197,11 @@ function run_test(test_input, rtol, atol; args...)
     phi = nothing
     n_ion = nothing
     upar_ion = nothing
-    ppar_ion = nothing
+    p_ion = nothing
     f_ion = nothing
     n_neutral = nothing
     upar_neutral = nothing
-    ppar_neutral = nothing
+    p_neutral = nothing
     f_neutral = nothing
     z, z_spectral = nothing, nothing
     vpa, vpa_spectral = nothing, nothing
@@ -226,8 +226,8 @@ function run_test(test_input, rtol, atol; args...)
             phi_zrt, Er_zrt, Ez_zrt = load_fields_data(fid)
 
             # load velocity moments data
-            n_ion_zrst, upar_ion_zrst, ppar_ion_zrst, qpar_ion_zrst, v_t_ion_zrst = load_ion_moments_data(fid)
-            n_neutral_zrst, upar_neutral_zrst, ppar_neutral_zrst, qpar_neutral_zrst, v_t_neutral_zrst = load_neutral_particle_moments_data(fid)
+            n_ion_zrst, upar_ion_zrst, p_ion_zrst, ppar_ion_zrst, qpar_ion_zrst, v_t_ion_zrst = load_ion_moments_data(fid)
+            n_neutral_zrst, upar_neutral_zrst, p_neutral_zrst, pz_neutral_zrst, qpar_neutral_zrst, v_t_neutral_zrst = load_neutral_particle_moments_data(fid)
             z, z_spectral = load_coordinate_data(fid, "z"; ignore_MPI=true)
 
             close(fid)
@@ -245,13 +245,13 @@ function run_test(test_input, rtol, atol; args...)
             phi = phi_zrt[:,1,:]
             n_ion = n_ion_zrst[:,1,:,:]
             upar_ion = upar_ion_zrst[:,1,:,:]
-            ppar_ion = ppar_ion_zrst[:,1,:,:]
+            p_ion = p_ion_zrst[:,1,:,:]
             qpar_ion = qpar_ion_zrst[:,1,:,:]
             v_t_ion = v_t_ion_zrst[:,1,:,:]
             f_ion = f_ion_vpavperpzrst[:,1,:,1,:,:]
             n_neutral = n_neutral_zrst[:,1,:,:]
             upar_neutral = upar_neutral_zrst[:,1,:,:]
-            ppar_neutral = ppar_neutral_zrst[:,1,:,:]
+            p_neutral = p_neutral_zrst[:,1,:,:]
             qpar_neutral = qpar_neutral_zrst[:,1,:,:]
             v_t_neutral = v_t_neutral_zrst[:,1,:,:]
             f_neutral = f_neutral_vzvrvzetazrst[:,1,1,:,1,:,:]
@@ -309,17 +309,17 @@ function run_test(test_input, rtol, atol; args...)
         #println("upar_neutral ", size(newgrid_upar_neutral))
         #println(newgrid_upar_neutral)
         #println()
-        #newgrid_ppar_ion = cat(interpolate_to_grid_z(expected.z, ppar_ion[:, :, 1], z, z_spectral)[:,1],
-        #                           interpolate_to_grid_z(expected.z, ppar_ion[:, :, 2], z, z_spectral)[:,1];
-        #                           dims=2)
-        #println("ppar_ion ", size(newgrid_ppar_ion))
-        #println(newgrid_ppar_ion)
+        #newgrid_p_ion = cat(interpolate_to_grid_z(expected.z, p_ion[:, :, 1], z, z_spectral)[:,1],
+        #                    interpolate_to_grid_z(expected.z, p_ion[:, :, 2], z, z_spectral)[:,1];
+        #                    dims=2)
+        #println("p_ion ", size(newgrid_p_ion))
+        #println(newgrid_p_ion)
         #println()
-        #newgrid_ppar_neutral = cat(interpolate_to_grid_z(expected.z, ppar_neutral[:, :, 1], z, z_spectral)[:,1],
-        #                           interpolate_to_grid_z(expected.z, ppar_neutral[:, :, 2], z, z_spectral)[:,1];
-        #                           dims=2)
-        #println("ppar_neutral ", size(newgrid_ppar_neutral))
-        #println(newgrid_ppar_neutral)
+        #newgrid_p_neutral = cat(interpolate_to_grid_z(expected.z, p_neutral[:, :, 1], z, z_spectral)[:,1],
+        #                        interpolate_to_grid_z(expected.z, p_neutral[:, :, 2], z, z_spectral)[:,1];
+        #                        dims=2)
+        #println("p_neutral ", size(newgrid_p_neutral))
+        #println(newgrid_p_neutral)
         #println()
         #newgrid_f_ion = cat(interpolate_to_grid_vpa(expected.vpa, interpolate_to_grid_z(expected.z, f_ion[:, :, :, 1], z, z_spectral), vpa, vpa_spectral)[:,:,1],
         #                        interpolate_to_grid_vpa(expected.vpa, interpolate_to_grid_z(expected.z, f_ion[:, :, :, 2], z, z_spectral), vpa, vpa_spectral)[:,:,1];
@@ -347,10 +347,10 @@ function run_test(test_input, rtol, atol; args...)
                 newgrid_upar_ion = interpolate_to_grid_z(expected.z, upar_ion[:, :, tind], z, z_spectral)
                 @test isapprox(expected.upar_ion[:, tind], newgrid_upar_ion[:,1], rtol=rtol, atol=atol)
 
-                newgrid_ppar_ion = interpolate_to_grid_z(expected.z, ppar_ion[:, :, tind], z, z_spectral)
-                @test isapprox(expected.ppar_ion[:, tind], newgrid_ppar_ion[:,1], rtol=rtol)
+                newgrid_p_ion = interpolate_to_grid_z(expected.z, p_ion[:, :, tind], z, z_spectral)
+                @test isapprox(expected.p_ion[:, tind], newgrid_p_ion[:,1], rtol=rtol)
 
-                newgrid_vth_ion = @. sqrt(2.0*newgrid_ppar_ion/newgrid_n_ion)
+                newgrid_vth_ion = @. sqrt(2.0*newgrid_p_ion/newgrid_n_ion)
                 newgrid_f_ion = interpolate_to_grid_z(expected.z, f_ion[:, :, :, tind], z, z_spectral)
                 temp = newgrid_f_ion
                 newgrid_f_ion = fill(NaN, length(expected.vpa),
@@ -378,10 +378,10 @@ function run_test(test_input, rtol, atol; args...)
                 newgrid_upar_neutral = interpolate_to_grid_z(expected.z, upar_neutral[:, :, tind], z, z_spectral)
                 @test isapprox(expected.upar_neutral[:, tind], newgrid_upar_neutral[:,:,1], rtol=rtol, atol=atol)
 
-                newgrid_ppar_neutral = interpolate_to_grid_z(expected.z, ppar_neutral[:, :, tind], z, z_spectral)
-                @test isapprox(expected.ppar_neutral[:, tind], newgrid_ppar_neutral[:,:,1], rtol=rtol)
+                newgrid_p_neutral = interpolate_to_grid_z(expected.z, p_neutral[:, :, tind], z, z_spectral)
+                @test isapprox(expected.p_neutral[:, tind], newgrid_p_neutral[:,:,1], rtol=rtol)
 
-                newgrid_vth_neutral = @. sqrt(2.0*newgrid_ppar_neutral/newgrid_n_neutral)
+                newgrid_vth_neutral = @. sqrt(2.0*newgrid_p_neutral/newgrid_n_neutral)
                 newgrid_f_neutral = interpolate_to_grid_z(expected.z, f_neutral[:, :, :, tind], z, z_spectral)
                 temp = newgrid_f_neutral
                 newgrid_f_neutral = fill(NaN, length(expected.vpa),
