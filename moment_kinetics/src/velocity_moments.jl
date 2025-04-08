@@ -1559,7 +1559,7 @@ function update_moments_neutral!(moments, pdf, vz, vr, vzeta, z, r, composition)
                                               moments.neutral.vth[:,:,isn],
                                               pdf[:,:,:,:,:,isn], vz, vr, vzeta, z, r,
                                               moments.evolve_density, moments.evolve_upar,
-                                              evolve_p)
+                                              moments.evolve_p)
             moments.neutral.pz_updated[isn] = true
         end
         if moments.neutral.pr_updated[isn] == false
@@ -1813,6 +1813,90 @@ function update_neutral_uzeta_species!(uzeta, density, vth, ff, vz, vr, vzeta, z
     return nothing
 end
 
+function update_neutral_p!(p, p_updated, density, uz, ur, uzeta, vth, pdf, vz, vr, vzeta,
+                           z, r, composition, evolve_density, evolve_upar, evolve_p)
+    @boundscheck r.n == size(p,2) || throw(BoundsError(p))
+    @boundscheck z.n == size(p,1) || throw(BoundsError(p))
+
+    @begin_r_z_region()
+    @boundscheck composition.n_neutral_species == size(pdf, 6) || throw(BoundsError(pdf))
+    @boundscheck composition.n_neutral_species == size(p, 3) || throw(BoundsError(p))
+
+    @loop_sn isn begin
+        if p_updated[isn] == false
+            @views update_neutral_p_species!(p[:,:,isn], density[:,:,isn], uz[:,:,isn],
+                                             ur[:,:,isn], uzeta[:,:,isn], vth[:,:,isn],
+                                             pdf[:,:,:,:,:,isn], vz, vr, vzeta, z, r,
+                                             evolve_density, evolve_upar, evolve_p)
+            p_updated[isn] = true
+        end
+    end
+end
+
+"""
+calculate the updated pressure (p) for a given species
+"""
+function update_neutral_p_species!(p, density, uz, ur, uzeta, vth, ff, vz, vr, vzeta, z,
+                                   r, evolve_density, evolve_upar, evolve_p)
+    @boundscheck vz.n == size(ff, 1) || throw(BoundsError(ff))
+    @boundscheck vr.n == size(ff, 2) || throw(BoundsError(ff))
+    @boundscheck vzeta.n == size(ff, 3) || throw(BoundsError(ff))
+    @boundscheck z.n == size(ff, 4) || throw(BoundsError(ff))
+    @boundscheck r.n == size(ff, 5) || throw(BoundsError(ff))
+    @boundscheck z.n == size(p, 1) || throw(BoundsError(p))
+    @boundscheck r.n == size(p, 2) || throw(BoundsError(p))
+    if evolve_p
+        error("update_neutral_p_species!() should not be called when evolve_p=true")
+    elseif evolve_upar
+        # this is the case where the parallel flow and density are evolved separately
+        # from the normalized pdf; the vz coordinate is
+        # <(vz - uz_s) / cref>.
+        # Integrating calculates p_s/n_s + m_s/3*uzeta_s^2 + m_/3s*ur_s^2 = ∫d^3w w^2/3 * g_s
+        @loop_r_z ir iz begin
+            p[iz,ir] = 1.0/3.0 * (integral((vzeta,vr,vz)->(vz^2 + vzeta^2 + vr^2),
+                                           @view(ff[:,:,:,iz,ir]), vzeta, vr, vz)
+                                  - u_zeta[iz,ir]^2 - u_r[iz,ir]^2) *
+                       density[iz,ir]
+        end
+    elseif evolve_density
+        # corresponds to case where only the density is evolved separately from the
+        # normalised pdf; the vz coordinate is <vz / c_s>.
+        # Integrating calculates
+        # p_s/n_s + m_s/3*uz_s^2 + m_s/3 u*eta_s^2 + m_s/3*ur_s^2 = ∫d^3v v^2/3 * f_s
+        # so subtract off u^2 and multiply by density to get the internal energy density
+        # (aka pressure)
+        @loop_r_z ir iz begin
+            p[iz,ir] = 1.0/3.0 * (integral((vzeta,vr,vz)->(vz^2 + vzeta^2 + vr^2),
+                                           @view(ff[:,:,:,iz,ir]), vzeta, vr, vz)
+                                  - u_z[iz,ir]^2 - u_zeta[iz,ir]^2 - u_r[iz,ir]^2) *
+                       density[iz,ir]
+        end
+    else
+        # When evolve_density = false, the evolved pdf is the 'true' pdf,
+        # and the vz coordinate is <vz / cref>.
+        # Integrating calculates
+        # p_s + m_s/3*n_s*uz_s^2 + m_s/3*n_s*uzeta_s^2 + m_s/3*n_s*ur_s^2 = ∫d^3v v^2/3 * f_s
+        # so subtract off twice the mean kinetic energy density to get the
+        # internal energy density (aka pressure)
+        @loop_r_z ir iz begin
+            p[iz,ir] = 1.0/3.0 * (integral((vzeta,vr,vz)->(vz^2 + vzeta^2 + vr^2),
+                                           @view(ff[:,:,:,iz,ir]), vzeta, vr, vz) -
+                                  density[iz,ir]*(uz[iz,ir]^2 + ur[iz,ir]^2 + uzeta[iz,ir]^2))
+        end
+    end
+    return nothing
+end
+
+function get_neutral_p(ff, vzeta, vr, vz, density, upar, evolve_density, evolve_upar)
+    if evolve_upar
+        return density * integral((vzeta,vr,vz)->(vz^2 + vzeta^2 + vr^2), ff, vz, vr, vzeta)
+    elseif evolve_density
+        return density * integral((vzeta,vr,vz)->((vz-upar)^2 + vzeta^2 + vr^2), ff, vz, vr, vzeta)
+    else
+        return integral((vzeta,vr,vz)->((vz-upar)^2 + vzeta^2 + vr^2), ff, vz, vr, vzeta)
+    end
+end
+
 function update_neutral_pz!(pz, pz_updated, density, uz, p, vth, pdf, vz, vr, vzeta, z, r,
                             composition, evolve_density, evolve_upar, evolve_p)
     @boundscheck r.n == size(pz,2) || throw(BoundsError(pz))
@@ -2054,16 +2138,6 @@ function update_neutral_pzeta_species!(pzeta, density, uzeta, vth, ff, vz, vr, v
     return nothing
 end
 
-function get_neutral_p(ff, vzeta, vr, vz, density, upar, evolve_density, evolve_upar)
-    if evolve_upar
-        return density * integral((vzeta,vr,vz)->(vz^2 + vzeta^2 + vr^2), ff, vz, vr, vzeta)
-    elseif evolve_density
-        return density * integral((vzeta,vr,vz)->((vz-upar)^2 + vzeta^2 + vr^2), ff, vz, vr, vzeta)
-    else
-        return integral((vzeta,vr,vz)->((vz-upar)^2 + vzeta^2 + vr^2), ff, vz, vr, vzeta)
-    end
-end
-
 function update_neutral_qz!(qz, qz_updated, density, uz, vth, pdf, vz, vr, vzeta, z, r,
                             composition, evolve_density, evolve_upar, evolve_p)
     @boundscheck r.n == size(qz,2) || throw(BoundsError(qz))
@@ -2303,6 +2377,22 @@ function update_derived_moments_neutral!(new_scratch, moments, vz, vr, vzeta, z,
                            new_scratch.pdf_neutral, vz, vr, vzeta, z, r, composition,
                            moments.evolve_density, moments.evolve_p)
     end
+    if !moments.evolve_p
+        update_neutral_uzeta!(moments.neutral.uzeta, moments.neutral.uzeta_updated,
+                              new_scratch.density_neutral, moments.neutral.vth,
+                              new_scratch.pdf_neutral, vz, vr, vzeta, z, r, composition,
+                              moments.evolve_density, moments.evolve_p)
+        update_neutral_ur!(moments.neutral.ur, moments.neutral.ur_updated,
+                           new_scratch.density_neutral, moments.neutral.vth,
+                           new_scratch.pdf_neutral, vz, vr, vzeta, z, r, composition,
+                           moments.evolve_density, moments.evolve_p)
+        update_neutral_p!(new_scratch.p_neutral, moments.neutral.p_updated,
+                          new_scratch.density_neutral, new_scratch.uz_neutral,
+                          moments.neutral.ur, moments.neutral.uzeta,
+                          moments.neutral.vth, new_scratch.pdf_neutral, vz, vr, vzeta, z,
+                          r, composition, moments.evolve_density, moments.evolve_upar,
+                          moments.evolve_p)
+    end
     # pz is needed for the neutral parallel momentum equation if evolving uz and the
     # neutral pressure equation if evolving p.
     update_neutral_pz!(moments.neutral.pz, moments.neutral.pz_updated,
@@ -2525,10 +2615,11 @@ function reset_moments_status!(moments)
     moments.neutral.ur_updated .= false
     moments.neutral.pzeta_updated .= false
     moments.neutral.pr_updated .= false
+    moments.neutral.pz_updated .= false
     moments.neutral.qz_updated .= false
+    moments.electron.dens_updated[] = false
+    moments.electron.upar_updated[] = false
     if false
-        moments.electron.dens_updated[] = false
-        moments.electron.upar_updated[] = false
         moments.electron.p_updated[] = false
     end
     moments.electron.qpar_updated[] = false
