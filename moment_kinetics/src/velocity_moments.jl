@@ -657,7 +657,7 @@ function update_upar_species!(upar, density, vth, ff, vpa, vperp, z, r, evolve_d
         # so convert from upar_s / vth_s to upar_s / c_s
         # we set the input density to get_upar = 1.0 as the normalised distribution has density of 1.0
         @loop_r_z ir iz begin
-            upar[iz,ir] = vth[iz,ir]*get_upar(@view(ff[:,:,iz,ir]), vpa, vperp, 1.0,
+            upar[iz,ir] = vth[iz,ir]*get_upar(@view(ff[:,:,iz,ir]), 1.0, vpa, vperp,
                                               evolve_density)
         end
     elseif evolve_density
@@ -668,7 +668,7 @@ function update_upar_species!(upar, density, vth, ff, vpa, vperp, z, r, evolve_d
         # (upar_s / c_s) = (1/√π)∫d(vpa/c_s) * (vpa/c_s) * (√π f_s c_s / n_s)
         # we set the input density to get_upar = 1.0 as the normalised distribution has density of 1.0
         @loop_r_z ir iz begin
-            upar[iz,ir] = get_upar(@view(ff[:,:,iz,ir]), vpa, vperp, 1.0, evolve_density)
+            upar[iz,ir] = get_upar(@view(ff[:,:,iz,ir]), 1.0, vpa, vperp, evolve_density)
         end
     else
         # When evolve_density = false, the evolved pdf is the 'true' pdf,
@@ -676,14 +676,14 @@ function update_upar_species!(upar, density, vth, ff, vpa, vperp, z, r, evolve_d
         # Integrating calculates
         # (n_s / N_e) * (upar_s / c_s) = (1/√π)∫d(vpa/c_s) * (vpa/c_s) * (√π f_s c_s / N_e)
         @loop_r_z ir iz begin
-            upar[iz,ir] = get_upar(@view(ff[:,:,iz,ir]), vpa, vperp, density[iz,ir],
+            upar[iz,ir] = get_upar(@view(ff[:,:,iz,ir]), density[iz,ir], vpa, vperp,
                                    evolve_density)
         end
     end
     return nothing
 end
 
-function get_upar(ff, vpa, vperp, density, evolve_density)
+function get_upar(ff, density, vpa, vperp, evolve_density)
     # Integrating calculates
     # (n_s / N_e) * (upar_s / c_s) = (1/√π)∫d(vpa/c_s) * (vpa/c_s) * (√π f_s c_s / N_e)
     # so we divide by the density of f_s
@@ -860,7 +860,7 @@ function get_ppar(density, upar, p, vth, ff, vpa, vperp, evolve_density, evolve_
         if vperp.n == 1
             return 3.0 * p
         else
-            return density * vth^2 * get_second_moment(ff, vpa, vperp, 0.0)
+            return density * vth^2 * get_vpa2_moment(ff, vpa, vperp, 0.0)
         end
     elseif evolve_upar
         return density * get_vpa2_moment(ff, vpa, vperp, 0.0)
@@ -1102,7 +1102,7 @@ function get_qpar(ff, density, upar, p, vth, vpa, vperp, dummy_vpavperp, evolve_
 end
 
 # generalised moment useful for computing numerical conserving terms in the collision operator
-function get_rmom(ff, vpa, vperp, upar)
+function get_rmom(ff, upar, vpa, vperp)
     return integral((vperp,vpa)->((vpa-upar)^2 + vperp^2)^2, ff, vperp, vpa)
 end
 
@@ -1710,7 +1710,7 @@ function update_neutral_uz_species!(uz, density, vth, ff, vz, vr, vzeta, z, r,
     return nothing
 end
 
-function get_neutral_uz(ff, vzeta, vr, vz, density, evolve_density)
+function get_neutral_uz(ff, density, vzeta, vr, vz, evolve_density)
     upar = integral(ff, vz.grid, 1, vz.wgts, vr.grid, 0, vr.wgts, vzeta.grid, 0,
                     vzeta.wgts)
     if !evolve_density
@@ -1887,7 +1887,7 @@ function update_neutral_p_species!(p, density, uz, ur, uzeta, vth, ff, vz, vr, v
     return nothing
 end
 
-function get_neutral_p(ff, vzeta, vr, vz, density, upar, evolve_density, evolve_upar)
+function get_neutral_p(ff, density, upar, vzeta, vr, vz, evolve_density, evolve_upar)
     if evolve_upar
         return density * integral((vzeta,vr,vz)->(vz^2 + vzeta^2 + vr^2), ff, vz, vr, vzeta)
     elseif evolve_density
