@@ -190,13 +190,13 @@ function run_test(test_input, rtol, atol, upar_rtol=nothing; args...)
         #println()
         #newgrid_f_ion = cat(interpolate_to_grid_vpa(expected.vpa, interpolate_to_grid_z(expected.z, f_ion[:, :, :, 1], z, z_spectral), vpa, vpa_spectral)[:,:,1],
         #                        interpolate_to_grid_vpa(expected.vpa, interpolate_to_grid_z(expected.z, f_ion[:, :, :, 2], z, z_spectral), vpa, vpa_spectral)[:,:,1];
-        #                        dims=4)
+        #                        dims=3)
         #println("f_ion ", size(newgrid_f_ion))
         #println(newgrid_f_ion)
         #println()
         #newgrid_f_neutral = cat(interpolate_to_grid_vpa(expected.vpa, interpolate_to_grid_z(expected.z, f_neutral[:, :, :, 1], z, z_spectral), vpa, vpa_spectral)[:,:,1],
         #                        interpolate_to_grid_vpa(expected.vpa, interpolate_to_grid_z(expected.z, f_neutral[:, :, :, 2], z, z_spectral), vpa, vpa_spectral)[:,:,1];
-        #                        dims=4)
+        #                        dims=3)
         #println("f_neutral ", size(newgrid_f_neutral))
         #println(newgrid_f_neutral)
         #println()
