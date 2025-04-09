@@ -132,7 +132,8 @@ test_input_chebyshev_split_3_moments =
     recursive_merge(test_input_chebyshev_split_2_moments,
                     OptionsDict("output" => OptionsDict("run_name" => "chebyshev_pseudospectral_split_3_moments"),
                                 "evolve_moments" => OptionsDict("pressure" => true),
-                                "vpa" => OptionsDict("L" => 13.856406460551018)))
+                                "vpa" => OptionsDict("L" => 13.856406460551018),
+                                "vz" => OptionsDict("L" => 13.856406460551018)))
 
 
 """
@@ -308,14 +309,14 @@ function run_test_set_finite_difference()
     @long run_test(test_input_finite_difference, 2*π*0.0 * sqrt(2), -2*π*0.2727 * sqrt(2),
                    [-0.3465733721093574, -0.3465733761667264, -0.3465733811031762,
                     -0.3465733869008616, -0.3465733935343765, -0.3465734009730069];
-                   composition = OptionsDict("T_e" => 2.0 * 0.5),
+                   composition = OptionsDict("T_e" => 0.5),
                    reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0 * sqrt(2)))
 
     # n_i=n_n T_e=4
     @long run_test(test_input_finite_difference, 2*π*1.9919 * sqrt(2), -2*π*0.2491 * sqrt(2),
                    [-2.772608882427265, -2.7726085100293045, -2.772608058199096,
                     -2.7726075287624155, -2.772606923796338, -2.772606245649231];
-                   composition = OptionsDict("T_e" => 2.0 * 4.0))
+                   composition = OptionsDict("T_e" => 4.0))
     # CX=2*π*2.0 case with T_e=4 is too hard to converge, so skip
 end
 
@@ -367,20 +368,20 @@ function run_test_set_finite_difference_split_1_moment()
     run_test(test_input_finite_difference_split_1_moment, 2*π*1.2671 * sqrt(2), -2*π*0.8033 * sqrt(2),
              [-0.34657359193147635, -0.34657359189694775, -0.34657359186157893,
               -0.3465735918241752, -0.346573591781001, -0.3465735917294017], 30;
-             composition = OptionsDict("T_e" => 2.0 * 0.5),
+             composition = OptionsDict("T_e" => 0.5),
              timestepping = OptionsDict("nstep" => 1300),
              reactions=OptionsDict("charge_exchange_frequency"=>2*π*0.0))
     run_test(test_input_finite_difference_split_1_moment, 2*π*0.0, -2*π*0.2727 * sqrt(2),
              [-0.34657336973345404, -0.3465733737937447, -0.3465733787327239,
               -0.34657338453223374, -0.34657339116759117, -0.3465733986089023];
-             composition = OptionsDict("T_e" => 2.0 * 0.5),
+             composition = OptionsDict("T_e" => 0.5),
              reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0 * sqrt(2)))
 
     # n_i=n_n T_e=4
     run_test(test_input_finite_difference_split_1_moment, 2*π*1.9919 * sqrt(2), -2*π*0.2491 * sqrt(2),
              [-2.772608874435827, -2.772608502007103, -2.7726080501068613,
               -2.7726075205725347, -2.772606915491342, -2.772606237232529];
-              composition = OptionsDict("T_e" => 2.0 * 4.0))
+              composition = OptionsDict("T_e" => 4.0))
     # CX=2*π*2.0 case with T_e=4 is too hard to converge, so skip
 end
 
@@ -432,26 +433,26 @@ function run_test_set_finite_difference_split_2_moments()
     run_test(test_input_finite_difference_split_2_moments, 2*π*1.2671 * sqrt(2), -2*π*0.8033 * sqrt(2),
              [-0.346573591766657, -0.34657359174673225, -0.34657359172287355,
               -0.34657359169939517, -0.3465735916797001, -0.34657359166412655], 30;
-             composition = OptionsDict("T_e" => 2.0 * 0.5),
+             composition = OptionsDict("T_e" => 0.5),
              timestepping = OptionsDict("nstep" => 1300), z = OptionsDict("ngrid" => 150),
              reactions=OptionsDict("charge_exchange_frequency"=>2*π*0.0))
     run_test(test_input_finite_difference_split_2_moments, 2*π*0.0, -2*π*0.2727 * sqrt(2),
              [-0.3465733699053305, -0.3465733739644282, -0.346573378901869,
               -0.34657338470094573, -0.3465733913346283, -0.34657339876836535];
-             composition = OptionsDict("T_e" => 2.0 * 0.5),
+             composition = OptionsDict("T_e" => 0.5),
              reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0 * sqrt(2)))
 
     # n_i=n_n T_e=4
     run_test(test_input_finite_difference_split_2_moments, 2*π*1.9919 * sqrt(2), -2*π*0.2491 * sqrt(2),
              [-2.7726088854800626, -2.772608513020236, -2.772608060924859,
               -2.7726075310205816, -2.772606925417984, -2.7726062465238828];
-              composition = OptionsDict("T_e" => 2.0 * 4.0))
+              composition = OptionsDict("T_e" => 4.0))
     # CX=2*π*2.0 case with T_e=4 is too hard to converge, so skip
 end
 
 function run_test_set_finite_difference_split_3_moments()
     #n_i=n_n, T_e=1
-    @long run_test(test_input_finite_difference_split_3_moments, 2*π*1.4467 * sqrt(2), -2*π*0.6020,
+    @long run_test(test_input_finite_difference_split_3_moments, 2*π*1.4467 * sqrt(2), -2*π*0.6020 * sqrt(2),
                    [-0.6931471880707393, -0.6931471879690346, -0.6931471878177268,
                     -0.6931471876182085, -0.6931471873673419, -0.6931471870645703];
                    reactions=OptionsDict("charge_exchange_frequency"=>2*π*0.0))
@@ -505,7 +506,7 @@ function run_test_set_finite_difference_split_3_moments()
     @long run_test(test_input_finite_difference_split_3_moments, 2*π*0.0, -2*π*0.2727 * sqrt(2),
                    [-0.346573370100048, -0.34657337420743906, -0.3465733791652966,
                     -0.3465733849553609, -0.34657339155230077, -0.34657339892683386];
-                   composition = OptionsDict("T_e" => 2.0 * 0.5),
+                   composition = OptionsDict("T_e" => 0.5),
                    reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0 * sqrt(2)))
 
     # n_i=n_n T_e=4
@@ -564,20 +565,20 @@ function run_test_set_chebyshev()
     @long run_test(test_input_chebyshev, 2*π*1.2671 * sqrt(2), -2*π*0.8033 * sqrt(2),
                    [-0.34657359028138823, -0.3465735895309023, -0.3465735890566611,
                     -0.3465735889775626, -0.34657358897367324, -0.34657358897756235],
-                   30; composition = OptionsDict("T_e" => 2.0 * 0.5),
+                   30; composition = OptionsDict("T_e" => 0.5),
                    timestepping = OptionsDict("nstep" => 1300),
                    reactions=OptionsDict("charge_exchange_frequency"=>2*π*0.0))
     @long run_test(test_input_chebyshev, 2*π*0.0, -2*π*0.2727 * sqrt(2),
                    [-0.34657359029097584, -0.34657371934209186, -0.34657379475484945,
                     -0.346573816865366, -0.3465738184803065, -0.3465738168653658];
-                   composition = OptionsDict("T_e" => 2.0 * 0.5),
+                   composition = OptionsDict("T_e" => 0.5),
                    reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0 * sqrt(2)))
 
     # n_i=n_n T_e=4
     @long run_test(test_input_chebyshev, 2*π*1.9919 * sqrt(2), -2*π*0.2491 * sqrt(2),
                    [-2.772588723097548, -2.7725769408799374, -2.772570056405588,
                     -2.7725680387868135, -2.772567890042227, -2.7725680387868143];
-                   composition = OptionsDict("T_e" => 2.0 * 4.0))
+                   composition = OptionsDict("T_e" => 4.0))
     # CX=2*π*2.0 case with T_e=4 is too hard to converge, so skip
 end
 
@@ -629,20 +630,20 @@ function run_test_set_chebyshev_split_1_moment()
     @long run_test(test_input_chebyshev_split_1_moment, 2*π*1.2671 * sqrt(2), -2*π*0.8033 * sqrt(2),
                    [-0.34657358993342785, -0.34657358985387404, -0.34657358873350347,
                     -0.34657358929201915, -0.3465735885789893, -0.3465735892920189],
-                   30; composition = OptionsDict("T_e" => 2.0 * 0.5),
+                   30; composition = OptionsDict("T_e" => 0.5),
                    timestepping = OptionsDict("nstep" => 1300),
                    reactions=OptionsDict("charge_exchange_frequency"=>2*π*0.0))
     @long run_test(test_input_chebyshev_split_1_moment, 2*π*0.0, -2*π*0.2727 * sqrt(2),
                    [-0.3465735899333066, -0.34657371970143575, -0.34657379438589264,
                     -0.34657381720435393, -0.3465738181404627, -0.34657381720435393];
-                   composition = OptionsDict("T_e" => 2.0 * 0.5),
+                   composition = OptionsDict("T_e" => 0.5),
                    reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0 * sqrt(2)))
 
     # n_i=n_n T_e=4
     @long run_test(test_input_chebyshev_split_1_moment, 2*π*1.9919 * sqrt(2), -2*π*0.2491 * sqrt(2),
                    [-2.7725887202721675, -2.7725769438619237, -2.772570053870096,
                     -2.772568041774934, -2.7725678875212694, -2.772568041774933];
-                   composition = OptionsDict("T_e" => 2.0 * 4.0))
+                   composition = OptionsDict("T_e" => 4.0))
     # CX=2*π*2.0 case with T_e=4 is too hard to converge, so skip
 end
 
@@ -694,20 +695,20 @@ function run_test_set_chebyshev_split_2_moments()
     @long run_test(test_input_chebyshev_split_2_moments, 2*π*1.2671 * sqrt(2), -2*π*0.8033 * sqrt(2),
                    [-0.3465735899057673, -0.34657358985025616, -0.3465735887503771,
                     -0.3465735893085064, -0.34657358859846926, -0.3465735893085064],
-                   40; composition = OptionsDict("T_e" => 2.0 * 0.5),
+                   40; composition = OptionsDict("T_e" => 0.5),
                    timestepping = OptionsDict("nstep" => 1300, "nwrite" => 10),
                    reactions=OptionsDict("charge_exchange_frequency"=>2*π*0.0 * sqrt(2)))
     @long run_test(test_input_chebyshev_split_2_moments, 2*π*0.0, -2*π*0.2727 * sqrt(2),
                    [-0.34657358990901804, -0.3465737196976823, -0.3465737944001157,
                     -0.34657381722098596, -0.34657381816130056, -0.3465738172209856];
-                   composition = OptionsDict("T_e" => 2.0 * 0.5),
+                   composition = OptionsDict("T_e" => 0.5),
                    reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0 * sqrt(2)))
 
     # n_i=n_n T_e=4
     @long run_test(test_input_chebyshev_split_2_moments, 2*π*1.9919 * sqrt(2), -2*π*0.2491 * sqrt(2),
                    [-2.772588720093862, -2.7725769438079513, -2.7725700538723164,
                     -2.772568041721212, -2.772567887507286, -2.772568041721212];
-                   composition = OptionsDict("T_e" => 2.0 * 4.0))
+                   composition = OptionsDict("T_e" => 4.0))
     # CX=2*π*2.0 case with T_e=4 is too hard to converge, so skip
 end
 
@@ -759,20 +760,20 @@ function run_test_set_chebyshev_split_3_moments()
     @long run_test(test_input_chebyshev_split_3_moments, 2*π*1.2671 * sqrt(2), -2*π*0.8033 * sqrt(2),
                    [-0.3465735899531481, -0.3465735898798234, -0.3465735887122014,
                     -0.3465735892961365, -0.3465735885612577, -0.34657358929613663],
-                   80; composition = OptionsDict("T_e" => 2.0 * 0.5),
+                   80; composition = OptionsDict("T_e" => 0.5),
                    timestepping = OptionsDict("nstep" => 1300, "nwrite" => 5),
                    reactions=OptionsDict("charge_exchange_frequency"=>2*π*0.0))
     @long run_test(test_input_chebyshev_split_3_moments, 2*π*0.0, -2*π*0.2727 * sqrt(2),
                    [-0.34657358994829507, -0.3465737197177701, -0.34657379442475766,
                     -0.34657381717120433, -0.3465738181058981, -0.34657381717120433];
-                   composition = OptionsDict("T_e" => 2.0 * 0.5),
+                   composition = OptionsDict("T_e" => 0.5),
                    reactions=OptionsDict("charge_exchange_frequency"=>2*π*2.0 * sqrt(2)))
 
     # n_i=n_n T_e=4
     @long run_test(test_input_chebyshev_split_3_moments, 2*π*1.9919 * sqrt(2), -2*π*0.2491 * sqrt(2),
                    [-2.7725887202834048, -2.7725769429232954, -2.772570052229691,
                     -2.772568040051165, -2.7725678857139404, -2.772568040051166];
-                   composition = OptionsDict("T_e" => 2.0 * 4.0))
+                   composition = OptionsDict("T_e" => 4.0))
     # CX=2*π*2.0 case with T_e=4 is too hard to converge, so skip
 end
 
