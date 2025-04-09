@@ -2177,17 +2177,23 @@ function convert_full_f_neutral_to_normalised!(f, density, uz, p, vth, vzeta, vr
         end
 
         # Calculate moments
-        @views density[iz] = integrate_over_neutral_vspace(
+        @views density[iz] = integral(
                                  f[:,:,:,iz], vz_grid_input, 0, vz_wgts_input,
                                  vr_grid_input, 0, vr_wgts_input, vzeta_grid_input, 0,
                                  vzeta_wgts_input)
-        @views uz[iz] = integrate_over_neutral_vspace(
+        @views uz[iz] = integral(
                             f[:,:,:,iz], vz_grid_input, 1, vz_wgts_input, vr_grid_input,
                             0, vr_wgts_input, vzeta_grid_input, 0, vzeta_wgts_input) /
                         density[iz]
-        @views p[iz] = (integrate_over_neutral_vspace(
+        @views p[iz] = (integral(
                             f[:,:,:,iz], vz_grid_input, 2, vz_wgts_input, vr_grid_input,
-                            0, vr_wgts_input, vzeta_grid_input, 0, vzeta_wgts_input) -
+                            0, vr_wgts_input, vzeta_grid_input, 0, vzeta_wgts_input) +
+                        integral(
+                            f[:,:,:,iz], vz_grid_input, 0, vz_wgts_input, vr_grid_input,
+                            2, vr_wgts_input, vzeta_grid_input, 0, vzeta_wgts_input) +
+                        integral(
+                            f[:,:,:,iz], vz_grid_input, 0, vz_wgts_input, vr_grid_input,
+                            0, vr_wgts_input, vzeta_grid_input, 2,  vzeta_wgts_input)) -
                         density[iz]*uz[iz]^2
         vth[iz] = sqrt(2.0*p[iz]/density[iz])
 
