@@ -1553,7 +1553,7 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
                     #
                     # Implemented by multiplying by a smooth 'notch' function
                     # notch(v,u0,width) = 1 - exp(-(v-u0)^2/width)
-                    if vperp.n == 1
+                    if vzeta.n == 1 && vr.n == 1
                         # Multiply by sqrt(3) so that in 1V case we set the width relative
                         # to sqrt(2*Tpar/m_s) rather than sqrt(2*T/m_s).
                         width = 0.1 * sqrt(3.0)
