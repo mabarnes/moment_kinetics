@@ -89,7 +89,7 @@ evolve the neutral parallel pressure by solving the energy equation
 
     @loop_sn_r_z isn ir iz begin
         dp_dt[iz,ir,isn] = (-fvec.uz_neutral[iz,ir,isn]*moments.neutral.dp_dz_upwind[iz,ir,isn]
-                            -fvec.p_neutral[iz,ir,isn]*moments.neutral.duz_dz_upwind[iz,ir,isn]
+                            -fvec.p_neutral[iz,ir,isn]*moments.neutral.duz_dz[iz,ir,isn]
                             - 2.0/3.0*moments.neutral.dqz_dz[iz,ir,isn]
                             - 2.0/3.0*moments.neutral.pz[iz,ir,isn]*moments.neutral.duz_dz[iz,ir,isn])
     end
