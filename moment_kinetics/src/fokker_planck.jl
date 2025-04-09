@@ -1033,6 +1033,10 @@ function fokker_planck_self_collisions_backward_euler_step!(Fold, delta_t, ms, n
             # function to solve K * F^n+1 = M * F^n
             # and return F^n+1 in place in x
             pdf = x
+            # enforce zero BCs on pdf in so that
+            # these BCs are imposed via the unit boundary
+            # values in CC2D_sparse, in the event BCs are used
+            enforce_vpavperp_BCs!(pdf,vpa,vperp,vpa_spectral,vperp_spectral)
             pdf_scratch = fkpl_arrays.rhsvpavperp
             pdf_dummy = fkpl_arrays.S_dummy
             MM2D_sparse = fkpl_arrays.MM2D_sparse
@@ -1067,6 +1071,9 @@ function fokker_planck_self_collisions_backward_euler_step!(Fold, delta_t, ms, n
         Fw = fkpl_arrays.Fw
         success = newton_solve!(Fnew, residual_func!, Fresidual, F_delta_x, F_rhs_delta, Fv, Fw, nl_solver_params;
                     coords, right_preconditioner=right_preconditioner)
+        # apply BCs on result, if non-natural BCs are imposed
+        # should only introduce error of order ~ atol
+        enforce_vpavperp_BCs!(Fnew,vpa,vperp,vpa_spectral,vperp_spectral)
     end
     @_anyv_subblock_synchronize()
     return success

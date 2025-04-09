@@ -2697,6 +2697,62 @@ function calculate_test_particle_preconditioner!(pdf,delta_t,ms,msp,nussp,
             end
         end
     end
+    impose_BC_at_zero_vperp=false
+    # only support zero bc
+    if vpa.bc == "zero" || vperp.bc == "zero"
+        # loop over elements
+        for ielement_vperp in 1:vperp.nelement_local
+            for ielement_vpa in 1:vpa.nelement_local
+                # loop over field positions in each element
+                for ivperp_local in 1:vperp.ngrid
+                    for ivpa_local in 1:vpa.ngrid
+                        for jvperpp_local in 1:vperp.ngrid
+                            for jvpap_local in 1:vpa.ngrid
+                                ic_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
+                                icp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,jvpap_local,jvperpp_local)
+                                icsc = icsc_func(ivpa_local,jvpap_local,ielement_vpa,
+                                        ngrid_vpa,nelement_vpa,
+                                        ivperp_local,jvperpp_local,
+                                        ielement_vperp,
+                                        ngrid_vperp,nelement_vperp)
+        
+                                lower_boundary_row_vpa = (ielement_vpa == 1 && ivpa_local == 1)
+                                upper_boundary_row_vpa = (ielement_vpa == vpa.nelement_local && ivpa_local == vpa.ngrid)
+                                lower_boundary_row_vperp = (ielement_vperp == 1 && ivperp_local == 1)
+                                upper_boundary_row_vperp = (ielement_vperp == vperp.nelement_local && ivperp_local == vperp.ngrid)
+                                
+                                if lower_boundary_row_vpa && vpa.bc == "zero"
+                                    if jvpap_local == 1 && ivperp_local == jvperpp_local
+                                        assign_constructor_data!(CC2D_sparse_constructor,icsc,ic_global,icp_global,1.0)
+                                    else 
+                                        assign_constructor_data!(CC2D_sparse_constructor,icsc,ic_global,icp_global,0.0)
+                                    end
+                                elseif upper_boundary_row_vpa && vpa.bc == "zero"
+                                    if jvpap_local == vpa.ngrid && ivperp_local == jvperpp_local 
+                                        assign_constructor_data!(CC2D_sparse_constructor,icsc,ic_global,icp_global,1.0)
+                                    else 
+                                        assign_constructor_data!(CC2D_sparse_constructor,icsc,ic_global,icp_global,0.0)
+                                    end
+                                elseif lower_boundary_row_vperp && impose_BC_at_zero_vperp
+                                    if jvperpp_local == 1 && ivpa_local == jvpap_local
+                                        assign_constructor_data!(CC2D_sparse_constructor,icsc,ic_global,icp_global,1.0)
+                                    else 
+                                        assign_constructor_data!(CC2D_sparse_constructor,icsc,ic_global,icp_global,0.0)
+                                    end
+                                elseif upper_boundary_row_vperp && vperp.bc == "zero"
+                                    if jvperpp_local == vperp.ngrid && ivpa_local == jvpap_local
+                                        assign_constructor_data!(CC2D_sparse_constructor,icsc,ic_global,icp_global,1.0)
+                                    else 
+                                        assign_constructor_data!(CC2D_sparse_constructor,icsc,ic_global,icp_global,0.0)
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end # end bc assignment
     # should improve on this step to avoid recreating the sparse array if possible.
     fkpl_arrays.CC2D_sparse .= create_sparse_matrix(CC2D_sparse_constructor)
     return nothing

@@ -15,6 +15,7 @@ using moment_kinetics.fokker_planck: init_fokker_planck_collisions_weak_form
 using moment_kinetics.fokker_planck: setup_fp_nl_solve, setup_fkpl_collisions_input,
                                      implicit_ion_fokker_planck_self_collisions!,
                                      fokker_planck_self_collisions_backward_euler_step!
+using moment_kinetics.fokker_planck_calculus: enforce_vpavperp_BCs!
 using moment_kinetics.fokker_planck_test: F_Maxwellian, print_test_data
 using moment_kinetics.calculus: derivative!
 using moment_kinetics.velocity_moments: get_density, get_upar, get_ppar, get_pperp, get_pressure
@@ -79,6 +80,13 @@ function diagnose_F_Maxwellian(pdf,pdf_exact,pdf_dummy_1,pdf_dummy_2,vpa,vperp,t
         println("dens: ", dens)
         println("upar: ", upar)
         println("vth: ", vth)
+        if vpa.bc == "zero"
+            println("test vpa bc: F[1, :]", pdf[1, :])
+            println("test vpa bc: F[end, :]", pdf[end, :])
+        end
+        if vperp.bc == "zero"
+            println("test vperp bc: F[:, end]", pdf[:, end])
+        end
     end
 end
 
@@ -131,7 +139,8 @@ function diagnose_F_gif(pdf,Ez,phi,density,vpa,vperp,z,ntime)
 end
 
 function test_implicit_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=3,nelement_vpa=8,nelement_vperp=4,
-    Lvpa=6.0,Lvperp=3.0,ntime=1,delta_t=1.0,
+    Lvpa=6.0,Lvperp=3.0,bc_vpa="none",bc_vperp="none",
+    ntime=1,delta_t=1.0,
     restart = 8,
     max_restarts = 1,
     atol = 1.0e-10,
@@ -165,12 +174,12 @@ function test_implicit_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=3,neleme
                                 "nelement_local"=>nelement_local_vperp, "L"=>Lvperp,
                                 "discretization"=>discretization,
                                 "element_spacing_option"=>element_spacing_option,
-                                "bc"=>"none"),
+                                "bc"=>bc_vperp),
         "vpa"=>OptionsDict("ngrid"=>ngrid, "nelement"=>nelement_global_vpa,
                             "nelement_local"=>nelement_local_vpa, "L"=>Lvpa,
                             "discretization"=>discretization,
                             "element_spacing_option"=>element_spacing_option,
-                            "bc"=>"none"),
+                            "bc"=>bc_vpa),
     )
     #println("made inputs")
     #println("vpa: ngrid: ",ngrid," nelement: ",nelement_local_vpa, " Lvpa: ",Lvpa)
@@ -178,6 +187,9 @@ function test_implicit_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=3,neleme
     # create the coordinate structs
     vperp, vperp_spectral = define_coordinate(coords_input, "vperp")
     vpa, vpa_spectral = define_coordinate(coords_input, "vpa")
+    if vperp.bc == "zero-impose-regularity"
+        error("vperp.bc = $(vperp.bc) not supported for implicit FP")
+    end
     looping.setup_loop_ranges!(block_rank[], block_size[];
                                     s=1, sn=1,
                                     r=1, z=1, vperp=vperp.n, vpa=vpa.n,
@@ -199,6 +211,17 @@ function test_implicit_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=3,neleme
     @serial_region begin
         @loop_vperp_vpa ivperp ivpa begin
             fvpavperp[ivpa,ivperp,1] = exp(-((vpa.grid[ivpa]-vpa0)^2 + (vperp.grid[ivperp]-vperp0)^2)/(vth0^2))
+        end
+        if vpa.bc == "zero"
+            @loop_vperp ivperp begin
+                fvpavperp[1,ivperp,1] = 0.0
+                fvpavperp[end,ivperp,1] = 0.0
+            end
+        end
+        if vperp.bc == "zero"
+            @loop_vpa ivpa begin
+                fvpavperp[ivpa,end,1] = 0.0
+            end
         end
         # normalise to unit density
         @views densfac = get_density(fvpavperp[:,:,1],vpa,vperp)
@@ -267,7 +290,8 @@ function test_implicit_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=3,neleme
 end
 
 function test_implicit_collisions_wrapper(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=3,nelement_vpa=8,nelement_vperp=4,
-    Lvpa=6.0,Lvperp=3.0,ntime=1,delta_t=1.0,
+    Lvpa=6.0,Lvperp=3.0, bc_vpa="none", bc_vperp = "none",
+    ntime=1,delta_t=1.0,
     restart = 8,
     max_restarts = 1,
     atol = 1.0e-10,
@@ -302,12 +326,12 @@ function test_implicit_collisions_wrapper(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=
                                 "nelement_local"=>nelement_local_vperp, "L"=>Lvperp,
                                 "discretization"=>discretization,
                                 "element_spacing_option"=>element_spacing_option,
-                                "bc"=>"none"),
+                                "bc"=>bc_vperp),
         "vpa"=>OptionsDict("ngrid"=>ngrid, "nelement"=>nelement_global_vpa,
                             "nelement_local"=>nelement_local_vpa, "L"=>Lvpa,
                             "discretization"=>discretization,
                             "element_spacing_option"=>element_spacing_option,
-                            "bc"=>"none"),
+                            "bc"=>bc_vpa),
         "z"=>OptionsDict("ngrid"=> 1, "nelement"=> 1,
                             "nelement_local"=> 1, "bc"=>"none"),
         "r"=>OptionsDict("ngrid"=> 1, "nelement"=> 1,
@@ -322,6 +346,9 @@ function test_implicit_collisions_wrapper(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=
     r, r_spectral = define_coordinate(coords_input, "r")
     z, z_spectral = define_coordinate(coords_input, "z")
     composition = get_species_input(OptionsDict("composition" => OptionsDict("n_ion_species" => 1, "n_neutral_species" => 0) ), true)
+    if vperp.bc == "zero-impose-regularity"
+        error("vperp.bc = $(vperp.bc) not supported for implicit FP")
+    end
     looping.setup_loop_ranges!(block_rank[], block_size[];
                                     s=composition.n_ion_species, sn=1,
                                     r=r.n, z=z.n, vperp=vperp.n, vpa=vpa.n,
@@ -358,6 +385,17 @@ function test_implicit_collisions_wrapper(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=
         @loop_s_r_z is ir iz begin
             @loop_vperp_vpa ivperp ivpa begin
                 fvpavperpzrst[ivpa,ivperp,iz,ir,is,1] = exp(-((vpa.grid[ivpa]-vpa0)^2 + (vperp.grid[ivperp]-vperp0)^2)/(vth0^2))
+            end
+            if vpa.bc == "zero"
+                @loop_vperp ivperp begin
+                    fvpavperpzrst[1,ivperp,1] = 0.0
+                    fvpavperpzrst[end,ivperp,1] = 0.0
+                end
+            end
+            if vperp.bc == "zero"
+                @loop_vpa ivpa begin
+                    fvpavperpzrst[ivpa,end,1] = 0.0
+                end
             end
             # normalise to unit density
             @views densfac = get_density(fvpavperpzrst[:,:,iz,ir,is,1],vpa,vperp)
@@ -688,6 +726,6 @@ if abspath(PROGRAM_FILE) == @__FILE__
     #   serial_solve=false,anyv_region=true,plot_test_output=false,
     #   test_numerical_conserving_terms=true)
     test_implicit_collisions_wrapper(test_particle_preconditioner=true,test_numerical_conserving_terms=true,
-    vth0=0.5,vperp0=1.0,vpa0=1.0, nelement_vpa=8,nelement_vperp=4,Lvpa=8.0,Lvperp=4.0,
-     ntime=1, delta_t = 1.0, ngrid=5, test_linearised_advance=false, use_end_of_step_corrections=true)
+    vth0=0.5,vperp0=1.0,vpa0=1.0, nelement_vpa=32,nelement_vperp=16,Lvpa=8.0,Lvperp=4.0, bc_vpa="none", bc_vperp="none",
+     ntime=2, delta_t = 1.0, ngrid=5, test_linearised_advance=false, use_end_of_step_corrections=true)
 end
