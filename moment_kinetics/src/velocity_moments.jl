@@ -1710,7 +1710,7 @@ function update_neutral_uz_species!(uz, density, vth, ff, vz, vr, vzeta, z, r,
     return nothing
 end
 
-function get_neutral_uz(ff, density, vzeta, vr, vz, evolve_density)
+function get_neutral_uz(ff, density, vz, vr, vzeta, evolve_density)
     upar = integral(ff, vz.grid, 1, vz.wgts, vr.grid, 0, vr.wgts, vzeta.grid, 0,
                     vzeta.wgts)
     if !evolve_density
