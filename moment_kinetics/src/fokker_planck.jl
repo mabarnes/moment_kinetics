@@ -1028,7 +1028,6 @@ function fokker_planck_self_collisions_backward_euler_step!(Fold, delta_t, ms, n
             use_Maxwellian_Rosenbluth_coefficients=use_Maxwellian_Rosenbluth_coefficients_in_preconditioner,
             boundary_data_option=boundary_data_option)
     
-        lu_CC = fkpl_arrays.lu_obj_CC2D 
         function test_particle_precon!(x)
             # let K * dF = C[dF,F^n]
             # function to solve K * F^n+1 = M * F^n
