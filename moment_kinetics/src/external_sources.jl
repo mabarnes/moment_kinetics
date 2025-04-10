@@ -877,10 +877,10 @@ Add external source term to the ion kinetic equation.
     source_n = ion_source.source_n
     if vperp.n == 1
         source_vth_factor = 1.0 / sqrt(2.0 * source_T)
-        constant_prefactor = 1.0 / sqrt(π)
+        Maxwellian_prefactor = 1.0 / sqrt(π)
     else
         source_vth_factor = 1.0 / (2.0 * source_T)^1.5
-        constant_prefactor = 1.0 / π^1.5
+        Maxwellian_prefactor = 1.0 / π^1.5
     end
     vpa_grid = vpa.grid
     vperp_grid = vperp.grid
@@ -899,7 +899,7 @@ Add external source term to the ion kinetic equation.
                 this_upar = upar[iz,ir,is]
                 this_vth = vth[iz,ir,is]
                 this_prefactor = dt * this_vth_factor / density[iz,ir,is] *
-                                 constant_prefactor * source_vth_factor *
+                                 Maxwellian_prefactor * source_vth_factor *
                                  source_amplitude[iz,ir]
                 @loop_vperp_vpa ivperp ivpa begin
                     # Factor of 1/sqrt(π) (for 1V) or 1/π^(3/2) (for 2V/3V) is absorbed by the
@@ -908,7 +908,7 @@ Add external source term to the ion kinetic equation.
                     vpa_unnorm = vpa_grid[ivpa] * this_vth + this_upar
                     pdf[ivpa,ivperp,iz,ir,is] +=
                         this_prefactor * source_n *
-                        exp(-(vperp_unnorm^2 + vpa_unnorm^2) / source_T)
+                        exp(-(vperp_unnorm^2 + vpa_unnorm^2) / (2.0 * source_T))
                 end
             end
         elseif moments.evolve_upar && moments.evolve_density
@@ -916,7 +916,7 @@ Add external source term to the ion kinetic equation.
             upar = fvec.upar
             @loop_s_r_z is ir iz begin
                 this_upar = upar[iz,ir,is]
-                this_prefactor = dt / density[iz,ir,is] * constant_prefactor *
+                this_prefactor = dt / density[iz,ir,is] * Maxwellian_prefactor *
                                  source_vth_factor * source_amplitude[iz,ir]
                 @loop_vperp_vpa ivperp ivpa begin
                     # Factor of 1/sqrt(π) (for 1V) or 1/π^(3/2) (for 2V/3V) is absorbed by the
@@ -924,32 +924,32 @@ Add external source term to the ion kinetic equation.
                     vpa_unnorm = vpa_grid[ivpa] + this_upar
                     pdf[ivpa,ivperp,iz,ir,is] +=
                         this_prefactor * source_n *
-                        exp(-(vperp_grid[ivperp]^2 + vpa_unnorm^2) / source_T)
+                        exp(-(vperp_grid[ivperp]^2 + vpa_unnorm^2) / (2.0 * source_T))
                 end
             end
         elseif moments.evolve_density
             density = fvec.density
             @loop_s_r_z is ir iz begin
-                this_prefactor = dt / density[iz,ir,is] * constant_prefactor *
+                this_prefactor = dt / density[iz,ir,is] * Maxwellian_prefactor *
                                  source_vth_factor * source_amplitude[iz,ir]
                 @loop_vperp_vpa ivperp ivpa begin
                     # Factor of 1/sqrt(π) (for 1V) or 1/π^(3/2) (for 2V/3V) is absorbed by the
                     # normalisation of F
                     pdf[ivpa,ivperp,iz,ir,is] +=
                         this_prefactor * source_n *
-                        exp(-(vperp_grid[ivperp]^2 + vpa_grid[ivpa]^2) / source_T)
+                        exp(-(vperp_grid[ivperp]^2 + vpa_grid[ivpa]^2) / (2.0 * source_T))
                 end
             end
         elseif !moments.evolve_p && !moments.evolve_upar && !moments.evolve_density
             @loop_s_r_z is ir iz begin
-                this_prefactor = dt * constant_prefactor * source_vth_factor *
+                this_prefactor = dt * Maxwellian_prefactor * source_vth_factor *
                                  source_amplitude[iz,ir]
                 @loop_vperp_vpa ivperp ivpa begin
                     # Factor of 1/sqrt(π) (for 1V) or 1/π^(3/2) (for 2V/3V) is absorbed by the
                     # normalisation of F
                     pdf[ivpa,ivperp,iz,ir,is] +=
                         this_prefactor * source_n *
-                        exp(-(vperp_grid[ivperp]^2 + vpa_grid[ivpa]^2) / source_T)
+                        exp(-(vperp_grid[ivperp]^2 + vpa_grid[ivpa]^2) / (2.0 *source_T))
                 end
             end
         else
@@ -975,18 +975,18 @@ Add external source term to the ion kinetic equation.
     elseif source_type == "alphas" || source_type == "alphas-with-losses"
         @begin_s_r_z_region()
         source_v0 = ion_source.source_v0
-        constant_prefactor = 1.0 / π^1.5
+        Maxwellian_prefactor = 1.0 / π^1.5
         if !(source_v0 > 1.0e-8)
             error("source_v0=$source_v0 < 1.0e-8")
         end
         dummy_vpavperp = scratch_dummy.dummy_vpavperp
         if !moments.evolve_p && !moments.evolve_upar && !moments.evolve_density
             @loop_s_r_z is ir iz begin
-                this_prefactor = dt * constant_prefactor * source_amplitude[iz,ir]
+                this_prefactor = dt * Maxwellian_prefactor * source_amplitude[iz,ir]
                 # first assign source to local scratch array
                 @loop_vperp_vpa ivperp ivpa begin
                     v2 = vperp_grid[ivperp]^2 + vpa_grid[ivpa]^2
-                    fac = 2.0/(source_T*source_v0^2)
+                    fac = 2.0/(2.0*source_T*source_v0^2)
                     dummy_vpavperp[ivpa,ivperp] = exp(-fac*(v2 - source_v0^2)^2 )
                 end
                 # get the density for normalisation purposes
@@ -1034,7 +1034,7 @@ Add external source term to the ion kinetic equation.
         @begin_s_r_z_region()
         source_vpa0 = ion_source.source_vpa0
         source_vperp0 = ion_source.source_vperp0
-        constant_prefactor = 1.0 / π^1.5
+        Maxwellian_prefactor = 1.0 / π^1.5
         if !(source_vpa0 > 1.0e-8)
             error("source_vpa0=$source_vpa0 < 1.0e-8")
         end
@@ -1044,7 +1044,7 @@ Add external source term to the ion kinetic equation.
         dummy_vpavperp = scratch_dummy.dummy_vpavperp
         if !moments.evolve_p && !moments.evolve_upar && !moments.evolve_density
             @loop_s_r_z is ir iz begin
-                this_prefactor = dt * constant_prefactor * source_amplitude[iz,ir]
+                this_prefactor = dt * Maxwellian_prefactor * source_amplitude[iz,ir]
                 # first assign source to local scratch array
                 @loop_vperp_vpa ivperp ivpa begin
                     vth0  = sqrt(2.0*source_T) # sqrt(2 T / m), m = mref = 1
@@ -1139,10 +1139,10 @@ Note that this function operates on a single point in `r`, given by `ir`, and `p
     source_T = electron_source.source_T
     if vperp.n == 1
         source_vth_factor = 1.0 / sqrt(2.0 * source_T / me_over_mi)
-        constant_prefactor = 1.0 / sqrt(π)
+        Maxwellian_prefactor = 1.0 / sqrt(π)
     else
         source_vth_factor = 1.0 / (2.0 * source_T / me_over_mi)^1.5
-        constant_prefactor = 1.0 / π^1.5
+        Maxwellian_prefactor = 1.0 / π^1.5
     end
     vpa_grid = vpa.grid
     vperp_grid = vperp.grid
@@ -1157,14 +1157,14 @@ Note that this function operates on a single point in `r`, given by `ir`, and `p
         this_upar = electron_upar[iz]
         this_vth = vth[iz]
         this_prefactor = dt * this_vth_factor / electron_density[iz] *
-                         constant_prefactor * source_vth_factor * source_amplitude[iz]
+                         Maxwellian_prefactor * source_vth_factor * source_amplitude[iz]
         @loop_vperp ivperp begin
             # Factor of 1/sqrt(π) (for 1V) or 1/π^(3/2) (for 2V/3V) is absorbed by the
             # normalisation of F
             vperp_unnorm = vperp_grid[ivperp] * this_vth
             @. pdf_out[:,ivperp,iz] +=
                 this_prefactor *
-                exp(-(vperp_unnorm^2 + (vpa_grid * this_vth + this_upar)^2) * me_over_mi / source_T)
+                exp(-(vperp_unnorm^2 + (vpa_grid * this_vth + this_upar)^2) * me_over_mi / (2.0 * source_T))
         end
     end
 
@@ -1216,10 +1216,10 @@ function add_external_electron_source_to_Jacobian!(jacobian_matrix, f, moments, 
     vth = @view moments.electron.vth[:,ir]
     if vperp.n == 1
         source_vth_factor = 1.0 / sqrt(2.0 * source_T / me)
-        constant_prefactor = 1.0 / sqrt(π)
+        Maxwellian_prefactor = 1.0 / sqrt(π)
     else
         source_vth_factor = 1.0 / (2.0 * source_T / me)^1.5
-        constant_prefactor = 1.0 / π^1.5
+        Maxwellian_prefactor = 1.0 / π^1.5
     end
     vperp_grid = vperp.grid
     vpa_grid = vpa.grid
@@ -1250,22 +1250,22 @@ function add_external_electron_source_to_Jacobian!(jacobian_matrix, f, moments, 
             row = (iz - 1) * v_size + (ivperp - 1) * vpa.n + ivpa + f_offset
 
             # Contributions from
-            #   -vth_factor/n*constant_prefactor*source_vth_factor*source_amplitude*exp(-((w_⟂*vth)^2+(w_∥*vth+u)^2)*me/source_T)
+            #   -vth_factor/n*Maxwellian_prefactor*source_vth_factor*source_amplitude*exp(-((w_⟂*vth)^2+(w_∥*vth+u)^2)*me/(2.0 * source_T))
             # Using
             #   d(vth[irowz])/d(ppar[icolz]) = 1/2*vth/ppar * delta(irowz,icolz)
             #
-            #   d(exp(-((w_⟂*vth)^2+(w_∥*vth+u)^2)*me/source_T)[irowz])/d(ppar[icolz])
-            #     = -2*(w_⟂^2+(w_∥*vth+u)*w_∥)*me/source_T * 1/2*vth/ppar * exp(-((w_⟂*vth)^2+(w_∥*vth+u)^2)*me/source_T) * delta(irowz,icolz)
-            #     = -(w_⟂^2+(w_∥*vth+u)*w_∥)*me/source_T * vth/ppar * exp(-((w_⟂*vth)^2+(w_∥*vth+u)^2)*me/source_T) * delta(irowz,icolz)
+            #   d(exp(-((w_⟂*vth)^2+(w_∥*vth+u)^2)*me/(2.0*source_T))[irowz])/d(ppar[icolz])
+            #     = -2*(w_⟂^2+(w_∥*vth+u)*w_∥)*me/(2.0*source_T) * 1/2*vth/ppar * exp(-((w_⟂*vth)^2+(w_∥*vth+u)^2)*me/(2.0*source_T)) * delta(irowz,icolz)
+            #     = -(w_⟂^2+(w_∥*vth+u)*w_∥)*me/(2.0*source_T) * vth/ppar * exp(-((w_⟂*vth)^2+(w_∥*vth+u)^2)*me/(2.0*source_T)) * delta(irowz,icolz)
             if vperp.n == 1
                 this_vth_factor = vth[iz]
             else
                 this_vth_factor = vth[iz]^3
             end
             jacobian_matrix[row,ppar_offset+iz] +=
-                -dt * this_vth_factor / dens[iz] * constant_prefactor * source_vth_factor * source_amplitude[iz] *
-                      (0.5/ppar[iz] - (vperp_grid[ivperp]^2 + (vpa_grid[ivpa]*vth[iz] + upar[iz])*vpa_grid[ivpa])*me/source_T*vth[iz]/ppar[iz]) *
-                      exp(-((vperp_grid[ivperp]*vth[iz])^2 + (vpa_grid[ivpa]*vth[iz] + upar[iz])^2) * me / source_T)
+                -dt * this_vth_factor / dens[iz] * Maxwellian_prefactor * source_vth_factor * source_amplitude[iz] *
+                      (0.5/ppar[iz] - (vperp_grid[ivperp]^2 + (vpa_grid[ivpa]*vth[iz] + upar[iz])*vpa_grid[ivpa])*me/(2.0*source_T)*vth[iz]/ppar[iz]) *
+                      exp(-((vperp_grid[ivperp]*vth[iz])^2 + (vpa_grid[ivpa]*vth[iz] + upar[iz])^2) * me / (2.0 * source_T))
         end
     end
 
@@ -1347,10 +1347,10 @@ function add_external_electron_source_to_v_only_Jacobian!(
     end
     if vperp.n == 1
         source_vth_factor = 1.0 / sqrt(2.0 * source_T / me)
-        constant_prefactor = 1.0 / sqrt(π)
+        Maxwellian_prefactor = 1.0 / sqrt(π)
     else
         source_vth_factor = 1.0 / (2.0 * source_T / me)^1.5
-        constant_prefactor = 1.0 / π^1.5
+        Maxwellian_prefactor = 1.0 / π^1.5
     end
     vperp_grid = vperp.grid
     vpa_grid = vpa.grid
@@ -1379,9 +1379,9 @@ function add_external_electron_source_to_v_only_Jacobian!(
         row = (ivperp - 1) * vpa.n + ivpa
 
         jacobian_matrix[row,end] +=
-            -dt * this_vth_factor / dens * constant_prefactor * source_vth_factor * source_amplitude *
-                  (0.5/ppar - (vperp_grid[ivperp]^2 + (vpa_grid[ivpa]*vth + upar)*vpa_grid[ivpa])*me/source_T*vth/ppar) *
-                  exp(-((vperp_grid[ivperp]*vth)^2 + (vpa_grid[ivpa]*vth + upar)^2) * me / source_T)
+            -dt * this_vth_factor / dens * Maxwellian_prefactor * source_vth_factor * source_amplitude *
+                  (0.5/ppar - (vperp_grid[ivperp]^2 + (vpa_grid[ivpa]*vth + upar)*vpa_grid[ivpa])*me/(2.0*source_T)*vth/ppar) *
+                  exp(-((vperp_grid[ivperp]*vth)^2 + (vpa_grid[ivpa]*vth + upar)^2) * me / (2.0 * source_T))
     end
 
     return nothing
@@ -1402,10 +1402,10 @@ Add external source term to the neutral kinetic equation.
     source_T = neutral_source.source_T
     if vzeta.n == 1 && vr.n == 1
         source_vth_factor = 1.0 / sqrt(2.0 * source_T)
-        constant_prefactor = 1.0 / sqrt(π)
+        Maxwellian_prefactor = 1.0 / sqrt(π)
     else
         source_vth_factor = 1.0 / (2.0 * source_T)^1.5
-        constant_prefactor = 1.0 / π^1.5
+        Maxwellian_prefactor = 1.0 / π^1.5
     end
     vzeta_grid = vzeta.grid
     vr_grid = vr.grid
@@ -1424,7 +1424,7 @@ Add external source term to the neutral kinetic equation.
             this_uz = uz[iz,ir,isn]
             this_vth = vth[iz,ir,isn]
             this_prefactor = dt * this_vth_factor / density[iz,ir,isn] *
-                             constant_prefactor * source_vth_factor *
+                             Maxwellian_prefactor * source_vth_factor *
                              source_amplitude[iz,ir]
             @loop_vzeta_vr_vz ivzeta ivr ivz begin
                 # Factor of 1/sqrt(π) (for 1V) or 1/π^(3/2) (for 2V/3V) is absorbed by the
@@ -1434,7 +1434,7 @@ Add external source term to the neutral kinetic equation.
                 vz_unnorm = vz_grid[ivz] * this_vth + this_uz
                 pdf[ivz,ivr,ivzeta,iz,ir,isn] +=
                     this_prefactor *
-                    exp(-(vzeta_unnorm^2 + vr_unnorm^2 + vz_unnorm^2) / source_T)
+                    exp(-(vzeta_unnorm^2 + vr_unnorm^2 + vz_unnorm^2) / (2.0 * source_T))
             end
         end
     elseif moments.evolve_upar && moments.evolve_density
@@ -1442,7 +1442,7 @@ Add external source term to the neutral kinetic equation.
         uz = fvec.uz_neutral
         @loop_sn_r_z isn ir iz begin
             this_uz = uz[iz,ir,isn]
-            this_prefactor = dt / density[iz,ir,isn] * constant_prefactor *
+            this_prefactor = dt / density[iz,ir,isn] * Maxwellian_prefactor *
                              source_vth_factor * source_amplitude[iz,ir]
             @loop_vzeta_vr_vz ivzeta ivr ivz begin
                 # Factor of 1/sqrt(π) (for 1V) or 1/π^(3/2) (for 2V/3V) is absorbed by the
@@ -1450,32 +1450,32 @@ Add external source term to the neutral kinetic equation.
                 vz_unnorm = vz_grid[ivz] + this_uz
                 pdf[ivz,ivr,ivzeta,iz,ir,isn] +=
                     this_prefactor *
-                    exp(-(vzeta_grid[ivzeta]^2 + vr_grid[ivr]^2 + vz_unnorm^2) / source_T)
+                    exp(-(vzeta_grid[ivzeta]^2 + vr_grid[ivr]^2 + vz_unnorm^2) / (2.0 * source_T))
             end
         end
     elseif moments.evolve_density
         density = fvec.density_neutral
         @loop_sn_r_z isn ir iz begin
-            this_prefactor = dt / density[iz,ir,isn] * constant_prefactor *
+            this_prefactor = dt / density[iz,ir,isn] * Maxwellian_prefactor *
                              source_vth_factor * source_amplitude[iz,ir]
             @loop_vzeta_vr_vz ivzeta ivr ivz begin
                 # Factor of 1/sqrt(π) (for 1V) or 1/π^(3/2) (for 2V/3V) is absorbed by the
                 # normalisation of F
                 pdf[ivz,ivr,ivzeta,iz,ir,isn] +=
                     this_prefactor *
-                    exp(-(vzeta_grid[ivzeta]^2 + vr_grid[ivr]^2 + vz_grid[ivz]^2) / source_T)
+                    exp(-(vzeta_grid[ivzeta]^2 + vr_grid[ivr]^2 + vz_grid[ivz]^2) / (2.0 * source_T))
             end
         end
     elseif !moments.evolve_p && !moments.evolve_upar && !moments.evolve_density
         @loop_sn_r_z isn ir iz begin
-            this_prefactor = dt * constant_prefactor * source_vth_factor *
+            this_prefactor = dt * Maxwellian_prefactor * source_vth_factor *
                              source_amplitude[iz,ir]
             @loop_vzeta_vr_vz ivzeta ivr ivz begin
                 # Factor of 1/sqrt(π) (for 1V) or 1/π^(3/2) (for 2V/3V) is absorbed by the
                 # normalisation of F
                 pdf[ivz,ivr,ivzeta,iz,ir,isn] +=
                     this_prefactor *
-                    exp(-(vzeta_grid[ivzeta]^2 + vr_grid[ivr]^2 + vz_grid[ivz]^2) / source_T)
+                    exp(-(vzeta_grid[ivzeta]^2 + vr_grid[ivr]^2 + vz_grid[ivz]^2) / (2.0 * source_T))
             end
         end
     else
