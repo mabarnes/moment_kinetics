@@ -1560,6 +1560,11 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
             else
                 vgrid_scale_factor = ones(size(vth))
             end
+            if vzeta.n == 1 && vr.n == 1
+                # Convert to a thermal speed defined with the parallel temperature in 1V
+                # case.
+                vgrid_scale_factor *= sqrt(3.0)
+            end
             for iz ∈ zrange
                 @. vz.scratch = vz.grid * vgrid_scale_factor[iz]
                 @. vzeta.scratch = vzeta.grid * vgrid_scale_factor[iz]
@@ -1569,10 +1574,20 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
                     # normalise/interpolate (if necessary). This makes it easier to
                     # initialise a normalised pdf consistent with the moments, although it
                     # modifies the moments from the 'input' values.
+                    @. vz.scratch = (vz.grid - uz[iz]) / vth[iz]
+                    vzeta.scratch[ivzeta] = vzeta.grid[ivzeta] / vth[iz]
+                    vr.scratch[ivr] = vr.grid[ivr] / vth[iz]
+                    if vzeta.n == 1 && vr.n == 1
+                        # Need to initialise using Maxwellian defined using T_∥ = 3*T as T_⟂=0
+                        vth_factor = sqrt(3.0) * vth[iz]
+                        vz.scratch ./= sqrt(3.0)
+                    else
+                        vth_factor = vth[iz]^3
+                    end
                     @. pdf[:,ivr,ivzeta,iz] = density[iz] * Maxwellian_prefactor *
                                               exp(-((vz.scratch - uz[iz])^2 +
                                                     vzeta.scratch[ivzeta]^2 + vr.scratch[ivr]^2)
-                                                  / vth[iz]^2) / vth[iz]
+                                                  / vth[iz]^2) / vth_factor
 
                     # Also ensure both species go to zero smoothly at v_z=0 at the
                     # wall, where the boundary conditions require that distribution
@@ -1582,12 +1597,14 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
                     #
                     # Implemented by multiplying by a smooth 'notch' function
                     # notch(v,u0,width) = 1 - exp(-(v-u0)^2/width)
+                    # Factor of sqrt(2) included to make this consistent with earlier
+                    # version of code - this width is arbitrary anyway.
                     if evolve_p
                         # Initialization grid scaled by 1/vth already, so don't need to
                         # scale `width`.
-                        width = sqrt(0.1)
+                        width = sqrt(0.1) * sqrt(2.0)
                     else
-                        width = sqrt(0.1) * vth[iz]
+                        width = sqrt(0.1) * sqrt(2.0) * vth[iz]
                     end
                     if vzeta.n == 1 && vr.n == 1
                         # Multiply by sqrt(3) so that in 1V case we set the width relative
@@ -1681,11 +1698,19 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
             elseif vzeta.n == 1 && vr.n == 1
                 # get the marginalised Knudsen cosine distribution after integrating over
                 # vperp appropriate for 1V model
+
+                # Convert to a thermal speed defined with the parallel temperature in 1V
+                # case.
+                knudsen_vtfac *= sqrt(3.0)
+
                 @. vz.scratch = vz.grid * vgrid_scale_factor0
                 @. knudsen_pdf_lower[:,1,1] = (3.0*pi/knudsen_vtfac^3)*Maxwellian_prefactor*abs(vz.scratch)*erfc(abs(vz.scratch) / knudsen_vtfac)
 
                 @. vz.scratch = vz.grid * vgrid_scale_factorL
                 @. knudsen_pdf_upper[:,1,1] = (3.0*pi/knudsen_vtfac^3)*Maxwellian_prefactor*abs(vz.scratch)*erfc(abs(vz.scratch) / knudsen_vtfac)
+            else
+                error("If 1V expect both vzeta.n and vr.n to be 1. Got "
+                      * "vzeta.n=$(vzeta.n), vr.n=$(vr.n).")
             end
 
             # add this species' contribution to the combined ion/neutral particle flux
@@ -2023,6 +2048,11 @@ function init_knudsen_cosine!(knudsen_cosine, vz, vr, vzeta, vpa, vperp, composi
         elseif vzeta.n == 1 && vr.n == 1
             # get the marginalised Knudsen cosine distribution after integrating over vperp
             # appropriate for 1V model
+
+            # Adjust vtfac so that it is calculated with T_parallel instead of T for the
+            # 1V model.
+            vtfac *= sqrt(3)
+
             @. vz.scratch = (3.0*pi/vtfac^3)*Maxwellian_prefactor*abs(vz.grid)*erfc(abs(vz.grid)/vtfac)
             normalisation = integrate_over_positive_vz(vz.grid .* vz.scratch, vz.grid, vz.wgts, vz.scratch2,
                                                        vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
