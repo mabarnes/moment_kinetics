@@ -28,6 +28,7 @@ export calculate_rosenbluth_potentials_via_elliptic_solve!
 export calculate_rosenbluth_potentials_via_analytical_Maxwellian!
 export allocate_preconditioner_matrix
 export calculate_test_particle_preconditioner!
+export advance_linearised_test_particle_collisions!
 
 # testing
 export calculate_rosenbluth_potential_boundary_data_exact!
@@ -56,7 +57,7 @@ using Dates
 using SpecialFunctions: ellipk, ellipe
 using SparseArrays: sparse, AbstractSparseArray
 using SuiteSparse
-using LinearAlgebra: ldiv!, mul!, LU, ldiv, lu!
+using LinearAlgebra: ldiv!, mul!, LU, ldiv, lu, lu!
 using FastGaussQuadrature
 using Printf
 using MPI
@@ -2770,6 +2771,37 @@ function calculate_test_particle_preconditioner!(pdf,delta_t,ms,msp,nussp,
     # should improve on this step to avoid recreating the sparse array if possible.
     fkpl_arrays.CC2D_sparse .= create_sparse_matrix(CC2D_sparse_constructor)
     lu!(fkpl_arrays.lu_obj_CC2D, fkpl_arrays.CC2D_sparse)
+    return nothing
+end
+
+function advance_linearised_test_particle_collisions!(pdf,fkpl_arrays,
+                                vpa,vperp,vpa_spectral,vperp_spectral)
+    # (the LU decomposition object for) 
+    # the backward Euler time advance matrix
+    # for linearised test particle collisions K * dF = C[dF, F^n+1].
+    # this is also the LU decomposition of the approximate Jacobian
+    # for the nonlinear residual R = F^n+1 - F^n - C[F^n+1, F^n+1]
+    lu_CC = fkpl_arrays.lu_obj_CC2D
+    # function to solve K * F^n+1 = M * F^n
+    # and return F^n+1 in place in pdf
+    # enforce zero BCs on pdf in so that
+    # these BCs are imposed via the unit boundary
+    # values in CC2D_sparse, in the event BCs are used
+    enforce_vpavperp_BCs!(pdf,vpa,vperp,vpa_spectral,vperp_spectral)
+    # extra dummy arrays
+    pdf_scratch = fkpl_arrays.rhsvpavperp
+    pdf_dummy = fkpl_arrays.S_dummy
+    # mass matrix for RHS
+    MM2D_sparse = fkpl_arrays.MM2D_sparse
+    @begin_anyv_region()
+    @anyv_serial_region begin
+        @views @. pdf_scratch = pdf
+        pdf_c = vec(pdf)
+        pdf_scratch_c = vec(pdf_scratch)
+        pdf_dummy_c = vec(pdf_dummy)
+        mul!(pdf_dummy_c, MM2D_sparse, pdf_scratch_c)
+        ldiv!(pdf_c,lu_CC,pdf_dummy_c)
+    end
     return nothing
 end
 
