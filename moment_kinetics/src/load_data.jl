@@ -414,7 +414,12 @@ function load_mk_options(fid)
 
     evolve_density = load_variable(overview, "evolve_density")
     evolve_upar = load_variable(overview, "evolve_upar")
-    evolve_p = load_variable(overview, "evolve_p")
+    if "evolve_p" ∈ keys(overview)
+        evolve_p = load_variable(overview, "evolve_p")
+    else
+        # Older output file, before option was renamed
+        evolve_p = load_variable(overview, "evolve_ppar")
+    end
 
     return evolve_density, evolve_upar, evolve_p
 end
