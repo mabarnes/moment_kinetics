@@ -263,7 +263,7 @@ function init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_sp
                                            YY_arrays, S_dummy, Q_dummy, rhsvpavperp, rhsvpavperp_copy1, rhsvpavperp_copy2, rhsvpavperp_copy3,
                                            CC, GG, HH, dHdvpa, dHdvperp, dGdvperp, d2Gdvperp2, d2Gdvpa2, d2Gdvperpdvpa,
                                            FF, dFdvpa, dFdvperp, 
-                                           CC2D_sparse, CC2D_sparse_constructor, lu_obj_MM,
+                                           CC2D_sparse, CC2D_sparse_constructor, lu_obj_CC2D,
                                            rhs_advection, Fnew, Fresidual, F_delta_x, F_rhs_delta, Fv, Fw)
     return fka
 end

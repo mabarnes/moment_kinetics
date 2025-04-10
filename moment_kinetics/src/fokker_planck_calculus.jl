@@ -56,7 +56,7 @@ using Dates
 using SpecialFunctions: ellipk, ellipe
 using SparseArrays: sparse, AbstractSparseArray
 using SuiteSparse
-using LinearAlgebra: ldiv!, mul!, LU, ldiv, lu
+using LinearAlgebra: ldiv!, mul!, LU, ldiv, lu!
 using FastGaussQuadrature
 using Printf
 using MPI
@@ -2763,9 +2763,7 @@ function calculate_test_particle_preconditioner!(pdf,delta_t,ms,msp,nussp,
     end # end bc assignment
     # should improve on this step to avoid recreating the sparse array if possible.
     fkpl_arrays.CC2D_sparse .= create_sparse_matrix(CC2D_sparse_constructor)
-    println(lu(fkpl_arrays.CC2D_sparse))
-    println(fkpl_arrays.lu_obj_CC2D)
-    fkpl_arrays.lu_obj_CC2D .= lu(fkpl_arrays.CC2D_sparse)
+    lu!(fkpl_arrays.lu_obj_CC2D, fkpl_arrays.CC2D_sparse)
     return nothing
 end
 # functions to modify an existing sparse matrix
