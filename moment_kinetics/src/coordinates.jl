@@ -586,7 +586,7 @@ function set_element_boundaries(nelement_global, L, element_spacing_option, coor
             @. element_boundaries[mid_ind_plus:end] =
                 L * (sqrt(s0^2 + a0^2 - (a[mid_ind_plus:end]-a0)^2) + s0)
         end
-    elseif element_spacing_option == "coarse_tails"
+    elseif startswith(element_spacing_option, "coarse_tails")
         # Element boundaries at
         #
         # x = (1 + (BT)^2 / 3) T tan(BT a) / (1 + (BT a)^2 / 3)
@@ -606,7 +606,12 @@ function set_element_boundaries(nelement_global, L, element_spacing_option, coor
         #
         # We choose T=5 so that the electron sheath cutoff, which is around
         # v_∥/vth≈3≈w_∥ is captured in the finer grid spacing in the 'constant' region.
-        T = 5.0
+        params = split(element_spacing_option, "coarse_tails")[2]
+        if params == ""
+            T = 5.0
+        else
+            T = parse(mk_float, params)
+        end
         BT = atan(L / 2.0 / T)
         a = (collect(1:nelement_global+1) .- 1 .- nelement_global ./ 2.0) ./ (nelement_global ./ 2.0)
         @. element_boundaries = tan(BT * a) / (1.0 + (BT * a)^2 / 3.0)
