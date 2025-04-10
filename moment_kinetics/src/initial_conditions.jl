@@ -509,9 +509,7 @@ function initialize_pdf!(pdf, moments, boundary_distributions, composition, r, z
                                         moments.ion.upar[end,ir,is]
 
             @loop_z iz begin
-                if moments.evolve_ppar
-                    @. pdf.ion.norm[:,:,iz,ir,is] *= moments.ion.vth[iz,ir,is]
-                elseif moments.evolve_density == false
+                if moments.evolve_density == false
                     @. pdf.ion.norm[:,:,iz,ir,is] *= moments.ion.dens[iz,ir,is]
                 end
             end
@@ -533,9 +531,7 @@ function initialize_pdf!(pdf, moments, boundary_distributions, composition, r, z
                 wall_flux_0[ir,min(isn,composition.n_ion_species)],
                 wall_flux_L[ir,min(isn,composition.n_ion_species)])
             @loop_z iz begin
-                if moments.evolve_ppar
-                    @. pdf.neutral.norm[:,:,:,iz,ir,isn] *= moments.neutral.vth[iz,ir,isn]
-                elseif moments.evolve_density == false
+                if moments.evolve_density == false
                     @. pdf.neutral.norm[:,:,:,iz,ir,isn] *= moments.neutral.dens[iz,ir,isn]
                 end
             end
