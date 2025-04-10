@@ -428,7 +428,7 @@ function enforce_neutral_z_boundary_condition!(pdf, density, uz, pz, moments, de
             # BC for neutrals
             @loop_r ir begin
                 # define vtfac to avoid repeated computation below
-                vtfac = sqrt(composition.T_wall * composition.mn_over_mi)
+                vtfac = sqrt(2.0 * composition.T_wall * composition.mn_over_mi)
                 # Assume for now that the ion species index corresponding to this neutral
                 # species is the same as the neutral species index.
                 # Note, have already calculated moments of ion distribution function(s),
