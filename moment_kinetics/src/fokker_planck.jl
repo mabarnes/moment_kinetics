@@ -76,7 +76,8 @@ using ..fokker_planck_calculus: init_Rosenbluth_potential_integration_weights!,
                                 elliptic_solve!, algebraic_solve!, allocate_preconditioner_matrix,
                                 calculate_rosenbluth_potentials_via_elliptic_solve!,
                                 calculate_rosenbluth_potentials_via_analytical_Maxwellian!,
-                                calculate_test_particle_preconditioner!
+                                calculate_test_particle_preconditioner!,
+                                advance_linearised_test_particle_collisions!
 using ..fokker_planck_test: Cssp_fully_expanded_form, calculate_collisional_fluxes,
                             d2Gdvpa2_Maxwellian, d2Gdvperpdvpa_Maxwellian, d2Gdvperp2_Maxwellian, dHdvpa_Maxwellian, dHdvperp_Maxwellian,
                             F_Maxwellian, dFdvpa_Maxwellian, dFdvperp_Maxwellian
@@ -236,7 +237,7 @@ function init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_sp
     dFdvpa = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
     dFdvperp = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
     # preconditioner matrix
-    CC2D_sparse, CC2D_sparse_constructor = allocate_preconditioner_matrix(vpa,vperp,vpa_spectral,vperp_spectral)
+    CC2D_sparse, CC2D_sparse_constructor, lu_obj_CC2D = allocate_preconditioner_matrix(vpa,vperp,vpa_spectral,vperp_spectral)
     rhs_advection = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
     # dummy arrays for JFNK
     Fnew = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
@@ -263,7 +264,7 @@ function init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_sp
                                            YY_arrays, S_dummy, Q_dummy, rhsvpavperp, rhsvpavperp_copy1, rhsvpavperp_copy2, rhsvpavperp_copy3,
                                            CC, GG, HH, dHdvpa, dHdvperp, dGdvperp, d2Gdvperp2, d2Gdvpa2, d2Gdvperpdvpa,
                                            FF, dFdvpa, dFdvperp, 
-                                           CC2D_sparse, CC2D_sparse_constructor,
+                                           CC2D_sparse, CC2D_sparse_constructor, lu_obj_CC2D,
                                            rhs_advection, Fnew, Fresidual, F_delta_x, F_rhs_delta, Fv, Fw)
     return fka
 end
@@ -1027,28 +1028,14 @@ function fokker_planck_self_collisions_backward_euler_step!(Fold, delta_t, ms, n
             use_Maxwellian_Rosenbluth_coefficients=use_Maxwellian_Rosenbluth_coefficients_in_preconditioner,
             boundary_data_option=boundary_data_option)
     
-        # LU decomposition of the approximate Jacobian
-        lu_CC = lu(fkpl_arrays.CC2D_sparse) 
+        lu_CC = fkpl_arrays.lu_obj_CC2D 
         function test_particle_precon!(x)
+            # let K * dF = C[dF,F^n]
             # function to solve K * F^n+1 = M * F^n
             # and return F^n+1 in place in x
             pdf = x
-            # enforce zero BCs on pdf in so that
-            # these BCs are imposed via the unit boundary
-            # values in CC2D_sparse, in the event BCs are used
-            enforce_vpavperp_BCs!(pdf,vpa,vperp,vpa_spectral,vperp_spectral)
-            pdf_scratch = fkpl_arrays.rhsvpavperp
-            pdf_dummy = fkpl_arrays.S_dummy
-            MM2D_sparse = fkpl_arrays.MM2D_sparse
-            @begin_anyv_region()
-            @anyv_serial_region begin
-                @views @. pdf_scratch = pdf
-                pdf_c = vec(pdf)
-                pdf_scratch_c = vec(pdf_scratch)
-                pdf_dummy_c = vec(pdf_dummy)
-                mul!(pdf_dummy_c, MM2D_sparse, pdf_scratch_c)
-                ldiv!(pdf_c,lu_CC,pdf_dummy_c)
-            end
+            advance_linearised_test_particle_collisions!(pdf,fkpl_arrays,
+                                vpa,vperp,vpa_spectral,vperp_spectral)
             return nothing
         end 
         right_preconditioner = test_particle_precon!

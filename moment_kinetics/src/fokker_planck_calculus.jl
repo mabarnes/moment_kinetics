@@ -28,6 +28,7 @@ export calculate_rosenbluth_potentials_via_elliptic_solve!
 export calculate_rosenbluth_potentials_via_analytical_Maxwellian!
 export allocate_preconditioner_matrix
 export calculate_test_particle_preconditioner!
+export advance_linearised_test_particle_collisions!
 
 # testing
 export calculate_rosenbluth_potential_boundary_data_exact!
@@ -56,7 +57,7 @@ using Dates
 using SpecialFunctions: ellipk, ellipe
 using SparseArrays: sparse, AbstractSparseArray
 using SuiteSparse
-using LinearAlgebra: ldiv!, mul!, LU, ldiv
+using LinearAlgebra: ldiv!, mul!, LU, ldiv, lu, lu!
 using FastGaussQuadrature
 using Printf
 using MPI
@@ -131,6 +132,12 @@ function assemble_constructor_value!(data::sparse_matrix_constructor,icsc::mk_in
     data.SS[icsc] += ss
     return nothing
 end
+
+function assign_constructor_value!(data::sparse_matrix_constructor,icsc::mk_int,ss::mk_float)
+    data.SS[icsc] = ss
+    return nothing
+end
+
 """
 Wrapper function to create a sparse matrix with an instance of `sparse_matrix_constructor`
 and `sparse()`.
@@ -317,6 +324,7 @@ struct fokkerplanck_weakform_arrays_struct{M <: AbstractSparseArray{mk_float,mk_
     # based on I - dt * C[delta F, F]
     CC2D_sparse::M
     CC2D_sparse_constructor::sparse_matrix_constructor
+    lu_obj_CC2D::SuiteSparse.UMFPACK.UmfpackLU{mk_float,mk_int}
     # dummy array for vpa vperp advection contributions
     rhs_advection::MPISharedArray{mk_float,2}
     # dummy arrays for Jacobian-Free-Newton-Krylov solver
@@ -2564,8 +2572,14 @@ function allocate_preconditioner_matrix(vpa,vperp,vpa_spectral,vperp_spectral)
                                            ivperp_local,ivperpp_local,
                                            ielement_vperp,
                                            ngrid_vperp,nelement_vperp)
-                            # assign zero values everywhere retained in the sparse matrix                                           
-                            assign_constructor_data!(CC2D,icsc,ic_global,icp_global,0.0)
+                            # assign placeholder matrix to be the identity
+                            if ic_global == icp_global
+                                # assign unit values
+                                assign_constructor_data!(CC2D,icsc,ic_global,icp_global,1.0)
+                            else
+                                # assign zero values 
+                                assign_constructor_data!(CC2D,icsc,ic_global,icp_global,0.0)
+                            end
                         end
                     end
                 end
@@ -2573,7 +2587,8 @@ function allocate_preconditioner_matrix(vpa,vperp,vpa_spectral,vperp_spectral)
         end
     end
     CC2D_sparse = create_sparse_matrix(CC2D)
-    return CC2D_sparse, CC2D
+    lu_obj_CC2D = lu(CC2D_sparse)
+    return CC2D_sparse, CC2D, lu_obj_CC2D
 end
 
 function calculate_test_particle_preconditioner!(pdf,delta_t,ms,msp,nussp,
@@ -2708,8 +2723,8 @@ function calculate_test_particle_preconditioner!(pdf,delta_t,ms,msp,nussp,
                     for ivpa_local in 1:vpa.ngrid
                         for jvperpp_local in 1:vperp.ngrid
                             for jvpap_local in 1:vpa.ngrid
-                                ic_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
-                                icp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,jvpap_local,jvperpp_local)
+                                #ic_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
+                                #icp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,jvpap_local,jvperpp_local)
                                 icsc = icsc_func(ivpa_local,jvpap_local,ielement_vpa,
                                         ngrid_vpa,nelement_vpa,
                                         ivperp_local,jvperpp_local,
@@ -2723,27 +2738,27 @@ function calculate_test_particle_preconditioner!(pdf,delta_t,ms,msp,nussp,
                                 
                                 if lower_boundary_row_vpa && vpa.bc == "zero"
                                     if jvpap_local == 1 && ivperp_local == jvperpp_local
-                                        assign_constructor_data!(CC2D_sparse_constructor,icsc,ic_global,icp_global,1.0)
+                                        assign_constructor_value!(CC2D_sparse_constructor,icsc,1.0)
                                     else 
-                                        assign_constructor_data!(CC2D_sparse_constructor,icsc,ic_global,icp_global,0.0)
+                                        assign_constructor_value!(CC2D_sparse_constructor,icsc,0.0)
                                     end
                                 elseif upper_boundary_row_vpa && vpa.bc == "zero"
                                     if jvpap_local == vpa.ngrid && ivperp_local == jvperpp_local 
-                                        assign_constructor_data!(CC2D_sparse_constructor,icsc,ic_global,icp_global,1.0)
+                                        assign_constructor_value!(CC2D_sparse_constructor,icsc,1.0)
                                     else 
-                                        assign_constructor_data!(CC2D_sparse_constructor,icsc,ic_global,icp_global,0.0)
+                                        assign_constructor_value!(CC2D_sparse_constructor,icsc,0.0)
                                     end
                                 elseif lower_boundary_row_vperp && impose_BC_at_zero_vperp
                                     if jvperpp_local == 1 && ivpa_local == jvpap_local
-                                        assign_constructor_data!(CC2D_sparse_constructor,icsc,ic_global,icp_global,1.0)
+                                        assign_constructor_value!(CC2D_sparse_constructor,icsc,1.0)
                                     else 
-                                        assign_constructor_data!(CC2D_sparse_constructor,icsc,ic_global,icp_global,0.0)
+                                        assign_constructor_value!(CC2D_sparse_constructor,icsc,0.0)
                                     end
                                 elseif upper_boundary_row_vperp && vperp.bc == "zero"
                                     if jvperpp_local == vperp.ngrid && ivpa_local == jvpap_local
-                                        assign_constructor_data!(CC2D_sparse_constructor,icsc,ic_global,icp_global,1.0)
+                                        assign_constructor_value!(CC2D_sparse_constructor,icsc,1.0)
                                     else 
-                                        assign_constructor_data!(CC2D_sparse_constructor,icsc,ic_global,icp_global,0.0)
+                                        assign_constructor_value!(CC2D_sparse_constructor,icsc,1.0)
                                     end
                                 end
                             end
@@ -2755,17 +2770,38 @@ function calculate_test_particle_preconditioner!(pdf,delta_t,ms,msp,nussp,
     end # end bc assignment
     # should improve on this step to avoid recreating the sparse array if possible.
     fkpl_arrays.CC2D_sparse .= create_sparse_matrix(CC2D_sparse_constructor)
+    lu!(fkpl_arrays.lu_obj_CC2D, fkpl_arrays.CC2D_sparse)
     return nothing
 end
-# functions to modify an existing sparse matrix
-function assign_sparse_matrix_value!(matrix::AbstractSparseArray{mk_float,mk_int,N},value,icsc) where N
-    matrix.nzval[icsc] = value
-    return nothing
-end
-function assemble_sparse_matrix_value!(matrix::AbstractSparseArray{mk_float,mk_int,N},value,icsc) where N
-    println(icsc, " ", value)
-    matrix.nzval[icsc] += value
 
+function advance_linearised_test_particle_collisions!(pdf,fkpl_arrays,
+                                vpa,vperp,vpa_spectral,vperp_spectral)
+    # (the LU decomposition object for) 
+    # the backward Euler time advance matrix
+    # for linearised test particle collisions K * dF = C[dF, F^n+1].
+    # this is also the LU decomposition of the approximate Jacobian
+    # for the nonlinear residual R = F^n+1 - F^n - C[F^n+1, F^n+1]
+    lu_CC = fkpl_arrays.lu_obj_CC2D
+    # function to solve K * F^n+1 = M * F^n
+    # and return F^n+1 in place in pdf
+    # enforce zero BCs on pdf in so that
+    # these BCs are imposed via the unit boundary
+    # values in CC2D_sparse, in the event BCs are used
+    enforce_vpavperp_BCs!(pdf,vpa,vperp,vpa_spectral,vperp_spectral)
+    # extra dummy arrays
+    pdf_scratch = fkpl_arrays.rhsvpavperp
+    pdf_dummy = fkpl_arrays.S_dummy
+    # mass matrix for RHS
+    MM2D_sparse = fkpl_arrays.MM2D_sparse
+    @begin_anyv_region()
+    @anyv_serial_region begin
+        @views @. pdf_scratch = pdf
+        pdf_c = vec(pdf)
+        pdf_scratch_c = vec(pdf_scratch)
+        pdf_dummy_c = vec(pdf_dummy)
+        mul!(pdf_dummy_c, MM2D_sparse, pdf_scratch_c)
+        ldiv!(pdf_c,lu_CC,pdf_dummy_c)
+    end
     return nothing
 end
 
