@@ -83,11 +83,16 @@ function mk_input(input_dict=OptionsDict("output" => OptionsDict("run_name" => "
     input_keys = keys(input_dict)
     for opt in removed_options_list
         if opt ∈ input_keys
-            error("Option '$opt' is no longer used. Please update your input file. The "
-                  * "option may have been moved into an input file section - there are "
-                  * "no longer any top-level options (i.e. ones not in a section). You "
-                  * "may need to set some new options to replicate the effect of the "
-                  * "removed ones.")
+            message = "Option '$opt' is no longer used. Please update your input file. " *
+                      "The option may have been moved into an input file section - " *
+                      "there are no longer any top-level options (i.e. ones not in a " *
+                      "section). You may need to set some new options to replicate the " *
+                      "effect of the removed ones."
+            if warn_unexpected
+                println(message)
+            else
+                error(message)
+            end
         end
     end
     # Check for input options that used to exist in some section, but do not any more. If
@@ -101,9 +106,14 @@ function mk_input(input_dict=OptionsDict("output" => OptionsDict("run_name" => "
         section_keys = keys(section)
         for opt ∈ removed_options
             if opt ∈ section_keys
-                error("Option '$opt' in section [$section_name] is no longer used. "
-                      * "Please update your input file. You may need to set some new "
-                      * "option(s) to replicate the effect of the removed ones.")
+                message = "Option '$opt' in section [$section_name] is no longer used. " *
+                          "Please update your input file. You may need to set some new " *
+                          "option(s) to replicate the effect of the removed ones."
+                if warn_unexpected
+                    println(message)
+                else
+                    error(message)
+                end
             end
         end
     end
