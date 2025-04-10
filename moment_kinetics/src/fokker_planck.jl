@@ -236,7 +236,7 @@ function init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_sp
     dFdvpa = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
     dFdvperp = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
     # preconditioner matrix
-    CC2D_sparse, CC2D_sparse_constructor = allocate_preconditioner_matrix(vpa,vperp,vpa_spectral,vperp_spectral)
+    CC2D_sparse, CC2D_sparse_constructor, lu_obj_CC2D = allocate_preconditioner_matrix(vpa,vperp,vpa_spectral,vperp_spectral)
     rhs_advection = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
     # dummy arrays for JFNK
     Fnew = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
@@ -263,7 +263,7 @@ function init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_sp
                                            YY_arrays, S_dummy, Q_dummy, rhsvpavperp, rhsvpavperp_copy1, rhsvpavperp_copy2, rhsvpavperp_copy3,
                                            CC, GG, HH, dHdvpa, dHdvperp, dGdvperp, d2Gdvperp2, d2Gdvpa2, d2Gdvperpdvpa,
                                            FF, dFdvpa, dFdvperp, 
-                                           CC2D_sparse, CC2D_sparse_constructor,
+                                           CC2D_sparse, CC2D_sparse_constructor, lu_obj_MM,
                                            rhs_advection, Fnew, Fresidual, F_delta_x, F_rhs_delta, Fv, Fw)
     return fka
 end
@@ -1028,7 +1028,7 @@ function fokker_planck_self_collisions_backward_euler_step!(Fold, delta_t, ms, n
             boundary_data_option=boundary_data_option)
     
         # LU decomposition of the approximate Jacobian
-        lu_CC = lu(fkpl_arrays.CC2D_sparse) 
+        lu_CC = fkpl_arrays.lu_obj_CC2D 
         function test_particle_precon!(x)
             # function to solve K * F^n+1 = M * F^n
             # and return F^n+1 in place in x

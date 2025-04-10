@@ -56,7 +56,7 @@ using Dates
 using SpecialFunctions: ellipk, ellipe
 using SparseArrays: sparse, AbstractSparseArray
 using SuiteSparse
-using LinearAlgebra: ldiv!, mul!, LU, ldiv
+using LinearAlgebra: ldiv!, mul!, LU, ldiv, lu
 using FastGaussQuadrature
 using Printf
 using MPI
@@ -317,6 +317,7 @@ struct fokkerplanck_weakform_arrays_struct{M <: AbstractSparseArray{mk_float,mk_
     # based on I - dt * C[delta F, F]
     CC2D_sparse::M
     CC2D_sparse_constructor::sparse_matrix_constructor
+    lu_obj_CC2D::SuiteSparse.UMFPACK.UmfpackLU{mk_float,mk_int}
     # dummy array for vpa vperp advection contributions
     rhs_advection::MPISharedArray{mk_float,2}
     # dummy arrays for Jacobian-Free-Newton-Krylov solver
@@ -2564,8 +2565,14 @@ function allocate_preconditioner_matrix(vpa,vperp,vpa_spectral,vperp_spectral)
                                            ivperp_local,ivperpp_local,
                                            ielement_vperp,
                                            ngrid_vperp,nelement_vperp)
-                            # assign zero values everywhere retained in the sparse matrix                                           
-                            assign_constructor_data!(CC2D,icsc,ic_global,icp_global,0.0)
+                            # assign placeholder matrix to be the identity
+                            if ic_global == icp_global
+                                # assign unit values
+                                assign_constructor_data!(CC2D,icsc,ic_global,icp_global,1.0)
+                            else
+                                # assign zero values 
+                                assign_constructor_data!(CC2D,icsc,ic_global,icp_global,0.0)
+                            end
                         end
                     end
                 end
@@ -2573,7 +2580,8 @@ function allocate_preconditioner_matrix(vpa,vperp,vpa_spectral,vperp_spectral)
         end
     end
     CC2D_sparse = create_sparse_matrix(CC2D)
-    return CC2D_sparse, CC2D
+    lu_obj_CC2D = lu(CC2D_sparse)
+    return CC2D_sparse, CC2D, lu_obj_CC2D
 end
 
 function calculate_test_particle_preconditioner!(pdf,delta_t,ms,msp,nussp,
@@ -2755,6 +2763,9 @@ function calculate_test_particle_preconditioner!(pdf,delta_t,ms,msp,nussp,
     end # end bc assignment
     # should improve on this step to avoid recreating the sparse array if possible.
     fkpl_arrays.CC2D_sparse .= create_sparse_matrix(CC2D_sparse_constructor)
+    println(lu(fkpl_arrays.CC2D_sparse))
+    println(fkpl_arrays.lu_obj_CC2D)
+    fkpl_arrays.lu_obj_CC2D .= lu(fkpl_arrays.CC2D_sparse)
     return nothing
 end
 # functions to modify an existing sparse matrix
