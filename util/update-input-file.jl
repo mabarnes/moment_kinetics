@@ -225,6 +225,8 @@ PR322_omega = (x) -> x ≥ 0.0 ? sqrt(2)*x : x
 PR322_v_diffusion_coefficient = (x) -> 2^1.5*x
 PR322_w_evolve_ppar = (x) -> sqrt(3)*x
 const PR322_definitions_update_map_2V = OptionsDict(
+    "z_IC_ion_species_1" => OptionsDict("upar_amplitude" => PR322_v),
+    "z_IC_neutral_species_1" => OptionsDict("upar_amplitude" => PR322_v),
     "vpa_IC_ion_species_1" => OptionsDict("v0" => PR322_v,
                                           "vth0" => PR322_v,
                                           "vpa0" => PR322_v,
