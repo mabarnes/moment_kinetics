@@ -1193,10 +1193,10 @@ function init_ion_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
                     #
                     # Implemented by multiplying by a smooth 'notch' function
                     # notch(v,u0,width) = 1 - exp(-(v-u0)^2/width)
-                    width = 0.1 * vth[iz]
-                    inverse_width = 1.0 / width
+                    width = sqrt(0.1) * vth[iz]
+                    inverse_width_squared = 1.0 / width^2
 
-                    @. pdf[:,ivperp,iz] *= 1.0 - exp(-vpa.grid^2*inverse_width)
+                    @. pdf[:,ivperp,iz] *= 1.0 - exp(-vpa.grid^2*inverse_width_squared)
                 end
             end
             # Can use non-shared memory here because `init_ion_pdf_over_density!()` is
@@ -1421,10 +1421,10 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
                     #
                     # Implemented by multiplying by a smooth 'notch' function
                     # notch(v,u0,width) = 1 - exp(-(v-u0)^2/width)
-                    width = 0.1
-                    inverse_width = 1.0 / width
+                    width = sqrt(0.1)
+                    inverse_width_squared = 1.0 / width^2
 
-                    @. pdf[:,ivr,ivzeta,iz] *= 1.0 - exp(-vz.grid^2*inverse_width)
+                    @. pdf[:,ivr,ivzeta,iz] *= 1.0 - exp(-vz.grid^2*inverse_width_squared)
                 end
             end
             # Can use non-shared memory here because `init_ion_pdf_over_density!()` is
