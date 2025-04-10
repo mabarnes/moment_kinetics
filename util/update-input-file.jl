@@ -225,6 +225,10 @@ PR322_omega = (x) -> x ≥ 0.0 ? sqrt(2)*x : x
 PR322_v_diffusion_coefficient = (x) -> 2^1.5*x
 PR322_w_evolve_ppar = (x) -> sqrt(3)*x
 const PR322_definitions_update_map_2V = OptionsDict(
+    # "upar_amplitude" might not always need correcting - e.g. the amplitude is a relative
+    # amplitude that should be left unchanged if using initialization_option="sinusoid" -
+    # but usually either upar_amplitude=0 or initialization_option="gaussian" (in which
+    # case this option represents an absolute value of parallel flow)
     "z_IC_ion_species_1" => OptionsDict("upar_amplitude" => PR322_v),
     "z_IC_neutral_species_1" => OptionsDict("upar_amplitude" => PR322_v),
     "vpa_IC_ion_species_1" => OptionsDict("v0" => PR322_v,
@@ -286,11 +290,16 @@ const PR322_definitions_update_map_2V = OptionsDict(
                                            "constraint_forcing_rate" => PR322_omega,
                                            "converged_residual_value" => PR322_omega,
                                           ),
-    "vpa" => OptionsDict("L" => PR322_v,),
-    "vperp" => OptionsDict("L" => PR322_v,),
-    "vz" => OptionsDict("L" => PR322_v,),
-    "vr" => OptionsDict("L" => PR322_v,),
-    "vzeta" => OptionsDict("L" => PR322_v,),
+    "vpa" => OptionsDict("element_spacing_option" => OptionsDict("coarse_tails" => OptionsDict("vpa" => OptionsDict("element_spacing_option" => "coarse_tails$(5.0*sqrt(2))"))),
+                         "L" => PR322_v,),
+    "vperp" => OptionsDict("element_spacing_option" => OptionsDict("coarse_tails" => OptionsDict("vperp" => OptionsDict("element_spacing_option" => "coarse_tails$(5.0*sqrt(2))"))),
+                           "L" => PR322_v,),
+    "vz" => OptionsDict("element_spacing_option" => OptionsDict("coarse_tails" => OptionsDict("vz" => OptionsDict("element_spacing_option" => "coarse_tails$(5.0*sqrt(2))"))),
+                        "L" => PR322_v,),
+    "vr" => OptionsDict("element_spacing_option" => OptionsDict("coarse_tails" => OptionsDict("vr" => OptionsDict("element_spacing_option" => "coarse_tails$(5.0*sqrt(2))"))),
+                        "L" => PR322_v,),
+    "vzeta" => OptionsDict("element_spacing_option" => OptionsDict("coarse_tails" => OptionsDict("vzeta" => OptionsDict("element_spacing_option" => "coarse_tails$(5.0*sqrt(2))"))),
+                           "L" => PR322_v,),
     "ion_source_1" => OptionsDict("source_strength" => PR322_omega,
                                   "source_v0" => PR322_v,
                                   "source_vpa0" => PR322_v,
@@ -348,8 +357,10 @@ const PR322_definitions_update_map_1V = recursive_merge(
    )
 const PR322_definitions_update_map_1V_evolve_ppar = recursive_merge(
     PR322_definitions_update_map_1V,
-    OptionsDict("vpa" => OptionsDict("L" => PR322_w_evolve_ppar,),
-                "vz" => OptionsDict("L" => PR322_w_evolve_ppar,),
+    OptionsDict("vpa" => OptionsDict("element_spacing_option" => OptionsDict("coarse_tails" => OptionsDict("vpa" => OptionsDict("element_spacing_option" => "coarse_tails$(5.0*sqrt(3))"))),
+                                     "L" => PR322_w_evolve_ppar,),
+                "vz" => OptionsDict("element_spacing_option" => OptionsDict("coarse_tails" => OptionsDict("vz" => OptionsDict("element_spacing_option" => "coarse_tails$(5.0*sqrt(3))"))),
+                                    "L" => PR322_w_evolve_ppar,),
                )
    )
 
@@ -437,10 +448,10 @@ function update_input_dict(original_input::DictType;
             end
             old_value = section[old_key]
             if new_option_setting isa AbstractDict
-                pop!(section, old_key)
                 if old_value ∉ keys(new_option_setting)
                     continue
                 end
+                pop!(section, old_key)
                 for (new_section_name, new_section_map) ∈ new_option_setting[old_value]
                     new_section = get(updated_input, new_section_name, DictType())
                     for (k,v) ∈ new_section_map
