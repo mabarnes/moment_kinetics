@@ -2195,7 +2195,7 @@ function update_neutral_qz_species!(qz, density, uz, vth, ff, vz, vr, vzeta, z, 
         end
     else
         @loop_r_z ir iz begin
-            qz[iz,ir] = 0.5
+            qz[iz,ir] = 0.5 *
                         integral((vzeta,vr,vz)->((vz-uz[iz,ir])*((vz-uz[iz,ir])^2+vzeta^2+vr^2)),
                                  @view(ff[:,:,:,iz,ir]), vzeta, vr, vz)
         end
