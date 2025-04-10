@@ -1176,7 +1176,6 @@ function init_ion_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
                         vth_factor *= vth[iz]
                     end
                     vpa.scratch ./= sqrt(3.0)
-                    vperp.scratch ./= sqrt(3.0)
                 else
                     if !evolve_p
                         vth_factor = vth[iz]^3
@@ -1275,9 +1274,18 @@ function init_ion_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
                     # normalise/interpolate (if necessary). This makes it easier to
                     # initialise a normalised pdf consistent with the moments, although it
                     # modifies the moments from the 'input' values.
+                    @. vpa.scratch = (vpa.grid - upar[iz]) / vth[iz]
+                    vperp.scratch[ivperp] = vperp.grid[ivperp] / vth[iz]
+                    if vperp.n == 1
+                        # Need to initialise using Maxwellian defined using T_∥ = 3*T as T_⟂=0
+                        vth_factor = sqrt(3.0) * vth[iz]
+                        vpa.scratch ./= sqrt(3.0)
+                    else
+                        vth_factor = vth[iz]^3
+                    end
                     @. pdf[:,ivperp,iz] = density[iz] * Maxwellian_prefactor *
                                           exp(-((vpa.scratch - upar[iz])^2 + vperp.scratch[ivperp]^2)
-                                               / vth[iz]^2) / vth[iz]
+                                               / vth_factor^2) / vth_factor
 
                     # Also ensure both species go to zero smoothly at v_parallel=0 at the
                     # wall, where the boundary conditions require that distribution
@@ -1338,10 +1346,17 @@ function init_ion_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
             @loop_z_vperp iz ivperp begin
                 @. vpa.scratch = vpa.grid * vgrid_scale_factor[iz]
                 vperp.scratch[ivperp] = vperp.grid[ivperp] * vgrid_scale_factor[iz]
+                if vperp.n == 1
+                    # Need to initialise using Maxwellian defined using T_∥ = 3*T as T_⟂=0
+                    vth_factor = sqrt(3.0) * vth[iz]
+                    vpa.scratch ./= sqrt(3.0)
+                else
+                    vth_factor = vth[iz]^3
+                end
                 @. pdf[:,ivperp,iz] += spec.z_IC.density_amplitude * Maxwellian_prefactor *
                                        (1.0 - (2.0 * z.grid[iz] / z.L)^2) *
                                        exp(-(vpa.scratch^2 + vperp.scratch[ivperp]^2)
-                                           / vth[iz]^2) / vth[iz]
+                                           / vth[iz]^2) / vth_factor
             end
 
             # Get the unnormalised pdf and the moments of the constructed full-f
@@ -1451,8 +1466,6 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
                         vth_factor *= vth[iz]
                     end
                     vz.scratch ./= sqrt(3.0)
-                    vzeta.scratch ./= sqrt(3.0)
-                    vr.scratch ./= sqrt(3.0)
                 else
                     if !evolve_p
                         vth_factor = vth[iz]^3
