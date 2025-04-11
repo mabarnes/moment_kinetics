@@ -2049,9 +2049,9 @@ function init_knudsen_cosine!(knudsen_cosine, vz, vr, vzeta, vpa, vperp, composi
             # get the marginalised Knudsen cosine distribution after integrating over vperp
             # appropriate for 1V model
 
-            # Adjust vtfac so that it is calculated with T_parallel instead of T for the
-            # 1V model.
-            vtfac *= sqrt(3)
+            # Knudsen cosine distribution does not have separate T_∥ and T_⟂, so is
+            # marginalised rather than setting T_⟂=0, therefore no need to convert to a
+            # thermal speed defined with the parallel temperature in 1V case.
 
             @. vz.scratch = (3.0*pi/vtfac^3)*Maxwellian_prefactor*abs(vz.grid)*erfc(abs(vz.grid)/vtfac)
             normalisation = integrate_over_positive_vz(vz.grid .* vz.scratch, vz.grid, vz.wgts, vz.scratch2,
