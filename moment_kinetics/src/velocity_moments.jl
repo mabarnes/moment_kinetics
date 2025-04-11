@@ -743,7 +743,7 @@ end
 function get_v2_moment(ff, vpa, vperp, upar)
     # Integrating calculates
     # ∫d^3v (((vpa-upar))^2 + vperp^2) * ff
-    return integral((vperp,vpa)->((vpa - upar)^2 + vperp^2), ff, vperp, vpa )
+    return integral((vperp,vpa)->((vpa - upar)^2 + vperp^2), ff, vperp, vpa)
 end
 
 function get_p(ff, density, upar, vpa, vperp, evolve_density, evolve_upar)
