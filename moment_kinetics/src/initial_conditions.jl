@@ -1642,9 +1642,9 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
                 # get the marginalised Knudsen cosine distribution after integrating over
                 # vperp appropriate for 1V model
 
-                # Convert to a thermal speed defined with the parallel temperature in 1V
-                # case.
-                knudsen_vtfac *= sqrt(3.0)
+                # Knudsen cosine distribution does not have separate T_∥ and T_⟂, so is
+                # marginalised rather than setting T_⟂=0, therefore no need to convert to
+                # a thermal speed defined with the parallel temperature in 1V case.
 
                 @. knudsen_pdf[:,1,1] = (3.0*pi/knudsen_vtfac^3)*Maxwellian_prefactor*abs(vz.grid*vth_init)*erfc(abs(vz.grid) * vth_init / knudsen_vtfac)
             else
