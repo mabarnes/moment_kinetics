@@ -2,6 +2,8 @@ module FokkerPlanckTests
 
 include("setup.jl")
 
+export backward_Euler_linearised_collisions_test
+export backward_Euler_fokker_planck_self_collisions_test
 
 using MPI
 using LinearAlgebra: mul!, ldiv!
@@ -16,6 +18,7 @@ using moment_kinetics.input_structs: direct_integration, multipole_expansion, de
 using moment_kinetics.fokker_planck: init_fokker_planck_collisions_weak_form, fokker_planck_collision_operator_weak_form!
 using moment_kinetics.fokker_planck: conserving_corrections!, init_fokker_planck_collisions_direct_integration
 using moment_kinetics.fokker_planck: density_conserving_correction!, fokker_planck_collision_operator_weak_form_Maxwellian_Fsp!
+using moment_kinetics.fokker_planck: setup_fp_nl_solve, fokker_planck_self_collisions_backward_euler_step!
 using moment_kinetics.fokker_planck_test: print_test_data, fkpl_error_data, allocate_error_data #, plot_test_data
 using moment_kinetics.fokker_planck_test: F_Maxwellian, G_Maxwellian, H_Maxwellian
 using moment_kinetics.fokker_planck_test: d2Gdvpa2_Maxwellian, d2Gdvperp2_Maxwellian, d2Gdvperpdvpa_Maxwellian, dGdvperp_Maxwellian
@@ -135,29 +138,242 @@ function backward_Euler_linearised_collisions_test(;
                         vpa,vperp,vpa_spectral,vperp_spectral)
     end
     # now check distribution
+    test_F_Maxwellian(FMaxwell,pdf,
+            vpa,vperp,
+            FMaxwell_err,dummy_array, 
+            dens, upar, vth, ms,
+            atol_max, atol_L2,
+            atol_dens, atol_upar, atol_vth, 
+            print_to_screen=print_to_screen)
+    finalize_comms!()
+    return nothing
+end
+
+function test_F_Maxwellian(pdf_Maxwell,pdf,
+    vpa,vperp,
+    dummy_array_1,dummy_array_2, 
+    dens, upar, vth, mass,
+    atol_max, atol_L2,
+    atol_dens, atol_upar, atol_vth; 
+    print_to_screen=false)
     @begin_serial_region()
     @serial_region begin
-        F_M_max, F_M_L2 = print_test_data(FMaxwell,pdf,FMaxwell_err,"pdf",
-          vpa,vperp,dummy_array,print_to_screen=print_to_screen)
+        F_M_max, F_M_L2 = print_test_data(pdf_Maxwell,pdf,dummy_array_1,"pdf",
+          vpa,vperp,dummy_array_2,print_to_screen=print_to_screen)
         dens_num = get_density(pdf,vpa,vperp)
         upar_num = get_upar(pdf,vpa,vperp,dens)
         ppar = get_ppar(pdf,vpa,vperp,upar)
         pperp = get_pperp(pdf,vpa,vperp)
         pres = get_pressure(ppar,pperp) 
-        vth_num = sqrt(2.0*pres/(dens_num*ms))
+        vth_num = sqrt(2.0*pres/(dens_num*mass))
         @test F_M_max < atol_max
         @test F_M_L2 < atol_L2
         @test abs(dens_num - dens) < atol_dens
         @test abs(upar_num - upar) < atol_upar
         @test abs(vth_num - vth) < atol_vth
     end
+    return nothing
+end
+
+function diagnose_F_Maxwellian(pdf,pdf_exact,pdf_dummy_1,pdf_dummy_2,vpa,vperp,time,mass,it)
+    @begin_serial_region()
+    @serial_region begin
+        dens = get_density(pdf,vpa,vperp)
+        upar = get_upar(pdf,vpa,vperp,dens)
+        ppar = get_ppar(pdf,vpa,vperp,upar)
+        pperp = get_pperp(pdf,vpa,vperp)
+        pres = get_pressure(ppar,pperp) 
+        vth = sqrt(2.0*pres/(dens*mass))
+        @loop_vperp_vpa ivperp ivpa begin
+            pdf_exact[ivpa,ivperp] = F_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+        end
+        println("it = ", it, " time: ", time)
+        print_test_data(pdf_exact,pdf,pdf_dummy_1,"F",vpa,vperp,pdf_dummy_2;print_to_screen=true)
+        println("dens: ", dens)
+        println("upar: ", upar)
+        println("vth: ", vth)
+        if vpa.bc == "zero"
+            println("test vpa bc: F[1, :]", pdf[1, :])
+            println("test vpa bc: F[end, :]", pdf[end, :])
+        end
+        if vperp.bc == "zero"
+            println("test vperp bc: F[:, end]", pdf[:, end])
+        end
+    end
+    return nothing
+end
+
+function backward_Euler_fokker_planck_self_collisions_test(; 
+    vth0=0.5,vperp0=1.0,vpa0=1.0, ngrid=5,nelement_vpa=16,nelement_vperp=8,
+    Lvpa=10.0,Lvperp=5.0,bc_vpa="none",bc_vperp="none",
+    ntime=100,delta_t=1.0,
+    test_particle_preconditioner=true,
+    test_linearised_advance=false,
+    use_Maxwellian_Rosenbluth_coefficients_in_preconditioner=false,
+    test_dense_construction=false,standalone=true,
+    test_numerical_conserving_terms=true,
+    boundary_data_option=multipole_expansion,
+    print_to_screen=true,
+    # error tolerances
+    atol_max = 2.0e-5,
+    atol_L2 = 2.0e-6,
+    atol_dens = 1.0e-8,
+    atol_upar = 5.0e-9,
+    atol_vth = 1.0e-7)
+    
+    nelement_local_vpa = nelement_vpa # number of elements per rank
+    nelement_global_vpa = nelement_local_vpa # total number of elements 
+    nelement_local_vperp = nelement_vperp # number of elements per rank
+    nelement_global_vperp = nelement_local_vperp # total number of elements 
+    discretization = "gausslegendre_pseudospectral"
+    element_spacing_option = "uniform"
+    
+    # Set up MPI
+    if standalone
+        initialize_comms!()
+    end
+    setup_distributed_memory_MPI(1,1,1,1)
+    coords_input = OptionsDict(
+        "vperp"=>OptionsDict("ngrid"=>ngrid, "nelement"=>nelement_global_vperp,
+                                "nelement_local"=>nelement_local_vperp, "L"=>Lvperp,
+                                "discretization"=>discretization,
+                                "element_spacing_option"=>element_spacing_option,
+                                "bc"=>bc_vperp),
+        "vpa"=>OptionsDict("ngrid"=>ngrid, "nelement"=>nelement_global_vpa,
+                            "nelement_local"=>nelement_local_vpa, "L"=>Lvpa,
+                            "discretization"=>discretization,
+                            "element_spacing_option"=>element_spacing_option,
+                            "bc"=>bc_vpa),
+    )
+    #println("made inputs")
+    #println("vpa: ngrid: ",ngrid," nelement: ",nelement_local_vpa, " Lvpa: ",Lvpa)
+    #println("vperp: ngrid: ",ngrid," nelement: ",nelement_local_vperp, " Lvperp: ",Lvperp)
+    # create the coordinate structs
+    vperp, vperp_spectral = define_coordinate(coords_input, "vperp")
+    vpa, vpa_spectral = define_coordinate(coords_input, "vpa")
+    if vperp.bc == "zero-impose-regularity"
+        error("vperp.bc = $(vperp.bc) not supported for implicit FP")
+    end
+    looping.setup_loop_ranges!(block_rank[], block_size[];
+                                    s=1, sn=1,
+                                    r=1, z=1, vperp=vperp.n, vpa=vpa.n,
+                                    vzeta=1, vr=1, vz=1)
+    @begin_serial_region()
+    if boundary_data_option == direct_integration
+        precompute_weights = true
+    else
+        precompute_weights = false
+    end
+    fkpl_arrays = init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_spectral; 
+                        precompute_weights=precompute_weights, test_dense_matrix_construction=test_dense_construction,
+                        print_to_screen=print_to_screen)
+    
+    # initial condition
+    Fold = allocate_shared_float(vpa.n,vperp.n)
+    @serial_region begin
+        @loop_vperp_vpa ivperp ivpa begin
+            Fold[ivpa,ivperp] = exp(-((vpa.grid[ivpa]-vpa0)^2 + (vperp.grid[ivperp]-vperp0)^2)/(vth0^2))
+        end
+        if vpa.bc == "zero"
+            @loop_vperp ivperp begin
+                Fold[1,ivperp] = 0.0
+                Fold[end,ivperp] = 0.0
+            end
+        end
+        if vperp.bc == "zero"
+            @loop_vpa ivpa begin
+                Fold[ivpa,end] = 0.0
+            end
+        end
+        # normalise to unit density
+        @views densfac = get_density(Fold[:,:],vpa,vperp)
+        @loop_vperp_vpa ivperp ivpa begin
+            Fold[ivpa,ivperp] /= densfac
+        end
+    end
+    # dummy arrays
+    Fdummy1 = allocate_shared_float(vpa.n,vperp.n)
+    Fdummy2 = allocate_shared_float(vpa.n,vperp.n)
+    Fdummy3 = allocate_shared_float(vpa.n,vperp.n)
+    FMaxwell = allocate_shared_float(vpa.n,vperp.n)
+    # physics parameters
+    ms = 1.0
+    nuss = 1.0
+    
+    # initial condition 
+    time = 0.0
+    # Maxwellian and parameters
+    dens = get_density(Fold,vpa,vperp)
+    upar = get_upar(Fold,vpa,vperp,dens)
+    ppar = get_ppar(Fold,vpa,vperp,upar)
+    pperp = get_pperp(Fold,vpa,vperp)
+    pres = get_pressure(ppar,pperp) 
+    vth = sqrt(2.0*pres/(dens*ms))
+    @serial_region begin
+        @loop_vperp_vpa ivperp ivpa begin
+            FMaxwell[ivpa,ivperp] = F_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+        end
+    end
+
+    if print_to_screen
+        diagnose_F_Maxwellian(Fold,Fdummy1,Fdummy2,Fdummy3,vpa,vperp,time,ms,0)
+    end
+    implicit_ion_fp_collisions = true
+    coords = (vperp=vperp,vpa=vpa)
+    spectral = (vperp_spectral=vperp_spectral, vpa_spectral=vpa_spectral)
+    nl_solver_params = setup_fp_nl_solve(implicit_ion_fp_collisions, coords)
+
+    for it in 1:ntime
+        @begin_s_r_z_anyv_region()
+        fokker_planck_self_collisions_backward_euler_step!(Fold, delta_t, ms, nuss, fkpl_arrays,
+            coords, spectral,
+            nl_solver_params,
+            test_numerical_conserving_terms=test_numerical_conserving_terms,
+            test_particle_preconditioner=test_particle_preconditioner,
+            test_linearised_advance=test_linearised_advance,
+            use_Maxwellian_Rosenbluth_coefficients_in_preconditioner=use_Maxwellian_Rosenbluth_coefficients_in_preconditioner,
+            boundary_data_option=boundary_data_option)
+        @begin_serial_region()
+        # update the pdf
+        @serial_region begin
+            Fnew = fkpl_arrays.Fnew
+            @loop_vperp_vpa ivperp ivpa begin
+                Fold[ivpa,ivperp] = Fnew[ivpa,ivperp]
+            end
+        end
+        # diagnose Fold
+        time += delta_t
+        if print_to_screen
+            diagnose_F_Maxwellian(Fold,Fdummy1,Fdummy2,Fdummy3,vpa,vperp,time,ms,it)
+        end
+    end
+    
+    # now check distribution
+    test_F_Maxwellian(FMaxwell,Fold,
+            vpa,vperp,
+            Fdummy2,Fdummy3, 
+            dens, upar, vth, ms,
+            atol_max, atol_L2,
+            atol_dens, atol_upar, atol_vth, 
+            print_to_screen=print_to_screen)
     finalize_comms!()
+    return nothing
 end
 
 function runtests()
     print_to_screen = false
     @testset "Fokker Planck tests" verbose=use_verbose begin
         println("Fokker Planck tests")
+        
+        @testset "backward-Euler nonlinear Fokker-Planck collisions" begin
+            println("    - test backward-Euler nonlinear Fokker-Planck collisions")
+            #@testset "$bc" for bc in ("none")#, "zero")  
+                bc = "none"
+                println("        -  bc=$bc")
+                backward_Euler_fokker_planck_self_collisions_test(bc_vperp=bc, bc_vpa=bc,
+                   print_to_screen=print_to_screen)
+            #end
+        end
 
         @testset "Lagrange-polynomial 2D interpolation" begin
             println("    - test Lagrange-polynomial 2D interpolation")
@@ -856,6 +1072,7 @@ function runtests()
             end
         end
 
+        
     end
 end
 
