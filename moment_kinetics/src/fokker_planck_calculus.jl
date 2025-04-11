@@ -2758,7 +2758,7 @@ function calculate_test_particle_preconditioner!(pdf,delta_t,ms,msp,nussp,
                                     if jvperpp_local == vperp.ngrid && ivpa_local == jvpap_local
                                         assign_constructor_value!(CC2D_sparse_constructor,icsc,1.0)
                                     else 
-                                        assign_constructor_value!(CC2D_sparse_constructor,icsc,1.0)
+                                        assign_constructor_value!(CC2D_sparse_constructor,icsc,0.0)
                                     end
                                 end
                             end
