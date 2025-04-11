@@ -345,8 +345,7 @@ const PR322_definitions_update_map_2V = OptionsDict(
    )
 const PR322_definitions_update_map_1V = recursive_merge(
     PR322_definitions_update_map_2V,
-    OptionsDict("composition" => OptionsDict(# Note T_e should not get updated.
-                                             "T_wall" => PR322_T_1V,
+    OptionsDict("composition" => OptionsDict(# Note T_e and T_wall should not get updated.
                                             ),
                 "ion_species_1" => OptionsDict("initial_temperature" => PR322_T_1V,),
                 "neutral_species_1" => OptionsDict("initial_temperature" => PR322_T_1V,),
