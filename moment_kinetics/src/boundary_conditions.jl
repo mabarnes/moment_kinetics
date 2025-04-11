@@ -657,6 +657,12 @@ function enforce_neutral_wall_bc!(pdf, z, vzeta, vr, vz, pz, uz, density, wall_f
     wall_flux_L *= recycling_fraction
     pdf_buffer = @view buffer_vzvrvzetarsn[:,:,:,1,1]
 
+    if vzeta.n == 1 && vr.n == 1
+        Maxwellian_prefactor = 1.0 / sqrt(π)
+    else
+        Maxwellian_prefactor = 1.0 / π^1.5
+    end
+
     if !evolve_density && !evolve_upar
         knudsen_cosine = boundary_distributions.knudsen
 
@@ -782,7 +788,7 @@ function enforce_neutral_wall_bc!(pdf, z, vzeta, vr, vz, pz, uz, density, wall_f
             # Create normalised Knudsen cosine distribution, to use for positive v_parallel
             # at z = -Lz/2
             # Note this only makes sense for the 1V case with vr.n=vzeta.n=1
-            @. vz.scratch = (3.0*pi/vtfac^3)*abs(vz.scratch2)*erfc(abs(vz.scratch2)/vtfac)
+            @. vz.scratch = (3.0*pi/vtfac^3)*Maxwellian_prefactor*abs(vz.scratch2)*erfc(abs(vz.scratch2)/vtfac)
 
             # The v_parallel>0 part of the pdf is replaced by the Knudsen cosine
             # distribution. To ensure the constraints ∫dwpa wpa^m F = 0 are satisfied when
@@ -901,7 +907,7 @@ function enforce_neutral_wall_bc!(pdf, z, vzeta, vr, vz, pz, uz, density, wall_f
             # obtain the Knudsen cosine distribution at z = Lz/2
             # the z-dependence is only introduced if the peculiiar velocity is used as vz
             # Note this only makes sense for the 1V case with vr.n=vzeta.n=1
-            @. vz.scratch = (3.0*pi/vtfac^3)*abs(vz.scratch2)*erfc(abs(vz.scratch2)/vtfac)
+            @. vz.scratch = (3.0*pi/vtfac^3)*Maxwellian_prefactor*abs(vz.scratch2)*erfc(abs(vz.scratch2)/vtfac)
 
             # The v_parallel<0 part of the pdf is replaced by the Knudsen cosine
             # distribution. To ensure the constraint ∫dwpa wpa F = 0 is satisfied, multiply
