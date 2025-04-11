@@ -21,7 +21,7 @@ test_input_finite_difference = OptionsDict("composition" => OptionsDict("n_ion_s
                                                                         "n_neutral_species" => 1,
                                                                         "electron_physics" => "boltzmann_electron_response",
                                                                         "T_e" => 1.0,
-                                                                        "T_wall" => 0.3333333333333333),
+                                                                        "T_wall" => 1.0),
                                            "ion_species_1" => OptionsDict("initial_density" => 1.0,
                                                                           "initial_temperature" => 0.3333333333333333),
                                            "z_IC_ion_species_1" => OptionsDict("initialization_option" => "gaussian",
