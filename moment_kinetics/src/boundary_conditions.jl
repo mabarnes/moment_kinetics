@@ -212,7 +212,7 @@ function enforce_z_boundary_condition!(pdf, density, upar, vth, phi, moments, bc
             if moments.evolve_upar
                 @loop_r ir begin
                     @views enforce_zero_incoming_bc!(
-                        pdf[:,:,:,ir,is], z, vpa, density[:,ir,is], upar[:,ir,is],
+                        pdf[:,:,:,ir,is], z, vperp, vpa, density[:,ir,is], upar[:,ir,is],
                         vth[:,ir,is], moments.evolve_upar, moments.evolve_p, zero,
                         phi[:,ir])
                 end
@@ -516,8 +516,8 @@ function get_ion_z_boundary_cutoff_indices(density, upar, vth, evolve_upar, evol
     end
     return last_negative_vpa_ind, first_positive_vpa_ind
 end
-function enforce_zero_incoming_bc!(pdf, z::coordinate, vpa::coordinate, density, upar,
-                                   vth, evolve_upar, evolve_p, zero, phi)
+function enforce_zero_incoming_bc!(pdf, z::coordinate, vperp::coordinate, vpa::coordinate,
+                                   density, upar, vth, evolve_upar, evolve_p, zero, phi)
     if z.irank != 0 && z.irank != z.nrank - 1
         # No z-boundary in this block
         return nothing
@@ -903,20 +903,37 @@ function enforce_neutral_wall_bc!(pdf, z, vzeta, vr, vz, pz, uz, density, wall_f
                 @views pdf_integral_3 = integrate_over_negative_vz(pdf_buffer, vz.scratch2, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
                 # Calculate normalisation factor N_out for the Knudsen part of the
                 # distirbution and normalisation factor N_in and correction term C*wpa*F_in
-                # for the incoming distribution so that ∫dwpa F = 1, ∫dwpa wpa F = 0, and
-                # ∫dwpa wpa^2 F = 1/2
+                # for the incoming distribution so that ∫d^3w F = 1, ∫d^3w wpa F = 0, and
+                # ∫d^3w w^2 F = ∫d^3w wpa^2 F = 3/2
                 # ⇒ N_in*pdf_integral_0 + C*pdf_integral_1 + N_out*knudsen_integral_0 = 1
                 #   N_in*pdf_integral_1 + C*pdf_integral_2 + N_out*knudsen_integral_1 = 0
-                #   N_in*pdf_integral_2 + C*pdf_integral_3 + N_out*knudsen_integral_2 = 1/2
-                N_in = (0.5*knudsen_integral_0*pdf_integral_2 +
-                        knudsen_integral_1*(pdf_integral_3 - 0.5*pdf_integral_1) -
+                #   N_in*pdf_integral_2 + C*pdf_integral_3 + N_out*knudsen_integral_2 = 3/2
+                # ⇒
+                #   C = (3/2 - N_out*knudsen_integral_2 - N_in*pdf_integral_2) / pdf_integral_3
+                #   N_out*knudsen_integral_1 = - N_in*pdf_integral_1 - C*pdf_integral_2
+                #   N_out*knudsen_integral_1*pdf_integral_3 = - N_in*pdf_integral_1*pdf_integral_3 - (3/2 - N_out*knudsen_integral_2 - N_in*pdf_integral_2)*pdf_integral_2
+                #   N_out*(knudsen_integral_1*pdf_integral_3 - knudsen_integral_2*pdf_integral_2) = -N_in*(pdf_integral_1*pdf_integral_3 - pdf_integral_2*pdf_integral_2) - 3/2*pdf_integral_2
+                #   N_out = [-N_in*(pdf_integral_1*pdf_integral_3 - pdf_integral_2*pdf_integral_2) - 3/2*pdf_integral_2] / (knudsen_integral_1*pdf_integral_3 - knudsen_integral_2*pdf_integral_2)
+                #   N_in*pdf_integral_0 = 1 - C*pdf_integral_1 - N_out*knudsen_integral_0
+                #   N_in*pdf_integral_0*pdf_integral_3 = pdf_integral_3 - (3/2 - N_out*knudsen_integral_2 - N_in*pdf_integral_2)*pdf_integral_1 - N_out*knudsen_integral_0*pdf_integral_3
+                #   N_in*(pdf_integral_0*pdf_integral_3 - pdf_integral_1*pdf_integral_2) = pdf_integral_3 - 3/2*pdf_integral_1 + N_out*(knudsen_integral_2*pdf_integral_1 - knudsen_integral_0*pdf_integral_3)
+                #   N_in*(pdf_integral_0*pdf_integral_3 - pdf_integral_1*pdf_integral_2)*(knudsen_integral_1*pdf_integral_3 - knudsen_integral_2*pdf_integral_2) = (pdf_integral_3 - 3/2*pdf_integral_1)*(knudsen_integral_1*pdf_integral_3 - knudsen_integral_2*pdf_integral_2) + [-N_in*(pdf_integral_1*pdf_integral_3 - pdf_integral_2*pdf_integral_2) - 3/2*pdf_integral_2]*(knudsen_integral_2*pdf_integral_1 - knudsen_integral_0*pdf_integral_3)
+                #   N_in*[(pdf_integral_0*pdf_integral_3 - pdf_integral_1*pdf_integral_2)*(knudsen_integral_1*pdf_integral_3 - knudsen_integral_2*pdf_integral_2) + (pdf_integral_1*pdf_integral_3 - pdf_integral_2*pdf_integral_2)*(knudsen_integral_2*pdf_integral_1 - knudsen_integral_0*pdf_integral_3)] = (pdf_integral_3 - 3/2*pdf_integral_1)*(knudsen_integral_1*pdf_integral_3 - knudsen_integral_2*pdf_integral_2) - 3/2*pdf_integral_2*(knudsen_integral_2*pdf_integral_1 - knudsen_integral_0*pdf_integral_3)
+
+                #   N_in*[knudsen_integral_1*pdf_integral_0*pdf_integral_3^2 - knudsen_integral_2*pdf_integral_0*pdf_integral_2*pdf_integral_3 - knudsen_integral_1*pdf_integral_1*pdf_integral_2*pdf_integral_3 + knudsen_integral_2*pdf_integral_1*pdf_integral_2^2 + knudsen_integral_2*pdf_integral_1^2*pdf_integral_3 - knudsen_integral_0*pdf_integral_1*pdf_integral3^2 - knudsen_integral_2*pdf_integral_1*pdf_integral_2^2 + knudsen_integral_0*pdf_integral_2^2*pdf_integral_3] = knudsen_integral_1*pdf_integral_3*pdf_integral_3 - knudsen_integral_2*pdf_integral_3*pdf_integral_2 - 3/2*knudsen_integral_1*pdf_integral_1*pdf_integral_3 + 3/2*knudsen_integral_2*pdf_integral_1*pdf_integral_2 - 3/2*knudsen_integral_2*pdf_integral_1*pdf_integral_2 + 3/2*knudsen_integral_0*pdf_integral_2*pdf_integral_3
+
+                #   N_in*[knudsen_integral_0*(pdf_integral_2^2*pdf_integral_3 - pdf_integral_1*pdf_integral_3^2) + knudsen_integral_1*(pdf_integral_0*pdf_integral_3^2 - pdf_integral_1*pdf_integral_2*pdf_integral_3) + knudsen_integral_2(pdf_integral_1*pdf_integral_2^2 - pdf_integral_0*pdf_integral_2*pdf_integral_3 + pdf_integral_1^2*pdf_integral_3 - pdf_integral_1*pdf_integral_2^2)] = 3/2*knudsen_integral_0*pdf_integral_2*pdf_integral_3 + knudsen_integral_1*(pdf_integral_3*pdf_integral_3 - 3/2*pdf_integral_1*pdf_integral_3) + knudsen_integral_2*(3/2*pdf_integral_1*pdf_integral_2 - pdf_integral_3*pdf_integral_2 - 3/2*pdf_integral_1*pdf_integral_2)
+                #   N_in*[knudsen_integral_0*(pdf_integral_2^2*pdf_integral_3 - pdf_integral_1*pdf_integral_3^2) + knudsen_integral_1*(pdf_integral_0*pdf_integral_3^2 - pdf_integral_1*pdf_integral_2*pdf_integral_3) + knudsen_integral_2(pdf_integral_1^2*pdf_integral_3 - pdf_integral_0*pdf_integral_2*pdf_integral_3)] = 3/2*knudsen_integral_0*pdf_integral_2*pdf_integral_3 + knudsen_integral_1*(pdf_integral_3*pdf_integral_3 - 3/2*pdf_integral_1*pdf_integral_3) - knudsen_integral_2*pdf_integral_3*pdf_integral_2
+                #   N_in*[knudsen_integral_0*(pdf_integral_2^2 - pdf_integral_1*pdf_integral_3) + knudsen_integral_1*(pdf_integral_0*pdf_integral_3 - pdf_integral_1*pdf_integral_2) + knudsen_integral_2(pdf_integral_1^2 - pdf_integral_0*pdf_integral_2)] = 3/2*knudsen_integral_0*pdf_integral_2 + knudsen_integral_1*(pdf_integral_3 - 3/2*pdf_integral_1) - knudsen_integral_2*pdf_integral_2
+                N_in = (1.5*knudsen_integral_0*pdf_integral_2 +
+                        knudsen_integral_1*(pdf_integral_3 - 1.5*pdf_integral_1) -
                         knudsen_integral_2*pdf_integral_2) /
                        (knudsen_integral_0*(pdf_integral_2^2 - pdf_integral_1*pdf_integral_3) +
                         knudsen_integral_1*(pdf_integral_0*pdf_integral_3 - pdf_integral_1*pdf_integral_2) +
                         knudsen_integral_2*(pdf_integral_1^2 - pdf_integral_0*pdf_integral_2))
-                N_out = -(N_in*(pdf_integral_1*pdf_integral_3 - pdf_integral_2^2) + 0.5*pdf_integral_2) /
+                N_out = -(N_in*(pdf_integral_1*pdf_integral_3 - pdf_integral_2^2) + 1.5*pdf_integral_2) /
                          (knudsen_integral_1*pdf_integral_3 - knudsen_integral_2*pdf_integral_2)
-                C = (0.5 - N_out*knudsen_integral_2 - N_in*pdf_integral_2)/pdf_integral_3
+                C = (1.5 - N_out*knudsen_integral_2 - N_in*pdf_integral_2)/pdf_integral_3
 
                 zero_vz_ind = 0
                 for ivz ∈ 1:vz.n
@@ -1020,16 +1037,33 @@ function enforce_neutral_wall_bc!(pdf, z, vzeta, vr, vz, pz, uz, density, wall_f
                 # ∫dwpa wpa^2 F = 1/2
                 # ⇒ N_in*pdf_integral_0 + C*pdf_integral_1 + N_out*knudsen_integral_0 = 1
                 #   N_in*pdf_integral_1 + C*pdf_integral_2 + N_out*knudsen_integral_1 = 0
-                #   N_in*pdf_integral_2 + C*pdf_integral_3 + N_out*knudsen_integral_2 = 1/2
-                N_in = (0.5*knudsen_integral_0*pdf_integral_2 +
-                        knudsen_integral_1*(pdf_integral_3 - 0.5*pdf_integral_1) -
+                #   N_in*pdf_integral_2 + C*pdf_integral_3 + N_out*knudsen_integral_2 = 3/2
+                # ⇒
+                #   C = (3/2 - N_out*knudsen_integral_2 - N_in*pdf_integral_2) / pdf_integral_3
+                #   N_out*knudsen_integral_1 = - N_in*pdf_integral_1 - C*pdf_integral_2
+                #   N_out*knudsen_integral_1*pdf_integral_3 = - N_in*pdf_integral_1*pdf_integral_3 - (3/2 - N_out*knudsen_integral_2 - N_in*pdf_integral_2)*pdf_integral_2
+                #   N_out*(knudsen_integral_1*pdf_integral_3 - knudsen_integral_2*pdf_integral_2) = -N_in*(pdf_integral_1*pdf_integral_3 - pdf_integral_2*pdf_integral_2) - 3/2*pdf_integral_2
+                #   N_out = [-N_in*(pdf_integral_1*pdf_integral_3 - pdf_integral_2*pdf_integral_2) - 3/2*pdf_integral_2] / (knudsen_integral_1*pdf_integral_3 - knudsen_integral_2*pdf_integral_2)
+                #   N_in*pdf_integral_0 = 1 - C*pdf_integral_1 - N_out*knudsen_integral_0
+                #   N_in*pdf_integral_0*pdf_integral_3 = pdf_integral_3 - (3/2 - N_out*knudsen_integral_2 - N_in*pdf_integral_2)*pdf_integral_1 - N_out*knudsen_integral_0*pdf_integral_3
+                #   N_in*(pdf_integral_0*pdf_integral_3 - pdf_integral_1*pdf_integral_2) = pdf_integral_3 - 3/2*pdf_integral_1 + N_out*(knudsen_integral_2*pdf_integral_1 - knudsen_integral_0*pdf_integral_3)
+                #   N_in*(pdf_integral_0*pdf_integral_3 - pdf_integral_1*pdf_integral_2)*(knudsen_integral_1*pdf_integral_3 - knudsen_integral_2*pdf_integral_2) = (pdf_integral_3 - 3/2*pdf_integral_1)*(knudsen_integral_1*pdf_integral_3 - knudsen_integral_2*pdf_integral_2) + [-N_in*(pdf_integral_1*pdf_integral_3 - pdf_integral_2*pdf_integral_2) - 3/2*pdf_integral_2]*(knudsen_integral_2*pdf_integral_1 - knudsen_integral_0*pdf_integral_3)
+                #   N_in*[(pdf_integral_0*pdf_integral_3 - pdf_integral_1*pdf_integral_2)*(knudsen_integral_1*pdf_integral_3 - knudsen_integral_2*pdf_integral_2) + (pdf_integral_1*pdf_integral_3 - pdf_integral_2*pdf_integral_2)*(knudsen_integral_2*pdf_integral_1 - knudsen_integral_0*pdf_integral_3)] = (pdf_integral_3 - 3/2*pdf_integral_1)*(knudsen_integral_1*pdf_integral_3 - knudsen_integral_2*pdf_integral_2) - 3/2*pdf_integral_2*(knudsen_integral_2*pdf_integral_1 - knudsen_integral_0*pdf_integral_3)
+
+                #   N_in*[knudsen_integral_1*pdf_integral_0*pdf_integral_3^2 - knudsen_integral_2*pdf_integral_0*pdf_integral_2*pdf_integral_3 - knudsen_integral_1*pdf_integral_1*pdf_integral_2*pdf_integral_3 + knudsen_integral_2*pdf_integral_1*pdf_integral_2^2 + knudsen_integral_2*pdf_integral_1^2*pdf_integral_3 - knudsen_integral_0*pdf_integral_1*pdf_integral3^2 - knudsen_integral_2*pdf_integral_1*pdf_integral_2^2 + knudsen_integral_0*pdf_integral_2^2*pdf_integral_3] = knudsen_integral_1*pdf_integral_3*pdf_integral_3 - knudsen_integral_2*pdf_integral_3*pdf_integral_2 - 3/2*knudsen_integral_1*pdf_integral_1*pdf_integral_3 + 3/2*knudsen_integral_2*pdf_integral_1*pdf_integral_2 - 3/2*knudsen_integral_2*pdf_integral_1*pdf_integral_2 + 3/2*knudsen_integral_0*pdf_integral_2*pdf_integral_3
+
+                #   N_in*[knudsen_integral_0*(pdf_integral_2^2*pdf_integral_3 - pdf_integral_1*pdf_integral_3^2) + knudsen_integral_1*(pdf_integral_0*pdf_integral_3^2 - pdf_integral_1*pdf_integral_2*pdf_integral_3) + knudsen_integral_2(pdf_integral_1*pdf_integral_2^2 - pdf_integral_0*pdf_integral_2*pdf_integral_3 + pdf_integral_1^2*pdf_integral_3 - pdf_integral_1*pdf_integral_2^2)] = 3/2*knudsen_integral_0*pdf_integral_2*pdf_integral_3 + knudsen_integral_1*(pdf_integral_3*pdf_integral_3 - 3/2*pdf_integral_1*pdf_integral_3) + knudsen_integral_2*(3/2*pdf_integral_1*pdf_integral_2 - pdf_integral_3*pdf_integral_2 - 3/2*pdf_integral_1*pdf_integral_2)
+                #   N_in*[knudsen_integral_0*(pdf_integral_2^2*pdf_integral_3 - pdf_integral_1*pdf_integral_3^2) + knudsen_integral_1*(pdf_integral_0*pdf_integral_3^2 - pdf_integral_1*pdf_integral_2*pdf_integral_3) + knudsen_integral_2(pdf_integral_1^2*pdf_integral_3 - pdf_integral_0*pdf_integral_2*pdf_integral_3)] = 3/2*knudsen_integral_0*pdf_integral_2*pdf_integral_3 + knudsen_integral_1*(pdf_integral_3*pdf_integral_3 - 3/2*pdf_integral_1*pdf_integral_3) - knudsen_integral_2*pdf_integral_3*pdf_integral_2
+                #   N_in*[knudsen_integral_0*(pdf_integral_2^2 - pdf_integral_1*pdf_integral_3) + knudsen_integral_1*(pdf_integral_0*pdf_integral_3 - pdf_integral_1*pdf_integral_2) + knudsen_integral_2(pdf_integral_1^2 - pdf_integral_0*pdf_integral_2)] = 3/2*knudsen_integral_0*pdf_integral_2 + knudsen_integral_1*(pdf_integral_3 - 3/2*pdf_integral_1) - knudsen_integral_2*pdf_integral_2
+                N_in = (1.5*knudsen_integral_0*pdf_integral_2 +
+                        knudsen_integral_1*(pdf_integral_3 - 1.5*pdf_integral_1) -
                         knudsen_integral_2*pdf_integral_2) /
                        (knudsen_integral_0*(pdf_integral_2^2 - pdf_integral_1*pdf_integral_3) +
                         knudsen_integral_1*(pdf_integral_0*pdf_integral_3 - pdf_integral_1*pdf_integral_2) +
                         knudsen_integral_2*(pdf_integral_1^2 - pdf_integral_0*pdf_integral_2))
-                N_out = -(N_in*(pdf_integral_1*pdf_integral_3 - pdf_integral_2^2) + 0.5*pdf_integral_2) /
+                N_out = -(N_in*(pdf_integral_1*pdf_integral_3 - pdf_integral_2^2) + 1.5*pdf_integral_2) /
                          (knudsen_integral_1*pdf_integral_3 - knudsen_integral_2*pdf_integral_2)
-                C = (0.5 - N_out*knudsen_integral_2 - N_in*pdf_integral_2)/pdf_integral_3
+                C = (1.5 - N_out*knudsen_integral_2 - N_in*pdf_integral_2)/pdf_integral_3
 
                 zero_vz_ind = 0
                 for ivz ∈ vz.n:-1:1
