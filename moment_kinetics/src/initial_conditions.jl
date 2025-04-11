@@ -1270,6 +1270,13 @@ function init_ion_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
                     if vperp.n == 1
                         # Need to initialise using Maxwellian defined using T_∥ = 3*T as T_⟂=0
                         vth_factor = sqrt(3.0) * vth[iz]
+                        if evolve_p
+                            # This series of hacks is only needed to ensure the grid used
+                            # for initialization (before transformation to normalised
+                            # distribution function in convert_full_f_ion_to_normalised!()
+                            # below) can be exactly matched to the one used before PR#322.
+                            @. vpa.scratch = (vpa.grid * sqrt(2/3) - upar[iz]) / vth[iz]
+                        end
                         vpa.scratch ./= sqrt(3.0)
                     else
                         vth_factor = vth[iz]^3
@@ -1288,6 +1295,13 @@ function init_ion_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
                     # notch(v,u0,width) = 1 - exp(-(v-u0)^2/width)
                     width = sqrt(0.1) * sqrt(2.0 * ppar[iz] / density[iz])
                     inverse_width_squared = 1.0 / width^2
+                    if vperp.n == 1 && evolve_p
+                        # This series of hacks is only needed to ensure the grid used
+                        # for initialization (before transformation to normalised
+                        # distribution function in convert_full_f_ion_to_normalised!()
+                        # below) can be exactly matched to the one used before PR#322.
+                        inverse_width_squared *= 2/3
+                    end
 
                     @. pdf[:,ivperp,iz] *= 1.0 - exp(-vpa.grid^2*inverse_width_squared)
                 end
@@ -2067,6 +2081,15 @@ function convert_full_f_ion_to_normalised!(f, density, upar, p, vth, vperp, vpa,
         @views density[iz] = get_density(f[:,:,iz], vpa, vperp)
         @views upar[iz] = get_upar(f[:,:,iz], density[iz], vpa, vperp, false)
         @views p[iz] = get_p(f[:,:,iz], density[iz], upar[iz], vpa, vperp, false, false)
+        if vperp.n == 1 && evolve_p
+            # This series of hacks is only needed to ensure the grid used
+            # for initialization (before transformation to normalised
+            # distribution function in this function) can be exactly matched
+            # to the one used before PR#322.
+            density[iz] *= sqrt(2/3)
+            upar[iz] *= 2/3
+            p[iz] *= (2/3)^1.5
+        end
 
         vth[iz] = sqrt(2.0*p[iz]/density[iz])
 
@@ -2083,6 +2106,17 @@ function convert_full_f_ion_to_normalised!(f, density, upar, p, vth, vperp, vpa,
             # the w_parallel grid
             vpa.scratch .= vpagrid_to_dzdt(vpa.grid, vth[iz], upar[iz], evolve_p,
                                            evolve_upar)
+            if vperp.n == 1 && evolve_p
+                # This series of hacks is only needed to ensure the grid used
+                # for initialization (before transformation to normalised
+                # distribution function in this function) can be exactly matched
+                # to the one used before PR#322.
+                # Don't fully understand why the factors of sqrt(2/3) and 3/2 appear here,
+                # but this vpa.scratch, when divided by sqrt(3), matches the grid to
+                # interpolate to for evolve_ppar=true from the pre-PR#322 code.
+                vpa.scratch .= vpagrid_to_dzdt(vpa.grid .* sqrt(2/3), vth[iz], upar[iz],
+                                               evolve_p, evolve_upar) .* 3/2
+            end
             @loop_vperp ivperp begin
                 @views vpa.scratch2 .= f[:,ivperp,iz] # Copy to use as input to interpolation
                 @views interpolate_to_grid_1d!(f[:,ivperp,iz], vpa.scratch, vpa.scratch2,
