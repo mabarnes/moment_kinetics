@@ -23,16 +23,17 @@ using moment_kinetics.fokker_planck_test: dHdvperp_Maxwellian, dHdvpa_Maxwellian
 using moment_kinetics.fokker_planck_calculus: calculate_rosenbluth_potentials_via_elliptic_solve!, calculate_rosenbluth_potential_boundary_data_exact!
 using moment_kinetics.fokker_planck_calculus: test_rosenbluth_potential_boundary_data, allocate_rosenbluth_potential_boundary_data
 using moment_kinetics.fokker_planck_calculus: enforce_vpavperp_BCs!, calculate_rosenbluth_potentials_via_direct_integration!
-using moment_kinetics.fokker_planck_calculus: interpolate_2D_vspace!
+using moment_kinetics.fokker_planck_calculus: interpolate_2D_vspace!, calculate_test_particle_preconditioner!
+using moment_kinetics.fokker_planck_calculus: advance_linearised_test_particle_collisions!
 
 function create_grids(ngrid,nelement_vpa,nelement_vperp;
-                      Lvpa=12.0,Lvperp=6.0)
+                      Lvpa=12.0,Lvperp=6.0,bc="zero")
 
         nelement_local_vpa = nelement_vpa # number of elements per rank
         nelement_global_vpa = nelement_local_vpa # total number of elements
         nelement_local_vperp = nelement_vperp # number of elements per rank
         nelement_global_vperp = nelement_local_vperp # total number of elements
-        bc = "zero" # used only in derivative! functions
+        #bc = "zero" # used only in derivative! functions
         #discretization = "chebyshev_pseudospectral"
         discretization = "gausslegendre_pseudospectral"
         # create the 'input' struct containing input info needed to create a
@@ -60,6 +61,97 @@ function create_grids(ngrid,nelement_vpa,nelement_vperp;
                                        vzeta=1, vr=1, vz=1)
 
         return vpa, vpa_spectral, vperp, vperp_spectral
+end
+
+# test of preconditioner matrix for nonlinear implicit solve.
+# We use the preconditioner matrix for a time advance of
+# dF/dt = C[F,F_M], with F_M a fixed Maxwellian distribution.
+# We test that the result F is close to F_M.
+function backward_Euler_linearised_collisions_test(;      
+                # grid and physics parameters
+                ngrid = 5,
+                nelement_vpa = 16,
+                nelement_vperp = 8,
+                bc="none",
+                ms = 1.0,
+                delta_t = 1.0,
+                nuss = 1.0,
+                ntime = 100,
+                # background Maxwellian
+                dens = 1.0,
+                upar = 0.0,
+                vth = 1.0,
+                # initial beam parameters
+                vpa0 = 1.0,
+                vperp0 = 1.0,
+                vth0 = 0.5,
+                # options
+                boundary_data_option = multipole_expansion,
+                use_Maxwellian_Rosenbluth_coefficients_in_preconditioner=true,
+                print_to_screen=false,
+                # error tolerances
+                atol_max = 2.0e-5,
+                atol_L2 = 2.0e-6,
+                atol_dens = 1.0e-8,
+                atol_upar = 1.0e-10,
+                atol_vth = 1.0e-7)
+
+    # initialise arrays
+    vpa, vpa_spectral, vperp, vperp_spectral = create_grids(ngrid,nelement_vpa,nelement_vperp,
+                                                                Lvpa=10.0,Lvperp=5.0, bc=bc)
+    fkpl_arrays = init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_spectral,
+        precompute_weights=false, print_to_screen=print_to_screen)
+    dummy_array = allocate_float(vpa.n,vperp.n)
+    FMaxwell = allocate_shared_float(vpa.n,vperp.n)
+    FMaxwell_err = allocate_shared_float(vpa.n,vperp.n)
+    # make sure to use anyv communicator for any array that is modified in fokker_planck.jl functions
+    pdf = allocate_shared_float(vpa.n,vperp.n; comm=comm_anyv_subblock[])
+    @begin_serial_region()
+    @serial_region begin
+        @loop_vperp_vpa ivperp ivpa begin
+            FMaxwell[ivpa,ivperp] = F_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+        end
+    end
+    @begin_s_r_z_anyv_region()
+    @begin_anyv_region()
+    @anyv_serial_region begin
+        @loop_vperp_vpa ivperp ivpa begin
+            pdf[ivpa,ivperp] = exp(-((vpa.grid[ivpa]-vpa0)^2 + (vperp.grid[ivperp]-vperp0)^2)/(vth0^2))
+        end
+        # normalise to unit density
+        @views densfac = get_density(pdf,vpa,vperp)
+        @loop_vperp_vpa ivperp ivpa begin
+            pdf[ivpa,ivperp] /= densfac
+        end
+    end
+    @_anyv_subblock_synchronize()
+    # calculate the linearised advance matrix 
+    calculate_test_particle_preconditioner!(FMaxwell,delta_t,ms,ms,nuss,
+        vpa,vperp,vpa_spectral,vperp_spectral,fkpl_arrays, 
+        use_Maxwellian_Rosenbluth_coefficients=use_Maxwellian_Rosenbluth_coefficients_in_preconditioner,
+        boundary_data_option=boundary_data_option)
+    for it in 1:ntime
+        advance_linearised_test_particle_collisions!(pdf,fkpl_arrays,
+                        vpa,vperp,vpa_spectral,vperp_spectral)
+    end
+    # now check distribution
+    @begin_serial_region()
+    @serial_region begin
+        F_M_max, F_M_L2 = print_test_data(FMaxwell,pdf,FMaxwell_err,"pdf",
+          vpa,vperp,dummy_array,print_to_screen=print_to_screen)
+        dens_num = get_density(pdf,vpa,vperp)
+        upar_num = get_upar(pdf,vpa,vperp,dens)
+        ppar = get_ppar(pdf,vpa,vperp,upar)
+        pperp = get_pperp(pdf,vpa,vperp)
+        pres = get_pressure(ppar,pperp) 
+        vth_num = sqrt(2.0*pres/(dens_num*ms))
+        @test F_M_max < atol_max
+        @test F_M_L2 < atol_L2
+        @test abs(dens_num - dens) < atol_dens
+        @test abs(upar_num - upar) < atol_upar
+        @test abs(vth_num - vth) < atol_vth
+    end
+    finalize_comms!()
 end
 
 function runtests()
@@ -751,7 +843,18 @@ function runtests()
             end
             finalize_comms!()
         end
-
+        
+        @testset "backward-Euler linearised test particle collisions" begin
+            println("    - test backward-Euler linearised test particle collisions")
+            @testset "$bc" for bc in ("none", "zero")  
+                println("        -  bc=$bc")
+                backward_Euler_linearised_collisions_test(bc=bc,
+                 use_Maxwellian_Rosenbluth_coefficients_in_preconditioner=true)
+                backward_Euler_linearised_collisions_test(bc=bc,
+                 use_Maxwellian_Rosenbluth_coefficients_in_preconditioner=false,
+                 atol_vth=3.0e-7)
+            end
+        end
 
     end
 end
