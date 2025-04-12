@@ -1175,14 +1175,23 @@ function init_ion_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
             else
                 zrange = ()
             end
+            if evolve_ppar
+                # Scale the velocity grid used for initialization in case the
+                # temperature changes a lot.
+                vgrid_scale_factor = copy(vth)
+            else
+                vgrid_scale_factor = ones(size(vth))
+            end
             for iz ∈ zrange
+                @. vpa.scratch = vpa.grid * vgrid_scale_factor[iz]
+                @. vperp.scratch = vperp.grid * vgrid_scale_factor[iz]
                 @loop_vperp ivperp begin
                     # Initialise as full-f distribution functions, then
                     # normalise/interpolate (if necessary). This makes it easier to
                     # initialise a normalised pdf consistent with the moments, although it
                     # modifies the moments from the 'input' values.
                     @. pdf[:,ivperp,iz] = density[iz] *
-                                          exp(-((vpa.grid - upar[iz])^2 + vperp.grid[ivperp]^2)
+                                          exp(-((vpa.scratch - upar[iz])^2 + vperp.scratch[ivperp]^2)
                                                / vth[iz]^2) / vth[iz]
 
                     # Also ensure both species go to zero smoothly at v_parallel=0 at the
@@ -1196,7 +1205,7 @@ function init_ion_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
                     width = sqrt(0.1) * vth[iz]
                     inverse_width_squared = 1.0 / width^2
 
-                    @. pdf[:,ivperp,iz] *= 1.0 - exp(-vpa.grid^2*inverse_width_squared)
+                    @. pdf[:,ivperp,iz] *= 1.0 - exp(-vpa.scratch^2*inverse_width_squared)
                 end
             end
             # Can use non-shared memory here because `init_ion_pdf_over_density!()` is
@@ -1242,17 +1251,19 @@ function init_ion_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
             # Add a non-flowing Maxwellian (that vanishes at the sheath entrance boundaries) to try to
             # avoid the 'hole' in the distribution function that can drive instabilities.
             @loop_z_vperp iz ivperp begin
+                @. vpa.scratch = vpa.grid * vgrid_scale_factor[iz]
+                vperp.scratch[ivperp] = vperp.grid[ivperp] * vgrid_scale_factor[iz]
                 @. pdf[:,ivperp,iz] += spec.z_IC.density_amplitude *
-                                      (1.0 - (2.0 * z.grid[iz] / z.L)^2) *
-                                      exp(-(vpa.grid^2 + vperp.grid[ivperp]^2)
-                                          / vth[iz]^2) / vth[iz]
+                                       (1.0 - (2.0 * z.grid[iz] / z.L)^2) *
+                                       exp(-(vpa.scratch^2 + vperp.scratch[ivperp]^2)
+                                           / vth[iz]^2) / vth[iz]
             end
 
             # Get the unnormalised pdf and the moments of the constructed full-f
             # distribution function (which will be modified from the input moments).
-            convert_full_f_ion_to_normalised!(pdf, density, upar, ppar, vth, vperp,
-                                                  vpa, vpa_spectral, evolve_density,
-                                                  evolve_upar, evolve_ppar)
+            convert_full_f_ion_to_normalised!(pdf, density, upar, ppar, vth, vperp, vpa,
+                                              vpa_spectral, evolve_density, evolve_upar,
+                                              evolve_ppar, vgrid_scale_factor)
 
             if !evolve_density
                 # Need to divide out density to return pdf/density
@@ -1386,11 +1397,6 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
                 end
             end
         else
-            # Normalise grid to thermal speed of `initial_temperature`, to avoid
-            # inaccuracy in moment-kinetic cases when `initial_temperature` is very
-            # small or large compared to the reference value.
-            vth_init = sqrt(spec.initial_temperature)
-
             # First create distribution functions at the z-boundary points that obey the
             # boundary conditions.
             if z.irank == 0 && z.irank == z.nrank - 1
@@ -1402,16 +1408,26 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
             else
                 zrange = ()
             end
+            if evolve_ppar
+                # Scale the velocity grid used for initialization in case the
+                # temperature changes a lot.
+                vgrid_scale_factor = copy(vth)
+            else
+                vgrid_scale_factor = ones(size(vth))
+            end
             for iz ∈ zrange
+                @. vz.scratch = vz.grid * vgrid_scale_factor[iz]
+                @. vzeta.scratch = vzeta.grid * vgrid_scale_factor[iz]
+                @. vr.scratch = vr.grid * vgrid_scale_factor[iz]
                 @loop_vzeta_vr ivzeta ivr begin
                     # Initialise as full-f distribution functions, then
                     # normalise/interpolate (if necessary). This makes it easier to
                     # initialise a normalised pdf consistent with the moments, although it
                     # modifies the moments from the 'input' values.
                     @. pdf[:,ivr,ivzeta,iz] = density[iz] *
-                                              exp(-((vz.grid - uz[iz])^2 +
-                                                    vzeta.grid[ivzeta]^2 + vr.grid[ivr]^2)
-                                                  * vth_init^2 / vth[iz]^2) / vth[iz]
+                                              exp(-((vz.scratch - uz[iz])^2 +
+                                                    vzeta.scratch[ivzeta]^2 + vr.scratch[ivr]^2)
+                                                  / vth[iz]^2) / vth[iz]
 
                     # Also ensure both species go to zero smoothly at v_z=0 at the
                     # wall, where the boundary conditions require that distribution
@@ -1421,10 +1437,10 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
                     #
                     # Implemented by multiplying by a smooth 'notch' function
                     # notch(v,u0,width) = 1 - exp(-(v-u0)^2/width)
-                    width = sqrt(0.1)
+                    width = sqrt(0.1) * vth[iz]
                     inverse_width_squared = 1.0 / width^2
 
-                    @. pdf[:,ivr,ivzeta,iz] *= 1.0 - exp(-vz.grid^2*inverse_width_squared)
+                    @. pdf[:,ivr,ivzeta,iz] *= 1.0 - exp(-vz.scratch^2*inverse_width_squared)
                 end
             end
             # Can use non-shared memory here because `init_ion_pdf_over_density!()` is
@@ -1439,82 +1455,126 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
             end
 
             # Get the boundary pdfs from the processes that have the actual z-boundary
-            @views MPI.Bcast!(lower_z_pdf_buffer, 0, z.comm)
-            @views MPI.Bcast!(upper_z_pdf_buffer, z.nrank - 1, z.comm)
+            MPI.Bcast!(lower_z_pdf_buffer, 0, z.comm)
+            MPI.Bcast!(upper_z_pdf_buffer, z.nrank - 1, z.comm)
 
             # Also need to get the (ion) wall fluxes from the processes that have the
             # actual z-boundary
             temp = Ref(wall_flux_0)
-            @views MPI.Bcast!(temp, 0, z.comm)
+            MPI.Bcast!(temp, 0, z.comm)
             wall_flux_0 = temp[]
             temp[] = wall_flux_L
-            @views MPI.Bcast!(temp, z.nrank - 1, z.comm)
+            MPI.Bcast!(temp, z.nrank - 1, z.comm)
             wall_flux_L = temp[]
 
+            # ...and the vgrid_scale_factor from both z-boundaries
+            temp[] = vgrid_scale_factor[1]
+            MPI.Bcast!(temp, 0, z.comm)
+            vgrid_scale_factor0 = temp[]
+            temp[] = vgrid_scale_factor[end]
+            MPI.Bcast!(temp, z.nrank - 1, z.comm)
+            vgrid_scale_factorL = temp[]
+
             # Re-calculate Knudsen distribution instead of using
-            # `boundary_distributions.knudsen`, so that we can include vth_init here.
-            knudsen_pdf = allocate_float(vz.n, vr.n, vzeta.n)
+            # `boundary_distributions.knudsen`, so that we can include vgrid_scale_factor
+            # here.
+            knudsen_pdf_lower = allocate_float(vz.n, vr.n, vzeta.n)
+            knudsen_pdf_upper = allocate_float(vz.n, vr.n, vzeta.n)
             knudsen_vtfac = sqrt(composition.T_wall * composition.mn_over_mi)
             if vzeta.n > 1 && vr.n > 1
                 # 3V specification of neutral wall emission distribution for boundary condition
                 # get the true Knudsen cosine distribution for neutral particle wall emission
+                @. vz.scratch = vz.grid * vgrid_scale_factor0
+                @. vzeta.scratch = vzeta.grid * vgrid_scale_factor0
+                @. vr.scratch = vr.grid * vgrid_scale_factor0
                 for ivzeta in 1:vzeta.n
                     for ivr in 1:vr.n
                         for ivz in 1:vz.n
-                            v_transverse = sqrt(vzeta.grid[ivzeta]^2 + vr.grid[ivr]^2)
-                            v_normal = abs(vz.grid[ivz])
+                            v_transverse = sqrt(vzeta.scratch[ivzeta]^2 + vr.scratch[ivr]^2)
+                            v_normal = abs(vz.scratch[ivz])
                             v_tot = sqrt(v_normal^2 + v_transverse^2)
                             if  v_tot > zero
                                 prefac = v_normal/v_tot
                             else
                                 prefac = 0.0
                             end
-                            knudsen_pdf[ivz,ivr,ivzeta] = (3.0*sqrt(pi)/knudsen_vtfac^4) * prefac *
-                                                             exp(-((v_normal/knudsen_vtfac)^2 + (v_transverse/knudsen_vtfac)^2) * vth_init^2)
+                            knudsen_pdf_lower[ivz,ivr,ivzeta] = (3.0*sqrt(pi)/knudsen_vtfac^4) * prefac *
+                                                                exp(-((v_normal/knudsen_vtfac)^2 + (v_transverse/knudsen_vtfac)^2))
+                        end
+                    end
+                end
+                @. vz.scratch = vz.grid * vgrid_scale_factorL
+                @. vzeta.scratch = vzeta.grid * vgrid_scale_factorL
+                @. vr.scratch = vr.grid * vgrid_scale_factorL
+                for ivzeta in 1:vzeta.n
+                    for ivr in 1:vr.n
+                        for ivz in 1:vz.n
+                            v_transverse = sqrt(vzeta.scratch[ivzeta]^2 + vr.scratch[ivr]^2)
+                            v_normal = abs(vz.scratch[ivz])
+                            v_tot = sqrt(v_normal^2 + v_transverse^2)
+                            if  v_tot > zero
+                                prefac = v_normal/v_tot
+                            else
+                                prefac = 0.0
+                            end
+                            knudsen_pdf_upper[ivz,ivr,ivzeta] = (3.0*sqrt(pi)/knudsen_vtfac^4) * prefac *
+                                                                exp(-((v_normal/knudsen_vtfac)^2 + (v_transverse/knudsen_vtfac)^2))
                         end
                     end
                 end
             elseif vzeta.n == 1 && vr.n == 1
                 # get the marginalised Knudsen cosine distribution after integrating over
                 # vperp appropriate for 1V model
-                @. knudsen_pdf[:,1,1] = (3.0*pi/knudsen_vtfac^3)*abs(vz.grid*vth_init)*erfc(abs(vz.grid) * vth_init / knudsen_vtfac)
-            end
+                @. vz.scratch = vz.grid * vgrid_scale_factor0
+                @. knudsen_pdf_lower[:,1,1] = (3.0*pi/knudsen_vtfac^3)*abs(vz.scratch)*erfc(abs(vz.scratch) / knudsen_vtfac)
 
-            if vzeta.n > 1 || vr.n > 1
-                wgts_3V_vth_init = vth_init
-            else
-                wgts_3V_vth_init = 1.0
+                @. vz.scratch = vz.grid * vgrid_scale_factorL
+                @. knudsen_pdf_upper[:,1,1] = (3.0*pi/knudsen_vtfac^3)*abs(vz.scratch)*erfc(abs(vz.scratch) / knudsen_vtfac)
             end
 
             # add this species' contribution to the combined ion/neutral particle flux
             # out of the domain at z=-Lz/2
+            if vzeta.n > 1 || vr.n > 1
+                wgts_3V_scale_factor0 = vgrid_scale_factor0
+            else
+                wgts_3V_scale_factor0 = 1.0
+            end
             @views wall_flux_0 += integrate_over_negative_vz(
-                                      vth_init .* abs.(vz.grid) .* lower_z_pdf_buffer,
-                                      vth_init .* vz.grid, vth_init .* vz.wgts,
-                                      vz.scratch3, vth_init .* vr.grid,
-                                      wgts_3V_vth_init .* vr.wgts, vth_init .* vzeta.grid,
-                                      wgts_3V_vth_init .* vzeta.wgts)
+                                      vgrid_scale_factor0 .* abs.(vz.grid) .*
+                                      lower_z_pdf_buffer, vgrid_scale_factor0 .* vz.grid,
+                                      vgrid_scale_factor0 .* vz.wgts, vz.scratch3,
+                                      vgrid_scale_factor0 .* vr.grid,
+                                      wgts_3V_scale_factor0 .* vr.wgts,
+                                      vgrid_scale_factor0 .* vzeta.grid,
+                                      wgts_3V_scale_factor0 .* vzeta.wgts)
             # for left boundary in zed (z = -Lz/2), want
             # f_n(z=-Lz/2, v_z > 0) = Γ_0 * f_KW(v_z) * pdf_norm_fac(-Lz/2)
             @loop_vz ivz begin
-                if vz.grid[ivz] > zero
-                    @. lower_z_pdf_buffer[ivz,:,:] = wall_flux_0 * knudsen_pdf[ivz,:,:]
+                if vz.scratch[ivz] > zero
+                    @. lower_z_pdf_buffer[ivz,:,:] = wall_flux_0 * knudsen_pdf_lower[ivz,:,:]
                 end
             end
 
             # add this species' contribution to the combined ion/neutral particle flux
             # out of the domain at z=-Lz/2
+            if vzeta.n > 1 || vr.n > 1
+                wgts_3V_scale_factorL = vgrid_scale_factorL
+            else
+                wgts_3V_scale_factorL = 1.0
+            end
             @views wall_flux_L += integrate_over_positive_vz(
-                                      vth_init .* abs.(vz.grid) .* upper_z_pdf_buffer,
-                                      vth_init .* vz.grid, vth_init .* vz.wgts,
-                                      vz.scratch3, vth_init .* vr.grid,
-                                      wgts_3V_vth_init .* vr.wgts, vth_init .* vzeta.grid,
-                                      wgts_3V_vth_init .* vzeta.wgts)
+                                      vgrid_scale_factorL .* abs.(vz.grid) .*
+                                      upper_z_pdf_buffer, vgrid_scale_factorL .* vz.grid,
+                                      vgrid_scale_factorL .* vz.wgts, vz.scratch3,
+                                      vgrid_scale_factorL .* vr.grid,
+                                      wgts_3V_scale_factorL .* vr.wgts,
+                                      vgrid_scale_factorL .* vzeta.grid,
+                                      wgts_3V_scale_factorL .* vzeta.wgts)
             # for right boundary in zed (z = Lz/2), want
             # f_n(z=Lz/2, v_z < 0) = Γ_Lz * f_KW(v_z) * pdf_norm_fac(Lz/2)
             @loop_vz ivz begin
                 if vz.grid[ivz] < -zero
-                    @. upper_z_pdf_buffer[ivz,:,:] = wall_flux_L * knudsen_pdf[ivz,:,:]
+                    @. upper_z_pdf_buffer[ivz,:,:] = wall_flux_L * knudsen_pdf_upper[ivz,:,:]
                 end
             end
 
@@ -1539,9 +1599,9 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
             # Get the unnormalised pdf and the moments of the constructed full-f
             # distribution function (which will be modified from the input moments).
             convert_full_f_neutral_to_normalised!(pdf, density, uz, pz, vth, vzeta, vr,
-                                                  vz, vz_spectral, vth_init,
-                                                  evolve_density, evolve_upar,
-                                                  evolve_ppar)
+                                                  vz, vz_spectral, evolve_density,
+                                                  evolve_upar, evolve_ppar,
+                                                  vgrid_scale_factor)
 
             if !evolve_density
                 # Need to divide out density to return pdf/density
@@ -1871,21 +1931,38 @@ Uses input value of `f` and modifies in place to the normalised distribution fun
 Input `density`, `upar`, `ppar`, and `vth` are not used, the values are overwritten with
 the moments of `f`.
 
-Inputs/outputs depend on z, vperp, and vpa (should be inside loops over species, r)
+Inputs/outputs depend on z, vperp, and vpa (should be inside loops over species, r).
+
+The velocity grid that the input `f` is defined on can be scaled by `vgrid_scale_factor`:
+`f` is given on a velocity grid `vperp.grid .* vgrid_scale_factor` and
+`vpa.grid .* vgrid_scale_factor`.
 """
 function convert_full_f_ion_to_normalised!(f, density, upar, ppar, vth, vperp, vpa,
-        vpa_spectral, evolve_density, evolve_upar, evolve_ppar)
+                                           vpa_spectral, evolve_density, evolve_upar,
+                                           evolve_ppar, vgrid_scale_factor=ones(size(vth)))
 
     @loop_z iz begin
+        vpa_grid_input = vpa.grid .* vgrid_scale_factor[iz]
+        vpa_wgts_input = vpa.wgts .* vgrid_scale_factor[iz]
+        vperp_grid_input = vperp.grid .* vgrid_scale_factor[iz]
+        if vperp.n == 1
+            vperp_wgts_input = vperp.wgts
+        else
+            vperp_wgts_input = vperp.wgts .* vgrid_scale_factor[iz]
+        end
+
         # Calculate moments
-        @views density[iz] = integrate_over_vspace(f[:,:,iz], vpa.grid, 0, vpa.wgts,
-                                                   vperp.grid, 0, vperp.wgts)
-        @views upar[iz] = integrate_over_vspace(f[:,:,iz], vpa.grid, 1, vpa.wgts,
-                                                vperp.grid, 0, vperp.wgts) /
-                             density[iz]
-        @views ppar[iz] = integrate_over_vspace(f[:,:,iz], vpa.grid, 2, vpa.wgts,
-                                                vperp.grid, 0, vperp.wgts) -
-                             density[iz]*upar[iz]^2
+        @views density[iz] = integrate_over_vspace(f[:,:,iz], vpa_grid_input, 0,
+                                                   vpa_wgts_input, vperp_grid_input, 0,
+                                                   vperp_wgts_input)
+        @views upar[iz] = integrate_over_vspace(f[:,:,iz], vpa_grid_input, 1,
+                                                vpa_wgts_input, vperp_grid_input, 0,
+                                                vperp_wgts_input) /
+                          density[iz]
+        @views ppar[iz] = integrate_over_vspace(f[:,:,iz], vpa_grid_input, 2,
+                                                vpa_wgts_input, vperp_grid_input, 0,
+                                                vperp_wgts_input) -
+                          density[iz]*upar[iz]^2
         vth[iz] = sqrt(2.0*ppar[iz]/density[iz])
 
         # Normalise f
@@ -1901,6 +1978,10 @@ function convert_full_f_ion_to_normalised!(f, density, upar, ppar, vth, vperp, v
             # the w_parallel grid
             vpa.scratch .= vpagrid_to_dzdt(vpa.grid, vth[iz], upar[iz], evolve_ppar,
                                            evolve_upar)
+            # It would be inconvienient to create a coordinate object corresponding to
+            # vpa_grid_input just to do this interpolation. Instead we can use vpa, but
+            # scale the output grid by 1/vgrid_scale_factor
+            vpa.scratch ./= vgrid_scale_factor[iz]
             @loop_vperp ivperp begin
                 @views vpa.scratch2 .= f[:,ivperp,iz] # Copy to use as input to interpolation
                 @views interpolate_to_grid_1d!(f[:,ivperp,iz], vpa.scratch, vpa.scratch2,
@@ -1920,32 +2001,42 @@ Uses input value of `f` and modifies in place to the normalised distribution fun
 Input `density`, `upar`, `ppar`, and `vth` are not used, the values are overwritten with
 the moments of `f`.
 
-Inputs/outputs depend on z, vzeta, vr and vz (should be inside loops over species, r)
+Inputs/outputs depend on z, vzeta, vr and vz (should be inside loops over species, r).
+
+The velocity grid that the input `f` is defined on can be scaled by `vgrid_scale_factor`:
+`f` is given on a velocity grid `vzeta.grid .* vgrid_scale_factor`,
+`vr.grid .* vgrid_scale_factor`, and `vz.grid .* vgrid_scale_factor`.
 """
 function convert_full_f_neutral_to_normalised!(f, density, uz, pz, vth, vzeta, vr, vz,
-        vz_spectral, vth_init, evolve_density, evolve_upar, evolve_ppar)
+                                               vz_spectral, evolve_density, evolve_upar,
+                                               evolve_ppar,
+                                               vgrid_scale_factor=ones(size(vth)))
 
-    if vzeta.n > 1 || vr.n > 1
-        wgts_3V_vth_init = vth_init
-    else
-        wgts_3V_vth_init = 1.0
-    end
     @loop_z iz begin
+        vz_grid_input = vz.grid .* vgrid_scale_factor[iz]
+        vz_wgts_input = vz.wgts .* vgrid_scale_factor[iz]
+        vzeta_grid_input = vzeta.grid .* vgrid_scale_factor[iz]
+        vr_grid_input = vr.grid .* vgrid_scale_factor[iz]
+        if vzeta == 1 && vr == 1
+            vzeta_wgts_input = vzeta.wgts
+            vr_wgts_input = vr.wgts
+        else
+            vzeta_wgts_input = vzeta.wgts .* vgrid_scale_factor[iz]
+            vr_wgts_input = vr.wgts .* vgrid_scale_factor[iz]
+        end
+
         # Calculate moments
         @views density[iz] = integrate_over_neutral_vspace(
-                                 f[:,:,:,iz], vth_init .* vth_init .* vz.grid, 0,
-                                 vth_init .* vz.wgts, vth_init .* vr.grid, 0,
-                                 wgts_3V_vth_init .* vr.wgts, vth_init .* vzeta.grid, 0,
-                                 wgts_3V_vth_init .* vzeta.wgts)
+                                 f[:,:,:,iz], vz_grid_input, 0, vz_wgts_input,
+                                 vr_grid_input, 0, vr_wgts_input, vzeta_grid_input, 0,
+                                 vzeta_wgts_input)
         @views uz[iz] = integrate_over_neutral_vspace(
-                            f[:,:,:,iz], vth_init .* vz.grid, 1, vth_init .* vz.wgts,
-                            vth_init .* vr.grid, 0, wgts_3V_vth_init .* vr.wgts,
-                            vth_init .* vzeta.grid, 0, wgts_3V_vth_init .* vzeta.wgts) /
+                            f[:,:,:,iz], vz_grid_input, 1, vz_wgts_input, vr_grid_input,
+                            0, vr_wgts_input, vzeta_grid_input, 0, vzeta_wgts_input) /
                         density[iz]
         @views pz[iz] = integrate_over_neutral_vspace(
-                            f[:,:,:,iz], vth_init .* vz.grid, 2, vth_init .* vz.wgts,
-                            vth_init .* vr.grid, 0, wgts_3V_vth_init .* vr.wgts,
-                            vth_init .* vzeta.grid, 0, wgts_3V_vth_init .* vzeta.wgts) -
+                            f[:,:,:,iz], vz_grid_input, 2, vz_wgts_input, vr_grid_input,
+                            0, vr_wgts_input, vzeta_grid_input, 0, vzeta_wgts_input) -
                         density[iz]*uz[iz]^2
         vth[iz] = sqrt(2.0*pz[iz]/density[iz])
 
@@ -1961,7 +2052,11 @@ function convert_full_f_neutral_to_normalised!(f, density, uz, pz, vth, vzeta, v
             # The values to interpolate *to* are the v_parallel values corresponding to
             # the w_parallel grid
             vz.scratch .= vpagrid_to_dzdt(vz.grid, vth[iz], uz[iz], evolve_ppar,
-                                          evolve_upar) ./ vth_init
+                                          evolve_upar)
+            # It would be inconvienient to create a coordinate object corresponding to
+            # vpa_grid_input just to do this interpolation. Instead we can use vpa, but
+            # scale the output grid by 1/vgrid_scale_factor
+            vz.scratch ./= vgrid_scale_factor[iz]
             @loop_vzeta_vr ivzeta ivr begin
                 @views vz.scratch2 .= f[:,ivr,ivzeta,iz] # Copy to use as input to interpolation
                 @views interpolate_to_grid_1d!(f[:,ivr,ivzeta,iz], vz.scratch,
