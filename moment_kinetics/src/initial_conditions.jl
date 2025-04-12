@@ -1263,6 +1263,9 @@ function init_ion_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
                 # Scale the velocity grid used for initialization in case the
                 # temperature changes a lot.
                 vgrid_scale_factor = copy(vth)
+                if vperp.n == 1
+                    vgrid_scale_factor .*= sqrt(3.0)
+                end
             else
                 vgrid_scale_factor = ones(size(vth))
             end
@@ -1274,18 +1277,18 @@ function init_ion_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
                     # normalise/interpolate (if necessary). This makes it easier to
                     # initialise a normalised pdf consistent with the moments, although it
                     # modifies the moments from the 'input' values.
-                    @. vpa.scratch = (vpa.grid - upar[iz]) / vth[iz]
-                    vperp.scratch[ivperp] = vperp.grid[ivperp] / vth[iz]
                     if vperp.n == 1
                         # Need to initialise using Maxwellian defined using T_∥ = 3*T as T_⟂=0
-                        vth_factor = sqrt(3.0) * vth[iz]
+                        this_vth = sqrt(3.0) * vth[iz]
+                        vth_factor = this_vth
                         vpa.scratch ./= sqrt(3.0)
                     else
+                        this_vth = vth[iz]
                         vth_factor = vth[iz]^3
                     end
                     @. pdf[:,ivperp,iz] = density[iz] * Maxwellian_prefactor *
                                           exp(-((vpa.scratch - upar[iz])^2 + vperp.scratch[ivperp]^2)
-                                               / vth_factor^2) / vth_factor
+                                               / this_vth^2) / vth_factor
 
                     # Also ensure both species go to zero smoothly at v_parallel=0 at the
                     # wall, where the boundary conditions require that distribution
@@ -1295,7 +1298,7 @@ function init_ion_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
                     #
                     # Implemented by multiplying by a smooth 'notch' function
                     # notch(v,u0,width) = 1 - exp(-(v-u0)^2/width)
-                    width = sqrt(0.1) * sqrt(2.0 * ppar[iz] / density[iz])
+                    width = sqrt(0.1) * this_vth
                     inverse_width_squared = 1.0 / width^2
 
                     @. pdf[:,ivperp,iz] *= 1.0 - exp(-vpa.scratch^2*inverse_width_squared)
@@ -1348,15 +1351,16 @@ function init_ion_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
                 vperp.scratch[ivperp] = vperp.grid[ivperp] * vgrid_scale_factor[iz]
                 if vperp.n == 1
                     # Need to initialise using Maxwellian defined using T_∥ = 3*T as T_⟂=0
-                    vth_factor = sqrt(3.0) * vth[iz]
-                    vpa.scratch ./= sqrt(3.0)
+                    this_vth = sqrt(3.0) * vth[iz]
+                    vth_factor = this_vth
                 else
+                    this_vth = vth[iz]
                     vth_factor = vth[iz]^3
                 end
                 @. pdf[:,ivperp,iz] += spec.z_IC.density_amplitude * Maxwellian_prefactor *
                                        (1.0 - (2.0 * z.grid[iz] / z.L)^2) *
                                        exp(-(vpa.scratch^2 + vperp.scratch[ivperp]^2)
-                                           / vth[iz]^2) / vth_factor
+                                           / this_vth^2) / vth_factor
             end
 
             # Get the unnormalised pdf and the moments of the constructed full-f
@@ -2168,8 +2172,8 @@ function convert_full_f_ion_to_normalised!(f, density, upar, p, vth, vperp, vpa,
 
         # Interpolate f to moment kinetic grid
         if evolve_p || evolve_upar
-            # The values to interpolate *to* are the v_parallel values corresponding to
-            # the w_parallel grid
+            # The values to interpolate *to* are the v_parallel/vperp values corresponding
+            # to the w_parallel/w_perp grid
             vpa.scratch .= vpagrid_to_dzdt(vpa.grid, vth[iz], upar[iz], evolve_p,
                                            evolve_upar)
             # It would be inconvienient to create a coordinate object corresponding to
@@ -2180,6 +2184,12 @@ function convert_full_f_ion_to_normalised!(f, density, upar, p, vth, vperp, vpa,
                 @views vpa.scratch2 .= f[:,ivperp,iz] # Copy to use as input to interpolation
                 @views interpolate_to_grid_1d!(f[:,ivperp,iz], vpa.scratch, vpa.scratch2,
                                                vpa, vpa_spectral)
+            end
+            @. vperp.scratch = vperp.grid / vgrid_scale_factor[iz]
+            @loop_vpa ivpa begin
+                @views vperp.scratch2 .= f[ivpa,:,iz] # Copy to use as input to interpolation
+                @views interpolate_to_grid_1d!(f[ivpa,:,iz], vperp.scratch,
+                                               vperp.scratch2, vperp, vperp_spectral)
             end
         end
     end
@@ -2249,8 +2259,8 @@ function convert_full_f_neutral_to_normalised!(f, density, uz, p, vth, vzeta, vr
 
         # Interpolate f to moment kinetic grid
         if evolve_p || evolve_upar
-            # The values to interpolate *to* are the v_parallel values corresponding to
-            # the w_parallel grid
+            # The values to interpolate *to* are the vz/vzeta/vr values corresponding to
+            # the wz/wzeta/wr grid.
             vz.scratch .= vpagrid_to_dzdt(vz.grid, vth[iz], uz[iz], evolve_p,
                                           evolve_upar)
             # It would be inconvienient to create a coordinate object corresponding to
