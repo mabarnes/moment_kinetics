@@ -134,8 +134,8 @@ with a self-consistent initial condition
 """
 function init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geometry, composition, r, z,
                                vperp, vpa, vzeta, vr, vz, z_spectral, r_spectral,
-                               vperp_spectral, vpa_spectral, vz_spectral, species,
-                               collisions, external_source_settings,
+                               vperp_spectral, vpa_spectral, vzeta_spectral, vr_spectral,
+                               vz_spectral, species, collisions, external_source_settings,
                                manufactured_solns_input, t_input, num_diss_params,
                                advection_structs, io_input, input_dict)
     if manufactured_solns_input.use_for_init
@@ -212,7 +212,8 @@ function init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geo
         # the definition of pdf.norm changes accordingly from pdf_unnorm / density to pdf_unnorm * vth / density
         # when evolve_p = true.
         initialize_pdf!(pdf, moments, boundary_distributions, composition, r, z, vperp,
-                        vpa, vzeta, vr, vz, vpa_spectral, vz_spectral, species)
+                        vpa, vzeta, vr, vz, vperp_spectral, vpa_spectral, vzeta_spectral,
+                        vr_spectral, vz_spectral, species)
 
         @begin_s_r_z_region()
         # calculate the initial parallel heat flux from the initial un-normalised pdf. Even if coll_krook fluid is being
@@ -518,7 +519,8 @@ end
 """
 """
 function initialize_pdf!(pdf, moments, boundary_distributions, composition, r, z, vperp,
-                         vpa, vzeta, vr, vz, vpa_spectral, vz_spectral, species)
+                         vpa, vzeta, vr, vz, vperp_spectral, vpa_spectral, vzeta_spectral,
+                         vr_specrtal, vz_spectral, species)
     wall_flux_0 = allocate_float(r.n, composition.n_ion_species)
     wall_flux_L = allocate_float(r.n, composition.n_ion_species)
 
@@ -534,7 +536,7 @@ function initialize_pdf!(pdf, moments, boundary_distributions, composition, r, z
                 # to machine precision
                 @views init_ion_pdf_over_density!(
                     pdf.ion.norm[:,:,:,ir,is], species.ion[is], composition, vpa, vperp,
-                    z, vpa_spectral, moments.ion.dens[:,ir,is],
+                    z, vperp_spectral, vpa_spectral, moments.ion.dens[:,ir,is],
                     moments.ion.upar[:,ir,is], moments.ion.p[:,ir,is],
                     moments.ion.ppar[:,ir,is], moments.ion.vth[:,ir,is],
                     moments.ion.v_norm_fac[:,ir,is], moments.evolve_density,
@@ -560,11 +562,11 @@ function initialize_pdf!(pdf, moments, boundary_distributions, composition, r, z
             # initial condition.
             @views init_neutral_pdf_over_density!(
                 pdf.neutral.norm[:,:,:,:,ir,isn], boundary_distributions,
-                species.neutral[isn], composition, vz, vr, vzeta, z, vz_spectral,
-                moments.neutral.dens[:,ir,isn], moments.neutral.uz[:,ir,isn],
-                moments.neutral.p[:,ir,isn], moments.neutral.vth[:,ir,isn],
-                moments.neutral.v_norm_fac[:,ir,isn], moments.evolve_density,
-                moments.evolve_upar, moments.evolve_p,
+                species.neutral[isn], composition, vz, vr, vzeta, z, vzeta_spectral,
+                vr_spectral, vz_spectral, moments.neutral.dens[:,ir,isn],
+                moments.neutral.uz[:,ir,isn], moments.neutral.p[:,ir,isn],
+                moments.neutral.vth[:,ir,isn], moments.neutral.v_norm_fac[:,ir,isn],
+                moments.evolve_density, moments.evolve_upar, moments.evolve_p,
                 wall_flux_0[ir,min(isn,composition.n_ion_species)],
                 wall_flux_L[ir,min(isn,composition.n_ion_species)])
             @loop_z iz begin
@@ -1137,8 +1139,8 @@ end
 """
 """
 function init_ion_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
-        vpa_spectral, density, upar, p, ppar, vth, v_norm_fac, evolve_density,
-        evolve_upar, evolve_p)
+        vperp_spectral, vpa_spectral, density, upar, p, ppar, vth, v_norm_fac,
+        evolve_density, evolve_upar, evolve_p)
 
     # Prefactor for Maxwellian distribution functions
     if vperp.n == 1
@@ -1298,7 +1300,9 @@ function init_ion_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
                     #
                     # Implemented by multiplying by a smooth 'notch' function
                     # notch(v,u0,width) = 1 - exp(-(v-u0)^2/width)
-                    width = sqrt(0.1) * this_vth
+                    # Factor of sqrt(2) included to make this consistent with earlier
+                    # version of code - this width is arbitrary anyway.
+                    width = sqrt(0.1) * sqrt(2.0) * this_vth
                     inverse_width_squared = 1.0 / width^2
 
                     @. pdf[:,ivperp,iz] *= 1.0 - exp(-vpa.scratch^2*inverse_width_squared)
@@ -1366,8 +1370,9 @@ function init_ion_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
             # Get the unnormalised pdf and the moments of the constructed full-f
             # distribution function (which will be modified from the input moments).
             convert_full_f_ion_to_normalised!(pdf, density, upar, p, vth, vperp, vpa,
-                                              vpa_spectral, evolve_density, evolve_upar,
-                                              evolve_p, vgrid_scale_factor)
+                                              vperp_spectral, vpa_spectral,
+                                              evolve_density, evolve_upar, evolve_p,
+                                              vgrid_scale_factor)
 
             if !evolve_density
                 # Need to divide out density to return pdf/density
@@ -1424,8 +1429,10 @@ end
 """
 """
 function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, composition,
-        vz, vr, vzeta, z, vz_spectral, density, uz, p, vth, v_norm_fac, evolve_density,
-        evolve_upar, evolve_p, wall_flux_0, wall_flux_L)
+                                        vz, vr, vzeta, z, vzeta_spectral, vr_spectral,
+                                        vz_spectral, density, uz, p, vth, v_norm_fac,
+                                        evolve_density, evolve_upar, evolve_p,
+                                        wall_flux_0, wall_flux_L)
 
     zero = 1.0e-14
 
@@ -1561,6 +1568,9 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
                 # Scale the velocity grid used for initialization in case the
                 # temperature changes a lot.
                 vgrid_scale_factor = copy(vth)
+                if vzeta.n == 1 && vr.n == 1
+                    vgrid_scale_factor .*= sqrt(3.0)
+                end
             else
                 vgrid_scale_factor = ones(size(vth))
             end
@@ -1578,20 +1588,18 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
                     # normalise/interpolate (if necessary). This makes it easier to
                     # initialise a normalised pdf consistent with the moments, although it
                     # modifies the moments from the 'input' values.
-                    @. vz.scratch = (vz.grid - uz[iz]) / vth[iz]
-                    vzeta.scratch[ivzeta] = vzeta.grid[ivzeta] / vth[iz]
-                    vr.scratch[ivr] = vr.grid[ivr] / vth[iz]
                     if vzeta.n == 1 && vr.n == 1
                         # Need to initialise using Maxwellian defined using T_∥ = 3*T as T_⟂=0
-                        vth_factor = sqrt(3.0) * vth[iz]
-                        vz.scratch ./= sqrt(3.0)
+                        this_vth = sqrt(3.0) * vth[iz]
+                        vth_factor = this_vth
                     else
+                        this_vth = vth[iz]
                         vth_factor = vth[iz]^3
                     end
                     @. pdf[:,ivr,ivzeta,iz] = density[iz] * Maxwellian_prefactor *
                                               exp(-((vz.scratch - uz[iz])^2 +
                                                     vzeta.scratch[ivzeta]^2 + vr.scratch[ivr]^2)
-                                                  / vth[iz]^2) / vth_factor
+                                                  / this_vth^2) / vth_factor
 
                     # Also ensure both species go to zero smoothly at v_z=0 at the
                     # wall, where the boundary conditions require that distribution
@@ -1603,18 +1611,7 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
                     # notch(v,u0,width) = 1 - exp(-(v-u0)^2/width)
                     # Factor of sqrt(2) included to make this consistent with earlier
                     # version of code - this width is arbitrary anyway.
-                    if evolve_p
-                        # Initialization grid scaled by 1/vth already, so don't need to
-                        # scale `width`.
-                        width = sqrt(0.1) * sqrt(2.0)
-                    else
-                        width = sqrt(0.1) * sqrt(2.0) * vth[iz]
-                    end
-                    if vzeta.n == 1 && vr.n == 1
-                        # Multiply by sqrt(3) so that in 1V case we set the width relative
-                        # to sqrt(2*Tpar/m_s) rather than sqrt(2*T/m_s).
-                        width *= sqrt(3.0)
-                    end
+                    width = sqrt(0.1) * sqrt(2.0) * this_vth
                     inverse_width_squared = 1.0 / width^2
 
                     @. pdf[:,ivr,ivzeta,iz] *= 1.0 - exp(-vz.scratch^2*inverse_width_squared)
@@ -1725,8 +1722,8 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
                 wgts_3V_scale_factor0 = 1.0
             end
             @views wall_flux_0 += integrate_over_negative_vz(
-                                      vgrid_scale_factor0 .* abs.(vz.grid) .*
-                                      lower_z_pdf_buffer, vgrid_scale_factor0 .* vz.grid,
+                                      vgrid_scale_factor0 .* abs.(vz.grid) .* lower_z_pdf_buffer,
+                                      vgrid_scale_factor0 .* vz.grid,
                                       vgrid_scale_factor0 .* vz.wgts, vz.scratch3,
                                       vgrid_scale_factor0 .* vr.grid,
                                       wgts_3V_scale_factor0 .* vr.wgts,
@@ -1748,8 +1745,8 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
                 wgts_3V_scale_factorL = 1.0
             end
             @views wall_flux_L += integrate_over_positive_vz(
-                                      vgrid_scale_factorL .* abs.(vz.grid) .*
-                                      upper_z_pdf_buffer, vgrid_scale_factorL .* vz.grid,
+                                      vgrid_scale_factorL .* abs.(vz.grid) .* upper_z_pdf_buffer,
+                                      vgrid_scale_factorL .* vz.grid,
                                       vgrid_scale_factorL .* vz.wgts, vz.scratch3,
                                       vgrid_scale_factorL .* vr.grid,
                                       wgts_3V_scale_factorL .* vr.wgts,
@@ -1784,7 +1781,8 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
             # Get the unnormalised pdf and the moments of the constructed full-f
             # distribution function (which will be modified from the input moments).
             convert_full_f_neutral_to_normalised!(pdf, density, uz, p, vth, vzeta, vr,
-                                                  vz, vz_spectral, evolve_density,
+                                                  vz, vzeta_spectral, vr_spectral,
+                                                  vz_spectral, evolve_density,
                                                   evolve_upar, evolve_p,
                                                   vgrid_scale_factor)
 
@@ -2137,8 +2135,9 @@ The velocity grid that the input `f` is defined on can be scaled by `vgrid_scale
 `vpa.grid .* vgrid_scale_factor`.
 """
 function convert_full_f_ion_to_normalised!(f, density, upar, p, vth, vperp, vpa,
-                                           vpa_spectral, evolve_density, evolve_upar,
-                                           evolve_p, vgrid_scale_factor=ones(size(vth)))
+                                           vperp_spectral, vpa_spectral, evolve_density,
+                                           evolve_upar, evolve_p,
+                                           vgrid_scale_factor=ones(size(vth)))
 
     @loop_z iz begin
         vpa_grid_input = vpa.grid .* vgrid_scale_factor[iz]
@@ -2176,16 +2175,21 @@ function convert_full_f_ion_to_normalised!(f, density, upar, p, vth, vperp, vpa,
             # to the w_parallel/w_perp grid
             vpa.scratch .= vpagrid_to_dzdt(vpa.grid, vth[iz], upar[iz], evolve_p,
                                            evolve_upar)
+            if evolve_p
+                @. vperp.scratch .= vperp.grid / vth[iz]
+            else
+                vperp.scratch .= vperp.grid
+            end
             # It would be inconvienient to create a coordinate object corresponding to
             # vpa_grid_input just to do this interpolation. Instead we can use vpa, but
             # scale the output grid by 1/vgrid_scale_factor
             vpa.scratch ./= vgrid_scale_factor[iz]
+            vperp.scratch ./= vgrid_scale_factor[iz]
             @loop_vperp ivperp begin
                 @views vpa.scratch2 .= f[:,ivperp,iz] # Copy to use as input to interpolation
                 @views interpolate_to_grid_1d!(f[:,ivperp,iz], vpa.scratch, vpa.scratch2,
                                                vpa, vpa_spectral)
             end
-            @. vperp.scratch = vperp.grid / vgrid_scale_factor[iz]
             @loop_vpa ivpa begin
                 @views vperp.scratch2 .= f[ivpa,:,iz] # Copy to use as input to interpolation
                 @views interpolate_to_grid_1d!(f[ivpa,:,iz], vperp.scratch,
@@ -2212,8 +2216,8 @@ The velocity grid that the input `f` is defined on can be scaled by `vgrid_scale
 `vr.grid .* vgrid_scale_factor`, and `vz.grid .* vgrid_scale_factor`.
 """
 function convert_full_f_neutral_to_normalised!(f, density, uz, p, vth, vzeta, vr, vz,
-                                               vz_spectral, evolve_density, evolve_upar,
-                                               evolve_p,
+                                               vzeta_spectral, vr_spectral, vz_spectral,
+                                               evolve_density, evolve_upar, evolve_p,
                                                vgrid_scale_factor=ones(size(vth)))
 
     @loop_z iz begin
@@ -2263,14 +2267,33 @@ function convert_full_f_neutral_to_normalised!(f, density, uz, p, vth, vzeta, vr
             # the wz/wzeta/wr grid.
             vz.scratch .= vpagrid_to_dzdt(vz.grid, vth[iz], uz[iz], evolve_p,
                                           evolve_upar)
+            if evolve_p
+                @. vzeta.scratch = vzeta.grid * vth[iz]
+                @. vr.scratch = vr.grid * vth[iz]
+            else
+                vzeta.scratch .= vzeta.grid
+                vr.scratch .= vr.grid
+            end
             # It would be inconvienient to create a coordinate object corresponding to
             # vpa_grid_input just to do this interpolation. Instead we can use vpa, but
             # scale the output grid by 1/vgrid_scale_factor
             vz.scratch ./= vgrid_scale_factor[iz]
+            vzeta.scratch ./= vgrid_scale_factor[iz]
+            vr.scratch ./= vgrid_scale_factor[iz]
             @loop_vzeta_vr ivzeta ivr begin
                 @views vz.scratch2 .= f[:,ivr,ivzeta,iz] # Copy to use as input to interpolation
                 @views interpolate_to_grid_1d!(f[:,ivr,ivzeta,iz], vz.scratch,
                                                vz.scratch2, vz, vz_spectral)
+            end
+            @loop_vr_vz ivr ivz begin
+                @views vzeta.scratch2 .= f[ivz,ivr,:,iz] # Copy to use as input to interpolation
+                @views interpolate_to_grid_1d!(f[ivz,ivr,:,iz], vzeta.scratch,
+                                               vzeta.scratch2, vzeta, vzeta_spectral)
+            end
+            @loop_vzeta_vz ivzeta ivz begin
+                @views vr.scratch2 .= f[ivz,:,ivzeta,iz] # Copy to use as input to interpolation
+                @views interpolate_to_grid_1d!(f[ivz,:,ivzeta,iz], vr.scratch,
+                                               vr.scratch2, vr, vr_spectral)
             end
         end
     end

@@ -280,7 +280,8 @@ parallel loop ranges, and are only used by the tests in `debug_test/`.
         init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geometry,
                               composition, r, z, vperp, vpa, vzeta, vr, vz,
                               z_spectral, r_spectral, vperp_spectral, vpa_spectral,
-                              vz_spectral, species, collisions, external_source_settings,
+                              vzeta_spectral, vr_spectral, vz_spectral, species,
+                              collisions, external_source_settings,
                               manufactured_solns_input, t_input, num_diss_params,
                               advection_structs, io_input, input_dict)
         # initialize time variable
