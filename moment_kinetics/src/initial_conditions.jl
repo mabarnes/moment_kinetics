@@ -1259,7 +1259,7 @@ function init_ion_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
             else
                 zrange = ()
             end
-            if evolve_ppar
+            if evolve_p
                 # Scale the velocity grid used for initialization in case the
                 # temperature changes a lot.
                 vgrid_scale_factor = copy(vth)
@@ -1553,7 +1553,7 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
             else
                 zrange = ()
             end
-            if evolve_ppar
+            if evolve_p
                 # Scale the velocity grid used for initialization in case the
                 # temperature changes a lot.
                 vgrid_scale_factor = copy(vth)
@@ -2147,14 +2147,14 @@ function convert_full_f_ion_to_normalised!(f, density, upar, p, vth, vperp, vpa,
         end
 
         # Calculate moments
-        @views density[iz] = integrate(f[:,:,iz], vpa_grid_input, 0, vpa_wgts_input,
+        @views density[iz] = integral(f[:,:,iz], vpa_grid_input, 0, vpa_wgts_input,
                                        vperp_grid_input, 0, vperp_wgts_input)
-        @views upar[iz] = integrate(f[:,:,iz], vpa_grid_input, 1, vpa_wgts_input,
+        @views upar[iz] = integral(f[:,:,iz], vpa_grid_input, 1, vpa_wgts_input,
                                     vperp_grid_input, 0, vperp_wgts_input) /
                           density[iz]
-        @views p[iz] = (integrate(f[:,:,iz], vpa_grid_input, 2, vpa_wgts_input,
+        @views p[iz] = (integral(f[:,:,iz], vpa_grid_input, 2, vpa_wgts_input,
                                     vperp_grid_input, 0, vperp_wgts_input)
-                        + integrate(f[:,:,iz], vpa_grid_input, 0, vpa_wgts_input,
+                        + integral(f[:,:,iz], vpa_grid_input, 0, vpa_wgts_input,
                                     vperp_grid_input, 2, vperp_wgts_input)) -
                        density[iz]*upar[iz]^2
         vth[iz] = sqrt(2.0*p[iz]/density[iz])
