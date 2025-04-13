@@ -520,7 +520,7 @@ end
 """
 function initialize_pdf!(pdf, moments, boundary_distributions, composition, r, z, vperp,
                          vpa, vzeta, vr, vz, vperp_spectral, vpa_spectral, vzeta_spectral,
-                         vr_specrtal, vz_spectral, species)
+                         vr_spectral, vz_spectral, species)
     wall_flux_0 = allocate_float(r.n, composition.n_ion_species)
     wall_flux_L = allocate_float(r.n, composition.n_ion_species)
 
