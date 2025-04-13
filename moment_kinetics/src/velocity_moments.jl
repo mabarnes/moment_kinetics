@@ -31,7 +31,6 @@ export get_density
 export get_upar
 export get_ppar
 export get_pperp
-export get_pressure
 export get_qpar
 export get_rmom
 
