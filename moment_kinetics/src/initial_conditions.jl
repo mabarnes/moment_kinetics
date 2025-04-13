@@ -2145,8 +2145,10 @@ function convert_full_f_ion_to_normalised!(f, density, upar, p, vth, vperp, vpa,
         vth[iz] = sqrt(2.0*p[iz]/density[iz])
 
         # Normalise f
-        if evolve_p
+        if evolve_p && vperp.n == 1
             f[:,:,iz] .*= vth[iz] / density[iz]
+        elseif evolve_p
+            f[:,:,iz] .*= vth[iz]^3 / density[iz]
         elseif evolve_density
             f[:,:,iz] ./= density[iz]
         end
@@ -2207,7 +2209,7 @@ function convert_full_f_neutral_to_normalised!(f, density, uz, p, vth, vzeta, vr
         vz_wgts_input = vz.wgts .* vgrid_scale_factor[iz]
         vzeta_grid_input = vzeta.grid .* vgrid_scale_factor[iz]
         vr_grid_input = vr.grid .* vgrid_scale_factor[iz]
-        if vzeta == 1 && vr == 1
+        if vzeta.n == 1 && vr.n == 1
             vzeta_wgts_input = vzeta.wgts
             vr_wgts_input = vr.wgts
         else
@@ -2237,8 +2239,10 @@ function convert_full_f_neutral_to_normalised!(f, density, uz, p, vth, vzeta, vr
         vth[iz] = sqrt(2.0*p[iz]/density[iz])
 
         # Normalise f
-        if evolve_p
+        if evolve_p && vzeta.n == 1 && vr.n == 1
             f[:,:,:,iz] .*= vth[iz] / density[iz]
+        elseif evolve_p
+            f[:,:,:,iz] .*= vth[iz]^3 / density[iz]
         elseif evolve_density
             f[:,:,:,iz] ./= density[iz]
         end
