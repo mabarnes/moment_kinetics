@@ -928,6 +928,21 @@ u_{n\parallel} / \partial t$ or $\partial v_{Tn} / \partial t$ so that the only
 contributions are from $\partial n_n / \partial t$ that contributes to
 $\dot{F}$ and the explicit term in $\mathcal C_n$, and these will cancel.
 
+### Wall boundary condition (Knudsen cosine distribution)
+
+Neutrals returning from the wall belong to a Knudsen cosine distribution,
+defined with a wall temperature $T_\mathrm{wall}$, which is given by
+[\[Excalibur report TN-05\]](https://excalibur-neptune.github.io/Documents/TN-05_1DDriftKineticWallBoundaryConditions.html)
+```math
+\begin{align}
+f_n(0,v_\parallel>0,v_\perp,t) &= \Gamma_0 f_\mathrm{Kw}(v_\parallel,v_\perp) \\
+f_n(L,v_\parallel<0,v_\perp,t) &= \Gamma_L f_\mathrm{Kw}(v_\parallel,v_\perp) \\
+\Gamma_0 &= \sum_{s=i,n} 2 \pi \int_{-\infty}^0 dv_\parallel \int_0^\infty dv_\perp v_\perp |v_\parallel| f_s(0,v_\parallel,v_\perp,t) \\
+\Gamma_L &= \sum_{s=i,n} 2 \pi \int_0^\infty dv_\parallel \int_0^\infty dv_\perp v_\perp |v_\parallel| f_s(L,v_\parallel,v_\perp,t) \\
+f_\mathrm{Kw}(v_\parallel,v_\perp) &= \frac{3}{4\pi} \left( \frac{m_n}{T_w} \right)^2 \frac{|v_\parallel|}{\sqrt{v_\parallel^2 + v_\perp^2}} \exp\left( -\frac{m_n(v_\parallel^2 + v_\perp^2)}{2T_w} \right) \\
+\end{align}
+```
+
 [Reduction to 1D1V](@id ion_reduction_to_1d1v)
 ----------------------------------------------
 
@@ -1224,6 +1239,18 @@ where
   \end{align}
   ```
 
+### Wall boundary condition (Knudsen cosine distribution)
+
+For the 1D1V model, the Knudsen cosine distribution is marginalised over
+$v_\perp$
+[\[Excalibur report TN-08\]](https://excalibur-neptune.github.io/Documents/TN-08_Numerical11DDriftKineticModelWallBoundaryConditions.html)
+```math
+\begin{align}
+\bar{f}_\mathrm{Kw}(v_\parallel) &= 2 \pi \int_0^\infty dv_\perp v_\perp f_\mathrm{Kw}(v_\parallel,v_\perp) \nonumber \\
+    &= 3 \sqrt{\pi} \left( \frac{m_n}{2T_w} \right)^{3/2} |v_\parallel| \,\mathrm{erfc}\!\left( \sqrt{\frac{m_n}{2 T_w}} |v_\parallel| \right) \\
+\end{align}
+```
+
 Conversion to conventions of 1D1V Excalibur reports
 ---------------------------------------------------
 
@@ -1341,6 +1368,8 @@ The full set of dimensionless variables are related to the dimensional ones by
 \hat{S}_{s,E} &= \frac{L_\mathrm{ref} S_{s,E}}{c_\mathrm{ref} m_\mathrm{i} n_\mathrm{ref} T_\mathrm{ref}} \\
 \hat{S}_{s,p} &= \frac{L_\mathrm{ref} S_{s,p}}{c_\mathrm{ref} m_\mathrm{i} n_\mathrm{ref} T_\mathrm{ref}} \\
 \hat{C}_{ii}(\hat{f_i}, \hat{f_i}) &= \frac{L_\mathrm{ref} n_\mathrm{ref}}{c_\mathrm{ref}^4} C_{ii}(f_i, f_i) \\
+\hat{f}_\mathrm{Kw} &= c_\mathrm{ref}^4 f_\mathrm{Kw} \\
+\hat{\bar{f}}_\mathrm{Kw} &= c_\mathrm{ref}^2 \bar{f}_\mathrm{Kw} \\
 \end{align}
 ```
 
@@ -1783,6 +1812,10 @@ differences first
     && \hat{\bar{f}}_s = \frac{1}{\sqrt{2 \pi}} \mathring{\bar{f}}_s \\
 \mathring{F}_s &= \sqrt{\pi} \check{F}_s = \sqrt{\pi} \sqrt{3} \bar{F}_s
     && \bar{F}_s = \frac{1}{\sqrt{\pi} \sqrt{3}} \mathring{\bar{F}}_s \\
+\mathring{f}_\mathrm{Kw} &= \frac{\pi^{3/2} \check{c}_\mathrm{ref}^4}{\check{n}_\mathrm{ref}} f_\mathrm{Kw} = 4\pi^{3/2} \frac{c_\mathrm{ref}^4}{n_\mathrm{ref}} f_\mathrm{Kw} = 4\pi^{3/2} \hat{f}_\mathrm{Kw}
+    && \hat{f}_\mathrm{Kw} = \frac{1}{4\pi^{3/2}} \mathring{f}_\mathrm{Kw} \\
+\mathring{\bar{f}}_\mathrm{Kw} &= \sqrt{\pi} \check{c}_\mathrm{ref}^2 \bar{f}_\mathrm{Kw} = 2\sqrt{\pi} c_\mathrm{ref} \bar{f}_\mathrm{Kw} = 2\sqrt{\pi} \hat{\bar{f}}_\mathrm{Kw}
+    && \hat{\bar{f}}_\mathrm{Kw} = \frac{1}{2\sqrt{\pi}} \mathring{\bar{f}}_\mathrm{Kw} \\
 \mathring{t} &= \frac{\check{c}_\mathrm{ref} t}{\check{L}_\mathrm{ref}} = \sqrt{2} \frac{c_\mathrm{ref} t}{L_\mathrm{ref}} = \sqrt{2} \hat{t}
     && \hat{t} = \frac{1}{\sqrt{2}} \mathring{t} \\
 \frac{\partial}{\partial \mathring{t}} &= \frac{\check{L}_\mathrm{ref}}{\check{c}_\mathrm{ref}} \frac{\partial}{\partial t} = \frac{L_\mathrm{ref}}{\sqrt{2} c_\mathrm{ref}} \frac{\partial}{\partial \hat{t}} = \frac{1}{\sqrt{2}} \frac{\partial}{\partial \hat{t}}
