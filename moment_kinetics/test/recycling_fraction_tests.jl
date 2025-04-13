@@ -19,7 +19,7 @@ test_input = OptionsDict("composition" => OptionsDict("n_ion_species" => 1,
                                                       "n_neutral_species" => 1,
                                                       "electron_physics" => "boltzmann_electron_response",
                                                       "T_e" => 0.2,
-                                                      "T_wall" => 0.03333333333333333,
+                                                      "T_wall" => 0.1,
                                                       "recycling_fraction" => 0.5),
                          "ion_species_1" => OptionsDict("initial_density" => 1.0,
                                                         "initial_temperature" => 0.3333333333333333),
@@ -181,7 +181,7 @@ test_input_adaptive_split2["timestepping"]["exact_output_times"] = true
 """
 Run a test for a single set of parameters
 """
-function run_test(test_input, expected_phi; rtol=4.e-14, atol=1.e-15, args...)
+function run_test(test_input, expected_phi; rtol=4.e-14, atol=1.e-14, args...)
     # by passing keyword arguments to run_test, args becomes a Tuple of Pairs which can be
     # used to update the default inputs
 
@@ -237,7 +237,7 @@ function run_test(test_input, expected_phi; rtol=4.e-14, atol=1.e-15, args...)
             println("data tested would be: ", actual_phi)
             @test false
         else
-            @test isapprox(actual_phi, expected_phi, rtol=rtol, atol=atol)
+            @test elementwise_isapprox(actual_phi, expected_phi, rtol=rtol, atol=atol)
         end
     end
 end
