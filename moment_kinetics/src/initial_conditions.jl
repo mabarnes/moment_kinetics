@@ -1265,9 +1265,6 @@ function init_ion_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
                 # Scale the velocity grid used for initialization in case the
                 # temperature changes a lot.
                 vgrid_scale_factor = copy(vth)
-                if vperp.n == 1
-                    vgrid_scale_factor .*= sqrt(3.0)
-                end
             else
                 vgrid_scale_factor = ones(size(vth))
             end
@@ -1283,7 +1280,6 @@ function init_ion_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
                         # Need to initialise using Maxwellian defined using T_∥ = 3*T as T_⟂=0
                         this_vth = sqrt(3.0) * vth[iz]
                         vth_factor = this_vth
-                        vpa.scratch ./= sqrt(3.0)
                     else
                         this_vth = vth[iz]
                         vth_factor = vth[iz]^3
@@ -1302,7 +1298,7 @@ function init_ion_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
                     # notch(v,u0,width) = 1 - exp(-(v-u0)^2/width)
                     # Factor of sqrt(2) included to make this consistent with earlier
                     # version of code - this width is arbitrary anyway.
-                    width = sqrt(0.1) * sqrt(2.0) * this_vth
+                    width = sqrt(0.1) * this_vth
                     inverse_width_squared = 1.0 / width^2
 
                     @. pdf[:,ivperp,iz] *= 1.0 - exp(-vpa.scratch^2*inverse_width_squared)
@@ -1568,16 +1564,8 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
                 # Scale the velocity grid used for initialization in case the
                 # temperature changes a lot.
                 vgrid_scale_factor = copy(vth)
-                if vzeta.n == 1 && vr.n == 1
-                    vgrid_scale_factor .*= sqrt(3.0)
-                end
             else
                 vgrid_scale_factor = ones(size(vth))
-            end
-            if vzeta.n == 1 && vr.n == 1
-                # Convert to a thermal speed defined with the parallel temperature in 1V
-                # case.
-                vgrid_scale_factor *= sqrt(3.0)
             end
             for iz ∈ zrange
                 @. vz.scratch = vz.grid * vgrid_scale_factor[iz]
@@ -1611,7 +1599,7 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
                     # notch(v,u0,width) = 1 - exp(-(v-u0)^2/width)
                     # Factor of sqrt(2) included to make this consistent with earlier
                     # version of code - this width is arbitrary anyway.
-                    width = sqrt(0.1) * sqrt(2.0) * this_vth
+                    width = sqrt(0.1) * this_vth
                     inverse_width_squared = 1.0 / width^2
 
                     @. pdf[:,ivr,ivzeta,iz] *= 1.0 - exp(-vz.scratch^2*inverse_width_squared)
@@ -2151,15 +2139,14 @@ function convert_full_f_ion_to_normalised!(f, density, upar, p, vth, vperp, vpa,
 
         # Calculate moments
         @views density[iz] = integral(f[:,:,iz], vpa_grid_input, 0, vpa_wgts_input,
-                                       vperp_grid_input, 0, vperp_wgts_input)
+                                      vperp_grid_input, 0, vperp_wgts_input)
         @views upar[iz] = integral(f[:,:,iz], vpa_grid_input, 1, vpa_wgts_input,
-                                    vperp_grid_input, 0, vperp_wgts_input) /
+                                   vperp_grid_input, 0, vperp_wgts_input) /
                           density[iz]
-        @views p[iz] = (integral(f[:,:,iz], vpa_grid_input, 2, vpa_wgts_input,
-                                    vperp_grid_input, 0, vperp_wgts_input)
+        @views p[iz] = (integral(f[:,:,iz], vpa_grid_input .- upar[iz], 2, vpa_wgts_input,
+                                 vperp_grid_input, 0, vperp_wgts_input)
                         + integral(f[:,:,iz], vpa_grid_input, 0, vpa_wgts_input,
-                                    vperp_grid_input, 2, vperp_wgts_input)) -
-                       density[iz]*upar[iz]^2
+                                   vperp_grid_input, 2, vperp_wgts_input)) / 3.0
         vth[iz] = sqrt(2.0*p[iz]/density[iz])
 
         # Normalise f
@@ -2243,15 +2230,15 @@ function convert_full_f_neutral_to_normalised!(f, density, uz, p, vth, vzeta, vr
                             0, vr_wgts_input, vzeta_grid_input, 0, vzeta_wgts_input) /
                         density[iz]
         @views p[iz] = (integral(
-                            f[:,:,:,iz], vz_grid_input, 2, vz_wgts_input, vr_grid_input,
-                            0, vr_wgts_input, vzeta_grid_input, 0, vzeta_wgts_input) +
+                            f[:,:,:,iz], vz_grid_input .- uz[iz], 2, vz_wgts_input,
+                            vr_grid_input, 0, vr_wgts_input, vzeta_grid_input, 0,
+                            vzeta_wgts_input) +
                         integral(
                             f[:,:,:,iz], vz_grid_input, 0, vz_wgts_input, vr_grid_input,
                             2, vr_wgts_input, vzeta_grid_input, 0, vzeta_wgts_input) +
                         integral(
                             f[:,:,:,iz], vz_grid_input, 0, vz_wgts_input, vr_grid_input,
-                            0, vr_wgts_input, vzeta_grid_input, 2,  vzeta_wgts_input)) -
-                        density[iz]*uz[iz]^2
+                            0, vr_wgts_input, vzeta_grid_input, 2,  vzeta_wgts_input)) / 3.0
         vth[iz] = sqrt(2.0*p[iz]/density[iz])
 
         # Normalise f
