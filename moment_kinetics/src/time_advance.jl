@@ -2852,7 +2852,9 @@ appropriate.
                 p = @view scratch[t_params.n_rk_stages+1].p[:,ir,is]
                 phi = fields.phi[:,ir]
                 last_negative_vpa_ind, first_positive_vpa_ind =
-                    get_ion_z_boundary_cutoff_indices(density, upar, p,
+                    get_ion_z_boundary_cutoff_indices(density, upar,
+                                                      moments.ion.vth[1,ir,is],
+                                                      moments.ion.vth[end,ir,is],
                                                       moments.evolve_upar,
                                                       moments.evolve_p, z, vpa,
                                                       1.0e-14, phi)
