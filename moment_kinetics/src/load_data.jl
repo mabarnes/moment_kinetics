@@ -1432,7 +1432,7 @@ function reload_ion_pdf(dynamic, time_index, moments, r, z, vperp, vpa, r_range,
             @views interpolate_to_grid_1d!(
                        new_pdf[ivpa,:,iz,ir,is], vperp.grid,
                        this_pdf[ivpa,:,iz,ir,is], restart_vperp,
-                       restart_vperp_spectral)
+                       restart_vperp_spectral, Val(0))
         end
         this_pdf = new_pdf
     end
@@ -1452,7 +1452,7 @@ function reload_ion_pdf(dynamic, time_index, moments, r, z, vperp, vpa, r_range,
                 @views interpolate_to_grid_1d!(
                            new_pdf[:,ivperp,iz,ir,is], vpa.grid,
                            this_pdf[:,ivperp,iz,ir,is], restart_vpa,
-                           restart_vpa_spectral)
+                           restart_vpa_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
             end
             this_pdf = new_pdf
         end
@@ -1466,7 +1466,7 @@ function reload_ion_pdf(dynamic, time_index, moments, r, z, vperp, vpa, r_range,
             @views interpolate_to_grid_1d!(
                        new_pdf[:,ivperp,iz,ir,is], restart_vpa_vals,
                        this_pdf[:,ivperp,iz,ir,is], restart_vpa,
-                       restart_vpa_spectral)
+                       restart_vpa_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     elseif (!moments.evolve_upar && !moments.evolve_p &&
@@ -1479,7 +1479,7 @@ function reload_ion_pdf(dynamic, time_index, moments, r, z, vperp, vpa, r_range,
             @views interpolate_to_grid_1d!(
                        new_pdf[:,ivperp,iz,ir,is], restart_vpa_vals,
                        this_pdf[:,ivperp,iz,ir,is], restart_vpa,
-                       restart_vpa_spectral)
+                       restart_vpa_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     elseif (!moments.evolve_upar && !moments.evolve_p &&
@@ -1493,7 +1493,7 @@ function reload_ion_pdf(dynamic, time_index, moments, r, z, vperp, vpa, r_range,
             @views interpolate_to_grid_1d!(
                        new_pdf[:,ivperp,iz,ir,is], restart_vpa_vals,
                        this_pdf[:,ivperp,iz,ir,is], restart_vpa,
-                       restart_vpa_spectral)
+                       restart_vpa_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     elseif (moments.evolve_upar && !moments.evolve_p &&
@@ -1506,7 +1506,7 @@ function reload_ion_pdf(dynamic, time_index, moments, r, z, vperp, vpa, r_range,
             @views interpolate_to_grid_1d!(
                        new_pdf[:,ivperp,iz,ir,is], restart_vpa_vals,
                        this_pdf[:,ivperp,iz,ir,is], restart_vpa,
-                       restart_vpa_spectral)
+                       restart_vpa_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     elseif (moments.evolve_upar && !moments.evolve_p &&
@@ -1520,7 +1520,7 @@ function reload_ion_pdf(dynamic, time_index, moments, r, z, vperp, vpa, r_range,
             @views interpolate_to_grid_1d!(
                        new_pdf[:,ivperp,iz,ir,is], restart_vpa_vals,
                        this_pdf[:,ivperp,iz,ir,is], restart_vpa,
-                       restart_vpa_spectral)
+                       restart_vpa_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     elseif (moments.evolve_upar && !moments.evolve_p &&
@@ -1533,7 +1533,7 @@ function reload_ion_pdf(dynamic, time_index, moments, r, z, vperp, vpa, r_range,
             @views interpolate_to_grid_1d!(
                        new_pdf[:,ivperp,iz,ir,is], restart_vpa_vals,
                        this_pdf[:,ivperp,iz,ir,is], restart_vpa,
-                       restart_vpa_spectral)
+                       restart_vpa_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     elseif (!moments.evolve_upar && moments.evolve_p &&
@@ -1546,7 +1546,7 @@ function reload_ion_pdf(dynamic, time_index, moments, r, z, vperp, vpa, r_range,
             @views interpolate_to_grid_1d!(
                        new_pdf[:,ivperp,iz,ir,is], restart_vpa_vals,
                        this_pdf[:,ivperp,iz,ir,is], restart_vpa,
-                       restart_vpa_spectral)
+                       restart_vpa_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     elseif (!moments.evolve_upar && moments.evolve_p &&
@@ -1559,7 +1559,7 @@ function reload_ion_pdf(dynamic, time_index, moments, r, z, vperp, vpa, r_range,
             @views interpolate_to_grid_1d!(
                        new_pdf[:,ivperp,iz,ir,is], restart_vpa_vals,
                        this_pdf[:,ivperp,iz,ir,is], restart_vpa,
-                       restart_vpa_spectral)
+                       restart_vpa_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     elseif (!moments.evolve_upar && moments.evolve_p &&
@@ -1573,7 +1573,7 @@ function reload_ion_pdf(dynamic, time_index, moments, r, z, vperp, vpa, r_range,
             @views interpolate_to_grid_1d!(
                        new_pdf[:,ivperp,iz,ir,is], restart_vpa_vals,
                        this_pdf[:,ivperp,iz,ir,is], restart_vpa,
-                       restart_vpa_spectral)
+                       restart_vpa_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     elseif (moments.evolve_upar && moments.evolve_p &&
@@ -1586,7 +1586,7 @@ function reload_ion_pdf(dynamic, time_index, moments, r, z, vperp, vpa, r_range,
             @views interpolate_to_grid_1d!(
                        new_pdf[:,ivperp,iz,ir,is], restart_vpa_vals,
                        this_pdf[:,ivperp,iz,ir,is], restart_vpa,
-                       restart_vpa_spectral)
+                       restart_vpa_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     elseif (moments.evolve_upar && moments.evolve_p &&
@@ -1599,7 +1599,7 @@ function reload_ion_pdf(dynamic, time_index, moments, r, z, vperp, vpa, r_range,
             @views interpolate_to_grid_1d!(
                        new_pdf[:,ivperp,iz,ir,is], restart_vpa_vals,
                        this_pdf[:,ivperp,iz,ir,is], restart_vpa,
-                       restart_vpa_spectral)
+                       restart_vpa_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     elseif (moments.evolve_upar && moments.evolve_p &&
@@ -1613,7 +1613,7 @@ function reload_ion_pdf(dynamic, time_index, moments, r, z, vperp, vpa, r_range,
             @views interpolate_to_grid_1d!(
                        new_pdf[:,ivperp,iz,ir,is], restart_vpa_vals,
                        this_pdf[:,ivperp,iz,ir,is], restart_vpa,
-                       restart_vpa_spectral)
+                       restart_vpa_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     else
@@ -1670,7 +1670,7 @@ function reload_ion_boundary_pdf(boundary_distributions_io, var_name, ir, moment
             @views interpolate_to_grid_1d!(
                                            new_pdf[ivpa,ivperp,:,is], z.grid,
                                            this_pdf[ivpa,ivperp,:,is], restart_z,
-                                           restart_z_spectral)
+                                           restart_z_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     end
@@ -1684,7 +1684,7 @@ function reload_ion_boundary_pdf(boundary_distributions_io, var_name, ir, moment
             @views interpolate_to_grid_1d!(
                                            new_pdf[ivpa,:,iz,is], vperp.grid,
                                            this_pdf[ivpa,:,iz,is], restart_vperp,
-                                           restart_vperp_spectral)
+                                           restart_vperp_spectral, Val(0))
         end
         this_pdf = new_pdf
     end
@@ -1704,7 +1704,7 @@ function reload_ion_boundary_pdf(boundary_distributions_io, var_name, ir, moment
                 @views interpolate_to_grid_1d!(
                                                new_pdf[:,ivperp,iz,is], vpa.grid,
                                                this_pdf[:,ivperp,iz,is], restart_vpa,
-                                               restart_vpa_spectral)
+                                               restart_vpa_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
             end
             this_pdf = new_pdf
         end
@@ -1717,7 +1717,8 @@ function reload_ion_boundary_pdf(boundary_distributions_io, var_name, ir, moment
             restart_vpa_vals = vpa.grid .- moments.ion.upar[iz,ir,is]
             @views interpolate_to_grid_1d!(
                                            new_pdf[:,ivperp,iz,is], restart_vpa_vals,
-                                           this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral)
+                                           this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral,
+                                           Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     elseif (!moments.evolve_upar && !moments.evolve_p &&
@@ -1729,7 +1730,8 @@ function reload_ion_boundary_pdf(boundary_distributions_io, var_name, ir, moment
             restart_vpa_vals = vpa.grid ./ moments.ion.vth[iz,ir,is]
             @views interpolate_to_grid_1d!(
                                            new_pdf[:,ivperp,iz,is], restart_vpa_vals,
-                                           this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral)
+                                           this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral,
+                                           Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     elseif (!moments.evolve_upar && !moments.evolve_p &&
@@ -1743,7 +1745,8 @@ function reload_ion_boundary_pdf(boundary_distributions_io, var_name, ir, moment
             moments.ion.vth[iz,ir,is]
             @views interpolate_to_grid_1d!(
                                            new_pdf[:,ivperp,iz,is], restart_vpa_vals,
-                                           this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral)
+                                           this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral,
+                                           Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     elseif (moments.evolve_upar && !moments.evolve_p &&
@@ -1755,7 +1758,8 @@ function reload_ion_boundary_pdf(boundary_distributions_io, var_name, ir, moment
             restart_vpa_vals = vpa.grid .+ moments.ion.upar[iz,ir,is]
             @views interpolate_to_grid_1d!(
                                            new_pdf[:,ivperp,iz,is], restart_vpa_vals,
-                                           this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral)
+                                           this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral,
+                                           Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     elseif (moments.evolve_upar && !moments.evolve_p &&
@@ -1769,7 +1773,8 @@ function reload_ion_boundary_pdf(boundary_distributions_io, var_name, ir, moment
             moments.ion.vth
             @views interpolate_to_grid_1d!(
                                            new_pdf[:,ivperp,iz,is], restart_vpa_vals,
-                                           this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral)
+                                           this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral,
+                                           Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     elseif (moments.evolve_upar && !moments.evolve_p &&
@@ -1781,7 +1786,8 @@ function reload_ion_boundary_pdf(boundary_distributions_io, var_name, ir, moment
             restart_vpa_vals = vpa.grid ./ moments.ion.vth[iz,ir,is]
             @views interpolate_to_grid_1d!(
                                            new_pdf[:,ivperp,iz,is], restart_vpa_vals,
-                                           this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral)
+                                           this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral,
+                                           Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     elseif (!moments.evolve_upar && moments.evolve_p &&
@@ -1793,7 +1799,8 @@ function reload_ion_boundary_pdf(boundary_distributions_io, var_name, ir, moment
             restart_vpa_vals = vpa.grid .* moments.ion.vth[iz,ir,is]
             @views interpolate_to_grid_1d!(
                                            new_pdf[:,ivperp,iz,is], restart_vpa_vals,
-                                           this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral)
+                                           this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral,
+                                           Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     elseif (!moments.evolve_upar && moments.evolve_p &&
@@ -1806,7 +1813,7 @@ function reload_ion_boundary_pdf(boundary_distributions_io, var_name, ir, moment
             moments.ion.upar[iz,ir,is]
             @views interpolate_to_grid_1d!(
                                            new_pdf[:,ivperp,iz,is], restart_vpa_vals,
-                                           this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral)
+                                           this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     elseif (!moments.evolve_upar && moments.evolve_p &&
@@ -1820,7 +1827,7 @@ function reload_ion_boundary_pdf(boundary_distributions_io, var_name, ir, moment
             moments.ion.upar[iz,ir,is]/moments.ion.vth[iz,ir,is]
             @views interpolate_to_grid_1d!(
                                            new_pdf[:,ivperp,iz,is], restart_vpa_vals,
-                                           this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral)
+                                           this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     elseif (moments.evolve_upar && moments.evolve_p &&
@@ -1833,7 +1840,7 @@ function reload_ion_boundary_pdf(boundary_distributions_io, var_name, ir, moment
             moments.ion.upar[iz,ir,is]
             @views interpolate_to_grid_1d!(
                                            new_pdf[:,ivperp,iz,is], restart_vpa_vals,
-                                           this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral)
+                                           this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     elseif (moments.evolve_upar && moments.evolve_p &&
@@ -1845,7 +1852,7 @@ function reload_ion_boundary_pdf(boundary_distributions_io, var_name, ir, moment
             restart_vpa_vals = vpa.grid .* moments.ion.vth[iz,ir,is]
             @views interpolate_to_grid_1d!(
                                            new_pdf[:,ivperp,iz,is], restart_vpa_vals,
-                                           this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral)
+                                           this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     elseif (moments.evolve_upar && moments.evolve_p &&
@@ -1859,7 +1866,7 @@ function reload_ion_boundary_pdf(boundary_distributions_io, var_name, ir, moment
             moments.ion.upar[iz,ir,is] / moments.ion.vth[iz,ir,is]
             @views interpolate_to_grid_1d!(
                                            new_pdf[:,ivperp,iz,is], restart_vpa_vals,
-                                           this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral)
+                                           this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     else
@@ -1922,7 +1929,7 @@ function reload_electron_pdf(dynamic, time_index, moments, r, z, vperp, vpa, r_r
             @views interpolate_to_grid_1d!(
                        new_pdf[ivpa,ivperp,iz,:], r.grid,
                        this_pdf[ivpa,ivperp,iz,:], restart_r,
-                       restart_r_spectral)
+                       restart_r_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     end
@@ -1933,7 +1940,7 @@ function reload_electron_pdf(dynamic, time_index, moments, r, z, vperp, vpa, r_r
             @views interpolate_to_grid_1d!(
                        new_pdf[ivpa,ivperp,:,ir], z.grid,
                        this_pdf[ivpa,ivperp,:,ir], restart_z,
-                       restart_z_spectral)
+                       restart_z_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     end
@@ -1947,7 +1954,7 @@ function reload_electron_pdf(dynamic, time_index, moments, r, z, vperp, vpa, r_r
             @views interpolate_to_grid_1d!(
                        new_pdf[ivpa,:,iz,ir], vperp.grid,
                        this_pdf[ivpa,:,iz,ir], restart_vperp,
-                       restart_vperp_spectral)
+                       restart_vperp_spectral, Val(0))
         end
         this_pdf = new_pdf
     end
@@ -1967,7 +1974,7 @@ function reload_electron_pdf(dynamic, time_index, moments, r, z, vperp, vpa, r_r
                 @views interpolate_to_grid_1d!(
                            new_pdf[:,ivperp,iz,ir], vpa.grid,
                            this_pdf[:,ivperp,iz,ir], restart_vpa,
-                           restart_vpa_spectral)
+                           restart_vpa_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
             end
             this_pdf = new_pdf
         end
@@ -1981,7 +1988,7 @@ function reload_electron_pdf(dynamic, time_index, moments, r, z, vperp, vpa, r_r
             @views interpolate_to_grid_1d!(
                        new_pdf[:,ivperp,iz,ir], restart_vpa_vals,
                        this_pdf[:,ivperp,iz,ir], restart_vpa,
-                       restart_vpa_spectral)
+                       restart_vpa_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     elseif (!evolve_upar && !evolve_p &&
@@ -1994,7 +2001,7 @@ function reload_electron_pdf(dynamic, time_index, moments, r, z, vperp, vpa, r_r
             @views interpolate_to_grid_1d!(
                        new_pdf[:,ivperp,iz,ir], restart_vpa_vals,
                        this_pdf[:,ivperp,iz,ir], restart_vpa,
-                       restart_vpa_spectral)
+                       restart_vpa_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     elseif (!evolve_upar && !evolve_p &&
@@ -2009,7 +2016,7 @@ function reload_electron_pdf(dynamic, time_index, moments, r, z, vperp, vpa, r_r
             @views interpolate_to_grid_1d!(
                        new_pdf[:,ivperp,iz,ir], restart_vpa_vals,
                        this_pdf[:,ivperp,iz,ir], restart_vpa,
-                       restart_vpa_spectral)
+                       restart_vpa_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     elseif (evolve_upar && !evolve_p &&
@@ -2022,7 +2029,7 @@ function reload_electron_pdf(dynamic, time_index, moments, r, z, vperp, vpa, r_r
             @views interpolate_to_grid_1d!(
                        new_pdf[:,ivperp,iz,ir], restart_vpa_vals,
                        this_pdf[:,ivperp,iz,ir], restart_vpa,
-                       restart_vpa_spectral)
+                       restart_vpa_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     elseif (evolve_upar && !evolve_p &&
@@ -2037,7 +2044,7 @@ function reload_electron_pdf(dynamic, time_index, moments, r, z, vperp, vpa, r_r
             @views interpolate_to_grid_1d!(
                        new_pdf[:,ivperp,iz,ir], restart_vpa_vals,
                        this_pdf[:,ivperp,iz,ir], restart_vpa,
-                       restart_vpa_spectral)
+                       restart_vpa_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     elseif (evolve_upar && !evolve_p &&
@@ -2050,7 +2057,7 @@ function reload_electron_pdf(dynamic, time_index, moments, r, z, vperp, vpa, r_r
             @views interpolate_to_grid_1d!(
                        new_pdf[:,ivperp,iz,ir], restart_vpa_vals,
                        this_pdf[:,ivperp,iz,ir], restart_vpa,
-                       restart_vpa_spectral)
+                       restart_vpa_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     elseif (!evolve_upar && evolve_p &&
@@ -2063,7 +2070,7 @@ function reload_electron_pdf(dynamic, time_index, moments, r, z, vperp, vpa, r_r
             @views interpolate_to_grid_1d!(
                        new_pdf[:,ivperp,iz,ir], restart_vpa_vals,
                        this_pdf[:,ivperp,iz,ir], restart_vpa,
-                       restart_vpa_spectral)
+                       restart_vpa_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     elseif (!evolve_upar && evolve_p &&
@@ -2077,7 +2084,7 @@ function reload_electron_pdf(dynamic, time_index, moments, r, z, vperp, vpa, r_r
             @views interpolate_to_grid_1d!(
                        new_pdf[:,ivperp,iz,ir], restart_vpa_vals,
                        this_pdf[:,ivperp,iz,ir], restart_vpa,
-                       restart_vpa_spectral)
+                       restart_vpa_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     elseif (!evolve_upar && evolve_p &&
@@ -2092,7 +2099,7 @@ function reload_electron_pdf(dynamic, time_index, moments, r, z, vperp, vpa, r_r
             @views interpolate_to_grid_1d!(
                        new_pdf[:,ivperp,iz,ir], restart_vpa_vals,
                        this_pdf[:,ivperp,iz,ir], restart_vpa,
-                       restart_vpa_spectral)
+                       restart_vpa_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     elseif (evolve_upar && evolve_p &&
@@ -2106,7 +2113,7 @@ function reload_electron_pdf(dynamic, time_index, moments, r, z, vperp, vpa, r_r
             @views interpolate_to_grid_1d!(
                        new_pdf[:,ivperp,iz,ir], restart_vpa_vals,
                        this_pdf[:,ivperp,iz,ir], restart_vpa,
-                       restart_vpa_spectral)
+                       restart_vpa_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     elseif (evolve_upar && evolve_p &&
@@ -2119,7 +2126,7 @@ function reload_electron_pdf(dynamic, time_index, moments, r, z, vperp, vpa, r_r
             @views interpolate_to_grid_1d!(
                        new_pdf[:,ivperp,iz,ir], restart_vpa_vals,
                        this_pdf[:,ivperp,iz,ir], restart_vpa,
-                       restart_vpa_spectral)
+                       restart_vpa_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     elseif (evolve_upar && evolve_p &&
@@ -2134,7 +2141,7 @@ function reload_electron_pdf(dynamic, time_index, moments, r, z, vperp, vpa, r_r
             @views interpolate_to_grid_1d!(
                        new_pdf[:,ivperp,iz,ir], restart_vpa_vals,
                        this_pdf[:,ivperp,iz,ir], restart_vpa,
-                       restart_vpa_spectral)
+                       restart_vpa_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     else
@@ -2193,7 +2200,7 @@ function reload_neutral_pdf(dynamic, time_index, moments, r, z, vzeta, vr, vz, r
             @views interpolate_to_grid_1d!(
                 new_pdf[ivz,ivr,ivzeta,iz,:,is], r.grid,
                 this_pdf[ivz,ivr,ivzeta,iz,:,is], restart_r,
-                restart_r_spectral)
+                restart_r_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     end
@@ -2205,7 +2212,7 @@ function reload_neutral_pdf(dynamic, time_index, moments, r, z, vzeta, vr, vz, r
             @views interpolate_to_grid_1d!(
                 new_pdf[ivz,ivr,ivzeta,:,ir,is], z.grid,
                 this_pdf[ivz,ivr,ivzeta,:,ir,is], restart_z,
-                restart_z_spectral)
+                restart_z_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     end
@@ -2221,7 +2228,7 @@ function reload_neutral_pdf(dynamic, time_index, moments, r, z, vzeta, vr, vz, r
             @views interpolate_to_grid_1d!(
                 new_pdf[ivz,ivr,:,iz,ir,is], vzeta.grid,
                 this_pdf[ivz,ivr,:,iz,ir,is], restart_vzeta,
-                restart_vzeta_spectral)
+                restart_vzeta_spectral, Val(0))
         end
         this_pdf = new_pdf
     end
@@ -2233,7 +2240,7 @@ function reload_neutral_pdf(dynamic, time_index, moments, r, z, vzeta, vr, vz, r
             @views interpolate_to_grid_1d!(
                 new_pdf[ivz,:,ivzeta,iz,ir,is], vr.grid,
                 this_pdf[ivz,:,ivzeta,iz,ir,is], restart_vr,
-                restart_vr_spectral)
+                restart_vr_spectral, Val(0))
         end
         this_pdf = new_pdf
     end
@@ -2254,7 +2261,7 @@ function reload_neutral_pdf(dynamic, time_index, moments, r, z, vzeta, vr, vz, r
                 @views interpolate_to_grid_1d!(
                     new_pdf[:,ivr,ivzeta,iz,ir,is], vz.grid,
                     this_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz,
-                    restart_vz_spectral)
+                    restart_vz_spectral, Val(0))
             end
             this_pdf = new_pdf
         end
@@ -2269,7 +2276,7 @@ function reload_neutral_pdf(dynamic, time_index, moments, r, z, vzeta, vr, vz, r
             @views interpolate_to_grid_1d!(
                 new_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz_vals,
                 this_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz,
-                restart_vz_spectral)
+                restart_vz_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     elseif (!moments.evolve_upar && !moments.evolve_p &&
@@ -2283,7 +2290,7 @@ function reload_neutral_pdf(dynamic, time_index, moments, r, z, vzeta, vr, vz, r
             @views interpolate_to_grid_1d!(
                 new_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz_vals,
                 this_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz,
-                restart_vz_spectral)
+                restart_vz_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     elseif (!moments.evolve_upar && !moments.evolve_p &&
@@ -2299,7 +2306,7 @@ function reload_neutral_pdf(dynamic, time_index, moments, r, z, vzeta, vr, vz, r
             @views interpolate_to_grid_1d!(
                 new_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz_vals,
                 this_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz,
-                restart_vz_spectral)
+                restart_vz_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     elseif (moments.evolve_upar && !moments.evolve_p &&
@@ -2312,7 +2319,7 @@ function reload_neutral_pdf(dynamic, time_index, moments, r, z, vzeta, vr, vz, r
             restart_vz_vals = vz.grid .+ moments.neutral.uz[iz,ir,is]
             @views interpolate_to_grid_1d!(
                 new_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz_vals,
-                this_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz, restart_vz_spectral)
+                this_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz, restart_vz_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     elseif (moments.evolve_upar && !moments.evolve_p &&
@@ -2328,7 +2335,7 @@ function reload_neutral_pdf(dynamic, time_index, moments, r, z, vzeta, vr, vz, r
             @views interpolate_to_grid_1d!(
                 new_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz_vals,
                 this_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz,
-                restart_vz_spectral)
+                restart_vz_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     elseif (moments.evolve_upar && !moments.evolve_p &&
@@ -2342,7 +2349,7 @@ function reload_neutral_pdf(dynamic, time_index, moments, r, z, vzeta, vr, vz, r
             @views interpolate_to_grid_1d!(
                 new_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz_vals,
                 this_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz,
-                restart_vz_spectral)
+                restart_vz_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     elseif (!moments.evolve_upar && moments.evolve_p &&
@@ -2356,7 +2363,7 @@ function reload_neutral_pdf(dynamic, time_index, moments, r, z, vzeta, vr, vz, r
             @views interpolate_to_grid_1d!(
                 new_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz_vals,
                 this_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz,
-                restart_vz_spectral)
+                restart_vz_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     elseif (!moments.evolve_upar && moments.evolve_p &&
@@ -2372,7 +2379,7 @@ function reload_neutral_pdf(dynamic, time_index, moments, r, z, vzeta, vr, vz, r
             @views interpolate_to_grid_1d!(
                 new_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz_vals,
                 this_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz,
-                restart_vz_spectral)
+                restart_vz_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     elseif (!moments.evolve_upar && moments.evolve_p &&
@@ -2388,7 +2395,7 @@ function reload_neutral_pdf(dynamic, time_index, moments, r, z, vzeta, vr, vz, r
             @views interpolate_to_grid_1d!(
                 new_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz_vals,
                 this_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz,
-                restart_vz_spectral)
+                restart_vz_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     elseif (moments.evolve_upar && moments.evolve_p &&
@@ -2404,7 +2411,7 @@ function reload_neutral_pdf(dynamic, time_index, moments, r, z, vzeta, vr, vz, r
             @views interpolate_to_grid_1d!(
                 new_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz_vals,
                 this_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz,
-                restart_vz_spectral)
+                restart_vz_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     elseif (moments.evolve_upar && moments.evolve_p &&
@@ -2418,7 +2425,7 @@ function reload_neutral_pdf(dynamic, time_index, moments, r, z, vzeta, vr, vz, r
             @views interpolate_to_grid_1d!(
                 new_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz_vals,
                 this_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz,
-                restart_vz_spectral)
+                restart_vz_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     elseif (moments.evolve_upar && moments.evolve_p &&
@@ -2434,7 +2441,7 @@ function reload_neutral_pdf(dynamic, time_index, moments, r, z, vzeta, vr, vz, r
             @views interpolate_to_grid_1d!(
                 new_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz_vals,
                 this_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz,
-                restart_vz_spectral)
+                restart_vz_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     else
@@ -2492,7 +2499,7 @@ function reload_neutral_boundary_pdf(boundary_distributions_io, var_name, ir, mo
             @views interpolate_to_grid_1d!(
                 new_pdf[ivz,ivr,ivzeta,:,is], z.grid,
                 this_pdf[ivz,ivr,ivzeta,:,is], restart_z,
-                restart_z_spectral)
+                restart_z_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     end
@@ -2508,7 +2515,7 @@ function reload_neutral_boundary_pdf(boundary_distributions_io, var_name, ir, mo
             @views interpolate_to_grid_1d!(
                 new_pdf[ivz,ivr,:,iz,is], vzeta.grid,
                 this_pdf[ivz,ivr,:,iz,is], restart_vzeta,
-                restart_vzeta_spectral)
+                restart_vzeta_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     end
@@ -2519,7 +2526,7 @@ function reload_neutral_boundary_pdf(boundary_distributions_io, var_name, ir, mo
             @views interpolate_to_grid_1d!(
                 new_pdf[ivz,:,ivzeta,iz,is], vr.grid,
                 this_pdf[ivz,:,ivzeta,iz,is], restart_vr,
-                restart_vr_spectral)
+                restart_vr_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     end
@@ -2540,7 +2547,7 @@ function reload_neutral_boundary_pdf(boundary_distributions_io, var_name, ir, mo
                 @views interpolate_to_grid_1d!(
                     new_pdf[:,ivr,ivzeta,iz,is], vz.grid,
                     this_pdf[:,ivr,ivzeta,iz,is], restart_vz,
-                    restart_vz_spectral)
+                    restart_vz_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
             end
             this_pdf = new_pdf
         end
@@ -2554,7 +2561,7 @@ function reload_neutral_boundary_pdf(boundary_distributions_io, var_name, ir, mo
             @views interpolate_to_grid_1d!(
                 new_pdf[:,ivr,ivzeta,iz,is], restart_vz_vals,
                 this_pdf[:,ivr,ivzeta,iz,is], restart_vz,
-                restart_vz_spectral)
+                restart_vz_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     elseif (!moments.evolve_upar && !moments.evolve_p &&
@@ -2567,7 +2574,7 @@ function reload_neutral_boundary_pdf(boundary_distributions_io, var_name, ir, mo
             @views interpolate_to_grid_1d!(
                 new_pdf[:,ivr,ivzeta,iz,is], restart_vz_vals,
                 this_pdf[:,ivr,ivzeta,iz,is], restart_vz,
-                restart_vz_spectral)
+                restart_vz_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     elseif (!moments.evolve_upar && !moments.evolve_p &&
@@ -2582,7 +2589,7 @@ function reload_neutral_boundary_pdf(boundary_distributions_io, var_name, ir, mo
             @views interpolate_to_grid_1d!(
                 new_pdf[:,ivr,ivzeta,iz,is], restart_vz_vals,
                 this_pdf[:,ivr,ivzeta,iz,is], restart_vz,
-                restart_vz_spectral)
+                restart_vz_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     elseif (moments.evolve_upar && !moments.evolve_p &&
@@ -2596,7 +2603,7 @@ function reload_neutral_boundary_pdf(boundary_distributions_io, var_name, ir, mo
             @views interpolate_to_grid_1d!(
                 new_pdf[:,ivr,ivzeta,iz,is], restart_vz_vals,
                 this_pdf[:,ivr,ivzeta,iz,is], restart_vz,
-                restart_vz_spectral)
+                restart_vz_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     elseif (moments.evolve_upar && !moments.evolve_p &&
@@ -2611,7 +2618,7 @@ function reload_neutral_boundary_pdf(boundary_distributions_io, var_name, ir, mo
             @views interpolate_to_grid_1d!(
                 new_pdf[:,ivr,ivzeta,iz,is], restart_vz_vals,
                 this_pdf[:,ivr,ivzeta,iz,is], restart_vz,
-                restart_vz_spectral)
+                restart_vz_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     elseif (moments.evolve_upar && !moments.evolve_p &&
@@ -2624,7 +2631,7 @@ function reload_neutral_boundary_pdf(boundary_distributions_io, var_name, ir, mo
             @views interpolate_to_grid_1d!(
                 new_pdf[:,ivr,ivzeta,iz,is], restart_vz_vals,
                 this_pdf[:,ivr,ivzeta,iz,is], restart_vz,
-                restart_vz_spectral)
+                restart_vz_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     elseif (!moments.evolve_upar && moments.evolve_p &&
@@ -2638,7 +2645,7 @@ function reload_neutral_boundary_pdf(boundary_distributions_io, var_name, ir, mo
             @views interpolate_to_grid_1d!(
                 new_pdf[:,ivr,ivzeta,iz,is], restart_vz_vals,
                 this_pdf[:,ivr,ivzeta,iz,is], restart_vz,
-                restart_vz_spectral)
+                restart_vz_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     elseif (!moments.evolve_upar && moments.evolve_p &&
@@ -2653,7 +2660,7 @@ function reload_neutral_boundary_pdf(boundary_distributions_io, var_name, ir, mo
             @views interpolate_to_grid_1d!(
                 new_pdf[:,ivr,ivzeta,iz,is], restart_vz_vals,
                 this_pdf[:,ivr,ivzeta,iz,is], restart_vz,
-                restart_vz_spectral)
+                restart_vz_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     elseif (!moments.evolve_upar && moments.evolve_p &&
@@ -2668,7 +2675,7 @@ function reload_neutral_boundary_pdf(boundary_distributions_io, var_name, ir, mo
             @views interpolate_to_grid_1d!(
                 new_pdf[:,ivr,ivzeta,iz,is], restart_vz_vals,
                 this_pdf[:,ivr,ivzeta,iz,is], restart_vz,
-                restart_vz_spectral)
+                restart_vz_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     elseif (moments.evolve_upar && moments.evolve_p &&
@@ -2683,7 +2690,7 @@ function reload_neutral_boundary_pdf(boundary_distributions_io, var_name, ir, mo
             @views interpolate_to_grid_1d!(
                 new_pdf[:,ivr,ivzeta,iz,is], restart_vz_vals,
                 this_pdf[:,ivr,ivzeta,iz,is], restart_vz,
-                restart_vz_spectral)
+                restart_vz_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     elseif (moments.evolve_upar && moments.evolve_p &&
@@ -2696,7 +2703,7 @@ function reload_neutral_boundary_pdf(boundary_distributions_io, var_name, ir, mo
             @views interpolate_to_grid_1d!(
                 new_pdf[:,ivr,ivzeta,iz,is], restart_vz_vals,
                 this_pdf[:,ivr,ivzeta,iz,is], restart_vz,
-                restart_vz_spectral)
+                restart_vz_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
         this_pdf = new_pdf
     elseif (moments.evolve_upar && moments.evolve_p &&
@@ -2711,7 +2718,7 @@ function reload_neutral_boundary_pdf(boundary_distributions_io, var_name, ir, mo
             @views interpolate_to_grid_1d!(
                 new_pdf[:,ivr,ivzeta,iz,is], restart_vz_vals,
                 this_pdf[:,ivr,ivzeta,iz,is], restart_vz,
-                restart_vz_spectral)
+                restart_vz_spectral, Val(0), restart_evolve_p ? 1.0/3.0 : 1.0/2.0)
         end
     else
         # This should never happen, as all combinations of evolve_* options
