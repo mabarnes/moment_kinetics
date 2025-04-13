@@ -1642,7 +1642,7 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
             # here.
             knudsen_pdf_lower = allocate_float(vz.n, vr.n, vzeta.n)
             knudsen_pdf_upper = allocate_float(vz.n, vr.n, vzeta.n)
-            knudsen_vtfac = sqrt(2.0 * composition.T_wall * composition.mn_over_mi)
+            T_wall_over_m = composition.T_wall / composition.mn_over_mi
             if vzeta.n > 1 && vr.n > 1
                 # 3V specification of neutral wall emission distribution for boundary condition
                 # get the true Knudsen cosine distribution for neutral particle wall emission
@@ -1660,8 +1660,8 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
                             else
                                 prefac = 0.0
                             end
-                            knudsen_pdf_lower[ivz,ivr,ivzeta] = (3.0*sqrt(pi)/knudsen_vtfac^4) * prefac *
-                                                                exp(-((v_normal/knudsen_vtfac)^2 + (v_transverse/knudsen_vtfac)^2))
+                            knudsen_pdf_lower[ivz,ivr,ivzeta] = 0.75 / π / T_wall_over_m^2 * prefac *
+                                                                exp(-0.5 * (v_normal^2 + v_transverse^2) / T_wall_over_m)
                         end
                     end
                 end
@@ -1679,8 +1679,8 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
                             else
                                 prefac = 0.0
                             end
-                            knudsen_pdf_upper[ivz,ivr,ivzeta] = (3.0*sqrt(pi)/knudsen_vtfac^4) * prefac *
-                                                                exp(-((v_normal/knudsen_vtfac)^2 + (v_transverse/knudsen_vtfac)^2))
+                            knudsen_pdf_upper[ivz,ivr,ivzeta] = 0.75 / π / T_wall_over_m^2 * prefac *
+                                                                exp(-0.5 * (v_normal^2 + v_transverse^2) / T_wall_over_m)
                         end
                     end
                 end
@@ -1693,10 +1693,10 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
                 # a thermal speed defined with the parallel temperature in 1V case.
 
                 @. vz.scratch = vz.grid * vgrid_scale_factor0
-                @. knudsen_pdf_lower[:,1,1] = (3.0*pi/knudsen_vtfac^3)*Maxwellian_prefactor*abs(vz.scratch)*erfc(abs(vz.scratch) / knudsen_vtfac)
+                @. knudsen_pdf_lower[:,1,1] = (3.0 * sqrt(π) * (0.5 / T_wall_over_m)^1.5) * abs(vz.scratch) * erfc(sqrt(0.5 / T_wall_over_m) * abs(vz.scratch))
 
                 @. vz.scratch = vz.grid * vgrid_scale_factorL
-                @. knudsen_pdf_upper[:,1,1] = (3.0*pi/knudsen_vtfac^3)*Maxwellian_prefactor*abs(vz.scratch)*erfc(abs(vz.scratch) / knudsen_vtfac)
+                @. knudsen_pdf_upper[:,1,1] = (3.0 * sqrt(π) * (0.5 / T_wall_over_m)^1.5) * abs(vz.scratch) * erfc(sqrt(0.5 / T_wall_over_m) * abs(vz.scratch))
             else
                 error("If 1V expect both vzeta.n and vr.n to be 1. Got "
                       * "vzeta.n=$(vzeta.n), vr.n=$(vr.n).")
@@ -1985,16 +1985,11 @@ end
 
 function init_knudsen_cosine!(knudsen_cosine, vz, vr, vzeta, vpa, vperp, composition, zero)
 
-    if vperp.n == 1
-        Maxwellian_prefactor = 1.0 / sqrt(π)
-    else
-        Maxwellian_prefactor = 1.0 / π^1.5
-    end
     @begin_serial_region()
     @serial_region begin
         integrand = zeros(mk_float, vz.n, vr.n, vzeta.n)
 
-        vtfac = sqrt(2.0 * composition.T_wall * composition.mn_over_mi)
+        T_wall_over_m = composition.T_wall / composition.mn_over_mi
 
         if vzeta.n > 1 && vr.n > 1
             # 3V specification of neutral wall emission distribution for boundary condition
@@ -2005,7 +2000,7 @@ function init_knudsen_cosine!(knudsen_cosine, vz, vr, vzeta, vpa, vperp, composi
                         for ivz in 1:vz.n
                             v_transverse = sqrt(vzeta.grid[ivzeta]^2 + vr.grid[ivr]^2)
                             v_normal = abs(vz.grid[ivz])
-                            knudsen_cosine[ivz,ivr,ivzeta] = (4.0/vtfac^5)*v_normal*Maxwellian_prefactor*exp( - (v_normal/vtfac)^2 - (v_transverse/vtfac)^2 )
+                            knudsen_cosine[ivz,ivr,ivzeta] = (1.0/π/T_wall_over_m^2.5)*v_normal*exp( - 0.5 * (v_normal^2 - v_transverse^2) / T_wall_over_m)
                             integrand[ivz,ivr,ivzeta] = vz.grid[ivz]*knudsen_cosine[ivz,ivr,ivzeta]
                         end
                     end
@@ -2022,7 +2017,7 @@ function init_knudsen_cosine!(knudsen_cosine, vz, vr, vzeta, vpa, vperp, composi
                             else
                                 prefac = 0.0
                             end
-                            knudsen_cosine[ivz,ivr,ivzeta] = (3.0*sqrt(pi)/vtfac^4)*prefac*Maxwellian_prefactor*exp( - (v_normal/vtfac)^2 - (v_transverse/vtfac)^2 )
+                            knudsen_cosine[ivz,ivr,ivzeta] = (0.75/π/T_wall_over_m^2)*prefac*exp( - 0.5 * (v_normal^2 - v_transverse^2) / T_wall_over_m )
                             integrand[ivz,ivr,ivzeta] = vz.grid[ivz]*knudsen_cosine[ivz,ivr,ivzeta]
                         end
                     end
@@ -2043,7 +2038,7 @@ function init_knudsen_cosine!(knudsen_cosine, vz, vr, vzeta, vpa, vperp, composi
             # marginalised rather than setting T_⟂=0, therefore no need to convert to a
             # thermal speed defined with the parallel temperature in 1V case.
 
-            @. vz.scratch = (3.0*pi/vtfac^3)*Maxwellian_prefactor*abs(vz.grid)*erfc(abs(vz.grid)/vtfac)
+            @. vz.scratch = 3.0 * sqrt(π) * (0.5 / T_wall_over_m)^1.5 * abs(vz.grid) * erfc(sqrt(0.5 / T_wall_over_m) * abs(vz.grid))
             normalisation = integrate_over_positive_vz(vz.grid .* vz.scratch, vz.grid, vz.wgts, vz.scratch2,
                                                        vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
             # uncomment this line to test:
