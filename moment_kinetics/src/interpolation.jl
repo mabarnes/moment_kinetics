@@ -53,7 +53,7 @@ derivative : Val(n)
 function interpolate_to_grid_1d! end
 
 function interpolate_to_grid_1d!(result, newgrid, f, coord, spectral,
-                                 derivative::Val=Val(0))
+                                 derivative::Val=Val(0), extrapolation_prefactor=1.0)
     # define local variable nelement for convenience
     nelement = coord.nelement_local
 
@@ -92,14 +92,14 @@ function interpolate_to_grid_1d!(result, newgrid, f, coord, spectral,
         for j ∈ 1:kstart[1]-1
             # if the new grid location is outside the bounds of the original grid,
             # extrapolate f with Gaussian-like decay beyond the domain
-            result[j] = f[1] * exp(-(coord.grid[1] - newgrid[j])^2)
+            result[j] = f[1] * exp(-extrapolation_prefactor * (coord.grid[1] - newgrid[j])^2)
         end
     elseif isa(derivative, Val{1})
         for j ∈ 1:kstart[1]-1
             # if the new grid location is outside the bounds of the original grid,
             # extrapolate f with Gaussian-like decay beyond the domain, then take
             # derivative.
-            result[j] = 2.0 * (coord.grid[1] - newgrid[j]) * f[1] * exp(-(coord.grid[1] - newgrid[j])^2)
+            result[j] = 2.0 * extrapolation_prefactor * (coord.grid[1] - newgrid[j]) * f[1] * exp(-extrapolation_prefactor * (coord.grid[1] - newgrid[j])^2)
         end
     else
         error("Unrecognised derivative=$derivative")
@@ -133,11 +133,11 @@ function interpolate_to_grid_1d!(result, newgrid, f, coord, spectral,
 
     if isa(derivative, Val{0})
         for k ∈ kstart[nelement+1]:n_new
-            result[k] = f[end] * exp(-(newgrid[k] - coord.grid[end])^2)
+            result[k] = f[end] * exp(-extrapolation_prefactor * (newgrid[k] - coord.grid[end])^2)
         end
     elseif isa(derivative, Val{1})
         for k ∈ kstart[nelement+1]:n_new
-            result[k] = -2.0 * (newgrid[k] - coord.grid[end]) * f[end] * exp(-(newgrid[k] - coord.grid[end])^2)
+            result[k] = -2.0 * extrapolation_prefactor * (newgrid[k] - coord.grid[end]) * f[end] * exp(-extrapolation_prefactor * (newgrid[k] - coord.grid[end])^2)
         end
     else
         error("Unrecognised derivative=$derivative")
@@ -235,7 +235,7 @@ end
 
 function interpolate_to_grid_1d!(result, new_grid, f, coord,
                                  spectral::null_spatial_dimension_info,
-                                 derivative::Val{0})
+                                 derivative::Val{0}, extrapolation_prefactor=1.0)
     # There is only one point in the 'old grid' represented by coord (as indicated by the
     # type of the `spectral` argument), and we are interpolating in a spatial dimension.
     # Assume that the variable should be taken to be constant in this dimension to
@@ -247,12 +247,12 @@ end
 
 function interpolate_to_grid_1d!(result, new_grid, f, coord,
                                  spectral::null_velocity_dimension_info,
-                                 derivative::Val{0})
+                                 derivative::Val{0}, extrapolation_prefactor=1.0)
     # There is only one point in the 'old grid' represented by coord (as indicated by the
     # type of the `spectral` argument), and we are interpolating in a velocity space
     # dimension. Assume that the profile 'should be' a Maxwellian over the new grid, with
     # a width of 1 in units of the reference speed.
-    @. result = f[1] * exp(-new_grid^2)
+    @. result = f[1] * exp(-extrapolation_prefactor*new_grid^2)
 
     return nothing
 end
@@ -354,11 +354,11 @@ end
 
 """
 """
-function interpolate_to_grid_vpa!(result::Array{mk_float, 3}, newgrid, f::Array{mk_float, 3}, vpa, spectral)
+function interpolate_to_grid_vpa!(result::Array{mk_float, 3}, newgrid, f::Array{mk_float, 3}, vpa, spectral, args...)
     size_f = size(f)
     for is ∈ 1:size_f[3]
         for iz ∈ 1:size_f[2]
-            @views interpolate_to_grid_1d!(result[:, iz, is], newgrid, f[:, iz, is], vpa, spectral)
+            @views interpolate_to_grid_1d!(result[:, iz, is], newgrid, f[:, iz, is], vpa, spectral, args...)
         end
     end
 
@@ -367,11 +367,11 @@ end
 
 """
 """
-function interpolate_to_grid_vpa(newgrid, f::Array{mk_float, 3}, vpa, spectral)
+function interpolate_to_grid_vpa(newgrid, f::Array{mk_float, 3}, vpa, spectral, args...)
     size_f = size(f)
     result = allocate_float(size(newgrid)[1], size_f[2:3]...)
 
-    interpolate_to_grid_vpa!(result, newgrid, f, vpa, spectral)
+    interpolate_to_grid_vpa!(result, newgrid, f, vpa, spectral, args...)
 
     return result
 end
@@ -379,18 +379,18 @@ end
 """
 """
 function interpolate_to_grid_vpa!(result::AbstractVector{mk_float}, newgrid,
-                                  f::AbstractVector{mk_float}, vpa, spectral)
+                                  f::AbstractVector{mk_float}, vpa, spectral, args...)
 
-    interpolate_to_grid_1d!(result, newgrid, f, vpa, spectral)
+    interpolate_to_grid_1d!(result, newgrid, f, vpa, spectral, args...)
 
     return nothing
 end
 
 """
 """
-function interpolate_to_grid_vpa(newgrid, f::AbstractVector{mk_float}, vpa, spectral)
+function interpolate_to_grid_vpa(newgrid, f::AbstractVector{mk_float}, vpa, spectral, args...)
 
-    return interpolate_to_grid_1d(newgrid, f, vpa, spectral)
+    return interpolate_to_grid_1d(newgrid, f, vpa, spectral, args...)
 end
 
 """
