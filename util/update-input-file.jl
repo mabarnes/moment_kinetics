@@ -223,6 +223,7 @@ PR322_v = (x) -> sqrt(2)*x
 PR322_t = (x) -> x/sqrt(2)
 PR322_omega = (x) -> x ≥ 0.0 ? sqrt(2)*x : x
 PR322_v_diffusion_coefficient = (x) -> 2^1.5*x
+PR322_w_diffusion_coefficient = (x) -> 3*sqrt(2)*x
 PR322_w_evolve_ppar = (x) -> sqrt(3)*x
 const PR322_definitions_update_map_2V = OptionsDict(
     # "upar_amplitude" might not always need correcting - e.g. the amplitude is a relative
@@ -357,9 +358,18 @@ const PR322_definitions_update_map_1V = recursive_merge(
 const PR322_definitions_update_map_1V_evolve_ppar = recursive_merge(
     PR322_definitions_update_map_1V,
     OptionsDict("vpa" => OptionsDict("element_spacing_option" => OptionsDict("coarse_tails" => OptionsDict("vpa" => OptionsDict("element_spacing_option" => "coarse_tails$(5.0*sqrt(3))"))),
-                                     "L" => PR322_w_evolve_ppar,),
+                                     "L" => PR322_w_evolve_ppar,
+                                    ),
                 "vz" => OptionsDict("element_spacing_option" => OptionsDict("coarse_tails" => OptionsDict("vz" => OptionsDict("element_spacing_option" => "coarse_tails$(5.0*sqrt(3))"))),
-                                    "L" => PR322_w_evolve_ppar,),
+                                    "L" => PR322_w_evolve_ppar,
+                                   ),
+                "ion_numerical_dissipation" => OptionsDict("vpa_boundary_buffer_diffusion_coefficient" => PR322_w_diffusion_coefficient,
+                                                           "vpa_dissipation_coefficient" => PR322_w_diffusion_coefficient,
+                                                          ),
+                "electron_numerical_dissipation" => OptionsDict("vpa_boundary_buffer_diffusion_coefficient" => PR322_w_diffusion_coefficient,
+                                                                "vpa_dissipation_coefficient" => PR322_w_diffusion_coefficient,
+                                                               ),
+                "neutral_numerical_dissipation" => OptionsDict("vz_dissipation_coefficient" => PR322_w_diffusion_coefficient,),
                )
    )
 
