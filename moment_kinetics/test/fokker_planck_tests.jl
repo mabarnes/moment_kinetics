@@ -30,7 +30,7 @@ using moment_kinetics.fokker_planck_calculus: interpolate_2D_vspace!, calculate_
 using moment_kinetics.fokker_planck_calculus: advance_linearised_test_particle_collisions!
 
 function create_grids(ngrid,nelement_vpa,nelement_vperp;
-                      Lvpa=12.0,Lvperp=6.0,bc="zero")
+                      Lvpa=12.0,Lvperp=6.0,bc_vpa="zero",bc_vperp="zero")
 
         nelement_local_vpa = nelement_vpa # number of elements per rank
         nelement_global_vpa = nelement_local_vpa # total number of elements
@@ -45,11 +45,11 @@ function create_grids(ngrid,nelement_vpa,nelement_vperp;
         coords_input = OptionsDict(
             "vperp"=>OptionsDict("ngrid"=>ngrid, "nelement"=>nelement_global_vperp,
                                  "nelement_local"=>nelement_local_vperp, "L"=>Lvperp,
-                                 "discretization"=>discretization, "bc"=>bc,
+                                 "discretization"=>discretization, "bc"=>bc_vperp,
                                  "element_spacing_option"=>element_spacing_option),
             "vpa"=>OptionsDict("ngrid"=>ngrid, "nelement"=>nelement_global_vpa,
                                "nelement_local"=>nelement_local_vpa, "L"=>Lvpa,
-                               "discretization"=>discretization, "bc"=>bc,
+                               "discretization"=>discretization, "bc"=>bc_vpa,
                                "element_spacing_option"=>element_spacing_option),
         )
 
@@ -75,7 +75,8 @@ function backward_Euler_linearised_collisions_test(;
                 ngrid = 5,
                 nelement_vpa = 16,
                 nelement_vperp = 8,
-                bc="none",
+                bc_vpa="none",
+                bc_vperp="none",
                 ms = 1.0,
                 delta_t = 1.0,
                 nuss = 1.0,
@@ -101,7 +102,8 @@ function backward_Euler_linearised_collisions_test(;
 
     # initialise arrays
     vpa, vpa_spectral, vperp, vperp_spectral = create_grids(ngrid,nelement_vpa,nelement_vperp,
-                                                                Lvpa=10.0,Lvperp=5.0, bc=bc)
+                                                                Lvpa=10.0,Lvperp=5.0,
+                                                                bc_vperp=bc_vperp,bc_vpa=bc_vpa)
     fkpl_arrays = init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_spectral,
         precompute_weights=false, print_to_screen=print_to_screen)
     dummy_array = allocate_float(vpa.n,vperp.n)
@@ -221,43 +223,11 @@ function backward_Euler_fokker_planck_self_collisions_test(;
     atol_upar = 5.0e-9,
     atol_vth = 1.0e-7)
     
-    nelement_local_vpa = nelement_vpa # number of elements per rank
-    nelement_global_vpa = nelement_local_vpa # total number of elements 
-    nelement_local_vperp = nelement_vperp # number of elements per rank
-    nelement_global_vperp = nelement_local_vperp # total number of elements 
-    discretization = "gausslegendre_pseudospectral"
-    element_spacing_option = "uniform"
-    
-    # Set up MPI
-    if standalone
-        initialize_comms!()
-    end
-    setup_distributed_memory_MPI(1,1,1,1)
-    coords_input = OptionsDict(
-        "vperp"=>OptionsDict("ngrid"=>ngrid, "nelement"=>nelement_global_vperp,
-                                "nelement_local"=>nelement_local_vperp, "L"=>Lvperp,
-                                "discretization"=>discretization,
-                                "element_spacing_option"=>element_spacing_option,
-                                "bc"=>bc_vperp),
-        "vpa"=>OptionsDict("ngrid"=>ngrid, "nelement"=>nelement_global_vpa,
-                            "nelement_local"=>nelement_local_vpa, "L"=>Lvpa,
-                            "discretization"=>discretization,
-                            "element_spacing_option"=>element_spacing_option,
-                            "bc"=>bc_vpa),
-    )
-    #println("made inputs")
-    #println("vpa: ngrid: ",ngrid," nelement: ",nelement_local_vpa, " Lvpa: ",Lvpa)
-    #println("vperp: ngrid: ",ngrid," nelement: ",nelement_local_vperp, " Lvperp: ",Lvperp)
-    # create the coordinate structs
-    vperp, vperp_spectral = define_coordinate(coords_input, "vperp")
-    vpa, vpa_spectral = define_coordinate(coords_input, "vpa")
+    vpa, vpa_spectral, vperp, vperp_spectral = create_grids(ngrid,nelement_vpa,nelement_vperp;
+                      Lvpa=Lvpa,Lvperp=Lvperp,bc_vpa=bc_vpa,bc_vperp=bc_vperp)
     if vperp.bc == "zero-impose-regularity"
         error("vperp.bc = $(vperp.bc) not supported for implicit FP")
     end
-    looping.setup_loop_ranges!(block_rank[], block_size[];
-                                    s=1, sn=1,
-                                    r=1, z=1, vperp=vperp.n, vpa=vpa.n,
-                                    vzeta=1, vr=1, vz=1)
     @begin_serial_region()
     if boundary_data_option == direct_integration
         precompute_weights = true
@@ -1069,9 +1039,9 @@ function runtests()
             println("    - test backward-Euler linearised test particle collisions")
             @testset "$bc" for bc in ("none", "zero")  
                 println("        -  bc=$bc")
-                backward_Euler_linearised_collisions_test(bc=bc,
+                backward_Euler_linearised_collisions_test(bc_vpa=bc,bc_vperp=bc,
                  use_Maxwellian_Rosenbluth_coefficients_in_preconditioner=true)
-                backward_Euler_linearised_collisions_test(bc=bc,
+                backward_Euler_linearised_collisions_test(bc_vpa=bc,bc_vperp=bc,
                  use_Maxwellian_Rosenbluth_coefficients_in_preconditioner=false,
                  atol_vth=3.0e-7)
             end
