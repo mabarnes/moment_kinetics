@@ -816,7 +816,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
                                                   vzeta.n, composition.n_ion_species,
                                                   n_neutral_species_alloc, t_params)
     # create arrays for Fokker-Planck collisions 
-    if advance.explicit_weakform_fp_collisions || advance_implicit.explicit_weakform_fp_collisions
+    if advance.fp_collisions || advance_implicit.fp_collisions
         if collisions.fkpl.boundary_data_option == direct_integration
             precompute_weights = true
         else
@@ -1217,7 +1217,7 @@ function setup_advance_flags(moments, composition, t_params, collisions,
     vpa_diffusion = false
     vperp_diffusion = false
     vz_diffusion = false
-    explicit_weakform_fp_collisions = false
+    fp_collisions = false
     # all advance flags remain false if using operator-splitting
     # otherwise, check to see if the flags need to be set to true
     if !t_params.split_operators
@@ -1229,9 +1229,9 @@ function setup_advance_flags(moments, composition, t_params, collisions,
         advance_z_advection = z.n > 1 && !t_params.implicit_ion_advance
         advance_r_advection = r.n > 1 && !t_params.implicit_ion_advance
         if collisions.fkpl.nuii > 0.0 && vperp.n > 1 && !t_params.implicit_ion_advance
-            explicit_weakform_fp_collisions = true
+            fp_collisions = true
         else
-            explicit_weakform_fp_collisions = false    
+            fp_collisions = false
         end
         # if neutrals present, check to see if different ion-neutral
         # collisions are enabled
@@ -1374,7 +1374,7 @@ function setup_advance_flags(moments, composition, t_params, collisions,
                         advance_neutral_ionization, advance_ion_ionization_1V,
                         advance_neutral_ionization_1V, advance_krook_collisions_ii,
                         advance_maxwell_diffusion_ii, advance_maxwell_diffusion_nn,
-                        explicit_weakform_fp_collisions,
+                        fp_collisions,
                         advance_external_source, advance_ion_numerical_dissipation,
                         advance_neutral_numerical_dissipation, advance_sources,
                         advance_continuity, advance_force_balance, advance_energy,
@@ -1433,7 +1433,7 @@ function setup_implicit_advance_flags(moments, composition, t_params, collisions
     vpa_diffusion = false
     vperp_diffusion = false
     vz_diffusion = false
-    explicit_weakform_fp_collisions = false
+    fp_collisions = false
     if t_params.split_operators
         error("Implicit timesteps do not support `t_params.split_operators=true`")
     end
@@ -1468,7 +1468,7 @@ function setup_implicit_advance_flags(moments, composition, t_params, collisions
         advance_external_source = any(x -> x.active, external_source_settings.ion)
         advance_ion_numerical_dissipation = true
         advance_sources = moments.evolve_density || moments.evolve_upar || moments.evolve_ppar
-        explicit_weakform_fp_collisions = collisions.fkpl.nuii > 0.0 && vperp.n > 1
+        fp_collisions = collisions.fkpl.nuii > 0.0 && vperp.n > 1
     elseif t_params.implicit_vpa_advection
         advance_vpa_advection = true
         advance_ion_numerical_dissipation = true
@@ -1513,7 +1513,7 @@ function setup_implicit_advance_flags(moments, composition, t_params, collisions
                         advance_neutral_ionization, advance_ion_ionization_1V,
                         advance_neutral_ionization_1V, advance_krook_collisions_ii,
                         advance_maxwell_diffusion_ii, advance_maxwell_diffusion_nn,
-                        explicit_weakform_fp_collisions,
+                        fp_collisions,
                         advance_external_source, advance_ion_numerical_dissipation,
                         advance_neutral_numerical_dissipation, advance_sources,
                         advance_continuity, advance_force_balance, advance_energy,
@@ -3719,7 +3719,7 @@ with fvec_in an input and fvec_out the output
                                 dt, num_diss_params.neutral.r_dissipation_coefficient, scratch_dummy)
         end
         # advance with the Fokker-Planck self-collision operator
-        if advance.explicit_weakform_fp_collisions
+        if advance.fp_collisions
             update_entropy_diagnostic = (istage == 1)
             if collisions.fkpl.self_collisions
                 # self collisions for each species

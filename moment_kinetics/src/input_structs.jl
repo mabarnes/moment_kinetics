@@ -143,7 +143,7 @@ struct advance_info
     krook_collisions_ii::Bool
     mxwl_diff_collisions_ii::Bool
     mxwl_diff_collisions_nn::Bool
-    explicit_weakform_fp_collisions::Bool
+    fp_collisions::Bool
     external_source::Bool
     ion_numerical_dissipation::Bool
     neutral_numerical_dissipation::Bool
