@@ -49,6 +49,20 @@ export explicit_pseudotimestep
 export null_kinetic_electrons
 
 """
+"""
+@enum kinetic_ion_solver_type begin
+    full_implicit_ion_advance
+    implicit_ion_vpa_advection
+    implicit_ion_fp_collisions
+    full_explicit_ion_advance
+end
+export kinetic_ion_solver_type
+export full_implicit_ion_advance
+export implicit_ion_vpa_advection
+export implicit_ion_fp_collisions
+export full_explicit_ion_advance
+
+"""
 `t_error_sum` is included so that a type which might be mk_float or Float128 can be set by
 an option but known at compile time when a `time_info` struct is passed as a function
 argument.
@@ -100,9 +114,10 @@ struct time_info{Terrorsum <: Real, T_debug_output, T_electron, Trkimp, Timpzero
     implicit_braginskii_conduction::Bool
     kinetic_electron_solver::kinetic_electron_solver_type
     electron_preconditioner_type::Telectronprecon
+    kinetic_ion_solver::kinetic_ion_solver_type
     implicit_ion_advance::Bool
     implicit_vpa_advection::Bool
-    implicit_ion_fp_collisions::Bool
+    use_implicit_ion_fp_collisions::Bool
     constraint_forcing_rate::mk_float
     decrease_dt_iteration_threshold::mk_int
     increase_dt_iteration_threshold::mk_int
