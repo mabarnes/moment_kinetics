@@ -158,15 +158,23 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(); defa
         s = allocate_shared_float(linear_restart + 1; comm=comm_anyv_subblock[])
         g = allocate_shared_float(linear_restart + 1; comm=comm_anyv_subblock[])
         V = allocate_shared_float(reverse(coord_sizes)..., linear_restart+1; comm=comm_anyv_subblock[])
-
-        @begin_serial_region()
-        @serial_region begin
+        # Arrays below appear to need to be initialised to zero on setup.
+        # This is inconvenient for anyv communicators because we need to switch
+        # now into the special "anyv" region for this assignment,
+        # to make sure that all instances of memory are initialised to zero.
+        @begin_s_r_z_anyv_region()
+        @begin_anyv_region()
+        @anyv_serial_region begin
             H .= 0.0
             c .= 0.0
             s .= 0.0
             g .= 0.0
             V .= 0.0
         end
+        # switch out of anyv region to avoid errors on
+        # the next region call in initialisation, which
+        # will not be an "anyv" call.
+        @begin_serial_region()
     else
         H = allocate_shared_float(linear_restart + 1, linear_restart)
         c = allocate_shared_float(linear_restart + 1)
