@@ -160,6 +160,8 @@ test_input_adaptive_split2["timestepping"] = recursive_merge(test_input_adaptive
 test_input_adaptive_split3 = recursive_merge(test_input_adaptive_split2,
                                              OptionsDict("output" => OptionsDict("run_name" => "adaptive split3"),
                                                          "evolve_moments" => OptionsDict("pressure" => true),
+                                                         "vpa" => OptionsDict("element_spacing_option" => "coarse_tails8.660254037844386"),
+                                                         "vz" => OptionsDict("element_spacing_option" => "coarse_tails8.660254037844386"),
                                                          "ion_numerical_dissipation" => OptionsDict("force_minimum_pdf_value" => 0.0),
                                                          "neutral_numerical_dissipation" => OptionsDict("force_minimum_pdf_value" => 0.0)))
 # The initial conditions seem to make the split3 case hard to advance without any
@@ -302,7 +304,8 @@ function runtests()
                       0.008010459888136036, 0.0022238610414135186, -0.0020340880648959266,
                       -0.006273371184150506, -0.011509711109921564, -0.01608354415559066,
                       -0.019068436253618693, -0.02165307457245153, -0.02374536776323688,
-                      -0.026193225296752082, -0.03316168704620608])
+                      -0.026193225296752082, -0.03316168704620608], rtol=0.0, 
+                     atol=1.0e-13)
         end
 
         fullf_expected_output = [-0.06485643672684559, -0.01393132401823833,
