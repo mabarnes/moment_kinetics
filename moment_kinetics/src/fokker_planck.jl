@@ -898,7 +898,7 @@ function setup_fp_nl_solve(implicit_ion_fp_collisions, coords)
                                 "atol" => 1.0e-10,
                                 "linear_restart" => 8,
                                 "linear_max_restarts" => 1,
-                                "nonlinear_max_iterations" => 100)),
+                                "nonlinear_max_iterations" => 20)),
         coords; serial_solve=false, anyv_region=true,
         preconditioner_type=Val(:lu))
 end
