@@ -246,16 +246,6 @@ function init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_sp
     F_rhs_delta = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
     Fv = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
     Fw = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
-    # zero dummy arrays for JFNK
-    @serial_region begin
-        @loop_vperp_vpa ivperp ivpa begin
-            Fresidual[ivpa,ivperp] = 0.0
-            F_delta_x[ivpa,ivperp] = 0.0
-            F_rhs_delta[ivpa,ivperp] = 0.0
-            Fv[ivpa,ivperp] = 0.0
-            Fw[ivpa,ivperp] = 0.0
-        end
-    end
     fka = fokkerplanck_weakform_arrays_struct(bwgt,rpbd,MM2D_sparse,KKpar2D_sparse,KKperp2D_sparse,
                                            KKpar2D_with_BC_terms_sparse,KKperp2D_with_BC_terms_sparse,
                                            LP2D_sparse,LV2D_sparse,LB2D_sparse,PUperp2D_sparse,PPparPUperp2D_sparse,
