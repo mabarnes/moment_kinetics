@@ -205,14 +205,36 @@ function diagnose_F_Maxwellian(pdf,pdf_exact,pdf_dummy_1,pdf_dummy_2,vpa,vperp,t
     return nothing
 end
 
+# Test of implementation of backward Euler solve of d F / d t = C[F, F]
+# i.e., we solve F^n+1 - F^n = delta_t * C[ F^n+1, F^n+1 ]
+# using a Newton-Krylov root-finding method. This test function
+# can be used to check the performance of the solver at a single
+# velocity space point. We initialise with a beam distribution
+# ~ exp ( - ((vpa - vpa0)^2 + (vperp - vperp0)^2) / vth0^2 )
+# and timestep for a fixed timestep delta_t to a maximum time
+# ntime * delta_t. Errors between F and F_Maxwellian can be printed to screen.
+# Different algorithm options can be checked.
 function backward_Euler_fokker_planck_self_collisions_test(; 
-    vth0=0.5,vperp0=1.0,vpa0=1.0, ngrid=5,nelement_vpa=16,nelement_vperp=8,
-    Lvpa=10.0,Lvperp=5.0,bc_vpa="none",bc_vperp="none",
-    ntime=100,delta_t=1.0,
+    # initial beam parameters 
+    vth0=0.5,
+    vperp0=1.0,
+    vpa0=1.0,
+    # grid parameters
+    ngrid=5,
+    nelement_vpa=16,
+    nelement_vperp=8,
+    Lvpa=10.0,
+    Lvperp=5.0,
+    bc_vpa="none",
+    bc_vperp="none",
+    # timestepping parameters
+    ntime=100,
+    delta_t=1.0,
+    # options
     test_particle_preconditioner=true,
     test_linearised_advance=false,
     use_Maxwellian_Rosenbluth_coefficients_in_preconditioner=false,
-    test_dense_construction=false,standalone=true,
+    test_dense_construction=false,
     test_numerical_conserving_terms=true,
     boundary_data_option=multipole_expansion,
     print_to_screen=true,
