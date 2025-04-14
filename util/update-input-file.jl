@@ -222,6 +222,7 @@ PR322_T_1V = (x) -> x/3 # Inputs before PR322 were T_∥ values, but after are T
 PR322_v = (x) -> sqrt(2)*x
 PR322_t = (x) -> x/sqrt(2)
 PR322_omega = (x) -> x ≥ 0.0 ? sqrt(2)*x : x
+PR322_I = (x) -> x ≥ 0.0 ? 2*x : x
 PR322_v_diffusion_coefficient = (x) -> 2^1.5*x
 PR322_w_diffusion_coefficient = (x) -> 3*sqrt(2)*x
 PR322_w_evolve_ppar = (x) -> sqrt(3)*x
@@ -307,7 +308,7 @@ const PR322_definitions_update_map_2V = OptionsDict(
                                   "source_vperp0" => PR322_v,
                                   "sink_vth" => PR322_v,
                                   "PI_density_controller_P" => PR322_omega,
-                                  "PI_density_controller_I" => PR322_omega,
+                                  "PI_density_controller_I" => PR322_I,
                                   "PI_temperature_controller_P" => PR322_omega,
                                   "PI_temperature_controller_I" => PR322_omega,
                                  ),
@@ -317,7 +318,7 @@ const PR322_definitions_update_map_2V = OptionsDict(
                                   "source_vperp0" => PR322_v,
                                   "sink_vth" => PR322_v,
                                   "PI_density_controller_P" => PR322_omega,
-                                  "PI_density_controller_I" => PR322_omega,
+                                  "PI_density_controller_I" => PR322_I,
                                   "PI_temperature_controller_P" => PR322_omega,
                                   "PI_temperature_controller_I" => PR322_omega,
                                  ),
@@ -327,7 +328,7 @@ const PR322_definitions_update_map_2V = OptionsDict(
                                   "source_vperp0" => PR322_v,
                                   "sink_vth" => PR322_v,
                                   "PI_density_controller_P" => PR322_omega,
-                                  "PI_density_controller_I" => PR322_omega,
+                                  "PI_density_controller_I" => PR322_I,
                                   "PI_temperature_controller_P" => PR322_omega,
                                   "PI_temperature_controller_I" => PR322_omega,
                                  ),
@@ -339,7 +340,7 @@ const PR322_definitions_update_map_2V = OptionsDict(
                                       "source_vperp0" => PR322_v,
                                       "sink_vth" => PR322_v,
                                       "PI_density_controller_P" => PR322_omega,
-                                      "PI_density_controller_I" => PR322_omega,
+                                      "PI_density_controller_I" => PR322_I,
                                       "PI_temperature_controller_P" => PR322_omega,
                                       "PI_temperature_controller_I" => PR322_omega,
                                      ),
