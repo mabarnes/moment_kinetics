@@ -2,21 +2,6 @@
 const z_L = 1.0 # always 1 in normalized units?
 const vpa_L = 8.0
 
-# The expected output
-struct expected_data
-    z::Array{mk_float, 1}
-    vpa::Array{mk_float, 1}
-    phi::Array{mk_float, 2}
-    n_ion::Array{mk_float, 2}
-    n_neutral::Array{mk_float, 2}
-    upar_ion::Array{mk_float, 2}
-    upar_neutral::Array{mk_float, 2}
-    ppar_ion::Array{mk_float, 2}
-    ppar_neutral::Array{mk_float, 2}
-    f_ion::Array{mk_float, 3}
-    f_neutral::Array{mk_float, 3}
-end
-
 # Use very small number of points in vpa_expected to reduce the amount of entries we
 # need to store. First and last entries are within the grid (rather than at the ends) in
 # order to get non-zero values.
