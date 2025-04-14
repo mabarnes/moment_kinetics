@@ -367,12 +367,17 @@ function runtests()
         
         @testset "backward-Euler nonlinear Fokker-Planck collisions" begin
             println("    - test backward-Euler nonlinear Fokker-Planck collisions")
-            #@testset "$bc" for bc in ("none")#, "zero")  
-                bc = "none"
+            @testset "$bc" for bc in ("none", "zero")  
                 println("        -  bc=$bc")
+                # here test that a Maxwellian initial condition remains Maxwellian,
+                # i.e., we check the numerical Maxwellian is close to the analytical one.
+                # This is faster and more stable than doing a relaxation from vperp0 /= 0.
                 backward_Euler_fokker_planck_self_collisions_test(bc_vperp=bc, bc_vpa=bc,
+                   #ngrid = 5, nelement_vpa = 16, nelement_vperp = 8, Lvpa = 10.0, Lvperp = 5.0,
+                   ntime = 10, delta_t = 0.1,
+                   vth0 = 1.0, vpa0 = 1.0, vperp0 = 0.0, 
                    print_to_screen=print_to_screen)
-            #end
+            end
         end
 
         @testset "Lagrange-polynomial 2D interpolation" begin
