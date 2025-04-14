@@ -1691,7 +1691,6 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
                 # Knudsen cosine distribution does not have separate T_∥ and T_⟂, so is
                 # marginalised rather than setting T_⟂=0, therefore no need to convert to
                 # a thermal speed defined with the parallel temperature in 1V case.
-
                 @. vz.scratch = vz.grid * vgrid_scale_factor0
                 @. knudsen_pdf_lower[:,1,1] = (3.0 * sqrt(π) * (0.5 / T_wall_over_m)^1.5) * abs(vz.scratch) * erfc(sqrt(0.5 / T_wall_over_m) * abs(vz.scratch))
 
