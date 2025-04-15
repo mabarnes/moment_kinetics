@@ -219,6 +219,7 @@ const sections_update_map = OptionsDict(
 
 PR322_p = (x) -> 2 * x
 PR322_T_1V = (x) -> x/3 # Inputs before PR322 were T_∥ values, but after are T values (for 1D1V T=T_∥/3)
+PR322_temperature_PI_1V = (x) -> 3*x # Inputs before PR322 were T_∥ values, but after are T values (for 1D1V T=T_∥/3)
 PR322_v = (x) -> sqrt(2)*x
 PR322_t = (x) -> x/sqrt(2)
 PR322_omega = (x) -> x ≥ 0.0 ? sqrt(2)*x : x
@@ -446,6 +447,23 @@ function update_input_dict(original_input::DictType;
 
     # Fix updated options in the sections
     existing_sections = keys(updated_input)
+    # Some special updates that it is inconvenient to do using combined_update_map
+    for section_name ∈ existing_sections
+        if update_definitions_322 && !is_2V &&
+                (startswith(section_name, "ion_source")
+                 || startswith(section_name, "electron_source")
+                 || startswith(section_name, "neutral_source"))
+            section = updated_input[section_name]
+            if ("source_strength" ∈ keys(section)
+                && "source_type" ∈ keys(section)
+                && section["source_type"] ∈ ("energy", "temperature_midpoint_control")
+               )
+                # Update for 1V Tpar->T here. The tref correction will be applied below.
+                section["PI_temperature_controller_P"] = PR322_temperature_PI_1V(section["PI_temperature_controller_P"])
+                section["PI_temperature_controller_I"] = PR322_temperature_PI_1V(section["PI_temperature_controller_I"])
+            end
+        end
+    end
     for (section_name, section_update_map) ∈ combined_update_map
         if section_name ∉ existing_sections
             continue
