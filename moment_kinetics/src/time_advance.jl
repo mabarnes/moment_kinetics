@@ -1762,20 +1762,31 @@ function setup_scratch_arrays(moments, pdf, n, time_evolve_electrons)
         uz_neutral_array = allocate_shared_float(moment_neutral_dims...)
         pz_neutral_array = allocate_shared_float(moment_neutral_dims...)
 
+        ion_external_source_controller_integral =
+            allocate_shared_float(size(moments.ion.external_source_controller_integral)...)
+        #electron_external_source_controller_integral =
+        #    allocate_shared_float(size(moments.electron.external_source_controller_integral)...)
+        neutral_external_source_controller_integral =
+            allocate_shared_float(size(moments.neutral.external_source_controller_integral)...)
 
-        scratch[istage] = scratch_pdf(pdf_array, density_array, upar_array,
-                                      ppar_array, pperp_array, temp_array,
+        scratch[istage] = scratch_pdf(pdf_array, density_array, upar_array, ppar_array,
+                                      pperp_array,
+                                      ion_external_source_controller_integral, temp_array,
                                       pdf_electron_array, density_electron_array,
                                       upar_electron_array, ppar_electron_array,
                                       pperp_electron_array, temp_electron_array,
+                                      #electron_external_source_controller_integral,
                                       pdf_neutral_array, density_neutral_array,
-                                      uz_neutral_array, pz_neutral_array)
+                                      uz_neutral_array, pz_neutral_array,
+                                      neutral_external_source_controller_integral)
         @serial_region begin
             scratch[istage].pdf .= pdf.ion.norm
             scratch[istage].density .= moments.ion.dens
             scratch[istage].upar .= moments.ion.upar
             scratch[istage].ppar .= moments.ion.ppar
             scratch[istage].pperp .= moments.ion.pperp
+            scratch[istage].ion_external_source_controller_integral .=
+                moments.ion.external_source_controller_integral
 
             if time_evolve_electrons
                 scratch[istage].pdf_electron .= pdf.electron.norm
@@ -1784,11 +1795,15 @@ function setup_scratch_arrays(moments, pdf, n, time_evolve_electrons)
             scratch[istage].electron_upar .= moments.electron.upar
             scratch[istage].electron_ppar .= moments.electron.ppar
             scratch[istage].electron_pperp .= 0.0 #moments.electron.pperp
+            #scratch[istage].electron_external_source_controller_integral .=
+            #    moments.electron.external_source_controller_integral
 
             scratch[istage].pdf_neutral .= pdf.neutral.norm
             scratch[istage].density_neutral .= moments.neutral.dens
             scratch[istage].uz_neutral .= moments.neutral.uz
             scratch[istage].pz_neutral .= moments.neutral.pz
+            scratch[istage].neutral_external_source_controller_integral .=
+                moments.neutral.external_source_controller_integral
         end
     end
     return scratch
@@ -2793,6 +2808,7 @@ appropriate.
                     scratch[t_params.n_rk_stages+1].upar,
                     scratch[t_params.n_rk_stages+1].ppar,
                     scratch[t_params.n_rk_stages+1].pperp,
+                    scratch[t_params.n_rk_stages+1].ion_external_source_controller_integral,
                     scratch[t_params.n_rk_stages+1].temp_z_s,
                     scratch[2].pdf_electron,
                     scratch[t_params.n_rk_stages+1].electron_density,
@@ -2800,10 +2816,12 @@ appropriate.
                     scratch[t_params.n_rk_stages+1].electron_ppar,
                     scratch[t_params.n_rk_stages+1].electron_pperp,
                     scratch[t_params.n_rk_stages+1].electron_temp,
+                    #scratch[t_params.n_rk_stages+1].electron_external_source_controller_integral,
                     scratch[2].pdf_neutral,
                     scratch[t_params.n_rk_stages+1].density_neutral,
                     scratch[t_params.n_rk_stages+1].uz_neutral,
-                    scratch[t_params.n_rk_stages+1].pz_neutral)
+                    scratch[t_params.n_rk_stages+1].pz_neutral,
+                    scratch[t_params.n_rk_stages+1].neutral_external_source_controller_integral)
     apply_all_bcs_constraints_update_moments!(
         loworder_constraints_scratch, pdf, moments, fields, boundary_distributions,
         scratch_electron, vz, vr, vzeta, vpa, vperp, z, r, spectral_objects,
@@ -3170,6 +3188,19 @@ end
             # other neutral moments here if required
         end
     end
+    @begin_serial_region()
+    @serial_region begin
+        first_scratch.ion_external_source_controller_integral .=
+            moments.ion.external_source_controller_integral
+        #if length(first_scratch.pdf_electron) > 0
+        #    first_scratch.electron_external_source_controller_integral .=
+        #        moments.electron.external_source_controller_integral
+        #end
+        if composition.n_neutral_species > 0
+            first_scratch.neutral_external_source_controller_integral .=
+                moments.neutral.external_source_controller_integral
+        end
+    end
     if moments.evolve_upar
         # moments may be read on all ranks, even though loop type is z_s, so need to
         # synchronize here
@@ -3454,6 +3485,19 @@ end
                 rethrow(e)
             end
         end
+        @begin_serial_region()
+        @serial_region begin
+            moments.ion.external_source_controller_integral .=
+                final_scratch.ion_external_source_controller_integral
+            #if length(first_scratch.pdf_electron) > 0
+            #    moments.electron.external_source_controller_integral .=
+            #        final_scratch.electron_external_source_controller_integral
+            #end
+            if composition.n_neutral_species > 0
+                moments.neutral.external_source_controller_integral .=
+                    final_scratch.neutral_external_source_controller_integral
+            end
+        end
     end
 
     return nothing
@@ -3485,12 +3529,15 @@ with fvec_in an input and fvec_out the output
     neutral_z_advect, neutral_r_advect, neutral_vz_advect = advect_objects.neutral_z_advect, advect_objects.neutral_r_advect, advect_objects.neutral_vz_advect
 
     if advance.external_source
-        total_external_ion_source_controllers!(fvec_in, moments, external_source_settings.ion,
-                                        dt)
+        total_external_ion_source_controllers!(fvec_out.ion_external_source_controller_integral,
+                                               fvec_in, moments,
+                                               external_source_settings.ion, dt)
     end
     if advance.neutral_external_source
-        total_external_neutral_source_controllers!(fvec_in, moments,
-                                            external_source_settings.neutral, r, z, dt)
+        total_external_neutral_source_controllers!(fvec_out.neutral_external_source_controller_integral,fvec_in,
+                                                   moments,
+                                                   external_source_settings.neutral, r, z,
+                                                   dt)
     end
 
     # Start advance for moments
@@ -4049,7 +4096,7 @@ Do a backward-Euler timestep for all terms in the ion kinetic equation.
                                   fvec_out.electron_ppar, fvec_out.electron_pperp,
                                   fvec_out.electron_temp, fvec_out.pdf_neutral,
                                   fvec_out.density_neutral, fvec_out.uz_neutral,
-                                  fvec_out.pz_neutral)
+                                  fvec_out.pz_neutral, fvec_out.controller_integrals)
         # scratch_pdf struct containing the array passed as residual
         residual_scratch = scratch_pdf(residual, fvec_out.density, fvec_out.upar,
                                        fvec_out.ppar, fvec_out.pperp, fvec_out.temp_z_s,
@@ -4057,7 +4104,7 @@ Do a backward-Euler timestep for all terms in the ion kinetic equation.
                                        fvec_out.electron_ppar, fvec_out.electron_pperp,
                                        fvec_out.electron_temp, fvec_out.pdf_neutral,
                                        fvec_out.density_neutral, fvec_out.uz_neutral,
-                                       fvec_out.pz_neutral)
+                                       fvec_out.pz_neutral, fvec_out.controller_integrals)
 
         # Ensure moments are consistent with f_new
         update_derived_moments!(new_scratch, moments, vpa, vperp, z, r, composition,
@@ -4158,6 +4205,14 @@ function update_solution_vector!(new_evolved, old_evolved, moments, composition,
             new_evolved.density_neutral[iz,ir,isn] = old_evolved.density_neutral[iz,ir,isn]
             new_evolved.uz_neutral[iz,ir,isn] = old_evolved.uz_neutral[iz,ir,isn]
             new_evolved.pz_neutral[iz,ir,isn] = old_evolved.pz_neutral[iz,ir,isn]
+        end
+    end
+    @begin_serial_region
+    @serial_region begin
+        new_evolved.ion_external_source_controller_integral .= old_evolved.ion_external_source_controller_integral
+        #new_evolved.electron_external_source_controller_integral .= electron_evolved.ion_external_source_controller_integral
+        if composition.n_neutral_species > 0
+            new_evolved.neutral_external_source_controller_integral .= old_evolved.neutral_external_source_controller_integral
         end
     end
     return nothing

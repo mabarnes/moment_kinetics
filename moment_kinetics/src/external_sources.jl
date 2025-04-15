@@ -1384,27 +1384,33 @@ Add external source term to the neutral kinetic equation.
 end
 
 """
-    total_external_ion_source_controllers!(fvec_in, moments, ion_sources, dt)
+    total_external_ion_source_controllers!(ion_external_source_controller_integral,
+                                           fvec_in, moments, ion_sources, dt)
 
 Contribute all of the ion source controllers to fvec_in, one by one.
 """
-function total_external_ion_source_controllers!(fvec_in, moments, ion_sources, dt)
+function total_external_ion_source_controllers!(ion_external_source_controller_integral,
+                                                fvec_in, moments, ion_sources, dt)
     for index ∈ eachindex(ion_sources)
         if ion_sources[index].active
-            external_ion_source_controller!(fvec_in, moments, ion_sources[index], index, dt)
+            @views external_ion_source_controller!(ion_external_source_controller_integral[:,:,index],
+                                                   fvec_in, moments, ion_sources[index],
+                                                   index, dt)
         end
     end
     return nothing
 end
 
 """
-    external_ion_source_controller!(fvec_in, moments, ion_source_settings, dt)
+    external_ion_source_controller!(ion_external_source_controller_integral, fvec_in,
+                                    moments, ion_source_settings, dt)
 
 Calculate the amplitude when using a PI controller for the density to set the external
 source amplitude.
 """
 @timeit global_timer external_ion_source_controller!(
-                         fvec_in, moments, ion_source_settings, index, dt) = begin
+                         ion_external_source_controller_integral, fvec_in, moments,
+                         ion_source_settings, index, dt) = begin
     @begin_r_z_region()
 
     is = 1
@@ -1455,14 +1461,15 @@ source amplitude.
                                 ion_source_settings.PI_density_target_ir, is]
                 n_error = ion_source_settings.PI_density_target - n_mid
 
-                ion_moments.external_source_controller_integral[1,1,index] +=
-                    dt * ion_source_settings.PI_density_controller_I * n_error
-
                 # Only want a source, so never allow amplitude to be negative
                 amplitude = max(ion_source_settings.source_strength +
                     ion_source_settings.PI_density_controller_P * n_error +
-                    ion_moments.external_source_controller_integral[1,1,index],
-                    0)
+                    ion_external_source_controller_integral[1,1], 0)
+
+                # Add time derivative to controller integral after using the current
+                # value.
+                ion_external_source_controller_integral[1,1] +=
+                    dt * ion_source_settings.PI_density_controller_I * n_error
             else
                 amplitude = nothing
             end
@@ -1505,14 +1512,15 @@ source amplitude.
                                 ion_source_settings.PI_temperature_target_ir, is]
                 T_error = ion_source_settings.PI_temperature_target - T_mid
 
-                ion_moments.external_source_controller_integral[1,1,index] +=
-                    dt * ion_source_settings.PI_temperature_controller_I * T_error
-
                 # Only want a source, so never allow amplitude to be negative
                 amplitude = max(ion_source_settings.source_strength +
                     ion_source_settings.PI_temperature_controller_P * T_error +
-                    ion_moments.external_source_controller_integral[1,1,index],
-                    0)
+                    ion_external_source_controller_integral[1,1], 0)
+
+                # Add time derivative to controller integral after using the current
+                # value.
+                ion_external_source_controller_integral[1,1] +=
+                    dt * ion_source_settings.PI_temperature_controller_I * T_error
             else
                 amplitude = nothing
             end
@@ -1550,13 +1558,13 @@ source amplitude.
         target = ion_source_settings.PI_density_target
         P = ion_source_settings.PI_density_controller_P
         I = ion_source_settings.PI_density_controller_I
-        integral = ion_moments.external_source_controller_integral
         amplitude = ion_moments.external_source_amplitude
         @loop_r_z ir iz begin
             n_error = target[iz,ir] - density[iz,ir,is]
-            integral[iz,ir,index] += dt * I * n_error
             # Only want a source, so never allow amplitude to be negative
-            amplitude[iz,ir,index] = max(P * n_error + integral[iz,ir,index], 0)
+            amplitude[iz,ir,index] = max(P * n_error + ion_external_source_controller_integral[iz,ir], 0)
+            # Add time derivative to controller integral after using the current value.
+            ion_external_source_controller_integral[iz,ir] += dt * I * n_error
         end
         if moments.evolve_density
             @loop_r_z ir iz begin
@@ -1586,21 +1594,28 @@ source amplitude.
 end
 
 """
-    total_external_electron_source_controllers!(fvec_in, moments, electron_sources, dt)
+    total_external_electron_source_controllers!(electron_external_source_controller_integral,
+                                                fvec_in, moments, electron_sources, dt)
 
 Contribute all of the electron source controllers to fvec_in, one by one.
 """
-function total_external_electron_source_controllers!(fvec_in, moments, electron_sources, dt)
+function total_external_electron_source_controllers!(
+             electron_external_source_controller_integral, fvec_in, moments,
+             electron_sources, dt)
+
     for index ∈ eachindex(electron_sources)
         if electron_sources[index].active
-            external_electron_source_controller!(fvec_in, moments, electron_sources[index], index, dt)
+            @views external_electron_source_controller!(
+                       electron_external_source_controller_integral[:,:,index], fvec_in,
+                       moments, electron_sources[index], index, dt)
         end
     end
     return nothing
 end
 
 """
-    external_electron_source_controller!(fvec_in, moments, electron_source_settings, dt)
+    external_electron_source_controller!(electron_external_source_controller_integral,
+                                         fvec_in, moments, electron_source_settings, dt)
 
 Calculate the amplitude, e.g. when using a PI controller for the density to set the
 external source amplitude.
@@ -1611,8 +1626,10 @@ operation) depends on the ion source, so [`external_ion_source_controller!`](@re
 called before this function is called so that `moments.ion.external_source_amplitude` is
 up to date.
 """
-@timeit global_timer external_electron_source_controller!(
-                         fvec_in, moments, electron_source_settings, index, dt) = begin
+@timeit global_timer external_electron_source_controller!(electron_external_source_controller_integral,
+                                                          fvec_in, moments,
+                                                          electron_source_settings, index,
+                                                          dt) = begin
     @begin_r_z_region()
 
     is = 1
@@ -1671,30 +1688,36 @@ up to date.
 end
 
 """
-    total_external_neutral_source_controllers!(fvec_in, moments, neutral_sources, dt)
+    total_external_neutral_source_controllers!(neutral_external_source_controller_integral,
+                                               fvec_in, moments, neutral_sources, dt)
 
 Contribute all of the neutral source controllers to fvec_in, one by one.
 """
-function total_external_neutral_source_controllers!(fvec_in, moments, neutral_sources, r, z, dt)
+function
+    total_external_neutral_source_controllers!(neutral_external_source_controller_integral,
+        fvec_in, moments, neutral_sources, r, z, dt)
+
     for index ∈ eachindex(neutral_sources)
         if neutral_sources[index].active
-            external_neutral_source_controller!(fvec_in, moments, neutral_sources[index], 
-                                                index, r, z, dt)
+            @views external_neutral_source_controller!(
+                       neutral_external_source_controller_integral[:,:,index], fvec_in, moments,
+                       neutral_sources[index], index, r, z, dt)
         end
     end
     return nothing
 end
 
 """
-    external_neutral_source_controller!(fvec_in, moments, neutral_source_settings, r,
-                                        z, dt)
+    external_neutral_source_controller!(neutral_external_source_controller_integral,
+                                        fvec_in, moments, neutral_source_settings, r, z,
+                                        dt)
 
 Calculate the amplitude when using a PI controller for the density to set the external
 source amplitude.
 """
 @timeit global_timer external_neutral_source_controller!(
-                         fvec_in, moments, neutral_source_settings, index, r, z,
-                         dt) = begin
+                         neutral_external_source_controller_integral, fvec_in, moments,
+                         neutral_source_settings, index, r, z, dt) = begin
     @begin_r_z_region()
 
     is = 1
@@ -1745,14 +1768,15 @@ source amplitude.
                                         neutral_source_settings.PI_density_target_ir, is]
                 n_error = neutral_source_settings.PI_density_target - n_mid
 
-                neutral_moments.external_source_controller_integral[1,1,index] +=
-                    dt * neutral_source_settings.PI_density_controller_I * n_error
-
                 # Only want a source, so never allow amplitude to be negative
                 amplitude = max(
                     neutral_source_settings.PI_density_controller_P * n_error +
-                    neutral_moments.external_source_controller_integral[1,1,index],
-                    0)
+                    neutral_external_source_controller_integral[1,1], 0)
+
+                # Add time derivative to controller integral after using the current
+                # value.
+                neutral_external_source_controller_integral[1,1] +=
+                    dt * neutral_source_settings.PI_density_controller_I * n_error
             else
                 amplitude = nothing
             end
@@ -1787,12 +1811,12 @@ source amplitude.
         target = neutral_source_settings.PI_density_target
         P = neutral_source_settings.PI_density_controller_P
         I = neutral_source_settings.PI_density_controller_I
-        PI_integral = neutral_moments.external_source_controller_integral
         amplitude = neutral_moments.external_source_amplitude
         @loop_r_z ir iz begin
             n_error = target[iz,ir] - density[iz,ir,is]
-            PI_integral[iz,ir,index] += dt * I * n_error
-            amplitude[iz,ir,index] = P * n_error + PI_integral[iz,ir,index]
+            amplitude[iz,ir,index] = P * n_error + neutral_external_source_controller_integral[iz,ir,index]
+            # Add time derivative to controller integral after using the current value.
+            neutral_external_source_controller_integral[iz,ir] += dt * I * n_error
         end
         if moments.evolve_density
             @loop_r_z ir iz begin

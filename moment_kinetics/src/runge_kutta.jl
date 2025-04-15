@@ -383,6 +383,10 @@ function rk_update_evolved_moments!(scratch, scratch_implicit, moments, t_params
     if moments.evolve_ppar
         rk_update_variable!(scratch, scratch_implicit, :ppar, t_params, istage)
     end
+
+    rk_update_variable!(scratch, scratch_implicit,
+                        :ion_external_source_controller_integral, t_params, istage;
+                        controller_integrals=true)
 end
 
 """
@@ -394,6 +398,10 @@ function rk_update_evolved_moments_electron!(scratch, scratch_implicit, moments,
     # For now, electrons always fully moment kinetic, and ppar is the only evolving moment
     # (density and upar are calculated from quasineutrality and ambipolarity constraints).
     rk_update_variable!(scratch, scratch_implicit, :ppar_electron, t_params, istage)
+
+    #rk_update_variable!(scratch, scratch_implicit,
+    #                    :electron_external_source_controller_integral, t_params, istage;
+    #                    controller_integrals=true)
 end
 
 """
@@ -419,6 +427,10 @@ function rk_update_evolved_moments_neutral!(scratch, scratch_implicit, moments, 
         rk_update_variable!(scratch, scratch_implicit, :pz_neutral, t_params, istage;
                             neutrals=true)
     end
+
+    rk_update_variable!(scratch, scratch_implicit,
+                        :neutral_external_source_controller_integral, t_params, istage;
+                        controller_integrals=true)
 end
 
 """
@@ -429,7 +441,7 @@ coefficients. `scratch_implicit` contains the results of backward-Euler updates,
 needed for IMEX timestepping schemes.
 """
 function rk_update_variable!(scratch, scratch_implicit, var_symbol::Symbol, t_params,
-                             istage; neutrals=false)
+                             istage; neutrals=false, controller_integrals=false)
     if t_params.low_storage
         var_arrays = (getfield(scratch[istage+1], var_symbol),
                       getfield(scratch[istage], var_symbol),
@@ -464,6 +476,14 @@ function rk_update_variable!(scratch, scratch_implicit, var_symbol::Symbol, t_pa
         else
             rk_update_loop_neutrals!(rk_coefs, rk_coefs_implicit, var_arrays,
                                      var_arrays_implicit)
+        end
+    elseif controller_integrals
+        if t_params.low_storage
+            rk_update_loop_low_storage_controller_integrals!(
+                rk_coefs, rk_coefs_implicit, var_arrays..., var_arrays_implicit...)
+        else
+            rk_update_loop_controller_integrals!(
+                rk_coefs, rk_coefs_implicit, var_arrays, var_arrays_implicit)
         end
     else
         if t_params.low_storage
@@ -635,6 +655,47 @@ function rk_update_loop!(rk_coefs, rk_coefs_implicit,
         @loop_s_r_z is ir iz begin
             output[iz,ir,is] = sum(rk_coefs[i] * var_arrays[i][iz,ir,is] for i ∈ 1:N) +
                                sum(rk_coefs_implicit[i] * var_arrays_implicit[i][iz,ir,is] for i ∈ 1:N-1)
+        end
+    end
+
+    return nothing
+end
+
+# PI controller integrals
+function rk_update_loop_low_storage_controller_integrals!(
+        rk_coefs, rk_coefs_implicit, new::AbstractArray{mk_float,3},
+        old::AbstractArray{mk_float,3}, first::AbstractArray{mk_float,3}, new_implicit,
+        old_implicit, first_implicit; output=new)
+    @boundscheck length(rk_coefs) == 3
+
+    @begin_serial_region()
+    @serial_region begin
+        if rk_coefs_implicit === nothing
+            @. output = rk_coefs[1]*first + rk_coefs[2]*old + rk_coefs[3]*new
+        else
+            @. output = rk_coefs[1]*first + rk_coefs[2]*old + rk_coefs[3]*new +
+                        rk_coefs_implicit[1]*first_implicit + rk_coefs_implicit[2]*old_implicit
+        end
+    end
+
+    return nothing
+end
+function rk_update_loop_controller_integrals!(
+        rk_coefs, rk_coefs_implicit, var_arrays::NTuple{N,AbstractArray{mk_float,3}},
+        var_arrays_implicit; output=var_arrays[N]) where N
+    @boundscheck length(rk_coefs) ≥ N
+
+    @begin_serial_region()
+    @serial_region begin
+        if rk_coefs_implicit === nothing
+            for i ∈ eachindex(output)
+                output[i] = sum(rk_coefs[j] * var_arrays[j][i] for j ∈ 1:N)
+            end
+        else
+            for i ∈ eachindex(output)
+                output[i] = sum(rk_coefs[j] * var_arrays[j][i] for j ∈ 1:N) +
+                            sum(rk_coefs_implicit[j] * var_arrays_implicit[j][i] for j ∈ 1:N-1)
+            end
         end
     end
 
