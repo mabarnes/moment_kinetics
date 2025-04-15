@@ -32,6 +32,7 @@ struct scratch_pdf
     upar::MPISharedArray{mk_float, ndim_moment}
     ppar::MPISharedArray{mk_float, ndim_moment}
     pperp::MPISharedArray{mk_float, ndim_moment}
+    ion_external_source_controller_integral::MPISharedArray{mk_float, 3}
     temp_z_s::MPISharedArray{mk_float, ndim_moment}
     # electrons
     pdf_electron::MPISharedArray{mk_float, ndim_pdf_electron}
@@ -40,11 +41,13 @@ struct scratch_pdf
     electron_ppar::MPISharedArray{mk_float, ndim_moment_electron}
     electron_pperp::MPISharedArray{mk_float, ndim_moment_electron}
     electron_temp::MPISharedArray{mk_float, ndim_moment_electron}
+    #electron_external_source_controller_integral::MPISharedArray{mk_float, 3} # Not implemented yet
     # neutral particles 
     pdf_neutral::MPISharedArray{mk_float, ndim_pdf_neutral}
     density_neutral::MPISharedArray{mk_float, ndim_moment}
     uz_neutral::MPISharedArray{mk_float, ndim_moment}
     pz_neutral::MPISharedArray{mk_float, ndim_moment}
+    neutral_external_source_controller_integral::MPISharedArray{mk_float, 3}
 end
 
 """
