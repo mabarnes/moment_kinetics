@@ -3857,6 +3857,7 @@ end
                                             external_source_settings, num_diss_params,
                                             gyroavs, nl_solver_params.ion_advance,
                                             advance, fp_arrays, istage)
+        success = success && ion_success
     elseif t_params.kinetic_ion_solver == implicit_ion_vpa_advection
         ion_success = implicit_vpa_advection!(fvec_out.pdf, fvec_in, fields, moments,
                                               z_advect, vpa_advect, vpa, vperp, z, r, dt,
@@ -3866,14 +3867,15 @@ end
                                               nl_solver_params.vpa_advection,
                                               advance.vpa_diffusion, num_diss_params,
                                               gyroavs, scratch_dummy)
+        success = success && ion_success
     elseif t_params.kinetic_ion_solver == implicit_ion_fp_collisions
         # backward Euler advance d F / d t = C[F, F]
         ion_success = implicit_ion_fokker_planck_self_collisions!(fvec_out.pdf, fvec_in.pdf, moments.ion.dSdt, 
         composition, collisions, fp_arrays, 
         vpa, vperp, z, r, dt, spectral_objects,
         nl_solver_params.ion_fp_collisions; diagnose_entropy_production=false)
+        success = success && ion_success
     end
-    success = success && ion_success
     return success
 end
 
