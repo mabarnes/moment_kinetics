@@ -3519,9 +3519,6 @@ with fvec_in an input and fvec_out the output
     # define some abbreviated variables for tidiness
     n_ion_species = composition.n_ion_species
     n_neutral_species = composition.n_neutral_species
-    # vpa_advection! advances the 1D advection equation in vpa.
-    # only ion species have a force accelerating them in vpa;
-    # however, neutral species do have non-zero d(wpa)/dt, so there is advection in wpa
 
     vpa_spectral, vperp_spectral, r_spectral, z_spectral = spectral_objects.vpa_spectral, spectral_objects.vperp_spectral, spectral_objects.r_spectral, spectral_objects.z_spectral
     vz_spectral, vr_spectral, vzeta_spectral = spectral_objects.vz_spectral, spectral_objects.vr_spectral, spectral_objects.vzeta_spectral
@@ -3613,6 +3610,7 @@ with fvec_in an input and fvec_out the output
 
     # Start advance for distribution functions
     if composition.ion_physics ∈ (drift_kinetic_ions, gyrokinetic_ions)
+        # vpa_advection! advances the 1D advection equation in vpa.
         if advance.vpa_advection
             vpa_advection!(fvec_out.pdf, fvec_in, fields, moments, vpa_advect, vpa, vperp, z, r, dt, t,
                 vpa_spectral, composition, collisions, external_source_settings.ion, geometry)
@@ -3620,7 +3618,6 @@ with fvec_in an input and fvec_out the output
 
         # z_advection! advances 1D advection equation in z
         # apply z-advection operation to ion species
-
         if advance.z_advection
             z_advection!(fvec_out.pdf, fvec_in, moments, fields, z_advect, z, vpa, vperp, r,
                         dt, t, z_spectral, composition, geometry, scratch_dummy)
@@ -3654,6 +3651,9 @@ with fvec_in an input and fvec_out the output
                 r, z, vzeta, vr, vz, dt, r_spectral, composition, geometry, scratch_dummy)
         end
 
+        # neutral_advection_vz! advances the 1D advection equation in vz.
+        # neutral species do not have a force accelerating them in vz;
+        # however, neutral species do have non-zero d(wpa)/dt, so there is advection in wpa
         if advance.neutral_vz_advection
             neutral_advection_vz!(fvec_out.pdf_neutral, fvec_in, fields, moments,
                                 neutral_vz_advect, vz, vr, vzeta, z, r, dt, vz_spectral,
