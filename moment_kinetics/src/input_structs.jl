@@ -55,12 +55,14 @@ export null_kinetic_electrons
     implicit_ion_vpa_advection
     implicit_ion_fp_collisions
     full_explicit_ion_advance
+    null_kinetic_ions
 end
 export kinetic_ion_solver_type
 export full_implicit_ion_advance
 export implicit_ion_vpa_advection
 export implicit_ion_fp_collisions
 export full_explicit_ion_advance
+export null_kinetic_ions
 
 """
 `t_error_sum` is included so that a type which might be mk_float or Float128 can be set by
