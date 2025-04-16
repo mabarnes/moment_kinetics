@@ -69,22 +69,23 @@ use_fokker_planck = true
 # nuii sets the normalised input C[F,F] Fokker-Planck collision frequency
 nuii = 1.0
 frequency_option = "manual"
-boundary_data_option="delta_f_multipole"
+boundary_data_option="multipole_expansion"
+#boundary_data_option="delta_f_multipole"
 #boundary_data_option="direct_integration"
 
 [timestepping]
-nstep = 500
+nstep = 10
 dt = 1.0e-3
 nwrite = 1
 nwrite_dfns = 1
-implicit_ion_advance = true
+kinetic_ion_solver = "implicit_ion_fp_collisions"
 type = "KennedyCarpenterARK324"
 
-[nonlinear_solver]
-nonlinear_max_iterations = 20
-rtol = 1.0e-5
-atol = 1.0e-12
-linear_restart = 10
-total_its_soft_limit = 50
-preconditioner_update_interval = 300
+#[nonlinear_solver]
+#nonlinear_max_iterations = 20
+#rtol = 1.0e-5
+#atol = 1.0e-12
+#linear_restart = 10
+#total_its_soft_limit = 50
+#preconditioner_update_interval = 300
  

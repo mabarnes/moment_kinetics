@@ -95,8 +95,7 @@ initial_density = 1.0
 [timestepping]
 type = "Fekete4(3)"
 kinetic_electron_solver = "explicit_time_evolving"
-implicit_ion_advance = false
-implicit_vpa_advection = false
+kinetic_ion_solver = "full_explicit_ion_advance"
 nstep = 100000 #1000000
 dt = 1.0e-5
 nwrite = 1000 #10000

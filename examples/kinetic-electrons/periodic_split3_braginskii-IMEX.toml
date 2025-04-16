@@ -88,8 +88,7 @@ upar_phase = 0.0
 
 [timestepping]
 type = "KennedyCarpenterARK324"
-implicit_ion_advance = false
-implicit_vpa_advection = false
+kinetic_ion_solver = "full_explicit_ion_advance"
 implicit_braginskii_conduction = true
 nstep = 1000000
 dt = 1.0e-6
@@ -101,8 +100,7 @@ steady_state_residual = true
 converged_residual_value = 1.0e-3
 #[timestepping]
 #type = "KennedyCarpenterARK324"
-#implicit_ion_advance = false
-#implicit_vpa_advection = false
+#kinetic_ion_solver = "full_explicit_ion_advance"
 #implicit_braginskii_conduction = true
 #nstep = 1000000
 #dt = 1.0e-6
