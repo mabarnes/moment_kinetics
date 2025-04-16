@@ -447,20 +447,18 @@ function setup_file_io(io_input, boundary_distributions, vz, vr, vzeta, vpa, vpe
             ascii = ascii_ios(nothing, nothing, nothing, nothing, nothing)
         end
 
-        run_id = io_input.run_id
-
         io_moments = setup_moments_io(out_prefix, io_input, vz, vr, vzeta, vpa, vperp, r,
                                       z, composition, collisions, evolve_density,
                                       evolve_upar, evolve_ppar, external_source_settings,
-                                      input_dict, comm_inter_block[], run_id,
-                                      restart_time_index, previous_runs_info,
-                                      time_for_setup, t_params, nl_solver_params)
+                                      input_dict, comm_inter_block[], restart_time_index,
+                                      previous_runs_info, time_for_setup, t_params,
+                                      nl_solver_params)
         io_dfns = setup_dfns_io(out_prefix, io_input, boundary_distributions, r, z, vperp,
                                 vpa, vzeta, vr, vz, composition, collisions,
                                 evolve_density, evolve_upar, evolve_ppar,
                                 external_source_settings, input_dict, comm_inter_block[],
-                                run_id, restart_time_index, previous_runs_info,
-                                time_for_setup, t_params, nl_solver_params)
+                                restart_time_index, previous_runs_info, time_for_setup,
+                                t_params, nl_solver_params)
 
         return ascii, io_moments, io_dfns
     end
@@ -2087,8 +2085,8 @@ setup file i/o for moment variables
 function setup_moments_io(prefix, io_input, vz, vr, vzeta, vpa, vperp, r, z,
                           composition, collisions, evolve_density, evolve_upar,
                           evolve_ppar, external_source_settings, input_dict,
-                          io_comm, run_id, restart_time_index, previous_runs_info,
-                          time_for_setup, t_params, nl_solver_params)
+                          io_comm, restart_time_index, previous_runs_info, time_for_setup,
+                          t_params, nl_solver_params)
     @serial_region begin
         moments_prefix = string(prefix, ".moments")
         parallel_io = io_input.parallel_io
@@ -2105,8 +2103,9 @@ function setup_moments_io(prefix, io_input, vz, vr, vzeta, vpa, vperp, r, z,
                         evolve_upar, evolve_ppar, time_for_setup)
 
         # write provenance tracking information to the output file
-        write_provenance_tracking_info!(fid, parallel_io, run_id, restart_time_index,
-                                        input_dict, previous_runs_info)
+        write_provenance_tracking_info!(fid, parallel_io, io_input.run_id,
+                                        restart_time_index, input_dict,
+                                        previous_runs_info)
 
         # write the input settings
         write_input!(fid, input_dict, parallel_io)
@@ -2238,9 +2237,9 @@ setup file i/o for distribution function variables
 """
 function setup_dfns_io(prefix, io_input, boundary_distributions, r, z, vperp, vpa, vzeta,
                        vr, vz, composition, collisions, evolve_density, evolve_upar,
-                       evolve_ppar, external_source_settings, input_dict, io_comm, run_id,
+                       evolve_ppar, external_source_settings, input_dict, io_comm,
                        restart_time_index, previous_runs_info, time_for_setup, t_params,
-                       nl_solver_params)
+                       nl_solver_params; is_debug=false)
 
     @serial_region begin
         dfns_prefix = string(prefix, ".dfns")
@@ -2259,8 +2258,9 @@ function setup_dfns_io(prefix, io_input, boundary_distributions, r, z, vperp, vp
                         evolve_upar, evolve_ppar, time_for_setup)
 
         # write provenance tracking information to the output file
-        write_provenance_tracking_info!(fid, parallel_io, run_id, restart_time_index,
-                                        input_dict, previous_runs_info)
+        write_provenance_tracking_info!(fid, parallel_io, io_input.run_id,
+                                        restart_time_index, input_dict,
+                                        previous_runs_info)
 
         # write the input settings
         write_input!(fid, input_dict, parallel_io)
@@ -2279,6 +2279,20 @@ function setup_dfns_io(prefix, io_input, boundary_distributions, r, z, vperp, vp
             fid, r, z, vperp, vpa, vzeta, vr, vz, composition, io_input,
             external_source_settings, evolve_density, evolve_upar, evolve_ppar, t_params,
             nl_solver_params)
+
+        if is_debug
+            # create the "istage" variable, used to identify the rk stage where
+            # `write_debug_data_to_binary()` was called.
+            dynamic = get_group(fid, "dynamic_data")
+            io_istage = create_dynamic_variable!(dynamic, "istage", mk_int;
+                                                 parallel_io=parallel_io,
+                                                 description="RK istage")
+            # create the "label" variable, used to identify the
+            # `write_debug_data_to_binary()` call-site
+            io_label = create_dynamic_variable!(dynamic, "label", String;
+                                                parallel_io=parallel_io,
+                                                description="call-site label")
+        end
 
         close(fid)
 
@@ -2437,7 +2451,7 @@ file
 @timeit global_timer write_all_moments_data_to_binary(
                          scratch, moments, fields, n_ion_species, n_neutral_species,
                          io_or_file_info_moments, t_idx, time_for_run, t_params,
-                         nl_solver_params, r, z, dfns=false) = begin
+                         nl_solver_params, r, z, dfns=false; timing_data=true) = begin
 
     io_moments = io_or_file_info_moments
     @serial_region begin
@@ -2473,11 +2487,18 @@ file
         append_to_dynamic_var(io_moments.dt, t_params.dt_before_output[], t_idx, parallel_io)
         append_to_dynamic_var(io_moments.previous_dt, t_params.previous_dt[], t_idx, parallel_io)
         append_to_dynamic_var(io_moments.failure_counter, t_params.failure_counter[], t_idx, parallel_io)
+        dynamic_varnames = collect(keys(dynamic))
         for (k,v) ∈ pairs(t_params.failure_caused_by)
+            if "failure_caused_by_$k" ∉ dynamic_varnames
+                continue
+            end
             io_var = dynamic["failure_caused_by_$k"]
             append_to_dynamic_var(io_var, v, t_idx, parallel_io; only_root=true)
         end
         for (k,v) ∈ pairs(t_params.limit_caused_by)
+            if "limit_caused_by_$k" ∉ dynamic_varnames
+                continue
+            end
             io_var = dynamic["limit_caused_by_$k"]
             append_to_dynamic_var(io_var, v, t_idx, parallel_io; only_root=true)
         end
@@ -2498,7 +2519,9 @@ file
         end
     end
 
-    write_timing_data(io_moments, t_idx, dfns)
+    if timing_data
+        write_timing_data(io_moments, t_idx, dfns)
+    end
 
     @serial_region begin
         closefile && close(io_moments.fid)
@@ -3244,7 +3267,7 @@ binary output file
                          scratch, scratch_electron, moments, fields, n_ion_species,
                          n_neutral_species, io_or_file_info_dfns, t_idx, time_for_run,
                          t_params, nl_solver_params, r, z, vperp, vpa, vzeta, vr,
-                         vz) = begin
+                         vz; is_debug=false, label=nothing, istage=nothing) = begin
     io_dfns = nothing
     io_dfns_moments = io_or_file_info_dfns
     closefile = true
@@ -3260,13 +3283,23 @@ binary output file
         end
 
         io_dfns_moments = io_dfns.io_moments
+
+        if is_debug
+            # Figure out the current length of the debug file
+            dynamic = get_group(io_dfns.fid, "dynamic_data")
+            parallel_io = io_dfns.io_input.parallel_io
+            t_idx = length(dynamic["time"]) + 1
+            append_to_dynamic_var(dynamic["istage"], istage, t_idx, parallel_io)
+            append_to_dynamic_var(dynamic["label"], label, t_idx, parallel_io)
+        end
     end
 
     # Write the moments for this time slice to the output file.
     # This also updates the time.
     write_all_moments_data_to_binary(scratch, moments, fields, n_ion_species,
                                      n_neutral_species, io_dfns_moments, t_idx,
-                                     time_for_run, t_params, nl_solver_params, r, z, true)
+                                     time_for_run, t_params, nl_solver_params, r, z, true;
+                                     timing_data=!is_debug)
 
     @serial_region begin
         # add the distribution function data at this time slice to the output file
@@ -3281,6 +3314,39 @@ binary output file
 
         closefile && close(io_dfns.fid)
     end
+    return nothing
+end
+
+"""
+    write_debug_data_to_binary(this_scratch, moments, fields, composition, t_params,
+                               r, z, vperp, vpa, vzeta, vr, vz, label, istage)
+
+If `t_params.debug_io` represents an output file (rather than being `nothing`), write the
+state contained in `this_scratch`, `moments`, and `fields` to that output file. `label` is
+a String identifying the location this function was called from (for reference when
+debugging). `istage` should be the Runge-Kutta stage that this function was called from
+(when called from within the loop over Runge-Kutta stages).
+"""
+function write_debug_data_to_binary(this_scratch, moments, fields, composition, t_params,
+                                    r, z, vperp, vpa, vzeta, vr, vz, label, istage)
+    if t_params.debug_io === nothing
+        # Not using debug IO, so nothing to do. When t_params.debug_io is `nothing`, this
+        # is known at compile time, so the compiler will optimise away
+        # `write_debug_data_to_binary()` because it knows it is a no-op.
+        return nothing
+    end
+
+    @begin_serial_region()
+
+    # write_all_dfns_data_to_binary() expects `scratch` to be a Vector of length
+    # n_rk_stages+1.
+    scratch = [this_scratch for i ∈ 1:t_params.n_rk_stages+1]
+
+    write_all_dfns_data_to_binary(scratch, nothing, moments, fields,
+                                  composition.n_ion_species,
+                                  composition.n_neutral_species, t_params.debug_io,
+                                  nothing, 0.0, t_params, (), r, z, vperp, vpa, vzeta, vr,
+                                  vz; is_debug=true, label=label, istage=istage)
     return nothing
 end
 
@@ -3322,7 +3388,7 @@ function write_electron_dfns_data_to_binary(scratch, scratch_electron, t_params,
         parallel_io = io_dfns.io_input.parallel_io
 
         if io_dfns.f_electron !== nothing
-            if t_params.kinetic_electron_solver == implicit_time_evolving
+            if t_params.kinetic_electron_solver == implicit_time_evolving || scratch_electron === nothing
                 n_rk_stages = t_params.n_rk_stages
                 this_scratch = scratch
             elseif t_params.electron === nothing

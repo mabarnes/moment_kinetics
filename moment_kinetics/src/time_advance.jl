@@ -10,13 +10,14 @@ export setup_dummy_and_buffer_arrays
 using MPI
 using OrderedCollections
 using Quadmath
-using ..type_definitions: mk_float, mk_int
+using ..type_definitions
 using ..array_allocation: allocate_float, allocate_shared_float, allocate_shared_int, allocate_shared_bool
 using ..communication
 using ..communication: @_block_synchronize
 using ..debugging
 using ..file_io: write_data_to_ascii, write_all_moments_data_to_binary,
-                 write_all_dfns_data_to_binary, debug_dump, setup_electron_io
+                 write_all_dfns_data_to_binary, debug_dump, setup_electron_io,
+                 io_input_struct, setup_dfns_io, write_debug_data_to_binary
 using ..initial_conditions: initialize_electrons!
 using ..looping
 using ..moment_kinetics_structs: scratch_pdf, scratch_electron_pdf
@@ -309,7 +310,9 @@ function allocate_advection_structs(composition, z, r, vpa, vperp, vz, vr, vzeta
 end
 
 """
-    setup_time_info(t_input; electrons=nothing)
+    setup_time_info(t_input, n_variables, code_time, dt_reload,
+                    dt_before_last_fail_reload, composition,
+                    manufactured_solns_input, io_input, input_dict; electron=nothing)
 
 Create a [`input_structs.time_info`](@ref) struct using the settings in `t_input`.
 
@@ -318,7 +321,8 @@ the returned `time_info`.
 """
 function setup_time_info(t_input, n_variables, code_time, dt_reload,
                          dt_before_last_fail_reload, composition,
-                         manufactured_solns_input, io_input, input_dict; electron=nothing)
+                         manufactured_solns_input, io_input, input_dict; electron=nothing,
+                         debug_io=nothing)
     code_time = mk_float(code_time)
     rk_coefs, rk_coefs_implicit, implicit_coefficient_is_zero, n_rk_stages, rk_order,
     adaptive, low_storage, CFL_prefactor =
@@ -420,14 +424,12 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
         # Setting up time_info for electrons.
         # Store io_input as the debug_io variable so we can use it to open the debug
         # output file.
-        if t_input["debug_io"] !== false
+        if t_input["debug_io"] !== false && debug_io === nothing
             if !isa(t_input["debug_io"], mk_int)
                 error("`debug_io` input should be an integer, giving the number of steps "
                       * "between writes, if it is passed")
             end
             debug_io = (io_input, input_dict, t_input["debug_io"])
-        else
-            debug_io = nothing
         end
 
         kinetic_electron_solver = null_kinetic_electrons # This option is only used from the ion time_info struct
@@ -440,7 +442,6 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
         include_wall_bc_in_preconditioner = t_input["include_wall_bc_in_preconditioner"]
         electron_t_params = nothing
     elseif electron === false
-        debug_io = nothing
         kinetic_electron_solver = null_kinetic_electrons
         electron_preconditioner_type = nothing
         decrease_dt_iteration_threshold = -1
@@ -451,8 +452,6 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
         include_wall_bc_in_preconditioner = false
         electron_t_params = nothing
     else
-        debug_io = nothing
-
         kinetic_electron_solver = t_input["kinetic_electron_solver"]
         if kinetic_electron_solver ∈ (implicit_time_evolving,
                                       implicit_ppar_implicit_pseudotimestep,
@@ -625,10 +624,53 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
             n_variables += 1
         end
     end
+    if t_input["debug_io"]
+        if t_input["nstep"] > 10
+            println("You have enabled debug_io while setting a large value for "
+                    * "nstep=$(t_input["nstep"]) > 10. Reducing to nstep=10 to avoid "
+                    * "excessively large debug output files. If you really need nstep>10 "
+                    * "comment out this modification at $(@__FILE__):$(@__LINE__).")
+            t_input["nstep"] = 10
+        end
+
+        fake_t_params = (failure_caused_by=(), limit_caused_by=(),
+                         electron=(failure_caused_by=(), limit_caused_by=(),),)
+        # Various diagnostic outputs require information from multiple RK stages. It does
+        # not make sense to write these in the debug_io where we write from within
+        # individual RK stages, so force these diagnostic outputs to be disabled with
+        # `debug_io_input`.
+        debug_io_input = io_input_struct(;
+                             run_name=io_input.run_name,
+                             base_directory=io_input.base_directory,
+                             ascii_output=false,
+                             binary_format=io_input.binary_format,
+                             parallel_io=io_input.parallel_io,
+                             run_id=io_input.run_id,
+                             output_dir=io_input.output_dir,
+                             write_error_diagnostics=false,
+                             write_steady_state_diagnostics=false,
+                             write_electron_error_diagnostics=false,
+                             write_electron_steady_state_diagnostics=false,
+                             display_timing_info=false,
+                            )
+        # Need to exclude internal implementation variable "_section_check_store" from
+        # input to be written to debug file.
+        fake_input_dict = OptionsDict(k => v for (k,v) ∈ input_dict
+                                      if k != "_section_check_store")
+        debug_io = setup_dfns_io(joinpath(io_input.output_dir, "debug"), debug_io_input,
+                                 boundary_distributions, r, z, vperp, vpa, vzeta, vr, vz,
+                                 composition, collisions, moments.evolve_density,
+                                 moments.evolve_upar, moments.evolve_ppar,
+                                 external_source_settings, fake_input_dict,
+                                 comm_inter_block[], 1, nothing, 0.0, fake_t_params, ();
+                                 is_debug=true)
+    else
+        debug_io = nothing
+    end
     t_params = setup_time_info(t_input, n_variables, code_time, dt_reload,
                                dt_before_last_fail_reload, composition,
                                manufactured_solns_input, io_input, input_dict;
-                               electron=electron_t_params)
+                               electron=electron_t_params, debug_io=debug_io)
 
     # Set up entries for counters for which variable caused timestep limits and
     # timestep failures the right length. Do this setup even when not using adaptive
@@ -3139,6 +3181,17 @@ end
                              advance, advance_implicit, fp_arrays, scratch_dummy,
                              manufactured_source_list,diagnostic_checks, istep) = begin
 
+    # Convenience wrapper for calls to write debug information within this function.
+    function write_debug_IO(this_scratch, istage, label)
+        if t_params.debug_io === nothing
+            # Allow compiler to optimise away this function if debug IO is not being used.
+            return nothing
+        end
+        write_debug_data_to_binary(this_scratch, moments, fields, composition, t_params,
+                                   r, z, vperp, vpa, vzeta, vr, vz, label, istage)
+        return nothing
+    end
+
     @begin_s_r_z_region()
 
     n_rk_stages = t_params.n_rk_stages
@@ -3201,6 +3254,8 @@ end
                 moments.neutral.external_source_controller_integral
         end
     end
+    write_debug_IO(first_scratch, 0, "begin ssp_rk!")
+
     if moments.evolve_upar
         # moments may be read on all ranks, even though loop type is z_s, so need to
         # synchronize here
@@ -3213,17 +3268,21 @@ end
         if t_params.rk_coefs_implicit !== nothing
             update_solution_vector!(scratch_implicit[istage], scratch[istage], moments,
                                     composition, vpa, vperp, z, r)
+            write_debug_IO(scratch_implicit[istage], istage,
+                           "implicit update_solution_vector!")
             if t_params.implicit_coefficient_is_zero[istage]
                 # No implicit solve needed at this stage. Do an explicit step of the
                 # implicitly-evolved terms so we can store their time-derivative at this
                 # stage.
                 euler_time_advance!(scratch_implicit[istage], scratch[istage],
                                     pdf, fields, moments, advect_objects, vz, vr, vzeta,
-                                    vpa, vperp, gyrophase, z, r, t_params.t[], t_params.dt[],
+                                    vpa, vperp, gyrophase, z, r, t_params, t_params.dt[],
                                     spectral_objects, composition, collisions, geometry,
                                     scratch_dummy, manufactured_source_list,
                                     external_source_settings, num_diss_params,
                                     advance_implicit, fp_arrays, istage)
+                write_debug_IO(scratch_implicit[istage], istage,
+                               "implicit_coefficient_is_zero euler_time_advance!")
                 # The result of the forward-Euler step is just a hack to store the
                 # (explicit) time-derivative of the implicitly advanced terms. The result
                 # is not used as input to the explicit part of the IMEX advance.
@@ -3252,6 +3311,7 @@ end
                                              external_source_settings, num_diss_params,
                                              gyroavs, nl_solver_params, advance_implicit,
                                              fp_arrays, istage)
+                write_debug_IO(scratch_implicit[istage], istage, "backward_euler!")
                 nl_success = MPI.Allreduce(nl_success, &, comm_world)
                 if !nl_success
                     success = "nonlinear-solver"
@@ -3276,6 +3336,8 @@ end
                     t_params, nl_solver_params, advance, scratch_dummy, false,
                     max_electron_pdf_iterations, max_electron_sim_time;
                     update_electrons=update_electrons)
+                write_debug_IO(scratch_implicit[istage], istage,
+                               "implicit apply_all_bcs_constraints_update_moments!")
                 if bcs_constraints_success != ""
                     success = bcs_constraints_success
                 end
@@ -3293,18 +3355,21 @@ end
         end
         update_solution_vector!(scratch[istage+1], old_scratch, moments, composition, vpa,
                                 vperp, z, r)
+        write_debug_IO(scratch[istage+1], istage, "update_solution_vector!")
         # do an Euler time advance, with scratch[istage+1] containing the advanced
         # quantities and scratch[istage] containing quantities at time level n, RK stage
         # istage
         # calculate f^{(1)} = fⁿ + Δt*G[fⁿ] = scratch[2].pdf
         euler_time_advance!(scratch[istage+1], old_scratch, pdf, fields, moments,
                             advect_objects, vz, vr, vzeta, vpa, vperp, gyrophase, z,
-                            r, t_params.t[], t_params.dt[], spectral_objects, composition,
+                            r, t_params, t_params.dt[], spectral_objects, composition,
                             collisions, geometry, scratch_dummy,
                             manufactured_source_list, external_source_settings,
                             num_diss_params, advance, fp_arrays, istage)
+        write_debug_IO(scratch[istage+1], istage, "after euler_time_advance!")
 
         rk_update!(scratch, scratch_implicit, moments, t_params, istage, composition)
+        write_debug_IO(scratch[istage+1], istage, "rk_update!")
 
         # Always apply boundary conditions and constraints here for explicit schemes. For
         # IMEX schemes, only apply boundary conditions and constraints at the final RK
@@ -3330,6 +3395,8 @@ end
             advance, scratch_dummy, diagnostic_moments, max_electron_pdf_iterations,
             max_electron_sim_time; pdf_bc_constraints=apply_bc_constraints,
             update_electrons=update_electrons)
+        write_debug_IO(scratch[istage+1], istage,
+                       "apply_all_bcs_constraints_update_moments!")
         if bcs_constraints_success != ""
             success = bcs_constraints_success
         end
@@ -3383,6 +3450,7 @@ end
                                   vpa, vzeta, vr, vz, success, nl_max_its_fraction,
                                   nl_total_its_soft_limit,
                                   nl_total_its_soft_limit_reduce_dt)
+        write_debug_IO(scratch[n_rk_stages+1], 0, "adaptive_timestep_update!")
     elseif success != ""
         error("Implicit part of timestep failed")
     end
@@ -3498,6 +3566,7 @@ end
                     final_scratch.neutral_external_source_controller_integral
             end
         end
+        write_debug_IO(final_scratch, istage, "end ssp_rk!")
     end
 
     return nothing
@@ -3507,18 +3576,35 @@ end
 euler_time_advance! advances the vector equation dfvec/dt = G[f]
 that includes the kinetic equation + any evolved moment equations
 using the forward Euler method: fvec_out = fvec_in + dt*fvec_in,
-with fvec_in an input and fvec_out the output
+with fvec_in an input and fvec_out the output.
+
+Note `dt` is passed separately from `t_params` because sometimes (in the IMEX Runge-Kutta
+implementation), a call needs to be made with `dt` scaled by some coefficient.
 """
 @timeit global_timer euler_time_advance!(
                          fvec_out, fvec_in, pdf, fields, moments, advect_objects, vz, vr,
-                         vzeta, vpa, vperp, gyrophase, z, r, t, dt, spectral_objects,
-                         composition, collisions, geometry, scratch_dummy,
-                         manufactured_source_list, external_source_settings,
-                         num_diss_params, advance, fp_arrays, istage) = begin
+                         vzeta, vpa, vperp, gyrophase, z, r, t_params, dt,
+                         spectral_objects, composition, collisions, geometry,
+                         scratch_dummy, manufactured_source_list,
+                         external_source_settings, num_diss_params, advance, fp_arrays,
+                         istage) = begin
+
+    # Convenience wrapper for calls to write debug information within this function.
+    function write_debug_IO(label)
+        if t_params.debug_io === nothing
+            # Allow compiler to optimise away this function if debug IO is not being used.
+            return nothing
+        end
+        write_debug_data_to_binary(fvec_out, moments, fields, composition, t_params, r, z,
+                                   vperp, vpa, vzeta, vr, vz, label, istage)
+        return nothing
+    end
+    write_debug_IO("begin euler_time_advance!")
 
     # define some abbreviated variables for tidiness
     n_ion_species = composition.n_ion_species
     n_neutral_species = composition.n_neutral_species
+    t = t_params.t[]
 
     vpa_spectral, vperp_spectral, r_spectral, z_spectral = spectral_objects.vpa_spectral, spectral_objects.vperp_spectral, spectral_objects.r_spectral, spectral_objects.z_spectral
     vz_spectral, vr_spectral, vzeta_spectral = spectral_objects.vz_spectral, spectral_objects.vr_spectral, spectral_objects.vzeta_spectral
@@ -3529,12 +3615,14 @@ with fvec_in an input and fvec_out the output
         total_external_ion_source_controllers!(fvec_out.ion_external_source_controller_integral,
                                                fvec_in, moments,
                                                external_source_settings.ion, dt)
+        write_debug_IO("total_external_ion_source_controllers!")
     end
     if advance.neutral_external_source
         total_external_neutral_source_controllers!(fvec_out.neutral_external_source_controller_integral,fvec_in,
                                                    moments,
                                                    external_source_settings.neutral, r, z,
                                                    dt)
+        write_debug_IO("total_external_neutral_source_controllers!")
     end
 
     # Start advance for moments
@@ -3542,32 +3630,38 @@ with fvec_in an input and fvec_out the output
         continuity_equation!(fvec_out.density, fvec_in, moments, composition, dt,
                              z_spectral, collisions.reactions.ionization_frequency,
                              external_source_settings.ion, num_diss_params)
+        write_debug_IO("continuity_equation!")
     end
     if advance.force_balance
         force_balance!(fvec_out.upar, fvec_out.density, fvec_in, moments, fields,
                        collisions, dt, z_spectral, composition, geometry,
                        external_source_settings.ion, num_diss_params)
+        write_debug_IO("force_balance!")
     end
     if advance.energy
         energy_equation!(fvec_out.ppar, fvec_in, moments, collisions, dt, z_spectral,
                          composition, external_source_settings.ion, num_diss_params)
+        write_debug_IO("energy_equation!")
     end
     if advance.neutral_continuity
         neutral_continuity_equation!(fvec_out.density_neutral, fvec_in, moments,
                                      composition, dt, z_spectral,
                                      collisions.reactions.ionization_frequency,
                                      external_source_settings.neutral, num_diss_params)
+        write_debug_IO("neutral_continuity_equation!")
     end
     if advance.neutral_force_balance
         neutral_force_balance!(fvec_out.uz_neutral, fvec_out.density_neutral, fvec_in,
                                moments, fields, collisions, dt, z_spectral, composition,
                                geometry, external_source_settings.neutral,
                                num_diss_params)
+        write_debug_IO("neutral_force_balance!")
     end
     if advance.neutral_energy
         neutral_energy_equation!(fvec_out.pz_neutral, fvec_in, moments, collisions, dt,
                                  z_spectral, composition,
                                  external_source_settings.neutral, num_diss_params)
+        write_debug_IO("neutral_energy_equation!")
     end
 
     if advance.electron_pdf
@@ -3580,6 +3674,7 @@ with fvec_in an input and fvec_out the output
                        vpa_advect, scratch_dummy, collisions, composition,
                        external_source_settings, num_diss_params, electron_t_params, ir)
         end
+        write_debug_IO("electron_kinetic_equation_euler_update!")
     end
     if advance.electron_energy
         electron_energy_equation!(fvec_out.electron_ppar, fvec_out.density,
@@ -3592,6 +3687,7 @@ with fvec_in an input and fvec_out the output
                                   z; conduction=advance.electron_conduction)
         update_derived_electron_moment_time_derivatives!(fvec_in.electron_ppar, moments,
                                                          composition.electron_physics)
+        write_debug_IO("electron_energy_equation!")
     elseif advance.electron_conduction
         # Explicit version of the implicit part of the IMEX timestep, need to evaluate
         # only the conduction term.
@@ -3602,6 +3698,7 @@ with fvec_in an input and fvec_out the output
                 fvec_in.upar[:,ir], moments.electron, collisions, composition, z,
                 z_spectral, scratch_dummy, dt, ir)
         end
+        write_debug_IO("electron_braginskii_conduction!")
     end
 
     update_derived_ion_moment_time_derivatives!(fvec_in, moments)
@@ -3614,6 +3711,7 @@ with fvec_in an input and fvec_out the output
         if advance.vpa_advection
             vpa_advection!(fvec_out.pdf, fvec_in, fields, moments, vpa_advect, vpa, vperp, z, r, dt, t,
                 vpa_spectral, composition, collisions, external_source_settings.ion, geometry)
+            write_debug_IO("vpa_advection!")
         end
 
         # z_advection! advances 1D advection equation in z
@@ -3621,12 +3719,14 @@ with fvec_in an input and fvec_out the output
         if advance.z_advection
             z_advection!(fvec_out.pdf, fvec_in, moments, fields, z_advect, z, vpa, vperp, r,
                         dt, t, z_spectral, composition, geometry, scratch_dummy)
+            write_debug_IO("z_advection!")
         end
 
         # r advection relies on derivatives in z to get ExB
         if advance.r_advection
             r_advection!(fvec_out.pdf, fvec_in, moments, fields, r_advect, r, z, vperp, vpa,
                         dt, r_spectral, composition, geometry, scratch_dummy)
+            write_debug_IO("r_advection!")
         end
         # vperp_advection requires information about z and r advection
         # so call vperp_advection! only after z and r advection routines
@@ -3634,21 +3734,25 @@ with fvec_in an input and fvec_out the output
             vperp_advection!(fvec_out.pdf, fvec_in, vperp_advect, r, z, vperp, vpa,
                         dt, vperp_spectral, composition, z_advect, r_advect, geometry,
                         moments, fields, t)
+            write_debug_IO("vperp_advection!")
         end
 
         if advance.source_terms
             source_terms!(fvec_out.pdf, fvec_in, moments, vpa, z, r, dt, z_spectral,
                         composition, collisions, external_source_settings.ion)
+            write_debug_IO("source_terms!")
         end
 
         if advance.neutral_z_advection
             neutral_advection_z!(fvec_out.pdf_neutral, fvec_in, moments, neutral_z_advect,
                 r, z, vzeta, vr, vz, dt, t, z_spectral, composition, scratch_dummy)
+            write_debug_IO("neutral_advection_z!")
         end
 
         if advance.neutral_r_advection
             neutral_advection_r!(fvec_out.pdf_neutral, fvec_in, neutral_r_advect,
                 r, z, vzeta, vr, vz, dt, r_spectral, composition, geometry, scratch_dummy)
+            write_debug_IO("neutral_advection_r!")
         end
 
         # neutral_advection_vz! advances the 1D advection equation in vz.
@@ -3658,24 +3762,29 @@ with fvec_in an input and fvec_out the output
             neutral_advection_vz!(fvec_out.pdf_neutral, fvec_in, fields, moments,
                                 neutral_vz_advect, vz, vr, vzeta, z, r, dt, vz_spectral,
                                 composition, collisions, external_source_settings.neutral)
+            write_debug_IO("neutral_advection_vz!")
         end
 
         if advance.neutral_source_terms
             source_terms_neutral!(fvec_out.pdf_neutral, fvec_in, moments, vz, z, r, dt, z_spectral,
                         composition, collisions, external_source_settings.neutral)
+            write_debug_IO("source_terms_neutral!")
         end
 
         if advance.manufactured_solns_test
             source_terms_manufactured!(fvec_out.pdf, fvec_out.pdf_neutral, vz, vr, vzeta, vpa, vperp, z, r, t, dt, composition, manufactured_source_list)
+            write_debug_IO("source_terms_manufactured!")
         end
 
         if advance.ion_cx_collisions || advance.ion_ionization_collisions
             # gyroaverage neutral dfn and place it in the ion.buffer array for use in the collisions step
             vzvrvzeta_to_vpavperp!(pdf.ion.buffer, fvec_in.pdf_neutral, vz, vr, vzeta, vpa, vperp, gyrophase, z, r, geometry, composition)
+            write_debug_IO("vzvrvzeta_to_vpavperp!")
         end
         if advance.neutral_cx_collisions || advance.neutral_ionization_collisions
             # interpolate ion particle dfn and place it in the neutral.buffer array for use in the collisions step
             vpavperp_to_vzvrvzeta!(pdf.neutral.buffer, fvec_in.pdf, vz, vr, vzeta, vpa, vperp, z, r, geometry, composition)
+            write_debug_IO("vpavperp_to_vzvrvzeta!")
         end
 
         # account for charge exchange collisions between ions and neutrals
@@ -3683,82 +3792,102 @@ with fvec_in an input and fvec_out the output
             ion_charge_exchange_collisions_1V!(fvec_out.pdf, fvec_in, moments, composition,
                                             vpa, vz, collisions.reactions.charge_exchange_frequency,
                                             vpa_spectral, vz_spectral, dt)
+            write_debug_IO("ion_charge_exchange_collisions_1V!")
         elseif advance.ion_cx_collisions
             ion_charge_exchange_collisions_3V!(fvec_out.pdf, pdf.ion.buffer, fvec_in,
                                             composition, vz, vr, vzeta, vpa, vperp, z, r,
                                             collisions.reactions.charge_exchange_frequency, dt)
+            write_debug_IO("ion_charge_exchange_collisions_3V!")
         end
         if advance.neutral_cx_collisions_1V
             neutral_charge_exchange_collisions_1V!(fvec_out.pdf_neutral, fvec_in, moments,
                                                 composition, vpa, vz,
                                                 collisions.reactions.charge_exchange_frequency, vpa_spectral,
                                                 vz_spectral, dt)
+            write_debug_IO("neutral_charge_exchange_collisions_1V!")
         elseif advance.neutral_cx_collisions
             neutral_charge_exchange_collisions_3V!(fvec_out.pdf_neutral, pdf.neutral.buffer,
                                                 fvec_in, composition, vz, vr, vzeta, vpa,
                                                 vperp, z, r, collisions.reactions.charge_exchange_frequency,
                                                 dt)
+            write_debug_IO("neutral_charge_exchange_collisions_3V!")
         end
         # account for ionization collisions between ions and neutrals
         if advance.ion_ionization_collisions_1V
             ion_ionization_collisions_1V!(fvec_out.pdf, fvec_in, vz, vpa, vperp, z, r,
                                         vz_spectral, moments, composition, collisions, dt)
+            write_debug_IO("ion_ionization_collisions_1V!")
         elseif advance.ion_ionization_collisions
             ion_ionization_collisions_3V!(fvec_out.pdf, pdf.ion.buffer, fvec_in, composition,
                                         vz, vr, vzeta, vpa, vperp, z, r, collisions, dt)
+            write_debug_IO("ion_ionization_collisions_3V!")
         end
         if advance.neutral_ionization_collisions_1V
             neutral_ionization_collisions_1V!(fvec_out.pdf_neutral, fvec_in, vz, vpa, vperp,
                                             z, r, vz_spectral, moments, composition,
                                             collisions, dt)
+            write_debug_IO("neutral_ionization_collisions_1V!")
         elseif advance.neutral_ionization_collisions
             neutral_ionization_collisions_3V!(fvec_out.pdf_neutral, fvec_in, composition, vz,
                                             vr, vzeta, vpa, vperp, z, r, collisions, dt)
+            write_debug_IO("neutral_ionization_collisions_3V!")
         end
 
         # Add Krook collision operator for ions
         if advance.krook_collisions_ii
             krook_collisions!(fvec_out.pdf, fvec_in, moments, composition, collisions,
                             vperp, vpa, dt)
+            write_debug_IO("krook_collisions!")
         end
         # Add maxwellian diffusion collision operator for ions
         if advance.mxwl_diff_collisions_ii
             ion_vpa_maxwell_diffusion!(fvec_out.pdf, fvec_in, moments, vpa, vperp, vpa_spectral, 
                                     dt, collisions.mxwl_diff.D_ii)
+            write_debug_IO("ion_vpa_maxwell_diffusion!")
         end
         # Add maxwellian diffusion collision operator for neutrals
         if advance.mxwl_diff_collisions_nn
             neutral_vz_maxwell_diffusion!(fvec_out.pdf_neutral, fvec_in, moments, vzeta, vr, vz, vz_spectral, 
                                     dt, collisions.mxwl_diff.D_nn)
+            write_debug_IO("neutral_vz_maxwell_diffusion!")
         end
 
         if advance.external_source
             total_external_ion_sources!(fvec_out.pdf, fvec_in, moments, external_source_settings.ion,
                                 vperp, vpa, dt, scratch_dummy)
+            write_debug_IO("total_external_ion_sources!")
         end
         if advance.neutral_external_source
             total_external_neutral_sources!(fvec_out.pdf_neutral, fvec_in, moments,
                                     external_source_settings.neutral, vzeta, vr, vz, dt)
+            write_debug_IO("total_external_neutral_sources!")
         end
 
         # add numerical dissipation
         if advance.ion_numerical_dissipation
             vpa_dissipation!(fvec_out.pdf, fvec_in.pdf, vpa, vpa_spectral, dt,
                             num_diss_params.ion.vpa_dissipation_coefficient)
+            write_debug_IO("vpa_dissipation!")
             vperp_dissipation!(fvec_out.pdf, fvec_in.pdf, vperp, vperp_spectral, dt,
                             num_diss_params.ion.vperp_dissipation_coefficient)
+            write_debug_IO("vperp_dissipation!")
             z_dissipation!(fvec_out.pdf, fvec_in.pdf, z, z_spectral, dt,
                         num_diss_params.ion.z_dissipation_coefficient, scratch_dummy)
+            write_debug_IO("z_dissipation!")
             r_dissipation!(fvec_out.pdf, fvec_in.pdf, r, r_spectral, dt,
                         num_diss_params.ion.r_dissipation_coefficient, scratch_dummy)
+            write_debug_IO("r_dissipation!")
         end
         if advance.neutral_numerical_dissipation
             vz_dissipation_neutral!(fvec_out.pdf_neutral, fvec_in.pdf_neutral, vz,
                                     vz_spectral, dt, num_diss_params.neutral.vz_dissipation_coefficient)
+            write_debug_IO("vz_dissipation_neutral!")
             z_dissipation_neutral!(fvec_out.pdf_neutral, fvec_in.pdf_neutral, z, z_spectral,
                                 dt, num_diss_params.neutral.z_dissipation_coefficient, scratch_dummy)
+            write_debug_IO("z_dissipation_neutral!")
             r_dissipation_neutral!(fvec_out.pdf_neutral, fvec_in.pdf_neutral, r, r_spectral,
                                 dt, num_diss_params.neutral.r_dissipation_coefficient, scratch_dummy)
+            write_debug_IO("r_dissipation_neutral!")
         end
         # advance with the Fokker-Planck self-collision operator
         if advance.explicit_weakform_fp_collisions
@@ -3768,12 +3897,14 @@ with fvec_in an input and fvec_out the output
                 explicit_fokker_planck_collisions_weak_form!(fvec_out.pdf,fvec_in.pdf,moments.ion.dSdt,composition,
                                     collisions,dt,fp_arrays,r,z,vperp,vpa,vperp_spectral,vpa_spectral,scratch_dummy,
                                                         diagnose_entropy_production = update_entropy_diagnostic)
+                write_debug_IO("explicit_fokker_planck_collisions_weak_form!")
             end
             if collisions.fkpl.slowing_down_test
             # include cross-collsions with fixed Maxwellian backgrounds
                 explicit_fp_collisions_weak_form_Maxwellian_cross_species!(fvec_out.pdf,fvec_in.pdf,moments.ion.dSdt,
                                 composition,collisions,dt,fp_arrays,r,z,vperp,vpa,vperp_spectral,vpa_spectral,
                                                 diagnose_entropy_production = update_entropy_diagnostic)
+                write_debug_IO("explicit_fp_collisions_weak_form_Maxwellian_cross_species!")
             end
         end
     end
@@ -3887,7 +4018,7 @@ end
     if nl_solver_params.ion_advance !== nothing
         ion_success = implicit_ion_advance!(fvec_out, fvec_in, pdf, fields, moments,
                                             advect_objects, vz, vr, vzeta, vpa, vperp,
-                                            gyrophase, z, r, t_params.t[], dt,
+                                            gyrophase, z, r, t_params, dt,
                                             spectral_objects, composition, collisions,
                                             geometry, scratch_dummy,
                                             manufactured_source_list,
@@ -3912,7 +4043,7 @@ end
 
 """
     implicit_ion_advance!(fvec_out, fvec_in, pdf, fields, moments, advect_objects,
-                          vz, vr, vzeta, vpa, vperp, gyrophase, z, r, t, dt,
+                          vz, vr, vzeta, vpa, vperp, gyrophase, z, r, t_params, dt,
                           spectral_objects, composition, collisions, geometry,
                           scratch_dummy, manufactured_source_list,
                           external_source_settings, num_diss_params,
@@ -3922,12 +4053,13 @@ Do a backward-Euler timestep for all terms in the ion kinetic equation.
 """
 @timeit global_timer implicit_ion_advance!(
                          fvec_out, fvec_in, pdf, fields, moments, advect_objects, vz, vr,
-                         vzeta, vpa, vperp, gyrophase, z, r, t, dt, spectral_objects,
-                         composition, collisions, geometry, scratch_dummy,
-                         manufactured_source_list, external_source_settings,
-                         num_diss_params, gyroavs, nl_solver_params, advance, fp_arrays,
-                         istage) = begin
+                         vzeta, vpa, vperp, gyrophase, z, r, t_params, dt,
+                         spectral_objects, composition, collisions, geometry,
+                         scratch_dummy, manufactured_source_list,
+                         external_source_settings, num_diss_params, gyroavs,
+                         nl_solver_params, advance, fp_arrays, istage) = begin
 
+    t = t_params.t[]
     vpa_spectral, vperp_spectral, r_spectral, z_spectral = spectral_objects.vpa_spectral, spectral_objects.vperp_spectral, spectral_objects.r_spectral, spectral_objects.z_spectral
     vpa_advect, vperp_advect, r_advect, z_advect = advect_objects.vpa_advect, advect_objects.vperp_advect, advect_objects.r_advect, advect_objects.z_advect
 
@@ -4066,9 +4198,9 @@ Do a backward-Euler timestep for all terms in the ion kinetic equation.
 
     # Use a forward-Euler step as the initial guess for fvec_out.pdf
     euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, advect_objects, vz, vr,
-                        vzeta, vpa, vperp, gyrophase, z, r, t, dt, spectral_objects,
-                        composition, collisions, geometry, scratch_dummy,
-                        manufactured_source_list, external_source_settings,
+                        vzeta, vpa, vperp, gyrophase, z, r, t_params, dt,
+                        spectral_objects, composition, collisions, geometry,
+                        scratch_dummy, manufactured_source_list, external_source_settings,
                         num_diss_params, advance, fp_arrays, istage)
 
     # Apply the 'new' boundary conditions to f_old, so it has the same boundary conditions
@@ -4116,8 +4248,8 @@ Do a backward-Euler timestep for all terms in the ion kinetic equation.
 
         euler_time_advance!(residual_scratch, new_scratch, pdf, fields, moments,
                             advect_objects, vz, vr, vzeta, vpa, vperp, gyrophase, z,
-                            r, t, dt, spectral_objects, composition, collisions, geometry,
-                            scratch_dummy, manufactured_source_list,
+                            r, t_params, dt, spectral_objects, composition, collisions,
+                            geometry, scratch_dummy, manufactured_source_list,
                             external_source_settings, num_diss_params, advance, fp_arrays,
                             istage)
 
