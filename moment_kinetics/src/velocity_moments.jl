@@ -2200,7 +2200,7 @@ function update_neutral_qz_species!(qz, density, uz, vth, ff, vz, vr, vzeta, z, 
         end
     elseif evolve_density
         @loop_r_z ir iz begin
-            qz[iz,ir] = 0.5 * density[iz,ir]
+            qz[iz,ir] = 0.5 * density[iz,ir] *
                         integral((vzeta,vr,vz)->((vz-uz[iz,ir])*((vz-uz[iz,ir])^2+vzeta^2+vr^2)),
                                  @view(ff[:,:,:,iz,ir]), vzeta, vr, vz)
         end
