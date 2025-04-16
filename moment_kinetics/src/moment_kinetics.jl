@@ -315,8 +315,7 @@ parallel loop ranges, and are only used by the tests in `debug_test/`.
 
         @begin_serial_region()
         @serial_region begin
-            @. moments.electron.temp = composition.me_over_mi * moments.electron.vth^2
-            @. moments.electron.ppar = 0.5 * moments.electron.dens * moments.electron.temp
+            @. moments.electron.temp = 0.5 * composition.me_over_mi * moments.electron.vth^2
         end
         if composition.electron_physics ∈ (kinetic_electrons,
                                            kinetic_electrons_with_temperature_equation)
