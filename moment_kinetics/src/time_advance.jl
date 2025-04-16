@@ -442,7 +442,7 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
     elseif electron === false
         debug_io = nothing
         kinetic_electron_solver = null_kinetic_electrons
-        kinetic_ion_solver = null_kinetic_ions
+        kinetic_ion_solver = t_input["kinetic_ion_solver"]
         electron_preconditioner_type = nothing
         decrease_dt_iteration_threshold = -1
         increase_dt_iteration_threshold = typemax(mk_int)
