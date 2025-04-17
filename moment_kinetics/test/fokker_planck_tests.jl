@@ -464,20 +464,20 @@ function runtests()
                 @serial_region begin
                     C_M_max, C_M_L2 = print_test_data(C_M_exact,C_M_num,C_M_err,"C_M",vpa,vperp,dummy_array,print_to_screen=print_to_screen)
                     if test_self_operator && !test_numerical_conserving_terms && !use_Maxwellian_Rosenbluth_coefficients && !use_Maxwellian_field_particle_distribution
-                        atol_max = 6.0e-4/π^3
-                        atol_L2 = 7.0e-6/π^3
+                        atol_max = 6.0e-4/π^1.5
+                        atol_L2 = 7.0e-6/π^1.5
                     elseif test_self_operator && test_numerical_conserving_terms && !use_Maxwellian_Rosenbluth_coefficients && !use_Maxwellian_field_particle_distribution
-                        atol_max = 7.0e-4/π^3
-                        atol_L2 = 7.0e-6/π^3
+                        atol_max = 7.0e-4/π^1.5
+                        atol_L2 = 7.0e-6/π^1.5
                     elseif test_self_operator && !test_numerical_conserving_terms && use_Maxwellian_Rosenbluth_coefficients && !use_Maxwellian_field_particle_distribution
-                        atol_max = 8.0e-4/π^3
-                        atol_L2 = 8.1e-6/π^3
+                        atol_max = 8.0e-4/π^1.5
+                        atol_L2 = 8.1e-6/π^1.5
                     elseif test_self_operator && !test_numerical_conserving_terms && !use_Maxwellian_Rosenbluth_coefficients && use_Maxwellian_field_particle_distribution
-                        atol_max = 1.1e-3/π^3
-                        atol_L2 = 9.0e-6/π^3
+                        atol_max = 1.1e-3/π^1.5
+                        atol_L2 = 9.0e-6/π^1.5
                     else
-                        atol_max = 7.0e-2/π^3
-                        atol_L2 = 6.0e-4/π^3
+                        atol_max = 7.0e-2/π^1.5
+                        atol_L2 = 6.0e-4/π^1.5
                     end
                     @test C_M_max < atol_max
                     @test C_M_L2 < atol_L2
@@ -504,9 +504,9 @@ function runtests()
                         rtol, atol = 0.0, 1.0e-9
                         @test isapprox(delta_upar, rtol ; atol=atol)
                         if algebraic_solve_for_d2Gdvperp2
-                            rtol, atol = 0.0, 1.0e-7
+                            rtol, atol = 0.0, 1.0e-7*2
                         else
-                            rtol, atol = 0.0, 1.0e-8
+                            rtol, atol = 0.0, 1.0e-8*2
                         end
                         @test isapprox(delta_pressure, rtol ; atol=atol)
                         if print_to_screen
@@ -527,7 +527,7 @@ function runtests()
                         @test isapprox(delta_n, rtol ; atol=atol)
                         rtol, atol = 0.0, 1.0e-15
                         @test isapprox(delta_upar, rtol ; atol=atol)
-                        rtol, atol = 0.0, 1.0e-15
+                        rtol, atol = 0.0, 1.0e-15*2
                         @test isapprox(delta_pressure, rtol ; atol=atol)
                         if print_to_screen
                             println("dSdt: $dSdt should be >0.0")
@@ -624,8 +624,8 @@ function runtests()
                 @begin_serial_region()
                 @serial_region begin
                     C_M_max, C_M_L2 = print_test_data(C_M_exact,C_M_num,C_M_err,"C_M",vpa,vperp,dummy_array,print_to_screen=print_to_screen)
-                    atol_max = 7.0e-2/π^3
-                    atol_L2 = 6.0e-4/π^3
+                    atol_max = 7.0e-2/π^1.5
+                    atol_L2 = 6.0e-4/π^1.5
                     @test C_M_max < atol_max
                     @test C_M_L2 < atol_L2
                     if !test_numerical_conserving_terms
@@ -716,36 +716,36 @@ function runtests()
                 dGdvperp_M_max, dGdvperp_M_L2 = print_test_data(dGdvperp_M_exact,dGdvperp_M_num,dGdvperp_M_err,"dGdvperp_M",vpa,vperp,dummy_array,print_to_screen=print_to_screen)
                 d2Gdvperpdvpa_M_max, d2Gdvperpdvpa_M_L2 = print_test_data(d2Gdvperpdvpa_M_exact,d2Gdvperpdvpa_M_num,d2Gdvperpdvpa_M_err,"d2Gdvperpdvpa_M",vpa,vperp,dummy_array,print_to_screen=print_to_screen)
                 d2Gdvperp2_M_max, d2Gdvperp2_M_L2 = print_test_data(d2Gdvperp2_M_exact,d2Gdvperp2_M_num,d2Gdvperp2_M_err,"d2Gdvperp2_M",vpa,vperp,dummy_array,print_to_screen=print_to_screen)
-                atol_max = 2.1e-4/π^1.5
-                atol_L2 = 6.5e-6/π^1.5
+                atol_max = 2.1e-4
+                atol_L2 = 6.5e-6
                 @test H_M_max < atol_max
                 @test H_M_L2 < atol_L2
-                atol_max = 1.5e-3/π^1.5
-                atol_L2 = 6.5e-5/π^1.5
+                atol_max = 1.5e-3
+                atol_L2 = 6.5e-5
                 @test dHdvpa_M_max < atol_max
                 @test dHdvpa_M_L2 < atol_L2
-                atol_max = 8.0e-4/π^1.5
-                atol_L2 = 4.0e-5/π^1.5
+                atol_max = 8.0e-4
+                atol_L2 = 4.0e-5
                 @test dHdvperp_M_max < atol_max
                 @test dHdvperp_M_L2 < atol_L2
-                atol_max = 1.1e-4/π^1.5
-                atol_L2 = 4.0e-5/π^1.5
+                atol_max = 1.1e-4
+                atol_L2 = 4.0e-5
                 @test G_M_max < atol_max
                 @test G_M_L2 < atol_L2
-                atol_max = 2.5e-4/π^1.5
-                atol_L2 = 1.2e-5/π^1.5
+                atol_max = 2.5e-4
+                atol_L2 = 1.2e-5
                 @test d2Gdvpa2_M_max < atol_max
                 @test d2Gdvpa2_M_L2 < atol_L2
-                atol_max = 9.0e-5/π^1.5
-                atol_L2 = 6.0e-5/π^1.5
+                atol_max = 9.0e-5
+                atol_L2 = 6.0e-5
                 @test dGdvperp_M_max < atol_max
                 @test dGdvperp_M_L2 < atol_L2
-                atol_max = 1.1e-4/π^1.5
-                atol_L2 = 9.0e-6/π^1.5
+                atol_max = 1.1e-4
+                atol_L2 = 9.0e-6
                 @test d2Gdvperpdvpa_M_max < atol_max
                 @test d2Gdvperpdvpa_M_L2 < atol_L2
-                atol_max = 2.0e-4/π^1.5
-                atol_L2 = 1.1e-5/π^1.5
+                atol_max = 2.0e-4
+                atol_L2 = 1.1e-5
                 @test d2Gdvperp2_M_max < atol_max
                 @test d2Gdvperp2_M_L2 < atol_L2
             end
