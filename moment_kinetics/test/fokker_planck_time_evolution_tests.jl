@@ -1,15 +1,18 @@
 module FokkerPlanckTimeEvolutionTests
 include("setup.jl")
 
+export print_output_data_for_test_update
+
 using Base.Filesystem: tempname
 using MPI
-
+using Printf
 using moment_kinetics.load_data: open_readonly_output_file, load_coordinate_data,
                                  load_species_data, load_fields_data,
                                  load_ion_moments_data, load_pdf_data,
                                  load_time_data, load_species_data
 using moment_kinetics.type_definitions: mk_float
 using moment_kinetics.utils: merge_dict_with_kwargs!
+using moment_kinetics.input_structs: options_to_TOML
 
 const analytical_rtol = 3.e-2
 const regression_rtol = 2.e-8
@@ -179,48 +182,99 @@ expected_data(
 # to modify the test, with a new expected f, print the new f using the following commands
 # in an interative Julia REPL. The path is the path to the .dfns file. 
 ########################################################################################## 
+
 """
-using moment_kinetics.load_data: open_readonly_output_file, load_pdf_data, load_ion_moments_data, load_fields_data
-fid = open_readonly_output_file(path, "dfns")
-f_ion_vpavperpzrst = load_pdf_data(fid)
-f_ion = f_ion_vpavperpzrst[:,:,1,1,1,:]
-ntind = 2
-nvpa = 13  #subject to grid choices
-nvperp = 7 #subject to grid choices
-# pdf
-for k in 1:ntind
-     for i in 1:nvpa-1
-         for j in 1:nvperp-1
-            @printf("%.15f ", f_ion[i,j,k])
-         end
-         @printf("%.15f ", f_ion[i,nvperp,k])
-         print(";\n")
-     end
-     for j in 1:nvperp-1
-       @printf("%.15f ", f_ion[nvpa,j,k])
-     end
-     @printf("%.15f ", f_ion[nvpa,nvperp,k])
-     if k < ntind
-         print(";;;\n")
-     end
-end
-# a moment
-n_ion_zrst, upar_ion_zrst, ppar_ion_zrst, pperp_ion_zrst, qpar_ion_zrst, v_t_ion_zrst, dSdt_zrst = load_ion_moments_data(fid,extended_moments=true)
-for k in 1:ntind
-   @printf("%.15f", n_ion_zrst[1,1,1,k])
-   if k < ntind
-       print(", ")
-   end
-end
-# a field
-phi_zrt, Er_zrt, Ez_zrt = load_fields_data(fid)
-for k in 1:ntind
-   @printf("%.15f", phi_zrt[1,1,k])
-   if k < ntind
-       print(", ")
-   end
-end
+Function to print data from a moment_kinetics run suitable
+for copying into the expected data structure.
 """
+function print_output_data_for_test_update(path)
+    fid = open_readonly_output_file(path, "dfns")
+    f_ion_vpavperpzrst = load_pdf_data(fid)
+    f_ion = f_ion_vpavperpzrst[:,:,1,1,1,:]
+    ntind = size(f_ion,3)
+    nvperp = size(f_ion,2)
+    nvpa = size(f_ion,1)
+    vpa, vpa_spectral = load_coordinate_data(fid, "vpa"; ignore_MPI=true)
+    vperp, vperp_spectral = load_coordinate_data(fid, "vperp"; ignore_MPI=true)
+    # grid
+    function print_grid(coord)
+        println("# Expected "*coord.name)
+        print("[")
+        for k in 1:coord.n
+            @printf("%.15f", coord.grid[k])
+            if k < coord.n
+                print(", ")
+            end
+        end
+        print("],\n")
+        return nothing
+    end
+    # pdf
+    function print_pdf(pdf)
+        println("# Expected f_ion")
+        print("[")
+        for k in 1:ntind
+            for i in 1:nvpa-1
+                for j in 1:nvperp-1
+                    @printf("%.15f ", pdf[i,j,k])
+                end
+                @printf("%.15f ", pdf[i,nvperp,k])
+                print(";\n")
+            end
+            for j in 1:nvperp-1
+                @printf("%.15f ", pdf[nvpa,j,k])
+            end
+            @printf("%.15f ", pdf[nvpa,nvperp,k])
+            if k < ntind
+                print(";;;\n")
+            end
+        end
+        print("]\n")
+        return nothing
+    end
+    # a moment
+    function print_moment(moment,moment_name)
+        println("# Expected "*moment_name)
+        print("[")
+        for k in 1:ntind
+            @printf("%.15f", moment[1,1,1,k])
+            if k < ntind
+                print(", ")
+            end
+        end
+        print("],\n")
+        return nothing
+    end    
+    # a field
+    function print_field(field,field_name)
+        println("# Expected "*field_name)
+        print("[")
+        for k in 1:ntind
+            @printf("%.15f", field[1,1,k])
+            if k < ntind
+                print(", ")
+            end
+        end
+        print("],\n")
+        return nothing
+    end
+    
+    n_ion_zrst, upar_ion_zrst, ppar_ion_zrst, pperp_ion_zrst, qpar_ion_zrst, v_t_ion_zrst, dSdt_zrst = load_ion_moments_data(fid,extended_moments=true)
+    phi_zrt, Er_zrt, Ez_zrt = load_fields_data(fid)
+    print_grid(vpa)
+    print_grid(vperp)
+    print_field(phi_zrt,"phi")
+    print_moment(n_ion_zrst,"n_ion")
+    print_moment(upar_ion_zrst,"upar_ion")
+    print_moment(ppar_ion_zrst,"ppar_ion")
+    print_moment(pperp_ion_zrst,"pperp_ion")
+    print_moment(qpar_ion_zrst,"qpar_ion")
+    print_moment(v_t_ion_zrst,"v_t_ion")
+    print_moment(dSdt_zrst,"dSdt_ion")
+    print_pdf(f_ion)
+    return nothing
+end
+
 # default inputs for tests
 test_input_gauss_legendre = OptionsDict("output" => OptionsDict("run_name" => "gausslegendre_pseudospectral",
                                                                 "base_directory" => test_output_directory),
@@ -270,7 +324,7 @@ test_input_gauss_legendre = OptionsDict("output" => OptionsDict("run_name" => "g
                                                                       "nwrite_dfns" => 5000),
                                        )
 
-
+#println(options_to_TOML(test_input_gauss_legendre))
 """
 Run a test for a single set of parameters
 """
