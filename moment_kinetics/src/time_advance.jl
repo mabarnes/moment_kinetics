@@ -3454,10 +3454,6 @@ end
     elseif success != ""
         error("Implicit part of timestep failed")
     end
-#if global_rank[] == 0
-#    println("loworder ", scratch[2].pdf[92:95,1,1,1,1])
-#    println()
-#end
 
     reset_nonlinear_per_stage_counters!(nl_solver_params.ion_advance)
     reset_nonlinear_per_stage_counters!(nl_solver_params.vpa_advection)
