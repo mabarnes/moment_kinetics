@@ -3473,10 +3473,6 @@ end
                                   moments.neutral.vth, pdf.neutral.norm, vz, vr, vzeta, z,
                                   r, composition, moments.evolve_density,
                                   moments.evolve_upar, moments.evolve_p)
-            # pz can be calculated from p, pzeta, and pr
-            @loop_sn_r_z isn ir iz begin
-                moments.neutral.pz[iz,ir,isn] = (3.0 * moments.neutral.p[iz,ir,isn] - moments.neutral.pr[iz,ir,isn] - moments.neutral.pzeta[iz,ir,isn])
-            end
             # get particle fluxes (n.b. bad naming convention uz -> means -> n uz here)
             update_neutral_ur!(moments.neutral.ur, moments.neutral.ur_updated,
                                moments.neutral.dens, moments.neutral.vth,
@@ -3486,24 +3482,6 @@ end
                                   moments.neutral.dens, moments.neutral.vth,
                                   pdf.neutral.norm, vz, vr, vzeta, z, r, composition,
                                   moments.evolve_density, moments.evolve_p)
-            try #below loop can cause DomainError if p < 0 or density < 0, so exit cleanly if possible
-                @loop_sn_r_z isn ir iz begin
-                    # update density using last density from Runga-Kutta stages
-                    moments.neutral.dens[iz,ir,isn] = final_scratch.density_neutral[iz,ir,isn]
-                    # get vth for neutrals
-                    moments.neutral.vth[iz,ir,isn] = sqrt(2.0*moments.neutral.p[iz,ir,isn]/moments.neutral.dens[iz,ir,isn])
-                end
-            catch e
-                if global_size[] > 1
-                    println("ERROR: error at $(@__LINE__) 724 of time_advance.jl")
-                    println(e)
-                    display(stacktrace(catch_backtrace()))
-                    flush(stdout)
-                    flush(stderr)
-                    MPI.Abort(comm_world, 1)
-                end
-                rethrow(e)
-            end
         end
         @begin_serial_region()
         @serial_region begin
