@@ -1083,8 +1083,8 @@ function calculate_ion_qpar_from_coll_krook!(qpar, density, upar, vth, dT_dz, z,
     return nothing
 end
 
-function get_qpar(ff, density, upar, p, vth, vpa, vperp, dummy_vpavperp, evolve_density,
-                  evolve_upar, evolve_p)
+function get_qpar(ff, density, upar, p, vth, vpa, vperp, evolve_density, evolve_upar,
+                  evolve_p)
     if evolve_p
         return 0.5 * density * vth^3
                integral((vperp,vpa) -> vpa*(vpa^2 + vperp^2), ff, vperp, vpa)
