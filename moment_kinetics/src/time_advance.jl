@@ -16,8 +16,8 @@ using ..communication
 using ..communication: @_block_synchronize
 using ..debugging
 using ..file_io: write_data_to_ascii, write_all_moments_data_to_binary,
-                 write_all_dfns_data_to_binary, debug_dump, setup_electron_io,
-                 io_input_struct, setup_dfns_io, write_debug_data_to_binary
+                 write_all_dfns_data_to_binary, setup_electron_io, io_input_struct,
+                 setup_dfns_io, write_debug_data_to_binary
 using ..initial_conditions: initialize_electrons!
 using ..looping
 using ..moment_kinetics_structs: scratch_pdf, scratch_electron_pdf
