@@ -313,7 +313,7 @@ function Cssp_Maxwellian_inputs(denss::mk_float,upars::mk_float,vths::mk_float,m
         2.0*d2Fsdvperpdvpa*d2Gspdvperpdvpa + 
         (1.0/(vperp.grid[ivperp]^2))*dFsdvperp*dGspdvperp +
         2.0*(1.0 - (ms/msp))*(dFsdvpa*dHspdvpa + dFsdvperp*dHspdvperp) +
-        (8.0/sqrt(pi))*(ms/msp)*Fs*Fsp ) 
+        (8.0*pi)*(ms/msp)*Fs*Fsp)
         
     Cssp_Maxwellian *= nussp
     return Cssp_Maxwellian
