@@ -447,20 +447,18 @@ function setup_file_io(io_input, boundary_distributions, vz, vr, vzeta, vpa, vpe
             ascii = ascii_ios(nothing, nothing, nothing, nothing, nothing)
         end
 
-        run_id = io_input.run_id
-
         io_moments = setup_moments_io(out_prefix, io_input, vz, vr, vzeta, vpa, vperp, r,
                                       z, composition, collisions, evolve_density,
                                       evolve_upar, evolve_ppar, external_source_settings,
-                                      input_dict, comm_inter_block[], run_id,
-                                      restart_time_index, previous_runs_info,
-                                      time_for_setup, t_params, nl_solver_params)
+                                      input_dict, comm_inter_block[], restart_time_index,
+                                      previous_runs_info, time_for_setup, t_params,
+                                      nl_solver_params)
         io_dfns = setup_dfns_io(out_prefix, io_input, boundary_distributions, r, z, vperp,
                                 vpa, vzeta, vr, vz, composition, collisions,
                                 evolve_density, evolve_upar, evolve_ppar,
                                 external_source_settings, input_dict, comm_inter_block[],
-                                run_id, restart_time_index, previous_runs_info,
-                                time_for_setup, t_params, nl_solver_params)
+                                restart_time_index, previous_runs_info, time_for_setup,
+                                t_params, nl_solver_params)
 
         return ascii, io_moments, io_dfns
     end
@@ -2087,8 +2085,8 @@ setup file i/o for moment variables
 function setup_moments_io(prefix, io_input, vz, vr, vzeta, vpa, vperp, r, z,
                           composition, collisions, evolve_density, evolve_upar,
                           evolve_ppar, external_source_settings, input_dict,
-                          io_comm, run_id, restart_time_index, previous_runs_info,
-                          time_for_setup, t_params, nl_solver_params)
+                          io_comm, restart_time_index, previous_runs_info, time_for_setup,
+                          t_params, nl_solver_params)
     @serial_region begin
         moments_prefix = string(prefix, ".moments")
         parallel_io = io_input.parallel_io
@@ -2105,8 +2103,9 @@ function setup_moments_io(prefix, io_input, vz, vr, vzeta, vpa, vperp, r, z,
                         evolve_upar, evolve_ppar, time_for_setup)
 
         # write provenance tracking information to the output file
-        write_provenance_tracking_info!(fid, parallel_io, run_id, restart_time_index,
-                                        input_dict, previous_runs_info)
+        write_provenance_tracking_info!(fid, parallel_io, io_input.run_id,
+                                        restart_time_index, input_dict,
+                                        previous_runs_info)
 
         # write the input settings
         write_input!(fid, input_dict, parallel_io)
@@ -2238,9 +2237,9 @@ setup file i/o for distribution function variables
 """
 function setup_dfns_io(prefix, io_input, boundary_distributions, r, z, vperp, vpa, vzeta,
                        vr, vz, composition, collisions, evolve_density, evolve_upar,
-                       evolve_ppar, external_source_settings, input_dict, io_comm, run_id,
+                       evolve_ppar, external_source_settings, input_dict, io_comm,
                        restart_time_index, previous_runs_info, time_for_setup, t_params,
-                       nl_solver_params)
+                       nl_solver_params; is_debug=false)
 
     @serial_region begin
         dfns_prefix = string(prefix, ".dfns")
@@ -2259,8 +2258,9 @@ function setup_dfns_io(prefix, io_input, boundary_distributions, r, z, vperp, vp
                         evolve_upar, evolve_ppar, time_for_setup)
 
         # write provenance tracking information to the output file
-        write_provenance_tracking_info!(fid, parallel_io, run_id, restart_time_index,
-                                        input_dict, previous_runs_info)
+        write_provenance_tracking_info!(fid, parallel_io, io_input.run_id,
+                                        restart_time_index, input_dict,
+                                        previous_runs_info)
 
         # write the input settings
         write_input!(fid, input_dict, parallel_io)
@@ -2279,6 +2279,20 @@ function setup_dfns_io(prefix, io_input, boundary_distributions, r, z, vperp, vp
             fid, r, z, vperp, vpa, vzeta, vr, vz, composition, io_input,
             external_source_settings, evolve_density, evolve_upar, evolve_ppar, t_params,
             nl_solver_params)
+
+        if is_debug
+            # create the "istage" variable, used to identify the rk stage where
+            # `write_debug_data_to_binary()` was called.
+            dynamic = get_group(fid, "dynamic_data")
+            io_istage = create_dynamic_variable!(dynamic, "istage", mk_int;
+                                                 parallel_io=parallel_io,
+                                                 description="RK istage")
+            # create the "label" variable, used to identify the
+            # `write_debug_data_to_binary()` call-site
+            io_label = create_dynamic_variable!(dynamic, "label", String;
+                                                parallel_io=parallel_io,
+                                                description="call-site label")
+        end
 
         close(fid)
 
@@ -2437,7 +2451,7 @@ file
 @timeit global_timer write_all_moments_data_to_binary(
                          scratch, moments, fields, n_ion_species, n_neutral_species,
                          io_or_file_info_moments, t_idx, time_for_run, t_params,
-                         nl_solver_params, r, z, dfns=false) = begin
+                         nl_solver_params, r, z, dfns=false; timing_data=true) = begin
 
     io_moments = io_or_file_info_moments
     @serial_region begin
@@ -2473,11 +2487,18 @@ file
         append_to_dynamic_var(io_moments.dt, t_params.dt_before_output[], t_idx, parallel_io)
         append_to_dynamic_var(io_moments.previous_dt, t_params.previous_dt[], t_idx, parallel_io)
         append_to_dynamic_var(io_moments.failure_counter, t_params.failure_counter[], t_idx, parallel_io)
+        dynamic_varnames = collect(keys(dynamic))
         for (k,v) ∈ pairs(t_params.failure_caused_by)
+            if "failure_caused_by_$k" ∉ dynamic_varnames
+                continue
+            end
             io_var = dynamic["failure_caused_by_$k"]
             append_to_dynamic_var(io_var, v, t_idx, parallel_io; only_root=true)
         end
         for (k,v) ∈ pairs(t_params.limit_caused_by)
+            if "limit_caused_by_$k" ∉ dynamic_varnames
+                continue
+            end
             io_var = dynamic["limit_caused_by_$k"]
             append_to_dynamic_var(io_var, v, t_idx, parallel_io; only_root=true)
         end
@@ -2498,7 +2519,9 @@ file
         end
     end
 
-    write_timing_data(io_moments, t_idx, dfns)
+    if timing_data
+        write_timing_data(io_moments, t_idx, dfns)
+    end
 
     @serial_region begin
         closefile && close(io_moments.fid)
@@ -3244,7 +3267,7 @@ binary output file
                          scratch, scratch_electron, moments, fields, n_ion_species,
                          n_neutral_species, io_or_file_info_dfns, t_idx, time_for_run,
                          t_params, nl_solver_params, r, z, vperp, vpa, vzeta, vr,
-                         vz) = begin
+                         vz; is_debug=false, label=nothing, istage=nothing) = begin
     io_dfns = nothing
     io_dfns_moments = io_or_file_info_dfns
     closefile = true
@@ -3260,13 +3283,23 @@ binary output file
         end
 
         io_dfns_moments = io_dfns.io_moments
+
+        if is_debug
+            # Figure out the current length of the debug file
+            dynamic = get_group(io_dfns.fid, "dynamic_data")
+            parallel_io = io_dfns.io_input.parallel_io
+            t_idx = length(dynamic["time"]) + 1
+            append_to_dynamic_var(dynamic["istage"], istage, t_idx, parallel_io)
+            append_to_dynamic_var(dynamic["label"], label, t_idx, parallel_io)
+        end
     end
 
     # Write the moments for this time slice to the output file.
     # This also updates the time.
     write_all_moments_data_to_binary(scratch, moments, fields, n_ion_species,
                                      n_neutral_species, io_dfns_moments, t_idx,
-                                     time_for_run, t_params, nl_solver_params, r, z, true)
+                                     time_for_run, t_params, nl_solver_params, r, z, true;
+                                     timing_data=!is_debug)
 
     @serial_region begin
         # add the distribution function data at this time slice to the output file
@@ -3281,6 +3314,39 @@ binary output file
 
         closefile && close(io_dfns.fid)
     end
+    return nothing
+end
+
+"""
+    write_debug_data_to_binary(this_scratch, moments, fields, composition, t_params,
+                               r, z, vperp, vpa, vzeta, vr, vz, label, istage)
+
+If `t_params.debug_io` represents an output file (rather than being `nothing`), write the
+state contained in `this_scratch`, `moments`, and `fields` to that output file. `label` is
+a String identifying the location this function was called from (for reference when
+debugging). `istage` should be the Runge-Kutta stage that this function was called from
+(when called from within the loop over Runge-Kutta stages).
+"""
+function write_debug_data_to_binary(this_scratch, moments, fields, composition, t_params,
+                                    r, z, vperp, vpa, vzeta, vr, vz, label, istage)
+    if t_params.debug_io === nothing
+        # Not using debug IO, so nothing to do. When t_params.debug_io is `nothing`, this
+        # is known at compile time, so the compiler will optimise away
+        # `write_debug_data_to_binary()` because it knows it is a no-op.
+        return nothing
+    end
+
+    @begin_serial_region()
+
+    # write_all_dfns_data_to_binary() expects `scratch` to be a Vector of length
+    # n_rk_stages+1.
+    scratch = [this_scratch for i ∈ 1:t_params.n_rk_stages+1]
+
+    write_all_dfns_data_to_binary(scratch, nothing, moments, fields,
+                                  composition.n_ion_species,
+                                  composition.n_neutral_species, t_params.debug_io,
+                                  nothing, 0.0, t_params, (), r, z, vperp, vpa, vzeta, vr,
+                                  vz; is_debug=true, label=label, istage=istage)
     return nothing
 end
 
@@ -3322,7 +3388,7 @@ function write_electron_dfns_data_to_binary(scratch, scratch_electron, t_params,
         parallel_io = io_dfns.io_input.parallel_io
 
         if io_dfns.f_electron !== nothing
-            if t_params.kinetic_electron_solver == implicit_time_evolving
+            if t_params.kinetic_electron_solver == implicit_time_evolving || scratch_electron === nothing
                 n_rk_stages = t_params.n_rk_stages
                 this_scratch = scratch
             elseif t_params.electron === nothing
@@ -3647,254 +3713,6 @@ and returns the corresponding io stream (identifier)
 function open_ascii_output_file(prefix, ext)
     str = string(prefix,".",ext)
     return io = open(str,"w")
-end
-
-"""
-An nc_info instance that may be initialised for writing debug output
-
-This is a non-const module variable, so does cause type instability, but it is only used
-for debugging (from `debug_dump()`) so performance is not critical.
-"""
-debug_output_file = nothing
-
-"""
-Global counter for calls to debug_dump
-"""
-const debug_output_counter = Ref(1)
-
-"""
-    debug_dump(ff, dens, upar, ppar, phi, t; istage=0, label="")
-    debug_dump(fvec::scratch_pdf, fields::em_fields_struct, t; istage=0, label="")
-
-Dump variables into a NetCDF file for debugging
-
-Intended to be called more frequently than `write_data_to_binary()`, possibly several
-times within a timestep, so includes a `label` argument to identify the call site.
-
-Writes to a file called `debug_output.h5` in the current directory.
-
-Can either be called directly with the arrays to be dumped (fist signature), or using
-`scratch_pdf` and `em_fields_struct` structs.
-
-`nothing` can be passed to any of the positional arguments (if they are unavailable at a
-certain point in the code, or just not interesting). `t=nothing` will set `t` to the
-value saved in the previous call (or 0.0 on the first call). Passing `nothing` to the
-other arguments will set that array to `0.0` for this call (need to write some value so
-all the arrays have the same length, with an entry for each call to `debug_dump()`).
-"""
-function debug_dump end
-function debug_dump(vz::coordinate, vr::coordinate, vzeta::coordinate, vpa::coordinate,
-                    vperp::coordinate, z::coordinate, r::coordinate, t::mk_float;
-                    evolve_density, evolve_upar, evolve_ppar,
-                    ff=nothing, dens=nothing, upar=nothing, ppar=nothing, pperp=nothing, qpar=nothing,
-                    vth=nothing,
-                    ff_neutral=nothing, dens_neutral=nothing, uz_neutral=nothing,
-                    #ur_neutral=nothing, uzeta_neutral=nothing,
-                    pz_neutral=nothing,
-                    #pr_neutral=nothing, pzeta_neutral=nothing,
-                    qz_neutral=nothing,
-                    #qr_neutral=nothing, qzeta_neutral=nothing,
-                    vth_neutral=nothing,
-                    phi=nothing, Er=nothing, Ez=nothing,
-                    istage=0, label="", t_params=nothing, nl_solver_params=())
-    global debug_output_file
-
-    # Only read/write from first process in each 'block'
-    @_block_synchronize()
-    @serial_region begin
-        if debug_output_file === nothing
-            # Open the file the first time`debug_dump()` is called
-
-            debug_output_counter[] = 1
-
-            (nvpa, nvperp, nz, nr, n_species) = size(ff)
-            prefix = "debug_output.$(iblock_index[])"
-            filename = string(prefix, ".h5")
-            # if a file with the requested name already exists, remove it
-            isfile(filename) && rm(filename)
-            # create the new NetCDF file
-            fid = open_output_file_hdf5(prefix)
-            # write a header to the NetCDF file
-            add_attribute!(fid, "file_info",
-                           "This is a file containing debug output from the moment_kinetics code")
-
-            ### define coordinate dimensions ###
-            define_io_coordinates!(fid, vz, vr, vzeta, vpa, vperp, z, r, false)
-
-            ### create variables for time-dependent quantities and store them ###
-            ### in a struct for later access ###
-            io_moments = define_dynamic_moment_variables!(fid, composition.n_ion_species,
-                                                          composition.n_neutral_species,
-                                                          r, z, nothing,
-                                                          external_source_settings,
-                                                          evolve_density, evolve_upar,
-                                                          evolve_ppar,
-                                                          composition.electron_physics, t_params,
-                                                          nl_solver_params)
-            io_dfns = define_dynamic_dfn_variables!(
-                fid, r, z, vperp, vpa, vzeta, vr, vz, composition.n_ion_species,
-                composition.n_neutral_species, nothing, external_source_settings,
-                evolve_density, evolve_upar, evolve_ppar, t_params, nl_solver_params)
-
-            # create the "istage" variable, used to identify the rk stage where
-            # `debug_dump()` was called
-            dynamic = fid["dynamic_data"]
-            io_istage = create_dynamic_variable!(dynamic, "istage", mk_int;
-                                                 parallel_io=parallel_io,
-                                                 description="rk istage")
-            # create the "label" variable, used to identify the `debug_dump()` call-site
-            io_label = create_dynamic_variable!(dynamic, "label", String;
-                                                parallel_io=parallel_io,
-                                                description="call-site label")
-
-            # create a struct that stores the variables and other info needed for
-            # writing to the netcdf file during run-time
-            debug_output_file = (fid=fid, moments=io_moments, dfns=io_dfns,
-                                 istage=io_istage, label=io_label)
-        end
-
-        # add the time for this time slice to the netcdf file
-        if t === nothing
-            if debug_output_counter[] == 1
-                debug_output_file.moments.time[debug_output_counter[]] = 0.0
-            else
-                debug_output_file.moments.time[debug_output_counter[]] =
-                debug_output_file.moments.time[debug_output_counter[]-1]
-            end
-        else
-            debug_output_file.moments.time[debug_output_counter[]] = t
-        end
-        # add the rk istage for this call to the netcdf file
-        debug_output_file.istage[debug_output_counter[]] = istage
-        # add the label for this call to the netcdf file
-        debug_output_file.label[debug_output_counter[]] = label
-        # add the distribution function data at this time slice to the netcdf file
-        if ff === nothing
-            debug_output_file.dfns.ion_f[:,:,:,:,:,debug_output_counter[]] = 0.0
-        else
-            debug_output_file.dfns.ion_f[:,:,:,:,:,debug_output_counter[]] = ff
-        end
-        # add the moments data at this time slice to the netcdf file
-        if dens === nothing
-            debug_output_file.moments.density[:,:,:,debug_output_counter[]] = 0.0
-        else
-            debug_output_file.moments.density[:,:,:,debug_output_counter[]] = dens
-        end
-        if upar === nothing
-            debug_output_file.moments.parallel_flow[:,:,:,debug_output_counter[]] = 0.0
-        else
-            debug_output_file.moments.parallel_flow[:,:,:,debug_output_counter[]] = upar
-        end
-        if ppar === nothing
-            debug_output_file.moments.parallel_pressure[:,:,:,debug_output_counter[]] = 0.0
-        else
-            debug_output_file.moments.parallel_pressure[:,:,:,debug_output_counter[]] = ppar
-        end
-        if pperp === nothing
-            debug_output_file.moments.perpendicular_pressure[:,:,:,debug_output_counter[]] = 0.0
-        else
-            debug_output_file.moments.perpendicular_pressure[:,:,:,debug_output_counter[]] = pperp
-        end
-        if qpar === nothing
-            debug_output_file.moments.parallel_heat_flux[:,:,:,debug_output_counter[]] = 0.0
-        else
-            debug_output_file.moments.parallel_heat_flux[:,:,:,debug_output_counter[]] = qpar
-        end
-        if vth === nothing
-            debug_output_file.moments.thermal_speed[:,:,:,debug_output_counter[]] = 0.0
-        else
-            debug_output_file.moments.thermal_speed[:,:,:,debug_output_counter[]] = vth
-        end
-
-        # add the neutral distribution function data at this time slice to the netcdf file
-        if ff_neutral === nothing
-            debug_output_file.dfns.f_neutral[:,:,:,:,:,:,debug_output_counter[]] = 0.0
-        else
-            debug_output_file.dfns.f_neutral[:,:,:,:,:,:,debug_output_counter[]] = ff_neutral
-        end
-        # add the neutral moments data at this time slice to the netcdf file
-        if dens === nothing
-            debug_output_file.moments.density_neutral[:,:,:,debug_output_counter[]] = 0.0
-        else
-            debug_output_file.moments.density_neutral[:,:,:,debug_output_counter[]] = dens_neutral
-        end
-        if uz_neutral === nothing
-            debug_output_file.moments.uz_neutral[:,:,:,debug_output_counter[]] = 0.0
-        else
-            debug_output_file.moments.uz_neutral[:,:,:,debug_output_counter[]] = uz_neutral
-        end
-        if pz_neutral === nothing
-            debug_output_file.moments.pz_neutral[:,:,:,debug_output_counter[]] = 0.0
-        else
-            debug_output_file.moments.pz_neutral[:,:,:,debug_output_counter[]] = pz_neutral
-        end
-        if qz_neutral === nothing
-            debug_output_file.moments.qz_neutral[:,:,:,debug_output_counter[]] = 0.0
-        else
-            debug_output_file.moments.qz_neutral[:,:,:,debug_output_counter[]] = qz_neutral
-        end
-        if vth_neutral === nothing
-            debug_output_file.moments.thermal_speed_neutral[:,:,:,debug_output_counter[]] = 0.0
-        else
-            debug_output_file.moments.thermal_speed_neutral[:,:,:,debug_output_counter[]] = vth_neutral
-        end
-
-        # add the electrostatic potential data at this time slice to the netcdf file
-        if phi === nothing
-            debug_output_file.moments.phi[:,:,debug_output_counter[]] = 0.0
-        else
-            debug_output_file.moments.phi[:,:,debug_output_counter[]] = phi
-        end
-        if Er === nothing
-            debug_output_file.moments.Er[:,:,debug_output_counter[]] = 0.0
-        else
-            debug_output_file.moments.Er[:,:,debug_output_counter[]] = Er
-        end
-        if Ez === nothing
-            debug_output_file.moments.Ez[:,:,debug_output_counter[]] = 0.0
-        else
-            debug_output_file.moments.Ez[:,:,debug_output_counter[]] = Ez
-        end
-    end
-
-    debug_output_counter[] += 1
-
-    @_block_synchronize()
-
-    return nothing
-end
-function debug_dump(fvec::Union{scratch_pdf,Nothing},
-                    fields::Union{em_fields_struct,Nothing}, vz, vr, vzeta, vpa, vperp, z,
-                    r, t; istage=0, label="")
-    if fvec === nothing
-        pdf = nothing
-        density = nothing
-        upar = nothing
-        ppar = nothing
-        pperp = nothing
-        pdf_neutral = nothing
-        density_neutral = nothing
-    else
-        pdf = fvec.pdf
-        density = fvec.density
-        upar = fvec.upar
-        ppar = fvec.ppar
-        pperp = fvec.pperp
-        pdf_neutral = fvec.pdf_neutral
-        density_neutral = fvec.density_neutral
-    end
-    if fields === nothing
-        phi = nothing
-        Er = nothing
-        Ez = nothing
-    else
-        phi = fields.phi
-        Er = fields.Er
-        Ez = fields.Ez
-    end
-    return debug_dump(vz, vr, vzeta, vpa, vperp, z, r, t; ff=pdf, dens=density, upar=upar,
-                      ppar=ppar, pperp=pperp, ff_neutral=pdf_neutral, dens_neutral=density_neutral,
-                      phi=phi, Er=Er, Ez=Ez, t, istage=istage, label=label)
 end
 
 end

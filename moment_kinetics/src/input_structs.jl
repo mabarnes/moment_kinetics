@@ -13,7 +13,6 @@ export em_fields_input
 export ion_source_data, electron_source_data, neutral_source_data
 export collisions_input, reactions, electron_fluid_collisions, krook_collisions_input,
        fkpl_collisions_input, mxwl_diff_collisions_input
-export io_input
 export pp_input
 export geometry_input
 export set_defaults_and_check_top_level!, set_defaults_and_check_section!,
@@ -117,7 +116,7 @@ struct time_info{Terrorsum <: Real, T_debug_output, T_electron, Trkimp, Timpzero
     converged_residual_value::mk_float
     use_manufactured_solns_for_advance::Bool
     stopfile::String
-    debug_io::T_debug_output # Currently only used by electrons
+    debug_io::T_debug_output
     electron::T_electron
 end
 
