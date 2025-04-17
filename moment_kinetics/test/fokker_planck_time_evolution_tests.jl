@@ -9,10 +9,13 @@ using Printf
 using moment_kinetics.load_data: open_readonly_output_file, load_coordinate_data,
                                  load_species_data, load_fields_data,
                                  load_ion_moments_data, load_pdf_data,
-                                 load_time_data, load_species_data
+                                 load_time_data, load_species_data,
+                                 load_input
 using moment_kinetics.type_definitions: mk_float
 using moment_kinetics.utils: merge_dict_with_kwargs!
 using moment_kinetics.input_structs: options_to_TOML
+using moment_kinetics.fokker_planck_test: F_Maxwellian, print_test_data
+using moment_kinetics.velocity_moments: get_density, get_upar, get_ppar, get_pperp, get_pressure
 
 const analytical_rtol = 3.e-2
 const regression_rtol = 2.e-8
@@ -33,6 +36,8 @@ struct expected_data
     qpar_ion::Array{mk_float, 1} # time
     v_t_ion::Array{mk_float, 1} # time
     dSdt::Array{mk_float, 1} # time
+    maxnorm_ion::Array{mk_float, 1} # time
+    L2norm_ion::Array{mk_float, 1} # time
     f_ion::Array{mk_float, 3} # vpa, vperp, time
 end
 
@@ -58,6 +63,10 @@ const expected_zero_impose_regularity =
     [1.021755168637407, 1.034087075929172],
     # Expected dSdt_ion
     [0.000000000000000, 0.000164440610574],
+    # Expected maxnorm_ion
+    [0.808346186957451, 0.179973032115546],
+    # Expected L2norm_ion
+    [0.087661894753377, 0.011357320066030],
     # Expected f_ion
     [0.000000000000000 0.000000000000000 0.000000000000000 0.000000000000000 0.000000000000000 0.000000000000000 0.000000000000000 ;
     0.000000000000743 0.000000000001327 0.000000000002198 0.000000000000808 0.000000000000040 0.000000000000000 0.000000000000000 ;
@@ -107,6 +116,10 @@ expected_data(
     [1.030335090859288, 1.030335090859291],
     # Expected dSdt_ion
     [0.000000000000000, -0.000000000001616],
+    # Expected maxnorm_ion
+    [0.818237925050035, 0.106008532902116],
+    # Expected L2norm_ion
+    [0.091263900048123, 0.007627575466069],
     # Expected f_ion
     [0.000000000000000 0.000000000000000 0.000000000000000 0.000000000000000 0.000000000000000 0.000000000000000 0.000000000000000 ;
     0.000000000000126 0.000000000001327 0.000000000002198 0.000000000000808 0.000000000000040 0.000000000000000 0.000000000000000 ;
@@ -157,6 +170,10 @@ expected_data(
     [1.030335250714622, 1.030335250714620],
     # Expected dSdt_ion
     [0.000000000000000, 0.000000000000006],
+    # Expected maxnorm_ion
+    [0.818237961233122, 0.011544489536890],
+    # Expected L2norm_ion
+    [0.091263890321732, 0.001724403977964],
     # Expected f_ion
     [0.000000000000000 0.000000000000000 0.000000000000000 0.000000000000000 0.000000000000000 0.000000000000000 0.000000000000000 ;
     0.000000000000126 0.000000000001327 0.000000000002198 0.000000000000808 0.000000000000040 0.000000000000000 0.000000000000000 ;
@@ -193,8 +210,9 @@ expected_data(
 Function to print data from a moment_kinetics run suitable
 for copying into the expected data structure.
 """
-function print_output_data_for_test_update(path)
+function print_output_data_for_test_update(path; write_grid=true, write_pdf=true)
     fid = open_readonly_output_file(path, "dfns")
+    input = load_input(fid)
     f_ion_vpavperpzrst = load_pdf_data(fid)
     f_ion = f_ion_vpavperpzrst[:,:,1,1,1,:]
     ntind = size(f_ion,3)
@@ -264,11 +282,47 @@ function print_output_data_for_test_update(path)
         print("],\n")
         return nothing
     end
-    
+    # the norms
+    function print_norms(pdf)
+        L2norm_ion = copy(pdf[1,1,:])
+        maxnorm_ion = copy(pdf[1,1,:])
+        f_dummy_1 = copy(pdf[:,:,1])
+        f_dummy_2 = copy(pdf[:,:,1])
+        f_dummy_3 = copy(pdf[:,:,1])
+        mass = input["ion_species_1"]["mass"]
+        for it in 1:ntind
+            @views output = diagnose_F_Maxwellian_serial(pdf[:,:,it],
+                                                        f_dummy_1,f_dummy_2,f_dummy_3,
+                                                        vpa,vperp,mass)
+            maxnorm_ion[it] = output[1]
+            L2norm_ion[it] = output[2]
+        end
+        println("# Expected maxnorm_ion")
+        print("[")
+        for k in 1:ntind
+            @printf("%.15f", maxnorm_ion[k])
+            if k < ntind
+                print(", ")
+            end
+        end
+        print("],\n")
+        println("# Expected L2norm_ion")
+        print("[")
+        for k in 1:ntind
+            @printf("%.15f", L2norm_ion[k])
+            if k < ntind
+                print(", ")
+            end
+        end
+        print("],\n")
+        return nothing
+    end
     n_ion_zrst, upar_ion_zrst, ppar_ion_zrst, pperp_ion_zrst, qpar_ion_zrst, v_t_ion_zrst, dSdt_zrst = load_ion_moments_data(fid,extended_moments=true)
     phi_zrt, Er_zrt, Ez_zrt = load_fields_data(fid)
-    print_grid(vpa)
-    print_grid(vperp)
+    if write_grid
+        print_grid(vpa)
+        print_grid(vperp)
+    end
     print_field(phi_zrt,"phi")
     print_moment(n_ion_zrst,"n_ion")
     print_moment(upar_ion_zrst,"upar_ion")
@@ -277,8 +331,31 @@ function print_output_data_for_test_update(path)
     print_moment(qpar_ion_zrst,"qpar_ion")
     print_moment(v_t_ion_zrst,"v_t_ion")
     print_moment(dSdt_zrst,"dSdt_ion")
-    print_pdf(f_ion)
+    print_norms(f_ion)
+    if write_pdf
+        print_pdf(f_ion)
+    end
     return nothing
+end
+
+function diagnose_F_Maxwellian_serial(pdf,pdf_exact,pdf_dummy_1,pdf_dummy_2,vpa,vperp,mass)
+    # call this function from a single process
+    # construct the local-in-time Maxwellian for this pdf
+    dens = get_density(pdf,vpa,vperp)
+    upar = get_upar(pdf,vpa,vperp,dens)
+    ppar = get_ppar(pdf,vpa,vperp,upar)
+    pperp = get_pperp(pdf,vpa,vperp)
+    pres = get_pressure(ppar,pperp) 
+    vth = sqrt(2.0*pres/(dens*mass))
+    for ivperp in 1:vperp.n
+        for ivpa in 1:vpa.n
+            pdf_exact[ivpa,ivperp] = F_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+        end
+    end
+    # check how close the pdf is to the Maxwellian with
+    # maximum of difference and L2 of difference
+    max_err, L2norm = print_test_data(pdf_exact,pdf,pdf_dummy_1,"F",vpa,vperp,pdf_dummy_2;print_to_screen=false)
+    return max_err, L2norm
 end
 
 # default inputs for tests
@@ -289,7 +366,8 @@ test_input_gauss_legendre = OptionsDict("output" => OptionsDict("run_name" => "g
                                                                      "electron_physics" => "boltzmann_electron_response",
                                                                      "T_e" => 1.0),
                                         "ion_species_1" => OptionsDict("initial_density" => 1.0,
-                                                                       "initial_temperature" => 1.0),
+                                                                       "initial_temperature" => 1.0,
+                                                                       "mass" => 1.0),
                                         "z_IC_ion_species_1" => OptionsDict("initialization_option" => "sinusoid",
                                                                             "density_amplitude" => 0.0,
                                                                             "density_phase" => 0.0,
@@ -383,6 +461,8 @@ function run_test(test_input, expected, rtol, atol, upar_rtol=nothing; args...)
     qpar_ion = nothing
     v_t_ion = nothing
     dSdt = nothing
+    maxnorm_ion = nothing
+    L2norm_ion = nothing
     f_ion = nothing
     f_err = nothing
     vpa, vpa_spectral = nothing, nothing
@@ -435,9 +515,19 @@ function run_test(test_input, expected, rtol, atol, upar_rtol=nothing; args...)
             dSdt = dSdt_zrst[1,1,1,:]
             f_ion = f_ion_vpavperpzrst[:,:,1,1,1,:]
             f_err = copy(f_ion)
-            # Unnormalize f
-            # NEED TO UPGRADE TO 2V MOMENT KINETICS HERE
-            
+            f_dummy_1 = copy(f_ion[:,:,1])
+            f_dummy_2 = copy(f_ion[:,:,1])
+            f_dummy_3 = copy(f_ion[:,:,1])
+            L2norm_ion = copy(phi)
+            maxnorm_ion = copy(phi)
+            mass = input["ion_species_1"]["mass"]
+            for it in 1:size(phi,1)
+                @views output = diagnose_F_Maxwellian_serial(f_ion[:,:,it],
+                                                            f_dummy_1,f_dummy_2,f_dummy_3,
+                                                            vpa,vperp,mass)
+                maxnorm_ion[it] = output[1]
+                L2norm_ion[it] = output[2]
+            end
         end
         
         function test_values(tind)
@@ -463,6 +553,8 @@ function run_test(test_input, expected, rtol, atol, upar_rtol=nothing; args...)
                 @test isapprox(expected.qpar_ion[tind], qpar_ion[tind], atol=atol)
                 @test isapprox(expected.v_t_ion[tind], v_t_ion[tind], atol=atol)
                 @test isapprox(expected.dSdt[tind], dSdt[tind], atol=atol)
+                @test isapprox(expected.maxnorm_ion[tind], maxnorm_ion[tind], atol=atol)
+                @test isapprox(expected.L2norm_ion[tind], L2norm_ion[tind], atol=atol)
                 @. f_err = abs(expected.f_ion - f_ion)
                 max_f_err = maximum(f_err)
                 @test isapprox(max_f_err, 0.0, atol=atol)
