@@ -10,7 +10,7 @@ using moment_kinetics.looping
 using moment_kinetics.array_allocation: allocate_float, allocate_shared_float
 using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.type_definitions: mk_float, mk_int
-using moment_kinetics.velocity_moments: get_density, get_upar, get_ppar, get_pperp, get_pressure
+using moment_kinetics.velocity_moments: get_density, get_upar, get_p, get_ppar, get_pperp
 using moment_kinetics.input_structs: direct_integration, multipole_expansion, delta_f_multipole
 
 using moment_kinetics.fokker_planck: init_fokker_planck_collisions_weak_form, fokker_planck_collision_operator_weak_form!
@@ -303,23 +303,23 @@ function runtests()
                     max_dGdvperp_boundary_data_err, max_d2Gdvperp2_boundary_data_err,
                     max_d2Gdvperpdvpa_boundary_data_err, max_d2Gdvpa2_boundary_data_err = test_rosenbluth_potential_boundary_data(fkpl_arrays.rpbd,rpbd_exact,vpa,vperp,print_to_screen=print_to_screen)
                     if boundary_data_option==multipole_expansion
-                        atol_max_H = 5.0e-8/π^1.5
-                        atol_max_dHdvpa = 5.0e-8/π^1.5
-                        atol_max_dHdvperp = 5.0e-8/π^1.5
-                        atol_max_G = 5.0e-7/π^1.5
-                        atol_max_dGdvperp = 5.0e-7/π^1.5
-                        atol_max_d2Gdvperp2 = 5.0e-7/π^1.5
-                        atol_max_d2Gdvperpdvpa = 5.0e-7/π^1.5
-                        atol_max_d2Gdvpap2 = 1.0e-6/π^1.5
+                        atol_max_H = 5.0e-8
+                        atol_max_dHdvpa = 5.0e-8
+                        atol_max_dHdvperp = 5.0e-8
+                        atol_max_G = 5.0e-7
+                        atol_max_dGdvperp = 5.0e-7
+                        atol_max_d2Gdvperp2 = 5.0e-7
+                        atol_max_d2Gdvperpdvpa = 5.0e-7
+                        atol_max_d2Gdvpap2 = 1.0e-6
                     else
-                        atol_max_H = 2.0e-12/π^1.5
-                        atol_max_dHdvpa = 2.0e-11/π^1.5
-                        atol_max_dHdvperp = 6.0e-9/π^1.5
-                        atol_max_G = 1.0e-11/π^1.5
-                        atol_max_dGdvperp = 2.0e-7/π^1.5
-                        atol_max_d2Gdvperp2 = 5.0e-8/π^1.5
-                        atol_max_d2Gdvperpdvpa = 2.0e-8/π^1.5
-                        atol_max_d2Gdvpap2 = 1.0e-11/π^1.5
+                        atol_max_H = 2.0e-12
+                        atol_max_dHdvpa = 2.0e-11
+                        atol_max_dHdvperp = 6.0e-9
+                        atol_max_G = 1.0e-11
+                        atol_max_dGdvperp = 2.0e-7
+                        atol_max_d2Gdvperp2 = 5.0e-8
+                        atol_max_d2Gdvperpdvpa = 2.0e-8
+                        atol_max_d2Gdvpap2 = 1.0e-11
                     end
                     @test max_H_boundary_data_err < atol_max_H
                     @test max_dHdvpa_boundary_data_err < atol_max_dHdvpa
@@ -339,39 +339,39 @@ function runtests()
                     d2Gdvperpdvpa_M_max, d2Gdvperpdvpa_M_L2 = print_test_data(d2Gdvperpdvpa_M_exact,d2Gdvperpdvpa_M_num,d2Gdvperpdvpa_M_err,"d2Gdvperpdvpa_M",vpa,vperp,dummy_array,print_to_screen=print_to_screen)
                     d2Gdvperp2_M_max, d2Gdvperp2_M_L2 = print_test_data(d2Gdvperp2_M_exact,d2Gdvperp2_M_num,d2Gdvperp2_M_err,"d2Gdvperp2_M",vpa,vperp,dummy_array,print_to_screen=print_to_screen)
                     if boundary_data_option==multipole_expansion
-                        atol_max_H = 2.0e-7/π^1.5
-                        atol_L2_H = 5.0e-9/π^1.5
-                        atol_max_dHdvpa = 2.0e-6/π^1.5
-                        atol_L2_dHdvpa = 5.0e-8/π^1.5
-                        atol_max_dHdvperp = 2.0e-5/π^1.5
-                        atol_L2_dHdvperp = 1.0e-7/π^1.5
-                        atol_max_G = 5.0e-7/π^1.5
-                        atol_L2_G = 5.0e-8/π^1.5
-                        atol_max_d2Gdvpap2 = 1.0e-6/π^1.5
-                        atol_L2_d2Gdvpa2 = 5.0e-8/π^1.5
-                        atol_max_dGdvperp = 2.0e-6/π^1.5
-                        atol_L2_dGdvperp = 2.0e-7/π^1.5
-                        atol_max_d2Gdvperpdvpa = 2.0e-6/π^1.5
-                        atol_L2_d2Gdvperpdvpa = 5.0e-8/π^1.5
-                        atol_max_d2Gdvperp2 = 5.0e-7/π^1.5
-                        atol_L2_d2Gdvperp2 = 5.0e-8/π^1.5
+                        atol_max_H = 2.0e-7
+                        atol_L2_H = 5.0e-9
+                        atol_max_dHdvpa = 2.0e-6
+                        atol_L2_dHdvpa = 5.0e-8
+                        atol_max_dHdvperp = 2.0e-5
+                        atol_L2_dHdvperp = 1.0e-7
+                        atol_max_G = 5.0e-7
+                        atol_L2_G = 5.0e-8
+                        atol_max_d2Gdvpap2 = 1.0e-6
+                        atol_L2_d2Gdvpa2 = 5.0e-8
+                        atol_max_dGdvperp = 2.0e-6
+                        atol_L2_dGdvperp = 2.0e-7
+                        atol_max_d2Gdvperpdvpa = 2.0e-6
+                        atol_L2_d2Gdvperpdvpa = 5.0e-8
+                        atol_max_d2Gdvperp2 = 5.0e-7
+                        atol_L2_d2Gdvperp2 = 5.0e-8
                     else
-                        atol_max_H = 2.0e-7/π^1.5
-                        atol_L2_H = 5.0e-9/π^1.5
-                        atol_max_dHdvpa = 2.0e-6/π^1.5
-                        atol_L2_dHdvpa = 5.0e-8/π^1.5
-                        atol_max_dHdvperp = 2.0e-5/π^1.5
-                        atol_L2_dHdvperp = 1.0e-7/π^1.5
-                        atol_max_G = 2.0e-8/π^1.5
-                        atol_L2_G = 7.0e-10/π^1.5
-                        atol_max_d2Gdvpap2 = 2.0e-7/π^1.5
-                        atol_L2_d2Gdvpa2 = 4.0e-9/π^1.5
-                        atol_max_dGdvperp = 2.0e-6/π^1.5
-                        atol_L2_dGdvperp = 2.0e-7/π^1.5
-                        atol_max_d2Gdvperpdvpa = 2.0e-6/π^1.5
-                        atol_L2_d2Gdvperpdvpa = 2.0e-8/π^1.5
-                        atol_max_d2Gdvperp2 = 3.0e-7/π^1.5
-                        atol_L2_d2Gdvperp2 = 2.0e-8/π^1.5
+                        atol_max_H = 2.0e-7
+                        atol_L2_H = 5.0e-9
+                        atol_max_dHdvpa = 2.0e-6
+                        atol_L2_dHdvpa = 5.0e-8
+                        atol_max_dHdvperp = 2.0e-5
+                        atol_L2_dHdvperp = 1.0e-7
+                        atol_max_G = 2.0e-8
+                        atol_L2_G = 7.0e-10
+                        atol_max_d2Gdvpap2 = 2.0e-7
+                        atol_L2_d2Gdvpa2 = 4.0e-9
+                        atol_max_dGdvperp = 2.0e-6
+                        atol_L2_dGdvperp = 2.0e-7
+                        atol_max_d2Gdvperpdvpa = 2.0e-6
+                        atol_L2_d2Gdvperpdvpa = 2.0e-8
+                        atol_max_d2Gdvperp2 = 3.0e-7
+                        atol_L2_d2Gdvperp2 = 2.0e-8
                     end
                     @test H_M_max < atol_max_H
                     @test H_M_L2 < atol_L2_H
