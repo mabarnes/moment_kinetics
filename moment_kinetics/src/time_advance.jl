@@ -1053,7 +1053,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
         # condition
         enforce_boundary_conditions!(
             pdf.ion.norm, boundary_distributions.pdf_rboundary_ion,
-            moments.ion.dens, moments.ion.upar, fields.phi, moments,
+            moments.ion.dens, moments.ion.upar, moments.ion.p, fields.phi, moments,
             vpa.bc, z.bc, r.bc, vpa, vperp, z, r, vpa_spectral, vperp_spectral,
             vpa_advect, vperp_advect, z_advect, r_advect, composition, scratch_dummy,
             advance.r_diffusion, advance.vpa_diffusion, advance.vperp_diffusion)
