@@ -28,12 +28,14 @@ that `"new_name"` in A will be multiplied by `c` and then compared to `"old_name
 Any variables in `ignore` will not be compared.
 
 Pass `print_changed=true` to print the array values for any arrays that are different.
+Pass `print_deltas=true` as well to print the difference between the changed value and the
+previous value - represents the contribution added by the term that caused the change.
 """
 function regression_test_debug_comparison(filenameA, filenameB;
                                           tolerance=1.0e-13,
                                           conversions=Dict{String,Any}(),
                                           ignore=(),
-                                          print_changed=false)
+                                          print_changed=false, print_deltas=false)
 
     A = get_run_info_no_setup(filenameA; dfns=true)
     B = get_run_info_no_setup(filenameB; dfns=true)
@@ -107,20 +109,37 @@ function regression_test_debug_comparison(filenameA, filenameB;
             if print_changed
                 for (vA, vB) ∈ changed_variables
                     valA = postproc_load_variable(A, vA; it=it)
+                    if it > 1 && print_deltas
+                        deltaA = valA .- postproc_load_variable(A, vA; it=it-1)
+                    end
                     if vA ∈ conversions_keys
                         c = conversions[vA]
                         if c isa Tuple
                             valA .*= c[2]
+                            if it > 1 && print_deltas
+                                deltaA .*= c[2]
+                            end
                         else
                             valA .*= c
+                            if it > 1 && print_deltas
+                                deltaA .*= c
+                            end
                         end
                     end
                     valB = postproc_load_variable(B, vB; it=it)
+                    if it > 1 && print_deltas
+                        deltaB = valB .- postproc_load_variable(B, vB; it=it-1)
+                    end
 
                     println()
                     println("$vA A\n", valA)
                     println("$vB B\n", valB)
                     println("diff\n", valA .- valB)
+                    if it > 1 && print_deltas
+                        println("delta $vA A\n", deltaA)
+                        println("delta $vB B\n", deltaB)
+                        println("diff delta\n", deltaA .- deltaB)
+                    end
                 end
             end
 
