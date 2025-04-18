@@ -308,7 +308,7 @@ function runtests()
                         atol_max_dHdvperp = 5.0e-8
                         atol_max_G = 5.0e-7
                         atol_max_dGdvperp = 5.0e-7
-                        atol_max_d2Gdvperp2 = 5.0e-8
+                        atol_max_d2Gdvperp2 = 5.0e-7
                         atol_max_d2Gdvperpdvpa = 5.0e-7
                         atol_max_d2Gdvpap2 = 1.0e-6
                     else
@@ -326,7 +326,7 @@ function runtests()
                     @test max_dHdvperp_boundary_data_err < atol_max_dHdvperp
                     @test max_G_boundary_data_err < atol_max_G
                     @test max_dGdvperp_boundary_data_err < atol_max_dGdvperp
-                    @test max_d2Gdvperpdvpa_boundary_data_err < atol_max_d2Gdvperpdvpa
+                    @test max_d2Gdvperp2_boundary_data_err < atol_max_d2Gdvperp2
                     @test max_d2Gdvperpdvpa_boundary_data_err < atol_max_d2Gdvperpdvpa
                     @test max_d2Gdvpa2_boundary_data_err < atol_max_d2Gdvpap2
                     # test the elliptic solvers
