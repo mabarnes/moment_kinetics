@@ -26,7 +26,7 @@ flow and/or pressure, and use them to update the pdf
     dn_dt = moments.ion.ddens_dt
     dn_dz = moments.ion.ddens_dz
     vpa_grid = vpa.grid
-    if moments.evolve_ppar
+    if moments.evolve_p
         dvth_dt = moments.ion.dvth_dt
         dvth_dz = moments.ion.dvth_dz
         @loop_s_r_z is ir iz begin
@@ -80,7 +80,7 @@ flow and/or pressure, and use them to update the pdf
     dn_dt = moments.neutral.ddens_dt
     dn_dz = moments.neutral.ddens_dz
     vz_grid = vz.grid
-    if moments.evolve_ppar
+    if moments.evolve_p
         dvth_dt = moments.neutral.dvth_dt
         dvth_dz = moments.neutral.dvth_dz
         @loop_sn_r_z isn ir iz begin

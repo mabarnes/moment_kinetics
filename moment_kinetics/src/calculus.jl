@@ -866,6 +866,62 @@ function integral(integrand, v, n, wgts)
     return integral
 end
 
+"""
+Compute the 1D integral `∫dv prefactor(v)*integrand`
+
+In this variant `v` should be a `coordinate` object.
+"""
+function integral(prefactor::Function, integrand, v)
+    @boundscheck v.n == length(integrand) || throw(BoundsError(integrand))
+    v_grid = v.grid
+    wgts = v.wgts
+    integral = 0.0
+    @inbounds for i ∈ eachindex(v_grid)
+        integral += prefactor(v[i]) * integrand[i] * wgts[i]
+    end
+    return integral
+end
+
+"""
+Compute the 2D integral `∫d^2vperp.dvpa prefactor(vperp,vpa)*integrand`
+
+In this variant `vperp` and `vpa` should be `coordinate` objects.
+"""
+function integral(prefactor::Function, integrand, vperp, vpa)
+    @boundscheck (vpa.n, vperp.n) == size(integrand) || throw(BoundsError(integrand))
+    vperp_grid = vperp.grid
+    vperp_wgts = vperp.wgts
+    vpa_grid = vpa.grid
+    vpa_wgts = vpa.wgts
+    integral = 0.0
+    for ivperp ∈ eachindex(vperp_grid), ivpa ∈ eachindex(vpa_grid)
+        integral += prefactor(vperp_grid[ivperp], vpa_grid[ivpa]) *
+                    integrand[ivpa, ivperp] * vperp_wgts[ivperp] * vpa_wgts[ivpa]
+    end
+    return integral
+end
+
+"""
+Compute the 3D integral `∫dvzeta.dvr.dvz prefactor(vzeta,vr,vz)*integrand`
+
+In this variant `vzeta`, `vr`, and `vz` should be `coordinate` objects.
+"""
+function integral(prefactor::Function, integrand, vzeta, vr, vz)
+    @boundscheck (vz.n, vr.n, vzeta.n) == size(integrand) || throw(BoundsError(integrand))
+    vzeta_grid = vzeta.grid
+    vzeta_wgts = vzeta.wgts
+    vr_grid = vr.grid
+    vr_wgts = vr.wgts
+    vz_grid = vz.grid
+    vz_wgts = vz.wgts
+    integral = 0.0
+    for ivzeta ∈ eachindex(vzeta_grid), ivr ∈ eachindex(vr_grid), ivz ∈ eachindex(vz_grid)
+        integral += prefactor(vzeta_grid[ivzeta], vr_grid[ivr], vz_grid[ivz]) *
+                    integrand[ivz, ivr, ivzeta] * vzeta_wgts[ivzeta] * vr_wgts[ivr] *
+                    vz_wgts[ivz]
+    end
+    return integral
+end
 
 """
 2D velocity integration routines

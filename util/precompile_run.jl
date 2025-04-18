@@ -65,7 +65,7 @@ for input ∈ [base_input, cheb_input, wall_bc_input, wall_bc_cheb_input]
     push!(inputs_list, x)
     x = recursive_merge(x, OptionsDict("evolve_moments" => OptionsDict("parallel_flow" => true)))
     push!(inputs_list, x)
-    x = recursive_merge(x, OptionsDict("evolve_moments" => OptionsDict("parallel_pressure" => true)))
+    x = recursive_merge(x, OptionsDict("evolve_moments" => OptionsDict("pressure" => true)))
     push!(inputs_list, x)
 end
 
@@ -98,7 +98,7 @@ geo_input1 = recursive_merge(wall_bc_cheb_input, OptionsDict("composition" => Op
 
 kinetic_electron_input = recursive_merge(cheb_input, OptionsDict("evolve_moments" => OptionsDict("density" => true,
                                                                                                  "parallel_flow" => true,
-                                                                                                 "parallel_pressure" => true),
+                                                                                                 "pressure" => true),
                                                                  "z" => OptionsDict("discretization" => "gausslegendre_pseudospectral"),
                                                                  "vpa" => OptionsDict("discretization" => "gausslegendre_pseudospectral"),
                                                                  "vz" => OptionsDict("discretization" => "gausslegendre_pseudospectral"),

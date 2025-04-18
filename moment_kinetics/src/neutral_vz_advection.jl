@@ -77,11 +77,11 @@ end
 """
 function update_speed_default_neutral!(advect, fields, fvec, moments, vz, z, r,
                                        composition, collisions, neutral_source_settings)
-    if moments.evolve_ppar && moments.evolve_upar
+    if moments.evolve_p && moments.evolve_upar
         update_speed_n_u_p_evolution_neutral!(advect, fvec, moments, vz, z, r,
                                               composition, collisions,
                                               neutral_source_settings)
-    elseif moments.evolve_ppar
+    elseif moments.evolve_p
         update_speed_n_p_evolution_neutral!(advect, fields, fvec, moments, vz, z, r,
                                             composition, collisions,
                                             neutral_source_settings)

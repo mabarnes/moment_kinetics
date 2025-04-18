@@ -70,8 +70,8 @@ using moment_kinetics.StatsBase
 # Small parameter used to create perturbations to test Jacobian against
 epsilon = 1.0e-6
 test_wavenumber = 2.0
-dt = 0.42
-ion_dt = 1.0e-6
+dt = 0.2969848480983499
+ion_dt = 7.071067811865475e-7
 ir = 1
 zero = 1.0e-14
 
@@ -83,135 +83,113 @@ zero = 1.0e-14
 # * For `z_bc = "periodic"`, the Jacobian matrices (by design) do not account for the
 #   periodicity. This should be fine when they are used as preconditioners, but does
 #   introduce errors at the periodic boundaries which would complicate testing.
-test_input = OptionsDict("output" => OptionsDict("run_name" => "jacobian_matrix",
-                                                ),
+test_input = OptionsDict("output" => OptionsDict("run_name" => "jacobian_matrix"),
                          "composition" => OptionsDict("n_ion_species" => 1,
                                                       "n_neutral_species" => 1,
                                                       "electron_physics" => "kinetic_electrons",
                                                       "recycling_fraction" => 0.5,
-                                                      "T_e" => 1.0,
-                                                      "T_wall" => 0.1,
-                                                     ),
+                                                      "T_e" => 0.6666666666666666,
+                                                      "T_wall" => 0.06666666666666667),
                          "evolve_moments" => OptionsDict("density" => true,
                                                          "parallel_flow" => true,
-                                                         "parallel_pressure" => true,
-                                                         "moments_conservation" => true,
-                                                        ),
+                                                         "pressure" => true,
+                                                         "moments_conservation" => true),
                          "ion_species_1" => OptionsDict("initial_density" => 1.0,
-                                                        "initial_temperature" => 1.0,
-                                                       ),
+                                                        "initial_temperature" => 0.6666666666666666),
                          "z_IC_ion_species_1" => OptionsDict("initialization_option" => "sinusoid",
                                                              "density_amplitude" => 0.1,
-                                                             "density_phase" => mk_float(π),
-                                                             "upar_amplitude" => 0.1,
-                                                             "upar_phase" => mk_float(π),
-                                                             "temperature_amplitude" => 0.1,
-                                                             "temperature_phase" => mk_float(π),
-                                                            ),
+                                                             "density_phase" => 3.141592653589793,
+                                                             "upar_amplitude" => 0.14142135623730953,
+                                                             "upar_phase" => 3.141592653589793,
+                                                             "temperature_amplitude" => 0.06666666666666667,
+                                                             "temperature_phase" => 3.141592653589793),
                          "vpa_IC_ion_species_1" => OptionsDict("initialization_option" => "gaussian",
                                                                "density_amplitude" => 1.0,
                                                                "density_phase" => 0.0,
                                                                "upar_amplitude" => 0.0,
                                                                "upar_phase" => 0.0,
                                                                "temperature_amplitude" => 0.0,
-                                                               "temperature_phase" => 0.0,
-                                                              ),
+                                                               "temperature_phase" => 0.0),
                          "neutral_species_1" => OptionsDict("initial_density" => 1.0,
-                                                            "initial_temperature" => 1.0,
-                                                           ),
+                                                            "initial_temperature" => 0.6666666666666666),
                          "z_IC_neutral_species_1" => OptionsDict("initialization_option" => "sinusoid",
                                                                  "density_amplitude" => 0.001,
-                                                                 "density_phase" => mk_float(π),
+                                                                 "density_phase" => 3.141592653589793,
                                                                  "upar_amplitude" => 0.0,
-                                                                 "upar_phase" => mk_float(π),
+                                                                 "upar_phase" => 3.141592653589793,
                                                                  "temperature_amplitude" => 0.0,
-                                                                 "temperature_phase" => mk_float(π),
-                                                                ),
+                                                                 "temperature_phase" => 3.141592653589793),
                          "vz_IC_neutral_species_1" => OptionsDict("initialization_option" => "gaussian",
-                                                                   "density_amplitude" => 1.0,
-                                                                   "density_phase" => 0.0,
-                                                                   "upar_amplitude" => 0.0,
-                                                                   "upar_phase" => 0.0,
-                                                                   "temperature_amplitude" => 0.0,
-                                                                   "temperature_phase" => 0.0,
-                                                                  ),
-                         "reactions" => OptionsDict("charge_exchange_frequency" => 0.75,
-                                                    "ionization_frequency" => 0.0,
-                                                   ),
+                                                                  "density_amplitude" => 1.0,
+                                                                  "density_phase" => 0.0,
+                                                                  "upar_amplitude" => 0.0,
+                                                                  "upar_phase" => 0.0,
+                                                                  "temperature_amplitude" => 0.0,
+                                                                  "temperature_phase" => 0.0),
+                         "reactions" => OptionsDict("charge_exchange_frequency" => 1.0606601717798214,
+                                                    "ionization_frequency" => 0.0),
                          "r" => OptionsDict("ngrid" => 1,
-                                            "nelement" => 1,
-                                           ),
+                                            "nelement" => 1),
                          "z" => OptionsDict("ngrid" => 9,
                                             "nelement" => 16,
                                             "bc" => "constant",
-                                            "discretization" => "gausslegendre_pseudospectral",
-                                           ),
+                                            "discretization" => "gausslegendre_pseudospectral"),
                          "vpa" => OptionsDict("ngrid" => 6,
                                               "nelement" => 31,
-                                              "L" => 12.0,
+                                              "L" => 16.970562748477143,
                                               "bc" => "zero",
                                               "discretization" => "gausslegendre_pseudospectral",
-                                              "element_spacing_option" => "coarse_tails",
-                                             ),
+                                              "element_spacing_option" => "coarse_tails"),
                          "vz" => OptionsDict("ngrid" => 6,
                                              "nelement" => 31,
-                                             "L" => 12.0,
+                                             "L" => 16.970562748477143,
                                              "bc" => "zero",
                                              "discretization" => "gausslegendre_pseudospectral",
-                                             "element_spacing_option" => "coarse_tails",
-                                            ),
+                                             "element_spacing_option" => "coarse_tails"),
                          "timestepping" => OptionsDict("type" => "KennedyCarpenterARK324",
                                                        "kinetic_electron_solver" => "implicit_ppar_implicit_pseudotimestep",
                                                        "implicit_ion_advance" => false,
                                                        "implicit_vpa_advection" => false,
                                                        "nstep" => 1,
                                                        "dt" => ion_dt,
-                                                       "minimum_dt" => 1.0e-7,
-                                                       "rtol" => 1.0e-4,
+                                                       "minimum_dt" => 7.071067811865474e-8,
+                                                       "rtol" => 0.0001,
                                                        "max_increase_factor_near_last_fail" => 1.001,
                                                        "last_fail_proximity_factor" => 1.1,
                                                        "max_increase_factor" => 1.05,
                                                        "nwrite" => 10000,
                                                        "nwrite_dfns" => 10000,
                                                        "steady_state_residual" => true,
-                                                       "converged_residual_value" => 1.0e-3,
-                                                      ),
+                                                       "converged_residual_value" => 0.001),
                          "electron_timestepping" => OptionsDict("nstep" => 1,
                                                                 "dt" => dt,
-                                                                "maximum_dt" => 1.0,
+                                                                "maximum_dt" => 0.7071067811865475,
                                                                 "nwrite" => 10000,
                                                                 "nwrite_dfns" => 100000,
                                                                 "type" => "Fekete4(3)",
                                                                 "rtol" => 1.0e-6,
                                                                 "atol" => 1.0e-14,
-                                                                "minimum_dt" => 1.0e-10,
+                                                                "minimum_dt" => 7.071067811865475e-11,
                                                                 "initialization_residual_value" => 2.5,
-                                                                "converged_residual_value" => 1.0e-2,
-                                                                "constraint_forcing_rate" => 2.321,
-                                                                "include_wall_bc_in_preconditioner" => true,
-                                                               ),
+                                                                "converged_residual_value" => 0.01,
+                                                                "constraint_forcing_rate" => 3.282389678267954,
+                                                                "include_wall_bc_in_preconditioner" => true),
                          "nonlinear_solver" => OptionsDict("nonlinear_max_iterations" => 100,
                                                            "rtol" => 1.0e-5,
                                                            "atol" => 1.0e-15,
-                                                           "preconditioner_update_interval" => 1,
-                                                          ),
-                         "ion_numerical_dissipation" => OptionsDict("vpa_dissipation_coefficient" => 1.0e0,
-                                                                    "force_minimum_pdf_value" => 0.0,
-                                                                   ),
-                         "electron_numerical_dissipation" => OptionsDict("vpa_dissipation_coefficient" => 2.0,
-                                                                         "force_minimum_pdf_value" => 0.0,
-                                                                        ),
-                         "neutral_numerical_dissipation" => OptionsDict("vz_dissipation_coefficient" => 1.0e-1,
-                                                                        "force_minimum_pdf_value" => 0.0,
-                                                                       ),
+                                                           "preconditioner_update_interval" => 1),
+                         "ion_numerical_dissipation" => OptionsDict("vpa_dissipation_coefficient" => 2.8284271247461903,
+                                                                    "force_minimum_pdf_value" => 0.0),
+                         "electron_numerical_dissipation" => OptionsDict("vpa_dissipation_coefficient" => 5.656854249492381,
+                                                                         "force_minimum_pdf_value" => 0.0),
+                         "neutral_numerical_dissipation" => OptionsDict("vz_dissipation_coefficient" => 0.28284271247461906,
+                                                                        "force_minimum_pdf_value" => 0.0),
                          "ion_source_1" => OptionsDict("active" => true,
                                                        "z_profile" => "gaussian",
                                                        "z_width" => 0.125,
-                                                       "source_strength" => 0.1,
-                                                       "source_T" => 2.0,
-                                                      ),
-                         "krook_collisions" => OptionsDict("use_krook" => true),
-                        )
+                                                       "source_strength" => 0.14142135623730953,
+                                                       "source_T" => 4.0),
+                         "krook_collisions" => OptionsDict("use_krook" => true))
 
 function get_mk_state(test_input)
     # Reset timers in case there was a previous run which did not clean them up.
@@ -425,7 +403,7 @@ function test_electron_z_advection(test_input; rtol=(2.5e2*epsilon)^2)
                                    (dens[iz] * composition.me_over_mi)))
             end
             # Calculate heat flux and derivatives using new_variables
-            calculate_electron_qpar_from_pdf_no_r!(qpar, this_p, vth, this_f, vpa, ir)
+            calculate_electron_qpar_from_pdf_no_r!(qpar, this_n, vth, this_f, vpa, ir)
 
             calculate_electron_moment_derivatives_no_r!(
                 moments,
@@ -763,7 +741,7 @@ function test_electron_vpa_advection(test_input; rtol=(3.0e2*epsilon)^2)
                                    (dens[iz] * composition.me_over_mi)))
             end
             # Calculate heat flux and derivatives using new_variables
-            calculate_electron_qpar_from_pdf_no_r!(qpar, this_p, vth, this_f, vpa, ir)
+            calculate_electron_qpar_from_pdf_no_r!(qpar, this_n, vth, this_f, vpa, ir)
 
             calculate_electron_moment_derivatives_no_r!(
                 moments,
@@ -1116,7 +1094,7 @@ function test_contribution_from_electron_pdf_term(test_input; rtol=(4.0e2*epsilo
                                    (dens[iz] * composition.me_over_mi)))
             end
             # Calculate heat flux and derivatives using new_variables
-            calculate_electron_qpar_from_pdf_no_r!(qpar, this_p, vth, this_f, vpa, ir)
+            calculate_electron_qpar_from_pdf_no_r!(qpar, this_n, vth, this_f, vpa, ir)
 
             calculate_electron_moment_derivatives_no_r!(
                 moments,
@@ -1415,7 +1393,7 @@ function test_electron_dissipation_term(test_input; rtol=(3.0e0*epsilon)^2)
                                    (dens[iz] * composition.me_over_mi)))
             end
             # Calculate heat flux and derivatives using new_variables
-            calculate_electron_qpar_from_pdf_no_r!(qpar, this_p, vth, this_f, vpa, ir)
+            calculate_electron_qpar_from_pdf_no_r!(qpar, this_n, vth, this_f, vpa, ir)
 
             calculate_electron_moment_derivatives_no_r!(
                 moments,
@@ -1731,7 +1709,7 @@ function test_electron_krook_collisions(test_input; rtol=(2.0e1*epsilon)^2)
                                    (dens[iz] * composition.me_over_mi)))
             end
             # Calculate heat flux and derivatives using new_variables
-            calculate_electron_qpar_from_pdf_no_r!(qpar, this_p, vth, this_f, vpa, ir)
+            calculate_electron_qpar_from_pdf_no_r!(qpar, this_n, vth, this_f, vpa, ir)
 
             calculate_electron_moment_derivatives_no_r!(
                 moments,
@@ -2061,7 +2039,7 @@ function test_external_electron_source(test_input; rtol=(3.0e1*epsilon)^2)
                                    (dens[iz] * composition.me_over_mi)))
             end
             # Calculate heat flux and derivatives using new_variables
-            calculate_electron_qpar_from_pdf_no_r!(qpar, this_p, vth, this_f, vpa, ir)
+            calculate_electron_qpar_from_pdf_no_r!(qpar, this_n, vth, this_f, vpa, ir)
 
             calculate_electron_moment_derivatives_no_r!(
                 moments,
@@ -2407,7 +2385,7 @@ function test_electron_implicit_constraint_forcing(test_input; rtol=(1.5e0*epsil
                                    (dens[iz] * composition.me_over_mi)))
             end
             # Calculate heat flux and derivatives using new_variables
-            calculate_electron_qpar_from_pdf_no_r!(qpar, this_p, vth, this_f, vpa, ir)
+            calculate_electron_qpar_from_pdf_no_r!(qpar, this_n, vth, this_f, vpa, ir)
 
             calculate_electron_moment_derivatives_no_r!(
                 moments,
@@ -2744,7 +2722,7 @@ function test_electron_energy_equation(test_input; rtol=(6.0e2*epsilon)^2)
                                    (dens[iz] * composition.me_over_mi)))
             end
             # Calculate heat flux and derivatives using new_variables
-            calculate_electron_qpar_from_pdf_no_r!(qpar, this_p, vth, this_f, vpa, ir)
+            calculate_electron_qpar_from_pdf_no_r!(qpar, this_n, vth, this_f, vpa, ir)
 
             calculate_electron_moment_derivatives_no_r!(
                 moments,
@@ -3003,7 +2981,7 @@ function test_ion_dt_forcing_of_electron_ppar(test_input; rtol=(1.5e1*epsilon)^2
                                    (dens[iz] * composition.me_over_mi)))
             end
             # Calculate heat flux and derivatives using new_variables
-            calculate_electron_qpar_from_pdf_no_r!(qpar, this_p, vth, this_f, vpa, ir)
+            calculate_electron_qpar_from_pdf_no_r!(qpar, this_n, vth, this_f, vpa, ir)
 
             calculate_electron_moment_derivatives_no_r!(
                 moments,
@@ -3392,7 +3370,7 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
                                    (dens[iz] * composition.me_over_mi)))
             end
             # Calculate heat flux and derivatives using new_variables
-            calculate_electron_qpar_from_pdf_no_r!(qpar, this_p, vth, this_f, vpa, ir)
+            calculate_electron_qpar_from_pdf_no_r!(qpar, this_n, vth, this_f, vpa, ir)
 
             calculate_electron_moment_derivatives_no_r!(
                 moments,
