@@ -1501,6 +1501,28 @@ $F_s$, $w_\parallel$, $w_\perp$.
 \end{align}
 ```
 
+#### Collision coefficient
+
+The coefficient in front of the Fokker-Planck collision operator is
+```math
+\begin{align}
+\gamma_{ss'} = \frac{2 \pi Z_s^2 Z_{s'}^2 e^4 \log\Lambda_{ss'}}{(4 \pi \epsilon_0)^2}
+\end{align}
+```
+and is made dimensionless as
+```math
+\begin{align}
+\hat{\gamma}_{ss'} = \frac{n_\mathrm{ref} t_\mathrm{ref}}{m_\mathrm{ref}^2 c_\mathrm{ref}^3} \gamma_{ss'}
+                   = \frac{n_\mathrm{ref} L_\mathrm{ref}}{m_\mathrm{ref}^2 c_\mathrm{ref}^4} \gamma_{ss'}
+                   = \frac{1}{2} \frac{n_\mathrm{ref} Z_s^2 Z_{s'}^2 e^4 \log\Lambda_{ss'} L_\mathrm{ref}}{4 \pi \epsilon_0^2 m_\mathrm{ref}^2 c_\mathrm{ref}^4}
+\end{align}
+```
+$\hat \gamma_{ss'}$ is called `nuii` in [`moment_kinetics.fokker_planck`](@ref).
+
+`nuii` can also be set manually in the `[fokker_planck_collisions]`
+input section, which could be thought of as choosing $\log\Lambda$ to set the
+requested dimensionless `nuii`.
+
 ### Dimensionless 1D2V neutral equations
 
 ```math
@@ -1854,6 +1876,8 @@ differences first
     && \hat{S}_{s,p} = 2 \sqrt{2} \mathring{S}_{s,p} \\
 \mathring{S}_{s,p_\parallel} &= \frac{1}{2 \sqrt{2}} \hat{S}_{s,p_\parallel} = \frac{3}{2 \sqrt{2}} \hat{S}_{s,p}
     && \hat{S}_{s,p} = \frac{2 \sqrt{2}}{3} \mathring{S}_{s,p_\parallel} \\
+\mathring{\gamma}_{ss'} &= \frac{\check{n}_\mathrm{ref} \check{L}_\mathrm{ref}}{\check{m}_\mathrm{ref}^2 \check{c}_\mathrm{ref}^4} \gamma_{ss'} = \frac{n_\mathrm{ref} L_\mathrm{ref}}{4 m_\mathrm{ref}^2 c_\mathrm{ref}^4} \gamma_{ss'} = \frac{1}{4} \hat{\gamma}_{ss'}
+    && \hat{\gamma}_{ss'} = 4 \mathring{\gamma}_{ss'} \\
 \mathring{n}_s &= \frac{n_s}{\check{n}_\mathrm{ref}} = \hat{n}_s
     && \hat{n}_s = \mathring{n}_s \\
 \mathring{T}_s &= \frac{T_s}{\check{T}_\mathrm{ref}} = \frac{T_s}{\check{T}_\mathrm{ref}} = \hat{T}_s
