@@ -1,4 +1,5 @@
-using moment_kinetics.load_data: get_run_info_no_setup, postproc_load_variable
+using moment_kinetics.load_data: get_run_info_no_setup, postproc_load_variable,
+                                 close_run_info
 
 function convert_to_string(array::Vector{UInt8})
     s = String(array)
@@ -143,10 +144,14 @@ function regression_test_debug_comparison(filenameA, filenameB;
                 end
             end
 
+            close_run_info(A)
+            close_run_info(B)
             return nothing
         end
     end
 
+    close_run_info(A)
+    close_run_info(B)
     println("No differences found")
     return nothing
 end
