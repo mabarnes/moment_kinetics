@@ -538,25 +538,6 @@ function initialize_pdf!(pdf, moments, boundary_distributions, composition, r, z
         end
     end
 
-    # @serial_region begin
-    #     @loop_r ir begin
-    #         # this is the initial guess for the electron pdf
-    #         # it will be iteratively updated to satisfy the time-independent
-    #         # electron kinetic equation
-    #         @views init_electron_pdf_over_density!(pdf.electron.norm[:,:,:,ir], moments.electron.dens[:,ir],
-    #             moments.electron.upar[:,ir], moments.electron.vth[:,ir], z, vpa, vperp)
-    #     end
-    #     # now that we have our initial guess for the electron pdf, we iterate
-    #     # using the time-independent electron kinetic equation to find a self-consistent
-    #     # solution for the electron pdf
-    #     max_electron_pdf_iterations = 100
-    #     @views update_electron_pdf!(pdf.electron.norm, moments.electron.dens, moments.electron.vth, moments.electron.ppar, 
-    #                                 moments.electron.ddens_dz, moments.electron.dppar_dz, moments.electron.dqpar_dz, moments.electron.dvth_dz,
-    #                                 max_electron_pdf_iterations, z, vpa, z_spectral, vpa_spectral, scratch_dummy)
-    # end
-
-
-
     return nothing
 end
 
@@ -568,8 +549,10 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
                                   nl_solver_params, t_params, t_input, io_input,
                                   input_dict; skip_electron_solve)
 
-    # now that the initial electron pdf is given, the electron parallel heat flux should be updated
-    # if using kinetic electrons
+    if t_input["skip_electron_initial_solve"]
+        skip_electron_solve = true
+    end
+
     if composition.electron_physics ∈ (kinetic_electrons,
                                        kinetic_electrons_with_temperature_equation)
         @begin_serial_region()
