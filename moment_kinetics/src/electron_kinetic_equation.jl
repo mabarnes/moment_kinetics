@@ -294,10 +294,6 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
         do_debug_io = false
     end
 
-    #z_speedup_fac = 20.0
-    #z_speedup_fac = 5.0
-    z_speedup_fac = 1.0
-
     text_output = false
 
     epsilon = 1.e-11
@@ -413,8 +409,6 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
                            num_diss_params, t_params, ir; evolve_p=evolve_p,
                            ion_dt=ion_dt)
             end
-            speedup_hack!(scratch[istage+1], scratch[istage], z_speedup_fac, z, vpa;
-                          evolve_p=evolve_p)
 
             rk_update_variable!(scratch, nothing, :pdf_electron, t_params, istage)
 
@@ -2198,48 +2192,6 @@ global_rank[] == 0 && println("recalculating precon")
         success = ""
     end
     return success
-end
-
-function speedup_hack!(fvec_out, fvec_in, z_speedup_fac, z, vpa; evolve_p=false)
-    # Divide by wpa to relax CFL condition at large wpa - only looking for steady
-    # state here, so does not matter that this makes time evolution incorrect.
-    # Also increase the effective timestep for z-values far from the sheath boundary -
-    # these have a less-limited timestep so letting them evolve faster speeds up
-    # convergence to the steady state.
-
-    # Actually modify so that large wpa does go faster (to allow some phase mixing - maybe
-    # this makes things more stable?), but not by so much.
-    #vpa_fudge_factor = 1.0
-    #vpa_fudge_factor = 0.8
-    vpa_fudge_factor = 0.0
-
-    Lz = z.L
-
-    if evolve_p
-        @begin_r_z_region()
-        p_out = fvec_out.electron_p
-        p_in = fvec_in.electron_p
-        @loop_r_z ir iz begin
-            zval = z.grid[iz]
-            znorm = 2.0*zval/Lz
-            p_out[iz,ir] = p_in[iz,ir] +
-                (1.0 + z_speedup_fac*(1.0 - znorm^2)) *
-                (p_out[iz,ir] - p_in[iz,ir])
-        end
-    end
-
-    @begin_r_z_vperp_vpa_region()
-    pdf_out = fvec_out.pdf_electron
-    pdf_in = fvec_in.pdf_electron
-    @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
-        zval = z.grid[iz]
-        znorm = 2.0*zval/Lz
-        pdf_out[ivpa,ivperp,iz,ir] = pdf_in[ivpa,ivperp,iz,ir] +
-            (1.0 + z_speedup_fac*(1.0 - znorm^2)) /
-            sqrt(1.0 + vpa_fudge_factor * vpa.grid[ivpa]^2) *
-            (pdf_out[ivpa,ivperp,iz,ir] - pdf_in[ivpa,ivperp,iz,ir])
-    end
-    return nothing
 end
 
 function apply_electron_bc_and_constraints!(this_scratch, phi, moments, r, z, vperp, vpa,
