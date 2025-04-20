@@ -46,7 +46,8 @@ using ..external_sources: total_external_electron_sources!,
                           add_total_external_electron_source_to_Jacobian!,
                           add_total_external_electron_source_to_v_only_Jacobian!,
                           add_total_external_electron_source_to_z_only_Jacobian!
-using ..file_io: get_electron_io_info, write_electron_state, finish_electron_io
+using ..file_io: get_electron_io_info, write_electron_state, finish_electron_io,
+                 write_debug_data_to_binary
 using ..collision_frequencies: get_collision_frequency_ee,
                                  get_collision_frequency_ei
 using ..krook_collisions: electron_krook_collisions!, add_electron_krook_collisions_to_Jacobian!,
@@ -390,9 +391,7 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
             # 'anyzv' region to allow parallelising over r as well).
             for ir ∈ 1:r.n
                 @views electron_kinetic_equation_euler_update!(
-                           scratch[istage+1].pdf_electron[:,:,:,ir],
-                           scratch[istage+1].electron_ppar[:,ir],
-                           scratch[istage].pdf_electron[:,:,:,ir],
+                           scratch[istage+1], scratch[istage].pdf_electron[:,:,:,ir],
                            scratch[istage].electron_ppar[:,ir], moments, z, vperp, vpa,
                            z_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
                            collisions, composition, external_source_settings,
@@ -1834,12 +1833,11 @@ global_rank[] == 0 && println("recalculating precon")
             f_electron_residual[ivpa,ivperp,iz] = f_electron_old[ivpa,ivperp,iz]
         end
         electron_kinetic_equation_euler_update!(
-            f_electron_residual, electron_ppar_residual, f_electron_newvar,
-            electron_ppar_newvar, moments, z, vperp, vpa, z_spectral,
-            vpa_spectral, z_advect, vpa_advect, scratch_dummy, collisions,
-            composition, external_source_settings, num_diss_params, t_params,
-            ir; evolve_ppar=evolve_ppar, ion_dt=ion_dt,
-            soft_force_constraints=true)
+            (f_electron_residual, electron_ppar_residual), f_electron_newvar,
+            electron_ppar_newvar, moments, z, vperp, vpa, z_spectral, vpa_spectral,
+            z_advect, vpa_advect, scratch_dummy, collisions, composition,
+            external_source_settings, num_diss_params, t_params, ir;
+            evolve_ppar=evolve_ppar, ion_dt=ion_dt, soft_force_constraints=true)
 
         # Now
         #   residual = f_electron_old + dt*RHS(f_electron_newvar)
@@ -2153,11 +2151,11 @@ global_rank[] == 0 && println("recalculating precon")
             end
             t_params.dt[] = pdf_electron_normalisation_factor
             electron_kinetic_equation_euler_update!(
-                f_electron_residual, electron_ppar_residual, f_electron_new,
-                electron_ppar_new, moments, z, vperp, vpa, z_spectral, vpa_spectral, z_advect,
-                vpa_advect, scratch_dummy, collisions, composition, external_source_settings,
-                num_diss_params, t_params, ir; evolve_ppar=true, ion_dt=ion_dt,
-                soft_force_constraints=true)
+                (f_electron_residual, electron_ppar_residual), f_electron_new,
+                electron_ppar_new, moments, z, vperp, vpa, z_spectral, vpa_spectral,
+                z_advect, vpa_advect, scratch_dummy, collisions, composition,
+                external_source_settings, num_diss_params, t_params, ir; evolve_ppar=true,
+                ion_dt=ion_dt, soft_force_constraints=true)
 
             # Set residual to zero where pdf_electron is determined by boundary conditions.
             if vpa.n > 1
@@ -4747,14 +4745,16 @@ function update_electron_pdf_with_picard_iteration!(pdf, dens, vthe, ppar, ddens
 end
 
 """
-    electron_kinetic_equation_euler_update!(f_out, ppar_out, f_in, ppar_in, moments,
-                                            z, vperp, vpa, z_spectral, vpa_spectral,
+    electron_kinetic_equation_euler_update!(result_object, f_in, ppar_in, moments, z,
+                                            vperp, vpa, z_spectral, vpa_spectral,
                                             z_advect, vpa_advect, scratch_dummy,
                                             collisions, composition,
-                                            external_source_settings,
-                                            num_diss_params, t_params, ir;
-                                            evolve_ppar=false, ion_dt=nothing,
-                                            soft_force_constraints=false)
+                                            external_source_settings, num_diss_params,
+                                            t_params, ir; evolve_ppar=false,
+                                            ion_dt=nothing, soft_force_constraints=false,
+                                            debug_io=nothing, fields=nothing, r=nothing,
+                                            vzeta=nothing, vr=nothing, vz=nothing,
+                                            istage=0)
 
 Do a forward-Euler update of the electron kinetic equation.
 
@@ -4762,13 +4762,47 @@ When `evolve_ppar=true` is passed, also updates the electron parallel pressure.
 
 Note that this function operates on a single point in `r`, given by `ir`, and `f_out`,
 `ppar_out`, `f_in`, and `ppar_in` should have no r-dimension.
+
+`result_object` should be either a `scratch_pdf` object (which contains data for all
+r-indices) or a Tuple containing `(pdf_electron, electron_ppar)` fields for r-index `ir`
+only. This allows `result_object` to be (possibly) passed to
+`write_debug_data_to_binary()` when `result_object` is a `scratch_pdf`.
+
+`fields`, `r`, `vzeta`, `vr`, `vz`, and `istage` are only required when a non-`nothing`
+`debug_io` is passed.
 """
 @timeit global_timer electron_kinetic_equation_euler_update!(
-                         f_out, ppar_out, f_in, ppar_in, moments, z, vperp, vpa,
-                         z_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
-                         collisions, composition, external_source_settings,
-                         num_diss_params, t_params, ir; evolve_ppar=false, ion_dt=nothing,
-                         soft_force_constraints=false) = begin
+                         result_object, f_in, ppar_in, moments, z, vperp, vpa, z_spectral,
+                         vpa_spectral, z_advect, vpa_advect, scratch_dummy, collisions,
+                         composition, external_source_settings, num_diss_params, t_params,
+                         ir; evolve_ppar=false, ion_dt=nothing,
+                         soft_force_constraints=false, debug_io=nothing,
+                         fields=nothing, r=nothing, vzeta=nothing, vr=nothing,
+                         vz=nothing, istage=0) = begin
+
+    if debug_io !== nothing && !isa(result_object, scratch_pdf)
+        error("debug_io can only be used when a `scratch_pdf` is passed as result_object")
+    end
+    if debug_io !== nothing && fields === nothing
+        error("`fields` is required when debug_io is passed")
+    end
+
+    function write_debug_IO(label)
+        if debug_io === nothing
+            return nothing
+        end
+        write_debug_data_to_binary(result_object, moments, fields, composition, t_params,
+                                   r, z, vperp, vpa, vzeta, vr, vz, label, istage)
+        return nothing
+    end
+
+    if isa(result_object, scratch_pdf) || isa(result_object, scratch_electron_pdf)
+        # Arrays including r-dimension passed to allow debug output to be written
+        f_out = @view result_object.pdf_electron[:,:,:,ir]
+        ppar_out = @view result_object.electron_ppar[:,ir]
+    else
+        f_out, ppar_out = result_object
+    end
     dt = t_params.dt[]
 
     if evolve_ppar
@@ -4784,27 +4818,32 @@ Note that this function operates on a single point in `r`, given by `ir`, and `f
 
         update_derived_electron_moment_time_derivatives!(ppar_in, moments,
                                                          composition.electron_physics)
+        write_debug_IO("electron_energy_equation_no_r!")
     end
 
     # add the contribution from the z advection term
     @views electron_z_advection!(f_out, f_in, moments.electron.upar[:,ir],
                                  moments.electron.vth[:,ir], z_advect, z, vpa.grid,
                                  z_spectral, scratch_dummy, dt, ir)
+    write_debug_IO("electron_z_advection!")
 
     # add the contribution from the wpa advection term
     @views electron_vpa_advection!(f_out, f_in, moments.electron.dens[:,ir],
                                    moments.electron.upar[:,ir], ppar_in, moments,
                                    vpa_advect, vpa, vpa_spectral, scratch_dummy, dt,
                                    external_source_settings.electron, ir)
+    write_debug_IO("electron_vpa_advection!")
 
     # add in the contribution to the residual from the term proportional to the pdf
     add_contribution_from_pdf_term!(f_out, f_in, ppar_in, moments.electron.dens[:,ir],
                                     moments.electron.upar[:,ir], moments, vpa.grid, z, dt,
                                     external_source_settings.electron, ir)
+    write_debug_IO("add_contribution_from_pdf_term!")
 
     # add in numerical dissipation terms
     add_dissipation_term!(f_out, f_in, scratch_dummy, z_spectral, z, vpa, vpa_spectral,
                           num_diss_params, dt)
+    write_debug_IO("add_dissipation_term!")
 
     if collisions.krook.nuee0 > 0.0 || collisions.krook.nuei0 > 0.0
         # Add a Krook collision operator
@@ -4815,17 +4854,20 @@ Note that this function operates on a single point in `r`, given by `ir`, and `f
                                           moments.ion.upar[:,ir],
                                           moments.electron.vth[:,ir], collisions, vperp,
                                           vpa, dt)
+        write_debug_IO("electron_krook_collisions!")
     end
 
     @views total_external_electron_sources!(f_out, f_in, moments.electron.dens[:,ir],
                                             moments.electron.upar[:,ir], moments,
                                             composition, external_source_settings.electron,
                                             vperp, vpa, dt, ir)
+    write_debug_IO("total_external_electron_sources!")
 
     if soft_force_constraints
         electron_implicit_constraint_forcing!(f_out, f_in,
                                               t_params.constraint_forcing_rate, vpa, dt,
                                               ir)
+        write_debug_IO("electron_implicit_constraint_forcing!")
     end
 
     return nothing
