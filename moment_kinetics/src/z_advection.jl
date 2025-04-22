@@ -4,18 +4,12 @@ module z_advection
 
 export z_advection!
 export update_speed_z!
-export init_z_advection_implicit
 
 using ..advection: advance_f_df_precomputed!
 using ..chebyshev: chebyshev_info
 using ..looping
 using ..timer_utils
 using ..derivatives: derivative_z!
-using ..array_allocation: allocate_float, allocate_int
-using ..type_definitions: mk_float, mk_int
-using SparseArrays: sparse, AbstractSparseArray
-using SuiteSparse
-using LinearAlgebra: lu, mul!, ldiv!
 """
 do a single stage time advance (potentially as part of a multi-stage RK scheme)
 """
@@ -115,132 +109,4 @@ function update_speed_z!(advect, upar, vth, evolve_upar, evolve_ppar, fields, vp
     return nothing
 end
 
-struct z_advection_implicit_arrays
-    mass_matrix_z::AbstractSparseArray{mk_float,mk_int,2}
-    stream_matrices::Array{AbstractSparseArray{mk_float,mk_int,2},2}
-    streaming_lu_objs::Array{SuiteSparse.UMFPACK.UmfpackLU{mk_float,mk_int},2}
-end
-
-function init_z_advection_implicit(z,z_spectral,vperp,vpa,delta_t)
-    nelement_z = z.nelement_local
-    ngrid_z = z.ngrid
-    z_igrid_full = z.igrid_full
-    # number of entries in sparse matrix
-    ntot_z = (nelement_z - 1)*(ngrid_z^2 - 1) + ngrid_z^2
-    # arrays for creating sparse matrices
-    II = allocate_int(ntot_z)
-    JJ = allocate_int(ntot_z)
-    VV = allocate_float(ntot_z)
-    II .= 0
-    JJ .= 0
-    # data structures for storing results
-    streaming_sparse = Array{AbstractSparseArray{mk_float,mk_int,2},2}(undef,vpa.n,vperp.n)
-    streaming_lu_objs = Array{SuiteSparse.UMFPACK.UmfpackLU{mk_float,mk_int},2}(undef,vpa.n,vperp.n)
-    # the calculation
-    # for now use that elemental matrices
-    # are independent of ielement for z
-    M0 = z_spectral.lobatto.M0
-    P0 = z_spectral.lobatto.P0
-    zerovpa = 1.0e-8
-
-    # mass matrix
-    VV .= 0.0
-    for ielement in 1:nelement_z
-        for iz_local in 1:ngrid_z
-            for izp_local in 1:ngrid_z
-                iz_global = z_igrid_full[iz_local,ielement]
-                izp_global = z_igrid_full[izp_local,ielement]
-                icsc_z = 1 + ((izp_local - 1) + (iz_local - 1)*ngrid_z +
-                (ielement - 1)*(ngrid_z^2 - 1))
-
-                II[icsc_z] = iz_global
-                JJ[icsc_z] = izp_global
-
-                # assemble matrix
-                VV[icsc_z] += M0[iz_local,izp_local]
-            end
-        end
-    end
-    mass_matrix_z = sparse(II,JJ,VV)
-
-    # make streaming matrices
-    for ivperp in 1:vperp.n
-        for ivpa in 1:vpa.n
-            VV .= 0.0
-            # make the streaming matrix for this dzdt(vpa,vperp)
-            # for now, use that dzdt independent of z
-            for ielement in 1:nelement_z
-                for iz_local in 1:ngrid_z
-                    for izp_local in 1:ngrid_z
-                        iz_global = z_igrid_full[iz_local,ielement]
-                        izp_global = z_igrid_full[izp_local,ielement]
-                        icsc_z = 1 + ((izp_local - 1) + (iz_local - 1)*ngrid_z +
-                        (ielement - 1)*(ngrid_z^2 - 1))
-
-                        II[icsc_z] = iz_global
-                        JJ[icsc_z] = izp_global
-
-                        dzdt = vpa.grid[ivpa]
-                        lower_wall = (ielement == 1 && iz_local == 1 && dzdt > zerovpa)
-                        upper_wall = (ielement == nelement_z && iz_local == ngrid_z && dzdt < -zerovpa)
-                        if lower_wall
-                            if (iz_local == izp_local)
-                                # set bc row
-                                VV[icsc_z] = 1.0
-                            end
-                        elseif upper_wall
-                            if (iz_local == izp_local)
-                                # set bc row
-                                VV[icsc_z] = 1.0
-                            end
-                        else
-                            # assemble matrix
-                            VV[icsc_z] += M0[iz_local,izp_local] + delta_t * dzdt * P0[iz_local,izp_local]
-                        end
-                    end
-                end
-            end
-            stream_matrix = sparse(II,JJ,VV)
-            stream_lu = lu(stream_matrix)
-            
-            streaming_sparse[ivpa,ivperp] = stream_matrix
-            streaming_lu_objs[ivpa,ivperp] = stream_lu
-        end
-    end
-    return z_advection_implicit_arrays(mass_matrix_z, streaming_sparse, streaming_lu_objs)
-end
-
-function z_advection_implicit_advance!(pdf,z,vpa,vperp,streaming_arrays::z_advection_implicit_arrays)
-    # use the implicit advance matrix to get the pdf at the next time level
-    begin_vperp_vpa_region()
-    mass_matrix_z = streaming_arrays.mass_matrix_z
-    streaming_lu_objs = streaming_arrays.streaming_lu_objs
-    zerovpa = 1.0e-8
-    nz = z.n
-    @loop_vperp_vpa ivperp ivpa begin
-        # extract the source pdf and store it
-        @views @. z.scratch = pdf[ivpa,ivperp,:]
-        # apply mass matrix
-        mul!(z.scratch2,mass_matrix_z,z.scratch)
-        
-        # impose bc
-        dzdt = vpa.grid[ivpa]
-        # lower wall
-        if dzdt > zerovpa
-            z.scratch2[1] = 0.0
-        end
-        # upper wall
-        if dzdt < -zerovpa
-            z.scratch2[nz] = 0.0
-        end
-        
-        # solve matrix system
-        lu_stream = streaming_lu_objs[ivpa,ivperp]
-        ldiv!(z.scratch3,lu_stream,z.scratch2)
-        
-        # put result in pdf array
-        @views @. pdf[ivpa,ivperp,:] = z.scratch3
-    end
-    return nothing
-end
 end # z_advection
