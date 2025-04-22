@@ -438,7 +438,7 @@ function run_test(test_input, expected, rtol, atol, upar_rtol=nothing; args...)
     end
     name = input["output"]["run_name"]
     if length(args) > 0
-        name = string(name, "_", (stringify_arg(k, v) for (k, v) in args)...)
+        name = string(name[1], "_", (stringify_arg(k, v) for (k, v) in args)...)
     end
 
     # Provide some progress info
@@ -597,6 +597,18 @@ function runtests()
             vpa_bc = "none"
             run_test(test_input_gauss_legendre, expected_none_bc, 1.0e-14, 1.0e-14;
                      vperp=OptionsDict("bc" => vperp_bc), vpa=OptionsDict("bc" => vpa_bc))
+        end
+        @testset "Gauss Legendre no (explicitly) enforced boundary conditions" begin
+            run_name = "gausslegendre_pseudospectral_none_bc"
+            vperp_bc = "none"
+            vpa_bc = "none"
+            run_test(test_input_gauss_legendre, expected_none_bc, 5.0e-12, 5.0e-12;
+                     vperp=OptionsDict("bc" => vperp_bc), vpa=OptionsDict("bc" => vpa_bc),
+                     fokker_planck_collisions_nonlinear_solver=OptionsDict("rtol" => 0.0,
+                                                                           "atol" => 1.0e-14,
+                                                                           "nonlinear_max_iterations" => 20,),
+                     timestepping=OptionsDict("kinetic_ion_solver" => "implicit_ion_fp_collisions",
+                                              "type" => "PareschiRusso3(4,3,3)",))
         end
     end
 end
