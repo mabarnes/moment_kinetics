@@ -3874,7 +3874,7 @@ end
         ion_success = implicit_ion_fokker_planck_self_collisions!(fvec_out.pdf, fvec_in.pdf, moments.ion.dSdt, 
         composition, collisions, fp_arrays, 
         vpa, vperp, z, r, dt, spectral_objects,
-        nl_solver_params.ion_fp_collisions; diagnose_entropy_production=false)
+        nl_solver_params.ion_fp_collisions; diagnose_entropy_production=true)
         success = success && ion_success
     end
     return success
