@@ -213,15 +213,15 @@ function create_moments_ion(nz, nr, n_species, evolve_density, evolve_upar,
         external_source_controller_integral = allocate_shared_float(1, 1, n_sources)
     end
 
-    #if evolve_density || evolve_upar || evolve_ppar
+    if evolve_density || evolve_upar || evolve_ppar
         constraints_A_coefficient = allocate_shared_float(nz, nr, n_species)
         constraints_B_coefficient = allocate_shared_float(nz, nr, n_species)
         constraints_C_coefficient = allocate_shared_float(nz, nr, n_species)
-    #else
-    #    constraints_A_coefficient = nothing
-    #    constraints_B_coefficient = nothing
-    #    constraints_C_coefficient = nothing
-    #end
+    else
+        constraints_A_coefficient = nothing
+        constraints_B_coefficient = nothing
+        constraints_C_coefficient = nothing
+    end
 
     # return struct containing arrays needed to update moments
     return moments_ion_substruct(density, density_updated, parallel_flow,
