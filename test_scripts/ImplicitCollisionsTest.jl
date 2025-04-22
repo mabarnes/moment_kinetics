@@ -26,6 +26,7 @@ using moment_kinetics.input_structs: direct_integration, multipole_expansion
 using moment_kinetics.nonlinear_solvers
 using moment_kinetics.z_advection: init_z_advection_implicit, z_advection_implicit_advance!
 using moment_kinetics.species_input: get_species_input
+using moment_kinetics.input_structs: options_to_TOML
 
 function plot_test_data(func_exact,func_num,func_err,func_name,vpa,vperp)
     @views heatmap(vperp.grid, vpa.grid, func_num[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
@@ -141,11 +142,9 @@ end
 function test_implicit_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=3,nelement_vpa=8,nelement_vperp=4,
     Lvpa=6.0,Lvperp=3.0,bc_vpa="none",bc_vperp="none",
     ntime=1,delta_t=1.0,
-    restart = 8,
-    max_restarts = 1,
     atol = 1.0e-10,
-    serial_solve = false,
-    anyv_region = true,
+    rtol = 0.0,
+    nonlinear_max_iterations = 20,
     test_particle_preconditioner=false,
     test_linearised_advance=false,
     use_Maxwellian_Rosenbluth_coefficients_in_preconditioner=false,
@@ -251,7 +250,12 @@ function test_implicit_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=3,neleme
     implicit_ion_fp_collisions = true
     coords = (vperp=vperp,vpa=vpa)
     spectral = (vperp_spectral=vperp_spectral, vpa_spectral=vpa_spectral)
-    nl_solver_params = setup_fp_nl_solve(implicit_ion_fp_collisions, coords)
+    input_toml = OptionsDict("fokker_planck_collisions_nonlinear_solver" => OptionsDict("rtol" => rtol,
+                                                                                        "atol" => atol,
+                                                                                        "nonlinear_max_iterations" => nonlinear_max_iterations),)
+    fkpl = setup_fkpl_collisions_input(input_toml, true)
+    nl_solver_params = setup_fp_nl_solve(implicit_ion_fp_collisions,
+                                        fkpl, coords)
 
     #println(nl_solver_params.preconditioners)
     for it in 1:ntime
@@ -292,11 +296,9 @@ end
 function test_implicit_collisions_wrapper(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=3,nelement_vpa=8,nelement_vperp=4,
     Lvpa=6.0,Lvperp=3.0, bc_vpa="none", bc_vperp = "none",
     ntime=1,delta_t=1.0,
-    restart = 8,
-    max_restarts = 1,
     atol = 1.0e-10,
-    serial_solve = false,
-    anyv_region = true,
+    rtol = 0.0,
+    nonlinear_max_iterations = 20,
     test_particle_preconditioner=false,
     test_linearised_advance=false,
     use_Maxwellian_Rosenbluth_coefficients_in_preconditioner=false,
@@ -368,9 +370,14 @@ function test_implicit_collisions_wrapper(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=
                                                                         "frequency_option" => "manual",
                                                                         "self_collisions" => true,
                                                                         "use_conserving_corrections" => test_numerical_conserving_terms,
-                                                                        "boundary_data_option" => boundary_data_option,
-                                                                        ))
+                                                                        "boundary_data_option" => boundary_data_option,),
+                            "fokker_planck_collisions_nonlinear_solver" => OptionsDict("rtol" => rtol,
+                                                                                       "atol" => atol,
+                                                                                       "nonlinear_max_iterations" => nonlinear_max_iterations),
+                            )
+    #println(options_to_TOML(input_toml))
     collisions = (fkpl = setup_fkpl_collisions_input(input_toml, true), krook=nothing)
+
     finish_init_time = now()
     
     # initial condition
@@ -429,7 +436,8 @@ function test_implicit_collisions_wrapper(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=
     implicit_ion_fp_collisions = true
     coords = (vperp=vperp,vpa=vpa)
     spectral_objects = (vperp_spectral=vperp_spectral, vpa_spectral=vpa_spectral)
-    nl_solver_params = setup_fp_nl_solve(implicit_ion_fp_collisions, coords)
+    nl_solver_params = setup_fp_nl_solve(implicit_ion_fp_collisions,
+                                         collisions.fkpl, coords)
 
     #println(nl_solver_params.preconditioners)
     for it in 1:ntime

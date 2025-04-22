@@ -778,7 +778,8 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
         error("Cannot use implicit_ion_advance and implicit_vpa_advection at the same "
               * "time")
     end
-    nl_solver_ion_fp_collisions = setup_fp_nl_solve(t_params.use_implicit_ion_fp_collisions, (vperp=vperp, vpa=vpa))
+    nl_solver_ion_fp_collisions = setup_fp_nl_solve(t_params.use_implicit_ion_fp_collisions,
+                                                    collisions.fkpl, (vperp=vperp, vpa=vpa))
 
     nl_solver_params = (electron_conduction=electron_conduction_nl_solve_parameters,
                         electron_advance=nl_solver_electron_advance_params,

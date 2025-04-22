@@ -92,6 +92,10 @@ Structure the namelist as follows.
     use_fokker_planck = true
     nuii = 1.0
     frequency_option = "manual"
+
+    [fokker_planck_collisions_nonlinear_solver]
+    atol = 1.0e-10
+    rtol = 1.0e-10
 """
 function setup_fkpl_collisions_input(toml_input::AbstractDict, warn_unexpected::Bool)
     reference_params = setup_reference_parameters(toml_input, warn_unexpected)
@@ -114,6 +118,21 @@ function setup_fkpl_collisions_input(toml_input::AbstractDict, warn_unexpected::
         sd_mi = 0.25,
         sd_me = 0.25/1836.0,
         Zi = 1.0)
+    # since set_defaults_and_check_section!() cannot
+    # merge values from a default OptionsDicts recursively, i.e.,
+    # a Dict from the TOML entirely replaces the default,
+    # here we use a new section to retain the expected behaviour
+    # for defaults
+    nonlinear_solver_settings = set_defaults_and_check_section!(
+        toml_input, "fokker_planck_collisions_nonlinear_solver", warn_unexpected;
+        # default inputs
+        rtol = 0.0,
+        atol = 1.0e-10,
+        linear_restart = 8,
+        linear_max_restarts = 1,
+        nonlinear_max_iterations = 20)
+    # place nonlinear_solver inputs into main Dict
+    input_section["nonlinear_solver"] = nonlinear_solver_settings
     # ensure that the collision frequency is consistent with the input option
     frequency_option = input_section["frequency_option"]
     if frequency_option == "reference_parameters"
@@ -879,16 +898,13 @@ end
 # Functions associated with implicit timestepping
 #################################################
 
-function setup_fp_nl_solve(implicit_ion_fp_collisions, coords)
+function setup_fp_nl_solve(implicit_ion_fp_collisions::Bool,
+                           fkpl::fkpl_collisions_input,
+                           coords)
     #coords = (vperp=vperp,vpa=vpa)
     return setup_nonlinear_solve(
         implicit_ion_fp_collisions,
-        OptionsDict("nonlinear_solver" =>
-                    OptionsDict("rtol" => 0.0,
-                                "atol" => 1.0e-10,
-                                "linear_restart" => 8,
-                                "linear_max_restarts" => 1,
-                                "nonlinear_max_iterations" => 20)),
+        OptionsDict("nonlinear_solver" => fkpl.nonlinear_solver),
         coords; serial_solve=false, anyv_region=true,
         preconditioner_type=Val(:lu))
 end

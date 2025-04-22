@@ -27,13 +27,14 @@ discretization = "chebyshev_pseudospectral"
 ngrid = 5
 nelement = 8
 L = 4.5
-bc = "zero"
+bc = "none"
 discretization = "gausslegendre_pseudospectral"
 
 [vperp]
 ngrid = 5
 nelement = 4
 L = 2.25
+bc = "none"
 discretization = "gausslegendre_pseudospectral"
 # Fokker-Planck operator requires the "gausslegendre_pseudospectral
 # options for the vpa and vperp grids
@@ -73,19 +74,16 @@ boundary_data_option="multipole_expansion"
 #boundary_data_option="delta_f_multipole"
 #boundary_data_option="direct_integration"
 
+[fokker_planck_collisions_nonlinear_solver]
+rtol = 0.0
+atol = 1.0e-10
+nonlinear_max_iterations = 50
+
 [timestepping]
 nstep = 10
 dt = 1.0e-3
 nwrite = 1
 nwrite_dfns = 1
 kinetic_ion_solver = "implicit_ion_fp_collisions"
-type = "KennedyCarpenterARK324"
-
-#[nonlinear_solver]
-#nonlinear_max_iterations = 20
-#rtol = 1.0e-5
-#atol = 1.0e-12
-#linear_restart = 10
-#total_its_soft_limit = 50
-#preconditioner_update_interval = 300
- 
+#type = "KennedyCarpenterARK324"
+type = "PareschiRusso3(4,3,3)"

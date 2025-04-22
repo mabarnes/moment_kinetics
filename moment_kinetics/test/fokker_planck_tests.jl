@@ -19,6 +19,7 @@ using moment_kinetics.fokker_planck: init_fokker_planck_collisions_weak_form, fo
 using moment_kinetics.fokker_planck: conserving_corrections!, init_fokker_planck_collisions_direct_integration
 using moment_kinetics.fokker_planck: density_conserving_correction!, fokker_planck_collision_operator_weak_form_Maxwellian_Fsp!
 using moment_kinetics.fokker_planck: setup_fp_nl_solve, fokker_planck_self_collisions_backward_euler_step!
+using moment_kinetics.fokker_planck: setup_fkpl_collisions_input
 using moment_kinetics.fokker_planck_test: print_test_data, fkpl_error_data, allocate_error_data #, plot_test_data
 using moment_kinetics.fokker_planck_test: F_Maxwellian, G_Maxwellian, H_Maxwellian
 using moment_kinetics.fokker_planck_test: d2Gdvpa2_Maxwellian, d2Gdvperp2_Maxwellian, d2Gdvperpdvpa_Maxwellian, dGdvperp_Maxwellian
@@ -313,7 +314,12 @@ function backward_Euler_fokker_planck_self_collisions_test(;
     implicit_ion_fp_collisions = true
     coords = (vperp=vperp,vpa=vpa)
     spectral = (vperp_spectral=vperp_spectral, vpa_spectral=vpa_spectral)
-    nl_solver_params = setup_fp_nl_solve(implicit_ion_fp_collisions, coords)
+    # initialise instance of fkpl_collisions_input() to get default nonlinear solver values
+    # no need to supply any "fokker_planck_collisions" options as we use lower-level functions
+    # below which do not otherwise use the data in the fkpl struct.
+    fkpl = setup_fkpl_collisions_input(OptionsDict(), true)
+    nl_solver_params = setup_fp_nl_solve(implicit_ion_fp_collisions,
+                                        fkpl, coords)
 
     for it in 1:ntime
         @begin_s_r_z_anyv_region()
