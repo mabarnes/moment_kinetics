@@ -604,9 +604,10 @@ function runtests()
             vpa_bc = "none"
             run_test(test_input_gauss_legendre, expected_none_bc, 5.0e-12, 5.0e-12;
                      vperp=OptionsDict("bc" => vperp_bc), vpa=OptionsDict("bc" => vpa_bc),
-                     fokker_planck_collisions_nonlinear_solver=OptionsDict("rtol" => 0.0,
+                     fokker_planck_collisions=OptionsDict("nonlinear_solver" =>
+                                                               OptionsDict("rtol" => 0.0,
                                                                            "atol" => 1.0e-14,
-                                                                           "nonlinear_max_iterations" => 20,),
+                                                                           "nonlinear_max_iterations" => 20,),),
                      timestepping=OptionsDict("kinetic_ion_solver" => "implicit_ion_fp_collisions",
                                               "type" => "PareschiRusso3(4,3,3)",))
         end
