@@ -171,9 +171,9 @@ function test_implicit_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=3,neleme
     implicit_ion_fp_collisions = true
     coords = (vperp=vperp,vpa=vpa)
     spectral = (vperp_spectral=vperp_spectral, vpa_spectral=vpa_spectral)
-    input_toml = OptionsDict("fokker_planck_collisions_nonlinear_solver" => OptionsDict("rtol" => rtol,
-                                                                                        "atol" => atol,
-                                                                                        "nonlinear_max_iterations" => nonlinear_max_iterations),)
+    input_toml = OptionsDict("fokker_planck_collisions" => OptionsDict("nonlinear_solver" => OptionsDict("rtol" => rtol,
+                                                                                                         "atol" => atol,
+                                                                                                         "nonlinear_max_iterations" => nonlinear_max_iterations),))
     fkpl = setup_fkpl_collisions_input(input_toml, true)
     nl_solver_params = setup_fp_nl_solve(implicit_ion_fp_collisions,
                                         fkpl, coords)
@@ -291,10 +291,11 @@ function test_implicit_collisions_wrapper(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=
                                                                         "frequency_option" => "manual",
                                                                         "self_collisions" => true,
                                                                         "use_conserving_corrections" => test_numerical_conserving_terms,
-                                                                        "boundary_data_option" => boundary_data_option,),
-                            "fokker_planck_collisions_nonlinear_solver" => OptionsDict("rtol" => rtol,
-                                                                                       "atol" => atol,
-                                                                                       "nonlinear_max_iterations" => nonlinear_max_iterations),
+                                                                        "boundary_data_option" => boundary_data_option,
+                                                                        "nonlinear_solver" => OptionsDict("rtol" => rtol,
+                                                                                                          "atol" => atol,
+                                                                                                          "nonlinear_max_iterations" => nonlinear_max_iterations),
+                                                                        )
                             )
     #println(options_to_TOML(input_toml))
     collisions = (fkpl = setup_fkpl_collisions_input(input_toml, true), krook=nothing)
