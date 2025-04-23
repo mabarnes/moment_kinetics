@@ -31,7 +31,7 @@ flow and/or pressure, and use them to update the pdf
         dvth_dz = moments.ion.dvth_dz
         @loop_s_r_z is ir iz begin
             coefficient1 = -(dn_dt[iz,ir,is] + upar[iz,ir,is] * dn_dz[iz,ir,is]) / n[iz,ir,is] +
-                           (dvth_dt[iz,ir,is] + upar[iz,ir,is]) / vth[iz,ir,is]
+                           (dvth_dt[iz,ir,is] + upar[iz,ir,is] * dvth_dz[iz,ir,is]) / vth[iz,ir,is]
             coefficient2 = -vth[iz,ir,is] * dn_dz[iz,ir,is] / n[iz,ir,is] + dvth_dz[iz,ir,is]
             @loop_vperp_vpa ivperp ivpa begin
                 pdf_out[ivpa,ivperp,iz,ir,is] +=
@@ -85,7 +85,7 @@ flow and/or pressure, and use them to update the pdf
         dvth_dz = moments.neutral.dvth_dz
         @loop_sn_r_z isn ir iz begin
             coefficient1 = -(dn_dt[iz,ir,isn] + uz[iz,ir,isn] * dn_dz[iz,ir,isn]) / n[iz,ir,isn] +
-                           (dvth_dt[iz,ir,isn] + uz[iz,ir,isn]) / vth[iz,ir,isn]
+                           (dvth_dt[iz,ir,isn] + uz[iz,ir,isn] * dvth_dz[iz,ir,isn]) / vth[iz,ir,isn]
             coefficient2 = -vth[iz,ir,isn] * dn_dz[iz,ir,isn] / n[iz,ir,isn] + dvth_dz[iz,ir,isn]
             @loop_vzeta_vr_vz ivzeta ivr ivz begin
                 pdf_out[ivz,ivr,ivzeta,iz,ir,isn] +=

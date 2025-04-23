@@ -363,9 +363,8 @@ end
                 # end
                 @loop_sn_z isn iz begin
                     dp_dt[iz] +=
-                        ionization_electron * density_neutral[iz,isn] * (
-                        ppar_in[iz] -
-                        electron_density_in[iz] * ionization_energy)
+                        -ionization_electron * density_neutral[iz,isn] *
+                         electron_density_in[iz] * ionization_energy
                 end
             end
         end

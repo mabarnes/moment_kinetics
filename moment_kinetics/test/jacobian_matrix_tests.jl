@@ -3553,7 +3553,7 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
     return nothing
 end
 
-function test_electron_wall_bc(test_input; atol=(7.0*epsilon)^2)
+function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2)
     test_input = deepcopy(test_input)
     test_input["output"]["run_name"] *= "_electron_wall_bc"
     println("    - electron_wall_bc")

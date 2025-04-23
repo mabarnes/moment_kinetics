@@ -194,6 +194,7 @@ function mk_input(input_dict=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
         write_error_diagnostics=false,
         write_steady_state_diagnostics=false,
         high_precision_error_sum=false,
+        debug_io=false,
        )
     if timestepping_section["nwrite"] > timestepping_section["nstep"]
         timestepping_section["nwrite"] = timestepping_section["nstep"]

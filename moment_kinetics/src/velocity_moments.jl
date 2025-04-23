@@ -212,6 +212,12 @@ function create_moments_ion(nz, nr, n_species, evolve_density, evolve_upar,
         external_source_pressure_amplitude = allocate_shared_float(1, 1, n_sources)
         external_source_controller_integral = allocate_shared_float(1, 1, n_sources)
     end
+    # If not using PI controllers, the integrals might not otherwise be initialised, so
+    # zero-initialise here.
+    @begin_serial_region()
+    @serial_region begin
+        external_source_controller_integral .= 0.0
+    end
 
     if evolve_density || evolve_upar || evolve_ppar
         constraints_A_coefficient = allocate_shared_float(nz, nr, n_species)
@@ -460,6 +466,12 @@ function create_moments_neutral(nz, nr, n_species, evolve_density, evolve_upar,
         external_source_momentum_amplitude = allocate_shared_float(1, 1, n_sources)
         external_source_pressure_amplitude = allocate_shared_float(1, 1, n_sources)
         external_source_controller_integral = allocate_shared_float(1, 1, n_sources)
+    end
+    # If not using PI controllers, the integrals might not otherwise be initialised, so
+    # zero-initialise here.
+    @begin_serial_region()
+    @serial_region begin
+        external_source_controller_integral .= 0.0
     end
 
     if evolve_density || evolve_upar || evolve_ppar

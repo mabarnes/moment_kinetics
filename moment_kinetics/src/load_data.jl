@@ -3848,7 +3848,7 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
             elseif vartype == mk_float
                 result = allocate_float(dims...)
             else
-                error("Unsupported dtype for 1D variable $(variable.dtype)")
+                result = Array{vartype}(undef, dims...)
             end
         elseif nd == 2
             # Time-dependent vector with dimensions (unique_dim,t).
@@ -3864,7 +3864,7 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
             elseif vartype == mk_float
                 result = allocate_float(dims...)
             else
-                error("Unsupported dtype for 1D variable $(variable.dtype)")
+                result = Array{vartype}(undef, dims...)
             end
         elseif nd == 3
             # EM variable with dimensions (z,r,t)
