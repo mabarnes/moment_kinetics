@@ -947,13 +947,8 @@ function set_defaults_and_check_section!(options::OptionsDict, section_name::Str
         # `Base.get()` defined above.
         if isa(default_value, AbstractDict)
             # handle the case that the default_value is itself a dictionary from a subnamelist
-            if !(key in keys(section))
-                # create the subsection if it doesn't already exist
-                section[key] = OptionsDict()
-            end
-            subsection = section[key]
             for (sub_key, sub_default_value) in default_value
-                subsection[sub_key] = get(subsection, sub_key, sub_default_value)
+                section[key][sub_key] = get(section[key], sub_key, sub_default_value)
             end
         else
             section[key] = get(section, key, default_value)
