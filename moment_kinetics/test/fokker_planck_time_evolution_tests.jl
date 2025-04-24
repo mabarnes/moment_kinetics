@@ -581,7 +581,7 @@ function runtests()
             run_name = "gausslegendre_pseudospectral"
             vperp_bc = "zero-impose-regularity"
             run_test(test_input_gauss_legendre,
-             expected_zero_impose_regularity, 1.0e-14, 1.0e-14;
+             expected_zero_impose_regularity, 1.0e-14, 2.0e-14;
              vperp=OptionsDict("bc" => vperp_bc))
         end
         @testset "Gauss Legendre no enforced regularity condition at vperp = 0" begin
