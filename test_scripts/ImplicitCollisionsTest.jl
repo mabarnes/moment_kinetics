@@ -176,7 +176,7 @@ function test_implicit_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=3,neleme
                                                                                         "nonlinear_max_iterations" => nonlinear_max_iterations),)
     fkpl = setup_fkpl_collisions_input(input_toml, true)
     nl_solver_params = setup_fp_nl_solve(implicit_ion_fp_collisions,
-                                        fkpl, coords)
+                                        input_toml, coords)
 
     #println(nl_solver_params.preconditioners)
     for it in 1:ntime
@@ -358,7 +358,7 @@ function test_implicit_collisions_wrapper(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=
     coords = (vperp=vperp,vpa=vpa)
     spectral_objects = (vperp_spectral=vperp_spectral, vpa_spectral=vpa_spectral)
     nl_solver_params = setup_fp_nl_solve(implicit_ion_fp_collisions,
-                                         collisions.fkpl, coords)
+                                         input_toml, coords)
 
     #println(nl_solver_params.preconditioners)
     for it in 1:ntime

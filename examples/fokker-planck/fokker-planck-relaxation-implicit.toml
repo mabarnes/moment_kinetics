@@ -74,7 +74,7 @@ boundary_data_option="multipole_expansion"
 #boundary_data_option="delta_f_multipole"
 #boundary_data_option="direct_integration"
 
-[fokker_planck_collisions.nonlinear_solver]
+[fokker_planck_collisions_nonlinear_solver]
 rtol = 0.0
 atol = 1.0e-10
 nonlinear_max_iterations = 50

@@ -92,10 +92,6 @@ Structure the namelist as follows.
     use_fokker_planck = true
     nuii = 1.0
     frequency_option = "manual"
-
-    [fokker_planck_collisions.nonlinear_solver]
-    atol = 1.0e-10
-    rtol = 1.0e-10
 """
 function setup_fkpl_collisions_input(toml_input::AbstractDict, warn_unexpected::Bool)
     reference_params = setup_reference_parameters(toml_input, warn_unexpected)
@@ -117,13 +113,7 @@ function setup_fkpl_collisions_input(toml_input::AbstractDict, warn_unexpected::
         sd_q = 1.0,
         sd_mi = 0.25,
         sd_me = 0.25/1836.0,
-        Zi = 1.0,
-        nonlinear_solver= OptionsDict("rtol" => 0.0,
-                                      "atol" => 1.0e-10,
-                                      "linear_restart" => 8,
-                                      "linear_max_restarts" => 1,
-                                      "nonlinear_max_iterations" => 20)
-        )
+        Zi = 1.0)
     # ensure that the collision frequency is consistent with the input option
     frequency_option = input_section["frequency_option"]
     if frequency_option == "reference_parameters"
@@ -889,14 +879,41 @@ end
 # Functions associated with implicit timestepping
 #################################################
 
+"""
+Function to setup nonlinear_solver struct for implicit
+Fokker-Planck collisions. An input namelist of form
+
+```
+    [fokker_planck_collisions.nonlinear_solver]
+    atol = 1.0e-10
+    rtol = 0.0
+    ...
+```
+is used, with the same defaults as the main
+`[nonlinear_solver]` namelist, apart from `atol`
+and `rtol`, which are set to their own defaults here.
+"""
 function setup_fp_nl_solve(implicit_ion_fp_collisions::Bool,
-                           fkpl::fkpl_collisions_input,
-                           coords)
-    #coords = (vperp=vperp,vpa=vpa)
+        # the main input namelist in dict format
+        input_dict::OptionsDict,
+        #coords = (vperp=vperp,vpa=vpa)
+        coords)
+    # section name in TOML input for nonlinear solver
+    # options for FP collisions
+    section_name = "fokker_planck_collisions_nonlinear_solver"
+    # Default values of atol, rtol
+    # for which implicit FP collisions have
+    # been tested. Taking large timesteps
+    # with smaller atol challenges the solver
+    # with bc="zero".
+    default_atol = 1.0e-10
+    default_rtol = 0.0
     return setup_nonlinear_solve(
         implicit_ion_fp_collisions,
-        OptionsDict("nonlinear_solver" => fkpl.nonlinear_solver),
+        input_dict,
         coords; serial_solve=false, anyv_region=true,
+        section_name = section_name,
+        default_atol=default_atol, default_rtol=default_rtol,
         preconditioner_type=Val(:lu))
 end
 

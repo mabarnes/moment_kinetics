@@ -586,8 +586,6 @@ Base.@kwdef struct fkpl_collisions_input
     # kept here because charge number different from 1
     # is not supported for other physics features
     Zi::mk_float
-    # OptionsDict for nonlinear solver
-    nonlinear_solver::OptionsDict
 end
 
 """

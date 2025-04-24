@@ -314,12 +314,9 @@ function backward_Euler_fokker_planck_self_collisions_test(;
     implicit_ion_fp_collisions = true
     coords = (vperp=vperp,vpa=vpa)
     spectral = (vperp_spectral=vperp_spectral, vpa_spectral=vpa_spectral)
-    # initialise instance of fkpl_collisions_input() to get default nonlinear solver values
-    # no need to supply any "fokker_planck_collisions" options as we use lower-level functions
-    # below which do not otherwise use the data in the fkpl struct.
     fkpl = setup_fkpl_collisions_input(OptionsDict(), true)
     nl_solver_params = setup_fp_nl_solve(implicit_ion_fp_collisions,
-                                        fkpl, coords)
+                                        OptionsDict(), coords)
 
     for it in 1:ntime
         @begin_s_r_z_anyv_region()

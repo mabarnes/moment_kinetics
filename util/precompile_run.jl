@@ -93,9 +93,9 @@ collisions_input4 = recursive_merge(wall_bc_cheb_input, OptionsDict("composition
                                                                     "vpa" => OptionsDict("discretization" => "gausslegendre_pseudospectral"),
                                                                    ))
 collisions_input5 = recursive_merge(wall_bc_cheb_input, OptionsDict("composition" => OptionsDict("n_neutral_species" => 0),
-                                                                    "fokker_planck_collisions" => OptionsDict("use_fokker_planck" => true, "self_collisions" => true, "boundary_data_option" => "multipole_expansion",
-                                                                                                              "nonlinear_solver" => OptionsDict("rtol" => 0.0,
-                                                                                                                                               "atol" => 1.0e-14)),
+                                                                    "fokker_planck_collisions" => OptionsDict("use_fokker_planck" => true, "self_collisions" => true, "boundary_data_option" => "multipole_expansion"),
+                                                                    "fokker_planck_collisions_nonlinear_solver" => OptionsDict("rtol" => 0.0,
+                                                                                                                               "atol" => 1.0e-14),
                                                                     "timestepping"=> OptionsDict("kinetic_ion_solver" => "implicit_ion_fp_collisions",
                                                                                                  "type" => "PareschiRusso3(4,3,3)",),
                                                                     "vperp" => OptionsDict("discretization" => "gausslegendre_pseudospectral"),
