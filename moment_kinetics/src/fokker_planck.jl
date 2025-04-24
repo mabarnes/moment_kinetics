@@ -913,8 +913,7 @@ function setup_fp_nl_solve(implicit_ion_fp_collisions::Bool,
         input_dict,
         coords; serial_solve=false, anyv_region=true,
         section_name = section_name,
-        default_atol=default_atol, default_rtol=default_rtol,
-        preconditioner_type=Val(:lu))
+        default_atol=default_atol, default_rtol=default_rtol)
 end
 
 function implicit_ion_fokker_planck_self_collisions!(pdf_out, pdf_in, dSdt, 
