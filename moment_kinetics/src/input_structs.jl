@@ -586,8 +586,6 @@ Base.@kwdef struct fkpl_collisions_input
     # kept here because charge number different from 1
     # is not supported for other physics features
     Zi::mk_float
-    # OptionsDict for nonlinear solver
-    nonlinear_solver::OptionsDict
 end
 
 """
@@ -945,19 +943,7 @@ function set_defaults_and_check_section!(options::OptionsDict, section_name::Str
         key = String(key_sym)
         # Use `Base.get()` here to take advantage of our `Enum`-handling method of
         # `Base.get()` defined above.
-        if isa(default_value, AbstractDict)
-            # handle the case that the default_value is itself a dictionary from a subnamelist
-            if !(key in keys(section))
-                # create the subsection if it doesn't already exist
-                section[key] = OptionsDict()
-            end
-            subsection = section[key]
-            for (sub_key, sub_default_value) in default_value
-                subsection[sub_key] = get(subsection, sub_key, sub_default_value)
-            end
-        else
-            section[key] = get(section, key, default_value)
-        end
+        section[key] = get(section, key, default_value)
     end
 
     _check_for_nothing(section, section_name)

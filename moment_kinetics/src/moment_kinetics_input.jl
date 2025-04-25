@@ -438,8 +438,7 @@ function mk_input(input_dict=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
     end
     
     # check input (and initialized coordinate structs) to catch errors/unsupported options
-    check_input(io, io_immutable.output_dir, timestepping_section["nstep"],
-                timestepping_section["dt"], r, z, vpa, vperp, composition,
+    check_input(io, io_immutable.output_dir, timestepping_section, r, z, vpa, vperp, composition,
                 species_immutable, evolve_moments, num_diss_params, save_inputs_to_txt,
                 collisions)
 
@@ -460,8 +459,10 @@ end
 """
 check various input options to ensure they are all valid/consistent
 """
-function check_input(io, output_dir, nstep, dt, r, z, vpa, vperp, composition, species,
+function check_input(io, output_dir, timestepping_section, r, z, vpa, vperp, composition, species,
                      evolve_moments, num_diss_params, save_inputs_to_txt, collisions)
+    nstep = timestepping_section["nstep"]
+    dt = timestepping_section["dt"]
     # copy the input file to the output directory to be saved
     if save_inputs_to_txt && global_rank[] == 0
         cp(joinpath(@__DIR__, "moment_kinetics_input.jl"), joinpath(output_dir, "moment_kinetics_input.jl"), force=true)
@@ -484,6 +485,18 @@ function check_input(io, output_dir, nstep, dt, r, z, vpa, vperp, composition, s
             error("ERROR: you are using \n      vpa.discretization='"*vpa.discretization*
               "' \n      vperp.discretization='"*vperp.discretization*"' \n      with the ion self-collision operator \n"*
               "ERROR: you should use \n       vpa.discretization='gausslegendre_pseudospectral' \n       vperp.discretization='gausslegendre_pseudospectral'")
+        end
+        if (timestepping_section["kinetic_ion_solver"] == implicit_ion_fp_collisions) && (vperp.bc == "zero-impose-regularity")
+            errorstring = (
+                """ERROR: you are using
+
+                    vperp.bc = "$(vperp.bc)"
+                    kinetic_ion_solver="$(implicit_ion_fp_collisions)"
+
+                Only vperp.bc = "none" or vperp.bc = "zero" are currently
+                supported for kinetic_ion_solver="$(implicit_ion_fp_collisions)".
+                """)
+            error(errorstring)
         end
     end
 end
