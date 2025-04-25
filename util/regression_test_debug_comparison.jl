@@ -92,19 +92,27 @@ function regression_test_debug_comparison(filenameA, filenameB;
                 println("Error: checking step=$step in A, but step=$stepB in B")
             end
 
-            istage = postproc_load_variable(A, "istage"; it=it)[1]
-            istageB = postproc_load_variable(B, "istage"; it=it)[1]
-            if istage != istageB
-                println("Error: checking istage=$istage in A, but istage=$istageB in B")
-            end
+            is_debug_files = ("istage" ∈ A.variable_names
+                              && "label" ∈ A.variable_names
+                              && "istage" ∈ B.variable_names
+                              && "label" ∈ B.variable_names)
+            if is_debug_files
+                istage = postproc_load_variable(A, "istage"; it=it)[1]
+                istageB = postproc_load_variable(B, "istage"; it=it)[1]
+                if istage != istageB
+                    println("Error: checking istage=$istage in A, but istage=$istageB in B")
+                end
 
-            label = convert_to_string(postproc_load_variable(A, "label"; it=it))
-            labelB = convert_to_string(postproc_load_variable(B, "label"; it=it))
-            if label != labelB
-                println("Error: checking label=$label in A, but label=$labelB in B")
-            end
+                label = convert_to_string(postproc_load_variable(A, "label"; it=it))
+                labelB = convert_to_string(postproc_load_variable(B, "label"; it=it))
+                if label != labelB
+                    println("Error: checking label=$label in A, but label=$labelB in B")
+                end
 
-            println("Differences found at step=$step, istage=$istage, label=$label")
+                println("Differences found at step=$step, istage=$istage, label=$label")
+            else
+                println("Differences found at step=$step")
+            end
             println("$changed_variables")
 
             if print_changed
