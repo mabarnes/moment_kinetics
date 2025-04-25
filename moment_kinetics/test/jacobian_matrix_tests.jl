@@ -3415,10 +3415,10 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
                 residual_p[iz] = ppar[iz]
             end
             electron_kinetic_equation_euler_update!(
-                residual_f, residual_p, this_f, this_p, moments, z, vperp, vpa,
-                z_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy, collisions,
-                composition, external_source_settings, num_diss_params, t_params.electron,
-                ir; evolve_ppar=true, ion_dt=ion_dt)
+                (pdf_electron=residual_f, electron_ppar=residual_p), this_f, this_p,
+                moments, z, vperp, vpa, z_spectral, vpa_spectral, z_advect, vpa_advect,
+                scratch_dummy, collisions, composition, external_source_settings,
+                num_diss_params, t_params.electron, ir; evolve_ppar=true, ion_dt=ion_dt)
             # Now
             #   residual = f_electron_old + dt*RHS(f_electron_newvar)
             # so update to desired residual

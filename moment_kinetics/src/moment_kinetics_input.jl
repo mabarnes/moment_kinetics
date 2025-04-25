@@ -238,6 +238,7 @@ function mk_input(input_dict=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
         max_pseudotime=1.0e-2,
         include_wall_bc_in_preconditioner=false,
         no_restart=false,
+        skip_electron_initial_solve=false,
         debug_io=false,
        )
     if electron_timestepping_section["nwrite"] < 0

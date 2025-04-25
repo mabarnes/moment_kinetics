@@ -1166,19 +1166,28 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
             dynamic, "failure_counter", mk_int; parallel_io=parallel_io,
             description="cumulative number of timestep failures for the run")
 
+        dynamic_keys = collect(keys(dynamic))
         for failure_var ∈ keys(t_params.failure_caused_by)
-            create_dynamic_variable!(
-                dynamic, "failure_caused_by_$failure_var", mk_int;
-                parallel_io=parallel_io,
-                description="cumulative count of how many times $failure_var caused a "
-                            * "timestep failure for the run")
+            # Only write these variables if they were created in the output file, because
+            # sometimes (e.g. for debug_io=true) they are not needed.
+            if failure_var ∈ dynamic_keys
+                create_dynamic_variable!(
+                    dynamic, "failure_caused_by_$failure_var", mk_int;
+                    parallel_io=parallel_io,
+                    description="cumulative count of how many times $failure_var caused "
+                                * "a timestep failure for the run")
+            end
         end
         for limit_var ∈ keys(t_params.limit_caused_by)
-            create_dynamic_variable!(
-                dynamic, "limit_caused_by_$limit_var", mk_int;
-                parallel_io=parallel_io,
-                description="cumulative count of how many times $limit_var limited the "
-                            * "timestep for the run")
+            # Only write these variables if they were created in the output file, because
+            # sometimes (e.g. for debug_io=true) they are not needed.
+            if limit_var ∈ dynamic_keys
+                create_dynamic_variable!(
+                    dynamic, "limit_caused_by_$limit_var", mk_int;
+                    parallel_io=parallel_io,
+                    description="cumulative count of how many times $limit_var limited "
+                                * "the timestep for the run")
+            end
         end
 
         io_dt_before_last_fail = create_dynamic_variable!(
@@ -3136,13 +3145,22 @@ function write_electron_moments_data_to_binary(scratch, moments, t_params, elect
                                   electron_t_params.previous_dt[], t_idx, parallel_io)
             append_to_dynamic_var(io_moments.electron_failure_counter,
                                   electron_t_params.failure_counter[], t_idx, parallel_io)
+            dynamic_keys = collect(keys(dynamic))
             for (k,v) ∈ pairs(electron_t_params.failure_caused_by)
-                io_var = dynamic["electron_failure_caused_by_$k"]
-                append_to_dynamic_var(io_var, v, t_idx, parallel_io; only_root=true)
+                # Only write these variables if they were created in the output file,
+                # because sometimes (e.g. for debug_io=true) they are not needed.
+                if k ∈ dynamic_keys
+                    io_var = dynamic["electron_failure_caused_by_$k"]
+                    append_to_dynamic_var(io_var, v, t_idx, parallel_io; only_root=true)
+                end
             end
             for (k,v) ∈ pairs(electron_t_params.limit_caused_by)
-                io_var = dynamic["electron_limit_caused_by_$k"]
-                append_to_dynamic_var(io_var, v, t_idx, parallel_io; only_root=true)
+                # Only write these variables if they were created in the output file,
+                # because sometimes (e.g. for debug_io=true) they are not needed.
+                if k ∈ dynamic_keys
+                    io_var = dynamic["electron_limit_caused_by_$k"]
+                    append_to_dynamic_var(io_var, v, t_idx, parallel_io; only_root=true)
+                end
             end
             append_to_dynamic_var(io_moments.electron_dt_before_last_fail,
                                   electron_t_params.dt_before_last_fail[], t_idx,
@@ -3305,7 +3323,7 @@ binary output file
         # add the distribution function data at this time slice to the output file
         write_ion_dfns_data_to_binary(scratch, t_params, n_ion_species, io_dfns, t_idx, r,
                                       z, vperp, vpa)
-        if t_params.kinetic_electron_solver == implicit_time_evolving || scratch_electron !== nothing
+        if t_params.kinetic_electron_solver ∈ (implicit_time_evolving, explicit_time_evolving) || scratch_electron !== nothing
             write_electron_dfns_data_to_binary(scratch, scratch_electron, t_params,
                                                io_dfns, t_idx, r, z, vperp, vpa)
         end
@@ -3388,7 +3406,7 @@ function write_electron_dfns_data_to_binary(scratch, scratch_electron, t_params,
         parallel_io = io_dfns.io_input.parallel_io
 
         if io_dfns.f_electron !== nothing
-            if t_params.kinetic_electron_solver == implicit_time_evolving || scratch_electron === nothing
+            if t_params.kinetic_electron_solver ∈ (implicit_time_evolving, explicit_time_evolving) || scratch_electron === nothing
                 n_rk_stages = t_params.n_rk_stages
                 this_scratch = scratch
             elseif t_params.electron === nothing

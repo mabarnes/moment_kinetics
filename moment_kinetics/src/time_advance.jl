@@ -3661,14 +3661,23 @@ implementation), a call needs to be made with `dt` scaled by some coefficient.
     end
 
     if advance.electron_pdf
-        electron_t_params = (dt=Ref(dt),)
         for ir ∈ 1:r.n
+            if t_params.debug_io !== nothing && ir == 1
+                # Probably do not want to write separate debug output for every r-index
+                # even in 2D, as this would create very large output files, so pick a
+                # single r-index for debug output. This might not be the most useful
+                # r-index for 2D simulations!
+                this_debug_io = t_params.debug_io
+            else
+                this_debug_io = nothing
+            end
             @views electron_kinetic_equation_euler_update!(
-                       fvec_out.pdf_electron[:,:,:,ir], fvec_out.electron_ppar[:,ir],
-                       fvec_in.pdf_electron[:,:,:,ir], fvec_in.electron_ppar[:,ir],
-                       moments, z, vperp, vpa, z_spectral, vpa_spectral, z_advect,
-                       vpa_advect, scratch_dummy, collisions, composition,
-                       external_source_settings, num_diss_params, electron_t_params, ir)
+                       fvec_out, fvec_in.pdf_electron[:,:,:,ir],
+                       fvec_in.electron_ppar[:,ir], moments, z, vperp, vpa, z_spectral,
+                       vpa_spectral, z_advect, vpa_advect, scratch_dummy, collisions,
+                       composition, external_source_settings, num_diss_params,
+                       t_params, ir; debug_io=this_debug_io, fields=fields,
+                       r=r, vzeta=vzeta, vr=vr, vz=vz, istage=istage)
         end
         write_debug_IO("electron_kinetic_equation_euler_update!")
     end
