@@ -106,13 +106,14 @@ kinetic_input["electron_timestepping"] = OptionsDict("nstep" => 5000000,
                                                      "decrease_dt_iteration_threshold" => 5000,
                                                      "increase_dt_iteration_threshold" => 0,
                                                      "cap_factor_ion_dt" => 10.0,
-                                                     "initialization_residual_value" => 1.0e0,
-                                                     "converged_residual_value" => 0.1,
+                                                     "initialization_residual_value" => 0.9425, # Fudged value to match number of iterations from pre-PR#322 version
+                                                     "converged_residual_value" => 0.04606588659617807,
+                                                     "constraint_forcing_rate" => sqrt(2) * 1.0e6,
                                                     )
 
 kinetic_input["nonlinear_solver"] = OptionsDict("nonlinear_max_iterations" => 1000,
                                                 "rtol" => 1.0e-8,
-                                                "atol" => 1.0e-14,
+                                                "atol" => 3.2573500793527995e-15,
                                                 "linear_restart" => 5,
                                                 "preconditioner_update_interval" => 100,
                                                )
