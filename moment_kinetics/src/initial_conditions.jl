@@ -22,6 +22,7 @@ using ..communication
 using ..external_sources
 using ..interpolation: interpolate_to_grid_1d!
 using ..looping
+using ..electron_fluid_equations: calculate_electron_moments!
 using ..electron_kinetic_equation: implicit_electron_advance!
 using ..em_fields: update_phi!
 using ..file_io: setup_electron_io, write_electron_state, finish_electron_io
@@ -803,6 +804,14 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
                 end
             end
         end
+        @begin_r_z_region()
+        @loop_r_z ir iz begin
+            for i ∈ 1:length(scratch)
+                scratch[i].electron_ppar[iz,ir] = moments.electron.ppar[iz,ir]
+            end
+        end
+        calculate_electron_moments!(scratch[1], pdf, moments, composition, collisions, r,
+                                    z, vpa)
 
         # No need to do electron I/O (apart from possibly debug I/O) any more, so if
         # adaptive timestep is used, it does not need to adjust to output times.

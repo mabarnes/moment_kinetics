@@ -262,7 +262,7 @@ function add_electron_vpa_advection_to_Jacobian!(jacobian_matrix, f, dens, upar,
                 electron_source = external_source_settings.electron[index]
                 if electron_source.active
                     jacobian_matrix[row,ppar_offset+iz] += dt * (
-                        -0.5*source_density_amplitude[iz,index]*upar[iz]/sqrt(2.0*dens[iz])/ppar[iz]^1.5
+                        -0.5*source_density_amplitude[iz,index]*upar[iz]/sqrt(2.0*dens[iz]/me)/ppar[iz]^1.5
                         + vpa.grid[ivpa]*0.5*(source_pressure_amplitude[iz,index]
                                               + 2.0*upar[iz]*source_momentum_amplitude[iz,index])/ppar[iz]^2
                        ) * dpdf_dvpa[ivpa,ivperp,iz]
@@ -363,7 +363,7 @@ function add_electron_vpa_advection_to_v_only_Jacobian!(
             electron_source = external_source_settings.electron[index]
             if electron_source.active
                 jacobian_matrix[row,end] += dt * (
-                    -0.5*source_density_amplitude[index]*upar/sqrt(2.0*dens)/ppar^1.5
+                    -0.5*source_density_amplitude[index]*upar/sqrt(2.0*dens/me)/ppar^1.5
                     + vpa.grid[ivpa]*0.5*(source_pressure_amplitude[index]
                                           + 2.0*upar*source_momentum_amplitude[index])/ppar^2
                    ) * dpdf_dvpa[ivpa,ivperp]
