@@ -6,8 +6,8 @@ ionization_frequency = 0.0
 [evolve_moments]
 density = false
 parallel_flow = false
-parallel_pressure = false
 moments_conservation = false
+pressure = false
 
 [z]
 ngrid = 1
@@ -26,14 +26,14 @@ discretization = "chebyshev_pseudospectral"
 [vpa]
 ngrid = 5
 nelement = 32
-L = 3.0
+L = 4.242640687119286
 bc = "zero"
 discretization = "gausslegendre_pseudospectral"
 
 [vperp]
 ngrid = 5
 nelement = 16
-L = 1.5
+L = 2.121320343559643
 discretization = "gausslegendre_pseudospectral"
 bc = "zero"
 # Fokker-Planck operator requires the "gausslegendre_pseudospectral
@@ -41,7 +41,7 @@ bc = "zero"
 
 [fokker_planck_collisions]
 # nuii sets the normalised input C[F,F] Fokker-Planck collision frequency
-nuii = 1.876334222e-3 #(1/nu_alphae, as computed from input diagnostic)
+nuii = 0.007505336888 #(1/nu_alphae, as computed from input diagnostic)
 Zi = 2.0
 self_collisions = true
 slowing_down_test = true
@@ -55,28 +55,28 @@ sd_me = 0.000013616 # 0.25/1836.0 me/malpha
 sd_q = 1.0
 
 [ion_source_1]
-active=false
-source_strength=0.0
-source_T=0.005
-source_n=1.0
-r_profile="constant"
-r_width=1.0
-r_relative_minimum=0.0
-z_profile="gaussian"
-z_width=0.1
-z_relative_minimum=0.0
-source_v0 = 1.0
+active = false
+source_strength = 0.0
+source_T = 0.005
+source_n = 1.0
+r_profile = "constant"
+r_width = 1.0
+r_relative_minimum = 0.0
+z_profile = "gaussian"
+z_width = 0.1
+z_relative_minimum = 0.0
+source_v0 = 1.4142135623730951
 #source_type="alphas"
-source_type="alphas-with-losses"
+source_type = "alphas-with-losses"
 #source_type="beam-with-losses"
 #source_vpa0 = 1.0
 #source_vperp0 = 1.0
 sink_strength = 0.0
-sink_vth=0.07071067811865475                     
+sink_vth = 0.1
 
 [timestepping]
 nstep = 50000
-dt = 2.5e-4
+dt = 0.00017677669529663688
 nwrite = 100
 nwrite_dfns = 100
 
@@ -103,7 +103,7 @@ temperature_phase = 0.0
 [vpa_IC_ion_species_1]
 initialization_option = "isotropic-beam"
 #initialization_option = "directed-beam"
-v0 = 1.0
-vth0 = 0.1
+v0 = 1.4142135623730951
+vth0 = 0.14142135623730953
 #vpa0 = -1.5
 #vperp0 = 0.0
