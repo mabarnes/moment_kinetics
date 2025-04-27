@@ -220,17 +220,17 @@ const sections_update_map = OptionsDict(
                                  ),
    )
 
-PR322_p = (x) -> 2 * x
-PR322_T_1V = (x) -> x/3 # Inputs before PR322 were T_∥ values, but after are T values (for 1D1V T=T_∥/3)
-PR322_temperature_PI_1V = (x) -> 3*x # Inputs before PR322 were T_∥ values, but after are T values (for 1D1V T=T_∥/3)
-PR322_v = (x) -> sqrt(2)*x
-PR322_t = (x) -> x/sqrt(2)
-PR322_omega = (x) -> x ≥ 0.0 ? sqrt(2)*x : x
-PR322_nuii = (x) -> x ≥ 0.0 ? 4*x : x
-PR322_I = (x) -> x ≥ 0.0 ? 2*x : x
-PR322_v_diffusion_coefficient = (x) -> 2^1.5*x
-PR322_w_diffusion_coefficient = (x) -> 3*sqrt(2)*x
-PR322_w_evolve_ppar = (x) -> sqrt(3)*x
+PR322_p = (x) -> 2 .* x
+PR322_T_1V = (x) -> x ./ 3 # Inputs before PR322 were T_∥ values, but after are T values (for 1D1V T=T_∥/3)
+PR322_temperature_PI_1V = (x) -> 3 .* x # Inputs before PR322 were T_∥ values, but after are T values (for 1D1V T=T_∥/3)
+PR322_v = (x) -> sqrt(2) .* x
+PR322_t = (x) -> x ./ sqrt(2)
+PR322_omega = (x) -> any(x .≥ 0.0) ? sqrt(2) .* x : x
+PR322_nuii = (x) -> any(x .≥ 0.0) ? 4 .* x : x
+PR322_I = (x) -> any(x .≥ 0.0) ? 2 .* x : x
+PR322_v_diffusion_coefficient = (x) -> 2^1.5 .* x
+PR322_w_diffusion_coefficient = (x) -> 3 * sqrt(2) .* x
+PR322_w_evolve_ppar = (x) -> sqrt(3) .* x
 const PR322_definitions_update_map_2V = OptionsDict(
     # "upar_amplitude" might not always need correcting - e.g. the amplitude is a relative
     # amplitude that should be left unchanged if using initialization_option="sinusoid" -
@@ -417,6 +417,12 @@ function update_input_dict(original_input::DictType;
             section = get(updated_input, "fokker_planck_collisions", DictType())
             section["use_fokker_planck"] = true
             section[k] = v
+        elseif k == "combine_outer"
+            # Option for parameter scans, leave in top level
+            if "" ∉ keys(updated_input)
+                updated_input[""] = OptionsDict()
+            end
+            updated_input[""]["combine_outer"] = original_input["combine_outer"]
         else
             new_section_name, new_key = top_level_update_map[k]
             updated_input[new_section_name] = get(updated_input, new_section_name, DictType())
@@ -515,35 +521,145 @@ end
 
 function update_input_file(filename; update_definitions_322=false)
     file_text = read(filename, String)
-    mv(filename, "$filename.unmodified")
-
-    comments = String[]
-    for line ∈ split(file_text, "\n")
-        if occursin("#", line)
-            push!(comments, line)
-        end
-    end
-    if length(comments) > 0
-        println("Found comments in file. These are not copied to output. If you want to keep them, copy by hand!")
-        println("Lines with comments were:")
-        for line in comments
-            println(line)
-        end
-    end
 
     original_input = TOML.parse(file_text)
 
     updated_input = update_input_dict(original_input;
                                       update_definitions_322=update_definitions_322)
 
+    updated_file_text = ""
+    section = ""
+    updated_sections = collect(keys(updated_input))
+    top_level = true
+    have_printed_missing_comments_header = false
+    if "" ∈ updated_sections
+        updated_section = pop!(updated_input, "")
+        skip_this_section = false
+    else
+        updated_section = OptionsDict()
+        skip_this_section = true
+    end
+    updated_section_keys = collect(keys(updated_section))
+    function print_missing_comment_message(key_value, comment)
+        if !have_printed_missing_comments_header
+            println("The comments from the following lines have not been transferred to "
+                    * "the updated input files. Please copy them manually if you want to "
+                    * "keep them.")
+            have_printed_missing_comments_header = true
+        end
+        println("$key_value#$comment")
+        return nothing
+    end
+
+    # Update sections that are already present in original input file.
+    for line ∈ split(file_text, "\n")
+        comment_split = split(line, "#"; limit=2)
+        if length(comment_split) == 1
+            # No comment present
+            key_value = comment_split[1]
+            comment = ""
+        else
+            key_value, comment = comment_split
+        end
+
+        section_regex_match = match(r"^\w*\[.*\]", key_value)
+        if section_regex_match !== nothing
+            # This line is a section heading
+
+            top_level = false
+
+            # Add any more options that have not already been handled from
+            # `updated_section`.
+            if length(updated_section) > 0
+                updated_file_text = rstrip(updated_file_text)
+                updated_file_text *= "\n"
+
+                for (key, value) ∈ updated_section
+                    if value isa String
+                        value = "\"$value\""
+                    end
+                    updated_file_text *= "$key = $value\n"
+                end
+
+                updated_file_text *= "\n"
+            end
+
+            section_title = section_regex_match.match[2:end-1]
+            if section_title ∉ updated_sections
+                skip_this_section = true
+                if comment != ""
+                    print_missing_comment_message(key_value, comment)
+                end
+            else
+                updated_section = pop!(updated_input, section_title)
+                updated_section_keys = collect(keys(updated_section))
+                skip_this_section = false
+                updated_file_text *= "$key_value"
+                if comment != ""
+                    updated_file_text *= "#$comment"
+                end
+                updated_file_text *= "\n"
+            end
+        elseif top_level && comment != ""
+            updated_file_text *= "$key_value#$comment\n"
+        elseif skip_this_section && comment != ""
+            print_missing_comment_message(key_value, comment)
+        elseif skip_this_section
+            # Nothing to do
+        elseif all(c->isspace(c), key_value)
+            # No actual setting on this line, so just re-print
+            updated_file_text *= "$key_value"
+            if comment != ""
+                updated_file_text *= "#$comment"
+            end
+            updated_file_text *= "\n"
+        else
+            key, _ = split(key_value, "=")
+            key = strip(key)
+
+            if key ∈ updated_section_keys
+                value = pop!(updated_section, key)
+                if value isa String
+                    value = "\"$value\""
+                end
+                updated_file_text *= "$key = $value"
+                if comment != ""
+                    updated_file_text *= " #$comment"
+                end
+                updated_file_text *= "\n"
+            else
+                if comment != ""
+                    print_missing_comment_message(key_value, comment)
+                end
+            end
+        end
+    end
+
+    # Add any new sections that were not present in originial input file.
+    for (updated_section_name, updated_section) ∈ updated_input
+        updated_file_text *= "\n[$updated_section_name]\n"
+        for (key, value) ∈ updated_section
+            if value isa String
+                value = "\"$value\""
+            end
+            updated_file_text *= "$key = $value\n"
+        end
+    end
+
+    # Make sure there is just one newline at the end of the file
+    updated_file_text = rstrip(updated_file_text, '\n')
+    updated_file_text *= "\n"
+
+    mv(filename, "$filename.unmodified")
+
     # Write the updated file. We have moved the original file, so this does not need to
-    # overwrite. Pass `truncate=false` to ensure we never accidentally delete a file, even
-    # though this should never happen anyway.
+    # overwrite. Check if the file already exists first to ensure we never accidentally
+    # delete a file, even though this should never happen.
     if isfile(filename)
         error("$filename already exists")
     end
     open(filename; write=true) do io
-        TOML.print(io, updated_input)
+        print(io, updated_file_text)
     end
 
     return nothing
@@ -553,9 +669,10 @@ using moment_kinetics.command_line_options.ArgParse
 if abspath(PROGRAM_FILE) == @__FILE__
     s = ArgParseSettings()
     @add_arg_table! s begin
-        "inputfile"
+        "inputfiles"
             help = "Name of TOML input file to update."
             arg_type = String
+            nargs = '+'
             default = nothing
         "--update-definitions-322"
             help = "Update definitions and dimensionless variables according to the changes in PR #322 (April 2025)"
@@ -563,5 +680,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     end
     args = parse_args(s)
 
-    update_input_file(args["inputfile"]; update_definitions_322=args["update-definitions-322"])
+    for filename ∈ args["inputfiles"]
+        update_input_file(filename; update_definitions_322=args["update-definitions-322"])
+    end
 end
