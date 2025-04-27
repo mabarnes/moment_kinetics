@@ -1,6 +1,5 @@
 n_ion_species = 1
 n_neutral_species = 1
-boltzmann_electron_response = true
 base_directory = "nothing"
 evolve_moments_density = true
 evolve_moments_parallel_flow = false
