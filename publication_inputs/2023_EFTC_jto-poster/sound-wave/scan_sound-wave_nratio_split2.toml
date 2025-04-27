@@ -9,12 +9,6 @@ T_e = 1.0
 [z_IC_ion_species_1]
 initial_density = [1.0e-5, 0.5, 1.0, 1.5, 1.99999]
 initial_temperature = 1.0
-
-[neutral_species_1]
-initial_density = [1.99999, 1.5, 1.0, 0.5, 1.0e-5]
-initial_temperature = 1.0
-
-[z_IC_ion_species_1]
 initialization_option = "sinusoid"
 density_amplitude = 0.001
 density_phase = 0.0
@@ -24,6 +18,8 @@ temperature_amplitude = 0.0
 temperature_phase = 0.0
 
 [z_IC_neutral_species_1]
+initial_density = [1.99999, 1.5, 1.0, 0.5, 1.0e-5]
+initial_temperature = 1.0
 initialization_option = "sinusoid"
 density_amplitude = 0.001
 density_phase = 0.0
