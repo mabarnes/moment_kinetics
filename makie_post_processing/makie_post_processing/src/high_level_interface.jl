@@ -185,7 +185,7 @@ function makie_post_process(run_dir::Union{String,Tuple},
     timestep_diagnostics(run_info, run_info_dfns; plot_prefix=plot_prefix)
     if any((ri.composition.electron_physics ∈ (kinetic_electrons,
                                                kinetic_electrons_with_temperature_equation)
-            && !ri.t_input["implicit_electron_advance"]) for ri ∈ run_info)
+            && ri.t_input["kinetic_electron_solver"] != implicit_steady_state) for ri ∈ run_info)
         timestep_diagnostics(run_info, run_info_dfns; plot_prefix=plot_prefix, electron=true)
     end
 

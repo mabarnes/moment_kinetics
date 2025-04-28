@@ -288,7 +288,11 @@ function plot_charged_pdf_2D_at_wall(run_info; plot_prefix, electron=false)
             end
 
             if input.advection_velocity
-                animate_vs_vpa(run_info, "$(electron_prefix)vpa_advect_speed"; is=1, input=f_input,
+                # Need to get variable without selecting wall point so that z-derivatives
+                # can be calculated.
+                vpa_advect_speed = get_variable(run_info, "$(electron_prefix)vpa_advect_speed")
+                animate_vs_vpa(run_info, "$(electron_prefix)vpa_advect_speed";
+                               data=vpa_advect_speed, is=1, input=f_input,
                                outfile=plot_prefix * "$(electron_prefix)vpa_advect_speed_$(label)_vs_vpa." * input.animation_ext)
             end
         end
@@ -613,7 +617,11 @@ function plot_neutral_pdf_2D_at_wall(run_info; plot_prefix)
             end
 
             if input.advection_velocity
-                animate_vs_vz(run_info, "neutral_vz_advect_speed"; is=1, input=f_neutral_input,
+                # Need to get variable without selecting wall point so that z-derivatives
+                # can be calculated.
+                vz_advect_speed = get_variable(run_info, "neutral_vz_advect_speed")
+                animate_vs_vz(run_info, "neutral_vz_advect_speed"; data=vz_advect_speed,
+                              is=1, input=f_neutral_input,
                               outfile=plot_prefix * "neutral_vz_advect_speed_$(label)_vs_vz." * input.animation_ext)
             end
         end

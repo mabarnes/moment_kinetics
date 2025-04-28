@@ -4158,7 +4158,10 @@ function _get_all_moment_variables(run_info; it=nothing, kwargs...)
         println("getting ", v)
         try
             push!(pairs, Symbol(v)=>get_variable(run_info, v; it=it, kwargs...))
-        catch KeyError
+        catch e
+            if !isa(e, KeyError)
+                rethrow()
+            end
         end
     end
     return (; pairs...)
@@ -4385,7 +4388,8 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         return variable
     end
 
-    function get_z_derivative(dx_dz, x)
+    function get_z_derivative_of_loaded_variable(x)
+        dx_dz = similar(x)
         if :iz ∈ keys(kwargs) && kwargs[:iz] !== nothing
             error("Cannot take z-derivative when iz!==nothing")
         end
@@ -4409,9 +4413,11 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
                                    run_info.z_spectral)
             end
         end
+        return dx_dz
     end
 
-    function get_upwind_z_derivative(dx_dz, x, upar)
+    function get_upwind_z_derivative(x, upar)
+        dx_dz = similar(x)
         if :iz ∈ keys(kwargs) && kwargs[:iz] !== nothing
             error("Cannot take z-derivative when iz!==nothing")
         end
@@ -4436,140 +4442,106 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
                                    .-upar[:,ir,is,it], run_info.z_spectral)
             end
         end
+        return dx_dz
     end
 
-    function get_electron_z_derivative(dx_dz, x)
+    function get_electron_z_derivative(x)
+        dx_dz = similar(x)
         if :iz ∈ keys(kwargs) && kwargs[:iz] !== nothing
             error("Cannot take z-derivative when iz!==nothing")
         end
         if :ir ∈ keys(kwargs) && isa(kwargs[:ir], mk_int)
             for it ∈ 1:size(dx_dz, 2)
-                @views derivative!(dx_dz[:,it], x[:,:,it], run_info.z,
+                @views derivative!(dx_dz[:,it], x[:,it], run_info.z,
                                    run_info.z_spectral)
             end
         else
             for it ∈ 1:size(dx_dz, 3), ir ∈ 1:run_info.r.n
-                @views derivative!(dx_dz[:,ir,it], x[:,:,ir,it], run_info.z,
+                @views derivative!(dx_dz[:,ir,it], x[:,ir,it], run_info.z,
                                    run_info.z_spectral)
             end
         end
+        return dx_dz
     end
 
     if variable_name == "temperature"
         vth = get_variable(run_info, "thermal_speed"; kwargs...)
         variable = 0.5 * vth.^2
     elseif variable_name == "ddens_dz"
-        n = get_variable(run_info, "density"; kwargs...)
-        variable = similar(n)
-        get_z_derivative(variable, n)
+        variable = get_z_derivative(run_info, "density"; kwargs...)
     elseif variable_name == "ddens_dz_upwind"
         n = get_variable(run_info, "density"; kwargs...)
         upar = get_variable(run_info, "parallel_flow"; kwargs...)
-        variable = similar(n)
-        get_upwind_z_derivative(variable, n, upar)
+        variable = get_upwind_z_derivative(n, upar)
     elseif variable_name == "dupar_dz"
-        upar = get_variable(run_info, "parallel_flow"; kwargs...)
-        variable = similar(upar)
-        get_z_derivative(variable, upar)
+        variable = get_z_derivative(run_info, "parallel_flow"; kwargs...)
     elseif variable_name == "dupar_dz_upwind"
         upar = get_variable(run_info, "parallel_flow"; kwargs...)
-        variable = similar(upar)
-        get_upwind_z_derivative(variable, upar, upar)
+        variable = get_upwind_z_derivative(upar, upar)
     elseif variable_name == "dp_dz"
-        p = get_variable(run_info, "pressure"; kwargs...)
-        variable = similar(p)
-        get_z_derivative(variable, p)
+        variable = get_z_derivative(run_info, "pressure"; kwargs...)
     elseif variable_name == "dp_dz_upwind"
-        p = get_variable(run_info, "parallel"; kwargs...)
+        p = get_variable(run_info, "pressure"; kwargs...)
         upar = get_variable(run_info, "parallel_flow"; kwargs...)
-        variable = similar(p)
-        get_upwind_z_derivative(variable, p, upar)
+        variable = get_upwind_z_derivative(p, upar)
     elseif variable_name == "dppar_dz"
+        variable = get_z_derivative(run_info, "parallel_pressure"; kwargs...)
+    elseif variable_name == "dppar_dz_upwind"
         ppar = get_variable(run_info, "parallel_pressure"; kwargs...)
-        variable = similar(ppar)
-        get_z_derivative(variable, ppar)
+        upar = get_variable(run_info, "parallel_flow"; kwargs...)
+        variable = get_upwind_z_derivative(ppar, upar)
     elseif variable_name == "dvth_dz"
-        vth = get_variable(run_info, "thermal_speed"; kwargs...)
-        variable = similar(vth)
-        get_z_derivative(variable, vth)
+        variable = get_z_derivative(run_info, "thermal_speed"; kwargs...)
     elseif variable_name == "dT_dz"
-        T = get_variable(run_info, "temperature"; kwargs...)
-        variable = similar(T)
-        get_z_derivative(variable, T)
+        variable = get_z_derivative(run_info, "temperature"; kwargs...)
     elseif variable_name == "dqpar_dz"
-        qpar = get_variable(run_info, "parallel_heat_flux"; kwargs...)
-        variable = similar(qpar)
-        get_z_derivative(variable, qpar)
+        variable = get_z_derivative(run_info, "parallel_heat_flux"; kwargs...)
     elseif variable_name == "electron_ddens_dz"
         n = get_variable(run_info, "electron_density"; kwargs...)
-        variable = similar(n)
-        get_electron_z_derivative(variable, n)
+        variable = get_electron_z_derivative(n)
     elseif variable_name == "electron_dupar_dz"
         upar = get_variable(run_info, "electron_parallel_flow"; kwargs...)
-        variable = similar(upar)
-        get_electron_z_derivative(variable, upar)
+        variable = get_electron_z_derivative(upar)
     elseif variable_name == "electron_dp_dz"
         p = get_variable(run_info, "electron_pressure"; kwargs...)
-        variable = similar(p)
-        get_electron_z_derivative(variable, p)
+        variable = get_electron_z_derivative(p)
     elseif variable_name == "electron_dppar_dz"
         ppar = get_variable(run_info, "electron_parallel_pressure"; kwargs...)
-        variable = similar(ppar)
-        get_electron_z_derivative(variable, ppar)
+        variable = get_electron_z_derivative(ppar)
     elseif variable_name == "electron_dvth_dz"
         vth = get_variable(run_info, "electron_thermal_speed"; kwargs...)
-        variable = similar(vth)
-        get_electron_z_derivative(variable, vth)
+        variable = get_electron_z_derivative(vth)
     elseif variable_name == "electron_dT_dz"
         T = get_variable(run_info, "electron_temperature"; kwargs...)
-        variable = similar(T)
-        get_electron_z_derivative(variable, T)
+        variable = get_electron_z_derivative(T)
     elseif variable_name == "electron_dqpar_dz"
         qpar = get_variable(run_info, "electron_parallel_heat_flux"; kwargs...)
-        variable = similar(qpar)
-        get_electron_z_derivative(variable, qpar)
+        variable = get_electron_z_derivative(qpar)
     elseif variable_name == "neutral_ddens_dz"
-        n = get_variable(run_info, "density_neutral"; kwargs...)
-        variable = similar(n)
-        get_z_derivative(variable, n)
+        variable = get_z_derivative(run_info, "density_neutral"; kwargs...)
     elseif variable_name == "neutral_ddens_dz_upwind"
         n = get_variable(run_info, "density_neutral"; kwargs...)
         uz = get_variable(run_info, "uz_neutral"; kwargs...)
-        variable = similar(n)
-        get_upwind_z_derivative(variable, n, uz)
+        variable = get_upwind_z_derivative(n, uz)
     elseif variable_name == "neutral_duz_dz"
-        uz = get_variable(run_info, "uz_neutral"; kwargs...)
-        variable = similar(uz)
-        get_z_derivative(variable, uz)
+        variable = get_z_derivative(run_info, "uz_neutral"; kwargs...)
     elseif variable_name == "neutral_duz_dz_upwind"
         uz = get_variable(run_info, "uz_neutral"; kwargs...)
-        variable = similar(uz)
-        get_upwind_z_derivative(variable, uz, uz)
+        variable = get_upwind_z_derivative(uz, uz)
     elseif variable_name == "neutral_dp_dz"
-        p = get_variable(run_info, "p_neutral"; kwargs...)
-        variable = similar(p)
-        get_z_derivative(variable, p)
+        variable = get_z_derivative(run_info, "p_neutral"; kwargs...)
     elseif variable_name == "neutral_dp_dz_upwind"
         p = get_variable(run_info, "p_neutral"; kwargs...)
         uz = get_variable(run_info, "uz_neutral"; kwargs...)
-        variable = similar(p)
-        get_upwind_z_derivative(variable, p, uz)
+        variable = get_upwind_z_derivative(p, uz)
     elseif variable_name == "neutral_dpz_dz"
-        pz = get_variable(run_info, "pz_neutral"; kwargs...)
-        variable = similar(pz)
-        get_z_derivative(variable, pz)
+        variable = get_z_derivative(run_info, "pz_neutral"; kwargs...)
     elseif variable_name == "neutral_dvth_dz"
-        vth = get_variable(run_info, "thermal_speed_neutral"; kwargs...)
-        variable = similar(vth)
-        get_electron_z_derivative(variable, vth)
+        variable = get_z_derivative(run_info, "thermal_speed_neutral"; kwargs...)
     elseif variable_name == "neutral_dT_dz"
-        T = get_variable(run_info, "temperature_neutral"; kwargs...)
-        variable = similar(T)
-        get_z_derivative(variable, T)
+        variable = get_z_derivative(run_info, "temperature_neutral"; kwargs...)
     elseif variable_name == "neutral_dqz_dz"
-        qz = get_variable(run_info, "qz_neutral"; kwargs...)
-        variable = similar(qz)
-        get_z_derivative(variable, qz)
+        variable = get_z_derivative(run_info, "qz_neutral"; kwargs...)
     elseif variable_name == "ddens_dt"
         all_moments = _get_all_moment_variables(run_info; kwargs...)
         variable = similar(all_moments.density)
@@ -4949,14 +4921,19 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
             end
         end
     elseif variable_name == "vpa_advect_speed"
-        density = get_variable(run_info, "density")
-        upar = get_variable(run_info, "parallel_flow")
-        p = get_variable(run_info, "pressure")
-        vth = get_variable(run_info, "thermal_speed")
-        dupar_dz = get_z_derivative(run_info, "parallel_flow")
-        dp_dz = get_z_derivative(run_info, "pressure")
-        dvth_dz = get_z_derivative(run_info, "thermal_speed")
-        dqpar_dz = get_z_derivative(run_info, "parallel_heat_flux")
+        density = get_variable(run_info, "density"; kwargs...)
+        upar = get_variable(run_info, "parallel_flow"; kwargs...)
+        p = get_variable(run_info, "pressure"; kwargs...)
+        vth = get_variable(run_info, "thermal_speed"; kwargs...)
+        dupar_dz = similar(upar)
+        dupar_dz = get_z_derivative_of_loaded_variable(upar)
+        dp_dz = similar(p)
+        dp_dz = get_z_derivative_of_loaded_variable(p)
+        dvth_dz = similar(vth)
+        dvth_dz = get_z_derivative_of_loaded_variable(vth)
+        dqpar_dz = get_z_derivative(run_info, "parallel_heat_flux"; kwargs...)
+        dupar_dt = get_variable(run_info, "dupar_dt"; kwargs...)
+        dvth_dt = get_variable(run_info, "dvth_dt"; kwargs...)
         if any(x -> x.active, run_info.external_source_settings.ion)
             n_sources = length(run_info.external_source_settings.ion)
             external_source_amplitude = get_variable(run_info, "external_source_amplitude")
@@ -5021,6 +4998,8 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
                                    dvth_dz=dvth_dz[:,:,:,it],
                                    dqpar_dz=dqpar_dz[:,:,:,it],
                                    vth=vth[:,:,:,it],
+                                   dupar_dt=dupar_dt[:,:,:,it],
+                                   dvth_dt=dvth_dt[:,:,:,it],
                                    external_source_amplitude=external_source_amplitude[:,:,:,it],
                                    external_source_density_amplitude=external_source_density_amplitude[:,:,:,it],
                                    external_source_momentum_amplitude=external_source_momentum_amplitude[:,:,:,it],
@@ -5108,21 +5087,24 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
     elseif variable_name == "electron_vpa_advect_speed"
         # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
         # to get_variable() in this case. Instead select a slice of the result.
-        density = get_variable(run_info, "electron_density")
-        upar = get_variable(run_info, "electron_parallel_flow")
-        p = get_variable(run_info, "electron_pressure")
-        ppar = get_variable(run_info, "electron_parallel_pressure")
-        vth = get_variable(run_info, "electron_thermal_speed")
-        dp_dz = get_z_derivative(run_info, "electron_pressure")
-        dppar_dz = get_z_derivative(run_info, "electron_parallel_pressure")
-        dvth_dz = get_z_derivative(run_info, "electron_thermal_speed")
-        dqpar_dz = get_z_derivative(run_info, "electron_parallel_heat_flux")
+        density = get_variable(run_info, "electron_density"; kwargs...)
+        upar = get_variable(run_info, "electron_parallel_flow"; kwargs...)
+        p = get_variable(run_info, "electron_pressure"; kwargs...)
+        ppar = get_variable(run_info, "electron_parallel_pressure"; kwargs...)
+        vth = get_variable(run_info, "electron_thermal_speed"; kwargs...)
+        dp_dz = similar(p)
+        dp_dz = get_z_derivative_of_loaded_variable(p)
+        dppar_dz = similar(ppar)
+        dppar_dz = get_z_derivative_of_loaded_variable(ppar)
+        dvth_dz = similar(vth)
+        dvth_dz = get_z_derivative_of_loaded_variable(vth)
+        dqpar_dz = get_z_derivative(run_info, "electron_parallel_heat_flux"; kwargs...)
         if any(x -> x.active, run_info.external_source_settings.electron)
             n_sources = length(run_info.external_source_settings.electron)
-            external_source_amplitude = get_variable(run_info, "external_source_electron_amplitude")
-            external_source_density_amplitude = get_variable(run_info, "external_source_electron_density_amplitude")
-            external_source_momentum_amplitude = get_variable(run_info, "external_source_electron_momentum_amplitude")
-            external_source_pressure_amplitude = get_variable(run_info, "external_source_electron_pressure_amplitude")
+            external_source_amplitude = get_variable(run_info, "external_source_electron_amplitude"; kwargs...)
+            external_source_density_amplitude = get_variable(run_info, "external_source_electron_density_amplitude"; kwargs...)
+            external_source_momentum_amplitude = get_variable(run_info, "external_source_electron_momentum_amplitude"; kwargs...)
+            external_source_pressure_amplitude = get_variable(run_info, "external_source_electron_pressure_amplitude"; kwargs...)
         else
             n_sources = 0
             external_source_amplitude = zeros(0,0,n_sources,run_info.nt)
@@ -5229,33 +5211,38 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
     elseif variable_name == "neutral_vz_advect_speed"
         # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
         # to get_variable() in this case. Instead select a slice of the result.
-        Ez = get_variable(run_info, "Ez")
-        density = get_variable(run_info, "density")
-        upar = get_variable(run_info, "parallel_flow")
-        p = get_variable(run_info, "pressure")
-        density_neutral = get_variable(run_info, "density_neutral")
-        uz_neutral = get_variable(run_info, "uz_neutral")
-        p_neutral = get_variable(run_info, "p_neutral")
-        vth = get_variable(run_info, "thermal_speed_neutral")
-        duz_dz = get_z_derivative(run_info, "uz_neutral")
-        dp_dz = get_z_derivative(run_info, "p_neutral")
-        dvth_dz = get_z_derivative(run_info, "thermal_speed_neutral")
-        dqz_dz = get_z_derivative(run_info, "qz_neutral")
+        Ez = get_variable(run_info, "Ez"; kwargs...)
+        density = get_variable(run_info, "density"; kwargs...)
+        upar = get_variable(run_info, "parallel_flow"; kwargs...)
+        p = get_variable(run_info, "pressure"; kwargs...)
+        density_neutral = get_variable(run_info, "density_neutral"; kwargs...)
+        uz_neutral = get_variable(run_info, "uz_neutral"; kwargs...)
+        p_neutral = get_variable(run_info, "p_neutral"; kwargs...)
+        vth = get_variable(run_info, "thermal_speed_neutral"; kwargs...)
+        duz_dz = get_z_derivative_of_loaded_variable(uz_neutral)
+        dp_dz = similar(p_neutral)
+        dp_dz = get_z_derivative_of_loaded_variable(p_neutral)
+        dvth_dz = similar(vth)
+        dvth_dz = get_z_derivative_of_loaded_variable(vth)
+        dqz_dz = get_z_derivative(run_info, "qz_neutral"; kwargs...)
+        dp_dt = get_variable(run_info, "p_neutral")
+        duz_dt = get_variable(run_info, "uz_neutral")
+        dvth_dt = get_variable(run_info, "thermal_speed_neutral")
         if any(x -> x.active, run_info.external_source_settings.neutral)
             n_sources = length(run_info.external_source_settings.neutral)
-            external_source_amplitude = get_variable(run_info, "external_source_neutral_amplitude")
+            external_source_amplitude = get_variable(run_info, "external_source_neutral_amplitude"; kwargs...)
             if run_info.evolve_density
-                external_source_density_amplitude = get_variable(run_info, "external_source_neutral_density_amplitude")
+                external_source_density_amplitude = get_variable(run_info, "external_source_neutral_density_amplitude"; kwargs...)
             else
                 external_source_density_amplitude = zeros(0,0,n_sources,run_info.nt)
             end
             if run_info.evolve_upar
-                external_source_momentum_amplitude = get_variable(run_info, "external_source_neutral_momentum_amplitude")
+                external_source_momentum_amplitude = get_variable(run_info, "external_source_neutral_momentum_amplitude"; kwargs...)
             else
                 external_source_momentum_amplitude = zeros(0,0,n_sources,run_info.nt)
             end
             if run_info.evolve_p
-                external_source_pressure_amplitude = get_variable(run_info, "external_source_neutral_pressure_amplitude")
+                external_source_pressure_amplitude = get_variable(run_info, "external_source_neutral_pressure_amplitude"; kwargs...)
             else
                 external_source_pressure_amplitude = zeros(0,0,n_sources,run_info.nt)
             end
@@ -5294,6 +5281,9 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
                                        dvth_dz=dvth_dz[:,:,:,it],
                                        dqz_dz=dqz_dz[:,:,:,it],
                                        vth=vth[:,:,:,it],
+                                       dp_dt=dp_dt[:,:,:,it],
+                                       duz_dt=duz_dt[:,:,:,it],
+                                       dvth_dt=dvth_dt[:,:,:,it],
                                        external_source_amplitude=external_source_amplitude[:,:,:,it],
                                        external_source_density_amplitude=external_source_density_amplitude[:,:,:,it],
                                        external_source_momentum_amplitude=external_source_momentum_amplitude[:,:,:,it],
