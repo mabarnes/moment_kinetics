@@ -393,7 +393,7 @@ function update_speed_n_u_p_evolution!(advect, fields, fvec, moments, vpa, z, r,
                                        composition, collisions, ion_source_settings)
     upar = fvec.upar
     vth = moments.ion.vth
-    Ez = fields.Ez
+    gEz = fields.gEz
     dupar_dz = moments.ion.dupar_dz
     dvth_dz = moments.ion.dvth_dz
     dupar_dt = moments.ion.dupar_dt
@@ -405,7 +405,7 @@ function update_speed_n_u_p_evolution!(advect, fields, fvec, moments, vpa, z, r,
             # update parallel acceleration to account for:
             @loop_z_vperp iz ivperp begin
                 @. speed[:,ivperp,iz,ir] =
-                    (Ez[iz,ir]
+                    (gEz[ivperp,iz,ir,is]
                      - (dupar_dt[iz,ir,is] + (vth[iz,ir,is] * wpa + upar[iz,ir,is]) * dupar_dz[iz,ir,is])
                      - wpa * (dvth_dt[iz,ir,is] + (vth[iz,ir,is] * wpa + upar[iz,ir,is]) * dvth_dz[iz,ir,is])
                     ) / vth[iz,ir,is]
@@ -425,7 +425,7 @@ vpahat = vpa/vth
 function update_speed_n_p_evolution!(advect, fields, fvec, moments, vpa, z, r,
                                      composition, collisions, ion_source_settings)
     vth = moments.ion.vth
-    Ez = fields.Ez
+    gEz = fields.gEz
     dvth_dz = moments.ion.dvth_dz
     dvth_dt = moments.ion.dvth_dt
     wpa = vpa.grid
@@ -435,7 +435,7 @@ function update_speed_n_p_evolution!(advect, fields, fvec, moments, vpa, z, r,
             # update parallel acceleration to account for:
             @loop_z_vperp iz ivperp begin
                 @. speed[:,ivperp,iz,ir] =
-                    (Ez[iz,ir]
+                    (gEz[ivperp,iz,ir,is]
                      - wpa * (dvth_dt[iz,ir,is] + vth[iz,ir,is] * wpa * dvth_dz[iz,ir,is])
                     ) / vth[iz,ir,is]
             end
@@ -454,7 +454,7 @@ wpa = vpa-upar
 function update_speed_n_u_evolution!(advect, fields, fvec, moments, vpa, z, r,
                                      composition, collisions, ion_source_settings)
     upar = fvec.upar
-    Ez = fields.Ez
+    gEz = fields.gEz
     dupar_dz = moments.ion.dupar_dz
     dupar_dt = moments.ion.dupar_dt
     wpa = vpa.grid
@@ -464,7 +464,7 @@ function update_speed_n_u_evolution!(advect, fields, fvec, moments, vpa, z, r,
             # update parallel acceleration to account for:
             @loop_z_vperp iz ivperp begin
                 @. speed[:,ivperp,iz,ir] =
-                    (Ez[iz,ir]
+                    (gEz[ivperp,iz,ir,is]
                      - (dupar_dt[iz,ir,is] + (wpa + upar[iz,ir,is]) * dupar_dz[iz,ir,is])
                     )
             end
