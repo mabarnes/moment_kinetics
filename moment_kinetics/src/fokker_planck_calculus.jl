@@ -325,6 +325,7 @@ struct fokkerplanck_weakform_arrays_struct{M <: AbstractSparseArray{mk_float,mk_
     CC2D_sparse::M
     CC2D_sparse_constructor::sparse_matrix_constructor
     lu_obj_CC2D::SuiteSparse.UMFPACK.UmfpackLU{mk_float,mk_int}
+    update_preconditioner::Base.RefValue{Bool}
     # dummy array for vpa vperp advection contributions
     rhs_advection::MPISharedArray{mk_float,2}
     # dummy arrays for Jacobian-Free-Newton-Krylov solver

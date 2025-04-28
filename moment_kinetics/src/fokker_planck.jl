@@ -239,6 +239,7 @@ function init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_sp
     # preconditioner matrix
     CC2D_sparse, CC2D_sparse_constructor, lu_obj_CC2D = allocate_preconditioner_matrix(vpa,vperp,vpa_spectral,vperp_spectral)
     rhs_advection = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
+    update_preconditioner = true
     # dummy arrays for JFNK
     Fnew = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
     Fresidual = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
@@ -254,7 +255,7 @@ function init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_sp
                                            YY_arrays, S_dummy, Q_dummy, rhsvpavperp, rhsvpavperp_copy1, rhsvpavperp_copy2, rhsvpavperp_copy3,
                                            CC, GG, HH, dHdvpa, dHdvperp, dGdvperp, d2Gdvperp2, d2Gdvpa2, d2Gdvperpdvpa,
                                            FF, dFdvpa, dFdvperp, 
-                                           CC2D_sparse, CC2D_sparse_constructor, lu_obj_CC2D,
+                                           CC2D_sparse, CC2D_sparse_constructor, lu_obj_CC2D, Ref(update_preconditioner),
                                            rhs_advection, Fnew, Fresidual, F_delta_x, F_rhs_delta, Fv, Fw)
     return fka
 end
@@ -1036,10 +1037,16 @@ function fokker_planck_self_collisions_backward_euler_step!(Fold, delta_t, ms, n
         # such that K * F^n+1 = M * F^n advances the linearised collision operator due
         # to test particle collisions only (differential piece of C).
         # CC2D_sparse is the approximate Jacobian for the residual Fresidual.
-        calculate_test_particle_preconditioner!(Fold,delta_t,ms,ms,nuss,
-            vpa,vperp,vpa_spectral,vperp_spectral,fkpl_arrays, 
-            use_Maxwellian_Rosenbluth_coefficients=use_Maxwellian_Rosenbluth_coefficients_in_preconditioner,
-            boundary_data_option=boundary_data_option)
+        update_preconditioner = fkpl_arrays.update_preconditioner[] || ((nl_solver_params.nonlinear_counter[] / nl_solver_params.nonlinear_max_iterations) > 0.2)
+        #println("update_preconditioner: ", update_preconditioner)
+        if update_preconditioner
+            #println("recalculate preconditioner")
+            calculate_test_particle_preconditioner!(Fold,delta_t,ms,ms,nuss,
+                vpa,vperp,vpa_spectral,vperp_spectral,fkpl_arrays,
+                use_Maxwellian_Rosenbluth_coefficients=use_Maxwellian_Rosenbluth_coefficients_in_preconditioner,
+                boundary_data_option=boundary_data_option)
+            fkpl_arrays.update_preconditioner[] = false
+        end
     
         function test_particle_precon!(x)
             # let K * dF = C[dF,F^n]

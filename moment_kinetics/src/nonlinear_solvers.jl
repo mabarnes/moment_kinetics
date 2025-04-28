@@ -65,6 +65,7 @@ struct nl_solver_info{TH,TV,Tcsg,Tlig,Tprecon,Tpretype}
     global_linear_iterations::Base.RefValue{mk_int}
     global_precon_iterations::Base.RefValue{mk_int}
     solves_since_precon_update::Base.RefValue{mk_int}
+    nonlinear_counter::Base.RefValue{mk_int}
     precon_dt::Base.RefValue{mk_float}
     precon_lowerz_vcut_inds::Vector{mk_int}
     precon_upperz_vcut_inds::Vector{mk_int}
@@ -302,7 +303,7 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=();
                           mk_float(nl_solver_input.linear_atol), linear_restart,
                           nl_solver_input.linear_max_restarts, H, c, s, g, V,
                           linear_initial_guess, Ref(0), Ref(0), Ref(0), Ref(0), Ref(0),
-                          Ref(0), Ref(0), Ref(0),
+                          Ref(0), Ref(0), Ref(0), Ref(0),
                           Ref(nl_solver_input.preconditioner_update_interval),
                           Ref(mk_float(0.0)), zeros(mk_int, n_vcut_inds),
                           zeros(mk_int, n_vcut_inds), serial_solve, anyv_region, Ref(0), Ref(0),
@@ -572,6 +573,8 @@ old_precon_iterations = nl_solver_params.precon_iterations[]
         max(counter, nl_solver_params.max_nonlinear_iterations_this_step[])
     nl_solver_params.max_linear_iterations_this_step[] =
         max(linear_counter, nl_solver_params.max_linear_iterations_this_step[])
+    # extract raw nonlinear counter for FP precon update
+    nl_solver_params.nonlinear_counter[] = counter
 #    println("Newton iterations: ", counter)
 #    println("Final residual: ", residual_norm)
 #    println("Total linear iterations: ", linear_counter)
