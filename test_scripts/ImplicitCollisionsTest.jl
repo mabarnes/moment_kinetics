@@ -72,6 +72,7 @@ function test_implicit_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=3,neleme
     plot_test_output=false,
     test_dense_construction=false,standalone=true,
     test_numerical_conserving_terms=false,
+    update_preconditioner_always=true,
     boundary_data_option=multipole_expansion)
     
     nelement_local_vpa = nelement_vpa # number of elements per rank
@@ -188,6 +189,7 @@ function test_implicit_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=3,neleme
             test_particle_preconditioner=test_particle_preconditioner,
             test_linearised_advance=test_linearised_advance,
             use_Maxwellian_Rosenbluth_coefficients_in_preconditioner=use_Maxwellian_Rosenbluth_coefficients_in_preconditioner,
+            update_preconditioner_always=update_preconditioner_always,
             boundary_data_option=boundary_data_option)
         @begin_serial_region()
         # update the pdf
@@ -227,6 +229,7 @@ function test_implicit_collisions_wrapper(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=
     plot_test_output=false,
     test_dense_construction=false,standalone=true,
     test_numerical_conserving_terms=false,
+    update_preconditioner_always=true,
     boundary_data_option=multipole_expansion,
     use_end_of_step_corrections=true)
     
@@ -370,6 +373,7 @@ function test_implicit_collisions_wrapper(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=
                                         test_linearised_advance=test_linearised_advance,
                                         test_particle_preconditioner=test_particle_preconditioner,
                                         use_Maxwellian_Rosenbluth_coefficients_in_preconditioner=use_Maxwellian_Rosenbluth_coefficients_in_preconditioner,
+                                        update_preconditioner_always=update_preconditioner_always,
                                         use_end_of_step_corrections=use_end_of_step_corrections)
         @begin_serial_region()
         # update the pdf

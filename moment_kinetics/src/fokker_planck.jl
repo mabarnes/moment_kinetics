@@ -924,6 +924,7 @@ function implicit_ion_fokker_planck_self_collisions!(pdf_out, pdf_in, dSdt,
                     test_linearised_advance=false,
                     test_particle_preconditioner=true,
                     use_Maxwellian_Rosenbluth_coefficients_in_preconditioner=false,
+                    update_preconditioner_always=true,
                     use_end_of_step_corrections=true)
     # bounds checking
     n_ion_species = composition.n_ion_species
@@ -965,6 +966,7 @@ function implicit_ion_fokker_planck_self_collisions!(pdf_out, pdf_in, dSdt,
                             test_linearised_advance=test_linearised_advance,
                             test_particle_preconditioner=test_particle_preconditioner,
                             use_Maxwellian_Rosenbluth_coefficients_in_preconditioner=use_Maxwellian_Rosenbluth_coefficients_in_preconditioner,
+                            update_preconditioner_always=update_preconditioner_always,
                             boundary_data_option=boundary_data_option)
         # global success true only if local_success true
         success = success && local_success
@@ -1009,6 +1011,7 @@ function fokker_planck_self_collisions_backward_euler_step!(Fold, delta_t, ms, n
                         test_linearised_advance=false,
                         test_particle_preconditioner=true,
                         use_Maxwellian_Rosenbluth_coefficients_in_preconditioner=false,
+                        update_preconditioner_always=true,
                         boundary_data_option=multipole_expansion)
 
     vperp, vperp_spectral = coords.vperp, spectral.vperp_spectral
@@ -1045,7 +1048,7 @@ function fokker_planck_self_collisions_backward_euler_step!(Fold, delta_t, ms, n
                 vpa,vperp,vpa_spectral,vperp_spectral,fkpl_arrays,
                 use_Maxwellian_Rosenbluth_coefficients=use_Maxwellian_Rosenbluth_coefficients_in_preconditioner,
                 boundary_data_option=boundary_data_option)
-            fkpl_arrays.update_preconditioner[] = false
+            fkpl_arrays.update_preconditioner[] = update_preconditioner_always
         end
     
         function test_particle_precon!(x)
