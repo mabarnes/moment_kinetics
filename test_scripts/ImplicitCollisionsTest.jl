@@ -207,11 +207,12 @@ function test_implicit_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=3,neleme
             end
         end
     end
-    
-    #diagnose_F_Maxwellian(Fold,Fdummy1,Fdummy2,Fdummy3,vpa,vperp,ntime,ms)
+    finish_run_time = now()
     if plot_test_output
         diagnose_F_gif(fvpavperp,vpa,vperp,ntime)
-    end    
+    end
+    println("init time (ms): ", Dates.value(finish_init_time - start_init_time))
+    println("run time (ms): ", Dates.value(finish_run_time - finish_init_time))
 end
 
 function test_implicit_collisions_wrapper(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=3,nelement_vpa=8,nelement_vperp=4,
@@ -392,10 +393,12 @@ function test_implicit_collisions_wrapper(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=
             end
         end
     end
-    
+    finish_run_time = now()
     if plot_test_output
         @views diagnose_F_gif(fvpavperpzrst[:,:,1,1,1,:],vpa,vperp,ntime)
-    end    
+    end
+    println("init time (ms): ", Dates.value(finish_init_time - start_init_time))
+    println("run time (ms): ", Dates.value(finish_run_time - finish_init_time))
 end
     
 if abspath(PROGRAM_FILE) == @__FILE__
