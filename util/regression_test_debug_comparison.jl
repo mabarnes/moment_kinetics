@@ -11,7 +11,8 @@ end
     regression_test_debug_comparison(filenameA, filenameB;
                                      tolerance=1.0e-13,
                                      conversions=Dict{String,Any}(),
-                                     print_changed=false)
+                                     ignore=(), print_index_ranges=true,
+                                     print_changed=false, print_deltas=false)
 
 Compare debug files produced when `debug_io=true` is set in the `[timestepping]` input to
 find the first place where any variable differs by more than `tolerance`.
@@ -19,6 +20,12 @@ find the first place where any variable differs by more than `tolerance`.
 This function is expected to be useful when regression testing a run that is expected to
 be identical between two different versions, to identify the place in the code where any
 difference in output comes from.
+
+Prints point in the code where differences were first detected (step_counter, istage, and
+label), the variables with differences, and for each variable the minimum/maximum index
+for each dimension where a difference was found (note not every point within these index
+ranges must have a difference, the aim is to give a quick indication, e.g. if the
+differences only occur on one boundary).
 
 If some variables are expected to be rescaled by constant factors between the runs, pass
 the conversion in `conversions`. Variables from `filenameA` that match a key in
@@ -28,6 +35,9 @@ that `"new_name"` in A will be multiplied by `c` and then compared to `"old_name
 
 Any variables in `ignore` will not be compared.
 
+To disable printing of index ranges (to reduce the amount of output if that's useful),
+pass `print_index_ranges=false`.
+
 Pass `print_changed=true` to print the array values for any arrays that are different.
 Pass `print_deltas=true` as well to print the difference between the changed value and the
 previous value - represents the contribution added by the term that caused the change.
@@ -35,7 +45,7 @@ previous value - represents the contribution added by the term that caused the c
 function regression_test_debug_comparison(filenameA, filenameB;
                                           tolerance=1.0e-13,
                                           conversions=Dict{String,Any}(),
-                                          ignore=(),
+                                          ignore=(), print_index_ranges=true,
                                           print_changed=false, print_deltas=false)
 
     A = get_run_info_no_setup(filenameA; dfns=true)
@@ -46,7 +56,7 @@ function regression_test_debug_comparison(filenameA, filenameB;
     conversions_keys = collect(keys(conversions))
 
     for it ∈ 1:nt_min
-        changed_variables = Tuple{String,String}[]
+        changed_variables = Tuple[]
         for v ∈ variable_names
             if startswith(v, "chodura_integral")
                 # These are just diagnostic variables, and have a non-standard shape, so
@@ -77,10 +87,63 @@ function regression_test_debug_comparison(filenameA, filenameB;
             # the result would be NaN even though they are 'equal'), then compare with
             # negation and ≤ so that if there are any NaNs the variable counts as
             # 'changed', as any comparison with NaN always evaluates to `false`.
-            for i ∈ eachindex(newv, oldv)
-                if newv[i] != oldv[i] && !(abs(newv[i] - oldv[i]) ≤ tolerance)
-                    push!(changed_variables, (v, oldname))
-                    break
+            if print_index_ranges
+                maxinds = CartesianIndex((-1 for _ ∈ 1:ndims(newv))...)
+                # `length(newv)+1` is definitely bigger than any index of any dimension in
+                # `newv`.
+                mininds = CartesianIndex((length(newv)+1 for _ ∈ 1:ndims(newv))...)
+                for i ∈ CartesianIndices(newv)
+                    if newv[i] != oldv[i] && abs(newv[i] - oldv[i]) ≤ tolerance
+                        mininds = min(mininds, i)
+                        maxinds = max(maxinds, i)
+                    end
+                end
+
+                if v == oldname
+                    names_to_save = (v,)
+                else
+                    names_to_save = (v, oldname)
+                end
+                if all(maxinds.I .> 0)
+                    # Found one or more differences
+
+                    # Guess dimension types from number of dimensions.
+                    if ndims(newv) == 1
+                        # Not sure what dimensions are for 1D array
+                        push!(changed_variables, (names_to_save..., (i=mininds[1]:maxinds[1],)))
+                    elseif ndims(newv) == 2
+                        push!(changed_variables, (names_to_save..., (z=mininds[1]:maxinds[1],
+                                                                     r=mininds[2]:maxinds[2])))
+                    elseif ndims(newv) == 3
+                        push!(changed_variables, (names_to_save..., (z=mininds[1]:maxinds[1],
+                                                                     r=mininds[2]:maxinds[2],
+                                                                     s=mininds[3]:maxinds[3])))
+                    elseif ndims(newv) == 4
+                        push!(changed_variables, (names_to_save..., (vpa=mininds[1]:maxinds[1],
+                                                                     vperp=mininds[2]:maxinds[2],
+                                                                     z=mininds[3]:maxinds[3],
+                                                                     r=mininds[4]:maxinds[4])))
+                    elseif ndims(newv) == 5
+                        push!(changed_variables, (names_to_save..., (vpa=mininds[1]:maxinds[1],
+                                                                     vperp=mininds[2]:maxinds[2],
+                                                                     z=mininds[3]:maxinds[3],
+                                                                     r=mininds[4]:maxinds[4],
+                                                                     s=mininds[5]:maxinds[5])))
+                    elseif ndims(newv) == 6
+                        push!(changed_variables, (names_to_save..., (vz=mininds[1]:maxinds[1],
+                                                                     vr=mininds[2]:maxinds[2],
+                                                                     vzeta=mininds[3]:maxinds[3],
+                                                                     z=mininds[4]:maxinds[4],
+                                                                     r=mininds[5]:maxinds[5],
+                                                                     s=mininds[6]:maxinds[6])))
+                    end
+                end
+            else
+                for i ∈ eachindex(newv, oldv)
+                    if newv[i] != oldv[i] && !(abs(newv[i] - oldv[i]) ≤ tolerance)
+                        push!(changed_variables, names_to_save)
+                        break
+                    end
                 end
             end
         end
@@ -116,7 +179,12 @@ function regression_test_debug_comparison(filenameA, filenameB;
             println("$changed_variables")
 
             if print_changed
-                for (vA, vB) ∈ changed_variables
+                for v ∈ changed_variables
+                    if length(v) ≥ 2 && isa(v[2], String)
+                        vA, vB = v[1:2]
+                    else
+                        vA = vB = v[1]
+                    end
                     valA = postproc_load_variable(A, vA; it=it)
                     if it > 1 && print_deltas
                         deltaA = valA .- postproc_load_variable(A, vA; it=it-1)
