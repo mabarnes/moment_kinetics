@@ -68,14 +68,74 @@ run_directory = joinpath(input["output"]["base_directory"], input["output"]["run
 get_electron_Jacobian_matrix(run_directory)
 
 # Run each term individually
-get_electron_Jacobian_matrix(run_directory; include_z_advection=true)
-get_electron_Jacobian_matrix(run_directory; include_vpa_advection=true)
-get_electron_Jacobian_matrix(run_directory; include_electron_pdf_term=true)
-get_electron_Jacobian_matrix(run_directory; include_dissipation=true)
-get_electron_Jacobian_matrix(run_directory; include_krook=true)
-get_electron_Jacobian_matrix(run_directory; include_external_source=true)
-get_electron_Jacobian_matrix(run_directory; include_constraint_forcing=true)
-get_electron_Jacobian_matrix(run_directory; include_energy_equation=true)
-get_electron_Jacobian_matrix(run_directory; include_ion_dt_forcing=true)
-get_electron_Jacobian_matrix(run_directory; include_wall_bc=true)
+get_electron_Jacobian_matrix(run_directory; include_z_advection=true,
+                             include_vpa_advection=false, include_electron_pdf_term=false,
+                             include_dissipation=false, include_krook=false,
+                             include_external_source=false,
+                             include_constraint_forcing=false,
+                             include_energy_equation=false, include_ion_dt_forcing=false,
+                             include_wall_bc=false)
+get_electron_Jacobian_matrix(run_directory; include_z_advection=false,
+                             include_vpa_advection=true, include_electron_pdf_term=false,
+                             include_dissipation=false, include_krook=false,
+                             include_external_source=false,
+                             include_constraint_forcing=false,
+                             include_energy_equation=false, include_ion_dt_forcing=false,
+                             include_wall_bc=false)
+get_electron_Jacobian_matrix(run_directory; include_z_advection=false,
+                             include_vpa_advection=false, include_electron_pdf_term=true,
+                             include_dissipation=false, include_krook=false,
+                             include_external_source=false,
+                             include_constraint_forcing=false,
+                             include_energy_equation=false, include_ion_dt_forcing=false,
+                             include_wall_bc=false)
+get_electron_Jacobian_matrix(run_directory; include_z_advection=false,
+                             include_vpa_advection=false, include_electron_pdf_term=false,
+                             include_dissipation=true, include_krook=false,
+                             include_external_source=false,
+                             include_constraint_forcing=false,
+                             include_energy_equation=false, include_ion_dt_forcing=false,
+                             include_wall_bc=false)
+get_electron_Jacobian_matrix(run_directory; include_z_advection=false,
+                             include_vpa_advection=false, include_electron_pdf_term=false,
+                             include_dissipation=false, include_krook=true,
+                             include_external_source=false,
+                             include_constraint_forcing=false,
+                             include_energy_equation=false, include_ion_dt_forcing=false,
+                             include_wall_bc=false)
+get_electron_Jacobian_matrix(run_directory; include_z_advection=false,
+                             include_vpa_advection=false, include_electron_pdf_term=false,
+                             include_dissipation=false, include_krook=false,
+                             include_external_source=true,
+                             include_constraint_forcing=false,
+                             include_energy_equation=false, include_ion_dt_forcing=false,
+                             include_wall_bc=false)
+get_electron_Jacobian_matrix(run_directory; include_z_advection=false,
+                             include_vpa_advection=false, include_electron_pdf_term=false,
+                             include_dissipation=false, include_krook=false,
+                             include_external_source=false,
+                             include_constraint_forcing=true,
+                             include_energy_equation=false, include_ion_dt_forcing=false,
+                             include_wall_bc=false)
+get_electron_Jacobian_matrix(run_directory; include_z_advection=false,
+                             include_vpa_advection=false, include_electron_pdf_term=false,
+                             include_dissipation=false, include_krook=false,
+                             include_external_source=false,
+                             include_constraint_forcing=false,
+                             include_energy_equation=true, include_ion_dt_forcing=false,
+                             include_wall_bc=false)
+get_electron_Jacobian_matrix(run_directory; include_z_advection=false,
+                             include_vpa_advection=false, include_electron_pdf_term=false,
+                             include_dissipation=false, include_krook=false,
+                             include_external_source=false,
+                             include_constraint_forcing=false,
+                             include_energy_equation=false, include_ion_dt_forcing=true,
+                             include_wall_bc=false)
+get_electron_Jacobian_matrix(run_directory; include_z_advection=false,
+                             include_vpa_advection=false, include_electron_pdf_term=false,
+                             include_dissipation=false, include_krook=false,
+                             include_external_source=false,
+                             include_constraint_forcing=false,
+                             include_energy_equation=false, include_ion_dt_forcing=false,
+                             include_wall_bc=true)
 nothing
