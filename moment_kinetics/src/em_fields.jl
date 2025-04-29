@@ -154,6 +154,10 @@ function update_phi!(fields, fvec, vperp, z, r, composition, collisions, moments
                     scratch_dummy.buffer_rs_1[:,1], scratch_dummy.buffer_rs_2[:,1],
                     scratch_dummy.buffer_rs_3[:,1], scratch_dummy.buffer_rs_4[:,1],
                     z_spectral,z)
+        else
+            @loop_r_z ir iz begin
+                fields.Ez[iz,ir] = 0.0
+            end
         end
     end
 
