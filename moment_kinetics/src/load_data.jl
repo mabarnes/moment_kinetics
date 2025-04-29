@@ -4257,7 +4257,15 @@ end
 
 function get_variable(run_info, variable_name; normalize_advection_speed_shape=true,
                       kwargs...)
+    return _get_variable_internal(run_info, Symbol(variable_name);
+                                  normalize_advection_speed_shape=normalize_advection_speed_shape,
+                                  kwargs...)
+end
 
+# Define internal function with a `Symbol` argument because this allows the compiler to
+# optimize out (most of?) the large if-elseif-... chain below to improve the compile time.
+function _get_variable_internal(run_info, variable_name::Symbol;
+                                normalize_advection_speed_shape=true, kwargs...)
     # Set up loop macros for serial operation, in case they are used by any functions
     # below.
     looping.setup_loop_ranges!(0, 1;
@@ -4457,85 +4465,85 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         return dx_dz
     end
 
-    if variable_name == "temperature"
+    if variable_name == :temperature
         vth = get_variable(run_info, "thermal_speed"; kwargs...)
         variable = 0.5 * vth.^2
-    elseif variable_name == "ddens_dz"
+    elseif variable_name == :ddens_dz
         variable = get_z_derivative(run_info, "density"; kwargs...)
-    elseif variable_name == "ddens_dz_upwind"
+    elseif variable_name == :ddens_dz_upwind
         n = get_variable(run_info, "density"; kwargs...)
         upar = get_variable(run_info, "parallel_flow"; kwargs...)
         variable = get_upwind_z_derivative(n, upar)
-    elseif variable_name == "dupar_dz"
+    elseif variable_name == :dupar_dz
         variable = get_z_derivative(run_info, "parallel_flow"; kwargs...)
-    elseif variable_name == "dupar_dz_upwind"
+    elseif variable_name == :dupar_dz_upwind
         upar = get_variable(run_info, "parallel_flow"; kwargs...)
         variable = get_upwind_z_derivative(upar, upar)
-    elseif variable_name == "dp_dz"
+    elseif variable_name == :dp_dz
         variable = get_z_derivative(run_info, "pressure"; kwargs...)
-    elseif variable_name == "dp_dz_upwind"
+    elseif variable_name == :dp_dz_upwind
         p = get_variable(run_info, "pressure"; kwargs...)
         upar = get_variable(run_info, "parallel_flow"; kwargs...)
         variable = get_upwind_z_derivative(p, upar)
-    elseif variable_name == "dppar_dz"
+    elseif variable_name == :dppar_dz
         variable = get_z_derivative(run_info, "parallel_pressure"; kwargs...)
-    elseif variable_name == "dppar_dz_upwind"
+    elseif variable_name == :dppar_dz_upwind
         ppar = get_variable(run_info, "parallel_pressure"; kwargs...)
         upar = get_variable(run_info, "parallel_flow"; kwargs...)
         variable = get_upwind_z_derivative(ppar, upar)
-    elseif variable_name == "dvth_dz"
+    elseif variable_name == :dvth_dz
         variable = get_z_derivative(run_info, "thermal_speed"; kwargs...)
-    elseif variable_name == "dT_dz"
+    elseif variable_name == :dT_dz
         variable = get_z_derivative(run_info, "temperature"; kwargs...)
-    elseif variable_name == "dqpar_dz"
+    elseif variable_name == :dqpar_dz
         variable = get_z_derivative(run_info, "parallel_heat_flux"; kwargs...)
-    elseif variable_name == "electron_ddens_dz"
+    elseif variable_name == :electron_ddens_dz
         n = get_variable(run_info, "electron_density"; kwargs...)
         variable = get_electron_z_derivative(n)
-    elseif variable_name == "electron_dupar_dz"
+    elseif variable_name == :electron_dupar_dz
         upar = get_variable(run_info, "electron_parallel_flow"; kwargs...)
         variable = get_electron_z_derivative(upar)
-    elseif variable_name == "electron_dp_dz"
+    elseif variable_name == :electron_dp_dz
         p = get_variable(run_info, "electron_pressure"; kwargs...)
         variable = get_electron_z_derivative(p)
-    elseif variable_name == "electron_dppar_dz"
+    elseif variable_name == :electron_dppar_dz
         ppar = get_variable(run_info, "electron_parallel_pressure"; kwargs...)
         variable = get_electron_z_derivative(ppar)
-    elseif variable_name == "electron_dvth_dz"
+    elseif variable_name == :electron_dvth_dz
         vth = get_variable(run_info, "electron_thermal_speed"; kwargs...)
         variable = get_electron_z_derivative(vth)
-    elseif variable_name == "electron_dT_dz"
+    elseif variable_name == :electron_dT_dz
         T = get_variable(run_info, "electron_temperature"; kwargs...)
         variable = get_electron_z_derivative(T)
-    elseif variable_name == "electron_dqpar_dz"
+    elseif variable_name == :electron_dqpar_dz
         qpar = get_variable(run_info, "electron_parallel_heat_flux"; kwargs...)
         variable = get_electron_z_derivative(qpar)
-    elseif variable_name == "neutral_ddens_dz"
+    elseif variable_name == :neutral_ddens_dz
         variable = get_z_derivative(run_info, "density_neutral"; kwargs...)
-    elseif variable_name == "neutral_ddens_dz_upwind"
+    elseif variable_name == :neutral_ddens_dz_upwind
         n = get_variable(run_info, "density_neutral"; kwargs...)
         uz = get_variable(run_info, "uz_neutral"; kwargs...)
         variable = get_upwind_z_derivative(n, uz)
-    elseif variable_name == "neutral_duz_dz"
+    elseif variable_name == :neutral_duz_dz
         variable = get_z_derivative(run_info, "uz_neutral"; kwargs...)
-    elseif variable_name == "neutral_duz_dz_upwind"
+    elseif variable_name == :neutral_duz_dz_upwind
         uz = get_variable(run_info, "uz_neutral"; kwargs...)
         variable = get_upwind_z_derivative(uz, uz)
-    elseif variable_name == "neutral_dp_dz"
+    elseif variable_name == :neutral_dp_dz
         variable = get_z_derivative(run_info, "p_neutral"; kwargs...)
-    elseif variable_name == "neutral_dp_dz_upwind"
+    elseif variable_name == :neutral_dp_dz_upwind
         p = get_variable(run_info, "p_neutral"; kwargs...)
         uz = get_variable(run_info, "uz_neutral"; kwargs...)
         variable = get_upwind_z_derivative(p, uz)
-    elseif variable_name == "neutral_dpz_dz"
+    elseif variable_name == :neutral_dpz_dz
         variable = get_z_derivative(run_info, "pz_neutral"; kwargs...)
-    elseif variable_name == "neutral_dvth_dz"
+    elseif variable_name == :neutral_dvth_dz
         variable = get_z_derivative(run_info, "thermal_speed_neutral"; kwargs...)
-    elseif variable_name == "neutral_dT_dz"
+    elseif variable_name == :neutral_dT_dz
         variable = get_z_derivative(run_info, "temperature_neutral"; kwargs...)
-    elseif variable_name == "neutral_dqz_dz"
+    elseif variable_name == :neutral_dqz_dz
         variable = get_z_derivative(run_info, "qz_neutral"; kwargs...)
-    elseif variable_name == "ddens_dt"
+    elseif variable_name == :ddens_dt
         all_moments = _get_all_moment_variables(run_info; kwargs...)
         variable = similar(all_moments.density)
         # Define function here to minimise effect type instability due to
@@ -4557,7 +4565,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
             end
         end
         get_ddens_dt!(variable, all_moments)
-    elseif variable_name == "dnupar_dt"
+    elseif variable_name == :dnupar_dt
         all_moments = _get_all_moment_variables(run_info; kwargs...)
         variable = similar(all_moments.parallel_flow)
         # Define function here to minimise effect type instability due to
@@ -4579,13 +4587,13 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
             end
         end
         get_dnupar_dt!(variable, all_moments)
-    elseif variable_name == "dupar_dt"
+    elseif variable_name == :dupar_dt
         dn_dt = get_variable(run_info, "ddens_dt"; kwargs...)
         dnupar_dt = get_variable(run_info, "dnupar_dt"; kwargs...)
         n = get_variable(run_info, "density"; kwargs...)
         upar = get_variable(run_info, "parallel_flow"; kwargs...)
         variable = @. dnupar_dt / n - upar / n * dn_dt
-    elseif variable_name == "dp_dt"
+    elseif variable_name == :dp_dt
         all_moments = _get_all_moment_variables(run_info; kwargs...)
         variable = similar(all_moments.pressure)
         # Define function here to minimise effect type instability due to
@@ -4606,14 +4614,14 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
             end
         end
         get_dp_dt!(variable, all_moments)
-    elseif variable_name == "dvth_dt"
+    elseif variable_name == :dvth_dt
         dn_dt = get_variable(run_info, "ddens_dt"; kwargs...)
         dp_dt = get_variable(run_info, "dp_dt"; kwargs...)
         n = get_variable(run_info, "density"; kwargs...)
         p = get_variable(run_info, "pressure"; kwargs...)
         vth = get_variable(run_info, "thermal_speed"; kwargs...)
         variable = @. 0.5 * vth * (dp_dt / p - dn_dt / n)
-    elseif variable_name == "electron_dp_dt"
+    elseif variable_name == :electron_dp_dt
         all_moments = _get_all_moment_variables(run_info; kwargs...)
         variable = similar(all_moments.electron_pressure)
         # Define function here to minimise effect type instability due to
@@ -4641,7 +4649,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
             end
         end
         get_electron_dp_dt!(variable, all_moments)
-    elseif variable_name == "electron_dvth_dt"
+    elseif variable_name == :electron_dvth_dt
         # Note that this block neglects any contribution of dn/dt to dvth/dt because the
         # operator splitting between implicit/explicit operators in the code means that
         # when dvth/dt is calculated for electrons, the (ion) density does not change in
@@ -4654,7 +4662,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         p = get_variable(run_info, "electron_pressure"; kwargs...)
         vth = get_variable(run_info, "electron_thermal_speed"; kwargs...)
         variable = @. 0.5 * vth * dp_dt / p
-    elseif variable_name == "neutral_ddens_dt"
+    elseif variable_name == :neutral_ddens_dt
         all_moments = _get_all_moment_variables(run_info; kwargs...)
         variable = similar(all_moments.density)
         # Define function here to minimise effect type instability due to
@@ -4676,7 +4684,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
             end
         end
         get_neutral_ddens_dt!(variable, all_moments)
-    elseif variable_name == "neutral_dnuz_dt"
+    elseif variable_name == :neutral_dnuz_dt
         all_moments = _get_all_moment_variables(run_info; kwargs...)
         variable = similar(all_moments.uz_neutral)
         # Define function here to minimise effect type instability due to
@@ -4698,13 +4706,13 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
             end
         end
         get_neutral_dnuz_dt!(variable, all_moments)
-    elseif variable_name == "neutral_duz_dt"
+    elseif variable_name == :neutral_duz_dt
         dn_dt = get_variable(run_info, "neutral_ddens_dt"; kwargs...)
         dnuz_dt = get_variable(run_info, "neutral_dnuz_dt"; kwargs...)
         n = get_variable(run_info, "density_neutral"; kwargs...)
         uz = get_variable(run_info, "uz_neutral"; kwargs...)
         variable = @. dnuz_dt / n - uz / n * dn_dt
-    elseif variable_name == "neutral_dp_dt"
+    elseif variable_name == :neutral_dp_dt
         all_moments = _get_all_moment_variables(run_info; kwargs...)
         variable = similar(all_moments.p_neutral)
         # Define function here to minimise effect type instability due to
@@ -4725,18 +4733,18 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
             end
         end
         get_neutral_duz_dt!(variable, all_moments)
-    elseif variable_name == "neutral_dvth_dt"
+    elseif variable_name == :neutral_dvth_dt
         dn_dt = get_variable(run_info, "neutral_ddens_dt"; kwargs...)
         dp_dt = get_variable(run_info, "neutral_dp_dt"; kwargs...)
         n = get_variable(run_info, "density_neutral"; kwargs...)
         p = get_variable(run_info, "p_neutral"; kwargs...)
         vth = get_variable(run_info, "thermal_speed_neutral"; kwargs...)
         variable = @. 0.5 * vth * (dp_dt / p - dn_dt / n)
-    elseif variable_name == "mfp"
+    elseif variable_name == :mfp
         vth = get_variable(run_info, "thermal_speed"; kwargs...)
         nu_ii = get_variable(run_info, "collision_frequency_ii"; kwargs...)
         variable = vth ./ nu_ii
-    elseif variable_name == "L_T"
+    elseif variable_name == :L_T
         dT_dz = get_variable(run_info, "dT_dz"; kwargs...)
         temp = get_variable(run_info, "temperature"; kwargs...)
         # We define gradient lengthscale of T as LT^-1 = dln(T)/dz (ignore negative sign
@@ -4745,7 +4753,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         # flat points in temperature have diverging LT, so ignore those with NaN
         # using a hard coded 10.0 tolerance for now
         variable[variable .> 10.0] .= NaN
-    elseif variable_name == "L_n"
+    elseif variable_name == :L_n
         ddens_dz = get_variable(run_info, "ddens_dz"; kwargs...)
         n = get_variable(run_info, "density"; kwargs...)
         # We define gradient lengthscale of n as Ln^-1 = dln(n)/dz (ignore negative sign
@@ -4754,7 +4762,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         # flat points in temperature have diverging Ln, so ignore those with NaN
         # using a hard coded 10.0 tolerance for now
         variable[variable .> 10.0] .= NaN
-    elseif variable_name == "L_upar"
+    elseif variable_name == :L_upar
         dupar_dz = get_variable(run_info, "dupar_dz"; kwargs...)
         upar = get_variable(run_info, "parallel_flow"; kwargs...)
         # We define gradient lengthscale of upar as Lupar^-1 = dln(upar)/dz (ignore negative sign
@@ -4763,31 +4771,31 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         # flat points in temperature have diverging Lupar, so ignore those with NaN
         # using a hard coded 10.0 tolerance for now
         variable[variable .> 10.0] .= NaN
-    elseif variable_name == "coll_krook_heat_flux"
+    elseif variable_name == :coll_krook_heat_flux
         n = get_variable(run_info, "density"; kwargs...)
         vth = get_variable(run_info, "thermal_speed"; kwargs...)
         dT_dz = get_variable(run_info, "dT_dz"; kwargs...)
         nu_ii = get_variable(run_info, "collision_frequency_ii"; kwargs...)
         variable = @. -(1/2) * 3/2 * n * vth^2 * dT_dz / nu_ii
-    elseif variable_name == "collision_frequency_ii"
+    elseif variable_name == :collision_frequency_ii
         n = get_variable(run_info, "density"; kwargs...)
         vth = get_variable(run_info, "thermal_speed"; kwargs...)
         variable = get_collision_frequency_ii(run_info.collisions, n, vth)
-    elseif variable_name == "collision_frequency_ee"
+    elseif variable_name == :collision_frequency_ee
         n = get_variable(run_info, "electron_density"; kwargs...)
         vth = get_variable(run_info, "electron_thermal_speed"; kwargs...)
         variable = get_collision_frequency_ee(run_info.collisions, n, vth)
-    elseif variable_name == "collision_frequency_ei"
+    elseif variable_name == :collision_frequency_ei
         n = get_variable(run_info, "electron_density"; kwargs...)
         vth = get_variable(run_info, "electron_thermal_speed"; kwargs...)
         variable = get_collision_frequency_ei(run_info.collisions, n, vth)
-    elseif variable_name == "electron_temperature"
+    elseif variable_name == :electron_temperature
         vth = get_variable(run_info, "electron_thermal_speed"; kwargs...)
         variable = 0.5 * run_info.composition.me_over_mi .* vth.^2
-    elseif variable_name == "temperature_neutral"
+    elseif variable_name == :temperature_neutral
         vth = get_variable(run_info, "thermal_speed_neutral"; kwargs...)
         variable = 0.5 * vth.^2
-    elseif variable_name == "sound_speed"
+    elseif variable_name == :sound_speed
         T_e = run_info.composition.T_e
         T_i = get_variable(run_info, "temperature"; kwargs...)
 
@@ -4796,17 +4804,17 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         gamma = 3.0
 
         variable = @. sqrt((T_e + gamma*T_i))
-    elseif variable_name == "mach_number"
+    elseif variable_name == :mach_number
         upar = get_variable(run_info, "parallel_flow"; kwargs...)
         cs = get_variable(run_info, "sound_speed"; kwargs...)
         variable = upar ./ cs
-    elseif variable_name == "total_energy"
+    elseif variable_name == :total_energy
         p = get_variable(run_info, "pressure"; kwargs...)
         upar = get_variable(run_info, "parallel_flow"; kwargs...)
         n = get_variable(run_info, "density"; kwargs...)
 
         variable = @. 1.5 * p + 0.5*n*upar^2
-    elseif variable_name == "total_energy_neutral"
+    elseif variable_name == :total_energy_neutral
         p = get_variable(run_info, "p_neutral"; kwargs...)
         upar = get_variable(run_info, "uz_neutral"; kwargs...)
         n = get_variable(run_info, "density_neutral"; kwargs...)
@@ -4814,7 +4822,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         # Factor of 3/2 in front of 1/2*n*vth^2*upar because this in 1V - would be 5/2
         # for 2V/3V cases.
         variable = @. 1.5 * p + 0.5*n*upar^2
-    elseif variable_name == "total_energy_flux"
+    elseif variable_name == :total_energy_flux
         if run_info.vperp.n > 1
             qpar = get_variable(run_info, "parallel_heat_flux"; kwargs...)
             vth = get_variable(run_info, "thermal_speed"; kwargs...)
@@ -4832,7 +4840,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
             # for 2V/3V cases.
             variable = @. qpar + 0.75*n*vth^2*upar + 0.5*n*upar^3
         end
-    elseif variable_name == "total_energy_flux_neutral"
+    elseif variable_name == :total_energy_flux_neutral
         if run_info.vzeta.n > 1 || run_info.vr.n > 1
             qpar = get_variable(run_info, "qz_neutral"; kwargs...)
             vth = get_variable(run_info, "thermal_speed_neutral"; kwargs...)
@@ -4850,7 +4858,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
             # for 2V/3V cases.
             variable = @. qpar + 0.75*n*vth^2*upar + 0.5*n*upar^3
         end
-    elseif variable_name == "z_advect_speed"
+    elseif variable_name == :z_advect_speed
         # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
         # to get_variable() in this case. Instead select a slice of the result.
         upar = get_variable(run_info, "parallel_flow")
@@ -4913,7 +4921,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
                 variable = selectdim(variable, 1, kwargs[:iz])
             end
         end
-    elseif variable_name == "vpa_advect_speed"
+    elseif variable_name == :vpa_advect_speed
         density = get_variable(run_info, "density"; kwargs...)
         upar = get_variable(run_info, "parallel_flow"; kwargs...)
         p = get_variable(run_info, "pressure"; kwargs...)
@@ -5021,7 +5029,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
 
         variable = speed
         variable = select_slice_of_variable(variable; kwargs...)
-     elseif variable_name == "electron_z_advect_speed"
+     elseif variable_name == :electron_z_advect_speed
         # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
         # to get_variable() in this case. Instead select a slice of the result.
         upar = get_variable(run_info, "electron_parallel_flow")
@@ -5077,7 +5085,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
                 variable = selectdim(variable, 1, kwargs[:iz])
             end
         end
-    elseif variable_name == "electron_vpa_advect_speed"
+    elseif variable_name == :electron_vpa_advect_speed
         # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
         # to get_variable() in this case. Instead select a slice of the result.
         density = get_variable(run_info, "electron_density"; kwargs...)
@@ -5142,7 +5150,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
 
         variable = speed
         variable = select_slice_of_variable(variable; kwargs...)
-    elseif variable_name == "neutral_z_advect_speed"
+    elseif variable_name == :neutral_z_advect_speed
         # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
         # to get_variable() in this case. Instead select a slice of the result.
         uz = get_variable(run_info, "parallel_flow")
@@ -5201,7 +5209,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
                 variable = selectdim(variable, 1, kwargs[:iz])
             end
         end
-    elseif variable_name == "neutral_vz_advect_speed"
+    elseif variable_name == :neutral_vz_advect_speed
         # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
         # to get_variable() in this case. Instead select a slice of the result.
         Ez = get_variable(run_info, "Ez"; kwargs...)
@@ -5293,15 +5301,15 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
 
         variable = speed
         variable = select_slice_of_variable(variable; kwargs...)
-    elseif variable_name == "steps_per_output"
+    elseif variable_name == :steps_per_output
         variable = get_per_step_from_cumulative_variable(run_info, "step_counter"; kwargs...)
-    elseif variable_name == "failures_per_output"
+    elseif variable_name == :failures_per_output
         variable = get_per_step_from_cumulative_variable(run_info, "failure_counter"; kwargs...)
-    elseif variable_name == "failure_caused_by_per_output"
+    elseif variable_name == :failure_caused_by_per_output
         variable = get_per_step_from_cumulative_variable(run_info, "failure_caused_by"; kwargs...)
-    elseif variable_name == "limit_caused_by_per_output"
+    elseif variable_name == :limit_caused_by_per_output
         variable = get_per_step_from_cumulative_variable(run_info, "limit_caused_by"; kwargs...)
-    elseif variable_name == "average_successful_dt"
+    elseif variable_name == :average_successful_dt
         steps_per_output = get_variable(run_info, "steps_per_output"; kwargs...)
         failures_per_output = get_variable(run_info, "failures_per_output"; kwargs...)
         successful_steps_per_output = steps_per_output - failures_per_output
@@ -5321,19 +5329,19 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
             # Don't want a meaningless Inf...
             variable[1] = 0.0
         end
-    elseif variable_name == "electron_steps_per_ion_step"
+    elseif variable_name == :electron_steps_per_ion_step
         electron_steps_per_output = get_variable(run_info, "electron_steps_per_output"; kwargs...)
         ion_steps_per_output = get_variable(run_info, "steps_per_output"; kwargs...)
         variable = electron_steps_per_output ./ ion_steps_per_output
-    elseif variable_name == "electron_steps_per_output"
+    elseif variable_name == :electron_steps_per_output
         variable = get_per_step_from_cumulative_variable(run_info, "electron_step_counter"; kwargs...)
-    elseif variable_name == "electron_failures_per_output"
+    elseif variable_name == :electron_failures_per_output
         variable = get_per_step_from_cumulative_variable(run_info, "electron_failure_counter"; kwargs...)
-    elseif variable_name == "electron_failure_caused_by_per_output"
+    elseif variable_name == :electron_failure_caused_by_per_output
         variable = get_per_step_from_cumulative_variable(run_info, "electron_failure_caused_by"; kwargs...)
-    elseif variable_name == "electron_limit_caused_by_per_output"
+    elseif variable_name == :electron_limit_caused_by_per_output
         variable = get_per_step_from_cumulative_variable(run_info, "electron_limit_caused_by"; kwargs...)
-    elseif variable_name == "electron_average_successful_dt"
+    elseif variable_name == :electron_average_successful_dt
         electron_steps_per_output = get_variable(run_info, "electron_steps_per_output"; kwargs...)
         electron_failures_per_output = get_variable(run_info, "electron_failures_per_output"; kwargs...)
         electron_successful_steps_per_output = electron_steps_per_output - electron_failures_per_output
@@ -5354,7 +5362,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
             # Don't want a meaningless Inf...
             variable[1] = 0.0
         end
-    elseif variable_name == "CFL_ion_z"
+    elseif variable_name == :CFL_ion_z
         # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
         # to get_variable() in this case. Instead select a slice of the result.
         speed = get_variable(run_info, "z_advect_speed";
@@ -5370,7 +5378,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
             variable[ivpa,ivperp,iz,ir,is,it] = CFL[iz,ivpa,ivperp,ir,is,it]
         end
         variable = select_slice_of_variable(variable; kwargs...)
-    elseif variable_name == "CFL_ion_vpa"
+    elseif variable_name == :CFL_ion_vpa
         # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
         # to get_variable() in this case. Instead select a slice of the result.
         speed = get_variable(run_info, "vpa_advect_speed")
@@ -5382,7 +5390,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
 
         variable = CFL
         variable = select_slice_of_variable(variable; kwargs...)
-    elseif variable_name == "CFL_electron_z"
+    elseif variable_name == :CFL_electron_z
         # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
         # to get_variable() in this case. Instead select a slice of the result.
         speed = get_variable(run_info, "electron_z_advect_speed";
@@ -5398,7 +5406,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
             variable[ivpa,ivperp,iz,ir,it] = CFL[iz,ivpa,ivperp,ir,it]
         end
         variable = select_slice_of_variable(variable; kwargs...)
-    elseif variable_name == "CFL_electron_vpa"
+    elseif variable_name == :CFL_electron_vpa
         # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
         # to get_variable() in this case. Instead select a slice of the result.
         speed = get_variable(run_info, "electron_vpa_advect_speed")
@@ -5410,7 +5418,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
 
         variable = CFL
         variable = select_slice_of_variable(variable; kwargs...)
-    elseif variable_name == "CFL_neutral_z"
+    elseif variable_name == :CFL_neutral_z
         # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
         # to get_variable() in this case. Instead select a slice of the result.
         speed = get_variable(run_info, "neutral_z_advect_speed";
@@ -5426,7 +5434,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
             variable[ivz,ivr,ivzeta,iz,ir,is,it] = CFL[iz,ivz,ivr,ivzeta,ir,is,it]
         end
         variable = select_slice_of_variable(variable; kwargs...)
-    elseif variable_name == "CFL_neutral_vz"
+    elseif variable_name == :CFL_neutral_vz
         # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
         # to get_variable() in this case. Instead select a slice of the result.
         speed = get_variable(run_info, "neutral_vz_advect_speed")
@@ -5438,7 +5446,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
 
         variable = CFL
         variable = select_slice_of_variable(variable; kwargs...)
-    elseif variable_name == "minimum_CFL_ion_z"
+    elseif variable_name == :minimum_CFL_ion_z
         # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
         # to get_variable() in this case. Instead select a slice of the result.
         speed = get_variable(run_info, "z_advect_speed";
@@ -5455,7 +5463,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
             variable[it] = min_CFL
         end
         variable = select_slice_of_variable(variable; kwargs...)
-    elseif variable_name == "minimum_CFL_ion_vpa"
+    elseif variable_name == :minimum_CFL_ion_vpa
         # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
         # to get_variable() in this case. Instead select a slice of the result.
         speed = get_variable(run_info, "vpa_advect_speed")
@@ -5471,7 +5479,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
             variable[it] = min_CFL
         end
         variable = select_slice_of_variable(variable; kwargs...)
-    elseif variable_name == "minimum_CFL_electron_z"
+    elseif variable_name == :minimum_CFL_electron_z
         # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
         # to get_variable() in this case. Instead select a slice of the result.
         speed = get_variable(run_info, "electron_z_advect_speed";
@@ -5484,7 +5492,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
             variable[it] = min_CFL
         end
         variable = select_slice_of_variable(variable; kwargs...)
-    elseif variable_name == "minimum_CFL_electron_vpa"
+    elseif variable_name == :minimum_CFL_electron_vpa
         # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
         # to get_variable() in this case. Instead select a slice of the result.
         speed = get_variable(run_info, "electron_vpa_advect_speed")
@@ -5496,7 +5504,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
             variable[it] = min_CFL
         end
         variable = select_slice_of_variable(variable; kwargs...)
-    elseif variable_name == "minimum_CFL_neutral_z"
+    elseif variable_name == :minimum_CFL_neutral_z
         # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
         # to get_variable() in this case. Instead select a slice of the result.
         speed = get_variable(run_info, "neutral_z_advect_speed";
@@ -5513,7 +5521,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
             variable[it] = min_CFL
         end
         variable = select_slice_of_variable(variable; kwargs...)
-    elseif variable_name == "minimum_CFL_neutral_vz"
+    elseif variable_name == :minimum_CFL_neutral_vz
         # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
         # to get_variable() in this case. Instead select a slice of the result.
         speed = get_variable(run_info, "neutral_vz_advect_speed")
@@ -5529,13 +5537,13 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
             variable[it] = min_CFL
         end
         variable = select_slice_of_variable(variable; kwargs...)
-    elseif occursin("_timestep_error", variable_name)
-        prefix = split(variable_name, "_timestep_error")[1]
+    elseif occursin("_timestep_error", String(variable_name))
+        prefix = split(String(variable_name), "_timestep_error")[1]
         full_order = get_variable(run_info, prefix; kwargs...)
         low_order = get_variable(run_info, prefix * "_loworder"; kwargs...)
         variable = low_order .- full_order
-    elseif occursin("_timestep_residual", variable_name)
-        prefix = split(variable_name, "_timestep_residual")[1]
+    elseif occursin("_timestep_residual", String(variable_name))
+        prefix = split(String(variable_name), "_timestep_residual")[1]
         full_order = get_variable(run_info, prefix; kwargs...)
         low_order = get_variable(run_info, prefix * "_loworder"; kwargs...)
         if prefix == "pdf_electron"
@@ -5546,8 +5554,8 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
             atol = run_info.input["timestepping"]["atol"]
         end
         variable = @. (low_order - full_order) / (rtol * abs(full_order) + atol)
-    elseif occursin("_steady_state_residual", variable_name)
-        prefix = split(variable_name, "_steady_state_residual")[1]
+    elseif occursin("_steady_state_residual", String(variable_name))
+        prefix = split(String(variable_name), "_steady_state_residual")[1]
         end_step = get_variable(run_info, prefix; kwargs...)
         begin_step = get_variable(run_info, prefix * "_start_last_timestep"; kwargs...)
         if prefix == "f_electron"
@@ -5562,36 +5570,36 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
             end
         end
         variable = (end_step .- begin_step) ./ dt
-    elseif occursin("_nonlinear_iterations_per_solve", variable_name)
-        prefix = split(variable_name, "_nonlinear_iterations_per_solve")[1]
+    elseif occursin("_nonlinear_iterations_per_solve", String(variable_name))
+        prefix = split(String(variable_name), "_nonlinear_iterations_per_solve")[1]
         nl_nsolves = get_per_step_from_cumulative_variable(
             run_info, "$(prefix)_n_solves"; kwargs...)
         nl_iterations = get_per_step_from_cumulative_variable(
             run_info, "$(prefix)_nonlinear_iterations"; kwargs...)
         variable = nl_iterations ./ nl_nsolves
-    elseif occursin("_linear_iterations_per_nonlinear_iteration", variable_name)
-        prefix = split(variable_name, "_linear_iterations_per_nonlinear_iteration")[1]
+    elseif occursin("_linear_iterations_per_nonlinear_iteration", String(variable_name))
+        prefix = split(String(variable_name), "_linear_iterations_per_nonlinear_iteration")[1]
         nl_iterations = get_per_step_from_cumulative_variable(
             run_info, "$(prefix)_nonlinear_iterations"; kwargs...)
         nl_linear_iterations = get_per_step_from_cumulative_variable(
             run_info, "$(prefix)_linear_iterations"; kwargs...)
         variable = nl_linear_iterations ./ nl_iterations
-    elseif occursin("_precon_iterations_per_linear_iteration", variable_name)
-        prefix = split(variable_name, "_precon_iterations_per_linear_iteration")[1]
+    elseif occursin("_precon_iterations_per_linear_iteration", String(variable_name))
+        prefix = split(String(variable_name), "_precon_iterations_per_linear_iteration")[1]
         nl_linear_iterations = get_per_step_from_cumulative_variable(
             run_info, "$(prefix)_linear_iterations"; kwargs...)
         nl_precon_iterations = get_per_step_from_cumulative_variable(
             run_info, "$(prefix)_precon_iterations"; kwargs...)
         variable = nl_precon_iterations ./ nl_linear_iterations
-    elseif endswith(variable_name, "_per_step") && variable_name ∉ run_info.variable_names
+    elseif endswith(String(variable_name), "_per_step") && String(variable_name) ∉ run_info.variable_names
         # If "_per_step" is appended to a variable name, assume it is a cumulative
         # variable, and get the per-step version.
         variable =
             get_per_step_from_cumulative_variable(run_info,
-                                                  split(variable_name, "_per_step")[1];
+                                                  split(String(variable_name), "_per_step")[1];
                                                   kwargs...)
     else
-        variable = postproc_load_variable(run_info, variable_name; kwargs...)
+        variable = postproc_load_variable(run_info, String(variable_name); kwargs...)
     end
 
     return variable
