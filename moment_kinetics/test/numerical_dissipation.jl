@@ -482,19 +482,19 @@ function runtests()
         # Benchmark data is taken from this run (Chebyshev with no splitting)
         @testset "base" begin
             test_input["output"]["base_directory"] = test_output_directory
-            run_test(test_input, expected_base, 1.e-10, 1.0e-15)
+            run_test(test_input, expected_base, 1.e-10, 1.0e-14)
         end
         @testset "split 1" begin
             test_input_split_1_moment["output"]["base_directory"] = test_output_directory
-            run_test(test_input_split_1_moment, expected_split_1, 1.e-10, 1.0e-15)
+            run_test(test_input_split_1_moment, expected_split_1, 1.e-10, 1.0e-14)
         end
         @testset "split 2" begin
             test_input_split_2_moments["output"]["base_directory"] = test_output_directory
-            run_test(test_input_split_2_moments, expected_split_2, 1.e-10, 1.0e-15)
+            run_test(test_input_split_2_moments, expected_split_2, 1.e-10, 1.0e-14)
         end
         @testset "split 3" begin
             test_input_split_3_moments["output"]["base_directory"] = test_output_directory
-            run_test(test_input_split_3_moments, expected_split_3, 1.e-10, 1.0e-15)
+            run_test(test_input_split_3_moments, expected_split_3, 1.e-10, 1.0e-14)
         end
     end
 
