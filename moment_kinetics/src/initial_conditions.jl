@@ -2184,12 +2184,12 @@ function convert_full_f_ion_to_normalised!(f, density, upar, p, vth, vperp, vpa,
             @loop_vperp ivperp begin
                 @views vpa.scratch2 .= f[:,ivperp,iz] # Copy to use as input to interpolation
                 @views interpolate_to_grid_1d!(f[:,ivperp,iz], vpa.scratch, vpa.scratch2,
-                                               vpa, vpa_spectral, Val(0), evolve_p ? 1.0/3.0 : 1.0/2.0)
+                                               vpa, vpa_spectral)
             end
             @loop_vpa ivpa begin
                 @views vperp.scratch2 .= f[ivpa,:,iz] # Copy to use as input to interpolation
                 @views interpolate_to_grid_1d!(f[ivpa,:,iz], vperp.scratch,
-                                               vperp.scratch2, vperp, vperp_spectral, Val(0), evolve_p ? 1.0/3.0 : 1.0/2.0)
+                                               vperp.scratch2, vperp, vperp_spectral)
             end
         end
     end
@@ -2281,17 +2281,17 @@ function convert_full_f_neutral_to_normalised!(f, density, uz, p, vth, vzeta, vr
             @loop_vzeta_vr ivzeta ivr begin
                 @views vz.scratch2 .= f[:,ivr,ivzeta,iz] # Copy to use as input to interpolation
                 @views interpolate_to_grid_1d!(f[:,ivr,ivzeta,iz], vz.scratch,
-                                               vz.scratch2, vz, vz_spectral, Val(0), evolve_p ? 1.0/3.0 : 1.0/2.0)
+                                               vz.scratch2, vz, vz_spectral)
             end
             @loop_vr_vz ivr ivz begin
                 @views vzeta.scratch2 .= f[ivz,ivr,:,iz] # Copy to use as input to interpolation
                 @views interpolate_to_grid_1d!(f[ivz,ivr,:,iz], vzeta.scratch,
-                                               vzeta.scratch2, vzeta, vzeta_spectral, Val(0), evolve_p ? 1.0/3.0 : 1.0/2.0)
+                                               vzeta.scratch2, vzeta, vzeta_spectral)
             end
             @loop_vzeta_vz ivzeta ivz begin
                 @views vr.scratch2 .= f[ivz,:,ivzeta,iz] # Copy to use as input to interpolation
                 @views interpolate_to_grid_1d!(f[ivz,:,ivzeta,iz], vr.scratch,
-                                               vr.scratch2, vr, vr_spectral, Val(0), evolve_p ? 1.0/3.0 : 1.0/2.0)
+                                               vr.scratch2, vr, vr_spectral)
             end
         end
     end

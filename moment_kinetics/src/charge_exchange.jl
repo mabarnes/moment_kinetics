@@ -43,7 +43,7 @@ between ions and neutrals
             @loop_r_z ir iz begin
                 @views interpolate_to_grid_vpa!(vpa.scratch, vpa.grid,
                                                 fvec_in.pdf_neutral[:,1,1,iz,ir,isn], vz,
-                                                vz_spectral, Val(0), 1.0/2.0)
+                                                vz_spectral)
                 @loop_vpa ivpa begin
                     f_out[ivpa,1,iz,ir,is] +=
                         dt*charge_exchange_frequency*(
@@ -87,8 +87,7 @@ between ions and neutrals
             @loop_r_z ir iz begin
                 @views interpolate_to_grid_vpa!(vz.scratch, vz.grid,
                                                 fvec_in.pdf[:,1,iz,ir,isn], vpa,
-                                                vpa_spectral, Val(0), moments.evolve_p ?
-                                                1.0/3.0 : 1.0/2.0)
+                                                vpa_spectral)
                 @loop_vz ivz begin
                     f_neutral_out[ivz,1,1,iz,ir,isn] +=
                         dt*charge_exchange_frequency*(
@@ -151,9 +150,7 @@ function charge_exchange_collisions_single_species!(f_out, pdf_in, pdf_other,
             new_grid = vpa.grid
         end
         # interpolate to new_grid and return interpolated values in vpa.scratch2
-        @views interpolate_to_grid_vpa!(vpa.scratch2, new_grid, pdf_other[:,iz,ir],
-                                        vpa_other, spectral_other, Val(0),
-                                        moments.evolve_p ? 1.0/3.0 : 1.0/2.0)
+        @views interpolate_to_grid_vpa!(vpa.scratch2, new_grid, pdf_other[:,iz,ir], vpa_other, spectral_other)
 
         if neutrals
             @loop_vz ivz begin
