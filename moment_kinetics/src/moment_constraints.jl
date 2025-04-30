@@ -377,9 +377,8 @@ timesteps that do not guarantee accurate time evolution.
             f_out[ivpa,ivperp,iz] +=
                 dt * constraint_forcing_rate *
                 ((1.0 - zeroth_moment)
-                 - first_moment*vpa_grid[ivpa] / 3
-                 + (1.5 - second_moment)*vpa_grid[ivpa]^2 / 9
-                ) * f_in[ivpa,ivperp,iz]
+                 - first_moment*vpa_grid[ivpa]
+                 + (1.5 - second_moment)*vpa_grid[ivpa]^2) * f_in[ivpa,ivperp,iz]
         end
     end
 
@@ -421,8 +420,8 @@ function add_electron_implicit_constraint_forcing_to_Jacobian!(
         if include === :all
             jacobian_matrix[row,row] += -dt * constraint_forcing_rate *
                                               ((1.0 - zeroth_moment[iz])
-                                               - first_moment[iz]*vpa_grid[ivpa] / 3
-                                               + (1.5 - second_moment[iz])*vpa_grid[ivpa]^2 / 9)
+                                               - first_moment[iz]*vpa_grid[ivpa]
+                                               + (1.5 - second_moment[iz])*vpa_grid[ivpa]^2)
         end
 
         if include ∈ (:all, :explicit_v)
@@ -432,8 +431,8 @@ function add_electron_implicit_constraint_forcing_to_Jacobian!(
                 col = (iz - 1) * v_size + (icolvperp - 1) * vpa.n + icolvpa + f_offset
                 jacobian_matrix[row,col] += dt * constraint_forcing_rate *
                                                  (1.0
-                                                  + vpa_grid[icolvpa]*vpa_grid[ivpa] / 3
-                                                  + vpa_grid[icolvpa]^2*vpa_grid[ivpa]^2 / 9) *
+                                                  + vpa_grid[icolvpa]*vpa_grid[ivpa]
+                                                  + vpa_grid[icolvpa]^2*vpa_grid[ivpa]^2) *
                                                  vpa_wgts[icolvpa] * f[ivpa,ivperp,iz]
             end
         end
@@ -463,8 +462,8 @@ function add_electron_implicit_constraint_forcing_to_z_only_Jacobian!(
         # Diagonal terms
         jacobian_matrix[row,row] += -dt * constraint_forcing_rate *
                                           ((1.0 - zeroth_moment[iz])
-                                           - first_moment[iz]*vpa_grid[ivpa] / 3
-                                           + (1.5 - second_moment[iz])*vpa_grid[ivpa]^2 / 9)
+                                           - first_moment[iz]*vpa_grid[ivpa]
+                                           + (1.5 - second_moment[iz])*vpa_grid[ivpa]^2)
     end
 
     return nothing
@@ -492,8 +491,8 @@ function add_electron_implicit_constraint_forcing_to_v_only_Jacobian!(
         # Diagonal terms
         jacobian_matrix[row,row] += -dt * constraint_forcing_rate *
                                           ((1.0 - zeroth_moment)
-                                           - first_moment*vpa_grid[ivpa] / 3
-                                           + (1.5 - second_moment)*vpa_grid[ivpa]^2 / 9)
+                                           - first_moment*vpa_grid[ivpa]
+                                           + (1.5 - second_moment)*vpa_grid[ivpa]^2)
 
         # Integral terms
         # d(∫dw_∥ w_∥^n g[irow])/d(g[icol]) = vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^n
@@ -501,8 +500,8 @@ function add_electron_implicit_constraint_forcing_to_v_only_Jacobian!(
             col = (icolvperp - 1) * vpa.n + icolvpa
             jacobian_matrix[row,col] += dt * constraint_forcing_rate *
                                              (1.0
-                                              + vpa_grid[icolvpa]*vpa_grid[ivpa] / 3
-                                              + vpa_grid[icolvpa]^2*vpa_grid[ivpa]^2 / 9) *
+                                              + vpa_grid[icolvpa]*vpa_grid[ivpa]
+                                              + vpa_grid[icolvpa]^2*vpa_grid[ivpa]^2) *
                                              vpa_wgts[icolvpa] * f[ivpa,ivperp]
         end
     end
