@@ -2053,7 +2053,7 @@ function  time_advance!(pdf, scratch, scratch_implicit, scratch_electron, t_para
                             print("midpoint density: ", 
                             rpad(string(round(moments.ion.dens[midpoint,1,1], sigdigits = 4)), 7))
                             print("   midpoint temperature: ", 
-                            rpad(string(round(moments.ion.p[midpoint,1,1]*2/(
+                            rpad(string(round(moments.ion.p[midpoint,1,1]/(
                             moments.ion.dens[midpoint,1,1]), sigdigits = 4)), 7), "\n")
                         end
                         if t_params.adaptive
