@@ -1162,7 +1162,7 @@ end
 Construction function to provide the appropriate elemental 
 matrix `Q` to the global matrix assembly functions.
 """
-function get_QQ_local!(QQ::Array{mk_float,2},ielement,
+function get_QQ_local!(QQ::AbstractArray{mk_float,2},ielement,
         lobatto::gausslegendre_base_info,
         radau::gausslegendre_base_info, 
         coord,option)

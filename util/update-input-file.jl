@@ -203,6 +203,8 @@ const sections_update_map = Dict(
                                                             "adi" => Dict("timestepping" => Dict("kinetic_electron_solver" => "implicit_ppar_implicit_pseudotimestep", "kinetic_electron_preconditioner" => "adi"),),
                                                             "static_condensation" => Dict("timestepping" => Dict("kinetic_electron_solver" => "implicit_ppar_implicit_pseudotimestep", "kinetic_electron_preconditioner" => "static_condensation"),),
                                                               ),
+                           "implicit_ion_advance" => Dict(true => Dict("timestepping" => Dict("kinetic_ion_solver" => "full_implicit_ion_advance"))),
+                           "implicit_vpa_advection" => Dict(true => Dict("timestepping" => Dict("kinetic_ion_solver" => "implicit_ion_vpa_advection"))),
                           ),
    )
 

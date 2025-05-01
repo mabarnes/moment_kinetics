@@ -95,8 +95,7 @@ initial_density = 1.0
 [timestepping]
 type = "KennedyCarpenterARK324"
 kinetic_electron_solver = "implicit_ppar_implicit_pseudotimestep"
-implicit_ion_advance = false
-implicit_vpa_advection = false
+kinetic_ion_solver = "full_explicit_ion_advance"
 nstep = 1000000
 dt = 1.0e-5
 maximum_dt = 1.0e-5

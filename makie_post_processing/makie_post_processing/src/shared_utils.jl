@@ -62,7 +62,7 @@ function calculate_and_write_frequencies(run_name, ntime, time, z, itime_min, it
 end
 
 function get_geometry(scan_input,z,r)
-    geo_in = setup_geometry_input(scan_input)
+    geo_in = setup_geometry_input(scan_input, true)
     geometry = init_magnetic_geometry(geo_in,z,r)
     return geometry
 end

@@ -96,8 +96,7 @@ initial_density = 1.0
 [timestepping]
 type = "PareschiRusso2(2,2,2)"
 kinetic_electron_solver = "implicit_ppar_implicit_pseudotimestep"
-implicit_ion_advance = false
-implicit_vpa_advection = false
+kinetic_ion_solver = "full_explicit_ion_advance"
 nstep = 500000
 dt = 2.0e-4
 #nwrite = 50
