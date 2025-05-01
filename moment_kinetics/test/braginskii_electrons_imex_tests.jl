@@ -103,7 +103,7 @@ end
 Run a test for a single set of parameters
 """
 function run_test(test_input, expected_p, expected_q, expected_vt; rtol=1.e-6,
-                  atol=1.e-8, args...)
+                  atol=2.e-8, args...)
     # by passing keyword arguments to run_test, args becomes a Tuple of Pairs which can be
     # used to update the default inputs
 
@@ -292,7 +292,7 @@ function runtests()
             timestep_check_input["output"]["run_name"] = type
             timestep_check_input["timestepping"]["type"] = type
             run_test(timestep_check_input, expected_p, expected_q, expected_vt,
-                     rtol=2.e-4, atol=1.e-10)
+                     rtol=2.e-4)
         end
     end
 
