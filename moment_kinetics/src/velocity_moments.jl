@@ -733,25 +733,25 @@ function update_p_species!(p, density, upar, ff, vpa, vperp, z, r, evolve_densit
         # <(v_∥ - upar_s) / cref> and so we set upar = 0 in the call to get_p
         # because the mean flow of the shape function is zero
         @loop_r_z ir iz begin
-            p[iz,ir] = 1.0 / 3.0 * density[iz,ir] * get_v2_moment(@view(ff[:,:,iz,ir]), vpa, vperp, 0.0)
+            p[iz,ir] = 1.0 / 3.0 * density[iz,ir] * get_moment_for_pressure(@view(ff[:,:,iz,ir]), vpa, vperp, 0.0)
         end
     elseif evolve_density
         # corresponds to case where only the density is evolved separately from the
         # normalised distribution function; the vpa coordinate is v_∥ / cref.
         @loop_r_z ir iz begin
-            p[iz,ir] = 1.0 / 3.0 * density[iz,ir] * get_v2_moment(@view(ff[:,:,iz,ir]), vpa, vperp, upar[iz,ir])
+            p[iz,ir] = 1.0 / 3.0 * density[iz,ir] * get_moment_for_pressure(@view(ff[:,:,iz,ir]), vpa, vperp, upar[iz,ir])
         end
     else
         # When evolve_density = false, the evolved pdf is the 'true' pdf,
         # and the vpa coordinate is v_∥ / cref.
         @loop_r_z ir iz begin
-            p[iz,ir] = 1.0 / 3.0 * get_v2_moment(@view(ff[:,:,iz,ir]), vpa, vperp, upar[iz,ir])
+            p[iz,ir] = 1.0 / 3.0 * get_moment_for_pressure(@view(ff[:,:,iz,ir]), vpa, vperp, upar[iz,ir])
         end
     end
     return nothing
 end
 
-function get_v2_moment(ff, vpa, vperp, upar)
+function get_moment_for_pressure(ff, vpa, vperp, upar)
     # Integrating calculates
     # ∫d^3v (((vpa-upar))^2 + vperp^2) * ff
     return integral((vperp,vpa)->((vpa - upar)^2 + vperp^2), ff, vperp, vpa)
@@ -763,13 +763,13 @@ function get_p(ff, density, upar, vpa, vperp, evolve_density, evolve_upar)
     # the internal energy density (aka pressure of f_s)
 
     if evolve_upar
-        return 1.0 / 3.0 * density * get_v2_moment(ff, vpa, vperp, 0.0)
+        return 1.0 / 3.0 * density * get_moment_for_pressure(ff, vpa, vperp, 0.0)
     elseif evolve_density
         # corresponds to case where only the density is evolved separately from the
         # normalised distribution function; the vpa coordinate is v_∥ / cref.
-        return 1.0 / 3.0 * density * get_v2_moment(ff, vpa, vperp, upar)
+        return 1.0 / 3.0 * density * get_moment_for_pressure(ff, vpa, vperp, upar)
     else
-        return 1.0 / 3.0 * get_v2_moment(ff, vpa, vperp, upar)
+        return 1.0 / 3.0 * get_moment_for_pressure(ff, vpa, vperp, upar)
     end
 end
 
@@ -807,7 +807,7 @@ function update_ppar_species!(ppar, density, upar, p, ff, vpa, vperp, z, r,
         # this is the case where the pressure, parallel flow and density are evolved
         # separately from the shape function; the vpa coordinate
         # is <(v_∥ - upar_s) / vth_s> and so we set upar = 0 in the call to
-        # get_vpa2_moment because the mean flow of the shape function is zero
+        # get_moment_for_ppar because the mean flow of the shape function is zero
         if vperp.n == 1
             @loop_r_z ir iz begin
                 ppar[iz,ir] = 3.0 * p[iz,ir]
@@ -815,34 +815,34 @@ function update_ppar_species!(ppar, density, upar, p, ff, vpa, vperp, z, r,
         else
             @loop_r_z ir iz begin
                 ppar[iz,ir] = density[iz,ir] * vth[iz,ir]^2 *
-                              get_second_moment(@view(ff[:,:,iz,ir]), vpa, vperp, 0.0)
+                              get_moment_for_ppar(@view(ff[:,:,iz,ir]), vpa, vperp, 0.0)
             end
         end
     elseif evolve_upar
         # this is the case where the parallel flow and density are evolved separately
         # from the normalized pdf; the vpa coordinate is <v_∥ - upar_s) / c_ref> and so we
-        # set upar = 0 in the call to get_vpa2_moment because the mean flow of the
+        # set upar = 0 in the call to get_moment_for_ppar because the mean flow of the
         # normalised ff is zero
         @loop_r_z ir iz begin
-            ppar[iz,ir] = density[iz,ir]*get_vpa2_moment(@view(ff[:,:,iz,ir]), vpa, vperp, 0.0)
+            ppar[iz,ir] = density[iz,ir]*get_moment_for_ppar(@view(ff[:,:,iz,ir]), vpa, vperp, 0.0)
         end
     elseif evolve_density
         # corresponds to case where only the density is evolved separately from the
         # normalised pdf; the vpa coordinate is v_\parallel / cref.
         @loop_r_z ir iz begin
-            ppar[iz,ir] = density[iz,ir]*get_vpa2_moment(@view(ff[:,:,iz,ir]), vpa, vperp, upar[iz,ir])
+            ppar[iz,ir] = density[iz,ir]*get_moment_for_ppar(@view(ff[:,:,iz,ir]), vpa, vperp, upar[iz,ir])
         end
     else
         # When evolve_density = false, the evolved pdf is the 'true' pdf,
         # and the vpa coordinate is v_∥ / cref.
         @loop_r_z ir iz begin
-            ppar[iz,ir] = get_vpa2_moment(@view(ff[:,:,iz,ir]), vpa, vperp, upar[iz,ir])
+            ppar[iz,ir] = get_moment_for_ppar(@view(ff[:,:,iz,ir]), vpa, vperp, upar[iz,ir])
         end
     end
     return nothing
 end
 
-function get_vpa2_moment(ff, vpa, vperp, upar)
+function get_moment_for_ppar(ff, vpa, vperp, upar)
     # Calculate ∫d^3v (vpa-upar)^2 ff
 
     # modify input vpa.grid to account for the mean flow
@@ -859,14 +859,14 @@ function get_ppar(density, upar, p, vth, ff, vpa, vperp, evolve_density, evolve_
         if vperp.n == 1
             return 3.0 * p
         else
-            return density * vth^2 * get_vpa2_moment(ff, vpa, vperp, 0.0)
+            return density * vth^2 * get_moment_for_ppar(ff, vpa, vperp, 0.0)
         end
     elseif evolve_upar
-        return density * get_vpa2_moment(ff, vpa, vperp, 0.0)
+        return density * get_moment_for_ppar(ff, vpa, vperp, 0.0)
     elseif evolve_density
-        return density * get_vpa2_moment(ff, vpa, vperp, upar)
+        return density * get_moment_for_ppar(ff, vpa, vperp, upar)
     else
-        return get_vpa2_moment(ff, vpa, vperp, upar)
+        return get_moment_for_ppar(ff, vpa, vperp, upar)
     end
     return nothing
 end

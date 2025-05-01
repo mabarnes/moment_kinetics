@@ -1812,7 +1812,7 @@ function calculate_rosenbluth_potential_boundary_data_delta_f_multipole!(rpbd::r
       dens = get_density(pdf, vpa, vperp)
       upar = get_upar(pdf, dens, vpa, vperp, false)
       pressure = get_p(pdf, dens, upar, vpa, vperp, false, false)
-      vth = sqrt(2.0*pressure/dens)
+      vth = sqrt(2.0*pressure/(dens*mass))
       ppar = get_ppar(dens, upar, pressure, vth, pdf, vpa, vperp, false, false,
                       false)
       pperp = get_pperp(pressure, ppar)
