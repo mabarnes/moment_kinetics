@@ -15,80 +15,64 @@ using moment_kinetics.Glob
 
 # Input for Boltzmann electron part of run
 boltzmann_input = OptionsDict(
-    "output" => OptionsDict("run_name" => "kinetic_electron_test_boltzmann_initialisation",
-                           ),
-    "evolve_moments" => OptionsDict("parallel_pressure" => true,
-                                    "density" => true,
+    "output" => OptionsDict("run_name" => "kinetic_electron_test_boltzmann_initialisation"),
+    "evolve_moments" => OptionsDict("density" => true,
                                     "moments_conservation" => true,
                                     "parallel_flow" => true,
-                                   ),
+                                    "pressure" => true),
     "r" => OptionsDict("ngrid" => 1,
-                       "nelement" => 1,
-                      ),
+                       "nelement" => 1),
     "z" => OptionsDict("ngrid" => 5,
                        "discretization" => "gausslegendre_pseudospectral",
                        "nelement" => 8,
-                       "bc" => "wall",
-                      ),
+                       "bc" => "wall"),
     "vpa" => OptionsDict("ngrid" => 6,
                          "discretization" => "gausslegendre_pseudospectral",
                          "nelement" => 17,
-                         "L" => 24.0,
-                         "element_spacing_option" => "coarse_tails",
+                         "L" => 41.569219381653056,
                          "bc" => "zero",
-                        ),
+                         "element_spacing_option" => "coarse_tails8.660254037844386"),
     "composition" => OptionsDict("T_e" => 0.2,
                                  "n_ion_species" => 1,
-                                 "n_neutral_species" => 0,
-                                ),
-    "ion_species_1" => OptionsDict("initial_temperature" => 0.2,
-                                   "initial_density" => 1.0,
-                                  ),
+                                 "n_neutral_species" => 0),
+    "ion_species_1" => OptionsDict("initial_temperature" => 0.06666666666666667,
+                                   "initial_density" => 1.0),
     "z_IC_ion_species_1" => OptionsDict("initialization_option" => "gaussian",
                                         "density_amplitude" => 1.0,
                                         "temperature_amplitude" => 0.0,
                                         "density_phase" => 0.0,
-                                        "upar_amplitude" => 1.0,
+                                        "upar_amplitude" => 1.4142135623730951,
                                         "temperature_phase" => 0.0,
-                                        "upar_phase" => 0.0,
-                                       ),
+                                        "upar_phase" => 0.0),
     "vpa_IC_ion_species_1" => OptionsDict("initialization_option" => "gaussian",
                                           "density_amplitude" => 1.0,
                                           "temperature_amplitude" => 0.0,
                                           "density_phase" => 0.0,
                                           "upar_amplitude" => 0.0,
                                           "temperature_phase" => 0.0,
-                                          "upar_phase" => 0.0,
-                                         ),
-    "krook_collisions" => OptionsDict("use_krook" => true,
-                                     ),
+                                          "upar_phase" => 0.0),
+    "krook_collisions" => OptionsDict("use_krook" => true),
     "reactions" => OptionsDict("electron_ionization_frequency" => 0.0,
-                               "ionization_frequency" => 0.5,
-                               "charge_exchange_frequency" => 0.75,
-                              ),
+                               "ionization_frequency" => 0.7071067811865476,
+                               "charge_exchange_frequency" => 1.0606601717798214),
     "ion_source_1" => OptionsDict("active" => true,
                                   "z_profile" => "gaussian",
                                   "z_width" => 0.25,
-                                  "source_strength" => 2.0,
-                                  "source_T" => 2.0,
-                                 ),
+                                  "source_strength" => 2.8284271247461903,
+                                  "source_T" => 2.0),
     "ion_source_2" => OptionsDict("active" => true,
                                   "z_profile" => "wall_exp_decay",
                                   "z_width" => 0.25,
-                                  "source_strength" => 0.5,
-                                  "source_T" => 0.2,
-                                 ),
+                                  "source_strength" => 0.7071067811865476,
+                                  "source_T" => 0.2),
     "timestepping" => OptionsDict("type" => "SSPRK4",
                                   "nstep" => 20000,
-                                  "dt" => 1.0e-4,
+                                  "dt" => 7.071067811865475e-5,
                                   "nwrite" => 2500,
                                   "nwrite_dfns" => 2500,
-                                  "steady_state_residual" => true,
-                                 ),
-    "ion_numerical_dissipation" => OptionsDict("force_minimum_pdf_value" => 0.0,
-                                              ),
-    "electron_numerical_dissipation" => OptionsDict("force_minimum_pdf_value" => 0.0,
-                                                   ),
+                                  "steady_state_residual" => true),
+    "ion_numerical_dissipation" => OptionsDict("force_minimum_pdf_value" => 0.0),
+    "electron_numerical_dissipation" => OptionsDict("force_minimum_pdf_value" => 0.0),
    )
 
 # Test use distributed-memory when possible
@@ -105,30 +89,31 @@ kinetic_input = deepcopy(boltzmann_input)
 kinetic_input["output"]["run_name"] = "kinetic_electron_test"
 kinetic_input["composition"]["electron_physics"] = "kinetic_electrons"
 kinetic_input["timestepping"] = OptionsDict("type" => "PareschiRusso2(2,2,2)",
-                                            "kinetic_electron_solver" => "implicit_ppar_implicit_pseudotimestep",
+                                            "kinetic_electron_solver" => "implicit_p_implicit_pseudotimestep",
                                             "implicit_ion_advance" => false,
                                             "implicit_vpa_advection" => false,
                                             "nstep" => 100,
-                                            "dt" => 1.0e-5,
+                                            "dt" => 7.0710678118654756e-6,
                                             "nwrite" => 100,
                                             "nwrite_dfns" => 100,
                                            )
 
 kinetic_input["electron_timestepping"] = OptionsDict("nstep" => 5000000,
-                                                     "dt" => 2.0e-5,
+                                                     "dt" => 1.4142135623730951e-5,
                                                      "maximum_dt" => Inf,
                                                      "nwrite" => 10000,
                                                      "nwrite_dfns" => 100000,
                                                      "decrease_dt_iteration_threshold" => 5000,
                                                      "increase_dt_iteration_threshold" => 0,
                                                      "cap_factor_ion_dt" => 10.0,
-                                                     "initialization_residual_value" => 1.0e0,
-                                                     "converged_residual_value" => 1.0e-1,
+                                                     "initialization_residual_value" => 0.9425, # Fudged value to match number of iterations from pre-PR#322 version
+                                                     "converged_residual_value" => 0.04606588659617807,
+                                                     "constraint_forcing_rate" => sqrt(2) * 1.0e6,
                                                     )
 
 kinetic_input["nonlinear_solver"] = OptionsDict("nonlinear_max_iterations" => 1000,
                                                 "rtol" => 1.0e-8,
-                                                "atol" => 1.0e-14,
+                                                "atol" => 3.2573500793527995e-15,
                                                 "linear_restart" => 5,
                                                 "preconditioner_update_interval" => 100,
                                                )
@@ -136,7 +121,7 @@ kinetic_input["nonlinear_solver"] = OptionsDict("nonlinear_max_iterations" => 10
 kinetic_input_adaptive_timestep = deepcopy(kinetic_input)
 kinetic_input_adaptive_timestep["output"]["run_name"] = "kinetic_electron_adaptive_timestep_test"
 kinetic_input_adaptive_timestep["timestepping"]["type"] = "KennedyCarpenterARK324"
-kinetic_input_adaptive_timestep["timestepping"]["maximum_dt"] = 1.0e-5
+kinetic_input_adaptive_timestep["timestepping"]["maximum_dt"] = 7.0710678118654756e-6
 
 
 """
@@ -238,7 +223,7 @@ function run_test()
                                0.6550826239125845 0.664323742887138;
                                0.9612863324379184 0.9702557520666016;
                                1.0960537306313323 1.1031866331581117]
-                expected_vthe = [22.701979703912098 22.5411136516573;
+                expected_vthe = sqrt(2/3) .* [22.701979703912098 22.5411136516573;
                                  23.775975068878136 23.6447117144965;
                                  25.269573404652828 25.182460531284597;
                                  26.180827153256086 26.126134875486123;

@@ -13,7 +13,7 @@ test_input_finite_difference_1D1V = OptionsDict(
                           "T_wall" => 1.0),
     "evolve_moments" => OptionsDict("density" => false,
                                     "parallel_flow" => false,
-                                    "parallel_pressure" => false,
+                                    "pressure" => false,
                                     "moments_conservation" => true),
     "reactions" => OptionsDict("charge_exchange_frequency" => 2.0,
                                "ionization_frequency" => 2.0),
@@ -100,7 +100,7 @@ test_input_chebyshev_split2_1D1V = recursive_merge(test_input_chebyshev_split1_1
 
 test_input_chebyshev_split3_1D1V = recursive_merge(test_input_chebyshev_split2_1D1V,
                                                    OptionsDict("output" => OptionsDict("run_name" => "chebyshev_pseudospectral_split3_1D1V"),
-                                                               "evolve_moments" => OptionsDict("parallel_pressure" => true)))
+                                                               "evolve_moments" => OptionsDict("pressure" => true)))
 
 
 test_input_chebyshev_simple_sheath_1D1V = recursive_merge(

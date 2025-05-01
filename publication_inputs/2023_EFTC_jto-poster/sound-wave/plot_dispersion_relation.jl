@@ -40,7 +40,7 @@ Extra `kwargs...` are passed to `optimize()`.
 """
 function solve_dispersion_relation(ni, nn, Th, Te, Rin; initial_guesses=nothing,
                                    n_solutions=1, kwargs...)
-    vth = sqrt(Th) # in moment_kinetics normalised units
+    vth = sqrt(2*Th) # in moment_kinetics normalised units
 
     function zeta(omega)
         return omega / (kpar * vth)
@@ -150,9 +150,9 @@ function get_sequence_vs_Ri(ni, nn, Th, Te; starting_omega, kwargs...)
     if abs(real(starting_omega)) < 1.0e-10 && ni == 0.0
         # The ni=0 case has funny behaviour with a transition at about Rin=4.
         # Want to start following the solution from R>4.
-        Ri = 5.0
+        Ri = 5.0 * sqrt(2)
     else
-        Ri = 1.0
+        Ri = 1.0 * sqrt(2)
     end
 
     omega_initial = starting_omega
@@ -167,11 +167,11 @@ function get_sequence_vs_Ri(ni, nn, Th, Te; starting_omega, kwargs...)
                                                   initial_guesses=[omega_initial],
                                                   kwargs...)[1]
     end
-    vth = sqrt(Th)
-    Ri_result = collect(0.0:0.001:2.0*π*vth)
+    vth = sqrt(2 * Th)
+    Ri_result = collect(0.0:0.001*sqrt(2):2.0*π*vth)
     omega_result = similar(Ri_result, ComplexF64)
     omega_result .= NaN
-    startind = findfirst(x->abs(x-Ri)<1.e-8, Ri_result)
+    startind = findfirst(x->abs(x-Ri)<1.e-8*sqrt(2), Ri_result)
 
     # Go down from omega_initial
     omega = omega_initial
@@ -181,7 +181,7 @@ function get_sequence_vs_Ri(ni, nn, Th, Te; starting_omega, kwargs...)
         if length(omega) == 0
             # Failed to find solution
             break
-        elseif (i < startind - 1 && abs(real(starting_omega)) < 1.e-10 && (imag(omega[1])-imag(omega_result[i+1])) * (imag(omega_result[startind-1])-imag(omega_result[startind])) < 0.0)
+        elseif (i < startind - 1 && abs(real(starting_omega)) < 1.e-10 * sqrt(2) && (imag(omega[1])-imag(omega_result[i+1])) * (imag(omega_result[startind-1])-imag(omega_result[startind])) < 0.0)
             # Expect growth rate to be monotonic for zero frequency mode. Stop if it is not
             break
         end
@@ -218,7 +218,7 @@ function plot_zero_frequency!(ax, ni, nn, Th, Te; kwargs...)
     Ri, omega, gamma = get_sequence_vs_Ri(ni, nn, Th, Te;
                                           starting_omega=default_zero_frequency)
     # Hopefully there were only a few entries that jumped to the wrong root. Delete them.
-    wrong_root_indices = findall(x->abs(x)>1.0e-10, omega)
+    wrong_root_indices = findall(x->abs(x)>1.0e-10 * sqrt(2), omega)
     deleteat!(Ri, wrong_root_indices)
     deleteat!(omega, wrong_root_indices)
     deleteat!(gamma, wrong_root_indices)
@@ -227,7 +227,7 @@ function plot_zero_frequency!(ax, ni, nn, Th, Te; kwargs...)
     #end
 
     # There is the odd point with gamma=0 that doesn't look right, so skip those too
-    wrong_root_indices = findall(x->abs(x)<1.0e-10, gamma)
+    wrong_root_indices = findall(x->abs(x)<1.0e-10 * sqrt(2), gamma)
     deleteat!(Ri, wrong_root_indices)
     deleteat!(omega, wrong_root_indices)
     deleteat!(gamma, wrong_root_indices)
@@ -247,7 +247,7 @@ function plot_positive_frequency!(ax_omega, ax_gamma, ni, nn, Th, Te; kwargs...)
     Ri_gamma = copy(Ri)
     # Points with omega=0 overlap with zero-frequency mode on gamma-plot and look weird,
     # so chop them out here
-    wrong_root_indices = findall(x->abs(x)<1.0e-10, omega)
+    wrong_root_indices = findall(x->abs(x)<1.0e-10 * sqrt(2), omega)
     deleteat!(Ri_gamma, wrong_root_indices)
     deleteat!(gamma, wrong_root_indices)
 

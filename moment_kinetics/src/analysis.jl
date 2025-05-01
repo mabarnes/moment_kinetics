@@ -16,7 +16,6 @@ using ..load_data: open_readonly_output_file, get_nranks, load_pdf_data, load_ra
 using ..load_data: load_distributed_ion_pdf_slice
 using ..looping
 using ..type_definitions: mk_int, mk_float
-using ..velocity_moments: integrate_over_vspace
 
 using FFTW
 using LsqFit
@@ -62,17 +61,15 @@ vpa = cref vpaN
 vperp = cref vperpN
 ne = nref neN
 Te = Tref TeN
-F = FN nref / cref^3 pi^3/2
-cref = sqrt(2 Tref / mi)
+F = FN nref / cref^3
+cref = sqrt(Tref / mi)
 
-cref^3 ∫d^3vN FN nref / cref^3 pi^3/2 cref^2 vpaN^2 ≤ mi nref neN / Tref TeN
-nref / (pi^3/2 cref^2) * ∫d^3vN FN / vpaN^2 ≤ mi nref neN / Tref TeN
-mi nref / (pi^3/2 2 Tref) * ∫d^3vN FN / vpaN^2 ≤ mi nref neN / Tref TeN
-1 / (2 pi^3/2) * ∫d^3vN FN / vpaN^2 ≤ neN / TeN
-1 / (2 pi^3/2) * ∫d^3vN FN / vpaN^2 ≤ neN / TeN
-TeN / (2 neN pi^3/2) * ∫d^3vN FN / vpaN^2 ≤ 1
-
-Note that `integrate_over_vspace()` includes the 1/pi^3/2 factor already.
+cref^3 ∫d^3vN FN nref / cref^3 cref^2 vpaN^2 ≤ mi nref neN / Tref TeN
+nref / (cref^2) * ∫d^3vN FN / vpaN^2 ≤ mi nref neN / Tref TeN
+mi nref / (2 Tref) * ∫d^3vN FN / vpaN^2 ≤ mi nref neN / Tref TeN
+1 / 2 * ∫d^3vN FN / vpaN^2 ≤ neN / TeN
+1 / 2 * ∫d^3vN FN / vpaN^2 ≤ neN / TeN
+TeN / (2 neN) * ∫d^3vN FN / vpaN^2 ≤ 1
 
 1D1V
 ----
@@ -85,17 +82,15 @@ In normalised form (normalised variables suffixed with 'N'):
 vpa = cref vpaN
 ne = nref neN
 Te = Tref TeN
-f = fN nref / cref sqrt(pi)
+f = fN nref / cref
 cref = sqrt(2 Tref / mi)
 
-cref ∫dvpaN fN nref / cref sqrt(pi) cref^2 vpaN^2 ≤ mi nref neN / Tref TeN
-nref / (sqrt(pi) cref^2) * ∫dvpaN fN / vpaN^2 ≤ mi nref neN / Tref TeN
-mi nref / (sqrt(pi) 2 Tref) * ∫dvpaN fN / vpaN^2 ≤ mi nref neN / Tref TeN
-1 / (2 sqrt(pi)) * ∫dvpaN fN / vpaN^2 ≤ neN / TeN
-1 / (2 sqrt(pi)) * ∫dvpaN fN / vpaN^2 ≤ neN / TeN
-TeN / (2 neN sqrt(pi)) * ∫dvpaN fN / vpaN^2 ≤ 1
-
-Note that `integrate_over_vspace()` includes the 1/sqrt(pi) factor already.
+cref ∫dvpaN fN nref / cref cref^2 vpaN^2 ≤ mi nref neN / Tref TeN
+nref / cref^2 * ∫dvpaN fN / vpaN^2 ≤ mi nref neN / Tref TeN
+mi nref / (2 Tref) * ∫dvpaN fN / vpaN^2 ≤ mi nref neN / Tref TeN
+1 / 2 * ∫dvpaN fN / vpaN^2 ≤ neN / TeN
+1 / 2 * ∫dvpaN fN / vpaN^2 ≤ neN / TeN
+TeN / (2 neN) * ∫dvpaN fN / vpaN^2 ≤ 1
 
 If `ir0` is passed, only load the data for as single r-point (to save memory).
 
@@ -108,8 +103,8 @@ function check_Chodura_condition(r, z, vperp, vpa, dens, upar, vth, temp_e, comp
                                  it0::Union{Nothing, mk_int}=nothing,
                                  ir0::Union{Nothing, mk_int}=nothing;
                                  f_lower=nothing, f_upper=nothing,
-                                 evolve_density=false, evolve_upar=false,
-                                 evolve_ppar=false, find_extra_offset=false)
+                                 evolve_density=false, evolve_upar=false, evolve_p=false,
+                                 find_extra_offset=false)
 
     if z_bc != "wall"
         return nothing, nothing
@@ -173,9 +168,9 @@ function check_Chodura_condition(r, z, vperp, vpa, dens, upar, vth, temp_e, comp
     end
 
     f_lower = @views get_unnormalised_f_1d(f_lower, dens[1,:,:,:], vth[1,:,:,:],
-                                           evolve_density, evolve_ppar)
+                                           evolve_density, evolve_p)
     f_upper = @views get_unnormalised_f_1d(f_upper, dens[end,:,:,:], vth[end,:,:,:],
-                                           evolve_density, evolve_ppar)
+                                           evolve_density, evolve_p)
     if find_extra_offset
         # Allocate output arrays for the number of entries that would need to be zero-ed
         # out.
@@ -189,7 +184,7 @@ function check_Chodura_condition(r, z, vperp, vpa, dens, upar, vth, temp_e, comp
         ##############
 
         v_parallel = vpagrid_to_dzdt(vpa.grid, vth[1,ir,is,it], upar[1,ir,is,it],
-                                     evolve_ppar, evolve_upar)
+                                     evolve_p, evolve_upar)
         vpabar = @. v_parallel - 0.5 * geometry.rhostar * Er[1,ir,it] / geometry.bzed[1,ir]
 
         # Get rid of a zero if it is there to avoid a blow up - f should be zero at that
@@ -201,8 +196,8 @@ function check_Chodura_condition(r, z, vperp, vpa, dens, upar, vth, temp_e, comp
         end
 
         @views lower_result[ir,it] =
-            integrate_over_vspace(f_lower[:,:,ir,is,it], vpabar, -2, vpa.wgts, vperp.grid,
-                                  0, vperp.wgts)
+            integral(f_lower[:,:,ir,is,it], vpabar, -2, vpa.wgts, vperp.grid, 0,
+                     vperp.wgts)
         if it == ntime
             println("check vpabar lower", vpabar)
             println("result lower ", lower_result[ir,it])
@@ -216,9 +211,7 @@ function check_Chodura_condition(r, z, vperp, vpa, dens, upar, vth, temp_e, comp
             else
                 integrand = f_lower[:,:,ir,is,it]
                 for ivperp ∈ 1:nvperp
-                    # 1/sqrt(π) factor to correspond with behaviour of
-                    # `integrate_over_vspace()`.
-                    @. integrand[:,ivperp] *= vpabar^(-2) * vpa.wgts * vperp.wgts[ivperp] / sqrt(π)
+                    @. integrand[:,ivperp] *= vpabar^(-2) * vpa.wgts * vperp.wgts[ivperp]
                 end
                 vperp_integral = @view sum(integrand; dims=2)[:,1]
                 cumulative_vpa_integral = cumsum(vperp_integral)
@@ -233,7 +226,7 @@ function check_Chodura_condition(r, z, vperp, vpa, dens, upar, vth, temp_e, comp
         ##############
 
         v_parallel = vpagrid_to_dzdt(vpa.grid, vth[end,ir,is,it], upar[end,ir,is,it],
-                                     evolve_ppar, evolve_upar)
+                                     evolve_p, evolve_upar)
         vpabar = @. v_parallel - 0.5 * geometry.rhostar * Er[end,ir,it] / geometry.bzed[end,ir]
 
         # Get rid of a zero if it is there to avoid a blow up - f should be zero at that
@@ -245,8 +238,8 @@ function check_Chodura_condition(r, z, vperp, vpa, dens, upar, vth, temp_e, comp
         end
 
         @views upper_result[ir,it] =
-            integrate_over_vspace(f_upper[:,:,ir,is,it], vpabar, -2, vpa.wgts, vperp.grid,
-                                  0, vperp.wgts)
+            integral(f_upper[:,:,ir,is,it], vpabar, -2, vpa.wgts, vperp.grid, 0,
+                     vperp.wgts)
         if it == ntime
             println("check vpabar upper ", vpabar)
             println("result upper ", upper_result[ir,it])
@@ -260,9 +253,7 @@ function check_Chodura_condition(r, z, vperp, vpa, dens, upar, vth, temp_e, comp
             else
                 integrand = f_upper[:,:,ir,is,it]
                 for ivperp ∈ 1:nvperp
-                    # 1/sqrt(π) factor to correspond with behaviour of
-                    # `integrate_over_vspace()`.
-                    @. integrand[:,ivperp] *= vpabar^(-2) * vpa.wgts * vperp.wgts[ivperp] / sqrt(π)
+                    @. integrand[:,ivperp] *= vpabar^(-2) * vpa.wgts * vperp.wgts[ivperp]
                 end
                 vperp_integral = @view sum(integrand; dims=2)[:,1]
                 cumulative_vpa_integral = reverse(cumsum(reverse(vperp_integral)))
@@ -396,9 +387,9 @@ function analyze_pdf_data(ff, n_species, ntime, z, vpa, vth, evolve_ppar)
     for i ∈ 1:ntime
         for is ∈ 1:n_species
             for iz ∈ 1:z.n
-                @views dens_moment[iz,is,i] = integrate_over_vspace(ff[:,iz,is,i], vpa.wgts)
-                @views upar_moment[iz,is,i] = integrate_over_vspace(ff[:,iz,is,i], vpa.grid, vpa.wgts)
-                @views ppar_moment[iz,is,i] = integrate_over_vspace(ff[:,iz,is,i], vpa.grid, 2, vpa.wgts)
+                @views dens_moment[iz,is,i] = integral(ff[:,iz,is,i], vpa.wgts)
+                @views upar_moment[iz,is,i] = integral(ff[:,iz,is,i], vpa.grid, vpa.wgts)
+                @views ppar_moment[iz,is,i] = integral(ff[:,iz,is,i], vpa.grid, 2, vpa.wgts)
             end
         end
     end

@@ -12,7 +12,7 @@ base_input = OptionsDict(
                                   "T_e" => 1.0),
      "evolve_moments" => OptionsDict("density" => false,
                                      "parallel_flow" => false,
-                                     "parallel_pressure" => false,
+                                     "pressure" => false,
                                      "moments_conservation" => true),
      "reactions" => OptionsDict("charge_exchange_frequency" => 2*π*0.1,
                                 "ionization_frequency" => 0.0),
@@ -66,7 +66,7 @@ test_input_split1 =
     test_input_split3 =
     recursive_merge(test_input_split2,
                     OptionsDict("output" => OptionsDict("run_name" => "split3"),
-                                "evolve_moments" => OptionsDict("parallel_pressure" => true)))
+                                "evolve_moments" => OptionsDict("pressure" => true)))
 
 test_input_list = [
      test_input,

@@ -6,10 +6,10 @@ function.
 module moment_constraints
 
 using ..boundary_conditions: skip_f_electron_bc_points_in_Jacobian
+using ..calculus: integral
 using ..looping
 using ..timer_utils
 using ..type_definitions: mk_float
-using ..velocity_moments: integrate_over_vspace, update_ion_qpar!
 
 export hard_force_moment_constraints!, hard_force_moment_constraints_neutral!,
        electron_implicit_constraint_forcing!,
@@ -26,47 +26,70 @@ initial state, and when applying boundary conditions.
 Note this function assumes the input is given at a single spatial position.
 """
 function hard_force_moment_constraints!(f, moments, vpa)
-    #if moments.evolve_ppar
-    #    I0 = integrate_over_vspace(f, vpa.wgts)
-    #    I1 = integrate_over_vspace(f, vpa.grid, vpa.wgts)
-    #    I2 = integrate_over_vspace(f, vpa.grid, 2, vpa.wgts)
-    #    I3 = integrate_over_vspace(f, vpa.grid, 3, vpa.wgts)
-    #    I4 = integrate_over_vspace(f, vpa.grid, 4, vpa.wgts)
-    #    A = ((1.0 - 0.5*I2/I4)*(I2 - I3^2/I4) + 0.5*I3/I4*(I1-I2*I3/I4)) /
-    #        ((I0 - I2^2/I4)*(I2 - I3^2/I4) - (I1 - I2*I3/I4)^2)
-    #    B = -(0.5*I3/I4 + A*(I1 - I2*I3/I4)) / (I2 - I3^2/I4)
-    #    C = -(A*I1 + B*I2) / I3
-    #    @. f = A*f + B*vpa.grid*f + C*vpa.grid*vpa.grid*f
-    #elseif moments.evolve_upar
-    #    I0 = integrate_over_vspace(f, vpa.wgts)
-    #    I1 = integrate_over_vspace(f, vpa.grid, vpa.wgts)
-    #    I2 = integrate_over_vspace(f, vpa.grid, 2, vpa.wgts)
-    #    A = 1.0 / (I0 + I1*I1/I2)
-    #    B = -I1*A/I2
-    #    @. f = A*f + B*vpa.grid*f
-    #elseif moments.evolve_density
-    #    I0 = integrate_over_vspace(f, vpa.wgts)
-    #    @. f = f / I0
-    #end
 
     f1d = @view f[:,1]
-    if moments.evolve_ppar
-        I0 = integrate_over_vspace(f1d, vpa.wgts)
-        I1 = integrate_over_vspace(f1d, vpa.grid, vpa.wgts)
-        I2 = integrate_over_vspace(f1d, vpa.grid, 2, vpa.wgts)
-        I3 = integrate_over_vspace(f1d, vpa.grid, 3, vpa.wgts)
-        I4 = integrate_over_vspace(f1d, vpa.grid, 4, vpa.wgts)
+    if moments.evolve_p
+        # fnew = (A + B*wpa + C*wpa^2)*f
+        # Constraints:
+        #   1 = ∫fnew dwpa
+        #   0 = ∫wpa*fnew dwpa
+        #   3/2 = ∫wpa^2*fnew dwpa
+        #
+        # Define In = ∫wpa^n*f dwpa
+        # gives 3 simultaneous equations
+        #   1 = A*I0 + B*I1 + C*I2
+        #   0 = A*I1 + B*I2 + C*I3
+        #   3/2 = A*I2 + B*I3 + C*I4
+        # which we can solve for
+        #   C = (3/2 - A*I2 - B*I3) / I4
+        #
+        #   B*I2 = -A*I1 - C*I3
+        #        = -A*I1 - (3/2 - A*I2 - B*I3)/I4 * I3
+        #   B = (3/2*I3 + A*(I1*I4 - I2*I3)) / (I3^2 - I2*I4)
+        #
+        #   A*I0 = 1 - B*I1 - C*I2
+        #        = 1 - B*I1 - (3/2 - A*I2 - B*I3) / I4 * I2
+        #   A*I0*I4 = I4 - B*I1*I4 - 3/2*I2 + A*I2^2 + B*I3*I2
+        #   A*(I0*I4 - I2^2) = I4 - 3/2*I2 + B*(I2*I3 - I1*I4)
+        #   A*(I0*I4 - I2^2) = I4 - 3/2*I2 + (3/2*I3 + A*(I1*I4 - I2*I3))*(I2*I3 - I1*I4) / (I3^2 - I2*I4)
+        #   A*(I0*I4 - I2^2)*(I3^2 - I2*I4) = (I4 - 3/2*I2)*(I3^2 - I2*I4) + (3/2*I3 + A*(I1*I4 - I2*I3))*(I2*I3 - I1*I4)
+        #   A*((I0*I4 - I2^2)*(I3^2 - I2*I4) - (I1*I4 - I2*I3)*(I2*I3 - I1*I4) = (I4 - 3/2*I2)*(I3^2 - I2*I4) + 3/2*I3*(I2*I3 - I1*I4)
+        #   A*(I0*I3^2*I4 - I0*I2*I4^2 - I2^2*I3^2 + I2^3*I4 - I1*I2*I3*I4 + I1^2*I4^2 + I2^2*I3^2 - I1*I2*I3*I4) = I3^2*I4 - I2*I4^2 - 3/2*I2*I3^2 + 3/2*I2^2*I4 + 3/2*I2*I3^2 - 3/2*I1*I3*I4
+        #   A*(I0*I3^2*I4 - I0*I2*I4^2 + I2^3*I4 - 2*I1*I2*I3*I4 + I1^2*I4^2) = I3^2*I4 - I2*I4^2 + 3/2*I2^2*I4 - 3/2*I1*I3*I4
+        #   A*(I0*I3^2 - I0*I2*I4 + I2^3 - 2*I1*I2*I3 + I1^2*I4) = I3^2 - I2*I4 + 3/2*I2^2 - 3/2*I1*I3
 
-        A = (I3^2 - I2*I4 + 0.5*(I2^2 - I1*I3)) /
+        I0 = integral(f1d, vpa.wgts)
+        I1 = integral(f1d, vpa.grid, vpa.wgts)
+        I2 = integral(f1d, vpa.grid, 2, vpa.wgts)
+        I3 = integral(f1d, vpa.grid, 3, vpa.wgts)
+        I4 = integral(f1d, vpa.grid, 4, vpa.wgts)
+
+        A = (I3^2 - I2*I4 + 1.5*(I2^2 - I1*I3)) /
             (I0*(I3^2 - I2*I4) + I1*I1*I4 - 2.0*I1*I2*I3 + I2^3)
-        B = (0.5*I3 + A*(I1*I4 - I2*I3)) / (I3^2 - I2*I4)
-        C = (0.5 - A*I2 -B*I3) / I4
+        B = (1.5*I3 + A*(I1*I4 - I2*I3)) / (I3^2 - I2*I4)
+        C = (1.5 - A*I2 - B*I3) / I4
 
-        @. f1d = A*f1d + B*vpa.grid*f1d + C*vpa.grid*vpa.grid*f1d
+        @. f1d = (A + B*vpa.grid + C*vpa.grid*vpa.grid)*f1d
     elseif moments.evolve_upar
-        I0 = integrate_over_vspace(f1d, vpa.wgts)
-        I1 = integrate_over_vspace(f1d, vpa.grid, vpa.wgts)
-        I2 = integrate_over_vspace(f1d, vpa.grid, 2, vpa.wgts)
+        # fnew = (A + B*wpa)*f
+        # Constraints:
+        #   1 = ∫fnew dwpa
+        #   0 = ∫wpa*fnew dwpa
+        #
+        # Define In = ∫wpa^n*f dwpa
+        # gives 3 simultaneous equations
+        #   1 = A*I0 + B*I1
+        #   0 = A*I1 + B*I2
+        # which we can solve for
+        #   B = -A*I1/I2
+        #
+        #   A*I0 = 1 - B*I1
+        #   A*I0 = 1 + A*I1/I2*I1
+        #   A*(I0 - I1^2/I2) = 1
+
+        I0 = integral(f1d, vpa.wgts)
+        I1 = integral(f1d, vpa.grid, vpa.wgts)
+        I2 = integral(f1d, vpa.grid, 2, vpa.wgts)
 
         A = 1.0 / (I0 - I1^2/I2)
         B = -A*I1/I2
@@ -75,7 +98,7 @@ function hard_force_moment_constraints!(f, moments, vpa)
 
         C = NaN
     elseif moments.evolve_density
-        I0 = integrate_over_vspace(f1d, vpa.wgts)
+        I0 = integral(f1d, vpa.wgts)
         A = 1.0 / I0
         @. f1d = A * f1d
 
@@ -126,23 +149,68 @@ Notes:
 """
 function hard_force_moment_constraints_neutral!(f, moments, vz)
     f1d = @view f[:,1,1]
-    if moments.evolve_ppar
-        I0 = integrate_over_vspace(f1d, vz.wgts)
-        I1 = integrate_over_vspace(f1d, vz.grid, vz.wgts)
-        I2 = integrate_over_vspace(f1d, vz.grid, 2, vz.wgts)
-        I3 = integrate_over_vspace(f1d, vz.grid, 3, vz.wgts)
-        I4 = integrate_over_vspace(f1d, vz.grid, 4, vz.wgts)
+    if moments.evolve_p
+        # fnew = (A + B*wz + C*wz^2)*f
+        # Constraints:
+        #   1 = ∫fnew dwpa
+        #   0 = ∫wz*fnew dwpa
+        #   3/2 = ∫wz^2*fnew dwpa
+        #
+        # Define In = ∫wz^n*f dwpa
+        # gives 3 simultaneous equations
+        #   1 = A*I0 + B*I1 + C*I2
+        #   0 = A*I1 + B*I2 + C*I3
+        #   3/2 = A*I2 + B*I3 + C*I4
+        # which we can solve for
+        #   C = (3/2 - A*I2 - B*I3) / I4
+        #
+        #   B*I2 = -A*I1 - C*I3
+        #        = -A*I1 - (3/2 - A*I2 - B*I3)/I4 * I3
+        #   B = (3/2*I3 + A*(I1*I4 - I2*I3)) / (I3^2 - I2*I4)
+        #
+        #   A*I0 = 1 - B*I1 - C*I2
+        #        = 1 - B*I1 - (3/2 - A*I2 - B*I3) / I4 * I2
+        #   A*I0*I4 = I4 - B*I1*I4 - 3/2*I2 + A*I2^2 + B*I3*I2
+        #   A*(I0*I4 - I2^2) = I4 - 3/2*I2 + B*(I2*I3 - I1*I4)
+        #   A*(I0*I4 - I2^2) = I4 - 3/2*I2 + (3/2*I3 + A*(I1*I4 - I2*I3))*(I2*I3 - I1*I4) / (I3^2 - I2*I4)
+        #   A*(I0*I4 - I2^2)*(I3^2 - I2*I4) = (I4 - 3/2*I2)*(I3^2 - I2*I4) + (3/2*I3 + A*(I1*I4 - I2*I3))*(I2*I3 - I1*I4)
+        #   A*((I0*I4 - I2^2)*(I3^2 - I2*I4) - (I1*I4 - I2*I3)*(I2*I3 - I1*I4) = (I4 - 3/2*I2)*(I3^2 - I2*I4) + 3/2*I3*(I2*I3 - I1*I4)
+        #   A*(I0*I3^2*I4 - I0*I2*I4^2 - I2^2*I3^2 + I2^3*I4 - I1*I2*I3*I4 + I1^2*I4^2 + I2^2*I3^2 - I1*I2*I3*I4) = I3^2*I4 - I2*I4^2 - 3/2*I2*I3^2 + 3/2*I2^2*I4 + 3/2*I2*I3^2 - 3/2*I1*I3*I4
+        #   A*(I0*I3^2*I4 - I0*I2*I4^2 + I2^3*I4 - 2*I1*I2*I3*I4 + I1^2*I4^2) = I3^2*I4 - I2*I4^2 + 3/2*I2^2*I4 - 3/2*I1*I3*I4
+        #   A*(I0*I3^2 - I0*I2*I4 + I2^3 - 2*I1*I2*I3 + I1^2*I4) = I3^2 - I2*I4 + 3/2*I2^2 - 3/2*I1*I3
 
-        A = (I3^2 - I2*I4 + 0.5*(I2^2 - I1*I3)) /
+        I0 = integral(f1d, vz.wgts)
+        I1 = integral(f1d, vz.grid, vz.wgts)
+        I2 = integral(f1d, vz.grid, 2, vz.wgts)
+        I3 = integral(f1d, vz.grid, 3, vz.wgts)
+        I4 = integral(f1d, vz.grid, 4, vz.wgts)
+
+        A = (I3^2 - I2*I4 + 1.5*(I2^2 - I1*I3)) /
             (I0*(I3^2 - I2*I4) + I1*I1*I4 - 2.0*I1*I2*I3 + I2^3)
-        B = (0.5*I3 + A*(I1*I4 - I2*I3)) / (I3^2 - I2*I4)
-        C = (0.5 - A*I2 -B*I3) / I4
+        B = (1.5*I3 + A*(I1*I4 - I2*I3)) / (I3^2 - I2*I4)
+        C = (1.5 - A*I2 -B*I3) / I4
 
         @. f1d = A*f1d + B*vz.grid*f1d + C*vz.grid*vz.grid*f1d
     elseif moments.evolve_upar
-        I0 = integrate_over_vspace(f1d, vz.wgts)
-        I1 = integrate_over_vspace(f1d, vz.grid, vz.wgts)
-        I2 = integrate_over_vspace(f1d, vz.grid, 2, vz.wgts)
+        # fnew = (A + B*wz)*f
+        # Constraints:
+        #   1 = ∫fnew dwpa
+        #   0 = ∫wz*fnew dwpa
+        #
+        # Define In = ∫wz^n*f dwpa
+        # gives 3 simultaneous equations
+        #   1 = A*I0 + B*I1
+        #   0 = A*I1 + B*I2
+        # which we can solve for
+        #   B = -A*I1/I2
+        #
+        #   A*I0 = 1 - B*I1
+        #   A*I0 = 1 + A*I1/I2*I1
+        #   A*(I0 - I1^2/I2) = 1
+
+        I0 = integral(f1d, vz.wgts)
+        I1 = integral(f1d, vz.grid, vz.wgts)
+        I2 = integral(f1d, vz.grid, 2, vz.wgts)
 
         A = 1.0 / (I0 - I1^2/I2)
         B = -A*I1/I2
@@ -151,7 +219,7 @@ function hard_force_moment_constraints_neutral!(f, moments, vz)
 
         C = NaN
     elseif moments.evolve_density
-        I0 = integrate_over_vspace(f1d, vz.wgts)
+        I0 = integral(f1d, vz.wgts)
         A = 1.0 / I0
         @. f1d = A * f1d
 
@@ -173,7 +241,7 @@ end
     @begin_sn_r_z_region()
     @loop_sn_r_z isn ir iz begin
         A[iz,ir,isn], B[iz,ir,isn], C[iz,ir,isn] =
-            hard_force_moment_constraints_neutral!(@view(f[:,:,:,iz,ir,is]), moments, vz)
+            hard_force_moment_constraints_neutral!(@view(f[:,:,:,iz,ir,isn]), moments, vz)
     end
 end
 
@@ -198,15 +266,42 @@ function moment_constraints_on_residual!(residual::AbstractArray{T,N},
         f = @view f[:,1]
         residual = @view residual[:,1]
     end
-    if moments.evolve_ppar
-        I0 = integrate_over_vspace(f, vpa.wgts)
-        I1 = integrate_over_vspace(f, vpa.grid, vpa.wgts)
-        I2 = integrate_over_vspace(f, vpa.grid, 2, vpa.wgts)
-        I3 = integrate_over_vspace(f, vpa.grid, 3, vpa.wgts)
-        I4 = integrate_over_vspace(f, vpa.grid, 4, vpa.wgts)
-        J0 = integrate_over_vspace(residual, vpa.wgts)
-        J1 = integrate_over_vspace(residual, vpa.grid, vpa.wgts)
-        J2 = integrate_over_vspace(residual, vpa.grid, 2, vpa.wgts)
+    if moments.evolve_p
+        # rnew = r + (A + B*wpa + C*wpa^2)*f
+        # Constraints:
+        #   0 = ∫rnew dwpa
+        #   0 = ∫wpa*fnew dwpa
+        #   0 = ∫wpa^2*rnew dwpa
+        #
+        # Define In = ∫wpa^n*f dwpa, Jn = ∫wpa^n*r dwpa
+        # gives 3 simultaneous equations
+        #   0 = J0 + A*I0 + B*I1 + C*I2
+        #   0 = J1 + A*I1 + B*I2 + C*I3
+        #   0 = J2 + A*I2 + B*I3 + C*I4
+        # which we can solve for
+        #   C = -(J2 + A*I2 + B*I3) / I4
+        #
+        #   B*I2 = -J1 - A*I1 - C*I3
+        #        = -J1 - A*I1 + (J2 + A*I2 + B*I3)/I4 * I3
+        #   B = (J2*I3 - J1*I4 - A*(I1*I4 - I2*I3)) / (I2*I4 - I3^2)
+        #
+        #   A*I0 = -J0 - B*I1 - C*I2
+        #        = -J0 - B*I1 + (J2 + A*I2 + B*I3) / I4 * I2
+        #   A*I0*I4 = -J0*I4 - B*I1*I4 + J2*I2 + A*I2^2 + B*I3*I2
+        #   A*(I0*I4 - I2^2) = J2*I2 - J0*I4 + B*(I2*I3 - I1*I4)
+        #   A*(I0*I4 - I2^2) = J2*I2 - J0*I4 + (J2*I3 - J1*I4 - A*(I1*I4 - I2*I3))*(I2*I3 - I1*I4) / (I2*I4 - I3^2)
+        #   A*(I0*I4 - I2^2)*(I2*I4 - I3^2) = (J2*I2 - J0*I4)*(I2*I4 - I3^2) + (J2*I3 - J1*I4 - A*(I1*I4 - I2*I3))*(I2*I3 - I1*I4)
+        #   A*((I0*I4 - I2^2)*(I2*I4 - I3^2) + (I1*I4 - I2*I3)*(I2*I3 - I1*I4)) = (J2*I2 - J0*I4)*(I2*I4 - I3^2) + (J2*I3 - J1*I4)*(I2*I3 - I1*I4)
+        #   A*((I0*I4 - I2^2)*(I2*I4 - I3^2) - (I2*I3 - I1*I4)^2) = (J2*I2 - J0*I4)*(I2*I4 - I3^2) + (J2*I3 - J1*I4)*(I2*I3 - I1*I4)
+
+        I0 = integral(f, vpa.wgts)
+        I1 = integral(f, vpa.grid, vpa.wgts)
+        I2 = integral(f, vpa.grid, 2, vpa.wgts)
+        I3 = integral(f, vpa.grid, 3, vpa.wgts)
+        I4 = integral(f, vpa.grid, 4, vpa.wgts)
+        J0 = integral(residual, vpa.wgts)
+        J1 = integral(residual, vpa.grid, vpa.wgts)
+        J2 = integral(residual, vpa.grid, 2, vpa.wgts)
 
         A = ((I2*J2 - J0*I4)*(I2*I4 - I3^2) + (I2*I3 - I1*I4)*(J2*I3 - J1*I4)) /
             ((I0*I4 - I2^2)*(I2*I4 - I3^2) - (I2*I3 - I1*I4)^2)
@@ -215,11 +310,27 @@ function moment_constraints_on_residual!(residual::AbstractArray{T,N},
 
         @. residual = residual + (A + B*vpa.grid + C*vpa.grid*vpa.grid) * f
     elseif moments.evolve_upar
-        I0 = integrate_over_vspace(f, vpa.wgts)
-        I1 = integrate_over_vspace(f, vpa.grid, vpa.wgts)
-        I2 = integrate_over_vspace(f, vpa.grid, 2, vpa.wgts)
-        J0 = integrate_over_vspace(residual, vpa.wgts)
-        J1 = integrate_over_vspace(residual, vpa.grid, vpa.wgts)
+        # rnew = r + (A + B*wpa + C*wpa^2)*f
+        # Constraints:
+        #   0 = ∫rnew dwpa
+        #   0 = ∫wpa*fnew dwpa
+        #
+        # Define In = ∫wpa^n*f dwpa, Jn = ∫wpa^n*r dwpa
+        # gives 3 simultaneous equations
+        #   0 = J0 + A*I0 + B*I1
+        #   0 = J1 + A*I1 + B*I2
+        # which we can solve for
+        #   B = -(J1 + A*I1)/I2
+        #   A*I0 = -J0 - B*I1
+        #   A*I0 = -J0 + I1*(J1 + A*I1)/I2
+        #   A*I0*I2 = -J0*I2 + I1*(J1 + A*I1)
+        #   A*(I0*I2 - I1^2) = J1*I1 - J0*I2
+
+        I0 = integral(f, vpa.wgts)
+        I1 = integral(f, vpa.grid, vpa.wgts)
+        I2 = integral(f, vpa.grid, 2, vpa.wgts)
+        J0 = integral(residual, vpa.wgts)
+        J1 = integral(residual, vpa.grid, vpa.wgts)
 
         A = (I1*J1 - J0*I2) / (I0*I2 - I1^2)
         B = -(J1 + I1*A) / I2
@@ -228,8 +339,8 @@ function moment_constraints_on_residual!(residual::AbstractArray{T,N},
 
         C = NaN
     elseif moments.evolve_density
-        I0 = integrate_over_vspace(f, vpa.wgts)
-        J0 = integrate_over_vspace(residual, vpa.wgts)
+        I0 = integral(f, vpa.wgts)
+        J0 = integral(residual, vpa.wgts)
         A = -J0 / I0
         @. f = A * f
         @. residual = residual + A * f
@@ -258,16 +369,17 @@ timesteps that do not guarantee accurate time evolution.
     @begin_z_region()
     vpa_grid = vpa.grid
     @loop_z iz begin
-        @views zeroth_moment = integrate_over_vspace(f_in[:,1,iz], vpa.wgts)
-        @views first_moment = integrate_over_vspace(f_in[:,1,iz], vpa.grid, vpa.wgts)
-        @views second_moment = integrate_over_vspace(f_in[:,1,iz], vpa.grid, 2, vpa.wgts)
+        @views zeroth_moment = integral(f_in[:,1,iz], vpa.wgts)
+        @views first_moment = integral(f_in[:,1,iz], vpa.grid, vpa.wgts)
+        @views second_moment = integral(f_in[:,1,iz], vpa.grid, 2, vpa.wgts)
 
         @loop_vperp_vpa ivperp ivpa begin
             f_out[ivpa,ivperp,iz] +=
                 dt * constraint_forcing_rate *
                 ((1.0 - zeroth_moment)
-                 - first_moment*vpa_grid[ivpa]
-                 + (0.5 - second_moment)*vpa_grid[ivpa]^2) * f_in[ivpa,ivperp,iz]
+                 - first_moment*vpa_grid[ivpa] / 3
+                 + (1.5 - second_moment)*vpa_grid[ivpa]^2 / 9
+                ) * f_in[ivpa,ivperp,iz]
         end
     end
 
@@ -309,8 +421,8 @@ function add_electron_implicit_constraint_forcing_to_Jacobian!(
         if include === :all
             jacobian_matrix[row,row] += -dt * constraint_forcing_rate *
                                               ((1.0 - zeroth_moment[iz])
-                                               - first_moment[iz]*vpa_grid[ivpa]
-                                               + (0.5 - second_moment[iz])*vpa_grid[ivpa]^2)
+                                               - first_moment[iz]*vpa_grid[ivpa] / 3
+                                               + (1.5 - second_moment[iz])*vpa_grid[ivpa]^2 / 9)
         end
 
         if include ∈ (:all, :explicit_v)
@@ -320,9 +432,9 @@ function add_electron_implicit_constraint_forcing_to_Jacobian!(
                 col = (iz - 1) * v_size + (icolvperp - 1) * vpa.n + icolvpa + f_offset
                 jacobian_matrix[row,col] += dt * constraint_forcing_rate *
                                                  (1.0
-                                                  + vpa_grid[icolvpa]*vpa_grid[ivpa]
-                                                  + vpa_grid[icolvpa]^2*vpa_grid[ivpa]^2) *
-                                                 vpa_wgts[icolvpa]/sqrt(π) * f[ivpa,ivperp,iz]
+                                                  + vpa_grid[icolvpa]*vpa_grid[ivpa] / 3
+                                                  + vpa_grid[icolvpa]^2*vpa_grid[ivpa]^2 / 9) *
+                                                 vpa_wgts[icolvpa] * f[ivpa,ivperp,iz]
             end
         end
     end
@@ -351,8 +463,8 @@ function add_electron_implicit_constraint_forcing_to_z_only_Jacobian!(
         # Diagonal terms
         jacobian_matrix[row,row] += -dt * constraint_forcing_rate *
                                           ((1.0 - zeroth_moment[iz])
-                                           - first_moment[iz]*vpa_grid[ivpa]
-                                           + (0.5 - second_moment[iz])*vpa_grid[ivpa]^2)
+                                           - first_moment[iz]*vpa_grid[ivpa] / 3
+                                           + (1.5 - second_moment[iz])*vpa_grid[ivpa]^2 / 9)
     end
 
     return nothing
@@ -380,8 +492,8 @@ function add_electron_implicit_constraint_forcing_to_v_only_Jacobian!(
         # Diagonal terms
         jacobian_matrix[row,row] += -dt * constraint_forcing_rate *
                                           ((1.0 - zeroth_moment)
-                                           - first_moment*vpa_grid[ivpa]
-                                           + (0.5 - second_moment)*vpa_grid[ivpa]^2)
+                                           - first_moment*vpa_grid[ivpa] / 3
+                                           + (1.5 - second_moment)*vpa_grid[ivpa]^2 / 9)
 
         # Integral terms
         # d(∫dw_∥ w_∥^n g[irow])/d(g[icol]) = vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^n
@@ -389,9 +501,9 @@ function add_electron_implicit_constraint_forcing_to_v_only_Jacobian!(
             col = (icolvperp - 1) * vpa.n + icolvpa
             jacobian_matrix[row,col] += dt * constraint_forcing_rate *
                                              (1.0
-                                              + vpa_grid[icolvpa]*vpa_grid[ivpa]
-                                              + vpa_grid[icolvpa]^2*vpa_grid[ivpa]^2) *
-                                             vpa_wgts[icolvpa]/sqrt(π) * f[ivpa,ivperp]
+                                              + vpa_grid[icolvpa]*vpa_grid[ivpa] / 3
+                                              + vpa_grid[icolvpa]^2*vpa_grid[ivpa]^2 / 9) *
+                                             vpa_wgts[icolvpa] * f[ivpa,ivperp]
         end
     end
 
