@@ -80,7 +80,8 @@ end
         use_Maxwellian_field_particle_distribution=false,
         test_numerical_conserving_terms=false,
         algebraic_solve_for_d2Gdvperp2=false,
-        boundary_data_option=direct_integration)
+        boundary_data_option=direct_integration,
+        bc="none")
         # define inputs needed for the test
         #plot_test_output = false#true
         #test_parallelism = false#true
@@ -93,7 +94,6 @@ end
         nelement_global_vperp = nelement_local_vperp # total number of elements 
         #Lvpa = 12.0 #physical box size in reference units 
         #Lvperp = 6.0 #physical box size in reference units 
-        bc = "" #not required to take a particular value, not used 
         # fd_option and adv_input not actually used so given values unimportant
         #discretization = "chebyshev_pseudospectral"
         discretization = "gausslegendre_pseudospectral"
@@ -107,11 +107,11 @@ end
         coords_input = OptionsDict(
             "vperp"=>OptionsDict("ngrid"=>ngrid, "nelement"=>nelement_global_vperp,
                                  "nelement_local"=>nelement_local_vperp, "L"=>Lvperp,
-                                 "discretization"=>discretization,
+                                 "discretization"=>discretization, "bc"=>bc,
                                  "element_spacing_option"=>element_spacing_option),
             "vpa"=>OptionsDict("ngrid"=>ngrid, "nelement"=>nelement_global_vpa,
                                "nelement_local"=>nelement_local_vpa, "L"=>Lvpa,
-                               "discretization"=>discretization,
+                               "discretization"=>discretization, "bc"=>bc,
                                "element_spacing_option"=>element_spacing_option),
         )
         println("made inputs")
@@ -396,7 +396,7 @@ end
         test_numerical_conserving_terms=false,
         algebraic_solve_for_d2Gdvperp2=false,
         test_self_operator = true,
-        Lvpa = 12.0, Lvperp = 6.0,
+        Lvpa = 12.0, Lvperp = 6.0, bc="none",
         boundary_data_option = direct_integration,
         outdir = "")
         initialize_comms!()
@@ -468,7 +468,7 @@ end
             use_Maxwellian_Rosenbluth_coefficients=use_Maxwellian_Rosenbluth_coefficients,
             use_Maxwellian_field_particle_distribution=use_Maxwellian_field_particle_distribution,
             test_numerical_conserving_terms=test_numerical_conserving_terms,
-            algebraic_solve_for_d2Gdvperp2=algebraic_solve_for_d2Gdvperp2,
+            algebraic_solve_for_d2Gdvperp2=algebraic_solve_for_d2Gdvperp2, bc=bc,
             standalone=false, Lvpa=Lvpa, Lvperp=Lvperp, boundary_data_option=boundary_data_option)
             max_C_err[iscan], L2_C_err[iscan] = fkerr.C_M.max ,fkerr.C_M.L2
             max_H_err[iscan], L2_H_err[iscan] = fkerr.H_M.max ,fkerr.H_M.L2

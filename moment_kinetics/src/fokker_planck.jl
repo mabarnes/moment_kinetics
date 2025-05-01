@@ -711,6 +711,7 @@ function conserving_corrections!(CC,pdf_in,vpa,vperp,fkpl_arrays)
         dppar = get_ppar(CC, vpa, vperp, upar)
         dpperp = get_pperp(CC, vpa, vperp)
         dp = get_pressure(dppar,dpperp)
+        println("dn: ", dn)
         println("int_vpa_C: ", int_vpa_C, " du: ", du)
         println("int_vpa_C - du: ", int_vpa_C - du)
         int_w2_C = int_vpa2_C + int_vperp2_C - 2.0*upar*int_vpa_C
