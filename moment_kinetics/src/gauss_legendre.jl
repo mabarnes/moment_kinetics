@@ -1468,7 +1468,9 @@ function get_MR_local!(QQ,ielement,
                           radau.M1*2.0*shift_factor*scale_factor +
                           radau.M2*scale_factor^2)*scale_factor
             end
-        else # assume integrals of form int^infty_-infty (.) d vpa
+        elseif coord.name == "vpa"
+            @. QQ = (shift_factor*lobatto.M0 + scale_factor*lobatto.M1)*scale_factor
+        else  # assume integrals of form int^infty_-infty (.) d vpa
             @. QQ = lobatto.M0*scale_factor
         end 
         return nothing
@@ -1533,6 +1535,8 @@ function get_PU_local!(QQ,ielement,
                           radau.P1*2.0*shift_factor*scale_factor +
                           radau.P2*scale_factor^2)
             end
+        elseif coord.name == "vpa"
+            @. QQ = shift_factor*lobatto.P0 + scale_factor*lobatto.P1
         else # assume integrals of form int^infty_-infty (.) d vpa
             @. QQ = lobatto.P0
         end 

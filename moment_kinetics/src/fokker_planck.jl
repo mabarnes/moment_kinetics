@@ -77,7 +77,8 @@ using ..fokker_planck_calculus: init_Rosenbluth_potential_integration_weights!,
                                 calculate_rosenbluth_potentials_via_elliptic_solve!,
                                 calculate_rosenbluth_potentials_via_analytical_Maxwellian!,
                                 calculate_test_particle_preconditioner!,
-                                advance_linearised_test_particle_collisions!
+                                advance_linearised_test_particle_collisions!,
+                                get_collision_moments
 using ..fokker_planck_test: Cssp_fully_expanded_form, calculate_collisional_fluxes,
                             d2Gdvpa2_Maxwellian, d2Gdvperpdvpa_Maxwellian, d2Gdvperp2_Maxwellian, dHdvpa_Maxwellian, dHdvperp_Maxwellian,
                             F_Maxwellian, dFdvpa_Maxwellian, dFdvperp_Maxwellian
@@ -402,7 +403,7 @@ end
     # make ad-hoc conserving corrections appropriate only for the self operator
     if use_conserving_corrections
         conserving_corrections!(CC, pdf_in, vpa, vperp,
-                            fkpl_arrays.S_dummy)
+                            fkpl_arrays)
     end
     return nothing
 end
@@ -684,7 +685,10 @@ the finite-element implementation, \$u_{\\|}\$ is the parallel velocity of \$F_s
 and \$x_0,x_1,x_2\$ are parameters that are chosen so that \$C_{ss}\$
 conserves density, parallel velocity and pressure of \$F_s\$.
 """
-function conserving_corrections!(CC,pdf_in,vpa,vperp,dummy_vpavperp)
+function conserving_corrections!(CC,pdf_in,vpa,vperp,fkpl_arrays)
+    dummy_vpavperp = fkpl_arrays.S_dummy
+    # hack mass and nu = 1 here
+    (int_vpa_C, int_vpa2_C, int_vperp2_C) = get_collision_moments(pdf_in, 1.0, 1.0, 1.0, vpa, vperp, fkpl_arrays)
     @begin_anyv_region()
     x0, x1, x2, upar = 0.0, 0.0, 0.0, 0.0
     @anyv_serial_region begin
@@ -707,7 +711,11 @@ function conserving_corrections!(CC,pdf_in,vpa,vperp,dummy_vpavperp)
         dppar = get_ppar(CC, vpa, vperp, upar)
         dpperp = get_pperp(CC, vpa, vperp)
         dp = get_pressure(dppar,dpperp)
-
+        println("int_vpa_C: ", int_vpa_C, " du: ", du)
+        println("int_vpa_C - du: ", int_vpa_C - du)
+        int_w2_C = int_vpa2_C + int_vperp2_C - 2.0*upar*int_vpa_C
+        println("(1/3)*int_w2_C: ", (1.0/3.0)*int_w2_C, " dp: ", dp)
+        println("(1/3)*int_w2_C - dp: ", (1.0/3.0)*int_w2_C -  dp)
         # form the appropriate matrix coefficients
         b0, b1, b2 = dn, du - upar*dn, 3.0*dp
         A00, A02, A11, A12, A22 = dens, 3.0*pressure, ppar, qpar, rmom
@@ -980,7 +988,7 @@ function implicit_ion_fokker_planck_self_collisions!(pdf_out, pdf_in, dSdt,
             # "correct" root that should have been found by the iterative solve, i.e.,
             # errors of size ~ atol.
             conserving_corrections!(deltaF, Fold, vpa, vperp,
-                                fkpl_arrays.S_dummy)
+                                fkpl_arrays)
             # update Fnew
             @loop_vperp_vpa ivperp ivpa begin
                 Fnew[ivpa,ivperp] = deltaF[ivpa,ivperp] + Fold[ivpa,ivperp]

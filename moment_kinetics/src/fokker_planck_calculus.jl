@@ -23,7 +23,7 @@ export calculate_rosenbluth_potential_boundary_data_delta_f_multipole!
 export elliptic_solve!, algebraic_solve!
 export fokkerplanck_arrays_direct_integration_struct
 export fokkerplanck_weakform_arrays_struct
-export enforce_vpavperp_BCs!
+export enforce_vpavperp_BCs!, integrate_collision_moments, get_collision_moments
 export calculate_rosenbluth_potentials_via_elliptic_solve!
 export calculate_rosenbluth_potentials_via_analytical_Maxwellian!
 export allocate_preconditioner_matrix
@@ -251,22 +251,30 @@ struct YY_collision_operator_arrays
     YY2perp::Array{mk_float,4}
     # YY3perp[i,j,k,iel] = \int phi_i(vperp) phi'_j(vperp) phi_k(vperp) vperp d vperp
     YY3perp::Array{mk_float,4}
-    # YY0par[i,j,k,iel] = \int phi_i(vpa) phi_j(vpa) phi_k(vpa) vpa d vpa
+    # YY0par[i,j,k,iel] = \int phi_i(vpa) phi_j(vpa) phi_k(vpa) d vpa
     YY0par::Array{mk_float,4}
-    # YY1par[i,j,k,iel] = \int phi_i(vpa) phi_j(vpa) phi'_k(vpa) vpa d vpa
+    # YY1par[i,j,k,iel] = \int phi_i(vpa) phi_j(vpa) phi'_k(vpa) d vpa
     YY1par::Array{mk_float,4}
-    # YY2par[i,j,k,iel] = \int phi_i(vpa) phi'_j(vpa) phi'_k(vpa) vpa d vpa
+    # YY2par[i,j,k,iel] = \int phi_i(vpa) phi'_j(vpa) phi'_k(vpa) d vpa
     YY2par::Array{mk_float,4}
-    # YY3par[i,j,k,iel] = \int phi_i(vpa) phi'_j(vpa) phi_k(vpa) vpa d vpa
+    # YY3par[i,j,k,iel] = \int phi_i(vpa) phi'_j(vpa) phi_k(vpa) d vpa
     YY3par::Array{mk_float,4}
-    # MMpar[i,j,iel]
+    # MMpar[i,j,iel] = \int phi_i(vpa) phi_j(vpa) d vpa
     MMpar::Array{mk_float,3}
-    # MMperp[i,j,iel]
-    MMperp::Array{mk_float,3}
-    # PPpar[i,j,iel]
+    # MRpar[i,j,iel] = \int phi_i(vpa) phi_j(vpa) vpa d vpa
+    MRpar::Array{mk_float,3}
+    # PPpar[i,j,iel] = \int phi_i(vpa) phi'_j(vpa) d vpa
     PPpar::Array{mk_float,3}
-    # PPperp[i,j,iel]
+    # PUpar[i,j,iel] = \int phi_i(vpa) phi'_j(vpa) vpa d vpa
+    PUpar::Array{mk_float,3}
+    # MMperp[i,j,iel] = \int phi_i(vperp) phi'_j(vperp) vperp d vperp
+    MMperp::Array{mk_float,3}
+    # MRperp[i,j,iel] = \int phi_i(vperp) phi'_j(vperp) vperp^2 d vperp
+    MRperp::Array{mk_float,3}
+    # PPperp[i,j,iel] = \int phi_i(vperp) phi'_j(vperp) vperp d vperp
     PPperp::Array{mk_float,3}
+    # PUperp[i,j,iel] = \int phi_i(vperp) phi'_j(vperp) vperp^2 d vperp
+    PUperp::Array{mk_float,3}
 end
 
 """
@@ -2930,9 +2938,13 @@ function calculate_YY_arrays(vpa,vperp,vpa_spectral,vperp_spectral)
     YY2par = Array{mk_float,4}(undef,vpa.ngrid,vpa.ngrid,vpa.ngrid,vpa.nelement_local)
     YY3par = Array{mk_float,4}(undef,vpa.ngrid,vpa.ngrid,vpa.ngrid,vpa.nelement_local)
     MMpar = Array{mk_float,3}(undef,vpa.ngrid,vpa.ngrid,vpa.nelement_local)
-    MMperp = Array{mk_float,3}(undef,vperp.ngrid,vperp.ngrid,vperp.nelement_local)
+    MRpar = Array{mk_float,3}(undef,vpa.ngrid,vpa.ngrid,vpa.nelement_local)
     PPpar = Array{mk_float,3}(undef,vpa.ngrid,vpa.ngrid,vpa.nelement_local)
+    PUpar = Array{mk_float,3}(undef,vpa.ngrid,vpa.ngrid,vpa.nelement_local)
+    MMperp = Array{mk_float,3}(undef,vperp.ngrid,vperp.ngrid,vperp.nelement_local)
+    MRperp = Array{mk_float,3}(undef,vperp.ngrid,vperp.ngrid,vperp.nelement_local)
     PPperp = Array{mk_float,3}(undef,vperp.ngrid,vperp.ngrid,vperp.nelement_local)
+    PUperp = Array{mk_float,3}(undef,vperp.ngrid,vperp.ngrid,vperp.nelement_local)
 
     for ielement_vperp in 1:vperp.nelement_local
         @views get_QQ_local!(YY0perp[:,:,:,ielement_vperp],ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"YY0")
@@ -2940,7 +2952,9 @@ function calculate_YY_arrays(vpa,vperp,vpa_spectral,vperp_spectral)
         @views get_QQ_local!(YY2perp[:,:,:,ielement_vperp],ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"YY2")
         @views get_QQ_local!(YY3perp[:,:,:,ielement_vperp],ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"YY3")
         @views get_QQ_local!(MMperp[:,:,ielement_vperp],ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"M")
+        @views get_QQ_local!(MRperp[:,:,ielement_vperp],ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"R")
         @views get_QQ_local!(PPperp[:,:,ielement_vperp],ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"P")
+        @views get_QQ_local!(PUperp[:,:,ielement_vperp],ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"U")
         
     end
      for ielement_vpa in 1:vpa.nelement_local
@@ -2949,12 +2963,15 @@ function calculate_YY_arrays(vpa,vperp,vpa_spectral,vperp_spectral)
         @views get_QQ_local!(YY2par[:,:,:,ielement_vpa],ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"YY2")
         @views get_QQ_local!(YY3par[:,:,:,ielement_vpa],ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"YY3")
         @views get_QQ_local!(MMpar[:,:,ielement_vpa],ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"M")
+        @views get_QQ_local!(MRpar[:,:,ielement_vpa],ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"R")
         @views get_QQ_local!(PPpar[:,:,ielement_vpa],ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"P")
+        @views get_QQ_local!(PUpar[:,:,ielement_vpa],ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"U")
      end
     
     return YY_collision_operator_arrays(YY0perp,YY1perp,YY2perp,YY3perp,
                                         YY0par,YY1par,YY2par,YY3par,
-                                        MMpar,MMperp, PPpar,PPperp)
+                                        MMpar,MRpar,PPpar,PUpar,
+                                        MMperp,MRperp,PPperp,PUperp)
 end
 
 """
@@ -3223,6 +3240,102 @@ function assemble_explicit_collision_operator_rhs_parallel_analytical_inputs_inn
         return result
     end
 end
+
+##
+# element-wise integration function to get moments of C(vpa,vperp) without assembling C
+##
+function get_collision_moments(pdf_in,
+    ms, msp, nussp, vpa, vperp,
+    fkpl_arrays::fokkerplanck_weakform_arrays_struct)
+    # call the lower level function after expanding some variables
+    YY_arrays = fkpl_arrays.YY_arrays
+    d2Gdvperp2 = fkpl_arrays.d2Gdvperp2
+    d2Gdvpa2 = fkpl_arrays.d2Gdvpa2
+    d2Gdvperpdvpa = fkpl_arrays.d2Gdvperpdvpa
+    dHdvperp = fkpl_arrays.dHdvperp
+    dHdvpa = fkpl_arrays.dHdvpa
+    int_C_vec = integrate_collision_moments(pdf_in,d2Gdvpa2,d2Gdvperpdvpa,
+        d2Gdvperp2,dHdvpa,dHdvperp,ms,msp,nussp,
+        vpa,vperp,YY_arrays)
+    return int_C_vec
+end
+function integrate_collision_moments(pdfs,d2Gspdvpa2,d2Gspdvperpdvpa,
+    d2Gspdvperp2,dHspdvpa,dHspdvperp,ms,msp,nussp,
+    vpa,vperp,YY_arrays::YY_collision_operator_arrays)
+
+    int_vpa_C = 0.0
+    int_vpa2_C = 0.0
+    int_vperp2_C = 0.0
+    int_C_vec = [int_vpa_C, int_vpa2_C, int_vperp2_C]
+    @inbounds begin
+        @begin_anyv_region()
+        @anyv_serial_region begin
+            # assemble integrals of collision operator
+            # loop over elements
+            for ielement_vperp in 1:vperp.nelement_local
+                MMperp = YY_arrays.MMperp[:,:,ielement_vperp]
+                MRperp = YY_arrays.MRperp[:,:,ielement_vperp]
+                PPperp = YY_arrays.PPperp[:,:,ielement_vperp]
+                PUperp = YY_arrays.PUperp[:,:,ielement_vperp]
+                #println("MMperp: ", MMperp)
+                #println("PPperp: ",PPperp)
+                for ielement_vpa in 1:vpa.nelement_local
+                    MMpar = YY_arrays.MMpar[:,:,ielement_vpa]
+                    MRpar = YY_arrays.MRpar[:,:,ielement_vpa]
+                    PPpar = YY_arrays.PPpar[:,:,ielement_vpa]
+                    PUpar = YY_arrays.PUpar[:,:,ielement_vpa]
+                    #println("MMpar: ", MMpar)
+                    #println("PPpar: ", PPpar)
+                    # loop over field positions in each element
+                    for jvperpp_local in 1:vperp.ngrid
+                        jvperpp = vperp.igrid_full[jvperpp_local,ielement_vperp]
+                        for kvperpp_local in 1:vperp.ngrid
+                            kvperpp = vperp.igrid_full[kvperpp_local,ielement_vperp]
+                            for jvpap_local in 1:vpa.ngrid
+                                jvpap = vpa.igrid_full[jvpap_local,ielement_vpa]
+                                pdfjj = pdfs[jvpap,jvperpp]
+                                for kvpap_local in 1:vpa.ngrid
+                                    kvpap = vpa.igrid_full[kvpap_local,ielement_vpa]
+                                    # carry out the matrix sum on each 2D element
+                                    # the three lines represent parallel flux terms
+                                    # int_vpa_C
+                                    int_C_vec[1] += -(2.0/sqrt(pi))*
+                                                 nussp*pdfjj*(PPpar[kvpap_local,jvpap_local]*MMperp[kvperpp_local,jvperpp_local]*d2Gspdvpa2[kvpap,kvperpp] +
+                                                              MMpar[kvpap_local,jvpap_local]*PPperp[kvperpp_local,jvperpp_local]*d2Gspdvperpdvpa[kvpap,kvperpp] -
+                                                              2.0*(ms/msp)*MMpar[kvpap_local,jvpap_local]*MMperp[kvperpp_local,jvperpp_local]*dHspdvpa[kvpap,kvperpp]
+                                                              )
+                                    # the three lines represent parallel flux terms
+                                    # int_vpa2_C
+                                    int_C_vec[2] += -(2.0/sqrt(pi))*
+                                                      2.0*nussp*pdfjj*(PUpar[kvpap_local,jvpap_local]*MMperp[kvperpp_local,jvperpp_local]*d2Gspdvpa2[kvpap,kvperpp] +
+                                                                       MRpar[kvpap_local,jvpap_local]*PPperp[kvperpp_local,jvperpp_local]*d2Gspdvperpdvpa[kvpap,kvperpp] -
+                                                                       2.0*(ms/msp)*MRpar[kvpap_local,jvpap_local]*MMperp[kvperpp_local,jvperpp_local]*dHspdvpa[kvpap,kvperpp])
+                                    # the three lines represent perpendicular flux terms
+                                    # int_vperp2_C
+                                    int_C_vec[3] += -(2.0/sqrt(pi))*
+                                                      2.0*nussp*pdfjj*(PPpar[kvpap_local,jvpap_local]*MRperp[kvperpp_local,jvperpp_local]*d2Gspdvperpdvpa[kvpap,kvperpp] +
+                                                                       MMpar[kvpap_local,jvpap_local]*PUperp[kvperpp_local,jvperpp_local]*d2Gspdvperp2[kvpap,kvperpp] -
+                                                                       2.0*(ms/msp)*MMpar[kvpap_local,jvpap_local]*MRperp[kvperpp_local,jvperpp_local]*dHspdvperp[kvpap,kvperpp])
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    println("[int_vpa_C, int_vpa2_C, int_vperp2_C]")
+    println(int_C_vec)
+    # MPI # Broadcast integrals to all processes in the 'anyv' subblock
+    #int_C_vec = [int_vpa_C, int_vpa2_C, int_vperp2_C]
+    if comm_anyv_subblock[] != MPI.COMM_NULL
+        MPI.Bcast!(int_C_vec, 0, comm_anyv_subblock[])
+    end
+    # ensure data is synchronized
+    @_anyv_subblock_synchronize()
+    return int_C_vec
+end
+
 
 """
 Elliptic solve function. 
