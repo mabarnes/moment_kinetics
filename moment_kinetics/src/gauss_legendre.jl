@@ -68,6 +68,12 @@ struct gausslegendre_base_info
     P2::Array{mk_float,2}
     # boundary condition differentiation matrix (for vperp grid using radau points)
     D0::Array{mk_float,1}
+    # int lagrange_j(x) dx
+    V0::Array{mk_float,1}
+    # int x lagrange_j(x) dx
+    V1::Array{mk_float,1}
+    # int x^2 lagrange_j(x) dx
+    V2::Array{mk_float,1}
     # local nonlinear diffusion matrix Y00
     Y00::Array{mk_float,3}
     # local nonlinear diffusion matrix Y01
@@ -214,6 +220,12 @@ function setup_gausslegendre_pseudospectral_lobatto(coord; collision_operator_di
         GaussLegendre_weak_product_matrix!(P1,coord.ngrid,x,w,"P1")
         P2 = allocate_float(coord.ngrid, coord.ngrid)
         GaussLegendre_weak_product_matrix!(P2,coord.ngrid,x,w,"P2")
+        V0 = allocate_float(coord.ngrid)
+        GaussLegendre_weak_product_matrix!(V0,coord.ngrid,x,w,"V0")
+        V1 = allocate_float(coord.ngrid)
+        GaussLegendre_weak_product_matrix!(V1,coord.ngrid,x,w,"V1")
+        V2 = allocate_float(coord.ngrid)
+        GaussLegendre_weak_product_matrix!(V2,coord.ngrid,x,w,"V2")
 
         Y00 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
         Y01 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
@@ -238,6 +250,9 @@ function setup_gausslegendre_pseudospectral_lobatto(coord; collision_operator_di
         K2 = allocate_float(0, 0)
         P1 = allocate_float(0, 0)
         P2 = allocate_float(0, 0)
+        V0 = allocate_float(0)
+        V1 = allocate_float(0)
+        V2 = allocate_float(0)
 
         Y00 = allocate_float(0, 0, 0)
         Y01 = allocate_float(0, 0, 0)
@@ -249,7 +264,7 @@ function setup_gausslegendre_pseudospectral_lobatto(coord; collision_operator_di
         Y31 = allocate_float(0, 0, 0)
     end
     return gausslegendre_base_info(Dmat,M0,M1,M2,S0,S1,
-            K0,K1,K2,P0,P1,P2,D0,Y00,Y01,Y10,Y11,Y20,Y21,Y30,Y31)
+            K0,K1,K2,P0,P1,P2,D0,V0,V1,V2,Y00,Y01,Y10,Y11,Y20,Y21,Y30,Y31)
 end
 
 """
@@ -293,6 +308,12 @@ function setup_gausslegendre_pseudospectral_radau(coord; collision_operator_dim=
         GaussLegendre_weak_product_matrix!(P1,coord.ngrid,xreverse,wreverse,"P1",radau=true)
         P2 = allocate_float(coord.ngrid, coord.ngrid)
         GaussLegendre_weak_product_matrix!(P2,coord.ngrid,xreverse,wreverse,"P2",radau=true)
+        V0 = allocate_float(coord.ngrid)
+        GaussLegendre_weak_product_matrix!(V0,coord.ngrid,xreverse,wreverse,"V0",radau=true)
+        V1 = allocate_float(coord.ngrid)
+        GaussLegendre_weak_product_matrix!(V1,coord.ngrid,xreverse,wreverse,"V1",radau=true)
+        V2 = allocate_float(coord.ngrid)
+        GaussLegendre_weak_product_matrix!(V2,coord.ngrid,xreverse,wreverse,"V2",radau=true)
 
         Y00 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
         Y01 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
@@ -317,6 +338,9 @@ function setup_gausslegendre_pseudospectral_radau(coord; collision_operator_dim=
         K2 = allocate_float(0, 0)
         P1 = allocate_float(0, 0)
         P2 = allocate_float(0, 0)
+        V0 = allocate_float(0)
+        V1 = allocate_float(0)
+        V2 = allocate_float(0)
 
         Y00 = allocate_float(0, 0, 0)
         Y01 = allocate_float(0, 0, 0)
@@ -328,7 +352,7 @@ function setup_gausslegendre_pseudospectral_radau(coord; collision_operator_dim=
         Y31 = allocate_float(0, 0, 0)
     end
     return gausslegendre_base_info(Dmat,M0,M1,M2,S0,S1,
-            K0,K1,K2,P0,P1,P2,D0,Y00,Y01,Y10,Y11,Y20,Y21,Y30,Y31)
+            K0,K1,K2,P0,P1,P2,D0,V0,V1,V2,Y00,Y01,Y10,Y11,Y20,Y21,Y30,Y31)
 end 
 
 """
@@ -743,6 +767,55 @@ function GaussLegendre_weak_product_matrix!(QQ::Array{mk_float,2},ngrid,x,wgts,o
                     QQ[i,j] += wgts[i]*wgts[j]*Pl(x[i],k-1)*Pl(x[j],l-1)*AA[k,l]/(gamma[k]*gamma[l])
                 end
             end
+        end
+    end
+    return nothing
+end
+
+function GaussLegendre_weak_product_matrix!(QQ::Array{mk_float,1},ngrid,x,wgts,option;radau=false)
+    # coefficient in expansion of 
+    # lagrange polys in terms of Legendre polys
+    gamma = allocate_float(ngrid)
+    for i in 1:ngrid-1
+        gamma[i] = Legendre_h_n(i-1)
+    end
+    if radau
+        gamma[ngrid] = Legendre_h_n(ngrid-1)
+    else
+        gamma[ngrid] = 2.0/(ngrid - 1)
+    end
+    # appropriate inner product of Legendre polys
+    # definition depends on required matrix 
+    # for V1: AA = < x P_j >
+    # for V2: AA = < x^2 P_j >
+    AA = allocate_float(ngrid)
+    nquad = 2*ngrid
+    zz, wz = gausslegendre(nquad)
+    @. AA = 0.0
+    if option == "V0"
+        for j in 1:ngrid
+            for k in 1:nquad
+                AA[j] += wz[k]*Pl(zz[k],j-1)
+            end
+        end
+    elseif option == "V1"
+        for j in 1:ngrid
+            for k in 1:nquad
+                AA[j] += zz[k]*wz[k]*Pl(zz[k],j-1)
+            end
+        end
+    elseif option == "V2"
+        for j in 1:ngrid
+            for k in 1:nquad
+                AA[j] += (zz[k]^2)*wz[k]*Pl(zz[k],j-1)
+            end
+        end
+    end
+    
+    QQ .= 0.0
+    for j in 1:ngrid
+        for k in 1:ngrid
+            QQ[j] += wgts[j]*Pl(x[j],k-1)*AA[k]/(gamma[k])
         end
     end
     return nothing
@@ -1696,5 +1769,94 @@ function get_YY3_local!(QQ,ielement,
         return nothing
 end
 
+
+"""
+Construction function for polynomial integration vectors, only
+used in the assembly of the collision operator integrals
+"""
+function get_QQ_local!(QQ::AbstractArray{mk_float,1},
+        ielement,lobatto::gausslegendre_base_info,
+        radau::gausslegendre_base_info, 
+        coord,option)
+  
+        if option == "VV1" # int v phi_j d v
+            get_VV1_local!(QQ,ielement,lobatto,radau,coord)
+        elseif option == "VV2" # int v^2 phi_j d v
+            get_VV2_local!(QQ,ielement,lobatto,radau,coord)
+        end
+        return nothing
+end
+
+"""
+Unlike for the rest of the functions of this type, here we use the same polynomial
+factors for both `vperp` and `vpa` coordinates. For `vpa`, we calculate
+```math
+ (VV1)_{j} = \\int^{v_\\|^U}_{v_\\|^L}  \\varphi_j(v_\\|) v_\\| d v_\\|
+ = \\int^1_{-1} l_j(x) (c_i + s_i x ) s_i d x,
+```
+and for `vperp` we compute
+```math
+ (VV1)_{j} = \\int^{v_\\perp^U}_{v_\\perp^L}  \\varphi_j(v_\\perp) v_\\perp d v_\\perp
+ = \\int^1_{-1} l_j(x) (c_i + s_i x ) s_i d x.
+```
+"""
+function get_VV1_local!(QQ,ielement,
+    lobatto::gausslegendre_base_info,
+    radau::gausslegendre_base_info, 
+    coord)
+    
+    scale_factor = coord.element_scale[ielement]
+    shift_factor = coord.element_shift[ielement]
+    if coord.name == "vperp" # assume integrals of form int^infty_0 (.) vperp d vperp
+        # extra scale and shift factors required because of vperp in integral
+        if ielement > 1 || coord.irank > 0 # lobatto points
+            @. QQ =  (lobatto.V0*shift_factor + lobatto.V1*scale_factor)*scale_factor
+        else # radau points 
+            @. QQ =  (radau.V0*shift_factor + radau.V1*scale_factor)*scale_factor
+        end
+    else # assume integrals of form int^infty_-infty (.) d vpa
+        @. QQ = (lobatto.V0*shift_factor + lobatto.V1*scale_factor)*scale_factor
+    end 
+    return nothing
+end
+
+"""
+Unlike for the rest of the functions of this type, here we use the same polynomial
+factors for both `vperp` and `vpa` coordinates. For `vpa`, we calculate
+```math
+ (VV1)_{j} = \\int^{v_\\|^U}_{v_\\|^L}  \\varphi_j(v_\\|) v_\\|^2 d v_\\|
+ = \\int^1_{-1} l_j(x) (c_i + s_i x )^2 s_i d x,
+```
+and for `vperp` we compute
+```math
+ (VV1)_{j} = \\int^{v_\\perp^U}_{v_\\perp^L}  \\varphi_j(v_\\perp) v_\\perp^2 d v_\\perp
+ = \\int^1_{-1} l_j(x) (c_i + s_i x )^2 s_i d x.
+```
+"""
+function get_VV2_local!(QQ,ielement,
+    lobatto::gausslegendre_base_info,
+    radau::gausslegendre_base_info, 
+    coord)
+    
+    scale_factor = coord.element_scale[ielement]
+    shift_factor = coord.element_shift[ielement]
+    if coord.name == "vperp" # assume integrals of form int^infty_0 (.) vperp d vperp
+        # extra scale and shift factors required because of vperp in integral
+        if ielement > 1 || coord.irank > 0 # lobatto points
+            @. QQ =  (lobatto.V0*shift_factor^2 + 
+                        2.0*lobatto.V1*scale_factor*shift_factor +
+                        lobatto.V2*scale_factor^2)*scale_factor
+        else # radau points 
+            @. QQ =  (radau.V0*shift_factor^2 + 
+                        2.0*radau.V1*scale_factor*shift_factor +
+                        radau.V2*scale_factor^2)*scale_factor
+        end
+    else # assume integrals of form int^infty_-infty (.) d vpa
+        @. QQ = (lobatto.V0*shift_factor^2 + 
+                    2.0*lobatto.V1*scale_factor*shift_factor +
+                    lobatto.V2*scale_factor^2)*scale_factor
+    end 
+    return nothing
+end
 
 end

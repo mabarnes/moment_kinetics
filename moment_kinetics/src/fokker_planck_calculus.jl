@@ -267,6 +267,10 @@ struct YY_collision_operator_arrays
     PPpar::Array{mk_float,3}
     # PUpar[i,j,iel] = \int phi_i(vpa) phi'_j(vpa) vpa d vpa
     PUpar::Array{mk_float,3}
+    # VV1par[i,iel] = \int phi_i(vpa) vpa d vpa
+    # VV1par::Array{mk_float,2}
+    # VV2par[i,iel] = \int phi_i(vpa) vpa^2 d vpa
+    # VV2par::Array{mk_float,2}
     # MMperp[i,j,iel] = \int phi_i(vperp) phi'_j(vperp) vperp d vperp
     MMperp::Array{mk_float,3}
     # MRperp[i,j,iel] = \int phi_i(vperp) phi'_j(vperp) vperp^2 d vperp
@@ -275,6 +279,18 @@ struct YY_collision_operator_arrays
     PPperp::Array{mk_float,3}
     # PUperp[i,j,iel] = \int phi_i(vperp) phi'_j(vperp) vperp^2 d vperp
     PUperp::Array{mk_float,3}
+    # VV2perp[i,iel] = \int phi_i(vpa) vpa^2 d vpa
+    # VV2perp::Array{mk_float,2}
+    # coeff z_j in vpa = sum_j z_j phi_j(vpa) for lower boundary point
+    vpa_coeff_lower::mk_float
+    # coeff z_j in vpa2 = sum_j z_j phi_j(vpa) for lower boundary point
+    vpa2_coeff_lower::mk_float
+    # coeff z_j in vpa = sum_j z_j phi_j(vpa) for upper boundary point
+    vpa_coeff_upper::mk_float
+    # coeff z_j in vpa2 = sum_j z_j phi_j(vpa) for upper boundary point
+    vpa2_coeff_upper::mk_float
+    # coeff z_j in vperp2 = sum_j z_j phi_j(vperp) for upper boundary point
+    vperp2_coeff_upper::mk_float
 end
 
 """
@@ -2941,10 +2957,13 @@ function calculate_YY_arrays(vpa,vperp,vpa_spectral,vperp_spectral)
     MRpar = Array{mk_float,3}(undef,vpa.ngrid,vpa.ngrid,vpa.nelement_local)
     PPpar = Array{mk_float,3}(undef,vpa.ngrid,vpa.ngrid,vpa.nelement_local)
     PUpar = Array{mk_float,3}(undef,vpa.ngrid,vpa.ngrid,vpa.nelement_local)
+    VV1par = Array{mk_float,2}(undef,vpa.ngrid,vpa.nelement_local)
+    VV2par = Array{mk_float,2}(undef,vpa.ngrid,vpa.nelement_local)
     MMperp = Array{mk_float,3}(undef,vperp.ngrid,vperp.ngrid,vperp.nelement_local)
     MRperp = Array{mk_float,3}(undef,vperp.ngrid,vperp.ngrid,vperp.nelement_local)
     PPperp = Array{mk_float,3}(undef,vperp.ngrid,vperp.ngrid,vperp.nelement_local)
     PUperp = Array{mk_float,3}(undef,vperp.ngrid,vperp.ngrid,vperp.nelement_local)
+    VV2perp = Array{mk_float,2}(undef,vperp.ngrid,vperp.nelement_local)
 
     for ielement_vperp in 1:vperp.nelement_local
         @views get_QQ_local!(YY0perp[:,:,:,ielement_vperp],ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"YY0")
@@ -2955,9 +2974,9 @@ function calculate_YY_arrays(vpa,vperp,vpa_spectral,vperp_spectral)
         @views get_QQ_local!(MRperp[:,:,ielement_vperp],ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"R")
         @views get_QQ_local!(PPperp[:,:,ielement_vperp],ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"P")
         @views get_QQ_local!(PUperp[:,:,ielement_vperp],ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"U")
-        
+        @views get_QQ_local!(VV2perp[:,ielement_vperp],ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"VV2")
     end
-     for ielement_vpa in 1:vpa.nelement_local
+    for ielement_vpa in 1:vpa.nelement_local
         @views get_QQ_local!(YY0par[:,:,:,ielement_vpa],ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"YY0")
         @views get_QQ_local!(YY1par[:,:,:,ielement_vpa],ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"YY1")
         @views get_QQ_local!(YY2par[:,:,:,ielement_vpa],ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"YY2")
@@ -2966,12 +2985,40 @@ function calculate_YY_arrays(vpa,vperp,vpa_spectral,vperp_spectral)
         @views get_QQ_local!(MRpar[:,:,ielement_vpa],ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"R")
         @views get_QQ_local!(PPpar[:,:,ielement_vpa],ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"P")
         @views get_QQ_local!(PUpar[:,:,ielement_vpa],ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"U")
-     end
+        @views get_QQ_local!(VV1par[:,ielement_vpa],ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"VV1")
+        @views get_QQ_local!(VV2par[:,ielement_vpa],ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"VV2")
+    end
+    # lower vpa boundary constant
+    vpa_coeffs_lower = Array{mk_float,1}(undef,vpa.ngrid)
+    vpa2_coeffs_lower = Array{mk_float,1}(undef,vpa.ngrid)
+    lu_M = lu(MMpar[:,:,1])
+    ldiv!(vpa_coeffs_lower, lu_M, VV1par[:,1])
+    ldiv!(vpa2_coeffs_lower, lu_M, VV2par[:,1])
+    println(vpa_coeffs_lower)
+    println(vpa2_coeffs_lower)
     
+    # upper vpa boundary constant
+    vpa_coeffs_upper = Array{mk_float,1}(undef,vpa.ngrid)
+    vpa2_coeffs_upper = Array{mk_float,1}(undef,vpa.ngrid)
+    lu_M = lu(MMpar[:,:,end])
+    ldiv!(vpa_coeffs_upper, lu_M, VV1par[:,end])
+    ldiv!(vpa2_coeffs_upper, lu_M, VV2par[:,end])
+    println(vpa_coeffs_upper)
+    println(vpa2_coeffs_upper)
+
+    # upper vperp boundary constant
+    vperp2_coeffs_upper = Array{mk_float,1}(undef,vpa.ngrid)
+    lu_M = lu(MMperp[:,:,end])
+    ldiv!(vperp2_coeffs_upper, lu_M, VV2perp[:,end])
+    println(vperp2_coeffs_upper)
+
     return YY_collision_operator_arrays(YY0perp,YY1perp,YY2perp,YY3perp,
                                         YY0par,YY1par,YY2par,YY3par,
-                                        MMpar,MRpar,PPpar,PUpar,
-                                        MMperp,MRperp,PPperp,PUperp)
+                                        MMpar,MRpar,PPpar,PUpar, #VV1par,VV2par,
+                                        MMperp,MRperp,PPperp,PUperp,#VV2perp
+                                        vpa_coeffs_lower[1], vpa2_coeffs_lower[1],
+                                        vpa_coeffs_upper[vpa.ngrid], vpa2_coeffs_upper[vpa.ngrid],
+                                        vperp2_coeffs_upper[vperp.ngrid])
 end
 
 """
