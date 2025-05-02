@@ -2748,7 +2748,8 @@ appropriate.
         update_electron_speed_vpa!(electron_vpa_advect[1], moments.electron.dens,
                                    moments.electron.upar,
                                    scratch[t_params.n_rk_stages+1].electron_p, moments,
-                                   vpa.grid, external_source_settings.electron)
+                                   composition.me_over_mi, vpa.grid,
+                                   external_source_settings.electron)
         electron_vpa_CFL = get_minimum_CFL_vpa(electron_vpa_advect[1].speed, vpa)
         if block_rank[] == 0
             CFL_limits["electron_CFL_vpa"] = t_params.CFL_prefactor * electron_vpa_CFL
