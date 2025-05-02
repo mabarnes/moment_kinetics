@@ -292,7 +292,8 @@ function test_implicit_collisions_wrapper(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=
                                                                         "frequency_option" => "manual",
                                                                         "self_collisions" => true,
                                                                         "use_conserving_corrections" => test_numerical_conserving_terms,
-                                                                        "boundary_data_option" => boundary_data_option,),
+                                                                        "boundary_data_option" => boundary_data_option,
+                                                                        "use_test_particle_preconditioner" => test_particle_preconditioner,),
                             "fokker_planck_collisions_nonlinear_solver" => OptionsDict("rtol" => rtol,
                                                                                        "atol" => atol,
                                                                                        "nonlinear_max_iterations" => nonlinear_max_iterations),
@@ -368,7 +369,6 @@ function test_implicit_collisions_wrapper(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=
                                         vpa, vperp, z, r, delta_t, spectral_objects,
                                         nl_solver_params; diagnose_entropy_production=true,
                                         test_linearised_advance=test_linearised_advance,
-                                        test_particle_preconditioner=test_particle_preconditioner,
                                         use_Maxwellian_Rosenbluth_coefficients_in_preconditioner=use_Maxwellian_Rosenbluth_coefficients_in_preconditioner,
                                         use_end_of_step_corrections=use_end_of_step_corrections)
         @begin_serial_region()
