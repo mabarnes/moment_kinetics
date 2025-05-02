@@ -30,7 +30,7 @@ function interpolate_to_grid_1d! end
 
 function interpolate_to_grid_1d!(result, new_grid, f, coord,
                                  not_spectral::finite_difference_info,
-                                 derivative::Val{0}=Val(0), args...)
+                                 derivative::Val{0}=Val(0))
     x = coord.grid
     n_new = length(new_grid)
 
@@ -110,7 +110,7 @@ end
 
 function interpolate_to_grid_1d!(result, new_grid, f, coord,
                                  not_spectral::finite_difference_info,
-                                 derivative::Val{1}, args...)
+                                 derivative::Val{1})
     error("First derivative interpolation not implemented for finite-difference yet.")
 end
 

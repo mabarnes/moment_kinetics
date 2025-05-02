@@ -296,11 +296,29 @@ function create_moments_electron(nz, nr, electron_model, num_diss_params, n_sour
         if electron_model == kinetic_electrons_with_temperature_equation
             dp_dt = nothing
             dT_dt = allocate_shared_float(nz, nr)
+            @serial_region begin
+                # Initialise time derivatives so that we can use them without errors when
+                # initialising advection speeds. Note the initial values of the speeds are
+                # never actually used, as they are updated again in the first timestep.
+                dT_dt .= 0.0
+            end
         else
             dp_dt = allocate_shared_float(nz, nr)
             dT_dt = nothing
+            @serial_region begin
+                # Initialise time derivatives so that we can use them without errors when
+                # initialising advection speeds. Note the initial values of the speeds are
+                # never actually used, as they are updated again in the first timestep.
+                dp_dt .= 0.0
+            end
         end
         dvth_dt = allocate_shared_float(nz, nr)
+        @serial_region begin
+            # Initialise time derivatives so that we can use them without errors when
+            # initialising advection speeds. Note the initial values of the speeds are
+            # never actually used, as they are updated again in the first timestep.
+            dvth_dt .= 0.0
+        end
     else
         dT_dz_upwind = nothing
         dp_dt = nothing
@@ -385,6 +403,12 @@ function create_moments_neutral(nz, nr, n_species, evolve_density, evolve_upar,
         ddens_dz = allocate_shared_float(nz, nr, n_species)
         ddens_dz_upwind = allocate_shared_float(nz, nr, n_species)
         ddens_dt = allocate_shared_float(nz, nr, n_species)
+        @serial_region begin
+            # Initialise time derivatives so that we can use them without errors when
+            # initialising advection speeds. Note the initial values of the speeds are
+            # never actually used, as they are updated again in the first timestep.
+            ddens_dt .= 0.0
+        end
     else
         ddens_dz = nothing
         ddens_dz_upwind = nothing
@@ -405,6 +429,13 @@ function create_moments_neutral(nz, nr, n_species, evolve_density, evolve_upar,
         duz_dz_upwind = allocate_shared_float(nz, nr, n_species)
         duz_dt = allocate_shared_float(nz, nr, n_species)
         dnuz_dt = allocate_shared_float(nz, nr, n_species)
+        @serial_region begin
+            # Initialise time derivatives so that we can use them without errors when
+            # initialising advection speeds. Note the initial values of the speeds are
+            # never actually used, as they are updated again in the first timestep.
+            duz_dt .= 0.0
+            dnuz_dt .= 0.0
+        end
     else
         duz_dz_upwind = nothing
         duz_dt = nothing
@@ -429,6 +460,13 @@ function create_moments_neutral(nz, nr, n_species, evolve_density, evolve_upar,
         dvth_dz = allocate_shared_float(nz, nr, n_species)
         dp_dt = allocate_shared_float(nz, nr, n_species)
         dvth_dt = allocate_shared_float(nz, nr, n_species)
+        @serial_region begin
+            # Initialise time derivatives so that we can use them without errors when
+            # initialising advection speeds. Note the initial values of the speeds are
+            # never actually used, as they are updated again in the first timestep.
+            dp_dt .= 0.0
+            dvth_dt .= 0.0
+        end
     else
         dp_dz = nothing
         dp_dz_upwind = nothing

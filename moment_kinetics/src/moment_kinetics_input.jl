@@ -236,7 +236,7 @@ function mk_input(input_dict=OptionsDict("output" => OptionsDict("run_name" => "
         last_fail_proximity_factor=timestepping_section["last_fail_proximity_factor"],
         minimum_dt=timestepping_section["minimum_dt"] * sqrt(composition.me_over_mi),
         maximum_dt=timestepping_section["maximum_dt"] * sqrt(composition.me_over_mi),
-        constraint_forcing_rate=1.0e6,
+        constraint_forcing_rate=1.0e5,
         write_after_fixed_step_count=false,
         write_error_diagnostics=false,
         write_steady_state_diagnostics=false,
