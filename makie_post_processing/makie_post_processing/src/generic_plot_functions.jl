@@ -1395,7 +1395,12 @@ function animate_1d(xcoord, data; frame_index=nothing, ax=nothing, fig=nothing,
             # No limits set yet, need to use minimum and maximum of data over all time,
             # otherwise the automatic axis scaling would use the minimum and maximum of
             # the data at the initial time point.
-            ylims!(ax, datamin, datamax)
+            # If datamin==datamax, plot is probably not that interesting, but also the
+            # limits do not change with time, so might as well leave limits as whatever
+            # the default is.
+            if datamin != datamax
+                ylims!(ax, datamin, datamax)
+            end
         else
             # Expand currently set limits to ensure they include the minimum and maxiumum
             # of the data.
