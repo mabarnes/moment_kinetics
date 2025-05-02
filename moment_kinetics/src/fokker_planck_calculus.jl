@@ -3369,6 +3369,89 @@ function integrate_collision_moments(pdfs,d2Gspdvpa2,d2Gspdvperpdvpa,
                     end
                 end
             end
+            # subtract contributions which are zero-ed out by boundary conditions
+            if vpa.bc == "zero"
+                for ielement_vperp in 1:vperp.nelement_local
+                    MMperp = YY_arrays.MMperp[:,:,ielement_vperp]
+                    MRperp = YY_arrays.MRperp[:,:,ielement_vperp]
+                    PPperp = YY_arrays.PPperp[:,:,ielement_vperp]
+                    PUperp = YY_arrays.PUperp[:,:,ielement_vperp]
+                    # lower boundary
+                    ielement_vpa = 1
+                    MMpar = YY_arrays.MMpar[:,:,ielement_vpa]
+                    MRpar = YY_arrays.MRpar[:,:,ielement_vpa]
+                    PPpar = YY_arrays.PPpar[:,:,ielement_vpa]
+                    PUpar = YY_arrays.PUpar[:,:,ielement_vpa]
+                    YY1par = YY_arrays.YY1par[:,:,:,ielement_vpa]
+                    YY2par = YY_arrays.YY2par[:,:,:,ielement_vpa]
+                    # loop over field positions in each element
+                    for jvperpp_local in 1:vperp.ngrid
+                        jvperpp = vperp.igrid_full[jvperpp_local,ielement_vperp]
+                        for kvperpp_local in 1:vperp.ngrid
+                            kvperpp = vperp.igrid_full[kvperpp_local,ielement_vperp]
+                            for jvpap_local in 1:vpa.ngrid
+                                jvpap = vpa.igrid_full[jvpap_local,ielement_vpa]
+                                pdfjj = pdfs[jvpap,jvperpp]
+                                for kvpap_local in 1:vpa.ngrid
+                                    kvpap = vpa.igrid_full[kvpap_local,ielement_vpa]
+                                    # carry out the matrix sum on each 2D element
+                                    # the three lines represent parallel flux terms
+                                    # int_vpa_C
+                                    int_C_vec[1] += (2.0/sqrt(pi))*vpa.grid[1]*
+                                                    nussp*pdfjj*(YY2par[kvpap_local,jvpap_local,1]*MMperp[kvperpp_local,jvperpp_local]*d2Gspdvpa2[kvpap,kvperpp] +
+                                                                YY1par[kvpap_local,jvpap_local,1]*PPperp[kvperpp_local,jvperpp_local]*d2Gspdvperpdvpa[kvpap,kvperpp] -
+                                                                2.0*(ms/msp)*YY1par[kvpap_local,jvpap_local,1]*MMperp[kvperpp_local,jvperpp_local]*dHspdvpa[kvpap,kvperpp]
+                                                                )
+                                    # the three lines represent parallel flux terms
+                                    # int_vpa2_C
+                                    int_C_vec[2] += (2.0/sqrt(pi))*(vpa.grid[1]^2)*
+                                                      2.0*nussp*pdfjj*(YY2par[kvpap_local,jvpap_local,1]*MMperp[kvperpp_local,jvperpp_local]*d2Gspdvpa2[kvpap,kvperpp] +
+                                                                       YY1par[kvpap_local,jvpap_local,1]*PPperp[kvperpp_local,jvperpp_local]*d2Gspdvperpdvpa[kvpap,kvperpp] -
+                                                                       2.0*(ms/msp)*YY1par[kvpap_local,jvpap_local,1]*MMperp[kvperpp_local,jvperpp_local]*dHspdvpa[kvpap,kvperpp])
+                                end
+                            end
+                        end
+                    end
+                    # upper boundary
+                    ielement_vpa = vpa.nelement_local
+                    MMpar = YY_arrays.MMpar[:,:,ielement_vpa]
+                    MRpar = YY_arrays.MRpar[:,:,ielement_vpa]
+                    PPpar = YY_arrays.PPpar[:,:,ielement_vpa]
+                    PUpar = YY_arrays.PUpar[:,:,ielement_vpa]
+                    YY1par = YY_arrays.YY1par[:,:,:,ielement_vpa]
+                    YY2par = YY_arrays.YY2par[:,:,:,ielement_vpa]
+                    # loop over field positions in each element
+                    for jvperpp_local in 1:vperp.ngrid
+                        jvperpp = vperp.igrid_full[jvperpp_local,ielement_vperp]
+                        for kvperpp_local in 1:vperp.ngrid
+                            kvperpp = vperp.igrid_full[kvperpp_local,ielement_vperp]
+                            for jvpap_local in 1:vpa.ngrid
+                                jvpap = vpa.igrid_full[jvpap_local,ielement_vpa]
+                                pdfjj = pdfs[jvpap,jvperpp]
+                                for kvpap_local in 1:vpa.ngrid
+                                    kvpap = vpa.igrid_full[kvpap_local,ielement_vpa]
+                                    # carry out the matrix sum on each 2D element
+                                    # the three lines represent parallel flux terms
+                                    # int_vpa_C
+                                    int_C_vec[1] += (2.0/sqrt(pi))*vpa.grid[vpa.n]*
+                                                    nussp*pdfjj*(YY2par[kvpap_local,jvpap_local,vpa.ngrid]*MMperp[kvperpp_local,jvperpp_local]*d2Gspdvpa2[kvpap,kvperpp] +
+                                                                YY1par[kvpap_local,jvpap_local,vpa.ngrid]*PPperp[kvperpp_local,jvperpp_local]*d2Gspdvperpdvpa[kvpap,kvperpp] -
+                                                                2.0*(ms/msp)*YY1par[kvpap_local,jvpap_local,vpa.ngrid]*MMperp[kvperpp_local,jvperpp_local]*dHspdvpa[kvpap,kvperpp]
+                                                                )
+                                    # the three lines represent parallel flux terms
+                                    # int_vpa2_C
+                                    int_C_vec[2] += (2.0/sqrt(pi))*(vpa.grid[vpa.n]^2)*
+                                                      2.0*nussp*pdfjj*(YY2par[kvpap_local,jvpap_local,vpa.ngrid]*MMperp[kvperpp_local,jvperpp_local]*d2Gspdvpa2[kvpap,kvperpp] +
+                                                                       YY1par[kvpap_local,jvpap_local,vpa.ngrid]*PPperp[kvperpp_local,jvperpp_local]*d2Gspdvperpdvpa[kvpap,kvperpp] -
+                                                                       2.0*(ms/msp)*YY1par[kvpap_local,jvpap_local,vpa.ngrid]*MMperp[kvperpp_local,jvperpp_local]*dHspdvpa[kvpap,kvperpp])
+                                end
+                            end
+                        end
+                    end
+                end                                      
+            end
+            if vperp.bc == "zero"
+            end
         end
     end
     println("[int_vpa_C, int_vpa2_C, int_vperp2_C]")
