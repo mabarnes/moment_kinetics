@@ -1172,26 +1172,18 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
 
         dynamic_keys = collect(keys(dynamic))
         for failure_var ∈ keys(t_params.failure_caused_by)
-            # Only write these variables if they were created in the output file, because
-            # sometimes (e.g. for debug_io=true) they are not needed.
-            if failure_var ∈ dynamic_keys
-                create_dynamic_variable!(
-                    dynamic, "failure_caused_by_$failure_var", mk_int;
-                    parallel_io=parallel_io,
-                    description="cumulative count of how many times $failure_var caused "
-                                * "a timestep failure for the run")
-            end
+            create_dynamic_variable!(
+                dynamic, "failure_caused_by_$failure_var", mk_int;
+                parallel_io=parallel_io,
+                description="cumulative count of how many times $failure_var caused "
+                            * "a timestep failure for the run")
         end
         for limit_var ∈ keys(t_params.limit_caused_by)
-            # Only write these variables if they were created in the output file, because
-            # sometimes (e.g. for debug_io=true) they are not needed.
-            if limit_var ∈ dynamic_keys
-                create_dynamic_variable!(
-                    dynamic, "limit_caused_by_$limit_var", mk_int;
-                    parallel_io=parallel_io,
-                    description="cumulative count of how many times $limit_var limited "
-                                * "the timestep for the run")
-            end
+            create_dynamic_variable!(
+                dynamic, "limit_caused_by_$limit_var", mk_int;
+                parallel_io=parallel_io,
+                description="cumulative count of how many times $limit_var limited "
+                            * "the timestep for the run")
         end
 
         io_dt_before_last_fail = create_dynamic_variable!(
