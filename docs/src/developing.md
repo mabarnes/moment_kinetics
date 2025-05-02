@@ -231,8 +231,8 @@ that share an anysv subblock are all part of the `comm_anysv_subblock[]`
 communicator (which is a subset of the processes in the full block, whose
 communicator is `comm_block[]`).
 
-See also notes on debugging the 'anyv' parallelisation: [Collision operator and
-'anysv' region](@ref).
+See also notes on debugging the 'anysv' parallelisation: [Collision operator
+and 'anysv' region](@ref).
 
 ## Bounds checking
 

@@ -69,7 +69,7 @@ struct nl_solver_info{TH,TV,Tcsg,Tlig,Tprecon,Tpretype}
     precon_lowerz_vcut_inds::Vector{mk_int}
     precon_upperz_vcut_inds::Vector{mk_int}
     serial_solve::Bool
-    anyv_region::Bool
+    anysv_region::Bool
     max_nonlinear_iterations_this_step::Base.RefValue{mk_int}
     max_linear_iterations_this_step::Base.RefValue{mk_int}
     total_its_soft_limit::mk_int
@@ -89,7 +89,7 @@ for example a preconditioner object for each point in that outer loop.
 """
 function setup_nonlinear_solve(active, input_dict, coords, outer_coords=();
                                section_name="nonlinear_solver", default_rtol=1.0e-5,
-                               default_atol=1.0e-12, serial_solve=false, anyv_region=false,
+                               default_atol=1.0e-12, serial_solve=false, anysv_region=false,
                                electron_p_pdf_solve=false,
                                preconditioner_type=Val(:none), warn_unexpected=false)
     nl_solver_section = set_defaults_and_check_section!(
@@ -153,28 +153,30 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=();
         V = (V_ppar, V_pdf)
 
         n_vcut_inds = prod(outer_coord_sizes)
-    elseif anyv_region
-        H = allocate_shared_float(linear_restart + 1, linear_restart; comm=comm_anyv_subblock[])
-        c = allocate_shared_float(linear_restart + 1; comm=comm_anyv_subblock[])
-        s = allocate_shared_float(linear_restart + 1; comm=comm_anyv_subblock[])
-        g = allocate_shared_float(linear_restart + 1; comm=comm_anyv_subblock[])
-        V = allocate_shared_float(reverse(coord_sizes)..., linear_restart+1; comm=comm_anyv_subblock[])
+    elseif anysv_region
+        H = allocate_shared_float(linear_restart + 1, linear_restart; comm=comm_anysv_subblock[])
+        c = allocate_shared_float(linear_restart + 1; comm=comm_anysv_subblock[])
+        s = allocate_shared_float(linear_restart + 1; comm=comm_anysv_subblock[])
+        g = allocate_shared_float(linear_restart + 1; comm=comm_anysv_subblock[])
+        V = allocate_shared_float(reverse(coord_sizes)..., linear_restart+1; comm=comm_anysv_subblock[])
         # Arrays below appear to need to be initialised to zero on setup.
-        # This is inconvenient for anyv communicators because we need to switch
-        # now into the special "anyv" region for this assignment,
+        # This is inconvenient for anysv communicators because we need to switch
+        # now into the special "anysv" region for this assignment,
         # to make sure that all instances of memory are initialised to zero.
-        @begin_s_r_z_anyv_region()
-        @begin_anyv_region()
-        @anyv_serial_region begin
-            H .= 0.0
-            c .= 0.0
-            s .= 0.0
-            g .= 0.0
-            V .= 0.0
+        @begin_r_z_anysv_region()
+        @begin_anysv_region()
+        if anysv_subblock_rank[] ≥ 0
+            @anysv_serial_region begin
+                H .= 0.0
+                c .= 0.0
+                s .= 0.0
+                g .= 0.0
+                V .= 0.0
+            end
         end
-        # switch out of anyv region to avoid errors on
+        # switch out of anysv region to avoid errors on
         # the next region call in initialisation, which
-        # will not be an "anyv" call.
+        # will not be an "anysv" call.
         @begin_serial_region()
     else
         H = allocate_shared_float(linear_restart + 1, linear_restart)
@@ -305,7 +307,7 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=();
                           Ref(0), Ref(0), Ref(0),
                           Ref(nl_solver_input.preconditioner_update_interval),
                           Ref(mk_float(0.0)), zeros(mk_int, n_vcut_inds),
-                          zeros(mk_int, n_vcut_inds), serial_solve, anyv_region, Ref(0), Ref(0),
+                          zeros(mk_int, n_vcut_inds), serial_solve, anysv_region, Ref(0), Ref(0),
                           nl_solver_input.total_its_soft_limit, preconditioner_type,
                           nl_solver_input.preconditioner_update_interval, preconditioners)
 end
@@ -482,7 +484,7 @@ old_precon_iterations = nl_solver_params.precon_iterations[]
                                    V=nl_solver_params.V, rhs_delta=rhs_delta,
                                    initial_guess=nl_solver_params.linear_initial_guess,
                                    serial_solve=nl_solver_params.serial_solve,
-                                   anyv_region=nl_solver_params.anyv_region,
+                                   anysv_region=nl_solver_params.anysv_region,
                                    initial_delta_x_is_zero=true)
         linear_counter += linear_its
 
@@ -643,27 +645,27 @@ end
                                residual::AbstractArray{mk_float, 2},
                                coords, rtol, atol, x::AbstractArray{mk_float, 2}) = begin
     # no distributed memory paralleism required when solving only in (vperp, vpa)
-    # assumed called inside @begin_s_r_z_anyv_region()
+    # assumed called inside @begin_r_z_anysv_region()
     pdf_residual = residual
     x_pdf = x
     vperp = coords.vperp
     vpa = coords.vpa
 
-    @begin_anyv_vperp_vpa_region()
+    @begin_anysv_vperp_vpa_region()
     pdf_norm_square = 0.0
     @loop_vperp_vpa ivperp ivpa begin
         pdf_norm_square += (pdf_residual[ivpa,ivperp] / (rtol * abs(x_pdf[ivpa,ivperp]) + atol))^2
     end
-    @_anyv_subblock_synchronize()
+    @_anysv_subblock_synchronize()
     global_norm = Ref(pdf_norm_square)
-    @timeit_debug global_timer "MPI.Reduce! comm_block" MPI.Reduce!(global_norm, +, comm_anyv_subblock[]) # global_norm is the norm_square for the block
+    @timeit_debug global_timer "MPI.Reduce! comm_block" MPI.Reduce!(global_norm, +, comm_anysv_subblock[]) # global_norm is the norm_square for the block
 
-    if anyv_subblock_rank[] == 0
+    if anysv_subblock_rank[] == 0
         global_norm[] = sqrt(global_norm[] / (vperp.n_global * vpa.n_global))
     end
-    @_anyv_subblock_synchronize()
+    @_anysv_subblock_synchronize()
 
-    @timeit_debug global_timer "MPI.Bcast! comm_block" MPI.Bcast!(global_norm, comm_anyv_subblock[]; root=0)
+    @timeit_debug global_timer "MPI.Bcast! comm_block" MPI.Bcast!(global_norm, comm_anysv_subblock[]; root=0)
     
     return global_norm[]
 end
@@ -838,16 +840,16 @@ end
     vperp = coords.vperp
     vpa = coords.vpa
 
-    @begin_anyv_vperp_vpa_region()
+    @begin_anysv_vperp_vpa_region()
 
     pdf_dot = 0.0
     @loop_vperp_vpa ivperp ivpa begin
         pdf_dot += v_pdf[ivpa,ivperp] * w_pdf[ivpa,ivperp] / (rtol * abs(x_pdf[ivpa,ivperp]) + atol)^2
     end
-    @_anyv_subblock_synchronize()
+    @_anysv_subblock_synchronize()
     global_dot = Ref(pdf_dot)
-    @timeit_debug global_timer "MPI.Reduce! comm_anyv_subblock" MPI.Reduce!(global_dot, +, comm_anyv_subblock[]) # global_dot is the dot for the block
-    if anyv_subblock_rank[] == 0
+    @timeit_debug global_timer "MPI.Reduce! comm_anysv_subblock" MPI.Reduce!(global_dot, +, comm_anysv_subblock[]) # global_dot is the dot for the block
+    if anysv_subblock_rank[] == 0
         global_dot[] = global_dot[] / (vperp.n_global * vpa.n_global)
     end
     return global_dot[]
@@ -1070,12 +1072,12 @@ end
 
     result_pdf = result
 
-    @begin_anyv_vperp_vpa_region()
+    @begin_anysv_vperp_vpa_region()
 
     @loop_vperp_vpa ivperp ivpa begin
         result_pdf[ivpa,ivperp] = func()
     end
-    @_anyv_subblock_synchronize()
+    @_anysv_subblock_synchronize()
     return nothing
 end
 @timeit_debug global_timer parallel_map(
@@ -1085,12 +1087,12 @@ end
     result_pdf = result
     x1_pdf = x1
 
-    @begin_anyv_vperp_vpa_region()
+    @begin_anysv_vperp_vpa_region()
 
     @loop_vperp_vpa ivperp ivpa begin
         result_pdf[ivpa,ivperp] = func(x1_pdf[ivpa,ivperp])
     end
-    @_anyv_subblock_synchronize()
+    @_anysv_subblock_synchronize()
     return nothing
 end
 @timeit_debug global_timer parallel_map(
@@ -1100,7 +1102,7 @@ end
     result_pdf = result
     x1_pdf = x1
 
-    @begin_anyv_vperp_vpa_region()
+    @begin_anysv_vperp_vpa_region()
 
     if isa(x2, AbstractArray)
         x2_pdf = x2
@@ -1113,7 +1115,7 @@ end
             result_pdf[ivpa,ivperp] = func(x1_pdf[ivpa,ivperp], x2)
         end
     end
-    @_anyv_subblock_synchronize()
+    @_anysv_subblock_synchronize()
     return nothing
 end
 @timeit_debug global_timer parallel_map(
@@ -1123,7 +1125,7 @@ end
     result_pdf = result
     x1_pdf = x1
     x2_pdf = x2
-    @begin_anyv_vperp_vpa_region()
+    @begin_anysv_vperp_vpa_region()
 
     if isa(x3, AbstractArray)
         x3_pdf = x3
@@ -1136,7 +1138,7 @@ end
             result_pdf[ivpa,ivperp] = func(x1_pdf[ivpa,ivperp], x2_pdf[ivpa,ivperp], x3)
         end
     end
-    @_anyv_subblock_synchronize()
+    @_anysv_subblock_synchronize()
     return nothing
 end
 
@@ -1349,7 +1351,7 @@ end
 
     ny = length(y)
 
-    @begin_anyv_vperp_vpa_region()
+    @begin_anysv_vperp_vpa_region()
 
     @loop_vperp_vpa ivperp ivpa begin
         for iy ∈ 1:ny
@@ -1424,7 +1426,7 @@ MGS-GMRES' in Zou (2023) [https://doi.org/10.1016/j.amc.2023.127869].
                          x, residual_func!, residual0, delta_x, v, w, solver_type::Val,
                          norm_params; coords, rtol, atol, restart, max_restarts,
                          left_preconditioner, right_preconditioner, H, c, s, g, V,
-                         rhs_delta, initial_guess, serial_solve, anyv_region,
+                         rhs_delta, initial_guess, serial_solve, anysv_region,
                          initial_delta_x_is_zero) = begin
     # Solve (approximately?):
     #   J δx = residual0
@@ -1471,9 +1473,9 @@ MGS-GMRES' in Zou (2023) [https://doi.org/10.1016/j.amc.2023.127869].
     parallel_map(solver_type, (w,beta) -> w/beta, select_from_V(V, 1), w, beta)
     if serial_solve
         g[1] = beta
-    elseif anyv_region
-        @begin_anyv_region()
-        @anyv_serial_region begin
+    elseif anysv_region
+        @begin_anysv_region()
+        @anysv_serial_region begin
             g[1] = beta
         end
     else
@@ -1508,9 +1510,9 @@ MGS-GMRES' in Zou (2023) [https://doi.org/10.1016/j.amc.2023.127869].
                 w_dot_Vj = distributed_dot(solver_type, w, v, norm_params...)
                 if serial_solve
                     H[j,i] = w_dot_Vj
-                elseif anyv_region
-                    @begin_anyv_region()
-                    @anyv_serial_region begin
+                elseif anysv_region
+                    @begin_anysv_region()
+                    @anysv_serial_region begin
                         H[j,i] = w_dot_Vj
                     end
                 else
@@ -1524,9 +1526,9 @@ MGS-GMRES' in Zou (2023) [https://doi.org/10.1016/j.amc.2023.127869].
             norm_w = distributed_norm(solver_type, w, norm_params...)
             if serial_solve
                 H[i+1,i] = norm_w
-            elseif anyv_region
-                @begin_anyv_region()
-                @anyv_serial_region begin
+            elseif anysv_region
+                @begin_anysv_region()
+                @anysv_serial_region begin
                     H[i+1,i] = norm_w
                 end
             else
@@ -1550,9 +1552,9 @@ MGS-GMRES' in Zou (2023) [https://doi.org/10.1016/j.amc.2023.127869].
                 H[i+1,i] = 0
                 g[i+1] = -s[i] * g[i]
                 g[i] = c[i] * g[i]
-            elseif anyv_region
-                @begin_anyv_region()
-                @anyv_serial_region begin
+            elseif anysv_region
+                @begin_anysv_region()
+                @anysv_serial_region begin
                     for j ∈ 1:i-1
                         gamma = c[j] * H[j,i] + s[j] * H[j+1,i]
                         H[j+1,i] = -s[j] * H[j,i] + c[j] * H[j+1,i]
@@ -1566,7 +1568,7 @@ MGS-GMRES' in Zou (2023) [https://doi.org/10.1016/j.amc.2023.127869].
                     g[i+1] = -s[i] * g[i]
                     g[i] = c[i] * g[i]
                 end
-                @_anyv_subblock_synchronize()
+                @_anysv_subblock_synchronize()
             else
                 @begin_serial_region()
                 @serial_region begin

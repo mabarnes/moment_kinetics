@@ -187,7 +187,7 @@ function test_implicit_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=3,neleme
 
     #println(nl_solver_params.preconditioners)
     for it in 1:ntime
-        @begin_s_r_z_anyv_region()
+        @begin_r_z_anysv_region()
         fokker_planck_self_collisions_backward_euler_step!(Fold, delta_t, ms, nuss, fkpl_arrays,
             coords, spectral,
             nl_solver_params,
@@ -416,7 +416,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     Pkg.activate(".")
     
     # test_implicit_collisions(ngrid=3,nelement_vpa=8,nelement_vperp=4,ntime=50,delta_t=1.0,
-    #   serial_solve=false,anyv_region=true,plot_test_output=false,
+    #   serial_solve=false,anysv_region=true,plot_test_output=false,
     #   test_numerical_conserving_terms=true)
     test_implicit_collisions_wrapper(test_particle_preconditioner=true,test_numerical_conserving_terms=true,
     vth0=0.5,vperp0=1.0,vpa0=1.0, nelement_vpa=32,nelement_vperp=16,Lvpa=8.0,Lvperp=4.0, bc_vpa="none", bc_vperp="none",

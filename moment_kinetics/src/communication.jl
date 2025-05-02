@@ -973,10 +973,10 @@ debugging routines need to be updated.
             end
         end
 
-        # Also check 'anyv' arrays, as these are synchronized by this call.
+        # Also check 'anysv' arrays, as these are synchronized by this call.
         # `missing` passed as the call_site argument here indicates that the check of
         # call_site has already been done.
-        _anyv_subblock_synchronize(missing)
+        _anysv_subblock_synchronize(missing)
 
         MPI.Barrier(comm_block[])
     end
