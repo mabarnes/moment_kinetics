@@ -4148,7 +4148,6 @@ function _get_all_moment_variables(run_info; it=nothing, kwargs...)
     end
     pairs = Pair{Symbol,Any}[]
     for v ∈ all_moment_variables
-        println("getting ", v)
         try
             push!(pairs, Symbol(v)=>get_variable(run_info, v; it=it, kwargs...))
         catch e
