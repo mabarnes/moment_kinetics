@@ -5,8 +5,8 @@ the numerical differentiation for
 the implementation of the 
 the full-F Fokker-Planck collision operator [`moment_kinetics.fokker_planck`](@ref).
 
-Parallelisation of the collision operator uses a special 'anyv' region type, see
-[Collision operator and `anyv` region](@ref).
+Parallelisation of the collision operator uses a special 'anysv' region type, see
+[Collision operator and `anysv` region](@ref).
 """
 module fokker_planck_calculus
 
@@ -272,7 +272,7 @@ function allocate_boundary_integration_weights(vpa,vperp)
     # collision operator for a single species at a single spatial point. They are
     # shared-memory arrays. The `comm` argument to `allocate_shared_float()` is used to
     # set up the shared-memory arrays so that they are shared only by the processes on
-    # `comm_anyv_subblock[]` rather than on the full `comm_block[]`. This means that
+    # `comm_anysv_subblock[]` rather than on the full `comm_block[]`. This means that
     # different subblocks that are calculating the collision operator at different
     # spatial points do not interfere with each others' buffer arrays.
     # Note that the 'weights' allocated above are read-only and therefore can be used
@@ -280,9 +280,9 @@ function allocate_boundary_integration_weights(vpa,vperp)
     # `comm_block[]` in order to save memory and setup time.
     nvpa = vpa.n
     nvperp = vperp.n
-    dfdvpa = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
-    d2fdvperpdvpa = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
-    dfdvperp = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
+    dfdvpa = allocate_shared_float(nvpa,nvperp; comm=comm_anysv_subblock[])
+    d2fdvperpdvpa = allocate_shared_float(nvpa,nvperp; comm=comm_anysv_subblock[])
+    dfdvperp = allocate_shared_float(nvpa,nvperp; comm=comm_anysv_subblock[])
     return fokkerplanck_boundary_data_arrays_struct(G0_weights,
             G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
             dfdvpa,d2fdvperpdvpa,dfdvperp)
@@ -1096,12 +1096,12 @@ function allocate_boundary_data(vpa,vperp)
     # collision operator for a single species at a single spatial point. They are
     # shared-memory arrays. The `comm` argument to `allocate_shared_float()` is used to
     # set up the shared-memory arrays so that they are shared only by the processes on
-    # `comm_anyv_subblock[]` rather than on the full `comm_block[]`. This means that
+    # `comm_anysv_subblock[]` rather than on the full `comm_block[]`. This means that
     # different subblocks that are calculating the collision operator at different
     # spatial points do not interfere with each others' buffer arrays.
-    lower_boundary_vpa = allocate_shared_float(vperp.n; comm=comm_anyv_subblock[])
-    upper_boundary_vpa = allocate_shared_float(vperp.n; comm=comm_anyv_subblock[])
-    upper_boundary_vperp = allocate_shared_float(vpa.n; comm=comm_anyv_subblock[])
+    lower_boundary_vpa = allocate_shared_float(vperp.n; comm=comm_anysv_subblock[])
+    upper_boundary_vpa = allocate_shared_float(vperp.n; comm=comm_anysv_subblock[])
+    upper_boundary_vperp = allocate_shared_float(vpa.n; comm=comm_anysv_subblock[])
     return vpa_vperp_boundary_data(lower_boundary_vpa,
             upper_boundary_vpa,upper_boundary_vperp)
 end
@@ -1112,10 +1112,10 @@ of `vpa_vperp_boundary_data`. Used in testing.
 """
 function assign_exact_boundary_data!(func_data::vpa_vperp_boundary_data,
                                         func_exact,vpa,vperp)
-    @begin_anyv_region()
+    @begin_anysv_region()
     nvpa = vpa.n
     nvperp = vperp.n
-    @anyv_serial_region begin
+    @anysv_serial_region begin
         for ivperp in 1:nvperp
             func_data.lower_boundary_vpa[ivperp] = func_exact[1,ivperp]
             func_data.upper_boundary_vpa[ivperp] = func_exact[nvpa,ivperp]
@@ -1174,7 +1174,7 @@ function calculate_boundary_data!(func_data::vpa_vperp_boundary_data,
                                   weight::MPISharedArray{mk_float,4},func_input,vpa,vperp)
     nvpa = vpa.n
     nvperp = vperp.n
-    @begin_anyv_vperp_region(true)
+    @begin_anysv_vperp_region(true)
     @loop_vperp ivperp begin
         func_data.lower_boundary_vpa[ivperp] = 0.0
         func_data.upper_boundary_vpa[ivperp] = 0.0
@@ -1186,7 +1186,7 @@ function calculate_boundary_data!(func_data::vpa_vperp_boundary_data,
         end
     end
     #for ivpa in 1:nvpa
-    @begin_anyv_vpa_region(true)
+    @begin_anysv_vpa_region(true)
     @loop_vpa ivpa begin
         func_data.upper_boundary_vperp[ivpa] = 0.0
         for ivperpp in 1:nvperp
@@ -1209,7 +1209,7 @@ function calculate_boundary_data!(func_data::vpa_vperp_boundary_data,
                                   func_input,vpa,vperp)
     nvpa = vpa.n
     nvperp = vperp.n
-    @begin_anyv_vperp_region(true)
+    @begin_anysv_vperp_region(true)
     @loop_vperp ivperp begin
         func_data.lower_boundary_vpa[ivperp] = 0.0
         func_data.upper_boundary_vpa[ivperp] = 0.0
@@ -1221,7 +1221,7 @@ function calculate_boundary_data!(func_data::vpa_vperp_boundary_data,
         end
     end
     #for ivpa in 1:nvpa
-    @begin_anyv_vpa_region(true)
+    @begin_anysv_vpa_region(true)
     @loop_vpa ivpa begin
         func_data.upper_boundary_vperp[ivpa] = 0.0
         for ivperpp in 1:nvperp
@@ -1247,18 +1247,18 @@ function calculate_rosenbluth_potential_boundary_data!(rpbd::rosenbluth_potentia
     dfdvpa = fkpl.dfdvpa
     d2fdvperpdvpa = fkpl.d2fdvperpdvpa
     #for ivpa in 1:vpa.n
-    @begin_anyv_vpa_region()
+    @begin_anysv_vpa_region()
     @loop_vpa ivpa begin
         @views derivative!(dfdvperp[ivpa,:], pdf[ivpa,:], vperp, vperp_spectral)
     end
-    @begin_anyv_vperp_region()
+    @begin_anysv_vperp_region()
     @loop_vperp ivperp begin
     #for ivperp in 1:vperp.n
         @views derivative!(dfdvpa[:,ivperp], pdf[:,ivperp], vpa, vpa_spectral)
         @views derivative!(d2fdvperpdvpa[:,ivperp], dfdvperp[:,ivperp], vpa, vpa_spectral)
     end
     # ensure data is synchronized
-    @_anyv_subblock_synchronize()
+    @_anysv_subblock_synchronize()
     # carry out the numerical integration 
     calculate_boundary_data!(rpbd.H_data,fkpl.H0_weights,pdf,vpa,vperp)
     calculate_boundary_data!(rpbd.dHdvpa_data,fkpl.H0_weights,dfdvpa,vpa,vperp)
@@ -1578,12 +1578,12 @@ function calculate_boundary_data_multipole_H!(func_data::vpa_vperp_boundary_data
                                              Inn_vec)
     nvpa = vpa.n
     nvperp = vperp.n
-    @begin_anyv_vperp_region(true)
+    @begin_anysv_vperp_region(true)
     @loop_vperp ivperp begin
                 func_data.lower_boundary_vpa[ivperp] = multipole_H(vpa.grid[1],vperp.grid[ivperp],Inn_vec)
                 func_data.upper_boundary_vpa[ivperp] = multipole_H(vpa.grid[nvpa],vperp.grid[ivperp],Inn_vec)
     end
-    @begin_anyv_vpa_region(true)
+    @begin_anysv_vpa_region(true)
     @loop_vpa ivpa begin
                 func_data.upper_boundary_vperp[ivpa] = multipole_H(vpa.grid[ivpa],vperp.grid[nvperp],Inn_vec)
     end
@@ -1596,12 +1596,12 @@ end
 function calculate_boundary_data_multipole_dHdvpa!(func_data::vpa_vperp_boundary_data,vpa,vperp,Inn_vec)
     nvpa = vpa.n
     nvperp = vperp.n
-    @begin_anyv_vperp_region(true)
+    @begin_anysv_vperp_region(true)
     @loop_vperp ivperp begin
                 func_data.lower_boundary_vpa[ivperp] = multipole_dHdvpa(vpa.grid[1],vperp.grid[ivperp],Inn_vec)
                 func_data.upper_boundary_vpa[ivperp] = multipole_dHdvpa(vpa.grid[nvpa],vperp.grid[ivperp],Inn_vec)
     end
-    @begin_anyv_vpa_region(true)
+    @begin_anysv_vpa_region(true)
     @loop_vpa ivpa begin
                 func_data.upper_boundary_vperp[ivpa] = multipole_dHdvpa(vpa.grid[ivpa],vperp.grid[nvperp],Inn_vec)
     end
@@ -1614,12 +1614,12 @@ end
 function calculate_boundary_data_multipole_dHdvperp!(func_data::vpa_vperp_boundary_data,vpa,vperp,Inn_vec)
     nvpa = vpa.n
     nvperp = vperp.n
-    @begin_anyv_vperp_region(true)
+    @begin_anysv_vperp_region(true)
     @loop_vperp ivperp begin
                 func_data.lower_boundary_vpa[ivperp] = multipole_dHdvperp(vpa.grid[1],vperp.grid[ivperp],Inn_vec)
                 func_data.upper_boundary_vpa[ivperp] = multipole_dHdvperp(vpa.grid[nvpa],vperp.grid[ivperp],Inn_vec)
     end
-    @begin_anyv_vpa_region(true)
+    @begin_anysv_vpa_region(true)
     @loop_vpa ivpa begin
                 func_data.upper_boundary_vperp[ivpa] = multipole_dHdvperp(vpa.grid[ivpa],vperp.grid[nvperp],Inn_vec)
     end
@@ -1632,12 +1632,12 @@ end
 function calculate_boundary_data_multipole_G!(func_data::vpa_vperp_boundary_data,vpa,vperp,Inn_vec)
     nvpa = vpa.n
     nvperp = vperp.n
-    @begin_anyv_vperp_region(true)
+    @begin_anysv_vperp_region(true)
     @loop_vperp ivperp begin
                 func_data.lower_boundary_vpa[ivperp] = multipole_G(vpa.grid[1],vperp.grid[ivperp],Inn_vec)
                 func_data.upper_boundary_vpa[ivperp] = multipole_G(vpa.grid[nvpa],vperp.grid[ivperp],Inn_vec)
     end
-    @begin_anyv_vpa_region(true)
+    @begin_anysv_vpa_region(true)
     @loop_vpa ivpa begin
                 func_data.upper_boundary_vperp[ivpa] = multipole_G(vpa.grid[ivpa],vperp.grid[nvperp],Inn_vec)
     end
@@ -1650,12 +1650,12 @@ end
 function calculate_boundary_data_multipole_dGdvperp!(func_data::vpa_vperp_boundary_data,vpa,vperp,Inn_vec)
     nvpa = vpa.n
     nvperp = vperp.n
-    @begin_anyv_vperp_region(true)
+    @begin_anysv_vperp_region(true)
     @loop_vperp ivperp begin
                 func_data.lower_boundary_vpa[ivperp] = multipole_dGdvperp(vpa.grid[1],vperp.grid[ivperp],Inn_vec)
                 func_data.upper_boundary_vpa[ivperp] = multipole_dGdvperp(vpa.grid[nvpa],vperp.grid[ivperp],Inn_vec)
     end
-    @begin_anyv_vpa_region(true)
+    @begin_anysv_vpa_region(true)
     @loop_vpa ivpa begin
                 func_data.upper_boundary_vperp[ivpa] = multipole_dGdvperp(vpa.grid[ivpa],vperp.grid[nvperp],Inn_vec)
     end
@@ -1668,12 +1668,12 @@ end
 function calculate_boundary_data_multipole_d2Gdvperp2!(func_data::vpa_vperp_boundary_data,vpa,vperp,Inn_vec)
     nvpa = vpa.n
     nvperp = vperp.n
-    @begin_anyv_vperp_region(true)
+    @begin_anysv_vperp_region(true)
     @loop_vperp ivperp begin
                 func_data.lower_boundary_vpa[ivperp] = multipole_d2Gdvperp2(vpa.grid[1],vperp.grid[ivperp],Inn_vec)
                 func_data.upper_boundary_vpa[ivperp] = multipole_d2Gdvperp2(vpa.grid[nvpa],vperp.grid[ivperp],Inn_vec)
     end
-    @begin_anyv_vpa_region(true)
+    @begin_anysv_vpa_region(true)
     @loop_vpa ivpa begin
                 func_data.upper_boundary_vperp[ivpa] = multipole_d2Gdvperp2(vpa.grid[ivpa],vperp.grid[nvperp],Inn_vec)
     end
@@ -1686,12 +1686,12 @@ end
 function calculate_boundary_data_multipole_d2Gdvperpdvpa!(func_data::vpa_vperp_boundary_data,vpa,vperp,Inn_vec)
     nvpa = vpa.n
     nvperp = vperp.n
-    @begin_anyv_vperp_region(true)
+    @begin_anysv_vperp_region(true)
     @loop_vperp ivperp begin
                 func_data.lower_boundary_vpa[ivperp] = multipole_d2Gdvperpdvpa(vpa.grid[1],vperp.grid[ivperp],Inn_vec)
                 func_data.upper_boundary_vpa[ivperp] = multipole_d2Gdvperpdvpa(vpa.grid[nvpa],vperp.grid[ivperp],Inn_vec)
     end
-    @begin_anyv_vpa_region(true)
+    @begin_anysv_vpa_region(true)
     @loop_vpa ivpa begin
                 func_data.upper_boundary_vperp[ivpa] = multipole_d2Gdvperpdvpa(vpa.grid[ivpa],vperp.grid[nvperp],Inn_vec)
     end
@@ -1704,12 +1704,12 @@ end
 function calculate_boundary_data_multipole_d2Gdvpa2!(func_data::vpa_vperp_boundary_data,vpa,vperp,Inn_vec)
     nvpa = vpa.n
     nvperp = vperp.n
-    @begin_anyv_vperp_region(true)
+    @begin_anysv_vperp_region(true)
     @loop_vperp ivperp begin
                 func_data.lower_boundary_vpa[ivperp] = multipole_d2Gdvpa2(vpa.grid[1],vperp.grid[ivperp],Inn_vec)
                 func_data.upper_boundary_vpa[ivperp] = multipole_d2Gdvpa2(vpa.grid[nvpa],vperp.grid[ivperp],Inn_vec)
     end
-    @begin_anyv_vpa_region(true)
+    @begin_anysv_vpa_region(true)
     @loop_vpa ivpa begin
                 func_data.upper_boundary_vperp[ivpa] = multipole_d2Gdvpa2(vpa.grid[ivpa],vperp.grid[nvperp],Inn_vec)
     end
@@ -1733,8 +1733,8 @@ function calculate_rosenbluth_potential_boundary_data_multipole!(rpbd::rosenblut
         I06, I16, I26 = 0.0, 0.0, 0.0
         I08 = 0.0
         
-        @begin_anyv_region()
-        @anyv_serial_region begin
+        @begin_anysv_region()
+        @anysv_serial_region begin
            I00 = integral(pdf, vpa.grid, 0, vpa.wgts, vperp.grid, 0, vperp.wgts)
            I10 = integral(pdf, vpa.grid, 1, vpa.wgts, vperp.grid, 0, vperp.wgts)
            I20 = integral(pdf, vpa.grid, 2, vpa.wgts, vperp.grid, 0, vperp.wgts)
@@ -1765,17 +1765,17 @@ function calculate_rosenbluth_potential_boundary_data_multipole!(rpbd::rosenblut
            
            I08 = integral(pdf, vpa.grid, 0, vpa.wgts, vperp.grid, 8, vperp.wgts)
         end
-        # Broadcast integrals to all processes in the 'anyv' subblock
+        # Broadcast integrals to all processes in the 'anysv' subblock
         Inn_vec = [I00, I10, I20, I30, I40, I50, I60, I70, I80, 
                     I02, I12, I22, I32, I42, I52, I62,
                     I04, I14, I24, I34, I44,
                     I06, I16, I26,
                     I08]
-        if comm_anyv_subblock[] != MPI.COMM_NULL
-            MPI.Bcast!(Inn_vec, 0, comm_anyv_subblock[])
+        if comm_anysv_subblock[] != MPI.COMM_NULL
+            MPI.Bcast!(Inn_vec, 0, comm_anysv_subblock[])
         end
         # ensure data is synchronized
-        @_anyv_subblock_synchronize()
+        @_anysv_subblock_synchronize()
         # evaluate the multipole formulae 
         calculate_boundary_data_multipole_H!(rpbd.H_data,vpa,vperp,Inn_vec)
         calculate_boundary_data_multipole_dHdvpa!(rpbd.dHdvpa_data,vpa,vperp,Inn_vec)
@@ -1807,8 +1807,8 @@ function calculate_rosenbluth_potential_boundary_data_delta_f_multipole!(rpbd::r
     mass = 1.0
     dens, upar, vth = 0.0, 0.0, 0.0
     # first, compute the moments and delta f
-    @begin_anyv_region()
-    @anyv_serial_region begin
+    @begin_anysv_region()
+    @anysv_serial_region begin
       dens = get_density(pdf, vpa, vperp)
       upar = get_upar(pdf, dens, vpa, vperp, false)
       pressure = get_p(pdf, dens, upar, vpa, vperp, false, false)
@@ -1822,12 +1822,12 @@ function calculate_rosenbluth_potential_boundary_data_delta_f_multipole!(rpbd::r
     end
     # broadcast this information across cores
     param_vec = [dens, upar, vth] 
-    if comm_anyv_subblock[] != MPI.COMM_NULL
-        MPI.Bcast!(param_vec, 0, comm_anyv_subblock[])
+    if comm_anysv_subblock[] != MPI.COMM_NULL
+        MPI.Bcast!(param_vec, 0, comm_anysv_subblock[])
     end
     (dens, upar, vth) = param_vec
     # ensure data is synchronized
-    @_anyv_subblock_synchronize()
+    @_anysv_subblock_synchronize()
     # now pass the delta f to the multipole function
     calculate_rosenbluth_potential_boundary_data_multipole!(rpbd,dummy_vpavperp,
       vpa,vperp,vpa_spectral,vperp_spectral,
@@ -1835,7 +1835,7 @@ function calculate_rosenbluth_potential_boundary_data_delta_f_multipole!(rpbd::r
     # now add on the contributions from the Maxwellian
     nvpa = vpa.n
     nvperp = vperp.n
-    @begin_anyv_vperp_region()
+    @begin_anysv_vperp_region()
     @loop_vperp ivperp begin
                 rpbd.H_data.lower_boundary_vpa[ivperp] += H_Maxwellian(dens,upar,vth,vpa,vperp,1,ivperp)
                 rpbd.H_data.upper_boundary_vpa[ivperp] += H_Maxwellian(dens,upar,vth,vpa,vperp,nvpa,ivperp)
@@ -1850,7 +1850,7 @@ function calculate_rosenbluth_potential_boundary_data_delta_f_multipole!(rpbd::r
                 rpbd.d2Gdvperp2_data.lower_boundary_vpa[ivperp] += d2Gdvperp2_Maxwellian(dens,upar,vth,vpa,vperp,1,ivperp)
                 rpbd.d2Gdvperp2_data.upper_boundary_vpa[ivperp] += d2Gdvperp2_Maxwellian(dens,upar,vth,vpa,vperp,nvpa,ivperp)
     end
-    @begin_anyv_vpa_region()
+    @begin_anysv_vpa_region()
     @loop_vpa ivpa begin
                 rpbd.H_data.upper_boundary_vperp[ivpa] += H_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,nvperp)
                 rpbd.dHdvpa_data.upper_boundary_vperp[ivpa] += dHdvpa_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,nvperp)
@@ -1860,23 +1860,23 @@ function calculate_rosenbluth_potential_boundary_data_delta_f_multipole!(rpbd::r
                 rpbd.d2Gdvperp2_data.upper_boundary_vperp[ivpa] += d2Gdvperp2_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,nvperp)
     end
     if calculate_GG
-       @begin_anyv_vperp_region()
+       @begin_anysv_vperp_region()
        @loop_vperp ivperp begin
                    rpbd.G_data.lower_boundary_vpa[ivperp] += G_Maxwellian(dens,upar,vth,vpa,vperp,1,ivperp)
                    rpbd.G_data.upper_boundary_vpa[ivperp] += G_Maxwellian(dens,upar,vth,vpa,vperp,nvpa,ivperp)
        end
-       @begin_anyv_vpa_region()
+       @begin_anysv_vpa_region()
        @loop_vpa ivpa begin
                    rpbd.G_data.upper_boundary_vperp[ivpa] += G_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,nvperp)
        end
     end
     if calculate_dGdvperp
-       @begin_anyv_vperp_region()
+       @begin_anysv_vperp_region()
        @loop_vperp ivperp begin
                    rpbd.dGdvperp_data.lower_boundary_vpa[ivperp] += dGdvperp_Maxwellian(dens,upar,vth,vpa,vperp,1,ivperp)
                    rpbd.dGdvperp_data.upper_boundary_vpa[ivperp] += dGdvperp_Maxwellian(dens,upar,vth,vpa,vperp,nvpa,ivperp)
        end
-       @begin_anyv_vpa_region()
+       @begin_anysv_vpa_region()
        @loop_vpa ivpa begin
                    rpbd.dGdvperp_data.upper_boundary_vperp[ivpa] += dGdvperp_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,nvperp)
        end
@@ -2553,8 +2553,8 @@ function assemble_explicit_collision_operator_rhs_serial!(rhsvpavperp,pdfs,d2Gsp
     d2Gspdvperp2,dHspdvpa,dHspdvperp,ms,msp,nussp,
     vpa,vperp,YY_arrays::YY_collision_operator_arrays)
     @inbounds begin
-        @begin_anyv_region()
-        @anyv_serial_region begin
+        @begin_anysv_region()
+        @anysv_serial_region begin
             # assemble RHS of collision operator
             rhsc = vec(rhsvpavperp)
             @. rhsc = 0.0
@@ -2623,7 +2623,7 @@ function assemble_explicit_collision_operator_rhs_parallel!(rhsvpavperp,pdfs,d2G
     d2Gspdvperp2,dHspdvpa,dHspdvperp,ms,msp,nussp,
     vpa,vperp,YY_arrays::YY_collision_operator_arrays)
     # assemble RHS of collision operator
-    @begin_anyv_vperp_vpa_region()
+    @begin_anysv_vperp_vpa_region()
     @loop_vperp_vpa ivperp ivpa begin
         rhsvpavperp[ivpa,ivperp] = 0.0
     end
@@ -2720,7 +2720,7 @@ function assemble_explicit_collision_operator_rhs_parallel_analytical_inputs!(rh
     d2Gspdvperp2,dHspdvpa,dHspdvperp,ms,msp,nussp,
     vpa,vperp,YY_arrays::YY_collision_operator_arrays)
     # assemble RHS of collision operator
-    @begin_anyv_vperp_vpa_region()
+    @begin_anysv_vperp_vpa_region()
     @loop_vperp_vpa ivperp ivpa begin
         rhsvpavperp[ivpa,ivperp] = 0.0
     end
@@ -2964,7 +2964,7 @@ function calculate_rosenbluth_potentials_via_elliptic_solve!(GG,HH,dHdvpa,dHdvpe
               or boundary_data_option='$direct_integration'")
     end
     # carry out the elliptic solves required
-    @begin_anyv_vperp_vpa_region()
+    @begin_anysv_vperp_vpa_region()
     @loop_vperp_vpa ivperp ivpa begin
         S_dummy[ivpa,ivperp] = -(4.0*pi)*ffsp_in[ivpa,ivperp]
     end
@@ -2973,21 +2973,21 @@ function calculate_rosenbluth_potentials_via_elliptic_solve!(GG,HH,dHdvpa,dHdvpe
     # The solves run on ranks 0, 1 and 2 of the subblock respectively, but modulo the size
     # of the subblock (to ensure that the ranks doing work are never outside the
     # subblock, if the size of the subblock is less than 3).
-    @begin_anyv_region()
-    if anyv_subblock_rank[] == 0 % anyv_subblock_size[]
+    @begin_anysv_region()
+    if anysv_subblock_rank[] == 0 % anysv_subblock_size[]
         elliptic_solve!(HH, S_dummy, rpbd.H_data, lu_obj_LP, MM2D_sparse, rhsvpavperp,
                         vpa, vperp)
     end
-    if anyv_subblock_rank[] == 1 % anyv_subblock_size[]
+    if anysv_subblock_rank[] == 1 % anysv_subblock_size[]
         elliptic_solve!(dHdvpa, S_dummy, rpbd.dHdvpa_data, lu_obj_LP, PPpar2D_sparse,
                         rhsvpavperp_copy1, vpa, vperp)
     end
-    if anyv_subblock_rank[] == 2 % anyv_subblock_size[]
+    if anysv_subblock_rank[] == 2 % anysv_subblock_size[]
         elliptic_solve!(dHdvperp, S_dummy, rpbd.dHdvperp_data, lu_obj_LV, PUperp2D_sparse,
                         rhsvpavperp_copy2, vpa, vperp)
     end
     
-    @begin_anyv_vperp_vpa_region()
+    @begin_anysv_vperp_vpa_region()
     @loop_vperp_vpa ivperp ivpa begin
         S_dummy[ivpa,ivperp] = 2.0*HH[ivpa,ivperp]
     end
@@ -2999,36 +2999,36 @@ function calculate_rosenbluth_potentials_via_elliptic_solve!(GG,HH,dHdvpa,dHdvpe
     # ranks in the subblock if both conditions calculate_GG and calculate_dGdvperp are
     # false; at least 3 ranks if only one of the conditions is true; and at least 4 ranks
     # if both conditions are true).
-    @begin_anyv_region()
+    @begin_anysv_region()
     if calculate_GG
-        if anyv_subblock_rank[] == 2 % anyv_subblock_size[]
+        if anysv_subblock_rank[] == 2 % anysv_subblock_size[]
             elliptic_solve!(GG, S_dummy, rpbd.G_data, lu_obj_LP, MM2D_sparse,
                             rhsvpavperp_copy2, vpa, vperp)
         end
     end
     if calculate_dGdvperp || algebraic_solve_for_d2Gdvperp2
-        if anyv_subblock_rank[] == (calculate_GG ? 3 : 2) % anyv_subblock_size[]
+        if anysv_subblock_rank[] == (calculate_GG ? 3 : 2) % anysv_subblock_size[]
             elliptic_solve!(dGdvperp, S_dummy, rpbd.dGdvperp_data, lu_obj_LV,
                             PUperp2D_sparse, rhsvpavperp_copy3, vpa, vperp)
         end
     end
-    if anyv_subblock_rank[] == 0 % anyv_subblock_size[]
+    if anysv_subblock_rank[] == 0 % anysv_subblock_size[]
         elliptic_solve!(d2Gdvpa2, S_dummy, rpbd.d2Gdvpa2_data, lu_obj_LP, KKpar2D_sparse,
                         rhsvpavperp, vpa, vperp)
     end
-    if anyv_subblock_rank[] == 1 % anyv_subblock_size[]
+    if anysv_subblock_rank[] == 1 % anysv_subblock_size[]
         elliptic_solve!(d2Gdvperpdvpa, S_dummy, rpbd.d2Gdvperpdvpa_data, lu_obj_LV,
                         PPparPUperp2D_sparse, rhsvpavperp_copy1, vpa, vperp)
     end
     
     if algebraic_solve_for_d2Gdvperp2
-        @begin_anyv_vperp_vpa_region()
+        @begin_anysv_vperp_vpa_region()
         @loop_vperp_vpa ivperp ivpa begin
             S_dummy[ivpa,ivperp] = 2.0*HH[ivpa,ivperp] - d2Gdvpa2[ivpa,ivperp]
             Q_dummy[ivpa,ivperp] = -dGdvperp[ivpa,ivperp]
         end
-        @begin_anyv_region()
-        @anyv_serial_region begin
+        @begin_anysv_region()
+        @anysv_serial_region begin
             # use the algebraic solve function to find
             # d2Gdvperp2 = 2H - d2Gdvpa2 - (1/vperp)dGdvperp
             # using a weak form
@@ -3038,14 +3038,14 @@ function calculate_rosenbluth_potentials_via_elliptic_solve!(GG,HH,dHdvpa,dHdvpe
         end
     else
         # solve a weak-form PDE for d2Gdvperp2
-        @begin_anyv_vperp_vpa_region()
+        @begin_anysv_vperp_vpa_region()
         @loop_vperp_vpa ivperp ivpa begin
             #S_dummy[ivpa,ivperp] = 2.0*HH[ivpa,ivperp] # <- this is already the value of
                                                         #    S_dummy calculated above
             Q_dummy[ivpa,ivperp] = 2.0*d2Gdvpa2[ivpa,ivperp]
         end
-        @begin_anyv_region()
-        @anyv_serial_region begin
+        @begin_anysv_region()
+        @anysv_serial_region begin
             elliptic_solve!(d2Gdvperp2, S_dummy, Q_dummy, rpbd.d2Gdvperp2_data, lu_obj_LB,
                             KPperp2D_sparse, MMparMNperp2D_sparse, rhsvpavperp, vpa,
                             vperp)
@@ -3072,11 +3072,11 @@ function calculate_rosenbluth_potentials_via_direct_integration!(GG,HH,dHdvpa,dH
     H2_weights = fkpl_arrays.H2_weights
     H3_weights = fkpl_arrays.H3_weights
     # first compute the derivatives of fs' (the integration weights assume d fs' dvpa and d fs' dvperp are known)
-    @begin_anyv_vperp_region()
+    @begin_anysv_vperp_region()
     @loop_vperp ivperp begin
         @views derivative!(dfdvpa[:,ivperp], ffsp_in[:,ivperp], vpa, vpa_spectral)
     end
-    @begin_anyv_vpa_region()
+    @begin_anysv_vpa_region()
     @loop_vpa ivpa begin
         @views derivative!(dfdvperp[ivpa,:], ffsp_in[ivpa,:], vperp, vperp_spectral)
         @views derivative!(d2fdvperpdvpa[ivpa,:], dfdvpa[ivpa,:], vperp, vperp_spectral)
@@ -3105,7 +3105,7 @@ function calculate_rosenbluth_integrals!(GG,d2Gspdvpa2,dGspdvperp,d2Gspdvperpdvp
                                         fsp,dfspdvpa,dfspdvperp,d2fspdvperpdvpa,
                                         G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
                                         nvpa,nvperp)
-    @begin_anyv_vperp_vpa_region()
+    @begin_anysv_vperp_vpa_region()
     @loop_vperp_vpa ivperp ivpa begin
         GG[ivpa,ivperp] = 0.0
         d2Gspdvpa2[ivpa,ivperp] = 0.0
@@ -3146,7 +3146,7 @@ function enforce_vpavperp_BCs!(pdf,vpa,vperp,vpa_spectral,vperp_spectral)
     # vpa boundary conditions
     # zero at infinity
     if vpa.bc == "zero"
-        @begin_anyv_vperp_region()
+        @begin_anysv_vperp_region()
         @loop_vperp ivperp begin
             pdf[1,ivperp] = 0.0
             pdf[nvpa,ivperp] = 0.0
@@ -3156,7 +3156,7 @@ function enforce_vpavperp_BCs!(pdf,vpa,vperp,vpa_spectral,vperp_spectral)
     # zero boundary condition at infinity
     # set regularity condition d F / d vperp = 0 at vperp = 0
     # adjust F(vperp = 0) so that d F / d vperp = 0 at vperp = 0
-    @begin_anyv_vpa_region()
+    @begin_anysv_vpa_region()
     if vperp.bc in ("zero", "zero-impose-regularity")
         @loop_vpa ivpa begin
             pdf[ivpa,nvperp] = 0.0
@@ -3188,7 +3188,7 @@ two reference speeds.
 """
 function interpolate_2D_vspace!(pdf_out,pdf_in,vpa,vperp,scalefac)
     
-    @begin_anyv_vperp_vpa_region()
+    @begin_anysv_vperp_vpa_region()
     # loop over points in the output interpolated dataset
     @loop_vperp ivperp begin
         vperp_val = vperp.grid[ivperp]*scalefac
@@ -3245,13 +3245,13 @@ end
 #    newgrid_vperp = vperp.scratch .= scalefac .* vperp.grid
 #    newgrid_vpa = vpa.scratch .= scalefac .* vpa.grid
 #
-#    @begin_anyv_vpa_region()
+#    @begin_anysv_vpa_region()
 #    @loop_vpa ivpa begin
 #        @views interpolate_to_grid_1d!(pdf_buffer[ivpa,:], newgrid_vperp,
 #                                       pdf_in[ivpa,:], vperp, vperp_spectral)
 #    end
 #
-#    @begin_anyv_vperp_region()
+#    @begin_anysv_vperp_region()
 #    @loop_vperp ivperp begin
 #        @views interpolate_to_grid_1d!(pdf_out[:,ivperp], newgrid_vpa,
 #                                       pdf_buffer[:,ivperp], vpa, vpa_spectral)
