@@ -67,7 +67,6 @@ test_input_finite_difference = OptionsDict("composition" => OptionsDict("n_ion_s
                                                                          "split_operators" => false),
                                            "r" => OptionsDict("ngrid" => 1,
                                                               "nelement" => 1,
-                                                              "bc" => "periodic",
                                                               "discretization" => "finite_difference"),
                                            "z" => OptionsDict("ngrid" => 200,
                                                               "nelement" => 1,
