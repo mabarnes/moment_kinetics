@@ -27,8 +27,9 @@ test_input = OptionsDict(
                        "discretization" => "chebyshev_pseudospectral"),
     "r" => OptionsDict("ngrid" => 3,
                        "nelement" => 2,
-                       "bc" => "periodic",
                        "discretization" => "chebyshev_pseudospectral"),
+    "inner_r_bc_1" => OptionsDict("bc" => "periodic"),
+    "outer_r_bc_1" => OptionsDict("bc" => "periodic"),
     "vpa" => OptionsDict("ngrid" => 3,
                          "nelement" => 2,
                          "L" => 12.0,
@@ -58,7 +59,8 @@ test_input = OptionsDict(
 
 test_input_Dirichlet_r = deepcopy(test_input)
 test_input_Dirichlet_r["output"]["run_name"] = "MMS-2D-wall_cheb-with-neutrals-Dirichlet"
-test_input_Dirichlet_r["r"]["bc"] => "Dirichlet"
+test_input_Dirichlet_r["inner_r_bc_1"]["bc"] => "Dirichlet"
+test_input_Dirichlet_r["outer_r_bc_1"]["bc"] => "Dirichlet"
 
 test_input_list = [
      test_input,

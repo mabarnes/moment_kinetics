@@ -123,7 +123,6 @@ test_input_full_f = OptionsDict("composition" => OptionsDict("n_ion_species" => 
                                                               "split_operators" => false),
                                 "r" => OptionsDict("ngrid" => 1,
                                                    "nelement" => 1,
-                                                   "bc" => "periodic",
                                                    "discretization" => "chebyshev_pseudospectral"),
                                 "z" => OptionsDict("ngrid" => 9,
                                                    "nelement" => 4,
