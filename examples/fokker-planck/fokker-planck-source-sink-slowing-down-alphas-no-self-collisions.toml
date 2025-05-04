@@ -20,7 +20,6 @@ discretization = "chebyshev_pseudospectral"
 ngrid = 1
 nelement = 1
 nelement_local = 1
-bc = "periodic"
 discretization = "chebyshev_pseudospectral"
 
 [vpa]
@@ -106,3 +105,9 @@ nstep = 250000
 dt = 7.071067811865475e-5
 nwrite = 500
 nwrite_dfns = 500
+
+[inner_r_bc_1]
+bc = "periodic"
+
+[outer_r_bc_1]
+bc = "periodic"

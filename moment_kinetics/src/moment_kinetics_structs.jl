@@ -7,9 +7,15 @@ module moment_kinetics_structs
 using ..communication
 using ..type_definitions: mk_float
 
-export ndim_pdf_ion, ndim_pdf_neutral, ndim_pdf_electron
-export ndim_field, ndim_moment, ndim_moment_electron
-export ndim_v, ndim_v_neutral
+export scratch_pdf, scratch_electron_pdf, em_fields_struct, moments_ion_substruct,
+       moments_electron_substruct, moments_neutral_substruct, pdf_substruct,
+       electron_pdf_substruct, pdf_struct, moments_struct
+export ndim_pdf_ion, ndim_pdf_neutral, ndim_pdf_electron, ndim_field, ndim_moment,
+       ndim_moment_electron, ndim_v, ndim_v_neutral, ndim_pdf_ion_boundary,
+       ndim_moment_boundary, ndim_pdf_electron_boundary, ndim_electron_moment_boundary,
+       ndim_pdf_neutral_boundary
+export discretization_info, weak_discretization_info, null_spatial_dimension_info,
+       null_velocity_dimension_info, null_vperp_dimension_info
 
 # variables to define the number of dimensions in arrays
 const ndim_pdf_ion = 5 #(vpa + vperp + z + r + s)
@@ -21,6 +27,12 @@ const ndim_moment = 3 #(z + r + s)
 const ndim_moment_electron = 2 #(z + r)
 const ndim_v = 2 #(vpa + vperp)
 const ndim_v_neutral = 3 #(vz + vr + vzeta)
+
+const ndim_pdf_ion_boundary = ndim_pdf_ion - 1
+const ndim_moment_boundary = ndim_moment - 1
+const ndim_pdf_electron_boundary = ndim_pdf_electron - 1
+const ndim_electron_moment_boundary = ndim_field - 1
+const ndim_pdf_neutral_boundary = ndim_pdf_neutral - 1
 
 
 """
@@ -421,17 +433,6 @@ struct moments_struct{ndim_moment_wall, ndim_moment_electron_source}
 end
 
 """
-"""
-struct boundary_distributions_struct
-    # knudsen cosine distribution for imposing the neutral wall boundary condition
-    knudsen::MPISharedArray{mk_float,ndim_v_neutral}
-    # ion particle r boundary values (vpa,vperp,z,r,s)
-    pdf_rboundary_ion::MPISharedArray{mk_float,ndim_pdf_ion}
-    # neutral particle r boundary values (vz,vr,vzeta,z,r,s)
-    pdf_rboundary_neutral::MPISharedArray{mk_float,ndim_pdf_neutral}
-end
-
-"""
 discretization_info for one dimension
 
 All the specific discretizations in moment_kinetics are subtypes of this type.
@@ -458,5 +459,90 @@ struct null_velocity_dimension_info <: discretization_info end
 Type representing a vperp dimension with only one grid point
 """
 struct null_vperp_dimension_info <: discretization_info end
+
+
+# Types used for radial boundary conditions
+###########################################
+
+export ion_r_boundary_section, electron_r_boundary_section, neutral_r_boundary_section,
+       r_boundary_section, ion_r_boundary_section_periodic,
+       electron_r_boundary_section_periodic, neutral_r_boundary_section_periodic,
+       ion_r_boundary_section_Neumann, electron_r_boundary_section_Neumann,
+       neutral_r_boundary_section_Neumann, ion_r_boundary_section_Dirichlet,
+       electron_r_boundary_section_Dirichlet, neutral_r_boundary_section_Dirichlet,
+       r_boundary_info, z_boundary_info, boundary_info
+
+abstract type ion_r_boundary_section end
+abstract type electron_r_boundary_section end
+abstract type neutral_r_boundary_section end
+
+struct r_boundary_section{Tion <: ion_r_boundary_section,
+                          Telectron <: electron_r_boundary_section,
+                          Tneutral <: neutral_r_boundary_section}
+    z_range::UnitRange
+    ion::Tion
+    electron::Telectron
+    neutral::Tneutral
+end
+
+struct ion_r_boundary_section_periodic <: ion_r_boundary_section end
+
+struct electron_r_boundary_section_periodic <: electron_r_boundary_section end
+
+struct neutral_r_boundary_section_periodic <: neutral_r_boundary_section end
+
+struct ion_r_boundary_section_Neumann <: ion_r_boundary_section
+    is_inner::Bool
+    one_over_logarithmic_gradient_value_minus_Db::mk_float
+    derivative_coefficients::Vector{mk_float}
+end
+
+struct electron_r_boundary_section_Neumann <: electron_r_boundary_section
+    is_inner::Bool
+    one_over_logarithmic_gradient_value_minus_Db::mk_float
+    derivative_coefficients::Vector{mk_float}
+end
+
+struct neutral_r_boundary_section_Neumann <: neutral_r_boundary_section
+    is_inner::Bool
+    one_over_logarithmic_gradient_value_minus_Db::mk_float
+    derivative_coefficients::Vector{mk_float}
+end
+
+struct ion_r_boundary_section_Dirichlet <: ion_r_boundary_section
+    pdf::MPISharedArray{mk_float,ndim_pdf_ion_boundary}
+    density::MPISharedArray{mk_float,ndim_moment_boundary}
+    upar::MPISharedArray{mk_float,ndim_moment_boundary}
+    p::MPISharedArray{mk_float,ndim_moment_boundary}
+end
+
+struct electron_r_boundary_section_Dirichlet <: electron_r_boundary_section
+    pdf::MPISharedArray{mk_float,ndim_pdf_electron_boundary}
+    density::MPISharedArray{mk_float,ndim_electron_moment_boundary}
+    upar::MPISharedArray{mk_float,ndim_electron_moment_boundary}
+    p::MPISharedArray{mk_float,ndim_electron_moment_boundary}
+end
+
+struct neutral_r_boundary_section_Dirichlet <: neutral_r_boundary_section
+    pdf::MPISharedArray{mk_float,ndim_pdf_neutral_boundary}
+    density::MPISharedArray{mk_float,ndim_moment_boundary}
+    uz::MPISharedArray{mk_float,ndim_moment_boundary}
+    p::MPISharedArray{mk_float,ndim_moment_boundary}
+end
+
+struct r_boundary_info{Tinner <: NTuple{M,r_boundary_section} where M,
+                       Touter <: NTuple{N,r_boundary_section} where N}
+    inner_sections::Tinner
+    outer_sections::Touter
+end
+
+struct z_boundary_info
+    knudsen_cosine::MPISharedArray{mk_float,3}
+end
+
+struct boundary_info
+    r::r_boundary_info
+    z::z_boundary_info
+end
 
 end

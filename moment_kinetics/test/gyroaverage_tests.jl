@@ -8,7 +8,9 @@ using MPI
 using SpecialFunctions: besselj0
 
 import moment_kinetics
+using moment_kinetics: setup_moment_kinetics, cleanup_moment_kinetics!
 using moment_kinetics.input_structs
+using moment_kinetics.boundary_conditions: create_boundary_info
 using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.geo: init_magnetic_geometry, setup_geometry_input
 using moment_kinetics.communication
@@ -114,17 +116,15 @@ function gyroaverage_test(absolute_error; rhostar=0.1, pitch=0.5, ngrid=5, kr=2,
         # create the 'input' struct containing input info needed to create a
         # coordinate
         
-        # Set up MPI
-        initialize_comms!()
-        setup_distributed_memory_MPI(1,1,1,1)
-        irank_z, nrank_z, comm_sub_z, irank_r, nrank_r, comm_sub_r = setup_distributed_memory_MPI(z_nelement_global,z_nelement_local,r_nelement_global,r_nelement_local)
-        
-        coords_input = OptionsDict(
+        test_input = OptionsDict(
+            "output"=>OptionsDict("base_directory"=>get_MPI_tempdir(),
+                                  "run_name"=>"gyroaverages_test"),
             "r"=>OptionsDict("ngrid"=>r_ngrid, "nelement"=>r_nelement_global,
                              "nelement_local"=>r_nelement_local, "L"=>r_L,
                              "discretization"=>discretization, "cheb_option"=>cheb_option,
-                             "bc"=>r_bc,
                              "element_spacing_option"=>element_spacing_option),
+            "inner_r_bc_1"=>OptionsDict("bc"=>r_bc),
+            "outer_r_bc_1"=>OptionsDict("bc"=>r_bc),
             "z"=>OptionsDict("ngrid"=>z_ngrid, "nelement"=>z_nelement_global,
                              "nelement_local"=>z_nelement_local, "L"=>z_L,
                              "discretization"=>discretization, "cheb_option"=>cheb_option,
@@ -145,45 +145,26 @@ function gyroaverage_test(absolute_error; rhostar=0.1, pitch=0.5, ngrid=5, kr=2,
                                      "L"=>gyrophase_L, "discretization"=>discretization,
                                      "cheb_option"=>cheb_option, "bc"=>gyrophase_bc,
                                      "element_spacing_option"=>element_spacing_option),
+            "geometry" => OptionsDict("option" => "constant-helical",
+                                      "rhostar" => rhostar, "pitch" => pitch),
+            "composition" => OptionsDict("n_ion_species" => 1, "n_neutral_species" => 0,
+                                         "ion_physics" => "gyrokinetic_ions"),
         )
-        
-        # create the coordinate structs
-        r, r_spectral = define_coordinate(coords_input, "r"; collision_operator_dim=false,
-                                          run_directory=test_output_directory,
-                                          irank=irank_r, nrank=nrank_r, comm=comm_sub_r)
-        z, z_spectral = define_coordinate(coords_input, "z"; collision_operator_dim=false,
-                                          run_directory=test_output_directory,
-                                          irank=irank_z, nrank=nrank_z, comm=comm_sub_z)
-        vperp, vperp_spectral = define_coordinate(coords_input, "vperp";
-                                                  collision_operator_dim=false,
-                                                  run_directory=test_output_directory)
-        vpa, vpa_spectral = define_coordinate(coords_input, "vpa";
-                                              collision_operator_dim=false,
-                                              run_directory=test_output_directory)
-        gyrophase, gyrophase_spectral = define_coordinate(coords_input, "gyrophase";
-                                                          collision_operator_dim=false,
-                                                          run_directory=test_output_directory)
-        
-        # create test geometry
-        option = "constant-helical"
-        inputdict = OptionsDict("geometry" => OptionsDict("option" => option, "rhostar" => rhostar, "pitch" => pitch))
-        geometry_in = setup_geometry_input(inputdict, true)
-        geometry = init_magnetic_geometry(geometry_in,z,r)
-        
-        # create test composition
-        composition = create_test_composition()
-            
-        # setup shared-memory MPI ranges
-        looping.setup_loop_ranges!(block_rank[], block_size[];
-                                       s=composition.n_ion_species, sn=1,
-                                       r=r.n, z=z.n, vperp=vperp.n, vpa=vpa.n,
-                                       vzeta=1, vr=1, vz=1)
-                                       
-        # initialise the matrix for the gyroaverages
-        gyro = init_gyro_operators(vperp,z,r,gyrophase,geometry,composition,print_info=print_test_results)
+
+        fields = composition = r = z = vperp = vpa = geometry = gyroavs = nothing
+        quietoutput() do
+            pdf, scratch, scratch_implicit, scratch_electron, t_params, vz, vr, vzeta,
+                vpa, vperp, gyrophase, z, r, moments, fields, spectral_objects,
+                advection_structs, composition, collisions, geometry, gyroavs, boundaries,
+                external_source_settings, num_diss_params, nl_solver_params, advance,
+                advance_implicit, fp_arrays, scratch_dummy, manufactured_source_list,
+                ascii_io, io_moments, io_dfns =
+                    setup_moment_kinetics(test_input; write_output=false)
+           end
+
         # initialise a test field
-        phi = allocate_shared_float(z.n,r.n)
-        gphi = allocate_shared_float(vperp.n,z.n,r.n,composition.n_ion_species)
+        phi = fields.phi
+        gphi = fields.gphi
         gphi_exact = allocate_float(vperp.n,z.n,r.n,composition.n_ion_species)
         gphi_err = allocate_float(vperp.n,z.n,r.n)
         @begin_serial_region()
@@ -192,7 +173,7 @@ function gyroaverage_test(absolute_error; rhostar=0.1, pitch=0.5, ngrid=5, kr=2,
         end
         
         # gyroaverage phi
-        gyroaverage_field!(gphi,phi,gyro,vperp,z,r,composition)
+        gyroaverage_field!(gphi,phi,gyroavs,vperp,z,r,composition)
         
         # compute errors
         @begin_serial_region()
@@ -224,7 +205,7 @@ function gyroaverage_test(absolute_error; rhostar=0.1, pitch=0.5, ngrid=5, kr=2,
             fill_pdf_test_arrays!(pdf,gpdf_exact,vpa,vperp,z,r,composition,geometry,kz,kr,phasez,phaser)
         end
         
-        gyroaverage_pdf!(gpdf,pdf,gyro,vpa,vperp,z,r,composition)
+        gyroaverage_pdf!(gpdf,pdf,gyroavs,vpa,vperp,z,r,composition)
         # compute errors
         @begin_serial_region()
         @serial_region begin
@@ -248,13 +229,9 @@ function gyroaverage_test(absolute_error; rhostar=0.1, pitch=0.5, ngrid=5, kr=2,
             end
         end
         
-        finalize_comms!()
-end
-
-function create_test_composition()
-    input_dict = OptionsDict("composition" => OptionsDict("n_ion_species" => 1, "n_neutral_species" => 0, "ion_physics" => "gyrokinetic_ions") )
-    #println(input_dict)
-    return get_species_input(input_dict, true)
+        quietoutput() do
+            cleanup_moment_kinetics!(nothing, nothing, nothing)
+        end
 end
 
 function fill_test_arrays!(phi,gphi,vperp,z,r,geometry,composition,kz,kr,phasez,phaser)
