@@ -13,6 +13,7 @@ using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float, allocate_shared_float
 using ..array_allocation: allocate_int, allocate_shared_int
 using ..lagrange_polynomials: lagrange_poly
+using ..moment_kinetics_structs: ion_r_boundary_section_periodic
 using ..input_structs: gyrokinetic_ions
 using ..looping
 using ..timer_utils
@@ -40,7 +41,8 @@ This behaviour should be modified if we aim to support
 other nonzero boundary conditions for the z and r domains.
 """
 
-function init_gyro_operators(vperp,z,r,gyrophase,geometry,composition;print_info=false)
+function init_gyro_operators(vperp, z, r, gyrophase, geometry, boundaries, composition;
+                             print_info=false)
     gkions = composition.ion_physics == gyrokinetic_ions
     if !gkions
         gyromatrix =  allocate_shared_float(1,1,1,1,1,1)
@@ -64,6 +66,16 @@ function init_gyro_operators(vperp,z,r,gyrophase,geometry,composition;print_info
            rlist = allocate_float(gyrophase.n)
            zelementlist = allocate_int(gyrophase.n)
            relementlist = allocate_int(gyrophase.n)
+           z_periodic = (z.bc == "periodic")
+           if length(boundaries.r.inner_sections) > 1 || length(boundaries.r.outer_sections) > 1
+               error("gyroaverages do not support multiple r boundary conditions yet")
+           elseif isa(boundaries.r.inner_sections[1].ion, ion_r_boundary_section_periodic)
+               # Have already checked that periodic bc are consistent between inner and
+               # outer boundaries.
+               r_periodic = true
+           else
+               r_periodic = false
+           end
            
            @loop_s_r_z_vperp is ir iz ivperp begin
                #println("ivperp, iz, ir: ",ivperp," ",iz," ",ir)
@@ -81,8 +93,8 @@ function init_gyro_operators(vperp,z,r,gyrophase,geometry,composition;print_info
                # convert these angles to a list of z'(gphase) r'(gphase)
                zrcoordinatelist!(gyrophase,zlist,rlist,rho_val,r_val,z_val,bzeta)
                # determine which elements contain these z', r'
-               elementlist!(zelementlist,zlist,z)
-               elementlist!(relementlist,rlist,r)
+               elementlist!(zelementlist,zlist,z,z_periodic)
+               elementlist!(relementlist,rlist,r,r_periodic)
                #println(z_val,zlist)
                #println(r_val,rlist)
                #println(zelementlist)
@@ -101,7 +113,7 @@ function init_gyro_operators(vperp,z,r,gyrophase,geometry,composition;print_info
                        #continue
                        # if set to zero any <field> where the path exits the domain
                        @. gyromatrix[:,:,ivperp,iz,ir,is] = 0.0
-                       if z.bc == "periodic"
+                       if z_periodic
                            print("ERROR: -1 in zelementlist")
                        end
                        break
@@ -116,7 +128,7 @@ function init_gyro_operators(vperp,z,r,gyrophase,geometry,composition;print_info
                        #continue
                        # if set to zero any <field> where the path exits the domain
                        @. gyromatrix[:,:,ivperp,iz,ir,is] = 0.0
-                       if r.bc == "periodic"
+                       if r_periodic
                            print("ERROR: -1 in relementlist")
                        end
                        break
@@ -213,15 +225,14 @@ for a given list of coordinate values, determine in which elements they are foun
 -- assume here that the coordinates are fully local in memory
 
 """
-function elementlist!(elist,coordlist,coord)
+function elementlist!(elist,coordlist,coord,periodic)
     zero = 1.0e-14
     ngyro = size(coordlist,1)
     nelement = coord.nelement_global
     xebs = coord.element_boundaries
-    bc = coord.bc
     L = coord.L
     for i in 1:ngyro
-        if bc=="periodic"
+        if periodic
             x = coordlist[i]
             # if x is outside the domain, shift x to the appropriate periodic copy within the domain
             x0 = xebs[1] # the lower endpoint

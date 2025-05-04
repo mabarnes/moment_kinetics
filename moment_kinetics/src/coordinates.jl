@@ -159,7 +159,7 @@ function get_coordinate_input(input_dict, name; ignore_MPI=false,
     if name == "z"
         default_bc = "wall"
     elseif name == "r"
-        default_bc = "periodic"
+        default_bc = "default"
     elseif name == "vperp"
         default_bc = "default"
     else
@@ -201,6 +201,11 @@ function get_coordinate_input(input_dict, name; ignore_MPI=false,
        )
     if coord_input_dict["nelement_local"] == -1 || ignore_MPI
         coord_input_dict["nelement_local"] = coord_input_dict["nelement"]
+    end
+    if name == "r" && coord_input_dict["bc"] != "default"
+        error("Radial boundary conditions should be set in [inner_r_bc_*] and "
+              * "[outer_r_bc_*] sections, not in [r], but got "
+              * "bc=$(coord_input_dict["bc"]) in [r] section.")
     end
     if name == "vperp" && coord_input_dict["bc"] == "default"
         if coord_input_dict["ngrid"] == 1 && coord_input_dict["nelement"] == 1

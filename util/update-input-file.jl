@@ -211,11 +211,15 @@ const top_level_update_map = OptionsDict(
 
 # If the "new option" is a String, it is the name of the option within the same section
 # that should replace the "old option".
+# If the "new option" is a Pair{String,String}, it gives the new section and name of the
+# option that should replace the "old option".
 # If the "new option" is an OptionsDict, it gives a map from the original option values to
 # new option names and values. If the new value is `nothing` it is replaced by the old
 # value.
 # If the "new option" is a Function, the option is not renamed, instead the function is
 # applied to the value.
+# If the "new option" is a Tuple, the old option is replaced by multiple new settings,
+# which can be specified by any of the methods above.
 const sections_update_map = OptionsDict(
     "evolve_moments" => OptionsDict("parallel_pressure" => "pressure"),
     "timestepping" => OptionsDict("implicit_electron_advance" => OrderedDict{Any,Any}(true => OptionsDict("timestepping" => OptionsDict("kinetic_electron_solver" => "implicit_steady_state"),),
@@ -237,6 +241,8 @@ const sections_update_map = OptionsDict(
                                                                                     "implicit_ppar_explicit_pseudotimestep" => OptionsDict("timestepping" => OptionsDict("kinetic_electron_solver" => "implicit_p_explicit_pseudotimestep")),
                                                                                    )
                                  ),
+    "r" => OptionsDict("bc" => (Pair("inner_r_bc_1", "bc"), Pair("outer_r_bc_1", "bc")),
+                      )
    )
 
 PR322_p = (x) -> 2 .* x
@@ -507,34 +513,53 @@ function update_input_dict(original_input::DictType;
         end
         section = updated_input[section_name]
         existing_keys = keys(section)
-        for (old_key, new_option_setting) ∈ section_update_map
+        for (old_key, new_option_settings) ∈ section_update_map
             if old_key ∉ existing_keys
                 continue
             end
             old_value = section[old_key]
-            if new_option_setting isa AbstractDict
-                if old_value ∉ keys(new_option_setting)
-                    continue
-                end
-                pop!(section, old_key)
-                for (new_section_name, new_section_map) ∈ new_option_setting[old_value]
-                    new_section = get(updated_input, new_section_name, DictType())
-                    for (k,v) ∈ new_section_map
-                        if k ∈ keys(new_section)
-                            error("Trying to add new key \"$k\" to $new_section_name, but \"$k\" already exists")
-                        end
-                        if v === nothing
-                            new_section[k] = old_value
-                        else
-                            new_section[k] = v
+            if !isa(new_option_settings, Tuple)
+                new_option_settings = (new_option_settings,)
+            end
+            for this_option_setting ∈ new_option_settings
+                if this_option_setting isa Pair
+                    # Provide default because if new_option_settings is a Tuple with
+                    # multiple entries, pop!() will be called more than once for the same
+                    # old_key.
+                    pop!(section, old_key, "")
+                    new_section = get(updated_input, this_option_setting[1], DictType())
+                    new_section[this_option_setting[2]] = old_value
+                    updated_input[this_option_setting[1]] = new_section
+                elseif this_option_setting isa AbstractDict
+                    if old_value ∉ keys(this_option_setting)
+                        continue
+                    end
+                    # Provide default because if new_option_settings is a Tuple with
+                    # multiple entries, pop!() will be called more than once for the same
+                    # old_key.
+                    pop!(section, old_key, "")
+                    for (new_section_name, new_section_map) ∈ this_option_setting[old_value]
+                        new_section = get(updated_input, new_section_name, DictType())
+                        for (k,v) ∈ new_section_map
+                            if k ∈ keys(new_section)
+                                error("Trying to add new key \"$k\" to $new_section_name, but \"$k\" already exists")
+                            end
+                            if v === nothing
+                                new_section[k] = old_value
+                            else
+                                new_section[k] = v
+                            end
                         end
                     end
+                elseif this_option_setting isa Function
+                    section[old_key] = this_option_setting(old_value)
+                else
+                    # Provide default because if new_option_settings is a Tuple with
+                    # multiple entries, pop!() will be called more than once for the same
+                    # old_key.
+                    pop!(section, old_key, "")
+                    section[this_option_setting] = old_value
                 end
-            elseif new_option_setting isa Function
-                section[old_key] = new_option_setting(old_value)
-            else
-                pop!(section, old_key)
-                section[new_option_setting] = old_value
             end
         end
     end

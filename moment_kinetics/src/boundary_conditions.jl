@@ -3,26 +3,724 @@ Functions for applying boundary conditions
 """
 module boundary_conditions
 
+export create_boundary_info
 export enforce_boundary_conditions!
 export enforce_neutral_boundary_conditions!
 
+using LinearAlgebra: dot
 using SpecialFunctions: erfc
 
+using ..array_allocation: allocate_shared_float
 using ..calculus: integral, reconcile_element_boundaries_MPI!
+using ..communication
 using ..coordinates: coordinate
+using ..input_structs
 using ..interpolation: interpolate_to_grid_1d!
 using ..looping
 using ..timer_utils
-using ..moment_kinetics_structs: scratch_pdf, em_fields_struct
-using ..type_definitions: mk_float, mk_int
+using ..moment_kinetics_structs
+using ..type_definitions
 using ..velocity_moments: integrate_over_positive_vz, integrate_over_negative_vz
+
+function create_boundary_info(input_dict, pdf, moments, r, z, vperp, vpa, vzeta, vr, vz,
+                              r_spectral, composition, zero; warn_unexpected)
+    return boundary_info(create_r_boundary_info(input_dict, pdf, moments, r, z, vperp,
+                                                vpa, vzeta, vr, vz, r_spectral,
+                                                composition;
+                                                warn_unexpected=warn_unexpected),
+                         create_z_boundary_info(r, z, vperp, vpa, vzeta, vr, vz,
+                                                composition, zero))
+end
+
+function read_r_sections_input(input_dict, warn_unexpected)
+    inner_sections_counter = 1
+    inner_input = OptionsDict[]
+    element_lower = 1
+    single_section = false
+    section_name = "inner_r_bc_$inner_sections_counter"
+    while true
+        this_input = deepcopy(set_defaults_and_check_section!(
+            input_dict, section_name, warn_unexpected;
+            nelement=-1,
+            bc="Neumann",
+            ion_bc="default",
+            electron_bc="default",
+            neutral_bc="default",
+           ))
+        this_input["section_name"] = section_name
+        this_input["element_lower"] = element_lower
+        if this_input["nelement"] == -1
+            single_section = true
+            this_input["element_upper"] = -1
+        else
+            this_input["element_upper"] = element_lower + this_input["nelement"] - 1
+            element_lower = this_input["element_upper"] + 1
+        end
+        this_input["element_lower"] = element_lower
+        push!(inner_input, this_input)
+
+        inner_sections_counter += 1
+        section_name = "inner_r_bc_$inner_sections_counter"
+        if section_name ∉ keys(input_dict)
+            break
+        elseif single_section
+            error("When nelement=-1 is set, there can only be a single r-boundary "
+                  * "section, but found section $section_name")
+        end
+    end
+
+    outer_sections_counter = 1
+    outer_input = OptionsDict[]
+    element_lower = 1
+    single_section = false
+    section_name = "outer_r_bc_$outer_sections_counter"
+    while true
+        this_input = deepcopy(set_defaults_and_check_section!(
+            input_dict, section_name, warn_unexpected;
+            nelement=-1,
+            bc="Neumann",
+            ion_bc="default",
+            electron_bc="default",
+            neutral_bc="default",
+           ))
+        this_input["section_name"] = section_name
+        this_input["element_lower"] = element_lower
+        if this_input["nelement"] == -1
+            single_section = true
+            this_input["element_upper"] = -1
+        else
+            this_input["element_upper"] = element_lower + this_input["nelement"] - 1
+            element_lower = this_input["element_upper"] + 1
+        end
+        this_input["element_lower"] = element_lower
+        push!(outer_input, this_input)
+
+        outer_sections_counter += 1
+        section_name = "outer_r_bc_$outer_sections_counter"
+        if section_name ∉ keys(input_dict)
+            break
+        elseif single_section
+            error("When nelement=-1 is set, there can only be a single r-boundary "
+                  * "section, but found section $section_name")
+        end
+    end
+
+    return inner_input, outer_input
+end
+
+function create_r_boundary_info(input_dict, pdf, moments, r, z, vperp, vpa, vzeta, vr, vz,
+                                r_spectral, composition; warn_unexpected)
+    inner_input, outer_input = read_r_sections_input(input_dict, warn_unexpected)
+
+    ion_pdf_inner = @view pdf.ion.norm[:,:,:,1,:]
+    ion_density_inner = @view moments.ion.dens[:,1,:]
+    ion_upar_inner = @view moments.ion.upar[:,1,:]
+    ion_p_inner = @view moments.ion.p[:,1,:]
+    electron_pdf_inner = pdf.electron === nothing ? nothing : @view pdf.electron.norm[:,:,:,1]
+    electron_density_inner = @view moments.electron.dens[:,1]
+    electron_upar_inner = @view moments.electron.upar[:,1]
+    electron_p_inner = @view moments.electron.p[:,1]
+    neutral_pdf_inner = @view pdf.neutral.norm[:,:,:,:,1,:]
+    neutral_density_inner = @view moments.neutral.dens[:,1,:]
+    neutral_uz_inner = @view moments.neutral.uz[:,1,:]
+    neutral_p_inner = @view moments.neutral.p[:,1,:]
+
+    # Only inner-r shared-memory block needs to apply r-boundary conditions.
+    # Note that 1D simulations cannot have r-boundaries
+    if r.n > 1 && r.irank == 0
+        inner_sections = collect(create_r_section(inp, ion_pdf_inner, ion_density_inner,
+                                                  ion_upar_inner, ion_p_inner,
+                                                  electron_pdf_inner,
+                                                  electron_density_inner,
+                                                  electron_upar_inner, electron_p_inner,
+                                                  neutral_pdf_inner,
+                                                  neutral_density_inner, neutral_uz_inner,
+                                                  neutral_p_inner, r, z, vperp, vpa,
+                                                  vzeta, vr, vz, r_spectral, moments,
+                                                  composition, true)
+                                 for inp in inner_input)
+    else
+        inner_sections = ()
+    end
+
+    ion_pdf_outer = @view pdf.ion.norm[:,:,:,end,:]
+    ion_density_outer = @view moments.ion.dens[:,end,:]
+    ion_upar_outer = @view moments.ion.upar[:,end,:]
+    ion_p_outer = @view moments.ion.p[:,end,:]
+    electron_pdf_outer = pdf.electron === nothing ? nothing : @view pdf.electron.norm[:,:,:,end]
+    electron_density_outer = @view moments.electron.dens[:,end]
+    electron_upar_outer = @view moments.electron.upar[:,end]
+    electron_p_outer = @view moments.electron.p[:,end]
+    neutral_pdf_outer = @view pdf.neutral.norm[:,:,:,:,end,:]
+    neutral_density_outer = @view moments.neutral.dens[:,end,:]
+    neutral_uz_outer = @view moments.neutral.uz[:,end,:]
+    neutral_p_outer = @view moments.neutral.p[:,end,:]
+
+    # Only outer-r shared-memory block needs to apply r-boundary conditions.
+    # Note that 1D simulations cannot have r-boundaries
+    if r.n > 1 && r.irank == r.nrank - 1
+        outer_sections = collect(create_r_section(inp, ion_pdf_outer, ion_density_outer,
+                                                  ion_upar_outer, ion_p_outer,
+                                                  electron_pdf_outer,
+                                                  electron_density_outer,
+                                                  electron_upar_outer, electron_p_outer,
+                                                  neutral_pdf_outer,
+                                                  neutral_density_outer, neutral_uz_outer,
+                                                  neutral_p_outer, r, z, vperp, vpa,
+                                                  vzeta, vr, vz, r_spectral, moments,
+                                                  composition, false)
+                                 for inp in outer_input)
+    else
+        outer_sections = ()
+    end
+
+    for s_inner ∈ inner_sections
+        if isa(s_inner.ion, ion_r_boundary_section_periodic)
+            if r.nelement_local != r.nelement_global
+                error("Periodic r-boundary-conditions are not supported when using "
+                      * "distributed-MPI in the r-direction")
+            end
+            # Check there is a corresponding periodic section in the outer boundary.
+            if !any(isa(s_outer.ion, ion_r_boundary_section_periodic)
+                    && s_outer.z_range == s_inner.z_range
+                    for s_outer ∈ outer_sections)
+                error("Periodic boundary conditions requested for ions on inner "
+                      * "r-boundary for iz=$(s_inner.z_range) but no "
+                      * "corresponding section found on the outer r-boundary.")
+            end
+        end
+        if isa(s_inner.electron, electron_r_boundary_section_periodic)
+            if r.nelement_local != r.nelement_global
+                error("Periodic r-boundary-conditions are not supported when using "
+                      * "distributed-MPI in the r-direction")
+            end
+            # Check there is a corresponding periodic section in the outer boundary.
+            if !any(isa(s_outer.electron, electron_r_boundary_section_periodic)
+                    && s_outer.z_range == s_inner.z_range
+                    for s_outer ∈ outer_sections)
+                error("Periodic boundary conditions requested for electrons on inner "
+                      * "r-boundary for iz=$(s_inner.z_range) but no "
+                      * "corresponding section found on the outer r-boundary.")
+            end
+        end
+        if isa(s_inner.neutral, neutral_r_boundary_section_periodic)
+            if r.nelement_local != r.nelement_global
+                error("Periodic r-boundary-conditions are not supported when using "
+                      * "distributed-MPI in the r-direction")
+            end
+            # Check there is a corresponding periodic section in the outer boundary.
+            if !any(isa(s_outer.neutral, neutral_r_boundary_section_periodic)
+                    && s_outer.z_range == s_inner.z_range
+                    for s_outer ∈ outer_sections)
+                error("Periodic boundary conditions requested for neutral on inner "
+                      * "r-boundary for iz=$(s_inner.z_range) but no "
+                      * "corresponding section found on the outer r-boundary.")
+            end
+        end
+    end
+
+    r_boundaries = r_boundary_info(Tuple(s for s ∈ inner_sections if s !== nothing),
+                                   Tuple(s for s ∈ outer_sections if s !== nothing))
+
+    # Check that all boundary points are handled
+    if r.irank == 0 && r.n > 1
+        covered_points = vcat([b.z_range for b ∈ r_boundaries.inner_sections]...)
+        sort!(covered_points)
+        if covered_points != collect(1:z.n)
+            error("On inner r-boundary, boundary condition not specified for all points, "
+                  * "or multiply specified for some points. Points specified are "
+                  * "$covered_points.")
+        end
+    end
+    if r.irank == r.nrank - 1 && r.n > 1
+        covered_points = vcat([b.z_range for b ∈ r_boundaries.outer_sections]...)
+        sort!(covered_points)
+        if covered_points != collect(1:z.n)
+            error("On outer r-boundary, boundary condition not specified for all points, "
+                  * "or multiply specified for some points. Points specified are "
+                  * "$covered_points.")
+        end
+    end
+
+    return r_boundaries
+end
+
+function create_r_section(this_input, ion_pdf, ion_density, ion_upar, ion_p, electron_pdf,
+                          electron_density, electron_upar, electron_p, neutral_pdf,
+                          neutral_density, neutral_uz, neutral_p, r, z, vperp, vpa, vzeta,
+                          vr, vz, r_spectral, moments, composition, is_inner)
+    element_lower = this_input["element_lower"]
+    if this_input["element_upper"] < 0
+        element_upper = z.nelement_global
+    else
+        element_upper = this_input["element_upper"]
+    end
+
+    # element_lower and element_upper are global element indices. If we are using
+    # distributed-MPI, we need to convert them to local element indices.
+    offset = z.irank * z.nelement_local
+    element_lower -= offset
+    element_upper -= offset
+
+    if element_upper < 0 || element_lower > z.nelement_local + 1
+        # This section falls entirely outside this shared-memory block.
+        return nothing
+    end
+    has_element_lower_boundary = true
+    if element_lower ≤ 0
+        # This section is only partially contained in this shared-memory block.
+        element_lower = 1
+        has_element_lower_boundary = false
+    end
+    has_element_upper_boundary = true
+    if element_upper > z.nelement_local
+        # This section is only partially contained in this shared-memory block.
+        element_upper = z.nelement_local
+        has_element_upper_boundary = false
+    end
+
+    # At the meeting point of two sections, apply the boundary condition from whichever
+    # section is closer to z=0. This is an arbitrary choice, made to allow up-down
+    # symmetric simulations.
+    if (z.irank == 0 && element_lower == 1)
+        # First section, always include lower point
+        first_index = 1
+    elseif element_upper == 0
+        # Only upper edge of section meets this shared-memory block
+        if z.grid[1] > 0
+            first_index = 1
+        else
+            # Don't need to include this section in things imposed on this shared-memory
+            # block.
+            return nothing
+        end
+    else
+        first_index = (element_lower - 1) * (z.ngrid - 1) + 1
+        if z.grid[first_index] ≥ 0.0 && has_element_lower_boundary
+            # First point is included in previous section.
+            first_index += 1
+        end
+    end
+    if (z.irank == z.nrank - 1 && element_upper == z.nelement_local)
+        # Last section, always include upper point
+        last_index = z.n
+    elseif element_lower == z.nelement_local + 1
+        # Only lower edge of section meets this shared-memory block
+        if z.grid[end] < 0
+            last_index = z.n
+        else
+            # Don't need to include this section in things imposed on this shared-memory
+            # block.
+            return nothing
+        end
+    else
+        last_index = element_upper * (z.ngrid - 1) + 1
+        if z.grid[last_index] < 0.0 && has_element_upper_boundary
+            # Last point is included in next section.
+            last_index -= 1
+        end
+    end
+
+    z_range = first_index:last_index
+
+    function get_section(species)
+        if this_input["$(species)_bc"] == "default"
+            this_input["$(species)_bc"] = this_input["bc"]
+        end
+        if this_input["$(species)_bc"] == "periodic"
+            # No boundary condition to impose, periodicity is imposed by communication
+            # when calculating derivatives.
+            if species == "ion"
+                this_section = ion_r_boundary_section_periodic()
+            elseif species == "electron"
+                this_section = electron_r_boundary_section_periodic()
+            elseif species == "neutral"
+                this_section = neutral_r_boundary_section_periodic()
+            else
+                error("Unrecognised species=$species")
+            end
+        elseif startswith(this_input["$(species)_bc"], "Neumann")
+            boundary_value_string = split(this_input["$(species)_bc"], "Neumann")[2]
+            if boundary_value_string == ""
+                boundary_value = 0.0
+            else
+                boundary_value = parse(mk_float, boundary_value_string)
+            end
+
+            # Logarithmic derivative at boundary is equal to 'boundary value'. If `x` is
+            # the vector of ngrid values from the first/last element, D is the
+            # derivative matrix row corresponding to the inner/outer point, xb = x[1], Db
+            # = D[1] for the inner boundary or xb = x[end], Db = D[end] for the outer
+            # boundary, and xo, Do are the other x, D entries then
+            #   D.x / xb = boundary_value
+            #   ⇒ Do.xo = (boundary_value - Db) * xb
+            #        xb = Do.xo / (boundary_value - Db)
+            if :lobatto ∉ fieldnames(typeof(r_spectral)) || :Dmat ∉ fieldnames(typeof(r_spectral.lobatto))
+                error("$(typeof(r_spectral)) discretization does not support Neumann bc.")
+            end
+            if is_inner
+                Dmat_row = @view r_spectral.lobatto.Dmat[1,:]
+                derivative_coefficients = Dmat_row[2:end]
+                one_over_boundary_value_minus_Db = 1.0 / (boundary_value - Dmat_row[1])
+            else
+                Dmat_row = @view r_spectral.lobatto.Dmat[end,:]
+                derivative_coefficients = Dmat_row[1:end-1]
+                one_over_boundary_value_minus_Db = 1.0 / (boundary_value - Dmat_row[end])
+            end
+
+            if species == "ion"
+                this_section = ion_r_boundary_section_Neumann(is_inner,
+                                                              one_over_boundary_value_minus_Db,
+                                                              derivative_coefficients)
+            elseif species == "electron"
+                this_section = electron_r_boundary_section_Neumann(is_inner,
+                                                                   one_over_boundary_value_minus_Db,
+                                                                   derivative_coefficients)
+            elseif species == "neutral"
+                this_section = neutral_r_boundary_section_Neumann(is_inner,
+                                                                  one_over_boundary_value_minus_Db,
+                                                                  derivative_coefficients)
+            else
+                error("Unrecognised species=$species")
+            end
+        elseif startswith(this_input["$(species)_bc"], "Dirichlet")
+            bc_options = split(this_input["$(species)_bc"], "Dirichlet"; limit=2)[2]
+            bc_options_list = split(bc_options, "_")
+            n_val = 1.0
+            u_val = 0.0
+            T_val = 1.0
+
+            function get_Dirichlet_val(optionstring)
+                try
+                    val = parse(mk_float, optionstring[2:end])
+                catch e
+                    if isa(e, ArgumentError)
+                        error("Invalid Dirichlet option '$optionstring' found in "
+                              * "$(species)_bc in [$(this_input["section_name"])].")
+                    else
+                        rethrow()
+                    end
+                end
+            end
+
+            for o ∈ bc_options_list
+                if startswith(o, "n")
+                    n_val = get_Dirichlet_val(o)
+                elseif startswith(o, "u")
+                    u_val = get_Dirichlet_val(o)
+                elseif startswith(o, "T")
+                    T_val = get_Dirichlet_val(o)
+                end
+            end
+            vth = sqrt(2.0 * T_val)
+            vperp_grid = vperp.grid
+            vpa_grid = vpa.grid
+            if vperp.n == 1
+                Maxwellian_prefactor = 1.0 / sqrt(π)
+                vth_power = 0.5
+                fudge_factor_1V = sqrt(3.0)
+            else
+                Maxwellian_prefactor = 1.0 / π^1.5
+                vth_power = 1.5
+                fudge_factor_1V = 1.0
+            end
+
+            if species == "ion"
+                bc_ion_pdf = allocate_shared_float(vpa.n, vperp.n, length(z_range),
+                                                   composition.n_ion_species)
+                bc_ion_density = allocate_shared_float(length(z_range), composition.n_ion_species)
+                bc_ion_upar = allocate_shared_float(length(z_range), composition.n_ion_species)
+                bc_ion_p = allocate_shared_float(length(z_range), composition.n_ion_species)
+
+                @begin_s_region()
+                @loop_s is begin
+                    bc_ion_density[z_range,is] = n_val
+                    bc_ion_upar[z_range,is] = u_val
+                    bc_ion_p[z_range,is] = n_val * T_val
+                    if moments.evolve_p
+                        @loop_vperp_vpa ivperp ivpa begin
+                            bc_ion_pdf[ivperp,ivpa,z_range,is] =
+                                Maxwellian_prefactor / fudge_factor_1V *
+                                exp(-(vpa_grid[ivpa]^2 + vperp_grid[ivperp]^2) / fudge_factor_1V^2)
+                        end
+                    elseif moments.evolve_upar
+                        @loop_vperp_vpa ivperp ivpa begin
+                            bc_ion_pdf[ivperp,ivpa,z_range,is] =
+                                Maxwellian_prefactor / vth^vth_power *
+                                exp(-(vpa_grid[ivpa]^2 + vperp_grid[ivperp]^2) / vth^2)
+                        end
+                    elseif moments.evolve_density
+                        @loop_vperp_vpa ivperp ivpa begin
+                            bc_ion_pdf[ivperp,ivpa,z_range,is] =
+                                Maxwellian_prefactor / vth^vth_power *
+                                exp(-((vpa_grid[ivpa] - u_val)^2 + vperp_grid[ivperp]^2) / vth^2)
+                        end
+                    else
+                        @loop_vperp_vpa ivperp ivpa begin
+                            bc_ion_pdf[ivperp,ivpa,z_range,is] =
+                                Maxwellian_prefactor * n_val / vth^vth_power *
+                                exp(-((vpa_grid[ivpa] - u_val)^2 + vperp_grid[ivperp]^2) / vth^2)
+                        end
+                    end
+                end
+
+                this_section = ion_r_boundary_section_Dirichlet(bc_ion_pdf,
+                                                                bc_ion_density,
+                                                                bc_ion_upar, bc_ion_p)
+            elseif species == "electron"
+                vth /= sqrt(composition.me_over_mi)
+
+                bc_electron_pdf = allocate_shared_float(vpa.n, vperp.n, length(z_range))
+                bc_electron_density = allocate_shared_float(length(z_range))
+                bc_electron_upar = allocate_shared_float(length(z_range))
+                bc_electron_p = allocate_shared_float(length(z_range))
+
+                @begin_serial_region()
+                @serial_region begin
+                    bc_electron_density[z_range,is] = n_val
+                    bc_electron_upar[z_range,is] = u_val
+                    bc_electron_p[z_range,is] = n_val * T_val
+                    if moments.evolve_p
+                        @loop_vperp_vpa ivperp ivpa begin
+                            bc_electron_pdf[ivperp,ivpa,z_range,is] =
+                                Maxwellian_prefactor / fudge_factor_1V *
+                                exp(-(vpa_grid[ivpa]^2 + vperp_grid[ivperp]^2) / fudge_factor_1V^2)
+                        end
+                    elseif moments.evolve_upar
+                        @loop_vperp_vpa ivperp ivpa begin
+                            bc_electron_pdf[ivperp,ivpa,z_range,is] =
+                                Maxwellian_prefactor / vth^vth_power *
+                                exp(-(vpa_grid[ivpa]^2 + vperp_grid[ivperp]^2) / vth^2)
+                        end
+                    elseif moments.evolve_density
+                        @loop_vperp_vpa ivperp ivpa begin
+                            bc_electron_pdf[ivperp,ivpa,z_range,is] =
+                                Maxwellian_prefactor / vth^vth_power *
+                                exp(-((vpa_grid[ivpa] - u_val)^2 + vperp_grid[ivperp]^2) / vth^2)
+                        end
+                    else
+                        @loop_vperp_vpa ivperp ivpa begin
+                            bc_electron_pdf[ivperp,ivpa,z_range,is] =
+                                Maxwellian_prefactor * n_val / vth^vth_power *
+                                exp(-((vpa_grid[ivpa] - u_val)^2 + vperp_grid[ivperp]^2) / vth^2)
+                        end
+                    end
+                end
+
+                this_section = electron_r_boundary_section_Dirichlet(bc_electron_pdf,
+                                                                     bc_electron_density,
+                                                                     bc_electron_upar,
+                                                                     bc_electron_p)
+            elseif species == "neutral"
+                bc_neutral_pdf = allocate_shared_float(vz.n, vr.n, vzeta.n,
+                                                       length(z_range),
+                                                       composition.n_neutral_species)
+                bc_neutral_density = allocate_shared_float(length(z_range),
+                                                           composition.n_neutral_species)
+                bc_neutral_upar = allocate_shared_float(length(z_range),
+                                                        composition.n_neutral_species)
+                bc_neutral_p = allocate_shared_float(length(z_range),
+                                                     composition.n_neutral_species)
+
+                @begin_sn_region()
+                @loop_sn isn begin
+                    bc_neutral_density[z_range,isn] = n_val
+                    bc_neutral_upar[z_range,isn] = u_val
+                    bc_neutral_p[z_range,isn] = n_val * T_val
+                    if moments.evolve_p
+                        @loop_vperp_vpa ivperp ivpa begin
+                            bc_neutral_pdf[ivperp,ivpa,z_range,isn] =
+                                Maxwellian_prefactor / fudge_factor_1V *
+                                exp(-(vpa_grid[ivpa]^2 + vperp_grid[ivperp]^2) / fudge_factor_1V^2)
+                        end
+                    elseif moments.evolve_upar
+                        @loop_vperp_vpa ivperp ivpa begin
+                            bc_neutral_pdf[ivperp,ivpa,z_range,isn] =
+                                Maxwellian_prefactor / vth^vth_power *
+                                exp(-(vpa_grid[ivpa]^2 + vperp_grid[ivperp]^2) / vth^2)
+                        end
+                    elseif moments.evolve_density
+                        @loop_vperp_vpa ivperp ivpa begin
+                            bc_neutral_pdf[ivperp,ivpa,z_range,isn] =
+                                Maxwellian_prefactor / vth^vth_power *
+                                exp(-((vpa_grid[ivpa] - u_val)^2 + vperp_grid[ivperp]^2) / vth^2)
+                        end
+                    else
+                        @loop_vperp_vpa ivperp ivpa begin
+                            bc_neutral_pdf[ivperp,ivpa,z_range,isn] =
+                                Maxwellian_prefactor * n_val / vth^vth_power *
+                                exp(-((vpa_grid[ivpa] - u_val)^2 + vperp_grid[ivperp]^2) / vth^2)
+                        end
+                    end
+                end
+
+                this_section = neutral_r_boundary_section_Dirichlet(bc_neutral_pdf,
+                                                                    bc_neutral_density,
+                                                                    bc_neutral_upar,
+                                                                    bc_neutral_p)
+            end
+        elseif this_input["$(species)_bc"] == "pin_initial"
+            if species == "ion"
+                bc_ion_pdf = allocate_shared_float(vpa.n, vperp.n, length(z_range),
+                                                   composition.n_ion_species)
+                bc_ion_density = allocate_shared_float(length(z_range), composition.n_ion_species)
+                bc_ion_upar = allocate_shared_float(length(z_range), composition.n_ion_species)
+                bc_ion_p = allocate_shared_float(length(z_range), composition.n_ion_species)
+
+                @begin_s_region()
+                @loop_s is begin
+                    @views bc_ion_pdf[:,:,z_range,is] = ion_pdf[:,:,z_range,is]
+                    @views bc_ion_density[z_range,is] = ion_density[z_range,is]
+                    @views bc_ion_upar[z_range,is] = ion_upar[z_range,is]
+                    @views bc_ion_p[z_range,is] = ion_p[z_range,is]
+                end
+
+                this_section = ion_r_boundary_section_Dirichlet(bc_ion_pdf,
+                                                                bc_ion_density,
+                                                                bc_ion_upar, bc_ion_p)
+            elseif species == "electron"
+                if electron_pdf === nothing
+                    bc_electron_pdf = zeros(0, 0, 0)
+                else
+                    bc_electron_pdf = allocate_shared_float(vpa.n, vperp.n, length(z_range))
+                end
+                bc_electron_density = allocate_shared_float(length(z_range))
+                bc_electron_upar = allocate_shared_float(length(z_range))
+                bc_electron_p = allocate_shared_float(length(z_range))
+
+                @begin_serial_region()
+                @serial_region begin
+                    if electron_pdf !== nothing
+                        @views bc_electron_pdf[:,:,z_range] = electron_pdf[:,:,z_range]
+                    end
+                    @views bc_electron_density[z_range] = electron_density[z_range]
+                    @views bc_electron_upar[z_range] = electron_upar[z_range]
+                    @views bc_electron_p[z_range] = electron_p[z_range]
+                end
+
+                this_section = electron_r_boundary_section_pin_initial(bc_electron_pdf,
+                                                                       bc_electron_density,
+                                                                       bc_electron_upar,
+                                                                       bc_electron_p)
+            elseif species == "neutral"
+                bc_neutral_pdf = allocate_shared_float(vz.n, vr.n, vzeta.n,
+                                                       length(z_range),
+                                                       composition.n_neutral_species)
+                bc_neutral_density = allocate_shared_float(length(z_range),
+                                                           composition.n_neutral_species)
+                bc_neutral_upar = allocate_shared_float(length(z_range),
+                                                        composition.n_neutral_species)
+                bc_neutral_p = allocate_shared_float(length(z_range),
+                                                     composition.n_neutral_species)
+
+                @begin_sn_region()
+                @loop_sn isn begin
+                    @views bc_neutral_pdf[:,:,z_range,isn] = neutral_pdf[:,:,z_range,isn]
+                    @views bc_neutral_density[z_range,isn] = neutral_density[z_range,isn]
+                    @views bc_neutral_uz[z_range,isn] = neutral_uz[z_range,isn]
+                    @views bc_neutral_p[z_range,isn] = neutral_p[z_range,isn]
+                end
+
+                this_section = neutral_r_boundary_section_pin_initial(bc_neutral_pdf,
+                                                                      bc_neutral_density,
+                                                                      bc_neutral_uz,
+                                                                      bc_neutral_p)
+            else
+                error("Unrecognised species=$species")
+            end
+        else
+            error("Unrecognised option bc=$bc in section $(this_this_input["section_name"])")
+        end
+
+        return this_section
+    end
+
+    return r_boundary_section(z_range, get_section("ion"), get_section("electron"),
+                              get_section("neutral"))
+end
+
+function create_z_boundary_info(r, z, vperp, vpa, vzeta, vr, vz, composition, zero)
+    knudsen_cosine = init_knudsen_cosine(vzeta, vr, vz, composition, zero)
+    return z_boundary_info(knudsen_cosine)
+end
+
+function init_knudsen_cosine(vzeta, vr, vz, composition, zero)
+
+    knudsen_cosine = allocate_shared_float(vz.n, vr.n, vzeta.n)
+
+    @begin_serial_region()
+    @serial_region begin
+        integrand = zeros(mk_float, vz.n, vr.n, vzeta.n)
+
+        T_wall_over_m = composition.T_wall / composition.mn_over_mi
+
+        if vzeta.n > 1 && vr.n > 1
+            # 3V specification of neutral wall emission distribution for boundary condition
+            if composition.use_test_neutral_wall_pdf
+                # use test distribution that is easy for integration scheme to handle
+                for ivzeta in 1:vzeta.n
+                    for ivr in 1:vr.n
+                        for ivz in 1:vz.n
+                            v_transverse = sqrt(vzeta.grid[ivzeta]^2 + vr.grid[ivr]^2)
+                            v_normal = abs(vz.grid[ivz])
+                            knudsen_cosine[ivz,ivr,ivzeta] = (1.0/π/T_wall_over_m^2.5)*v_normal*exp( - 0.5 * (v_normal^2 + v_transverse^2) / T_wall_over_m)
+                            integrand[ivz,ivr,ivzeta] = vz.grid[ivz]*knudsen_cosine[ivz,ivr,ivzeta]
+                        end
+                    end
+                end
+            else # get the true Knudsen cosine distribution for neutral particle wall emission
+                for ivzeta in 1:vzeta.n
+                    for ivr in 1:vr.n
+                        for ivz in 1:vz.n
+                            v_transverse = sqrt(vzeta.grid[ivzeta]^2 + vr.grid[ivr]^2)
+                            v_normal = abs(vz.grid[ivz])
+                            v_tot = sqrt(v_normal^2 + v_transverse^2)
+                            if v_tot > zero
+                                prefac = v_normal/v_tot
+                            else
+                                prefac = 0.0
+                            end
+                            knudsen_cosine[ivz,ivr,ivzeta] = (0.75/π/T_wall_over_m^2)*prefac*exp( - 0.5 * (v_normal^2 + v_transverse^2) / T_wall_over_m )
+                            integrand[ivz,ivr,ivzeta] = vz.grid[ivz]*knudsen_cosine[ivz,ivr,ivzeta]
+                        end
+                    end
+                end
+            end
+            normalisation = integrate_over_positive_vz(integrand, vz.grid, vz.wgts,
+                                                       vz.scratch, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
+            # uncomment this line to test:
+            #println("normalisation should be 1, it is = ", normalisation)
+            #correct knudsen_cosine to conserve particle fluxes numerically
+            @. knudsen_cosine /= normalisation
+
+        elseif vzeta.n == 1 && vr.n == 1
+            # get the marginalised Knudsen cosine distribution after integrating over vperp
+            # appropriate for 1V model
+
+            # Knudsen cosine distribution does not have separate T_∥ and T_⟂, so is
+            # marginalised rather than setting T_⟂=0, therefore no need to convert to a
+            # thermal speed defined with the parallel temperature in 1V case.
+
+            @. vz.scratch = 3.0 * sqrt(π) * (0.5 / T_wall_over_m)^1.5 * abs(vz.grid) * erfc(sqrt(0.5 / T_wall_over_m) * abs(vz.grid))
+            normalisation = integrate_over_positive_vz(vz.grid .* vz.scratch, vz.grid, vz.wgts, vz.scratch2,
+                                                       vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
+            # uncomment this line to test:
+            #println("normalisation should be 1, it is = ", normalisation)
+            #correct knudsen_cosine to conserve particle fluxes numerically
+            @. vz.scratch /= normalisation
+            @. knudsen_cosine[:,1,1] = vz.scratch[:]
+
+        end
+    end
+    return knudsen_cosine
+end
 
 """
 enforce boundary conditions in vpa and z on the evolved pdf;
 also enforce boundary conditions in z on all separately evolved velocity space moments of the pdf
 """
 @timeit global_timer enforce_boundary_conditions!(
-                         f, f_r_bc, density, upar, p, phi, moments, vpa_bc, z_bc, r_bc,
+                         f, density, upar, p, phi, boundaries::boundary_info, moments,
                          vpa, vperp, z, r, vpa_spectral, vperp_spectral, vpa_adv,
                          vperp_adv, z_adv, r_adv, composition, scratch_dummy, r_diffusion,
                          vpa_diffusion, vperp_diffusion) = begin
@@ -32,7 +730,7 @@ also enforce boundary conditions in z on all separately evolved velocity space m
         @loop_s_r_z_vperp is ir iz ivperp begin
             # enforce the vpa BC
             # use that adv.speed independent of vpa
-            @views enforce_v_boundary_condition_local!(f[:,ivperp,iz,ir,is], vpa_bc,
+            @views enforce_v_boundary_condition_local!(f[:,ivperp,iz,ir,is], vpa.bc,
                              vpa_adv[is].speed[:,ivperp,iz,ir], vpa_diffusion,
                              vpa, vpa_spectral)
         end
@@ -45,8 +743,8 @@ also enforce boundary conditions in z on all separately evolved velocity space m
     if z.n > 1
         @begin_s_r_vperp_vpa_region()
         # enforce the z BC on the evolved velocity space moments of the pdf
-        enforce_z_boundary_condition_moments!(density, moments, z_bc)
-        enforce_z_boundary_condition!(f, density, upar, p, phi, moments, z_bc, z_adv, z,
+        enforce_z_boundary_condition_moments!(density, moments, z.bc)
+        enforce_z_boundary_condition!(f, density, upar, p, phi, moments, z.bc, z_adv, z,
                                       vperp, vpa, composition,
                                       scratch_dummy.buffer_vpavperprs_1,
                                       scratch_dummy.buffer_vpavperprs_2,
@@ -56,67 +754,191 @@ also enforce boundary conditions in z on all separately evolved velocity space m
 
     end
     if r.n > 1
-        @begin_s_z_vperp_vpa_region()
-        enforce_r_boundary_condition!(f, f_r_bc, r_bc, r_adv, vpa, vperp, z, r,
-                                      composition, scratch_dummy.buffer_vpavperpzs_1,
+        enforce_r_boundary_condition!(f, density, upar, p, boundaries.r, r_adv, vpa,
+                                      vperp, z, r, composition,
+                                      scratch_dummy.buffer_vpavperpzs_1,
                                       scratch_dummy.buffer_vpavperpzs_2,
                                       scratch_dummy.buffer_vpavperpzs_3,
                                       scratch_dummy.buffer_vpavperpzs_4, r_diffusion)
     end
 end
-function enforce_boundary_conditions!(fvec_out::scratch_pdf, moments, fields::em_fields_struct, f_r_bc, vpa_bc,
-        z_bc, r_bc, vpa, vperp, z, r, vpa_spectral, vperp_spectral, vpa_adv, vperp_adv, z_adv, r_adv, composition, scratch_dummy,
-        r_diffusion, vpa_diffusion, vperp_diffusion)
-    enforce_boundary_conditions!(fvec_out.pdf, f_r_bc, fvec_out.density, fvec_out.upar,
-        fvec_out.p, fields.phi, moments, vpa_bc, z_bc, r_bc, vpa, vperp, z, r,
-        vpa_spectral, vperp_spectral, vpa_adv, vperp_adv, z_adv, r_adv, composition,
-        scratch_dummy, r_diffusion, vpa_diffusion, vperp_diffusion)
+function enforce_boundary_conditions!(fvec_out::scratch_pdf, moments,
+                                      fields::em_fields_struct, boundaries::boundary_info,
+                                      vpa, vperp, z, r, vpa_spectral, vperp_spectral,
+                                      vpa_adv, vperp_adv, z_adv, r_adv, composition,
+                                      scratch_dummy, r_diffusion, vpa_diffusion,
+                                      vperp_diffusion)
+    enforce_boundary_conditions!(fvec_out.pdf, fvec_out.density, fvec_out.upar,
+                                 fvec_out.p, fields.phi, boundaries, moments, vpa, vperp,
+                                 z, r, vpa_spectral, vperp_spectral, vpa_adv, vperp_adv,
+                                 z_adv, r_adv, composition, scratch_dummy, r_diffusion,
+                                 vpa_diffusion, vperp_diffusion)
 end
 
 """
-enforce boundary conditions on f in r
+enforce boundary conditions on ions in r
 """
-function enforce_r_boundary_condition!(f::AbstractArray{mk_float,5}, f_r_bc, bc::String,
-        adv, vpa, vperp, z, r, composition, end1::AbstractArray{mk_float,4},
-        end2::AbstractArray{mk_float,4}, buffer1::AbstractArray{mk_float,4},
-        buffer2::AbstractArray{mk_float,4}, r_diffusion::Bool)
+function enforce_r_boundary_condition!(f::AbstractArray{mk_float,ndim_pdf_ion},
+        density::AbstractArray{mk_float,ndim_moment},
+        upar::AbstractArray{mk_float,ndim_moment}, p::AbstractArray{mk_float,ndim_moment},
+        r_boundaries::r_boundary_info, adv, vpa, vperp, z, r, composition,
+        end1::AbstractArray{mk_float,ndim_pdf_ion_boundary},
+        end2::AbstractArray{mk_float,ndim_pdf_ion_boundary},
+        buffer1::AbstractArray{mk_float,ndim_pdf_ion_boundary},
+        buffer2::AbstractArray{mk_float,ndim_pdf_ion_boundary}, r_diffusion::Bool)
 
     nr = r.n
 
     if r.nelement_global > r.nelement_local
         # reconcile internal element boundaries across processes
         # & enforce periodicity and external boundaries if needed
+        @begin_s_z_vperp_vpa_region()
         @loop_s_z_vperp_vpa is iz ivperp ivpa begin
             end1[ivpa,ivperp,iz,is] = f[ivpa,ivperp,iz,1,is]
             end2[ivpa,ivperp,iz,is] = f[ivpa,ivperp,iz,nr,is]
         end
         reconcile_element_boundaries_MPI!(f, end1, end2, buffer1, buffer2, r)
+
+        # Hacky way to get buffers to use for moment communication, to avoid having to
+        # pass in even more buffers. We know that the distribution function buffers are
+        # bigger than those needed for moments, so we can just take a chunk at the
+        # beginning of the distribution function buffers.
+        moment_end1 = reshape(@view(end1[1:z.n*composition.n_ion_species]), z.n,
+                              composition.n_ion_species)
+        moment_end2 = reshape(@view(end2[1:z.n*composition.n_ion_species]), z.n,
+                              composition.n_ion_species)
+        moment_buffer1 = reshape(@view(buffer1[1:z.n*composition.n_ion_species]), z.n,
+                                 composition.n_ion_species)
+        moment_buffer2 = reshape(@view(buffer2[1:z.n*composition.n_ion_species]), z.n,
+                                 composition.n_ion_species)
+        @begin_s_z_region()
+        @loop_s_z is iz begin
+            moment_end1[iz,is] = density[iz,1,is]
+            moment_end2[iz,is] = density[iz,nr,is]
+        end
+        reconcile_element_boundaries_MPI!(density, end1, end2, buffer1, buffer2, r)
+        @loop_s_z is iz begin
+            moment_end1[iz,is] = upar[iz,1,is]
+            moment_end2[iz,is] = upar[iz,nr,is]
+        end
+        reconcile_element_boundaries_MPI!(upar, end1, end2, buffer1, buffer2, r)
+        @loop_s_z is iz begin
+            moment_end1[iz,is] = p[iz,1,is]
+            moment_end2[iz,is] = p[iz,nr,is]
+        end
+        reconcile_element_boundaries_MPI!(p, end1, end2, buffer1, buffer2, r)
     end
 
-    # 'periodic' BC enforces periodicity by taking the average of the boundary points
-    # enforce the condition if r is local
-    if bc == "periodic" && r.nelement_global == r.nelement_local
-        @loop_s_z_vperp_vpa is iz ivperp ivpa begin
-            f[ivpa,ivperp,iz,1,is] = 0.5*(f[ivpa,ivperp,iz,nr,is]+f[ivpa,ivperp,iz,1,is])
-            f[ivpa,ivperp,iz,nr,is] = f[ivpa,ivperp,iz,1,is]
-        end
-    end
-    if bc == "Dirichlet"
-        zero = 1.0e-10
-        # use the old distribution to force the new distribution to have
-        # consistant-in-time values at the boundary
-        # with bc = "Dirichlet" and r_diffusion = false
-        # impose bc for incoming parts of velocity space only (Hyperbolic PDE)
-        # with bc = "Dirichlet" and r_diffusion = true
-        # impose bc on both sides of the domain to accomodate a diffusion operator d^2 / d r^2
-        @loop_s_z_vperp_vpa is iz ivperp ivpa begin
-            ir = 1 # r = -L/2 -- check that the point is on lowest rank
-            if r.irank == 0 && (r_diffusion || adv[is].speed[ir,ivpa,ivperp,iz] > zero)
-                f[ivpa,ivperp,iz,ir,is] = f_r_bc[ivpa,ivperp,iz,1,is]
-            end
-            ir = r.n # r = L/2 -- check that the point is on highest rank
-            if r.irank == r.nrank - 1 && (r_diffusion || adv[is].speed[ir,ivpa,ivperp,iz] < -zero)
-                f[ivpa,ivperp,iz,ir,is] = f_r_bc[ivpa,ivperp,iz,end,is]
+    for (ir, sections_tuple) ∈ ((1, r_boundaries.inner_sections),
+                                (nr, r_boundaries.outer_sections))
+        for section ∈ sections_tuple
+            ion_section = section.ion
+            # 'periodic' BC enforces periodicity by taking the average of the boundary points
+            # enforce the condition if r is local
+            if isa(ion_section, ion_r_boundary_section_periodic)
+                if r.nelement_global != r.nelement_local
+                    error("Periodic r-boundaries not yet implemented when r-dimension "
+                          * " is distributed")
+                end
+                if ir > 1
+                    # Both r-boundaries for periodic sections handled by inner boundary.
+                    # We have checked that there is a corresponding periodic
+                    # outer-boundary section defined.
+                    continue
+                end
+                @begin_s_vperp_vpa_region()
+                @loop_s is begin
+                    for iz ∈ section.z_range
+                        @loop_vperp_vpa ivperp ivpa begin
+                            f[ivpa,ivperp,iz,1,is] = 0.5 * (f[ivpa,ivperp,iz,nr,is] +
+                                                            f[ivpa,ivperp,iz,1,is])
+                            f[ivpa,ivperp,iz,nr,is] = f[ivpa,ivperp,iz,1,is]
+                        end
+                    end
+                end
+                @begin_s_region()
+                @loop_s is begin
+                    for iz ∈ section.z_range
+                        density[iz,1,is] = 0.5 * (density[iz,nr,is] + density[iz,1,is])
+                        density[iz,nr,is] = density[iz,1,is]
+                        upar[iz,1,is] = 0.5 * (upar[iz,nr,is] + upar[iz,1,is])
+                        upar[iz,nr,is] = upar[iz,1,is]
+                        p[iz,1,is] = 0.5 * (p[iz,nr,is] + p[iz,1,is])
+                        p[iz,nr,is] = p[iz,1,is]
+                    end
+                end
+            elseif isa(ion_section, ion_r_boundary_section_Dirichlet)
+                zero = 1.0e-10
+                # use the old distribution to force the new distribution to have
+                # consistant-in-time values at the boundary
+                # with bc = "Dirichlet" and r_diffusion = false
+                # impose bc for incoming parts of velocity space only (Hyperbolic PDE)
+                # with bc = "Dirichlet" and r_diffusion = true
+                # impose bc on both sides of the domain to accomodate a diffusion operator d^2 / d r^2
+                f_boundary = ion_section.pdf
+                @begin_s_vperp_vpa_region()
+                @loop_s is begin
+                    for (iz_section, iz) ∈ enumerate(section.z_range)
+                        @loop_vperp_vpa ivperp ivpa begin
+                            if r_diffusion || adv[is].speed[ir,ivpa,ivperp,iz] > zero
+                                f[ivpa,ivperp,iz,ir,is] = f_boundary[ivpa,ivperp,iz_section,is]
+                            end
+                        end
+                    end
+                end
+                n_boundary = ion_section.density
+                u_boundary = ion_section.upar
+                p_boundary = ion_section.p
+                @begin_s_region()
+                @loop_s is begin
+                    for (iz_section, iz) ∈ enumerate(section.z_range)
+                        # For now, assume always have r-diffusion for moments
+                        #if r_diffusion || moment_speed[ir,iz] > zero
+                            density[iz,ir,is] = n_boundary[iz_section,is]
+                            upar[iz,ir,is] = u_boundary[iz_section,is]
+                            p[iz,ir,is] = p[iz_section,is]
+                        #end
+                    end
+                end
+            elseif isa(ion_section, ion_r_boundary_section_Neumann)
+                one_over_logarithmic_gradient_value_minus_Db =
+                    ion_section.one_over_logarithmic_gradient_value_minus_Db
+                derivative_coefficients = ion_section.derivative_coefficients
+                if ion_section.is_inner
+                    other_elements_range = 2:r.ngrid
+                else
+                    other_elements_range = r.n-r.ngrid+1:r.n-1
+                end
+                @begin_s_vperp_vpa_region()
+                @loop_s is begin
+                    for (iz_section, iz) ∈ enumerate(section.z_range)
+                        @loop_vperp_vpa ivperp ivpa begin
+                            @views f[ivpa,ivperp,iz,ir,is] =
+                                dot(derivative_coefficients,
+                                    f[ivpa,ivperp,iz,other_elements_range,is]) *
+                                one_over_logarithmic_gradient_value_minus_Db
+                        end
+                    end
+                end
+                @begin_s_region()
+                @loop_s is begin
+                    for iz ∈ section.z_range
+                        @views density[iz,ir,is] =
+                            dot(derivative_coefficients,
+                                density[iz,other_elements_range,is]) *
+                            one_over_logarithmic_gradient_value_minus_Db
+                        @views upar[iz,ir,is] =
+                            dot(derivative_coefficients,
+                                upar[iz,other_elements_range,is]) *
+                            one_over_logarithmic_gradient_value_minus_Db
+                        @views p[iz,ir,is] =
+                            dot(derivative_coefficients,
+                                p[iz,other_elements_range,is]) *
+                            one_over_logarithmic_gradient_value_minus_Db
+                    end
+                end
+            else
+                error("Unsupported section type $(typeof(ion_section)).")
             end
         end
     end
@@ -229,11 +1051,170 @@ function enforce_z_boundary_condition!(pdf, density, upar, p, phi, moments, bc::
 end
 
 """
+enforce boundary conditions on electrons in r
+"""
+function enforce_electron_r_boundary_condition!(f::AbstractArray{mk_float,ndim_pdf_electron},
+        density::AbstractArray{mk_float,ndim_field},
+        upar::AbstractArray{mk_float,ndim_field}, p::AbstractArray{mk_float,ndim_field},
+        r_boundaries::r_boundary_info, adv, vpa, vperp, z, r, composition,
+        end1::AbstractArray{mk_float,ndim_pdf_electron_boundary},
+        end2::AbstractArray{mk_float,ndim_pdf_electron_boundary},
+        buffer1::AbstractArray{mk_float,ndim_pdf_electron_boundary},
+        buffer2::AbstractArray{mk_float,ndim_pdf_electron_boundary}, r_diffusion::Bool)
+
+    nr = r.n
+
+    if r.nelement_global > r.nelement_local
+        # reconcile internal element boundaries across processes
+        # & enforce periodicity and external boundaries if needed
+        @begin_z_vperp_vpa_region()
+        @loop_z_vperp_vpa iz ivperp ivpa begin
+            end1[ivpa,ivperp,iz] = f[ivpa,ivperp,iz,1]
+            end2[ivpa,ivperp,iz] = f[ivpa,ivperp,iz,nr]
+        end
+        reconcile_element_boundaries_MPI!(f, end1, end2, buffer1, buffer2, r)
+
+        # Hacky way to get buffers to use for moment communication, to avoid having to
+        # pass in even more buffers. We know that the distribution function buffers are
+        # bigger than those needed for moments, so we can just take a chunk at the
+        # beginning of the distribution function buffers.
+        moment_end1 = @view end1[1:z.n]
+        moment_end2 = @view end2[1:z.n]
+        moment_buffer1 = @view buffer1[1:z.n]
+        moment_buffer2 = @view buffer2[1:z.n]
+        @begin_z_region()
+        @loop_z iz begin
+            moment_end1[iz] = density[iz,1]
+            moment_end2[iz] = density[iz,nr]
+        end
+        reconcile_element_boundaries_MPI!(density, end1, end2, buffer1, buffer2, r)
+        @loop_z iz begin
+            moment_end1[iz] = upar[iz,1]
+            moment_end2[iz] = upar[iz,nr]
+        end
+        reconcile_element_boundaries_MPI!(upar, end1, end2, buffer1, buffer2, r)
+        @loop_z iz begin
+            moment_end1[iz] = p[iz,1]
+            moment_end2[iz] = p[iz,nr]
+        end
+        reconcile_element_boundaries_MPI!(p, end1, end2, buffer1, buffer2, r)
+    end
+
+    for (ir, sections_tuple) ∈ ((1, r_boundaries.inner_sections),
+                                (nr, r_boundaries.outer_sections))
+        for section ∈ sections_tuple
+            electron_section = section.electron
+            # 'periodic' BC enforces periodicity by taking the average of the boundary points
+            # enforce the condition if r is local
+            if isa(electron_section, electron_r_boundary_section_periodic)
+                if r.nelement_global != r.nelement_local
+                    error("Periodic r-boundaries not yet implemented when r-dimension "
+                          * " is distributed")
+                end
+                if ir > 1
+                    # Both r-boundaries for periodic sections handled by inner boundary.
+                    # We have checked that there is a corresponding periodic
+                    # outer-boundary section defined.
+                    continue
+                end
+                @begin_vperp_vpa_region()
+                for iz ∈ section.z_range
+                    @loop_vperp_vpa ivperp ivpa begin
+                        f[ivpa,ivperp,iz,1] = 0.5 * (f[ivpa,ivperp,iz,nr] +
+                                                     f[ivpa,ivperp,iz,1])
+                        f[ivpa,ivperp,iz,nr] = f[ivpa,ivperp,iz,1]
+                    end
+                end
+                @begin_serial_region()
+                @serial_region begin
+                    for iz ∈ section.z_range
+                        density[iz,1] = 0.5 * (density[iz,nr] + density[iz,1])
+                        density[iz,nr] = density[iz,1]
+                        upar[iz,1] = 0.5 * (upar[iz,nr] + upar[iz,1])
+                        upar[iz,nr] = upar[iz,1]
+                        p[iz,1] = 0.5 * (p[iz,nr] + p[iz,1])
+                        p[iz,nr] = p[iz,1]
+                    end
+                end
+            elseif isa(electron_section, electron_r_boundary_section_Dirichlet)
+                zero = 1.0e-10
+                # use the old distribution to force the new distribution to have
+                # consistant-in-time values at the boundary
+                # with bc = "Dirichlet" and r_diffusion = false
+                # impose bc for incoming parts of velocity space only (Hyperbolic PDE)
+                # with bc = "Dirichlet" and r_diffusion = true
+                # impose bc on both sides of the domain to accomodate a diffusion operator d^2 / d r^2
+                f_boundary = electron_section.pdf
+                @begin_vperp_vpa_region()
+                for (iz_section, iz) ∈ enumerate(section.z_range)
+                    @loop_vperp_vpa ivperp ivpa begin
+                        if r_diffusion || adv[1].speed[ir,ivpa,ivperp,iz] > zero
+                            f[ivpa,ivperp,iz,ir] = f_boundary[ivpa,ivperp,iz_section]
+                        end
+                    end
+                end
+                n_boundary = ion_section.density
+                u_boundary = ion_section.upar
+                p_boundary = ion_section.p
+                @begin_serial_region()
+                @serial_region begin
+                    for (iz_section, iz) ∈ enumerate(section.z_range)
+                        # For now, assume always have r-diffusion for moments
+                        #if r_diffusion || moment_speed[ir,iz] > zero
+                            density[iz,ir] = n_boundary[iz_section]
+                            upar[iz,ir] = u_boundary[iz_section]
+                            p[iz,ir] = p[iz_section]
+                        #end
+                    end
+                end
+            elseif isa(electron_section, electron_r_boundary_section_Neumann)
+                one_over_logarithmic_gradient_value_minus_Db =
+                    electron_section.one_over_logarithmic_gradient_value_minus_Db
+                derivative_coefficients = electron_section.derivative_coefficients
+                if electron_section.is_inner
+                    other_elements_range = 2:r.ngrid
+                else
+                    other_elements_range = r.n-r.ngrid+1:r.n-1
+                end
+                @begin_vperp_vpa_region()
+                for (iz_section, iz) ∈ enumerate(section.z_range)
+                    @loop_vperp_vpa ivperp ivpa begin
+                        @views f[ivpa,ivperp,iz,ir,is] =
+                            dot(derivative_coefficients,
+                                f[ivpa,ivperp,iz,other_elements_range,is]) *
+                            one_over_logarithmic_gradient_value_minus_Db
+                    end
+                end
+                @begin_serial_region()
+                @serial_region begin
+                    for iz ∈ section.z_range
+                        @views density[iz,ir] =
+                            dot(derivative_coefficients,
+                                density[iz,other_elements_range]) *
+                            one_over_logarithmic_gradient_value_minus_Db
+                        @views upar[iz,ir] =
+                            dot(derivative_coefficients,
+                                upar[iz,other_elements_range]) *
+                            one_over_logarithmic_gradient_value_minus_Db
+                        @views p[iz,ir] =
+                            dot(derivative_coefficients,
+                                p[iz,other_elements_range]) *
+                            one_over_logarithmic_gradient_value_minus_Db
+                    end
+                end
+            else
+                error("Unsupported section type $(typeof(electron_section)).")
+            end
+        end
+    end
+end
+
+"""
 enforce boundary conditions on neutral particle distribution function
 """
 @timeit global_timer enforce_neutral_boundary_conditions!(
-                         f_neutral, f_ion, boundary_distributions, density_neutral,
-                         uz_neutral, p_neutral, moments, density_ion, upar_ion, Er,
+                         f_neutral, f_ion, density_neutral, uz_neutral, p_neutral,
+                         boundaries::boundary_info, moments, density_ion, upar_ion, Er,
                          vzeta_spectral, vr_spectral, vz_spectral, r_adv, z_adv,
                          vzeta_adv, vr_adv, vz_adv, r, z, vzeta, vr, vz, composition,
                          geometry, scratch_dummy, r_diffusion, vz_diffusion) = begin
@@ -275,64 +1256,186 @@ enforce boundary conditions on neutral particle distribution function
     if z.n > 1
         @begin_sn_r_vzeta_vr_vz_region()
         enforce_neutral_z_boundary_condition!(f_neutral, density_neutral, uz_neutral,
-            p_neutral, moments, density_ion, upar_ion, Er, boundary_distributions, z_adv,
-            z, vzeta, vr, vz, composition, geometry, scratch_dummy.buffer_vzvrvzetarsn_1,
+            p_neutral, moments, density_ion, upar_ion, Er, boundaries.z, z_adv, z, vzeta,
+            vr, vz, composition, geometry, scratch_dummy.buffer_vzvrvzetarsn_1,
             scratch_dummy.buffer_vzvrvzetarsn_2, scratch_dummy.buffer_vzvrvzetarsn_3,
             scratch_dummy.buffer_vzvrvzetarsn_4,
             scratch_dummy.buffer_vzvrvzetarsn_5)
     end
     if r.n > 1
-        @begin_sn_z_vzeta_vr_vz_region()
-        enforce_neutral_r_boundary_condition!(f_neutral, boundary_distributions.pdf_rboundary_neutral,
-                                    r_adv, vz, vr, vzeta, z, r, composition,
-                                    scratch_dummy.buffer_vzvrvzetazsn_1, scratch_dummy.buffer_vzvrvzetazsn_2,
-                                    scratch_dummy.buffer_vzvrvzetazsn_3, scratch_dummy.buffer_vzvrvzetazsn_4,
-                                    r_diffusion)
+        enforce_neutral_r_boundary_condition!(f_neutral, density_neutral, uz_neutral,
+            p_neutral, boundaries.r, r_adv, vz, vr, vzeta, z, r, composition,
+            scratch_dummy.buffer_vzvrvzetazsn_1, scratch_dummy.buffer_vzvrvzetazsn_2,
+            scratch_dummy.buffer_vzvrvzetazsn_3, scratch_dummy.buffer_vzvrvzetazsn_4,
+            r_diffusion)
     end
 end
 
-function enforce_neutral_r_boundary_condition!(f::AbstractArray{mk_float,6},
-        f_r_bc::AbstractArray{mk_float,6}, adv, vz, vr, vzeta, z, r, composition,
-        end1::AbstractArray{mk_float,5}, end2::AbstractArray{mk_float,5},
-        buffer1::AbstractArray{mk_float,5}, buffer2::AbstractArray{mk_float,5},
-        r_diffusion) #f_initial,
+"""
+enforce boundary conditions on neutrals in r
+"""
+function enforce_neutral_r_boundary_condition!(
+        f::AbstractArray{mk_float,ndim_pdf_neutral},
+        density::AbstractArray{mk_float,ndim_moment},
+        uz::AbstractArray{mk_float,ndim_moment}, p::AbstractArray{mk_float,ndim_moment},
+        r_boundaries::r_boundary_info, adv, vz, vr, vzeta, z, r, composition,
+        end1::AbstractArray{mk_float,ndim_pdf_neutral_boundary},
+        end2::AbstractArray{mk_float,ndim_pdf_neutral_boundary},
+        buffer1::AbstractArray{mk_float,ndim_pdf_neutral_boundary},
+        buffer2::AbstractArray{mk_float,ndim_pdf_neutral_boundary}, r_diffusion::Bool)
 
-    bc = r.bc
     nr = r.n
 
     if r.nelement_global > r.nelement_local
         # reconcile internal element boundaries across processes
         # & enforce periodicity and external boundaries if needed
+        @begin_sn_z_vzeta_vr_vz_region()
         @loop_sn_z_vzeta_vr_vz isn iz ivzeta ivr ivz begin
             end1[ivz,ivr,ivzeta,iz,isn] = f[ivz,ivr,ivzeta,iz,1,isn]
             end2[ivz,ivr,ivzeta,iz,isn] = f[ivz,ivr,ivzeta,iz,nr,isn]
         end
         reconcile_element_boundaries_MPI!(f, end1, end2, buffer1, buffer2, r)
-    end
-    # 'periodic' BC enforces periodicity by taking the average of the boundary points
-    # local case only when no communication required
-    if bc == "periodic" && r.nelement_global == r.nelement_local
-        @loop_sn_z_vzeta_vr_vz isn iz ivzeta ivr ivz begin
-            f[ivz,ivr,ivzeta,iz,1,isn] = 0.5*(f[ivz,ivr,ivzeta,iz,1,isn]+f[ivz,ivr,ivzeta,iz,nr,isn])
-            f[ivz,ivr,ivzeta,iz,nr,isn] = f[ivz,ivr,ivzeta,iz,1,isn]
+
+        # Hacky way to get buffers to use for moment communication, to avoid having to
+        # pass in even more buffers. We know that the distribution function buffers are
+        # bigger than those needed for moments, so we can just take a chunk at the
+        # beginning of the distribution function buffers.
+        moment_end1 = reshape(@view(end1[1:z.n*composition.n_neutral_species]), z.n,
+                              composition.n_neutral_species)
+        moment_end2 = reshape(@view(end2[1:z.n*composition.n_neutral_species]), z.n,
+                              composition.n_neutral_species)
+        moment_buffer1 = reshape(@view(buffer1[1:z.n*composition.n_neutral_species]), z.n,
+                                 composition.n_neutral_species)
+        moment_buffer2 = reshape(@view(buffer2[1:z.n*composition.n_neutral_species]), z.n,
+                                 composition.n_neutral_species)
+        @begin_sn_z_region()
+        @loop_sn_z isn iz begin
+            moment_end1[iz,isn] = density[iz,1,isn]
+            moment_end2[iz,isn] = density[iz,nr,isn]
         end
+        reconcile_element_boundaries_MPI!(density, end1, end2, buffer1, buffer2, r)
+        @loop_sn_z isn iz begin
+            moment_end1[iz,isn] = uz[iz,1,isn]
+            moment_end2[iz,isn] = uz[iz,nr,isn]
+        end
+        reconcile_element_boundaries_MPI!(uz, end1, end2, buffer1, buffer2, r)
+        @loop_sn_z isn iz begin
+            moment_end1[iz,isn] = p[iz,1,isn]
+            moment_end2[iz,isn] = p[iz,nr,isn]
+        end
+        reconcile_element_boundaries_MPI!(p, end1, end2, buffer1, buffer2, r)
     end
-    # Dirichlet boundary condition for external endpoints
-    if bc == "Dirichlet"
-        zero = 1.0e-10
-        # use the old distribution to force the new distribution to have
-        # consistant-in-time values at the boundary
-        # impose bc for incoming parts of velocity space only (Hyperbolic PDE)
-        @loop_sn_z_vzeta_vr_vz isn iz ivzeta ivr ivz begin
-            ir = 1 # r = -L/2
-            # incoming particles and on lowest rank
-            if r.irank == 0 && (r_diffusion || adv[isn].speed[ir,ivz,ivr,ivzeta,iz] > zero)
-                f[ivz,ivr,ivzeta,iz,ir,isn] = f_r_bc[ivz,ivr,ivzeta,iz,1,isn]
-            end
-            ir = nr # r = L/2
-            # incoming particles and on highest rank
-            if r.irank == r.nrank - 1 && (r_diffusion || adv[isn].speed[ir,ivz,ivr,ivzeta,iz] < -zero)
-                f[ivz,ivr,ivzeta,iz,ir,isn] = f_r_bc[ivz,ivr,ivzeta,iz,end,isn]
+
+    for (ir, sections_tuple) ∈ ((1, r_boundaries.inner_sections),
+                                (nr, r_boundaries.outer_sections))
+        for section ∈ sections_tuple
+            neutral_section = section.neutral
+            # 'periodic' BC enforces periodicity by taking the average of the boundary points
+            # enforce the condition if r is local
+            if isa(neutral_section, neutral_r_boundary_section_periodic)
+                if r.nelement_global != r.nelement_local
+                    error("Periodic r-boundaries not yet implemented when r-dimension "
+                          * " is distributed")
+                end
+                if ir > 1
+                    # Both r-boundaries for periodic sections handled by inner boundary.
+                    # We have checked that there is a corresponding periodic
+                    # outer-boundary section defined.
+                    continue
+                end
+                @begin_sn_vzeta_vr_vz_region()
+                @loop_sn isn begin
+                    for iz ∈ section.z_range
+                        @loop_vzeta_vr_vz ivzeta ivr ivz begin
+                            f[ivz,ivr,ivzeta,iz,1,isn] = 0.5 * (f[ivz,ivr,ivzeta,iz,nr,isn] +
+                                                               f[ivz,ivr,ivzeta,iz,1,isn])
+                            f[ivz,ivr,ivzeta,iz,nr,isn] = f[ivz,ivr,ivzeta,iz,1,isn]
+                        end
+                    end
+                end
+                @begin_sn_region()
+                @loop_sn isn begin
+                    for iz ∈ section.z_range
+                        density[iz,1,isn] = 0.5 * (density[iz,nr,isn] + density[iz,1,isn])
+                        density[iz,nr,isn] = density[iz,1,isn]
+                        uz[iz,1,isn] = 0.5 * (uz[iz,nr,isn] + uz[iz,1,isn])
+                        uz[iz,nr,isn] = uz[iz,1,isn]
+                        p[iz,1,isn] = 0.5 * (p[iz,nr,isn] + p[iz,1,isn])
+                        p[iz,nr,isn] = p[iz,1,isn]
+                    end
+                end
+            elseif isa(neutral_section, neutral_r_boundary_section_Dirichlet)
+                zero = 1.0e-10
+                # use the old distribution to force the new distribution to have
+                # consistant-in-time values at the boundary
+                # with bc = "Dirichlet" and r_diffusion = false
+                # impose bc for incoming parts of velocity space only (Hyperbolic PDE)
+                # with bc = "Dirichlet" and r_diffusion = true
+                # impose bc on both sides of the domain to accomodate a diffusion operator d^2 / d r^2
+                f_boundary = ion_section.pdf
+                @begin_sn_vzeta_vr_vz_region()
+                @loop_sn isn begin
+                    for (iz_section, iz) ∈ enumerate(section.z_range)
+                        @loop_vzeta_vr_vz ivzeta ivr ivz begin
+                            if r_diffusion || adv[isn].speed[ir,ivz,ivr,ivzeta,iz] > zero
+                                f[ivz,ivr,ivzeta,iz,ir,isn] = f_boundary[ivz,ivr,ivzeta,iz_section,isn]
+                            end
+                        end
+                    end
+                end
+                n_boundary = neutral_section.density
+                u_boundary = neutral_section.uz
+                p_boundary = neutral_section.p
+                @begin_sn_region()
+                @loop_sn isn begin
+                    for (iz_section, iz) ∈ enumerate(section.z_range)
+                        # For now, assume always have r-diffusion for moments
+                        #if r_diffusion || moment_speed[ir,iz] > zero
+                            density[iz,ir,isn] = n_boundary[iz_section,isn]
+                            uz[iz,ir,isn] = u_boundary[iz_section,isn]
+                            p[iz,ir,isn] = p[iz_section,isn]
+                        #end
+                    end
+                end
+            elseif isa(neutral_section, neutral_r_boundary_section_Neumann)
+                one_over_logarithmic_gradient_value_minus_Db =
+                    neutral_section.one_over_logarithmic_gradient_value_minus_Db
+                derivative_coefficients = neutral_section.derivative_coefficients
+                if neutral_section.is_inner
+                    other_elements_range = 2:r.ngrid
+                else
+                    other_elements_range = r.n-r.ngrid+1:r.n-1
+                end
+                @begin_sn_vzeta_vr_vz_region()
+                @loop_sn isn begin
+                    for (iz_section, iz) ∈ enumerate(section.z_range)
+                        @loop_vzeta_vr_vz ivzeta ivr ivz begin
+                            @views f[ivz,ivr,ivzeta,iz,ir,isn] =
+                                dot(derivative_coefficients,
+                                    f[ivz,ivr,ivzeta,iz,other_elements_range,isn]) *
+                                one_over_logarithmic_gradient_value_minus_Db
+                        end
+                    end
+                end
+                @begin_sn_region()
+                @loop_sn isn begin
+                    for iz ∈ section.z_range
+                        @views density[iz,ir,isn] =
+                            dot(derivative_coefficients,
+                                density[iz,other_elements_range,isn]) *
+                            one_over_logarithmic_gradient_value_minus_Db
+                        @views uz[iz,ir,isn] =
+                            dot(derivative_coefficients,
+                                uz[iz,other_elements_range,isn]) *
+                            one_over_logarithmic_gradient_value_minus_Db
+                        @views p[iz,ir,isn] =
+                            dot(derivative_coefficients,
+                                p[iz,other_elements_range,isn]) *
+                            one_over_logarithmic_gradient_value_minus_Db
+                    end
+                end
+            else
+                error("Unsupported section type $(typeof(neutral_section)).")
             end
         end
     end
@@ -342,7 +1445,7 @@ end
 enforce boundary conditions on neutral particle f in z
 """
 function enforce_neutral_z_boundary_condition!(pdf, density, uz, pz, moments, density_ion,
-                                               upar_ion, Er, boundary_distributions, adv,
+                                               upar_ion, Er, z_boundaries, adv,
                                                z, vzeta, vr, vz, composition, geometry,
                                                end1::AbstractArray{mk_float,5}, end2::AbstractArray{mk_float,5},
                                                buffer1::AbstractArray{mk_float,5}, buffer2::AbstractArray{mk_float,5},
@@ -449,7 +1552,7 @@ function enforce_neutral_z_boundary_condition!(pdf, density, uz, pz, moments, de
                 # that leave the domain re-enter as neutrals
                 @views enforce_neutral_wall_bc!(
                     pdf[:,:,:,:,ir,isn], z, vzeta, vr, vz, pz[:,ir,isn], uz[:,ir,isn],
-                    density[:,ir,isn], ion_flux_0, ion_flux_L, boundary_distributions,
+                    density[:,ir,isn], ion_flux_0, ion_flux_L, z_boundaries,
                     T_wall_over_m, composition.recycling_fraction, moments.evolve_p,
                     moments.evolve_upar, moments.evolve_density, zero,
                     buffer3[:,:,:,ir,isn])
@@ -722,7 +1825,7 @@ enforce the wall boundary condition on neutrals;
 i.e., the incoming flux of neutrals equals the sum of the ion/neutral outgoing fluxes
 """
 function enforce_neutral_wall_bc!(pdf, z, vzeta, vr, vz, pz, uz, density, wall_flux_0,
-                                  wall_flux_L, boundary_distributions, T_wall_over_m,
+                                  wall_flux_L, z_boundaries, T_wall_over_m,
                                   recycling_fraction, evolve_p, evolve_upar,
                                   evolve_density, zero, pdf_buffer)
 
@@ -732,7 +1835,7 @@ function enforce_neutral_wall_bc!(pdf, z, vzeta, vr, vz, pz, uz, density, wall_f
     wall_flux_L *= recycling_fraction
 
     if !evolve_density && !evolve_upar
-        knudsen_cosine = boundary_distributions.knudsen
+        knudsen_cosine = z_boundaries.knudsen_cosine
 
         if z.irank == 0
             ## treat z = -Lz/2 boundary ##
@@ -769,7 +1872,7 @@ function enforce_neutral_wall_bc!(pdf, z, vzeta, vr, vz, pz, uz, density, wall_f
         end
     elseif !evolve_upar
         # Evolving density case
-        knudsen_cosine = boundary_distributions.knudsen
+        knudsen_cosine = z_boundaries.knudsen_cosine
 
         if z.irank == 0
             ## treat z = -Lz/2 boundary ##
