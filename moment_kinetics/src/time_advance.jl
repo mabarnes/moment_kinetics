@@ -658,12 +658,11 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
         fake_input_dict = OptionsDict(k => v for (k,v) ∈ input_dict
                                       if k != "_section_check_store")
         debug_io = setup_dfns_io(joinpath(io_input.output_dir, "debug"), debug_io_input,
-                                 boundary_distributions, r, z, vperp, vpa, vzeta, vr, vz,
-                                 composition, collisions, moments.evolve_density,
-                                 moments.evolve_upar, moments.evolve_p,
-                                 external_source_settings, fake_input_dict,
-                                 comm_inter_block[], 1, nothing, 0.0, fake_t_params, ();
-                                 is_debug=true)
+                                 r, z, vperp, vpa, vzeta, vr, vz, composition, collisions,
+                                 moments.evolve_density, moments.evolve_upar,
+                                 moments.evolve_p, external_source_settings,
+                                 fake_input_dict, comm_inter_block[], 1, nothing, 0.0,
+                                 fake_t_params, (); is_debug=true)
     else
         debug_io = nothing
     end
