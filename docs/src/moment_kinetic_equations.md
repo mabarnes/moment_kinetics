@@ -954,7 +954,7 @@ One way to do this formally is to assume that
 \begin{align}
 f_s &= \bar{f}_s(t,z,v_\parallel) f_{s\perp}(v_\perp) \\
 \text{with } f_{s\perp}(v_\perp) &= \frac{\exp(-v_\perp^2/v_{Ts\perp}^2)}{\pi v_{Ts\perp}^2} \\
-\text{where } m_s v_{Ts\perp}^2 &= T_\perp \\
+\text{where } \frac{1}{2} m_s v_{Ts\perp}^2 &= T_\perp \\
 \text{and similarly } S_s &= \bar{S}_s(t,z,v_\parallel) f_{s\perp}(v_\perp)
 \end{align}
 ```
