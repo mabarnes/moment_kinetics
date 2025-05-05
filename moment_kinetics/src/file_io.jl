@@ -425,11 +425,10 @@ end
 """
 open the necessary output files
 """
-function setup_file_io(io_input, boundary_distributions, vz, vr, vzeta, vpa, vperp, z, r,
-                       composition, collisions, evolve_density, evolve_upar, evolve_p,
-                       external_source_settings, manufactured_source_list, input_dict,
-                       restart_time_index, previous_runs_info, time_for_setup, t_params,
-                       nl_solver_params)
+function setup_file_io(io_input, vz, vr, vzeta, vpa, vperp, z, r, composition, collisions,
+                       evolve_density, evolve_upar, evolve_p, external_source_settings,
+                       manufactured_source_list, input_dict, restart_time_index,
+                       previous_runs_info, time_for_setup, t_params, nl_solver_params)
 
     @begin_serial_region()
     @serial_region begin
@@ -458,13 +457,12 @@ function setup_file_io(io_input, boundary_distributions, vz, vr, vzeta, vpa, vpe
                                       comm_inter_block[], restart_time_index,
                                       previous_runs_info, time_for_setup, t_params,
                                       nl_solver_params)
-        io_dfns = setup_dfns_io(out_prefix, io_input, boundary_distributions, r, z, vperp,
-                                vpa, vzeta, vr, vz, composition, collisions,
-                                evolve_density, evolve_upar, evolve_p,
-                                external_source_settings, manufactured_source_list,
-                                input_dict, comm_inter_block[], restart_time_index,
-                                previous_runs_info, time_for_setup, t_params,
-                                nl_solver_params)
+        io_dfns = setup_dfns_io(out_prefix, io_input, r, z, vperp, vpa, vzeta, vr, vz,
+                                composition, collisions, evolve_density, evolve_upar,
+                                evolve_p, external_source_settings,
+                                manufactured_source_list, restart_time_index, input_dict,
+                                comm_inter_block[], previous_runs_info, time_for_setup,
+                                t_params, nl_solver_params)
 
         return ascii, io_moments, io_dfns
     end
@@ -897,37 +895,6 @@ function write_input!(fid, input_dict, parallel_io)
         input_io = create_io_group(fid, "input")
         write_Dict_to_section(input_io, input_dict, parallel_io)
     end
-end
-
-"""
-Write the distributions that may be used for boundary conditions to the output file
-"""
-function write_boundary_distributions!(fid, boundary_distributions, parallel_io,
-                                       composition, z, vperp, vpa, vzeta, vr, vz)
-    @serial_region begin
-        boundary_distributions_io = create_io_group(fid, "boundary_distributions")
-
-        n_ion_species_coord = (name="n_ion_species", n=composition.n_ion_species)
-        n_neutral_species_coord = (name="n_neutral_species",
-                                   n=composition.n_neutral_species)
-        write_single_value!(boundary_distributions_io, "pdf_rboundary_ion_left",
-            boundary_distributions.pdf_rboundary_ion[:,:,:,1,:], vpa, vperp, z,
-            n_ion_species_coord; parallel_io=parallel_io,
-            description="Initial ion-particle pdf at left radial boundary")
-        write_single_value!(boundary_distributions_io, "pdf_rboundary_ion_right",
-            boundary_distributions.pdf_rboundary_ion[:,:,:,2,:], vpa, vperp, z,
-            n_ion_species_coord; parallel_io=parallel_io,
-            description="Initial ion-particle pdf at right radial boundary")
-        write_single_value!(boundary_distributions_io, "pdf_rboundary_neutral_left",
-            boundary_distributions.pdf_rboundary_neutral[:,:,:,:,1,:], vz, vr, vzeta, z,
-            n_neutral_species_coord; parallel_io=parallel_io,
-            description="Initial neutral-particle pdf at left radial boundary")
-        write_single_value!(boundary_distributions_io, "pdf_rboundary_neutral_right",
-            boundary_distributions.pdf_rboundary_neutral[:,:,:,:,2,:], vz, vr, vzeta, z,
-            n_neutral_species_coord; parallel_io=parallel_io,
-            description="Initial neutral-particle pdf at right radial boundary")
-    end
-    return nothing
 end
 
 """
@@ -2284,10 +2251,10 @@ end
 """
 setup file i/o for distribution function variables
 """
-function setup_dfns_io(prefix, io_input, boundary_distributions, r, z, vperp, vpa, vzeta,
-                       vr, vz, composition, collisions, evolve_density, evolve_upar,
-                       evolve_p, external_source_settings, manufactured_source_list,
-                       input_dict, io_comm, restart_time_index, previous_runs_info,
+function setup_dfns_io(prefix, io_input, r, z, vperp, vpa, vzeta, vr, vz, composition,
+                       collisions, evolve_density, evolve_upar, evolve_p,
+                       external_source_settings, manufactured_source_list,
+                       restart_time_index, input_dict, io_comm, previous_runs_info,
                        time_for_setup, t_params, nl_solver_params; is_debug=false)
 
     @serial_region begin
@@ -2316,11 +2283,6 @@ function setup_dfns_io(prefix, io_input, boundary_distributions, r, z, vperp, vp
 
         # write the input settings
         write_input!(fid, input_dict, parallel_io)
-
-        # write the distributions that may be used for boundary conditions to the output
-        # file
-        write_boundary_distributions!(fid, boundary_distributions, parallel_io,
-                                      composition, z, vperp, vpa, vzeta, vr, vz)
 
         ### define coordinate dimensions ###
         define_io_coordinates!(fid, vz, vr, vzeta, vpa, vperp, z, r, parallel_io)

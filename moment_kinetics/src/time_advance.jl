@@ -661,12 +661,11 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
                                       if k != "_section_check_store")
         @begin_serial_region()
         debug_io = setup_dfns_io(joinpath(io_input.output_dir, "debug"), debug_io_input,
-                                 boundary_distributions, r, z, vperp, vpa, vzeta, vr, vz,
-                                 composition, collisions, moments.evolve_density,
-                                 moments.evolve_upar, moments.evolve_p,
-                                 external_source_settings, nothing, fake_input_dict,
-                                 comm_inter_block[], 1, nothing, 0.0, fake_t_params, ();
-                                 is_debug=true)
+                                 r, z, vperp, vpa, vzeta, vr, vz, composition, collisions,
+                                 moments.evolve_density, moments.evolve_upar,
+                                 moments.evolve_p, external_source_settings, nothing,
+                                 1, fake_input_dict, comm_inter_block[], nothing, 0.0,
+                                 fake_t_params, (); is_debug=true)
     elseif t_input["debug_io"]
         # Need to synchronize shared-memory blocks before/after I/O. Set debug_io=true so
         # we can distinguish from no-debug-IO case on block_rank[]>0 processes.

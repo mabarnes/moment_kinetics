@@ -96,7 +96,8 @@ using .communication: @_block_synchronize
 using .debugging
 using .external_sources
 using .input_structs
-using .initial_conditions: allocate_pdf_and_moments, init_pdf_and_moments!
+using .initial_conditions: allocate_pdf_and_moments, init_pdf_and_moments!,
+                           init_boundary_distributions!
 using .load_data: reload_evolving_fields!
 using .looping
 using .moment_constraints: hard_force_moment_constraints!
@@ -308,10 +309,12 @@ parallel loop ranges, and are only used by the tests in `debug_test/`.
         # Reload pdf and moments from an existing output file
         code_time, dt, dt_before_last_fail, electron_dt, electron_dt_before_last_fail,
         previous_runs_info, restart_time_index, restart_electron_physics =
-            reload_evolving_fields!(pdf, moments, fields, boundary_distributions,
-                                    backup_prefix_iblock, restart_time_index,
-                                    composition, geometry, r, z, vpa, vperp, vzeta, vr,
-                                    vz)
+            reload_evolving_fields!(pdf, moments, fields, backup_prefix_iblock,
+                                    restart_time_index, composition, geometry, r, z, vpa,
+                                    vperp, vzeta, vr, vz)
+
+        init_boundary_distributions!(boundary_distributions, pdf, vz, vr, vzeta, vpa,
+                                     vperp, z, r, composition)
 
         @begin_serial_region()
         @serial_region begin
@@ -360,12 +363,11 @@ parallel loop ranges, and are only used by the tests in `debug_test/`.
 
     if write_output
         # setup i/o
-        ascii_io, io_moments, io_dfns = setup_file_io(io_input, boundary_distributions,
-            vz, vr, vzeta, vpa, vperp, z, r, composition, collisions,
-            moments.evolve_density, moments.evolve_upar, moments.evolve_p,
-            external_source_settings, manufactured_source_list, input_dict,
-            restart_time_index, previous_runs_info, time_for_setup, t_params,
-            nl_solver_params)
+        ascii_io, io_moments, io_dfns = setup_file_io(io_input, vz, vr, vzeta, vpa,
+            vperp, z, r, composition, collisions, moments.evolve_density,
+            moments.evolve_upar, moments.evolve_p, external_source_settings,
+            manufactured_source_list, input_dict, restart_time_index, previous_runs_info,
+            time_for_setup, t_params, nl_solver_params)
         # write initial data to ascii files
         write_data_to_ascii(pdf, moments, fields, vz, vr, vzeta, vpa, vperp, z, r,
             t_params.t[], composition.n_ion_species, composition.n_neutral_species,
