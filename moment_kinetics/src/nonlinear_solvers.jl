@@ -828,11 +828,10 @@ end
     return local_dot
 end
 
-#@timeit_debug global_timer distributed_dot(
-function distributed_dot(
+@timeit_debug global_timer distributed_dot(
                   ::Val{:vperpvpa}, v::AbstractArray{mk_float, 2},
                   w::AbstractArray{mk_float, 2}, coords,
-                  rtol, atol, x::AbstractArray{mk_float, 2})# = begin
+                  rtol, atol, x::AbstractArray{mk_float, 2}) = begin
     v_pdf = v
     w_pdf = w
     x_pdf = x
