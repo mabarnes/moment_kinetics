@@ -422,7 +422,7 @@ is not necessary to have a very tight `linear_rtol` for the GMRES solve.
                          x, residual_func!, residual, delta_x, rhs_delta, v, w,
                          nl_solver_params; left_preconditioner=nothing,
                          right_preconditioner=nothing, recalculate_preconditioner=nothing,
-                         coords)# = begin
+                         coords) = begin
     # This wrapper function constructs the `solver_type` from coords, so that the body of
     # the inner `newton_solve!()` can be fully type-stable
     solver_type = Val(Symbol((c for c ∈ keys(coords))...))
