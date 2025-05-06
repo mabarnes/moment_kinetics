@@ -1551,7 +1551,7 @@ MGS-GMRES' in Zou (2023) [https://doi.org/10.1016/j.amc.2023.127869].
                 H[i+1,i] = 0
                 g[i+1] = -s[i] * g[i]
                 g[i] = c[i] * g[i]
-            else
+            elseif anyv_region
                if anyv_region
                   @begin_anyv_region()
                   @anyv_serial_region begin
