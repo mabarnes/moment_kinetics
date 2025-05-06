@@ -1526,9 +1526,8 @@ MGS-GMRES' in Zou (2023) [https://doi.org/10.1016/j.amc.2023.127869].
             if serial_solve
                 H[i+1,i] = norm_w
             elseif anyv_region
-               if anyv_region
-                  @begin_anyv_region()
-                  @anyv_serial_region begin
+                @begin_anyv_region()
+                @anyv_serial_region begin
                     H[i+1,i] = norm_w
                   end
                else
