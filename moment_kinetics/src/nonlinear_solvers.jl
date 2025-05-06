@@ -1560,34 +1560,33 @@ MGS-GMRES' in Zou (2023) [https://doi.org/10.1016/j.amc.2023.127869].
                         gamma = c[j] * H[j,i] + s[j] * H[j+1,i]
                         H[j+1,i] = -s[j] * H[j,i] + c[j] * H[j+1,i]
                         H[j,i] = gamma
-                     end
-                     delta = sqrt(H[i,i]^2 + H[i+1,i]^2)
-                     s[i] = H[i+1,i] / delta
-                     c[i] = H[i,i] / delta
-                     H[i,i] = c[i] * H[i,i] + s[i] * H[i+1,i]
-                     H[i+1,i] = 0
-                     g[i+1] = -s[i] * g[i]
-                     g[i] = c[i] * g[i]
-                  end
-                  @_anyv_subblock_synchronize()
-               else
-                  @begin_serial_region()
-                  @serial_region begin
-                     for j ∈ 1:i-1
-                           gamma = c[j] * H[j,i] + s[j] * H[j+1,i]
-                           H[j+1,i] = -s[j] * H[j,i] + c[j] * H[j+1,i]
-                           H[j,i] = gamma
-                     end
-                     delta = sqrt(H[i,i]^2 + H[i+1,i]^2)
-                     s[i] = H[i+1,i] / delta
-                     c[i] = H[i,i] / delta
-                     H[i,i] = c[i] * H[i,i] + s[i] * H[i+1,i]
-                     H[i+1,i] = 0
-                     g[i+1] = -s[i] * g[i]
-                     g[i] = c[i] * g[i]
-                  end
-                  @_block_synchronize()
-               end
+                    end
+                    delta = sqrt(H[i,i]^2 + H[i+1,i]^2)
+                    s[i] = H[i+1,i] / delta
+                    c[i] = H[i,i] / delta
+                    H[i,i] = c[i] * H[i,i] + s[i] * H[i+1,i]
+                    H[i+1,i] = 0
+                    g[i+1] = -s[i] * g[i]
+                    g[i] = c[i] * g[i]
+                end
+                @_anyv_subblock_synchronize()
+            else
+                @begin_serial_region()
+                @serial_region begin
+                    for j ∈ 1:i-1
+                        gamma = c[j] * H[j,i] + s[j] * H[j+1,i]
+                        H[j+1,i] = -s[j] * H[j,i] + c[j] * H[j+1,i]
+                        H[j,i] = gamma
+                    end
+                    delta = sqrt(H[i,i]^2 + H[i+1,i]^2)
+                    s[i] = H[i+1,i] / delta
+                    c[i] = H[i,i] / delta
+                    H[i,i] = c[i] * H[i,i] + s[i] * H[i+1,i]
+                    H[i+1,i] = 0
+                    g[i+1] = -s[i] * g[i]
+                    g[i] = c[i] * g[i]
+                end
+                @_block_synchronize()
             end
             residual = abs(g[i+1])
 
