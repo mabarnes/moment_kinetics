@@ -418,8 +418,7 @@ iteration is therefore
 As the GMRES solve is only used to get the right `direction' for the next Newton step, it
 is not necessary to have a very tight `linear_rtol` for the GMRES solve.
 """
-#@timeit global_timer newton_solve!(
-function newton_solve!(
+@timeit global_timer newton_solve!(
                          x, residual_func!, residual, delta_x, rhs_delta, v, w,
                          nl_solver_params; left_preconditioner=nothing,
                          right_preconditioner=nothing, recalculate_preconditioner=nothing,
