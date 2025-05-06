@@ -233,7 +233,7 @@ enforce boundary conditions on neutral particle distribution function
 """
 @timeit global_timer enforce_neutral_boundary_conditions!(
                          f_neutral, f_ion, boundary_distributions, density_neutral,
-                         uz_neutral, pz_neutral, moments, density_ion, upar_ion, Er,
+                         uz_neutral, p_neutral, moments, density_ion, upar_ion, Er,
                          vzeta_spectral, vr_spectral, vz_spectral, r_adv, z_adv,
                          vzeta_adv, vr_adv, vz_adv, r, z, vzeta, vr, vz, composition,
                          geometry, scratch_dummy, r_diffusion, vz_diffusion) = begin
@@ -275,10 +275,10 @@ enforce boundary conditions on neutral particle distribution function
     if z.n > 1
         @begin_sn_r_vzeta_vr_vz_region()
         enforce_neutral_z_boundary_condition!(f_neutral, density_neutral, uz_neutral,
-            pz_neutral, moments, density_ion, upar_ion, Er, boundary_distributions,
-            z_adv, z, vzeta, vr, vz, composition, geometry,
-            scratch_dummy.buffer_vzvrvzetarsn_1, scratch_dummy.buffer_vzvrvzetarsn_2,
-            scratch_dummy.buffer_vzvrvzetarsn_3, scratch_dummy.buffer_vzvrvzetarsn_4,
+            p_neutral, moments, density_ion, upar_ion, Er, boundary_distributions, z_adv,
+            z, vzeta, vr, vz, composition, geometry, scratch_dummy.buffer_vzvrvzetarsn_1,
+            scratch_dummy.buffer_vzvrvzetarsn_2, scratch_dummy.buffer_vzvrvzetarsn_3,
+            scratch_dummy.buffer_vzvrvzetarsn_4,
             scratch_dummy.buffer_vzvrvzetarsn_5)
     end
     if r.n > 1
