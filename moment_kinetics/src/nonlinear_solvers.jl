@@ -1472,18 +1472,16 @@ MGS-GMRES' in Zou (2023) [https://doi.org/10.1016/j.amc.2023.127869].
     parallel_map(solver_type, (w,beta) -> w/beta, select_from_V(V, 1), w, beta)
     if serial_solve
         g[1] = beta
-    else
-      if anyv_region
+    elseif anyv_region
         @begin_anyv_region()
         @anyv_serial_region begin
             g[1] = beta
         end
-      else
+    else
         @begin_serial_region()
         @serial_region begin
             g[1] = beta
         end
-      end
     end
 
     # Set tolerance for GMRES iteration to rtol times the initial residual, unless this is
