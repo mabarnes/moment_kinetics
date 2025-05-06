@@ -1529,13 +1529,12 @@ MGS-GMRES' in Zou (2023) [https://doi.org/10.1016/j.amc.2023.127869].
                 @begin_anyv_region()
                 @anyv_serial_region begin
                     H[i+1,i] = norm_w
-                  end
-               else
-                  @begin_serial_region()
-                  @serial_region begin
-                     H[i+1,i] = norm_w
-                  end
-               end
+                end
+            else
+                @begin_serial_region()
+                @serial_region begin
+                    H[i+1,i] = norm_w
+                end
             end
             parallel_map(solver_type, (w) -> w / H[i+1,i], select_from_V(V, i+1), w)
 
