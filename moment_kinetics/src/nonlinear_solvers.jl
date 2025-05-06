@@ -1552,10 +1552,9 @@ MGS-GMRES' in Zou (2023) [https://doi.org/10.1016/j.amc.2023.127869].
                 g[i+1] = -s[i] * g[i]
                 g[i] = c[i] * g[i]
             elseif anyv_region
-               if anyv_region
-                  @begin_anyv_region()
-                  @anyv_serial_region begin
-                     for j ∈ 1:i-1
+                @begin_anyv_region()
+                @anyv_serial_region begin
+                    for j ∈ 1:i-1
                         gamma = c[j] * H[j,i] + s[j] * H[j+1,i]
                         H[j+1,i] = -s[j] * H[j,i] + c[j] * H[j+1,i]
                         H[j,i] = gamma
