@@ -37,8 +37,6 @@ function create_grids(ngrid,nelement_vpa,nelement_vperp;
         nelement_global_vpa = nelement_local_vpa # total number of elements
         nelement_local_vperp = nelement_vperp # number of elements per rank
         nelement_global_vperp = nelement_local_vperp # total number of elements
-        #bc = "zero" # used only in derivative! functions
-        #discretization = "chebyshev_pseudospectral"
         discretization = "gausslegendre_pseudospectral"
         # create the 'input' struct containing input info needed to create a
         # coordinate
