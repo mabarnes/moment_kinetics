@@ -639,11 +639,10 @@ end
     return residual_norm
 end
 
-#@timeit_debug global_timer distributed_norm(
-function distributed_norm(
+@timeit_debug global_timer distributed_norm(
                                ::Val{:vperpvpa},
                                residual::AbstractArray{mk_float, 2},
-                               coords, rtol, atol, x::AbstractArray{mk_float, 2})# = begin
+                               coords, rtol, atol, x::AbstractArray{mk_float, 2}) = begin
     # no distributed memory paralleism required when solving only in (vperp, vpa)
     # assumed called inside @begin_s_r_z_anyv_region()
     pdf_residual = residual
