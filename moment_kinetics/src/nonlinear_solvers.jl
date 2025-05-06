@@ -1066,9 +1066,8 @@ end
     return nothing
 end
 
-#@timeit_debug global_timer parallel_map(
-function parallel_map(
-                  ::Val{:vperpvpa}, func, result::AbstractArray{mk_float, 2})# = begin
+@timeit_debug global_timer parallel_map(
+                  ::Val{:vperpvpa}, func, result::AbstractArray{mk_float, 2}) = begin
 
     result_pdf = result
 
