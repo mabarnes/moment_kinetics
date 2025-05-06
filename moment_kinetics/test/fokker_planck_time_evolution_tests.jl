@@ -411,7 +411,6 @@ test_input_gauss_legendre = OptionsDict("output" => OptionsDict("run_name" => "g
                                                                       "nwrite_dfns" => 5000),
                                        )
 
-#println(options_to_TOML(test_input_gauss_legendre))
 """
 Run a test for a single set of parameters
 """

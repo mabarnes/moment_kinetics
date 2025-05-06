@@ -418,12 +418,11 @@ iteration is therefore
 As the GMRES solve is only used to get the right `direction' for the next Newton step, it
 is not necessary to have a very tight `linear_rtol` for the GMRES solve.
 """
-#@timeit global_timer newton_solve!(
-function newton_solve!(
+@timeit global_timer newton_solve!(
                          x, residual_func!, residual, delta_x, rhs_delta, v, w,
                          nl_solver_params; left_preconditioner=nothing,
                          right_preconditioner=nothing, recalculate_preconditioner=nothing,
-                         coords)# = begin
+                         coords) = begin
     # This wrapper function constructs the `solver_type` from coords, so that the body of
     # the inner `newton_solve!()` can be fully type-stable
     solver_type = Val(Symbol((c for c ∈ keys(coords))...))
@@ -639,11 +638,10 @@ end
     return residual_norm
 end
 
-#@timeit_debug global_timer distributed_norm(
-function distributed_norm(
+@timeit_debug global_timer distributed_norm(
                                ::Val{:vperpvpa},
                                residual::AbstractArray{mk_float, 2},
-                               coords, rtol, atol, x::AbstractArray{mk_float, 2})# = begin
+                               coords, rtol, atol, x::AbstractArray{mk_float, 2}) = begin
     # no distributed memory paralleism required when solving only in (vperp, vpa)
     # assumed called inside @begin_s_r_z_anyv_region()
     pdf_residual = residual
@@ -829,11 +827,10 @@ end
     return local_dot
 end
 
-#@timeit_debug global_timer distributed_dot(
-function distributed_dot(
+@timeit_debug global_timer distributed_dot(
                   ::Val{:vperpvpa}, v::AbstractArray{mk_float, 2},
                   w::AbstractArray{mk_float, 2}, coords,
-                  rtol, atol, x::AbstractArray{mk_float, 2})# = begin
+                  rtol, atol, x::AbstractArray{mk_float, 2}) = begin
     v_pdf = v
     w_pdf = w
     x_pdf = x
@@ -1068,9 +1065,8 @@ end
     return nothing
 end
 
-#@timeit_debug global_timer parallel_map(
-function parallel_map(
-                  ::Val{:vperpvpa}, func, result::AbstractArray{mk_float, 2})# = begin
+@timeit_debug global_timer parallel_map(
+                  ::Val{:vperpvpa}, func, result::AbstractArray{mk_float, 2}) = begin
 
     result_pdf = result
 
@@ -1082,10 +1078,9 @@ function parallel_map(
     @_anyv_subblock_synchronize()
     return nothing
 end
-#@timeit_debug global_timer parallel_map(
-function parallel_map(
+@timeit_debug global_timer parallel_map(
                   ::Val{:vperpvpa}, func, result::AbstractArray{mk_float, 2},
-                  x1)# = begin
+                  x1) = begin
 
     result_pdf = result
     x1_pdf = x1
@@ -1098,10 +1093,9 @@ function parallel_map(
     @_anyv_subblock_synchronize()
     return nothing
 end
-#@timeit_debug global_timer parallel_map(
-function parallel_map(
+@timeit_debug global_timer parallel_map(
                   ::Val{:vperpvpa}, func, result::AbstractArray{mk_float, 2},
-                  x1, x2)# = begin
+                  x1, x2) = begin
 
     result_pdf = result
     x1_pdf = x1
@@ -1122,10 +1116,9 @@ function parallel_map(
     @_anyv_subblock_synchronize()
     return nothing
 end
-#@timeit_debug global_timer parallel_map(
-function parallel_map(
+@timeit_debug global_timer parallel_map(
                   ::Val{:vperpvpa}, func, result::AbstractArray{mk_float, 2},
-                  x1, x2, x3)# = begin
+                  x1, x2, x3) = begin
 
     result_pdf = result
     x1_pdf = x1
@@ -1478,18 +1471,16 @@ MGS-GMRES' in Zou (2023) [https://doi.org/10.1016/j.amc.2023.127869].
     parallel_map(solver_type, (w,beta) -> w/beta, select_from_V(V, 1), w, beta)
     if serial_solve
         g[1] = beta
-    else
-      if anyv_region
+    elseif anyv_region
         @begin_anyv_region()
         @anyv_serial_region begin
             g[1] = beta
         end
-      else
+    else
         @begin_serial_region()
         @serial_region begin
             g[1] = beta
         end
-      end
     end
 
     # Set tolerance for GMRES iteration to rtol times the initial residual, unless this is
@@ -1517,36 +1508,32 @@ MGS-GMRES' in Zou (2023) [https://doi.org/10.1016/j.amc.2023.127869].
                 w_dot_Vj = distributed_dot(solver_type, w, v, norm_params...)
                 if serial_solve
                     H[j,i] = w_dot_Vj
-                else
-                  if anyv_region
-                     @begin_anyv_region()
-                     @anyv_serial_region begin
-                        H[j,i] = w_dot_Vj
-                     end
-                  else
-                    @begin_serial_region()
-                    @serial_region begin
+                elseif anyv_region
+                    @begin_anyv_region()
+                    @anyv_serial_region begin
                         H[j,i] = w_dot_Vj
                     end
-                  end
+                else
+                     @begin_serial_region()
+                     @serial_region begin
+                         H[j,i] = w_dot_Vj
+                     end
                 end
                 parallel_map(solver_type, (w, V) -> w - H[j,i] * V, w, w, select_from_V(V, j))
             end
             norm_w = distributed_norm(solver_type, w, norm_params...)
             if serial_solve
                 H[i+1,i] = norm_w
-            else
-               if anyv_region
-                  @begin_anyv_region()
-                  @anyv_serial_region begin
+            elseif anyv_region
+                @begin_anyv_region()
+                @anyv_serial_region begin
                     H[i+1,i] = norm_w
-                  end
-               else
-                  @begin_serial_region()
-                  @serial_region begin
-                     H[i+1,i] = norm_w
-                  end
-               end
+                end
+            else
+                @begin_serial_region()
+                @serial_region begin
+                    H[i+1,i] = norm_w
+                end
             end
             parallel_map(solver_type, (w) -> w / H[i+1,i], select_from_V(V, i+1), w)
 
@@ -1563,42 +1550,40 @@ MGS-GMRES' in Zou (2023) [https://doi.org/10.1016/j.amc.2023.127869].
                 H[i+1,i] = 0
                 g[i+1] = -s[i] * g[i]
                 g[i] = c[i] * g[i]
-            else
-               if anyv_region
-                  @begin_anyv_region()
-                  @anyv_serial_region begin
-                     for j ∈ 1:i-1
+            elseif anyv_region
+                @begin_anyv_region()
+                @anyv_serial_region begin
+                    for j ∈ 1:i-1
                         gamma = c[j] * H[j,i] + s[j] * H[j+1,i]
                         H[j+1,i] = -s[j] * H[j,i] + c[j] * H[j+1,i]
                         H[j,i] = gamma
-                     end
-                     delta = sqrt(H[i,i]^2 + H[i+1,i]^2)
-                     s[i] = H[i+1,i] / delta
-                     c[i] = H[i,i] / delta
-                     H[i,i] = c[i] * H[i,i] + s[i] * H[i+1,i]
-                     H[i+1,i] = 0
-                     g[i+1] = -s[i] * g[i]
-                     g[i] = c[i] * g[i]
-                  end
-                  @_anyv_subblock_synchronize()
-               else
-                  @begin_serial_region()
-                  @serial_region begin
-                     for j ∈ 1:i-1
-                           gamma = c[j] * H[j,i] + s[j] * H[j+1,i]
-                           H[j+1,i] = -s[j] * H[j,i] + c[j] * H[j+1,i]
-                           H[j,i] = gamma
-                     end
-                     delta = sqrt(H[i,i]^2 + H[i+1,i]^2)
-                     s[i] = H[i+1,i] / delta
-                     c[i] = H[i,i] / delta
-                     H[i,i] = c[i] * H[i,i] + s[i] * H[i+1,i]
-                     H[i+1,i] = 0
-                     g[i+1] = -s[i] * g[i]
-                     g[i] = c[i] * g[i]
-                  end
-                  @_block_synchronize()
-               end
+                    end
+                    delta = sqrt(H[i,i]^2 + H[i+1,i]^2)
+                    s[i] = H[i+1,i] / delta
+                    c[i] = H[i,i] / delta
+                    H[i,i] = c[i] * H[i,i] + s[i] * H[i+1,i]
+                    H[i+1,i] = 0
+                    g[i+1] = -s[i] * g[i]
+                    g[i] = c[i] * g[i]
+                end
+                @_anyv_subblock_synchronize()
+            else
+                @begin_serial_region()
+                @serial_region begin
+                    for j ∈ 1:i-1
+                        gamma = c[j] * H[j,i] + s[j] * H[j+1,i]
+                        H[j+1,i] = -s[j] * H[j,i] + c[j] * H[j+1,i]
+                        H[j,i] = gamma
+                    end
+                    delta = sqrt(H[i,i]^2 + H[i+1,i]^2)
+                    s[i] = H[i+1,i] / delta
+                    c[i] = H[i,i] / delta
+                    H[i,i] = c[i] * H[i,i] + s[i] * H[i+1,i]
+                    H[i+1,i] = 0
+                    g[i+1] = -s[i] * g[i]
+                    g[i] = c[i] * g[i]
+                end
+                @_block_synchronize()
             end
             residual = abs(g[i+1])
 
