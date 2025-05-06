@@ -1095,10 +1095,9 @@ function parallel_map(
     @_anyv_subblock_synchronize()
     return nothing
 end
-#@timeit_debug global_timer parallel_map(
-function parallel_map(
+@timeit_debug global_timer parallel_map(
                   ::Val{:vperpvpa}, func, result::AbstractArray{mk_float, 2},
-                  x1, x2)# = begin
+                  x1, x2) = begin
 
     result_pdf = result
     x1_pdf = x1
