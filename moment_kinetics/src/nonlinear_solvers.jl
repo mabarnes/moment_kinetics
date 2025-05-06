@@ -1509,18 +1509,16 @@ MGS-GMRES' in Zou (2023) [https://doi.org/10.1016/j.amc.2023.127869].
                 w_dot_Vj = distributed_dot(solver_type, w, v, norm_params...)
                 if serial_solve
                     H[j,i] = w_dot_Vj
-                else
-                  if anyv_region
-                     @begin_anyv_region()
-                     @anyv_serial_region begin
-                        H[j,i] = w_dot_Vj
-                     end
-                  else
-                    @begin_serial_region()
-                    @serial_region begin
+                elseif anyv_region
+                    @begin_anyv_region()
+                    @anyv_serial_region begin
                         H[j,i] = w_dot_Vj
                     end
-                  end
+                else
+                     @begin_serial_region()
+                     @serial_region begin
+                         H[j,i] = w_dot_Vj
+                     end
                 end
                 parallel_map(solver_type, (w, V) -> w - H[j,i] * V, w, w, select_from_V(V, j))
             end
