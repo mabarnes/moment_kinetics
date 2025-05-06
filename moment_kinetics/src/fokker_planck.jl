@@ -107,6 +107,7 @@ function setup_fkpl_collisions_input(toml_input::AbstractDict, warn_unexpected::
         self_collisions = true,
         use_conserving_corrections = true,
         boundary_data_option = direct_integration,
+        use_test_particle_preconditioner = true,
         slowing_down_test = false,
         sd_density = 1.0,
         sd_temp = 0.01,
@@ -921,7 +922,6 @@ function implicit_ion_fokker_planck_self_collisions!(pdf_out, pdf_in, dSdt,
                     vpa, vperp, z, r, delta_t, spectral_objects,
                     nl_solver_params; diagnose_entropy_production=false,
                     test_linearised_advance=false,
-                    test_particle_preconditioner=false,
                     use_Maxwellian_Rosenbluth_coefficients_in_preconditioner=false,
                     use_end_of_step_corrections=true)
     # bounds checking
@@ -950,7 +950,7 @@ function implicit_ion_fokker_planck_self_collisions!(pdf_out, pdf_in, dSdt,
     nuss = nuref*(Zi^4) # include charge number factor for self collisions
     use_conserving_corrections = collisions.fkpl.use_conserving_corrections
     boundary_data_option = collisions.fkpl.boundary_data_option
-
+    test_particle_preconditioner = collisions.fkpl.use_test_particle_preconditioner
     # coords for vperp vpa newton_solve!
     coords = (vperp=vperp,vpa=vpa)
     # N.B. parallelisation using special 'anyv' region
@@ -1006,7 +1006,7 @@ function fokker_planck_self_collisions_backward_euler_step!(Fold, delta_t, ms, n
                         nl_solver_params;
                         test_numerical_conserving_terms=false,
                         test_linearised_advance=false,
-                        test_particle_preconditioner=false,
+                        test_particle_preconditioner=true,
                         use_Maxwellian_Rosenbluth_coefficients_in_preconditioner=false,
                         boundary_data_option=multipole_expansion)
 

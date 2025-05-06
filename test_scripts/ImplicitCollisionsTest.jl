@@ -66,7 +66,7 @@ function test_implicit_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=3,neleme
     atol = 1.0e-10,
     rtol = 0.0,
     nonlinear_max_iterations = 20,
-    test_particle_preconditioner=false,
+    test_particle_preconditioner=true,
     test_linearised_advance=false,
     use_Maxwellian_Rosenbluth_coefficients_in_preconditioner=false,
     plot_test_output=false,
@@ -207,11 +207,12 @@ function test_implicit_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=3,neleme
             end
         end
     end
-    
-    #diagnose_F_Maxwellian(Fold,Fdummy1,Fdummy2,Fdummy3,vpa,vperp,ntime,ms)
+    finish_run_time = now()
     if plot_test_output
         diagnose_F_gif(fvpavperp,vpa,vperp,ntime)
-    end    
+    end
+    println("init time (ms): ", Dates.value(finish_init_time - start_init_time))
+    println("run time (ms): ", Dates.value(finish_run_time - finish_init_time))
 end
 
 function test_implicit_collisions_wrapper(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=3,nelement_vpa=8,nelement_vperp=4,
@@ -220,7 +221,7 @@ function test_implicit_collisions_wrapper(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=
     atol = 1.0e-10,
     rtol = 0.0,
     nonlinear_max_iterations = 20,
-    test_particle_preconditioner=false,
+    test_particle_preconditioner=true,
     test_linearised_advance=false,
     use_Maxwellian_Rosenbluth_coefficients_in_preconditioner=false,
     plot_test_output=false,
@@ -291,7 +292,8 @@ function test_implicit_collisions_wrapper(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=
                                                                         "frequency_option" => "manual",
                                                                         "self_collisions" => true,
                                                                         "use_conserving_corrections" => test_numerical_conserving_terms,
-                                                                        "boundary_data_option" => boundary_data_option,),
+                                                                        "boundary_data_option" => boundary_data_option,
+                                                                        "use_test_particle_preconditioner" => test_particle_preconditioner,),
                             "fokker_planck_collisions_nonlinear_solver" => OptionsDict("rtol" => rtol,
                                                                                        "atol" => atol,
                                                                                        "nonlinear_max_iterations" => nonlinear_max_iterations),
@@ -367,7 +369,6 @@ function test_implicit_collisions_wrapper(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=
                                         vpa, vperp, z, r, delta_t, spectral_objects,
                                         nl_solver_params; diagnose_entropy_production=true,
                                         test_linearised_advance=test_linearised_advance,
-                                        test_particle_preconditioner=test_particle_preconditioner,
                                         use_Maxwellian_Rosenbluth_coefficients_in_preconditioner=use_Maxwellian_Rosenbluth_coefficients_in_preconditioner,
                                         use_end_of_step_corrections=use_end_of_step_corrections)
         @begin_serial_region()
@@ -392,10 +393,12 @@ function test_implicit_collisions_wrapper(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=
             end
         end
     end
-    
+    finish_run_time = now()
     if plot_test_output
         @views diagnose_F_gif(fvpavperpzrst[:,:,1,1,1,:],vpa,vperp,ntime)
-    end    
+    end
+    println("init time (ms): ", Dates.value(finish_init_time - start_init_time))
+    println("run time (ms): ", Dates.value(finish_run_time - finish_init_time))
 end
     
 if abspath(PROGRAM_FILE) == @__FILE__
