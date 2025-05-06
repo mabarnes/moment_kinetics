@@ -884,7 +884,7 @@ Function to setup nonlinear_solver struct for implicit
 Fokker-Planck collisions. An input namelist of form
 
 ```
-    [fokker_planck_collisions.nonlinear_solver]
+    [fokker_planck_collisions_nonlinear_solver]
     atol = 1.0e-10
     rtol = 0.0
     ...
