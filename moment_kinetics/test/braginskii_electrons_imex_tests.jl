@@ -14,82 +14,92 @@ using moment_kinetics.load_data: get_run_info_no_setup, close_run_info, get_vari
 using moment_kinetics.utils: merge_dict_with_kwargs!
 
 # default inputs for tests
-test_input = OptionsDict( "composition" => OptionsDict("n_ion_species" => 1,
-                                                  "n_neutral_species" => 1,
-                                                  "electron_physics" => "braginskii_fluid",
-                                                  "T_e" => 0.2),
-                  "output" => OptionsDict("run_name" => "braginskii-electrons-imex"),
-                  "evolve_moments" => OptionsDict("density" => true,
-                                                  "parallel_flow" => true,
-                                                  "parallel_pressure" => true,
-                                                  "moments_conservation" => true),
-                  "ion_species_1" => OptionsDict("initial_density" => 1.0,
-                                                      "initial_temperature" => 1.0),
-                  "z_IC_ion_species_1" => OptionsDict("initialization_option" => "sinusoid",
-                                                           "density_amplitude" => 0.1,
-                                                           "density_phase" => 0.0,
-                                                           "upar_amplitude" => 1.0,
-                                                           "upar_phase" => 0.0,
-                                                           "temperature_amplitude" => 0.1,
-                                                           "temperature_phase" => 1.0),
-                  "vpa_IC_ion_species_1" => OptionsDict("initialization_option" => "gaussian",
-                                                             "density_amplitude" => 1.0,
+test_input = OptionsDict("composition" => OptionsDict("n_ion_species" => 1,
+
+                                                      "n_neutral_species" => 1,
+                                                      "electron_physics" => "braginskii_fluid",
+                                                      "T_e" => 0.2),
+                         "output" => OptionsDict("run_name" => "braginskii-electrons-imex"),
+                         "evolve_moments" => OptionsDict("density" => true,
+                                                         "parallel_flow" => true,
+                                                         "moments_conservation" => true,
+                                                         "pressure" => true),
+                         "ion_species_1" => OptionsDict("initial_density" => 1.0,
+                                                        "initial_temperature" => 0.3333333333333333),
+                         "z_IC_ion_species_1" => OptionsDict("initialization_option" => "sinusoid",
+                                                             "density_amplitude" => 0.1,
                                                              "density_phase" => 0.0,
-                                                             "upar_amplitude" => 0.0,
+                                                             "upar_amplitude" => 1.4142135623730951,
                                                              "upar_phase" => 0.0,
-                                                             "temperature_amplitude" => 0.0,
-                                                             "temperature_phase" => 0.0),
-                  "neutral_species_1" => OptionsDict("initial_density" => 1.0,
-                                                          "initial_temperature" => 1.0),
-                  "z_IC_neutral_species_1" => OptionsDict("initialization_option" => "sinusoid",
-                                                               "density_amplitude" => 0.001,
+                                                             "temperature_amplitude" => 0.1,
+                                                             "temperature_phase" => 1.0),
+                         "vpa_IC_ion_species_1" => OptionsDict("initialization_option" => "gaussian",
+                                                               "density_amplitude" => 1.0,
                                                                "density_phase" => 0.0,
                                                                "upar_amplitude" => 0.0,
                                                                "upar_phase" => 0.0,
                                                                "temperature_amplitude" => 0.0,
                                                                "temperature_phase" => 0.0),
-                  "vz_IC_neutral_species_1" => OptionsDict("initialization_option" => "gaussian",
-                                                           "density_amplitude" => 1.0,
-                                                           "density_phase" => 0.0,
-                                                           "upar_amplitude" => 0.0,
-                                                           "upar_phase" => 0.0,
-                                                           "temperature_amplitude" => 0.0,
-                                                           "temperature_phase" => 0.0),
-                  "electron_fluid_collisions" => OptionsDict("nu_ei" => 1.0e3),
-                  "reactions" => OptionsDict("charge_exchange_frequency" => 0.75,
-                                             "electron_charge_exchange_frequency" => 0.0,
-                                             "ionization_frequency" => 0.5,
-                                             "electron_ionization_frequency" => 0.0),
-                  "timestepping" => OptionsDict("type" => "KennedyCarpenterARK324",
-                                                     "kinetic_ion_solver" => "full_explicit_ion_advance",
-                                                     "nstep" => 10000,
-                                                     "dt" => 1.0e-6,
-                                                     "minimum_dt" => 1.e-7,
-                                                     "rtol" => 1.0e-7,
-                                                     "nwrite" => 10000,
-                                                     "exact_output_times" => true,
-                                                     "high_precision_error_sum" => true),
-                  "nonlinear_solver" => OptionsDict("nonlinear_max_iterations" => 100),
-                  "r" => OptionsDict("ngrid" => 1,
-                                     "nelement" => 1),
-                  "z" => OptionsDict("ngrid" => 17,
-                                     "nelement" => 16,
-                                     "bc" => "periodic",
-                                     "discretization" => "chebyshev_pseudospectral"),
-                  "vpa" => OptionsDict("ngrid" => 6,
-                                       "nelement" => 31,
-                                       "L" => 12.0,
-                                       "bc" => "zero",
-                                       "discretization" => "chebyshev_pseudospectral"),
-                  "vz" => OptionsDict("ngrid" => 6,
-                                      "nelement" => 31,
-                                      "L" => 12.0,
-                                      "bc" => "zero",
-                                      "discretization" => "chebyshev_pseudospectral"),
-                  "ion_numerical_dissipation" => OptionsDict("force_minimum_pdf_value" => 0.0,
-                                                                  "vpa_dissipation_coefficient" => 1e0),
-                  "neutral_numerical_dissipation" => OptionsDict("force_minimum_pdf_value" => 0.0,
-                                                                      "vz_dissipation_coefficient" => 1e-1))
+                         "neutral_species_1" => OptionsDict("initial_density" => 1.0,
+                                                            "initial_temperature" => 0.3333333333333333),
+                         "z_IC_neutral_species_1" => OptionsDict("initialization_option" => "sinusoid",
+                                                                 "density_amplitude" => 0.001,
+                                                                 "density_phase" => 0.0,
+                                                                 "upar_amplitude" => 0.0,
+                                                                 "upar_phase" => 0.0,
+                                                                 "temperature_amplitude" => 0.0,
+                                                                 "temperature_phase" => 0.0),
+                         "vz_IC_neutral_species_1" => OptionsDict("initialization_option" => "gaussian",
+                                                                  "density_amplitude" => 1.0,
+                                                                  "density_phase" => 0.0,
+                                                                  "upar_amplitude" => 0.0,
+                                                                  "upar_phase" => 0.0,
+                                                                  "temperature_amplitude" => 0.0,
+                                                                  "temperature_phase" => 0.0),
+                         "electron_fluid_collisions" => OptionsDict("nu_ei" => 1414.213562373095),
+                         "reactions" => OptionsDict("charge_exchange_frequency" => 1.0606601717798214,
+                                                    "electron_charge_exchange_frequency" => 0.0,
+                                                    "ionization_frequency" => 0.7071067811865476,
+                                                    "electron_ionization_frequency" => 0.7071067811865476),
+                         # Use higher-order "KennedyCarpenterARK437" scheme rather than
+                         # "KennedyCarpenterARK324" for the default case in this test,
+                         # because the higher order scheme is faster when enforcing the
+                         # tight tolerances that we use here. Tight solver tolerances are
+                         # used so that the results can be tested with reasonably tight
+                         # tolerances without needing to match iteration counts (which
+                         # could be affected by rounding errors, etc.).
+                         "timestepping" => OptionsDict("type" => "KennedyCarpenterARK437",
+                                                       "kinetic_ion_solver" => "full_explicit_ion_advance",
+                                                       "nstep" => 10000,
+                                                       "dt" => 7.071067811865475e-7,
+                                                       "minimum_dt" => 7.071067811865474e-8,
+                                                       "rtol" => 1.0e-11,
+                                                       "atol" => 1.0e-14,
+                                                       "nwrite" => 10000,
+                                                       "exact_output_times" => true,
+                                                       "high_precision_error_sum" => true),
+                         "nonlinear_solver" => OptionsDict("nonlinear_max_iterations" => 100),
+                         "r" => OptionsDict("ngrid" => 1,
+                                            "nelement" => 1),
+                         "z" => OptionsDict("ngrid" => 17,
+                                            "nelement" => 16,
+                                            "bc" => "periodic",
+                                            "discretization" => "chebyshev_pseudospectral"),
+                         "vpa" => OptionsDict("ngrid" => 6,
+                                              "nelement" => 31,
+                                              "L" => 20.784609690826528,
+                                              "bc" => "zero",
+                                              "discretization" => "chebyshev_pseudospectral"),
+                         "vz" => OptionsDict("ngrid" => 6,
+                                             "nelement" => 31,
+                                             "L" => 20.784609690826528,
+                                             "bc" => "zero",
+                                             "discretization" => "chebyshev_pseudospectral"),
+                         "ion_numerical_dissipation" => OptionsDict("force_minimum_pdf_value" => 0.0,
+                                                                    "vpa_dissipation_coefficient" => 4.242640687119286),
+                         "neutral_numerical_dissipation" => OptionsDict("force_minimum_pdf_value" => 0.0,
+                                                                        "vz_dissipation_coefficient" => 0.42426406871192857),
+                        )
 
 if global_size[] > 2 && global_size[] % 2 == 0
     # Test using distributed-memory
@@ -100,7 +110,7 @@ end
 Run a test for a single set of parameters
 """
 function run_test(test_input, expected_p, expected_q, expected_vt; rtol=1.e-6,
-                  atol=1.e-8, args...)
+                  qpar_atol=2.e-6, args...)
     # by passing keyword arguments to run_test, args becomes a Tuple of Pairs which can be
     # used to update the default inputs
 
@@ -143,13 +153,13 @@ function run_test(test_input, expected_p, expected_q, expected_vt; rtol=1.e-6,
             # open the output file
             run_info = get_run_info_no_setup(path)
 
-            parallel_pressure_zrt = get_variable(run_info, "electron_parallel_pressure")
+            pressure_zrt = get_variable(run_info, "electron_pressure")
             parallel_heat_flux_zrt = get_variable(run_info, "electron_parallel_heat_flux")
             thermal_speed_zrt = get_variable(run_info, "electron_thermal_speed")
 
             close_run_info(run_info)
 
-            p = parallel_pressure_zrt[:,1,:]
+            p = pressure_zrt[:,1,:]
             q = parallel_heat_flux_zrt[:,1,:]
             vt = thermal_speed_zrt[:,1,:]
         end
@@ -163,21 +173,21 @@ function run_test(test_input, expected_p, expected_q, expected_vt; rtol=1.e-6,
             println("data tested would be: ", actual_p)
             @test false
         else
-            @test isapprox(actual_p, expected_p, rtol=rtol, atol=atol)
+            @test elementwise_isapprox(actual_p, expected_p, rtol=rtol, atol=0.0)
         end
         if expected_q == nothing
             # Error: no expected input provided
             println("data tested would be: ", actual_q)
             @test false
         else
-            @test isapprox(actual_q, expected_q, rtol=10.0*rtol, atol=atol)
+            @test elementwise_isapprox(actual_q, expected_q, rtol=0.0, atol=qpar_atol)
         end
         if expected_vt == nothing
             # Error: no expected input provided
             println("data tested would be: ", actual_vt)
             @test false
         else
-            @test isapprox(actual_vt, expected_vt, rtol=rtol, atol=atol)
+            @test elementwise_isapprox(actual_vt, expected_vt, rtol=rtol, atol=0.0)
         end
     end
 end
@@ -186,93 +196,93 @@ function runtests()
     # Create a temporary directory for test output
     test_output_directory = get_MPI_tempdir()
 
-    expected_p = [0.4472667753573, 0.44586573052015466, 0.4424647096166432,
-                  0.43880148354600546, 0.4362338056099866, 0.4351231286737388,
-                  0.43477895664414823, 0.43365593088225596, 0.43257823403449747,
-                  0.43223077674966537, 0.4323953669714128, 0.43248849111426135,
-                  0.43286984145693197, 0.4340302551115443, 0.43602047637959573,
-                  0.4380477467623677, 0.4389146087536753, 0.4398379346877904,
-                  0.44256609548429504, 0.4466347628125969, 0.45073775485714207,
-                  0.45311308823748697, 0.45396929815757175, 0.45741231101077917,
-                  0.462992995661822, 0.46900364137058925, 0.47320430814053555,
-                  0.4743176908892343, 0.47756994729526264, 0.4838605291598065,
-                  0.4912370470466483, 0.4971308287885936, 0.4993737621289088,
-                  0.5016301082844635, 0.5076897886177998, 0.5155519153447844,
-                  0.5225137910929818, 0.5262101842133429, 0.5274912429744992,
-                  0.5323979131182897, 0.5396262894584034, 0.5465644289618494,
-                  0.5509571249788077, 0.5520629883964039, 0.5551591883386835,
-                  0.5606050354082762, 0.5661242922789107, 0.5698855786467936,
-                  0.5711677515774394, 0.5723747879575733, 0.5752039811770493,
-                  0.5779653686021129, 0.5795228328585527, 0.5799950142571424,
-                  0.5800990332324834, 0.5802025129877998, 0.5794475559292418,
-                  0.5775860811587035, 0.5757457393730918, 0.5751917019939247,
-                  0.5734266125158594, 0.5694471729004168, 0.563954552931989,
-                  0.5590156030954267, 0.5570216393839076, 0.5549566689161276,
-                  0.5491379571481412, 0.5410541224525021, 0.5334506536106367,
-                  0.5292589393149492, 0.5277823837805637, 0.5220167160265328,
-                  0.5132103110360944, 0.5043996594930746, 0.49862308603756,
-                  0.4971418463597247, 0.49293044374252115, 0.485253207324287,
-                  0.47699292326869625, 0.47093510094532054, 0.46875089498826766,
-                  0.46661928268970854, 0.461212786847941, 0.4548676297024186,
-                  0.44986029090974355, 0.4474307681332574]
-    expected_q = [0.6773526451128238, 0.670583999021797, 0.6493886936653975,
-                  0.6157359500217003, 0.5804376967961619, 0.5596337683940502,
-                  0.5520884618821148, 0.5215589214269033, 0.47165961574381243,
-                  0.41762978109691684, 0.3797992913311255, 0.3697685979640904,
-                  0.3404660459654843, 0.2837914706113863, 0.217344682639778,
-                  0.1642308040656865, 0.14400193349152263, 0.12363882636780353,
-                  0.06884919066760159, -0.0025785696544894806, -0.06633807940552049,
-                  -0.10046307561383809, -0.11234396149687136, -0.1581512531134767,
-                  -0.22672491652613394, -0.29421227846226833, -0.33809300344022425,
-                  -0.34931457578099034, -0.38117689954727624, -0.4391741381555335,
-                  -0.501575739061081, -0.5473683674328982, -0.5638771699478984,
-                  -0.5799806191665012, -0.6207340444297192, -0.6681331503508241,
-                  -0.7047507032435498, -0.7220311587726211, -0.7276524782441415,
-                  -0.7473515305771995, -0.7706226333743329, -0.7855209416550488,
-                  -0.7904681155606789, -0.7910821989001742, -0.7912803709037391,
-                  -0.7852740210044945, -0.7681916679409239, -0.7472160866320815,
-                  -0.7375866366230286, -0.7270004378513353, -0.6941685680972457,
-                  -0.642170986350678, -0.5873165464655995, -0.5548068899004526,
-                  -0.5429860662994594, -0.4950235043954368, -0.4163406850257616,
-                  -0.33116882409660287, -0.271824124909181, -0.2561572815629586,
-                  -0.21060197644705128, -0.12364331044604336, -0.024257155821442774,
-                  0.05264922083668048, 0.08125254896573005, 0.10963254026115248,
-                  0.18375652132254605, 0.2750046993849566, 0.35073171063740033,
-                  0.3888620927820992, 0.40172591212930353, 0.4492718653540388,
-                  0.5140694693311022, 0.5699172475856528, 0.6017607551833434,
-                  0.609314631225841, 0.629411904044992, 0.6606553098210337,
-                  0.6859771459149894, 0.6984902863851211, 0.7016072172421283,
-                  0.7038742159983571, 0.705858015204439, 0.700059410583365,
-                  0.6874958260779616, 0.6780812480898903]
-    expected_vt = [60.351816207604635, 60.31012015049677, 60.200604221763534,
-                   60.064056388407685, 59.9486166098168, 59.88950555572966,
-                   59.86938336673384, 59.794093675971, 59.688555354831614,
-                   59.59374628595299, 59.53732958585759, 59.52360365226546,
-                   59.486265902734885, 59.424892586011715, 59.369427971140304,
-                   59.33676186929905, 59.32688776618443, 59.318330034971396,
-                   59.301990065786086, 59.29478194397539, 59.30132730953455,
-                   59.309748023136486, 59.31347718556533, 59.33169891964568,
-                   59.37041176928683, 59.422126924870454, 59.46325312228893,
-                   59.47475465628287, 59.50966972516561, 59.58225272283746,
-                   59.674748539452345, 59.753654804363926, 59.784751684376296,
-                   59.81660062329952, 59.90483646250452, 60.02494223227007,
-                   60.13646982486386, 60.19767945902454, 60.21922333352952,
-                   60.30336655092559, 60.432344078530356, 60.56256699334704,
-                   60.64889991624143, 60.67118554864238, 60.73491855012813,
-                   60.852702387568364, 60.982164600875514, 61.07923838490804,
-                   61.11473832613493, 61.14965858786135, 61.23953948372659,
-                   61.34769829901661, 61.43539250374229, 61.47878240685701,
-                   61.49329290414419, 61.54628496978551, 61.61648033100149,
-                   61.67412230312648, 61.70500460236538, 61.71201348070227,
-                   61.72983625925911, 61.75383223671623, 61.7658956739661,
-                   61.76406330619319, 61.76082451138627, 61.75619056494155,
-                   61.73705790442811, 61.69800694295683, 61.65011541510284,
-                   61.6195413583548, 61.60809623511118, 61.560115308047024,
-                   61.476866628666976, 61.38144082319236, 61.312038431820156,
-                   61.29333291605387, 61.238042443579566, 61.12876555363245,
-                   60.99762498726125, 60.8911766729031, 60.85037690232061,
-                   60.809203653504845, 60.698124222165994, 60.55330673128157,
-                   60.424808096655475, 60.35658592031778]
+    expected_p = [0.2912266392615819, 0.29025433984310034, 0.2879242795894934,
+                  0.28548225806473115, 0.28384242576375174, 0.2831665146026283,
+                  0.28296363638030586, 0.2823366897521711, 0.2818560435545019,
+                  0.28192177350350867, 0.2822583749092662, 0.28238277460158656,
+                  0.2828236654979084, 0.28397537848027077, 0.28576932659403154,
+                  0.2875095946566044, 0.28823872862422006, 0.28900815861323625,
+                  0.2912486795813647, 0.29452677666810323, 0.2977814147553455,
+                  0.2996484553672727, 0.30031887657350365, 0.30300285160128704,
+                  0.3073193430797012, 0.31193161657793445, 0.31513687813211466,
+                  0.31598426295913096, 0.31845480898675826, 0.32321552054602143,
+                  0.32877244876597045, 0.33319548212915606, 0.33487518066968125,
+                  0.33656308386018763, 0.34108750584114733, 0.34694015823920066,
+                  0.3521069551605689, 0.354844322667331, 0.3557920384394313,
+                  0.35941717616187985, 0.36474291829688, 0.36983586978198124,
+                  0.37304870523370237, 0.37385586661162806, 0.37611166127481654,
+                  0.3800616750498591, 0.38403292172193515, 0.3867106101171749,
+                  0.3876154906109739, 0.3884623805519838, 0.39042067991590823,
+                  0.3922634642590541, 0.3932126368037694, 0.393443458681066,
+                  0.39347751170947465, 0.39338056919954756, 0.39253779331488525,
+                  0.39085137153218863, 0.38927266454143705, 0.38880516389341757,
+                  0.3873310901398761, 0.38406289700323226, 0.3796240522962586,
+                  0.3756763737398465, 0.37409128322752316, 0.37245421008517576,
+                  0.36786251955039573, 0.3615273349978123, 0.3556082477818965,
+                  0.35236000523009325, 0.3512182086376803, 0.34677149340933866,
+                  0.34001536757416884, 0.3332995292327041, 0.3289209220377829,
+                  0.3278014123659849, 0.3246260247818751, 0.31886782836137484,
+                  0.3127209794825403, 0.30824996369248003, 0.3066465903792448,
+                  0.30508670304077556, 0.30115425144651664, 0.29659122715149966,
+                  0.29304172559674013, 0.29134085003866206]
+    expected_q = [0.23556826923235596, 0.2288797766664259, 0.21041116238456214,
+                  0.18549245084781352, 0.1626219201422328, 0.15017868685441035,
+                  0.1458162456876596, 0.12885601503784916, 0.10305577133873899,
+                  0.07714819243582582, 0.05998214248641777, 0.055544990502692515,
+                  0.04282846870749182, 0.01915058669706081, -0.007332921607335636,
+                  -0.02769202946560893, -0.035283415721614204, -0.04284327260070175,
+                  -0.06281091997672486, -0.08813260536031556, -0.11016357594575653,
+                  -0.12176308441555106, -0.1257726062289506, -0.1411008577426437,
+                  -0.1636855820770096, -0.18552052141998032, -0.19951405956802407,
+                  -0.20306661730037573, -0.2130929704046349, -0.23109815855579335,
+                  -0.2500552520690091, -0.2636158151349759, -0.268412568602741,
+                  -0.2730353882345693, -0.2844327851651806, -0.2969302167940793,
+                  -0.30567633889851736, -0.30935363220923506, -0.3104606141551865,
+                  -0.3138487066565867, -0.3161079342833782, -0.3146323233472668,
+                  -0.31143848659084417, -0.3103111991123877, -0.3063695130000694,
+                  -0.29610797074083817, -0.2798689974197797, -0.2637840314630642,
+                  -0.256959258590788, -0.24970925520558615, -0.22836003518647713,
+                  -0.19666284393997444, -0.16490286167057094, -0.14664780208467387,
+                  -0.1400967815924841, -0.11393718546115707, -0.07229522166883755,
+                  -0.02876357704403918, 0.0006893474578849874, 0.00834770098017756,
+                  0.03033886249615677, 0.07115533338885446, 0.11585389615167233,
+                  0.14889687382302802, 0.16081345508408768, 0.17242339898794337,
+                  0.20167334048420674, 0.2352662878247843, 0.26071690396404323,
+                  0.2725278098522258, 0.2763388829863348, 0.289562883607562,
+                  0.30494352817593645, 0.3148361224416993, 0.3184371471998132,
+                  0.3189956780890423, 0.31976826683863097, 0.31803327794963066,
+                  0.31145690651138874, 0.30330213265226985, 0.2996141494839335,
+                  0.29560753786650734, 0.28349703217117483, 0.265184092043082,
+                  0.24682117995410455, 0.2363213577230064]
+    expected_vt = [48.6992868526641, 48.66061151828625, 48.562472749119,
+                   48.447386590870806, 48.35689214185663, 48.31320288737565,
+                   48.29877167655277, 48.246917255621504, 48.18065639743303,
+                   48.12907208406565, 48.10305008519001, 48.09737860085546,
+                   48.08352585895935, 48.06723944601686, 48.06375753887273,
+                   48.07173886211495, 48.07710175827975, 48.083736776797075,
+                   48.10750394035914, 48.15078049524789, 48.2005548271185,
+                   48.23137401970733, 48.24277819914424, 48.28999073879341,
+                   48.37030021545349, 48.460829577792815, 48.526061475669344,
+                   48.543585047501594, 48.595282117266834, 48.69721704693387,
+                   48.81957915246863, 48.91927408797529, 48.9576306807959,
+                   48.99644006244413, 49.101750081571524, 49.240705451992845,
+                   49.365985339465844, 49.43340450803446, 49.45692420763894,
+                   49.547788154586335, 49.68414133910146, 49.8183730789756,
+                   49.905474733027326, 49.92771042907716, 49.99072482092697,
+                   50.10483804117641, 50.226425429950744, 50.314571337911886,
+                   50.346069312688655, 50.376628012585485, 50.45311695531929,
+                   50.54016009674209, 50.605428974548346, 50.63538718425807,
+                   50.644981677404, 50.677832316151594, 50.71421623646161,
+                   50.73401425585734, 50.73767117504187, 50.73736594876943,
+                   50.73360398839693, 50.71500032904826, 50.67588851616629,
+                   50.632401347623436, 50.61316532492046, 50.59237053079966,
+                   50.52956408310521, 50.43348269604562, 50.33503576389008,
+                   50.27770400767619, 50.25701107772187, 50.17378212319549,
+                   50.039327077197896, 49.89596658563543, 49.797081906296036,
+                   49.771085589662256, 49.69571049233119, 49.5525228842394,
+                   49.38951061127272, 49.26344621978354, 49.21650697142358,
+                   49.16988299867822, 49.04771792593905, 48.896115879997794,
+                   48.76869738844039, 48.70375640464302]
 
     @testset "Braginskii electron IMEX timestepping" verbose=use_verbose begin
         println("Braginskii electron IMEX timestepping tests")
@@ -282,14 +292,13 @@ function runtests()
             run_test(test_input, expected_p, expected_q, expected_vt)
         end
         @long @testset "Check other timestep - $type" for
-                type ∈ ("KennedyCarpenterARK437",)
+                type ∈ ("KennedyCarpenterARK324",)
 
             timestep_check_input = deepcopy(test_input)
             timestep_check_input["output"]["base_directory"] = test_output_directory
             timestep_check_input["output"]["run_name"] = type
             timestep_check_input["timestepping"]["type"] = type
-            run_test(timestep_check_input, expected_p, expected_q, expected_vt,
-                     rtol=2.e-4, atol=1.e-10)
+            run_test(timestep_check_input, expected_p, expected_q, expected_vt)
         end
     end
 

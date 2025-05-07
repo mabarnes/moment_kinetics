@@ -45,7 +45,7 @@ base_input = OptionsDict("output" => OptionsDict("run_name" => "precompilation",
                                              "bc" => "zero",
                                              "L" => 8.0,
                                              "discretization" => "finite_difference"),
-                         "timestepping" => OptionsDict("nstep" => 1, "dt" => 2.0e-11))
+                         "timestepping" => OptionsDict("nstep" => 1, "dt" => 1.0e-11))
 cheb_input = recursive_merge(base_input, OptionsDict("r" => OptionsDict("discretization" => "chebyshev_pseudospectral"),
                                                      "z" => OptionsDict("discretization" => "chebyshev_pseudospectral"),
                                                      "vperp" => OptionsDict("discretization" => "chebyshev_pseudospectral"),
@@ -65,7 +65,7 @@ for input ∈ [base_input, cheb_input, wall_bc_input, wall_bc_cheb_input]
     push!(inputs_list, x)
     x = recursive_merge(x, OptionsDict("evolve_moments" => OptionsDict("parallel_flow" => true)))
     push!(inputs_list, x)
-    x = recursive_merge(x, OptionsDict("evolve_moments" => OptionsDict("parallel_pressure" => true)))
+    x = recursive_merge(x, OptionsDict("evolve_moments" => OptionsDict("pressure" => true)))
     push!(inputs_list, x)
 end
 
@@ -107,7 +107,7 @@ geo_input1 = recursive_merge(wall_bc_cheb_input, OptionsDict("composition" => Op
 
 kinetic_electron_input = recursive_merge(cheb_input, OptionsDict("evolve_moments" => OptionsDict("density" => true,
                                                                                                  "parallel_flow" => true,
-                                                                                                 "parallel_pressure" => true),
+                                                                                                 "pressure" => true),
                                                                  "z" => OptionsDict("discretization" => "gausslegendre_pseudospectral"),
                                                                  "vpa" => OptionsDict("discretization" => "gausslegendre_pseudospectral"),
                                                                  "vz" => OptionsDict("discretization" => "gausslegendre_pseudospectral"),

@@ -8,6 +8,7 @@ using MPI
 using Dates
 
 import moment_kinetics
+using moment_kinetics.calculus: integral
 using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.fokker_planck: init_fokker_planck_collisions_direct_integration
 using moment_kinetics.fokker_planck_calculus: calculate_rosenbluth_potentials_via_direct_integration!
@@ -18,7 +19,7 @@ using moment_kinetics.fokker_planck_test: d2Fdvpa2_Maxwellian, d2Fdvperpdvpa_Max
 using moment_kinetics.fokker_planck_test: save_fkpl_integration_error_data
 using moment_kinetics.type_definitions: mk_float, mk_int
 using moment_kinetics.calculus: derivative!
-using moment_kinetics.velocity_moments: integrate_over_vspace, get_pressure
+using moment_kinetics.velocity_moments: get_pperp
 using moment_kinetics.communication
 using moment_kinetics.looping
 using moment_kinetics.array_allocation: allocate_shared_float, allocate_float
@@ -49,8 +50,8 @@ function L2norm_vspace(ff_err,vpa,vperp)
     @. ff_ones = 1.0
     gg = copy(ff_err)
     @. gg = (ff_err)^2
-    num = integrate_over_vspace(@view(gg[:,:]), vpa.grid, 0, vpa.wgts, vperp.grid, 0, vperp.wgts)
-    denom = integrate_over_vspace(@view(ff_ones[:,:]), vpa.grid, 0, vpa.wgts, vperp.grid, 0, vperp.wgts)
+    num = integral(@view(gg[:,:]), vpa.grid, 0, vpa.wgts, vperp.grid, 0, vperp.wgts)
+    denom = integral(@view(ff_ones[:,:]), vpa.grid, 0, vpa.wgts, vperp.grid, 0, vperp.wgts)
     L2norm = sqrt(num/denom)
     return L2norm
 end
@@ -154,9 +155,9 @@ function test_Lagrange_Rosenbluth_potentials(ngrid,nelement; standalone=true)
     # set up test Maxwellian
     denss = 1.0 #3.0/4.0
     upars = 0.0 #2.0/3.0
+    press = 1.0 #2.0/3.0
     ppars = 1.0 #2.0/3.0
-    pperps = 1.0 #2.0/3.0
-    press = get_pressure(ppars,pperps) 
+    pperps = get_pperp(press, ppars)
     ms = 1.0
     vths = get_vth(press,denss,ms)
     

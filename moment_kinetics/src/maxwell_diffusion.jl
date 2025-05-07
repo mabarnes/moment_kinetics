@@ -91,6 +91,12 @@ to act as the diffusion operator.
         error("Maxwell diffusion not implemented for 2V moment-kinetic cases yet")
     end
 
+    if vperp.n == 1
+        Maxwellian_prefactor = 1.0 / sqrt(π)
+    else
+        Maxwellian_prefactor = 1.0 / π^1.5
+    end
+
     # Otherwise, build the maxwellian function (which is going to be subtracted from 
     # the current distribution) using the moments of the distribution (so that the 
     # operator itself conserves the moments), and then this result will be the one 
@@ -107,7 +113,7 @@ to act as the diffusion operator.
     if moments.evolve_density && moments.evolve_upar && moments.evolve_ppar
         @loop_s_r_z_vperp is ir iz ivperp begin
             @views @. vpa.scratch = f_in.pdf[:,ivperp,iz,ir,is] - 
-                            exp(-((vpa.grid[:])^2 + (vperp.grid[ivperp])^2) )
+                            Maxwellian_prefactor * exp(-((vpa.grid[:])^2 + (vperp.grid[ivperp])^2) )
             second_derivative!(vpa.scratch2, vpa.scratch, vpa, spectral)
             @views @. f_out[:,ivperp,iz,ir,is] += dt * diffusion_coefficient * vpa.scratch2
         end
@@ -115,7 +121,7 @@ to act as the diffusion operator.
         @loop_s_r_z_vperp is ir iz ivperp begin
             vth = moments.ion.vth[iz,ir,is]
             @views @. vpa.scratch = f_in.pdf[:,ivperp,iz,ir,is] - 
-                            1.0 / vth * exp(- ((vpa.grid[:])^2 + (vperp.grid[ivperp])^2)/(vth^2) )
+                            1.0 / vth * Maxwellian_prefactor * exp(- ((vpa.grid[:])^2 + (vperp.grid[ivperp])^2)/(vth^2) )
             second_derivative!(vpa.scratch2, vpa.scratch, vpa, spectral)
             @views @. f_out[:,ivperp,iz,ir,is] += dt * diffusion_coefficient * vpa.scratch2
         end
@@ -123,7 +129,7 @@ to act as the diffusion operator.
         @loop_s_r_z_vperp is ir iz ivperp begin
             upar = f_in.upar[iz,ir,is]
             @views @. vpa.scratch = f_in.pdf[:,ivperp,iz,ir,is] - 
-                            exp(- ((vpa.grid[:] - upar)^2 + (vperp.grid[ivperp])^2))
+                            Maxwellian_prefactor * exp(- ((vpa.grid[:] - upar)^2 + (vperp.grid[ivperp])^2))
             second_derivative!(vpa.scratch2, vpa.scratch, vpa, spectral)
             @views @. f_out[:,ivperp,iz,ir,is] += dt * diffusion_coefficient * vpa.scratch2
         end
@@ -131,7 +137,7 @@ to act as the diffusion operator.
         @loop_s_r_z_vperp is ir iz ivperp begin
             n = f_in.density[iz,ir,is]
             @views @. vpa.scratch = f_in.pdf[:,ivperp,iz,ir,is] - 
-                            n * exp(- ((vpa.grid[:])^2 + (vperp.grid[ivperp])^2) )
+                            n * Maxwellian_prefactor * exp(- ((vpa.grid[:])^2 + (vperp.grid[ivperp])^2) )
             second_derivative!(vpa.scratch2, vpa.scratch, vpa, spectral)
             @views @. f_out[:,ivperp,iz,ir,is] += dt * diffusion_coefficient * vpa.scratch2
         end
@@ -140,7 +146,7 @@ to act as the diffusion operator.
             vth = moments.ion.vth[iz,ir,is]
             upar = f_in.upar[iz,ir,is]
             @views @. vpa.scratch = f_in.pdf[:,ivperp,iz,ir,is] - 
-                            1.0 / vth * exp(- ((vpa.grid[:] - upar)^2 + (vperp.grid[ivperp])^2)/(vth^2) )
+                            1.0 / vth * Maxwellian_prefactor * exp(- ((vpa.grid[:] - upar)^2 + (vperp.grid[ivperp])^2)/(vth^2) )
             second_derivative!(vpa.scratch2, vpa.scratch, vpa, spectral)
             @views @. f_out[:,ivperp,iz,ir,is] += dt * diffusion_coefficient * vpa.scratch2
         end
@@ -149,7 +155,7 @@ to act as the diffusion operator.
             vth = moments.ion.vth[iz,ir,is]
             n = f_in.density[iz,ir,is]
             @views @. vpa.scratch = f_in.pdf[:,ivperp,iz,ir,is] - 
-                            n / vth * exp(- ((vpa.grid[:])^2 + (vperp.grid[ivperp])^2)/(vth^2) )
+                            n / vth * Maxwellian_prefactor * exp(- ((vpa.grid[:])^2 + (vperp.grid[ivperp])^2)/(vth^2) )
             second_derivative!(vpa.scratch2, vpa.scratch, vpa, spectral)
             @views @. f_out[:,ivperp,iz,ir,is] += dt * diffusion_coefficient * vpa.scratch2
         end
@@ -158,7 +164,7 @@ to act as the diffusion operator.
             n = f_in.density[iz,ir,is]
             upar = f_in.upar[iz,ir,is]
             @views @. vpa.scratch = f_in.pdf[:,ivperp,iz,ir,is] - 
-                            n * exp(- ((vpa.grid[:] - upar)^2 + (vperp.grid[ivperp])^2) )
+                            n * Maxwellian_prefactor * exp(- ((vpa.grid[:] - upar)^2 + (vperp.grid[ivperp])^2) )
             second_derivative!(vpa.scratch2, vpa.scratch, vpa, spectral)
             @views @. f_out[:,ivperp,iz,ir,is] += dt * diffusion_coefficient * vpa.scratch2
         end
@@ -174,7 +180,7 @@ to act as the diffusion operator.
                 vth_prefactor = 1.0 / vth^3
             end
             @views @. vpa.scratch = f_in.pdf[:,ivperp,iz,ir,is] - n * vth_prefactor * 
-                            exp(-( ((vpa.grid[:] - upar)^2) + (vperp.grid[ivperp])^2)/(vth^2) )
+                            Maxwellian_prefactor * exp(-( ((vpa.grid[:] - upar)^2) + (vperp.grid[ivperp])^2)/(vth^2) )
             second_derivative!(vpa.scratch2, vpa.scratch, vpa, spectral)
             @views @. f_out[:,ivperp,iz,ir,is] += dt * diffusion_coefficient * vpa.scratch2
         end
@@ -202,6 +208,12 @@ to act as the diffusion operator.
         error("Maxwell diffusion not implemented for 2V moment-kinetic cases yet")
     end
 
+    if vzeta.n == 1 && vr.n == 1
+        Maxwellian_prefactor = 1.0 / sqrt(π)
+    else
+        Maxwellian_prefactor = 1.0 / π^1.5
+    end
+
     # Otherwise, build the maxwellian function (which is going to be subtracted from 
     # the current distribution) using the moments of the distribution (so that the 
     # operator itself conserves the moments), and then this result will be the one 
@@ -213,7 +225,7 @@ to act as the diffusion operator.
         # See similar comments in krook_collisions! function. 
         @loop_sn_r_z_vzeta_vr isn ir iz ivzeta ivr begin
             @views @. vz.scratch = f_in.pdf_neutral[:,ivr,ivzeta,iz,ir,isn] - 
-                            exp(-((vz.grid[:])^2 + (vr.grid[ivr])^2 + (vzeta.grid[ivzeta])^2) )
+                            Maxwellian_prefactor * exp(-((vz.grid[:])^2 + (vr.grid[ivr])^2 + (vzeta.grid[ivzeta])^2) )
             second_derivative!(vz.scratch2, vz.scratch, vz, spectral)
             @views @. f_out[:,ivr,ivzeta,iz,ir,isn] += dt * diffusion_coefficient * vz.scratch2
         end
@@ -222,7 +234,7 @@ to act as the diffusion operator.
             vth = moments.neutral.vth[iz,ir,isn]
             uz = f_in.uz_neutral[iz,ir,isn]
             @views @. vz.scratch = f_in.pdf_neutral[:,ivr,ivzeta,iz,ir,isn] - 
-                            exp(- ((vz.grid[:] - uz)^2 + (vr.grid[ivr])^2 + (vzeta.grid[ivzeta])^2)/(vth^2) )
+                            Maxwellian_prefactor * exp(- ((vz.grid[:] - uz)^2 + (vr.grid[ivr])^2 + (vzeta.grid[ivzeta])^2)/(vth^2) )
             second_derivative!(vz.scratch2, vz.scratch, vz, spectral)
             @views @. f_out[:,ivr,ivzeta,iz,ir,isn] += dt * diffusion_coefficient * vz.scratch2
         end
@@ -230,7 +242,7 @@ to act as the diffusion operator.
         @loop_sn_r_z_vzeta_vr isn ir iz ivzeta ivr begin
             vth = moments.neutral.vth[iz,ir,isn]
             @views @. vz.scratch = f_in.pdf_neutral[:,ivr,ivzeta,iz,ir,isn] - 
-                            1.0 / vth * exp(- ((vz.grid[:])^2 + (vr.grid[ivr])^2 + (vzeta.grid[ivzeta])^2)/(vth^2) )
+                            1.0 / vth * Maxwellian_prefactor * exp(- ((vz.grid[:])^2 + (vr.grid[ivr])^2 + (vzeta.grid[ivzeta])^2)/(vth^2) )
             second_derivative!(vz.scratch2, vz.scratch, vz, spectral)
             @views @. f_out[:,ivr,ivzeta,iz,ir,isn] += dt * diffusion_coefficient * vz.scratch2
         end
@@ -239,8 +251,8 @@ to act as the diffusion operator.
             vth = moments.neutral.vth[iz,ir,isn]
             uz = f_in.uz_neutral[iz,ir,isn]
             @views @. vz.scratch = f_in.pdf_neutral[:,ivr,ivzeta,iz,ir,isn] - 
-                            1.0 / vth * exp(- ((vz.grid[:] - uz)^2 + 
-                                            (vr.grid[ivr])^2 + (vzeta.grid[ivzeta])^2)/(vth^2) )
+                            1.0 / vth * Maxwellian_prefactor * exp(- ((vz.grid[:] - uz)^2 +
+                                                                      (vr.grid[ivr])^2 + (vzeta.grid[ivzeta])^2)/(vth^2) )
             second_derivative!(vz.scratch2, vz.scratch, vz, spectral)
             @views @. f_out[:,ivr,ivzeta,iz,ir,isn] += dt * diffusion_coefficient * vz.scratch2
         end
@@ -255,7 +267,7 @@ to act as the diffusion operator.
                 vth_prefactor = 1.0 / vth^3
             end
             @views @. vz.scratch = f_in.pdf_neutral[:,ivr,ivzeta,iz,ir,isn] - n * vth_prefactor * 
-                            exp(-( (vz.grid[:] - uz)^2 + (vr.grid[ivr])^2 + (vzeta.grid[ivzeta])^2)/(vth^2) )
+                            Maxwellian_prefactor * exp(-( (vz.grid[:] - uz)^2 + (vr.grid[ivr])^2 + (vzeta.grid[ivzeta])^2)/(vth^2) )
             second_derivative!(vz.scratch2, vz.scratch, vz, spectral)
             @views @. f_out[:,ivr,ivzeta,iz,ir,isn] += dt * diffusion_coefficient * vz.scratch2
         end

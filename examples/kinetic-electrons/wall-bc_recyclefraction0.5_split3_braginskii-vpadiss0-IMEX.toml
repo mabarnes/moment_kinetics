@@ -1,15 +1,15 @@
 [reactions]
-charge_exchange_frequency = 0.75
-ionization_frequency = 0.5
+charge_exchange_frequency = 1.0606601717798214
+ionization_frequency = 0.7071067811865476
 
 [electron_fluid_collisions]
-nu_ei = 1000.0
+nu_ei = 1414.213562373095
 
 [evolve_moments]
 density = true
 parallel_flow = true
-parallel_pressure = true
 moments_conservation = true
+pressure = true
 
 [r]
 ngrid = 1
@@ -26,14 +26,14 @@ element_spacing_option = "sqrt"
 [vpa]
 ngrid = 6
 nelement = 63
-L = 36.0
+L = 62.35382907247958
 bc = "zero"
 discretization = "chebyshev_pseudospectral"
 
 [vz]
 ngrid = 6
 nelement = 63
-L = 36.0
+L = 62.35382907247958
 bc = "zero"
 discretization = "chebyshev_pseudospectral"
 
@@ -47,13 +47,13 @@ T_wall = 0.1
 
 [ion_species_1]
 initial_density = 1.0
-initial_temperature = 1.0
+initial_temperature = 0.3333333333333333
 
 [z_IC_ion_species_1]
 initialization_option = "gaussian"
 density_amplitude = 0.001
 density_phase = 0.0
-upar_amplitude = 1.0
+upar_amplitude = 1.4142135623730951
 upar_phase = 0.0
 temperature_amplitude = 0.0
 temperature_phase = 0.0
@@ -69,13 +69,13 @@ temperature_phase = 0.0
 
 [neutral_species_1]
 initial_density = 1.0
-initial_temperature = 1.0
+initial_temperature = 0.3333333333333333
 
 [z_IC_neutral_species_1]
 initialization_option = "gaussian"
 density_amplitude = 0.001
 density_phase = 0.0
-upar_amplitude = -1.0
+upar_amplitude = -1.4142135623730951
 upar_phase = 0.0
 temperature_amplitude = 0.0
 temperature_phase = 0.0
@@ -98,21 +98,21 @@ type = "KennedyCarpenterARK324"
 kinetic_ion_solver = "full_explicit_ion_advance"
 implicit_braginskii_conduction = true
 nstep = 1000000
-dt = 1.0e-6
-minimum_dt = 1.0e-9
+dt = 7.071067811865475e-7
+minimum_dt = 7.071067811865476e-10
 rtol = 1.0e-7
 #rtol = 1.0e-9
 nwrite = 10000
 nwrite_dfns = 100000
 steady_state_residual = true
-converged_residual_value = 1.0e-3
+converged_residual_value = 0.0014142135623730952
 #write_after_fixed_step_count = true
 
 [ion_source_1]
 active = true
 z_profile = "gaussian"
 z_width = 0.125
-source_strength = 2.0
+source_strength = 2.8284271247461903
 source_T = 2.0
 
 [ion_numerical_dissipation]
@@ -122,7 +122,7 @@ source_T = 2.0
 force_minimum_pdf_value = 0.0
 
 [electron_numerical_dissipation]
-vpa_dissipation_coefficient = 2.0
+vpa_dissipation_coefficient = 8.485281374238571
 force_minimum_pdf_value = 0.0
 
 [neutral_numerical_dissipation]

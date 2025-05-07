@@ -3,27 +3,27 @@ ngrid = 1
 nelement = 1
 
 [evolve_moments]
-parallel_pressure = true
 density = true
 moments_conservation = true
 parallel_flow = true
+pressure = true
 
 [ion_species_1]
-initial_temperature = 1.0
+initial_temperature = 0.3333333333333333
 initial_density = 2.0
 
 [krook_collisions]
 use_krook = true
 frequency_option = "reference_parameters"
-nuii0 = 1.0
+nuii0 = 1.4142135623730951
 
 [vpa]
 ngrid = 6
 discretization = "chebyshev_pseudospectral"
 nelement = 63
-L = 36.0
+L = 62.35382907247958
 bc = "zero"
-element_spacing_option = "coarse_tails"
+element_spacing_option = "coarse_tails8.660254037844386"
 
 [z]
 ngrid = 5
@@ -72,7 +72,7 @@ initialization_option = "gaussian"
 density_amplitude = 0.001
 temperature_amplitude = 0.0
 density_phase = 0.0
-upar_amplitude = 1.0
+upar_amplitude = 1.4142135623730951
 temperature_phase = 0.0
 upar_phase = 0.0
 
@@ -83,7 +83,7 @@ upar_phase = 0.0
 [ion_source_1]
 source_T = 1.0
 active = true
-source_strength = 2.0
+source_strength = 2.8284271247461903
 source_type = "energy"
 z_profile = "super_gaussian_4"
 z_width = 0.275816
@@ -91,14 +91,14 @@ z_width = 0.275816
 [ion_source_2]
 source_T = 0.1
 active = true
-source_strength = 2.0
+source_strength = 2.8284271247461903
 z_profile = "wall_exp_decay"
 z_width = 0.15
 
 [timestepping]
 nstep = 80000
 steady_state_residual = true
-dt = 0.00005
+dt = 3.535533905932738e-5
 nwrite = 4000
 type = "SSPRK4"
 nwrite_dfns = 4000

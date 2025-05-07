@@ -12,7 +12,7 @@ using moment_kinetics.looping
 using moment_kinetics.array_allocation: allocate_float, allocate_shared_float
 using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.type_definitions: mk_float, mk_int
-using moment_kinetics.velocity_moments: get_density, get_upar, get_ppar, get_pperp, get_pressure
+using moment_kinetics.velocity_moments: get_density, get_upar, get_p, get_ppar, get_pperp
 using moment_kinetics.input_structs: direct_integration, multipole_expansion, delta_f_multipole
 
 using moment_kinetics.fokker_planck: init_fokker_planck_collisions_weak_form, fokker_planck_collision_operator_weak_form!
@@ -161,12 +161,10 @@ function test_F_Maxwellian(pdf_Maxwell,pdf,
     @serial_region begin
         F_M_max, F_M_L2 = print_test_data(pdf_Maxwell,pdf,dummy_array_1,"pdf",
           vpa,vperp,dummy_array_2,print_to_screen=print_to_screen)
-        dens_num = get_density(pdf,vpa,vperp)
-        upar_num = get_upar(pdf,vpa,vperp,dens)
-        ppar = get_ppar(pdf,vpa,vperp,upar)
-        pperp = get_pperp(pdf,vpa,vperp)
-        pres = get_pressure(ppar,pperp) 
-        vth_num = sqrt(2.0*pres/(dens_num*mass))
+        dens_num = get_density(pdf, vpa, vperp)
+        upar_num = get_upar(pdf, dens, vpa, vperp, false)
+        pressure = get_p(pdf, dens, upar, vpa, vperp, false, false)
+        vth_num = sqrt(2.0*pressure/(dens*mass))
         @test F_M_max < atol_max
         @test F_M_L2 < atol_L2
         @test abs(dens_num - dens) < atol_dens
@@ -180,11 +178,9 @@ function diagnose_F_Maxwellian(pdf,pdf_exact,pdf_dummy_1,pdf_dummy_2,vpa,vperp,t
     @begin_serial_region()
     @serial_region begin
         dens = get_density(pdf,vpa,vperp)
-        upar = get_upar(pdf,vpa,vperp,dens)
-        ppar = get_ppar(pdf,vpa,vperp,upar)
-        pperp = get_pperp(pdf,vpa,vperp)
-        pres = get_pressure(ppar,pperp) 
-        vth = sqrt(2.0*pres/(dens*mass))
+        upar = get_upar(pdf, dens, vpa, vperp, false)
+        pressure = get_p(pdf, dens, upar, vpa, vperp, false, false)
+        vth = sqrt(2.0*pressure/(dens*mass))
         @loop_vperp_vpa ivperp ivpa begin
             pdf_exact[ivpa,ivperp] = F_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
         end
@@ -295,11 +291,9 @@ function backward_Euler_fokker_planck_self_collisions_test(;
     time = 0.0
     # Maxwellian and parameters
     dens = get_density(Fold,vpa,vperp)
-    upar = get_upar(Fold,vpa,vperp,dens)
-    ppar = get_ppar(Fold,vpa,vperp,upar)
-    pperp = get_pperp(Fold,vpa,vperp)
-    pres = get_pressure(ppar,pperp) 
-    vth = sqrt(2.0*pres/(dens*ms))
+    upar = get_upar(Fold, dens, vpa, vperp, false)
+    pressure = get_p(Fold, dens, upar, vpa, vperp, false, false)
+    vth = sqrt(2.0*pressure/(dens*ms))
     @serial_region begin
         @loop_vperp_vpa ivperp ivpa begin
             FMaxwell[ivpa,ivperp] = F_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
@@ -757,7 +751,7 @@ function runtests()
                     # enforce the boundary conditions on CC before it is used for timestepping
                     enforce_vpavperp_BCs!(fkpl_arrays.CC,vpa,vperp,vpa_spectral,vperp_spectral)
                     # make ad-hoc conserving corrections
-                    conserving_corrections!(fkpl_arrays.CC,Fs_M,vpa,vperp,dummy_array)
+                    conserving_corrections!(fkpl_arrays.CC,Fs_M,vpa,vperp)
                 end
                 # extract C[Fs,Fs'] result
                 @begin_s_r_z_anyv_region()
@@ -769,20 +763,20 @@ function runtests()
                 @serial_region begin
                     C_M_max, C_M_L2 = print_test_data(C_M_exact,C_M_num,C_M_err,"C_M",vpa,vperp,dummy_array,print_to_screen=print_to_screen)
                     if test_self_operator && !test_numerical_conserving_terms && !use_Maxwellian_Rosenbluth_coefficients && !use_Maxwellian_field_particle_distribution
-                        atol_max = 6.0e-4
-                        atol_L2 = 7.0e-6
+                        atol_max = 6.0e-4/π^1.5
+                        atol_L2 = 7.0e-6/π^1.5
                     elseif test_self_operator && test_numerical_conserving_terms && !use_Maxwellian_Rosenbluth_coefficients && !use_Maxwellian_field_particle_distribution
-                        atol_max = 7.0e-4
-                        atol_L2 = 7.0e-6
+                        atol_max = 7.0e-4/π^1.5
+                        atol_L2 = 7.0e-6/π^1.5
                     elseif test_self_operator && !test_numerical_conserving_terms && use_Maxwellian_Rosenbluth_coefficients && !use_Maxwellian_field_particle_distribution
-                        atol_max = 8.0e-4
-                        atol_L2 = 8.1e-6
+                        atol_max = 8.0e-4/π^1.5
+                        atol_L2 = 8.1e-6/π^1.5
                     elseif test_self_operator && !test_numerical_conserving_terms && !use_Maxwellian_Rosenbluth_coefficients && use_Maxwellian_field_particle_distribution
-                        atol_max = 1.1e-3
-                        atol_L2 = 9.0e-6
+                        atol_max = 1.1e-3/π^1.5
+                        atol_L2 = 9.0e-6/π^1.5
                     else
-                        atol_max = 7.0e-2
-                        atol_L2 = 6.0e-4
+                        atol_max = 7.0e-2/π^1.5
+                        atol_L2 = 6.0e-4/π^1.5
                     end
                     @test C_M_max < atol_max
                     @test C_M_L2 < atol_L2
@@ -800,18 +794,19 @@ function runtests()
                         end
                         @test isapprox(dSdt, rtol ; atol=atol)
                         delta_n = get_density(C_M_num, vpa, vperp)
-                        delta_upar = get_upar(C_M_num, vpa, vperp, dens)
-                        delta_ppar = msp*get_ppar(C_M_num, vpa, vperp, upar)
-                        delta_pperp = msp*get_pperp(C_M_num, vpa, vperp)
-                        delta_pressure = get_pressure(delta_ppar,delta_pperp)
+                        delta_upar = get_upar(C_M_num, dens, vpa, vperp, false)
+                        delta_pressure = msp*get_p(C_M_num, dens, upar, vpa, vperp, false, false)
+                        delta_ppar = msp*get_ppar(dens, upar, nothing, vth, C_M_num,
+                                                  vpa, vperp, false, false, false)
+                        delta_pperp = get_pperp(delta_pressure, delta_ppar)
                         rtol, atol = 0.0, 1.0e-12
                         @test isapprox(delta_n, rtol ; atol=atol)
                         rtol, atol = 0.0, 1.0e-9
                         @test isapprox(delta_upar, rtol ; atol=atol)
                         if algebraic_solve_for_d2Gdvperp2
-                            rtol, atol = 0.0, 1.0e-7
+                            rtol, atol = 0.0, 1.0e-7*2
                         else
-                            rtol, atol = 0.0, 1.0e-8
+                            rtol, atol = 0.0, 1.0e-8*2
                         end
                         @test isapprox(delta_pressure, rtol ; atol=atol)
                         if print_to_screen
@@ -824,15 +819,16 @@ function runtests()
                         rtol, atol = 0.0, 6.0e-7
                         @test isapprox(dSdt, rtol ; atol=atol)
                         delta_n = get_density(C_M_num, vpa, vperp)
-                        delta_upar = get_upar(C_M_num, vpa, vperp, dens)
-                        delta_ppar = msp*get_ppar(C_M_num, vpa, vperp, upar)
-                        delta_pperp = msp*get_pperp(C_M_num, vpa, vperp)
-                        delta_pressure = get_pressure(delta_ppar,delta_pperp)
+                        delta_upar = get_upar(C_M_num, dens, vpa, vperp, false)
+                        delta_pressure = msp*get_p(C_M_num, dens, upar, vpa, vperp, false, false)
+                        delta_ppar = msp*get_ppar(dens, upar, nothing, vth, C_M_num, vpa, vperp, false,
+                                              false, false)
+                        delta_pperp = get_pperp(delta_pressure, delta_ppar)
                         rtol, atol = 0.0, 1.0e-15
                         @test isapprox(delta_n, rtol ; atol=atol)
                         rtol, atol = 0.0, 1.0e-15
                         @test isapprox(delta_upar, rtol ; atol=atol)
-                        rtol, atol = 0.0, 1.0e-15
+                        rtol, atol = 0.0, 1.0e-15*2
                         @test isapprox(delta_pressure, rtol ; atol=atol)
                         if print_to_screen
                             println("dSdt: $dSdt should be >0.0")
@@ -842,7 +838,7 @@ function runtests()
                         end
                     else
                         atol = 1.0e-4
-                        @test isapprox(dSdt, 2.543251178128757 ; atol=atol)
+                        @test isapprox(dSdt, 2.543251178128757 / pi^1.5 ; atol=atol)
                         delta_n = get_density(C_M_num, vpa, vperp)
                         rtol, atol = 0.0, 1.0e-12
                         @test isapprox(delta_n, rtol ; atol=atol)
@@ -857,7 +853,7 @@ function runtests()
         end
 
         @testset "weak-form (slowing-down) collision operator calculation" begin
-            println("    - test weak-form (slowing-down) collision operator calculation")
+            println("   - test weak-form (slowing-down) collision operator calculation")
             ngrid = 9
             nelement_vpa = 16
             nelement_vperp = 8
@@ -918,7 +914,7 @@ function runtests()
                     # enforce the boundary conditions on CC before it is used for timestepping
                     enforce_vpavperp_BCs!(fkpl_arrays.CC,vpa,vperp,vpa_spectral,vperp_spectral)
                     # make ad-hoc conserving corrections
-                    density_conserving_correction!(fkpl_arrays.CC,Fs_M,vpa,vperp,dummy_array)
+                    density_conserving_correction!(fkpl_arrays.CC,Fs_M,vpa,vperp)
                 end
                 # extract C[Fs,Fs'] result
                 @begin_s_r_z_anyv_region()
@@ -929,8 +925,8 @@ function runtests()
                 @begin_serial_region()
                 @serial_region begin
                     C_M_max, C_M_L2 = print_test_data(C_M_exact,C_M_num,C_M_err,"C_M",vpa,vperp,dummy_array,print_to_screen=print_to_screen)
-                    atol_max = 7.0e-2
-                    atol_L2 = 6.0e-4
+                    atol_max = 7.0e-2/π^1.5
+                    atol_L2 = 6.0e-4/π^1.5
                     @test C_M_max < atol_max
                     @test C_M_L2 < atol_L2
                     if !test_numerical_conserving_terms

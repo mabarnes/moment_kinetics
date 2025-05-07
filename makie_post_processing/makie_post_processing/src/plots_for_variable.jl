@@ -186,7 +186,7 @@ function plots_for_dfn_variable(run_info, variable_name; plot_prefix, has_rdim=t
     plot_dims = tuple(:t, animate_dims...)
 
     moment_kinetic = any(ri !== nothing
-                         && (ri.evolve_density || ri.evolve_upar || ri.evolve_ppar)
+                         && (ri.evolve_density || ri.evolve_upar || ri.evolve_p)
                          for ri ∈ run_info)
 
     # test if any plot is needed

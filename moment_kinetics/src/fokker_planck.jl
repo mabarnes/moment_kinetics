@@ -53,9 +53,7 @@ using OrderedCollections: OrderedDict
 using ..type_definitions: mk_float, mk_int, OptionsDict
 using ..array_allocation: allocate_float, allocate_shared_float
 using ..communication
-using ..velocity_moments: integrate_over_vspace,
-                          get_density, get_upar, get_ppar, 
-                          get_pperp, get_qpar, get_pressure, get_rmom
+using ..velocity_moments: get_density, get_upar, get_p, get_ppar, get_pperp, get_qpar, get_rmom
 using ..looping
 using ..timer_utils
 using ..input_structs: fkpl_collisions_input, set_defaults_and_check_section!
@@ -303,7 +301,7 @@ where the Rosenbluth potentials are specified using analytical results.
     densp = [fkin.sd_density, fkin.sd_q*fkin.sd_density+ns*Zs]
  
     uparsp = [0.0, 0.0]
-    vthsp = [sqrt(fkin.sd_temp/msp[1]), sqrt(fkin.sd_temp/msp[2])]
+    vthsp = [sqrt(2.0*fkin.sd_temp/msp[1]), sqrt(2.0*fkin.sd_temp/msp[2])]
     
     # N.B. parallelisation using special 'anyv' region
     @begin_s_r_z_anyv_region()
@@ -316,8 +314,7 @@ where the Rosenbluth potentials are specified using analytical results.
         enforce_vpavperp_BCs!(fkpl_arrays.CC,vpa,vperp,vpa_spectral,vperp_spectral)
         # make sure that the cross-species terms conserve density
         if use_conserving_corrections
-            density_conserving_correction!(fkpl_arrays.CC, pdf_in[:,:,iz,ir,is], vpa, vperp,
-                                fkpl_arrays.S_dummy)
+            density_conserving_correction!(fkpl_arrays.CC, pdf_in[:,:,iz,ir,is], vpa, vperp)
         end
         # advance this part of s,r,z with the resulting sum_s' C[Fs,Fs']
         @begin_anyv_vperp_vpa_region()
@@ -402,8 +399,7 @@ end
     enforce_vpavperp_BCs!(CC,vpa,vperp,vpa_spectral,vperp_spectral)
     # make ad-hoc conserving corrections appropriate only for the self operator
     if use_conserving_corrections
-        conserving_corrections!(CC, pdf_in, vpa, vperp,
-                            fkpl_arrays.S_dummy)
+        conserving_corrections!(CC, pdf_in, vpa, vperp)
     end
     return nothing
 end
@@ -460,7 +456,7 @@ with \$\\gamma_\\mathrm{ref} = 2 \\pi e^4 \\ln \\Lambda_{ii} / (4 \\pi
     
     if use_Maxwellian_Rosenbluth_coefficients
         calculate_rosenbluth_potentials_via_analytical_Maxwellian!(GG,HH,dHdvpa,dHdvperp,
-                 d2Gdvpa2,dGdvperp,d2Gdvperpdvpa,d2Gdvperp2,ffsp_in,vpa,vperp)
+                 d2Gdvpa2,dGdvperp,d2Gdvperpdvpa,d2Gdvperp2,ffsp_in,vpa,vperp,msp)
     else
         calculate_rosenbluth_potentials_via_elliptic_solve!(GG,HH,dHdvpa,dHdvperp,
              d2Gdvpa2,dGdvperp,d2Gdvperpdvpa,d2Gdvperp2,ffsp_in,
@@ -472,12 +468,10 @@ with \$\\gamma_\\mathrm{ref} = 2 \\pi e^4 \\ln \\Lambda_{ii} / (4 \\pi
     # assemble the RHS of the collision operator matrix eq
     if use_Maxwellian_field_particle_distribution
         @begin_anyv_region()
-        dens = get_density(ffs_in,vpa,vperp)
-        upar = get_upar(ffs_in, vpa, vperp, dens)
-        ppar = get_ppar(ffs_in, vpa, vperp, upar)
-        pperp = get_pperp(ffs_in, vpa, vperp)
-        pressure = get_pressure(ppar,pperp)
-        vth = sqrt(2.0*pressure/dens)
+        dens = get_density(ffsp_in,vpa,vperp)
+        upar = get_upar(ffsp_in, dens, vpa, vperp, false)
+        pressure = get_p(ffsp_in, dens, upar, vpa, vperp, false, false)
+        vth = sqrt(2.0*pressure/(dens*msp))
         @begin_anyv_vperp_vpa_region()
         @loop_vperp_vpa ivperp ivpa begin
             FF[ivpa,ivperp] = F_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
@@ -685,7 +679,7 @@ the finite-element implementation, \$u_{\\|}\$ is the parallel velocity of \$F_s
 and \$x_0,x_1,x_2\$ are parameters that are chosen so that \$C_{ss}\$
 conserves density, parallel velocity and pressure of \$F_s\$.
 """
-function conserving_corrections!(CC,pdf_in,vpa,vperp,dummy_vpavperp)
+function conserving_corrections!(CC,pdf_in,vpa,vperp)
     @begin_anyv_region()
     x0, x1, x2, upar = 0.0, 0.0, 0.0, 0.0
     @anyv_serial_region begin
@@ -694,21 +688,21 @@ function conserving_corrections!(CC,pdf_in,vpa,vperp,dummy_vpavperp)
         # collision operator, so probably not worth the complication.
 
         # compute moments of the input pdf
-        dens =  get_density(pdf_in, vpa, vperp)
-        upar = get_upar(pdf_in, vpa, vperp, dens)
-        ppar = get_ppar(pdf_in, vpa, vperp, upar)
-        pperp = get_pperp(pdf_in, vpa, vperp)
-        pressure = get_pressure(ppar,pperp)
-        qpar = get_qpar(pdf_in, vpa, vperp, upar, dummy_vpavperp)
-        rmom = get_rmom(pdf_in, vpa, vperp, upar, dummy_vpavperp)
+        dens = get_density(pdf_in, vpa, vperp)
+        upar = get_upar(pdf_in, dens, vpa, vperp, false)
+        pressure = get_p(pdf_in, dens, upar, vpa, vperp, false, false)
+        vth = sqrt(2.0*pressure/dens)
+        ppar = get_ppar(dens, upar, pressure, vth, pdf_in, vpa, vperp, false, false,
+                        false)
+        qpar = get_qpar(pdf_in, dens, upar, pressure, vth, vpa, vperp, false, false,
+                        false)
+        rmom = get_rmom(pdf_in, upar, vpa, vperp)
 
         # compute moments of the numerical collision operator
         dn = get_density(CC, vpa, vperp)
-        du = get_upar(CC, vpa, vperp, 1.0)
-        dppar = get_ppar(CC, vpa, vperp, upar)
-        dpperp = get_pperp(CC, vpa, vperp)
-        dp = get_pressure(dppar,dpperp)
-
+        du = get_upar(CC, 1.0, vpa, vperp, false)
+        dp = get_p(CC, dens, upar, vpa, vperp, false, false)
+        
         # form the appropriate matrix coefficients
         b0, b1, b2 = dn, du - upar*dn, 3.0*dp
         A00, A02, A11, A12, A22 = dens, 3.0*pressure, ppar, qpar, rmom
@@ -741,7 +735,7 @@ C_{ss^\\prime} = C^\\ast_{ss}[F_s,F_{s^\\prime}] - x_0 F_s
 where \$C^\\ast_{ss}[F_s,F_{s^\\prime}]\$ is the weak-form collision operator computed using 
 the finite-element implementation.
 """
-function density_conserving_correction!(CC,pdf_in,vpa,vperp,dummy_vpavperp)
+function density_conserving_correction!(CC,pdf_in,vpa,vperp)
     @begin_anyv_region()
     x0 = 0.0
     @anyv_serial_region begin
@@ -979,8 +973,7 @@ function implicit_ion_fokker_planck_self_collisions!(pdf_out, pdf_in, dSdt,
             # this introduces errors of the size of the distance between F^n+1 and the 
             # "correct" root that should have been found by the iterative solve, i.e.,
             # errors of size ~ atol.
-            conserving_corrections!(deltaF, Fold, vpa, vperp,
-                                fkpl_arrays.S_dummy)
+            conserving_corrections!(deltaF, Fold, vpa, vperp)
             # update Fnew
             @loop_vperp_vpa ivperp ivpa begin
                 Fnew[ivpa,ivperp] = deltaF[ivpa,ivperp] + Fold[ivpa,ivperp]

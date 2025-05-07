@@ -9,12 +9,18 @@
 #
 # The original input file is not deleted, but is renamed with a '.unmodified' suffix.
 
+using moment_kinetics.type_definitions: OptionsDict, OrderedDict
+using moment_kinetics.utils: recursive_merge
 using TOML
+
+# Overload printing for type-alias OptionsDict to make it easier to copy-paste printed
+# output of update_input_dict().
+Base.show(io::IO, ::Type{OptionsDict}) = print(io, "OptionsDict")
 
 # Define the map of old name to new section and name.
 # Note, a couple of options have some special handling that is defined within the
 # update_input_file() function.
-const top_level_update_map = Dict(
+const top_level_update_map = OptionsDict(
     "n_ion_species" => ("composition", "n_ion_species"),
     "n_neutral_species" => ("composition", "n_neutral_species"),
     "electron_physics" => ("composition", "electron_physics"),
@@ -184,35 +190,206 @@ const top_level_update_map = Dict(
     "force_Er_zero_at_wall" => ("em_fields", "force_Er_zero_at_wall"),
    )
 
-# If the "new option name" is a Dict, it gives a map from the original
-# option values to new option names and values. If the new value is `nothing` it is
-# replaced by the old value.
-const sections_update_map = Dict(
-    "timestepping" => Dict("implicit_electron_advance" => Dict(true => Dict("timestepping" => Dict("kinetic_electron_solver" => "implicit_steady_state"),),
-                                                               "lu" => Dict("timestepping" => Dict("kinetic_electron_solver" => "implicit_steady_state", "kinetic_electron_preconditioner" => "lu"),),
-                                                               "adi" => Dict("timestepping" => Dict("kinetic_electron_solver" => "implicit_steady_state", "kinetic_electron_preconditioner" => "adi"),),
-                                                               "static_condensation" => Dict("timestepping" => Dict("kinetic_electron_solver" => "implicit_steady_state", "kinetic_electron_preconditioner" => "static_condensation"),),
-                                                              ),
-                           "implicit_electron_time_evolving" => Dict(true => Dict("timestepping" => Dict("kinetic_electron_solver" => "implicit_time_evolving"),),
-                                                                     "lu" => Dict("timestepping" => Dict("kinetic_electron_solver" => "implicit_time_evolving", "kinetic_electron_preconditioner" => "lu"),),
-                                                                     "adi" => Dict("timestepping" => Dict("kinetic_electron_solver" => "implicit_time_evolving", "kinetic_electron_preconditioner" => "adi"),),
-                                                                     "static_condensation" => Dict("timestepping" => Dict("kinetic_electron_solver" => "implicit_time_evolving", "kinetic_electron_preconditioner" => "static_condensation"),),
-                                                              ),
-                           "implicit_electron_ppar" => Dict(true => Dict("timestepping" => Dict("kinetic_electron_solver" => "implicit_ppar_implicit_pseudotimestep"),),
-                                                            "lu" => Dict("timestepping" => Dict("kinetic_electron_solver" => "implicit_ppar_implicit_pseudotimestep", "kinetic_electron_preconditioner" => "lu"),),
-                                                            "adi" => Dict("timestepping" => Dict("kinetic_electron_solver" => "implicit_ppar_implicit_pseudotimestep", "kinetic_electron_preconditioner" => "adi"),),
-                                                            "static_condensation" => Dict("timestepping" => Dict("kinetic_electron_solver" => "implicit_ppar_implicit_pseudotimestep", "kinetic_electron_preconditioner" => "static_condensation"),),
-                                                              ),
-                           "implicit_ion_advance" => Dict(true => Dict("timestepping" => Dict("kinetic_ion_solver" => "full_implicit_ion_advance"))),
-                           "implicit_vpa_advection" => Dict(true => Dict("timestepping" => Dict("kinetic_ion_solver" => "implicit_ion_vpa_advection"))),
-                          ),
+# If the "new option" is a String, it is the name of the option within the same section
+# that should replace the "old option".
+# If the "new option" is an OptionsDict, it gives a map from the original option values to
+# new option names and values. If the new value is `nothing` it is replaced by the old
+# value.
+# If the "new option" is a Function, the option is not renamed, instead the function is
+# applied to the value.
+const sections_update_map = OptionsDict(
+    "evolve_moments" => OptionsDict("parallel_pressure" => "pressure"),
+    "timestepping" => OptionsDict("implicit_electron_advance" => OrderedDict{Any,Any}(true => OptionsDict("timestepping" => OptionsDict("kinetic_electron_solver" => "implicit_steady_state"),),
+                                                                                      "lu" => OptionsDict("timestepping" => OptionsDict("kinetic_electron_solver" => "implicit_steady_state", "kinetic_electron_preconditioner" => "lu"),),
+                                                                                      "adi" => OptionsDict("timestepping" => OptionsDict("kinetic_electron_solver" => "implicit_steady_state", "kinetic_electron_preconditioner" => "adi"),),
+                                                                                      "static_condensation" => OptionsDict("timestepping" => OptionsDict("kinetic_electron_solver" => "implicit_steady_state", "kinetic_electron_preconditioner" => "static_condensation"),),
+                                                                                     ),
+                                  "implicit_electron_time_evolving" => OrderedDict{Any,Any}(true => OptionsDict("timestepping" => OptionsDict("kinetic_electron_solver" => "implicit_time_evolving"),),
+                                                                                            "lu" => OptionsDict("timestepping" => OptionsDict("kinetic_electron_solver" => "implicit_time_evolving", "kinetic_electron_preconditioner" => "lu"),),
+                                                                                            "adi" => OptionsDict("timestepping" => OptionsDict("kinetic_electron_solver" => "implicit_time_evolving", "kinetic_electron_preconditioner" => "adi"),),
+                                                                                            "static_condensation" => OptionsDict("timestepping" => OptionsDict("kinetic_electron_solver" => "implicit_time_evolving", "kinetic_electron_preconditioner" => "static_condensation"),),
+                                                                                           ),
+                                  "implicit_electron_ppar" => OrderedDict{Any,Any}(true => OptionsDict("timestepping" => OptionsDict("kinetic_electron_solver" => "implicit_p_implicit_pseudotimestep"),),
+                                                                                   "lu" => OptionsDict("timestepping" => OptionsDict("kinetic_electron_solver" => "implicit_p_implicit_pseudotimestep", "kinetic_electron_preconditioner" => "lu"),),
+                                                                                   "adi" => OptionsDict("timestepping" => OptionsDict("kinetic_electron_solver" => "implicit_p_implicit_pseudotimestep", "kinetic_electron_preconditioner" => "adi"),),
+                                                                                   "static_condensation" => OptionsDict("timestepping" => OptionsDict("kinetic_electron_solver" => "implicit_p_implicit_pseudotimestep", "kinetic_electron_preconditioner" => "static_condensation"),),
+                                                                                  ),
+                                  "kinetic_electron_solver" => OrderedDict{Any,Any}("implicit_ppar_implicit_pseudotimestep" => OptionsDict("timestepping" => OptionsDict("kinetic_electron_solver" => "implicit_p_implicit_pseudotimestep")),
+                                                                                    "implicit_ppar_explicit_pseudotimestep" => OptionsDict("timestepping" => OptionsDict("kinetic_electron_solver" => "implicit_p_explicit_pseudotimestep")),
+                                                                                   ),
+                                  "implicit_ion_advance" => Dict(true => Dict("timestepping" => Dict("kinetic_ion_solver" => "full_implicit_ion_advance"))),
+                                  "implicit_vpa_advection" => Dict(true => Dict("timestepping" => Dict("kinetic_ion_solver" => "implicit_ion_vpa_advection"))),                                         
+                                 ),
    )
 
-function update_input_dict(original_input)
-    updated_input = Dict{String,Any}()
+PR322_p = (x) -> 2 .* x
+PR322_T_1V = (x) -> x ./ 3 # Inputs before PR322 were T_∥ values, but after are T values (for 1D1V T=T_∥/3)
+PR322_temperature_PI_1V = (x) -> 3 .* x # Inputs before PR322 were T_∥ values, but after are T values (for 1D1V T=T_∥/3)
+PR322_v = (x) -> sqrt(2) .* x
+PR322_t = (x) -> x ./ sqrt(2)
+PR322_omega = (x) -> any(x .≥ 0.0) ? sqrt(2) .* x : x
+PR322_nuii = (x) -> any(x .≥ 0.0) ? 4 .* x : x
+PR322_I = (x) -> any(x .≥ 0.0) ? 2 .* x : x
+PR322_v_diffusion_coefficient = (x) -> 2^1.5 .* x
+PR322_w_diffusion_coefficient = (x) -> 3 * sqrt(2) .* x
+PR322_w_evolve_ppar = (x) -> sqrt(3) .* x
+const PR322_definitions_update_map_2V = OptionsDict(
+    # "upar_amplitude" might not always need correcting - e.g. the amplitude is a relative
+    # amplitude that should be left unchanged if using initialization_option="sinusoid" -
+    # but usually either upar_amplitude=0 or initialization_option="gaussian" (in which
+    # case this option represents an absolute value of parallel flow)
+    "z_IC_ion_species_1" => OptionsDict("upar_amplitude" => PR322_v),
+    "z_IC_neutral_species_1" => OptionsDict("upar_amplitude" => PR322_v),
+    "vpa_IC_ion_species_1" => OptionsDict("v0" => PR322_v,
+                                          "vth0" => PR322_v,
+                                          "vpa0" => PR322_v,
+                                          "vperp0" => PR322_v,
+                                         ),
+    "vz_IC_neutral_species_1" => OptionsDict("v0" => PR322_v,
+                                             "vth0" => PR322_v,
+                                             "vpa0" => PR322_v,
+                                             "vperp0" => PR322_v,
+                                            ),
+    "reactions" => OptionsDict("charge_exchange_frequency" => PR322_omega,
+                               "electron_charge_exchange_frequency" => PR322_omega,
+                               "ionization_frequency" => PR322_omega,
+                               "electron_ionization_frequency" => PR322_omega,
+                               "ionization_energy" => PR322_p,
+                              ),
+    "electron_fluid_collisions" => OptionsDict("nu_ei" => PR322_omega,),
+    "krook_collisions" => OptionsDict("nuii0" => PR322_omega,
+                                      "nuee0" => PR322_omega,
+                                      "nuei0" => PR322_omega,
+                                     ),
+    "fokker_planck_collisions" => OptionsDict("nuii" => PR322_nuii,
+                                             ),
+    "maxwell_diffusion_collisions" => OptionsDict("D_ii" => PR322_v_diffusion_coefficient,
+                                                  "D_nn" => PR322_v_diffusion_coefficient,
+                                                 ),
+    "ion_numerical_dissipation" => OptionsDict("vpa_boundary_buffer_damping_rate" => PR322_omega,
+                                               "vpa_boundary_buffer_diffusion_coefficient" => PR322_v_diffusion_coefficient,
+                                               "vpa_dissipation_coefficient" => PR322_v_diffusion_coefficient,
+                                               "vperp_dissipation_coefficient" => PR322_v_diffusion_coefficient,
+                                               "z_dissipation_coefficient" => PR322_omega,
+                                               "r_dissipation_coefficient" => PR322_omega,
+                                               "moment_dissipation_coefficient" => PR322_omega,
+                                              ),
+    "electron_numerical_dissipation" => OptionsDict("vpa_boundary_buffer_damping_rate" => PR322_omega,
+                                                    "vpa_boundary_buffer_diffusion_coefficient" => PR322_v_diffusion_coefficient,
+                                                    "vpa_dissipation_coefficient" => PR322_v_diffusion_coefficient,
+                                                    "vperp_dissipation_coefficient" => PR322_v_diffusion_coefficient,
+                                                    "z_dissipation_coefficient" => PR322_omega,
+                                                    "r_dissipation_coefficient" => PR322_omega,
+                                                    "moment_dissipation_coefficient" => PR322_omega,
+                                                   ),
+    "neutral_numerical_dissipation" => OptionsDict("vz_dissipation_coefficient" => PR322_v_diffusion_coefficient,
+                                                   "z_dissipation_coefficient" => PR322_omega,
+                                                   "r_dissipation_coefficient" => PR322_omega,
+                                                   "moment_dissipation_coefficient" => PR322_omega,
+                                                  ),
+    "timestepping" => OptionsDict("dt" => PR322_t,
+                                  "minimum_dt" => PR322_t,
+                                  "maximum_dt" => PR322_t,
+                                  "constraint_forcing_rate" => PR322_omega,
+                                  "converged_residual_value" => PR322_omega,
+                                 ),
+    "electron_timestepping" => OptionsDict("dt" => PR322_t,
+                                           "minimum_dt" => PR322_t,
+                                           "maximum_dt" => PR322_t,
+                                           "constraint_forcing_rate" => PR322_omega,
+                                           "converged_residual_value" => PR322_omega,
+                                          ),
+    "vpa" => OptionsDict("element_spacing_option" => OptionsDict("coarse_tails" => OptionsDict("vpa" => OptionsDict("element_spacing_option" => "coarse_tails$(5.0*sqrt(2))"))),
+                         "L" => PR322_v,),
+    "vperp" => OptionsDict("element_spacing_option" => OptionsDict("coarse_tails" => OptionsDict("vperp" => OptionsDict("element_spacing_option" => "coarse_tails$(5.0*sqrt(2))"))),
+                           "L" => PR322_v,),
+    "vz" => OptionsDict("element_spacing_option" => OptionsDict("coarse_tails" => OptionsDict("vz" => OptionsDict("element_spacing_option" => "coarse_tails$(5.0*sqrt(2))"))),
+                        "L" => PR322_v,),
+    "vr" => OptionsDict("element_spacing_option" => OptionsDict("coarse_tails" => OptionsDict("vr" => OptionsDict("element_spacing_option" => "coarse_tails$(5.0*sqrt(2))"))),
+                        "L" => PR322_v,),
+    "vzeta" => OptionsDict("element_spacing_option" => OptionsDict("coarse_tails" => OptionsDict("vzeta" => OptionsDict("element_spacing_option" => "coarse_tails$(5.0*sqrt(2))"))),
+                           "L" => PR322_v,),
+    "ion_source_1" => OptionsDict("source_strength" => PR322_omega,
+                                  "source_v0" => PR322_v,
+                                  "source_vpa0" => PR322_v,
+                                  "source_vperp0" => PR322_v,
+                                  "sink_vth" => PR322_v,
+                                  "PI_density_controller_P" => PR322_omega,
+                                  "PI_density_controller_I" => PR322_I,
+                                  "PI_temperature_controller_P" => PR322_omega,
+                                  "PI_temperature_controller_I" => PR322_I,
+                                 ),
+    "ion_source_2" => OptionsDict("source_strength" => PR322_omega,
+                                  "source_v0" => PR322_v,
+                                  "source_vpa0" => PR322_v,
+                                  "source_vperp0" => PR322_v,
+                                  "sink_vth" => PR322_v,
+                                  "PI_density_controller_P" => PR322_omega,
+                                  "PI_density_controller_I" => PR322_I,
+                                  "PI_temperature_controller_P" => PR322_omega,
+                                  "PI_temperature_controller_I" => PR322_I,
+                                 ),
+    "ion_source_3" => OptionsDict("source_strength" => PR322_omega,
+                                  "source_v0" => PR322_v,
+                                  "source_vpa0" => PR322_v,
+                                  "source_vperp0" => PR322_v,
+                                  "sink_vth" => PR322_v,
+                                  "PI_density_controller_P" => PR322_omega,
+                                  "PI_density_controller_I" => PR322_I,
+                                  "PI_temperature_controller_P" => PR322_omega,
+                                  "PI_temperature_controller_I" => PR322_I,
+                                 ),
+    "electron_source_1" => OptionsDict("source_strength" => PR322_omega,
+                                      ),
+    "neutral_source_1" => OptionsDict("source_strength" => PR322_omega,
+                                      "source_v0" => PR322_v,
+                                      "source_vpa0" => PR322_v,
+                                      "source_vperp0" => PR322_v,
+                                      "sink_vth" => PR322_v,
+                                      "PI_density_controller_P" => PR322_omega,
+                                      "PI_density_controller_I" => PR322_I,
+                                      "PI_temperature_controller_P" => PR322_omega,
+                                      "PI_temperature_controller_I" => PR322_I,
+                                     ),
+   )
+const PR322_definitions_update_map_1V = recursive_merge(
+    PR322_definitions_update_map_2V,
+    OptionsDict("composition" => OptionsDict(# Note T_e and T_wall should not get updated.
+                                            ),
+                "ion_species_1" => OptionsDict("initial_temperature" => PR322_T_1V,),
+                "neutral_species_1" => OptionsDict("initial_temperature" => PR322_T_1V,),
+                "reactions" => OptionsDict("ionization_energy" => PR322_T_1V,),
+                "fokker_planck_collisions" => OptionsDict("sd_temp" => PR322_T_1V,),
+                "ion_source_1" => OptionsDict("PI_temperature_target_amplitude" => PR322_T_1V,)
+               )
+   )
+const PR322_definitions_update_map_1V_evolve_ppar = recursive_merge(
+    PR322_definitions_update_map_1V,
+    OptionsDict("vpa" => OptionsDict("element_spacing_option" => OptionsDict("coarse_tails" => OptionsDict("vpa" => OptionsDict("element_spacing_option" => "coarse_tails$(5.0*sqrt(3))"))),
+                                     "L" => PR322_w_evolve_ppar,
+                                    ),
+                "vz" => OptionsDict("element_spacing_option" => OptionsDict("coarse_tails" => OptionsDict("vz" => OptionsDict("element_spacing_option" => "coarse_tails$(5.0*sqrt(3))"))),
+                                    "L" => PR322_w_evolve_ppar,
+                                   ),
+                "ion_numerical_dissipation" => OptionsDict("vpa_boundary_buffer_diffusion_coefficient" => PR322_w_diffusion_coefficient,
+                                                           "vpa_dissipation_coefficient" => PR322_w_diffusion_coefficient,
+                                                          ),
+                "electron_numerical_dissipation" => OptionsDict("vpa_boundary_buffer_diffusion_coefficient" => PR322_w_diffusion_coefficient,
+                                                                "vpa_dissipation_coefficient" => PR322_w_diffusion_coefficient,
+                                                               ),
+                "neutral_numerical_dissipation" => OptionsDict("vz_dissipation_coefficient" => PR322_w_diffusion_coefficient,),
+               )
+   )
+
+
+function update_input_dict(original_input::DictType;
+                           update_definitions_322=false) where DictType <: AbstractDict
+    original_input = deepcopy(original_input)
+    updated_input = DictType()
 
     # Get the existing sections first
-    for (k,v) ∈ original_input
+    for k ∈ collect(keys(original_input))
+        v = original_input[k]
         if isa(v, AbstractDict)
             updated_input[k] = v
             pop!(original_input, k)
@@ -235,39 +412,92 @@ function update_input_dict(original_input)
                 println("constant_ionization_rate is no longer supported. It was set to `false`, so just dropping it")
             end
         elseif k == "krook_collisions_option"
-            section = get(updated_input, "krook_collisions", Dict{String,Any}())
+            section = get(updated_input, "krook_collisions", DictType())
             section["use_krook"] = true
             section["frequency_option"] = v
         elseif k == "nuii"
-            section = get(updated_input, "fokker_planck_collisions", Dict{String,Any}())
+            section = get(updated_input, "fokker_planck_collisions", DictType())
             section["use_fokker_planck"] = true
             section[k] = v
+        elseif k == "combine_outer"
+            # Option for parameter scans, leave in top level
+            if "" ∉ keys(updated_input)
+                updated_input[""] = OptionsDict()
+            end
+            updated_input[""]["combine_outer"] = original_input["combine_outer"]
         else
             new_section_name, new_key = top_level_update_map[k]
-            updated_input[new_section_name] = get(updated_input, new_section_name, Dict{String,Any}())
+            updated_input[new_section_name] = get(updated_input, new_section_name, DictType())
             updated_input[new_section_name][new_key] = v
+        end
+    end
+
+    combined_update_map = sections_update_map
+    if update_definitions_322
+        is_2V = ("vperp" ∈ keys(updated_input)
+                 && (("ngrid" ∈ keys(updated_input["vperp"]) && updated_input["vperp"]["ngrid"] > 1)
+                     || ("nelement" ∈ keys(updated_input["vperp"]) && updated_input["vperp"]["nelement"] > 1)
+                    )
+                )
+        evolve_moments_section = get(updated_input, "evolve_moments", OptionsDict())
+        if "pressure" ∈ keys(evolve_moments_section)
+            error("Updating for changes in PR #322, but \"pressure\" is present in "
+                  * "[evolve_moments] section, which means input file must have been "
+                  * "created after PR #322 was merged.")
+        end
+        evolve_p = get(evolve_moments_section, "parallel_pressure", false) || get(evolve_moments_section, "pressure", false)
+        if is_2V
+            combined_update_map = recursive_merge(combined_update_map, PR322_definitions_update_map_2V)
+        else
+            if evolve_p
+                combined_update_map = recursive_merge(combined_update_map, PR322_definitions_update_map_1V_evolve_ppar)
+            else
+                combined_update_map = recursive_merge(combined_update_map, PR322_definitions_update_map_1V)
+            end
         end
     end
 
     # Fix updated options in the sections
     existing_sections = keys(updated_input)
-    for (section_name, section_update_map) ∈ sections_update_map
+    # Some special updates that it is inconvenient to do using combined_update_map
+    for section_name ∈ existing_sections
+        if update_definitions_322 && !is_2V &&
+                (startswith(section_name, "ion_source")
+                 || startswith(section_name, "electron_source")
+                 || startswith(section_name, "neutral_source"))
+            section = updated_input[section_name]
+            if ("source_strength" ∈ keys(section)
+                && "source_type" ∈ keys(section)
+                && section["source_type"] ∈ ("energy", "temperature_midpoint_control")
+               )
+                # Update for 1V Tpar->T here. The tref correction will be applied below.
+                if "PI_temperature_controller_P" ∈ keys(section)
+                    section["PI_temperature_controller_P"] = PR322_temperature_PI_1V(section["PI_temperature_controller_P"])
+                end
+                if "PI_temperature_controller_I" ∈ keys(section)
+                    section["PI_temperature_controller_I"] = PR322_temperature_PI_1V(section["PI_temperature_controller_I"])
+                end
+            end
+        end
+    end
+    for (section_name, section_update_map) ∈ combined_update_map
         if section_name ∉ existing_sections
             continue
         end
         section = updated_input[section_name]
         existing_keys = keys(section)
-        for (old_key, new_key_or_map) ∈ section_update_map
+        for (old_key, new_option_setting) ∈ section_update_map
             if old_key ∉ existing_keys
                 continue
             end
-            old_value = pop!(section, old_key)
-            if new_key_or_map isa AbstractDict
-                if old_value ∉ keys(new_key_or_map)
+            old_value = section[old_key]
+            if new_option_setting isa AbstractDict
+                if old_value ∉ keys(new_option_setting)
                     continue
                 end
-                for (new_section_name, new_section_map) ∈ new_key_or_map[old_value]
-                    new_section = get(updated_input, new_section_name, Dict{String,Any}())
+                pop!(section, old_key)
+                for (new_section_name, new_section_map) ∈ new_option_setting[old_value]
+                    new_section = get(updated_input, new_section_name, DictType())
                     for (k,v) ∈ new_section_map
                         if k ∈ keys(new_section)
                             error("Trying to add new key \"$k\" to $new_section_name, but \"$k\" already exists")
@@ -279,9 +509,11 @@ function update_input_dict(original_input)
                         end
                     end
                 end
+            elseif new_option_setting isa Function
+                section[old_key] = new_option_setting(old_value)
             else
-println("check $new_key_or_map, ", section[old_key])
-                section[new_key_or_map] = old_value
+                pop!(section, old_key)
+                section[new_option_setting] = old_value
             end
         end
     end
@@ -289,38 +521,168 @@ println("check $new_key_or_map, ", section[old_key])
     return updated_input
 end
 
-function update_input_file(filename)
+function update_input_file(filename; update_definitions_322=false)
     file_text = read(filename, String)
-    mv(filename, "$filename.unmodified")
-
-    comments = String[]
-    for line ∈ split(file_text, "\n")
-        if occursin("#", line)
-            push!(comments, line)
-        end
-    end
-    if length(comments) > 0
-        println("Found comments in file. These are not copied to output. If you want to keep them, copy by hand!")
-        println("Lines with comments were:")
-        for line in comments
-            println(line)
-        end
-    end
 
     original_input = TOML.parse(file_text)
 
-    updated_input = update_input_dict(original_input)
+    updated_input = update_input_dict(original_input;
+                                      update_definitions_322=update_definitions_322)
+
+    updated_file_text = ""
+    section = ""
+    updated_sections = collect(keys(updated_input))
+    top_level = true
+    have_printed_missing_comments_header = false
+    if "" ∈ updated_sections
+        updated_section = pop!(updated_input, "")
+        skip_this_section = false
+    else
+        updated_section = OptionsDict()
+        skip_this_section = true
+    end
+    updated_section_keys = collect(keys(updated_section))
+    function print_missing_comment_message(key_value, comment)
+        if !have_printed_missing_comments_header
+            println("The comments from the following lines have not been transferred to "
+                    * "the updated input files. Please copy them manually if you want to "
+                    * "keep them.")
+            have_printed_missing_comments_header = true
+        end
+        println("$key_value#$comment")
+        return nothing
+    end
+
+    # Update sections that are already present in original input file.
+    for line ∈ split(file_text, "\n")
+        comment_split = split(line, "#"; limit=2)
+        if length(comment_split) == 1
+            # No comment present
+            key_value = comment_split[1]
+            comment = ""
+        else
+            key_value, comment = comment_split
+        end
+
+        section_regex_match = match(r"^\w*\[.*\]", key_value)
+        if section_regex_match !== nothing
+            # This line is a section heading
+
+            top_level = false
+
+            # Add any more options that have not already been handled from
+            # `updated_section`.
+            if length(updated_section) > 0
+                updated_file_text = rstrip(updated_file_text)
+                updated_file_text *= "\n"
+
+                for (key, value) ∈ updated_section
+                    if value isa String
+                        value = "\"$value\""
+                    end
+                    updated_file_text *= "$key = $value\n"
+                end
+
+                updated_file_text *= "\n"
+            end
+
+            section_title = section_regex_match.match[2:end-1]
+            if section_title ∉ updated_sections
+                skip_this_section = true
+                if comment != ""
+                    print_missing_comment_message(key_value, comment)
+                end
+            else
+                updated_section = pop!(updated_input, section_title)
+                updated_section_keys = collect(keys(updated_section))
+                skip_this_section = false
+                updated_file_text *= "$key_value"
+                if comment != ""
+                    updated_file_text *= "#$comment"
+                end
+                updated_file_text *= "\n"
+            end
+        elseif top_level && comment != ""
+            updated_file_text *= "$key_value#$comment\n"
+        elseif skip_this_section && comment != ""
+            print_missing_comment_message(key_value, comment)
+        elseif skip_this_section
+            # Nothing to do
+        elseif all(c->isspace(c), key_value)
+            # No actual setting on this line, so just re-print
+            updated_file_text *= "$key_value"
+            if comment != ""
+                updated_file_text *= "#$comment"
+            end
+            updated_file_text *= "\n"
+        else
+            key, _ = split(key_value, "=")
+            key = strip(key)
+
+            if key ∈ updated_section_keys
+                value = pop!(updated_section, key)
+                if value isa String
+                    value = "\"$value\""
+                end
+                updated_file_text *= "$key = $value"
+                if comment != ""
+                    updated_file_text *= " #$comment"
+                end
+                updated_file_text *= "\n"
+            else
+                if comment != ""
+                    print_missing_comment_message(key_value, comment)
+                end
+            end
+        end
+    end
+
+    # Add any new sections that were not present in originial input file.
+    for (updated_section_name, updated_section) ∈ updated_input
+        updated_file_text *= "\n[$updated_section_name]\n"
+        for (key, value) ∈ updated_section
+            if value isa String
+                value = "\"$value\""
+            end
+            updated_file_text *= "$key = $value\n"
+        end
+    end
+
+    # Make sure there is just one newline at the end of the file
+    updated_file_text = rstrip(updated_file_text, '\n')
+    updated_file_text *= "\n"
+
+    mv(filename, "$filename.unmodified")
 
     # Write the updated file. We have moved the original file, so this does not need to
-    # overwrite. Pass `truncate=false` to ensure we never accidentally delete a file, even
-    # though this should never happen anyway.
-    open(filename; write=true, truncate=false) do io
-        TOML.print(io, updated_input)
+    # overwrite. Check if the file already exists first to ensure we never accidentally
+    # delete a file, even though this should never happen.
+    if isfile(filename)
+        error("$filename already exists")
+    end
+    open(filename; write=true) do io
+        print(io, updated_file_text)
     end
 
     return nothing
 end
 
+using moment_kinetics.command_line_options.ArgParse
 if abspath(PROGRAM_FILE) == @__FILE__
-    update_input_file(ARGS[1])
+    s = ArgParseSettings()
+    @add_arg_table! s begin
+        "inputfiles"
+            help = "Name of TOML input file to update."
+            arg_type = String
+            nargs = '+'
+            default = nothing
+        "--update-definitions-322"
+            help = "Update definitions and dimensionless variables according to the changes in PR #322 (April 2025)"
+            action = :store_true
+    end
+    args = parse_args(s)
+
+    for filename ∈ args["inputfiles"]
+        update_input_file(filename; update_definitions_322=args["update-definitions-322"])
+    end
 end

@@ -13,7 +13,7 @@ using moment_kinetics.fokker_planck: setup_fp_nl_solve, setup_fkpl_collisions_in
                                      implicit_ion_fokker_planck_self_collisions!,
                                      fokker_planck_self_collisions_backward_euler_step!
 using moment_kinetics.fokker_planck_test: F_Maxwellian, print_test_data
-using moment_kinetics.velocity_moments: get_density, get_upar, get_ppar, get_pperp, get_pressure
+using moment_kinetics.velocity_moments: get_density, get_upar, get_p
 using moment_kinetics.communication
 using moment_kinetics.communication: MPISharedArray
 using moment_kinetics.looping
@@ -26,11 +26,9 @@ function diagnose_F_Maxwellian(pdf,pdf_exact,pdf_dummy_1,pdf_dummy_2,vpa,vperp,t
     @begin_serial_region()
     @serial_region begin
         dens = get_density(pdf,vpa,vperp)
-        upar = get_upar(pdf,vpa,vperp,dens)
-        ppar = get_ppar(pdf,vpa,vperp,upar)
-        pperp = get_pperp(pdf,vpa,vperp)
-        pres = get_pressure(ppar,pperp) 
-        vth = sqrt(2.0*pres/(dens*mass))
+        upar = get_upar(pdf, dens, vpa, vperp, false)
+        pressure = get_p(pdf, dens, upar, vpa, vperp, false, false)
+        vth = sqrt(2.0*pressure/(dens*mass))
         @loop_vperp_vpa ivperp ivpa begin
             pdf_exact[ivpa,ivperp] = F_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
         end
