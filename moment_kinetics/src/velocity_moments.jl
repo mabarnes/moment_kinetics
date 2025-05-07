@@ -1294,6 +1294,17 @@ in a single species plasma with Z = 1
 """
 function update_chodura!(moments,ff,vpa,vperp,z,r,r_spectral,composition,geometry,scratch_dummy,z_advect)
     @boundscheck composition.n_ion_species == size(ff, 5) || throw(BoundsError(ff))
+
+    if vpa.n == 1
+        # Cannot calculate integral sensibly
+        @begin_s_r_region()
+        @loop_s_r is ir begin
+            moments.ion.chodura_integral_lower[ir,is] = 0.0
+            moments.ion.chodura_integral_upper[ir,is] = 0.0
+        end
+        return nothing
+    end
+
     @begin_s_z_vperp_vpa_region()
     # use buffer_vpavperpzrs_2 here as buffer_vpavperpzrs_1 is in use storing ff
     dffdr = scratch_dummy.buffer_vpavperpzrs_2 
