@@ -568,7 +568,7 @@ F_s(t,r,z,v_\parallel,v_\perp) = \frac{f_s(t,r,z,v_\parallel,v_\perp)}{n_s}
     + n_i (v_E^z + b^z v_\parallel) \frac{\partial F_i}{\partial z} + (v_E^z + b^z v_\parallel) F_i \frac{\partial n_i}{\partial z}
     - n_i b^z \frac{e}{m_i} \frac{\partial\phi}{\partial z} \frac{\partial F_i}{\partial v_\parallel} \nonumber \\
 &\quad= C_{ii}[n_i F_i, n_i F_i] - R_\mathrm{CX} n_i n_n (F_i - F_n) + R_\mathrm{ioniz} n_e n_n F_n + S_i
-        + D_r \left( n_i \frac{\partial^2 F_i}{\partial r^2} + 2 \frac{\partial n_i}{\partial r} + \frac{\partial^2 n}{\partial r^2} F_i \right) \\
+        + D_r \left( n_i \frac{\partial^2 F_i}{\partial r^2} + 2 \frac{\partial n_i}{\partial r} \frac{\partial F_i}{\partial r} + \frac{\partial^2 n}{\partial r^2} F_i \right) \\
 
 & n_i \frac{\partial F_i}{\partial t} - F_i v_E^r \frac{\partial n_i}{\partial r} - F_i v_E^z \frac{\partial n_i}{\partial z} - F_i b^z n_i \frac{\partial u_{i\parallel}}{\partial z} - F_i b^z u_{i\parallel} \frac{\partial n_i}{\partial z} + F_i R_\mathrm{ioniz} n_e n_n + F_i S_{i,n}
     + n_i v_E^r \frac{\partial F_i}{\partial r} + v_E^r F_i \frac{\partial n_i}{\partial r}
@@ -587,7 +587,8 @@ F_s(t,r,z,v_\parallel,v_\perp) = \frac{f_s(t,r,z,v_\parallel,v_\perp)}{n_s}
   + (v_E^z + b^z v_\parallel) \frac{\partial F_i}{\partial z}
   - b^z \frac{e}{m_i} \frac{\partial\phi}{\partial z} \frac{\partial F_i}{\partial v_\parallel}
   + \left( \frac{(b^z v_\parallel - b^z u_{i\parallel})}{n_i} \frac{\partial n_i}{\partial z} - b^z \frac{\partial u_{i\parallel}}{\partial z} + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} + \frac{1}{n_i} S_{i,n} \right) F_i \nonumber \\
-&\quad= \frac{1}{n_i} C_{ii}[n_i F_i, n_i F_i] - R_\mathrm{CX} n_n (F_i - F_n) + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} F_n + \frac{1}{n_i} S_i \\
+&\quad= \frac{1}{n_i} C_{ii}[n_i F_i, n_i F_i] - R_\mathrm{CX} n_n (F_i - F_n) + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} F_n + \frac{1}{n_i} S_i
+        + D_r \frac{\partial^2 F_i}{\partial r^2} \\
 \end{align}
 ```
 
