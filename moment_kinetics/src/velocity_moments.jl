@@ -1050,12 +1050,23 @@ function calculate_ion_qpar_from_coll_krook!(qpar, density, upar, vth, dT_dz, z,
     @boundscheck r.n == size(qpar, 2) || throw(BoundsError(qpar))
     @boundscheck z.n == size(qpar, 1) || throw(BoundsError(qpar))
 
+    if vperp.n == 1
+        # For 1V need to use parallel temperature for Maxwellian in Krook
+        # operator, and for consistency with old 1D1V results also calculate
+        # collision frequency using parallel temperature.
+        Krook_vth = sqrt(3.0) * vth
+        adjust_1V = 1.0 / sqrt(3.0)
+    else
+        Krook_vth = vth
+        adjust_1V = 1.0
+    end
+    
     # calculate coll_krook heat flux. Currently only works for one ion species! (hence the 1 in dT_dz[iz,ir,1])
     if evolve_density && evolve_upar && evolve_p
         @begin_r_z_region()
         @loop_r_z ir iz begin
-            nu_ii = get_collision_frequency_ii(collisions, density[iz,ir], vth[iz,ir])
-            qpar[iz,ir] = -(3/2) * 3/2 * density[iz,ir] * vth[iz,ir]^2 /nu_ii * 3 * dT_dz[iz,ir,1]
+            nu_ii = get_collision_frequency_ii(collisions, density[iz,ir], Krook_vth[iz,ir])
+            qpar[iz,ir] = -(3/2) * 1/2 * density[iz,ir] * Krook_vth[iz,ir]^2 /nu_ii * 3 * dT_dz[iz,ir,1]
         end
     else
         throw(ArgumentError("coll_krook heat flux simulation requires evolve_density, 
@@ -1092,19 +1103,19 @@ function calculate_ion_qpar_from_coll_krook!(qpar, density, upar, vth, dT_dz, z,
     # in 2V gamma_i = 3.5.
 
     if vperp.n == 1
-        gamma_i = 2.5 * 3
-        convective_coefficient = 1.5 * 3
+        gamma_i = 2.5
+        convective_coefficient = 1.5
     else
         gamma_i = 3.5
         convective_coefficient = 2.5
     end
     @loop_r ir begin
         for iz ∈ z_indices
-            this_p = vth[iz,ir]^2 * density[iz,ir] * 1/2
+            this_p = Krook_vth[iz,ir]^2 * density[iz,ir] * 1/2
             this_upar = upar[iz,ir]
             this_dens = density[iz,ir]
             particle_flux = this_dens * this_upar
-            T_i = 1/2 * vth[iz,ir]^2
+            T_i = 1/2 * Krook_vth[iz,ir]^2
 
             # Stangeby (2.92)
             total_heat_flux = gamma_i * T_i * particle_flux
