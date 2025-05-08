@@ -12,7 +12,7 @@ using moment_kinetics.looping
 using moment_kinetics.array_allocation: allocate_float, allocate_shared_float
 using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.type_definitions: mk_float, mk_int
-using moment_kinetics.velocity_moments: get_density, get_upar, get_p, get_ppar, get_pperp
+using moment_kinetics.velocity_moments: get_density, get_upar, get_p, get_ppar, get_pperp, get_qpar, get_rmom
 using moment_kinetics.input_structs: direct_integration, multipole_expansion, delta_f_multipole
 
 using moment_kinetics.fokker_planck: init_fokker_planck_collisions_weak_form, fokker_planck_collision_operator_weak_form!
@@ -21,7 +21,7 @@ using moment_kinetics.fokker_planck: density_conserving_correction!, fokker_plan
 using moment_kinetics.fokker_planck: setup_fp_nl_solve, fokker_planck_self_collisions_backward_euler_step!
 using moment_kinetics.fokker_planck: setup_fkpl_collisions_input
 using moment_kinetics.fokker_planck_test: print_test_data, fkpl_error_data, allocate_error_data #, plot_test_data
-using moment_kinetics.fokker_planck_test: F_Maxwellian, G_Maxwellian, H_Maxwellian
+using moment_kinetics.fokker_planck_test: F_Maxwellian, G_Maxwellian, H_Maxwellian, F_Beam
 using moment_kinetics.fokker_planck_test: d2Gdvpa2_Maxwellian, d2Gdvperp2_Maxwellian, d2Gdvperpdvpa_Maxwellian, dGdvperp_Maxwellian
 using moment_kinetics.fokker_planck_test: dHdvperp_Maxwellian, dHdvpa_Maxwellian, Cssp_Maxwellian_inputs
 using moment_kinetics.fokker_planck_calculus: calculate_rosenbluth_potentials_via_elliptic_solve!, calculate_rosenbluth_potential_boundary_data_exact!
@@ -347,11 +347,85 @@ function backward_Euler_fokker_planck_self_collisions_test(;
     return nothing
 end
 
+function numerical_error_corrections_test(; 
+    ngrid = 5, # chosen for a quick test -- direct integration is slow!
+    nelement_vpa = 8,
+    nelement_vperp = 4,
+    Lvpa = 12.0,
+    Lvperp = 6.0,
+    abeam = 0.5,
+    vpa0 = 1.0,
+    vperp0 = 1.0,
+    vth0 = 0.5,
+    atol = 1.0e-14,
+    print_to_screen=false,
+    )
+    vpa, vpa_spectral, vperp, vperp_spectral = create_grids(ngrid,nelement_vpa,nelement_vperp,
+                                                                Lvpa=Lvpa,Lvperp=Lvperp)
+    @begin_serial_region()
+    fkpl_arrays = init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_spectral,
+                        precompute_weights=false, print_to_screen=print_to_screen)
+
+    pdf_in = allocate_float(vpa.n,vperp.n)
+    C_num = allocate_shared_float(vpa.n,vperp.n)
+    denss, upars, vths = 1.0, 1.0, 1.0
+    # initialise a distribution that has a qpar
+    for ivperp in 1:vperp.n
+        for ivpa in 1:vpa.n
+            pdf_in[ivpa,ivperp] = (abeam * F_Beam(vpa0,vperp0,vth0,vpa,vperp,ivpa,ivperp)
+                                   + F_Beam(0.0,vperp0,vth0,vpa,vperp,ivpa,ivperp))
+        end
+    end
+    dens = get_density(pdf_in, vpa, vperp)
+    upar = get_upar(pdf_in, dens, vpa, vperp, false)
+    pressure = get_p(pdf_in, dens, upar, vpa, vperp, false, false)
+    vth = sqrt(2.0*pressure/dens)
+    ppar = get_ppar(dens, upar, pressure, vth, pdf_in, vpa, vperp, false, false,
+                    false)
+    qpar = get_qpar(pdf_in, dens, upar, pressure, vth, vpa, vperp, false, false,
+                    false)
+    rmom = get_rmom(pdf_in, upar, vpa, vperp)
+    # check test pdf unchanged
+    if abeam == 0.5 && vpa0 == 1.0 && vperp0 == 1.0 && vth0 == 0.5
+        @test isapprox(dens, 7.416900452984803, atol=atol)
+        @test isapprox(upar, 0.33114644602432997, atol=atol)
+        @test isapprox(vth, 1.0695323945144575, atol=atol)
+        @test isapprox(qpar, 0.29147880412034594, atol=atol)
+        @test isapprox(rmom, 27.57985752143237, atol=atol)
+    end
+
+    @begin_s_r_z_anyv_region()
+    CC = fkpl_arrays.CC
+    # fill CC with a pdf that definitely has a density, mean flow, and pressure (unlike C[F,F])
+    @loop_vperp_vpa ivperp ivpa begin
+        CC[ivpa,ivperp] = F_Maxwellian(denss,upars,vths,vpa,vperp,ivpa,ivperp)
+    end
+    @begin_anyv_vperp_vpa_region()
+    # make ad-hoc conserving corrections to remove the denisty, mean flow, and pressure
+    conserving_corrections!(CC,pdf_in,vpa,vperp)
+    
+    # extract result
+    @begin_anyv_vperp_vpa_region()
+    @loop_vperp_vpa ivperp ivpa begin
+        C_num[ivpa,ivperp] = CC[ivpa,ivperp]
+    end
+    @begin_serial_region()
+    @serial_region begin
+        # check CC now has zero density, flow, and pressure moments
+        dn = get_density(C_num, vpa, vperp)
+        du = get_upar(C_num, 1.0, vpa, vperp, false)
+        dp = get_p(C_num, dens, upar, vpa, vperp, false, false)
+        @test abs(dn) < atol
+        @test abs(du) < atol
+        @test abs(dp) < atol
+    end
+    return nothing
+end
+
 function runtests()
     print_to_screen = false
     @testset "Fokker Planck tests" verbose=use_verbose begin
         println("Fokker Planck tests")
-        
         @testset "backward-Euler nonlinear Fokker-Planck collisions" begin
             println("    - test backward-Euler nonlinear Fokker-Planck collisions")
             @testset "$bc" for bc in ("none", "zero")  
@@ -1065,6 +1139,11 @@ function runtests()
             end
         end
 
+        @testset "numerical error correcting terms" begin
+            println("    - test numerical error correcting terms")
+            numerical_error_corrections_test(print_to_screen=print_to_screen)
+        end
+        
         
     end
 end
