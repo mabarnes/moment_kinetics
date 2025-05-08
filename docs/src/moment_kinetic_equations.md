@@ -646,6 +646,7 @@ subsitute from the parallel flow equation
            + R_\mathrm{CX} n_n (u_{n\parallel} - u_{i\parallel})
            + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} u_{n\parallel}
            + \frac{1}{m_i n_i} S_{i,\mathrm{mom}}
+           - \frac{u_{i\parallel}}{n_i} S_{i,n}
            + \cancel{v_E^r \frac{\partial u_{i\parallel}}{\partial r}}
            + (\cancel{v_E^z} + b^z \hat{w}_\parallel + \cancel{b^z u_{i\parallel}}) \frac{\partial u_{i\parallel}}{\partial z}
            + \cancel{b^z \frac{e}{m_i} \frac{\partial\phi}{\partial z}} \right) \frac{\partial F_i}{\partial \hat{w}_\parallel} \nonumber \\
@@ -666,6 +667,7 @@ subsitute from the parallel flow equation
                  + R_\mathrm{CX} n_n (u_{n\parallel} - u_{i\parallel})
                  + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} u_{n\parallel}
                  + \frac{1}{m_i n_i} S_{i,\mathrm{mom}}
+                 - \frac{u_{i\parallel}}{n_i} S_{i,n}
                \right) \frac{\partial F_i}{\partial \hat{w}_\parallel} \nonumber \\
   &\quad+ \left( b^z \frac{\hat{w}_\parallel}{n_i} \frac{\partial n_i}{\partial z} - b^z \frac{\partial u_{i\parallel}}{\partial z} + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} + \frac{1}{n_i} S_{i,n} \right) F_i \nonumber \\
 &\quad= \frac{1}{n_i} C_{ii}[n_i F_i, n_i F_i] - R_\mathrm{CX} n_n (F_i - F_n) + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} F_n + \frac{1}{n_i} S_i \\
