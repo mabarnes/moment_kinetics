@@ -153,8 +153,16 @@ Can integrate the drift kinetic equation to give the moment equations:
   &= \underbrace{\int C_{ii}[f_i,f_i] d^3 v}_{=0\text{, collisions conserve particles}} +
       \int \left[ \underbrace{-R_\mathrm{CX}(n_n f_i - n_i f_n)}_{=0\text{, no particle source from CX}} + R_\mathrm{ioniz} n_e f_n \right] d^3 v
       + \underbrace{\int S_i d^3 v}_{S_{i,n}} + D_r \frac{\partial^2}{\partial r^2} \int f_i d^3 v \\
+
+  &\frac{\partial n_i}{\partial t} + \frac{\partial}{\partial z}\left( n_i u_{i\parallel} \right)
+        + \frac{E_y}{B} \frac{\partial n_i}{\partial r}
+        - \frac{E_r}{B} \frac{\partial n_i}{\partial y}
+      = R_\mathrm{ioniz} n_e n_n + S_{i,n} + D_r \frac{\partial^2 n_i}{\partial r^2} \\
   \end{align}
   ```
+  and noting that
+  $\partial E_y / \partial r - \partial E_r / \partial y = \partial^2 \phi / \partial y \partial r - \partial^2 \phi / \partial r \partial y = 0$
+  (in a constant $\boldsymbol B$ field the $E\times B$ drift is divergence-free)
   ```@raw html
   </details>
   ```
@@ -228,7 +236,7 @@ Can integrate the drift kinetic equation to give the moment equations:
   <details>
   <summary style="text-align:center">[ intermediate steps ]</summary>
   ```
-  take $u_{i\parallel}\times$continuity $\rightarrow$
+  take $m_i u_{i\parallel}\times$continuity $\rightarrow$
   ```math
   \begin{align}
   m_i u_{i\parallel} \frac{\partial n_i}{\partial t}
@@ -552,13 +560,15 @@ F_s(t,r,z,v_\parallel,v_\perp) = \frac{f_s(t,r,z,v_\parallel,v_\perp)}{n_s}
 \begin{align}
 & \frac{\partial n_i F_i}{\partial t} + v_E^r \frac{\partial n_i F_i}{\partial r} + (v_E^z + b^z v_\parallel) \frac{\partial n_i F_i}{\partial z}
     - b^z \frac{e}{m_i} \frac{\partial\phi}{\partial z} \frac{\partial n_i F_i}{\partial v_\parallel} \nonumber \\
-&\quad= C_{ii}[n_i F_i, n_i F_i] - R_\mathrm{CX}(n_n n_i F_i - n_i n_n F_n) + R_\mathrm{ioniz} n_e n_n F_n + S_i \\
+&\quad= C_{ii}[n_i F_i, n_i F_i] - R_\mathrm{CX}(n_n n_i F_i - n_i n_n F_n) + R_\mathrm{ioniz} n_e n_n F_n + S_i
+        + D_r \frac{\partial^2 (n_i F_i)}{\partial r^2} \\
 
 & n_i \frac{\partial F_i}{\partial t} + F_i \frac{\partial n_i}{\partial t}
     + n_i v_E^r \frac{\partial F_i}{\partial r} + v_E^r F_i \frac{\partial n_i}{\partial r}
     + n_i (v_E^z + b^z v_\parallel) \frac{\partial F_i}{\partial z} + (v_E^z + b^z v_\parallel) F_i \frac{\partial n_i}{\partial z}
     - n_i b^z \frac{e}{m_i} \frac{\partial\phi}{\partial z} \frac{\partial F_i}{\partial v_\parallel} \nonumber \\
-&\quad= C_{ii}[n_i F_i, n_i F_i] - R_\mathrm{CX} n_i n_n (F_i - F_n) + R_\mathrm{ioniz} n_e n_n F_n + S_i \\
+&\quad= C_{ii}[n_i F_i, n_i F_i] - R_\mathrm{CX} n_i n_n (F_i - F_n) + R_\mathrm{ioniz} n_e n_n F_n + S_i
+        + D_r \left( n_i \frac{\partial^2 F_i}{\partial r^2} + 2 \frac{\partial n_i}{\partial r} + \frac{\partial^2 n}{\partial r^2} F_i \right) \\
 
 & n_i \frac{\partial F_i}{\partial t} - F_i v_E^r \frac{\partial n_i}{\partial r} - F_i v_E^z \frac{\partial n_i}{\partial z} - F_i b^z n_i \frac{\partial u_{i\parallel}}{\partial z} - F_i b^z u_{i\parallel} \frac{\partial n_i}{\partial z} + F_i R_\mathrm{ioniz} n_e n_n + F_i S_{i,n}
     + n_i v_E^r \frac{\partial F_i}{\partial r} + v_E^r F_i \frac{\partial n_i}{\partial r}
