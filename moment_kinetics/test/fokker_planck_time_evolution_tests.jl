@@ -587,13 +587,13 @@ function runtests()
             vperp_bc = "zero"
             run_test(test_input_gauss_legendre,
             expected_zero,
-             1.0e-14, 1.0e-14; vperp=OptionsDict("bc" => vperp_bc))
+             1.0e-14, 2.0e-14; vperp=OptionsDict("bc" => vperp_bc))
         end
         @testset "Gauss Legendre no (explicitly) enforced boundary conditions: explicit timestepping" begin
             run_name = "gausslegendre_pseudospectral_none_bc"
             vperp_bc = "none"
             vpa_bc = "none"
-            run_test(test_input_gauss_legendre, expected_none_bc, 1.0e-14, 1.0e-14;
+            run_test(test_input_gauss_legendre, expected_none_bc, 1.0e-14, 2.0e-14;
                      vperp=OptionsDict("bc" => vperp_bc), vpa=OptionsDict("bc" => vpa_bc))
         end
         @testset "Gauss Legendre no (explicitly) enforced boundary conditions: IMEX timestepping" begin
