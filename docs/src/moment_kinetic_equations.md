@@ -653,7 +653,8 @@ the coordinates to ${r,z,\hat{w}_\parallel,v_\perp,t}$
   + (v_E^z + b^z v_\parallel) \left . \frac{\partial F_i}{\partial z} \right|_{t,r,v_\parallel,v_\perp}
   - b^z \frac{e}{m_i} \frac{\partial\phi}{\partial z} \left. \frac{\partial F_i}{\partial v_\parallel} \right|_{t,r,z,v_\perp}
   + \left( \frac{(b^z v_\parallel - b^z u_{i\parallel})}{n_i} \frac{\partial n_i}{\partial z} - b^z \frac{\partial u_{i\parallel}}{\partial z} + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} + \frac{1}{n_i} S_{i,n} \right) F_i \nonumber \\
-&\quad= \frac{1}{n_i} C_{ii}[n_i F_i, n_i F_i] - R_\mathrm{CX} n_n (F_i - F_n) + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} F_n + \frac{1}{n_i} S_i \\
+&\quad= \frac{1}{n_i} C_{ii}[n_i F_i, n_i F_i] - R_\mathrm{CX} n_n (F_i - F_n) + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} F_n + \frac{1}{n_i} S_i
+        + D_r \left . \frac{\partial^2 F_i}{\partial r^2} \right|_{t,r,y,z,v_\parallel,v_\perp} \\
 
 & \left. \frac{\partial F_i}{\partial t} \right|_{r,z,\hat{w}_\parallel,v_\perp}
   - \frac{\partial u_{i\parallel}}{\partial t} \left. \frac{\partial F_i}{\partial \hat{w}_\parallel} \right|_{t,r,z,v_\perp} \nonumber \\
@@ -663,7 +664,12 @@ the coordinates to ${r,z,\hat{w}_\parallel,v_\perp,t}$
   - (v_E^z + b^z \hat{w}_\parallel + b^z u_{i\parallel}) \frac{\partial u_{i\parallel}}{\partial z} \left . \frac{\partial F_i}{\partial \hat{w}_\parallel} \right|_{t,r,z,v_\perp} \nonumber \\
 & - b^z \frac{e}{m_i} \frac{\partial\phi}{\partial z} \left. \frac{\partial F_i}{\partial \hat{w}_\parallel} \right|_{t,r,z,v_\perp} \nonumber \\
 & + \left( \frac{b^z \hat{w}_\parallel}{n_i} \frac{\partial n_i}{\partial z} - \frac{\partial u_{i\parallel}}{\partial z} + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} + \frac{1}{n_i} S_{i,n} \right) F_i \nonumber \\
-&\quad= \frac{1}{n_i} C_{ii}[n_i F_i, n_i F_i] - R_\mathrm{CX} n_n (F_i - F_n) + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} F_n + \frac{1}{n_i} S_i \\
+&\quad= \frac{1}{n_i} C_{ii}[n_i F_i, n_i F_i] - R_\mathrm{CX} n_n (F_i - F_n) + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} F_n + \frac{1}{n_i} S_i \nonumber \\
+  &\quad+ D_r \left . \frac{\partial^2 F_i}{\partial r^2} \right|_{t,y,z,\hat{w}_\parallel,v_\perp}
+        - D_r \left . \frac{\partial u_{i\parallel}}{\partial r} \left . \frac{\partial}{\partial \hat{w}_\parallel} \right|_{t,r,y,z,v_\perp} \frac{\partial F_i}{\partial r} \right|_{t,y,z,\hat{w}_\parallel,v_\perp}
+        - D_r \left . \frac{\partial u_{i\parallel}}{\partial r} \left . \frac{\partial}{\partial r} \right|_{t,y,z,\hat{w}_\parallel,v_\perp} \frac{\partial F_i}{\partial \hat{w}_\parallel} \right|_{t,r,y,z,v_\perp} \nonumber \\
+  &\quad+ D_r \left . \left( \frac{\partial u_{i\parallel}}{\partial r} \right)^2 \frac{\partial^2 F_i}{\partial \hat{w}_\parallel^2} \right|_{t,r,y,z,v_\perp}
+        - D_r \frac{\partial^2 u_{i\parallel}}{\partial r^2} \left . \frac{\partial F_i}{\partial \hat{w}_\parallel} \right|_{t,r,y,z,v_\perp} \\
 
 & \frac{\partial F_i}{\partial t}
   + v_E^r \left. \frac{\partial F_i}{\partial r} \right|_{t,z,\hat{w}_\parallel,v_\perp}
@@ -673,7 +679,8 @@ the coordinates to ${r,z,\hat{w}_\parallel,v_\perp,t}$
            + (v_E^z + b^z \hat{w}_\parallel + b^z u_{i\parallel}) \frac{\partial u_{i\parallel}}{\partial z} 
            + b^z \frac{e}{m_i} \frac{\partial\phi}{\partial z} \right) \frac{\partial F_i}{\partial \hat{w}_\parallel} \nonumber \\
   &\quad+ \left( b^z \frac{\hat{w}_\parallel}{n_i} \frac{\partial n_i}{\partial z} - \frac{\partial u_{i\parallel}}{\partial z} + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} + \frac{1}{n_i} S_{i,n} \right) F_i \nonumber \\
-&\quad= \frac{1}{n_i} C_{ii}[n_i F_i, n_i F_i] - R_\mathrm{CX} n_n (F_i - F_n) + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} F_n + \frac{1}{n_i} S_i \\
+&\quad= \frac{1}{n_i} C_{ii}[n_i F_i, n_i F_i] - R_\mathrm{CX} n_n (F_i - F_n) + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} F_n + \frac{1}{n_i} S_i
+        + D_r \left . \frac{\partial^2 F_i}{\partial r^2} \right|_{t,r,y,z,v_\parallel,v_\perp} \\
 \end{align}
 ```
 subsitute from the parallel flow equation
@@ -688,12 +695,17 @@ subsitute from the parallel flow equation
            + R_\mathrm{CX} n_n (u_{n\parallel} - u_{i\parallel})
            + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} u_{n\parallel}
            + \frac{1}{m_i n_i} S_{i,\mathrm{mom}}
+           + D_r \left( \cancel{\frac{\partial^2 u_{i\parallel}}{\partial r^2}} + \cancel{\frac{2}{n_i} \frac{\partial n_i}{\partial r} \frac{\partial u_{i\parallel}}{\partial r}} \right)
            - \frac{u_{i\parallel}}{n_i} S_{i,n}
            + \cancel{v_E^r \frac{\partial u_{i\parallel}}{\partial r}}
            + (\cancel{v_E^z} + b^z \hat{w}_\parallel + \cancel{b^z u_{i\parallel}}) \frac{\partial u_{i\parallel}}{\partial z}
-           + \cancel{b^z \frac{e}{m_i} \frac{\partial\phi}{\partial z}} \right) \frac{\partial F_i}{\partial \hat{w}_\parallel} \nonumber \\
+           + \cancel{b^z \frac{e}{m_i} \frac{\partial\phi}{\partial z}}
+           - \cancel{D_r \frac{\partial^2 u_{i\parallel}}{\partial r^2}} \right) \frac{\partial F_i}{\partial \hat{w}_\parallel} \nonumber \\
   &\quad+ \left( b^z \frac{\hat{w}_\parallel}{n_i} \frac{\partial n_i}{\partial z} - b^z \frac{\partial u_{i\parallel}}{\partial z} + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} + \frac{1}{n_i} S_{i,n} \right) F_i \nonumber \\
-&\quad= \frac{1}{n_i} C_{ii}[n_i F_i, n_i F_i] - R_\mathrm{CX} n_n (F_i - F_n) + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} F_n + \frac{1}{n_i} S_i \\
+&\quad= \frac{1}{n_i} C_{ii}[n_i F_i, n_i F_i] - R_\mathrm{CX} n_n (F_i - F_n) + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} F_n + \frac{1}{n_i} S_i \nonumber \\
+  &\qquad+ D_r \frac{\partial^2 F_i}{\partial r^2}
+         - 2 D_r \frac{\partial u_{i\parallel}}{\partial r} \frac{\partial^2 F_i}{\partial r \partial \hat{w}_\parallel}
+         + D_r \left( \frac{\partial u_{i\parallel}}{\partial r} \right)^2 \frac{\partial^2 F_i}{\partial \hat{w}_\parallel^2} \\
 \end{align}
 ```
 ```@raw html
@@ -712,7 +724,10 @@ subsitute from the parallel flow equation
                  - \frac{u_{i\parallel}}{n_i} S_{i,n}
                \right) \frac{\partial F_i}{\partial \hat{w}_\parallel} \nonumber \\
   &\quad+ \left( b^z \frac{\hat{w}_\parallel}{n_i} \frac{\partial n_i}{\partial z} - b^z \frac{\partial u_{i\parallel}}{\partial z} + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} + \frac{1}{n_i} S_{i,n} \right) F_i \nonumber \\
-&\quad= \frac{1}{n_i} C_{ii}[n_i F_i, n_i F_i] - R_\mathrm{CX} n_n (F_i - F_n) + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} F_n + \frac{1}{n_i} S_i \\
+&\quad= \frac{1}{n_i} C_{ii}[n_i F_i, n_i F_i] - R_\mathrm{CX} n_n (F_i - F_n) + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} F_n + \frac{1}{n_i} S_i \nonumber \\
+  &\qquad+ D_r \frac{\partial^2 F_i}{\partial r^2}
+         - 2 D_r \frac{\partial u_{i\parallel}}{\partial r} \frac{\partial^2 F_i}{\partial r \partial \hat{w}_\parallel}
+         + D_r \left( \frac{\partial u_{i\parallel}}{\partial r} \right)^2 \frac{\partial^2 F_i}{\partial \hat{w}_\parallel^2} \\
 \end{align}
 ```
 
