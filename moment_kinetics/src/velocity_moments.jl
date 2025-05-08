@@ -1055,7 +1055,7 @@ function calculate_ion_qpar_from_coll_krook!(qpar, density, upar, vth, dT_dz, z,
         @begin_r_z_region()
         @loop_r_z ir iz begin
             nu_ii = get_collision_frequency_ii(collisions, density[iz,ir], vth[iz,ir])
-            qpar[iz,ir] = -(1/2) * 3/2 * density[iz,ir] * vth[iz,ir]^2 /nu_ii * dT_dz[iz,ir,1]
+            qpar[iz,ir] = -(3/2) * 3/2 * density[iz,ir] * vth[iz,ir]^2 /nu_ii * 3 * dT_dz[iz,ir,1]
         end
     else
         throw(ArgumentError("coll_krook heat flux simulation requires evolve_density, 
@@ -1092,19 +1092,19 @@ function calculate_ion_qpar_from_coll_krook!(qpar, density, upar, vth, dT_dz, z,
     # in 2V gamma_i = 3.5.
 
     if vperp.n == 1
-        gamma_i = 2.5
-        convective_coefficient = 1.5
+        gamma_i = 2.5 * 3
+        convective_coefficient = 1.5 * 3
     else
         gamma_i = 3.5
         convective_coefficient = 2.5
     end
     @loop_r ir begin
         for iz ∈ z_indices
-            this_p = vth[iz,ir]^2 * density[iz,ir]/2.0
+            this_p = vth[iz,ir]^2 * density[iz,ir] * 1/2
             this_upar = upar[iz,ir]
             this_dens = density[iz,ir]
             particle_flux = this_dens * this_upar
-            T_i = vth[iz,ir]^2
+            T_i = 1/2 * vth[iz,ir]^2
 
             # Stangeby (2.92)
             total_heat_flux = gamma_i * T_i * particle_flux
