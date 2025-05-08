@@ -705,7 +705,7 @@ function conserving_corrections!(CC,pdf_in,vpa,vperp)
         
         # form the appropriate matrix coefficients
         b0, b1, b2 = dn, du - upar*dn, 3.0*dp
-        A00, A02, A11, A12, A22 = dens, 3.0*pressure, ppar, qpar, rmom
+        A00, A02, A11, A12, A22 = dens, 3.0*pressure, ppar, 2.0*qpar, rmom
 
         # obtain the coefficients for the corrections
         (x0, x1, x2) = symmetric_matrix_inverse(A00,A02,A11,A12,A22,b0,b1,b2)
