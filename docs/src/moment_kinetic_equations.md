@@ -555,40 +555,72 @@ F_s(t,z,v_\parallel,v_\perp) = \frac{f_s(t,z,v_\parallel,v_\perp)}{n_s}
 Normalise $n_i$ out of the distribution function. Shift to peculiar velocity.
 ```math
 \begin{align}
-F_s(t,z,\hat{w}_\parallel,v_\perp) &= \frac{f_s(t,z,\hat{w}_\parallel,v_\perp)}{n_s} \\
+F_s(t,r,z,\hat{w}_\parallel,v_\perp) &= \frac{f_s(t,r,z,\hat{w}_\parallel,v_\perp)}{n_s} \\
 \hat{w}_\parallel &= v_\parallel - u_{s\parallel}
 \end{align}
 ```
 ```math
 \begin{align}
-\left. \frac{\partial}{\partial t} \right|_{z,v_\parallel,v_\perp}
-  &= \left. \frac{\partial t}{\partial t} \right|_{z,v_\parallel,v_\perp} \left. \frac{\partial}{\partial t} \right|_{z,\hat{w}_\parallel,v_\perp}
-    + \left. \frac{\partial z}{\partial t} \right|_{z,v_\parallel,v_\perp} \left. \frac{\partial}{\partial z} \right|_{t,\hat{w}_\parallel,v_\perp}
-    + \left. \frac{\partial \hat{w}_\parallel}{\partial t} \right|_{z,v_\parallel,v_\perp} \left. \frac{\partial}{\partial \hat{w}_\parallel} \right|_{t,z,v_\perp}
-    + \left. \frac{\partial v_\perp}{\partial t} \right|_{z,v_\parallel,v_\perp} \left. \frac{\partial}{\partial v_\perp} \right|_{t,z,\hat{w}_\parallel} \\
+\left. \frac{\partial}{\partial t} \right|_{r,y,z,v_\parallel,v_\perp}
+  &= \left. \frac{\partial t}{\partial t} \right|_{r,y,z,v_\parallel,v_\perp} \left. \frac{\partial}{\partial t} \right|_{r,y,z,\hat{w}_\parallel,v_\perp}
+    + \left. \frac{\partial r}{\partial t} \right|_{r,y,z,v_\parallel,v_\perp} \left. \frac{\partial}{\partial r} \right|_{t,y,z,\hat{w}_\parallel,v_\perp}
+    + \left. \frac{\partial y}{\partial t} \right|_{r,y,z,v_\parallel,v_\perp} \left. \frac{\partial}{\partial y} \right|_{t,r,z,\hat{w}_\parallel,v_\perp}
+    + \left. \frac{\partial z}{\partial t} \right|_{r,y,z,v_\parallel,v_\perp} \left. \frac{\partial}{\partial z} \right|_{t,r,y,\hat{w}_\parallel,v_\perp}
+    + \left. \frac{\partial \hat{w}_\parallel}{\partial t} \right|_{r,y,z,v_\parallel,v_\perp} \left. \frac{\partial}{\partial \hat{w}_\parallel} \right|_{t,r,y,z,v_\perp}
+    + \left. \frac{\partial v_\perp}{\partial t} \right|_{r,y,z,v_\parallel,v_\perp} \left. \frac{\partial}{\partial v_\perp} \right|_{t,r,y,z,\hat{w}_\parallel} \\
 
-  &= \left. \frac{\partial}{\partial t} \right|_{z,\hat{w}_\parallel,v_\perp}
-    - \left. \frac{\partial u_{s\parallel}}{\partial t} \right|_{z,v_\parallel,v_\perp} \left. \frac{\partial}{\partial \hat{w}_\parallel} \right|_{t,z,v_\perp} \\
+  &= \left. \frac{\partial}{\partial t} \right|_{r,y,z,\hat{w}_\parallel,v_\perp}
+    - \left. \frac{\partial u_{s\parallel}}{\partial t} \right|_{r,y,z,v_\parallel,v_\perp} \left. \frac{\partial}{\partial \hat{w}_\parallel} \right|_{t,r,y,z,v_\perp} \\
 
-  &\equiv \left. \frac{\partial}{\partial t} \right|_{z,\hat{w}_\parallel,v_\perp}
-    - \frac{\partial u_{s\parallel}}{\partial t} \left. \frac{\partial}{\partial \hat{w}_\parallel} \right|_{t,z,v_\perp} \\
+  &\equiv \left. \frac{\partial}{\partial t} \right|_{r,y,z,\hat{w}_\parallel,v_\perp}
+    - \frac{\partial u_{s\parallel}}{\partial t} \left. \frac{\partial}{\partial \hat{w}_\parallel} \right|_{t,r,y,z,v_\perp} \\
 
-\left. \frac{\partial}{\partial z} \right|_{t,v_\parallel,v_\perp}
-  &= \left. \frac{\partial t}{\partial z} \right|_{t,v_\parallel,v_\perp} \left. \frac{\partial}{\partial z} \right|_{t,\hat{w}_\parallel,v_\perp}
-    + \left. \frac{\partial z}{\partial z} \right|_{t,v_\parallel,v_\perp} \left. \frac{\partial}{\partial z} \right|_{t,\hat{w}_\parallel,v_\perp}
-    + \left. \frac{\partial \hat{w}_\parallel}{\partial z} \right|_{t,v_\parallel,v_\perp} \left. \frac{\partial}{\partial \hat{w}_\parallel} \right|_{t,z,v_\perp}
-    + \left. \frac{\partial v_\perp}{\partial z} \right|_{t,v_\parallel,v_\perp} \left. \frac{\partial}{\partial v_\perp} \right|_{t,z,\hat{w}_\parallel} \\
+\left. \frac{\partial}{\partial z} \right|_{t,r,v_\parallel,v_\perp}
+  &= \left. \frac{\partial t}{\partial z} \right|_{t,r,y,v_\parallel,v_\perp} \left. \frac{\partial}{\partial t} \right|_{t,r,y,\hat{w}_\parallel,v_\perp}
+    + \left. \frac{\partial z}{\partial r} \right|_{t,r,y,v_\parallel,v_\perp} \left. \frac{\partial}{\partial r} \right|_{t,z,y,\hat{w}_\parallel,v_\perp}
+    + \left. \frac{\partial z}{\partial y} \right|_{t,r,y,v_\parallel,v_\perp} \left. \frac{\partial}{\partial y} \right|_{t,r,z,\hat{w}_\parallel,v_\perp}
+    + \left. \frac{\partial z}{\partial z} \right|_{t,r,y,v_\parallel,v_\perp} \left. \frac{\partial}{\partial z} \right|_{t,r,y,\hat{w}_\parallel,v_\perp}
+    + \left. \frac{\partial \hat{w}_\parallel}{\partial z} \right|_{t,r,y,v_\parallel,v_\perp} \left. \frac{\partial}{\partial \hat{w}_\parallel} \right|_{t,r,y,z,v_\perp}
+    + \left. \frac{\partial v_\perp}{\partial z} \right|_{t,r,y,v_\parallel,v_\perp} \left. \frac{\partial}{\partial v_\perp} \right|_{t,r,y,z,\hat{w}_\parallel} \\
 
-  &= \left. \frac{\partial}{\partial z} \right|_{t,\hat{w}_\parallel,v_\perp}
-    - \left. \frac{\partial u_{s\parallel}}{\partial z} \right|_{t,v_\parallel,v_\perp} \left. \frac{\partial}{\partial \hat{w}_\parallel} \right|_{t,z,v_\perp} \\
+  &= \left. \frac{\partial}{\partial z} \right|_{t,r,y,\hat{w}_\parallel,v_\perp}
+    - \left. \frac{\partial u_{s\parallel}}{\partial z} \right|_{t,r,y,v_\parallel,v_\perp} \left. \frac{\partial}{\partial \hat{w}_\parallel} \right|_{t,r,y,z,v_\perp} \\
 
-  &\equiv \left. \frac{\partial}{\partial z} \right|_{z,\hat{w}_\parallel,v_\perp}
-    - \frac{\partial u_{s\parallel}}{\partial z} \left. \frac{\partial}{\partial \hat{w}_\parallel} \right|_{t,z,v_\perp} \\
+  &\equiv \left. \frac{\partial}{\partial z} \right|_{t,r,y,\hat{w}_\parallel,v_\perp}
+    - \frac{\partial u_{s\parallel}}{\partial z} \left. \frac{\partial}{\partial \hat{w}_\parallel} \right|_{t,r,y,z,v_\perp} \\
+
+\left. \frac{\partial}{\partial r} \right|_{t,y,z,v_\parallel,v_\perp}
+  &= \left. \frac{\partial t}{\partial r} \right|_{t,y,z,v_\parallel,v_\perp} \left. \frac{\partial}{\partial t} \right|_{r,y,z,\hat{w}_\parallel,v_\perp}
+    + \left. \frac{\partial r}{\partial r} \right|_{t,y,z,v_\parallel,v_\perp} \left. \frac{\partial}{\partial r} \right|_{t,y,z,\hat{w}_\parallel,v_\perp}
+    + \left. \frac{\partial y}{\partial r} \right|_{t,y,z,v_\parallel,v_\perp} \left. \frac{\partial}{\partial y} \right|_{t,r,z,\hat{w}_\parallel,v_\perp}
+    + \left. \frac{\partial z}{\partial r} \right|_{t,y,z,v_\parallel,v_\perp} \left. \frac{\partial}{\partial z} \right|_{t,r,y,\hat{w}_\parallel,v_\perp}
+    + \left. \frac{\partial \hat{w}_\parallel}{\partial r} \right|_{t,y,z,v_\parallel,v_\perp} \left. \frac{\partial}{\partial \hat{w}_\parallel} \right|_{t,r,y,z,v_\perp}
+    + \left. \frac{\partial v_\perp}{\partial r} \right|_{t,y,z,v_\parallel,v_\perp} \left. \frac{\partial}{\partial v_\perp} \right|_{t,r,y,z,\hat{w}_\parallel} \\
+
+  &= \left. \frac{\partial}{\partial r} \right|_{t,y,z,\hat{w}_\parallel,v_\perp}
+    - \left. \frac{\partial u_{s\parallel}}{\partial r} \right|_{t,y,z,v_\parallel,v_\perp} \left. \frac{\partial}{\partial \hat{w}_\parallel} \right|_{t,r,y,z,v_\perp} \\
+
+  &\equiv \left. \frac{\partial}{\partial r} \right|_{t,y,z,\hat{w}_\parallel,v_\perp}
+    - \frac{\partial u_{s\parallel}}{\partial r} \left. \frac{\partial}{\partial \hat{w}_\parallel} \right|_{t,r,y,z,v_\perp} \\
+
+\left. \frac{\partial}{\partial y} \right|_{t,r,z,v_\parallel,v_\perp}
+  &= \left. \frac{\partial t}{\partial y} \right|_{t,r,z,v_\parallel,v_\perp} \left. \frac{\partial}{\partial t} \right|_{r,y,z,\hat{w}_\parallel,v_\perp}
+    + \left. \frac{\partial r}{\partial y} \right|_{t,r,z,v_\parallel,v_\perp} \left. \frac{\partial}{\partial r} \right|_{t,y,z,\hat{w}_\parallel,v_\perp}
+    + \left. \frac{\partial y}{\partial y} \right|_{t,r,z,v_\parallel,v_\perp} \left. \frac{\partial}{\partial y} \right|_{t,r,z,\hat{w}_\parallel,v_\perp}
+    + \left. \frac{\partial z}{\partial y} \right|_{t,r,z,v_\parallel,v_\perp} \left. \frac{\partial}{\partial z} \right|_{t,r,y,\hat{w}_\parallel,v_\perp}
+    + \left. \frac{\partial \hat{w}_\parallel}{\partial y} \right|_{t,y,z,v_\parallel,v_\perp} \left. \frac{\partial}{\partial \hat{w}_\parallel} \right|_{t,r,y,z,v_\perp}
+    + \left. \frac{\partial v_\perp}{\partial y} \right|_{t,y,z,v_\parallel,v_\perp} \left. \frac{\partial}{\partial v_\perp} \right|_{t,r,y,z,\hat{w}_\parallel} \\
+
+  &= \left. \frac{\partial}{\partial y} \right|_{t,r,z,\hat{w}_\parallel,v_\perp}
+    - \left. \frac{\partial u_{s\parallel}}{\partial y} \right|_{t,r,z,v_\parallel,v_\perp} \left. \frac{\partial}{\partial \hat{w}_\parallel} \right|_{t,r,y,z,v_\perp} \\
+
+  &\equiv \left. \frac{\partial}{\partial y} \right|_{t,r,z,\hat{w}_\parallel,v_\perp}
+    - \frac{\partial u_{s\parallel}}{\partial y} \left. \frac{\partial}{\partial \hat{w}_\parallel} \right|_{t,r,y,z,v_\perp} \\
 \end{align}
 ```
- $\partial / \partial v_\parallel |_{t,z,v_\perp} = \partial / \partial \hat{w}_\parallel |_{t,z,v_\perp}$
+ $\partial / \partial v_\parallel |_{t,r,y,z,v_\perp} = \partial / \partial \hat{w}_\parallel |_{t,r,y,z,v_\perp}$
 and
-$\partial / \partial v_\perp |_{t,z,v_\parallel} = \partial / \partial v_\perp |_{t,z,\hat{w}_\parallel}$
+$\partial / \partial v_\perp |_{t,r,y,z,v_\parallel} = \partial / \partial v_\perp |_{t,r,y,z,\hat{w}_\parallel}$
 as $u_{s\parallel}$ does not depend on $v_\parallel$ or $v_\perp$.
 
 ```@raw html
@@ -597,30 +629,51 @@ as $u_{s\parallel}$ does not depend on $v_\parallel$ or $v_\perp$.
 ```
 The normalisation by $n_s$ to define $F_s$ is the same as for the 'separate
 $n_i$' case, so we can start from the kinetic equation there and then transform
-the coordinates to ${z,\hat{w}_\parallel,v_\perp,t}$
+the coordinates to ${r,y,z,\hat{w}_\parallel,v_\perp,t}$
 ```math
 \begin{align}
-& \left. \frac{\partial F_i}{\partial t} \right|_{z,v_\parallel,v_\perp}
-  + v_\parallel \left . \frac{\partial F_i}{\partial z} \right|_{t,v_\parallel,v_\perp}
-  - \frac{e}{m_i} \frac{\partial\phi}{\partial z} \left. \frac{\partial F_i}{\partial v_\parallel} \right|_{t,z,v_\perp}
+& \left. \frac{\partial F_i}{\partial t} \right|_{r,y,z,v_\parallel,v_\perp}
+  + v_\parallel \left . \frac{\partial F_i}{\partial z} \right|_{t,r,y,v_\parallel,v_\perp}
+  + \left( \frac{E_y}{B} - \frac{2 D_r}{n_i} \frac{\partial n_i}{\partial r} \right) \left . \frac{\partial F_i}{\partial r} \right|_{t,y,z,v_\parallel,v_\perp}
+  - \frac{E_r}{B} \left . \frac{\partial F_i}{\partial y} \right|_{t,r,z,v_\parallel,v_\perp} \nonumber \\
+&\quad- \frac{e}{m_i} \frac{\partial\phi}{\partial z} \left. \frac{\partial F_i}{\partial v_\parallel} \right|_{t,r,y,z,v_\perp}
   + \left( \frac{(v_\parallel - u_{i\parallel})}{n_i} \frac{\partial n_i}{\partial z} - \frac{\partial u_{i\parallel}}{\partial z} + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} + \frac{1}{n_i} S_{i,n} \right) F_i \nonumber \\
-&\quad= \frac{1}{n_i} C_{ii}[n_i F_i, n_i F_i] - R_\mathrm{CX} n_n (F_i - F_n) + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} F_n + \frac{1}{n_i} S_i \\
+&\quad= \frac{1}{n_i} C_{ii}[n_i F_i, n_i F_i] - R_\mathrm{CX} n_n (F_i - F_n) + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} F_n + \frac{1}{n_i} S_i
+        + D_r \left . \frac{\partial^2 F_i}{\partial r^2} \right|_{t,r,y,z,v_\parallel,v_\perp} \\
 
-& \left. \frac{\partial F_i}{\partial t} \right|_{z,\hat{w}_\parallel,v_\perp}
-  - \frac{\partial u_{i\parallel}}{\partial t} \left. \frac{\partial F_i}{\partial \hat{w}_\parallel} \right|_{t,z,v_\perp}
-  + (\hat{w}_\parallel + u_{i\parallel}) \left. \frac{\partial F_i}{\partial z} \right|_{t,\hat{w}_\parallel,v_\perp}
-  - (\hat{w}_\parallel + u_{i\parallel}) \frac{\partial u_{i\parallel}}{\partial z} \left . \frac{\partial F_i}{\partial \hat{w}_\parallel} \right|_{t,z,v_\perp}
-  - \frac{e}{m_i} \frac{\partial\phi}{\partial z} \left. \frac{\partial F_i}{\partial \hat{w}_\parallel} \right|_{t,z,v_\perp} \nonumber \\
+& \left. \frac{\partial F_i}{\partial t} \right|_{r,y,z,\hat{w}_\parallel,v_\perp}
+  - \frac{\partial u_{i\parallel}}{\partial t} \left. \frac{\partial F_i}{\partial \hat{w}_\parallel} \right|_{t,r,y,z,v_\perp}
+  + (\hat{w}_\parallel + u_{i\parallel}) \left. \frac{\partial F_i}{\partial z} \right|_{t,r,y,\hat{w}_\parallel,v_\perp}
+  - (\hat{w}_\parallel + u_{i\parallel}) \frac{\partial u_{i\parallel}}{\partial z} \left . \frac{\partial F_i}{\partial \hat{w}_\parallel} \right|_{t,r,y,z,v_\perp} \nonumber \\
+  &\quad+ \left( \frac{E_y}{B} - \frac{2 D_r}{n_i} \frac{\partial n_i}{\partial r} \right) \left . \frac{\partial F_i}{\partial r} \right|_{t,y,z,\hat{w}_\parallel,v_\perp}
+  - \left( \frac{E_y}{B} - \frac{2 D_r}{n_i} \frac{\partial n_i}{\partial r} \right) \frac{\partial u_{i\parallel}}{\partial r} \left . \frac{\partial F_i}{\partial \hat{w}_\parallel} \right|_{t,r,y,z,v_\perp} \nonumber \\
+  &\quad- \frac{E_r}{B} \left . \frac{\partial F_i}{\partial y} \right|_{t,r,z,\hat{w}_\parallel,v_\perp}
+  + \frac{E_r}{B} \left . \frac{\partial u_{i\parallel}}{\partial y} \frac{\partial F_i}{\partial \hat{w}_\parallel} \right|_{t,r,y,z,v_\perp} \nonumber \\
+  &\quad- \frac{e}{m_i} \frac{\partial\phi}{\partial z} \left. \frac{\partial F_i}{\partial \hat{w}_\parallel} \right|_{t,r,y,z,v_\perp} \nonumber \\
   &\quad+ \left( \frac{\hat{w}_\parallel}{n_i} \frac{\partial n_i}{\partial z} - \frac{\partial u_{i\parallel}}{\partial z} + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} + \frac{1}{n_i} S_{i,n} \right) F_i \nonumber \\
-&\quad= \frac{1}{n_i} C_{ii}[n_i F_i, n_i F_i] - R_\mathrm{CX} n_n (F_i - F_n) + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} F_n + \frac{1}{n_i} S_i \\
+&\quad= \frac{1}{n_i} C_{ii}[n_i F_i, n_i F_i] - R_\mathrm{CX} n_n (F_i - F_n) + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} F_n + \frac{1}{n_i} S_i \nonumber \\
+  &\quad+ D_r \left . \frac{\partial^2 F_i}{\partial r^2} \right|_{t,y,z,\hat{w}_\parallel,v_\perp}
+        - D_r \left . \frac{\partial u_{i\parallel}}{\partial r} \left . \frac{\partial}{\partial \hat{w}_\parallel} \right|_{t,r,y,z,v_\perp} \frac{\partial F_i}{\partial r} \right|_{t,y,z,\hat{w}_\parallel,v_\perp}
+        - D_r \left . \frac{\partial u_{i\parallel}}{\partial r} \left . \frac{\partial}{\partial r} \right|_{t,y,z,\hat{w}_\parallel,v_\perp} \frac{\partial F_i}{\partial \hat{w}_\parallel} \right|_{t,r,y,z,v_\perp} \nonumber \\
+  &\quad+ D_r \left . \left( \frac{\partial u_{i\parallel}}{\partial r} \right)^2 \frac{\partial^2 F_i}{\partial \hat{w}_\parallel^2} \right|_{t,r,y,z,v_\perp}
+        - D_r \frac{\partial^2 u_{i\parallel}}{\partial r^2} \left . \frac{\partial F_i}{\partial \hat{w}_\parallel} \right|_{t,r,y,z,v_\perp} \\
 
 & \frac{\partial F_i}{\partial t}
   + (\hat{w}_\parallel + u_{i\parallel}) \frac{\partial F_i}{\partial z}
-  - \left( \frac{\partial u_{i\parallel}}{\partial t}
-           + (\hat{w}_\parallel + u_{i\parallel}) \frac{\partial u_{i\parallel}}{\partial z} 
-           + \frac{e}{m_i} \frac{\partial\phi}{\partial z} \right) \frac{\partial F_i}{\partial \hat{w}_\parallel} \nonumber \\
+  + \left( \frac{E_y}{B} - \frac{2 D_r}{n_i} \frac{\partial n_i}{\partial r} \right) \frac{\partial F_i}{\partial r}
+  - \frac{E_r}{B} \frac{\partial F_i}{\partial y} \nonumber \\
+  &\quad- \left( \frac{\partial u_{i\parallel}}{\partial t}
+                 + (\hat{w}_\parallel + u_{i\parallel}) \frac{\partial u_{i\parallel}}{\partial z}
+                 + \left( \frac{E_y}{B} - \frac{2 D_r}{n_i} \frac{\partial n_i}{\partial r} \right) \frac{\partial u_{i\parallel}}{\partial r}
+                 - \frac{E_r}{B} \frac{\partial u_{i\parallel}}{\partial y}
+                 + \frac{e}{m_i} \frac{\partial\phi}{\partial z}
+                 - D_r \frac{\partial^2 u_{i\parallel}}{\partial r^2}
+          \right) \frac{\partial F_i}{\partial \hat{w}_\parallel} \nonumber \\
   &\quad+ \left( \frac{\hat{w}_\parallel}{n_i} \frac{\partial n_i}{\partial z} - \frac{\partial u_{i\parallel}}{\partial z} + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} + \frac{1}{n_i} S_{i,n} \right) F_i \nonumber \\
-&\quad= \frac{1}{n_i} C_{ii}[n_i F_i, n_i F_i] - R_\mathrm{CX} n_n (F_i - F_n) + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} F_n + \frac{1}{n_i} S_i \\
+&\quad= \frac{1}{n_i} C_{ii}[n_i F_i, n_i F_i] - R_\mathrm{CX} n_n (F_i - F_n) + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} F_n + \frac{1}{n_i} S_i \nonumber \\
+  &\qquad+ D_r \frac{\partial^2 F_i}{\partial r^2}
+         - 2 D_r \frac{\partial u_{i\parallel}}{\partial r} \frac{\partial^2 F_i}{\partial r \partial \hat{w}_\parallel}
+         + D_r \left( \frac{\partial u_{i\parallel}}{\partial r} \right)^2 \frac{\partial^2 F_i}{\partial \hat{w}_\parallel^2} \\
 \end{align}
 ```
 subsitute from the parallel flow equation
@@ -628,17 +681,29 @@ subsitute from the parallel flow equation
 \begin{align}
 & \frac{\partial F_i}{\partial t}
   + (\hat{w}_\parallel + u_{i\parallel}) \frac{\partial F_i}{\partial z}
-  - \left( - \cancel{u_{i\parallel} \frac{\partial u_{i\parallel}}{\partial z}}
-           - \frac{1}{m_i n_i} \frac{\partial p_{i\parallel}}{\partial z}
-           - \cancel{\frac{e}{m_i} \frac{\partial \phi}{\partial z}}
-           + R_\mathrm{CX} n_n (u_{n\parallel} - u_{i\parallel})
-           + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} u_{n\parallel}
-           + \frac{1}{m_i n_i} S_{i,\mathrm{mom}}
-           - \frac{u_{i\parallel}}{n_i} S_{i,n}
-           + (\hat{w}_\parallel + \cancel{u_{i\parallel}}) \frac{\partial u_{i\parallel}}{\partial z} 
-           + \cancel{\frac{e}{m_i} \frac{\partial\phi}{\partial z}} \right) \frac{\partial F_i}{\partial \hat{w}_\parallel} \nonumber \\
+  + \left( \frac{E_y}{B} - \frac{2 D_r}{n_i} \frac{\partial n_i}{\partial r} \right) \frac{\partial F_i}{\partial r}
+  - \frac{E_r}{B} \frac{\partial F_i}{\partial y} \nonumber \\
+&\quad- \left( - \cancel{u_{i\parallel} \frac{\partial u_{i\parallel}}{\partial z}}
+               - \cancel{\frac{E_y}{B} \frac{\partial u_{i\parallel}}{\partial r}}
+               + \cancel{\frac{E_r}{B} \frac{\partial u_{i\parallel}}{\partial y}}
+               - \frac{1}{m_i n_i} \frac{\partial p_{i\parallel}}{\partial z}
+               - \cancel{\frac{e}{m_i} \frac{\partial \phi}{\partial z}}
+               + R_\mathrm{CX} n_n (u_{n\parallel} - u_{i\parallel})
+               + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} u_{n\parallel}
+               + \frac{1}{m_i n_i} S_{i,\mathrm{mom}}
+               - \frac{u_{i\parallel}}{n_i} S_{i,n}
+               + D_r \left( \cancel{\frac{\partial^2 u_{i\parallel}}{\partial r^2}} + \cancel{\frac{2}{n_i} \frac{\partial n_i}{\partial r} \frac{\partial u_{i\parallel}}{\partial r}} \right)
+               + (\hat{w}_\parallel + \cancel{u_{i\parallel}}) \frac{\partial u_{i\parallel}}{\partial z}
+               + \left( \cancel{\frac{E_y}{B}} - \cancel{\frac{2 D_r}{n_i} \frac{\partial n_i}{\partial r}} \right) \frac{\partial u_{i\parallel}}{\partial r}
+               - \cancel{\frac{E_r}{B} \frac{\partial u_{i\parallel}}{\partial y}}
+               + \cancel{\frac{e}{m_i} \frac{\partial\phi}{\partial z}}
+               - \cancel{D_r \frac{\partial^2 u_{i\parallel}}{\partial r^2}}
+        \right) \frac{\partial F_i}{\partial \hat{w}_\parallel} \nonumber \\
   &\quad+ \left( \frac{\hat{w}_\parallel}{n_i} \frac{\partial n_i}{\partial z} - \frac{\partial u_{i\parallel}}{\partial z} + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} + \frac{1}{n_i} S_{i,n} \right) F_i \nonumber \\
-&\quad= \frac{1}{n_i} C_{ii}[n_i F_i, n_i F_i] - R_\mathrm{CX} n_n (F_i - F_n) + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} F_n + \frac{1}{n_i} S_i \\
+&\quad= \frac{1}{n_i} C_{ii}[n_i F_i, n_i F_i] - R_\mathrm{CX} n_n (F_i - F_n) + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} F_n + \frac{1}{n_i} S_i \nonumber \\
+  &\qquad+ D_r \frac{\partial^2 F_i}{\partial r^2}
+         - 2 D_r \frac{\partial u_{i\parallel}}{\partial r} \frac{\partial^2 F_i}{\partial r \partial \hat{w}_\parallel}
+         + D_r \left( \frac{\partial u_{i\parallel}}{\partial r} \right)^2 \frac{\partial^2 F_i}{\partial \hat{w}_\parallel^2} \\
 \end{align}
 ```
 ```@raw html
@@ -647,7 +712,9 @@ subsitute from the parallel flow equation
 ```math
 \begin{align}
 & \frac{\partial F_i}{\partial t}
-  + (\hat{w}_\parallel + u_{i\parallel}) \frac{\partial F_i}{\partial z} \nonumber \\
+  + (\hat{w}_\parallel + u_{i\parallel}) \frac{\partial F_i}{\partial z}
+  + \left( \frac{E_y}{B} - \frac{2 D_r}{n_i} \frac{\partial n_i}{\partial r} \right) \frac{\partial F_i}{\partial r}
+  - \frac{E_r}{B} \frac{\partial F_i}{\partial y} \nonumber \\
   &\quad- \left( \hat{w}_\parallel \frac{\partial u_{i\parallel}}{\partial z} 
                  - \frac{1}{m_i n_i} \frac{\partial p_{i\parallel}}{\partial z}
                  + R_\mathrm{CX} n_n (u_{n\parallel} - u_{i\parallel})
@@ -656,7 +723,10 @@ subsitute from the parallel flow equation
                  - \frac{u_{i\parallel}}{n_i} S_{i,n}
                \right) \frac{\partial F_i}{\partial \hat{w}_\parallel} \nonumber \\
   &\quad+ \left( \frac{\hat{w}_\parallel}{n_i} \frac{\partial n_i}{\partial z} - \frac{\partial u_{i\parallel}}{\partial z} + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} + \frac{1}{n_i} S_{i,n} \right) F_i \nonumber \\
-&\quad= \frac{1}{n_i} C_{ii}[n_i F_i, n_i F_i] - R_\mathrm{CX} n_n (F_i - F_n) + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} F_n + \frac{1}{n_i} S_i \\
+&\quad= \frac{1}{n_i} C_{ii}[n_i F_i, n_i F_i] - R_\mathrm{CX} n_n (F_i - F_n) + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} F_n + \frac{1}{n_i} S_i \nonumber \\
+  &\qquad+ D_r \frac{\partial^2 F_i}{\partial r^2}
+         - 2 D_r \frac{\partial u_{i\parallel}}{\partial r} \frac{\partial^2 F_i}{\partial r \partial \hat{w}_\parallel}
+         + D_r \left( \frac{\partial u_{i\parallel}}{\partial r} \right)^2 \frac{\partial^2 F_i}{\partial \hat{w}_\parallel^2} \\
 \end{align}
 ```
 
