@@ -12,7 +12,7 @@ using moment_kinetics.fokker_planck: init_fokker_planck_collisions_weak_form
 using moment_kinetics.fokker_planck: setup_fp_nl_solve, setup_fkpl_collisions_input,
                                      implicit_ion_fokker_planck_self_collisions!,
                                      fokker_planck_self_collisions_backward_euler_step!
-using moment_kinetics.fokker_planck_test: F_Maxwellian, print_test_data
+using moment_kinetics.fokker_planck_test: F_Maxwellian, F_Beam, print_test_data
 using moment_kinetics.velocity_moments: get_density, get_upar, get_p
 using moment_kinetics.communication
 using moment_kinetics.communication: MPISharedArray
@@ -128,7 +128,7 @@ function test_implicit_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=3,neleme
     fvpavperp = allocate_shared_float(vpa.n,vperp.n,ntime+1)
     @serial_region begin
         @loop_vperp_vpa ivperp ivpa begin
-            fvpavperp[ivpa,ivperp,1] = exp(-((vpa.grid[ivpa]-vpa0)^2 + (vperp.grid[ivperp]-vperp0)^2)/(vth0^2))
+            fvpavperp[ivpa,ivperp,1] = F_Beam(vpa0,vperp0,vth0,vpa,vperp,ivpa,ivperp)
         end
         if vpa.bc == "zero"
             @loop_vperp ivperp begin
@@ -312,7 +312,7 @@ function test_implicit_collisions_wrapper(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=
     @serial_region begin
         @loop_s_r_z is ir iz begin
             @loop_vperp_vpa ivperp ivpa begin
-                fvpavperpzrst[ivpa,ivperp,iz,ir,is,1] = exp(-((vpa.grid[ivpa]-vpa0)^2 + (vperp.grid[ivperp]-vperp0)^2)/(vth0^2))
+                fvpavperpzrst[ivpa,ivperp,iz,ir,is,1] = F_Beam(vpa0,vperp0,vth0,vpa,vperp,ivpa,ivperp)
             end
             if vpa.bc == "zero"
                 @loop_vperp ivperp begin

@@ -120,7 +120,7 @@ function backward_Euler_linearised_collisions_test(;
     @begin_anyv_region()
     @anyv_serial_region begin
         @loop_vperp_vpa ivperp ivpa begin
-            pdf[ivpa,ivperp] = exp(-((vpa.grid[ivpa]-vpa0)^2 + (vperp.grid[ivperp]-vperp0)^2)/(vth0^2))
+            pdf[ivpa,ivperp] = F_Beam(vpa0,vperp0,vth0,vpa,vperp,ivpa,ivperp)
         end
         # normalise to unit density
         @views densfac = get_density(pdf,vpa,vperp)
@@ -259,7 +259,7 @@ function backward_Euler_fokker_planck_self_collisions_test(;
     Fold = allocate_shared_float(vpa.n,vperp.n)
     @serial_region begin
         @loop_vperp_vpa ivperp ivpa begin
-            Fold[ivpa,ivperp] = exp(-((vpa.grid[ivpa]-vpa0)^2 + (vperp.grid[ivperp]-vperp0)^2)/(vth0^2))
+            Fold[ivpa,ivperp] = F_Beam(vpa0,vperp0,vth0,vpa,vperp,ivpa,ivperp)
         end
         if vpa.bc == "zero"
             @loop_vperp ivperp begin
