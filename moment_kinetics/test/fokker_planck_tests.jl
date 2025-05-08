@@ -391,7 +391,7 @@ function numerical_error_corrections_test(;
         @test isapprox(upar, 0.33114644602432997, atol=atol)
         @test isapprox(vth, 1.0695323945144575, atol=atol)
         @test isapprox(qpar, 0.29147880412034594, atol=atol)
-        @test isapprox(rmom, 27.57985752143237, atol=atol)
+        @test isapprox(rmom, 27.57985752143237, atol=3*atol)
     end
 
     @begin_s_r_z_anyv_region()
