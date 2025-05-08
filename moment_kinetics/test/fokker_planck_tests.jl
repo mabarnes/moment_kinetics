@@ -853,7 +853,7 @@ function runtests()
         end
 
         @testset "weak-form (slowing-down) collision operator calculation" begin
-            println("   - test weak-form (slowing-down) collision operator calculation")
+            println("    - test weak-form (slowing-down) collision operator calculation")
             ngrid = 9
             nelement_vpa = 16
             nelement_vperp = 8
