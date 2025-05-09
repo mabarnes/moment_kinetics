@@ -743,6 +743,7 @@ kinetic equation for $f_i(t,r,z,v_\parallel,v_\perp)$
     + \dot{v}_{i\parallel} \left. \frac{\partial f_i}{\partial v_\parallel} \right|_{t,r,z,v_\perp}
     + \dot{v}_{i\perp} \left. \frac{\partial f_i}{\partial v_\perp} \right|_{t,r,z,v_\parallel} \nonumber \\
     \quad = C_{ii}[f_i, f_i] - R_\mathrm{CX}(n_n f_i - n_i f_n) + R_\mathrm{ioniz} n_e f_n + S_i
+            + D_r \left. \frac{\partial^2 f_i}{\partial r^2} \right|_{t,y,z,v_\parallel,v_\perp}
 \end{align}
 ```
 where
@@ -795,6 +796,22 @@ Substituting the definition of $F_i$ gives
 \dot{v}_{i\perp} \left. \frac{\partial f_i}{\partial v_\perp} \right|_{t,r,z,v_\parallel}
   &= \dot{v}_{i\perp} \left. \frac{\partial}{\partial v_\perp} \right|_{t,r,z,v_\parallel} \left(\frac{n_i F_i}{v_{Ti}^3}\right) \nonumber \\
   &= \frac{n_i}{v_{Ti}^3} \dot{v}_{i\perp} \left. \frac{\partial F_i}{\partial v_\perp} \right|_{t,r,z,v_\parallel} \\
+
+D_r \left. \frac{\partial^2 f_i}{\partial r^2} \right|_{t,y,z,v_\parallel,v_\perp}
+  &= D_r \left. \frac{\partial^2}{\partial r^2} \right|_{t,y,z,v_\parallel,v_\perp} \left( \frac{n_i F_i}{v_{Ti}^3} \right) \nonumber \\
+  &= D_r \left. \frac{\partial}{\partial r} \right|_{t,y,z,v_\parallel,v_\perp} \left( \left. \frac{\partial n_i}{\partial r} \right|_{t,y,z,v_\parallel,v_\perp} \frac{F_i}{v_{Ti}^3} \right)
+     - 3 D_r \left. \frac{\partial}{\partial r} \right|_{t,y,z,v_\parallel,v_\perp} \left( \left. \frac{\partial v_{Ti}}{\partial r} \right|_{t,y,z,v_\parallel,v_\perp} \frac{n_i F_i}{v_{Ti}^4} \right)
+     + D_r \left. \frac{\partial}{\partial r} \right|_{t,y,z,v_\parallel,v_\perp} \left( \left. \frac{n_i}{v_{Ti}^3} \frac{\partial F_i}{\partial r} \right|_{t,y,z,v_\parallel,v_\perp} \right) \nonumber \\
+  &= D_r \left. \frac{\partial^2 n_i}{\partial r^2} \right|_{t,y,z,v_\parallel,v_\perp} \frac{F_i}{v_{Ti}^3}
+     -3 D_r \left. \frac{\partial n_i}{\partial r} \right|_{t,y,z,v_\parallel,v_\perp} \left. \frac{\partial v_{Ti}}{\partial r} \right|_{t,y,z,v_\parallel,v_\perp} \frac{F_i}{v_{Ti}^4}
+     + D_r \left. \frac{\partial n_i}{\partial r} \right|_{t,y,z,v_\parallel,v_\perp} \left. \frac{1}{v_{Ti}^3} \frac{\partial F_i}{\partial r} \right|_{t,y,z,v_\parallel,v_\perp} \nonumber \\
+&\quad- 3 D_r \left. \frac{\partial^2 v_{Ti}}{\partial r^2} \right|_{t,y,z,v_\parallel,v_\perp} \frac{n_i F_i}{v_{Ti}^4}
+     - 3 D_r \left. \frac{\partial v_{Ti}}{\partial r} \right|_{t,y,z,v_\parallel,v_\perp} \left. \frac{\partial n_i}{\partial r} \right|_{t,y,z,v_\parallel,v_\perp} \frac{F_i}{v_{Ti}^4}
+     + 12 D_r \left( \left. \frac{\partial v_{Ti}}{\partial r} \right|_{t,y,z,v_\parallel,v_\perp} \right)^2 \frac{n_i F_i}{v_{Ti}^5}
+     - 3 D_r \left. \frac{\partial v_{Ti}}{\partial r} \right|_{t,y,z,v_\parallel,v_\perp} \frac{n_i}{v_{Ti}^4} \left. \frac{\partial F_i}{\partial r} \right|_{t,y,z,v_\parallel,v_\perp} \nonumber \\
+&\quad+ D_r \frac{1}{v_{Ti}^3} \left. \frac{\partial n_i}{\partial r} \right|_{t,y,z,v_\parallel,v_\perp} \left. \frac{\partial F_i}{\partial r} \right|_{t,y,z,v_\parallel,v_\perp}
+     - 3 D_r \frac{n_i}{v_{Ti}^4} \left. \frac{\partial v_{Ti}}{\partial r} \right|_{t,y,z,v_\parallel,v_\perp} \left. \frac{\partial F_i}{\partial r} \right|_{t,y,z,v_\parallel,v_\perp}
+     + D_r \frac{n_i}{v_{Ti}^3} \left. \frac{\partial^2 F_i}{\partial r^2} \right|_{t,y,z,v_\parallel,v_\perp} \\
 \end{align}
 ```
 making the kinetic equation
