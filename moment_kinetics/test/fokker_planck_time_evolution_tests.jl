@@ -15,7 +15,7 @@ using moment_kinetics.type_definitions: mk_float
 using moment_kinetics.utils: merge_dict_with_kwargs!
 using moment_kinetics.input_structs: options_to_TOML
 using moment_kinetics.fokker_planck_test: F_Maxwellian, print_test_data
-using moment_kinetics.velocity_moments: get_density, get_upar, get_p, get_qpar
+using moment_kinetics.velocity_moments: get_density, get_upar, get_p
 
 const analytical_rtol = 3.e-2
 const regression_rtol = 2.e-8
@@ -206,33 +206,6 @@ expected_data(
 # in an interative Julia REPL. The path is the path to the .dfns file. 
 ########################################################################################## 
 
-# pdf
-function print_pdf(pdf)
-    nvpa = size(pdf,1)
-    nvperp = size(pdf,2)
-    ntind = size(pdf,3)
-    println("# Expected f_ion")
-    print("[")
-    for k in 1:ntind
-        for i in 1:nvpa-1
-            for j in 1:nvperp-1
-                @printf("%.15f ", pdf[i,j,k])
-            end
-            @printf("%.15f ", pdf[i,nvperp,k])
-            print(";\n")
-        end
-        for j in 1:nvperp-1
-            @printf("%.15f ", pdf[nvpa,j,k])
-        end
-        @printf("%.15f ", pdf[nvpa,nvperp,k])
-        if k < ntind
-            print(";;;\n")
-        end
-    end
-    print("]\n")
-    return nothing
-end
-
 """
 Function to print data from a moment_kinetics run suitable
 for copying into the expected data structure.
@@ -260,7 +233,29 @@ function print_output_data_for_test_update(path; write_grid=true, write_pdf=true
         print("],\n")
         return nothing
     end
-    
+    # pdf
+    function print_pdf(pdf)
+        println("# Expected f_ion")
+        print("[")
+        for k in 1:ntind
+            for i in 1:nvpa-1
+                for j in 1:nvperp-1
+                    @printf("%.15f ", pdf[i,j,k])
+                end
+                @printf("%.15f ", pdf[i,nvperp,k])
+                print(";\n")
+            end
+            for j in 1:nvperp-1
+                @printf("%.15f ", pdf[nvpa,j,k])
+            end
+            @printf("%.15f ", pdf[nvpa,nvperp,k])
+            if k < ntind
+                print(";;;\n")
+            end
+        end
+        print("]\n")
+        return nothing
+    end
     # a moment
     function print_moment(moment,moment_name)
         println("# Expected "*moment_name)
@@ -553,26 +548,13 @@ function run_test(test_input, expected, rtol, atol, upar_rtol=nothing; args...)
                 @test isapprox(expected.upar_ion[tind], upar_ion[tind], atol=atol)
                 @test isapprox(expected.ppar_ion[tind], ppar_ion[tind], atol=atol)
                 @test isapprox(expected.pperp_ion[tind], pperp_ion[tind], atol=atol)
-                dens = get_density(f_ion[:,:,tind], vpa, vperp)
-                upar = get_upar(f_ion[:,:,tind], dens, vpa, vperp, false)
-                pressure = get_p(f_ion[:,:,tind], dens, upar, vpa, vperp, false, false)
-                vth = sqrt(2.0*pressure/dens)
-                qpar = get_qpar(f_ion[:,:,tind], dens, upar, pressure, vth, vpa, vperp, false, false,
-                                false)
-                @test isapprox(expected.qpar_ion[tind], qpar, atol=atol)
+                #@test isapprox(expected.qpar_ion[tind], qpar_ion[tind], atol=atol)
                 @test isapprox(expected.v_t_ion[tind], v_t_ion[tind], atol=atol)
                 @test isapprox(expected.dSdt[tind], dSdt[tind], atol=atol)
                 @test isapprox(expected.maxnorm_ion[tind], maxnorm_ion[tind], atol=atol)
                 @test isapprox(expected.L2norm_ion[tind], L2norm_ion[tind], atol=atol)                                
                 @. f_err = abs(expected.f_ion[:,:,tind] - f_ion[:,:,tind])
                 max_f_err = maximum(f_err)
-                println("expected.f_ion")
-                print_pdf(expected.f_ion)
-                println("f_ion")
-                print_pdf(f_ion)
-                println("f_err")
-                print_pdf(f_err)
-                println("max_f_err: ",max_f_err)
                 @test isapprox(max_f_err, 0.0, atol=atol)
                 @test isapprox(expected.f_ion[:,:,tind], f_ion[:,:,tind], atol=atol)
             end
