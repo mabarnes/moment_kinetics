@@ -879,9 +879,17 @@ function calculate_ion_qpar_from_pdf!(qpar, density, upar, vth, ff, vpa, vperp, 
                           density[iz,ir]
         end
     else
-        @loop_r_z ir iz begin
-            @. vpa.scratch = vpa.grid - upar[iz,ir]
-            qpar[iz,ir] = integrate_over_vspace(@view(ff[:,:,iz,ir]), vpa.scratch, 3, vpa.wgts, vperp.grid, 0, vperp.wgts)
+        if vperp.n > 1
+            @loop_r_z ir iz begin
+                # use a copy here as a temporary solution as we only need this change to fix tests.
+                dummy = copy(ff[:,:,iz,ir])
+                @views qpar[iz,ir] = get_qpar(ff[:,:,iz,ir], vpa, vperp, upar[iz,ir], dummy)
+            end
+        else
+            @loop_r_z ir iz begin
+                @. vpa.scratch = vpa.grid - upar[iz,ir]
+                qpar[iz,ir] = integrate_over_vspace(@view(ff[:,:,iz,ir]), vpa.scratch, 3, vpa.wgts, vperp.grid, 0, vperp.wgts)
+            end
         end
     end
     return nothing
