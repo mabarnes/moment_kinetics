@@ -1,12 +1,12 @@
 [reactions]
-charge_exchange_frequency = 0.62831853071
+charge_exchange_frequency = 0.888576587620418
 ionization_frequency = 0.0
 
 [evolve_moments]
 density = true
 parallel_flow = false
-parallel_pressure = false
 moments_conservation = true
+pressure = false
 
 [r]
 ngrid = 1
@@ -21,14 +21,14 @@ discretization = "finite_difference"
 [vpa]
 ngrid = 180
 nelement = 1
-L = 8.0
+L = 11.313708498984761
 bc = "periodic"
 discretization = "finite_difference"
 
 [vz]
 ngrid = 180
 nelement = 1
-L = 8.0
+L = 11.313708498984761
 bc = "periodic"
 discretization = "finite_difference"
 
@@ -40,11 +40,11 @@ T_e = 1.0
 
 [ion_species_1]
 initial_density = 0.5
-initial_temperature = 1.0
+initial_temperature = 0.3333333333333333
 
 [neutral_species_1]
 initial_density = 0.5
-initial_temperature = 1.0
+initial_temperature = 0.3333333333333333
 
 [z_IC_ion_species_1]
 initialization_option = "sinusoid"
@@ -66,6 +66,6 @@ temperature_phase = 0.0
 
 [timestepping]
 nstep = 1500
-dt = 0.002
+dt = 0.001414213562373095
 nwrite = 20
 split_operators = false

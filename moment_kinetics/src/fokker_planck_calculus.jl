@@ -42,13 +42,12 @@ import moment_kinetics
 
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float, allocate_shared_float
-using ..calculus: derivative!
+using ..calculus: derivative!, integral
 using ..communication
 using ..communication: MPISharedArray, global_rank
 using ..lagrange_polynomials: lagrange_poly, lagrange_poly_optimised
 using ..looping
-using ..velocity_moments: integrate_over_vspace
-using ..velocity_moments: get_density, get_upar, get_ppar, get_pperp, get_pressure
+using ..velocity_moments: get_density, get_upar, get_p, get_ppar, get_pperp
 using ..input_structs: direct_integration, multipole_expansion, delta_f_multipole
 using ..fokker_planck_test: F_Maxwellian, G_Maxwellian, H_Maxwellian, dHdvpa_Maxwellian, dHdvperp_Maxwellian
 using ..fokker_planck_test: d2Gdvpa2_Maxwellian, d2Gdvperp2_Maxwellian, d2Gdvperpdvpa_Maxwellian, dGdvperp_Maxwellian
@@ -822,13 +821,13 @@ function local_element_integration!(G0_weights,G1_weights,H0_weights,H1_weights,
                         #if mm_test > 1.0
                         #    println("mm: ",mm_test," ellipe: ",ellipe_mm," ellipk: ",ellipk_mm)
                         #end
-                        G_elliptic_integral_factor = 2.0*ellipe_mm*prefac/pi
-                        G1_elliptic_integral_factor = -(2.0*prefac/pi)*( (2.0 - mm)*ellipe_mm - 2.0*(1.0 - mm)*ellipk_mm )/(3.0*mm)
-                        #G2_elliptic_integral_factor = (2.0*prefac/pi)*( (7.0*mm^2 + 8.0*mm - 8.0)*ellipe_mm + 4.0*(2.0 - mm)*(1.0 - mm)*ellipk_mm )/(15.0*mm^2)
-                        #G3_elliptic_integral_factor = (2.0*prefac/pi)*( 8.0*(mm^2 - mm + 1.0)*ellipe_mm - 4.0*(2.0 - mm)*(1.0 - mm)*ellipk_mm )/(15.0*mm^2)
-                        H_elliptic_integral_factor = 2.0*ellipk_mm/(pi*prefac)
-                        H1_elliptic_integral_factor = -(2.0/(pi*prefac))*( (mm-2.0)*(ellipk_mm/mm) + (2.0*ellipe_mm/mm) )
-                        H2_elliptic_integral_factor = (2.0/(pi*prefac))*( (3.0*mm^2 - 8.0*mm + 8.0)*(ellipk_mm/(3.0*mm^2)) + (4.0*mm - 8.0)*ellipe_mm/(3.0*mm^2) )
+                        G_elliptic_integral_factor = 2.0*ellipe_mm*prefac*sqrt(pi)
+                        G1_elliptic_integral_factor = -(2.0*prefac*sqrt(pi))*( (2.0 - mm)*ellipe_mm - 2.0*(1.0 - mm)*ellipk_mm )/(3.0*mm)
+                        #G2_elliptic_integral_factor = (2.0*prefac*sqrt(pi))*( (7.0*mm^2 + 8.0*mm - 8.0)*ellipe_mm + 4.0*(2.0 - mm)*(1.0 - mm)*ellipk_mm )/(15.0*mm^2)
+                        #G3_elliptic_integral_factor = (2.0*prefac*sqrt(pi))*( 8.0*(mm^2 - mm + 1.0)*ellipe_mm - 4.0*(2.0 - mm)*(1.0 - mm)*ellipk_mm )/(15.0*mm^2)
+                        H_elliptic_integral_factor = 2.0*ellipk_mm*sqrt(pi)/prefac
+                        H1_elliptic_integral_factor = -(2.0*sqrt(pi)/prefac)*( (mm-2.0)*(ellipk_mm/mm) + (2.0*ellipe_mm/mm) )
+                        H2_elliptic_integral_factor = (2.0*sqrt(pi)/prefac)*( (3.0*mm^2 - 8.0*mm + 8.0)*(ellipk_mm/(3.0*mm^2)) + (4.0*mm - 8.0)*ellipe_mm/(3.0*mm^2) )
                         lagrange_poly_vpa = lagrange_poly_optimised(vpa_other_nodes,
                                                                     vpa_one_over_denominator,
                                                                     x_kvpa)
@@ -1773,35 +1772,35 @@ function calculate_rosenbluth_potential_boundary_data_multipole!(rpbd::rosenblut
         
         @begin_anyv_region()
         @anyv_serial_region begin
-           I00 = integrate_over_vspace(@view(pdf[:,:]), vpa.grid, 0, vpa.wgts, vperp.grid, 0, vperp.wgts)
-           I10 = integrate_over_vspace(@view(pdf[:,:]), vpa.grid, 1, vpa.wgts, vperp.grid, 0, vperp.wgts)
-           I20 = integrate_over_vspace(@view(pdf[:,:]), vpa.grid, 2, vpa.wgts, vperp.grid, 0, vperp.wgts)
-           I30 = integrate_over_vspace(@view(pdf[:,:]), vpa.grid, 3, vpa.wgts, vperp.grid, 0, vperp.wgts)
-           I40 = integrate_over_vspace(@view(pdf[:,:]), vpa.grid, 4, vpa.wgts, vperp.grid, 0, vperp.wgts)
-           I50 = integrate_over_vspace(@view(pdf[:,:]), vpa.grid, 5, vpa.wgts, vperp.grid, 0, vperp.wgts)
-           I60 = integrate_over_vspace(@view(pdf[:,:]), vpa.grid, 6, vpa.wgts, vperp.grid, 0, vperp.wgts)
-           I70 = integrate_over_vspace(@view(pdf[:,:]), vpa.grid, 7, vpa.wgts, vperp.grid, 0, vperp.wgts)
-           I80 = integrate_over_vspace(@view(pdf[:,:]), vpa.grid, 8, vpa.wgts, vperp.grid, 0, vperp.wgts)
+           I00 = integral(pdf, vpa.grid, 0, vpa.wgts, vperp.grid, 0, vperp.wgts)
+           I10 = integral(pdf, vpa.grid, 1, vpa.wgts, vperp.grid, 0, vperp.wgts)
+           I20 = integral(pdf, vpa.grid, 2, vpa.wgts, vperp.grid, 0, vperp.wgts)
+           I30 = integral(pdf, vpa.grid, 3, vpa.wgts, vperp.grid, 0, vperp.wgts)
+           I40 = integral(pdf, vpa.grid, 4, vpa.wgts, vperp.grid, 0, vperp.wgts)
+           I50 = integral(pdf, vpa.grid, 5, vpa.wgts, vperp.grid, 0, vperp.wgts)
+           I60 = integral(pdf, vpa.grid, 6, vpa.wgts, vperp.grid, 0, vperp.wgts)
+           I70 = integral(pdf, vpa.grid, 7, vpa.wgts, vperp.grid, 0, vperp.wgts)
+           I80 = integral(pdf, vpa.grid, 8, vpa.wgts, vperp.grid, 0, vperp.wgts)
            
-           I02 = integrate_over_vspace(@view(pdf[:,:]), vpa.grid, 0, vpa.wgts, vperp.grid, 2, vperp.wgts)
-           I12 = integrate_over_vspace(@view(pdf[:,:]), vpa.grid, 1, vpa.wgts, vperp.grid, 2, vperp.wgts)
-           I22 = integrate_over_vspace(@view(pdf[:,:]), vpa.grid, 2, vpa.wgts, vperp.grid, 2, vperp.wgts)
-           I32 = integrate_over_vspace(@view(pdf[:,:]), vpa.grid, 3, vpa.wgts, vperp.grid, 2, vperp.wgts)
-           I42 = integrate_over_vspace(@view(pdf[:,:]), vpa.grid, 4, vpa.wgts, vperp.grid, 2, vperp.wgts)
-           I52 = integrate_over_vspace(@view(pdf[:,:]), vpa.grid, 5, vpa.wgts, vperp.grid, 2, vperp.wgts)
-           I62 = integrate_over_vspace(@view(pdf[:,:]), vpa.grid, 6, vpa.wgts, vperp.grid, 2, vperp.wgts)
+           I02 = integral(pdf, vpa.grid, 0, vpa.wgts, vperp.grid, 2, vperp.wgts)
+           I12 = integral(pdf, vpa.grid, 1, vpa.wgts, vperp.grid, 2, vperp.wgts)
+           I22 = integral(pdf, vpa.grid, 2, vpa.wgts, vperp.grid, 2, vperp.wgts)
+           I32 = integral(pdf, vpa.grid, 3, vpa.wgts, vperp.grid, 2, vperp.wgts)
+           I42 = integral(pdf, vpa.grid, 4, vpa.wgts, vperp.grid, 2, vperp.wgts)
+           I52 = integral(pdf, vpa.grid, 5, vpa.wgts, vperp.grid, 2, vperp.wgts)
+           I62 = integral(pdf, vpa.grid, 6, vpa.wgts, vperp.grid, 2, vperp.wgts)
            
-           I04 = integrate_over_vspace(@view(pdf[:,:]), vpa.grid, 0, vpa.wgts, vperp.grid, 4, vperp.wgts)
-           I14 = integrate_over_vspace(@view(pdf[:,:]), vpa.grid, 1, vpa.wgts, vperp.grid, 4, vperp.wgts)
-           I24 = integrate_over_vspace(@view(pdf[:,:]), vpa.grid, 2, vpa.wgts, vperp.grid, 4, vperp.wgts)
-           I34 = integrate_over_vspace(@view(pdf[:,:]), vpa.grid, 3, vpa.wgts, vperp.grid, 4, vperp.wgts)
-           I44 = integrate_over_vspace(@view(pdf[:,:]), vpa.grid, 4, vpa.wgts, vperp.grid, 4, vperp.wgts)
+           I04 = integral(pdf, vpa.grid, 0, vpa.wgts, vperp.grid, 4, vperp.wgts)
+           I14 = integral(pdf, vpa.grid, 1, vpa.wgts, vperp.grid, 4, vperp.wgts)
+           I24 = integral(pdf, vpa.grid, 2, vpa.wgts, vperp.grid, 4, vperp.wgts)
+           I34 = integral(pdf, vpa.grid, 3, vpa.wgts, vperp.grid, 4, vperp.wgts)
+           I44 = integral(pdf, vpa.grid, 4, vpa.wgts, vperp.grid, 4, vperp.wgts)
            
-           I06 = integrate_over_vspace(@view(pdf[:,:]), vpa.grid, 0, vpa.wgts, vperp.grid, 6, vperp.wgts)
-           I16 = integrate_over_vspace(@view(pdf[:,:]), vpa.grid, 1, vpa.wgts, vperp.grid, 6, vperp.wgts)
-           I26 = integrate_over_vspace(@view(pdf[:,:]), vpa.grid, 2, vpa.wgts, vperp.grid, 6, vperp.wgts)
+           I06 = integral(pdf, vpa.grid, 0, vpa.wgts, vperp.grid, 6, vperp.wgts)
+           I16 = integral(pdf, vpa.grid, 1, vpa.wgts, vperp.grid, 6, vperp.wgts)
+           I26 = integral(pdf, vpa.grid, 2, vpa.wgts, vperp.grid, 6, vperp.wgts)
            
-           I08 = integrate_over_vspace(@view(pdf[:,:]), vpa.grid, 0, vpa.wgts, vperp.grid, 8, vperp.wgts)    
+           I08 = integral(pdf, vpa.grid, 0, vpa.wgts, vperp.grid, 8, vperp.wgts)
         end
         # Broadcast integrals to all processes in the 'anyv' subblock
         Inn_vec = [I00, I10, I20, I30, I40, I50, I60, I70, I80, 
@@ -1847,12 +1846,13 @@ function calculate_rosenbluth_potential_boundary_data_delta_f_multipole!(rpbd::r
     # first, compute the moments and delta f
     @begin_anyv_region()
     @anyv_serial_region begin
-      dens =  get_density(pdf, vpa, vperp)
-      upar = get_upar(pdf, vpa, vperp, dens)
-      ppar = get_ppar(pdf, vpa, vperp, upar)
-      pperp = get_pperp(pdf, vpa, vperp)
-      pressure = get_pressure(ppar,pperp)
+      dens = get_density(pdf, vpa, vperp)
+      upar = get_upar(pdf, dens, vpa, vperp, false)
+      pressure = get_p(pdf, dens, upar, vpa, vperp, false, false)
       vth = sqrt(2.0*pressure/(dens*mass))
+      ppar = get_ppar(dens, upar, pressure, vth, pdf, vpa, vperp, false, false,
+                      false)
+      pperp = get_pperp(pressure, ppar)
       @loop_vperp_vpa ivperp ivpa begin
           dummy_vpavperp[ivpa,ivperp] = pdf[ivpa,ivperp] - F_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp) 
       end
@@ -2615,7 +2615,7 @@ function calculate_test_particle_preconditioner!(pdf,delta_t,ms,msp,nussp,
     # consider making a wrapper function for the following block -- repeated in fokker_planck.jl
     if use_Maxwellian_Rosenbluth_coefficients
         calculate_rosenbluth_potentials_via_analytical_Maxwellian!(GG,HH,dHdvpa,dHdvperp,
-                 d2Gdvpa2,dGdvperp,d2Gdvperpdvpa,d2Gdvperp2,pdf,vpa,vperp)
+                 d2Gdvpa2,dGdvperp,d2Gdvperpdvpa,d2Gdvperp2,pdf,vpa,vperp,msp)
     else
         calculate_rosenbluth_potentials_via_elliptic_solve!(GG,HH,dHdvpa,dHdvperp,
              d2Gdvpa2,dGdvperp,d2Gdvperpdvpa,d2Gdvperp2,pdf,
@@ -3380,7 +3380,7 @@ function calculate_rosenbluth_potentials_via_elliptic_solve!(GG,HH,dHdvpa,dHdvpe
     # carry out the elliptic solves required
     @begin_anyv_vperp_vpa_region()
     @loop_vperp_vpa ivperp ivpa begin
-        S_dummy[ivpa,ivperp] = -(4.0/sqrt(pi))*ffsp_in[ivpa,ivperp]
+        S_dummy[ivpa,ivperp] = -(4.0*pi)*ffsp_in[ivpa,ivperp]
     end
 
     # Can run the following three solves in parallel
@@ -3510,14 +3510,12 @@ Function to calculate Rosenbluth potentials for shifted Maxwellians
 using an analytical specification
 """
 function calculate_rosenbluth_potentials_via_analytical_Maxwellian!(GG,HH,dHdvpa,dHdvperp,
-    d2Gdvpa2,dGdvperp,d2Gdvperpdvpa,d2Gdvperp2,ffsp_in,vpa,vperp)
+    d2Gdvpa2,dGdvperp,d2Gdvperpdvpa,d2Gdvperp2,ffsp_in,vpa,vperp,mass)
     @begin_anyv_region()
-    dens = get_density(ffsp_in,vpa,vperp)
-    upar = get_upar(ffsp_in, vpa, vperp, dens)
-    ppar = get_ppar(ffsp_in, vpa, vperp, upar)
-    pperp = get_pperp(ffsp_in, vpa, vperp)
-    pressure = get_pressure(ppar,pperp)
-    vth = sqrt(2.0*pressure/dens)
+    dens = get_density(ffsp_in, vpa, vperp)
+        upar = get_upar(ffsp_in, dens, vpa, vperp, false)
+        pressure = get_p(ffsp_in, dens, upar, vpa, vperp, false, false)
+        vth = sqrt(2.0*pressure/(dens*mass))
     @begin_anyv_vperp_vpa_region()
     @loop_vperp_vpa ivperp ivpa begin
         HH[ivpa,ivperp] = H_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)

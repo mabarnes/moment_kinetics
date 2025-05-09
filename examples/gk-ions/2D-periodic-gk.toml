@@ -1,13 +1,13 @@
 [ion_source_1]
 z_profile = "constant"
-source_strength = 0.05
+source_strength = 0.07071067811865477
 source_T = 0.25
 
 [evolve_moments]
 density = false
 parallel_flow = false
-parallel_pressure = false
 moments_conservation = false
+pressure = false
 
 [r]
 ngrid = 5
@@ -23,21 +23,21 @@ discretization = "chebyshev_pseudospectral"
 [vpa]
 ngrid = 5
 nelement = 2
-L = 6.0
+L = 8.485281374238571
 bc = "zero"
 discretization = "chebyshev_pseudospectral"
 
 [vperp]
 ngrid = 5
 nelement = 1
-L = 3.0
+L = 4.242640687119286
 bc = "zero"
 discretization = "chebyshev_pseudospectral"
 
 [vz]
 ngrid = 9
 nelement = 64
-L = 18.0
+L = 25.455844122715714
 bc = "both_zero"
 discretization = "chebyshev_pseudospectral"
 
@@ -57,7 +57,7 @@ initial_temperature = 1.0
 initialization_option = "gaussian"
 density_amplitude = 0.001
 density_phase = 0.0
-upar_amplitude = 1.0
+upar_amplitude = 1.4142135623730951
 upar_phase = 0.0
 temperature_amplitude = 0.0
 temperature_phase = 0.0
@@ -74,23 +74,23 @@ temperature_phase = 0.0
 
 [geometry]
 #option="1D-mirror"
-DeltaB=0.0
-option="constant-helical"
-pitch=0.1
-rhostar= 0.1
+DeltaB = 0.0
+option = "constant-helical"
+pitch = 0.1
+rhostar = 0.1
 
 [ion_numerical_dissipation]
-vpa_dissipation_coefficient = 1.0e-3 #1.0e-2 #1.0e-1
-vperp_dissipation_coefficient = 1.0e-3 #1.0e-2 #1.0e-1
+vpa_dissipation_coefficient = 0.0028284271247461905 #1.0e-2 #1.0e-1
+vperp_dissipation_coefficient = 0.0028284271247461905 #1.0e-2 #1.0e-1
 #r_disspipation_coefficient = 1.0e-3
 #force_minimum_pdf_value = 0.0
 
 [neutral_numerical_dissipation]
-moment_dissipation_coefficient = 0.0001
-vz_dissipation_coefficient = 0.01
+moment_dissipation_coefficient = 0.0001414213562373095
+vz_dissipation_coefficient = 0.028284271247461905
 
 [timestepping]
 nstep = 50
-dt = 1.0e-3
+dt = 0.0007071067811865475
 nwrite = 10
 nwrite_dfns = 10

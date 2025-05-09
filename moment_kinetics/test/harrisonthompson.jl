@@ -13,7 +13,7 @@ using moment_kinetics.load_data: load_fields_data, load_time_data
 using moment_kinetics.load_data: load_species_data, load_coordinate_data
 using moment_kinetics.utils: merge_dict_with_kwargs!
 
-ionization_frequency = 0.688
+ionization_frequency = sqrt(2) * 0.688
 
 # Analytic solution given by implicit equation
 #   z = 1/2 ± 2/(π R_ion) * D(sqrt(-phi))
@@ -46,11 +46,11 @@ function newton(f, fprime, z, args...)
 end
 
 # want to find phi such that f(phi) is zero
-fnegative(phi, z, R_ion) = - z - 2.0 / π / R_ion * dawson(sqrt(-phi))
-fpositive(phi, z, R_ion) = - z + 2.0 / π / R_ion * dawson(sqrt(-phi))
+fnegative(phi, z, R_ion) = - z - 2.0 / π * sqrt(2) / R_ion * dawson(sqrt(-phi))
+fpositive(phi, z, R_ion) = - z + 2.0 / π * sqrt(2) / R_ion * dawson(sqrt(-phi))
 # derivative of f for Newton iteration
-fprimenegative(phi, z, R_ion) = 1.0 / π / R_ion / sqrt(-phi) * Dprime(sqrt(-phi))
-fprimepositive(phi, z, R_ion) = - 1.0 / π / R_ion / sqrt(-phi) * Dprime(sqrt(-phi))
+fprimenegative(phi, z, R_ion) = 1.0 / π * sqrt(2) / R_ion / sqrt(-phi) * Dprime(sqrt(-phi))
+fprimepositive(phi, z, R_ion) = - 1.0 / π * sqrt(2) / R_ion / sqrt(-phi) * Dprime(sqrt(-phi))
 function findphi(z, R_ion)
     if z < - eps()
         return newton(fnegative, fprimenegative, z, R_ion)
@@ -68,7 +68,7 @@ test_input_finite_difference = OptionsDict("composition" => OptionsDict("n_ion_s
                                                                         "T_e" => 1.0,
                                                                         "T_wall" => 1.0),
                                            "ion_species_1" => OptionsDict("initial_density" => 1.0,
-                                                                          "initial_temperature" => 1.0),
+                                                                          "initial_temperature" => 0.3333333333333333),
                                            "z_IC_ion_species_1" => OptionsDict("initialization_option" => "gaussian",
                                                                                "density_amplitude" => 0.0,
                                                                                "density_phase" => 0.0,
@@ -87,12 +87,12 @@ test_input_finite_difference = OptionsDict("composition" => OptionsDict("n_ion_s
                                                                    "parallel_io" => false),
                                            "evolve_moments" => OptionsDict("density" => false,
                                                                            "parallel_flow" => false,
-                                                                           "parallel_pressure" => false,
+                                                                           "pressure" => false,
                                                                            "moments_conservation" => false),
                                            "reactions" => OptionsDict("charge_exchange_frequency" => 0.0,
                                                                       "ionization_frequency" => 0.0),
                                            "timestepping" => OptionsDict("nstep" => 25000,
-                                                                         "dt" => 0.0002,
+                                                                         "dt" => 0.0001414213562373095,
                                                                          "nwrite" => 25000,
                                                                          "split_operators" => false),
                                            "r" => OptionsDict("ngrid" => 1,
@@ -105,20 +105,19 @@ test_input_finite_difference = OptionsDict("composition" => OptionsDict("n_ion_s
                                                               "discretization" => "finite_difference"),
                                            "vpa" => OptionsDict("ngrid" => 200,
                                                                 "nelement" => 1,
-                                                                "L" => 4.0,
+                                                                "L" => 5.656854249492381,
                                                                 "bc" => "zero",
                                                                 "discretization" => "finite_difference"),
                                            "vz" => OptionsDict("ngrid" => 200,
                                                                "nelement" => 1,
-                                                               "L" => 4.0,
+                                                               "L" => 5.656854249492381,
                                                                "bc" => "zero",
                                                                "discretization" => "finite_difference"),
                                            "ion_source_1" => OptionsDict("active" => true,
                                                                          "source_strength" => ionization_frequency,
                                                                          "source_T" => 0.25,
                                                                          "z_profile" => "constant",
-                                                                         "r_profile" => "constant"),
-                                          )
+                                                                         "r_profile" => "constant"))
 
 test_input_chebyshev = recursive_merge(test_input_finite_difference,
                                        OptionsDict("output" => OptionsDict("run_name" => "chebyshev_pseudospectral"),
@@ -148,9 +147,9 @@ test_input_chebyshev_split2 = recursive_merge(test_input_chebyshev_split1,
 
 test_input_chebyshev_split3 = recursive_merge(test_input_chebyshev_split2,
                                               OptionsDict("output" => OptionsDict("run_name" => "chebyshev_pseudospectral_split3"),
-                                                          "evolve_moments" => OptionsDict("parallel_pressure" => true),
-                                                          "vpa" => OptionsDict("L" => 8.0),
-                                                          "vz" => OptionsDict("L" => 8.0),
+                                                          "evolve_moments" => OptionsDict("pressure" => true),
+                                                          "vpa" => OptionsDict("L" => 13.856406460551018),
+                                                          "vz" => OptionsDict("L" => 13.856406460551018),
                                                          ))
 
 """
@@ -282,36 +281,36 @@ function runtests()
         @testset "Chebyshev split 2" begin
             test_input_chebyshev_split2["output"]["base_directory"] = test_output_directory
             run_test(test_input_chebyshev_split2, 1.0e-1,
-                     [-0.8342777186033496, -0.769878727433516, -0.641982842664368,
-                      -0.5380384218360059, -0.45889874587050933, -0.39807155031220376,
-                      -0.35765940559579507, -0.33397094568809443, -0.3264506607380896,
-                      -0.3052034117107722, -0.2546495401700432, -0.1997389847343175,
-                      -0.15432601725684672, -0.1260728604002081, -0.11448123528034684,
-                      -0.11187870253742047, -0.11151473033292825, -0.11187870253742047,
-                      -0.1144812352803461, -0.12607286040020482, -0.15432601725684672,
-                      -0.19973898473431914, -0.2546495401700432, -0.30520341171077403,
-                      -0.32645066073809237, -0.333970945688096, -0.35765940559579695,
-                      -0.3980715503122051, -0.45889874587050794, -0.5380384218360059,
-                      -0.6419828426643654, -0.7698787274335136, -0.8342777186033492],
-                     1.e-9)
+                     [-0.8342782054922465, -0.7698792128186727, -0.6419833246457909,
+                      -0.5380388932896103, -0.45889917659758056, -0.39807195331828643,
+                      -0.3576597920490238, -0.33397131407819936, -0.3264510287084936,
+                      -0.3052037686864204, -0.2546498635690567, -0.19973926625908636,
+                      -0.1543263173744529, -0.12607323832818293, -0.1144816092742381,
+                      -0.11187906177507229, -0.11151509101101001, -0.11187906177507229,
+                      -0.1144816092742381, -0.12607323832818293, -0.1543263173744529,
+                      -0.19973926625908556, -0.25464986356905644, -0.30520376868642224,
+                      -0.32645102870849174, -0.33397131407819947, -0.3576597920490245,
+                      -0.3980719533182843, -0.4588991765975813, -0.5380388932896125,
+                      -0.6419833246457909, -0.7698792128186712, -0.8342782054922452],
+                      1.e-9)
         end
         # The 'split 3' test is pretty badly resolved, but don't want to increase
         # run-time!
         @testset "Chebyshev split 3" begin
             test_input_chebyshev_split3["output"]["base_directory"] = test_output_directory
             run_test(test_input_chebyshev_split3, 1.0e-1,
-                     [-0.7232298105580431, -0.6952974296073846, -0.6131203685189957,
-                      -0.511049503269883, -0.4376138300941866, -0.38571349239474045,
-                      -0.3443539621584152, -0.321660373774848, -0.3139314114299114,
-                      -0.2923509332924494, -0.24310201928208505, -0.1894188137371367,
-                      -0.14639639366230545, -0.11912393553082326, -0.10670759657841722,
-                      -0.10384303279245431, -0.10363760821526818, -0.10384303279245431,
-                      -0.10670759657841573, -0.11912393553082326, -0.14639639366230608,
-                      -0.1894188137371367, -0.24310201928208505, -0.2923509332924494,
-                      -0.31393141142991393, -0.3216603737748517, -0.34435396215841546,
-                      -0.38571349239474223, -0.4376138300941907, -0.5110495032698841,
-                      -0.6131203685189993, -0.6952974296073926, -0.7232298105580541],
-                     1.e-9)
+                     [-0.723229810721327, -0.6952974296367678, -0.6131203685171661,
+                      -0.5110495033264857, -0.4376138300678886, -0.38571349239013963,
+                      -0.3443539621753186, -0.3216603737851765, -0.3139314114208953,
+                      -0.29235093328514117, -0.24310201929164407, -0.18941881373899155,
+                      -0.14639639365793675, -0.11912393552838069, -0.10670759656092232,
+                      -0.10384303276413827, -0.10363760818756187, -0.10384303276413703,
+                      -0.10670759656092159, -0.11912393552838219, -0.14639639365793827,
+                      -0.18941881373899155, -0.24310201929164182, -0.29235093328513934,
+                      -0.31393141142089365, -0.32166037378517587, -0.34435396217531766,
+                      -0.3857134923901387, -0.4376138300678855, -0.5110495033264835,
+                      -0.6131203685171644, -0.6952974296367611, -0.7232298107213195],
+                      1.e-9)
         end
     end
 

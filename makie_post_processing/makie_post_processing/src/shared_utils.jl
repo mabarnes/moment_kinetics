@@ -5,6 +5,7 @@ export calculate_and_write_frequencies, get_geometry
 using moment_kinetics.analysis: fit_delta_phi_mode
 using moment_kinetics.array_allocation: allocate_float
 using moment_kinetics.coordinates: define_coordinate
+using moment_kinetics.file_io: open_ascii_output_file
 using moment_kinetics.input_structs: boltzmann_electron_response,
                                      boltzmann_electron_response_with_simple_sheath,
                                      geometry_input

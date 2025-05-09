@@ -1,12 +1,12 @@
 [reactions]
-charge_exchange_frequency = 0.5
-ionization_frequency = 0.75
+charge_exchange_frequency = 0.7071067811865476
+ionization_frequency = 1.0606601717798214
 
 [evolve_moments]
 density = false
 parallel_flow = false
-parallel_pressure = false
 moments_conservation = false
+pressure = false
 
 [r]
 ngrid = 1
@@ -21,14 +21,14 @@ discretization = "chebyshev_pseudospectral"
 [vpa]
 ngrid = 9
 nelement = 64
-L = 18.0
+L = 25.455844122715714
 bc = "both_zero"
 discretization = "chebyshev_pseudospectral"
 
 [vz]
 ngrid = 9
 nelement = 64
-L = 18.0
+L = 25.455844122715714
 bc = "both_zero"
 discretization = "chebyshev_pseudospectral"
 
@@ -41,13 +41,13 @@ T_wall = 1.0
 
 [ion_species_1]
 initial_density = 1.0
-initial_temperature = 1.0
+initial_temperature = 0.3333333333333333
 
 [z_IC_ion_species_1]
 initialization_option = "gaussian"
 density_amplitude = 0.001
 density_phase = 0.0
-upar_amplitude = 1.0
+upar_amplitude = 1.4142135623730951
 upar_phase = 0.0
 temperature_amplitude = 0.0
 temperature_phase = 0.0
@@ -63,13 +63,13 @@ temperature_phase = 0.0
 
 [neutral_species_1]
 initial_density = 1.0
-initial_temperature = 1.0
+initial_temperature = 0.3333333333333333
 
 [z_IC_neutral_species_1]
 initialization_option = "gaussian"
 density_amplitude = 0.001
 density_phase = 0.0
-upar_amplitude = -1.0
+upar_amplitude = -1.4142135623730951
 upar_phase = 0.0
 temperature_amplitude = 0.0
 temperature_phase = 0.0
@@ -85,7 +85,7 @@ temperature_phase = 0.0
 
 [timestepping]
 nstep = 50000
-dt = 1.0e-5
+dt = 7.0710678118654756e-6
 nwrite = 1000
 split_operators = false
 

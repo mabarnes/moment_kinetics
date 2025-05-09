@@ -6,11 +6,11 @@ T_e = 1.0
 
 [ion_species_1]
 initial_density = 1.0
-initial_temperature = 4.0
+initial_temperature = 1.3333333333333333
 
 [neutral_species_1]
 initial_density = 1.0
-initial_temperature = 4.0
+initial_temperature = 1.3333333333333333
 
 [z_IC_ion_species_1]
 initialization_option = "sinusoid"
@@ -33,14 +33,14 @@ temperature_amplitude = 0.0
 temperature_phase = 0.0
 
 [reactions]
-charge_exchange_frequency = [0.0, 0.4, 0.8, 1.2, 1.6, 2.0, 2.4, 2.8, 3.2, 3.6, 4.0, 4.4, 4.8, 5.2, 5.6, 6.0, 6.4, 6.8, 7.2, 7.6, 8.0, 8.4, 8.8, 9.2, 9.6, 10.0, 10.4, 10.8, 11.2, 11.6, 12.0, 12.4]
 ionization_frequency = 0.0
+charge_exchange_frequency = [0.0, 0.5656854249492381, 1.1313708498984762, 1.697056274847714, 2.2627416997969525, 2.8284271247461903, 3.394112549695428, 3.9597979746446663, 4.525483399593905, 5.091168824543143, 5.656854249492381, 6.222539674441619, 6.788225099390856, 7.353910524340095, 7.919595949289333, 8.485281374238571, 9.05096679918781, 9.616652224137047, 10.182337649086286, 10.748023074035522, 11.313708498984761, 11.879393923934, 12.445079348883239, 13.010764773832474, 13.576450198781712, 14.142135623730951, 14.70782104868019, 15.273506473629428, 15.839191898578665, 16.404877323527902, 16.970562748477143, 17.53624817342638]
 
 [evolve_moments]
 density = true
 parallel_flow = false
-parallel_pressure = false
 moments_conservation = true
+pressure = false
 
 [r]
 ngrid = 1
@@ -55,20 +55,20 @@ discretization = "chebyshev_pseudospectral"
 [vpa]
 ngrid = 17
 nelement = 8
-L = 16.0
+L = 22.627416997969522
 bc = "periodic"
 discretization = "chebyshev_pseudospectral"
 
 [vz]
 ngrid = 17
 nelement = 8
-L = 16.0
+L = 22.627416997969522
 bc = "periodic"
 discretization = "chebyshev_pseudospectral"
 
 [timestepping]
 nstep = 3000
-dt = 1.0e-3
+dt = 0.0007071067811865475
 nwrite = 20
 #nwrite_dfns = 20 #80
 split_operators = false

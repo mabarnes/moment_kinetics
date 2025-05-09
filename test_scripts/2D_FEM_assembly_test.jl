@@ -15,7 +15,7 @@ using moment_kinetics.fokker_planck: init_fokker_planck_collisions_weak_form
 using moment_kinetics.fokker_planck: fokker_planck_collision_operator_weak_form!
 using moment_kinetics.fokker_planck: conserving_corrections!
 using moment_kinetics.calculus: derivative!
-using moment_kinetics.velocity_moments: get_density, get_upar, get_ppar, get_pperp, get_pressure
+using moment_kinetics.velocity_moments: get_density, get_upar, get_p, get_ppar, get_pperp
 using moment_kinetics.communication
 using moment_kinetics.communication: MPISharedArray
 using moment_kinetics.looping
@@ -342,10 +342,11 @@ end
         end
         if test_self_operator
             delta_n = get_density(C_M_num, vpa, vperp)
-            delta_upar = get_upar(C_M_num, vpa, vperp, dens)
-            delta_ppar = msp*get_ppar(C_M_num, vpa, vperp, upar)
-            delta_pperp = msp*get_pperp(C_M_num, vpa, vperp)
-            delta_pressure = get_pressure(delta_ppar,delta_pperp)
+            delta_upar = get_upar(C_M_num, dens, vpa, vperp, false)
+            delta_pressure = msp*get_p(C_M_num, nothing, upar, vpa, vperp, false, false)
+            delta_ppar = msp*get_ppar(nothing, upar, nothing, nothing, C_M_num, vpa,
+                                      vperp, false, false, false)
+            delta_pperp = get_pperp(delta_pressure, delta_ppar)
             @serial_region begin
                 println("delta_n: ", delta_n)
                 println("delta_upar: ", delta_upar)

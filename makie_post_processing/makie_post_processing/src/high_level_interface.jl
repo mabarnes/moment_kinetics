@@ -185,7 +185,7 @@ function makie_post_process(run_dir::Union{String,Tuple},
     timestep_diagnostics(run_info, run_info_dfns; plot_prefix=plot_prefix)
     if any((ri.composition.electron_physics ∈ (kinetic_electrons,
                                                kinetic_electrons_with_temperature_equation)
-            && !ri.t_input["implicit_electron_advance"]) for ri ∈ run_info)
+            && ri.t_input["kinetic_electron_solver"] != implicit_steady_state) for ri ∈ run_info)
         timestep_diagnostics(run_info, run_info_dfns; plot_prefix=plot_prefix, electron=true)
     end
 
@@ -337,6 +337,55 @@ function generate_example_input_file(filename::String=default_input_file_name;
     # Write to output file
     open(filename, write=true, truncate=overwrite, append=false) do io
         print(io, file_contents)
+    end
+
+    return nothing
+end
+
+"""
+    generate_maximal_input_file(filename::String=default_input_file_name;
+                                overwrite::Bool=false)
+
+Generate an input file with all `Bool` options set to `true`, and no other options
+present. Intended mostly for setting up tests to check that `makie_post_process` runs
+without errors.
+
+`handle_errors` is set to `false` (although it is a `Bool`) so that any errors are not
+caught, and so will register as a test failure.
+"""
+function generate_maximal_input_file(filename::String=default_input_file_name;
+                                     overwrite::Bool=false)
+
+    if ispath(filename) && !overwrite
+        error("$filename already exists. If you want to overwrite it, pass "
+              * "`overwrite=true` to `generate_example_input_file()`.")
+    end
+
+    # Get example input, then convert to a String formatted as the contents of a TOML
+    # file
+    input_dict = generate_example_input_Dict()
+
+    # Filter out any non-Bool options, set "handle_errors" to false, and all other Bool
+    # options to true.
+    function filter_input!(d)
+        for (k,v) ∈ d
+            if isa(v, AbstractDict)
+                filter_input!(v)
+            elseif k == "handle_errors"
+                d[k] = false
+            elseif isa(v, Bool)
+                d[k] = true
+            else
+                pop!(d, k)
+            end
+        end
+        return nothing
+    end
+    filter_input!(input_dict)
+
+    # Write to output file
+    open(filename, write=true, truncate=overwrite, append=false) do io
+        TOML.print(io, input_dict)
     end
 
     return nothing

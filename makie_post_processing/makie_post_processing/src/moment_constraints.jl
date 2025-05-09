@@ -1,5 +1,4 @@
-using moment_kinetics.velocity_moments: integrate_over_vspace,
-                                        integrate_over_neutral_vspace
+using moment_kinetics.calculus: integral
 
 """
     check_moment_constraints(run_info, is_neutral; input, plot_prefix)
@@ -34,7 +33,7 @@ function check_moment_constraints(run_info, is_neutral; input, plot_prefix)
         if run_info.evolve_density
             moment = zeros(run_info.z.n, run_info.r.n, run_info.nt)
             for it ∈ 1:run_info.nt, ir ∈ 1:run_info.r.n, iz ∈ 1:run_info.z.n
-                moment[iz,ir,it] = integrate_over_neutral_vspace(
+                moment[iz,ir,it] = integral(
                     @view(fn[:,:,:,iz,ir,is,it]), run_info.vz.grid, 0, run_info.vz.wgts,
                     run_info.vr.grid, 0, run_info.vr.wgts, run_info.vzeta.grid, 0,
                     run_info.vzeta.wgts)
@@ -47,7 +46,7 @@ function check_moment_constraints(run_info, is_neutral; input, plot_prefix)
         if run_info.evolve_upar
             moment = zeros(run_info.z.n, run_info.r.n, run_info.nt)
             for it ∈ 1:run_info.nt, ir ∈ 1:run_info.r.n, iz ∈ 1:run_info.z.n
-                moment[iz,ir,it] = integrate_over_neutral_vspace(
+                moment[iz,ir,it] = integral(
                     @view(fn[:,:,:,iz,ir,is,it]), run_info.vz.grid, 1, run_info.vz.wgts,
                     run_info.vr.grid, 0, run_info.vr.wgts, run_info.vzeta.grid, 0,
                     run_info.vzeta.wgts)
@@ -57,24 +56,24 @@ function check_moment_constraints(run_info, is_neutral; input, plot_prefix)
                          outfile=plot_prefix * "parallel_flow_moment_neutral_check.gif")
         end
 
-        if run_info.evolve_ppar
+        if run_info.evolve_p
             moment = zeros(run_info.z.n, run_info.r.n, run_info.nt)
             for it ∈ 1:run_info.nt, ir ∈ 1:run_info.r.n, iz ∈ 1:run_info.z.n
-                moment[iz,ir,it] = integrate_over_neutral_vspace(
-                    @view(fn[:,:,:,iz,ir,is,it]), run_info.vz.grid, 2, run_info.vz.wgts,
-                    run_info.vr.grid, 0, run_info.vr.wgts, run_info.vzeta.grid, 0,
-                    run_info.vzeta.wgts)
+                moment[iz,ir,it] = integral(
+                    (vzeta,vr,vz) -> 0.5*(vzeta^2 + vr^2 + vz^2),
+                    @view(fn[:,:,:,iz,ir,is,it]), run_info.vzeta, run_info.vr,
+                    run_info.vz)
             end
-            error = moment .- 0.5
-            animate_vs_z(run_info, "parallel pressure neutral"; data=error, input=input,
-                         outfile=plot_prefix * "parallel_pressure_moment_neutral_check.gif")
+            error = moment .- 1.5
+            animate_vs_z(run_info, "pressure neutral"; data=error, input=input,
+                         outfile=plot_prefix * "pressure_moment_neutral_check.gif")
         end
     else
         f = get_variable(run_info, "f")
         if run_info.evolve_density
             moment = zeros(run_info.z.n, run_info.r.n, run_info.nt)
             for it ∈ 1:run_info.nt, ir ∈ 1:run_info.r.n, iz ∈ 1:run_info.z.n
-                moment[iz,ir,it] = integrate_over_vspace(
+                moment[iz,ir,it] = integral(
                     @view(f[:,:,iz,ir,is,it]), run_info.vpa.grid, 0, run_info.vpa.wgts,
                     run_info.vperp.grid, 0, run_info.vperp.wgts)
             end
@@ -86,7 +85,7 @@ function check_moment_constraints(run_info, is_neutral; input, plot_prefix)
         if run_info.evolve_upar
             moment = zeros(run_info.z.n, run_info.r.n, run_info.nt)
             for it ∈ 1:run_info.nt, ir ∈ 1:run_info.r.n, iz ∈ 1:run_info.z.n
-                moment[iz,ir,it] = integrate_over_vspace(
+                moment[iz,ir,it] = integral(
                     @view(f[:,:,iz,ir,is,it]), run_info.vpa.grid, 1, run_info.vpa.wgts,
                     run_info.vperp.grid, 0, run_info.vperp.wgts)
             end
@@ -95,16 +94,16 @@ function check_moment_constraints(run_info, is_neutral; input, plot_prefix)
                          outfile=plot_prefix * "parallel_flow_moment_check.gif")
         end
 
-        if run_info.evolve_ppar
+        if run_info.evolve_p
             moment = zeros(run_info.z.n, run_info.r.n, run_info.nt)
             for it ∈ 1:run_info.nt, ir ∈ 1:run_info.r.n, iz ∈ 1:run_info.z.n
-                moment[iz,ir,it] = integrate_over_vspace(
-                    @view(f[:,:,iz,ir,is,it]), run_info.vpa.grid, 2, run_info.vpa.wgts,
-                    run_info.vperp.grid, 0, run_info.vperp.wgts)
+                moment[iz,ir,it] = integral((vperp,vpa) -> 0.5*(vperp^2+vpa^2),
+                                            @view(f[:,:,iz,ir,is,it]), run_info.vperp,
+                                            run_info.vpa)
             end
-            error = moment .- 0.5
-            animate_vs_z(run_info, "parallel pressure moment"; data=error, input=input,
-                         outfile=plot_prefix * "parallel_pressure_moment_check.gif")
+            error = moment .- 1.5
+            animate_vs_z(run_info, "pressure moment"; data=error, input=input,
+                         outfile=plot_prefix * "pressure_moment_check.gif")
         end
     end
 
@@ -139,14 +138,14 @@ function constraints_plots(run_info; plot_prefix=plot_prefix)
         ir0 = input.ir0
 
         if input.plot
-            if any(ri.evolve_density || ri.evolve_upar || ri.evolve_ppar
+            if any(ri.evolve_density || ri.evolve_upar || ri.evolve_p
                    for ri ∈ run_info)
 
                 # Ions
                 frame_index = Observable(1)
                 fig, ax = get_1d_ax(; xlabel="z", ylabel="constraint coefficient")
                 for ri ∈ run_info
-                    if !(ri.evolve_density || ri.evolve_upar || ri.evolve_ppar)
+                    if !(ri.evolve_density || ri.evolve_upar || ri.evolve_p)
                         continue
                     end
                     nspecies = ri.n_ion_species
@@ -189,12 +188,12 @@ function constraints_plots(run_info; plot_prefix=plot_prefix)
 
             # Neutrals
             if any(ri.n_neutral_species > 0
-                   && (ri.evolve_density || ri.evolve_upar || ri.evolve_ppar)
+                   && (ri.evolve_density || ri.evolve_upar || ri.evolve_p)
                    for ri ∈ run_info)
 
                 fig, ax = get_1d_ax(; xlabel="z", ylabel="constraint coefficient")
                 for ri ∈ run_info
-                    if !(ri.evolve_density || ri.evolve_upar || ri.evolve_ppar)
+                    if !(ri.evolve_density || ri.evolve_upar || ri.evolve_p)
                         continue
                     end
                     nspecies = ri.n_neutral_species
@@ -276,7 +275,7 @@ function constraints_plots(run_info; plot_prefix=plot_prefix)
         if input.animate
             nt = minimum(ri.nt for ri ∈ run_info)
 
-            if any(ri.evolve_density || ri.evolve_upar || ri.evolve_ppar
+            if any(ri.evolve_density || ri.evolve_upar || ri.evolve_p
                    for ri ∈ run_info)
 
                 # Ions
@@ -289,7 +288,7 @@ function constraints_plots(run_info; plot_prefix=plot_prefix)
                 ymin = Inf
                 ymax = -Inf
                 for ri ∈ run_info
-                    if !(ri.evolve_density || ri.evolve_upar || ri.evolve_ppar)
+                    if !(ri.evolve_density || ri.evolve_upar || ri.evolve_p)
                         continue
                     end
                     nspecies = ri.n_ion_species
@@ -345,7 +344,7 @@ function constraints_plots(run_info; plot_prefix=plot_prefix)
 
             # Neutrals
             if any(ri.n_neutral_species > 0
-                   && (ri.evolve_density || ri.evolve_upar || ri.evolve_ppar)
+                   && (ri.evolve_density || ri.evolve_upar || ri.evolve_p)
                    for ri ∈ run_info)
 
                 frame_index = Observable(1)
@@ -357,7 +356,7 @@ function constraints_plots(run_info; plot_prefix=plot_prefix)
                 ymin = Inf
                 ymax = -Inf
                 for ri ∈ run_info
-                    if !(ri.evolve_density || ri.evolve_upar || ri.evolve_ppar)
+                    if !(ri.evolve_density || ri.evolve_upar || ri.evolve_p)
                         continue
                     end
                     nspecies = ri.n_neutral_species

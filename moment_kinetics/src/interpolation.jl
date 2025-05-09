@@ -9,7 +9,8 @@ export interpolate_to_grid_z, interpolate_to_grid_1d!, interpolate_symmetric!,
        fill_interpolate_symmetric_matrix!
 
 using ..array_allocation: allocate_float
-using ..moment_kinetics_structs: null_spatial_dimension_info, null_velocity_dimension_info
+using ..moment_kinetics_structs: null_spatial_dimension_info,
+                                 null_velocity_dimension_info, null_vperp_dimension_info
 using ..type_definitions: mk_float, mk_int
 
 """
@@ -250,9 +251,26 @@ function interpolate_to_grid_1d!(result, new_grid, f, coord,
                                  derivative::Val{0})
     # There is only one point in the 'old grid' represented by coord (as indicated by the
     # type of the `spectral` argument), and we are interpolating in a velocity space
-    # dimension. Assume that the profile 'should be' a Maxwellian over the new grid, with
-    # a width of 1 in units of the reference speed.
-    @. result = f[1] * exp(-new_grid^2)
+    # dimension. Assume that the profile 'should be' a unit-density Maxwellian over the
+    # new grid, with a temperature equal to the reference temperature, so that
+    # vth^2=2*(Tref/Tref)/(mref/mref)=2.
+    @. result = f[1] / sqrt(2.0 * π) * exp(-0.5*new_grid^2)
+
+    return nothing
+end
+
+function interpolate_to_grid_1d!(result, new_grid, f, coord,
+                                 spectral::null_vperp_dimension_info,
+                                 derivative::Val{0})
+    # There is only one point in the 'old grid' represented by coord (as indicated by the
+    # type of the `spectral` argument), and we are interpolating in a velocity space
+    # dimension. Assume that the profile 'should be' a unit-density, 2D Maxwellian over
+    # the new grid, with a temperature equal to the reference temperature, so that
+    # vth^2=2*(Tref/Tref)/(mref/mref)=2.
+    # Needs a 2D Maxwellian, because for the vperp coordinate, because the distribution
+    # function is gyrophase independent, the vperp dimension represents two dimensions of
+    # velocity space.
+    @. result = f[1] / 2.0 / π * exp(-0.5*new_grid^2)
 
     return nothing
 end

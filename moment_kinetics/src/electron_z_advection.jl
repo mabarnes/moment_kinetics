@@ -77,17 +77,17 @@ function update_electron_speed_z!(advect, upar, vth, vpa)
     return nothing
 end
 
-function add_electron_z_advection_to_Jacobian!(jacobian_matrix, f, dens, upar, ppar, vth,
+function add_electron_z_advection_to_Jacobian!(jacobian_matrix, f, dens, upar, p, vth,
                                                dpdf_dz, me, z, vperp, vpa, z_spectral,
                                                z_advect, z_speed, scratch_dummy, dt, ir,
-                                               include=:all; f_offset=0, ppar_offset=0)
-    if f_offset == ppar_offset
-        error("Got f_offset=$f_offset the same as ppar_offset=$ppar_offset. f and ppar "
+                                               include=:all; f_offset=0, p_offset=0)
+    if f_offset == p_offset
+        error("Got f_offset=$f_offset the same as p_offset=$p_offset. f and p "
               * "cannot be in same place in state vector.")
     end
     @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
     @boundscheck size(jacobian_matrix, 1) ≥ f_offset + z.n * vperp.n * vpa.n || error("f_offset=$f_offset is too big")
-    @boundscheck size(jacobian_matrix, 1) ≥ ppar_offset + z.n || error("ppar_offset=$ppar_offset is too big")
+    @boundscheck size(jacobian_matrix, 1) ≥ p_offset + z.n || error("p_offset=$p_offset is too big")
     @boundscheck include ∈ (:all, :explicit_z, :explicit_v) || error("Unexpected value for include=$include")
 
     v_size = vperp.n * vpa.n
@@ -148,10 +148,10 @@ function add_electron_z_advection_to_Jacobian!(jacobian_matrix, f, dens, upar, p
             end
         end
         # vth = sqrt(2*p/n/me)
-        # so d(vth)/d(ppar) = 1/n/me/sqrt(2*p/n/me) = 1/n/me/vth
-        # and d(w_∥*vth*dg/dz)/d(ppar) = 1/n/me/vth*w_∥*dg/dz
+        # so d(vth)/d(p) = 1/n/me/sqrt(2*p/n/me) = 1/n/me/vth
+        # and d(w_∥*vth*dg/dz)/d(p) = 1/n/me/vth*w_∥*dg/dz
         if include ∈ (:all, :explicit_v)
-            jacobian_matrix[row,ppar_offset+iz] += dt / dens[iz] / me / vth[iz] * vpa.grid[ivpa] * dpdf_dz[ivpa,ivperp,iz]
+            jacobian_matrix[row,p_offset+iz] += dt / dens[iz] / me / vth[iz] * vpa.grid[ivpa] * dpdf_dz[ivpa,ivperp,iz]
         end
     end
 
@@ -159,7 +159,7 @@ function add_electron_z_advection_to_Jacobian!(jacobian_matrix, f, dens, upar, p
 end
 
 function add_electron_z_advection_to_z_only_Jacobian!(
-        jacobian_matrix, f, dens, upar, ppar, vth, dpdf_dz, me, z, vperp, vpa, z_spectral,
+        jacobian_matrix, f, dens, upar, p, vth, dpdf_dz, me, z, vperp, vpa, z_spectral,
         z_advect, z_speed, scratch_dummy, dt, ir, ivperp, ivpa)
 
     @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
@@ -223,7 +223,7 @@ function add_electron_z_advection_to_z_only_Jacobian!(
 end
 
 function add_electron_z_advection_to_v_only_Jacobian!(
-        jacobian_matrix, f, dens, upar, ppar, vth, dpdf_dz, me, z, vperp, vpa, z_spectral,
+        jacobian_matrix, f, dens, upar, p, vth, dpdf_dz, me, z, vperp, vpa, z_spectral,
         z_advect, z_speed, scratch_dummy, dt, ir, iz)
 
     @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")

@@ -53,7 +53,7 @@ end
                          composition, collisions, ion_source_settings, geometry,
                          nl_solver_params, vpa_diffusion, num_diss_params, gyroavs,
                          scratch_dummy) = begin
-    if vperp.n > 1 && (moments.evolve_density || moments.evolve_upar || moments.evolve_ppar)
+    if vperp.n > 1 && (moments.evolve_density || moments.evolve_upar || moments.evolve_p)
         error("Moment constraints in implicit_vpa_advection!() do not support 2V runs yet")
     end
 
@@ -88,8 +88,7 @@ end
             if z.irank == 0 && iz == 1
                 @. vpa.scratch = vpagrid_to_dzdt(vpa.grid, moments.ion.vth[iz,ir,is],
                                                  fvec_in.upar[iz,ir,is],
-                                                 moments.evolve_ppar,
-                                                 moments.evolve_upar)
+                                                 moments.evolve_p, moments.evolve_upar)
                 icut_lower_z = vpa.n
                 for ivpa ∈ vpa.n:-1:1
                     # for left boundary in zed (z = -Lz/2), want
@@ -103,8 +102,7 @@ end
             if z.irank == z.nrank - 1 && iz == z.n
                 @. vpa.scratch = vpagrid_to_dzdt(vpa.grid, moments.ion.vth[iz,ir,is],
                                                  fvec_in.upar[iz,ir,is],
-                                                 moments.evolve_ppar,
-                                                 moments.evolve_upar)
+                                                 moments.evolve_p, moments.evolve_upar)
                 icut_upper_z = 0
                 for ivpa ∈ 1:vpa.n
                     # for right boundary in zed (z = Lz/2), want
@@ -360,10 +358,10 @@ end
 """
 function update_speed_default!(advect, fields, fvec, moments, vpa, vperp, z, r, composition,
                                collisions, ion_source_settings, t, geometry)
-    if moments.evolve_ppar && moments.evolve_upar
+    if moments.evolve_p && moments.evolve_upar
         update_speed_n_u_p_evolution!(advect, fields, fvec, moments, vpa, z, r,
                                       composition, collisions, ion_source_settings)
-    elseif moments.evolve_ppar
+    elseif moments.evolve_p
         update_speed_n_p_evolution!(advect, fields, fvec, moments, vpa, z, r, composition,
                                     collisions, ion_source_settings)
     elseif moments.evolve_upar
@@ -378,7 +376,7 @@ function update_speed_default!(advect, fields, fvec, moments, vpa, vperp, z, r, 
                 # mu, the adiabatic invariant
                 mu = 0.5*(vperp.grid[ivperp]^2)/Bmag[iz,ir]
                 # bzed = B_z/B
-                advect[is].speed[ivpa,ivperp,iz,ir] = (0.5*bzed[iz,ir]*fields.gEz[ivperp,iz,ir,is] - 
+                advect[is].speed[ivpa,ivperp,iz,ir] = (bzed[iz,ir]*fields.gEz[ivperp,iz,ir,is] -
                                                        mu*bzed[iz,ir]*dBdz[iz,ir])
             end
         end
@@ -395,7 +393,7 @@ function update_speed_n_u_p_evolution!(advect, fields, fvec, moments, vpa, z, r,
                                        composition, collisions, ion_source_settings)
     upar = fvec.upar
     vth = moments.ion.vth
-    Ez = fields.Ez
+    gEz = fields.gEz
     dupar_dz = moments.ion.dupar_dz
     dvth_dz = moments.ion.dvth_dz
     dupar_dt = moments.ion.dupar_dt
@@ -407,7 +405,7 @@ function update_speed_n_u_p_evolution!(advect, fields, fvec, moments, vpa, z, r,
             # update parallel acceleration to account for:
             @loop_z_vperp iz ivperp begin
                 @. speed[:,ivperp,iz,ir] =
-                    (0.5 * Ez[iz,ir]
+                    (gEz[ivperp,iz,ir,is]
                      - (dupar_dt[iz,ir,is] + (vth[iz,ir,is] * wpa + upar[iz,ir,is]) * dupar_dz[iz,ir,is])
                      - wpa * (dvth_dt[iz,ir,is] + (vth[iz,ir,is] * wpa + upar[iz,ir,is]) * dvth_dz[iz,ir,is])
                     ) / vth[iz,ir,is]
@@ -427,7 +425,7 @@ vpahat = vpa/vth
 function update_speed_n_p_evolution!(advect, fields, fvec, moments, vpa, z, r,
                                      composition, collisions, ion_source_settings)
     vth = moments.ion.vth
-    Ez = fields.Ez
+    gEz = fields.gEz
     dvth_dz = moments.ion.dvth_dz
     dvth_dt = moments.ion.dvth_dt
     wpa = vpa.grid
@@ -437,7 +435,7 @@ function update_speed_n_p_evolution!(advect, fields, fvec, moments, vpa, z, r,
             # update parallel acceleration to account for:
             @loop_z_vperp iz ivperp begin
                 @. speed[:,ivperp,iz,ir] =
-                    (0.5 * Ez[iz,ir]
+                    (gEz[ivperp,iz,ir,is]
                      - wpa * (dvth_dt[iz,ir,is] + vth[iz,ir,is] * wpa * dvth_dz[iz,ir,is])
                     ) / vth[iz,ir,is]
             end
@@ -456,7 +454,7 @@ wpa = vpa-upar
 function update_speed_n_u_evolution!(advect, fields, fvec, moments, vpa, z, r,
                                      composition, collisions, ion_source_settings)
     upar = fvec.upar
-    Ez = fields.Ez
+    gEz = fields.gEz
     dupar_dz = moments.ion.dupar_dz
     dupar_dt = moments.ion.dupar_dt
     wpa = vpa.grid
@@ -466,7 +464,7 @@ function update_speed_n_u_evolution!(advect, fields, fvec, moments, vpa, z, r,
             # update parallel acceleration to account for:
             @loop_z_vperp iz ivperp begin
                 @. speed[:,ivperp,iz,ir] =
-                    (0.5 * Ez[iz,ir]
+                    (gEz[ivperp,iz,ir,is]
                      - (dupar_dt[iz,ir,is] + (wpa + upar[iz,ir,is]) * dupar_dz[iz,ir,is])
                     )
             end

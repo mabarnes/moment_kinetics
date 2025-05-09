@@ -22,11 +22,11 @@ test_input = OptionsDict("composition" => OptionsDict("n_ion_species" => 1,
                                                       "T_wall" => 0.1,
                                                       "recycling_fraction" => 0.5),
                          "ion_species_1" => OptionsDict("initial_density" => 1.0,
-                                                        "initial_temperature" => 1.0),
+                                                        "initial_temperature" => 0.3333333333333333),
                          "z_IC_ion_species_1" => OptionsDict("initialization_option" => "gaussian",
                                                              "density_amplitude" => 0.0,
                                                              "density_phase" => 0.0,
-                                                             "upar_amplitude" => 1.0,
+                                                             "upar_amplitude" => 1.4142135623730951,
                                                              "upar_phase" => 0.0,
                                                              "temperature_amplitude" => 0.0,
                                                              "temperature_phase" => 0.0),
@@ -38,14 +38,14 @@ test_input = OptionsDict("composition" => OptionsDict("n_ion_species" => 1,
                                                                "temperature_amplitude" => 0.0,
                                                                "temperature_phase" => 0.0),
                          "neutral_species_1" => OptionsDict("initial_density" => 1.0,
-                                                            "initial_temperature" => 1.0),
+                                                            "initial_temperature" => 0.3333333333333333),
                          "z_IC_neutral_species_1" => OptionsDict("initialization_option" => "gaussian",
                                                                  "density_amplitude" => 0.001,
                                                                  "density_phase" => 0.0,
-                                                                 "upar_amplitude" => 1.0,
+                                                                 "upar_amplitude" => 1.4142135623730951,
                                                                  "upar_phase" => 0.0,
                                                                  "temperature_amplitude" => 0.0,
-                                                                 "temperature_phase" => 0.0),  
+                                                                 "temperature_phase" => 0.0),
                          "vz_IC_neutral_species_1" => OptionsDict("initialization_option" => "gaussian",
                                                                   "density_amplitude" => 1.0,
                                                                   "density_phase" => 0.0,
@@ -56,12 +56,12 @@ test_input = OptionsDict("composition" => OptionsDict("n_ion_species" => 1,
                          "output" => OptionsDict("run_name" => "full-f"),
                          "evolve_moments" => OptionsDict("density" => false,
                                                          "parallel_flow" => false,
-                                                         "parallel_pressure" => false,
+                                                         "pressure" => false,
                                                          "moments_conservation" => false),
-                         "reactions" => OptionsDict("charge_exchange_frequency" => 0.75,
-                                                    "ionization_frequency" => 0.5),
+                         "reactions" => OptionsDict("charge_exchange_frequency" => 1.0606601717798214,
+                                                    "ionization_frequency" => 0.7071067811865476),
                          "timestepping" => OptionsDict("nstep" => 1000,
-                                                       "dt" => 1.0e-4,
+                                                       "dt" => 7.071067811865475e-5,
                                                        "nwrite" => 1000,
                                                        "split_operators" => false),
                          "r" => OptionsDict("ngrid" => 1,
@@ -73,21 +73,21 @@ test_input = OptionsDict("composition" => OptionsDict("n_ion_species" => 1,
                                             "element_spacing_option" => "sqrt"),
                          "vpa" => OptionsDict("ngrid" => 10,
                                               "nelement" => 15,
-                                              "L" => 18.0,
+                                              "L" => 25.455844122715714,
                                               "bc" => "zero",
                                               "discretization" => "chebyshev_pseudospectral",
-                                              "element_spacing_option" => "coarse_tails"),
+                                              "element_spacing_option" => "coarse_tails7.0710678118654755"),
                          "vz" => OptionsDict("ngrid" => 10,
                                              "nelement" => 15,
-                                             "L" => 18.0,
+                                             "L" => 25.455844122715714,
                                              "bc" => "zero",
                                              "discretization" => "chebyshev_pseudospectral",
-                                             "element_spacing_option" => "coarse_tails"),
+                                             "element_spacing_option" => "coarse_tails7.0710678118654755"),
                          "ion_source_1" => OptionsDict("active" => true,
-                                                     "z_profile" => "gaussian",
-                                                     "z_width" => 0.125,
-                                                     "source_strength" => 2.0,
-                                                     "source_T" => 2.0),
+                                                       "z_profile" => "gaussian",
+                                                       "z_width" => 0.125,
+                                                       "source_strength" => 2.8284271247461903,
+                                                       "source_T" => 2.0),
                         )
 
 if global_size[] > 2 && global_size[] % 2 == 0
@@ -106,14 +106,18 @@ test_input_split3 = recursive_merge(test_input_split2,
                                     OptionsDict("output" => OptionsDict("run_name" => "split3"),
                                                 "z" => OptionsDict("ngrid" => 5,
                                                                    "nelement" => 32),
-                                                "vpa" => OptionsDict("nelement" => 31),
-                                                "vz" => OptionsDict("nelement" => 31),
-                                                "evolve_moments" => OptionsDict("parallel_pressure" => true),
+                                                "vpa" => OptionsDict("nelement" => 31,
+                                                                     "L" => 31.17691453623979,
+                                                                     "element_spacing_option" => "coarse_tails8.660254037844386"),
+                                                "vz" => OptionsDict("nelement" => 31,
+                                                                     "L" => 31.17691453623979,
+                                                                     "element_spacing_option" => "coarse_tails8.660254037844386"),
+                                                "evolve_moments" => OptionsDict("pressure" => true),
                                                 "ion_numerical_dissipation" => OptionsDict("force_minimum_pdf_value" => 0.0),
                                                 "neutral_numerical_dissipation" => OptionsDict("force_minimum_pdf_value" => 0.0)
                                                ))
 test_input_split3["timestepping"] = recursive_merge(test_input_split3["timestepping"],
-                                                    OptionsDict("dt" => 1.0e-5,
+                                                    OptionsDict("dt" => 7.0710678118654756e-6,
                                                                 "write_error_diagnostics" => true,
                                                                 "write_steady_state_diagnostics" => true))
 
@@ -136,8 +140,8 @@ test_input_adaptive = recursive_merge(test_input,
 test_input_adaptive["timestepping"] = recursive_merge(test_input_adaptive["timestepping"],
                                                       OptionsDict("type" => "Fekete4(3)",
                                                                   "nstep" => 5000,
-                                                                  "dt" => 1.0e-5,
-                                                                  "minimum_dt" => 1.0e-5,
+                                                                  "dt" => 7.0710678118654756e-6,
+                                                                  "minimum_dt" => 7.0710678118654756e-6,
                                                                   "CFL_prefactor" => 1.0,
                                                                   "step_update_prefactor" => 0.5,
                                                                   "nwrite" => 1000,
@@ -155,7 +159,9 @@ test_input_adaptive_split2["timestepping"] = recursive_merge(test_input_adaptive
                                                              OptionsDict("step_update_prefactor" => 0.4))
 test_input_adaptive_split3 = recursive_merge(test_input_adaptive_split2,
                                              OptionsDict("output" => OptionsDict("run_name" => "adaptive split3"),
-                                                         "evolve_moments" => OptionsDict("parallel_pressure" => true),
+                                                         "evolve_moments" => OptionsDict("pressure" => true),
+                                                         "vpa" => OptionsDict("element_spacing_option" => "coarse_tails8.660254037844386"),
+                                                         "vz" => OptionsDict("element_spacing_option" => "coarse_tails8.660254037844386"),
                                                          "ion_numerical_dissipation" => OptionsDict("force_minimum_pdf_value" => 0.0),
                                                          "neutral_numerical_dissipation" => OptionsDict("force_minimum_pdf_value" => 0.0)))
 # The initial conditions seem to make the split3 case hard to advance without any
@@ -163,10 +169,10 @@ test_input_adaptive_split3 = recursive_merge(test_input_adaptive_split2,
 # through this without crashing. For this test, want the timestep to adapt (not just sit
 # at minimum_dt), so just set a very small timestep.
 test_input_adaptive_split3["timestepping"] = recursive_merge(test_input_adaptive_split3["timestepping"],
-                                                             OptionsDict("dt" => 1.0e-7,
+                                                             OptionsDict("dt" => 7.071067811865474e-8,
                                                                          "rtol" => 2.0e-4,
-                                                                         "atol" => 2.0e-10,
-                                                                         "minimum_dt" => 1.0e-7,
+                                                                         "atol" => 7.978845608028654e-11,
+                                                                         "minimum_dt" => 7.071067811865474e-8,
                                                                          "step_update_prefactor" => 0.064))
 
 # Test exact_output_times option in full-f/split1/split2 cases
@@ -177,7 +183,7 @@ test_input_adaptive_split2["timestepping"]["exact_output_times"] = true
 """
 Run a test for a single set of parameters
 """
-function run_test(test_input, expected_phi; rtol=4.e-14, atol=1.e-15, args...)
+function run_test(test_input, expected_phi; rtol=4.e-14, atol=1.e-14, args...)
     # by passing keyword arguments to run_test, args becomes a Tuple of Pairs which can be
     # used to update the default inputs
 
@@ -233,7 +239,7 @@ function run_test(test_input, expected_phi; rtol=4.e-14, atol=1.e-15, args...)
             println("data tested would be: ", actual_phi)
             @test false
         else
-            @test isapprox(actual_phi, expected_phi, rtol=rtol, atol=atol)
+            @test elementwise_isapprox(actual_phi, expected_phi, rtol=rtol, atol=atol)
         end
     end
 end
@@ -298,7 +304,8 @@ function runtests()
                       0.008010459888136036, 0.0022238610414135186, -0.0020340880648959266,
                       -0.006273371184150506, -0.011509711109921564, -0.01608354415559066,
                       -0.019068436253618693, -0.02165307457245153, -0.02374536776323688,
-                      -0.026193225296752082, -0.03316168704620608])
+                      -0.026193225296752082, -0.03316168704620608], rtol=0.0, 
+                     atol=1.0e-13)
         end
 
         fullf_expected_output = [-0.06485643672684559, -0.01393132401823833,

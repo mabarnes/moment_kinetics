@@ -544,15 +544,27 @@ function initialize_external_source_amplitude!(moments, external_source_settings
                             ion_source_settings[index].z_amplitude[iz]
                     end
                 end
-                if moments.evolve_ppar
-                    @loop_r_z ir iz begin
-                        moments.ion.external_source_pressure_amplitude[iz,ir,index] =
-                            (0.5 * ion_source_settings[index].source_T +
-                             moments.ion.upar[iz,ir]^2 - moments.ion.ppar[iz,ir] /
-                             moments.ion.dens[iz,ir]) *
-                            ion_source_settings[index].source_strength *
-                            ion_source_settings[index].r_amplitude[ir] *
-                            ion_source_settings[index].z_amplitude[iz]
+                if moments.evolve_p
+                    if vperp.n == 1
+                        @loop_r_z ir iz begin
+                            moments.ion.external_source_pressure_amplitude[iz,ir,index] =
+                                (1.0/3.0 * ion_source_settings[index].source_T +
+                                 1.0/3.0 * moments.ion.upar[iz,ir]^2 -
+                                 moments.ion.p[iz,ir] / moments.ion.dens[iz,ir]) *
+                                ion_source_settings[index].source_strength *
+                                ion_source_settings[index].r_amplitude[ir] *
+                                ion_source_settings[index].z_amplitude[iz]
+                        end
+                    else
+                        @loop_r_z ir iz begin
+                            moments.ion.external_source_pressure_amplitude[iz,ir,index] =
+                                (ion_source_settings[index].source_T +
+                                 1.0/3.0 * moments.ion.upar[iz,ir]^2 -
+                                 moments.ion.p[iz,ir] / moments.ion.dens[iz,ir]) *
+                                ion_source_settings[index].source_strength *
+                                ion_source_settings[index].r_amplitude[ir] *
+                                ion_source_settings[index].z_amplitude[iz]
+                        end
                     end
                 end
             else
@@ -575,14 +587,25 @@ function initialize_external_source_amplitude!(moments, external_source_settings
                         moments.ion.external_source_momentum_amplitude[iz,ir,index] = 0.0
                     end
                 end
-                if moments.evolve_ppar
-                    @loop_r_z ir iz begin
-                        moments.ion.external_source_pressure_amplitude[iz,ir,index] =
-                            (0.5 * ion_source_settings[index].source_T +
-                            moments.ion.upar[iz,ir]^2) *
-                            ion_source_settings[index].source_strength *
-                            ion_source_settings[index].r_amplitude[ir] *
-                            ion_source_settings[index].z_amplitude[iz]
+                if moments.evolve_p
+                    if vperp.n == 1
+                        @loop_r_z ir iz begin
+                            moments.ion.external_source_pressure_amplitude[iz,ir,index] =
+                                (1.0/3.0 * ion_source_settings[index].source_T +
+                                 1.0/3.0 * moments.ion.upar[iz,ir]^2) *
+                                ion_source_settings[index].source_strength *
+                                ion_source_settings[index].r_amplitude[ir] *
+                                ion_source_settings[index].z_amplitude[iz]
+                        end
+                    else
+                        @loop_r_z ir iz begin
+                            moments.ion.external_source_pressure_amplitude[iz,ir,index] =
+                                (ion_source_settings[index].source_T +
+                                 1.0/3.0 * moments.ion.upar[iz,ir]^2) *
+                                ion_source_settings[index].source_strength *
+                                ion_source_settings[index].r_amplitude[ir] *
+                                ion_source_settings[index].z_amplitude[iz]
+                        end
                     end
                 end
             end
@@ -609,14 +632,26 @@ function initialize_external_source_amplitude!(moments, external_source_settings
                         electron_source_settings[index].r_amplitude[ir] *
                         electron_source_settings[index].z_amplitude[iz]
                 end
-                @loop_r_z ir iz begin
-                    moments.electron.external_source_pressure_amplitude[iz,ir,index] =
-                        (0.5 * electron_source_settings[index].source_T +
-                         moments.electron.upar[iz,ir]^2 -
-                         moments.electron.ppar[iz,ir] / moments.electron.dens[iz,ir]) *
-                        electron_source_settings[index].source_strength *
-                        electron_source_settings[index].r_amplitude[ir] *
-                        electron_source_settings[index].z_amplitude[iz]
+                if vperp.n == 1
+                    @loop_r_z ir iz begin
+                        moments.electron.external_source_pressure_amplitude[iz,ir,index] =
+                            (1.0/3.0 * electron_source_settings[index].source_T +
+                             1.0/3.0 * moments.electron.upar[iz,ir]^2 -
+                             moments.electron.p[iz,ir] / moments.electron.dens[iz,ir]) *
+                            electron_source_settings[index].source_strength *
+                            electron_source_settings[index].r_amplitude[ir] *
+                            electron_source_settings[index].z_amplitude[iz]
+                    end
+                else
+                    @loop_r_z ir iz begin
+                        moments.electron.external_source_pressure_amplitude[iz,ir,index] =
+                            (electron_source_settings[index].source_T +
+                             1.0/3.0 * moments.electron.upar[iz,ir]^2 -
+                             moments.electron.p[iz,ir] / moments.electron.dens[iz,ir]) *
+                            electron_source_settings[index].source_strength *
+                            electron_source_settings[index].r_amplitude[ir] *
+                            electron_source_settings[index].z_amplitude[iz]
+                    end
                 end
             else
                 @loop_r_z ir iz begin
@@ -643,11 +678,24 @@ function initialize_external_source_amplitude!(moments, external_source_settings
                 @loop_r_z ir iz begin
                     moments.electron.external_source_momentum_amplitude[iz,ir,index] = 0.0
                 end
-                @loop_r_z ir iz begin
-                    moments.electron.external_source_pressure_amplitude[iz,ir,index] =
-                        (0.5 * electron_source_settings[index].source_T +
-                        moments.electron.upar[iz,ir]^2) *
-                        moments.electron.external_source_amplitude[iz,ir,index]
+                if vperp.n == 1
+                    @loop_r_z ir iz begin
+                        moments.electron.external_source_pressure_amplitude[iz,ir,index] =
+                            (1.0/3.0 * electron_source_settings[index].source_T +
+                             1.0/3.0 * moments.electron.upar[iz,ir]^2) *
+                            electron_source_settings[index].source_strength *
+                            electron_source_settings[index].r_amplitude[ir] *
+                            electron_source_settings[index].z_amplitude[iz]
+                    end
+                else
+                    @loop_r_z ir iz begin
+                        moments.electron.external_source_pressure_amplitude[iz,ir,index] =
+                            (electron_source_settings[index].source_T +
+                             1.0/3.0 * moments.electron.upar[iz,ir]^2) *
+                            electron_source_settings[index].source_strength *
+                            electron_source_settings[index].r_amplitude[ir] *
+                            electron_source_settings[index].z_amplitude[iz]
+                    end
                 end
             end
         end
@@ -678,15 +726,27 @@ function initialize_external_source_amplitude!(moments, external_source_settings
                                 neutral_source_settings[index].z_amplitude[iz]
                         end
                     end
-                    if moments.evolve_ppar
-                        @loop_r_z ir iz begin
-                            moments.neutral.external_source_pressure_amplitude[iz,ir,index] =
-                                (0.5 * neutral_source_settings[index].source_T +
-                                moments.neutral.upar[iz,ir]^2 -
-                                moments.neutral.ppar[iz,ir] / moments.neutral.dens[iz,ir]) *
-                                neutral_source_settings[index].source_strength *
-                                neutral_source_settings[index].r_amplitude[ir] *
-                                neutral_source_settings[index].z_amplitude[iz]
+                    if moments.evolve_p
+                        if vperp.n == 1
+                            @loop_r_z ir iz begin
+                                moments.neutral.external_source_pressure_amplitude[iz,ir,index] =
+                                    (1.0/3.0 * neutral_source_settings[index].source_T +
+                                     1.0/3.0 * moments.neutral.uz[iz,ir]^2 -
+                                     moments.neutral.p[iz,ir] / moments.neutral.dens[iz,ir]) *
+                                    neutral_source_settings[index].source_strength *
+                                    neutral_source_settings[index].r_amplitude[ir] *
+                                    neutral_source_settings[index].z_amplitude[iz]
+                            end
+                        else
+                            @loop_r_z ir iz begin
+                                moments.neutral.external_source_pressure_amplitude[iz,ir,index] =
+                                    (neutral_source_settings[index].source_T +
+                                     1.0/3.0 * moments.neutral.uz[iz,ir]^2 -
+                                     moments.neutral.p[iz,ir] / moments.neutral.dens[iz,ir]) *
+                                    neutral_source_settings[index].source_strength *
+                                    neutral_source_settings[index].r_amplitude[ir] *
+                                    neutral_source_settings[index].z_amplitude[iz]
+                            end
                         end
                     end
                 else
@@ -709,14 +769,25 @@ function initialize_external_source_amplitude!(moments, external_source_settings
                             moments.neutral.external_source_momentum_amplitude[iz,ir,index] = 0.0
                         end
                     end
-                    if moments.evolve_ppar
-                        @loop_r_z ir iz begin
-                            moments.neutral.external_source_pressure_amplitude[iz,ir,index] =
-                                (0.5 * neutral_source_settings[index].source_T +
-                                moments.neutral.uz[iz,ir]^2) *
-                                neutral_source_settings[index].source_strength *
-                                neutral_source_settings[index].r_amplitude[ir] *
-                                neutral_source_settings[index].z_amplitude[iz]
+                    if moments.evolve_p
+                        if vperp.n == 1
+                            @loop_r_z ir iz begin
+                                moments.neutral.external_source_pressure_amplitude[iz,ir,index] =
+                                    (1.0/3.0 * neutral_source_settings[index].source_T +
+                                     1.0/3.0 * moments.neutral.uz[iz,ir]^2) *
+                                    neutral_source_settings[index].source_strength *
+                                    neutral_source_settings[index].r_amplitude[ir] *
+                                    neutral_source_settings[index].z_amplitude[iz]
+                            end
+                        else
+                            @loop_r_z ir iz begin
+                                moments.neutral.external_source_pressure_amplitude[iz,ir,index] =
+                                    (neutral_source_settings[index].source_T +
+                                     1.0/3.0 * moments.neutral.uz[iz,ir]^2) *
+                                    neutral_source_settings[index].source_strength *
+                                    neutral_source_settings[index].r_amplitude[ir] *
+                                    neutral_source_settings[index].z_amplitude[iz]
+                            end
                         end
                     end
                 end
@@ -809,22 +880,30 @@ Add external source term to the ion kinetic equation.
     source_T = ion_source.source_T
     source_n = ion_source.source_n
     if vperp.n == 1
-        vth_factor = 1.0 / sqrt(source_T)
+        source_vth_factor = 1.0 / sqrt(2.0 * source_T)
+        Maxwellian_prefactor = 1.0 / sqrt(π)
     else
-        vth_factor = 1.0 / source_T^1.5
+        source_vth_factor = 1.0 / (2.0 * source_T)^1.5
+        Maxwellian_prefactor = 1.0 / π^1.5
     end
     vpa_grid = vpa.grid
     vperp_grid = vperp.grid
     if source_type in ("Maxwellian","energy","density_midpoint_control","density_profile_control","temperature_midpoint_control")
         @begin_s_r_z_vperp_region()
-        if moments.evolve_ppar && moments.evolve_upar && moments.evolve_density
+        if moments.evolve_p && moments.evolve_upar && moments.evolve_density
             vth = moments.ion.vth
             density = fvec.density
             upar = fvec.upar
             @loop_s_r_z is ir iz begin
-                this_vth = vth[iz,ir,is]
+                if vperp.n == 1
+                    this_vth_factor = vth[iz,ir,is]
+                else
+                    this_vth_factor = vth[iz,ir,is]^3
+                end
                 this_upar = upar[iz,ir,is]
-                this_prefactor = dt * this_vth / density[iz,ir,is] * vth_factor *
+                this_vth = vth[iz,ir,is]
+                this_prefactor = dt * this_vth_factor / density[iz,ir,is] *
+                                 Maxwellian_prefactor * source_vth_factor *
                                  source_amplitude[iz,ir]
                 @loop_vperp_vpa ivperp ivpa begin
                     # Factor of 1/sqrt(π) (for 1V) or 1/π^(3/2) (for 2V/3V) is absorbed by the
@@ -833,7 +912,7 @@ Add external source term to the ion kinetic equation.
                     vpa_unnorm = vpa_grid[ivpa] * this_vth + this_upar
                     pdf[ivpa,ivperp,iz,ir,is] +=
                         this_prefactor * source_n *
-                        exp(-(vperp_unnorm^2 + vpa_unnorm^2) / source_T)
+                        exp(-(vperp_unnorm^2 + vpa_unnorm^2) / (2.0 * source_T))
                 end
             end
         elseif moments.evolve_upar && moments.evolve_density
@@ -841,42 +920,45 @@ Add external source term to the ion kinetic equation.
             upar = fvec.upar
             @loop_s_r_z is ir iz begin
                 this_upar = upar[iz,ir,is]
-                this_prefactor = dt / density[iz,ir,is] * vth_factor * source_amplitude[iz,ir]
+                this_prefactor = dt / density[iz,ir,is] * Maxwellian_prefactor *
+                                 source_vth_factor * source_amplitude[iz,ir]
                 @loop_vperp_vpa ivperp ivpa begin
                     # Factor of 1/sqrt(π) (for 1V) or 1/π^(3/2) (for 2V/3V) is absorbed by the
                     # normalisation of F
                     vpa_unnorm = vpa_grid[ivpa] + this_upar
                     pdf[ivpa,ivperp,iz,ir,is] +=
                         this_prefactor * source_n *
-                        exp(-(vperp_grid[ivperp]^2 + vpa_unnorm^2) / source_T)
+                        exp(-(vperp_grid[ivperp]^2 + vpa_unnorm^2) / (2.0 * source_T))
                 end
             end
         elseif moments.evolve_density
             density = fvec.density
             @loop_s_r_z is ir iz begin
-                this_prefactor = dt / density[iz,ir,is] * vth_factor * source_amplitude[iz,ir]
+                this_prefactor = dt / density[iz,ir,is] * Maxwellian_prefactor *
+                                 source_vth_factor * source_amplitude[iz,ir]
                 @loop_vperp_vpa ivperp ivpa begin
                     # Factor of 1/sqrt(π) (for 1V) or 1/π^(3/2) (for 2V/3V) is absorbed by the
                     # normalisation of F
                     pdf[ivpa,ivperp,iz,ir,is] +=
                         this_prefactor * source_n *
-                        exp(-(vperp_grid[ivperp]^2 + vpa_grid[ivpa]^2) / source_T)
+                        exp(-(vperp_grid[ivperp]^2 + vpa_grid[ivpa]^2) / (2.0 * source_T))
                 end
             end
-        elseif !moments.evolve_ppar && !moments.evolve_upar && !moments.evolve_density
+        elseif !moments.evolve_p && !moments.evolve_upar && !moments.evolve_density
             @loop_s_r_z is ir iz begin
-                this_prefactor = dt * vth_factor * source_amplitude[iz,ir]
+                this_prefactor = dt * Maxwellian_prefactor * source_vth_factor *
+                                 source_amplitude[iz,ir]
                 @loop_vperp_vpa ivperp ivpa begin
                     # Factor of 1/sqrt(π) (for 1V) or 1/π^(3/2) (for 2V/3V) is absorbed by the
                     # normalisation of F
                     pdf[ivpa,ivperp,iz,ir,is] +=
                         this_prefactor * source_n *
-                        exp(-(vperp_grid[ivperp]^2 + vpa_grid[ivpa]^2) / source_T)
+                        exp(-(vperp_grid[ivperp]^2 + vpa_grid[ivpa]^2) / (2.0 *source_T))
                 end
             end
         else
             error("Unsupported combination evolve_density=$(moments.evolve_density), "
-                  * "evolve_upar=$(moments.evolve_upar), evolve_ppar=$(moments.evolve_ppar)")
+                  * "evolve_upar=$(moments.evolve_upar), evolve_p=$(moments.evolve_p)")
         end
 
         if source_type ∈ ("energy", "temperature_midpoint_control")
@@ -897,17 +979,18 @@ Add external source term to the ion kinetic equation.
     elseif source_type == "alphas" || source_type == "alphas-with-losses"
         @begin_s_r_z_region()
         source_v0 = ion_source.source_v0
+        Maxwellian_prefactor = 1.0 / π^1.5
         if !(source_v0 > 1.0e-8)
             error("source_v0=$source_v0 < 1.0e-8")
         end
         dummy_vpavperp = scratch_dummy.dummy_vpavperp
-        if !moments.evolve_ppar && !moments.evolve_upar && !moments.evolve_density
+        if !moments.evolve_p && !moments.evolve_upar && !moments.evolve_density
             @loop_s_r_z is ir iz begin
-                this_prefactor = dt * source_amplitude[iz,ir]
+                this_prefactor = dt * Maxwellian_prefactor * source_amplitude[iz,ir]
                 # first assign source to local scratch array
                 @loop_vperp_vpa ivperp ivpa begin
                     v2 = vperp_grid[ivperp]^2 + vpa_grid[ivpa]^2
-                    fac = 2.0/(source_T*source_v0^2)
+                    fac = 2.0/(2.0*source_T*source_v0^2)
                     dummy_vpavperp[ivpa,ivperp] = exp(-fac*(v2 - source_v0^2)^2 )
                 end
                 # get the density for normalisation purposes
@@ -949,12 +1032,13 @@ Add external source term to the ion kinetic equation.
             end
         else
             error("Unsupported combination in source_type=$(source_type) evolve_density=$(moments.evolve_density), "
-                  * "evolve_upar=$(moments.evolve_upar), evolve_ppar=$(moments.evolve_ppar)")
+                  * "evolve_upar=$(moments.evolve_upar), evolve_p=$(moments.evolve_p)")
         end
     elseif source_type == "beam" || source_type == "beam-with-losses"
         @begin_s_r_z_region()
         source_vpa0 = ion_source.source_vpa0
         source_vperp0 = ion_source.source_vperp0
+        Maxwellian_prefactor = 1.0 / π^1.5
         if !(source_vpa0 > 1.0e-8)
             error("source_vpa0=$source_vpa0 < 1.0e-8")
         end
@@ -962,9 +1046,9 @@ Add external source term to the ion kinetic equation.
             error("source_vperp0=$source_vperp0 < 1.0e-8")
         end
         dummy_vpavperp = scratch_dummy.dummy_vpavperp
-        if !moments.evolve_ppar && !moments.evolve_upar && !moments.evolve_density
+        if !moments.evolve_p && !moments.evolve_upar && !moments.evolve_density
             @loop_s_r_z is ir iz begin
-                this_prefactor = dt * source_amplitude[iz,ir]
+                this_prefactor = dt * Maxwellian_prefactor * source_amplitude[iz,ir]
                 # first assign source to local scratch array
                 @loop_vperp_vpa ivperp ivpa begin
                     vth0  = sqrt(2.0*source_T) # sqrt(2 T / m), m = mref = 1
@@ -1010,7 +1094,7 @@ Add external source term to the ion kinetic equation.
             end
         else
             error("Unsupported combination in source_type=$(source_type) evolve_density=$(moments.evolve_density), "
-                  * "evolve_upar=$(moments.evolve_upar), evolve_ppar=$(moments.evolve_ppar)")
+                  * "evolve_upar=$(moments.evolve_upar), evolve_p=$(moments.evolve_p)")
         end
     else
         error("Unsupported source_type=$(source_type) ")
@@ -1058,26 +1142,33 @@ Note that this function operates on a single point in `r`, given by `ir`, and `p
     @views source_amplitude = moments.electron.external_source_amplitude[:,ir,index]
     source_T = electron_source.source_T
     if vperp.n == 1
-        vth_factor = 1.0 / sqrt(source_T / me_over_mi)
+        source_vth_factor = 1.0 / sqrt(2.0 * source_T / me_over_mi)
+        Maxwellian_prefactor = 1.0 / sqrt(π)
     else
-        vth_factor = 1.0 / (source_T / me_over_mi)^1.5
+        source_vth_factor = 1.0 / (2.0 * source_T / me_over_mi)^1.5
+        Maxwellian_prefactor = 1.0 / π^1.5
     end
     vpa_grid = vpa.grid
     vperp_grid = vperp.grid
 
     vth = @view moments.electron.vth[:,ir]
     @loop_z iz begin
-        this_vth = vth[iz]
+        if vperp.n == 1
+            this_vth_factor = vth[iz]
+        else
+            this_vth_factor = vth[iz]^3
+        end
         this_upar = electron_upar[iz]
-        this_prefactor = dt * this_vth / electron_density[iz] * vth_factor *
-                         source_amplitude[iz]
+        this_vth = vth[iz]
+        this_prefactor = dt * this_vth_factor / electron_density[iz] *
+                         Maxwellian_prefactor * source_vth_factor * source_amplitude[iz]
         @loop_vperp ivperp begin
             # Factor of 1/sqrt(π) (for 1V) or 1/π^(3/2) (for 2V/3V) is absorbed by the
             # normalisation of F
             vperp_unnorm = vperp_grid[ivperp] * this_vth
             @. pdf_out[:,ivperp,iz] +=
                 this_prefactor *
-                exp(-(vperp_unnorm^2 + (vpa_grid * this_vth + this_upar)^2) * me_over_mi / source_T)
+                exp(-(vperp_unnorm^2 + (vpa_grid * this_vth + this_upar)^2) * me_over_mi / (2.0 * source_T))
         end
     end
 
@@ -1094,27 +1185,26 @@ end
 
 function add_total_external_electron_source_to_Jacobian!(
         jacobian_matrix, f, moments, me, z_speed, electron_sources, z, vperp, vpa, dt, ir,
-        include=:all; f_offset=0, ppar_offset=0)
+        include=:all; f_offset=0, p_offset=0)
     for index ∈ eachindex(electron_sources)
         add_external_electron_source_to_Jacobian!(jacobian_matrix, f, moments, me,
                                                   z_speed, electron_sources[index], index,
                                                   z, vperp, vpa, dt, ir, include;
-                                                  f_offset=f_offset,
-                                                  ppar_offset=ppar_offset)
+                                                  f_offset=f_offset, p_offset=p_offset)
     end
 end
 
 function add_external_electron_source_to_Jacobian!(jacobian_matrix, f, moments, me,
                                                    z_speed, electron_source, index, z,
                                                    vperp, vpa, dt, ir, include=:all;
-                                                   f_offset=0, ppar_offset=0)
-    if f_offset == ppar_offset
-        error("Got f_offset=$f_offset the same as ppar_offset=$ppar_offset. f and ppar "
+                                                   f_offset=0, p_offset=0)
+    if f_offset == p_offset
+        error("Got f_offset=$f_offset the same as p_offset=$p_offset. f and p "
               * "cannot be in same place in state vector.")
     end
     @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
     @boundscheck size(jacobian_matrix, 1) ≥ f_offset + z.n * vperp.n * vpa.n || error("f_offset=$f_offset is too big")
-    @boundscheck size(jacobian_matrix, 1) ≥ ppar_offset + z.n || error("ppar_offset=$ppar_offset is too big")
+    @boundscheck size(jacobian_matrix, 1) ≥ p_offset + z.n || error("p_offset=$p_offset is too big")
     @boundscheck include ∈ (:all, :explicit_z, :explicit_v) || error("Unexpected value for include=$include")
 
     if !electron_source.active
@@ -1125,12 +1215,14 @@ function add_external_electron_source_to_Jacobian!(jacobian_matrix, f, moments, 
     source_T = electron_source.source_T
     dens = @view moments.electron.dens[:,ir]
     upar = @view moments.electron.upar[:,ir]
-    ppar = @view moments.electron.ppar[:,ir]
+    p = @view moments.electron.p[:,ir]
     vth = @view moments.electron.vth[:,ir]
     if vperp.n == 1
-        vth_factor = 1.0 / sqrt(source_T / me)
+        source_vth_factor = 1.0 / sqrt(2.0 * source_T / me)
+        Maxwellian_prefactor = 1.0 / sqrt(π)
     else
-        vth_factor = 1.0 / sqrt(source_T / me)^1.5
+        source_vth_factor = 1.0 / (2.0 * source_T / me)^1.5
+        Maxwellian_prefactor = 1.0 / π^1.5
     end
     vperp_grid = vperp.grid
     vpa_grid = vpa.grid
@@ -1161,17 +1253,22 @@ function add_external_electron_source_to_Jacobian!(jacobian_matrix, f, moments, 
             row = (iz - 1) * v_size + (ivperp - 1) * vpa.n + ivpa + f_offset
 
             # Contributions from
-            #   -vth/n*vth_factor*source_amplitude*exp(-((w_⟂*vth)^2+(w_∥*vth+u)^2)*me/source_T)
+            #   -vth_factor/n*Maxwellian_prefactor*source_vth_factor*source_amplitude*exp(-((w_⟂*vth)^2+(w_∥*vth+u)^2)*me/(2.0 * source_T))
             # Using
-            #   d(vth[irowz])/d(ppar[icolz]) = 1/2*vth/ppar * delta(irowz,icolz)
+            #   d(vth[irowz])/d(p[icolz]) = 1/2*vth/p * delta(irowz,icolz)
             #
-            #   d(exp(-((w_⟂*vth)^2+(w_∥*vth+u)^2)*me/source_T)[irowz])/d(ppar[icolz])
-            #     = -2*(w_⟂^2+(w_∥*vth+u)*w_∥)*me/source_T * 1/2*vth/ppar * exp(-((w_⟂*vth)^2+(w_∥*vth+u)^2)*me/source_T) * delta(irowz,icolz)
-            #     = -(w_⟂^2+(w_∥*vth+u)*w_∥)*me/source_T * vth/ppar * exp(-((w_⟂*vth)^2+(w_∥*vth+u)^2)*me/source_T) * delta(irowz,icolz)
-            jacobian_matrix[row,ppar_offset+iz] +=
-                -dt * vth[iz] / dens[iz] * vth_factor * source_amplitude[iz] *
-                      (0.5/ppar[iz] - (vperp_grid[ivperp]^2 + (vpa_grid[ivpa]*vth[iz] + upar[iz])*vpa_grid[ivpa])*me/source_T*vth[iz]/ppar[iz]) *
-                      exp(-((vperp_grid[ivperp]*vth[iz])^2 + (vpa_grid[ivpa]*vth[iz] + upar[iz])^2) * me / source_T)
+            #   d(exp(-((w_⟂*vth)^2+(w_∥*vth+u)^2)*me/(2.0*source_T))[irowz])/d(p[icolz])
+            #     = -2*(w_⟂^2+(w_∥*vth+u)*w_∥)*me/(2.0*source_T) * 1/2*vth/p * exp(-((w_⟂*vth)^2+(w_∥*vth+u)^2)*me/(2.0*source_T)) * delta(irowz,icolz)
+            #     = -(w_⟂^2+(w_∥*vth+u)*w_∥)*me/(2.0*source_T) * vth/p * exp(-((w_⟂*vth)^2+(w_∥*vth+u)^2)*me/(2.0*source_T)) * delta(irowz,icolz)
+            if vperp.n == 1
+                this_vth_factor = vth[iz]
+            else
+                this_vth_factor = vth[iz]^3
+            end
+            jacobian_matrix[row,p_offset+iz] +=
+                -dt * this_vth_factor / dens[iz] * Maxwellian_prefactor * source_vth_factor * source_amplitude[iz] *
+                      (0.5/p[iz] - (vperp_grid[ivperp]^2 + (vpa_grid[ivpa]*vth[iz] + upar[iz])*vpa_grid[ivpa])*me/(2.0*source_T)*vth[iz]/p[iz]) *
+                      exp(-((vperp_grid[ivperp]*vth[iz])^2 + (vpa_grid[ivpa]*vth[iz] + upar[iz])^2) * me / (2.0 * source_T))
         end
     end
 
@@ -1244,12 +1341,19 @@ function add_external_electron_source_to_v_only_Jacobian!(
     source_T = electron_source.source_T
     dens = moments.electron.dens[iz,ir]
     upar = moments.electron.upar[iz,ir]
-    ppar = moments.electron.ppar[iz,ir]
+    p = moments.electron.p[iz,ir]
     vth = moments.electron.vth[iz,ir]
     if vperp.n == 1
-        vth_factor = 1.0 / sqrt(source_T / me)
+        this_vth_factor = vth
     else
-        vth_factor = 1.0 / sqrt(source_T / me)^1.5
+        this_vth_factor = vth^3
+    end
+    if vperp.n == 1
+        source_vth_factor = 1.0 / sqrt(2.0 * source_T / me)
+        Maxwellian_prefactor = 1.0 / sqrt(π)
+    else
+        source_vth_factor = 1.0 / (2.0 * source_T / me)^1.5
+        Maxwellian_prefactor = 1.0 / π^1.5
     end
     vperp_grid = vperp.grid
     vpa_grid = vpa.grid
@@ -1278,9 +1382,9 @@ function add_external_electron_source_to_v_only_Jacobian!(
         row = (ivperp - 1) * vpa.n + ivpa
 
         jacobian_matrix[row,end] +=
-            -dt * vth / dens * vth_factor * source_amplitude *
-                  (0.5/ppar - (vperp_grid[ivperp]^2 + (vpa_grid[ivpa]*vth + upar)*vpa_grid[ivpa])*me/source_T*vth/ppar) *
-                  exp(-((vperp_grid[ivperp]*vth)^2 + (vpa_grid[ivpa]*vth + upar)^2) * me / source_T)
+            -dt * this_vth_factor / dens * Maxwellian_prefactor * source_vth_factor * source_amplitude *
+                  (0.5/p - (vperp_grid[ivperp]^2 + (vpa_grid[ivpa]*vth + upar)*vpa_grid[ivpa])*me/(2.0*source_T)*vth/p) *
+                  exp(-((vperp_grid[ivperp]*vth)^2 + (vpa_grid[ivpa]*vth + upar)^2) * me / (2.0 * source_T))
     end
 
     return nothing
@@ -1300,22 +1404,30 @@ Add external source term to the neutral kinetic equation.
     @views source_amplitude = moments.neutral.external_source_amplitude[:, :, index]
     source_T = neutral_source.source_T
     if vzeta.n == 1 && vr.n == 1
-        vth_factor = 1.0 / sqrt(source_T)
+        source_vth_factor = 1.0 / sqrt(2.0 * source_T)
+        Maxwellian_prefactor = 1.0 / sqrt(π)
     else
-        vth_factor = 1.0 / source_T^1.5
+        source_vth_factor = 1.0 / (2.0 * source_T)^1.5
+        Maxwellian_prefactor = 1.0 / π^1.5
     end
     vzeta_grid = vzeta.grid
     vr_grid = vr.grid
     vz_grid = vz.grid
 
-    if moments.evolve_ppar && moments.evolve_upar && moments.evolve_density
+    if moments.evolve_p && moments.evolve_upar && moments.evolve_density
         vth = moments.neutral.vth
         density = fvec.density_neutral
         uz = fvec.uz_neutral
         @loop_sn_r_z isn ir iz begin
-            this_vth = vth[iz,ir,isn]
+            if vzeta.n == 1 && vr.n == 1
+                this_vth_factor = vth[iz,ir,isn]
+            else
+                this_vth_factor = vth[iz,ir,isn]^3
+            end
             this_uz = uz[iz,ir,isn]
-            this_prefactor = dt * this_vth / density[iz,ir,isn] * vth_factor *
+            this_vth = vth[iz,ir,isn]
+            this_prefactor = dt * this_vth_factor / density[iz,ir,isn] *
+                             Maxwellian_prefactor * source_vth_factor *
                              source_amplitude[iz,ir]
             @loop_vzeta_vr_vz ivzeta ivr ivz begin
                 # Factor of 1/sqrt(π) (for 1V) or 1/π^(3/2) (for 2V/3V) is absorbed by the
@@ -1325,7 +1437,7 @@ Add external source term to the neutral kinetic equation.
                 vz_unnorm = vz_grid[ivz] * this_vth + this_uz
                 pdf[ivz,ivr,ivzeta,iz,ir,isn] +=
                     this_prefactor *
-                    exp(-(vzeta_unnorm^2 + vr_unnorm^2 + vz_unnorm^2) / source_T)
+                    exp(-(vzeta_unnorm^2 + vr_unnorm^2 + vz_unnorm^2) / (2.0 * source_T))
             end
         end
     elseif moments.evolve_upar && moments.evolve_density
@@ -1333,42 +1445,45 @@ Add external source term to the neutral kinetic equation.
         uz = fvec.uz_neutral
         @loop_sn_r_z isn ir iz begin
             this_uz = uz[iz,ir,isn]
-            this_prefactor = dt / density[iz,ir,isn] * vth_factor * source_amplitude[iz,ir]
+            this_prefactor = dt / density[iz,ir,isn] * Maxwellian_prefactor *
+                             source_vth_factor * source_amplitude[iz,ir]
             @loop_vzeta_vr_vz ivzeta ivr ivz begin
                 # Factor of 1/sqrt(π) (for 1V) or 1/π^(3/2) (for 2V/3V) is absorbed by the
                 # normalisation of F
                 vz_unnorm = vz_grid[ivz] + this_uz
                 pdf[ivz,ivr,ivzeta,iz,ir,isn] +=
                     this_prefactor *
-                    exp(-(vzeta_grid[ivzeta]^2 + vr_grid[ivr]^2 + vz_unnorm^2) / source_T)
+                    exp(-(vzeta_grid[ivzeta]^2 + vr_grid[ivr]^2 + vz_unnorm^2) / (2.0 * source_T))
             end
         end
     elseif moments.evolve_density
         density = fvec.density_neutral
         @loop_sn_r_z isn ir iz begin
-            this_prefactor = dt / density[iz,ir,isn] * vth_factor * source_amplitude[iz,ir]
+            this_prefactor = dt / density[iz,ir,isn] * Maxwellian_prefactor *
+                             source_vth_factor * source_amplitude[iz,ir]
             @loop_vzeta_vr_vz ivzeta ivr ivz begin
                 # Factor of 1/sqrt(π) (for 1V) or 1/π^(3/2) (for 2V/3V) is absorbed by the
                 # normalisation of F
                 pdf[ivz,ivr,ivzeta,iz,ir,isn] +=
                     this_prefactor *
-                    exp(-(vzeta_grid[ivzeta]^2 + vr_grid[ivr]^2 + vz_grid[ivz]^2) / source_T)
+                    exp(-(vzeta_grid[ivzeta]^2 + vr_grid[ivr]^2 + vz_grid[ivz]^2) / (2.0 * source_T))
             end
         end
-    elseif !moments.evolve_ppar && !moments.evolve_upar && !moments.evolve_density
+    elseif !moments.evolve_p && !moments.evolve_upar && !moments.evolve_density
         @loop_sn_r_z isn ir iz begin
-            this_prefactor = dt * vth_factor * source_amplitude[iz,ir]
+            this_prefactor = dt * Maxwellian_prefactor * source_vth_factor *
+                             source_amplitude[iz,ir]
             @loop_vzeta_vr_vz ivzeta ivr ivz begin
                 # Factor of 1/sqrt(π) (for 1V) or 1/π^(3/2) (for 2V/3V) is absorbed by the
                 # normalisation of F
                 pdf[ivz,ivr,ivzeta,iz,ir,isn] +=
                     this_prefactor *
-                    exp(-(vzeta_grid[ivzeta]^2 + vr_grid[ivr]^2 + vz_grid[ivz]^2) / source_T)
+                    exp(-(vzeta_grid[ivzeta]^2 + vr_grid[ivr]^2 + vz_grid[ivz]^2) / (2.0 * source_T))
             end
         end
     else
         error("Unsupported combination evolve_density=$(moments.evolve_density), "
-              * "evolve_upar=$(moments.evolve_upar), evolve_ppar=$(moments.evolve_ppar)")
+              * "evolve_upar=$(moments.evolve_upar), evolve_p=$(moments.evolve_p)")
     end
 
 
@@ -1390,12 +1505,12 @@ end
 Contribute all of the ion source controllers to fvec_in, one by one.
 """
 function total_external_ion_source_controllers!(ion_external_source_controller_integral,
-                                                fvec_in, moments, ion_sources, dt)
+                                                fvec_in, moments, ion_sources, vperp, dt)
     for index ∈ eachindex(ion_sources)
         if ion_sources[index].active
             @views external_ion_source_controller!(ion_external_source_controller_integral[:,:,index],
                                                    fvec_in, moments, ion_sources[index],
-                                                   index, dt)
+                                                   index, vperp, dt)
         end
     end
     return nothing
@@ -1410,21 +1525,35 @@ source amplitude.
 """
 @timeit global_timer external_ion_source_controller!(
                          ion_external_source_controller_integral, fvec_in, moments,
-                         ion_source_settings, index, dt) = begin
+                         ion_source_settings, index, vperp, dt) = begin
     @begin_r_z_region()
 
     is = 1
     ion_moments = moments.ion
-    density = fvec_in.density
-    upar = fvec_in.upar
-    ppar = fvec_in.ppar
+    density = @view fvec_in.density[:,:,1]
+    upar = @view fvec_in.upar[:,:,1]
+    p = @view fvec_in.p[:,:,1]
 
     if ion_source_settings.source_type == "Maxwellian"
-        if moments.evolve_ppar
-            @loop_r_z ir iz begin
-                ion_moments.external_source_pressure_amplitude[iz,ir,index] =
-                    (0.5 * ion_source_settings.source_T + upar[iz,ir,is]^2) *
-                    ion_moments.external_source_amplitude[iz,ir,index]
+        if moments.evolve_p
+            if vperp.n == 1
+                @loop_r_z ir iz begin
+                    ion_moments.external_source_pressure_amplitude[iz,ir,index] =
+                        (1.0/3.0 * ion_source_settings.source_T +
+                         1.0/3.0 * upar[iz,ir]^2) *
+                        ion_source_settings.source_strength *
+                        ion_source_settings.r_amplitude[ir] *
+                        ion_source_settings.z_amplitude[iz]
+                end
+            else
+                @loop_r_z ir iz begin
+                    ion_moments.external_source_pressure_amplitude[iz,ir,index] =
+                        (ion_source_settings.source_T +
+                         1.0/3.0 * upar[iz,ir]^2) *
+                        ion_source_settings.source_strength *
+                        ion_source_settings.r_amplitude[ir] *
+                        ion_source_settings.z_amplitude[iz]
+                end
             end
         end
     elseif ion_source_settings.source_type == "energy"
@@ -1437,14 +1566,25 @@ source amplitude.
                       ion_source_settings.z_amplitude[iz]
             end
         end
-        if moments.evolve_ppar
-            @loop_r_z ir iz begin
-                ion_moments.external_source_pressure_amplitude[iz,ir,index] =
-                    (0.5 * ion_source_settings.source_T + upar[iz,ir]^2 -
-                     ppar[iz,ir]/density[iz,ir]) *
-                    ion_source_settings.source_strength *
-                    ion_source_settings.r_amplitude[ir] *
-                    ion_source_settings.z_amplitude[iz]
+        if moments.evolve_p
+            if vperp.n == 1
+                @loop_r_z ir iz begin
+                    ion_moments.external_source_pressure_amplitude[iz,ir,index] =
+                        (1.0/3.0 * ion_source_settings.source_T +
+                         1.0/3.0 * upar[iz,ir]^2 - p[iz,ir] / density[iz,ir]) *
+                        ion_source_settings.source_strength *
+                        ion_source_settings.r_amplitude[ir] *
+                        ion_source_settings.z_amplitude[iz]
+                end
+            else
+                @loop_r_z ir iz begin
+                    ion_moments.external_source_pressure_amplitude[iz,ir,index] =
+                        (ion_source_settings.source_T +
+                         1.0/3.0 * upar[iz,ir]^2 - p[iz,ir] / density[iz,ir]) *
+                        ion_source_settings.source_strength *
+                        ion_source_settings.r_amplitude[ir] *
+                        ion_source_settings.z_amplitude[iz]
+                end
             end
         end
     elseif ion_source_settings.source_type == "density_midpoint_control"
@@ -1491,16 +1631,25 @@ source amplitude.
                     amplitude * ion_source_settings.controller_source_profile[iz,ir]
             end
         end
-        if moments.evolve_ppar
-            @loop_r_z ir iz begin
-                ion_moments.external_source_pressure_amplitude[iz,ir,index] =
-                    (0.5 * ion_source_settings.source_T + upar[iz,ir,is]^2) *
-                    amplitude * ion_source_settings.controller_source_profile[iz,ir]
+        if moments.evolve_p
+            if vperp.n == 1
+                @loop_r_z ir iz begin
+                    ion_moments.external_source_pressure_amplitude[iz,ir,index] =
+                        (1.0/3.0 * ion_source_settings.source_T +
+                         1.0/3.0 * upar[iz,ir]^2) *
+                        amplitude * ion_source_settings.controller_source_profile[iz,ir]
+                end
+            else
+                @loop_r_z ir iz begin
+                    ion_moments.external_source_pressure_amplitude[iz,ir,index] =
+                        (ion_source_settings.source_T + 1.0/3.0 * upar[iz,ir]^2) *
+                        amplitude * ion_source_settings.controller_source_profile[iz,ir]
+                end
             end
         end
     elseif ion_source_settings.source_type == "temperature_midpoint_control"
         @begin_serial_region()
-        ion_moments.temp .= 2 .* ppar ./ density
+        ion_moments.temp .= p ./ density
         # controller_amplitude error is a shared memory Vector of length 1
         controller_amplitude = ion_source_settings.PI_controller_amplitude
         @serial_region begin
@@ -1544,12 +1693,21 @@ source amplitude.
                     ion_source_settings.controller_source_profile[iz,ir]
             end
         end
-        if moments.evolve_ppar
-            @loop_r_z ir iz begin
-                ion_moments.external_source_pressure_amplitude[iz,ir,index] =
-                    ((0.5 * ion_source_settings.source_T + upar[iz,ir]^2 -
-                      ppar[iz,ir]/density[iz,ir]) * amplitude) *
-                    ion_source_settings.controller_source_profile[iz,ir]
+        if moments.evolve_p
+            if vperp.n == 1
+                @loop_r_z ir iz begin
+                    ion_moments.external_source_pressure_amplitude[iz,ir,index] =
+                        (1.0/3.0 * ion_source_settings.source_T +
+                         1.0/3.0 * upar[iz,ir]^2 - p[iz,ir] / density[iz,ir]) *
+                        amplitude * ion_source_settings.controller_source_profile[iz,ir]
+                end
+            else
+                @loop_r_z ir iz begin
+                    ion_moments.external_source_pressure_amplitude[iz,ir,index] =
+                        (ion_source_settings.source_T + 1.0/3.0 * upar[iz,ir]^2 -
+                         p[iz,ir] / density[iz,ir]) *
+                        amplitude * ion_source_settings.controller_source_profile[iz,ir]
+                end
             end
         end
     elseif ion_source_settings.source_type == "density_profile_control"
@@ -1571,11 +1729,20 @@ source amplitude.
                 ion_moments.external_source_density_amplitude[iz,ir,index] = amplitude[iz,ir,index]
             end
         end
-        if moments.evolve_ppar
-            @loop_r_z ir iz begin
-                ion_moments.external_source_pressure_amplitude[iz,ir,index] =
-                    (0.5 * ion_source_settings.source_T + upar[iz,ir,is]^2) *
-                    amplitude[iz,ir,index]
+        if moments.evolve_p
+            if vperp.n == 1
+                @loop_r_z ir iz begin
+                    ion_moments.external_source_pressure_amplitude[iz,ir,index] =
+                        (1.0/3.0 * ion_source_settings.source_T +
+                         1.0/3.0 * upar[iz,ir]^2) *
+                        amplitude[iz,ir,index]
+                end
+            else
+                @loop_r_z ir iz begin
+                    ion_moments.external_source_pressure_amplitude[iz,ir,index] =
+                        (ion_source_settings.source_T + 1.0/3.0 * upar[iz,ir]^2) *
+                        amplitude[iz,ir,index]
+                end
             end
         end
     elseif ion_source_settings.source_type == "alphas"
@@ -1636,30 +1803,45 @@ up to date.
     electron_moments = moments.electron
     density = fvec_in.electron_density
     upar = fvec_in.electron_upar
-    ppar = fvec_in.electron_ppar
+    p = fvec_in.electron_p
     @views ion_source_amplitude = moments.ion.external_source_amplitude[:, :, index]
 
     if electron_source_settings.source_type == "Maxwellian"
-        @loop_r_z ir iz begin
-            electron_moments.external_source_pressure_amplitude[iz,ir,index] =
-                (0.5 * electron_source_settings.source_T + upar[iz,ir,is]^2) *
-                electron_moments.external_source_amplitude[iz,ir,index]
+        if vperp.n == 1
+            @loop_r_z ir iz begin
+                electron_momentss.external_source_pressure_amplitude[iz,ir,index] =
+                    (1.0/3.0 * electron_source_settings[index].source_T +
+                     1.0/3.0 * upar[iz,ir]^2) *
+                    electron_moments.external_source_amplitude[iz,ir,index]
+            end
+        else
+            @loop_r_z ir iz begin
+                electron_moments.external_source_pressure_amplitude[iz,ir,index] =
+                    (electron_source_settings[index].source_T +
+                     1.0/3.0 * upar[iz,ir]^2) *
+                    electron_moments.external_source_amplitude[iz,ir,index]
+            end
         end
     elseif electron_source_settings.source_type == "energy"
         @loop_r_z ir iz begin
             electron_moments.external_source_momentum_amplitude[iz,ir,index] =
                 - density[iz,ir] * upar[iz,ir] *
-                  electron_source_settings.source_strength *
-                  electron_source_settings.r_amplitude[ir] *
-                  electron_source_settings.z_amplitude[iz]
+                  electron_moments.external_source_amplitude[iz,ir,index]
         end
-        @loop_r_z ir iz begin
-            electron_moments.external_source_pressure_amplitude[iz,ir,index] =
-                (0.5 * electron_source_settings.source_T + upar[iz,ir]^2 -
-                 ppar[iz,ir] / density[iz,ir]) *
-                electron_source_settings.source_strength *
-                electron_source_settings.r_amplitude[ir] *
-                electron_source_settings.z_amplitude[iz]
+        if vperp.n == 1
+            @loop_r_z ir iz begin
+                electron_moments.external_source_pressure_amplitude[iz,ir,index] =
+                    (1.0/3.0 * electron_source_settings[index].source_T +
+                     1.0/3.0 * upar[iz,ir]^2 - p[iz,ir] / density[iz,ir]) *
+                    electron_moments.external_source_amplitude[iz,ir,index]
+            end
+        else
+            @loop_r_z ir iz begin
+                electron_moments.external_source_pressure_amplitude[iz,ir,index] =
+                    (electron_source_settings[index].source_T +
+                     1.0/3.0 * upar[iz,ir]^2 - p[iz,ir] / density[iz,ir]) *
+                    electron_moments.external_source_amplitude[iz,ir,index]
+            end
         end
     else
         @loop_r_z ir iz begin
@@ -1670,11 +1852,20 @@ up to date.
                 - density[iz,ir] * upar[iz,ir] *
                   electron_moments.external_source_amplitude[iz,ir,index]
         end
-        @loop_r_z ir iz begin
-            electron_moments.external_source_pressure_amplitude[iz,ir,index] =
-                (0.5 * electron_source_settings.source_T + upar[iz,ir]^2 -
-                 ppar[iz,ir] / density[iz,ir]) *
-                electron_moments.external_source_amplitude[iz,ir,index]
+        if vperp.n == 1
+            @loop_r_z ir iz begin
+                electron_moments.external_source_pressure_amplitude[iz,ir,index] =
+                    (1.0/3.0 * electron_source_settings[index].source_T +
+                     1.0/3.0 * upar[iz,ir]^2 - p[iz,ir] / density[iz,ir]) *
+                    electron_moments.external_source_amplitude[iz,ir,index]
+            end
+        else
+            @loop_r_z ir iz begin
+                electron_moments.external_source_pressure_amplitude[iz,ir,index] =
+                    (electron_source_settings[index].source_T +
+                     1.0/3.0 * upar[iz,ir]^2 - p[iz,ir] / density[iz,ir]) *
+                    electron_moments.external_source_amplitude[iz,ir,index]
+            end
         end
     end
 
@@ -1695,13 +1886,14 @@ Contribute all of the neutral source controllers to fvec_in, one by one.
 """
 function
     total_external_neutral_source_controllers!(neutral_external_source_controller_integral,
-        fvec_in, moments, neutral_sources, r, z, dt)
+                                               fvec_in, moments, neutral_sources, r, z,
+                                               vzeta, vr, dt)
 
     for index ∈ eachindex(neutral_sources)
         if neutral_sources[index].active
             @views external_neutral_source_controller!(
                        neutral_external_source_controller_integral[:,:,index], fvec_in, moments,
-                       neutral_sources[index], index, r, z, dt)
+                       neutral_sources[index], index, r, z, vzeta, vr, dt)
         end
     end
     return nothing
@@ -1717,21 +1909,31 @@ source amplitude.
 """
 @timeit global_timer external_neutral_source_controller!(
                          neutral_external_source_controller_integral, fvec_in, moments,
-                         neutral_source_settings, index, r, z, dt) = begin
+                         neutral_source_settings, index, r, z, vzeta, vr, dt) = begin
     @begin_r_z_region()
 
     is = 1
     neutral_moments = moments.neutral
     density = fvec_in.density_neutral
     uz = fvec_in.uz_neutral
-    pz = fvec_in.pz_neutral
+    p = fvec_in.p_neutral
 
     if neutral_source_settings.source_type == "Maxwellian"
-        if moments.evolve_ppar
-            @loop_r_z ir iz begin
-                neutral_moments.external_source_pressure_amplitude[iz,ir,index] =
-                    (0.5 * neutral_source_settings.source_T + uz[iz,ir,is]^2) *
-                    neutral_moments.external_source_amplitude[iz,ir,index]
+        if moments.evolve_p
+            if vzeta.n == 1 && vr.n == 1
+                @loop_r_z ir iz begin
+                    neutral_moments.external_source_pressure_amplitude[iz,ir,index] =
+                        (1.0/3.0 * neutral_source_settings[index].source_T +
+                         1.0/3.0 * uz[iz,ir]^2) *
+                        neutral_moments.external_source_amplitude[iz,ir,index]
+                end
+            else
+                @loop_r_z ir iz begin
+                    neutral_moments.external_source_pressure_amplitude[iz,ir,index] =
+                        (neutral_source_settings[index].source_T +
+                         1.0/3.0 * uz[iz,ir]^2) *
+                        neutral_moments.external_source_amplitude[iz,ir,index]
+                end
             end
         end
     elseif neutral_source_settings.source_type == "energy"
@@ -1744,14 +1946,25 @@ source amplitude.
                       neutral_source_settings.z_amplitude[iz]
             end
         end
-        if moments.evolve_ppar
-            @loop_r_z ir iz begin
-                neutral_moments.external_source_pressure_amplitude[iz,ir,index] =
-                    (0.5 * neutral_source_settings.source_T +
-                     uz[iz,ir]^2 - pz[iz,ir] / density[iz,ir]) *
-                    neutral_source_settings.source_strength *
-                    neutral_source_settings.r_amplitude[ir] *
-                    neutral_source_settings.z_amplitude[iz]
+        if moments.evolve_p
+            if vperp.n == 1
+                @loop_r_z ir iz begin
+                    neutral_moments.external_source_pressure_amplitude[iz,ir,index] =
+                        (1.0/3.0 * neutral_source_settings[index].source_T +
+                         1.0/3.0 * uz[iz,ir]^2 - p[iz,ir] / density[iz,ir]) *
+                        neutral_source_settings[index].source_strength *
+                        neutral_source_settings[index].r_amplitude[ir] *
+                        neutral_source_settings[index].z_amplitude[iz]
+                end
+            else
+                @loop_r_z ir iz begin
+                    neutral_moments.external_source_pressure_amplitude[iz,ir,index] =
+                        (neutral_source_settings[index].source_T +
+                         1.0/3.0 * uz[iz,ir]^2 - p[iz,ir] / density[iz,ir]) *
+                        neutral_source_settings[index].source_strength *
+                        neutral_source_settings[index].r_amplitude[ir] *
+                        neutral_source_settings[index].z_amplitude[iz]
+                end
             end
         end
     elseif neutral_source_settings.source_type == "density_midpoint_control"
@@ -1798,11 +2011,21 @@ source amplitude.
                     amplitude * neutral_source_settings.controller_source_profile[iz,ir,index]
             end
         end
-        if moments.evolve_ppar
-            @loop_r_z ir iz begin
-                neutral_moments.external_source_pressure_amplitude[iz,ir,index] =
-                    (0.5 * neutral_source_settings.source_T + uz[iz,ir,is]^2) *
-                    amplitude * neutral_source_settings.controller_source_profile[iz,ir,index]
+        if moments.evolve_p
+            if vperp.n == 1
+                @loop_r_z ir iz begin
+                    neutral_moments.external_source_pressure_amplitude[iz,ir,index] =
+                        (1.0/3.0 * neutral_source_settings[index].source_T +
+                         1.0/3.0 * uz[iz,ir]^2) *
+                        amplitude * neutral_source_settings.controller_source_profile[iz,ir,index]
+                end
+            else
+                @loop_r_z ir iz begin
+                    neutral_moments.external_source_pressure_amplitude[iz,ir,index] =
+                        (neutral_source_settings[index].source_T +
+                         1.0/3.0 * uz[iz,ir]^2) *
+                        amplitude * neutral_source_settings.controller_source_profile[iz,ir,index]
+                end
             end
         end
     elseif neutral_source_settings.source_type == "density_profile_control"
@@ -1823,11 +2046,21 @@ source amplitude.
                 neutral_moments.external_source_density_amplitude[iz,ir,index] = amplitude[iz,ir,index]
             end
         end
-        if moments.evolve_ppar
-            @loop_r_z ir iz begin
-                neutral_moments.external_source_pressure_amplitude[iz,ir,index] =
-                    (0.5 * neutral_source_settings.source_T + uz[iz,ir,is]^2) *
-                    amplitude[iz,ir,index]
+        if moments.evolve_p
+            if vperp.n == 1
+                @loop_r_z ir iz begin
+                    neutral_moments.external_source_pressure_amplitude[iz,ir,index] =
+                        (1.0/3.0 * neutral_source_settings[index].source_T +
+                         1.0/3.0 * uz[iz,ir]^2) *
+                        amplitude[iz,ir,index]
+                end
+            else
+                @loop_r_z ir iz begin
+                    neutral_moments.external_source_pressure_amplitude[iz,ir,index] =
+                        (neutral_source_settings[index].source_T +
+                         1.0/3.0 * uz[iz,ir]^2) *
+                        amplitude[iz,ir,index]
+                end
             end
         end
     elseif neutral_source_settings.source_type == "recycling"
@@ -1872,11 +2105,21 @@ source amplitude.
                 neutral_moments.external_source_density_amplitude[iz,ir,index] = amplitude[iz,ir,index]
             end
         end
-        if moments.evolve_ppar
-            @loop_r_z ir iz begin
-                neutral_moments.external_source_pressure_amplitude[iz,ir,index] =
-                    (0.5 * neutral_source_settings.source_T + uz[iz,ir,is]^2) *
-                    amplitude[iz,ir,index]
+        if moments.evolve_p
+            if vperp.n == 1
+                @loop_r_z ir iz begin
+                    neutral_moments.external_source_pressure_amplitude[iz,ir,index] =
+                        (1.0/3.0 * neutral_source_settings[index].source_T +
+                         1.0/3.0 * uz[iz,ir]^2) *
+                        amplitude[iz,ir,index]
+                end
+            else
+                @loop_r_z ir iz begin
+                    neutral_moments.external_source_pressure_amplitude[iz,ir,index] =
+                        (neutral_source_settings[index].source_T +
+                         1.0/3.0 * uz[iz,ir]^2) *
+                        amplitude[iz,ir,index]
+                end
             end
         end
     else

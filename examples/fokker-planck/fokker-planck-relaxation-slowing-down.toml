@@ -6,8 +6,8 @@ ionization_frequency = 0.0
 [evolve_moments]
 density = false
 parallel_flow = false
-parallel_pressure = false
 moments_conservation = false
+pressure = false
 
 [z]
 ngrid = 1
@@ -26,14 +26,14 @@ discretization = "chebyshev_pseudospectral"
 [vpa]
 ngrid = 5
 nelement = 32
-L = 6.0
+L = 8.485281374238571
 bc = "zero"
 discretization = "gausslegendre_pseudospectral"
 
 [vperp]
 ngrid = 5
 nelement = 16
-L = 3.0
+L = 4.242640687119286
 discretization = "gausslegendre_pseudospectral"
 # Fokker-Planck operator requires the "gausslegendre_pseudospectral
 # options for the vpa and vperp grids
@@ -61,13 +61,13 @@ temperature_phase = 0.0
 
 [fokker_planck_collisions]
 # nuii sets the normalised input C[F,F] Fokker-Planck collision frequency
-nuii = 1.0
+nuii = 4.0
 slowing_down_test = true
 frequency_option = "manual"
 use_fokker_planck = true
 
 [timestepping]
 nstep = 1000
-dt = 1.0e-5
+dt = 7.0710678118654756e-6
 nwrite = 50
 nwrite_dfns = 50

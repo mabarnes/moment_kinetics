@@ -78,37 +78,64 @@ Currently Krook collisions
                          dt) = begin
     @begin_s_r_z_region()
 
-    if vperp.n > 1 && (moments.evolve_density || moments.evolve_upar || moments.evolve_ppar)
+    if vperp.n > 1 && (moments.evolve_density || moments.evolve_upar || moments.evolve_p)
         error("Krook collisions not implemented for 2V moment-kinetic cases yet")
+    end
+
+    if vperp.n == 1
+        Maxwellian_prefactor = 1.0 / sqrt(π)
+    else
+        Maxwellian_prefactor = 1.0 / π^1.5
     end
 
     # Note: do not need 1/sqrt(pi) for the 'Maxwellian' term because the pdf is already
     # normalized by sqrt(pi) (see velocity_moments.integrate_over_vspace).
-    if moments.evolve_ppar && moments.evolve_upar
+    if moments.evolve_p && moments.evolve_upar
         # Compared to evolve_upar version, grid is already normalized by vth, and multiply
         # through by vth, remembering pdf is already multiplied by vth
         @loop_s_r_z is ir iz begin
             n = fvec_in.density[iz,ir,is]
             vth = moments.ion.vth[iz,ir,is]
-            nu_ii = get_collision_frequency_ii(collisions, n, vth)
+            if vperp.n == 1
+                # For 1V need to use parallel temperature for Maxwellian in Krook
+                # operator, and for consistency with old 1D1V results also calculate
+                # collision frequency using parallel temperature.
+                Krook_vth = sqrt(3.0) * vth
+                adjust_1V = 1.0 / sqrt(3.0)
+            else
+                Krook_vth = vth
+                adjust_1V = 1.0
+            end
+            nu_ii = get_collision_frequency_ii(collisions, n, Krook_vth)
             @loop_vperp_vpa ivperp ivpa begin
                 pdf_out[ivpa,ivperp,iz,ir,is] -= dt * nu_ii *
                     (fvec_in.pdf[ivpa,ivperp,iz,ir,is]
-                     - exp(-vpa.grid[ivpa]^2 - vperp.grid[ivperp]^2))
+                     - Maxwellian_prefactor * adjust_1V * exp(-(vpa.grid[ivpa]*adjust_1V)^2
+                                                              - (vperp.grid[ivperp]*adjust_1V)^2))
             end
         end
-    elseif moments.evolve_ppar
+    elseif moments.evolve_p
         # Compared to full-f collision operater, multiply through by vth, remembering pdf
         # is already multiplied by vth, and grid is already normalized by vth
         @loop_s_r_z is ir iz begin
             n = fvec_in.density[iz,ir,is]
             vth = moments.ion.vth[iz,ir,is]
-            nu_ii = get_collision_frequency_ii(collisions, n, vth)
+            if vperp.n == 1
+                # For 1V need to use parallel temperature for Maxwellian in Krook
+                # operator, and for consistency with old 1D1V results also calculate
+                # collision frequency using parallel temperature.
+                Krook_vth = sqrt(3.0) * vth
+                adjust_1V = 1.0 / sqrt(3.0)
+            else
+                Krook_vth = vth
+                adjust_1V = 1.0
+            end
+            nu_ii = get_collision_frequency_ii(collisions, n, Krook_vth)
             @loop_vperp_vpa ivperp ivpa begin
                 pdf_out[ivpa,ivperp,iz,ir,is] -= dt * nu_ii *
                     (fvec_in.pdf[ivpa,ivperp,iz,ir,is]
-                     - exp(-((vpa.grid[ivpa] - fvec_in.upar[iz,ir,is]))^2
-                           - (vperp.grid[ivperp])^2))
+                     - Maxwellian_prefactor * adjust_1V * exp(-((vpa.grid[ivpa] - fvec_in.upar[iz,ir,is])*adjust_1V)^2
+                                                              - (vperp.grid[ivperp])^2)*adjust_1V)
             end
         end
     elseif moments.evolve_upar
@@ -116,12 +143,22 @@ Currently Krook collisions
         @loop_s_r_z is ir iz begin
             n = fvec_in.density[iz,ir,is]
             vth = moments.ion.vth[iz,ir,is]
-            nu_ii = get_collision_frequency_ii(collisions, n, vth)
+            if vperp.n == 1
+                # For 1V need to use parallel temperature for Maxwellian in Krook
+                # operator, and for consistency with old 1D1V results also calculate
+                # collision frequency using parallel temperature.
+                Krook_vth = sqrt(3.0) * vth
+                vth_prefactor = 1.0 / Krook_vth
+            else
+                Krook_vth = vth
+                vth_prefactor = 1.0 / Krook_vth^3
+            end
+            nu_ii = get_collision_frequency_ii(collisions, n, Krook_vth)
             @loop_vperp_vpa ivperp ivpa begin
                 pdf_out[ivpa,ivperp,iz,ir,is] -= dt * nu_ii *
                     (fvec_in.pdf[ivpa,ivperp,iz,ir,is]
-                     - 1.0 / vth * exp(-(vpa.grid[ivpa] / vth)^2
-                                       - (vperp.grid[ivperp] / vth)^2))
+                     - vth_prefactor * Maxwellian_prefactor * exp(-(vpa.grid[ivpa]/Krook_vth)^2
+                                                                  - (vperp.grid[ivperp]/Krook_vth)^2))
             end
         end
     elseif moments.evolve_density
@@ -130,13 +167,23 @@ Currently Krook collisions
         @loop_s_r_z is ir iz begin
             n = fvec_in.density[iz,ir,is]
             vth = moments.ion.vth[iz,ir,is]
-            nu_ii = get_collision_frequency_ii(collisions, n, vth)
+            if vperp.n == 1
+                # For 1V need to use parallel temperature for Maxwellian in Krook
+                # operator, and for consistency with old 1D1V results also calculate
+                # collision frequency using parallel temperature.
+                Krook_vth = sqrt(3.0) * vth
+                vth_prefactor = 1.0 / Krook_vth
+            else
+                Krook_vth = vth
+                vth_prefactor = 1.0 / Krook_vth^3
+            end
+            nu_ii = get_collision_frequency_ii(collisions, n, Krook_vth)
             @loop_vperp_vpa ivperp ivpa begin
                 pdf_out[ivpa,ivperp,iz,ir,is] -= dt * nu_ii *
                 (fvec_in.pdf[ivpa,ivperp,iz,ir,is]
-                 - 1.0 / vth
-                 * exp(-((vpa.grid[ivpa] - fvec_in.upar[iz,ir,is]) / vth)^2
-                           - (vperp.grid[ivperp]/vth)^2))
+                 - vth_prefactor * Maxwellian_prefactor
+                 * exp(-((vpa.grid[ivpa] - fvec_in.upar[iz,ir,is])/Krook_vth)^2
+                           - (vperp.grid[ivperp]/Krook_vth)^2))
             end
         end
     else
@@ -144,17 +191,21 @@ Currently Krook collisions
             n = fvec_in.density[iz,ir,is]
             vth = moments.ion.vth[iz,ir,is]
             if vperp.n == 1
-                vth_prefactor = 1.0 / vth
+                # For 1V need to use parallel temperature for Maxwellian in Krook
+                # operator.
+                Krook_vth = sqrt(3.0) * vth
+                vth_prefactor = 1.0 / Krook_vth
             else
-                vth_prefactor = 1.0 / vth^3
+                Krook_vth = vth
+                vth_prefactor = 1.0 / Krook_vth^3
             end
-            nu_ii = get_collision_frequency_ii(collisions, n, vth)
+            nu_ii = get_collision_frequency_ii(collisions, n, Krook_vth)
             @loop_vperp_vpa ivperp ivpa begin
                 pdf_out[ivpa,ivperp,iz,ir,is] -= dt * nu_ii *
                     (fvec_in.pdf[ivpa,ivperp,iz,ir,is]
-                     - n * vth_prefactor
-                     * exp(-((vpa.grid[ivpa] - fvec_in.upar[iz,ir,is])/vth)^2
-                           - (vperp.grid[ivperp]/vth)^2))
+                     - n * vth_prefactor * Maxwellian_prefactor
+                     * exp(-((vpa.grid[ivpa] - fvec_in.upar[iz,ir,is])/Krook_vth)^2
+                           - (vperp.grid[ivperp]/Krook_vth)^2))
             end
         end
     end
@@ -173,25 +224,41 @@ Note that this function operates on a single point in `r`, so `pdf_out`, `pdf_in
                          collisions, vperp, vpa, dt) = begin
     @begin_z_region()
 
+    if vperp.n == 1
+        Maxwellian_prefactor = 1.0 / sqrt(π)
+    else
+        Maxwellian_prefactor = 1.0 / π^1.5
+    end
+
     # For now, electrons are always fully moment-kinetic
     evolve_density = true
     evolve_upar = true
-    evolve_ppar = true
+    evolve_p = true
 
-    if vperp.n > 1 && (evolve_density || evolve_upar || evolve_ppar)
+    if vperp.n > 1 && (evolve_density || evolve_upar || evolve_p)
         error("Krook collisions not implemented for 2V moment-kinetic cases yet")
     end
 
     # Note: do not need 1/sqrt(pi) for the 'Maxwellian' term because the pdf is already
     # normalized by sqrt(pi) (see velocity_moments.integrate_over_vspace).
-    if evolve_ppar && evolve_upar
+    if evolve_p && evolve_upar
         # Compared to evolve_upar version, grid is already normalized by vth, and multiply
         # through by vth, remembering pdf is already multiplied by vth
         @loop_z iz begin
             n = dens_in[iz]
             vth = vth_in[iz]
-            nu_ee = get_collision_frequency_ee(collisions, n, vth)
-            nu_ei = get_collision_frequency_ei(collisions, n, vth)
+            if vperp.n == 1
+                # For 1V need to use parallel temperature for Maxwellian in Krook
+                # operator, and for consistency with old 1D1V results also calculate
+                # collision frequency using parallel temperature.
+                Krook_vth = sqrt(3.0) * vth
+                adjust_1V = 1.0 / sqrt(3.0)
+            else
+                Krook_vth = vth
+                adjust_1V = 1.0
+            end
+            nu_ee = get_collision_frequency_ee(collisions, n, Krook_vth)
+            nu_ei = get_collision_frequency_ei(collisions, n, Krook_vth)
 
             # e-i collisions push electrons towards a Maxwellian drifting at the ion
             # parallel flow, so need a corresponding normalised parallel velocity
@@ -203,13 +270,15 @@ Note that this function operates on a single point in `r`, so `pdf_out`, `pdf_in
             @loop_vperp_vpa ivperp ivpa begin
                 pdf_out[ivpa,ivperp,iz] -= dt * (
                     nu_ee * (pdf_in[ivpa,ivperp,iz]
-                             - exp(-vpa.grid[ivpa]^2 - vperp.grid[ivperp]^2))
+                             - Maxwellian_prefactor * adjust_1V *
+                               exp(-(vpa.grid[ivpa]*adjust_1V)^2 - (vperp.grid[ivperp]*adjust_1V)^2))
                     + nu_ei * (pdf_in[ivpa,ivperp,iz]
-                               - exp(-vpa.scratch[ivpa]^2 - vperp.grid[ivperp]^2))
+                               - Maxwellian_prefactor * adjust_1V *
+                                 exp(-(vpa.scratch[ivpa]*adjust_1V)^2 - (vperp.grid[ivperp]*adjust_1V)^2))
                    )
             end
         end
-    elseif evolve_ppar
+    elseif evolve_p
         # Compared to full-f collision operater, multiply through by vth, remembering pdf
         # is already multiplied by vth, and grid is already normalized by vth
         @loop_z iz begin
@@ -221,16 +290,16 @@ Note that this function operates on a single point in `r`, so `pdf_out`, `pdf_in
             @loop_vperp_vpa ivperp ivpa begin
                 pdf_out[ivpa,ivperp,iz] -= dt * (
                     nu_ee * (pdf_in[ivpa,ivperp,iz]
-                             - exp(-((vpa.grid[ivpa] - upar_in[iz])/vth)^2
-                                   - (vperp.grid[ivperp]/vth)^2))
+                             - Maxwellian_prefactor * exp(-((vpa.grid[ivpa] - upar_in[iz])/vth)^2
+                                                          - (vperp.grid[ivperp]/vth)^2))
                     # e-i collisions push electrons towards a Maxwellian drifting at the ion
                     # parallel flow, so need a corresponding normalised parallel velocity
                     # coordinate.
                     # For now, assume there is only one ion species rather than bothering to
                     # calculate an average ion flow speed, or sum over ion species here.
                     + nu_ei * (pdf_in[ivpa,ivperp,iz]
-                               - exp(-((vpa.grid[ivpa] - upar_ion_in[iz,1])/vth)^2
-                                     - (vperp.grid[ivperp]/vth)^2))
+                               - Maxwellian_prefactor * exp(-((vpa.grid[ivpa] - upar_ion_in[iz,1])/vth)^2
+                                                            - (vperp.grid[ivperp]/vth)^2))
                    )
             end
         end
@@ -252,11 +321,11 @@ Note that this function operates on a single point in `r`, so `pdf_out`, `pdf_in
             @loop_vperp_vpa ivperp ivpa begin
                 pdf_out[ivpa,ivperp,iz] -= dt * (
                     nu_ee * (pdf_in[ivpa,ivperp,iz]
-                             - 1.0 / vth * exp(-(vpa.grid[ivpa] / vth)^2
-                                               - (vperp.grid[ivperp] / vth)^2))
+                             - 1.0 / vth * Maxwellian_prefactor * exp(-(vpa.grid[ivpa] / vth)^2
+                                                                      - (vperp.grid[ivperp] / vth)^2))
                     + nu_ei * (pdf_in[ivpa,ivperp,iz]
-                               - 1.0 / vth * exp(-(vpa.scratch[ivpa] / vth)^2
-                                                 - (vperp.grid[ivperp] / vth)^2))
+                               - 1.0 / vth * Maxwellian_prefactor * exp(-(vpa.scratch[ivpa] / vth)^2
+                                                                        - (vperp.grid[ivperp] / vth)^2))
                    )
             end
         end
@@ -271,7 +340,7 @@ Note that this function operates on a single point in `r`, so `pdf_out`, `pdf_in
             @loop_vperp_vpa ivperp ivpa begin
                 pdf_out[ivpa,ivperp,iz] -= dt * (
                     nu_ee * (pdf_in[ivpa,ivperp,iz]
-                             - 1.0 / vth
+                             - 1.0 / vth * Maxwellian_prefactor
                              * exp(-((vpa.grid[ivpa] - upar_in[iz]) / vth)^2
                                    - (vperp.grid[ivperp]/vth)^2))
                     # e-i collisions push electrons towards a Maxwellian drifting at the ion
@@ -280,7 +349,7 @@ Note that this function operates on a single point in `r`, so `pdf_out`, `pdf_in
                     # For now, assume there is only one ion species rather than bothering to
                     # calculate an average ion flow speed, or sum over ion species here.
                     + nu_ei * (pdf_in[ivpa,ivperp,iz]
-                               - 1.0 / vth
+                               - 1.0 / vth * Maxwellian_prefactor
                                * exp(-((vpa.grid[ivpa] - upar_ion_in[iz,1]) / vth)^2
                                      - (vperp.grid[ivperp]/vth)^2))
                    )
@@ -300,7 +369,7 @@ Note that this function operates on a single point in `r`, so `pdf_out`, `pdf_in
             @loop_vperp_vpa ivperp ivpa begin
                 pdf_out[ivpa,ivperp,iz] -= dt * (
                     nu_ee * (pdf_in[ivpa,ivperp,iz]
-                             - n * vth_prefactor
+                             - n * vth_prefactor * Maxwellian_prefactor
                              * exp(-((vpa.grid[ivpa] - upar_in[iz])/vth)^2
                                    - (vperp.grid[ivperp]/vth)^2))
                     # e-i collisions push electrons towards a Maxwellian drifting at the ion
@@ -309,7 +378,7 @@ Note that this function operates on a single point in `r`, so `pdf_out`, `pdf_in
                     # For now, assume there is only one ion species rather than bothering to
                     # calculate an average ion flow speed, or sum over ion species here.
                     + nu_ee * (pdf_in[ivpa,ivperp,iz]
-                               - n * vth_prefactor
+                               - n * vth_prefactor * Maxwellian_prefactor
                                * exp(-((vpa.grid[ivpa] - upar_ion_in[iz,1])/vth)^2
                                      - (vperp.grid[ivperp]/vth)^2))
                    )
@@ -320,16 +389,22 @@ Note that this function operates on a single point in `r`, so `pdf_out`, `pdf_in
     return nothing
 end
 
-function add_electron_krook_collisions_to_Jacobian!(jacobian_matrix, f, dens, upar, ppar,
+function add_electron_krook_collisions_to_Jacobian!(jacobian_matrix, f, dens, upar, p,
                                                     vth, upar_ion, collisions, z, vperp,
                                                     vpa, z_speed, dt, ir, include=:all;
-                                                    f_offset=0, ppar_offset)
+                                                    f_offset=0, p_offset)
     @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
     @boundscheck size(jacobian_matrix, 1) ≥ f_offset + z.n * vperp.n * vpa.n || error("f_offset=$f_offset is too big")
     @boundscheck include ∈ (:all, :explicit_z, :explicit_v) || error("Unexpected value for include=$include")
 
     if collisions.krook.nuee0 ≤ 0.0 && collisions.krook.nuei0 ≤ 0.0
         return nothing
+    end
+
+    if vperp.n == 1
+        Maxwellian_prefactor = 1.0 / sqrt(π)
+    else
+        Maxwellian_prefactor = 1.0 / π^1.5
     end
 
     v_size = vperp.n * vpa.n
@@ -346,29 +421,40 @@ function add_electron_krook_collisions_to_Jacobian!(jacobian_matrix, f, dens, up
         row = (iz - 1) * v_size + (ivperp - 1) * vpa.n + ivpa + f_offset
 
         # Contribution from electron_krook_collisions!()
-        nu_ee = get_collision_frequency_ee(collisions, dens[iz], vth[iz])
-        nu_ei = get_collision_frequency_ei(collisions, dens[iz], vth[iz])
+        if vperp.n == 1
+            # For 1V need to use parallel temperature for Maxwellian in Krook
+            # operator, and for consistency with old 1D1V results also calculate
+            # collision frequency using parallel temperature.
+            Krook_vth = sqrt(3.0) * vth[iz]
+            adjust_1V = 1.0 / sqrt(3.0)
+        else
+            Krook_vth = vth[iz]
+            adjust_1V = 1.0
+        end
+        nu_ee = get_collision_frequency_ee(collisions, dens[iz], Krook_vth)
+        nu_ei = get_collision_frequency_ei(collisions, dens[iz], Krook_vth)
         if include === :all
             jacobian_matrix[row,row] += dt * (nu_ee + nu_ei)
         end
 
         if include ∈ (:all, :explicit_v)
-            fM_i = exp(-(vpa.grid[ivpa] + (upar_ion[iz] - upar[iz])/vth[iz])^2 - vperp.grid[ivperp]^2)
-            #   d(f_M(u_i)[irowz])/d(ppar[icolz])
-            #       = -2*(vpa.grid+(upar_ion-upar)/vth)*(upar_ion-upar)*(-1/2/vth/ppar)*f_M(u_i) * delta(irow,icolz)
-            #       = (vpa.grid+(upar_ion-upar)/vth)*(upar_ion-upar)/vth/ppar*f_M(u_i) * delta(irow,icolz)
-            jacobian_matrix[row,ppar_offset+iz] +=
-                -dt * nu_ei * (vpa.grid[ivpa]+(upar_ion[iz]-upar[iz])/vth[iz])*(upar_ion[iz]-upar[iz])/vth[iz]/ppar[iz]*fM_i
+            fM_i = Maxwellian_prefactor * adjust_1V *
+                   exp(-((vpa.grid[ivpa] + (upar_ion[iz] - upar[iz])/vth[iz])*adjust_1V)^2 - (vperp.grid[ivperp]*adjust_1V)^2)
+            #   d(f_M(u_i)[irowz])/d(p[icolz])
+            #       = -2*(vpa.grid+(upar_ion-upar)/vth)*(upar_ion-upar)*(-1/2/vth/p)*f_M(u_i) * delta(irow,icolz)
+            #       = (vpa.grid+(upar_ion-upar)/vth)*(upar_ion-upar)/vth/p*f_M(u_i) * delta(irow,icolz)
+            jacobian_matrix[row,p_offset+iz] +=
+                -dt * nu_ei * (vpa.grid[ivpa]+(upar_ion[iz]-upar[iz])/vth[iz])*adjust_1V*(upar_ion[iz]-upar[iz])/vth[iz]*adjust_1V/p[iz]*fM_i
 
             if using_reference_parameters
                 # Both collision frequencies are proportional to n/vth^3=n^(5/2)*(me/2/p)^3/2,
                 # so
-                #   d(nu[irowz])/d(ppar[icolz]) = -3/2*nu/ppar * delta(irowz,icolz)
-                #   d(-(vpa.grid+(upar_ion-upar)/vth)^2[irowz])/d(ppar[icoliz]
-                #       = -(vpa.grid+(upar_ion-upar)/vth)*(upar_ion-upar)/vth/ppar * delta(irow,icolz)
-                jacobian_matrix[row,ppar_offset+iz] +=
-                    -dt * 1.5 / ppar[iz] *
-                          (nu_ee * (f[ivpa,ivperp,iz] - exp(-vpa.grid[ivpa]^2 - vperp.grid[ivperp]^2))
+                #   d(nu[irowz])/d(p[icolz]) = -3/2*nu/p * delta(irowz,icolz)
+                #   d(-(vpa.grid+(upar_ion-upar)/vth)^2[irowz])/d(p[icoliz]
+                #       = -(vpa.grid+(upar_ion-upar)/vth)*(upar_ion-upar)/vth/p * delta(irow,icolz)
+                jacobian_matrix[row,p_offset+iz] +=
+                    -dt * 1.5 / p[iz] *
+                          (nu_ee * (f[ivpa,ivperp,iz] - Maxwellian_prefactor * adjust_1V * exp(-(vpa.grid[ivpa]*adjust_1V)^2 - (vperp.grid[ivperp]*adjust_1V)^2))
                            + nu_ei * (f[ivpa,ivperp,iz] - fM_i))
             end
         end
@@ -397,8 +483,16 @@ function add_electron_krook_collisions_to_z_only_Jacobian!(
         row = iz
 
         # Contribution from electron_krook_collisions!()
-        nu_ee = get_collision_frequency_ee(collisions, dens[iz], vth[iz])
-        nu_ei = get_collision_frequency_ei(collisions, dens[iz], vth[iz])
+        if vperp.n == 1
+            # For 1V need to use parallel temperature for Maxwellian in Krook
+            # operator, and for consistency with old 1D1V results also calculate
+            # collision frequency using parallel temperature.
+            Krook_vth = sqrt(3.0) * vth[iz]
+        else
+            Krook_vth = vth[iz]
+        end
+        nu_ee = get_collision_frequency_ee(collisions, dens[iz], Krook_vth)
+        nu_ei = get_collision_frequency_ei(collisions, dens[iz], Krook_vth)
         jacobian_matrix[row,row] += dt * (nu_ee + nu_ei)
     end
 
@@ -406,7 +500,7 @@ function add_electron_krook_collisions_to_z_only_Jacobian!(
 end
 
 function add_electron_krook_collisions_to_v_only_Jacobian!(
-        jacobian_matrix, f, dens, upar, ppar, vth, upar_ion, collisions, z, vperp, vpa,
+        jacobian_matrix, f, dens, upar, p, vth, upar_ion, collisions, z, vperp, vpa,
         z_speed, dt, ir, iz)
 
     @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
@@ -414,6 +508,12 @@ function add_electron_krook_collisions_to_v_only_Jacobian!(
 
     if collisions.krook.nuee0 ≤ 0.0 && collisions.krook.nuei0 ≤ 0.0
         return nothing
+    end
+
+    if vperp.n == 1
+        Maxwellian_prefactor = 1.0 / sqrt(π)
+    else
+        Maxwellian_prefactor = 1.0 / π^1.5
     end
 
     using_reference_parameters = (collisions.krook.frequency_option == "reference_parameters")
@@ -427,18 +527,29 @@ function add_electron_krook_collisions_to_v_only_Jacobian!(
         row = (ivperp - 1) * vpa.n + ivpa
 
         # Contribution from electron_krook_collisions!()
-        nu_ee = get_collision_frequency_ee(collisions, dens, vth)
-        nu_ei = get_collision_frequency_ei(collisions, dens, vth)
+        if vperp.n == 1
+            # For 1V need to use parallel temperature for Maxwellian in Krook
+            # operator, and for consistency with old 1D1V results also calculate
+            # collision frequency using parallel temperature.
+            Krook_vth = sqrt(3.0) * vth
+            adjust_1V = 1.0 / sqrt(3.0)
+        else
+            Krook_vth = vth
+            adjust_1V = 1.0
+        end
+        nu_ee = get_collision_frequency_ee(collisions, dens, Krook_vth)
+        nu_ei = get_collision_frequency_ei(collisions, dens, Krook_vth)
         jacobian_matrix[row,row] += dt * (nu_ee + nu_ei)
 
-        fM_i = exp(-(vpa.grid[ivpa] + (upar_ion - upar)/vth)^2 - vperp.grid[ivperp]^2)
+        fM_i = Maxwellian_prefactor * adjust_1V *
+               exp(-((vpa.grid[ivpa] + (upar_ion - upar)/vth)*adjust_1V)^2 - (vperp.grid[ivperp]*adjust_1V)^2)
         jacobian_matrix[row,end] +=
-            -dt * nu_ei * (vpa.grid[ivpa]+(upar_ion-upar)/vth)*(upar_ion-upar)/vth/ppar*fM_i
+            -dt * nu_ei * (vpa.grid[ivpa]+(upar_ion-upar)/vth)*adjust_1V*(upar_ion-upar)/vth*adjust_1V/p*fM_i
 
         if using_reference_parameters
             jacobian_matrix[row,end] +=
-                -dt * 1.5 / ppar *
-                      (nu_ee * (f[ivpa,ivperp] - exp(-vpa.grid[ivpa]^2 - vperp.grid[ivperp]^2))
+                -dt * 1.5 / p *
+                      (nu_ee * (f[ivpa,ivperp] - Maxwellian_prefactor * adjust_1V * exp(-(vpa.grid[ivpa]*adjust_1V)^2 - (vperp.grid[ivperp]*adjust_1V)^2))
                        + nu_ei * (f[ivpa,ivperp] - fM_i))
         end
     end

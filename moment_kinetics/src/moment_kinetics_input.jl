@@ -53,8 +53,8 @@ false for other situations (e.g. when post-processing).
 `ignore_MPI` should be false when actually running a simulation, but defaults to true for
 other situations (e.g. when post-processing).
 """
-function mk_input(input_dict=OptionsDict(); save_inputs_to_txt=false, ignore_MPI=true,
-                  warn_unexpected=false)
+function mk_input(input_dict=OptionsDict("output" => OptionsDict("run_name" => "default"));
+                  save_inputs_to_txt=false, ignore_MPI=true, warn_unexpected=false)
 
     # Check for input options that used to exist, but do not any more. If these are
     # present, the user probably needs to update their input file.
@@ -83,16 +83,22 @@ function mk_input(input_dict=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
     input_keys = keys(input_dict)
     for opt in removed_options_list
         if opt ∈ input_keys
-            error("Option '$opt' is no longer used. Please update your input file. The "
-                  * "option may have been moved into an input file section - there are "
-                  * "no longer any top-level options (i.e. ones not in a section). You "
-                  * "may need to set some new options to replicate the effect of the "
-                  * "removed ones.")
+            message = "Option '$opt' is no longer used. Please update your input file. " *
+                      "The option may have been moved into an input file section - " *
+                      "there are no longer any top-level options (i.e. ones not in a " *
+                      "section). You may need to set some new options to replicate the " *
+                      "effect of the removed ones."
+            if warn_unexpected
+                println(message)
+            else
+                error(message)
+            end
         end
     end
     # Check for input options that used to exist in some section, but do not any more. If
     # these are present, the user probably needs to update their input file.
-    removed_section_options_list = Dict("timestepping" => ("implicit_electron_advance",
+    removed_section_options_list = Dict("evolve_moments" => ("parallel_pressure",),
+                                        "timestepping" => ("implicit_electron_advance",
                                                            "implicit_electron_time_evolving",
                                                            "implicit_electron_ppar",),
                                        )
@@ -101,9 +107,14 @@ function mk_input(input_dict=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
         section_keys = keys(section)
         for opt ∈ removed_options
             if opt ∈ section_keys
-                error("Option '$opt' in section [$section_name] is no longer used. "
-                      * "Please update your input file. You may need to set some new "
-                      * "option(s) to replicate the effect of the removed ones.")
+                message = "Option '$opt' in section [$section_name] is no longer used. " *
+                          "Please update your input file. You may need to set some new " *
+                          "option(s) to replicate the effect of the removed ones."
+                if warn_unexpected
+                    println(message)
+                else
+                    error(message)
+                end
             end
         end
     end
@@ -119,7 +130,7 @@ function mk_input(input_dict=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
         input_dict, "evolve_moments", warn_unexpected;
         density=false,
         parallel_flow=false,
-        parallel_pressure=false,
+        pressure=false,
         moments_conservation=false,
        )
     evolve_moments = Dict_to_NamedTuple(evolve_moments_settings)
@@ -161,7 +172,7 @@ function mk_input(input_dict=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
     timestepping_section = set_defaults_and_check_section!(
         input_dict, "timestepping", warn_unexpected;
         nstep=5,
-        dt=0.00025/sqrt(composition.ion[1].initial_temperature),
+        dt=0.00025/sqrt(2.0*composition.ion[1].initial_temperature),
         CFL_prefactor=-1.0,
         nwrite=1,
         nwrite_dfns=-1,
@@ -183,7 +194,7 @@ function mk_input(input_dict=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
         implicit_braginskii_conduction=true,
         kinetic_electron_solver=(composition.electron_physics ∈ (kinetic_electrons,
                                                                  kinetic_electrons_with_temperature_equation)
-                                 ? implicit_ppar_implicit_pseudotimestep : null_kinetic_electrons),
+                                 ? implicit_p_implicit_pseudotimestep : null_kinetic_electrons),
         kinetic_electron_preconditioner="default",
         kinetic_ion_solver=full_explicit_ion_advance,
         constraint_forcing_rate=0.0,
@@ -224,7 +235,7 @@ function mk_input(input_dict=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
         last_fail_proximity_factor=timestepping_section["last_fail_proximity_factor"],
         minimum_dt=timestepping_section["minimum_dt"] * sqrt(composition.me_over_mi),
         maximum_dt=timestepping_section["maximum_dt"] * sqrt(composition.me_over_mi),
-        constraint_forcing_rate=1.0e6,
+        constraint_forcing_rate=1.0e5,
         write_after_fixed_step_count=false,
         write_error_diagnostics=false,
         write_steady_state_diagnostics=false,
@@ -237,6 +248,7 @@ function mk_input(input_dict=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
         max_pseudotime=1.0e-2,
         include_wall_bc_in_preconditioner=false,
         no_restart=false,
+        skip_electron_initial_solve=false,
         debug_io=false,
        )
     if electron_timestepping_section["nwrite"] < 0
@@ -412,7 +424,7 @@ function mk_input(input_dict=OptionsDict(); save_inputs_to_txt=false, ignore_MPI
     geometry = init_magnetic_geometry(geometry_in,z,r)
     if any(geometry.dBdz .!= 0.0) &&
             (evolve_moments.density || evolve_moments.parallel_flow ||
-             evolve_moments.parallel_pressure)
+             evolve_moments.pressure)
         error("Mirror terms not yet implemented for moment-kinetic modes")
     end
 
@@ -627,7 +639,7 @@ function check_input_initialization(composition, species, io)
         end
         if species[is].vpa_IC.initialization_option == "gaussian"
             print(io,">vpa_intialization_option = 'gaussian'.")
-            println(io,"  setting G(vpa) = exp(-(vpa/vpa_width)^2).")
+            println(io,"  setting G(vpa) = Maxwellian_prefactor*exp(-(vpa/vpa_width)^2).")
         elseif species[is].vpa_IC.initialization_option == "monomial"
             print(io,">vpa_intialization_option = 'monomial'.")
             println(io,"  setting G(vpa) = (vpa + L_vpa/2)^", species[is].vpa_IC._monomial_degree, ".")
@@ -639,7 +651,7 @@ function check_input_initialization(composition, species, io)
             println(io,"  setting F(z,vpa) = F(vpa^2 + phi), with phi_max = 0.")
         elseif species[is].vpa_IC.initialization_option == "vpagaussian"
             print(io,">vpa_initialization_option = 'vpagaussian'.")
-            println(io,"  setting G(vpa) = vpa^2*exp(-(vpa/vpa_width)^2).")
+            println(io,"  setting G(vpa) = vpa^2*Maxwellian_prefactor*exp(-(vpa/vpa_width)^2).")
         else
             input_option_error("vpa_initialization_option", species[is].vpa_IC.initialization_option)
         end

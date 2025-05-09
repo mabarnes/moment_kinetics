@@ -1,5 +1,6 @@
 include("shared_utils.jl")
 
+using moment_kinetics.analysis: analyze_fields_data
 using .shared_utils: calculate_and_write_frequencies
 
 """

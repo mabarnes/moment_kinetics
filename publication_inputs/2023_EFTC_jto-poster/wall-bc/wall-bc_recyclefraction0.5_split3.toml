@@ -12,13 +12,13 @@ frequency_option = "reference_parameters"
 
 [ion_species_1]
 initial_density = 1.0
-initial_temperature = 1.0
+initial_temperature = 0.3333333333333333
 
 [z_IC_ion_species_1]
 initialization_option = "gaussian"
 density_amplitude = 0.001
 density_phase = 0.0
-upar_amplitude = 1.0
+upar_amplitude = 1.4142135623730951
 upar_phase = 0.0
 temperature_amplitude = 0.0
 temperature_phase = 0.0
@@ -34,13 +34,13 @@ temperature_phase = 0.0
 
 [neutral_species_1]
 initial_density = 1.0
-initial_temperature = 1.0
+initial_temperature = 0.3333333333333333
 
 [z_IC_neutral_species_1]
 initialization_option = "gaussian"
 density_amplitude = 0.001
 density_phase = 0.0
-upar_amplitude = -1.0
+upar_amplitude = -1.4142135623730951
 upar_phase = 0.0
 temperature_amplitude = 0.0
 temperature_phase = 0.0
@@ -55,14 +55,14 @@ temperature_amplitude = 0.0
 temperature_phase = 0.0
 
 [reactions]
-charge_exchange_frequency = 0.75
-ionization_frequency = 0.5
+charge_exchange_frequency = 1.0606601717798214
+ionization_frequency = 0.7071067811865476
 
 [evolve_moments]
 density = true
 parallel_flow = true
-parallel_pressure = true
 moments_conservation = true
+pressure = true
 
 [r]
 ngrid = 1
@@ -79,39 +79,33 @@ element_spacing_option = "sqrt"
 [vpa]
 ngrid = 10
 nelement = 63
-L = 36.0
+L = 62.35382907247958
 bc = "zero"
 discretization = "chebyshev_pseudospectral"
 
 [vz]
 ngrid = 10
 nelement = 63
-L = 36.0
+L = 62.35382907247958
 bc = "zero"
 discretization = "chebyshev_pseudospectral"
 
 [timestepping]
 #nstep = 50000
 nstep = 1000000
-dt = 1.0e-5
+dt = 7.0710678118654756e-6
 nwrite = 10000
 nwrite_dfns = 10000
 split_operators = false
 steady_state_residual = true
-converged_residual_value = 1.0e-3
+converged_residual_value = 0.0014142135623730952
 
 [ion_source_1]
 active = true
 z_profile = "gaussian"
 z_width = 0.125
-source_strength = 2.0
+source_strength = 2.8284271247461903
 source_T = 2.0
-
-[ion_numerical_dissipation]
-#vpa_dissipation_coefficient = 1.0e-1
-#vpa_dissipation_coefficient = 1.0e-2
-#vpa_dissipation_coefficient = 1.0e-3
-force_minimum_pdf_value = 0.0
 
 [ion_numerical_dissipation]
 #vz_dissipation_coefficient = 1.0e-1

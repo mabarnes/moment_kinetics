@@ -1,13 +1,13 @@
 [evolve_moments]
-parallel_pressure = true
 density = true
 moments_conservation = true
 parallel_flow = true
+pressure = true
 
 [reactions]
 electron_ionization_frequency = 0.0
-ionization_frequency = 0.5
-charge_exchange_frequency = 0.75
+ionization_frequency = 0.7071067811865476
+charge_exchange_frequency = 1.0606601717798214
 
 [r]
 ngrid = 1
@@ -25,16 +25,16 @@ element_spacing_option = "compressed_4"
 ngrid = 6
 discretization = "gausslegendre_pseudospectral"
 nelement = 31
-L = 30.0
-element_spacing_option = "coarse_tails"
+L = 51.96152422706631
+element_spacing_option = "coarse_tails8.660254037844386"
 bc = "zero"
 
 [vz]
 ngrid = 6
 discretization = "gausslegendre_pseudospectral"
 nelement = 31
-L = 36.0
-element_spacing_option = "coarse_tails"
+L = 62.35382907247958
+element_spacing_option = "coarse_tails8.660254037844386"
 bc = "zero"
 
 [composition]
@@ -44,7 +44,7 @@ n_ion_species = 1
 n_neutral_species = 1
 
 [ion_species_1]
-initial_temperature = 0.2
+initial_temperature = 0.06666666666666667
 initial_density = 1.0
 
 [z_IC_ion_species_1]
@@ -66,7 +66,7 @@ temperature_phase = 0.0
 upar_phase = 0.0
 
 [neutral_species_1]
-initial_temperature = 0.2
+initial_temperature = 0.06666666666666667
 initial_density = 1.0
 
 [z_IC_neutral_species_1]
@@ -92,14 +92,14 @@ use_krook = true
 
 [timestepping]
 type = "PareschiRusso2(2,2,2)"
-kinetic_electron_solver = "implicit_ppar_implicit_pseudotimestep"
+kinetic_electron_solver = "implicit_p_implicit_pseudotimestep"
 kinetic_ion_solver = "full_explicit_ion_advance"
 nstep = 100000
-dt = 1.0e-5
+dt = 7.0710678118654756e-6
 nwrite = 1000
 nwrite_dfns = 1000
 steady_state_residual = true
-converged_residual_value = 1.0e-3
+converged_residual_value = 0.0014142135623730952
 
 #write_after_fixed_step_count = true
 #nstep = 1
@@ -109,20 +109,20 @@ converged_residual_value = 1.0e-3
 [electron_timestepping]
 nstep = 5000000
 #nstep = 1
-dt = 2.0e-8
+dt = 1.414213562373095e-8
 #maximum_dt = 1.0e-8
 nwrite = 10 #10000
 nwrite_dfns = 10 #100000
 #type = "SSPRK4"
 type = "Fekete4(3)"
-rtol = 1.0e-3
+rtol = 0.001
 atol = 1.0e-14
-minimum_dt = 1.0e-9
+minimum_dt = 7.071067811865476e-10
 decrease_dt_iteration_threshold = 100
 increase_dt_iteration_threshold = 20
 cap_factor_ion_dt = 5.0
 initialization_residual_value = 2.5
-converged_residual_value = 1.0e-2
+converged_residual_value = 0.014142135623730952
 
 #debug_io = 1
 

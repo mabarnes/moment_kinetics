@@ -29,6 +29,7 @@ using Measures
 using MPI
 # modules
 using moment_kinetics: check_so_newer_than_code
+using moment_kinetics.calculus: integral
 using moment_kinetics.communication
 using moment_kinetics.quadrature: composite_simpson_weights
 using moment_kinetics.array_allocation: allocate_float
@@ -50,7 +51,6 @@ using moment_kinetics.analysis: analyze_fields_data, analyze_moments_data,
                                 analyze_pdf_data, check_Chodura_condition,
                                 analyze_2D_instability, get_unnormalised_f_dzdt_1d,
                                 get_unnormalised_f_coords_2d
-using moment_kinetics.velocity_moments: integrate_over_vspace
 using moment_kinetics.manufactured_solns: manufactured_solutions,
                                           manufactured_electric_fields,
                                           manufactured_geometry
@@ -2461,7 +2461,7 @@ function plot_dfns(density, parallel_flow, parallel_pressure, thermal_speed, ff,
             #     @. tmp[:,1,1,:] /= vpa^2
             #     bohm_integral = copy(time)
             #     for i ∈ 1:ntime
-            #         @views bohm_integral[i] = integrate_over_vspace(tmp[1:cld(nvpa,2)-1,1,1,i],vpa_wgts[1:cld(nvpa,2)-1])/2.0
+            #         @views bohm_integral[i] = integral(tmp[1:cld(nvpa,2)-1,1,1,i],vpa_wgts[1:cld(nvpa,2)-1])/2.0
             #     end
             #     plot(time, bohm_integral, xlabel="time", label="Bohm integral")
             #     plot!(time, density[1,1,:], label="nᵢ(zmin)")
@@ -2475,7 +2475,7 @@ function plot_dfns(density, parallel_flow, parallel_pressure, thermal_speed, ff,
             #     end
             #     println()
             #     for j ∈ 0:10
-            #         println("j: ", j, "  Bohm integral: ", integrate_over_vspace(tmp[1:cld(nvpa,2)-j,1,1,end],vpa_wgts[1:cld(nvpa,2)-j,end])/2.0)
+            #         println("j: ", j, "  Bohm integral: ", integral(tmp[1:cld(nvpa,2)-j,1,1,end],vpa_wgts[1:cld(nvpa,2)-j,end])/2.0)
             #     end
             # end
             # make a gif animation of f(vpa,z0,t)
@@ -3427,7 +3427,7 @@ function plot_Maxwellian_diagnostic(ff, density, parallel_flow, thermal_speed, v
         for is in 1:n_ion_species
             for ivperp in 1:nvperp
                 for ivpa in 1:nvpa
-                   ff_Maxwellian[ivpa,ivperp,is,it] = (density[is,it]/thermal_speed[is,it]^pvth)*
+                   ff_Maxwellian[ivpa,ivperp,is,it] = (density[is,it]/thermal_speed[is,it]^pvth)/π^1.5*
                                                     exp(- (((vpa_local[ivpa] - parallel_flow[is,it])^2) +
                                                      (vperp_local[ivperp]^2) )/(thermal_speed[is,it]^2) ) 
                    ff_ones[ivpa,ivperp,is,it] = 1.0  
@@ -3439,8 +3439,8 @@ function plot_Maxwellian_diagnostic(ff, density, parallel_flow, thermal_speed, v
     ff_norm = copy(time)
     for is in 1:n_ion_species
         for it in 1:ntime
-            @views num = integrate_over_vspace( (ff[:,:,is,it] .- ff_Maxwellian[:,:,is,it]).^2 , vpa_local, 0, vpa_local_wgts, vperp_local, 0, vperp_local_wgts)
-            @views denom = integrate_over_vspace(ff_ones[:,:,is,it], vpa_local, 0, vpa_local_wgts, vperp_local, 0, vperp_local_wgts)
+            @views num = integral( (ff[:,:,is,it] .- ff_Maxwellian[:,:,is,it]).^2 , vpa_local, 0, vpa_local_wgts, vperp_local, 0, vperp_local_wgts)
+            @views denom = integral(ff_ones[:,:,is,it], vpa_local, 0, vpa_local_wgts, vperp_local, 0, vperp_local_wgts)
             ff_norm[it] = sqrt(num/denom)
         end
         iz0_string = string("_iz0", string(iz0))

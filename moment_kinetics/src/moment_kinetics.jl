@@ -280,7 +280,8 @@ parallel loop ranges, and are only used by the tests in `debug_test/`.
         init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geometry,
                               composition, r, z, vperp, vpa, vzeta, vr, vz,
                               z_spectral, r_spectral, vperp_spectral, vpa_spectral,
-                              vz_spectral, species, collisions, external_source_settings,
+                              vzeta_spectral, vr_spectral, vz_spectral, species,
+                              collisions, external_source_settings,
                               manufactured_solns_input, t_input, num_diss_params,
                               advection_structs, io_input, input_dict)
         # initialize time variable
@@ -314,8 +315,7 @@ parallel loop ranges, and are only used by the tests in `debug_test/`.
 
         @begin_serial_region()
         @serial_region begin
-            @. moments.electron.temp = composition.me_over_mi * moments.electron.vth^2
-            @. moments.electron.ppar = 0.5 * moments.electron.dens * moments.electron.temp
+            @. moments.electron.temp = 0.5 * composition.me_over_mi * moments.electron.vth^2
         end
         if composition.electron_physics ∈ (kinetic_electrons,
                                            kinetic_electrons_with_temperature_equation)
@@ -362,7 +362,7 @@ parallel loop ranges, and are only used by the tests in `debug_test/`.
         # setup i/o
         ascii_io, io_moments, io_dfns = setup_file_io(io_input, boundary_distributions,
             vz, vr, vzeta, vpa, vperp, z, r, composition, collisions,
-            moments.evolve_density, moments.evolve_upar, moments.evolve_ppar,
+            moments.evolve_density, moments.evolve_upar, moments.evolve_p,
             external_source_settings, input_dict, restart_time_index, previous_runs_info,
             time_for_setup, t_params, nl_solver_params)
         # write initial data to ascii files

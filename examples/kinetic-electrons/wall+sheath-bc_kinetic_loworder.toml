@@ -1,15 +1,15 @@
 [reactions]
-charge_exchange_frequency = 2.0
+charge_exchange_frequency = 2.8284271247461903
 electron_charge_exchange_frequency = 0.0
-ionization_frequency = 2.0
+ionization_frequency = 2.8284271247461903
 #electron_ionization_frequency = 2.0
 #ionization_energy = 1.0
 
 [evolve_moments]
 density = false
 parallel_flow = false
-parallel_pressure = false
 moments_conservation = false
+pressure = false
 
 [r]
 ngrid = 1
@@ -29,7 +29,7 @@ ngrid = 5
 nelement = 31
 #nelement = 40
 #nelement = 80
-L = 12.0 #8.0
+L = 16.970562748477143 #8.0
 bc = "zero"
 discretization = "gausslegendre_pseudospectral"
 #discretization = "gausslegendre_pseudospectral"
@@ -39,7 +39,7 @@ ngrid = 5
 nelement = 31
 #nelement = 40
 #nelement = 80
-L = 12.0
+L = 16.970562748477143
 bc = "zero"
 discretization = "gausslegendre_pseudospectral"
 
@@ -52,13 +52,13 @@ T_wall = 1.0
 
 [ion_species_1]
 initial_density = 1.0
-initial_temperature = 1.0
+initial_temperature = 0.3333333333333333
 
 [z_IC_ion_species_1]
 initialization_option = "gaussian"
 density_amplitude = 0.001
 density_phase = 0.0
-upar_amplitude = 1.0
+upar_amplitude = 1.4142135623730951
 upar_phase = 0.0
 temperature_amplitude = 0.0
 temperature_phase = 0.0
@@ -74,7 +74,7 @@ temperature_phase = 0.0
 
 [neutral_species_1]
 initial_density = 1.0
-initial_temperature = 1.0
+initial_temperature = 0.3333333333333333
 
 [z_IC_neutral_species_1]
 initialization_option = "gaussian"
@@ -102,26 +102,26 @@ temperature_phase = 0.0
 #moment_dissipation_coefficient = 1.0
 #vpa_dissipation_coefficient = 0.002
 #vpa_dissipation_coefficient = 0.2
-vpa_dissipation_coefficient = 2.0
+vpa_dissipation_coefficient = 5.656854249492381
 #vpa_dissipation_coefficient = 20.0
 
 [timestepping]
 kinetic_electron_solver = "explicit_pseudotimestep"
 nstep = 40000
 #nstep = 1
-dt = 5.0e-5
+dt = 3.535533905932738e-5
 nwrite = 200
 nwrite_dfns = 10000
 type = "SSPRK4"
 steady_state_residual = true
-converged_residual_value = 1.0e-3
+converged_residual_value = 0.0014142135623730952
 
 [electron_timestepping]
 nstep = 5000000
 #nstep = 1
-dt = 2.0e-8
+dt = 1.414213562373095e-8
 nwrite = 1000
 nwrite_dfns = 1000
 #type = "SSPRK4"
 type = "Fekete4(3)"
-minimum_dt = 1.0e-8
+minimum_dt = 7.071067811865475e-9
