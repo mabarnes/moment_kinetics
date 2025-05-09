@@ -16,7 +16,7 @@ using moment_kinetics.utils: merge_dict_with_kwargs!
 using moment_kinetics.input_structs: options_to_TOML
 using moment_kinetics.fokker_planck_test: F_Maxwellian, print_test_data
 using moment_kinetics.velocity_moments: get_density, get_upar, get_p, get_qpar
-using moment_kinetics.calculus: integral
+
 const analytical_rtol = 3.e-2
 const regression_rtol = 2.e-8
 
@@ -231,16 +231,6 @@ function print_pdf(pdf)
     end
     print("]\n")
     return nothing
-end
-
-function get_qpar_old(ff, vpa, vperp, upar, dummy_vpavperp)
-    for ivperp in 1:vperp.n 
-        for ivpa in 1:vpa.n
-            wpar = vpa.grid[ivpa]-upar
-            dummy_vpavperp[ivpa,ivperp] = ff[ivpa,ivperp]*wpar*( wpar^2 + vperp.grid[ivperp]^2)
-        end
-    end
-    return 0.5*integral(@view(dummy_vpavperp[:,:]), vpa.grid, 0, vpa.wgts, vperp.grid, 0, vperp.wgts)
 end
 
 """
@@ -569,11 +559,7 @@ function run_test(test_input, expected, rtol, atol, upar_rtol=nothing; args...)
                 vth = sqrt(2.0*pressure/dens)
                 qpar = get_qpar(f_ion[:,:,tind], dens, upar, pressure, vth, vpa, vperp, false, false,
                                 false)
-                f_dummy_1 = copy(f_ion[:,:,1])
-                qpar_old = get_qpar_old(f_ion[:,:,tind], vpa, vperp, upar, f_dummy_1)
-                println("qpar: old, new")
-                println("qpar: ",qpar_old," ", qpar)
-                @test isapprox(expected.qpar_ion[tind], qpar_old, atol=atol)
+                @test isapprox(expected.qpar_ion[tind], qpar, atol=atol)
                 @test isapprox(expected.v_t_ion[tind], v_t_ion[tind], atol=atol)
                 @test isapprox(expected.dSdt[tind], dSdt[tind], atol=atol)
                 @test isapprox(expected.maxnorm_ion[tind], maxnorm_ion[tind], atol=atol)
