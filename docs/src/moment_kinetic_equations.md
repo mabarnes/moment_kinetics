@@ -1149,6 +1149,53 @@ time-derivative-of-moment terms
 ```
 ```math
 \begin{align}
+\dot{w}_\parallel &= - w_\parallel \frac{\partial u_{i\parallel}}{\partial z}
+                     + \frac{1}{m_i n_i v_{Ti}} \frac{\partial p_{i\parallel}}{\partial z}
+                     - \frac{1}{v_{Ti}} R_\mathrm{CX} n_n (u_{n\parallel} - u_{i\parallel})
+                     - \frac{1}{v_{Ti}} R_\mathrm{ioniz} \frac{n_e n_n}{n_i} (u_{n\parallel} - u_{i\parallel})
+                     - \frac{S_{i,\mathrm{mom}}}{m_i n_i v_{Ti}}
+                     + \frac{u_{i\parallel}}{n_i v_{Ti}} S_{i,n} \nonumber \\
+              &\quad - w_\parallel^2 \frac{\partial v_{Ti}}{\partial z}
+                     + \frac{w_\parallel}{3 p_i} \frac{\partial q_{i\parallel}}{\partial z}
+                     + \frac{w_\parallel p_{i\parallel}}{3 p_i} \frac{\partial u_{i\parallel}}{\partial z}
+                     + \frac{w_\parallel}{6 p_i} R_\mathrm{CX} n_i n_n \left( 3 T_i - 3 T_n - m_i (u_{i\parallel} - u_{n\parallel})^2 \right) \nonumber \\
+              &\quad - \frac{w_\parallel}{6 p_i} R_\mathrm{ioniz} n_e n_n \left( 3 T_n - 3 T_i + m_i (u_{i\parallel} - u_{n\parallel})^2 \right)
+                     - \frac{w_\parallel}{2 p_i} S_{i,p}
+                     + \frac{w_\parallel}{2 n_i} S_{i,n} \nonumber \\
+              &\quad - D_r \frac{m_i w_\parallel}{3 T_i} \left( \frac{\partial u_{i\parallel}}{\partial r} \right)^2
+                     - 7 D_r \frac{1}{v_{Ti}^2} \frac{\partial v_{Ti}}{\partial r} \frac{\partial u_{i\parallel}}{\partial r}
+                     - 7 D_r \frac{w_\parallel}{v_{Ti}^2} \left( \frac{\partial v_{Ti}}{\partial r} \right)^2 \\
+
+\dot{w}_\perp &= - w_\parallel w_\perp \frac{\partial v_{Ti}}{\partial z}
+                 + \frac{w_\perp}{3 p_i} \frac{\partial q_{i\parallel}}{\partial z}
+                 + \frac{w_\perp p_{i\parallel}}{3 p_i} \frac{\partial u_{i\parallel}}{\partial z}
+                 + \frac{w_\perp}{6 p_i} R_\mathrm{CX} n_i n_n \left( 3 T_i - 3 T_n - m_i (u_{i\parallel} - u_{n\parallel})^2 \right) \nonumber \\
+          &\quad - \frac{w_\perp}{6 p_i} R_\mathrm{ioniz} n_e n_n \left( 3 T_n - 3 T_i + m_i (u_{i\parallel} - u_{n\parallel})^2 \right)
+                 - \frac{w_\perp}{2 p_i} S_{i,p}
+                 + \frac{w_\perp}{2 n_i} S_{i,n} \nonumber \\
+          &\quad - D_r \frac{m_i w_\perp}{3 T_i} \left( \frac{\partial u_{i\parallel}}{\partial r} \right)^2
+                 - 7 D_r \frac{1}{v_{Ti}} \frac{\partial v_{Ti}}{\partial r}
+                         \frac{w_\perp}{v_{Ti}} \frac{\partial v_{Ti}}{\partial r}
+                 - D_r \frac{w_\perp}{v_{Ti}^2} \left( \frac{\partial v_{Ti}}{\partial r} \right)^2
+                 - D_r \frac{w_\perp}{v_{Ti}^2} \left( \frac{\partial v_{Ti}}{\partial r} \right)^2 \\
+
+\frac{\dot{F}_i}{F_i} &= - 3 w_\parallel \frac{\partial v_{Ti}}{\partial z}
+                         - \frac{\partial u_{i\parallel}}{\partial z}
+                         + R_\mathrm{ioniz} \frac{n_e n_n}{n_i}
+                         + \frac{S_{i,n}}{n_i}
+                         + \frac{v_{Ti} w_\parallel}{n_i} \frac{\partial n_i}{\partial z} \nonumber \\
+                 &\quad + \frac{1}{p_i} \frac{\partial q_{i\parallel}}{\partial z}
+                        + \frac{p_{i\parallel}}{p_i} \frac{\partial u_{i\parallel}}{\partial z}
+                        + \frac{1}{2 p_i} R_\mathrm{CX} n_i n_n \left( 3 T_i - 3 T_n - m_i (u_{i\parallel} - u_{n\parallel})^2 \right) \nonumber \\
+                 &\quad - \frac{1}{2 p_i} R_\mathrm{ioniz} n_e n_n \left( 3 T_n - 3 T_i + m_i (u_{i\parallel} - u_{n\parallel})^2 \right)
+                        - \frac{3}{2 p_i} S_{i,p}
+                        + \frac{3}{2 n_i} S_{i,n} \nonumber \\
+                 &\quad - D_r \frac{m_i}{T_i} \left( \frac{\partial u_{i\parallel}}{\partial r} \right)^2
+                        - 15 D_r \frac{1}{v_{Ti}^2} \left( \frac{\partial v_{Ti}}{\partial r} \right)^2 \\
+\end{align}
+```
+```math
+\begin{align}
 \dot{w}_\parallel &= b^z \frac{1}{m_i n_i v_{Ti}} \frac{\partial p_{i\parallel}}{\partial z} - \frac{1}{v_{Ti}} R_\mathrm{CX} n_n \left(u_{n\parallel} - u_{i\parallel}\right) - \frac{1}{v_{Ti}} R_\mathrm{ioniz} \frac{n_e n_n}{n_i} \left(u_{n\parallel} - u_{i\parallel}\right) - \frac{S_{i,\mathrm{mom}}}{m_i n_iv_{Ti}} + \frac{u_{i\parallel} S_{i,n}}{n_i v_{Ti}} \nonumber \\
 &\quad + w_\parallel \left( - b^z \frac{\partial u_{i\parallel}}{\partial z} + \frac{b^z}{3 p_i} \frac{\partial q_{i\parallel}}{\partial z} + \frac{b^z}{3 p_i} p_{i\parallel} \frac{\partial u_{i\parallel}}{\partial z} \right. \nonumber \\
 &\qquad\qquad + \frac{1}{6 T_i} R_\mathrm{CX} n_n \left(3 T_i - 3 T_n - m_i (u_{i\parallel} - u_{n\parallel})^2\right) \nonumber \\
