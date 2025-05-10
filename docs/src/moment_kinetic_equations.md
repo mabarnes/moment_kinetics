@@ -1201,40 +1201,97 @@ time-derivative-of-moment terms
 ```
 ```math
 \begin{align}
-\dot{w}_\parallel &= - \left( -\cancel{\frac{u_{i\parallel}}{v_{Ti}} \frac{\partial u_{i\parallel}}{\partial z}}
-                    - \frac{1}{m_i n_i v_{Ti}} \frac{\partial p_{i\parallel}}{\partial z}
-                    - \cancel{\frac{e}{m_i v_{Ti}} \frac{\partial \phi}{\partial z}}
-                    + R_\mathrm{CX} \frac{n_n}{v_{Ti}} (u_{n\parallel} - u_{i\parallel})
-                    + R_\mathrm{ioniz} \frac{n_e n_n (u_{n\parallel} - u_{i\parallel})}{n_i v_{Ti}}
-                    + \frac{1}{m_i n_i v_{Ti}} \left( S_{i,\mathrm{mom}} - m_i u_{i\parallel} S_n \right)
-                    + \left( w_\parallel + \cancel{\frac{u_{i_\parallel}}{v_{Ti}}} \right) \frac{\partial u_{i\parallel}}{\partial z}
-                    + \cancel{\frac{e}{m_i v_{Ti}} \frac{\partial\phi}{\partial z}} \right. \nonumber \\
-    &\qquad\quad  \left. - \cancel{\frac{w_\parallel u_{i\parallel}}{v_{Ti}} \frac{\partial v_{Ti}}{\partial z}}
-                         - \frac{2 w_\parallel}{3 m_i n_i v_{Ti}^2} \frac{\partial q_{i\parallel}}{\partial z}
-                         - \frac{2 w_\parallel p_{i\parallel}}{3 m_i n_i v_{Ti}^2} \frac{\partial u_{i\parallel}}{\partial z}
-                         - \frac{w_\parallel}{3 m_i n_i v_{Ti}^2} R_\mathrm{CX} n_i n_n \left( 3 T_i - 3 T_n - m_i (u_{i\parallel} - u_{n\parallel})^2 \right)
-                         + \frac{w_\parallel}{3 m_i n_i v_{Ti}^2} R_\mathrm{ioniz} n_e n_n \left( 3 T_n - 3 T_i + m_i (u_{i\parallel} - u_{n\parallel})^2 \right)
-                         + \frac{w_\parallel}{m_i n_i v_{Ti}^2} S_{i,p}
-                         - \frac{w_\parallel}{m_i n_i v_{Ti}^2} T_i S_{i,n}
-                         + w_\parallel \left( w_\parallel + \cancel{\frac{u_{i\parallel}}{v_{Ti}}} \right) \frac{\partial v_{Ti}}{\partial z}
-                  \right) \\
-\dot{w}_\perp &= -\left( - \cancel{\frac{w_\perp u_{i\parallel}}{v_{Ti}} \frac{\partial v_{Ti}}{\partial z}}
-                         - \frac{2 w_\perp}{3 m_i n_i v_{Ti}^2} \frac{\partial q_{i\parallel}}{\partial z}
-                         - \frac{2 w_\perp p_{i\parallel}}{3 m_i n_i v_{Ti}^2}
-                         - \frac{w_\perp}{3 m_i n_i v_{Ti}^2} R_\mathrm{CX} n_i n_n \left( 3 T_i - 3 T_n - m_i (u_{i\parallel} - u_{n\parallel})^2 \right)
-                         + \frac{w_\perp}{3 m_i n_i v_{Ti}^2} R_\mathrm{ioniz} n_e n_n \left( 3 T_n - 3 T_i + m_i (u_{i\parallel} - u_{n\parallel})^2 \right)
-                         + \frac{w_\perp}{m_i n_i v_{Ti}^2} S_{i,p}
-                         - \frac{w_\perp}{m_i n_i v_{Ti}^2} T_i S_{i,n}
-                    + \left( w_\parallel + \cancel{\frac{u_{i\parallel}}{v_{Ti}}} \right) w_\perp \frac{\partial v_{Ti}}{\partial z} \right) \\
-\frac{\dot{F}_i}{F_i} &= - \cancel{\frac{3 u_{i\parallel}}{v_{Ti}} \frac{\partial v_{Ti}}{\partial z}}
-                         - \frac{2}{m_i n_i v_{Ti}^2} \frac{\partial q_{i\parallel}}{\partial z}
-                         - \frac{2 p_{i\parallel}}{m_i n_i v_{Ti}^2} \frac{\partial u_{i\parallel}}{\partial z}
-                         - \frac{1}{m_i n_i v_{Ti}^2} R_\mathrm{CX} n_i n_n \left( 3 T_i - 3 T_n - m_i (u_{i\parallel} - u_{n\parallel})^2 \right)
-                         + \frac{1}{m_i n_i v_{Ti}^2} R_\mathrm{ioniz} n_e n_n \left( 3 T_n - 3 T_i + m_i (u_{i\parallel} - u_{n\parallel})^2 \right)
-                         + \frac{3}{m_i n_i v_{Ti}^2} S_{i,p}
-                         - \frac{3}{m_i n_i v_{Ti}^2} T_i S_{i,n}
-                         + \frac{3 (v_{Ti} w_\parallel + \cancel{u_{i\parallel}})}{v_{Ti}} \frac{\partial v_{Ti}}{\partial z} \nonumber \\
-           &\qquad\quad  + \cancel{\frac{u_{i\parallel}}{n_i} \frac{\partial{n_i}}{\partial z}} + \frac{\partial u_{i\parallel}}{\partial z} - R_\mathrm{ioniz} \frac{n_e n_n}{n_i} - \frac{1}{n_i} S_{i,n} - \frac{(v_{Ti} w_\parallel + \cancel{u_{i\parallel}})}{n_i} \frac{\partial n_i}{\partial z} \nonumber \\
+\dot{w}_\parallel &= - \left[ \frac{1}{v_{Ti}} \left( - \cancel{u_{i\parallel} \frac{\partial u_{i\parallel}}{\partial z}}
+                                                      - \frac{E_y}{B} \frac{\partial u_{i\parallel}}{\partial r}
+                                                      - \frac{E_r}{B} \frac{\partial u_{i\parallel}}{\partial y}
+                                                      - \frac{1}{m_i n_i} \frac{\partial p_{i\parallel}}{\partial z}
+                                                      - \cancel{\frac{e}{m_i} \frac{\partial \phi}{\partial z}} \right . \right . \nonumber \\
+                                        &\qquad\qquad + R_\mathrm{CX} n_n (u_{n\parallel} - u_{i\parallel})
+                                                      + R_\mathrm{ioniz} \frac{n_e n_n}{n_i} (u_{n\parallel} - u_{i\parallel}) \nonumber \\
+                                &\qquad\qquad \left . + \frac{S_{i,\mathrm{mom}}}{m_i n_i}
+                                                      - \frac{u_{i\parallel}}{n_i} S_{i,n}
+                                                      + \frac{D_r}{n_i} \left( n_i \frac{\partial^2 u_{i\parallel}}{\partial r^2} + 2 \frac{\partial n_i}{\partial r} \frac{\partial u_{i\parallel}}{\partial r} \right)
+                                               \right) \nonumber \\
+                      &\qquad + \left( w_\parallel + \cancel{\frac{u_{i_\parallel}}{v_{Ti}}} \right) \frac{\partial u_{i\parallel}}{\partial z} + \cancel{\frac{e}{m_i v_{Ti}} \frac{\partial\phi}{\partial z}} \\
+                 &\qquad\quad + \frac{w_\parallel}{v_{Ti}} \left( - u_{i\parallel} \frac{\partial v_{Ti}}{\partial z}
+                                                                  - \frac{E_y}{B} \frac{\partial v_{Ti}}{\partial r}
+                                                                  + \frac{E_r}{B} \frac{\partial v_{Ti}}{\partial y} \right . \nonumber \\
+                                              &\qquad\qquad\qquad + \frac{2}{3 m_i n_i v_{Ti}} \left( - \frac{\partial q_{i\parallel}}{\partial z}
+                                                                                                    - p_{i\parallel} \frac{\partial u_{i\parallel}}{\partial z}
+                                                                                                    - \frac{1}{2} R_\mathrm{CX} n_i n_n \left( 3 T_i - 3 T_n - m_i (u_{i\parallel} - u_{n\parallel})^2 \right) \right . \nonumber \\
+                                                              &\qquad\qquad\qquad\qquad\qquad\qquad + \frac{1}{2} R_\mathrm{ioniz} n_e n_n \left( 3 T_n - 3 T_i + m_i (u_{i\parallel} - u_{n\parallel})^2 \right)
+                                                                                                    + \frac{3}{2} S_{i,p}
+                                                                                                    - \frac{3}{2} T_i S_{i,n} \nonumber \\
+                                              &\qquad\qquad\qquad\qquad\qquad\qquad \left . \left . + D_r \left( \frac{3}{2} n_i \frac{\partial^2 T_i}{\partial r^2} + 3 \frac{\partial n_i}{\partial r} \frac{\partial T_i}{\partial r} + m_i n_i \left( \frac{\partial u_{i\parallel}}{\partial r} \right)^2 \right)
+                                                                                             \right)
+                                                           \right) \nonumber \\
+                 &\qquad\quad + w_\parallel \left( w_\parallel + \frac{u_{i\parallel}}{v_{Ti}} \right) \frac{\partial v_{Ti}}{\partial z} \nonumber \\
+                 &\qquad\quad + \left( \frac{E_y}{B}
+                                       - D_r \frac{1}{n_i} \frac{\partial n_i}{\partial r}
+                                       + 3 D_r \frac{1}{v_{Ti}} \frac{\partial v_{Ti}}{\partial r}
+                                       - D_r \frac{1}{n_i} \frac{\partial n_i}{\partial r}
+                                       + 3 D_r \frac{1}{v_{Ti}} \frac{\partial v_{Ti}}{\partial r}
+                                \right) \frac{1}{v_{Ti}} \frac{\partial u_{i\parallel}}{\partial r} \nonumber \\
+                 &\qquad\quad + \left( \frac{E_y}{B}
+                                       - D_r \frac{1}{n_i} \frac{\partial n_i}{\partial r}
+                                       + 3 D_r \frac{1}{v_{Ti}} \frac{\partial v_{Ti}}{\partial r}
+                                       - D_r \frac{1}{n_i} \frac{\partial n_i}{\partial r}
+                                       + 3 D_r \frac{1}{v_{Ti}} \frac{\partial v_{Ti}}{\partial r}
+                                \right) \frac{w_\parallel}{v_{Ti}} \frac{\partial v_{Ti}}{\partial r} \nonumber \\
+                 &\qquad\quad + \frac{E_r}{B} \left( - \frac{1}{v_{Ti}} \frac{\partial u_{i\parallel}}{\partial y} - \frac{w_\parallel}{v_{Ti}} \frac{\partial v_{Ti}}{\partial y} \right) \nonumber \\
+                 &\qquad\quad \left. + D_r \left( - \frac{1}{v_{Ti}} \frac{\partial^2 u_{i\parallel}}{\partial r^2}
+                                                  + \frac{1}{v_{Ti}^2} \frac{\partial v_{Ti}}{\partial r} \frac{\partial u_{i\parallel}}{\partial r}
+                                                  + \frac{w_\parallel}{v_{Ti}^2} \left( \frac{\partial v_{Ti}}{\partial r} \right)^2
+                                           \right)
+                             + D_r \left( \frac{1}{v_{Ti}} \frac{\partial u_{i\parallel}}{\partial r} - \frac{w_\parallel}{v_{Ti}} \frac{\partial v_{Ti}}{\partial r} \right) \frac{1}{v_{Ti}} \frac{\partial v_{Ti}}{\partial r}
+                       \right] \\
+
+\dot{w}_\perp &= - \left[ \frac{w_\perp}{v_{Ti}} \left( - \frac{\partial q_{i\parallel}}{\partial z}
+                                                        - p_{i\parallel} \frac{\partial u_{i\parallel}}{\partial z}
+                                                        - \frac{1}{2} R_\mathrm{CX} n_i n_n \left( 3 T_i - 3 T_n - m_i (u_{i\parallel} - u_{n\parallel})^2 \right) \right . \right . \nonumber \\
+                                    &\qquad\qquad\qquad + \frac{1}{2} R_\mathrm{ioniz} n_e n_n \left( 3 T_n - 3 T_i + m_i (u_{i\parallel} - u_{n\parallel})^2 \right)
+                                                        + \frac{3}{2} S_{i,p}
+                                                        - \frac{3}{2} T_i S_{i,n} \nonumber \\
+                            &\qquad\qquad\qquad \left . + D_r \left( \frac{3}{2} n_i \frac{\partial^2 T_i}{\partial r^2} + 3 \frac{\partial n_i}{\partial r} \frac{\partial T_i}{\partial r} + m_i n_i \left( \frac{\partial u_{i\parallel}}{\partial r} \right)^2 \right)
+                                                 \right) \nonumber \\
+             &\qquad\quad + \left( w_\parallel + \frac{u_{i\parallel}}{v_{Ti}} \right) w_\perp \frac{\partial v_{Ti}}{\partial z} \nonumber \\
+             &\qquad\quad + \left( \frac{E_y}{B}
+                                   - D_r \frac{1}{n_i} \frac{\partial n_i}{\partial r}
+                                   + 3 D_r \frac{1}{v_{Ti}} \frac{\partial v_{Ti}}{\partial r}
+                                   - D_r \frac{1}{n_i} \frac{\partial n_i}{\partial r}
+                                   + 3 D_r \frac{1}{v_{Ti}} \frac{\partial v_{Ti}}{\partial r}
+                            \right) \frac{w_\perp}{v_{Ti}} \frac{\partial v_{Ti}}{\partial r} \nonumber \\
+             &\qquad\quad - \frac{E_r}{B} \frac{w_\perp}{v_{Ti}} \frac{\partial v_{Ti}}{\partial y}
+                          + D_r \left( - \frac{w_\perp}{v_{Ti}} \frac{\partial^2 v_{Ti}}{\partial r^2}
+                                 + \frac{w_\perp}{v_{Ti}^2} \left( \frac{\partial v_{Ti}}{\partial r} \right)^2
+                          \right)
+                          \left. + D_r \frac{w_\perp}{v_{Ti}^2} \left( \frac{\partial v_{Ti}}{\partial r} \right)^2
+                   \right]  \\
+
+\frac{\dot{F}_i}{F_i} &= \frac{1}{n_i} \left( - u_{i\parallel} \frac{\partial n_i}{\partial z}
+                                              - n_i \frac{\partial u_{i\parallel}}{\partial z}
+                                              - \frac{E_y}{B} \frac{\partial n_i}{\partial r}
+                                              - \frac{E_r}{B} \frac{\partial n_i}{\partial y}
+                                              + R_\mathrm{ioniz} n_e n_n
+                                              + S_{i,n}
+                                              + D_r \frac{\partial^2 n_i}{\partial r^2}
+                                       \right) \nonumber \\
+                &\qquad + \frac{(v_{Ti} w_\parallel + u_{i\parallel})}{n_i} \frac{\partial n_i}{\partial z} \nonumber \\
+                &\qquad - \frac{3}{v_{Ti}} \left( - \frac{\partial q_{i\parallel}}{\partial z}
+                                                  - p_{i\parallel} \frac{\partial u_{i\parallel}}{\partial z}
+                                                  - \frac{1}{2} R_\mathrm{CX} n_i n_n \left( 3 T_i - 3 T_n - m_i (u_{i\parallel} - u_{n\parallel})^2 \right) \right . \nonumber \\
+                              &\qquad\qquad\qquad + \frac{1}{2} R_\mathrm{ioniz} n_e n_n \left( 3 T_n - 3 T_i + m_i (u_{i\parallel} - u_{n\parallel})^2 \right)
+                                                  + \frac{3}{2} S_{i,p}
+                                                  - \frac{3}{2} T_i S_{i,n} \nonumber \\
+                      &\qquad\qquad\qquad \left . + D_r \left( \frac{3}{2} n_i \frac{\partial^2 T_i}{\partial r^2} + 3 \frac{\partial n_i}{\partial r} \frac{\partial T_i}{\partial r} + m_i n_i \left( \frac{\partial u_{i\parallel}}{\partial r} \right)^2 \right)
+                                           \right) \nonumber \\
+           &\qquad\quad - \frac{3 (v_{Ti} w_\parallel + u_{i\parallel})}{v_{Ti}} \frac{\partial v_{Ti}}{\partial z} \nonumber \\
+           &\qquad\quad + \frac{E_y}{B} \frac{1}{n_i} \frac{\partial n_i}{\partial r} - 3 \frac{E_y}{B} \frac{1}{v_{Ti}} \frac{\partial v_{Ti}}{\partial r}
+                        - \frac{E_r}{B} \frac{1}{n_i} \frac{\partial n_i}{\partial y} + 3 \frac{E_r}{B} \frac{1}{v_{Ti}} \frac{\partial v_{Ti}}{\partial y} \nonumber \\
+           &\qquad\quad - D_r \frac{1}{n_i} \frac{\partial^2 n_i}{\partial r^2}
+                        + 6 D_r \frac{1}{n_i v_{Ti}} \frac{\partial n_i}{\partial r} \frac{\partial v_{Ti}}{\partial r}
+                        + 3 D_r \frac{1}{v_{Ti}} \frac{\partial^2 v_{Ti}}{\partial r^2}
+                        - 12 D_r \frac{1}{v_{Ti}^2} \left( \frac{\partial v_{Ti}}{\partial r} \right)^2 \\
 \end{align}
 ```
 ```@raw html
