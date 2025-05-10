@@ -4,11 +4,18 @@ include("setup.jl")
 
 using moment_kinetics.coordinates: define_test_coordinate
 using moment_kinetics.calculus: derivative!, second_derivative!, integral
-using moment_kinetics.calculus: laplacian_derivative!
+using moment_kinetics.calculus: laplacian_derivative!, indefinite_integral!
 
 using MPI
 using Random
 using LinearAlgebra: mul!, ldiv!
+# To update one of the long list of tolerances, uncomment the line below
+# #using Printf
+# and insert a print statement, e.g.,
+# tolerance = 1.5*maximum(abs.(f .- expected_f))
+# tolerance_string = @sprintf("%.2g",tolerance)
+# println("($nelement, $ngrid, $tolerance_string),")
+# and comment out the failing test that needs updating or replacing
 
 function runtests()
     @testset "calculus" verbose=use_verbose begin
@@ -1859,6 +1866,194 @@ function runtests()
                 #minf = minimum(f)
                 #println("$nelement $ngrid $err $maxfe $maxf $minf")
                 @test isapprox(f, expected_f, rtol=rtol, atol=1.e-10,
+                               norm=maxabs_norm)
+            end
+        end
+
+        @testset "Indefinite line integration: spectral" verbose=false begin
+            @testset "$nelement $ngrid" for discretization in ("gausslegendre_pseudospectral", "chebyshev_pseudospectral"), name in ("z","vperp"), (nelement, ngrid, rtol) ∈
+                    (
+                     (1, 8, 1.e-3),
+                     (1, 9, 7.e-5),
+                     (1, 10, 5.e-5),
+                     (1, 11, 8.e-7),
+                     (1, 12, 5.e-7),
+                     (1, 13, 8.e-9),
+                     (1, 14, 5.e-9),
+                     (1, 15, 1.e-10),
+                     (1, 16, 5.e-10),
+                     (1, 17, 5.e-10),
+                     
+                     (2, 6, 2.e-4),
+                     (2, 7, 5.e-5),
+                     (2, 8, 1.e-6),
+                     (2, 9, 5.e-7),
+                     (2, 10, 5.e-9),
+                     (2, 11, 1.e-9),
+                     (2, 12, 5.e-10),
+                     (2, 13, 5.e-10),
+                     (2, 14, 5.e-10),
+                     (2, 15, 5.e-10),
+                     (2, 16, 5.e-10),
+                     (2, 17, 5.e-10),
+                     
+                     (3, 6, 5.e-5),
+                     (3, 7, 1.e-6),
+                     (3, 8, 8.e-8),
+                     (3, 9, 5.e-9),
+                     (3, 10, 5.e-10),
+                     (3, 11, 5.e-10),
+                     (3, 12, 5.e-10),
+                     (3, 13, 5.e-10),
+                     (3, 14, 5.e-10),
+                     (3, 15, 5.e-10),
+                     (3, 16, 5.e-10),
+                     (3, 17, 5.e-8),
+                     
+                     (4, 5, 6.e-5),
+                     (4, 6, 5.e-6),
+                     (4, 7, 1.e-7),
+                     (4, 8, 5.e-9),
+                     (4, 9, 1.e-9),
+                     (4, 10, 1.e-10),
+                     (4, 11, 8.e-10),
+                     (4, 12, 8.e-10),
+                     (4, 13, 8.e-10),
+                     (4, 14, 8.e-10),
+                     (4, 15, 8.e-10),
+                     (4, 16, 8.e-8),
+                     (4, 17, 8.e-8),
+                     
+                     (5, 5, 4.e-5),
+                     (5, 6, 8.e-7),
+                     (5, 7, 5.e-8),
+                     (5, 8, 1.e-9),
+                     (5, 9, 8.e-10),
+                     (5, 10, 5.e-10),
+                     (5, 11, 8.e-10),
+                     (5, 12, 4.e-10),
+                     (5, 13, 2.e-10),
+                     (5, 14, 2.e-10),
+                     (5, 15, 8.e-10),
+                     (5, 16, 8.e-10),
+                     (5, 17, 8.e-10),
+                     )
+
+                # define inputs needed for the test
+                L = 6.0
+                bc = "zero"
+                element_spacing_option = "uniform"
+                # create the coordinate struct 'x'
+                # This test runs effectively in serial, so implicitly uses
+                # `ignore_MPI=true` to avoid errors due to communicators not being fully
+                # set up.
+                x, spectral = define_test_coordinate(name; ngrid=ngrid,
+                                                     nelement=nelement, L=L,
+                                                     discretization=discretization,
+                                                     bc=bc,
+                                                     element_spacing_option=element_spacing_option,
+                                                     collision_operator_dim=false)
+                xllim = x.element_boundaries[1] # lower endpoint
+                f = @. cos(x.grid - xllim)
+                expected_pf = @. sin(x.grid - xllim)
+                # create array for the indefinite integral pf
+                pf = similar(f)
+
+                # differentiate f
+                indefinite_integral!(pf, f, x, spectral)
+                @test isapprox(pf, expected_pf, rtol=rtol, atol=1.e-10,
+                               norm=maxabs_norm)
+            end
+        end
+
+        @testset "Indefinite line integration: finite differences" verbose=false begin
+            @testset "$nelement $ngrid" for name in ("z","vperp"), (nelement, ngrid, rtol) ∈
+                    (
+                        (1, 8, 0.092),
+                        (1, 9, 0.071),
+                        (1, 10, 0.056),
+                        (1, 11, 0.045),
+                        (1, 12, 0.037),
+                        (1, 13, 0.031),
+                        (1, 14, 0.027),
+                        (1, 15, 0.023),
+                        (1, 16, 0.02),
+                        (1, 17, 0.018),
+                        (2, 6, 0.045),
+                        (2, 7, 0.031),
+                        (2, 8, 0.023),
+                        (2, 9, 0.018),
+                        (2, 10, 0.014),
+                        (2, 11, 0.011),
+                        (2, 12, 0.0093),
+                        (2, 13, 0.0078),
+                        (2, 14, 0.0067),
+                        (2, 15, 0.0057),
+                        (2, 16, 0.005),
+                        (2, 17, 0.0044),
+                        (3, 6, 0.02),
+                        (3, 7, 0.014),
+                        (3, 8, 0.01),
+                        (3, 9, 0.0078),
+                        (3, 10, 0.0062),
+                        (3, 11, 0.005),
+                        (3, 12, 0.0041),
+                        (3, 13, 0.0035),
+                        (3, 14, 0.003),
+                        (3, 15, 0.0026),
+                        (3, 16, 0.0022),
+                        (3, 17, 0.002),
+                        (4, 5, 0.018),
+                        (4, 6, 0.011),
+                        (4, 7, 0.0078),
+                        (4, 8, 0.0057),
+                        (4, 9, 0.0044),
+                        (4, 10, 0.0035),
+                        (4, 11, 0.0028),
+                        (4, 12, 0.0023),
+                        (4, 13, 0.002),
+                        (4, 14, 0.0017),
+                        (4, 15, 0.0014),
+                        (4, 16, 0.0013),
+                        (4, 17, 0.0011),
+                        (5, 5, 0.011),
+                        (5, 6, 0.0072),
+                        (5, 7, 0.005),
+                        (5, 8, 0.0037),
+                        (5, 9, 0.0028),
+                        (5, 10, 0.0022),
+                        (5, 11, 0.0018),
+                        (5, 12, 0.0015),
+                        (5, 13, 0.0013),
+                        (5, 14, 0.0011),
+                        (5, 15, 0.00092),
+                        (5, 16, 0.0008),
+                        (5, 17, 0.0007),
+                     )
+
+                # define inputs needed for the test
+                L = 6.0
+                bc = "zero"
+                element_spacing_option = "uniform"
+                # create the coordinate struct 'x'
+                # This test runs effectively in serial, so implicitly uses
+                # `ignore_MPI=true` to avoid errors due to communicators not being fully
+                # set up.
+                x, spectral = define_test_coordinate(name; ngrid=ngrid,
+                                                     nelement=nelement, L=L,
+                                                     discretization="finite_difference",
+                                                     bc=bc,
+                                                     element_spacing_option=element_spacing_option,
+                                                     collision_operator_dim=false)
+                xllim = x.element_boundaries[1] # lower endpoint
+                f = @. cos(x.grid - xllim)
+                expected_pf = @. sin(x.grid - xllim)
+                # create array for the indefinite integral pf
+                pf = similar(f)
+
+                # differentiate f
+                indefinite_integral!(pf, f, x, spectral)
+                @test isapprox(pf, expected_pf, rtol=rtol, atol=1.e-10,
                                norm=maxabs_norm)
             end
         end
