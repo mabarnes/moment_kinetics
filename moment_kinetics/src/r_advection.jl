@@ -24,7 +24,7 @@ do a single stage time advance (potentially as part of a multi-stage RK scheme)
         # get the updated speed along the r direction using the current f
         @views update_speed_r!(advect[is], fvec_in.upar[:,:,is],
                                moments.ion.vth[:,:,is], fields, moments.evolve_upar,
-                               moments.evolve_ppar, vpa, vperp, z, r, geometry, is)
+                               moments.evolve_p, vpa, vperp, z, r, geometry, is)
         # advance r-advection equation
         @loop_z_vpa iz ivpa begin
         end
@@ -33,14 +33,14 @@ do a single stage time advance (potentially as part of a multi-stage RK scheme)
             @views adjust_advection_speed!(advect[is].speed[:,ivpa,ivperp,iz],
                                            fvec_in.density[iz,:,is],
                                            moments.ion.vth[iz,:,is],
-                                           moments.evolve_density, moments.evolve_ppar)
+                                           moments.evolve_density, moments.evolve_p)
             # take the normalized pdf contained in fvec_in.pdf and remove the normalization,
             # returning the true (un-normalized) particle distribution function in r.scratch
             @views unnormalize_pdf!(
                        scratch_dummy.buffer_vpavperpzrs_2[ivpa,ivperp,iz,:,is],
                        fvec_in.pdf[ivpa,ivperp,iz,:,is], fvec_in.density[iz,:,is],
                        moments.ion.vth[iz,:,is], moments.evolve_density,
-                       moments.evolve_ppar)
+                       moments.evolve_p)
             advect[is].adv_fac[:,ivpa,ivperp,iz] .= -dt.*advect[is].speed[:,ivpa,ivperp,iz]
         end
     end
@@ -60,8 +60,8 @@ end
 
 """
 """
-function adjust_advection_speed!(speed, dens, vth, evolve_density, evolve_ppar)
-    if evolve_ppar
+function adjust_advection_speed!(speed, dens, vth, evolve_density, evolve_p)
+    if evolve_p
         @. speed *= vth/dens
     elseif evolve_density
         @. speed /= dens
@@ -71,8 +71,8 @@ end
 
 """
 """
-function unnormalize_pdf!(unnorm, norm, dens, vth, evolve_density, evolve_ppar)
-    if evolve_ppar
+function unnormalize_pdf!(unnorm, norm, dens, vth, evolve_density, evolve_p)
+    if evolve_p
         @. unnorm = norm * dens/vth
     elseif evolve_density
         @. unnorm = norm * dens
@@ -85,19 +85,18 @@ end
 """
 calculate the advection speed in the r-direction at each grid point
 """
-function update_speed_r!(advect, upar, vth, fields, evolve_upar, evolve_ppar, vpa, vperp,
+function update_speed_r!(advect, upar, vth, fields, evolve_upar, evolve_p, vpa, vperp,
                          z, r, geometry, is)
     @boundscheck z.n == size(advect.speed,4) || throw(BoundsError(advect))
     @boundscheck vperp.n == size(advect.speed,3) || throw(BoundsError(advect))
     @boundscheck vpa.n == size(advect.speed,2) || throw(BoundsError(advect))
     @boundscheck r.n == size(advect.speed,1) || throw(BoundsError(speed))
-    if evolve_upar || evolve_ppar
-        error("r_advection is not compatible with evolve_upar or evolve_ppar")
+    if evolve_upar || evolve_p
+        error("r_advection is not compatible with evolve_upar or evolve_p")
     end
     if r.advection.option == "default" && r.n > 1
         Bmag = geometry.Bmag
         rhostar = geometry.rhostar
-        ExBfac = 0.5*rhostar
         bzeta = geometry.bzeta
         jacobian = geometry.jacobian
         geofac = r.scratch
@@ -107,7 +106,7 @@ function update_speed_r!(advect, upar, vth, fields, evolve_upar, evolve_ppar, vp
             @loop_z_vperp_vpa iz ivperp ivpa begin
                 # ExB drift
                 @. geofac = bzeta[iz,:]*jacobian[iz,:]/Bmag[iz,:]
-                @views @. advect.speed[:,ivpa,ivperp,iz] = ExBfac*geofac*fields.gEz[ivperp,iz,:,is]
+                @views @. advect.speed[:,ivpa,ivperp,iz] = rhostar*geofac*fields.gEz[ivperp,iz,:,is]
                 # magnetic curvature drift
                 @. @views advect.speed[:,ivpa,ivperp,iz] += rhostar*(vpa.grid[ivpa]^2)*cvdriftr[iz,:]
                 # magnetic grad B drift

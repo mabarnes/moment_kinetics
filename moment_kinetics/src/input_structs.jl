@@ -31,19 +31,19 @@ using TOML
 """
 @enum kinetic_electron_solver_type begin
     implicit_time_evolving
-    implicit_ppar_implicit_pseudotimestep
+    implicit_p_implicit_pseudotimestep
     implicit_steady_state
     explicit_time_evolving
-    implicit_ppar_explicit_pseudotimestep
+    implicit_p_explicit_pseudotimestep
     explicit_pseudotimestep
     null_kinetic_electrons
 end
 export kinetic_electron_solver_type
 export implicit_time_evolving
-export implicit_ppar_implicit_pseudotimestep
+export implicit_p_implicit_pseudotimestep
 export implicit_steady_state
 export explicit_time_evolving
-export implicit_ppar_explicit_pseudotimestep
+export implicit_p_explicit_pseudotimestep
 export explicit_pseudotimestep
 export null_kinetic_electrons
 

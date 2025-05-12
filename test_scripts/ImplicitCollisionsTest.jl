@@ -12,8 +12,8 @@ using moment_kinetics.fokker_planck: init_fokker_planck_collisions_weak_form
 using moment_kinetics.fokker_planck: setup_fp_nl_solve, setup_fkpl_collisions_input,
                                      implicit_ion_fokker_planck_self_collisions!,
                                      fokker_planck_self_collisions_backward_euler_step!
-using moment_kinetics.fokker_planck_test: F_Maxwellian, print_test_data
-using moment_kinetics.velocity_moments: get_density, get_upar, get_ppar, get_pperp, get_pressure
+using moment_kinetics.fokker_planck_test: F_Maxwellian, F_Beam, print_test_data
+using moment_kinetics.velocity_moments: get_density, get_upar, get_p, get_ppar, get_qpar, get_rmom
 using moment_kinetics.communication
 using moment_kinetics.communication: MPISharedArray
 using moment_kinetics.looping
@@ -26,11 +26,14 @@ function diagnose_F_Maxwellian(pdf,pdf_exact,pdf_dummy_1,pdf_dummy_2,vpa,vperp,t
     @begin_serial_region()
     @serial_region begin
         dens = get_density(pdf,vpa,vperp)
-        upar = get_upar(pdf,vpa,vperp,dens)
-        ppar = get_ppar(pdf,vpa,vperp,upar)
-        pperp = get_pperp(pdf,vpa,vperp)
-        pres = get_pressure(ppar,pperp) 
-        vth = sqrt(2.0*pres/(dens*mass))
+        upar = get_upar(pdf, dens, vpa, vperp, false)
+        pressure = get_p(pdf, dens, upar, vpa, vperp, false, false)
+        vth = sqrt(2.0*pressure/(dens*mass))
+        ppar = get_ppar(dens, upar, pressure, vth, pdf, vpa, vperp, false, false,
+                    false)
+        qpar = get_qpar(pdf, dens, upar, pressure, vth, vpa, vperp, false, false,
+                    false)
+        rmom = get_rmom(pdf, upar, vpa, vperp)
         @loop_vperp_vpa ivperp ivpa begin
             pdf_exact[ivpa,ivperp] = F_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
         end
@@ -39,6 +42,9 @@ function diagnose_F_Maxwellian(pdf,pdf_exact,pdf_dummy_1,pdf_dummy_2,vpa,vperp,t
         println("dens: ", dens)
         println("upar: ", upar)
         println("vth: ", vth)
+        println("ppar: ", ppar)
+        println("qpar: ", qpar)
+        println("rmom: ", rmom)
         if vpa.bc == "zero"
             println("test vpa bc: F[1, :]", pdf[1, :])
             println("test vpa bc: F[end, :]", pdf[end, :])
@@ -62,7 +68,7 @@ end
 
 function test_implicit_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=3,nelement_vpa=8,nelement_vperp=4,
     Lvpa=6.0,Lvperp=3.0,bc_vpa="none",bc_vperp="none",
-    ntime=1,delta_t=1.0,
+    ntime=1,delta_t=1.0, zbeam=0.0,
     atol = 1.0e-10,
     rtol = 0.0,
     nonlinear_max_iterations = 20,
@@ -130,7 +136,8 @@ function test_implicit_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=3,neleme
     fvpavperp = allocate_shared_float(vpa.n,vperp.n,ntime+1)
     @serial_region begin
         @loop_vperp_vpa ivperp ivpa begin
-            fvpavperp[ivpa,ivperp,1] = exp(-((vpa.grid[ivpa]-vpa0)^2 + (vperp.grid[ivperp]-vperp0)^2)/(vth0^2))
+            fvpavperp[ivpa,ivperp,1] = F_Beam(vpa0,vperp0,vth0,vpa,vperp,ivpa,ivperp) +
+                                        + zbeam * F_Beam(0.0,vperp0,vth0,vpa,vperp,ivpa,ivperp)
         end
         if vpa.bc == "zero"
             @loop_vperp ivperp begin
@@ -217,7 +224,7 @@ end
 
 function test_implicit_collisions_wrapper(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=3,nelement_vpa=8,nelement_vperp=4,
     Lvpa=6.0,Lvperp=3.0, bc_vpa="none", bc_vperp = "none",
-    ntime=1,delta_t=1.0,
+    ntime=1,delta_t=1.0, zbeam = 0.0,
     atol = 1.0e-10,
     rtol = 0.0,
     nonlinear_max_iterations = 20,
@@ -314,7 +321,8 @@ function test_implicit_collisions_wrapper(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=
     @serial_region begin
         @loop_s_r_z is ir iz begin
             @loop_vperp_vpa ivperp ivpa begin
-                fvpavperpzrst[ivpa,ivperp,iz,ir,is,1] = exp(-((vpa.grid[ivpa]-vpa0)^2 + (vperp.grid[ivperp]-vperp0)^2)/(vth0^2))
+                fvpavperpzrst[ivpa,ivperp,iz,ir,is,1] = F_Beam(vpa0,vperp0,vth0,vpa,vperp,ivpa,ivperp) +
+                                                  zbeam * F_Beam(0.0,vperp0,vth0,vpa,vperp,ivpa,ivperp)
             end
             if vpa.bc == "zero"
                 @loop_vperp ivperp begin

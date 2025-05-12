@@ -1,3 +1,5 @@
+using moment_kinetics.input_structs
+
 """
     timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=nothing)
 
@@ -104,7 +106,7 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                                 linestyle=:dash, label=prefix * "failures caused by u_ion",
                                 ax=ax_failures)
                     end
-                    if !electron && ri.evolve_ppar
+                    if !electron && ri.evolve_p
                         # Ion parallel pressure failure counter
                         counter += 1
                         plot_1d(time, @view failure_caused_by_per_output[counter,:];
@@ -147,7 +149,7 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                                     linestyle=:dash,
                                     label=prefix * "failures caused by u_neutral", ax=ax_failures)
                         end
-                        if ri.evolve_ppar
+                        if ri.evolve_p
                             # Neutral flow failure counter
                             counter += 1
                             plot_1d(time, @view failure_caused_by_per_output[counter,:];
@@ -265,11 +267,12 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                     implicit_CFL_vars = String[]
 
                     push!(CFL_vars, "minimum_CFL_ion_z")
-                    if occursin("ARK", ri.t_input["type"]) && ri.t_input["implicit_ion_advance"]
+                    if occursin("ARK", ri.t_input["type"]) && ri.t_input["kinetic_ion_solver"] == full_implicit_ion_advance
                         push!(implicit_CFL_vars, "minimum_CFL_ion_z")
                     end
                     push!(CFL_vars, "minimum_CFL_ion_vpa")
-                    if occursin("ARK", ri.t_input["type"]) && (ri.t_input["implicit_ion_advance"] || ri.t_input["implicit_vpa_advection"])
+                    if occursin("ARK", ri.t_input["type"]) && ( (ri.t_input["kinetic_ion_solver"] == full_implicit_ion_advance) ||
+                                                                (ri.t_input["kinetic_ion_solver"] == implicit_ion_vpa_advection))
                         push!(implicit_CFL_vars, "minimum_CFL_ion_vpa")
                     end
                     if ri.n_neutral_species > 0
@@ -392,7 +395,7 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                                 label=prefix * "ion upar RK accuracy", ax=ax,
                                 linestyle=:dash)
                     end
-                    if !electron && ri.evolve_ppar
+                    if !electron && ri.evolve_p
                         counter += 1
                         plot_1d(time, @view limit_caused_by_per_output[counter,:];
                                 label=prefix * "ion ppar RK accuracy", ax=ax,
@@ -423,7 +426,7 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                                     label=prefix * "neutral uz RK accuracy", ax=ax,
                                     linestyle=:dash)
                         end
-                        if ri.evolve_ppar
+                        if ri.evolve_p
                             counter += 1
                             plot_1d(time, @view limit_caused_by_per_output[counter,:];
                                     label=prefix * "neutral pz RK accuracy", ax=ax,
@@ -431,7 +434,7 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                         end
                     end
 
-                    if electron || !(occursin("ARK", ri.t_input["type"]) && ri.t_input["implicit_ion_advance"])
+                    if electron || !(occursin("ARK", ri.t_input["type"]) && ri.t_input["kinetic_ion_solver"] == full_implicit_ion_advance)
                         # Ion z advection
                         counter += 1
                         if electron
@@ -443,7 +446,8 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                                 label=label, ax=ax, linestyle=:dot)
                     end
 
-                    if electron || !(occursin("ARK", ri.t_input["type"]) && (ri.t_input["implicit_ion_advance"] || ri.t_input["implicit_vpa_advection"]))
+                    if electron || !(occursin("ARK", ri.t_input["type"]) && (ri.t_input["kinetic_ion_solver"] == full_implicit_ion_advance) ||
+                                                                            (ri.t_input["kinetic_ion_solver"] == implicit_ion_vpa_advection))
                         # Ion vpa advection
                         counter += 1
                         if electron

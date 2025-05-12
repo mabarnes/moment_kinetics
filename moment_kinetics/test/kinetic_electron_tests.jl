@@ -15,80 +15,64 @@ using moment_kinetics.Glob
 
 # Input for Boltzmann electron part of run
 boltzmann_input = OptionsDict(
-    "output" => OptionsDict("run_name" => "kinetic_electron_test_boltzmann_initialisation",
-                           ),
-    "evolve_moments" => OptionsDict("parallel_pressure" => true,
-                                    "density" => true,
+    "output" => OptionsDict("run_name" => "kinetic_electron_test_boltzmann_initialisation"),
+    "evolve_moments" => OptionsDict("density" => true,
                                     "moments_conservation" => true,
                                     "parallel_flow" => true,
-                                   ),
+                                    "pressure" => true),
     "r" => OptionsDict("ngrid" => 1,
-                       "nelement" => 1,
-                      ),
+                       "nelement" => 1),
     "z" => OptionsDict("ngrid" => 5,
                        "discretization" => "gausslegendre_pseudospectral",
                        "nelement" => 8,
-                       "bc" => "wall",
-                      ),
+                       "bc" => "wall"),
     "vpa" => OptionsDict("ngrid" => 6,
                          "discretization" => "gausslegendre_pseudospectral",
                          "nelement" => 17,
-                         "L" => 24.0,
-                         "element_spacing_option" => "coarse_tails",
+                         "L" => 41.569219381653056,
                          "bc" => "zero",
-                        ),
+                         "element_spacing_option" => "coarse_tails8.660254037844386"),
     "composition" => OptionsDict("T_e" => 0.2,
                                  "n_ion_species" => 1,
-                                 "n_neutral_species" => 0,
-                                ),
-    "ion_species_1" => OptionsDict("initial_temperature" => 0.2,
-                                   "initial_density" => 1.0,
-                                  ),
+                                 "n_neutral_species" => 0),
+    "ion_species_1" => OptionsDict("initial_temperature" => 0.06666666666666667,
+                                   "initial_density" => 1.0),
     "z_IC_ion_species_1" => OptionsDict("initialization_option" => "gaussian",
                                         "density_amplitude" => 1.0,
                                         "temperature_amplitude" => 0.0,
                                         "density_phase" => 0.0,
-                                        "upar_amplitude" => 1.0,
+                                        "upar_amplitude" => 1.4142135623730951,
                                         "temperature_phase" => 0.0,
-                                        "upar_phase" => 0.0,
-                                       ),
+                                        "upar_phase" => 0.0),
     "vpa_IC_ion_species_1" => OptionsDict("initialization_option" => "gaussian",
                                           "density_amplitude" => 1.0,
                                           "temperature_amplitude" => 0.0,
                                           "density_phase" => 0.0,
                                           "upar_amplitude" => 0.0,
                                           "temperature_phase" => 0.0,
-                                          "upar_phase" => 0.0,
-                                         ),
-    "krook_collisions" => OptionsDict("use_krook" => true,
-                                     ),
+                                          "upar_phase" => 0.0),
+    "krook_collisions" => OptionsDict("use_krook" => true),
     "reactions" => OptionsDict("electron_ionization_frequency" => 0.0,
-                               "ionization_frequency" => 0.5,
-                               "charge_exchange_frequency" => 0.75,
-                              ),
+                               "ionization_frequency" => 0.7071067811865476,
+                               "charge_exchange_frequency" => 1.0606601717798214),
     "ion_source_1" => OptionsDict("active" => true,
                                   "z_profile" => "gaussian",
                                   "z_width" => 0.25,
-                                  "source_strength" => 2.0,
-                                  "source_T" => 2.0,
-                                 ),
+                                  "source_strength" => 2.8284271247461903,
+                                  "source_T" => 2.0),
     "ion_source_2" => OptionsDict("active" => true,
                                   "z_profile" => "wall_exp_decay",
                                   "z_width" => 0.25,
-                                  "source_strength" => 0.5,
-                                  "source_T" => 0.2,
-                                 ),
+                                  "source_strength" => 0.7071067811865476,
+                                  "source_T" => 0.2),
     "timestepping" => OptionsDict("type" => "SSPRK4",
                                   "nstep" => 20000,
-                                  "dt" => 1.0e-4,
+                                  "dt" => 7.071067811865475e-5,
                                   "nwrite" => 2500,
                                   "nwrite_dfns" => 2500,
-                                  "steady_state_residual" => true,
-                                 ),
-    "ion_numerical_dissipation" => OptionsDict("force_minimum_pdf_value" => 0.0,
-                                              ),
-    "electron_numerical_dissipation" => OptionsDict("force_minimum_pdf_value" => 0.0,
-                                                   ),
+                                  "steady_state_residual" => true),
+    "ion_numerical_dissipation" => OptionsDict("force_minimum_pdf_value" => 0.0),
+    "electron_numerical_dissipation" => OptionsDict("force_minimum_pdf_value" => 0.0),
    )
 
 # Test use distributed-memory when possible
@@ -105,16 +89,16 @@ kinetic_input = deepcopy(boltzmann_input)
 kinetic_input["output"]["run_name"] = "kinetic_electron_test"
 kinetic_input["composition"]["electron_physics"] = "kinetic_electrons"
 kinetic_input["timestepping"] = OptionsDict("type" => "PareschiRusso2(2,2,2)",
-                                            "kinetic_electron_solver" => "implicit_ppar_implicit_pseudotimestep",
+                                            "kinetic_electron_solver" => "implicit_p_implicit_pseudotimestep",
                                             "kinetic_ion_solver" => "full_explicit_ion_advance",
                                             "nstep" => 100,
-                                            "dt" => 1.0e-5,
+                                            "dt" => 7.0710678118654756e-6,
                                             "nwrite" => 100,
                                             "nwrite_dfns" => 100,
                                            )
 
 kinetic_input["electron_timestepping"] = OptionsDict("nstep" => 5000000,
-                                                     "dt" => 2.0e-5,
+                                                     "dt" => 1.4142135623730951e-5,
                                                      "maximum_dt" => Inf,
                                                      "nwrite" => 10000,
                                                      "nwrite_dfns" => 100000,
@@ -122,7 +106,7 @@ kinetic_input["electron_timestepping"] = OptionsDict("nstep" => 5000000,
                                                      "increase_dt_iteration_threshold" => 0,
                                                      "cap_factor_ion_dt" => 10.0,
                                                      "initialization_residual_value" => 1.0e0,
-                                                     "converged_residual_value" => 1.0e-1,
+                                                     "converged_residual_value" => 0.1,
                                                     )
 
 kinetic_input["nonlinear_solver"] = OptionsDict("nonlinear_max_iterations" => 1000,
@@ -135,7 +119,7 @@ kinetic_input["nonlinear_solver"] = OptionsDict("nonlinear_max_iterations" => 10
 kinetic_input_adaptive_timestep = deepcopy(kinetic_input)
 kinetic_input_adaptive_timestep["output"]["run_name"] = "kinetic_electron_adaptive_timestep_test"
 kinetic_input_adaptive_timestep["timestepping"]["type"] = "KennedyCarpenterARK324"
-kinetic_input_adaptive_timestep["timestepping"]["maximum_dt"] = 1.0e-5
+kinetic_input_adaptive_timestep["timestepping"]["maximum_dt"] = 7.0710678118654756e-6
 
 
 """
@@ -204,72 +188,72 @@ function run_test()
 
                 # Regression test
                 # Benchmark data generated in serial on Linux with the LU preconditioner
-                expected_Ez = [-0.6041204601483995 -1.1031866332806448;
-                               -0.4899985007615793 -0.9702557521523882;
-                               -0.30157125359653525 -0.6643237428722496;
-                               -0.20954461530743507 -0.448626721111969;
-                               -0.21725774052171043 -0.4277318601037891;
-                               -0.18018470169411022 -0.3565527283262676;
-                               -0.16701297966245815 -0.3017761888449479;
-                               -0.17029852097347278 -0.27919190408161193;
-                               -0.16479810222163319 -0.26349777285866993;
-                               -0.16650177136254102 -0.2578342975000088;
-                               -0.1582591452248845 -0.2364406501155452;
-                               -0.1399685108558434 -0.2048400200281007;
-                               -0.12562263699714843 -0.1822002667319203;
-                               -0.10941855412335265 -0.15825017226759588;
-                               -0.07065980133329615 -0.10154006187571918;
-                               -0.02509457740112119 -0.03600071035464205;
-                               -4.9183836139672385e-15 -1.3413867913678009e-15;
-                               0.02509457740109921 0.036000710354635534;
-                               0.07065980133330539 0.10154006187572036;
-                               0.10941855412336662 0.15825017226760096;
-                               0.12562263699711657 0.1822002667318202;
-                               0.13996851085584108 0.20484002002811758;
-                               0.15825914522490123 0.23644065011557544;
-                               0.16650177136252906 0.2578342974999823;
-                               0.16479810222160715 0.26349777285869874;
-                               0.17029852097352824 0.27919190408166017;
-                               0.16701297966244733 0.3017761888449203;
-                               0.18018470169405 0.35655272832620327;
-                               0.2172577405217179 0.42773186010381914;
-                               0.20954461530746524 0.4486267211119983;
-                               0.30157125359655934 0.6643237428722507;
-                               0.48999850076161194 0.9702557521524036;
-                               0.6041204601484808 1.1031866332808118]
-                expected_vthe = [22.701979703912098 22.5411136516573;
-                                 23.775975068878136 23.6447117144965;
-                                 25.269573404652828 25.182460531284597;
-                                 26.180827153256086 26.126134875486123;
-                                 26.51309766224318 26.474059474646683;
-                                 26.79872099105839 26.774324987310887;
-                                 27.201519125627595 27.202888862469653;
-                                 27.504241804407613 27.527721913513908;
-                                 27.62917500457502 27.662892119742363;
-                                 27.748959650467643 27.7918012928706;
-                                 27.93406504180257 27.99102536351066;
-                                 28.087581454272264 28.155353828397885;
-                                 28.149676510047023 28.22169681984343;
-                                 28.209108374685112 28.285001462447372;
-                                 28.28640026687845 28.366967786478135;
-                                 28.328755126231776 28.411895167214865;
-                                 28.33129226306051 28.414467418812272;
-                                 28.328755126231776 28.411895167214773;
-                                 28.286400266878456 28.366967786478064;
-                                 28.20910837468512 28.285001462447372;
-                                 28.14967651004702 28.22169681984338;
-                                 28.087581454272268 28.15535382839796;
-                                 27.934065041802572 27.991025363510623;
-                                 27.748959650467654 27.791801292870637;
-                                 27.62917500457503 27.6628921197423;
-                                 27.504241804407616 27.52772191351386;
-                                 27.201519125627602 27.202888862469674;
-                                 26.79872099105839 26.774324987310933;
-                                 26.513097662243187 26.474059474646687;
-                                 26.18082715325609 26.12613487548611;
-                                 25.269573404652864 25.182460531284644;
-                                 23.775975068878168 23.644711714496555;
-                                 22.701979703912126 22.54111365165734]
+                expected_Ez = [-1.0895274164035784 -1.0970177501908387;
+                               -0.9537107207596052 -0.9631959272172249;
+                               -0.64772944553686 -0.6575559480409691;
+                               -0.43239472087683595 -0.4420033942391701;
+                               -0.4105380746215833 -0.42060521634777404;
+                               -0.33983833864419305 -0.34963395157319677;
+                               -0.2861073091896529 -0.29524242236672676;
+                               -0.26534810699447464 -0.2733878928236646;
+                               -0.25036305483140153 -0.25799105954677626;
+                               -0.2462239877638327 -0.2529481757438659;
+                               -0.22689659814898167 -0.23241672064188235;
+                               -0.1973916704773328 -0.20170109302448888;
+                               -0.17561499525916122 -0.179426795393018;
+                               -0.15294516493420943 -0.15601704384255094;
+                               -0.09826229899568269 -0.10016270506096049;
+                               -0.03486133051300139 -0.035522850592919736;
+                               1.3413773492638221e-14 9.836836417565192e-15;
+                               0.034861330512983624 0.03552285059290884;
+                               0.09826229899569562 0.10016270506098028;
+                               0.15294516493422874 0.15601704384255108;
+                               0.17561499525908875 0.17942679539295694;
+                               0.1973916704773312 0.20170109302449535;
+                               0.22689659814900306 0.232416720641887;
+                               0.24622398776379703 0.25294817574384254;
+                               0.2503630548313581 0.25799105954671214;
+                               0.2653481069944839 0.2733878928236661;
+                               0.286107309189667 0.2952424223667506;
+                               0.33983833864420315 0.3496339515732098;
+                               0.4105380746216039 0.420605216347785;
+                               0.4323947208768342 0.44200339423916696;
+                               0.6477294455368593 0.657555948040973;
+                               0.9537107207596269 0.9631959272172261;
+                               1.0895274164035835 1.0970177501908676]
+                expected_vthe = [18.64261015736211 18.503539865415778;
+                                 19.499485808831345 19.385751601666698;
+                                 20.68998156542932 20.614269078147135;
+                                 21.41296969572403 21.365350877816354;
+                                 21.673831648467935 21.639832244311933;
+                                 21.897353309058506 21.8760286044872;
+                                 22.209365937638857 22.210200207478678;
+                                 22.442338512307604 22.461952501146477;
+                                 22.537886613304106 22.566112845438163;
+                                 22.629970638073402 22.665833362125596;
+                                 22.772403937680107 22.81997772177581;
+                                 22.89112371186613 22.947648728662358;
+                                 22.93926271365467 22.999281675351945;
+                                 22.985391188780792 23.048638152168788;
+                                 23.04564592047585 23.112764300849186;
+                                 23.07862063586566 23.1478959483387;
+                                 23.080704319614085 23.149987331423727;
+                                 23.07862063586566 23.1478959483387;
+                                 23.045645920475852 23.112764300849157;
+                                 22.98539118878079 23.048638152168767;
+                                 22.939262713654664 22.999281675351945;
+                                 22.89112371186613 22.947648728662358;
+                                 22.772403937680092 22.819977721775807;
+                                 22.6299706380734 22.665833362125596;
+                                 22.53788661330411 22.566112845438195;
+                                 22.442338512307604 22.461952501146513;
+                                 22.209365937638868 22.21020020747871;
+                                 21.89735330905851 21.8760286044872;
+                                 21.673831648467935 21.63983224431193;
+                                 21.41296969572403 21.36535087781635;
+                                 20.689981565429328 20.614269078147146;
+                                 19.49948580883135 19.385751601666673;
+                                 18.64261015736213 18.503539865415792]
 
                 if expected_Ez == nothing
                     # Error: no expected input provided

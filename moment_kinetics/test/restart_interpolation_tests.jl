@@ -9,11 +9,6 @@ using Base.Filesystem: tempname
 using moment_kinetics.communication
 using moment_kinetics.file_io: io_has_parallel
 using moment_kinetics.input_structs: hdf5
-using moment_kinetics.load_data: open_readonly_output_file, load_coordinate_data,
-                                 load_species_data, load_fields_data,
-                                 load_ion_moments_data, load_pdf_data,
-                                 load_neutral_particle_moments_data,
-                                 load_neutral_pdf_data, load_time_data, load_species_data
 using moment_kinetics.interpolation: interpolate_to_grid_z, interpolate_to_grid_vpa
 using moment_kinetics.load_data: get_run_info_no_setup, close_run_info,
                                  postproc_load_variable
@@ -62,8 +57,8 @@ restart_test_input_chebyshev_split_2_moments =
 restart_test_input_chebyshev_split_3_moments =
     recursive_merge(deepcopy(restart_test_input_chebyshev_split_2_moments),
                     OptionsDict("output" => OptionsDict("run_name" => "restart_chebyshev_pseudospectral_split_3_moments"),
-                                "evolve_moments" => OptionsDict("parallel_pressure" => true),
-                                "vpa" => OptionsDict("L" => 1.5*vpa_L), "vz" => OptionsDict("L" => 1.5*vpa_L)),
+                                "evolve_moments" => OptionsDict("pressure" => true),
+                                "vpa" => OptionsDict("L" => sqrt(3/2)*1.5*vpa_L), "vz" => OptionsDict("L" => sqrt(3/2)*1.5*vpa_L)),
                    )
 
 """
@@ -81,9 +76,11 @@ function run_test(test_input, base, message, rtol, atol; tol_3V, args...)
     if tol_3V === nothing
         atol_3V = atol
         rtol_3V = rtol
+        is_3V = false
     else
         atol_3V = tol_3V
         rtol_3V = tol_3V
+        is_3V = true
     end
 
     parallel_io = input["output"]["parallel_io"]
@@ -135,11 +132,13 @@ function run_test(test_input, base, message, rtol, atol; tol_3V, args...)
     phi = nothing
     n_ion = nothing
     upar_ion = nothing
+    p_ion = nothing
     ppar_ion = nothing
     f_ion = nothing
     n_neutral = nothing
     upar_neutral = nothing
-    ppar_neutral = nothing
+    p_neutral = nothing
+    pz_neutral = nothing
     f_neutral = nothing
     z, z_spectral = nothing, nothing
     vpa, vpa_spectral = nothing, nothing
@@ -170,13 +169,15 @@ function run_test(test_input, base, message, rtol, atol; tol_3V, args...)
             n_neutral_species = run_info.n_neutral_species
             n_ion_zrst = postproc_load_variable(run_info, "density")
             upar_ion_zrst = postproc_load_variable(run_info, "parallel_flow")
+            p_ion_zrst = postproc_load_variable(run_info, "pressure")
             ppar_ion_zrst = postproc_load_variable(run_info, "parallel_pressure")
             qpar_ion_zrst = postproc_load_variable(run_info, "parallel_heat_flux")
             v_t_ion_zrst = postproc_load_variable(run_info, "thermal_speed")
             f_ion_vpavperpzrst  = postproc_load_variable(run_info, "f")
             n_neutral_zrst = postproc_load_variable(run_info, "density_neutral")
             upar_neutral_zrst = postproc_load_variable(run_info, "uz_neutral")
-            ppar_neutral_zrst = postproc_load_variable(run_info, "pz_neutral")
+            p_neutral_zrst = postproc_load_variable(run_info, "p_neutral")
+            pz_neutral_zrst = postproc_load_variable(run_info, "pz_neutral")
             qpar_neutral_zrst = postproc_load_variable(run_info, "qz_neutral")
             v_t_neutral_zrst = postproc_load_variable(run_info, "thermal_speed_neutral")
             # Slice f_neutral while loading to save memory, and avoid termination of the
@@ -196,13 +197,15 @@ function run_test(test_input, base, message, rtol, atol; tol_3V, args...)
             phi = phi_zrt[:,1,:]
             n_ion = n_ion_zrst[:,1,:,:]
             upar_ion = upar_ion_zrst[:,1,:,:]
+            p_ion = p_ion_zrst[:,1,:,:]
             ppar_ion = ppar_ion_zrst[:,1,:,:]
             qpar_ion = qpar_ion_zrst[:,1,:,:]
             v_t_ion = v_t_ion_zrst[:,1,:,:]
             f_ion = f_ion_vpavperpzrst[:,1,:,1,:,:]
             n_neutral = n_neutral_zrst[:,1,:,:]
             upar_neutral = upar_neutral_zrst[:,1,:,:]
-            ppar_neutral = ppar_neutral_zrst[:,1,:,:]
+            p_neutral = p_neutral_zrst[:,1,:,:]
+            pz_neutral = pz_neutral_zrst[:,1,:,:]
             qpar_neutral = qpar_neutral_zrst[:,1,:,:]
             v_t_neutral = v_t_neutral_zrst[:,1,:,:]
             f_neutral = f_neutral_vzvrvzetazrst[:,:,1,:,:]
@@ -216,7 +219,7 @@ function run_test(test_input, base, message, rtol, atol; tol_3V, args...)
                     f_neutral[:,iz,isn,it] .*= n_neutral[iz,isn,it]
                 end
             end
-            if input["evolve_moments"]["parallel_pressure"]
+            if input["evolve_moments"]["pressure"]
                 for it ∈ 1:length(time), is ∈ 1:n_ion_species, iz ∈ 1:z.n
                     f_ion[:,iz,is,it] ./= v_t_ion[iz,is,it]
                 end
@@ -241,7 +244,8 @@ function run_test(test_input, base, message, rtol, atol; tol_3V, args...)
         newgrid_ppar_ion = interpolate_to_grid_z(expected.z, ppar_ion[:, :, end], z, z_spectral)
         @test isapprox(expected.ppar_ion[:, end], newgrid_ppar_ion[:,1], rtol=rtol)
 
-        newgrid_vth_ion = @. sqrt(2.0*newgrid_ppar_ion/newgrid_n_ion)
+        newgrid_p_ion = interpolate_to_grid_z(expected.z, p_ion[:, :, end], z, z_spectral)
+        newgrid_vth_ion = @. sqrt(2.0*newgrid_p_ion/newgrid_n_ion)
         newgrid_f_ion = interpolate_to_grid_z(expected.z, f_ion[:, :, :, end], z, z_spectral)
         temp = newgrid_f_ion
         newgrid_f_ion = fill(NaN, length(expected.vpa),
@@ -253,12 +257,19 @@ function run_test(test_input, base, message, rtol, atol; tol_3V, args...)
             if input["evolve_moments"]["parallel_flow"]
                 wpa .-= newgrid_upar_ion[iz,1]
             end
-            if input["evolve_moments"]["parallel_pressure"]
+            if input["evolve_moments"]["pressure"]
                 wpa ./= newgrid_vth_ion[iz,1]
             end
             newgrid_f_ion[:,iz,1] = interpolate_to_grid_vpa(wpa, temp[:,iz,1], vpa, vpa_spectral)
         end
-        @test isapprox(expected.f_ion[:, :, end], newgrid_f_ion[:,:,1], rtol=rtol_3V)
+        if is_3V
+            # Only looking at ivperp=1 point, but peak value of distribution function is
+            # changed to keep density fixed when converting from 1V to 3V
+            @test isapprox(expected.f_ion[:, :, end] ./ 2.0 ./ π, newgrid_f_ion[:,:,1],
+                           rtol=rtol_3V)
+        else
+            @test isapprox(expected.f_ion[:, :, end], newgrid_f_ion[:,:,1], rtol=rtol)
+        end
 
         # Check neutral particle moments and f
         ######################################
@@ -269,13 +280,14 @@ function run_test(test_input, base, message, rtol, atol; tol_3V, args...)
         newgrid_upar_neutral = interpolate_to_grid_z(expected.z, upar_neutral[:, :, end], z, z_spectral)
         @test isapprox(expected.upar_neutral[:, end], newgrid_upar_neutral[:,1], rtol=rtol, atol=atol_3V)
 
-        # The errors on ppar_neutral when using a 3V grid are large - probably because of
+        # The errors on pz_neutral when using a 3V grid are large - probably because of
         # linear interpolation in ion-neutral interaction operators - so for the 3V tests
-        # we have to use a very loose tolerance for ppar_neutral.
-        newgrid_ppar_neutral = interpolate_to_grid_z(expected.z, ppar_neutral[:, :, end], z, z_spectral)
-        @test isapprox(expected.ppar_neutral[:, end], newgrid_ppar_neutral[:,1], rtol=rtol_3V)
+        # we have to use a very loose tolerance for pz_neutral.
+        newgrid_pz_neutral = interpolate_to_grid_z(expected.z, pz_neutral[:, :, end], z, z_spectral)
+        @test isapprox(expected.ppar_neutral[:, end], newgrid_pz_neutral[:,1], rtol=rtol_3V)
 
-        newgrid_vth_neutral = @. sqrt(2.0*newgrid_ppar_neutral/newgrid_n_neutral)
+        newgrid_p_neutral = interpolate_to_grid_z(expected.z, p_neutral[:, :, end], z, z_spectral)
+        newgrid_vth_neutral = @. sqrt(2.0*newgrid_p_neutral/newgrid_n_neutral)
         newgrid_f_neutral = interpolate_to_grid_z(expected.z, f_neutral[:, :, :, end], z, z_spectral)
         temp = newgrid_f_neutral
         newgrid_f_neutral = fill(NaN, length(expected.vpa),
@@ -287,12 +299,20 @@ function run_test(test_input, base, message, rtol, atol; tol_3V, args...)
             if input["evolve_moments"]["parallel_flow"]
                 wpa .-= newgrid_upar_neutral[iz,1]
             end
-            if input["evolve_moments"]["parallel_pressure"]
+            if input["evolve_moments"]["pressure"]
                 wpa ./= newgrid_vth_neutral[iz,1]
             end
             newgrid_f_neutral[:,iz,1] = interpolate_to_grid_vpa(wpa, temp[:,iz,1], vz, vz_spectral)
         end
-        @test isapprox(expected.f_neutral[:, :, end], newgrid_f_neutral[:,:,1], rtol=rtol)
+        if is_3V
+            # Only looking at ivperp=1 point, but peak value of distribution function is
+            # changed to keep density fixed when converting from 1V to 3V
+            @test isapprox(expected.f_neutral[:, :, end] ./ 2.0 ./ π,
+                           newgrid_f_neutral[:,:,1], rtol=rtol)
+        else
+            @test isapprox(expected.f_neutral[:, :, end], newgrid_f_neutral[:,:,1],
+                           rtol=rtol)
+        end
     end
 end
 
@@ -317,16 +337,16 @@ function runtests()
                                                              "vpa" => OptionsDict("L" => 1.5*vpa_L),
                                                              "vz" => OptionsDict("L" => 1.5*vpa_L)),
                                                 )
-        base_input_evolve_ppar = recursive_merge(base_input_evolve_upar,
-                                                 OptionsDict("evolve_moments" => OptionsDict("parallel_pressure" => true),
-                                                             "vpa" => OptionsDict("L" => 1.5*vpa_L),
-                                                             "vz" => OptionsDict("L" => 1.5*vpa_L)),
+        base_input_evolve_p = recursive_merge(base_input_evolve_upar,
+                                                 OptionsDict("evolve_moments" => OptionsDict("pressure" => true),
+                                                             "vpa" => OptionsDict("L" => sqrt(3/2)*1.5*vpa_L),
+                                                             "vz" => OptionsDict("L" => sqrt(3/2)*1.5*vpa_L)),
                                                 )
 
         for (base, base_label) ∈ ((base_input_full_f, "full-f"),
                                   (base_input_evolve_density, "split 1"),
                                   (base_input_evolve_upar, "split 2"),
-                                  (base_input_evolve_ppar, "split 3"))
+                                  (base_input_evolve_p, "split 3"))
 
             test_output_directory = get_MPI_tempdir()
             base["output"]["base_directory"] = test_output_directory

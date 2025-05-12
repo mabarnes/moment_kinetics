@@ -141,16 +141,16 @@ using IfElse
 
     function knudsen_cosine(composition)
         T_wall = composition.T_wall
-        exponetial = exp( - (vz^2 + vr^2 + vzeta^2)/T_wall )
+        exponential = exp( - 0.5 * (vz^2 + vr^2 + vzeta^2)/T_wall )
         if composition.use_test_neutral_wall_pdf
             #test dfn
-            knudsen_pdf = (4.0/T_wall^(5.0/2.0))*abs(vz)*exponetial
+            knudsen_pdf = (1.0/π/T_wall^(5.0/2.0))*abs(vz)*exponential
         else
             #proper Knudsen dfn
             # prefac here may cause problems with NaNs if vz = vr = vzeta = 0 is on grid
             fac = abs(vz)/sqrt(vz^2 + vr^2 + vzeta^2)
             prefac = IfElse.ifelse( abs(vz) < 1000.0*zero_val,typed_zero(vz),fac)
-            knudsen_pdf = (3.0*sqrt(pi)/T_wall^2)*prefac*exponetial
+            knudsen_pdf = (0.75*pi/T_wall^2)*prefac*exponential
         end
         return knudsen_pdf
     end
@@ -200,7 +200,7 @@ using IfElse
         densn = densn_sym(Lr, Lz, r_bc, z_bc, geometry, composition,
                           manufactured_solns_input, species)
         if z_bc == "periodic"
-            dfnn = densn * exp( - vz^2 - vr^2 - vzeta^2)
+            dfnn = densn / π^1.5 * exp( - (vz^2 + vr^2 + vzeta^2) )
         elseif z_bc == "wall"
             Hplus = 0.5*(sign(vz) + 1.0)
             Hminus = 0.5*(sign(-vz) + 1.0)
@@ -220,7 +220,7 @@ using IfElse
         densn = densn_sym(Lr, Lz, r_bc, z_bc, geometry, composition,
                           manufactured_solns_input, species)
         #if (r_bc == "periodic" && z_bc == "periodic")
-            dfnn = densn * exp( - vpa^2 - vperp^2 )
+            dfnn = densn / π^1.5 * exp( - vpa^2 - vperp^2 )
         #end
         return dfnn
     end
@@ -291,7 +291,7 @@ using IfElse
             Bmag = geometry.Bmag
             rhostar = geometry.rhostar
             jacobian = geometry.jacobian
-            ExBgeofac = 0.5*rhostar*Bzeta*jacobian/Bmag^2
+            ExBgeofac = rhostar*Bzeta*jacobian/Bmag^2
             bzed = geometry.bzed
             epsilon = manufactured_solns_input.epsilon_offset
             alpha = manufactured_solns_input.alpha_switch
@@ -341,13 +341,7 @@ using IfElse
         ppari = ppari_sym(Lr,Lz,r_bc,z_bc,composition,manufactured_solns_input,species)
         pperpi = pperpi_sym(Lr,Lz,r_bc,z_bc,composition,manufactured_solns_input,species,nvperp)
         isotropic_pressure = (1.0/3.0)*(ppari + 2.0*pperpi)
-        normfac = 2.0 # if pressure normalised to 0.5* nref * Tref = mref cref^2
-        #normfac = 1.0 # if pressure normalised to nref*Tref
-        if nvperp > 1
-            vthi = sqrt(normfac*isotropic_pressure/densi) # thermal speed definition of 2V model
-        else
-            vthi = sqrt(normfac*ppari/densi) # thermal speed definition of 1V model
-        end
+        vthi = sqrt(2.0*isotropic_pressure/densi) # thermal speed definition of 2V model
         return vthi
     end
     
@@ -380,26 +374,26 @@ using IfElse
             Bmag = geometry.Bmag
             rhostar = geometry.rhostar
             jacobian = geometry.jacobian
-            ExBgeofac = 0.5*rhostar*Bzeta*jacobian/Bmag^2
+            ExBgeofac = rhostar*Bzeta*jacobian/Bmag^2
             epsilon = manufactured_solns_input.epsilon_offset
             alpha = manufactured_solns_input.alpha_switch
             if z_bc == "periodic"
-                dfni = densi * exp( - vpa^2 - vperp^2)
+                dfni = densi / π^1.5 * exp( - vpa^2 - vperp^2)
             elseif z_bc == "wall"
                 vpabar = vpa - alpha*ExBgeofac*(Bmag/Bzed)*Er # for alpha = 1.0, effective velocity in z direction * (Bmag/Bzed)
                 Hplus = 0.5*(sign(vpabar) + 1.0)
                 Hminus = 0.5*(sign(-vpabar) + 1.0)
-                ffa =  exp(- vperp^2)
+                ffa =  1.0 / π^1.5 * exp(- vperp^2)
                 dfni = ffa * ( nminus_sym(Lr,Lz,r_bc,z_bc,epsilon,alpha)* (0.5 - z/Lz) * Hminus * vpabar^pvpa + nplus_sym(Lr,Lz,r_bc,z_bc,epsilon,alpha)*(z/Lz + 0.5) * Hplus * vpabar^pvpa + nzero_sym(Lr,Lz,r_bc,z_bc,alpha)*(z/Lz + 0.5)*(0.5 - z/Lz) ) * exp( - vpabar^2 )
             end
         elseif manufactured_solns_input.type == "2D-instability"
             # Input for instability test
             T0 = Ti_sym(Lr, Lz, r_bc, z_bc, composition, manufactured_solns_input,
                         species)
-            vth = sqrt(T0)
+            vth = sqrt(2.0 * T0)
 
             # Note this is for a '1V' test
-            dfni = densi/vth * exp(-(vpa/vth)^2)
+            dfni = densi/vth/π^1.5 * exp(-(vpa/vth)^2)
         else
             error("Unrecognized option "
                   * "manufactured_solns:type=$(manufactured_solns_input.type)")
@@ -411,7 +405,7 @@ using IfElse
         densi = densi_sym(Lr, Lz, r_bc, z_bc, composition, manufactured_solns_input,
                           species)
         #if (r_bc == "periodic" && z_bc == "periodic") || (r_bc == "Dirichlet" && z_bc == "periodic")
-            dfni = densi * exp( - vz^2 - vr^2 - vzeta^2) 
+            dfni = densi / π^1.5 * exp( - vz^2 - vr^2 - vzeta^2)
         #end
         return dfni
     end
@@ -602,7 +596,7 @@ using IfElse
         dBdr = geometry.dBdr
         rhostar = geometry.rhostar
         jacobian = geometry.jacobian
-        ExBgeofac = 0.5*rhostar*Bzeta*jacobian/Bmag^2
+        ExBgeofac = rhostar*Bzeta*jacobian/Bmag^2
         #exceptions for cases with missing terms 
         if composition.n_neutral_species > 0
             cx_frequency = collisions.reactions.charge_exchange_frequency
@@ -627,7 +621,7 @@ using IfElse
         # the ion characteristic velocities
         dzdt = vpa * (Bzed/Bmag) - ExBgeofac*Er
         drdt = ExBgeofac*Ez*rfac
-        dvpadt = 0.5*(Bzed/Bmag)*Ez - mu*(Bzed/Bmag)*dBdz
+        dvpadt = (Bzed/Bmag)*Ez - mu*(Bzed/Bmag)*dBdz
         dvperpdt = (0.5*vperp/Bmag)*(dzdt*dBdz + drdt*dBdr)
         # the ion source to maintain the manufactured solution
         Si = ( Dt(dfni) 
@@ -650,7 +644,7 @@ using IfElse
             else 
                 pvth = 1
             end
-            FMaxwellian = (densi/vthi^pvth)*exp( -( ( vpa-upari)^2 + vperp^2 )/vthi^2)
+            FMaxwellian = (densi/vthi^pvth)/π^(pvth/2)*exp( -( ( vpa-upari)^2 + vperp^2 )/vthi^2)
             Si += - nuii_krook*(FMaxwellian - dfni)
         end
         include_num_diss_in_MMS = true

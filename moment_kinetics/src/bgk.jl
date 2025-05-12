@@ -48,8 +48,6 @@ function init_bgk_pdf!(pdf, phi_max, tau, z, Lz, vpa)
         trapped_pdf!(pdf, phi_max, tau, x, dum, wgts, integrand, ivpa_min)
         # fill in the pdf for the passing part of phase space
         passing_pdf!(pdf, phi_max, tau, x, ivpa_min)
-        # account for nomalization used in code
-        @. pdf *= sqrt(pi)
 #=
         for ivpa ∈ 1:length(vpa)
             for iz ∈ 1:nz

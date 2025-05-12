@@ -26,7 +26,7 @@ function setup_reference_parameters(input_dict, warn_unexpected::Bool)
         Tref=100.0,
         mref=deuteron_mass,
        ))
-    reference_parameter_section["cref"] = sqrt(2.0 * proton_charge * reference_parameter_section["Tref"] / (reference_parameter_section["mref"]))
+    reference_parameter_section["cref"] = sqrt(proton_charge * reference_parameter_section["Tref"] / (reference_parameter_section["mref"]))
     reference_parameter_section["timeref"] = reference_parameter_section["Lref"] / reference_parameter_section["cref"]
     reference_parameter_section["Omegaref"] = proton_charge * reference_parameter_section["Bref"] / reference_parameter_section["mref"]
 
@@ -61,7 +61,12 @@ function setup_reference_parameters(input_dict, warn_unexpected::Bool)
 end
 
 """
-Calculate normalized ion-ion collision frequency at reference parameters for Coulomb collisions.
+Calculate normalized ion-ion collision frequency for Coulomb collisions using reference
+density, mass and speed.
+Note this is not the thermal collision frequency evaluated with reference parameters, but
+rather the quantity that when multiplied by \$\\hat{n}s/v_{Ts}^3\$ gives the
+de-dimensionalised thermal collision frequency - the difference is a factor of
+\$2^{3/2}\$.
 
 Currently valid only for hydrogenic ions (Z=1)
 """
@@ -83,7 +88,12 @@ function get_reference_collision_frequency_ii(reference_params)
 end
 
 """
-Calculate normalized electron-electron collision frequency at reference parameters for Coulomb collisions.
+Calculate normalized electron-electron collision frequency for Coulomb collisions using
+reference density, mass and speed.
+Note this is not the thermal collision frequency evaluated with reference parameters, but
+rather the quantity that when multiplied by \$\\hat{n}s/v_{Ts}^3\$ gives the
+de-dimensionalised thermal collision frequency - the difference is a factor of
+\$2^{3/2}\$.
 """
 function get_reference_collision_frequency_ee(reference_params)
     Nref = reference_params.Nref
@@ -107,7 +117,12 @@ function get_reference_collision_frequency_ee(reference_params)
 end
 
 """
-Calculate normalized electron-ion collision frequency at reference parameters for Coulomb collisions.
+Calculate normalized electron-ion collision frequency for Coulomb collisions using
+reference density, mass and speed.
+Note this is not the thermal collision frequency evaluated with reference parameters, but
+rather the quantity that when multiplied by \$\\hat{n}s/v_{Ts}^3\$ gives the
+de-dimensionalised thermal collision frequency - the difference is a factor of
+\$2^{3/2}\$.
 
 Currently valid only for hydrogenic ions (Z=1)
 """

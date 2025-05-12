@@ -6,8 +6,8 @@ ionization_frequency = 0.0
 [evolve_moments]
 density = false
 parallel_flow = false
-parallel_pressure = false
 moments_conservation = false
+pressure = false
 
 [z]
 ngrid = 1
@@ -26,14 +26,14 @@ discretization = "chebyshev_pseudospectral"
 [vpa]
 ngrid = 5
 nelement = 8
-L = 4.5
+L = 6.3639610306789285
 bc = "none"
 discretization = "gausslegendre_pseudospectral"
 
 [vperp]
 ngrid = 5
 nelement = 4
-L = 2.25
+L = 3.1819805153394642
 bc = "none"
 discretization = "gausslegendre_pseudospectral"
 # Fokker-Planck operator requires the "gausslegendre_pseudospectral
@@ -62,13 +62,13 @@ temperature_phase = 0.0
 [vpa_IC_ion_species_1]
 initialization_option = "directed-beam"
 vpa0 = 0.0
-vperp0 = 1.0
-vth0 = 0.5
+vperp0 = 1.4142135623730951
+vth0 = 0.7071067811865476
 
 [fokker_planck_collisions]
 use_fokker_planck = true
 # nuii sets the normalised input C[F,F] Fokker-Planck collision frequency
-nuii = 1.0
+nuii = 4.0
 frequency_option = "manual"
 boundary_data_option="multipole_expansion"
 #boundary_data_option="delta_f_multipole"
@@ -81,7 +81,7 @@ nonlinear_max_iterations = 50
 
 [timestepping]
 nstep = 10
-dt = 1.0e-3
+dt = 0.7071067811865476e-3
 nwrite = 1
 nwrite_dfns = 1
 kinetic_ion_solver = "implicit_ion_fp_collisions"

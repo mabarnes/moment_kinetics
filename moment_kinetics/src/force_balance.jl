@@ -28,7 +28,7 @@ to update the parallel particle flux dens*upar for each species
         dnupar_dt[iz,ir,is] = -(moments.ion.dppar_dz[iz,ir,is] +
                                 upar[iz,ir,is]*upar[iz,ir,is]*moments.ion.ddens_dz_upwind[iz,ir,is] +
                                 2.0*density[iz,ir,is]*upar[iz,ir,is]*moments.ion.dupar_dz_upwind[iz,ir,is] -
-                                0.5*geometry.bzed[iz,ir]*fields.Ez[iz,ir]*density[iz,ir,is])
+                                geometry.bzed[iz,ir]*fields.Ez[iz,ir]*density[iz,ir,is])
     end
 
     for index ∈ eachindex(ion_source_settings)

@@ -16,7 +16,7 @@ test_input_full_f = OptionsDict(
      "evolve_moments" => OptionsDict("moments_conservation" => false,
                                      "density" => false,
                                      "parallel_flow" => false,
-                                     "parallel_pressure" => false),
+                                     "pressure" => false),
      "ion_species_1" => OptionsDict("initial_density" => 0.5,      
                                          "initial_temperature" => 1.0),
      "z_IC_ion_species_1" => OptionsDict("density_amplitude" => 0.001,
