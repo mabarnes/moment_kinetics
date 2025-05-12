@@ -1128,7 +1128,7 @@ function calculate_ion_qpar_from_coll_krook!(qpar, density, upar, vth, dT_dz, z,
 
             qpar[iz,ir] = conductive_heat_flux
             println("T_i: ", T_i)
-            println("this_ppar: ", this_ppar)
+            println("this_ppar: ", this_p)
             println("this_upar: ", this_upar)
             println("this_dens: ", this_dens)
             println("particle_flux: ", particle_flux)
