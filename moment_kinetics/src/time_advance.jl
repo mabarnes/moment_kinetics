@@ -3391,6 +3391,7 @@ end
         if t_params.kinetic_electron_solver ∈ (implicit_steady_state, implicit_time_evolving)
             params_to_check = (nl_solver_params.ion_advance,
                                nl_solver_params.vpa_advection,
+                               nl_solver_params.ion_fp_collisions,
                                nl_solver_params.electron_conduction,
                                nl_solver_params.electron_advance)
         else
@@ -3400,6 +3401,7 @@ end
             # compared to their maximum values
             params_to_check = (nl_solver_params.ion_advance,
                                nl_solver_params.vpa_advection,
+                               nl_solver_params.ion_fp_collisions,
                                nl_solver_params.electron_conduction)
             if t_params.electron !== nothing
                 electron_time_advance_fraction =
