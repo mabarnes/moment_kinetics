@@ -7,6 +7,7 @@ export force_balance!
 using ..calculus: derivative!
 using ..looping
 using ..timer_utils
+using ..input_structs: coll_krook_ions
 
 """
 use the force balance equation d(nu)/dt + d(ppar + n*upar*upar)/dz =
