@@ -71,6 +71,24 @@ to update the parallel particle flux dens*upar for each species
         upar_out[iz,ir,is] = (density[iz,ir,is]*upar[iz,ir,is] + dt * dnupar_dt[iz,ir,is]) / density_out[iz,ir,is]
     end
 
+    if composition.ion_physics == coll_krook_ions
+        # boundary condition for fluid simulation on ion flow at wall NOTE THIS HAS NOT BEEN PARALLELISED 
+        # BECAUSE I DON'T WANT THIS FUNCTION TO HAVE TO CARRY AROUND A COORD STRUCT for now.
+        # if z.irank == 0 && (z.irank == z.nrank - 1)
+        #     z_indices = (1, z.n)
+        # elseif z.irank == 0
+        #     z_indices = (1,)
+        # elseif z.irank == z.nrank - 1
+        #     z_indices = (z.n,)
+        # else
+        #     return nothing
+        # end
+        @loop_s_r is ir begin
+            # set the ion flow to local sound speed at wall
+            upar_out[1,ir,is] = sqrt(composition.T_e + moments.ion.temp[1,ir,is])
+            upar_out[end,ir,is] = sqrt(composition.T_e + moments.ion.temp[end,ir,is])
+        end
+    end
     return nothing
 end
 

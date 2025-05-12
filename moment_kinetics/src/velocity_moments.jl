@@ -597,7 +597,7 @@ function update_moments!(moments, ff_in, gyroavs::gyro_operators, vpa, vperp, z,
                                             ff[:,:,:,:,is], vpa, vperp, z, r,
                                             moments.evolve_density, moments.evolve_upar,
                                             moments.evolve_p, composition.ion_physics,
-                                            collisions)
+                                            collisions, composition.T_e)
             moments.ion.qpar_updated[is] = true
         end
     end
@@ -976,7 +976,7 @@ function update_ion_qpar!(qpar, qpar_updated, density, upar, vth, dT_dz, pdf, vp
             @views update_ion_qpar_species!(qpar[:,:,is], density[:,:,is], upar[:,:,is],
                                         vth[:,:,is], dT_dz, pdf[:,:,:,:,is], vpa, vperp, z, r,
                                         evolve_density, evolve_upar, evolve_p,
-                                        ion_physics, collisions)
+                                        ion_physics, collisions, composition.T_e)
             qpar_updated[is] = true
         end
     end
@@ -986,13 +986,13 @@ end
 calculate the updated parallel heat flux (qpar) for a given species
 """
 function update_ion_qpar_species!(qpar, density, upar, vth, dT_dz, ff, vpa, vperp, z, r, evolve_density,
-                                  evolve_upar, evolve_p, ion_physics, collisions)
+                                  evolve_upar, evolve_p, ion_physics, collisions, T_e)
     if ion_physics ∈ (drift_kinetic_ions, gyrokinetic_ions)
         calculate_ion_qpar_from_pdf!(qpar, density, upar, vth, ff, vpa, vperp, z, r, evolve_density,
                                      evolve_upar, evolve_p)
     elseif ion_physics == coll_krook_ions
         calculate_ion_qpar_from_coll_krook!(qpar, density, upar, vth, dT_dz, z, r, vperp, collisions, evolve_density, 
-                                            evolve_upar, evolve_p)
+                                            evolve_upar, evolve_p, T_e)
     else
         throw(ArgumentError("ion model $ion_physics not implemented for qpar calculation"))
     end
@@ -1044,7 +1044,7 @@ end
 """
 calculate parallel heat flux if ion composition flag is coll_krook fluid ions
 """
-function calculate_ion_qpar_from_coll_krook!(qpar, density, upar, vth, dT_dz, z, r, vperp, collisions, evolve_density, evolve_upar, evolve_p)
+function calculate_ion_qpar_from_coll_krook!(qpar, density, upar, vth, dT_dz, z, r, vperp, collisions, evolve_density, evolve_upar, evolve_p, T_e)
     # Note that this is a braginskii heat flux for ions using the krook operator. The full Fokker-Planck operator
     # Braginskii heat flux is different! This also assumes one ion species, and so no friction between ions.
     @boundscheck r.n == size(qpar, 2) || throw(BoundsError(qpar))
@@ -1102,13 +1102,6 @@ function calculate_ion_qpar_from_coll_krook!(qpar, density, upar, vth, dT_dz, z,
     # also depends on whether we're 1V or 2V - as in 1V gamma_i = 2.5, 
     # in 2V gamma_i = 3.5.
 
-    if vperp.n == 1
-        gamma_i = 2.5
-        convective_coefficient = 1.5
-    else
-        gamma_i = 3.5
-        convective_coefficient = 2.5
-    end
     @loop_r ir begin
         for iz ∈ z_indices
             this_p = Krook_vth[iz,ir]^2 * density[iz,ir] * 1/2
@@ -1117,23 +1110,31 @@ function calculate_ion_qpar_from_coll_krook!(qpar, density, upar, vth, dT_dz, z,
             particle_flux = this_dens * this_upar
             T_i = 1/2 * Krook_vth[iz,ir]^2
 
+        if vperp.n == 1
+            gamma_i = 2 + T_e/(2 * T_i)
+            convective_coefficient = 1.5
+        else
+            gamma_i = 3.5
+            convective_coefficient = 2.5
+        end
+
             # Stangeby (2.92)
             total_heat_flux = gamma_i * T_i * particle_flux
 
             # E.g. Helander&Sigmar (2.14), but in 1V we have no viscosity and only 3/2
             # rather than 5/2.
             conductive_heat_flux = total_heat_flux -
-                                   0.5 * convective_coefficient * this_p * this_upar -
-                                   0.5 * 0.5 * this_dens * this_upar^3
+                                   convective_coefficient * this_p * this_upar -
+                                   0.5 * this_dens * this_upar^3
 
             qpar[iz,ir] = conductive_heat_flux
-            # println("T_i: ", T_i)
-            # println("this_ppar: ", this_p)
-            # println("this_upar: ", this_upar)
-            # println("this_dens: ", this_dens)
-            # println("particle_flux: ", particle_flux)
-            # println("total_heat_flux: ", total_heat_flux)
-            # println("conductive_heat_flux: ", conductive_heat_flux)
+            println("T_i: ", T_i)
+            println("this_ppar: ", this_p)
+            println("this_upar: ", this_upar)
+            println("this_dens: ", this_dens)
+            println("particle_flux: ", particle_flux)
+            println("total_heat_flux: ", total_heat_flux)
+            println("conductive_heat_flux: ", conductive_heat_flux)
         end
     end
     return nothing
