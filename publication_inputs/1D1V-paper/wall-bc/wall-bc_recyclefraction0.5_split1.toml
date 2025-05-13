@@ -1,0 +1,120 @@
+[composition]
+n_ion_species = 1
+n_neutral_species = 1
+boltzmann_electron_response = true
+recycling_fraction = 0.5
+T_e = 0.2 # 1.0
+T_wall = 0.1
+
+[krook_collisions]
+use_krook = true
+frequency_option = "reference_parameters"
+
+[ion_species_1]
+initial_density = 1.0
+initial_temperature = 0.3333333333333333
+
+[z_IC_ion_species_1]
+initialization_option = "gaussian"
+density_amplitude = 0.001
+density_phase = 0.0
+upar_amplitude = 1.0
+upar_phase = 0.0
+temperature_amplitude = 0.0
+temperature_phase = 0.0
+
+[vpa_IC_ion_species_1]
+initialization_option = "gaussian"
+density_amplitude = 1.0
+density_phase = 0.0
+upar_amplitude = 0.0
+upar_phase = 0.0
+temperature_amplitude = 0.0
+temperature_phase = 0.0
+
+[neutral_species_1]
+initial_density = 1.0
+initial_temperature = 0.3333333333333333
+
+[z_IC_neutral_species_1]
+initialization_option = "gaussian"
+density_amplitude = 0.001
+density_phase = 0.0
+upar_amplitude = 1.0
+upar_phase = 0.0
+temperature_amplitude = 0.0
+temperature_phase = 0.0
+
+[vz_IC_neutral_species_1]
+initialization_option = "gaussian"
+density_amplitude = 1.0
+density_phase = 0.0
+upar_amplitude = 0.0
+upar_phase = 0.0
+temperature_amplitude = 0.0
+temperature_phase = 0.0
+
+[reactions]
+charge_exchange_frequency = 1.5
+ionization_frequency = 1.0
+
+[evolve_moments]
+density = true
+parallel_flow = false
+moments_conservation = true
+pressure = false
+
+[r]
+ngrid = 1
+nelement = 1
+
+[z]
+ngrid = 9
+nelement = 32
+nelement_local = 4
+bc = "wall"
+discretization = "chebyshev_pseudospectral"
+element_spacing_option = "sqrt"
+
+[vpa]
+ngrid = 10
+nelement = 63
+L = 25.0
+bc = "zero"
+discretization = "chebyshev_pseudospectral"
+
+[vz]
+ngrid = 10
+nelement = 63
+L = 25.0
+bc = "zero"
+discretization = "chebyshev_pseudospectral"
+
+[timestepping]
+#nstep = 50000
+nstep = 1000000
+dt = 2.0e-5
+nwrite = 10000
+nwrite_dfns = 10000
+split_operators = false
+steady_state_residual = true
+converged_residual_value = 0.001
+
+[ion_source_1]
+active = true
+z_profile = "gaussian"
+z_width = 0.125
+source_strength = 3.0
+source_T = 2.0
+
+[ion_numerical_dissipation]
+#vpa_dissipation_coefficient = 1.0e-1
+#vpa_dissipation_coefficient = 1.0e-2
+#vpa_dissipation_coefficient = 1.0e-3
+#force_minimum_pdf_value = 0.0
+
+[neutral_numerical_dissipation]
+#vz_dissipation_coefficient = 1.0e-1
+#vz_dissipation_coefficient = 1.0e-2
+#vz_dissipation_coefficient = 1.0e-3
+#force_minimum_pdf_value = 0.0
