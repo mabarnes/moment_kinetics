@@ -20,10 +20,12 @@ function manufactured_geometry end
 
 function __init__()
     try
-        # Try to load the Symbolics package so we can use it for manufactured solutions.
-        # If the package is not installed, then manufactured solutions will not be
+        # Try to load the Symbolics and IfElse packages so we can use them for
+        # manufactured solutions.
+        # If either package is not installed, then manufactured solutions will not be
         # available.
         Base.require(Main, :Symbolics)
+        Base.require(Main, :IfElse)
     catch
         # Do nothing
     end
@@ -53,9 +55,9 @@ function setup_manufactured_solutions(input_dict, warn_unexpected::Bool)
         if manufactured_solutions_ext === nothing
             # If Symbolics is not installed, then the extension manufactured_solns_ext
             # will not be loaded, in which case we cannot use manufactured solutions.
-            error("Symbolics package is not installed, so manufactured solutions are not "
-                  * "available. Re-run machines/machine-setup.sh and activate "
-                  * "manufactured solutions, or install Symbolics.")
+            error("Symbolics and/or IfELse packages are not installed, so manufactured "
+                  * "solutions are not available. Re-run machines/machine-setup.sh and "
+                  * "activate manufactured solutions, or install Symbolics and IfElse.")
         end
     end
     if manufactured_solns_section["use_vpabar_in_mms_dfni"]
