@@ -485,14 +485,22 @@ using IfElse
 
         #build julia functions from these symbolic expressions
         # cf. https://docs.juliahub.com/Symbolics/eABRO/3.4.0/tutorials/symbolic_functions/
-        densi_func = build_function(densi, z, r, t, expression=Val{false})
-        upari_func = build_function(upari, z, r, t, expression=Val{false})
-        ppari_func = build_function(ppari, z, r, t, expression=Val{false})
-        pperpi_func = build_function(pperpi, z, r, t, expression=Val{false})
-        vthi_func = build_function(vthi, z, r, t, expression=Val{false})
-        densn_func = build_function(densn, z, r, t, expression=Val{false})
-        dfni_func = build_function(dfni, vpa, vperp, z, r, t, expression=Val{false})
-        dfnn_func = build_function(dfnn, vz, vr, vzeta, z, r, t, expression=Val{false})
+        densi_func_inner = build_function(densi, z, r, t, expression=Val{false})
+        densi_func = (args...) -> Symbolics.value(densi_func_inner(args...))
+        upari_func_inner = build_function(upari, z, r, t, expression=Val{false})
+        upari_func = (args...) -> Symbolics.value(upari_func_inner(args...))
+        ppari_func_inner = build_function(ppari, z, r, t, expression=Val{false})
+        ppari_func = (args...) -> Symbolics.value(ppari_func_inner(args...))
+        pperpi_func_inner = build_function(pperpi, z, r, t, expression=Val{false})
+        pperpi_func = (args...) -> Symbolics.value(pperpi_func_inner(args...))
+        vthi_func_inner = build_function(vthi, z, r, t, expression=Val{false})
+        vthi_func = (args...) -> Symbolics.value(vthi_func_inner(args...))
+        densn_func_inner = build_function(densn, z, r, t, expression=Val{false})
+        densn_func = (args...) -> Symbolics.value(densn_func_inner(args...))
+        dfni_func_inner = build_function(dfni, vpa, vperp, z, r, t, expression=Val{false})
+        dfni_func = (args...) -> Symbolics.value(dfni_func_inner(args...))
+        dfnn_func_inner = build_function(dfnn, vz, vr, vzeta, z, r, t, expression=Val{false})
+        dfnn_func = (args...) -> Symbolics.value(dfnn_func_inner(args...))
         # return function
         # call like: 
         # densi_func(zval, rval, tval) 
@@ -517,9 +525,12 @@ using IfElse
         Er, Ez, phi = electric_fields(Lr, Lz, r_bc, z_bc, composition, geometry, nr,
                                       manufactured_solns_input, species)
         
-        Er_func = build_function(Er, z, r, t, expression=Val{false})
-        Ez_func = build_function(Ez, z, r, t, expression=Val{false})
-        phi_func = build_function(phi, z, r, t, expression=Val{false})
+        Er_func_inner = build_function(Er, z, r, t, expression=Val{false})
+        Er_func = (args...) -> Symbolics.value(Er_func_inner(args...))
+        Ez_func_inner = build_function(Ez, z, r, t, expression=Val{false})
+        Ez_func = (args...) -> Symbolics.value(Ez_func_inner(args...))
+        phi_func_inner = build_function(phi, z, r, t, expression=Val{false})
+        phi_func = (args...) -> Symbolics.value(phi_func_inner(args...))
         
         manufactured_E_fields = (Er_func = Er_func, Ez_func = Ez_func, phi_func = phi_func)
         
@@ -534,8 +545,11 @@ using IfElse
         bzed = geosym.bzed
         dBdz = geosym.dBdz
         Bmag_func = build_function(Bmag, z, r, expression=Val{false})
+        phi_func = (args...) -> Symbolics.value(phi_func_inner(args...))
         bzed_func = build_function(bzed, z, r, expression=Val{false})
+        phi_func = (args...) -> Symbolics.value(phi_func_inner(args...))
         dBdz_func = build_function(dBdz, z, r, expression=Val{false})
+        phi_func = (args...) -> Symbolics.value(phi_func_inner(args...))
         
         manufactured_geometry = (Bmag_func = Bmag_func,
                                  bzed_func = bzed_func,
@@ -677,8 +691,10 @@ using IfElse
         
         Source_n = expand_derivatives(Sn)
         
-        Source_i_func = build_function(Source_i, vpa, vperp, z, r, t, expression=Val{false})
-        Source_n_func = build_function(Source_n, vz, vr, vzeta, z, r, t, expression=Val{false})
+        Source_i_func_inner = build_function(Source_i, vpa, vperp, z, r, t, expression=Val{false})
+        Source_i_func = (args...) -> Symbolics.value(Source_i_func_inner(args...))
+        Source_n_func_inner = build_function(Source_n, vz, vr, vzeta, z, r, t, expression=Val{false})
+        Source_n_func = (args...) -> Symbolics.value(Source_n_func_inner(args...))
         
         if expand_derivatives(Dt(Source_i)) == 0 && expand_derivatives(Dt(Source_n)) == 0
             time_independent_sources = true
