@@ -1124,17 +1124,17 @@ function calculate_ion_qpar_from_coll_krook!(qpar, density, upar, vth, dT_dz, z,
             # E.g. Helander&Sigmar (2.14), but in 1V we have no viscosity and only 3/2
             # rather than 5/2.
             conductive_heat_flux = total_heat_flux -
-                                   convective_coefficient * this_p * this_upar -
-                                   0.5 * this_dens * this_upar^3
+                                   0.5 * convective_coefficient * this_p * this_upar -
+                                   0.5 * 0.5 * this_dens * this_upar^3
 
             qpar[iz,ir] = conductive_heat_flux
-            println("T_i: ", T_i)
-            println("this_ppar: ", this_p)
-            println("this_upar: ", this_upar)
-            println("this_dens: ", this_dens)
-            println("particle_flux: ", particle_flux)
-            println("total_heat_flux: ", total_heat_flux)
-            println("conductive_heat_flux: ", conductive_heat_flux)
+            # println("T_i: ", T_i)
+            # println("this_ppar: ", this_p)
+            # println("this_upar: ", this_upar)
+            # println("this_dens: ", this_dens)
+            # println("particle_flux: ", particle_flux)
+            # println("total_heat_flux: ", total_heat_flux)
+            # println("conductive_heat_flux: ", conductive_heat_flux)
         end
     end
     return nothing

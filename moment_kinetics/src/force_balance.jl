@@ -86,7 +86,7 @@ to update the parallel particle flux dens*upar for each species
         # end
         @loop_s_r is ir begin
             # set the ion flow to local sound speed at wall
-            upar_out[1,ir,is] = sqrt(composition.T_e + moments.ion.temp[1,ir,is])
+            upar_out[1,ir,is] = -sqrt(composition.T_e + moments.ion.temp[1,ir,is])
             upar_out[end,ir,is] = sqrt(composition.T_e + moments.ion.temp[end,ir,is])
         end
     end
