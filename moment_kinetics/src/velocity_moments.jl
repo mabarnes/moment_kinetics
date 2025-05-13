@@ -605,8 +605,9 @@ function update_moments!(moments, ff_in, gyroavs::gyro_operators, vpa, vperp, z,
     update_vth!(moments.ion.vth, moments.ion.p, moments.ion.dens, z, r, composition)
     # update the Chodura diagnostic -- note that the pdf should be the unnormalised one
     # so this will break for the split moments cases
-    update_chodura!(moments,ff,vpa,vperp,z,r,r_spectral,composition,geometry,scratch_dummy,z_advect)
-        
+    if composition.ion_physics != coll_krook_ions
+        update_chodura!(moments,ff,vpa,vperp,z,r,r_spectral,composition,geometry,scratch_dummy,z_advect)
+    end
     return nothing
 end
 
@@ -1110,13 +1111,13 @@ function calculate_ion_qpar_from_coll_krook!(qpar, density, upar, vth, dT_dz, z,
             particle_flux = this_dens * this_upar
             T_i = 1/2 * Krook_vth[iz,ir]^2
 
-        if vperp.n == 1
-            gamma_i = 2 + T_e/(2 * T_i)
-            convective_coefficient = 1.5
-        else
-            gamma_i = 3.5
-            convective_coefficient = 2.5
-        end
+            if vperp.n == 1
+                gamma_i = 2 + T_e/(2 * T_i)
+                convective_coefficient = 1.5
+            else
+                gamma_i = 3.5
+                convective_coefficient = 2.5
+            end
 
             # Stangeby (2.92)
             total_heat_flux = gamma_i * T_i * particle_flux
@@ -1124,8 +1125,8 @@ function calculate_ion_qpar_from_coll_krook!(qpar, density, upar, vth, dT_dz, z,
             # E.g. Helander&Sigmar (2.14), but in 1V we have no viscosity and only 3/2
             # rather than 5/2.
             conductive_heat_flux = total_heat_flux -
-                                   0.5 * convective_coefficient * this_p * this_upar -
-                                   0.5 * 0.5 * this_dens * this_upar^3
+                                   convective_coefficient * this_p * this_upar -
+                                   0.5 * this_dens * this_upar^3
 
             qpar[iz,ir] = conductive_heat_flux
             # println("T_i: ", T_i)
@@ -2396,9 +2397,9 @@ function update_derived_moments!(new_scratch, moments, vpa, vperp, z, r, composi
 
     # if diagnostic time step/RK stage
     # update the diagnostic chodura condition
-    if diagnostic_moments
-        update_chodura!(moments,ff,vpa,vperp,z,r,r_spectral,composition,geometry,scratch_dummy,z_advect)
-    end
+    # if diagnostic_moments
+    #     update_chodura!(moments,ff,vpa,vperp,z,r,r_spectral,composition,geometry,scratch_dummy,z_advect)
+    # end
     # update the thermal speed
     @begin_s_r_z_region()
     try #below block causes DomainError if ppar < 0 or density, so exit cleanly if possible

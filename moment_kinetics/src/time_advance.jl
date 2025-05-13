@@ -3576,7 +3576,7 @@ implementation), a call needs to be made with `dt` scaled by some coefficient.
     if advance.force_balance
         force_balance!(fvec_out.upar, fvec_out.density, fvec_in, moments, fields,
                        collisions, dt, z_spectral, composition, geometry,
-                       external_source_settings.ion, num_diss_params)
+                       external_source_settings.ion, num_diss_params, z)
         write_debug_IO("force_balance!")
     end
     if advance.energy

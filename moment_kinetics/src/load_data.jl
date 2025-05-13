@@ -4793,7 +4793,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
 
         # Adiabatic index. Not too clear what value should be (see e.g. [Riemann 1991,
         # below eq. (39)], or discussion of Bohm criterion in Stangeby's book.
-        gamma = 3.0
+        gamma = 1.0 # 3.0
 
         variable = @. sqrt((T_e + gamma*T_i))
     elseif variable_name == "mach_number"
