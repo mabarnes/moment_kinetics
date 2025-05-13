@@ -1523,7 +1523,7 @@ function setup_implicit_advance_flags(moments, composition, t_params, collisions
         advance_electron_pdf = true
     end
 
-    manufactured_solns_test = manufactured_solns_input.use_for_advance
+    manufactured_solns_test = false
 
     return advance_info(advance_vpa_advection, advance_vperp_advection, advance_z_advection, advance_r_advection,
                         advance_neutral_z_advection, advance_neutral_r_advection,
