@@ -183,7 +183,7 @@ function test_Lagrange_Rosenbluth_potentials(ngrid,nelement; standalone=true)
     fokkerplanck_arrays = init_fokker_planck_collisions_direct_integration(vperp,vpa; precompute_weights=true)
     fka = fokkerplanck_arrays
 
-    @begin_s_r_z_anyv_region()
+    @begin_r_z_anysv_region()
 
     # calculate the potentials by direct integration
     calculate_rosenbluth_potentials_via_direct_integration!(fka.GG,fka.HH,fka.dHdvpa,fka.dHdvperp,

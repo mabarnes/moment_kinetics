@@ -4,9 +4,9 @@ Provides convenience macros for shared-memory-parallel loops
 module looping
 
 using ..debugging
-using ..communication: _block_synchronize, _anyv_subblock_synchronize, comm_block,
-                       comm_anyv_subblock, anyv_subblock_rank, anyv_subblock_size,
-                       anyv_isubblock_index, anyv_nsubblocks_per_block
+using ..communication: _block_synchronize, _anysv_subblock_synchronize, comm_block,
+                       comm_anysv_subblock, anysv_subblock_rank, anysv_subblock_size,
+                       anysv_isubblock_index, anysv_nsubblocks_per_block
 using ..type_definitions: mk_int
 
 using Combinatorics
@@ -22,8 +22,9 @@ const all_dimensions = unique((ion_dimensions..., neutral_dimensions...))
 const dimension_combinations = Tuple(Tuple(c) for c in
                                      unique((combinations(ion_dimensions)...,
                                              combinations(neutral_dimensions)...)))
-const anyv_dimension_combinations = ((:anyv,), (:anyv, :vperp), (:anyv, :vpa),
-                                     (:anyv, :vperp, :vpa))
+const anysv_dimension_combinations = tuple((:anysv,),
+                                          ((:anysv, d...) for d ∈
+                                           unique(combinations((:s, :vperp, :vpa))))...)
 
 """
 Construct a string composed of the dimension names given in the Tuple `dims`,
@@ -39,8 +40,8 @@ end
 LoopRanges_body = quote
     parallel_dims::Tuple{Vararg{Symbol}}
     rank0::Bool
-    is_anyv::Bool
-    anyv_rank0::Bool
+    is_anysv::Bool
+    anysv_rank0::Bool
 end
 for dim ∈ all_dimensions
     global LoopRanges_body
@@ -290,25 +291,25 @@ function get_ranges_from_split(block_rank, effective_block_size, split, dim_size
 end
 
 """
-Find the numbers of processes for each dimension that optimize load balance for 'anyv'
+Find the numbers of processes for each dimension that optimize load balance for 'anysv'
 type loops for a certain block_size.
 
-The 'anyv' parallelisation patterns are designed for use in the collision operator. They
-all share the same parallelisation in species and spatial dimensions so that the region
-type can be switched between 'anyv' types within a loop over species and spatial
-dimensions (@loop_s_r_z). It is only defined for ions, not for neutrals.
+The 'anysv' parallelisation patterns are designed for use in the collision operator. They
+all share the same parallelisation in spatial dimensions so that the region type can be
+switched between 'anysv' types within a loop over spatial dimensions (@loop_r_z). It is
+only defined for ions, not for neutrals.
 
 Parts of the collision operator cannot conveniently be parallelised over velocity
-dimensions, so this function aims to assign as much parallelism as possible to the species
-and spatial dimensions.
+dimensions, so this function aims to assign as much parallelism as possible to the spatial
+dimensions.
 """
-function get_best_anyv_split(block_size, dim_sizes)
+function get_best_anysv_split(block_size, dim_sizes)
 
-    spatial_vperp_dim_sizes_list = Tuple(dim_sizes[d] for d ∈ (:s, :r, :z, :vperp))
+    spatial_vperp_dim_sizes_list = Tuple(dim_sizes[d] for d ∈ (:r, :z, :vperp))
     vperp_splits, vperp_max_work =
         get_splits_and_max_work_from_sizes(block_size, spatial_vperp_dim_sizes_list)
 
-    spatial_vpa_dim_sizes_list = Tuple(dim_sizes[d] for d ∈ (:s, :r, :z, :vpa))
+    spatial_vpa_dim_sizes_list = Tuple(dim_sizes[d] for d ∈ (:r, :z, :vpa))
     vpa_splits, vpa_max_work =
         get_splits_and_max_work_from_sizes(block_size, spatial_vpa_dim_sizes_list)
 
@@ -346,7 +347,7 @@ function get_best_anyv_split(block_size, dim_sizes)
     # are 'extra' factors that the algorithm does not think can be use for velocity space,
     # and end up in the process number for one of the other dimensions. However because at
     # least for part of the time the velocity space can use a 2d parallelisation within an
-    # anyv region, it can make use of those processors. So check for 'extra' factors, and
+    # anysv region, it can make use of those processors. So check for 'extra' factors, and
     # move them to the velocity dimension.
     for i ∈ 1:length(best_split) - 1
         dim_size = spatial_vpa_dim_sizes_list[i]
@@ -372,25 +373,37 @@ end
 
 """
 """
-function get_anyv_ranges(block_rank, split, anyv_dims, dim_sizes)
+function get_anysv_ranges(block_rank, split, anysv_dims, dim_sizes)
     effective_block_size = prod(split) # May be less than block_size
 
-    if :vperp ∈ anyv_dims && :vpa ∈ anyv_dims
+    if :s ∈ anysv_dims && :vperp ∈ anysv_dims && :vpa ∈ anysv_dims
+        s_vperp_vpa_split = get_best_split_from_sizes(split[end],
+                                                      (dim_sizes[:s], dim_sizes[:vperp], dim_sizes[:vpa]))
+        split = [split[1:end-1]..., s_vperp_vpa_split...]
+    elseif :s ∈ anysv_dims && :vperp ∈ anysv_dims
+        s_vperp_split = get_best_split_from_sizes(split[end],
+                                                  (dim_sizes[:s], dim_sizes[:vperp]))
+        split = [split[1:end-1]..., s_vperp_split...]
+    elseif :s ∈ anysv_dims && :vpa ∈ anysv_dims
+        s_vpa_split = get_best_split_from_sizes(split[end],
+                                                (dim_sizes[:s], dim_sizes[:vpa]))
+        split = [split[1:end-1]..., s_vpa_split...]
+    elseif :vperp ∈ anysv_dims && :vpa ∈ anysv_dims
         vperp_vpa_split = get_best_split_from_sizes(split[end],
                                                     (dim_sizes[:vperp], dim_sizes[:vpa]))
         split = [split[1:end-1]..., vperp_vpa_split...]
     end
 
-    dim_sizes_list = (dim_sizes[d] for d ∈ tuple(:s, :r, :z, anyv_dims[2:end]...))
+    dim_sizes_list = (dim_sizes[d] for d ∈ tuple(:r, :z, anysv_dims[2:end]...))
 
-    if !(:vpa ∈ anyv_dims || :vperp ∈ anyv_dims)
-        # A 'serial' (in velocity space) region
+    if !(:s ∈ anysv_dims || :vpa ∈ anysv_dims || :vperp ∈ anysv_dims)
+        # A 'serial' (in species/velocity space) region
         ranges = get_ranges_from_split(block_rank, effective_block_size, split[1:end-1], dim_sizes_list)
     else
         ranges = get_ranges_from_split(block_rank, effective_block_size, split, dim_sizes_list)
     end
 
-    dims = tuple(:s, :r, :z, anyv_dims[2:end]...,)
+    dims = tuple(:r, :z, anysv_dims[2:end]...,)
     result = Dict(d=>r for (d,r) ∈ zip(dims, ranges))
 
     # Iterate over all points in ranges not being parallelized
@@ -400,14 +413,15 @@ function get_anyv_ranges(block_rank, split, anyv_dims, dim_sizes)
         end
     end
 
-    if !(:vpa ∈ anyv_dims || :vperp ∈ anyv_dims)
-        # For a 'serial' 'anyv' region, following @begin_anyv_region(), only loop over
-        # velocity space on the rank-0 process of the anyv subblock
+    if !(:s ∈ anysv_dims || :vpa ∈ anysv_dims || :vperp ∈ anysv_dims)
+        # For a 'serial' 'anysv' region, following @begin_anysv_region(), only loop over
+        # species/velocity space on the rank-0 process of the anysv subblock
         #
         # Calculate the rank in the subblock from block_rank rather than using
-        # `anyv_subblock_rank[]` so that we can test this function without having to set
+        # `anysv_subblock_rank[]` so that we can test this function without having to set
         # up communications.
         if block_rank % split[end] != 0
+            result[:s] = 1:0
             result[:vpa] = 1:0
             result[:vperp] = 1:0
         end
@@ -448,50 +462,50 @@ eval(quote
              # Use empty tuple for serial region
              if rank0
                  loop_ranges_store[()] = LoopRanges(;
-                     parallel_dims=(), rank0=rank0, is_anyv=false, anyv_rank0=rank0,
+                     parallel_dims=(), rank0=rank0, is_anysv=false, anysv_rank0=rank0,
                      Dict(d=>1:n for (d,n) in dim_sizes)...)
              else
                  loop_ranges_store[()] = LoopRanges(;
-                     parallel_dims=(), rank0=rank0, is_anyv=false, anyv_rank0=rank0,
+                     parallel_dims=(), rank0=rank0, is_anysv=false, anysv_rank0=rank0,
                      Dict(d=>1:0 for (d,_) in dim_sizes)...)
              end
 
              for dims ∈ dimension_combinations
                  loop_ranges_store[dims] = LoopRanges(;
-                     parallel_dims=dims, rank0=rank0, is_anyv=false, anyv_rank0=rank0,
+                     parallel_dims=dims, rank0=rank0, is_anysv=false, anysv_rank0=rank0,
                      get_best_ranges(block_rank, block_size, dims, dim_sizes)...)
              end
 
 
-             # Set up looping for 'anyv' regions - used for the collision operator
+             # Set up looping for 'anysv' regions - used for the collision operator
              #####################################################################
 
-             anyv_split = get_best_anyv_split(block_size, dim_sizes)
+             anysv_split = get_best_anysv_split(block_size, dim_sizes)
 
-             anyv_subblock_size[] = anyv_split[end]
-             number_of_anyv_blocks = prod(anyv_split[1:end-1])
-             anyv_subblock_index = block_rank[] ÷ anyv_subblock_size[]
-             if anyv_subblock_index ≥ number_of_anyv_blocks
-                 anyv_subblock_index = nothing
-                 anyv_rank_within_subblock = -1
+             anysv_subblock_size[] = anysv_split[end]
+             number_of_anysv_blocks = prod(anysv_split[1:end-1])
+             anysv_subblock_index = block_rank[] ÷ anysv_subblock_size[]
+             if anysv_subblock_index ≥ number_of_anysv_blocks
+                 anysv_subblock_index = nothing
+                 anysv_rank_within_subblock = -1
              else
-                 anyv_rank_within_subblock = block_rank[] % anyv_subblock_size[]
+                 anysv_rank_within_subblock = block_rank[] % anysv_subblock_size[]
              end
 
-             # Create communicator for the anyv subblock. OK to do this here as
+             # Create communicator for the anysv subblock. OK to do this here as
              # communication.setup_distributed_memory_MPI() must have already been called
              # to set block_size[] and block_rank[]
-             comm_anyv_subblock[] = MPI.Comm_split(comm_block[], anyv_subblock_index,
-                                                   anyv_rank_within_subblock)
-             anyv_subblock_rank[] = anyv_rank_within_subblock
-             anyv_isubblock_index[] = anyv_subblock_index
-             anyv_nsubblocks_per_block[] = number_of_anyv_blocks
-             anyv_rank0 = (anyv_subblock_rank[] == 0)
+             comm_anysv_subblock[] = MPI.Comm_split(comm_block[], anysv_subblock_index,
+                                                   anysv_rank_within_subblock)
+             anysv_subblock_rank[] = anysv_rank_within_subblock
+             anysv_isubblock_index[] = anysv_subblock_index
+             anysv_nsubblocks_per_block[] = number_of_anysv_blocks
+             anysv_rank0 = (anysv_subblock_rank[] == 0)
 
-             for dims ∈ anyv_dimension_combinations
+             for dims ∈ anysv_dimension_combinations
                  loop_ranges_store[dims] = LoopRanges(;
-                     parallel_dims=dims, rank0=rank0, is_anyv=true, anyv_rank0=anyv_rank0,
-                     get_anyv_ranges(block_rank, anyv_split, dims, dim_sizes)...)
+                     parallel_dims=dims, rank0=rank0, is_anysv=true, anysv_rank0=anysv_rank0,
+                     get_anysv_ranges(block_rank, anysv_split, dims, dim_sizes)...)
              end
 
              #####################################################################
@@ -526,12 +540,12 @@ eval(quote
      if rank0
          serial_ranges = Dict(d=>1:n for (d,n) in dim_sizes)
          loop_ranges_store[()] = LoopRanges(;
-             parallel_dims=(), rank0=rank0, is_anyv=false, anyv_rank0=rank0,
+             parallel_dims=(), rank0=rank0, is_anysv=false, anysv_rank0=rank0,
              serial_ranges...)
      else
          serial_ranges = Dict(d=>1:0 for (d,_) in dim_sizes)
          loop_ranges_store[()] = LoopRanges(;
-             parallel_dims=(), rank0=rank0, is_anyv=false, anyv_rank0=rank0,
+             parallel_dims=(), rank0=rank0, is_anysv=false, anysv_rank0=rank0,
              serial_ranges...)
      end
 
@@ -561,7 +575,7 @@ eval(quote
                                            sub_block_size,
                                            dim_sizes[dim])
              loop_ranges_store[dims] = LoopRanges(;
-                 parallel_dims=dims, rank0=rank0, is_anyv=false, anyv_rank0=rank0,
+                 parallel_dims=dims, rank0=rank0, is_anysv=false, anysv_rank0=rank0,
                  ranges...)
          else
              # Loop over all indices for non-parallelised dimensions (dimensions not in
@@ -574,32 +588,32 @@ eval(quote
                  end
              end
              loop_ranges_store[dims] = LoopRanges(;
-                 parallel_dims=dims, rank0=rank0, is_anyv=false, anyv_rank0=rank0,
+                 parallel_dims=dims, rank0=rank0, is_anysv=false, anysv_rank0=rank0,
                  this_ranges...)
          end
      end
 
-     # Set up looping for 'anyv' regions - used for the collision operator
+     # Set up looping for 'anysv' regions - used for the collision operator
      #####################################################################
 
-     anyv_split = [1, 1, 1, block_size]
+     anysv_split = [1, 1, block_size]
 
-     anyv_subblock_size[] = anyv_split[end]
-     number_of_anyv_blocks = prod(anyv_split[1:end-1])
-     anyv_subblock_index = block_rank[] ÷ anyv_subblock_size[]
-     anyv_rank_within_subblock = block_rank[] % anyv_subblock_size[]
+     anysv_subblock_size[] = anysv_split[end]
+     number_of_anysv_blocks = prod(anysv_split[1:end-1])
+     anysv_subblock_index = block_rank[] ÷ anysv_subblock_size[]
+     anysv_rank_within_subblock = block_rank[] % anysv_subblock_size[]
 
-     # Create communicator for the anyv subblock. OK to do this here as
+     # Create communicator for the anysv subblock. OK to do this here as
      # communication.setup_distributed_memory_MPI() must have already been called
      # to set block_size[] and block_rank[]
-     comm_anyv_subblock[] = MPI.Comm_split(comm_block[], anyv_subblock_index,
-                                           anyv_rank_within_subblock)
-     anyv_subblock_rank[] = MPI.Comm_rank(comm_anyv_subblock[])
-     anyv_isubblock_index[] = anyv_subblock_index
-     anyv_nsubblocks_per_block[] = number_of_anyv_blocks
-     anyv_rank0 = (anyv_subblock_rank[] == 0)
+     comm_anysv_subblock[] = MPI.Comm_split(comm_block[], anysv_subblock_index,
+                                            anysv_rank_within_subblock)
+     anysv_subblock_rank[] = MPI.Comm_rank(comm_anysv_subblock[])
+     anysv_isubblock_index[] = anysv_subblock_index
+     anysv_nsubblocks_per_block[] = number_of_anysv_blocks
+     anysv_rank0 = (anysv_subblock_rank[] == 0)
 
-     for dims ∈ anyv_dimension_combinations
+     for dims ∈ anysv_dimension_combinations
          if dims == combination_to_split
              factors = factor(Vector, block_size)
              if length(factors) < length(dims_to_split)
@@ -625,7 +639,7 @@ eval(quote
                                            sub_block_size,
                                            dim_sizes[dim])
              loop_ranges_store[dims] = LoopRanges(;
-                 parallel_dims=dims, rank0=rank0, is_anyv=true, anyv_rank0=anyv_rank0,
+                 parallel_dims=dims, rank0=rank0, is_anysv=true, anysv_rank0=anysv_rank0,
                  ranges...)
          else
              this_ranges = Dict(d=>1:n for (d,n) in dim_sizes)
@@ -635,7 +649,7 @@ eval(quote
                  end
              end
              loop_ranges_store[dims] = LoopRanges(;
-                 parallel_dims=dims, rank0=rank0, is_anyv=true, anyv_rank0=anyv_rank0,
+                 parallel_dims=dims, rank0=rank0, is_anysv=true, anysv_rank0=anysv_rank0,
                  this_ranges...)
          end
      end
@@ -740,7 +754,7 @@ for dims ∈ dimension_combinations
 
              function $sync_name_internal(call_site::Union{Nothing,UInt64},
                                           no_synchronize::Bool)
-                 if !loop_ranges[].is_anyv && loop_ranges[].parallel_dims == $dims
+                 if !loop_ranges[].is_anysv && loop_ranges[].parallel_dims == $dims
                      return
                  end
                  if !no_synchronize
@@ -753,42 +767,40 @@ for dims ∈ dimension_combinations
 end
 
 """
-Begin region in which (:s,:r,:z) dimensions and velocity dimensions are parallelized by
-being split between processes, and which velocity dimensions are parallelized can be
-switched within the outer loop over (:s,:r,:z). This parallelization scheme is intended
-for use in the collision operator.
+Begin region in which (:r,:z) dimensions and species/velocity dimensions are parallelized
+by being split between processes, and which species/velocity dimensions are parallelized
+can be switched within the outer loop over (:r,:z). This parallelization scheme is
+intended for use in the collision operator.
 
-Returns immediately if loop_ranges[] is already
-set to the parallel
-dimensions being requested. This allows the @begin_*_region() calls to be
-placed where they make logical sense, with no cost if a call happens to be
-repeated (e.g. in different functions).
+Returns immediately if loop_ranges[] is already set to the parallel dimensions being
+requested. This allows the @begin_*_region() calls to be placed where they make logical
+sense, with no cost if a call happens to be repeated (e.g. in different functions).
 
 Calls `_block_synchronize()` to synchronize the processes operating on a
 shared-memory block, unless `no_synchronize=true` is passed as an argument.
 """
-macro begin_s_r_z_anyv_region(no_synchronize::Bool=false)
+macro begin_r_z_anysv_region(no_synchronize::Bool=false)
     id_hash = @debug_block_synchronize_quick_ifelse(
                    hash(string(@__FILE__, @__LINE__)),
                    nothing
                   )
     return quote
-        begin_s_r_z_anyv_region_internal($id_hash, $(esc(no_synchronize)))
+        begin_r_z_anysv_region_internal($id_hash, $(esc(no_synchronize)))
     end
 end
-function begin_s_r_z_anyv_region_internal(call_site, no_synchronize::Bool)
-    if loop_ranges[].is_anyv
+function begin_r_z_anysv_region_internal(call_site, no_synchronize::Bool)
+    if loop_ranges[].is_anysv
         return
     end
     if !no_synchronize
         _block_synchronize(call_site)
     end
-    loop_ranges[] = loop_ranges_store[(:anyv,)]
+    loop_ranges[] = loop_ranges_store[(:anysv,)]
 end
-export @begin_s_r_z_anyv_region
+export @begin_r_z_anysv_region
 
-# Create @begin_anyv_*_region() functions to use within a @begin_s_r_z_anyv_region() region.
-for dims ∈ anyv_dimension_combinations
+# Create @begin_anysv_*_region() functions to use within a @begin_r_z_anysv_region() region.
+for dims ∈ anysv_dimension_combinations
     # Create an expression-function/macro combination for each level of the
     # loop
     dims_symb = Symbol(dims_string(dims))
@@ -799,16 +811,16 @@ for dims ∈ anyv_dimension_combinations
     sync_name_internal = Symbol(sync_name, :_internal)
     eval(quote
              """
-             Begin 'anyv' sub-region in which $($dims[2:end]) velocity space dimensions
-             are parallelized by being split between processes.
+             Begin 'anysv' sub-region in which $($dims[2:end]) species/velocity space
+             dimensions are parallelized by being split between processes.
 
              Returns immediately if loop_ranges[] is already set to the parallel
-             dimensions being requested. This allows the @begin_anyv_*_region() calls to be
+             dimensions being requested. This allows the @begin_anysv_*_region() calls to be
              placed where they make logical sense, with no cost if a call happens to be
              repeated (e.g. in different functions).
 
-             Calls `_anyv_subblock_synchronize()` to synchronize the processes operating on
-             an 'anyv' shared-memory sub-block, unless `true` is passed as the
+             Calls `_anysv_subblock_synchronize()` to synchronize the processes operating on
+             an 'anysv' shared-memory sub-block, unless `true` is passed as the
              `no_synchronize` argument.
              """
              macro $sync_name(no_synchronize::Bool=false)
@@ -825,12 +837,12 @@ for dims ∈ anyv_dimension_combinations
                  if loop_ranges[].parallel_dims == $dims
                      return
                  end
-                 if !loop_ranges[].is_anyv
-                     error("Trying to change the 'anyv' sub-region when not an an 'anyv' "
+                 if !loop_ranges[].is_anysv
+                     error("Trying to change the 'anysv' sub-region when not an an 'anysv' "
                            * "region")
                  end
                  if !no_synchronize
-                     _anyv_subblock_synchronize(call_site)
+                     _anysv_subblock_synchronize(call_site)
                  end
                  loop_ranges[] = loop_ranges_store[$dims]
              end
@@ -883,16 +895,16 @@ end
 export @begin_serial_region
 
 """
-Run a block of code on only anyv-subblock-rank-0 of each group of processes operating on
-an 'anyv' shared-memory subblock
+Run a block of code on only anysv-subblock-rank-0 of each group of processes operating on
+an 'anysv' shared-memory subblock
 """
-macro anyv_serial_region(blk)
+macro anysv_serial_region(blk)
     return quote
-        if loop_ranges[].anyv_rank0
+        if loop_ranges[].anysv_rank0
             $(esc(blk))
         end
     end
 end
-export @anyv_serial_region
+export @anysv_serial_region
 
 end # looping

@@ -1885,7 +1885,7 @@ The r-dimension is not parallelised. For 1D runs this makes no difference. In 2D
 or might not be necessary. If r-dimension parallelisation is needed, it would need some
 work. The simplest option would be a non-parallelised outer loop over r, with each
 nonlinear solve being parallelised over {z,vperp,vpa}. More efficient might be to add an
-equivalent to the 'anyv' parallelisation used for the collision operator (e.g. 'anyzv'?)
+equivalent to the 'anysv' parallelisation used for the collision operator (e.g. 'anyzv'?)
 to allow the outer r-loop to be parallelised.
 """
 @timeit global_timer implicit_electron_advance!(
