@@ -2871,53 +2871,6 @@ function assemble_vpavperp_advection_terms!(rhsvpavperp,pdfs,dvpadt,
     end
 end
 
-function assemble_explicit_collision_operator_matrix_inner_loop!(CC2D_sparse, delta_t,
-        nussp, ms, msp, YY0perp, YY0par, YY1perp, YY1par, YY2perp, YY2par, YY3perp,
-        YY3par, MMpar, MMperp, d2Gspdvpa2, d2Gspdvperpdvpa, d2Gspdvperp2, dHspdvpa, dHspdvperp,
-        vperp_igrid_full_view, vpa_igrid_full_view,
-        ivpa_local,ielement_vpa,
-        ngrid_vpa,nelement_vpa,
-        ivperp_local,ielement_vperp,
-        ngrid_vperp,nelement_vperp)
-    @inbounds begin
-        # carry out the matrix sum on each 2D element
-        for jvperpp_local in 1:ngrid_vperp
-            for kvperpp_local in 1:ngrid_vperp
-                kvperpp = vperp_igrid_full_view[kvperpp_local]
-                YY0perp_kj = YY0perp[kvperpp_local,jvperpp_local]
-                YY1perp_kj = YY1perp[kvperpp_local,jvperpp_local]
-                YY2perp_kj = YY2perp[kvperpp_local,jvperpp_local]
-                YY3perp_kj = YY3perp[kvperpp_local,jvperpp_local]
-                for jvpap_local in 1:ngrid_vpa
-                    icsc = icsc_func(ivpa_local,jvpap_local,ielement_vpa,
-                                           ngrid_vpa,nelement_vpa,
-                                           ivperp_local,jvperpp_local,
-                                           ielement_vperp,
-                                           ngrid_vperp,nelement_vperp)
-                    for kvpap_local in 1:ngrid_vpa
-                        kvpap = vpa_igrid_full_view[kvpap_local]
-                        YY0par_kj = YY0par[kvpap_local,jvpap_local]
-                        YY1par_kj = YY1par[kvpap_local,jvpap_local]
-                        d2Gspdvperpdvpa_kk = d2Gspdvperpdvpa[kvpap,kvperpp]
-                        # first three lines represent parallel flux terms
-                        # second three lines represent perpendicular flux terms
-                        # Make P = - M + dt * RHSC to match residual R = -Fnew + Fold + dt * C
-                        assemble_sparse_matrix_value!(CC2D_sparse,
-                                           (MMpar[jvpap_local]*MMperp[jvperpp_local] - 0.0 * delta_t *
-                                           (-nussp*(YY0perp_kj*YY2par[kvpap_local,jvpap_local]*d2Gspdvpa2[kvpap,kvperpp] +
-                                            YY3perp_kj*YY1par_kj*d2Gspdvperpdvpa_kk -
-                                            2.0*(ms/msp)*YY0perp_kj*YY1par_kj*dHspdvpa[kvpap,kvperpp] +
-                                            # end parallel flux, start of perpendicular flux
-                                            YY1perp_kj*YY3par[kvpap_local,jvpap_local]*d2Gspdvperpdvpa_kk +
-                                            YY2perp_kj*YY0par_kj*d2Gspdvperp2[kvpap,kvperpp] -
-                                            2.0*(ms/msp)*YY1perp_kj*YY0par_kj*dHspdvperp[kvpap,kvperpp]))), icsc)
-                    end
-                end
-            end
-        end
-        return nothing
-    end
-end
 """
 Function to allocated an instance of `YY_collision_operator_arrays`.
 Calls `get_QQ_local!()` from `gauss_legendre`. Definitions of these
