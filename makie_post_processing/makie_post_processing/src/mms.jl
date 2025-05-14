@@ -27,7 +27,8 @@ function manufactured_solutions_get_field_and_field_sym(run_info, variable_name;
     variable_name = Symbol(variable_name)
 
     func_name_lookup = (phi=:phi_func, Er=:Er_func, Ez=:Ez_func, density=:densi_func,
-                        parallel_flow=:upari_func, pressure=:pi_func,
+                        parallel_flow=:upari_func, parallel_pressure=:ppari_func,
+                        perpendicular_pressure=:pperpi_func,
                         density_neutral=:densn_func, f=:dfni_func, f_neutral=:dfnn_func)
 
     nt = run_info.nt
@@ -55,10 +56,11 @@ function manufactured_solutions_get_field_and_field_sym(run_info, variable_name;
         manufactured_funcs =
             manufactured_electric_fields(Lr_in, run_info.z.L, run_info.r.bc,
                                          run_info.z.bc, run_info.composition,
-                                         run_info.r.n, run_info.manufactured_solns_input,
+                                         run_info.geometry.input, run_info.r.n,
+                                         run_info.manufactured_solns_input,
                                          run_info.species)
-    elseif variable_name ∈ (:density, :parallel_flow, :pressure,
-                            :density_neutral, :f, :f_neutral)
+    elseif variable_name ∈ (:density, :parallel_flow, :parallel_pressure,
+                            :perpendicular_pressure, :density_neutral, :f, :f_neutral)
         manufactured_funcs =
             manufactured_solutions(run_info.manufactured_solns_input, Lr_in, run_info.z.L,
                                    run_info.r.bc, run_info.z.bc, run_info.geometry.input,
@@ -174,14 +176,11 @@ function compare_moment_symbolic_test(run_info, plot_prefix, field_label, field_
         field_norm = zeros(mk_float,nt)
         for it in 1:nt
             dummy = 0.0
-            #dummy_N = 0.0
             for ir in 1:r.n
                 for iz in 1:z.n
-                    dummy += (field[iz,ir,it] - field_sym[iz,ir,it])^2
-                    #dummy_N +=  (field_sym[iz,ir,it])^2
+                    dummy += error[iz,ir,it]^2
                 end
             end
-            #field_norm[it] = dummy/dummy_N
             field_norm[it] = sqrt(dummy/(r.n*z.n))
         end
         println_to_stdout_and_file(io, join(field_norm, " "), " # ", variable_name)
@@ -399,7 +398,7 @@ function _MMS_pdf_plots(run_info, input, variable_name, plot_prefix, field_label
                 slices = (k=>v for (k, v) ∈ all_plot_slices if k != Symbol(:i, dim))
                 f, f_sym =
                     manufactured_solutions_get_field_and_field_sym(
-                        run_info, variable_name; nvperp=run_info.vperp.n, slices...)
+                        run_info, variable_name; slices...)
                 error = f .- f_sym
 
                 fig, ax, legend_place = get_1d_ax(2; yscale=yscale, get_legend_place=:below)
@@ -424,7 +423,7 @@ function _MMS_pdf_plots(run_info, input, variable_name, plot_prefix, field_label
                           if k ∉ (Symbol(:i, dim1), Symbol(:i, dim2)))
                 f, f_sym =
                 manufactured_solutions_get_field_and_field_sym(
-                    run_info, variable_name; nvperp=run_info.vperp.n, slices...)
+                    run_info, variable_name; slices...)
                 error = f .- f_sym
 
                 fig, ax, colorbar_place = get_2d_ax(3)
@@ -448,7 +447,7 @@ function _MMS_pdf_plots(run_info, input, variable_name, plot_prefix, field_label
                 slices = (k=>v for (k, v) ∈ all_animate_slices if k != Symbol(:i, dim))
                 f, f_sym =
                     manufactured_solutions_get_field_and_field_sym(
-                        run_info, variable_name; nvperp=run_info.vperp.n, slices...)
+                        run_info, variable_name; slices...)
                 error = f .- f_sym
 
                 fig, ax, legend_place = get_1d_ax(2; yscale=yscale, get_legend_place=:below)
@@ -476,7 +475,7 @@ function _MMS_pdf_plots(run_info, input, variable_name, plot_prefix, field_label
                           if k ∉ (Symbol(:i, dim1), Symbol(:i, dim2)))
                 f, f_sym =
                 manufactured_solutions_get_field_and_field_sym(
-                    run_info, variable_name; nvperp=run_info.vperp.n, slices...)
+                    run_info, variable_name; slices...)
                 error = f .- f_sym
 
                 fig, ax, colorbar_place = get_2d_ax(3)
@@ -976,7 +975,8 @@ function manufactured_solutions_analysis(run_info; plot_prefix, nvperp)
                  ("Ez", L"\tilde{E}_z", L"\tilde{E}_z^{sym}", L"\varepsilon(\tilde{E}_z)"),
                  ("density", L"\tilde{n}_i", L"\tilde{n}_i^{sym}", L"\varepsilon(\tilde{n}_i)"),
                  ("parallel_flow", L"\tilde{u}_{i,\parallel}", L"\tilde{u}_{i,\parallel}^{sym}", L"\varepsilon(\tilde{u}_{i,\parallel})"),
-                 ("pressure", L"\tilde{p}_{i}", L"\tilde{p}_{i}^{sym}", L"\varepsilon(\tilde{p}_{i})"),
+                 ("parallel_pressure", L"\tilde{p}_{i,\parallel}", L"\tilde{p}_{i,\parallel}^{sym}", L"\varepsilon(\tilde{p}_{i,\parallel})"),
+                 ("perpendicular_pressure", L"\tilde{p}_{i,\perp}", L"\tilde{p}_{i,\perp}^{sym}", L"\varepsilon(\tilde{p}_{i,\perp})"),
                  ("density_neutral", L"\tilde{n}_n", L"\tilde{n}_n^{sym}", L"\varepsilon(\tilde{n}_n)"))
 
             if contains(variable_name, "neutral") && run_info.n_neutral_species == 0
