@@ -52,7 +52,9 @@ function get_scan_inputs(scan_inputs::AbstractDict)
         outer_inputs_section = outer_inputs
         for section_name ∈ x_parts[1:end-1]
             scan_inputs_section = scan_inputs_section[section_name]
-            outer_inputs_section = get(outer_inputs_section, section_name, OptionsDict())
+            new_section = get(outer_inputs_section, section_name, OptionsDict())
+            outer_inputs_section[section_name] = new_section
+            outer_inputs_section = new_section
         end
         outer_inputs_section[x_parts[end]] = pop!(scan_inputs_section, x_parts[end])
     end
