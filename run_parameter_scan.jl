@@ -26,7 +26,7 @@ function run_parameter_scan(args...)
     scan_inputs = get_scan_inputs(args...)
 
     @sync @distributed for s ∈ scan_inputs
-        println("running ", s["run_name"])
+        println("running ", s["output"]["run_name"])
         run_moment_kinetics(s)
     end
 
