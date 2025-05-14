@@ -12,7 +12,7 @@ using PlasmaDispersionFunctions
 
 using moment_kinetics.parameter_scans
 
-const ext = ".png"
+const ext = ".pdf"
 const plot_dir = "sound-wave"
 
 CairoMakie.activate!(; px_per_unit=4)
