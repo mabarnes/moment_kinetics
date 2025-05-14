@@ -1,6 +1,7 @@
 #using moment_kinetics.makie_post_processing
 
-using makie_post_processing: CairoMakie
+import makie_post_processing: CairoMakie
+using .CairoMakie
 using DelimitedFiles
 using LaTeXStrings
 using MathTeXEngine
@@ -356,7 +357,7 @@ function plot_n_scan()
     Th = 1.0
     Te = 1.0
 
-    fig = Figure(; resolution=(1200, 600))
+    fig = Figure(; size=(1200, 600))
 
     ax_gamma = Axis(fig[1,1],
                     xlabel=L"(n_i + n_n)R_{in}/|k_\parallel|v_\mathrm{th}",
@@ -387,10 +388,10 @@ function plot_n_scan()
                            (0.5, 1.5, L"n_i / n_\mathrm{tot} = 1/4"),
                            (0.0, 2.0, L"n_i / n_\mathrm{tot} = 0"),
                           )
-        sims = Tuple(i for i ∈ sim_inputs if isapprox(i["initial_density1"], ni, atol=2.0e-5))
-        sims_split1 = Tuple(i for i ∈ sim_inputs_split1 if isapprox(i["initial_density1"], ni, atol=2.0e-5))
-        sims_split2 = Tuple(i for i ∈ sim_inputs_split2 if isapprox(i["initial_density1"], ni, atol=2.0e-5))
-        sims_split3 = Tuple(i for i ∈ sim_inputs_split3 if isapprox(i["initial_density1"], ni, atol=2.0e-5))
+        sims = Tuple(i for i ∈ sim_inputs if isapprox(i["ion_species_1"]["initial_density"], ni, atol=2.0e-5))
+        sims_split1 = Tuple(i for i ∈ sim_inputs_split1 if isapprox(i["ion_species_1"]["initial_density"], ni, atol=2.0e-5))
+        sims_split2 = Tuple(i for i ∈ sim_inputs_split2 if isapprox(i["ion_species_1"]["initial_density"], ni, atol=2.0e-5))
+        sims_split3 = Tuple(i for i ∈ sim_inputs_split3 if isapprox(i["ion_species_1"]["initial_density"], ni, atol=2.0e-5))
 
         p_omega, p_gamma, Ri_positive, gamma_positive =
             plot_positive_frequency!(ax_omega, ax_gamma, ni, nn, Th, Te; label=label)
@@ -434,7 +435,7 @@ function plot_T_scan()
     nn = 1.0
     Te = 1.0
 
-    fig = Figure(; resolution=(900, 450))
+    fig = Figure(; size=(900, 450))
 
     ax_gamma = Axis(fig[1,1],
                     xlabel=L"(n_i + n_n)R_{in}/|k_\parallel|v_\mathrm{th}",
