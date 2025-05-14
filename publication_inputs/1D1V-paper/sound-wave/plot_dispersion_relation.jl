@@ -317,7 +317,7 @@ function get_sim_omega_gamma(sim)
 end
 
 function plot_sim_output!(ax_omega, ax_gamma, sims, ni, nn, Th, Te; kwargs...)
-    vth = sqrt(Th)
+    vth = sqrt(2.0*Th)
 
     Ri = zeros(length(sims))
     omega = zeros(length(sims))
