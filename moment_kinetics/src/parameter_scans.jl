@@ -49,14 +49,10 @@ function get_scan_inputs(scan_inputs::AbstractDict)
     for x ∈ combine_outer
         x_parts = split(x, ".")
         scan_inputs_section = scan_inputs
-        outer_inputs_section = outer_inputs
         for section_name ∈ x_parts[1:end-1]
             scan_inputs_section = scan_inputs_section[section_name]
-            new_section = get(outer_inputs_section, section_name, OptionsDict())
-            outer_inputs_section[section_name] = new_section
-            outer_inputs_section = new_section
         end
-        outer_inputs_section[x_parts[end]] = pop!(scan_inputs_section, x_parts[end])
+        outer_inputs[x] = pop!(scan_inputs_section, x_parts[end])
     end
 
     # First combine the 'inner product' inputs
