@@ -1,6 +1,6 @@
 #using moment_kinetics.makie_post_processing
 
-using CairoMakie
+using makie_post_processing: CairoMakie
 using DelimitedFiles
 using LaTeXStrings
 using MathTeXEngine
