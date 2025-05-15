@@ -33,7 +33,7 @@ function main()
     run_info = Tuple(get_run_info(d; itime_min=-1, do_setup=false) for d ∈ run_dirs)
     run_info_dfns = Tuple(get_run_info(d; itime_min=-1, dfns=true, do_setup=false) for d ∈ run_dirs)
     setup_makie_post_processing_input!(
-        joinpath(output_dir, "post_processing_input_eftc2023.toml"),
+        joinpath(output_dir, "post_processing_input_1D1V_paper.toml"),
         run_info_moments=run_info, run_info_dfns=run_info_dfns)
 
     fig, axes = get_1d_ax(3; xlabel=L"z/L",
