@@ -666,7 +666,7 @@ using IfElse
             Si += - num_diss_params.ion.vpa_dissipation_coefficient*Dvpa(Dvpa(dfni))
         end
         if num_diss_params.ion.vperp_dissipation_coefficient > 0.0 && include_num_diss_in_MMS
-            Si += - num_diss_params.ion.vperp_dissipation_coefficient*Dvperp(Dvperp(dfni))
+            Si += - num_diss_params.ion.vperp_dissipation_coefficient/vperp*Dvperp(vperp*Dvperp(dfni))
         end
         if num_diss_params.ion.r_dissipation_coefficient > 0.0 && include_num_diss_in_MMS
             Si += - rfac*num_diss_params.ion.r_dissipation_coefficient*Dr(Dr(dfni))
