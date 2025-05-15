@@ -1,7 +1,6 @@
 [composition]
 n_ion_species = 1
 n_neutral_species = 1
-boltzmann_electron_response = true
 recycling_fraction = 0.5
 T_e = 0.2 # 1.0
 T_wall = 0.1
