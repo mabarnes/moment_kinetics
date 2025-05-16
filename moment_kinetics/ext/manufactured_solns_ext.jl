@@ -464,7 +464,7 @@ using IfElse
                           species)
         # calculate the electric fields
         dense = densi # get the electron density via quasineutrality with Zi = 1
-        phi = composition.T_e*log(dense/N_e) # use the adiabatic response of electrons for me/mi -> 0
+        phi = expand(composition.T_e*log(dense/N_e)) # use the adiabatic response of electrons for me/mi -> 0
         Er = -Dr(phi)*rfac + geometry.Er_constant
         Ez = -Dz(phi)      + geometry.Ez_constant
         
@@ -662,7 +662,7 @@ using IfElse
         dvperpdt = (0.5*vperp/Bmag)*(dzdt*dBdz + drdt*dBdr)
         # the ion source to maintain the manufactured solution
         Si = ( Dt(dfni) 
-               + dzdt * Dz(dfni)  
+               + dzdt * Dz(expand(dfni))
                + drdt * Dr(dfni)
                + dvpadt * Dvpa(dfni)
                + dvperpdt * Dvperp(dfni)
