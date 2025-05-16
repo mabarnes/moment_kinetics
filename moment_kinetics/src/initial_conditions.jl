@@ -1923,7 +1923,7 @@ function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, 
                                               geometry, composition, species, manufactured_solns_input, collisions)
     manufactured_solns_list = manufactured_solutions(manufactured_solns_input, r.L, z.L,
                                                      r.bc, z.bc, geometry, composition,
-                                                     species, r.n, vperp.n)
+                                                     species, r.n, vperp.n, vzeta.n, vr.n)
     dfni_func = manufactured_solns_list.dfni_func
     densi_func = manufactured_solns_list.densi_func
     dfnn_func = manufactured_solns_list.dfnn_func

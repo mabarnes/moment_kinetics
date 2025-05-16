@@ -195,12 +195,17 @@ using IfElse
     end
 
     # neutral distribution symbolic function
-    function dfnn_sym(Lr, Lz, r_bc, z_bc, geometry, composition, manufactured_solns_input,
-                      species)
+    function dfnn_sym(Lr, Lz, r_bc, z_bc, geometry, composition, nvzeta, nvr,
+                      manufactured_solns_input, species)
         densn = densn_sym(Lr, Lz, r_bc, z_bc, geometry, composition,
                           manufactured_solns_input, species)
+        if nvzeta == 1 && nvr == 1
+            Maxwellian_prefactor = 1 / sqrt(π)
+        else
+            Maxwellian_prefactor = 1 / π^1.5
+        end
         if z_bc == "periodic"
-            dfnn = densn / π^1.5 * exp( - (vz^2 + vr^2 + vzeta^2) )
+            dfnn = densn * Maxwellian_prefactor * exp( - (vz^2 + vr^2 + vzeta^2) )
         elseif z_bc == "wall"
             Hplus = 0.5*(sign(vz) + 1.0)
             Hminus = 0.5*(sign(-vz) + 1.0)
@@ -216,11 +221,16 @@ using IfElse
         return dfnn
     end
     function gyroaveraged_dfnn_sym(Lr, Lz, r_bc, z_bc, geometry, composition,
-                                   manufactured_solns_input, species)
+                                   nvzeta, nvr, manufactured_solns_input, species)
         densn = densn_sym(Lr, Lz, r_bc, z_bc, geometry, composition,
                           manufactured_solns_input, species)
+        if nvzeta == 1 && nvr == 1
+            Maxwellian_prefactor = 1 / sqrt(π)
+        else
+            Maxwellian_prefactor = 1 / π^1.5
+        end
         #if (r_bc == "periodic" && z_bc == "periodic")
-            dfnn = densn / π^1.5 * exp( - vpa^2 - vperp^2 )
+            dfnn = densn * Maxwellian_prefactor * exp( - vpa^2 - vperp^2 )
         #end
         return dfnn
     end
@@ -358,11 +368,16 @@ using IfElse
     end
     
     # ion distribution symbolic function
-    function dfni_sym(Lr, Lz, r_bc, z_bc, composition, geometry, nr,
+    function dfni_sym(Lr, Lz, r_bc, z_bc, composition, geometry, nr, nvperp,
                       manufactured_solns_input, species)
         densi = densi_sym(Lr, Lz, r_bc, z_bc, composition, manufactured_solns_input,
                           species)
 
+        if nvperp == 1
+            Maxwellian_prefactor = 1 / sqrt(π)
+        else
+            Maxwellian_prefactor = 1 / π^1.5
+        end
         if manufactured_solns_input.type == "default"
             # calculate the electric fields and the potential
             Er, Ez, phi = electric_fields(Lr, Lz, r_bc, z_bc, composition, geometry, nr,
@@ -378,12 +393,12 @@ using IfElse
             epsilon = manufactured_solns_input.epsilon_offset
             alpha = manufactured_solns_input.alpha_switch
             if z_bc == "periodic"
-                dfni = densi / π^1.5 * exp( - vpa^2 - vperp^2)
+                dfni = densi * Maxwellian_prefactor * exp( - vpa^2 - vperp^2)
             elseif z_bc == "wall"
                 vpabar = vpa - alpha*ExBgeofac*(Bmag/Bzed)*Er # for alpha = 1.0, effective velocity in z direction * (Bmag/Bzed)
                 Hplus = 0.5*(sign(vpabar) + 1.0)
                 Hminus = 0.5*(sign(-vpabar) + 1.0)
-                ffa =  1.0 / π^1.5 * exp(- vperp^2)
+                ffa =  1.0 * Maxwellian_prefactor * exp(- vperp^2)
                 dfni = ffa * ( nminus_sym(Lr,Lz,r_bc,z_bc,epsilon,alpha)* (0.5 - z/Lz) * Hminus * vpabar^pvpa + nplus_sym(Lr,Lz,r_bc,z_bc,epsilon,alpha)*(z/Lz + 0.5) * Hplus * vpabar^pvpa + nzero_sym(Lr,Lz,r_bc,z_bc,alpha)*(z/Lz + 0.5)*(0.5 - z/Lz) ) * exp( - vpabar^2 )
             end
         elseif manufactured_solns_input.type == "2D-instability"
@@ -393,19 +408,24 @@ using IfElse
             vth = sqrt(2.0 * T0)
 
             # Note this is for a '1V' test
-            dfni = densi/vth/π^1.5 * exp(-(vpa/vth)^2)
+            dfni = densi/vth * Maxwellian_prefactor * exp(-(vpa/vth)^2)
         else
             error("Unrecognized option "
                   * "manufactured_solns:type=$(manufactured_solns_input.type)")
         end
         return dfni
     end
-    function cartesian_dfni_sym(Lr, Lz, r_bc, z_bc, composition, manufactured_solns_input,
-                                species)
+    function cartesian_dfni_sym(Lr, Lz, r_bc, z_bc, composition, nvperp,
+                                manufactured_solns_input, species)
         densi = densi_sym(Lr, Lz, r_bc, z_bc, composition, manufactured_solns_input,
                           species)
+        if nvperp == 1
+            Maxwellian_prefactor = 1 / sqrt(π)
+        else
+            Maxwellian_prefactor = 1 / π^1.5
+        end
         #if (r_bc == "periodic" && z_bc == "periodic") || (r_bc == "Dirichlet" && z_bc == "periodic")
-            dfni = densi / π^1.5 * exp( - vz^2 - vr^2 - vzeta^2)
+            dfni = densi * Maxwellian_prefactor * exp( - vz^2 - vr^2 - vzeta^2)
         #end
         return dfni
     end
@@ -455,7 +475,8 @@ using IfElse
     end
 
     function manufactured_solutions(manufactured_solns_input, Lr, Lz, r_bc, z_bc,
-                                    geometry_input_data::geometry_input, composition, species, nr, nvperp)
+                                    geometry_input_data::geometry_input, composition,
+                                    species, nr, nvperp, nvzeta, nvr)
         # calculate the geometry symbolically
         geometry = geometry_sym(geometry_input_data,Lz,Lr,nr)
         ion_species = species.ion[1]
@@ -475,12 +496,12 @@ using IfElse
                           ion_species, nvperp)
         vthi = vthi_sym(Lr, Lz, r_bc, z_bc, composition, manufactured_solns_input,
                           ion_species, nvperp)
-        dfni = dfni_sym(Lr, Lz, r_bc, z_bc, composition, geometry, nr,
+        dfni = dfni_sym(Lr, Lz, r_bc, z_bc, composition, geometry, nr, nvperp,
                         manufactured_solns_input, ion_species)
 
         densn = densn_sym(Lr, Lz, r_bc, z_bc, geometry,composition,
                           manufactured_solns_input, neutral_species)
-        dfnn = dfnn_sym(Lr, Lz, r_bc, z_bc, geometry, composition,
+        dfnn = dfnn_sym(Lr, Lz, r_bc, z_bc, geometry, composition, nvzeta, nvr,
                         manufactured_solns_input, neutral_species)
 
         #build julia functions from these symbolic expressions
@@ -576,21 +597,23 @@ using IfElse
         vthi = vthi_sym(r_coord.L, z_coord.L, r_coord.bc, z_coord.bc, composition, manufactured_solns_input,
                           ion_species, vperp_coord.n)
         dfni = dfni_sym(r_coord.L, z_coord.L, r_coord.bc, z_coord.bc, composition,
-                        geometry, r_coord.n, manufactured_solns_input, ion_species)
+                        geometry, r_coord.n, vperp_coord.n, manufactured_solns_input,
+                        ion_species)
         #dfni in vr vz vzeta coordinates
         vrvzvzeta_dfni = cartesian_dfni_sym(r_coord.L, z_coord.L, r_coord.bc, z_coord.bc,
-                                            composition, manufactured_solns_input,
-                                            ion_species)
+                                            composition, vperp_coord.n,
+                                            manufactured_solns_input, ion_species)
 
         # neutral manufactured solutions
         densn = densn_sym(r_coord.L,z_coord.L, r_coord.bc, z_coord.bc, geometry,
                           composition, manufactured_solns_input, neutral_species)
         dfnn = dfnn_sym(r_coord.L, z_coord.L, r_coord.bc, z_coord.bc, geometry,
-                        composition, manufactured_solns_input, neutral_species)
+                        composition, vzeta_coord.n, vr_coord.n, manufactured_solns_input,
+                        neutral_species)
         # gyroaverage < dfnn > in vpa vperp coordinates
         gav_dfnn = gyroaveraged_dfnn_sym(r_coord.L, z_coord.L, r_coord.bc, z_coord.bc,
-                                         geometry, composition, manufactured_solns_input,
-                                         neutral_species)
+                                         geometry, composition, vzeta_coord.n, vr_coord.n,
+                                         manufactured_solns_input, neutral_species)
 
         dense = densi # get the electron density via quasineutrality with Zi = 1
 
