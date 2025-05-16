@@ -62,7 +62,7 @@ bc = "wall"
 
 [composition]
 T_wall = 1.0
-T_e = 1.0
+T_e = 0.5
 electron_physics = "boltzmann_electron_response"
 n_ion_species = 1
 n_neutral_species = 0
