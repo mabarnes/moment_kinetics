@@ -18,22 +18,22 @@ using Symbolics
 using IfElse
 
     @variables r z vpa vperp t vz vr vzeta
-    typed_zero(vz) = zero(vz)
+    const typed_zero(vz) = zero(vz)
     @register_symbolic typed_zero(vz)
-    zero_val = 1.0e-8
+    const zero_val = 1.0e-8
     #epsilon_offset = 0.001 
 
-    dfni_vpa_power_opt = "4" #"2"
+    const dfni_vpa_power_opt = "4" #"2"
     if dfni_vpa_power_opt == "2"
-       pvpa = 2
-       nconst = 0.25
-       pconst = 3.0/4.0
-       fluxconst = 0.5
+       const pvpa = 2
+       const nconst = 0.25
+       const pconst = 3.0/4.0
+       const fluxconst = 0.5
     elseif dfni_vpa_power_opt == "4"
-       pvpa = 4
-       nconst = 3.0/8.0
-       pconst = 15.0/8.0
-       fluxconst = 1.0
+       const pvpa = 4
+       const nconst = 3.0/8.0
+       const pconst = 15.0/8.0
+       const fluxconst = 1.0
     end
     
     # struct of symbolic functions for geometric coefficients
