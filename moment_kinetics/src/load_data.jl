@@ -4767,11 +4767,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         n = get_variable(run_info, "density"; kwargs...)
         vth = get_variable(run_info, "thermal_speed"; kwargs...)
         dT_dz = get_variable(run_info, "dT_dz"; kwargs...)
-        # nu_ii = get_variable(run_info, "collision_frequency_ii"; kwargs...)
         if run_info.vperp.n == 1
-            # For 1V need to use parallel temperature for Maxwellian in Krook
-            # operator, and for consistency with old 1D1V results also calculate
-            # collision frequency using parallel temperature.
             Krook_vth = sqrt(3.0) * vth
             adjust_1V = 1.0 / sqrt(3.0)
         else
