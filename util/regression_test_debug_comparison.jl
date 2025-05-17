@@ -1,7 +1,7 @@
 using moment_kinetics.load_data: get_run_info_no_setup, postproc_load_variable,
                                  close_run_info
 
-function convert_to_string(array::Vector{UInt8})
+function convert_to_string(array::AbstractVector{UInt8})
     s = String(array)
     s = replace(s, "\0" => "")
     return s
