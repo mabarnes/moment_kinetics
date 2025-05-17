@@ -738,9 +738,9 @@ function enforce_vpa_boundary_condition_local!(f::T, bc, adv_speed, vpa_diffusio
     dvpadt = adv_speed[1] #use that dvpa/dt is indendent of vpa in the current model 
     nvpa = size(f,1)
     if bc == "zero"
-        if dvpadt > zero || vpa_diffusion
+        if dvpadt[1] > -zero || vpa_diffusion
             f[1] = 0.0 # -infty forced to zero
-        elseif dvpadt < zero || vpa_diffusion
+        elseif dvpadt[end] < zero || vpa_diffusion
             f[end] = 0.0 # +infty forced to zero
         end
     elseif bc == "periodic"
