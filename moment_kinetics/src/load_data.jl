@@ -4780,6 +4780,15 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         n = get_variable(run_info, "density"; kwargs...)
         vth = get_variable(run_info, "thermal_speed"; kwargs...)
         variable = get_collision_frequency_ii(run_info.collisions, n, vth)
+    elseif variable_name == "Krook_collision_frequency_ii"
+        n = get_variable(run_info, "density"; kwargs...)
+        vth = get_variable(run_info, "thermal_speed"; kwargs...)
+        if run_info.vperp.n == 1
+            Krook_vth = sqrt(3.0) * vth
+        else
+            Krook_vth = vth
+        end
+        variable = get_collision_frequency_ii(run_info.collisions, n, Krook_vth)
     elseif variable_name == "collision_frequency_ee"
         n = get_variable(run_info, "electron_density"; kwargs...)
         vth = get_variable(run_info, "electron_thermal_speed"; kwargs...)
