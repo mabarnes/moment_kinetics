@@ -46,7 +46,8 @@ function regression_test_debug_comparison(filenameA, filenameB;
                                           tolerance=1.0e-13,
                                           conversions=Dict{String,Any}(),
                                           ignore=(), print_index_ranges=true,
-                                          print_changed=false, print_deltas=false)
+                                          print_changed=false, print_deltas=false,
+                                          return_changed=false)
 
     A = get_run_info_no_setup(filenameA; dfns=true)
     B = get_run_info_no_setup(filenameB; dfns=true)
@@ -219,10 +220,39 @@ function regression_test_debug_comparison(filenameA, filenameB;
                     end
                 end
             end
+            if return_changed
+                changed_vars = []
+                for v ∈ changed_variables
+                    if length(v) ≥ 2 && isa(v[2], String)
+                        vA, vB = v[1:2]
+                    else
+                        vA = vB = v[1]
+                    end
+                    valA = postproc_load_variable(A, vA; it=it)
+                    valB = postproc_load_variable(B, vB; it=it)
+                    if vA ∈ conversions_keys
+                        c = conversions[vA]
+                        if c isa Tuple
+                            valA .*= c[2]
+                            if it > 1 && print_deltas
+                                deltaA .*= c[2]
+                            end
+                        else
+                            valA .*= c
+                            if it > 1 && print_deltas
+                                deltaA .*= c
+                            end
+                        end
+                    end
+                    push!(changed_vars, (valA, valB))
+                end
+            else
+                changed_vars = nothing
+            end
 
             close_run_info(A)
             close_run_info(B)
-            return nothing
+            return changed_vars
         end
     end
 
