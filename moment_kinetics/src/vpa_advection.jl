@@ -359,16 +359,16 @@ end
 function update_speed_vpa_default!(advect, fields, fvec, moments, vpa, vperp, z, r, composition,
                                collisions, ion_source_settings, t, geometry)
     if moments.evolve_p && moments.evolve_upar
-        update_speed_n_u_p_evolution!(advect, fields, fvec, moments, vpa, z, r,
+        update_speed_vpa_n_u_p_evolution!(advect, fields, fvec, moments, vpa, z, r,
                                       composition, collisions, ion_source_settings)
     elseif moments.evolve_p
-        update_speed_n_p_evolution!(advect, fields, fvec, moments, vpa, z, r, composition,
+        update_speed_vpa_n_p_evolution!(advect, fields, fvec, moments, vpa, z, r, composition,
                                     collisions, ion_source_settings)
     elseif moments.evolve_upar
-        update_speed_n_u_evolution!(advect, fields, fvec, moments, vpa, z, r, composition,
+        update_speed_vpa_n_u_evolution!(advect, fields, fvec, moments, vpa, z, r, composition,
                                     collisions, ion_source_settings)
     elseif moments.evolve_density
-        update_speed_n_evolution!(advect, fields, fvec, moments, vpa, z, r, composition,
+        update_speed_vpa_n_evolution!(advect, fields, fvec, moments, vpa, z, r, composition,
                                   collisions, ion_source_settings)
     else
         bzed = geometry.bzed
@@ -392,7 +392,7 @@ where density, flow and pressure are evolved independently from the pdf;
 in this case, the parallel velocity coordinate is the normalized peculiar velocity
 wpa = (vpa - upar)/vth
 """
-function update_speed_n_u_p_evolution!(advect, fields, fvec, moments, vpa, z, r,
+function update_speed_vpa_n_u_p_evolution!(advect, fields, fvec, moments, vpa, z, r,
                                        composition, collisions, ion_source_settings)
     upar = fvec.upar
     vth = moments.ion.vth
@@ -425,7 +425,7 @@ where density and pressure are evolved independently from the pdf;
 in this case, the parallel velocity coordinate is the normalized velocity
 wpa = vpa/vth
 """
-function update_speed_n_p_evolution!(advect, fields, fvec, moments, vpa, z, r,
+function update_speed_vpa_n_p_evolution!(advect, fields, fvec, moments, vpa, z, r,
                                      composition, collisions, ion_source_settings)
     vth = moments.ion.vth
     gEz = fields.gEz
@@ -454,7 +454,7 @@ where density and flow are evolved independently from the pdf;
 in this case, the parallel velocity coordinate is the peculiar velocity
 wpa = vpa-upar
 """
-function update_speed_n_u_evolution!(advect, fields, fvec, moments, vpa, z, r,
+function update_speed_vpa_n_u_evolution!(advect, fields, fvec, moments, vpa, z, r,
                                      composition, collisions, ion_source_settings)
     upar = fvec.upar
     gEz = fields.gEz
@@ -482,7 +482,7 @@ update the advection speed in the parallel velocity coordinate for the case
 where density is evolved independently from the pdf;
 in this case, the parallel velocity coordinate is unchanged.
 """
-function update_speed_n_evolution!(advect, fields, fvec, moments, vpa, z, r,
+function update_speed_vpa_n_evolution!(advect, fields, fvec, moments, vpa, z, r,
                                      composition, collisions, ion_source_settings)
     gEz = fields.gEz
     wpa = vpa.grid
