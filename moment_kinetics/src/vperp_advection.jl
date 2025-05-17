@@ -40,8 +40,74 @@ function update_speed_vperp!(vperp_advect, vpa, vperp, z, r, z_advect, r_advect,
     @boundscheck vpa.n == size(vperp_advect.speed,2) || throw(BoundsError(vperp_advect))
     @boundscheck r.n == size(vperp_advect.speed,4) || throw(BoundsError(vperp_speed))
     if vperp.advection.option == "default"
-    # advection of vperp due to conservation of 
-    # the adiabatic invariant mu = vperp^2 / 2 B
+        update_speed_vperp_default!(vperp_advect, vpa, vperp, z, r, z_advect, r_advect, geometry)
+    elseif vperp.advection.option == "constant"
+        update_speed_vperp_constant!(vperp_advect, vpa, vperp, z, r, z_advect, r_advect, geometry)
+    end
+
+    return nothing
+end
+
+"""
+update speed vperp default
+"""
+function update_speed_vperp_default!(vperp_advect, vpa, vperp, z, r, z_advect, r_advect, geometry)
+    if moments.evolve_p && moments.evolve_upar
+        update_speed_vperp_n_u_p_evolution!(vperp_advect, vpa, vperp, z, r, z_advect, r_advect, geometry)
+    elseif moments.evolve_p
+        update_speed_vperp_n_p_evolution!(vperp_advect, vpa, vperp, z, r, z_advect, r_advect, geometry)
+    elseif moments.evolve_upar
+        update_speed_vperp_n_u_evolution!(vperp_advect, vpa, vperp, z, r, z_advect, r_advect, geometry)
+    elseif moments.evolve_density
+        update_speed_vperp_n_evolution!(vperp_advect, vpa, vperp, z, r, z_advect, r_advect, geometry)
+    else
+        update_speed_vperp_DK!(vperp_advect, vpa, vperp, z, r, z_advect, r_advect, geometry)
+    end
+end
+
+"""
+update vperp advection speed when n, u, p are evolved separately
+"""
+function update_speed_vperp_n_u_p_evolution!(vperp_advect, vpa, vperp, z, r, z_advect, r_advect, geometry)
+    if geometry.input.option ∈ ("default", "constant-helical")
+        nothing
+    end
+end
+
+"""
+update vperp advection speed when n, p are evolved separately
+"""
+function update_speed_vperp_n_p_evolution!(vperp_advect, vpa, vperp, z, r, z_advect, r_advect, geometry)
+    if geometry.input.option ∈ ("default", "constant-helical")
+        nothing
+    end
+end
+
+"""
+update vperp advection speed when n, u are evolved separately
+"""
+function update_speed_vperp_n_u_evolution!(vperp_advect, vpa, vperp, z, r, z_advect, r_advect, geometry)
+    if geometry.input.option ∈ ("default", "constant-helical")
+        nothing
+    end
+end
+
+"""
+update vperp advection speed when n is evolved separately
+"""
+function update_speed_vperp_n_evolution!(vperp_advect, vpa, vperp, z, r, z_advect, r_advect, geometry)
+    if geometry.input.option ∈ ("default", "constant-helical")
+        nothing
+    end
+end
+
+function update_speed_vperp_DK!(vperp_advect, vpa, vperp, z, r, z_advect, r_advect, geometry)
+    if geometry.input.option ∈ ("default", "constant-helical")
+        # constant vperp advection speed I guess
+        return nothing
+    else
+        # advection of vperp due to conservation of 
+        # the adiabatic invariant mu = vperp^2 / 2 B
         dzdt = vperp.scratch
         drdt = vperp.scratch2
         dBdr = geometry.dBdr
@@ -58,15 +124,21 @@ function update_speed_vperp!(vperp_advect, vpa, vperp, z, r, z_advect, r_advect,
                 @. @views vperp_advect.speed[:,ivpa,iz,ir] = (0.5*vperp.grid[:]/Bmag[iz,ir])*(dzdt[:]*dBdz[iz,ir] + drdt[:]*dBdr[iz,ir])
             end
         end
-    elseif vperp.advection.option == "constant"
-        @inbounds begin
-            @loop_r_z_vpa ir iz ivpa begin
-                @views vperp_advect.speed[:,ivpa,iz,ir] .= vperp.advection.constant_speed
-            end
+    end
+end
+
+
+"""
+update speed vperp constant
+"""
+function update_speed_vperp_constant!(vperp_advect, vpa, vperp, z, r, z_advect, r_advect, geometry)
+    @inbounds begin
+        @loop_r_z_vpa ir iz ivpa begin
+            @views vperp_advect.speed[:,ivpa,iz,ir] .= vperp.advection.constant_speed
         end
     end
-    return nothing
 end
+
 
 function update_z_r_speeds!(z_advect, r_advect, fvec_in, moments, fields,
                             geometry, vpa, vperp, z, r, t)
