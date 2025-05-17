@@ -330,7 +330,7 @@ function update_speed_vpa!(advect, fields, fvec, moments, vpa, vperp, z, r, comp
     if vpa.advection.option == "default"
         # dvpa/dt = Ze/m ⋅ E_parallel - (vperp^2/2B) bz dB/dz
         # magnetic mirror term only supported for standard DK implementation
-        update_speed_default!(advect, fields, fvec, moments, vpa, vperp, z, r, composition,
+        update_speed_vpa_default!(advect, fields, fvec, moments, vpa, vperp, z, r, composition,
                               collisions, ion_source_settings, t, geometry)
     elseif vpa.advection.option == "constant"
         @begin_serial_region()
@@ -338,7 +338,7 @@ function update_speed_vpa!(advect, fields, fvec, moments, vpa, vperp, z, r, comp
             # Not usually used - just run in serial
             # dvpa/dt = constant
             for is ∈ 1:composition.n_ion_species
-                update_speed_constant!(advect[is], vpa, 1:vperp.n, 1:z.n, 1:r.n)
+                update_speed_vpa_constant!(advect[is], vpa, 1:vperp.n, 1:z.n, 1:r.n)
             end
         end
     elseif vpa.advection.option == "linear"
@@ -347,7 +347,7 @@ function update_speed_vpa!(advect, fields, fvec, moments, vpa, vperp, z, r, comp
             # Not usually used - just run in serial
             # dvpa/dt = constant ⋅ (vpa + L_vpa/2)
             for is ∈ 1:composition.n_ion_species
-                update_speed_linear!(advect[is], vpa, 1:vperp.n, 1:z.n, 1:r.n)
+                update_speed_vpa_linear!(advect[is], vpa, 1:vperp.n, 1:z.n, 1:r.n)
             end
         end
     end
@@ -356,7 +356,7 @@ end
 
 """
 """
-function update_speed_default!(advect, fields, fvec, moments, vpa, vperp, z, r, composition,
+function update_speed_vpa_default!(advect, fields, fvec, moments, vpa, vperp, z, r, composition,
                                collisions, ion_source_settings, t, geometry)
     if moments.evolve_p && moments.evolve_upar
         update_speed_n_u_p_evolution!(advect, fields, fvec, moments, vpa, z, r,
@@ -477,7 +477,7 @@ end
 """
 update the advection speed dvpa/dt = constant
 """
-function update_speed_constant!(advect, vpa, vperp_range, z_range, r_range)
+function update_speed_vpa_constant!(advect, vpa, vperp_range, z_range, r_range)
     #@inbounds @fastmath begin
     for ir ∈ r_range
         for iz ∈ z_range
@@ -492,7 +492,7 @@ end
 """
 update the advection speed dvpa/dt = const*(vpa + L/2)
 """
-function update_speed_linear(advect, vpa, vperp_range, z_range, r_range)
+function update_speed_vpa_linear!(advect, vpa, vperp_range, z_range, r_range)
     @inbounds @fastmath begin
         for ir ∈ r_range
             for iz ∈ z_range
