@@ -93,7 +93,7 @@ function regression_test_debug_comparison(filenameA, filenameB;
                 # `newv`.
                 mininds = CartesianIndex((length(newv)+1 for _ ∈ 1:ndims(newv))...)
                 for i ∈ CartesianIndices(newv)
-                    if newv[i] != oldv[i] && abs(newv[i] - oldv[i]) ≤ tolerance
+                    if newv[i] != oldv[i] && !(abs(newv[i] - oldv[i]) ≤ tolerance)
                         mininds = min(mininds, i)
                         maxinds = max(maxinds, i)
                     end
