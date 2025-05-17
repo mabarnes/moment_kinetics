@@ -3359,6 +3359,13 @@ function write_debug_data_to_binary(this_scratch, moments, fields, composition, 
                                   composition.n_neutral_species, t_params.debug_io,
                                   nothing, 0.0, t_params, (), r, z, vperp, vpa, vzeta, vr,
                                   vz; is_debug=true, label=label, istage=istage)
+
+    # This call shouldn't be necessary, as the next @begin_*_region() call following the
+    # return from this functions should synchronize, but synchronize here anyway just to
+    # be on the safe side - this will only affect runs with debug_io=true set, so
+    # performance is not a concern.
+    @_block_synchronize()
+
     return nothing
 end
 
