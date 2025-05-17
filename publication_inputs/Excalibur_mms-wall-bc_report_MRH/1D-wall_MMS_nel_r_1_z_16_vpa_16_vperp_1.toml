@@ -45,7 +45,8 @@ bc = "zero"
 
 [geometry]
 Er_constant = 0.0
-rhostar = 1.0
+rhostar = 0.5773502691896258 # = 1/2 [change to Lz] * 1/sqrt(1-1/2^2) [compensate bzeta]
+pitch = 0.5
 
 [z]
 ngrid = 17
@@ -53,6 +54,7 @@ discretization = "chebyshev_pseudospectral"
 nelement = 16
 nelement_local = 16
 bc = "wall"
+L = 0.5
 
 [composition]
 T_wall = 1.0
