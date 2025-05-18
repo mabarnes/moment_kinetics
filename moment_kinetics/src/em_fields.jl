@@ -134,10 +134,16 @@ function update_phi!(fields, fvec, vperp, z, r, composition, collisions, moments
                 scratch_dummy.buffer_z_3, scratch_dummy.buffer_z_4,
                 r_spectral,r)
         if z.irank == 0 && fields.force_Er_zero_at_wall
-            fields.Er[1,:] .= 0.0
+            @begin_serial_region()
+            @serial_region begin
+                fields.Er[1,:] .= 0.0
+            end
         end
         if z.irank == z.nrank - 1 && fields.force_Er_zero_at_wall
-            fields.Er[z.n,:] .= 0.0
+            @begin_serial_region()
+            @serial_region begin
+                fields.Er[z.n,:] .= 0.0
+            end
         end
     else
         @loop_r_z ir iz begin
