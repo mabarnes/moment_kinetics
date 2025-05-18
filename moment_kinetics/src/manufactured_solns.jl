@@ -75,7 +75,8 @@ end
                          vpa_coord, vzeta_coord, vr_coord, vz_coord, composition,
                          geometry, collisions, num_diss_params, species) = begin
 
-    time_independent_sources, Source_i_func, Source_n_func =
+    time_independent_sources, Source_i_func, Source_i_expression, Source_n_func,
+    Source_n_expression =
         manufactured_sources_setup(manufactured_solns_input, r_coord, z_coord,
             vperp_coord, vpa_coord, vzeta_coord, vr_coord, vz_coord, composition,
             geometry, collisions, num_diss_params, species)
@@ -108,9 +109,17 @@ end
             Source_n_array = zeros(mk_float,0)
         end
 
-        manufactured_sources_list = (time_independent_sources = true, Source_i_array = Source_i_array, Source_n_array = Source_n_array)
+        manufactured_sources_list = (time_independent_sources = true,
+                                     Source_i_array = Source_i_array,
+                                     Source_i_expression = Source_i_expression,
+                                     Source_n_array = Source_n_array,
+                                     Source_n_expression = Source_n_expression)
     else
-        manufactured_sources_list = (time_independent_sources = false, Source_i_func = Source_i_func, Source_n_func = Source_n_func)
+        manufactured_sources_list = (time_independent_sources = false,
+                                     Source_i_func = Source_i_func,
+                                     Source_i_expression = Source_i_expression,
+                                     Source_n_func = Source_n_func,
+                                     Source_n_expression = Source_n_expression)
     end
 
     return manufactured_sources_list

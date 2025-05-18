@@ -662,7 +662,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
                                  boundary_distributions, r, z, vperp, vpa, vzeta, vr, vz,
                                  composition, collisions, moments.evolve_density,
                                  moments.evolve_upar, moments.evolve_p,
-                                 external_source_settings, fake_input_dict,
+                                 external_source_settings, nothing, fake_input_dict,
                                  comm_inter_block[], 1, nothing, 0.0, fake_t_params, ();
                                  is_debug=true)
     elseif t_input["debug_io"]
@@ -1047,7 +1047,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
                                                         composition, geometry.input, collisions,
                                                         num_diss_params, species)
     else
-        manufactured_source_list = false # dummy Bool to be passed as argument instead of list
+        manufactured_source_list = nothing
     end
 
     if !restarting

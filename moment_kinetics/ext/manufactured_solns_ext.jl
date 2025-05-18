@@ -725,7 +725,8 @@ using IfElse
             time_independent_sources = false
         end
         
-        return time_independent_sources, Source_i_func, Source_n_func
+        return time_independent_sources, Source_i_func, string(Source_i), Source_n_func,
+               string(Source_n)
     end 
     
 end
