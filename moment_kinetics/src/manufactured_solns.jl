@@ -89,7 +89,7 @@ end
         @loop_s is begin
             if is == 1
                 @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
-                    Source_i_array[ivpa,ivperp,iz,ir,is] = Source_i_func(vpa_coord.grid[ivpa],vperp_coord.grid[ivperp],z_coord.grid[iz],r_coord.grid[ir],0.0)
+                    Source_i_array[ivpa,ivperp,iz,ir] = Source_i_func(vpa_coord.grid[ivpa],vperp_coord.grid[ivperp],z_coord.grid[iz],r_coord.grid[ir],0.0)
                 end
             end
         end
@@ -100,7 +100,7 @@ end
             @loop_sn isn begin
                 if isn == 1
                     @loop_r_z_vzeta_vr_vz ir iz ivzeta ivr ivz begin
-                        Source_n_array[ivz,ivr,ivzeta,iz,ir,isn] = Source_n_func(vz_coord.grid[ivz],vr_coord.grid[ivr],vzeta_coord.grid[ivzeta],z_coord.grid[iz],r_coord.grid[ir],0.0)
+                        Source_n_array[ivz,ivr,ivzeta,iz,ir] = Source_n_func(vz_coord.grid[ivz],vr_coord.grid[ivr],vzeta_coord.grid[ivzeta],z_coord.grid[iz],r_coord.grid[ir],0.0)
                     end
                 end
             end
