@@ -26,15 +26,21 @@ flow and/or pressure, and use them to update the pdf
     dn_dt = moments.ion.ddens_dt
     dn_dz = moments.ion.ddens_dz
     vpa_grid = vpa.grid
-    if vperp.n == 1
-        
     if moments.evolve_p
+        if vperp.n == 1
+            # velocity dimension coefficient is 1.0 for 1V, and 3.0 for 3V. Only needed for evolve_p
+            # since vth does not come in to gdot (Fdot) for other cases.
+            v_dim_coeff = 1.0
+        else
+            v_dim_coeff = 3.0
+        end
         dvth_dt = moments.ion.dvth_dt
         dvth_dz = moments.ion.dvth_dz
         @loop_s_r_z is ir iz begin
             coefficient1 = -(dn_dt[iz,ir,is] + upar[iz,ir,is] * dn_dz[iz,ir,is]) / n[iz,ir,is] +
-                           (dvth_dt[iz,ir,is] + upar[iz,ir,is] * dvth_dz[iz,ir,is]) / vth[iz,ir,is]
-            coefficient2 = -vth[iz,ir,is] * dn_dz[iz,ir,is] / n[iz,ir,is] + dvth_dz[iz,ir,is]
+                           v_dim_coeff * (dvth_dt[iz,ir,is] + upar[iz,ir,is] * dvth_dz[iz,ir,is]) / vth[iz,ir,is]
+            coefficient2 = -vth[iz,ir,is] * dn_dz[iz,ir,is] / n[iz,ir,is] + 
+                           v_dim_coeff * dvth_dz[iz,ir,is]
             @loop_vperp_vpa ivperp ivpa begin
                 pdf_out[ivpa,ivperp,iz,ir,is] +=
                     dt * (coefficient1 + vpa_grid[ivpa] * coefficient2) *
