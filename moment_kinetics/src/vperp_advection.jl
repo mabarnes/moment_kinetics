@@ -77,7 +77,7 @@ function update_speed_vperp_n_u_p_evolution!(vperp_advect, fvec, vpa, vperp, z, 
     wperp = vperp.grid
     wpa = vpa.grid
     @loop_s is begin
-        speed = vperp_advect[is].speed
+        speed = vperp_advect.speed
         @loop_r ir begin
             @loop_z_vpa iz ivpa begin
                 # update perpendicular advection speed, which is only nonzero because of the

@@ -371,7 +371,7 @@ function update_speed_vpa_default!(vpa_advect, fields, fvec, moments, vpa, vperp
         update_speed_vpa_n_evolution!(vpa_advect, fields, fvec, moments, vpa, z, r, composition,
                                   collisions, ion_source_settings, geometry)
     else
-        update_speed_vpa_DK!(vpa_advect, fields, fvec, moments, vpa, z, r, composition,
+        update_speed_vpa_DK!(vpa_advect, fields, fvec, moments, vpa, vperp, z, r, composition,
                                   collisions, ion_source_settings, geometry)
     end
 end
@@ -474,6 +474,26 @@ in this case, the parallel velocity coordinate is unchanged.
 function update_speed_vpa_n_evolution!(vpa_advect, fields, fvec, moments, vpa, z, r,
                                      composition, collisions, ion_source_settings, geometry)
     gEz = fields.gEz
+        @loop_s is begin
+            speed = vpa_advect[is].speed
+            @loop_r ir begin
+                # update parallel acceleration to account for:
+                @loop_z_vperp iz ivperp begin
+                    @. speed[:,ivperp,iz,ir] = gEz[ivperp,iz,ir,is]
+                end
+            end
+        end
+
+    return nothing
+end
+
+"""
+update the advection speed in the parallel velocity coordinate for the case
+where no moments are evolved independently from the pdf. vpa is unchanged.
+"""
+function update_speed_vpa_DK!(vpa_advect, fields, fvec, moments, vpa, vperp, z, r,
+                                     composition, collisions, ion_source_settings, geometry)
+    gEz = fields.gEz
     @loop_s is begin
         speed = vpa_advect[is].speed
         @loop_r ir begin
@@ -483,16 +503,6 @@ function update_speed_vpa_n_evolution!(vpa_advect, fields, fvec, moments, vpa, z
             end
         end
     end
-
-    return nothing
-end
-
-"""
-update the advection speed in the parallel velocity coordinate for the case
-where no moments are evolved independently from the pdf. vpa is unchanged.
-"""
-function update_speed_vpa_DK!(vpa_advect, fields, fvec, moments, vpa, z, r,
-                                     composition, collisions, ion_source_settings, geometry)
     bzed = geometry.bzed
     dBdz = geometry.dBdz
     Bmag = geometry.Bmag
