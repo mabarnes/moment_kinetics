@@ -1269,8 +1269,10 @@ function init_ion_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
                 vgrid_scale_factor = ones(size(vth))
             end
             for iz ∈ zrange
+
                 @. vpa.scratch = vpa.grid * vgrid_scale_factor[iz]
                 @. vperp.scratch = vperp.grid * vgrid_scale_factor[iz]
+
                 @loop_vperp ivperp begin
                     # Initialise as full-f distribution functions, then
                     # normalise/interpolate (if necessary). This makes it easier to
@@ -1304,6 +1306,7 @@ function init_ion_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
                     @. pdf[:,ivperp,iz] *= 1.0 - exp(-vpa.scratch^2*inverse_width_squared)
                 end
             end
+
             # Can use non-shared memory here because `init_ion_pdf_over_density!()` is
             # called inside a `@serial_region`
             lower_z_pdf_buffer = allocate_float(vpa.n, vperp.n)
@@ -1376,6 +1379,7 @@ function init_ion_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
                     pdf[ivpa,ivperp,:] ./= density
                 end
             end
+
         end
     elseif spec.vpa_IC.initialization_option == "vpagaussian"
         @loop_z_vperp iz ivperp begin
@@ -1914,7 +1918,7 @@ function init_electron_pdf_over_density_and_boundary_phi!(pdf, phi, density, upa
     end
 
     # Ensure initial electron distribution function obeys constraints
-    hard_force_moment_constraints!(pdf, moments, vpa)
+    hard_force_moment_constraints!(pdf, moments, vpa, vperp)
 
     return nothing
 end
@@ -2207,7 +2211,7 @@ function convert_full_f_ion_to_normalised!(f, density, upar, p, vth, vperp, vpa,
             vpa.scratch .= vpagrid_to_dzdt(vpa.grid, vth[iz], upar[iz], evolve_p,
                                            evolve_upar)
             if evolve_p
-                @. vperp.scratch .= vperp.grid / vth[iz]
+                @. vperp.scratch .= vperp.grid * vth[iz]
             else
                 vperp.scratch .= vperp.grid
             end

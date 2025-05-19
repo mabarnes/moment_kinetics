@@ -76,24 +76,19 @@ function update_speed_vperp_n_u_p_evolution!(vperp_advect, fvec, vpa, vperp, z, 
     dvth_dt = moments.ion.dvth_dt
     wperp = vperp.grid
     wpa = vpa.grid
-    if geometry.input.option ∈ ("default", "constant-helical")
-        @loop_s is begin
-            speed = vperp_advect.speed
-            @loop_r ir begin
-                @loop_z_vpa iz ivpa begin
-                    # update perpendicular advection speed, which is only nonzero because of the
-                    # normalisation by thermal speed, so wperp grid is constantly stretching and
-                    # compressing to account for changing local temperatures while maintaining 
-                    # a normalised perpendicular speed.
-                    @. speed[:,ivpa,iz,ir] = 
-                       - (1/vth[iz,ir,is]) * wperp * (dvth_dt[iz,ir,is] + 
-                       (wpa[ivpa] * vth[iz,ir,is] + upar[iz,ir,is]) * dvth_dz[iz,ir,is])
-                end
+    @loop_s is begin
+        speed = vperp_advect[is].speed
+        @loop_r ir begin
+            @loop_z_vpa iz ivpa begin
+                # update perpendicular advection speed, which is only nonzero because of the
+                # normalisation by thermal speed, so wperp grid is constantly stretching and
+                # compressing to account for changing local temperatures while maintaining 
+                # a normalised perpendicular speed.
+                @. speed[:,ivpa,iz,ir] = 
+                    - (1/vth[iz,ir,is]) * wperp * (dvth_dt[iz,ir,is] + 
+                    (wpa[ivpa] * vth[iz,ir,is] + upar[iz,ir,is]) * dvth_dz[iz,ir,is])
             end
         end
-    else
-        # not implemented yet
-        error("update_speed_vperp_n_u_p_evolution! not implemented for this geometry")
     end
 end
 
@@ -106,24 +101,19 @@ function update_speed_vperp_n_p_evolution!(vperp_advect, fvec, vpa, vperp, z, r,
     dvth_dt = moments.ion.dvth_dt
     wperp = vperp.grid
     wpa = vpa.grid
-    if geometry.input.option ∈ ("default", "constant-helical")
-        @loop_s is begin
-            speed = vperp_advect[is].speed
-            @loop_r ir begin
-                @loop_z_vpa iz ivpa begin
-                    # update perpendicular advection speed, which is only nonzero because of the
-                    # normalisation by thermal speed, so wperp grid is constantly stretching and
-                    # compressing to account for changing local temperatures while maintaining 
-                    # a normalised perpendicular speed.
-                    @. speed[:,ivpa,iz,ir] = 
-                       - (1/vth[iz,ir,is]) * wperp * (dvth_dt[iz,ir,is] + 
-                       (wpa * vth[iz,ir,is]) * dvth_dz[iz,ir,is])
-                end
+    @loop_s is begin
+        speed = vperp_advect[is].speed
+        @loop_r ir begin
+            @loop_z_vpa iz ivpa begin
+                # update perpendicular advection speed, which is only nonzero because of the
+                # normalisation by thermal speed, so wperp grid is constantly stretching and
+                # compressing to account for changing local temperatures while maintaining 
+                # a normalised perpendicular speed.
+                @. speed[:,ivpa,iz,ir] = 
+                    - (1/vth[iz,ir,is]) * wperp * (dvth_dt[iz,ir,is] + 
+                    (wpa * vth[iz,ir,is]) * dvth_dz[iz,ir,is])
             end
         end
-    else
-        # not implemented yet
-        error("update_speed_vperp_n_p_evolution! not implemented for this geometry")
     end
 end
 
@@ -131,54 +121,39 @@ end
 update vperp advection speed when n, u are evolved separately
 """
 function update_speed_vperp_n_u_evolution!(vperp_advect, vpa, vperp, z, r, z_advect, r_advect, geometry, moments)
-    if geometry.input.option ∈ ("default", "constant-helical")
-        # with no perpendicular advection terms, the advection speed is zero
-        nothing
-    else
-        # not implemented yet
-        error("update_speed_vperp_n_u_evolution! not implemented for this geometry")
-    end
+    # with no perpendicular advection terms, the advection speed is zero
+    nothing
 end
 
 """
 update vperp advection speed when n is evolved separately
 """
 function update_speed_vperp_n_evolution!(vperp_advect, vpa, vperp, z, r, z_advect, r_advect, geometry, moments)
-    if geometry.input.option ∈ ("default", "constant-helical")
-        # with no perpendicular advection terms, the advection speed is zero
-        nothing
-    else
-        # not implemented yet
-        error("update_speed_vperp_n_evolution! not implemented for this geometry")
-    end
+    # with no perpendicular advection terms, the advection speed is zero
+    nothing
 end
 
 function update_speed_vperp_DK!(vperp_advect, vpa, vperp, z, r, z_advect, r_advect, geometry, moments)
-    if geometry.input.option ∈ ("default", "constant-helical")
-        # constant vperp advection speed I guess
-        nothing
-    else
-        # advection of vperp due to conservation of 
-        # the adiabatic invariant mu = vperp^2 / 2 B
-        dzdt = vperp.scratch
-        drdt = vperp.scratch2
-        dBdr = geometry.dBdr
-        dBdz = geometry.dBdz
-        Bmag = geometry.Bmag
-        rfac = 0.0
-        if r.n > 1
-            rfac = 1.0
-        end
-        @inbounds begin
-            @loop_s is begin
-                vperp_speed = vperp_advect[is].speed
-                z_speed = z_advect[is].speed
-                r_speed = r_advect[is].speed
-                @loop_r_z_vpa ir iz ivpa begin
-                    @. @views dzdt = z_speed[iz,ivpa,:,ir]
-                    @. @views drdt = rfac*r_speed[ir,ivpa,:,iz]
-                    @. @views vperp_speed[:,ivpa,iz,ir] = (0.5*vperp.grid[:]/Bmag[iz,ir])*(dzdt[:]*dBdz[iz,ir] + drdt[:]*dBdr[iz,ir])
-                end
+    # advection of vperp due to conservation of 
+    # the adiabatic invariant mu = vperp^2 / 2 B
+    dzdt = vperp.scratch
+    drdt = vperp.scratch2
+    dBdr = geometry.dBdr
+    dBdz = geometry.dBdz
+    Bmag = geometry.Bmag
+    rfac = 0.0
+    if r.n > 1
+        rfac = 1.0
+    end
+    @inbounds begin
+        @loop_s is begin
+            vperp_speed = vperp_advect[is].speed
+            z_speed = z_advect[is].speed
+            r_speed = r_advect[is].speed
+            @loop_r_z_vpa ir iz ivpa begin
+                @. @views dzdt = z_speed[iz,ivpa,:,ir]
+                @. @views drdt = rfac*r_speed[ir,ivpa,:,iz]
+                @. @views vperp_speed[:,ivpa,iz,ir] = (0.5*vperp.grid[:]/Bmag[iz,ir])*(dzdt[:]*dBdz[iz,ir] + drdt[:]*dBdr[iz,ir])
             end
         end
     end

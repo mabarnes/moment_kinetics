@@ -371,7 +371,7 @@ function update_speed_vpa_default!(vpa_advect, fields, fvec, moments, vpa, vperp
         update_speed_vpa_n_evolution!(vpa_advect, fields, fvec, moments, vpa, z, r, composition,
                                   collisions, ion_source_settings, geometry)
     else
-        update_speed_vpa_DK!(vpa_advect, fields, fvec, moments, vpa, z, r, composition,
+        update_speed_vpa_DK!(vpa_advect, fields, fvec, moments, vpa, vperp, z, r, composition,
                                   collisions, ion_source_settings, geometry)
     end
 end
@@ -392,23 +392,18 @@ function update_speed_vpa_n_u_p_evolution!(vpa_advect, fields, fvec, moments, vp
     dupar_dt = moments.ion.dupar_dt
     dvth_dt = moments.ion.dvth_dt
     wpa = vpa.grid
-    if geometry.input.option ∈ ("default", "constant-helical")
-        @loop_s is begin
-            speed = vpa_advect[is].speed
-            @loop_r ir begin
-                # update parallel acceleration to account for:
-                @loop_z_vperp iz ivperp begin
-                    @. speed[:,ivperp,iz,ir] =
-                        (gEz[ivperp,iz,ir,is]
-                        - (dupar_dt[iz,ir,is] + (vth[iz,ir,is] * wpa + upar[iz,ir,is]) * dupar_dz[iz,ir,is])
-                        - wpa * (dvth_dt[iz,ir,is] + (vth[iz,ir,is] * wpa + upar[iz,ir,is]) * dvth_dz[iz,ir,is])
-                        ) / vth[iz,ir,is]
-                end
+    @loop_s is begin
+        speed = vpa_advect[is].speed
+        @loop_r ir begin
+            # update parallel acceleration to account for:
+            @loop_z_vperp iz ivperp begin
+                @. speed[:,ivperp,iz,ir] =
+                    (gEz[ivperp,iz,ir,is]
+                    - (dupar_dt[iz,ir,is] + (vth[iz,ir,is] * wpa + upar[iz,ir,is]) * dupar_dz[iz,ir,is])
+                    - wpa * (dvth_dt[iz,ir,is] + (vth[iz,ir,is] * wpa + upar[iz,ir,is]) * dvth_dz[iz,ir,is])
+                    ) / vth[iz,ir,is]
             end
         end
-    else
-        # not implemented just yet
-        error("update_speed_vpa_n_u_p_evolution! not implemented for this geometry")
     end
 
     return nothing
@@ -427,24 +422,18 @@ function update_speed_vpa_n_p_evolution!(vpa_advect, fields, fvec, moments, vpa,
     dvth_dz = moments.ion.dvth_dz
     dvth_dt = moments.ion.dvth_dt
     wpa = vpa.grid
-    if geometry.input.option ∈ ("default", "constant-helical")
-        @loop_s is begin
-            speed = vpa_advect[is].speed
-            @loop_r ir begin
-                # update parallel acceleration to account for:
-                @loop_z_vperp iz ivperp begin
-                    @. speed[:,ivperp,iz,ir] =
-                        (gEz[ivperp,iz,ir,is]
-                        - wpa * (dvth_dt[iz,ir,is] + vth[iz,ir,is] * wpa * dvth_dz[iz,ir,is])
-                        ) / vth[iz,ir,is]
-                end
+    @loop_s is begin
+        speed = vpa_advect[is].speed
+        @loop_r ir begin
+            # update parallel acceleration to account for:
+            @loop_z_vperp iz ivperp begin
+                @. speed[:,ivperp,iz,ir] =
+                    (gEz[ivperp,iz,ir,is]
+                    - wpa * (dvth_dt[iz,ir,is] + vth[iz,ir,is] * wpa * dvth_dz[iz,ir,is])
+                    ) / vth[iz,ir,is]
             end
         end
-    else
-        # not implemented just yet
-        error("update_speed_vpa_n_p_evolution! not implemented for this geometry")
     end
-
     return nothing
 end
 
@@ -461,22 +450,17 @@ function update_speed_vpa_n_u_evolution!(vpa_advect, fields, fvec, moments, vpa,
     dupar_dz = moments.ion.dupar_dz
     dupar_dt = moments.ion.dupar_dt
     wpa = vpa.grid
-    if geometry.input.option ∈ ("default", "constant-helical")
-        @loop_s is begin
-            speed = vpa_advect[is].speed
-            @loop_r ir begin
-                # update parallel acceleration to account for:
-                @loop_z_vperp iz ivperp begin
-                    @. speed[:,ivperp,iz,ir] =
-                        (gEz[ivperp,iz,ir,is]
-                        - (dupar_dt[iz,ir,is] + (wpa + upar[iz,ir,is]) * dupar_dz[iz,ir,is])
-                        )
-                end
+    @loop_s is begin
+        speed = vpa_advect[is].speed
+        @loop_r ir begin
+            # update parallel acceleration to account for:
+            @loop_z_vperp iz ivperp begin
+                @. speed[:,ivperp,iz,ir] =
+                    (gEz[ivperp,iz,ir,is]
+                    - (dupar_dt[iz,ir,is] + (wpa + upar[iz,ir,is]) * dupar_dz[iz,ir,is])
+                    )
             end
         end
-    else
-        # not implemented just yet
-        error("update_speed_vpa_n_u_evolution! not implemented for this geometry")
     end
 
     return nothing
@@ -490,7 +474,6 @@ in this case, the parallel velocity coordinate is unchanged.
 function update_speed_vpa_n_evolution!(vpa_advect, fields, fvec, moments, vpa, z, r,
                                      composition, collisions, ion_source_settings, geometry)
     gEz = fields.gEz
-    if geometry.input.option ∈ ("default", "constant-helical")
         @loop_s is begin
             speed = vpa_advect[is].speed
             @loop_r ir begin
@@ -500,10 +483,6 @@ function update_speed_vpa_n_evolution!(vpa_advect, fields, fvec, moments, vpa, z
                 end
             end
         end
-    else
-        # not implemented just yet
-        error("update_speed_vpa_n_evolution! not implemented for this geometry")
-    end
 
     return nothing
 end
@@ -512,31 +491,28 @@ end
 update the advection speed in the parallel velocity coordinate for the case
 where no moments are evolved independently from the pdf. vpa is unchanged.
 """
-function update_speed_vpa_DK!(vpa_advect, fields, fvec, moments, vpa, z, r,
+function update_speed_vpa_DK!(vpa_advect, fields, fvec, moments, vpa, vperp, z, r,
                                      composition, collisions, ion_source_settings, geometry)
     gEz = fields.gEz
-    if geometry.input.option ∈ ("default", "constant-helical")
-        @loop_s is begin
-            speed = vpa_advect[is].speed
-            @loop_r ir begin
-                # update parallel acceleration to account for:
-                @loop_z_vperp iz ivperp begin
-                    @. speed[:,ivperp,iz,ir] = gEz[ivperp,iz,ir,is]
-                end
+    @loop_s is begin
+        speed = vpa_advect[is].speed
+        @loop_r ir begin
+            # update parallel acceleration to account for:
+            @loop_z_vperp iz ivperp begin
+                @. speed[:,ivperp,iz,ir] = gEz[ivperp,iz,ir,is]
             end
         end
-    else
-        bzed = geometry.bzed
-        dBdz = geometry.dBdz
-        Bmag = geometry.Bmag
-        @inbounds @fastmath begin
-            @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
-                # mu, the adiabatic invariant
-                mu = 0.5*(vperp.grid[ivperp]^2)/Bmag[iz,ir]
-                # bzed = B_z/B
-                vpa_advect[is].speed[ivpa,ivperp,iz,ir] = (bzed[iz,ir]*fields.gEz[ivperp,iz,ir,is] -
-                                                        mu*bzed[iz,ir]*dBdz[iz,ir])
-            end
+    end
+    bzed = geometry.bzed
+    dBdz = geometry.dBdz
+    Bmag = geometry.Bmag
+    @inbounds @fastmath begin
+        @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
+            # mu, the adiabatic invariant
+            mu = 0.5*(vperp.grid[ivperp]^2)/Bmag[iz,ir]
+            # bzed = B_z/B
+            vpa_advect[is].speed[ivpa,ivperp,iz,ir] = (bzed[iz,ir]*fields.gEz[ivperp,iz,ir,is] -
+                                                    mu*bzed[iz,ir]*dBdz[iz,ir])
         end
     end
     return nothing

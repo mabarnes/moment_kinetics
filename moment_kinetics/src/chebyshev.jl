@@ -28,6 +28,8 @@ struct chebyshev_base_info{TForward <: FFTW.cFFTWPlan, TBackward <: AbstractFFTs
     # fext is an array for storing f(z) on the extended domain needed
     # to perform complex-to-complex FFT using the fact that f(theta) is even in theta
     fext::Array{Complex{mk_float},1}
+    # flag for whether we are Radau or Lobatto
+    is_lobatto::Bool
     # Chebyshev spectral coefficients of distribution function f
     # first dimension contains location within element
     # second dimension indicates the element
@@ -143,7 +145,7 @@ function setup_chebyshev_pseudospectral_lobatto(coord, fftw_flags)
     D0 .= Dmat[1,:]
     # return a structure containing the information needed to carry out
     # a 1D Chebyshev transform
-    return chebyshev_base_info(fext, fcheby, dcheby, forward_transform, backward_transform, Dmat, D0)
+    return chebyshev_base_info(fext, true, fcheby, dcheby, forward_transform, backward_transform, Dmat, D0)
 end
 
 function setup_chebyshev_pseudospectral_radau(coord, fftw_flags)
@@ -166,7 +168,7 @@ function setup_chebyshev_pseudospectral_radau(coord, fftw_flags)
         cheb_lower_endpoint_derivative_vector_elementwise_radau_by_FFT!(D0, coord, fcheby, dcheby, fext, forward_transform)
         # return a structure containing the information needed to carry out
         # a 1D Chebyshev transform
-        return chebyshev_base_info(fext, fcheby, dcheby, forward_transform, backward_transform, Dmat, D0)
+        return chebyshev_base_info(fext, false, fcheby, dcheby, forward_transform, backward_transform, Dmat, D0)
 end
 
 """
@@ -473,12 +475,14 @@ function single_element_interpolate!(result, newgrid, f, imin, imax, ielement, c
     # Need to transform newgrid values to a scaled z-coordinate associated with the
     # Chebyshev coefficients to get the interpolated function values. Transform is a
     # shift and scale so that the element coordinate goes from -1 to 1
-    shift = 0.5 * (coord.grid[imin] + coord.grid[imax])
-    scale = 2.0 / (coord.grid[imax] - coord.grid[imin])
-
+    shift = coord.element_shift[ielement]
+    scale = 1/coord.element_scale[ielement]
     # Get Chebyshev coefficients
-    chebyshev_forward_transform!(cheby_f, chebyshev.fext, f, chebyshev.forward, coord.ngrid)
-
+    if chebyshev.is_lobatto
+        chebyshev_forward_transform!(cheby_f, chebyshev.fext, f, chebyshev.forward, coord.ngrid)
+    else
+        chebyshev_radau_forward_transform!(cheby_f, chebyshev.fext, f, chebyshev.forward, coord.ngrid)
+    end
     for i ∈ 1:length(newgrid)
         x = newgrid[i]
         z = scale * (x - shift)

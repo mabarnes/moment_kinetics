@@ -25,9 +25,7 @@ initial state, and when applying boundary conditions.
 
 Note this function assumes the input is given at a single spatial position.
 """
-function hard_force_moment_constraints!(f, moments, vpa)
-
-    f1d = @view f[:,1]
+function hard_force_moment_constraints!(f, moments, vpa, vperp)
     if moments.evolve_p
         # fnew = (A + B*wpa + C*wpa^2)*f
         # Constraints:
@@ -58,18 +56,18 @@ function hard_force_moment_constraints!(f, moments, vpa)
         #   A*(I0*I3^2*I4 - I0*I2*I4^2 + I2^3*I4 - 2*I1*I2*I3*I4 + I1^2*I4^2) = I3^2*I4 - I2*I4^2 + 3/2*I2^2*I4 - 3/2*I1*I3*I4
         #   A*(I0*I3^2 - I0*I2*I4 + I2^3 - 2*I1*I2*I3 + I1^2*I4) = I3^2 - I2*I4 + 3/2*I2^2 - 3/2*I1*I3
 
-        I0 = integral(f1d, vpa.wgts)
-        I1 = integral(f1d, vpa.grid, vpa.wgts)
-        I2 = integral(f1d, vpa.grid, 2, vpa.wgts)
-        I3 = integral(f1d, vpa.grid, 3, vpa.wgts)
-        I4 = integral(f1d, vpa.grid, 4, vpa.wgts)
+        I0 = integral((vperp,vpa)->(1), @view(f[:,:]), vperp, vpa)
+        I1 = integral((vperp,vpa)->(vpa), @view(f[:,:]), vperp, vpa)
+        I2 = integral((vperp,vpa)->(vpa^2), @view(f[:,:]), vperp, vpa)
+        I3 = integral((vperp,vpa)->(vpa^3), @view(f[:,:]), vperp, vpa)
+        I4 = integral((vperp,vpa)->(vpa^4), @view(f[:,:]), vperp, vpa)
 
         A = (I3^2 - I2*I4 + 1.5*(I2^2 - I1*I3)) /
             (I0*(I3^2 - I2*I4) + I1*I1*I4 - 2.0*I1*I2*I3 + I2^3)
         B = (1.5*I3 + A*(I1*I4 - I2*I3)) / (I3^2 - I2*I4)
         C = (1.5 - A*I2 - B*I3) / I4
 
-        @. f1d = (A + B*vpa.grid + C*vpa.grid*vpa.grid)*f1d
+        @. f = (A + B*vpa.grid + C*vpa.grid*vpa.grid)*f
     elseif moments.evolve_upar
         # fnew = (A + B*wpa)*f
         # Constraints:
@@ -86,21 +84,24 @@ function hard_force_moment_constraints!(f, moments, vpa)
         #   A*I0 = 1 - B*I1
         #   A*I0 = 1 + A*I1/I2*I1
         #   A*(I0 - I1^2/I2) = 1
-
-        I0 = integral(f1d, vpa.wgts)
-        I1 = integral(f1d, vpa.grid, vpa.wgts)
-        I2 = integral(f1d, vpa.grid, 2, vpa.wgts)
-
+        
+        I0 = integral((vperp,vpa)->(1), @view(f[:,:]), vperp, vpa)
+        I1 = integral((vperp,vpa)->(vpa), @view(f[:,:]), vperp, vpa)
+        I2 = integral((vperp,vpa)->(vpa^2), @view(f[:,:]), vperp, vpa)
+        # println("I0 = ", I0)
+        # println("I1 = ", I1)
+        # println("I2 = ", I2)
         A = 1.0 / (I0 - I1^2/I2)
         B = -A*I1/I2
 
-        @. f1d = A*f1d + B*vpa.grid*f1d
+        @. f = A*f + B*vpa.grid*f
 
         C = NaN
     elseif moments.evolve_density
-        I0 = integral(f1d, vpa.wgts)
+        I0 = integral((vperp,vpa)->(1), @view(f[:,:]), vperp, vpa)
+        # println("I0 = ", I0)
         A = 1.0 / I0
-        @. f1d = A * f1d
+        @. f = A * f
 
         B = NaN
         C = NaN
@@ -113,25 +114,25 @@ function hard_force_moment_constraints!(f, moments, vpa)
     return A, B, C
 end
 @timeit global_timer hard_force_moment_constraints!(
-                         f::AbstractArray{mk_float,4}, moments, vpa) = begin
+                         f::AbstractArray{mk_float,4}, moments, vpa, vperp) = begin
     A = moments.electron.constraints_A_coefficient
     B = moments.electron.constraints_B_coefficient
     C = moments.electron.constraints_C_coefficient
     @begin_r_z_region()
     @loop_r_z ir iz begin
         A[iz,ir], B[iz,ir], C[iz,ir] =
-            hard_force_moment_constraints!(@view(f[:,:,iz,ir]), moments, vpa)
+            hard_force_moment_constraints!(@view(f[:,:,iz,ir]), moments, vpa, vperp)
     end
 end
 @timeit global_timer hard_force_moment_constraints!(
-                         f::AbstractArray{mk_float,5}, moments, vpa) = begin
+                         f::AbstractArray{mk_float,5}, moments, vpa, vperp) = begin
     A = moments.ion.constraints_A_coefficient
     B = moments.ion.constraints_B_coefficient
     C = moments.ion.constraints_C_coefficient
     @begin_s_r_z_region()
     @loop_s_r_z is ir iz begin
         A[iz,ir,is], B[iz,ir,is], C[iz,ir,is] =
-            hard_force_moment_constraints!(@view(f[:,:,iz,ir,is]), moments, vpa)
+            hard_force_moment_constraints!(@view(f[:,:,iz,ir,is]), moments, vpa, vperp)
     end
 end
 
