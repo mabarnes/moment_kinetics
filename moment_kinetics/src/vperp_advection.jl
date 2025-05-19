@@ -77,7 +77,7 @@ function update_speed_vperp_n_u_p_evolution!(vperp_advect, fvec, vpa, vperp, z, 
     wperp = vperp.grid
     wpa = vpa.grid
     @loop_s is begin
-        speed = vperp_advect[is].speed
+        speed = vperp_advect.speed
         @loop_r ir begin
             @loop_z_vpa iz ivpa begin
                 # update perpendicular advection speed, which is only nonzero because of the
@@ -86,7 +86,7 @@ function update_speed_vperp_n_u_p_evolution!(vperp_advect, fvec, vpa, vperp, z, 
                 # a normalised perpendicular speed.
                 @. speed[:,ivpa,iz,ir] = 
                     - (1/vth[iz,ir,is]) * wperp * (dvth_dt[iz,ir,is] + 
-                    (wpa * vth[iz,ir,is] + upar[iz,ir,is]) * dvth_dz[iz,ir,is])
+                    (wpa[ivpa] * vth[iz,ir,is] + upar[iz,ir,is]) * dvth_dz[iz,ir,is])
             end
         end
     end

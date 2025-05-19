@@ -1942,7 +1942,7 @@ function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, 
                  vpa, vperp, z, r, composition, moments.evolve_density,
                  moments.evolve_p)
     update_ppar!(moments.ion.ppar, moments.ion.p_updated,
-                 moments.ion.dens, moments.ion.upar, pdf.ion.norm,
+                 moments.ion.dens, moments.ion.vth, moments.ion.upar, pdf.ion.norm,
                  vpa, vperp, z, r, composition, moments.evolve_density,
                  moments.evolve_upar)
     update_pperp!(moments.ion.pperp, pdf.ion.norm, vpa, vperp, z, r, composition)
