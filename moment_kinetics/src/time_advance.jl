@@ -990,7 +990,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
     if vperp.n > 1
         @begin_serial_region()
         @serial_region begin
-            update_speed_vperp!(vperp_advect, vpa, vperp, z, r, z_advect, r_advect, geometry)
+            update_speed_vperp!(vperp_advect, scratch[1], vpa, vperp, z, r, z_advect, r_advect, geometry)
         end
     end
     
@@ -3694,7 +3694,7 @@ implementation), a call needs to be made with `dt` scaled by some coefficient.
         end
 
         if advance.source_terms
-            source_terms!(fvec_out.pdf, fvec_in, moments, vpa, z, r, dt, z_spectral,
+            source_terms!(fvec_out.pdf, fvec_in, moments, vpa, vperp, z, r, dt, z_spectral,
                         composition, collisions, external_source_settings.ion)
             write_debug_IO("source_terms!")
         end
