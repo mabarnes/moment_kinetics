@@ -985,7 +985,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
         @begin_serial_region()
         @serial_region begin
             for is ∈ 1:n_ion_species
-                @views update_speed_vperp!(vperp_advect[is], scratch[1], vpa, vperp, z, r, z_advect[is], r_advect[is], geometry)
+                @views update_speed_vperp!(vperp_advect[is], scratch[1], vpa, vperp, z, r, z_advect[is], r_advect[is], geometry, moments)
             end
         end
     end
