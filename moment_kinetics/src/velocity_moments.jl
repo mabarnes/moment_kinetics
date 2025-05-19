@@ -814,7 +814,7 @@ end
 """
 Calculate the parallel pressure p_∥=∫d^3v (v_∥ - u_∥)^2 f
 """
-function update_ppar!(ppar, density, upar, p, pdf, vpa, vperp, z, r, composition,
+function update_ppar!(ppar, density, upar, vth, p, pdf, vpa, vperp, z, r, composition,
                       evolve_density, evolve_upar, evolve_p)
     @boundscheck composition.n_ion_species == size(ppar,3) || throw(BoundsError(ppar))
     @boundscheck r.n == size(ppar,2) || throw(BoundsError(ppar))
@@ -824,8 +824,8 @@ function update_ppar!(ppar, density, upar, p, pdf, vpa, vperp, z, r, composition
 
     @loop_s is begin
         @views update_ppar_species!(ppar[:,:,is], density[:,:,is], upar[:,:,is],
-                                    p[:,:,is], pdf[:,:,:,:,is], vpa, vperp, z, r,
-                                    evolve_density, evolve_upar, evolve_p)
+                                    vth[:,:,is], p[:,:,is], pdf[:,:,:,:,is], vpa, vperp, 
+                                    z, r, evolve_density, evolve_upar, evolve_p)
     end
 end
 
@@ -833,7 +833,7 @@ end
 calculate the updated energy density (or parallel pressure, ppar) for a given species;
 which of these is calculated depends on the definition of the vpa coordinate
 """
-function update_ppar_species!(ppar, density, upar, p, ff, vpa, vperp, z, r,
+function update_ppar_species!(ppar, density, upar, vth, p, ff, vpa, vperp, z, r,
                               evolve_density, evolve_upar, evolve_p)
     @boundscheck vpa.n == size(ff, 1) || throw(BoundsError(ff))
     @boundscheck vperp.n == size(ff, 2) || throw(BoundsError(ff))
@@ -2369,8 +2369,8 @@ function update_derived_moments!(new_scratch, moments, vpa, vperp, z, r, composi
                   new_scratch.upar, ff, vpa, vperp, z, r, composition,
                   moments.evolve_density, moments.evolve_upar)
     end
-    update_ppar!(moments.ion.ppar, new_scratch.density, new_scratch.upar, new_scratch.p,
-                 ff, vpa, vperp, z, r, composition, moments.evolve_density,
+    update_ppar!(moments.ion.ppar, new_scratch.density, new_scratch.upar, moments.ion.vth,
+                 new_scratch.p, ff, vpa, vperp, z, r, composition, moments.evolve_density,
                  moments.evolve_upar, moments.evolve_p)
     update_pperp!(moments.ion.pperp, new_scratch.p, moments.ion.ppar, vperp, z, r,
                   composition)
