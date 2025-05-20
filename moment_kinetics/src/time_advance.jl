@@ -2051,10 +2051,10 @@ function  time_advance!(pdf, scratch, scratch_implicit, scratch_electron, t_para
                         if t_params.print_nT_live
                             midpoint = Int64(round(size(moments.ion.dens)[1]/2))
                             print("midpoint density: ", 
-                            rpad(string(round(moments.ion.dens[midpoint,1,1], sigdigits = 4)), 7))
+                            rpad(string(round(moments.ion.dens[midpoint,1,1], sigdigits = 8)), 7))
                             print("   midpoint temperature: ", 
                             rpad(string(round(moments.ion.p[midpoint,1,1]/(
-                            moments.ion.dens[midpoint,1,1]), sigdigits = 4)), 7), "\n")
+                            moments.ion.dens[midpoint,1,1]), sigdigits = 8)), 7), "\n")
                         end
                         if t_params.adaptive
                             print("nfail = ", rpad(string(t_params.failure_counter[]), 7), "  ",
