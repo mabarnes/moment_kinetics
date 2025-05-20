@@ -7,16 +7,15 @@ function compare_collision_frequencies(input_file::String,
 
     input = moment_kinetics.moment_kinetics_input.read_input_file(input_file)
 
-    io_input, evolve_moments, t_input, z_input, r_input, vpa_input, vperp_input,
-    gyrophase_input, vz_input, vr_input, vzeta_input, composition, species, collisions,
-    geometry, drive_input, num_diss_params, manufactured_solns_input =
+    io_input, evolve_moments, t_input, z, z_spectral, r, r_spectral, vpa,
+    vpa_spectral, vperp, vperp_spectral, gyrophase, gyrophase_spectral, vz, vz_spectral,
+    vr, vr_spectral, vzeta, vzeta_spectral, composition, species, collisions,
+    geometry, em_input, external_source_settings, num_diss_params,
+    manufactured_solns_input =
         moment_kinetics.moment_kinetics_input.mk_input(input)
 
-    reference_params = moment_kinetics.reference_parameters.setup_reference_parameters(input)
-
-    dimensional_parameters = moment_kinetics.utils.get_unnormalized_parameters(
-        input_file; Bnorm=reference_params.Bref, Lnorm=reference_params.Lref,
-        Nnorm=reference_params.Nref, Tnorm=reference_params.Tref)
+    dimensional_parameters =
+        moment_kinetics.utils.get_unnormalized_parameters(input, true)
 
     println("Omega_i0 ", dimensional_parameters["Omega_i0"])
     println("rho_i0 ", dimensional_parameters["rho_i0"])
@@ -39,35 +38,36 @@ function compare_collision_frequencies(input_file::String,
     println("charge_exchange rate coefficient = ",
             dimensional_parameters["CX_rate_coefficient"])
 
-    println("nu_ei0 ", dimensional_parameters["nu_ei0"])
-    println("nu_ii0 ", dimensional_parameters["nu_ii0"])
-    println("nu_ie0 ", dimensional_parameters["nu_ie0"])
+    println("nu_ei0 ", dimensional_parameters["coulomb_collision_frequency_ei0"])
+    println("nu_ii0 ", dimensional_parameters["coulomb_collision_frequency_ii0"])
+    println("nu_ie0 ", dimensional_parameters["coulomb_collision_frequency_ie0"])
     println("nu_vpa_diss ", nu_vpa_diss)
 
     # Neutral collison rates:
     # The ionization term in the ion/neutral kinetic equations is ±R_ion*n_e*f_n.
     # R_ion*n_e is an 'ionization rate' that just needs unnormalising - it gives the
     # (inverse of the) characteristic time that it takes a neutral atom to be ionized.
-    nu_ionization0 = @. collisions.ionization * dimensional_parameters["Nnorm"] /
+    nu_ionization0 = @. collisions.reactions.ionization_frequency *
+                        dimensional_parameters["Nnorm"] /
                         dimensional_parameters["timenorm"]
     println("nu_ionization0 ", nu_ionization0)
     # The charge-exchange term in the ion kinetic equation is -R_in*(n_n*f_i-n_i*f_n).
     # So the rate at which ions experience CX reactions is R_in*n_n
-    nu_cx0 = @. collisions.charge_exchange * dimensional_parameters["Nnorm"] /
-                dimensional_parameters["timenorm"]
+    nu_cx0 = @. collisions.reactions.charge_exchange_frequency *
+                dimensional_parameters["Nnorm"] / dimensional_parameters["timenorm"]
     println("nu_cx0 ", nu_cx0)
 
     # Estimate classical particle and ion heat diffusion coefficients, for comparison to
     # numerical dissipation
     # Classical particle diffusivity estimate from Helander, D_⟂ on p.7.
     # D_⟂ ∼ nu_ei * rho_e^2 / 2
-    classical_particle_D0 = Unitful.upreferred(dimensional_parameters["nu_ei0"] *
+    classical_particle_D0 = Unitful.upreferred(dimensional_parameters["coulomb_collision_frequency_ei0"] *
                                                dimensional_parameters["rho_e0"]^2 / 2.0)
     println("classical_particle_D0 ", classical_particle_D0)
 
     # Classical thermal diffusivity estimate from Helander, eq. (1.8)
     # chi_i = rho_i^2 / tau_ii / 2 = nu_ii * rho_i^2 / 2
-    classical_heat_chi_i0 = Unitful.upreferred(dimensional_parameters["nu_ii0"] *
+    classical_heat_chi_i0 = Unitful.upreferred(dimensional_parameters["coulomb_collision_frequency_ii0"] *
                                               dimensional_parameters["rho_i0"]^2 / 2.0)
     println("classical_heat_chi_i0 ", classical_heat_chi_i0)
 
@@ -77,12 +77,14 @@ function compare_collision_frequencies(input_file::String,
     rho_i_effective = Unitful.upreferred(geometry.rhostar *
                                          dimensional_parameters["Lnorm"])
     rho_e_effective =
-        Unitful.upreferred(sqrt(dimensional_parameters["me"]/dimensional_parameters["mi"])
+        Unitful.upreferred(sqrt(dimensional_parameters["m_e"]/dimensional_parameters["m_i"])
                            * rho_i_effective)
     effective_classical_particle_D0 =
-        Unitful.upreferred(dimensional_parameters["nu_ei0"] * rho_e_effective^2 / 2.0)
+        Unitful.upreferred(dimensional_parameters["coulomb_collision_frequency_ei0"] *
+                           rho_e_effective^2 / 2.0)
     effective_classical_heat_chi_i0 =
-        Unitful.upreferred(dimensional_parameters["nu_ii0"] * rho_i_effective^2 / 2.0)
+        Unitful.upreferred(dimensional_parameters["coulomb_collision_frequency_ii0"] *
+                           rho_i_effective^2 / 2.0)
     println("rho_i_effective ", rho_i_effective)
     println("rho_e_effective ", rho_e_effective)
     println("classical particle D0 with effective rho_e ", effective_classical_particle_D0)
