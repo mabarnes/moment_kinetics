@@ -583,8 +583,8 @@ function update_moments!(moments, ff_in, gyroavs::gyro_operators, vpa, vperp, z,
             moments.ion.p_updated[is] = true
         end
         @views update_ppar_species!(moments.ion.ppar[:,:,is], moments.ion.dens[:,:,is],
-                                    moments.ion.upar[:,:,is], moments.ion.p[:,:,is],
-                                    ff[:,:,:,:,is], vpa, vperp, z, r,
+                                    moments.ion.upar[:,:,is], moments.ion.vth[:,:,is],
+                                    moments.ion.p[:,:,is], ff[:,:,:,:,is], vpa, vperp, z, r,
                                     moments.evolve_density, moments.evolve_upar,
                                     moments.evolve_p)
         @views update_pperp_species!(moments.ion.pperp[:,:,is], moments.ion.p[:,:,is],
