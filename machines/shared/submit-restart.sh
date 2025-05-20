@@ -119,6 +119,9 @@ fi
 
 # Create a submission script for the run
 RESTARTJOBSCRIPT=${RUNDIR}$RUNNAME-restart.job
+if [ x$RESTARTFROM != x ]; then
+  RESTARTFROM="--restartfile $RESTARTFROM"
+fi
 sed -e "s|NODES|$NODES|" -e "s|RUNTIME|$RUNTIME|" -e "s|ACCOUNT|$ACCOUNT|" -e "s|PARTITION|$PARTITION|" -e "s|QOS|$QOS|" -e "s|RUNDIR|$RUNDIR|" -e "s|INPUTFILE|$INPUTFILE|" -e "s|RESTARTFROM|$RESTARTFROM|" machines/$MACHINE/jobscript-restart.template > $RESTARTJOBSCRIPT
 
 if [[ "$WARN_OLD_SYSIMAGE" -eq 0 ]]; then

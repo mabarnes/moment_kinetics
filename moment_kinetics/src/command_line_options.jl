@@ -12,13 +12,16 @@ using ArgParse
 const s = ArgParseSettings()
 @add_arg_table! s begin
     "inputfile"
-        help = "Name of TOML input file."
+        help = "Name of TOML input file(s). If more than one input is given, the input " *
+               "files will be run one after the other. When multiple input files are " *
+               "passed all the runs will restart from the same restart file if one is " *
+               "given."
         arg_type = String
-        default = nothing
-    "restartfile"
+        nargs = '*'
+    "--restartfile"
         help = "Name of output file (HDF5 or NetCDF) to restart from"
         arg_type = String
-        default = nothing
+        nargs = 1
     "--debug", "-d"
         help = "Set debugging level, default is 0 (no extra debugging). Higher " *
                "integer values activate more checks (and increase run time)"
@@ -26,7 +29,7 @@ const s = ArgParseSettings()
         default = 0
     "--restart"
         help = "Restart from latest output file in run directory (ignored if " *
-               "`restartfile` is passed)"
+               "`--restartfile` is passed)"
         action = :store_true
     "--restart-time-index"
         help = "Time index in output file to restart from, defaults to final time point"

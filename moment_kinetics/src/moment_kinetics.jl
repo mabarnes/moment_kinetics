@@ -189,13 +189,14 @@ function run_moment_kinetics()
         restart = options["restartfile"]
     end
     restart_time_index = options["restart-time-index"]
-    if inputfile === nothing
-        this_input = OptionsDict()
+    if length(inputfile) == 0
+        this_input = [OptionsDict()]
     else
         this_input = inputfile
     end
-    run_moment_kinetics(this_input; restart=restart,
-                        restart_time_index=restart_time_index)
+    for i ∈ this_input
+        run_moment_kinetics(i; restart=restart, restart_time_index=restart_time_index)
+    end
 end
 
 """
