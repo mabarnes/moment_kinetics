@@ -68,8 +68,8 @@ ngrid = 1
 nelement = 1
 
 [z]
-ngrid = 9
-nelement = 8
+ngrid = 5
+nelement = 16
 nelement_local = 4
 bc = "wall"
 discretization = "chebyshev_pseudospectral"
