@@ -76,16 +76,16 @@ discretization = "chebyshev_pseudospectral"
 element_spacing_option = "sqrt"
 
 [vpa]
-ngrid = 10
-nelement = 11
+ngrid = 6
+nelement = 23
 L = 64.0
 bc = "zero"
 discretization = "chebyshev_pseudospectral"
 element_spacing_option = "coarse_tails"
 
 [vz]
-ngrid = 10
-nelement = 11
+ngrid = 6
+nelement = 23
 L = 64.0
 bc = "zero"
 discretization = "chebyshev_pseudospectral"
