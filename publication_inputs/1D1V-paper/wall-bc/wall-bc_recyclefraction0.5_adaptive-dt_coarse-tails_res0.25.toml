@@ -101,6 +101,8 @@ split_operators = false
 steady_state_residual = true
 converged_residual_value = 0.001
 exact_output_times = true
+rtol = 1.0e-5
+atol = 1.0e-10
 
 [ion_source_1]
 active = true
