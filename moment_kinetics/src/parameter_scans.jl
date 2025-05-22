@@ -131,10 +131,11 @@ function get_scan_inputs(scan_inputs::AbstractDict)
                     this_section = this_section[section_name]
                 end
                 this_section[key_parts[end]] = vals[j]
-                # Truncate `key` - seems that if file names are too long, HDF5 has a
+                # Truncate `opt_name` - seems that if file names are too long, HDF5 has a
                 # buffer overflow
+                opt_name = key_parts[end]
                 new_dict["output"]["run_name"] = new_dict["output"]["run_name"] *
-                                       "_$(key[1:min(3, length(key))])_$(vals[j])"
+                                       "_$(opt_name[1:min(3, length(opt_name))])_$(vals[j])"
                 new_scan_inputs[count] = new_dict
             end
         end
