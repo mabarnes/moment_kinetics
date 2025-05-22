@@ -233,7 +233,7 @@ function plot_zero_frequency!(ax, ni, nn, Th, Te; kwargs...)
     deleteat!(omega, wrong_root_indices)
     deleteat!(gamma, wrong_root_indices)
 
-    vth = sqrt(Th)
+    vth = sqrt(2 * Th)
     return lines!(ax, (ni+nn).*Ri./(kpar*vth), gamma./(kpar*vth), linestyle=:dash; kwargs...),
            Ri, gamma
 end
@@ -252,7 +252,7 @@ function plot_positive_frequency!(ax_omega, ax_gamma, ni, nn, Th, Te; kwargs...)
     deleteat!(Ri_gamma, wrong_root_indices)
     deleteat!(gamma, wrong_root_indices)
 
-    vth = sqrt(Th)
+    vth = sqrt(2 * Th)
     return lines!(ax_omega, (ni+nn).*Ri./(kpar*vth), omega./(kpar*vth); kwargs...),
            lines!(ax_gamma, (ni+nn).*Ri_gamma./(kpar*vth), gamma./(kpar*vth); kwargs...),
            Ri_gamma, gamma
@@ -317,7 +317,7 @@ function get_sim_omega_gamma(sim)
 end
 
 function plot_sim_output!(ax_omega, ax_gamma, sims, ni, nn, Th, Te; kwargs...)
-    vth = sqrt(2.0*Th)
+    vth = sqrt(2 * Th)
 
     Ri = zeros(length(sims))
     omega = zeros(length(sims))
@@ -401,7 +401,7 @@ function plot_n_scan()
         s_omega2, s_gamma2 = plot_sim_output!(ax_omega, ax_gamma, sims_split2, ni, nn, Th, Te; color=p_gamma.color, marker=marker3)
         s_omega3, s_gamma3 = plot_sim_output!(ax_omega, ax_gamma, sims_split3, ni, nn, Th, Te; color=p_gamma.color, marker=marker4)
 
-        vth = sqrt(Th)
+        vth = sqrt(2 * Th)
         crossing_x = find_crossing_xvalue(Ri_positive, gamma_positive, Ri_zero, gamma_zero)
         if crossing_x !== nothing
             vlines!(ax_omega, (ni + nn) * crossing_x / (kpar*vth), linestyle=:dot, color=p_gamma.color)
@@ -490,7 +490,7 @@ function plot_T_scan()
         s_omega2, s_gamma2 = plot_sim_output!(ax_omega, ax_gamma, sims[3], ni, nn, Th, Te; color=p_gamma.color, marker=marker3)
         s_omega3, s_gamma3 = plot_sim_output!(ax_omega, ax_gamma, sims[4], ni, nn, Th, Te; color=p_gamma.color, marker=marker4)
 
-        vth = sqrt(Th)
+        vth = sqrt(2 * Th)
         crossing_x = find_crossing_xvalue(Ri_positive, gamma_positive, Ri_zero, gamma_zero)
         if crossing_x !== nothing
             vlines!(ax_omega, (ni + nn) * crossing_x / (kpar * vth), linestyle=:dot, color=p_gamma.color)
