@@ -10,6 +10,8 @@ using Distributed
     "plot_vs_z_r" => false,
     "sound_wave_fit" => Dict{String,Any}("calculate_frequency"=>true, "plot"=>true),
     "itime_min" => 50,
+    "timestep_diagnostics" => Dict{String,Any}("plot" => false),
+    "collisionality_plots" => Dict{String,Any}("plot" => false),
    )
 
 # get the run_names from the command-line
