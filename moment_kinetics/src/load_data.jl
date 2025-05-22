@@ -4733,10 +4733,18 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         vth = get_variable(run_info, "thermal_speed_neutral"; kwargs...)
         variable = @. 0.5 * vth * (dp_dt / p - dn_dt / n)
     elseif variable_name == "mfp"
+        # this is mean free path for krook collision purposes, but it should be the same collision
+        # frequency used for other collision operators in general, as it encompasses the magnitude
+        # of collision frequency
         vth = get_variable(run_info, "thermal_speed"; kwargs...)
-        nu_ii = get_variable(run_info, "collision_frequency_ii"; kwargs...)
-        variable = vth ./ nu_ii
+        nu_ii = get_variable(run_info, "Krook_collision_frequency_ii"; kwargs...)
+        if run_info.vperp.n == 1
+            variable = sqrt(3.0) .* vth ./ nu_ii
+        else
+            variable = vth ./ nu_ii
+        end
     elseif variable_name == "L_T"
+        # same in 1V and 2V because it's just ratio of T to dT/dz
         dT_dz = get_variable(run_info, "dT_dz"; kwargs...)
         temp = get_variable(run_info, "temperature"; kwargs...)
         # We define gradient lengthscale of T as LT^-1 = dln(T)/dz (ignore negative sign
@@ -4767,14 +4775,7 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
         n = get_variable(run_info, "density"; kwargs...)
         vth = get_variable(run_info, "thermal_speed"; kwargs...)
         dT_dz = get_variable(run_info, "dT_dz"; kwargs...)
-        if run_info.vperp.n == 1
-            Krook_vth = sqrt(3.0) * vth
-            adjust_1V = 1.0 / sqrt(3.0)
-        else
-            Krook_vth = vth
-            adjust_1V = 1.0
-        end
-        Krook_nu_ii = get_collision_frequency_ii(run_info.collisions, n, Krook_vth)
+        Krook_nu_ii = get_variable(run_info, "Krook_collision_frequency_ii"; kwargs...)
         variable = @. -(1/2) * 3/2 * n * Krook_vth^2 * 3 * dT_dz / Krook_nu_ii
     elseif variable_name == "collision_frequency_ii"
         n = get_variable(run_info, "density"; kwargs...)
