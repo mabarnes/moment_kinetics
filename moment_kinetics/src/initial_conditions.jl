@@ -207,6 +207,7 @@ function init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geo
         moments.neutral.dens_updated .= true
         moments.neutral.uz_updated .= true
         moments.neutral.p_updated .= true
+        println("pdf before initialize_pdf call: ", pdf.ion.norm[45,1,1,1,1])
         # create and initialise the normalised, ion particle distribution function (pdf)
         # such that ∫dwpa pdf.norm = 1, ∫dwpa wpa * pdf.norm = 0, and ∫dwpa wpa^2 * pdf.norm = 1/2
         # note that wpa = vpa - upar, unless moments.evolve_p = true, in which case wpa = (vpa - upar)/vth
@@ -224,6 +225,7 @@ function init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geo
                      pdf.ion.norm, vpa, vperp, z, r, composition, drift_kinetic_ions, collisions,
                      moments.evolve_density, moments.evolve_upar, moments.evolve_p)
 
+        println("pdf after update_ion_qpar call: ", pdf.ion.norm[45,1,1,1,1])
         @begin_serial_region()
         @serial_region begin
             # If electrons are being used, they will be initialized properly later. Here
@@ -283,7 +285,7 @@ function init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geo
 
     init_boundary_distributions!(boundary_distributions, pdf, vz, vr, vzeta, vpa, vperp,
                                  z, r, composition)
-
+    println("pdf after init_boundary_distributions call: ", pdf.ion.norm[45,1,1,1,1])
     return nothing
 end
 
@@ -583,7 +585,7 @@ function initialize_pdf!(pdf, moments, boundary_distributions, composition, r, z
             end
         end
     end
-
+    println("ion pdf after initialize_pdf: ", pdf.ion.norm[45,1,1,1,1])
     return nothing
 end
 
@@ -1268,8 +1270,10 @@ function init_ion_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
                 vgrid_scale_factor = ones(size(vth))
             end
             for iz ∈ zrange
+
                 @. vpa.scratch = vpa.grid * vgrid_scale_factor[iz]
                 @. vperp.scratch = vperp.grid * vgrid_scale_factor[iz]
+                println("vperp.scratch: ", vperp.scratch)
                 @loop_vperp ivperp begin
                     # Initialise as full-f distribution functions, then
                     # normalise/interpolate (if necessary). This makes it easier to
@@ -1286,7 +1290,11 @@ function init_ion_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
                     @. pdf[:,ivperp,iz] = density[iz] * Maxwellian_prefactor *
                                           exp(-((vpa.scratch - upar[iz])^2 + vperp.scratch[ivperp]^2)
                                                / this_vth^2) / vth_factor
-
+                    if ivperp == 1
+                        println("for ivperp = 1, pdf[:,ivperp,iz]: ", pdf[45,ivperp,iz])
+                    elseif ivperp == 2
+                        println("for ivperp = 2, pdf[:,ivperp,iz]: ", pdf[45,ivperp,iz])
+                    end
                     # Also ensure both species go to zero smoothly at v_parallel=0 at the
                     # wall, where the boundary conditions require that distribution
                     # functions for both ions (where f_ion(v_parallel) = 0 for
@@ -1303,6 +1311,7 @@ function init_ion_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
                     @. pdf[:,ivperp,iz] *= 1.0 - exp(-vpa.scratch^2*inverse_width_squared)
                 end
             end
+            println("pdf after first initialization: ", pdf[45,1,1])
             # Can use non-shared memory here because `init_ion_pdf_over_density!()` is
             # called inside a `@serial_region`
             lower_z_pdf_buffer = allocate_float(vpa.n, vperp.n)
@@ -1375,6 +1384,7 @@ function init_ion_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
                     pdf[ivpa,ivperp,:] ./= density
                 end
             end
+            println("pdf after everything: ", pdf[45,1,1])
         end
     elseif spec.vpa_IC.initialization_option == "vpagaussian"
         @loop_z_vperp iz ivperp begin
@@ -1913,7 +1923,7 @@ function init_electron_pdf_over_density_and_boundary_phi!(pdf, phi, density, upa
     end
 
     # Ensure initial electron distribution function obeys constraints
-    hard_force_moment_constraints!(pdf, moments, vpa)
+    hard_force_moment_constraints!(pdf, moments, vpa, vperp)
 
     return nothing
 end

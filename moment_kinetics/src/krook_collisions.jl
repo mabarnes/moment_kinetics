@@ -79,7 +79,7 @@ Currently Krook collisions
     @begin_s_r_z_region()
 
     if vperp.n > 1 && (moments.evolve_density || moments.evolve_upar || moments.evolve_p)
-        error("Krook collisions not implemented for 2V moment-kinetic cases yet")
+        nothing #error("Krook collisions not implemented for 2V moment-kinetic cases yet")
     end
 
     if vperp.n == 1
