@@ -1291,9 +1291,9 @@ function init_ion_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
                                           exp(-((vpa.scratch - upar[iz])^2 + vperp.scratch[ivperp]^2)
                                                / this_vth^2) / vth_factor
                     if ivperp == 1
-                        println("for ivperp = 1, pdf[:,ivperp,iz]: ", pdf[45,ivperp,iz])
+                        println("for ivperp = 1, pdf[45,ivperp,iz]: ", pdf[45,ivperp,iz])
                     elseif ivperp == 2
-                        println("for ivperp = 2, pdf[:,ivperp,iz]: ", pdf[45,ivperp,iz])
+                        println("for ivperp = 2, pdf[45,ivperp,iz]: ", pdf[45,ivperp,iz])
                     end
                     # Also ensure both species go to zero smoothly at v_parallel=0 at the
                     # wall, where the boundary conditions require that distribution
@@ -1334,7 +1334,7 @@ function init_ion_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
                     upper_z_pdf_buffer[ivpa,:] .= 0.0
                 end
             end
-
+            println("pdf after buffer stuff: ", pdf[45,1,1])
             # Taper boundary distribution functions into each other across the
             # domain to avoid jumps.
             # Add some profile for density by scaling the pdf.
@@ -1351,7 +1351,7 @@ function init_ion_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
                                             (1.0 - right_weight)*lower_z_pdf_buffer +
                                             right_weight*upper_z_pdf_buffer)
             end
-
+            println("pdf after boundary condition alteration 1354: ", pdf[45,1,1])
             # Add a non-flowing Maxwellian (that vanishes at the sheath entrance boundaries) to try to
             # avoid the 'hole' in the distribution function that can drive instabilities.
             @loop_z_vperp iz ivperp begin
