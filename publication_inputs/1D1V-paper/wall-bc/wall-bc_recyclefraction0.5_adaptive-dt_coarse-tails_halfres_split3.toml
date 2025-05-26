@@ -81,7 +81,7 @@ nelement = 23
 L = 64.0
 bc = "zero"
 discretization = "chebyshev_pseudospectral"
-element_spacing_option = "coarse_tails"
+element_spacing_option = "coarse_tails9"
 
 [vz]
 ngrid = 10
@@ -89,7 +89,7 @@ nelement = 23
 L = 64.0
 bc = "zero"
 discretization = "chebyshev_pseudospectral"
-element_spacing_option = "coarse_tails"
+element_spacing_option = "coarse_tails9"
 
 [timestepping]
 type = "Fekete4(3)"
