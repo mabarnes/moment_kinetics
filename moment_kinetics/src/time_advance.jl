@@ -545,7 +545,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
                              restart_electron_physics, input_dict;
                              skip_electron_solve=false)
     
-    println("pdf at start of setup_time_advance! is ", pdf.ion.norm[45,1,1,1,1])
+    println("pdf at start of setup_time_advance! is ", pdf.ion.norm[45,1:4,1,1,1])
     # define some local variables for convenience/tidiness
     n_ion_species = composition.n_ion_species
     n_neutral_species = composition.n_neutral_species
@@ -1045,14 +1045,14 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
     else
         manufactured_source_list = false # dummy Bool to be passed as argument instead of list
     end
-    println("pdf just before if !restarting loop is ", pdf.ion.norm[45,1,1,1,1])
+    println("pdf just before if !restarting loop is ", pdf.ion.norm[45,1:4,1,1,1])
     if !restarting
         @begin_serial_region()
         # ensure initial pdf has no negative values
-        println("pdf just before force_minimum_pdf_value! is ", pdf.ion.norm[45,1,1,1,1])
+        println("pdf just before force_minimum_pdf_value! is ", pdf.ion.norm[45,1:4,1,1,1])
         force_minimum_pdf_value!(pdf.ion.norm, num_diss_params.ion.force_minimum_pdf_value)
         force_minimum_pdf_value_neutral!(pdf.neutral.norm, num_diss_params.neutral.force_minimum_pdf_value)
-        println("pdf just after force_minimum_pdf_value! is ", pdf.ion.norm[45,1,1,1,1])
+        println("pdf just after force_minimum_pdf_value! is ", pdf.ion.norm[45,1:4,1,1,1])
         # enforce boundary conditions and moment constraints to ensure a consistent initial
         # condition
         enforce_boundary_conditions!(
@@ -1062,12 +1062,12 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
             vpa_advect, vperp_advect, z_advect, r_advect, composition, scratch_dummy,
             advance.r_diffusion, advance.vpa_diffusion, advance.vperp_diffusion)
 
-        println("pdf just after enforce_bojundary_conditions! is ", pdf.ion.norm[45,1,1,1,1])
+        println("pdf just after enforce_bojundary_conditions! is ", pdf.ion.norm[45,1:4,1,1,1])
         # Ensure normalised pdf exactly obeys integral constraints if evolving moments
         if moments.evolve_density && moments.enforce_conservation
             hard_force_moment_constraints!(pdf.ion.norm, moments, vpa, vperp)
         end
-        println("pdf just after hard_force_moment_constraints! is ", pdf.ion.norm[45,1,1,1,1])
+        println("pdf just after hard_force_moment_constraints! is ", pdf.ion.norm[45,1:4,1,1,1])
         # update moments in case they were affected by applying boundary conditions or
         # constraints to the pdf
         reset_moments_status!(moments)
@@ -1171,7 +1171,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
             scratch[t_params.n_rk_stages+1].p_neutral[iz,ir,isn] = moments.neutral.p[iz,ir,isn]
         end
     end
-    println("pdf just after if !restarting loop is ", pdf.ion.norm[45,1,1,1,1])
+    println("pdf just after if !restarting loop is ", pdf.ion.norm[45,1:4,1,1,1])
     # calculate the electron-ion parallel friction force
     calculate_electron_parallel_friction_force!(moments.electron.parallel_friction, moments.electron.dens,
         moments.electron.upar, moments.ion.upar, moments.electron.dT_dz,
@@ -1192,7 +1192,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
     # Ensure all processes are synchronized at the end of the setup
     @_block_synchronize()
 
-    println("pdf at end of setup_time_advance! is ", pdf.ion.norm[45,1,1,1,1])
+    println("pdf at end of setup_time_advance! is ", pdf.ion.norm[45,1:4,1,1,1])
 
     return moments, spectral_objects, scratch, scratch_implicit, scratch_electron,
            scratch_dummy, advance, advance_implicit, t_params, fp_arrays, gyroavs,

@@ -135,7 +135,7 @@ function run_moment_kinetics(input_dict::OptionsDict; restart=false, restart_tim
             # set up all the structs, etc. needed for a run
             mk_state = setup_moment_kinetics(input_dict; restart=restart,
                                              restart_time_index=restart_time_index)
-            println("mk_state pdf after setup_moment_kinetics first call of init_pdf_and_moments!", mk_state[1].ion.norm[45,1,1,1,1])
+
             # solve the 1+1D kinetic equation to advance f in time by nstep time steps
             time_advance!(mk_state...)
         end
@@ -166,7 +166,7 @@ function run_moment_kinetics(input_dict::OptionsDict; restart=false, restart_tim
 
         rethrow(e)
     end
-    println("mk_state pdf is ", mk_state[1].ion.pdf[45,1,1,1,1])
+
     return nothing
 end
 
@@ -333,14 +333,14 @@ parallel loop ranges, and are only used by the tests in `debug_test/`.
 
         @_block_synchronize()
     end
-    println("pdf after setup_moment_kinetics first call of init_pdf_and_moments!", pdf.ion.norm[45,1,1,1,1])
+
     # Broadcast code_time from the root process of each shared-memory block (on which it
     # might have been loaded from a restart file).
     code_time = MPI.Bcast(code_time, 0, comm_block[])::mk_float
 
     # create arrays and do other work needed to setup
     # the main time advance loop -- including normalisation of f by density if requested
-    println("pdf just before setup_time_advance! is ", pdf.ion.norm[45,1,1,1,1])
+
     moments, spectral_objects, scratch, scratch_implicit, scratch_electron, scratch_dummy,
     advance, advance_implicit, t_params, fp_arrays, gyroavs, manufactured_source_list,
     nl_solver_params =
@@ -352,12 +352,12 @@ parallel loop ranges, and are only used by the tests in `debug_test/`.
             num_diss_params, manufactured_solns_input, advection_structs, io_input,
             restarting, restart_electron_physics, input_dict;
             skip_electron_solve=skip_electron_solve)
-    println("pdf just after setup_time_advance! is ", pdf.ion.norm[45,1,1,1,1])
+
     # This is the closest we can get to the end time of the setup before writing it to the
     # output file
     setup_end_time = now()
     time_for_setup = to_minutes(setup_end_time - setup_start_time)
-    println("pdf just before write_output is ", pdf.ion.norm[45,1,1,1,1])
+
     if write_output
         # setup i/o
         ascii_io, io_moments, io_dfns = setup_file_io(io_input, boundary_distributions,
@@ -385,7 +385,7 @@ parallel loop ranges, and are only used by the tests in `debug_test/`.
         io_moments = nothing
         io_dfns = nothing
     end
-    println("pdf at end of setup_moment_kinetics is ", pdf.ion.norm[45,1,1,1,1])
+
     @begin_s_r_z_vperp_region()
 
     return pdf, scratch, scratch_implicit, scratch_electron, t_params, vz, vr,

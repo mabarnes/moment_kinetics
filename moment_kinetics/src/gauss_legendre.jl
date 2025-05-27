@@ -42,6 +42,8 @@ A struct for passing around elemental matrices
 on Gauss-Legendre points in 1D
 """
 struct gausslegendre_base_info
+    # flag for whether we are Radau or Lobatto
+    is_lobatto::Bool
     # elementwise differentiation matrix (ngrid*ngrid)
     Dmat::Array{mk_float,2}
     # local mass matrix type 0
@@ -248,7 +250,7 @@ function setup_gausslegendre_pseudospectral_lobatto(coord; collision_operator_di
         Y30 = allocate_float(0, 0, 0)
         Y31 = allocate_float(0, 0, 0)
     end
-    return gausslegendre_base_info(Dmat,M0,M1,M2,S0,S1,
+    return gausslegendre_base_info(true,Dmat,M0,M1,M2,S0,S1,
             K0,K1,K2,P0,P1,P2,D0,Y00,Y01,Y10,Y11,Y20,Y21,Y30,Y31)
 end
 
@@ -327,7 +329,7 @@ function setup_gausslegendre_pseudospectral_radau(coord; collision_operator_dim=
         Y30 = allocate_float(0, 0, 0)
         Y31 = allocate_float(0, 0, 0)
     end
-    return gausslegendre_base_info(Dmat,M0,M1,M2,S0,S1,
+    return gausslegendre_base_info(false,Dmat,M0,M1,M2,S0,S1,
             K0,K1,K2,P0,P1,P2,D0,Y00,Y01,Y10,Y11,Y20,Y21,Y30,Y31)
 end 
 
