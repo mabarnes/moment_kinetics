@@ -680,6 +680,8 @@ function reload_evolving_fields!(pdf, moments, fields, boundary_distributions,
         fid = open_readonly_output_file(restart_prefix_iblock[1], "dfns";
                                         iblock=restart_prefix_iblock[2])
         try # finally to make sure to close file0
+            coords = (; r, z, vperp, vpa, vzeta, vr, vz)
+
             overview = get_group(fid, "overview")
             dynamic = get_group(fid, "dynamic_data")
             parallel_io = load_variable(overview, "parallel_io")
@@ -694,26 +696,20 @@ function reload_evolving_fields!(pdf, moments, fields, boundary_distributions,
             previous_runs_info = load_run_info_history(fid)
 
             restart_n_ion_species, restart_n_neutral_species = load_species_data(fid)
-            restart_r, restart_r_spectral, restart_z, restart_z_spectral, restart_vperp,
-                restart_vperp_spectral, restart_vpa, restart_vpa_spectral, restart_vzeta,
-                restart_vzeta_spectral, restart_vr,restart_vr_spectral, restart_vz,
-                restart_vz_spectral = load_restart_coordinates(fid, r, z, vperp, vpa,
-                                                               vzeta, vr, vz, parallel_io)
+            restart_coords = load_restart_coordinates(fid, coords, parallel_io)
 
             # Test whether any interpolation is needed
             interpolation_needed = OrderedDict(
                 x.name => (restart_x !== nothing
                            && (x.n != restart_x.n
                                || !all(isapprox.(x.grid, restart_x.grid))))
-                for (x, restart_x) ∈ ((z, restart_z), (r, restart_r),
-                                      (vperp, restart_vperp), (vpa, restart_vpa),
-                                      (vzeta, restart_vzeta), (vr, restart_vr),
-                                      (vz, restart_vz)))
+                for (x, restart_x) ∈ zip(coords, restart_coords))
 
             neutral_1V = (vzeta.n_global == 1 && vr.n_global == 1)
-            restart_neutral_1V = ((restart_vzeta === nothing
-                                   || restart_vzeta.n_global == 1)
-                                  && (restart_vr === nothing || restart_vr.n_global == 1))
+            restart_neutral_1V = ((restart_coords.vzeta === nothing
+                                   || restart_coords.vzeta.n_global == 1)
+                                  && (restart_coords.vr === nothing ||
+                                      restart_coords.vr.n_global == 1))
             if any(geometry.bzeta .!= 0.0) && ((neutral_1V && !restart_neutral_1V) ||
                                                (!neutral_1V && restart_neutral_1V))
                 # One but not the other of the run being restarted from and this run are
@@ -726,52 +722,40 @@ function reload_evolving_fields!(pdf, moments, fields, boundary_distributions,
 
             code_time = load_slice(dynamic, "time", time_index)
 
-            r_range, z_range, vperp_range, vpa_range, vzeta_range, vr_range, vz_range =
-                get_reload_ranges(parallel_io, restart_r, restart_z, restart_vperp,
-                                  restart_vpa, restart_vzeta, restart_vr, restart_vz)
+            reload_ranges = get_reload_ranges(parallel_io, restart_coords)
 
-            fields.phi .= reload_electron_moment("phi", dynamic, time_index, r, z,
-                                                 r_range, z_range, restart_r,
-                                                 restart_r_spectral, restart_z,
-                                                 restart_z_spectral, interpolation_needed)
-            moments.ion.dens .= reload_moment("density", dynamic, time_index, r, z,
-                                              r_range, z_range, restart_r,
-                                              restart_r_spectral, restart_z,
-                                              restart_z_spectral, interpolation_needed)
-            moments.ion.upar .= reload_moment("parallel_flow", dynamic, time_index, r, z,
-                                              r_range, z_range, restart_r,
-                                              restart_r_spectral, restart_z,
-                                              restart_z_spectral, interpolation_needed)
-            moments.ion.p .= reload_moment("pressure", dynamic, time_index, r,
-                                           z, r_range, z_range, restart_r,
-                                           restart_r_spectral, restart_z,
-                                           restart_z_spectral, interpolation_needed)
-            moments.ion.ppar .= reload_moment("parallel_pressure", dynamic, time_index, r,
-                                              z, r_range, z_range, restart_r,
-                                              restart_r_spectral, restart_z,
-                                              restart_z_spectral, interpolation_needed)
+            fields.phi .= reload_electron_moment("phi", dynamic, time_index, coords,
+                                                 reload_ranges, restart_coords,
+                                                 interpolation_needed)
+            moments.ion.dens .= reload_moment("density", dynamic, time_index, coords,
+                                              reload_ranges, restart_coords,
+                                              interpolation_needed)
+            moments.ion.upar .= reload_moment("parallel_flow", dynamic, time_index, coords,
+                                              reload_ranges, restart_coords,
+                                              interpolation_needed)
+            moments.ion.p .= reload_moment("pressure", dynamic, time_index, coords,
+                                           reload_ranges, restart_coords,
+                                           interpolation_needed)
+            moments.ion.ppar .= reload_moment("parallel_pressure", dynamic, time_index,
+                                              coords, reload_ranges, restart_coords,
+                                              interpolation_needed)
             moments.ion.pperp .= reload_moment("perpendicular_pressure", dynamic,
-                                               time_index, r, z, r_range, z_range,
-                                               restart_r, restart_r_spectral, restart_z,
-                                               restart_z_spectral, interpolation_needed)
+                                               time_index, coords, reload_ranges,
+                                               restart_coords, interpolation_needed)
             moments.ion.qpar .= reload_moment("parallel_heat_flux", dynamic, time_index,
-                                              r, z, r_range, z_range, restart_r,
-                                              restart_r_spectral, restart_z,
-                                              restart_z_spectral, interpolation_needed)
-            moments.ion.vth .= reload_moment("thermal_speed", dynamic, time_index, r, z,
-                                             r_range, z_range, restart_r,
-                                             restart_r_spectral, restart_z,
-                                             restart_z_spectral, interpolation_needed)
+                                              coords, reload_ranges, restart_coords,
+                                              interpolation_needed)
+            moments.ion.vth .= reload_moment("thermal_speed", dynamic, time_index, coords,
+                                             reload_ranges, restart_coords,
+                                             interpolation_needed)
             moments.ion.dSdt .= reload_moment("entropy_production", dynamic, time_index,
-                                              r, z, r_range, z_range, restart_r,
-                                              restart_r_spectral, restart_z,
-                                              restart_z_spectral, interpolation_needed)
+                                              coords, reload_ranges, restart_coords,
+                                              interpolation_needed)
             if moments.evolve_density || moments.evolve_upar || moments.evolve_p
                 if "ion_constraints_A_coefficient" ∈ keys(dynamic)
                     moments.ion.constraints_A_coefficient .=
                         reload_moment("ion_constraints_A_coefficient", dynamic,
-                                      time_index, r, z, r_range, z_range, restart_r,
-                                      restart_r_spectral, restart_z, restart_z_spectral,
+                                      time_index, coords, reload_ranges, restart_coords,
                                       interpolation_needed)
                 elseif moments.ion.constraints_A_coefficient !== nothing
                     moments.ion.constraints_A_coefficient .= 0.0
@@ -779,8 +763,7 @@ function reload_evolving_fields!(pdf, moments, fields, boundary_distributions,
                 if "ion_constraints_B_coefficient" ∈ keys(dynamic)
                     moments.ion.constraints_B_coefficient .=
                         reload_moment("ion_constraints_B_coefficient", dynamic,
-                                      time_index, r, z, r_range, z_range, restart_r,
-                                      restart_r_spectral, restart_z, restart_z_spectral,
+                                      time_index, coords, reload_ranges, restart_coords,
                                       interpolation_needed)
                 elseif moments.ion.constraints_B_coefficient !== nothing
                     moments.ion.constraints_B_coefficient .= 0.0
@@ -788,8 +771,7 @@ function reload_evolving_fields!(pdf, moments, fields, boundary_distributions,
                 if "ion_constraints_C_coefficient" ∈ keys(dynamic)
                     moments.ion.constraints_C_coefficient .=
                         reload_moment("ion_constraints_C_coefficient", dynamic,
-                                      time_index, r, z, r_range, z_range, restart_r,
-                                      restart_r_spectral, restart_z, restart_z_spectral,
+                                      time_index, coords, reload_ranges, restart_coords,
                                       interpolation_needed)
                 elseif moments.ion.constraints_C_coefficient !== nothing
                     moments.ion.constraints_C_coefficient .= 0.0
@@ -798,7 +780,8 @@ function reload_evolving_fields!(pdf, moments, fields, boundary_distributions,
             if z.irank == 0
                 if "chodura_integral_lower" ∈ keys(dynamic)
                     moments.ion.chodura_integral_lower .= load_slice(dynamic, "chodura_integral_lower",
-                                                                     r_range, :, time_index)
+                                                                     reload_ranges.r_range,
+                                                                     :, time_index)
                 else
                     moments.ion.chodura_integral_lower .= 0.0
                 end
@@ -806,7 +789,8 @@ function reload_evolving_fields!(pdf, moments, fields, boundary_distributions,
             if z.irank == z.nrank - 1
                 if "chodura_integral_upper" ∈ keys(dynamic)
                     moments.ion.chodura_integral_upper .= load_slice(dynamic, "chodura_integral_upper",
-                                                                     r_range, :, time_index)
+                                                                     reload_ranges.r_range,
+                                                                     :, time_index)
                 else
                     moments.ion.chodura_integral_upper .= 0.0
                 end
@@ -820,101 +804,75 @@ function reload_evolving_fields!(pdf, moments, fields, boundary_distributions,
                     size(moments.ion.external_source_controller_integral)[2] > 1 
                     moments.ion.external_source_controller_integral .=
                         reload_moment("external_source_controller_integral", dynamic,
-                                      time_index, r, z, r_range, z_range, restart_r,
-                                      restart_r_spectral, restart_z, restart_z_spectral,
+                                      time_index, coords, reload_ranges, restart_coords,
                                       interpolation_needed)
                 end
             end
 
-            pdf.ion.norm .= reload_ion_pdf(dynamic, time_index, moments, r, z, vperp, vpa, r_range,
-                                           z_range, vperp_range, vpa_range, restart_r,
-                                           restart_r_spectral, restart_z,
-                                           restart_z_spectral, restart_vperp,
-                                           restart_vperp_spectral, restart_vpa,
-                                           restart_vpa_spectral, interpolation_needed,
-                                           restart_evolve_density, restart_evolve_upar,
-                                           restart_evolve_p)
+            pdf.ion.norm .= reload_ion_pdf(dynamic, time_index, moments, coords,
+                                           reload_ranges, restart_coords,
+                                           interpolation_needed, restart_evolve_density,
+                                           restart_evolve_upar, restart_evolve_p)
             boundary_distributions_io = get_group(fid, "boundary_distributions")
 
             boundary_distributions.pdf_rboundary_ion[:,:,:,1,:] .=
                 reload_ion_boundary_pdf(boundary_distributions_io,
-                                        "pdf_rboundary_ion_left", 1, moments, z, vperp,
-                                        vpa, z_range, vperp_range, vpa_range, restart_z,
-                                        restart_z_spectral, restart_vperp,
-                                        restart_vperp_spectral, restart_vpa,
-                                        restart_vpa_spectral, interpolation_needed,
-                                        restart_evolve_density, restart_evolve_upar,
-                                        restart_evolve_p)
+                                        "pdf_rboundary_ion_left", 1, moments, coords,
+                                        reload_ranges, restart_coords,
+                                        interpolation_needed, restart_evolve_density,
+                                        restart_evolve_upar, restart_evolve_p)
             boundary_distributions.pdf_rboundary_ion[:,:,:,2,:] .=
                 reload_ion_boundary_pdf(boundary_distributions_io,
-                                        "pdf_rboundary_ion_right", r.n, moments, z, vperp,
-                                        vpa, z_range, vperp_range, vpa_range, restart_z,
-                                        restart_z_spectral, restart_vperp,
-                                        restart_vperp_spectral, restart_vpa,
-                                        restart_vpa_spectral, interpolation_needed,
-                                        restart_evolve_density, restart_evolve_upar,
-                                        restart_evolve_p)
+                                        "pdf_rboundary_ion_right", coords.r.n, moments,
+                                        coords, reload_ranges, restart_coords,
+                                        interpolation_needed, restart_evolve_density,
+                                        restart_evolve_upar, restart_evolve_p)
 
             moments.electron.dens .= reload_electron_moment("electron_density", dynamic,
-                                                            time_index, r, z, r_range,
-                                                            z_range, restart_r,
-                                                            restart_r_spectral, restart_z,
-                                                            restart_z_spectral,
+                                                            time_index, coords,
+                                                            reload_ranges, restart_coords,
                                                             interpolation_needed)
             moments.electron.upar .= reload_electron_moment("electron_parallel_flow",
-                                                            dynamic, time_index, r, z,
-                                                            r_range, z_range, restart_r,
-                                                            restart_r_spectral, restart_z,
-                                                            restart_z_spectral,
+                                                            dynamic, time_index, coords,
+                                                            reload_ranges, restart_coords,
                                                             interpolation_needed)
             moments.electron.p .= reload_electron_moment("electron_pressure",
-                                                         dynamic, time_index, r, z,
-                                                         r_range, z_range, restart_r,
-                                                         restart_r_spectral, restart_z,
-                                                         restart_z_spectral,
+                                                         dynamic, time_index, coords,
+                                                         reload_ranges, restart_coords,
                                                          interpolation_needed)
             moments.electron.ppar .= reload_electron_moment("electron_parallel_pressure",
-                                                            dynamic, time_index, r, z,
-                                                            r_range, z_range, restart_r,
-                                                            restart_r_spectral, restart_z,
-                                                            restart_z_spectral,
+                                                            dynamic, time_index, coords,
+                                                            reload_ranges, restart_coords,
                                                             interpolation_needed)
             moments.electron.qpar .= reload_electron_moment("electron_parallel_heat_flux",
-                                                            dynamic, time_index, r, z,
-                                                            r_range, z_range, restart_r,
-                                                            restart_r_spectral, restart_z,
-                                                            restart_z_spectral,
+                                                            dynamic, time_index, coords,
+                                                            reload_ranges, restart_coords,
                                                             interpolation_needed)
             moments.electron.vth .= reload_electron_moment("electron_thermal_speed",
-                                                           dynamic, time_index, r, z,
-                                                           r_range, z_range, restart_r,
-                                                           restart_r_spectral, restart_z,
-                                                           restart_z_spectral,
+                                                           dynamic, time_index, coords,
+                                                           reload_ranges, restart_coords,
                                                            interpolation_needed)
             if "electron_constraints_A_coefficient" ∈ keys(dynamic)
                 moments.electron.constraints_A_coefficient .=
                     reload_electron_moment("electron_constraints_A_coefficient", dynamic,
-                                           time_index, r, z, r_range, z_range, restart_r,
-                                           restart_r_spectral, restart_z,
-                                           restart_z_spectral, interpolation_needed)
+                                           time_index, coords, reload_ranges,
+                                           restart_coords, interpolation_needed)
             else
                 moments.electron.constraints_A_coefficient .= 0.0
             end
             if "electron_constraints_B_coefficient" ∈ keys(dynamic)
                 moments.electron.constraints_B_coefficient .=
                     reload_electron_moment("electron_constraints_B_coefficient", dynamic,
-                                           time_index, r, z, r_range, z_range, restart_r,
-                                           restart_r_spectral, restart_z,
-                                           restart_z_spectral, interpolation_needed)
+                                           time_index, coords, reload_ranges,
+                                           restart_coords, interpolation_needed)
             else
                 moments.electron.constraints_B_coefficient .= 0.0
             end
             if "electron_constraints_C_coefficient" ∈ keys(dynamic)
                 moments.electron.constraints_C_coefficient .=
                     reload_electron_moment("electron_constraints_C_coefficient", dynamic,
-                                           time_index, r, z, r_range, z_range, restart_r,
-                                           restart_r_spectral, restart_z,
-                                           restart_z_spectral, interpolation_needed)
+                                           time_index, coords, reload_ranges,
+                                           restart_coords, interpolation_needed)
             else
                 moments.electron.constraints_C_coefficient .= 0.0
             end
@@ -935,14 +893,10 @@ function reload_evolving_fields!(pdf, moments, fields, boundary_distributions,
                     restart_electron_physics ∈ (kinetic_electrons,
                                                 kinetic_electrons_with_temperature_equation)
                 pdf.electron.norm .=
-                    reload_electron_pdf(dynamic, time_index, moments, r, z, vperp, vpa,
-                                        r_range, z_range, vperp_range, vpa_range,
-                                        restart_r, restart_r_spectral, restart_z,
-                                        restart_z_spectral, restart_vperp,
-                                        restart_vperp_spectral, restart_vpa,
-                                        restart_vpa_spectral, interpolation_needed,
-                                        restart_evolve_density, restart_evolve_upar,
-                                        restart_evolve_p)
+                    reload_electron_pdf(dynamic, time_index, moments, coords,
+                                        reload_ranges, restart_coords,
+                                        interpolation_needed, restart_evolve_density,
+                                        restart_evolve_upar, restart_evolve_p)
             elseif pdf.electron !== nothing
                 # The electron distribution function will be initialized later
                 pdf.electron.norm .= 0.0
@@ -950,41 +904,29 @@ function reload_evolving_fields!(pdf, moments, fields, boundary_distributions,
 
             if composition.n_neutral_species > 0
                 moments.neutral.dens .= reload_moment("density_neutral", dynamic,
-                                                      time_index, r, z, r_range, z_range,
-                                                      restart_r, restart_r_spectral,
-                                                      restart_z, restart_z_spectral,
+                                                      time_index, coords, reload_ranges,
+                                                      restart_coords,
                                                       interpolation_needed)
-                moments.neutral.uz .= reload_moment("uz_neutral", dynamic, time_index, r,
-                                                    z, r_range, z_range, restart_r,
-                                                    restart_r_spectral, restart_z,
-                                                    restart_z_spectral,
+                moments.neutral.uz .= reload_moment("uz_neutral", dynamic, time_index,
+                                                    coords, reload_ranges, restart_coords,
                                                     interpolation_needed)
-                moments.neutral.p .= reload_moment("p_neutral", dynamic, time_index, r,
-                                                    z, r_range, z_range, restart_r,
-                                                    restart_r_spectral, restart_z,
-                                                    restart_z_spectral,
+                moments.neutral.p .= reload_moment("p_neutral", dynamic, time_index,
+                                                   coords, reload_ranges, restart_coords,
+                                                   interpolation_needed)
+                moments.neutral.pz .= reload_moment("pz_neutral", dynamic, time_index,
+                                                    coords, reload_ranges, restart_coords,
                                                     interpolation_needed)
-                moments.neutral.pz .= reload_moment("pz_neutral", dynamic, time_index, r,
-                                                    z, r_range, z_range, restart_r,
-                                                    restart_r_spectral, restart_z,
-                                                    restart_z_spectral,
-                                                    interpolation_needed)
-                moments.neutral.qz .= reload_moment("qz_neutral", dynamic, time_index, r,
-                                                    z, r_range, z_range, restart_r,
-                                                    restart_r_spectral, restart_z,
-                                                    restart_z_spectral,
+                moments.neutral.qz .= reload_moment("qz_neutral", dynamic, time_index,
+                                                    coords, reload_ranges, restart_coords,
                                                     interpolation_needed)
                 moments.neutral.vth .= reload_moment("thermal_speed_neutral", dynamic,
-                                                     time_index, r, z, r_range, z_range,
-                                                     restart_r, restart_r_spectral,
-                                                     restart_z, restart_z_spectral,
-                                                     interpolation_needed)
+                                                     time_index, coords, reload_ranges,
+                                                     restart_coords, interpolation_needed)
                 if moments.evolve_density || moments.evolve_upar || moments.evolve_p
                     if "neutral_constraints_A_coefficient" ∈ keys(dynamic)
                         moments.neutral.constraints_A_coefficient .=
                             reload_moment("neutral_constraints_A_coefficient", dynamic,
-                                          time_index, r, z, r_range, z_range, restart_r,
-                                          restart_r_spectral, restart_z, restart_z_spectral,
+                                          time_index, coords, reload_ranges, restart_coords,
                                           interpolation_needed)
                     elseif moments.neutral.constraints_A_coefficient !== nothing
                         moments.neutral.constraints_A_coefficient .= 0.0
@@ -992,8 +934,7 @@ function reload_evolving_fields!(pdf, moments, fields, boundary_distributions,
                     if "neutral_constraints_B_coefficient" ∈ keys(dynamic)
                         moments.neutral.constraints_B_coefficient .=
                             reload_moment("neutral_constraints_B_coefficient", dynamic,
-                                          time_index, r, z, r_range, z_range, restart_r,
-                                          restart_r_spectral, restart_z, restart_z_spectral,
+                                          time_index, coords, reload_ranges, restart_coords,
                                           interpolation_needed)
                     elseif moments.neutral.constraints_B_coefficient !== nothing
                         moments.neutral.constraints_B_coefficient .= 0.0
@@ -1001,8 +942,7 @@ function reload_evolving_fields!(pdf, moments, fields, boundary_distributions,
                     if "neutral_constraints_C_coefficient" ∈ keys(dynamic)
                         moments.neutral.constraints_C_coefficient .=
                             reload_moment("neutral_constraints_C_coefficient", dynamic,
-                                          time_index, r, z, r_range, z_range, restart_r,
-                                          restart_r_spectral, restart_z, restart_z_spectral,
+                                          time_index, coords, reload_ranges, restart_coords,
                                           interpolation_needed)
                     elseif moments.neutral.constraints_C_coefficient !== nothing
                         moments.neutral.constraints_C_coefficient .= 0.0
@@ -1018,43 +958,28 @@ function reload_evolving_fields!(pdf, moments, fields, boundary_distributions,
                 elseif length(moments.neutral.external_source_controller_integral) > 1
                     moments.neutral.external_source_controller_integral .=
                         reload_moment("external_source_neutral_controller_integral",
-                                      dynamic, time_index, r, z, r_range, z_range,
-                                      restart_r, restart_r_spectral, restart_z,
-                                      restart_z_spectral, interpolation_needed)
+                                      dynamic, time_index, coords, reload_ranges,
+                                      restart_coords, interpolation_needed)
                 end
 
                 pdf.neutral.norm .=
-                    reload_neutral_pdf(dynamic, time_index, moments, r, z, vzeta, vr, vz,
-                                       r_range, z_range, vzeta_range, vr_range, vz_range,
-                                       restart_r, restart_r_spectral, restart_z,
-                                       restart_z_spectral, restart_vzeta,
-                                       restart_vzeta_spectral, restart_vr,
-                                       restart_vr_spectral, restart_vz,
-                                       restart_vz_spectral, interpolation_needed,
-                                       restart_evolve_density, restart_evolve_upar,
-                                       restart_evolve_p)
+                    reload_neutral_pdf(dynamic, time_index, moments, coords,
+                                       reload_ranges, restart_coords,
+                                       interpolation_needed, restart_evolve_density,
+                                       restart_evolve_upar, restart_evolve_p)
 
                 boundary_distributions.pdf_rboundary_neutral[:,:,:,:,1,:] .=
                     reload_neutral_boundary_pdf(boundary_distributions_io,
                                                 "pdf_rboundary_neutral_left", 1, moments,
-                                                z, vzeta, vr, vz, z_range, vzeta_range,
-                                                vr_range, vz_range, restart_z,
-                                                restart_z_spectral, restart_vzeta,
-                                                restart_vzeta_spectral, restart_vr,
-                                                restart_vr_spectral, restart_vz,
-                                                restart_vz_spectral, interpolation_needed,
+                                                coords, reload_ranges, restart_coords,
+                                                interpolation_needed,
                                                 restart_evolve_density,
                                                 restart_evolve_upar, restart_evolve_p)
                 boundary_distributions.pdf_rboundary_neutral[:,:,:,:,2,:] .=
                     reload_neutral_boundary_pdf(boundary_distributions_io,
-                                                "pdf_rboundary_neutral_right", r.n,
-                                                moments, z, vzeta, vr, vz, z_range,
-                                                vzeta_range, vr_range, vz_range,
-                                                restart_z, restart_z_spectral,
-                                                restart_vzeta, restart_vzeta_spectral,
-                                                restart_vr, restart_vr_spectral,
-                                                restart_vz, restart_vz_spectral,
-                                                interpolation_needed,
+                                                "pdf_rboundary_neutral_right", coords.r.n,
+                                                moments, coords, reload_ranges,
+                                                restart_coords, interpolation_needed,
                                                 restart_evolve_density,
                                                 restart_evolve_upar, restart_evolve_p)
             end
@@ -1135,6 +1060,8 @@ function reload_electron_data!(pdf, moments, t_params, restart_prefix_iblock, ti
         fid = open_readonly_output_file(restart_prefix_iblock[1], "initial_electron";
                                         iblock=restart_prefix_iblock[2])
         try # finally to make sure to close file0
+            coords = (; r, z, vperp, vpa, vzeta, vr, vz)
+
             overview = get_group(fid, "overview")
             dynamic = get_group(fid, "dynamic_data")
             parallel_io = load_variable(overview, "parallel_io")
@@ -1151,56 +1078,42 @@ function reload_electron_data!(pdf, moments, t_params, restart_prefix_iblock, ti
             previous_runs_info = load_run_info_history(fid)
 
             restart_n_ion_species, restart_n_neutral_species = load_species_data(fid)
-            restart_r, restart_r_spectral, restart_z, restart_z_spectral, restart_vperp,
-                restart_vperp_spectral, restart_vpa, restart_vpa_spectral, restart_vzeta,
-                restart_vzeta_spectral, restart_vr,restart_vr_spectral, restart_vz,
-                restart_vz_spectral = load_restart_coordinates(fid, r, z, vperp, vpa,
-                                                               vzeta, vr, vz, parallel_io)
+            restart_coords = load_restart_coordinates(fid, coords, parallel_io)
 
             # Test whether any interpolation is needed
             interpolation_needed = OrderedDict(
                 x.name => x.n != restart_x.n || !all(isapprox.(x.grid, restart_x.grid))
-                for (x, restart_x) ∈ ((z, restart_z), (r, restart_r),
-                                      (vperp, restart_vperp), (vpa, restart_vpa)))
+                for (x, restart_x) ∈ zip(coords, restart_coords))
 
             code_time[] = load_slice(dynamic, "time", time_index)
 
             pdf_electron_converged[] = get_attribute(fid, "pdf_electron_converged")
 
-            r_range, z_range, vperp_range, vpa_range, vzeta_range, vr_range, vz_range =
-                get_reload_ranges(parallel_io, restart_r, restart_z, restart_vperp,
-                                  restart_vpa, restart_vzeta, restart_vr, restart_vz)
+            reload_ranges = get_reload_ranges(parallel_io, restart_coords)
 
             moments.electron.upar_updated[] = true
             moments.electron.p .=
-                reload_electron_moment("electron_pressure", dynamic, time_index,
-                                       r, z, r_range, z_range, restart_r,
-                                       restart_r_spectral, restart_z, restart_z_spectral,
+                reload_electron_moment("electron_pressure", dynamic, time_index, coords,
+                                       reload_ranges, restart_coords,
                                        interpolation_needed)
             moments.electron.p_updated[] = true
             moments.electron.ppar .=
                 reload_electron_moment("electron_parallel_pressure", dynamic, time_index,
-                                       r, z, r_range, z_range, restart_r,
-                                       restart_r_spectral, restart_z, restart_z_spectral,
+                                       coords, reload_ranges, restart_coords,
                                        interpolation_needed)
             moments.electron.qpar .=
                 reload_electron_moment("electron_parallel_heat_flux", dynamic, time_index,
-                                       r, z, r_range, z_range, restart_r,
-                                       restart_r_spectral, restart_z, restart_z_spectral,
+                                       coords, reload_ranges, restart_coords,
                                        interpolation_needed)
             moments.electron.qpar_updated[] = true
             moments.electron.vth .=
-                reload_electron_moment("electron_thermal_speed", dynamic, time_index, r,
-                                       z, r_range, z_range, restart_r, restart_r_spectral,
-                                       restart_z, restart_z_spectral,
+                reload_electron_moment("electron_thermal_speed", dynamic, time_index,
+                                       coords, reload_ranges, restart_coords,
                                        interpolation_needed)
 
             pdf.electron.norm .=
-                reload_electron_pdf(dynamic, time_index, moments, r, z, vperp, vpa,
-                                    r_range, z_range, vperp_range, vpa_range, restart_r,
-                                    restart_r_spectral, restart_z, restart_z_spectral,
-                                    restart_vperp, restart_vperp_spectral, restart_vpa,
-                                    restart_vpa_spectral, interpolation_needed,
+                reload_electron_pdf(dynamic, time_index, moments, coords, reload_ranges,
+                                    restart_coords, interpolation_needed,
                                     restart_evolve_density, restart_evolve_upar,
                                     restart_evolve_p)
 
@@ -1232,83 +1145,88 @@ function reload_electron_data!(pdf, moments, t_params, restart_prefix_iblock, ti
     return code_time[], pdf_electron_converged[], previous_runs_info, time_index
 end
 
-function load_restart_coordinates(fid, r, z, vperp, vpa, vzeta, vr, vz, parallel_io)
+function load_restart_coordinates(fid, new_coords, parallel_io)
     if parallel_io
-        restart_z, restart_z_spectral, _ =
-            load_coordinate_data(fid, "z"; irank=z.irank, nrank=z.nrank)
-        restart_r, restart_r_spectral, _ =
-            load_coordinate_data(fid, "r"; irank=r.irank, nrank=r.nrank)
-        restart_vperp, restart_vperp_spectral, _ =
-            load_coordinate_data(fid, "vperp"; irank=vperp.irank, nrank=vperp.nrank)
-        restart_vpa, restart_vpa_spectral, _ =
-            load_coordinate_data(fid, "vpa"; irank=vpa.irank, nrank=vpa.nrank)
-        restart_vzeta, restart_vzeta_spectral, _ =
-            load_coordinate_data(fid, "vzeta"; irank=vzeta.irank, nrank=vzeta.nrank)
-        restart_vr, restart_vr_spectral, _ =
-            load_coordinate_data(fid, "vr"; irank=vr.irank, nrank=vr.nrank)
-        restart_vz, restart_vz_spectral, _ =
-            load_coordinate_data(fid, "vz"; irank=vz.irank, nrank=vz.nrank)
+        z, z_spectral, _ =
+            load_coordinate_data(fid, "z"; irank=new_coords.z.irank,
+                                 nrank=new_coords.z.nrank)
+        r, r_spectral, _ =
+            load_coordinate_data(fid, "r"; irank=new_coords.r.irank,
+                                 nrank=new_coords.r.nrank)
+        vperp, vperp_spectral, _ =
+            load_coordinate_data(fid, "vperp"; irank=new_coords.vperp.irank,
+                                 nrank=new_coords.vperp.nrank)
+        vpa, vpa_spectral, _ =
+            load_coordinate_data(fid, "vpa"; irank=new_coords.vpa.irank,
+                                 nrank=new_coords.vpa.nrank)
+        vzeta, vzeta_spectral, _ =
+            load_coordinate_data(fid, "vzeta"; irank=new_coords.vzeta.irank,
+                                 nrank=new_coords.vzeta.nrank)
+        vr, vr_spectral, _ =
+            load_coordinate_data(fid, "vr"; irank=new_coords.vr.irank,
+                                 nrank=new_coords.vr.nrank)
+        vz, vz_spectral, _ =
+            load_coordinate_data(fid, "vz"; irank=new_coords.vz.irank,
+                                 nrank=new_coords.vz.nrank)
     else
-        restart_z, restart_z_spectral, _ =
+        z, z_spectral, _ =
             load_coordinate_data(fid, "z")
-        restart_r, restart_r_spectral, _ =
+        r, r_spectral, _ =
             load_coordinate_data(fid, "r")
-        restart_vperp, restart_vperp_spectral, _ =
+        vperp, vperp_spectral, _ =
             load_coordinate_data(fid, "vperp")
-        restart_vpa, restart_vpa_spectral, _ =
+        vpa, vpa_spectral, _ =
             load_coordinate_data(fid, "vpa")
-        restart_vzeta, restart_vzeta_spectral, _ =
+        vzeta, vzeta_spectral, _ =
             load_coordinate_data(fid, "vzeta")
-        restart_vr, restart_vr_spectral, _ =
+        vr, vr_spectral, _ =
             load_coordinate_data(fid, "vr")
-        restart_vz, restart_vz_spectral, _ =
+        vz, vz_spectral, _ =
             load_coordinate_data(fid, "vz")
 
-        if restart_r.nrank != r.nrank
+        if r.nrank != new_coords.r.nrank
             error("Not using parallel I/O, and distributed MPI layout has "
-                  * "changed: now r.nrank=$(r.nrank), but we are trying to "
-                  * "restart from files ith restart_r.nrank=$(restart_r.nrank).")
+                  * "changed: now r.nrank=$(new_coords.r.nrank), but we are trying to "
+                  * "restart from files with r.nrank=$(r.nrank).")
         end
-        if restart_z.nrank != z.nrank
+        if z.nrank != new_coords.z.nrank
             error("Not using parallel I/O, and distributed MPI layout has "
-                  * "changed: now z.nrank=$(z.nrank), but we are trying to "
-                  * "restart from files ith restart_z.nrank=$(restart_z.nrank).")
+                  * "changed: now z.nrank=$(new_coords.z.nrank), but we are trying to "
+                  * "restart from files with z.nrank=$(z.nrank).")
         end
-        if restart_vperp.nrank != vperp.nrank
+        if vperp.nrank != new_coords.vperp.nrank
             error("Not using parallel I/O, and distributed MPI layout has "
-                  * "changed: now vperp.nrank=$(vperp.nrank), but we are trying to "
-                  * "restart from files ith restart_vperp.nrank=$(restart_vperp.nrank).")
+                  * "changed: now vperp.nrank=$(new_coords.vperp.nrank), but we are "
+                  * "trying to restart from files with vperp.nrank=$(vperp.nrank).")
         end
-        if restart_vpa.nrank != vpa.nrank
+        if vpa.nrank != new_coords.vpa.nrank
             error("Not using parallel I/O, and distributed MPI layout has "
-                  * "changed: now vpa.nrank=$(vpa.nrank), but we are trying to "
-                  * "restart from files ith restart_vpa.nrank=$(restart_vpa.nrank).")
+                  * "changed: now vpa.nrank=$(new_coords.vpa.nrank), but we are trying "
+                  * "to restart from files with vpa.nrank=$(vpa.nrank).")
         end
-        if restart_vzeta.nrank != vzeta.nrank
+        if vzeta.nrank != new_coords.vzeta.nrank
             error("Not using parallel I/O, and distributed MPI layout has "
-                  * "changed: now vzeta.nrank=$(vzeta.nrank), but we are trying to "
-                  * "restart from files ith restart_vzeta.nrank=$(restart_vzeta.nrank).")
+                  * "changed: now vzeta.nrank=$(new_coords.vzeta.nrank), but we are "
+                  * "trying to restart from files with vzeta.nrank=$(vzeta.nrank).")
         end
-        if restart_vr.nrank != vr.nrank
+        if vr.nrank != new_coords.vr.nrank
             error("Not using parallel I/O, and distributed MPI layout has "
-                  * "changed: now vr.nrank=$(vr.nrank), but we are trying to "
-                  * "restart from files ith restart_vr.nrank=$(restart_vr.nrank).")
+                  * "changed: now vr.nrank=$(new_coords.vr.nrank), but we are trying to "
+                  * "restart from files with vr.nrank=$(vr.nrank).")
         end
-        if restart_vz.nrank != vz.nrank
+        if vz.nrank != new_coords.vz.nrank
             error("Not using parallel I/O, and distributed MPI layout has "
-                  * "changed: now vz.nrank=$(vz.nrank), but we are trying to "
-                  * "restart from files ith restart_vz.nrank=$(restart_vz.nrank).")
+                  * "changed: now vz.nrank=$(new_coords.vz.nrank), but we are trying to "
+                  * "restart from files with vz.nrank=$(vz.nrank).")
         end
     end
 
-    return restart_r, restart_r_spectral, restart_z, restart_z_spectral, restart_vperp,
-           restart_vperp_spectral, restart_vpa, restart_vpa_spectral, restart_vzeta,
-           restart_vzeta_spectral, restart_vr,restart_vr_spectral, restart_vz,
-           restart_vz_spectral
+    # Pack return values into a NamedTuple for convenience
+    return (; r, r_spectral, z, z_spectral, vperp, vperp_spectral, vpa, vpa_spectral,
+            vzeta, vzeta_spectral, vr,vr_spectral, vz, vz_spectral)
 end
 
-function get_reload_ranges(parallel_io, restart_r, restart_z, restart_vperp, restart_vpa,
-                           restart_vzeta, restart_vr, restart_vz)
+function get_reload_ranges(parallel_io, restart_coords)
     if parallel_io
         function get_range(coord)
             if coord === nothing
@@ -1322,13 +1240,13 @@ function get_reload_ranges(parallel_io, restart_r, restart_z, restart_vperp, res
                 return this_range.start:(this_range.stop+1)
             end
         end
-        r_range = get_range(restart_r)
-        z_range = get_range(restart_z)
-        vperp_range = get_range(restart_vperp)
-        vpa_range = get_range(restart_vpa)
-        vzeta_range = get_range(restart_vzeta)
-        vr_range = get_range(restart_vr)
-        vz_range = get_range(restart_vz)
+        r_range = get_range(restart_coords.r)
+        z_range = get_range(restart_coords.z)
+        vperp_range = get_range(restart_coords.vperp)
+        vpa_range = get_range(restart_coords.vpa)
+        vzeta_range = get_range(restart_coords.vzeta)
+        vr_range = get_range(restart_coords.vr)
+        vz_range = get_range(restart_coords.vz)
     else
         r_range = (:)
         z_range = (:)
@@ -1338,13 +1256,21 @@ function get_reload_ranges(parallel_io, restart_r, restart_z, restart_vperp, res
         vr_range = (:)
         vz_range = (:)
     end
-    return r_range, z_range, vperp_range, vpa_range, vzeta_range, vr_range, vz_range
+
+    # Pack return values into a NamedTuple for convenience
+    return (; r_range, z_range, vperp_range, vpa_range, vzeta_range, vr_range, vz_range)
 end
 
-function reload_moment(var_name, dynamic, time_index, r, z, r_range, z_range, restart_r,
-                       restart_r_spectral, restart_z, restart_z_spectral,
-                       interpolation_needed)
-    moment = load_slice(dynamic, var_name, z_range, r_range, :, time_index)
+function reload_moment(var_name, dynamic, time_index, coords, reload_ranges,
+                       restart_coords, interpolation_needed)
+    moment = load_slice(dynamic, var_name, reload_ranges.z_range, reload_ranges.r_range,
+                        :, time_index)
+    z = coords.z
+    r = coords.r
+    restart_r = restart_coords.r
+    restart_r_spectral = restart_coords.r_spectral
+    restart_z = restart_coords.z
+    restart_z_spectral = restart_coords.z_spectral
     orig_nz, orig_nr, nspecies = size(moment)
     if interpolation_needed["r"]
         new_moment = allocate_float(orig_nz, r.n, nspecies)
@@ -1367,10 +1293,16 @@ function reload_moment(var_name, dynamic, time_index, r, z, r_range, z_range, re
     return moment
 end
 
-function reload_electron_moment(var_name, dynamic, time_index, r, z, r_range, z_range,
-                                restart_r, restart_r_spectral, restart_z,
-                                restart_z_spectral, interpolation_needed)
-    moment = load_slice(dynamic, var_name, z_range, r_range, time_index)
+function reload_electron_moment(var_name, dynamic, time_index, coords, reload_ranges,
+                                restart_coords, interpolation_needed)
+    moment = load_slice(dynamic, var_name, reload_ranges.z_range, reload_ranges.r_range,
+                        time_index)
+    z = coords.z
+    r = coords.r
+    restart_r = restart_coords.r
+    restart_r_spectral = restart_coords.r_spectral
+    restart_z = restart_coords.z
+    restart_z_spectral = restart_coords.z_spectral
     orig_nz, orig_nr = size(moment)
     if interpolation_needed["r"]
         new_moment = allocate_float(orig_nz, r.n)
@@ -1384,21 +1316,32 @@ function reload_electron_moment(var_name, dynamic, time_index, r, z, r_range, z_
         new_moment = allocate_float(z.n, r.n)
         for ir ∈ 1:r.n
             @views interpolate_to_grid_1d!(new_moment[:,ir], z.grid, moment[:,ir],
-                                           restart_z, restart_z_spectral)
+                                           restart_coords.z, restart_coords.z_spectral)
         end
         moment = new_moment
     end
     return moment
 end
 
-function reload_ion_pdf(dynamic, time_index, moments, r, z, vperp, vpa, r_range, z_range,
-                        vperp_range, vpa_range, restart_r, restart_r_spectral, restart_z,
-                        restart_z_spectral, restart_vperp, restart_vperp_spectral,
-                        restart_vpa, restart_vpa_spectral, interpolation_needed,
-                        restart_evolve_density, restart_evolve_upar, restart_evolve_p)
+function reload_ion_pdf(dynamic, time_index, moments, coords, reload_ranges,
+                        restart_coords, interpolation_needed, restart_evolve_density,
+                        restart_evolve_upar, restart_evolve_p)
 
-    this_pdf = load_slice(dynamic, "f", vpa_range, vperp_range, z_range,
-        r_range, :, time_index)
+    this_pdf = load_slice(dynamic, "f", reload_ranges.vpa_range,
+                          reload_ranges.vperp_range, reload_ranges.z_range,
+                          reload_ranges.r_range, :, time_index)
+    z = coords.z
+    r = coords.r
+    vperp = new_coords.vperp
+    vpa = new_coords.vpa
+    restart_r = restart_coords.r
+    restart_r_spectral = restart_coords.r_spectral
+    restart_z = restart_coords.z
+    restart_z_spectral = restart_coords.z_spectral
+    restart_vperp = restart_coords.vperp
+    restart_vperp_spectral = restart_coords.vperp_spectral
+    restart_vpa = restart_coords.vpa
+    restart_vpa_spectral = restart_coords.vpa_spectral
     orig_nvpa, orig_nvperp, orig_nz, orig_nr, nspecies = size(this_pdf)
     if interpolation_needed["r"]
         new_pdf = allocate_float(orig_nvpa, orig_nvperp, orig_nz, r.n, nspecies)
@@ -1653,15 +1596,21 @@ function reload_ion_pdf(dynamic, time_index, moments, r, z, vperp, vpa, r_range,
     return this_pdf
 end
 
-function reload_ion_boundary_pdf(boundary_distributions_io, var_name, ir, moments, z,
-                                 vperp, vpa, z_range, vperp_range, vpa_range, restart_z,
-                                 restart_z_spectral, restart_vperp,
-                                 restart_vperp_spectral, restart_vpa,
-                                 restart_vpa_spectral, interpolation_needed,
+function reload_ion_boundary_pdf(boundary_distributions_io, var_name, ir, moments, coords,
+                                 reload_ranges, restart_coords, interpolation_needed,
                                  restart_evolve_density, restart_evolve_upar,
                                  restart_evolve_p)
-    this_pdf = load_slice(boundary_distributions_io, var_name, vpa_range,
-        vperp_range, z_range, :)
+    this_pdf = load_slice(boundary_distributions_io, var_name, reload_ranges.vpa_range,
+                          reload_ranges.vperp_range, reload_ranges.z_range, :)
+    z = coords.z
+    vperp = coords.vperp
+    vpa = coords.vpa
+    restart_z = restart_coords.z
+    restart_z_spectral = restart_coords.z_spectral
+    restart_vperp = restart_coords.vperp
+    restart_vperp_spectral = restart_coords.vperp_spectral
+    restart_vpa = restart_coords.vpa
+    restart_vpa_spectral = restart_coords.vpa_spectral
     orig_nvpa, orig_nvperp, orig_nz, nspecies = size(this_pdf)
     if interpolation_needed["z"]
         new_pdf = allocate_float(orig_nvpa, orig_nvperp, z.n, nspecies)
@@ -1703,8 +1652,9 @@ function reload_ion_boundary_pdf(boundary_distributions_io, var_name, ir, moment
             for is ∈ 1:nspecies, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
                 @views interpolate_to_grid_1d!(
                                                new_pdf[:,ivperp,iz,is], vpa.grid,
-                                               this_pdf[:,ivperp,iz,is], restart_vpa,
-                                               restart_vpa_spectral)
+                                               this_pdf[:,ivperp,iz,is],
+                                               restart_coords.vpa,
+                                               restart_coords.vpa_spectral)
             end
             this_pdf = new_pdf
         end
@@ -1727,8 +1677,7 @@ function reload_ion_boundary_pdf(boundary_distributions_io, var_name, ir, moment
         new_pdf = allocate_float(vpa.n, vperp.n, z.n, nspecies)
         for is ∈ nspecies, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
             restart_vpa_vals = vpa.grid ./ moments.ion.vth[iz,ir,is]
-            @views interpolate_to_grid_1d!(
-                                           new_pdf[:,ivperp,iz,is], restart_vpa_vals,
+            @views interpolate_to_grid_1d!(new_pdf[:,ivperp,iz,is], restart_vpa_vals,
                                            this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral)
         end
         this_pdf = new_pdf
@@ -1741,8 +1690,7 @@ function reload_ion_boundary_pdf(boundary_distributions_io, var_name, ir, moment
             restart_vpa_vals =
             @. (vpa.grid - moments.ion.upar[iz,ir,is]) /
             moments.ion.vth[iz,ir,is]
-            @views interpolate_to_grid_1d!(
-                                           new_pdf[:,ivperp,iz,is], restart_vpa_vals,
+            @views interpolate_to_grid_1d!(new_pdf[:,ivperp,iz,is], restart_vpa_vals,
                                            this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral)
         end
         this_pdf = new_pdf
@@ -1753,8 +1701,7 @@ function reload_ion_boundary_pdf(boundary_distributions_io, var_name, ir, moment
         new_pdf = allocate_float(vpa.n, vperp.n, z.n, nspecies)
         for is ∈ nspecies, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
             restart_vpa_vals = vpa.grid .+ moments.ion.upar[iz,ir,is]
-            @views interpolate_to_grid_1d!(
-                                           new_pdf[:,ivperp,iz,is], restart_vpa_vals,
+            @views interpolate_to_grid_1d!(new_pdf[:,ivperp,iz,is], restart_vpa_vals,
                                            this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral)
         end
         this_pdf = new_pdf
@@ -1767,8 +1714,7 @@ function reload_ion_boundary_pdf(boundary_distributions_io, var_name, ir, moment
             restart_vpa_vals =
             @. (vpa.grid + moments.ion.upar[iz,ir,is]) /
             moments.ion.vth
-            @views interpolate_to_grid_1d!(
-                                           new_pdf[:,ivperp,iz,is], restart_vpa_vals,
+            @views interpolate_to_grid_1d!(new_pdf[:,ivperp,iz,is], restart_vpa_vals,
                                            this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral)
         end
         this_pdf = new_pdf
@@ -1779,8 +1725,7 @@ function reload_ion_boundary_pdf(boundary_distributions_io, var_name, ir, moment
         new_pdf = allocate_float(vpa.n, vperp.n, z.n, nspecies)
         for is ∈ nspecies, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
             restart_vpa_vals = vpa.grid ./ moments.ion.vth[iz,ir,is]
-            @views interpolate_to_grid_1d!(
-                                           new_pdf[:,ivperp,iz,is], restart_vpa_vals,
+            @views interpolate_to_grid_1d!(new_pdf[:,ivperp,iz,is], restart_vpa_vals,
                                            this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral)
         end
         this_pdf = new_pdf
@@ -1791,8 +1736,7 @@ function reload_ion_boundary_pdf(boundary_distributions_io, var_name, ir, moment
         new_pdf = allocate_float(vpa.n, vperp.n, z.n, nspecies)
         for is ∈ nspecies, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
             restart_vpa_vals = vpa.grid .* moments.ion.vth[iz,ir,is]
-            @views interpolate_to_grid_1d!(
-                                           new_pdf[:,ivperp,iz,is], restart_vpa_vals,
+            @views interpolate_to_grid_1d!(new_pdf[:,ivperp,iz,is], restart_vpa_vals,
                                            this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral)
         end
         this_pdf = new_pdf
@@ -1804,8 +1748,7 @@ function reload_ion_boundary_pdf(boundary_distributions_io, var_name, ir, moment
         for is ∈ nspecies, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
             restart_vpa_vals = @. vpa.grid * moments.ion.vth[iz,ir,is] -
             moments.ion.upar[iz,ir,is]
-            @views interpolate_to_grid_1d!(
-                                           new_pdf[:,ivperp,iz,is], restart_vpa_vals,
+            @views interpolate_to_grid_1d!(new_pdf[:,ivperp,iz,is], restart_vpa_vals,
                                            this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral)
         end
         this_pdf = new_pdf
@@ -1818,8 +1761,7 @@ function reload_ion_boundary_pdf(boundary_distributions_io, var_name, ir, moment
             restart_vpa_vals =
             @. vpa.grid -
             moments.ion.upar[iz,ir,is]/moments.ion.vth[iz,ir,is]
-            @views interpolate_to_grid_1d!(
-                                           new_pdf[:,ivperp,iz,is], restart_vpa_vals,
+            @views interpolate_to_grid_1d!(new_pdf[:,ivperp,iz,is], restart_vpa_vals,
                                            this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral)
         end
         this_pdf = new_pdf
@@ -1831,8 +1773,7 @@ function reload_ion_boundary_pdf(boundary_distributions_io, var_name, ir, moment
         for is ∈ nspecies, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
             restart_vpa_vals = @. vpa.grid * moments.ion.vth[iz,ir,is] +
             moments.ion.upar[iz,ir,is]
-            @views interpolate_to_grid_1d!(
-                                           new_pdf[:,ivperp,iz,is], restart_vpa_vals,
+            @views interpolate_to_grid_1d!(new_pdf[:,ivperp,iz,is], restart_vpa_vals,
                                            this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral)
         end
         this_pdf = new_pdf
@@ -1843,8 +1784,7 @@ function reload_ion_boundary_pdf(boundary_distributions_io, var_name, ir, moment
         new_pdf = allocate_float(vpa.n, vperp.n, z.n, nspecies)
         for is ∈ nspecies, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
             restart_vpa_vals = vpa.grid .* moments.ion.vth[iz,ir,is]
-            @views interpolate_to_grid_1d!(
-                                           new_pdf[:,ivperp,iz,is], restart_vpa_vals,
+            @views interpolate_to_grid_1d!(new_pdf[:,ivperp,iz,is], restart_vpa_vals,
                                            this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral)
         end
         this_pdf = new_pdf
@@ -1857,8 +1797,7 @@ function reload_ion_boundary_pdf(boundary_distributions_io, var_name, ir, moment
             restart_vpa_vals =
             @. vpa.grid +
             moments.ion.upar[iz,ir,is] / moments.ion.vth[iz,ir,is]
-            @views interpolate_to_grid_1d!(
-                                           new_pdf[:,ivperp,iz,is], restart_vpa_vals,
+            @views interpolate_to_grid_1d!(new_pdf[:,ivperp,iz,is], restart_vpa_vals,
                                            this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral)
         end
         this_pdf = new_pdf
@@ -1899,21 +1838,30 @@ function reload_ion_boundary_pdf(boundary_distributions_io, var_name, ir, moment
     return this_pdf
 end
 
-function reload_electron_pdf(dynamic, time_index, moments, r, z, vperp, vpa, r_range,
-                             z_range, vperp_range, vpa_range, restart_r,
-                             restart_r_spectral, restart_z, restart_z_spectral,
-                             restart_vperp, restart_vperp_spectral, restart_vpa,
-                             restart_vpa_spectral, interpolation_needed,
-                             restart_evolve_density, restart_evolve_upar,
-                             restart_evolve_p)
+function reload_electron_pdf(dynamic, time_index, moments, coords, reload_ranges,
+                             restart_coords, interpolation_needed, restart_evolve_density,
+                             restart_evolve_upar, restart_evolve_p)
 
     # Currently, electrons are always fully moment-kinetic
     evolve_density = true
     evolve_upar = true
     evolve_p = true
 
-    this_pdf = load_slice(dynamic, "f_electron", vpa_range, vperp_range, z_range, r_range,
-                          time_index)
+    this_pdf = load_slice(dynamic, "f_electron", reload_ranges.vpa_range,
+                          reload_ranges.vperp_range, reload_ranges.z_range,
+                          reload_ranges.r_range, time_index)
+    z = coords.z
+    r = coords.r
+    vperp = coords.vperp
+    vpa = coords.vpa
+    restart_r = restart_coords.r
+    restart_r_spectral = restart_coords.r_spectral
+    restart_z = restart_coords.z
+    restart_z_spectral = restart_coords.z_spectral
+    restart_vperp = restart_coords.vperp
+    restart_vperp_spectral = restart_coords.vperp_spectral
+    restart_vpa = restart_coords.vpa
+    restart_vpa_spectral = restart_coords.vpa_spectral
     orig_nvpa, orig_nvperp, orig_nz, orig_nr = size(this_pdf)
     if interpolation_needed["r"]
         new_pdf = allocate_float(orig_nvpa, orig_nvperp, orig_nz, r.n)
@@ -2174,15 +2122,27 @@ function reload_electron_pdf(dynamic, time_index, moments, r, z, vperp, vpa, r_r
     return this_pdf
 end
 
-function reload_neutral_pdf(dynamic, time_index, moments, r, z, vzeta, vr, vz, r_range,
-                            z_range, vzeta_range, vr_range, vz_range, restart_r,
-                            restart_r_spectral, restart_z, restart_z_spectral,
-                            restart_vzeta, restart_vzeta_spectral, restart_vr,
-                            restart_vr_spectral, restart_vz, restart_vz_spectral,
-                            interpolation_needed, restart_evolve_density,
+function reload_neutral_pdf(dynamic, time_index, moments, coords, reload_ranges,
+                            restart_coords, interpolation_needed, restart_evolve_density,
                             restart_evolve_upar, restart_evolve_p)
-    this_pdf = load_slice(dynamic, "f_neutral", vz_range, vr_range,
-                          vzeta_range, z_range, r_range, :, time_index)
+    this_pdf = load_slice(dynamic, "f_neutral", reload_ranges.vz_range,
+                          reload_ranges.vr_range, reload_ranges.vzeta_range,
+                          reload_ranges.z_range, reload_ranges.r_range, :, time_index)
+    z = coords.z
+    r = coords.r
+    vzeta = coords.vzeta
+    vr = coords.vr
+    vz = coords.vz
+    restart_r = restart_coords.r
+    restart_r_spectral = restart_coords.r_spectral
+    restart_z = restart_coords.z
+    restart_z_spectral = restart_coords.z_spectral
+    restart_vzeta = restart_coords.vzeta
+    restart_vzeta_spectral = restart_coords.vzeta_spectral
+    restart_vr = restart_coords.vr
+    restart_vr_spectral = restart_coords.vr_spectral
+    restart_vz = restart_coords.vz
+    restart_vz_spectral = restart_coords.vz_spectral
     orig_nvz, orig_nvr, orig_nvzeta, orig_nz, orig_nr, nspecies =
         size(this_pdf)
     if interpolation_needed["r"]
@@ -2474,15 +2434,28 @@ function reload_neutral_pdf(dynamic, time_index, moments, r, z, vzeta, vr, vz, r
     return this_pdf
 end
 
-function reload_neutral_boundary_pdf(boundary_distributions_io, var_name, ir, moments, z,
-                                     vzeta, vr, vz, z_range, vzeta_range, vr_range,
-                                     vz_range, restart_z, restart_z_spectral,
-                                     restart_vzeta, restart_vzeta_spectral, restart_vr,
-                                     restart_vr_spectral, restart_vz, restart_vz_spectral,
+function reload_neutral_boundary_pdf(boundary_distributions_io, var_name, ir, moments,
+                                     coords, reload_ranges, restart_coords,
                                      interpolation_needed, restart_evolve_density,
                                      restart_evolve_upar, restart_evolve_p)
-    this_pdf = load_slice(boundary_distributions_io, var_name, vz_range,
-                          vr_range, vzeta_range, z_range, :)
+    this_pdf = load_slice(boundary_distributions_io, var_name, reload_ranges.vz_range,
+                          reload_ranges.vr_range, reload_ranges.vzeta_range,
+                          reload_ranges.z_range, :)
+    z = coords.z
+    r = coords.r
+    vzeta = coords.vzeta
+    vr = coords.vr
+    vz = coords.vz
+    restart_r = restart_coords.r
+    restart_r_spectral = restart_coords.r_spectral
+    restart_z = restart_coords.z
+    restart_z_spectral = restart_coords.z_spectral
+    restart_vzeta = restart_coords.vzeta
+    restart_vzeta_spectral = restart_coords.vzeta_spectral
+    restart_vr = restart_coords.vr
+    restart_vr_spectral = restart_coords.vr_spectral
+    restart_vz = restart_coords.vz
+    restart_vz_spectral = restart_coords.vz_spectral
     orig_nvz, orig_nvr, orig_nvzeta, orig_nz, nspecies = size(this_pdf)
     if interpolation_needed["z"]
         new_pdf = allocate_float(orig_nvz, orig_nvr, orig_nvzeta, z.n,
