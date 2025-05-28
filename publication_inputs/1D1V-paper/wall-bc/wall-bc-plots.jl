@@ -1,8 +1,9 @@
-using CairoMakie
 using LaTeXStrings
 using MathTeXEngine
 
-using moment_kinetics.makie_post_processing
+using makie_post_processing
+import makie_post_processing: CairoMakie
+using .CairoMakie
 
 function main()
     output_dir = "wall-bc"
@@ -38,7 +39,7 @@ function main()
 
     fig, axes = get_1d_ax(3; xlabel=L"z/L",
                           subtitles=(L"density$$", L"parallel flow$$", L"temperature$$"),
-                          resolution=(1200, 400))
+                          size=(1200, 400))
     for ((var_names, ylabel), ax) ∈ zip(((("density", "density_neutral"), L"n/n_\mathrm{ref}"),
                                          (("parallel_flow", "uz_neutral"), L"u_\parallel/v_\mathrm{ref}"),
                                          (("temperature", "temperature_neutral"), L"T/T_\mathrm{ref}")),
@@ -47,9 +48,9 @@ function main()
                                           (nothing, :dash, :dashdot, :dot))
             for (var_name, label2) ∈ zip(var_names, ("ion", "neutral"))
                 if var_name == "temperature"
-                    data = postproc_load_variable(ri, "thermal_speed", it=ri.nt, is=1, ir=1).^2
+                    data = get_variable(ri, "thermal_speed", it=ri.nt, is=1, ir=1).^2
                 elseif var_name == "temperature_neutral"
-                    data = postproc_load_variable(ri, "thermal_speed_neutral", it=ri.nt, is=1, ir=1).^2
+                    data = get_variable(ri, "thermal_speed_neutral", it=ri.nt, is=1, ir=1).^2
                 else
                     data = nothing
                 end
@@ -64,17 +65,18 @@ function main()
     #plot_vs_vpa_z(run_info_dfns, "f"; title=L"f_i", outfile=joinpath(output_dir, "f_ion$ext"), xlabel=L"v_\parallel", ylabel=L"z")
     #plot_vs_vz_z(run_info_dfns, "f_neutral"; title=L"f_n", outfile=joinpath(output_dir, "f_neutral$ext"), xlabel=L"v_\parallel", ylabel=L"z")
 
-    ion_cbar_max = 3
-    neutral_cbar_max = 8
-    lims = (-12.0, 12.0, -0.5, 0.5)
-    axis_args = Dict(:limits=>lims, :xgridvisible=>false, :ygridvisible=>false, :xticks=>-10:5:10)
+    ion_cbar_max = 1.2
+    neutral_cbar_max = 2.5
+    lims = (-18.0, 18.0, -0.5, 0.5)
+    #axis_args = Dict(:limits=>lims, :xgridvisible=>false, :ygridvisible=>false, :xticks=>-16:8:16)
+    axis_args = Dict(:limits=>lims, :xgridvisible=>false, :ygridvisible=>false)
     #plot_f_unnorm_vs_vpa_z(run_info_dfns; title=L"f_i", outfile=joinpath(output_dir, "f_ion$ext"), xlabel=L"v_\parallel", ylabel=L"z", rasterize=4.0, colorrange=(0, ion_cbar_max), subtitles=subtitles, axis_args=axis_args)
     #plot_f_unnorm_vs_vpa_z(run_info_dfns; neutral=true, title=L"f_n", outfile=joinpath(output_dir, "f_neutral$ext"), xlabel=L"v_\parallel", ylabel=L"z", rasterize=4.0, colorrange=(0, neutral_cbar_max), subtitles=subtitles, axis_args=axis_args)
 
     #plot_f_unnorm_vs_vpa_z(run_info_dfns; title=L"f_i", outfile=joinpath(output_dir, "logf_ion$ext"), transform=positive_or_nan, colorscale=log10, xlabel=L"v_\parallel", ylabel=L"z", rasterize=4.0, colorrange=(1e-16, ion_cbar_max), subtitles=subtitles, axis_args=axis_args)
     #plot_f_unnorm_vs_vpa_z(run_info_dfns; neutral=true, title=L"f_n", outfile=joinpath(output_dir, "logf_neutral$ext"), transform=positive_or_nan, colorscale=log10, xlabel=L"v_\parallel", ylabel=L"z", rasterize=4.0, colorrange=(1e-16, neutral_cbar_max), subtitles=subtitles, axis_args=axis_args)
 
-    fig = Figure(resolution=(1200, 500))
+    fig = Figure(size=(1200, 500))
 
     # Make column headings
     for (i, st) ∈ enumerate(short_labels)
