@@ -25,10 +25,10 @@ using moment_kinetics.looping: all_dimensions, ion_dimensions, neutral_dimension
 using moment_kinetics.load_data: get_variable, timestep_diagnostic_variables,
                                  em_variables, ion_moment_variables,
                                  electron_moment_variables, neutral_moment_variables,
-                                 all_moment_variables, ion_dfn_variables,
-                                 electron_dfn_variables, neutral_dfn_variables,
-                                 all_dfn_variables, ion_variables, neutral_variables,
-                                 all_variables, ion_source_variables,
+                                 all_source_variables, all_moment_variables,
+                                 ion_dfn_variables, electron_dfn_variables,
+                                 neutral_dfn_variables, all_dfn_variables, ion_variables,
+                                 neutral_variables, all_variables, ion_source_variables,
                                  neutral_source_variables, electron_source_variables
 using moment_kinetics.type_definitions
 
@@ -68,6 +68,7 @@ include("generic_plot_functions.jl")
 include("slicing.jl")
 include("error_handler.jl")
 
+include("compare_runs.jl")
 include("moment_constraints.jl")
 include("steady_state_residual.jl")
 include("wall_plots.jl")

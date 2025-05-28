@@ -280,6 +280,12 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
     end
 
     set_defaults_and_check_section!(
+        this_input_dict, "compare_runs", warn_unexpected;
+        enable=false,
+        interpolate_to_other_grid=false,
+       )
+
+    set_defaults_and_check_section!(
         this_input_dict, "wall_pdf", warn_unexpected;
         plot=false,
         animate=false,

@@ -85,14 +85,22 @@ const neutral_moment_gradient_variables = ("neutral_ddens_dz", "neutral_ddens_dz
                                            "neutral_dp_dz", "neutral_dp_dz_upwind",
                                            "neutral_dpz_dz", "neutral_dvth_dz",
                                            "neutral_dT_dz", "neutral_dqz_dz")
-const ion_source_variables = ("external_source_amplitude", "external_source_density_amplitude",
-                                "external_source_momentum_amplitude", "external_source_pressure_amplitude",
-                                "external_source_controller_integral")
-const neutral_source_variables = ("external_source_neutral_amplitude", "external_source_neutral_density_amplitude",
-                                "external_source_neutral_momentum_amplitude", "external_source_neutral_pressure_amplitude",
-                                "external_source_neutral_controller_integral")
-const electron_source_variables = ("external_source_electron_amplitude", "external_source_electron_density_amplitude",
-                                "external_source_electron_momentum_amplitude", "external_source_electron_pressure_amplitude")
+const ion_source_variables = ("external_source_amplitude",
+                              "external_source_density_amplitude",
+                              "external_source_momentum_amplitude",
+                              "external_source_pressure_amplitude",
+                              "external_source_controller_integral")
+const neutral_source_variables = ("external_source_neutral_amplitude",
+                                  "external_source_neutral_density_amplitude",
+                                  "external_source_neutral_momentum_amplitude",
+                                  "external_source_neutral_pressure_amplitude",
+                                  "external_source_neutral_controller_integral")
+const electron_source_variables = ("external_source_electron_amplitude",
+                                   "external_source_electron_density_amplitude",
+                                   "external_source_electron_momentum_amplitude",
+                                   "external_source_electron_pressure_amplitude")
+const all_source_variables = tuple(ion_source_variables..., electron_source_variables...,
+                                   neutral_source_variables...)
 const all_moment_variables = tuple(em_variables..., ion_moment_variables...,
                                    electron_moment_variables...,
                                    neutral_moment_variables...,
