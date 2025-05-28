@@ -7,7 +7,7 @@ using .CairoMakie
 
 function main()
     output_dir = "wall-bc"
-    ext = ".png"
+    ext = ".pdf"
 
     CairoMakie.activate!(; px_per_unit=4)
     update_theme!(fontsize=24, fonts=(; regular=texfont(:text), bold=texfont(:bold),
