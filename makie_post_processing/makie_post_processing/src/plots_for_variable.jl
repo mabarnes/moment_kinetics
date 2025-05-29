@@ -90,14 +90,6 @@ function plots_for_variable(run_info, variable_name; plot_prefix, has_rdim=true,
             variable_prefix = plot_prefix * variable_name * "_"
             log_variable_prefix = plot_prefix * "log" * variable_name * "_"
         end
-        if variable_name == "Er" && !has_rdim
-            # Skip if there is no r-dimension
-            continue
-        end
-        if variable_name == "Ez" && !has_zdim
-            # Skip if there is no r-dimension
-            continue
-        end
         if has_rdim && input.plot_vs_r_t
             plot_vs_r_t(run_info, variable_name, is=is, data=variable, input=input,
                         outfile=variable_prefix * "vs_r_t.pdf")
