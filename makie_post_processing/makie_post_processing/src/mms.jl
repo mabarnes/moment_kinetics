@@ -905,7 +905,7 @@ end
 
 """
     manufactured_solutions_analysis(run_info; plot_prefix)
-    manufactured_solutions_analysis(run_info::Tuple; plot_prefix)
+    manufactured_solutions_analysis(run_info::Vector{Any}; plot_prefix)
 
 Compare computed and manufactured solutions for field and moment variables for a 'method
 of manufactured solutions' (MMS) test.
@@ -919,13 +919,13 @@ will be saved with the format `plot_prefix<some_identifying_string>.pdf` for plo
 
 Settings are read from the `[manufactured_solns]` section of the input.
 
-While a Tuple of `run_info` can be passed for compatibility with `makie_post_process()`,
-at present comparison of multiple runs is not supported - passing a Tuple of length
+While a Vector of `run_info` can be passed for compatibility with `makie_post_process()`,
+at present comparison of multiple runs is not supported - passing a Vector of length
 greater than one will result in an error.
 """
 function manufactured_solutions_analysis end
 
-function manufactured_solutions_analysis(run_info::Tuple; plot_prefix, nvperp)
+function manufactured_solutions_analysis(run_info::Vector{Any}; plot_prefix, nvperp)
     if !any(ri !== nothing && ri.manufactured_solns_input.use_for_advance &&
             ri.manufactured_solns_input.use_for_init for ri ∈ run_info)
         # No manufactured solutions tests
@@ -997,7 +997,7 @@ end
 
 """
     manufactured_solutions_analysis_dfns(run_info; plot_prefix)
-    manufactured_solutions_analysis_dfns(run_info::Tuple; plot_prefix)
+    manufactured_solutions_analysis_dfns(run_info::Vector{Any}; plot_prefix)
 
 Compare computed and manufactured solutions for distribution function variables for a
 'method of manufactured solutions' (MMS) test.
@@ -1011,13 +1011,13 @@ will be saved with the format `plot_prefix<some_identifying_string>.pdf` for plo
 
 Settings are read from the `[manufactured_solns]` section of the input.
 
-While a Tuple of `run_info` can be passed for compatibility with `makie_post_process()`,
-at present comparison of multiple runs is not supported - passing a Tuple of length
+While a Vector of `run_info` can be passed for compatibility with `makie_post_process()`,
+at present comparison of multiple runs is not supported - passing a Vector of length
 greater than one will result in an error.
 """
 function manufactured_solutions_analysis_dfns end
 
-function manufactured_solutions_analysis_dfns(run_info::Tuple; plot_prefix)
+function manufactured_solutions_analysis_dfns(run_info::Vector{Any}; plot_prefix)
     if !any(ri !== nothing && ri.manufactured_solns_input.use_for_advance &&
             ri.manufactured_solns_input.use_for_init for ri ∈ run_info)
         # No manufactured solutions tests

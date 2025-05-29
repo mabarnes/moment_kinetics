@@ -32,7 +32,7 @@ for dim ∈ one_dimension_combinations
              export $function_name
 
              """
-                 $($function_name_str)(run_info::Tuple, var_name; is=1, data=nothing,
+                 $($function_name_str)(run_info::Vector{Any}, var_name; is=1, data=nothing,
                  $($spaces)input=nothing, outfile=nothing, yscale=nothing,
                  transform=identity, axis_args=Dict{Symbol,Any}(), it=nothing,
                  $($spaces)ir=nothing, iz=nothing, ivperp=nothing, ivpa=nothing,
@@ -47,7 +47,7 @@ for dim ∈ one_dimension_combinations
              Plot `var_name` from the run(s) represented by `run_info` (as returned by
              [`get_run_info`](@ref)) vs $($dim_str).
 
-             If a Tuple of `run_info` is passed, the plots from each run are overlayed on
+             If a Vector of `run_info` is passed, the plots from each run are overlayed on
              the same axis, and a legend is added.
 
              `it`, `is`, `ir`, `iz`, `ivperp`, `ivpa`, `ivzeta`, `ivr`, and `ivz` can be
@@ -94,14 +94,14 @@ for dim ∈ one_dimension_combinations
              """
              function $function_name end
 
-             function $function_name(run_info::Tuple, var_name; is=1, data=nothing,
+             function $function_name(run_info::Vector{Any}, var_name; is=1, data=nothing,
                                      input=nothing, outfile=nothing, yscale=nothing,
                                      transform=identity, axis_args=Dict{Symbol,Any}(),
                                      $idim=nothing, kwargs...)
 
                  try
                      if data === nothing
-                         data = Tuple(nothing for _ in run_info)
+                         data = [nothing for _ in run_info]
                      end
 
                      if input === nothing
@@ -258,7 +258,7 @@ for (dim1, dim2) ∈ two_dimension_combinations
              export $function_name
 
              """
-                 $($function_name_str)(run_info::Tuple, var_name; is=1, data=nothing,
+                 $($function_name_str)(run_info::Vector{Any}, var_name; is=1, data=nothing,
                  $($spaces)input=nothing, outfile=nothing, colorscale=identity,
                  $($spaces)transform=identity, axis_args=Dict{Symbol,Any}(),
                  $($spaces)it=nothing, ir=nothing, iz=nothing, ivperp=nothing,
@@ -275,7 +275,7 @@ for (dim1, dim2) ∈ two_dimension_combinations
              Plot `var_name` from the run(s) represented by `run_info` (as returned by
              [`get_run_info`](@ref))vs $($dim1_str) and $($dim2_str).
 
-             If a Tuple of `run_info` is passed, the plots from each run are displayed in
+             If a Vector of `run_info` is passed, the plots from each run are displayed in
              a horizontal row, and the subtitle for each subplot is the 'run name'.
 
              `it`, `is`, `ir`, `iz`, `ivperp`, `ivpa`, `ivzeta`, `ivr`, and `ivz` can be
@@ -322,13 +322,13 @@ for (dim1, dim2) ∈ two_dimension_combinations
              """
              function $function_name end
 
-             function $function_name(run_info::Tuple, var_name; is=1, data=nothing,
+             function $function_name(run_info::Vector{Any}, var_name; is=1, data=nothing,
                                      input=nothing, outfile=nothing, transform=identity,
                                      axis_args=Dict{Symbol,Any}(), kwargs...)
 
                  try
                      if data === nothing
-                         data = Tuple(nothing for _ in run_info)
+                         data = [nothing for _ in run_info]
                      end
                      fig, ax, colorbar_places = get_2d_ax(length(run_info);
                                                           title=get_variable_symbol(var_name),
@@ -459,7 +459,7 @@ for dim ∈ one_dimension_combinations_no_t
              export $function_name
 
              """
-                 $($function_name_str)(run_info::Tuple, var_name; is=1, data=nothing,
+                 $($function_name_str)(run_info::Vector{Any}, var_name; is=1, data=nothing,
                  $($spaces)input=nothing, outfile=nothing, yscale=nothing,
                  $($spaces)transform=identity, ylims=nothing,
                  $($spaces)axis_args=Dict{Symbol,Any}(), it=nothing, ir=nothing, iz=nothing,
@@ -476,7 +476,7 @@ for dim ∈ one_dimension_combinations_no_t
              Animate `var_name` from the run(s) represented by `run_info` (as returned by
              [`get_run_info`](@ref))vs $($dim_str).
 
-             If a Tuple of `run_info` is passed, the animations from each run are
+             If a Vector of `run_info` is passed, the animations from each run are
              overlayed on the same axis, and a legend is added.
 
              `it`, `is`, `ir`, `iz`, `ivperp`, `ivpa`, `ivzeta`, `ivr`, and `ivz` can be
@@ -527,14 +527,14 @@ for dim ∈ one_dimension_combinations_no_t
              """
              function $function_name end
 
-             function $function_name(run_info::Tuple, var_name; is=1, data=nothing,
+             function $function_name(run_info::Vector{Any}, var_name; is=1, data=nothing,
                                      input=nothing, outfile=nothing, yscale=nothing,
                                      ylims=nothing, axis_args=Dict{Symbol,Any}(),
                                      it=nothing, $idim=nothing, kwargs...)
 
                  try
                      if data === nothing
-                         data = Tuple(nothing for _ in run_info)
+                         data = [nothing for _ in run_info]
                      end
                      if outfile === nothing
                          error("`outfile` is required for $($function_name_str)")
@@ -729,7 +729,7 @@ for (dim1, dim2) ∈ two_dimension_combinations_no_t
              export $function_name
 
              """
-                 $($function_name_str)(run_info::Tuple, var_name; is=1, data=nothing,
+                 $($function_name_str)(run_info::Vector{Any}, var_name; is=1, data=nothing,
                  $($spaces)input=nothing, outfile=nothing, colorscale=identity,
                  $($spaces)transform=identity, axis_args=Dict{Symbol,Any}(),
                  $($spaces)it=nothing, ir=nothing, iz=nothing, ivperp=nothing,
@@ -747,7 +747,7 @@ for (dim1, dim2) ∈ two_dimension_combinations_no_t
              Animate `var_name` from the run(s) represented by `run_info` (as returned by
              [`get_run_info`](@ref))vs $($dim1_str) and $($dim2_str).
 
-             If a Tuple of `run_info` is passed, the animations from each run are
+             If a Vector of `run_info` is passed, the animations from each run are
              created in a horizontal row, with each sub-animation having the 'run name' as
              its subtitle.
 
@@ -797,13 +797,13 @@ for (dim1, dim2) ∈ two_dimension_combinations_no_t
              """
              function $function_name end
 
-             function $function_name(run_info::Tuple, var_name; is=1, data=nothing,
+             function $function_name(run_info::Vector{Any}, var_name; is=1, data=nothing,
                                      input=nothing, outfile=nothing, transform=identity,
                                      axis_args=Dict{Symbol,Any}(), it=nothing, kwargs...)
 
                  try
                      if data === nothing
-                         data = Tuple(nothing for _ in run_info)
+                         data = [nothing for _ in run_info]
                      end
                      if outfile === nothing
                          error("`outfile` is required for $($function_name_str)")
@@ -1541,7 +1541,7 @@ This function is only needed for moment-kinetic runs. These are currently only s
 for the 1D1V case.
 
 The information for the runs to plot is passed in `run_info` (as returned by
-[`get_run_info`](@ref)). If `run_info` is a Tuple, comparison plots are made where plots
+[`get_run_info`](@ref)). If `run_info` is a Vector, comparison plots are made where plots
 from the different runs are overlayed on the same axis.
 
 By default plots the ion distribution function. If `electron=true` is passed, plots the
@@ -1560,7 +1560,7 @@ The data needed will be loaded from file.
 If `outfile` is given, the plot will be saved to a file with that name. The suffix
 determines the file type.
 
-When `run_info` is not a Tuple, an Axis can be passed to `ax` to have the plot added to
+When `run_info` is not a Vector, an Axis can be passed to `ax` to have the plot added to
 `ax`. When `ax` is passed, if `outfile` is passed to save the plot, then the Figure
 containing `ax` must be passed to `fig`.
 
@@ -1578,7 +1578,7 @@ Any extra `kwargs` are passed to [`plot_1d`](@ref).
 """
 function plot_f_unnorm_vs_vpa end
 
-function plot_f_unnorm_vs_vpa(run_info::Tuple; f_over_vpa2=false, electron=false,
+function plot_f_unnorm_vs_vpa(run_info::Vector{Any}; f_over_vpa2=false, electron=false,
                               neutral=false, outfile=nothing,
                               axis_args=Dict{Symbol,Any}(), kwargs...)
     try
@@ -1721,7 +1721,7 @@ This function is only needed for moment-kinetic runs. These are currently only s
 for the 1D1V case.
 
 The information for the runs to plot is passed in `run_info` (as returned by
-[`get_run_info`](@ref)). If `run_info` is a Tuple, comparison plots are made where plots
+[`get_run_info`](@ref)). If `run_info` is a Vector, comparison plots are made where plots
 from the different runs are displayed in a horizontal row.
 
 By default plots the ion distribution function. If `electron=true` is passed, plots the
@@ -1739,7 +1739,7 @@ The data needed will be loaded from file.
 If `outfile` is given, the plot will be saved to a file with that name. The suffix
 determines the file type.
 
-When `run_info` is not a Tuple, an Axis can be passed to `ax` to have the plot created in
+When `run_info` is not a Vector, an Axis can be passed to `ax` to have the plot created in
 `ax`. When `ax` is passed, if `outfile` is passed to save the plot, then the Figure
 containing `ax` must be passed to `fig`.
 
@@ -1755,7 +1755,7 @@ plots as vectorized plots from `mesh!()` have a very large file size. Pass `fals
 plots vectorized. Pass a number to increase the resolution of the rasterized plot by that
 factor.
 
-When `run_info` is a Tuple, `subtitles` can be passed a Tuple (with the same length as
+When `run_info` is a Vector, `subtitles` can be passed a Vector (with the same length as
 `run_info`) to set the subtitle for each subplot.
 
 `axis_args` are passed as keyword arguments to `get_2d_ax()`, and from there to the `Axis`
@@ -1765,13 +1765,13 @@ Any extra `kwargs` are passed to [`plot_2d`](@ref).
 """
 function plot_f_unnorm_vs_vpa_z end
 
-function plot_f_unnorm_vs_vpa_z(run_info::Tuple; electron=false, neutral=false,
+function plot_f_unnorm_vs_vpa_z(run_info::Vector{Any}; electron=false, neutral=false,
                                 outfile=nothing, axis_args=Dict{Symbol,Any}(),
                                 title=nothing, subtitles=nothing, kwargs...)
     try
         n_runs = length(run_info)
         if subtitles === nothing
-            subtitles = Tuple(nothing for _ ∈ 1:n_runs)
+            subtitles = [nothing for _ ∈ 1:n_runs]
         end
         if title !== nothing
             title = neutral ? L"f_{n,\mathrm{unnormalized}}" : electron ? L"f_{e,\mathrm{unnormalized}}" : L"f_{i,\mathrm{unnormalized}}"
@@ -1892,7 +1892,7 @@ This function is only needed for moment-kinetic runs. These are currently only s
 for the 1D1V case.
 
 The information for the runs to animate is passed in `run_info` (as returned by
-[`get_run_info`](@ref)). If `run_info` is a Tuple, comparison plots are made where plots
+[`get_run_info`](@ref)). If `run_info` is a Vector, comparison plots are made where plots
 from the different runs are overlayed on the same axis.
 
 By default animates the ion distribution function. If `electron=true` is passed, animates
@@ -1913,7 +1913,7 @@ a file named `outfile`.  The suffix determines the file type. If both `outfile` 
 are passed, then the `Figure` containing `ax` must be passed to `fig` to allow the
 animation to be saved.
 
-When `run_info` is not a Tuple, an Axis can be passed to `ax` to have the plot added to
+When `run_info` is not a Vector, an Axis can be passed to `ax` to have the plot added to
 `ax`. When `ax` is passed, if `outfile` is passed to save the plot, then the Figure
 containing `ax` must be passed to `fig`.
 
@@ -1932,7 +1932,7 @@ to handle time-varying coordinates so cannot use [`animate_1d`](@ref)).
 """
 function animate_f_unnorm_vs_vpa end
 
-function animate_f_unnorm_vs_vpa(run_info::Tuple; f_over_vpa2=false, electron=false,
+function animate_f_unnorm_vs_vpa(run_info::Vector{Any}; f_over_vpa2=false, electron=false,
                                  neutral=false, outfile=nothing,
                                  axis_args=Dict{Symbol,Any}(), kwargs...)
     try
@@ -2130,7 +2130,7 @@ This function is only needed for moment-kinetic runs. These are currently only s
 for the 1D1V case.
 
 The information for the runs to plot is passed in `run_info` (as returned by
-[`get_run_info`](@ref)). If `run_info` is a Tuple, comparison plots are made where plots
+[`get_run_info`](@ref)). If `run_info` is a Vector, comparison plots are made where plots
 from the different runs are displayed in a horizontal row.
 
 By default animates the ion distribution function. If `electron=true` is passed, animates
@@ -2148,7 +2148,7 @@ a file named `outfile`.  The suffix determines the file type. If both `outfile` 
 are passed, then the `Figure` containing `ax` must be passed to `fig` to allow the
 animation to be saved.
 
-When `run_info` is not a Tuple, an Axis can be passed to `ax` to have the animation
+When `run_info` is not a Vector, an Axis can be passed to `ax` to have the animation
 created in `ax`. When `ax` is passed, if `outfile` is passed to save the animation, then
 the Figure containing `ax` must be passed to `fig`.
 
@@ -2167,7 +2167,7 @@ we have to handle time-varying coordinates so cannot use [`animate_2d`](@ref)).
 """
 function animate_f_unnorm_vs_vpa_z end
 
-function animate_f_unnorm_vs_vpa_z(run_info::Tuple; electron=false, neutral=false,
+function animate_f_unnorm_vs_vpa_z(run_info::Vector{Any}; electron=false, neutral=false,
                                    outfile=nothing, axis_args=Dict{Symbol,Any}(),
                                    kwargs...)
     try

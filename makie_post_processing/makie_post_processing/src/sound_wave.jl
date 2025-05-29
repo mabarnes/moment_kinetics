@@ -4,31 +4,31 @@ using moment_kinetics.analysis: analyze_fields_data
 using .shared_utils: calculate_and_write_frequencies
 
 """
-    sound_wave_plots(run_info::Tuple; plot_prefix)
+    sound_wave_plots(run_info::Vector{Any}; plot_prefix)
     sound_wave_plots(run_info; outfile=nothing, ax=nothing, phi=nothing)
 
 Calculate decay rate and frequency for the damped 'sound wave' in a 1D1V simulation in a
 periodic box. Plot the mode amplitude vs. time along with the fitted decay rate.
 
 The information for the runs to analyse and plot is passed in `run_info` (as returned by
-[`get_run_info`](@ref)). If `run_info` is a Tuple, comparison plots are made where line
+[`get_run_info`](@ref)). If `run_info` is a Vector, comparison plots are made where line
 plots from the different runs are overlayed on the same axis.
 
 Settings are read from the `[sound_wave]` section of the input.
 
-When `run_info` is a Tuple, `plot_prefix` is required and gives the path and prefix for
+When `run_info` is a Vector, `plot_prefix` is required and gives the path and prefix for
 plots to be saved to. They will be saved with the format
 `plot_prefix<some_identifying_string>.pdf`.
-When `run_info` is not a Tuple, `outfile` can be passed, to save the plot to `outfile`.
+When `run_info` is not a Vector, `outfile` can be passed, to save the plot to `outfile`.
 
-When `run_info` is not a Tuple, ax can be passed to add the plot to an existing `Axis`.
+When `run_info` is not a Vector, ax can be passed to add the plot to an existing `Axis`.
 
-When `run_info` is not a Tuple, the array containing data for phi can be passed to `phi` -
+When `run_info` is not a Vector, the array containing data for phi can be passed to `phi` -
 by default this data is loaded from the output file.
 """
 function sound_wave_plots end
 
-function sound_wave_plots(run_info::Tuple; plot_prefix)
+function sound_wave_plots(run_info::Vector{Any}; plot_prefix)
     input = Dict_to_NamedTuple(input_dict["sound_wave_fit"])
 
     if !input.calculate_frequency && !input.plot
