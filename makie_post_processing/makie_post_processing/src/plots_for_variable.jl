@@ -1,7 +1,7 @@
 """
     plots_for_variable(run_info, variable_name; plot_prefix, has_rdim=true,
                        has_zdim=true, is_1V=false,
-                       steady_state_residual_fig_axes=nothing)
+                       steady_state_residual_fig_axes=nothing, kwargs...)
 
 Make plots for the EM field or moment variable `variable_name`.
 
@@ -19,10 +19,13 @@ plots that do not make sense for 0D/1D or 1V simulations (regardless of the sett
 
 `steady_state_residual_fig_axes` contains the figure, axes and legend places for steady
 state residual plots.
+
+`kwargs...` are passed through to `plot_vs_*()` and `animate_vs_*()`.
 """
 function plots_for_variable(run_info, variable_name; plot_prefix, has_rdim=true,
                             has_zdim=true, is_1V=false,
-                            steady_state_residual_fig_axes=nothing)
+                            steady_state_residual_fig_axes=nothing,
+                            kwargs...)
     input = Dict_to_NamedTuple(input_dict[variable_name])
 
     # test if any plot is needed
@@ -91,36 +94,39 @@ function plots_for_variable(run_info, variable_name; plot_prefix, has_rdim=true,
             log_variable_prefix = plot_prefix * "log" * variable_name * "_"
         end
         if has_rdim && input.plot_vs_r_t
-            plot_vs_r_t(run_info, variable_name, is=is, data=variable, input=input,
-                        outfile=variable_prefix * "vs_r_t.pdf")
+            plot_vs_r_t(run_info, variable_name; is=is, data=variable, input=input,
+                        outfile=variable_prefix * "vs_r_t.pdf", kwargs...)
         end
         if has_zdim && input.plot_vs_z_t
-            plot_vs_z_t(run_info, variable_name, is=is, data=variable, input=input,
-                        outfile=variable_prefix * "vs_z_t.pdf")
+            plot_vs_z_t(run_info, variable_name; is=is, data=variable, input=input,
+                        outfile=variable_prefix * "vs_z_t.pdf", kwargs...)
         end
         if has_rdim && input.plot_vs_r
-            plot_vs_r(run_info, variable_name, is=is, data=variable, input=input,
-                      outfile=variable_prefix * "vs_r.pdf")
+            plot_vs_r(run_info, variable_name; is=is, data=variable, input=input,
+                      outfile=variable_prefix * "vs_r.pdf", kwargs...)
         end
         if has_zdim && input.plot_vs_z
-            plot_vs_z(run_info, variable_name, is=is, data=variable, input=input,
-                      outfile=variable_prefix * "vs_z.pdf")
+            plot_vs_z(run_info, variable_name; is=is, data=variable, input=input,
+                      outfile=variable_prefix * "vs_z.pdf", kwargs...)
         end
         if has_rdim && has_zdim && input.plot_vs_z_r
-            plot_vs_z_r(run_info, variable_name, is=is, data=variable, input=input,
-                        outfile=variable_prefix * "vs_z_r.pdf")
+            plot_vs_z_r(run_info, variable_name; is=is, data=variable, input=input,
+                        outfile=variable_prefix * "vs_z_r.pdf", kwargs...)
         end
         if has_zdim && input.animate_vs_z
-            animate_vs_z(run_info, variable_name, is=is, data=variable, input=input,
-                         outfile=variable_prefix * "vs_z." * input.animation_ext)
+            animate_vs_z(run_info, variable_name; is=is, data=variable, input=input,
+                         outfile=variable_prefix * "vs_z." * input.animation_ext,
+                         kwargs...)
         end
         if has_rdim && input.animate_vs_r
-            animate_vs_r(run_info, variable_name, is=is, data=variable, input=input,
-                         outfile=variable_prefix * "vs_r." * input.animation_ext)
+            animate_vs_r(run_info, variable_name; is=is, data=variable, input=input,
+                         outfile=variable_prefix * "vs_r." * input.animation_ext,
+                         kwargs...)
         end
         if has_rdim && has_zdim && input.animate_vs_z_r
-            animate_vs_z_r(run_info, variable_name, is=is, data=variable, input=input,
-                           outfile=variable_prefix * "vs_r." * input.animation_ext)
+            animate_vs_z_r(run_info, variable_name; is=is, data=variable, input=input,
+                           outfile=variable_prefix * "vs_r." * input.animation_ext,
+                           kwargs...)
         end
         if input.steady_state_residual
             calculate_steady_state_residual(run_info, variable_name; is=is, data=variable,
@@ -133,7 +139,7 @@ end
 
 """
     plots_for_dfn_variable(run_info, variable_name; plot_prefix, has_rdim=true,
-                           has_zdim=true, is_1V=false)
+                           has_zdim=true, is_1V=false, kwargs...)
 
 Make plots for the distribution function variable `variable_name`.
 
@@ -150,9 +156,12 @@ will be saved with the format `plot_prefix<some_identifying_string>.pdf` for plo
 
 `has_rdim`, `has_zdim` and/or `is_1V` can be passed to allow the function to skip some
 plots that do not make sense for 0D/1D or 1V simulations (regardless of the settings).
+
+`kwargs...` are passed through to `plot_vs_*()`, `plot_*_unnorm_vs_*()`, `animate_vs_*()`,
+and `animate_*_unnorm_vs_*()`.
 """
 function plots_for_dfn_variable(run_info, variable_name; plot_prefix, has_rdim=true,
-                                has_zdim=true, is_1V=false)
+                                has_zdim=true, is_1V=false, kwargs...)
     input = Dict_to_NamedTuple(input_dict_dfns[variable_name])
 
     is_neutral = variable_name ∈ neutral_dfn_variables
@@ -214,8 +223,8 @@ function plots_for_dfn_variable(run_info, variable_name; plot_prefix, has_rdim=t
                 if input[Symbol(:plot, log, :_vs_, dim)]
                     func = getfield(makie_post_processing, Symbol(:plot_vs_, dim))
                     outfile = var_prefix * "vs_$dim.pdf"
-                    func(run_info, variable_name, is=is, input=input, outfile=outfile,
-                         yscale=yscale, transform=transform)
+                    func(run_info, variable_name; is=is, input=input, outfile=outfile,
+                         yscale=yscale, transform=transform, kwargs...)
                 end
             end
             for (dim1, dim2) ∈ combinations(plot_dims, 2)
@@ -223,16 +232,17 @@ function plots_for_dfn_variable(run_info, variable_name; plot_prefix, has_rdim=t
                     func = getfield(makie_post_processing,
                                     Symbol(:plot_vs_, dim2, :_, dim1))
                     outfile = var_prefix * "vs_$(dim2)_$(dim1).pdf"
-                    func(run_info, variable_name, is=is, input=input, outfile=outfile,
-                         colorscale=yscale, transform=transform)
+                    func(run_info, variable_name; is=is, input=input, outfile=outfile,
+                         colorscale=yscale, transform=transform,
+                         kwargs...)
                 end
             end
             for dim ∈ animate_dims
                 if input[Symbol(:animate, log, :_vs_, dim)]
                     func = getfield(makie_post_processing, Symbol(:animate_vs_, dim))
                     outfile = var_prefix * "vs_$dim." * input.animation_ext
-                    func(run_info, variable_name, is=is, input=input, outfile=outfile,
-                         yscale=yscale, transform=transform)
+                    func(run_info, variable_name; is=is, input=input, outfile=outfile,
+                         yscale=yscale, transform=transform, kwargs...)
                 end
             end
             for (dim1, dim2) ∈ combinations(animate_dims, 2)
@@ -240,8 +250,9 @@ function plots_for_dfn_variable(run_info, variable_name; plot_prefix, has_rdim=t
                     func = getfield(makie_post_processing,
                                     Symbol(:animate_vs_, dim2, :_, dim1))
                     outfile = var_prefix * "vs_$(dim2)_$(dim1)." * input.animation_ext
-                    func(run_info, variable_name, is=is, input=input, outfile=outfile,
-                         colorscale=yscale, transform=transform)
+                    func(run_info, variable_name; is=is, input=input, outfile=outfile,
+                         colorscale=yscale, transform=transform,
+                         kwargs...)
                 end
             end
 
@@ -250,53 +261,54 @@ function plots_for_dfn_variable(run_info, variable_name; plot_prefix, has_rdim=t
                     if input[Symbol(:plot, log, :_unnorm_vs_vz)]
                         outfile = var_prefix * "unnorm_vs_vz.pdf"
                         plot_f_unnorm_vs_vpa(run_info; input=input, neutral=true, is=is,
-                                             outfile=outfile, yscale=yscale, transform=transform)
+                                             outfile=outfile, yscale=yscale, transform=transform, kwargs...)
                     end
                     if has_zdim && input[Symbol(:plot, log, :_unnorm_vs_vz_z)]
                         outfile = var_prefix * "unnorm_vs_vz_z.pdf"
                         plot_f_unnorm_vs_vpa_z(run_info; input=input, neutral=true, is=is,
                                                outfile=outfile, colorscale=yscale,
-                                               transform=transform)
+                                               transform=transform, kwargs...)
                     end
                     if input[Symbol(:animate, log, :_unnorm_vs_vz)]
                         outfile = var_prefix * "unnorm_vs_vz." * input.animation_ext
                         animate_f_unnorm_vs_vpa(run_info; input=input, neutral=true, is=is,
                                                 outfile=outfile, yscale=yscale,
-                                                transform=transform)
+                                                transform=transform, kwargs...)
                     end
                     if has_zdim && input[Symbol(:animate, log, :_unnorm_vs_vz_z)]
                         outfile = var_prefix * "unnorm_vs_vz_z." * input.animation_ext
                         animate_f_unnorm_vs_vpa_z(run_info; input=input, neutral=true, is=is,
                                                   outfile=outfile, colorscale=yscale,
-                                                  transform=transform)
+                                                  transform=transform,
+                                                  kwargs...)
                     end
                 else
                     if input[Symbol(:plot, log, :_unnorm_vs_vpa)]
                         outfile = var_prefix * "unnorm_vs_vpa.pdf"
                         plot_f_unnorm_vs_vpa(run_info; input=input, electron=is_electron,
                                              is=is, outfile=outfile, yscale=yscale,
-                                             transform=transform)
+                                             transform=transform, kwargs...)
                     end
                     if has_zdim && input[Symbol(:plot, log, :_unnorm_vs_vpa_z)]
                         outfile = var_prefix * "unnorm_vs_vpa_z.pdf"
                         plot_f_unnorm_vs_vpa_z(run_info; input=input,
                                                electron=is_electron, is=is,
                                                outfile=outfile, colorscale=yscale,
-                                               transform=transform)
+                                               transform=transform, kwargs...)
                     end
                     if input[Symbol(:animate, log, :_unnorm_vs_vpa)]
                         outfile = var_prefix * "unnorm_vs_vpa." * input.animation_ext
                         animate_f_unnorm_vs_vpa(run_info; input=input,
                                                 electron=is_electron, is=is,
                                                 outfile=outfile, yscale=yscale,
-                                                transform=transform)
+                                                transform=transform, kwargs...)
                     end
                     if has_zdim && input[Symbol(:animate, log, :_unnorm_vs_vpa_z)]
                         outfile = var_prefix * "unnorm_vs_vpa_z." * input.animation_ext
                         animate_f_unnorm_vs_vpa_z(run_info; input=input,
                                                   electron=is_electron, is=is,
                                                   outfile=outfile, colorscale=yscale,
-                                                  transform=transform)
+                                                  transform=transform, kwargs...)
                     end
                 end
                 check_moment_constraints(run_info, is_neutral; input=input, plot_prefix)
