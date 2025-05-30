@@ -93,8 +93,9 @@ element_spacing_option = "coarse_tails9"
 
 [timestepping]
 type = "Fekete4(3)"
-nstep = 1000000
+nstep = 10000000
 dt = 1.0e-5
+minimum_dt = 1.0e-6
 nwrite = 10000
 nwrite_dfns = 10000
 split_operators = false
