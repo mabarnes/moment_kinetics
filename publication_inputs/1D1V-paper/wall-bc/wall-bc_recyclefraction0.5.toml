@@ -92,7 +92,7 @@ discretization = "chebyshev_pseudospectral"
 [timestepping]
 #nstep = 50000
 nstep = 1000000
-dt = 2.0e-5
+dt = 1.0e-5
 nwrite = 10000
 nwrite_dfns = 10000
 split_operators = false
