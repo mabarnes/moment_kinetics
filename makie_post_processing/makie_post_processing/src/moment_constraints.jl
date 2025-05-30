@@ -14,7 +14,8 @@ function check_moment_constraints(run_info::Vector{Any}, is_neutral; input, plot
 
     # For now, don't support comparison plots
     if length(run_info) > 1
-        error("Comparison plots not supported by check_moment_constraints()")
+        println("Comparison plots not supported by check_moment_constraints()")
+        return nothing
     end
     return check_moment_constraints(run_info[1], is_neutral; input=input,
                                     plot_prefix=plot_prefix)
