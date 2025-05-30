@@ -1,29 +1,29 @@
 using moment_kinetics.analysis: check_Chodura_condition
 
 """
-    Chodura_condition_plots(run_info::Tuple; plot_prefix)
+    Chodura_condition_plots(run_info::Vector{Any}; plot_prefix)
     Chodura_condition_plots(run_info; plot_prefix=nothing, axes=nothing)
 
 Plot the criterion from the Chodura condition at the sheath boundaries.
 
 The information for the runs to plot is passed in `run_info` (as returned by
-[`get_run_info`](@ref)). If `run_info` is a Tuple, comparison plots are made where line
+[`get_run_info`](@ref)). If `run_info` is a Vector, comparison plots are made where line
 plots from the different runs are overlayed on the same axis, and heatmap plots are
 displayed in a horizontal row.
 
 Settings are read from the `[Chodura_condition]` section of the input.
 
-When `run_info` is a Tuple, `plot_prefix` is required and gives the path and prefix for
+When `run_info` is a Vector, `plot_prefix` is required and gives the path and prefix for
 plots to be saved to. They will be saved with the format
-`plot_prefix<some_identifying_string>.pdf`. When `run_info` is not a Tuple, `plot_prefix`
+`plot_prefix<some_identifying_string>.pdf`. When `run_info` is not a Vector, `plot_prefix`
 is optional - plots will be saved only if it is passed.
 
-When `run_info` is not a Tuple, a Vector of Axis objects can be passed to `axes`, and each
+When `run_info` is not a Vector, a Vector of Axis objects can be passed to `axes`, and each
 plot will be added to one of `axes`.
 """
 function Chodura_condition_plots end
 
-function Chodura_condition_plots(run_info::Tuple; plot_prefix)
+function Chodura_condition_plots(run_info::Vector{Any}; plot_prefix)
     input = Dict_to_NamedTuple(input_dict_dfns["Chodura_condition"])
 
     if !any(v for (k,v) ∈ pairs(input) if startswith(String(k), "plot"))
@@ -48,7 +48,7 @@ function Chodura_condition_plots(run_info::Tuple; plot_prefix)
         end
 
         figs = []
-        axes = Tuple([] for _ ∈ run_info)
+        axes = [[] for _ ∈ run_info]
         if input.plot_vs_t
             fig, ax = get_1d_ax(title="Chodura ratio at z=-L/2", xlabel="time",
                                 ylabel="ratio")

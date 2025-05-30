@@ -3438,12 +3438,12 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
         error("When `electron_debug=true` is passed, `dfns=true` must also be passed")
     end
     if length(run_dir) > 1
-        run_info = Tuple(get_run_info_no_setup(r; itime_min=itime_min,
-                                               itime_max=itime_max, itime_skip=itime_skip,
-                                               dfns=dfns,
-                                               initial_electron=initial_electron,
-                                               electron_debug=electron_debug)
-                         for r ∈ run_dir)
+        run_info = Any[get_run_info_no_setup(r; itime_min=itime_min,
+                                             itime_max=itime_max, itime_skip=itime_skip,
+                                             dfns=dfns,
+                                             initial_electron=initial_electron,
+                                             electron_debug=electron_debug)
+                       for r ∈ run_dir]
         return run_info
     end
 
@@ -4250,8 +4250,8 @@ handles the case where `run_info` is a Tuple (which `postproc_load_data` does no
 """
 function get_variable end
 
-function get_variable(run_info::Tuple, variable_name; kwargs...)
-    return Tuple(get_variable(ri, variable_name; kwargs...) for ri ∈ run_info)
+function get_variable(run_info::Vector{Any}, variable_name; kwargs...)
+    return [get_variable(ri, variable_name; kwargs...) for ri ∈ run_info]
 end
 
 function get_variable(run_info, variable_name; normalize_advection_speed_shape=true,

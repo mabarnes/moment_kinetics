@@ -98,3 +98,7 @@ run_moment_kinetics(test_input)
 example_output_directory = joinpath("runs", test_input["output"]["run_name"])
 
 makie_post_process(example_output_directory; input_file=postproc_input_filename)
+
+# Also check comparing multiple outputs.
+makie_post_process(example_output_directory, example_output_directory; input_file=postproc_input_filename)
+makie_post_process(example_output_directory, example_output_directory, example_output_directory; input_file=postproc_input_filename)
