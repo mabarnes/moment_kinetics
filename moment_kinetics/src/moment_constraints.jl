@@ -88,7 +88,9 @@ function hard_force_moment_constraints!(f, moments, vpa, vperp)
         I0 = integral((vperp,vpa)->(1), @view(f[:,:]), vperp, vpa)
         I1 = integral((vperp,vpa)->(vpa), @view(f[:,:]), vperp, vpa)
         I2 = integral((vperp,vpa)->(vpa^2), @view(f[:,:]), vperp, vpa)
-
+        # println("I0 = ", I0)
+        # println("I1 = ", I1)
+        # println("I2 = ", I2)
         A = 1.0 / (I0 - I1^2/I2)
         B = -A*I1/I2
 
@@ -97,7 +99,7 @@ function hard_force_moment_constraints!(f, moments, vpa, vperp)
         C = NaN
     elseif moments.evolve_density
         I0 = integral((vperp,vpa)->(1), @view(f[:,:]), vperp, vpa)
-        println("I0 = ", I0)
+        # println("I0 = ", I0)
         A = 1.0 / I0
         @. f = A * f
 
