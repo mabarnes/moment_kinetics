@@ -469,20 +469,27 @@ end
 
 function single_element_interpolate!(result, newgrid, f, imin, imax, ielement, coord,
                                      chebyshev::chebyshev_base_info, derivative::Val{0})
+
     # Temporary buffer to store Chebyshev coefficients
     cheby_f = chebyshev.df
 
     # Need to transform newgrid values to a scaled z-coordinate associated with the
     # Chebyshev coefficients to get the interpolated function values. Transform is a
     # shift and scale so that the element coordinate goes from -1 to 1
+
     shift = coord.element_shift[ielement]
     scale = 1/coord.element_scale[ielement]
+
+    
+
     # Get Chebyshev coefficients
     if chebyshev.is_lobatto
         chebyshev_forward_transform!(cheby_f, chebyshev.fext, f, chebyshev.forward, coord.ngrid)
     else
         chebyshev_radau_forward_transform!(cheby_f, chebyshev.fext, f, chebyshev.forward, coord.ngrid)
     end
+
+
     for i ∈ 1:length(newgrid)
         x = newgrid[i]
         z = scale * (x - shift)
@@ -496,6 +503,7 @@ function single_element_interpolate!(result, newgrid, f, imin, imax, ielement, c
         end
     end
 
+    
     return nothing
 end
 
@@ -775,92 +783,92 @@ function chebyshev_backward_transform!(ff, fext, chebyf, transform, n)
 end
 
 function chebyshev_radau_forward_transform!(chebyf, fext, ff, transform, n)
-        @inbounds begin
-            for j ∈ 1:n
-                fext[j] = complex(ff[n-j+1],0.0)
-            end
-            for j ∈ 1:n-1
-                fext[n+j] = fext[n-j+1]
-            end
+    @inbounds begin
+        for j ∈ 1:n
+            fext[j] = complex(ff[n-j+1],0.0)
         end
-        #println("ff",ff)
-        #println("fext",fext)
-        # perform the forward, complex-to-complex FFT in-place (cheby.fext is overwritten)
-        transform*fext
-        #println("fext",fext)
-        # use reality + evenness of f to eliminate unncessary information
-        # and obtain Chebyshev spectral coefficients for this element
-        # also sort out normalisation
-        @inbounds begin
-            nfft = 2*n - 1
-            for j ∈ 2:n
-                chebyf[j] = 2.0*real(fext[j])/nfft
-            end
-            chebyf[1] = real(fext[1])/nfft
+        for j ∈ 1:n-1
+            fext[n+j] = fext[n-j+1]
         end
-        return nothing
     end
+    #println("ff",ff)
+    #println("fext",fext)
+    # perform the forward, complex-to-complex FFT in-place (cheby.fext is overwritten)
+    transform*fext
+    #println("fext",fext)
+    # use reality + evenness of f to eliminate unncessary information
+    # and obtain Chebyshev spectral coefficients for this element
+    # also sort out normalisation
+    @inbounds begin
+        nfft = 2*n - 1
+        for j ∈ 2:n
+            chebyf[j] = 2.0*real(fext[j])/nfft
+        end
+        chebyf[1] = real(fext[1])/nfft
+    end
+    return nothing
+end
+
+"""
+"""
+function chebyshev_radau_backward_transform!(ff, fext, chebyf, transform, n)
+    # chebyf as input contains Chebyshev spectral coefficients
+    # need to use reality condition to extend onto negative frequency domain
+    @inbounds begin
+        # first, fill in values for fext corresponding to positive frequencies
+        for j ∈ 2:n
+            fext[j] = chebyf[j]*0.5
+        end
+        # next, fill in values for fext corresponding to negative frequencies
+        # using fext(-k) = conjg(fext(k)) = fext(k)
+        # usual FFT ordering with j=1 <-> k=0, followed by ascending k up to kmax
+        # and then descending from -kmax down to -dk
+        for j ∈ 1:n-1
+            fext[n+j] = fext[n-j+1]
+        end
+        # fill in zero frequency mode, which is special in that it does not require
+        # the 1/2 scale factor
+        fext[1] = chebyf[1]
+    end
+    #println("chebyf",chebyf)
+    #println("fext",fext)
+    # perform the backward, complex-to-complex FFT in-place (fext is overwritten)
+    transform*fext
+    #println("fext",fext)
     
-    """
-    """
-    function chebyshev_radau_backward_transform!(ff, fext, chebyf, transform, n)
-        # chebyf as input contains Chebyshev spectral coefficients
-        # need to use reality condition to extend onto negative frequency domain
-        @inbounds begin
-            # first, fill in values for fext corresponding to positive frequencies
-            for j ∈ 2:n
-                fext[j] = chebyf[j]*0.5
-            end
-            # next, fill in values for fext corresponding to negative frequencies
-            # using fext(-k) = conjg(fext(k)) = fext(k)
-            # usual FFT ordering with j=1 <-> k=0, followed by ascending k up to kmax
-            # and then descending from -kmax down to -dk
-            for j ∈ 1:n-1
-                fext[n+j] = fext[n-j+1]
-            end
-            # fill in zero frequency mode, which is special in that it does not require
-            # the 1/2 scale factor
-            fext[1] = chebyf[1]
+    @inbounds begin
+        for j ∈ 1:n
+            ff[j] = real(fext[n-j+1])
         end
-        #println("chebyf",chebyf)
-        #println("fext",fext)
-        # perform the backward, complex-to-complex FFT in-place (fext is overwritten)
-        transform*fext
-        #println("fext",fext)
-        
-        @inbounds begin
-            for j ∈ 1:n
-                ff[j] = real(fext[n-j+1])
-            end
-        end
-        return nothing
     end
-    function chebyshev_radau_derivative_single_element!(df, ff, cheby_f, cheby_df, cheby_fext, forward, coord)
-        # calculate the Chebyshev coefficients of the real-space function ff and return
-        # as cheby_f
-        chebyshev_radau_forward_transform!(cheby_f, cheby_fext, ff, forward, coord.ngrid)
-        # calculate the Chebyshev coefficients of the derivative of ff with respect to coord.grid
-        chebyshev_spectral_derivative!(cheby_df, cheby_f)
-        # inverse Chebyshev transform to get df/dcoord
-        chebyshev_radau_backward_transform!(df, cheby_fext, cheby_df, forward, coord.ngrid)
+    return nothing
+end
+function chebyshev_radau_derivative_single_element!(df, ff, cheby_f, cheby_df, cheby_fext, forward, coord)
+    # calculate the Chebyshev coefficients of the real-space function ff and return
+    # as cheby_f
+    chebyshev_radau_forward_transform!(cheby_f, cheby_fext, ff, forward, coord.ngrid)
+    # calculate the Chebyshev coefficients of the derivative of ff with respect to coord.grid
+    chebyshev_spectral_derivative!(cheby_df, cheby_f)
+    # inverse Chebyshev transform to get df/dcoord
+    chebyshev_radau_backward_transform!(df, cheby_fext, cheby_df, forward, coord.ngrid)
+end
+function chebyshev_radau_derivative_lower_endpoint(ff, cheby_f, cheby_df, cheby_fext, forward, coord)
+    # calculate the Chebyshev coefficients of the real-space function ff and return
+    # as cheby_f
+    chebyshev_radau_forward_transform!(cheby_f, cheby_fext, ff, forward, coord.ngrid)
+    # calculate the Chebyshev coefficients of the derivative of ff with respect to coord.grid
+    chebyshev_spectral_derivative!(cheby_df, cheby_f)
+    # form the derivative at x = - 1 using that T_n(-1) = (-1)^n
+    # and converting the normalisation factors to undo the normalisation in the FFT
+    # df = d0 + sum_n=1 (-1)^n d_n with d_n the coeffs
+    # of the Cheb derivative in the Fourier representation
+    # df = sum_n=0,N-1 d_n T_n(x)
+    df = cheby_df[1]
+    for i in 2:coord.ngrid
+        df += ((-1)^(i-1))*cheby_df[i]
     end
-    function chebyshev_radau_derivative_lower_endpoint(ff, cheby_f, cheby_df, cheby_fext, forward, coord)
-        # calculate the Chebyshev coefficients of the real-space function ff and return
-        # as cheby_f
-        chebyshev_radau_forward_transform!(cheby_f, cheby_fext, ff, forward, coord.ngrid)
-        # calculate the Chebyshev coefficients of the derivative of ff with respect to coord.grid
-        chebyshev_spectral_derivative!(cheby_df, cheby_f)
-        # form the derivative at x = - 1 using that T_n(-1) = (-1)^n
-        # and converting the normalisation factors to undo the normalisation in the FFT
-        # df = d0 + sum_n=1 (-1)^n d_n with d_n the coeffs
-        # of the Cheb derivative in the Fourier representation
-        # df = sum_n=0,N-1 d_n T_n(x)
-        df = cheby_df[1]
-        for i in 2:coord.ngrid
-            df += ((-1)^(i-1))*cheby_df[i]
-        end
-        return df
-    end
+    return df
+end
 
 
 """
@@ -870,121 +878,121 @@ https://people.maths.ox.ac.uk/trefethen/8all.pdf
 full list of Chapters may be obtained here 
 https://people.maths.ox.ac.uk/trefethen/pdetext.html
 """
-    function cheb_derivative_matrix_elementwise!(D::Array{Float64,2},n::Int64)
-        
-        # define Gauss-Lobatto Chebyshev points in reversed order x_j = { -1, ... , 1}
-        # consistent with use in elements of the grid
-        x = Array{Float64,1}(undef,n)
-        for j in 1:n
-            x[j] = cospi((n-j)/(n-1))
-        end
-        
-        # zero matrix before allocating values
-        D[:,:] .= 0.0
-        
-        # top row 
-        j = 1
-        c_j = 2.0 
-        c_k = 1.0
-        for k in 2:n-1
-            D[j,k] = Djk(x,j,k,c_j,c_k)
-        end
-        k = n 
-        c_k = 2.0
+function cheb_derivative_matrix_elementwise!(D::Array{Float64,2},n::Int64)
+    
+    # define Gauss-Lobatto Chebyshev points in reversed order x_j = { -1, ... , 1}
+    # consistent with use in elements of the grid
+    x = Array{Float64,1}(undef,n)
+    for j in 1:n
+        x[j] = cospi((n-j)/(n-1))
+    end
+    
+    # zero matrix before allocating values
+    D[:,:] .= 0.0
+    
+    # top row 
+    j = 1
+    c_j = 2.0 
+    c_k = 1.0
+    for k in 2:n-1
         D[j,k] = Djk(x,j,k,c_j,c_k)
-        
-        # bottom row 
-        j = n
-        c_j = 2.0 
-        c_k = 1.0
-        for k in 2:n-1
-            D[j,k] = Djk(x,j,k,c_j,c_k)
-        end
-        k = 1
-        c_k = 2.0
+    end
+    k = n 
+    c_k = 2.0
+    D[j,k] = Djk(x,j,k,c_j,c_k)
+    
+    # bottom row 
+    j = n
+    c_j = 2.0 
+    c_k = 1.0
+    for k in 2:n-1
         D[j,k] = Djk(x,j,k,c_j,c_k)
-        
-        #left column
-        k = 1
-        c_j = 1.0 
-        c_k = 2.0
-        for j in 2:n-1
-            D[j,k] = Djk(x,j,k,c_j,c_k)
-        end
-        
-        #right column
-        k = n
-        c_j = 1.0 
-        c_k = 2.0
-        for j in 2:n-1
-            D[j,k] = Djk(x,j,k,c_j,c_k)
-        end
-        
-        
-        # top left, bottom right
-        #D[n,n] = (2.0*(n - 1.0)^2 + 1.0)/6.0
-        #D[1,1] = -(2.0*(n - 1.0)^2 + 1.0)/6.0        
-        # interior rows and columns
-        for j in 2:n-1
-            #D[j,j] = Djj(x,j)
-            for k in 2:n-1
-                if j == k 
-                    continue
-                end
-                c_k = 1.0
-                c_j = 1.0
-                D[j,k] = Djk(x,j,k,c_j,c_k)
+    end
+    k = 1
+    c_k = 2.0
+    D[j,k] = Djk(x,j,k,c_j,c_k)
+    
+    #left column
+    k = 1
+    c_j = 1.0 
+    c_k = 2.0
+    for j in 2:n-1
+        D[j,k] = Djk(x,j,k,c_j,c_k)
+    end
+    
+    #right column
+    k = n
+    c_j = 1.0 
+    c_k = 2.0
+    for j in 2:n-1
+        D[j,k] = Djk(x,j,k,c_j,c_k)
+    end
+    
+    
+    # top left, bottom right
+    #D[n,n] = (2.0*(n - 1.0)^2 + 1.0)/6.0
+    #D[1,1] = -(2.0*(n - 1.0)^2 + 1.0)/6.0        
+    # interior rows and columns
+    for j in 2:n-1
+        #D[j,j] = Djj(x,j)
+        for k in 2:n-1
+            if j == k 
+                continue
             end
-        end
-        
-        # calculate diagonal entries to guarantee that
-        # D * (1, 1, ..., 1, 1) = (0, 0, ..., 0, 0)
-        for j in 1:n
-            D[j,j] = -sum(D[j,:])
+            c_k = 1.0
+            c_j = 1.0
+            D[j,k] = Djk(x,j,k,c_j,c_k)
         end
     end
-    function Djk(x::Array{Float64,1},j::Int64,k::Int64,c_j::Float64,c_k::Float64)
-        return  (c_j/c_k)*((-1)^(k+j))/(x[j] - x[k])
+    
+    # calculate diagonal entries to guarantee that
+    # D * (1, 1, ..., 1, 1) = (0, 0, ..., 0, 0)
+    for j in 1:n
+        D[j,j] = -sum(D[j,:])
     end
+end
+function Djk(x::Array{Float64,1},j::Int64,k::Int64,c_j::Float64,c_k::Float64)
+    return  (c_j/c_k)*((-1)^(k+j))/(x[j] - x[k])
+end
  """
  Derivative matrix for Chebyshev-Radau grid using the FFT.
  Note that a similar function could be constructed for the 
  Chebyshev-Lobatto grid, if desired.
  """
-    function cheb_derivative_matrix_elementwise_radau_by_FFT!(D::Array{Float64,2}, coord, f, df, fext, forward)
-        ff_buffer = Array{Float64,1}(undef,coord.ngrid)
-        df_buffer = Array{Float64,1}(undef,coord.ngrid)
-        # use response matrix approach to calculate derivative matrix D 
-        for j in 1:coord.ngrid 
-            ff_buffer .= 0.0 
-            ff_buffer[j] = 1.0
-            @views chebyshev_radau_derivative_single_element!(df_buffer[:], ff_buffer[:],
-                f[:,1], df, fext, forward, coord)
-            @. D[:,j] = df_buffer[:] # assign appropriate column of derivative matrix 
-        end
-        # correct diagonal elements to gurantee numerical stability
-        # gives D*[1.0, 1.0, ... 1.0] = [0.0, 0.0, ... 0.0]
-        for j in 1:coord.ngrid
-            D[j,j] = 0.0
-            D[j,j] = -sum(D[j,:])
-        end
+function cheb_derivative_matrix_elementwise_radau_by_FFT!(D::Array{Float64,2}, coord, f, df, fext, forward)
+    ff_buffer = Array{Float64,1}(undef,coord.ngrid)
+    df_buffer = Array{Float64,1}(undef,coord.ngrid)
+    # use response matrix approach to calculate derivative matrix D 
+    for j in 1:coord.ngrid 
+        ff_buffer .= 0.0 
+        ff_buffer[j] = 1.0
+        @views chebyshev_radau_derivative_single_element!(df_buffer[:], ff_buffer[:],
+            f[:,1], df, fext, forward, coord)
+        @. D[:,j] = df_buffer[:] # assign appropriate column of derivative matrix 
     end
-    
-    function cheb_lower_endpoint_derivative_vector_elementwise_radau_by_FFT!(D::Array{Float64,1}, coord, f, df, fext, forward)
-        ff_buffer = Array{Float64,1}(undef,coord.ngrid)
-        df_buffer = Array{Float64,1}(undef,coord.ngrid)
-        # use response matrix approach to calculate derivative vector D 
-        for j in 1:coord.ngrid 
-            ff_buffer .= 0.0 
-            ff_buffer[j] = 1.0
-            @views df_buffer = chebyshev_radau_derivative_lower_endpoint(ff_buffer[:],
-                f[:,1], df, fext, forward, coord)
-            D[j] = df_buffer # assign appropriate value of derivative vector 
-        end
-        # correct diagonal elements to gurantee numerical stability
-        # gives D*[1.0, 1.0, ... 1.0] = [0.0, 0.0, ... 0.0]
-        D[1] = 0.0
-        D[1] = -sum(D[:])
+    # correct diagonal elements to gurantee numerical stability
+    # gives D*[1.0, 1.0, ... 1.0] = [0.0, 0.0, ... 0.0]
+    for j in 1:coord.ngrid
+        D[j,j] = 0.0
+        D[j,j] = -sum(D[j,:])
     end
+end
+
+function cheb_lower_endpoint_derivative_vector_elementwise_radau_by_FFT!(D::Array{Float64,1}, coord, f, df, fext, forward)
+    ff_buffer = Array{Float64,1}(undef,coord.ngrid)
+    df_buffer = Array{Float64,1}(undef,coord.ngrid)
+    # use response matrix approach to calculate derivative vector D 
+    for j in 1:coord.ngrid 
+        ff_buffer .= 0.0 
+        ff_buffer[j] = 1.0
+        @views df_buffer = chebyshev_radau_derivative_lower_endpoint(ff_buffer[:],
+            f[:,1], df, fext, forward, coord)
+        D[j] = df_buffer # assign appropriate value of derivative vector 
+    end
+    # correct diagonal elements to gurantee numerical stability
+    # gives D*[1.0, 1.0, ... 1.0] = [0.0, 0.0, ... 0.0]
+    D[1] = 0.0
+    D[1] = -sum(D[:])
+end
 
 end

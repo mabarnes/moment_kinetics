@@ -27,79 +27,78 @@ Note this function assumes the input is given at a single spatial position.
 """
 function hard_force_moment_constraints!(f, moments, vpa, vperp)
     if moments.evolve_p
-        # fnew = (A + B*wpa + C*wpa^2)*f
+        # fnew = (A + B*wpa + C*(wpa^2 + wperp^2))*f
         # Constraints:
-        #   1 = ∫fnew dwpa
-        #   0 = ∫wpa*fnew dwpa
-        #   3/2 = ∫wpa^2*fnew dwpa
+        #   1 = ∫fnew d^3w
+        #   0 = ∫wpa*fnew d^3w
+        #   3/2 = ∫(wpa^2 + wperp^2)*fnew d^3w
         #
-        # Define In = ∫wpa^n*f dwpa
+        # Define 
+        # I0 = ∫f dwpa
+        # I1 = ∫wpa*f dwpa
+        # I2 = ∫(wpa^2 + wperp^2)*f dwpa
+        # I3 = ∫(wpa^2 + wperp^2)*wpa*f dwpa
+        # I4 = ∫(wpa^2 + wperp^2)^2*f dwpa
+        # I5 = ∫wpa^2 * f dwpa
+
         # gives 3 simultaneous equations
-        #   1 = A*I0 + B*I1 + C*I2
-        #   0 = A*I1 + B*I2 + C*I3
-        #   3/2 = A*I2 + B*I3 + C*I4
-        # which we can solve for
-        #   C = (3/2 - A*I2 - B*I3) / I4
+        #   A*I0 + B*I1 + C*I2 = 1
+        #   A*I1 + B*I5 + C*I3 = 0
+        #   A*I2 + B*I3 + C*I4 = 3/2
+        # 
+        # Using an inverted matrix to solve for A, B, C, the result is:
         #
-        #   B*I2 = -A*I1 - C*I3
-        #        = -A*I1 - (3/2 - A*I2 - B*I3)/I4 * I3
-        #   B = (3/2*I3 + A*(I1*I4 - I2*I3)) / (I3^2 - I2*I4)
-        #
-        #   A*I0 = 1 - B*I1 - C*I2
-        #        = 1 - B*I1 - (3/2 - A*I2 - B*I3) / I4 * I2
-        #   A*I0*I4 = I4 - B*I1*I4 - 3/2*I2 + A*I2^2 + B*I3*I2
-        #   A*(I0*I4 - I2^2) = I4 - 3/2*I2 + B*(I2*I3 - I1*I4)
-        #   A*(I0*I4 - I2^2) = I4 - 3/2*I2 + (3/2*I3 + A*(I1*I4 - I2*I3))*(I2*I3 - I1*I4) / (I3^2 - I2*I4)
-        #   A*(I0*I4 - I2^2)*(I3^2 - I2*I4) = (I4 - 3/2*I2)*(I3^2 - I2*I4) + (3/2*I3 + A*(I1*I4 - I2*I3))*(I2*I3 - I1*I4)
-        #   A*((I0*I4 - I2^2)*(I3^2 - I2*I4) - (I1*I4 - I2*I3)*(I2*I3 - I1*I4) = (I4 - 3/2*I2)*(I3^2 - I2*I4) + 3/2*I3*(I2*I3 - I1*I4)
-        #   A*(I0*I3^2*I4 - I0*I2*I4^2 - I2^2*I3^2 + I2^3*I4 - I1*I2*I3*I4 + I1^2*I4^2 + I2^2*I3^2 - I1*I2*I3*I4) = I3^2*I4 - I2*I4^2 - 3/2*I2*I3^2 + 3/2*I2^2*I4 + 3/2*I2*I3^2 - 3/2*I1*I3*I4
-        #   A*(I0*I3^2*I4 - I0*I2*I4^2 + I2^3*I4 - 2*I1*I2*I3*I4 + I1^2*I4^2) = I3^2*I4 - I2*I4^2 + 3/2*I2^2*I4 - 3/2*I1*I3*I4
-        #   A*(I0*I3^2 - I0*I2*I4 + I2^3 - 2*I1*I2*I3 + I1^2*I4) = I3^2 - I2*I4 + 3/2*I2^2 - 3/2*I1*I3
+        # determinant = I0*I5*I4 - I0*I3^2 - I1^2*I4 + 2*I1*I2*I3 - I2^2*I5
+        # A = (I5*I4 - I3^2 + 1.5*(I1*I3 - I2*I5)) / determinant
+        # B = (I3*I2 - I1*I4 + 1.5*(I1*I2 - I0*I3)) / determinant
+        # C = (I1*I3 - I2*I5 + 1.5*(I0*I5 - I1^2)) / determinant
 
         I0 = integral((vperp,vpa)->(1), @view(f[:,:]), vperp, vpa)
         I1 = integral((vperp,vpa)->(vpa), @view(f[:,:]), vperp, vpa)
-        I2 = integral((vperp,vpa)->(vpa^2), @view(f[:,:]), vperp, vpa)
-        I3 = integral((vperp,vpa)->(vpa^3), @view(f[:,:]), vperp, vpa)
-        I4 = integral((vperp,vpa)->(vpa^4), @view(f[:,:]), vperp, vpa)
+        I2 = integral((vperp,vpa)->(vpa^2 + vperp^2), @view(f[:,:]), vperp, vpa)
+        I3 = integral((vperp,vpa)->((vpa^2 + vperp^2)*vpa), @view(f[:,:]), vperp, vpa)
+        I4 = integral((vperp,vpa)->((vpa^2 + vperp^2)^2), @view(f[:,:]), vperp, vpa)
+        I5 = integral((vperp,vpa)->(vpa^2), @view(f[:,:]), vperp, vpa)
 
-        A = (I3^2 - I2*I4 + 1.5*(I2^2 - I1*I3)) /
-            (I0*(I3^2 - I2*I4) + I1*I1*I4 - 2.0*I1*I2*I3 + I2^3)
-        B = (1.5*I3 + A*(I1*I4 - I2*I3)) / (I3^2 - I2*I4)
-        C = (1.5 - A*I2 - B*I3) / I4
-
+        determinant = I0*I5*I4 - I0*I3^2 - I1^2*I4 + 2*I1*I2*I3 - I2^2*I5
+        A = (I5*I4 - I3^2 + 1.5*(I1*I3 - I2*I5)) / determinant
+        B = (I3*I2 - I1*I4 + 1.5*(I1*I2 - I0*I3)) / determinant
+        C = (I1*I3 - I2*I5 + 1.5*(I0*I5 - I1^2)) / determinant
         @. f = (A + B*vpa.grid + C*vpa.grid*vpa.grid)*f
     elseif moments.evolve_upar
         # fnew = (A + B*wpa)*f
         # Constraints:
-        #   1 = ∫fnew dwpa
-        #   0 = ∫wpa*fnew dwpa
+        #   1 = ∫fnew d^3w
+        #   0 = ∫wpa*fnew d^3w
         #
-        # Define In = ∫wpa^n*f dwpa
-        # gives 3 simultaneous equations
-        #   1 = A*I0 + B*I1
-        #   0 = A*I1 + B*I2
-        # which we can solve for
-        #   B = -A*I1/I2
+        # Define 
+        # I0 = ∫f dwpa
+        # I1 = ∫wpa*f dwpa
+        # I2 = ∫wpa^2 * f dwpa
+        # (note that I2 is not the same in the evolve_p = true case, where it is instead I5)
         #
-        #   A*I0 = 1 - B*I1
-        #   A*I0 = 1 + A*I1/I2*I1
-        #   A*(I0 - I1^2/I2) = 1
+        # gives 2 simultaneous equations
+        #   A*I0 + B*I1 = 1
+        #   A*I1 + B*I2 = 0
+        # 
+        # Using an inverted matrix to solve for A, B, the result is:
+        #
+        # determinant = I0*I2 - I1^2
+        # A = I2 / determinant
+        # B = -I1 / determinant
         
         I0 = integral((vperp,vpa)->(1), @view(f[:,:]), vperp, vpa)
         I1 = integral((vperp,vpa)->(vpa), @view(f[:,:]), vperp, vpa)
         I2 = integral((vperp,vpa)->(vpa^2), @view(f[:,:]), vperp, vpa)
-        # println("I0 = ", I0)
-        # println("I1 = ", I1)
-        # println("I2 = ", I2)
-        A = 1.0 / (I0 - I1^2/I2)
-        B = -A*I1/I2
+        determinant = I0*I2 - I1^2
+        A = I2 / determinant
+        B = -I1 / determinant
 
         @. f = A*f + B*vpa.grid*f
 
         C = NaN
     elseif moments.evolve_density
         I0 = integral((vperp,vpa)->(1), @view(f[:,:]), vperp, vpa)
-        # println("I0 = ", I0)
         A = 1.0 / I0
         @. f = A * f
 

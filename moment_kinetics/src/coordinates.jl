@@ -308,6 +308,7 @@ function define_coordinate(coord_input::NamedTuple; parallel_io::Bool=false,
     element_scale, element_shift =
         set_element_scale_and_shift(coord_input.nelement, coord_input.nelement_local,
                                     irank, element_boundaries)
+
     # initialize the grid and the integration weights associated with the grid
     # also obtain the Chebyshev theta grid and spacing if chosen as discretization option
     grid, wgts, uniform_grid, radau_first_element =
