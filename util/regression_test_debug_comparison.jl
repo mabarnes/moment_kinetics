@@ -68,19 +68,21 @@ function regression_test_debug_comparison(filenameA, filenameB;
         if name ∈ ignore
             return nothing
         end
-        if v ∈ conversions_keys
-            c = conversions[v]
+        if name ∈ conversions_keys
+            c = conversions[name]
             if c isa Tuple
                 conversion_factor = c[2]
-                oldname = c[1]
+                old_name = c[1]
             else
                 conversion_factor = c
-                oldname = v
+                old_name = name
             end
         else
             conversion_factor = 1
-            oldname = v
+            old_name = name
         end
+        newv = nothing
+        oldv = nothing
         try
             # Can't use postproc_load_variable() here because that function assumes that
             # the variable is time-dependent.
