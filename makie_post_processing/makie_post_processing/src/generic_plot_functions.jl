@@ -1284,6 +1284,19 @@ function plot_2d(xcoord, ycoord, data; ax=nothing, colorbar_place=nothing, xlabe
         data = transform.(data)
     end
 
+    if isa(data, AbstractArray)
+        datamin, datamax = NaNMath.extrema(data)
+        if isnan(datamin) && isnan(datamax)
+            datamin = 1.0
+            datamax = 1.0
+        end
+        if datamin == datamax
+            # Would error because the color scale has zero size, so pick some arbitrary
+            # non-identical limits
+            kwargs = tuple(kwargs..., :colorrange=>(datamin - 1.0e-3, datamin + 1.0e-3))
+        end
+    end
+
     # Convert grid point values to 'cell face' values for heatmap
     if xcoord isa Observable
         xcoord = lift(grid_points_to_faces, xcoord)
@@ -1390,6 +1403,10 @@ function animate_1d(xcoord, data; frame_index=nothing, ax=nothing, fig=nothing,
             datamin, datamax = variable_cache_extrema(data; transform=transform)
         else
             datamin, datamax = NaNMath.extrema(data)
+        end
+        if isnan(datamin) && isnan(datamax)
+            datamin = 1.0
+            datamax = 1.0
         end
         if ax.limits.val[2] === nothing
             # No limits set yet, need to use minimum and maximum of data over all time,
@@ -1504,11 +1521,23 @@ function animate_2d(xcoord, ycoord, data; frame_index=nothing, ax=nothing, fig=n
     ycoord = grid_points_to_faces(ycoord)
 
     # Use transform to allow user to do something like data = abs.(data)
+    if colorscale !== nothing
+        extrama_check_colorscale = colorscale
+    else
+        extrama_check_colorscale = identity
+    end
     if isa(data, VariableCache)
+        datamin, datamax = variable_cache_extrema(data; transform=transform)
         heatmap_data = @lift(transform.(get_cache_slice(data, $ind)))
     else
+        datamin, datamax = NaNMath.extrema(data)
         data = transform.(data)
         heatmap_data = @lift(@view data[:,:,$ind])
+    end
+    if !isfinite(extrama_check_colorscale(datamin)) && !isfinite(extrama_check_colorscale(datamax))
+        # Would error because the color scale has zero size, so pick some arbitrary
+        # non-identical limits
+        kwargs = tuple(kwargs..., :colorrange=>(1.0 - 1.0e-3, 1.0 + 1.0e-3))
     end
     if ndims(xcoord) == 1 && ndims(ycoord) == 1
         hm = heatmap!(ax, xcoord, ycoord, heatmap_data; colormap=colormap, kwargs...)
@@ -2076,6 +2105,10 @@ function animate_f_unnorm_vs_vpa(run_info; f_over_vpa2=false, input=nothing,
         this_fmin, this_fmax = NaNMath.extrema(transform.(this_f_unnorm))
         fmin = min(fmin, this_fmin)
         fmax = max(fmax, this_fmax)
+    end
+    if isnan(fmin) && isnan(fmax)
+        fmin = 1.0
+        fmax = 1.0
     end
     yheight = fmax - fmin
     xwidth = dzdtmax - dzdtmin

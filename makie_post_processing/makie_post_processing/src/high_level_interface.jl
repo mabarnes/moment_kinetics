@@ -239,6 +239,10 @@ function makie_post_process(run_dir::Union{String,Vector{String}},
         end
     end
 
+    compare_runs(run_info, run_info_dfns; has_electrons, has_neutrals,
+                 plot_prefix=plot_prefix, has_rdim=has_rdim, has_zdim=has_zdim,
+                 is_1V=is_1V, has_dfns=has_dfns)
+
     plot_charged_pdf_2D_at_wall(run_info_dfns; plot_prefix=plot_prefix)
     if has_electrons
         plot_charged_pdf_2D_at_wall(run_info_dfns; plot_prefix=plot_prefix, electron=true)

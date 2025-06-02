@@ -226,7 +226,6 @@ function Chodura_condition_plots(run_info::Vector{Any}; plot_prefix)
         end
         if input.plot_f_over_vpa2
             fig = figs[7]
-            println("check axes ", axes)
             ax = axes[1][7]
             put_legend_below(fig, ax)
             # Ensure the first row width is 3/4 of the column width so that
