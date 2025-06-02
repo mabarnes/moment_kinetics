@@ -18,22 +18,22 @@ using Symbolics
 using IfElse
 
     @variables r z vpa vperp t vz vr vzeta
-    typed_zero(vz) = zero(vz)
+    const typed_zero(vz) = zero(vz)
     @register_symbolic typed_zero(vz)
-    zero_val = 1.0e-8
+    const zero_val = 1.0e-8
     #epsilon_offset = 0.001 
 
-    dfni_vpa_power_opt = "4" #"2"
+    const dfni_vpa_power_opt = "4" #"2"
     if dfni_vpa_power_opt == "2"
-       pvpa = 2
-       nconst = 0.25
-       pconst = 3.0/4.0
-       fluxconst = 0.5
+       const pvpa = 2
+       const nconst = 0.25
+       const pconst = 3.0/4.0
+       const fluxconst = 0.5
     elseif dfni_vpa_power_opt == "4"
-       pvpa = 4
-       nconst = 3.0/8.0
-       pconst = 15.0/8.0
-       fluxconst = 1.0
+       const pvpa = 4
+       const nconst = 3.0/8.0
+       const pconst = 15.0/8.0
+       const fluxconst = 1.0
     end
     
     # struct of symbolic functions for geometric coefficients
@@ -195,12 +195,17 @@ using IfElse
     end
 
     # neutral distribution symbolic function
-    function dfnn_sym(Lr, Lz, r_bc, z_bc, geometry, composition, manufactured_solns_input,
-                      species)
+    function dfnn_sym(Lr, Lz, r_bc, z_bc, geometry, composition, nvzeta, nvr,
+                      manufactured_solns_input, species)
         densn = densn_sym(Lr, Lz, r_bc, z_bc, geometry, composition,
                           manufactured_solns_input, species)
+        if nvzeta == 1 && nvr == 1
+            Maxwellian_prefactor = 1 / sqrt(π)
+        else
+            Maxwellian_prefactor = 1 / π^1.5
+        end
         if z_bc == "periodic"
-            dfnn = densn / π^1.5 * exp( - (vz^2 + vr^2 + vzeta^2) )
+            dfnn = densn * Maxwellian_prefactor * exp( - (vz^2 + vr^2 + vzeta^2) )
         elseif z_bc == "wall"
             Hplus = 0.5*(sign(vz) + 1.0)
             Hminus = 0.5*(sign(-vz) + 1.0)
@@ -216,11 +221,16 @@ using IfElse
         return dfnn
     end
     function gyroaveraged_dfnn_sym(Lr, Lz, r_bc, z_bc, geometry, composition,
-                                   manufactured_solns_input, species)
+                                   nvzeta, nvr, manufactured_solns_input, species)
         densn = densn_sym(Lr, Lz, r_bc, z_bc, geometry, composition,
                           manufactured_solns_input, species)
+        if nvzeta == 1 && nvr == 1
+            Maxwellian_prefactor = 1 / sqrt(π)
+        else
+            Maxwellian_prefactor = 1 / π^1.5
+        end
         #if (r_bc == "periodic" && z_bc == "periodic")
-            dfnn = densn / π^1.5 * exp( - vpa^2 - vperp^2 )
+            dfnn = densn * Maxwellian_prefactor * exp( - vpa^2 - vperp^2 )
         #end
         return dfnn
     end
@@ -358,11 +368,16 @@ using IfElse
     end
     
     # ion distribution symbolic function
-    function dfni_sym(Lr, Lz, r_bc, z_bc, composition, geometry, nr,
+    function dfni_sym(Lr, Lz, r_bc, z_bc, composition, geometry, nr, nvperp,
                       manufactured_solns_input, species)
         densi = densi_sym(Lr, Lz, r_bc, z_bc, composition, manufactured_solns_input,
                           species)
 
+        if nvperp == 1
+            Maxwellian_prefactor = 1 / sqrt(π)
+        else
+            Maxwellian_prefactor = 1 / π^1.5
+        end
         if manufactured_solns_input.type == "default"
             # calculate the electric fields and the potential
             Er, Ez, phi = electric_fields(Lr, Lz, r_bc, z_bc, composition, geometry, nr,
@@ -378,12 +393,12 @@ using IfElse
             epsilon = manufactured_solns_input.epsilon_offset
             alpha = manufactured_solns_input.alpha_switch
             if z_bc == "periodic"
-                dfni = densi / π^1.5 * exp( - vpa^2 - vperp^2)
+                dfni = densi * Maxwellian_prefactor * exp( - vpa^2 - vperp^2)
             elseif z_bc == "wall"
                 vpabar = vpa - alpha*ExBgeofac*(Bmag/Bzed)*Er # for alpha = 1.0, effective velocity in z direction * (Bmag/Bzed)
                 Hplus = 0.5*(sign(vpabar) + 1.0)
                 Hminus = 0.5*(sign(-vpabar) + 1.0)
-                ffa =  1.0 / π^1.5 * exp(- vperp^2)
+                ffa =  1.0 * Maxwellian_prefactor * exp(- vperp^2)
                 dfni = ffa * ( nminus_sym(Lr,Lz,r_bc,z_bc,epsilon,alpha)* (0.5 - z/Lz) * Hminus * vpabar^pvpa + nplus_sym(Lr,Lz,r_bc,z_bc,epsilon,alpha)*(z/Lz + 0.5) * Hplus * vpabar^pvpa + nzero_sym(Lr,Lz,r_bc,z_bc,alpha)*(z/Lz + 0.5)*(0.5 - z/Lz) ) * exp( - vpabar^2 )
             end
         elseif manufactured_solns_input.type == "2D-instability"
@@ -393,19 +408,24 @@ using IfElse
             vth = sqrt(2.0 * T0)
 
             # Note this is for a '1V' test
-            dfni = densi/vth/π^1.5 * exp(-(vpa/vth)^2)
+            dfni = densi/vth * Maxwellian_prefactor * exp(-(vpa/vth)^2)
         else
             error("Unrecognized option "
                   * "manufactured_solns:type=$(manufactured_solns_input.type)")
         end
         return dfni
     end
-    function cartesian_dfni_sym(Lr, Lz, r_bc, z_bc, composition, manufactured_solns_input,
-                                species)
+    function cartesian_dfni_sym(Lr, Lz, r_bc, z_bc, composition, nvperp,
+                                manufactured_solns_input, species)
         densi = densi_sym(Lr, Lz, r_bc, z_bc, composition, manufactured_solns_input,
                           species)
+        if nvperp == 1
+            Maxwellian_prefactor = 1 / sqrt(π)
+        else
+            Maxwellian_prefactor = 1 / π^1.5
+        end
         #if (r_bc == "periodic" && z_bc == "periodic") || (r_bc == "Dirichlet" && z_bc == "periodic")
-            dfni = densi / π^1.5 * exp( - vz^2 - vr^2 - vzeta^2)
+            dfni = densi * Maxwellian_prefactor * exp( - vz^2 - vr^2 - vzeta^2)
         #end
         return dfni
     end
@@ -444,7 +464,7 @@ using IfElse
                           species)
         # calculate the electric fields
         dense = densi # get the electron density via quasineutrality with Zi = 1
-        phi = composition.T_e*log(dense/N_e) # use the adiabatic response of electrons for me/mi -> 0
+        phi = expand(composition.T_e*log(dense/N_e)) # use the adiabatic response of electrons for me/mi -> 0
         Er = -Dr(phi)*rfac + geometry.Er_constant
         Ez = -Dz(phi)      + geometry.Ez_constant
         
@@ -455,7 +475,8 @@ using IfElse
     end
 
     function manufactured_solutions(manufactured_solns_input, Lr, Lz, r_bc, z_bc,
-                                    geometry_input_data::geometry_input, composition, species, nr, nvperp)
+                                    geometry_input_data::geometry_input, composition,
+                                    species, nr, nvperp, nvzeta, nvr)
         # calculate the geometry symbolically
         geometry = geometry_sym(geometry_input_data,Lz,Lr,nr)
         ion_species = species.ion[1]
@@ -475,24 +496,32 @@ using IfElse
                           ion_species, nvperp)
         vthi = vthi_sym(Lr, Lz, r_bc, z_bc, composition, manufactured_solns_input,
                           ion_species, nvperp)
-        dfni = dfni_sym(Lr, Lz, r_bc, z_bc, composition, geometry, nr,
+        dfni = dfni_sym(Lr, Lz, r_bc, z_bc, composition, geometry, nr, nvperp,
                         manufactured_solns_input, ion_species)
 
         densn = densn_sym(Lr, Lz, r_bc, z_bc, geometry,composition,
                           manufactured_solns_input, neutral_species)
-        dfnn = dfnn_sym(Lr, Lz, r_bc, z_bc, geometry, composition,
+        dfnn = dfnn_sym(Lr, Lz, r_bc, z_bc, geometry, composition, nvzeta, nvr,
                         manufactured_solns_input, neutral_species)
 
         #build julia functions from these symbolic expressions
         # cf. https://docs.juliahub.com/Symbolics/eABRO/3.4.0/tutorials/symbolic_functions/
-        densi_func = build_function(densi, z, r, t, expression=Val{false})
-        upari_func = build_function(upari, z, r, t, expression=Val{false})
-        ppari_func = build_function(ppari, z, r, t, expression=Val{false})
-        pperpi_func = build_function(pperpi, z, r, t, expression=Val{false})
-        vthi_func = build_function(vthi, z, r, t, expression=Val{false})
-        densn_func = build_function(densn, z, r, t, expression=Val{false})
-        dfni_func = build_function(dfni, vpa, vperp, z, r, t, expression=Val{false})
-        dfnn_func = build_function(dfnn, vz, vr, vzeta, z, r, t, expression=Val{false})
+        densi_func_inner = build_function(densi, z, r, t, expression=Val{false})
+        densi_func = (args...) -> Symbolics.value(densi_func_inner(args...))
+        upari_func_inner = build_function(upari, z, r, t, expression=Val{false})
+        upari_func = (args...) -> Symbolics.value(upari_func_inner(args...))
+        ppari_func_inner = build_function(ppari, z, r, t, expression=Val{false})
+        ppari_func = (args...) -> Symbolics.value(ppari_func_inner(args...))
+        pperpi_func_inner = build_function(pperpi, z, r, t, expression=Val{false})
+        pperpi_func = (args...) -> Symbolics.value(pperpi_func_inner(args...))
+        vthi_func_inner = build_function(vthi, z, r, t, expression=Val{false})
+        vthi_func = (args...) -> Symbolics.value(vthi_func_inner(args...))
+        densn_func_inner = build_function(densn, z, r, t, expression=Val{false})
+        densn_func = (args...) -> Symbolics.value(densn_func_inner(args...))
+        dfni_func_inner = build_function(dfni, vpa, vperp, z, r, t, expression=Val{false})
+        dfni_func = (args...) -> Symbolics.value(dfni_func_inner(args...))
+        dfnn_func_inner = build_function(dfnn, vz, vr, vzeta, z, r, t, expression=Val{false})
+        dfnn_func = (args...) -> Symbolics.value(dfnn_func_inner(args...))
         # return function
         # call like: 
         # densi_func(zval, rval, tval) 
@@ -517,9 +546,12 @@ using IfElse
         Er, Ez, phi = electric_fields(Lr, Lz, r_bc, z_bc, composition, geometry, nr,
                                       manufactured_solns_input, species)
         
-        Er_func = build_function(Er, z, r, t, expression=Val{false})
-        Ez_func = build_function(Ez, z, r, t, expression=Val{false})
-        phi_func = build_function(phi, z, r, t, expression=Val{false})
+        Er_func_inner = build_function(Er, z, r, t, expression=Val{false})
+        Er_func = (args...) -> Symbolics.value(Er_func_inner(args...))
+        Ez_func_inner = build_function(Ez, z, r, t, expression=Val{false})
+        Ez_func = (args...) -> Symbolics.value(Ez_func_inner(args...))
+        phi_func_inner = build_function(phi, z, r, t, expression=Val{false})
+        phi_func = (args...) -> Symbolics.value(phi_func_inner(args...))
         
         manufactured_E_fields = (Er_func = Er_func, Ez_func = Ez_func, phi_func = phi_func)
         
@@ -534,8 +566,11 @@ using IfElse
         bzed = geosym.bzed
         dBdz = geosym.dBdz
         Bmag_func = build_function(Bmag, z, r, expression=Val{false})
+        phi_func = (args...) -> Symbolics.value(phi_func_inner(args...))
         bzed_func = build_function(bzed, z, r, expression=Val{false})
+        phi_func = (args...) -> Symbolics.value(phi_func_inner(args...))
         dBdz_func = build_function(dBdz, z, r, expression=Val{false})
+        phi_func = (args...) -> Symbolics.value(phi_func_inner(args...))
         
         manufactured_geometry = (Bmag_func = Bmag_func,
                                  bzed_func = bzed_func,
@@ -562,21 +597,23 @@ using IfElse
         vthi = vthi_sym(r_coord.L, z_coord.L, r_coord.bc, z_coord.bc, composition, manufactured_solns_input,
                           ion_species, vperp_coord.n)
         dfni = dfni_sym(r_coord.L, z_coord.L, r_coord.bc, z_coord.bc, composition,
-                        geometry, r_coord.n, manufactured_solns_input, ion_species)
+                        geometry, r_coord.n, vperp_coord.n, manufactured_solns_input,
+                        ion_species)
         #dfni in vr vz vzeta coordinates
         vrvzvzeta_dfni = cartesian_dfni_sym(r_coord.L, z_coord.L, r_coord.bc, z_coord.bc,
-                                            composition, manufactured_solns_input,
-                                            ion_species)
+                                            composition, vperp_coord.n,
+                                            manufactured_solns_input, ion_species)
 
         # neutral manufactured solutions
         densn = densn_sym(r_coord.L,z_coord.L, r_coord.bc, z_coord.bc, geometry,
                           composition, manufactured_solns_input, neutral_species)
         dfnn = dfnn_sym(r_coord.L, z_coord.L, r_coord.bc, z_coord.bc, geometry,
-                        composition, manufactured_solns_input, neutral_species)
+                        composition, vzeta_coord.n, vr_coord.n, manufactured_solns_input,
+                        neutral_species)
         # gyroaverage < dfnn > in vpa vperp coordinates
         gav_dfnn = gyroaveraged_dfnn_sym(r_coord.L, z_coord.L, r_coord.bc, z_coord.bc,
-                                         geometry, composition, manufactured_solns_input,
-                                         neutral_species)
+                                         geometry, composition, vzeta_coord.n, vr_coord.n,
+                                         manufactured_solns_input, neutral_species)
 
         dense = densi # get the electron density via quasineutrality with Zi = 1
 
@@ -625,7 +662,7 @@ using IfElse
         dvperpdt = (0.5*vperp/Bmag)*(dzdt*dBdz + drdt*dBdr)
         # the ion source to maintain the manufactured solution
         Si = ( Dt(dfni) 
-               + dzdt * Dz(dfni)  
+               + dzdt * Dz(expand(dfni))
                + drdt * Dr(dfni)
                + dvpadt * Dvpa(dfni)
                + dvperpdt * Dvperp(dfni)
@@ -652,7 +689,7 @@ using IfElse
             Si += - num_diss_params.ion.vpa_dissipation_coefficient*Dvpa(Dvpa(dfni))
         end
         if num_diss_params.ion.vperp_dissipation_coefficient > 0.0 && include_num_diss_in_MMS
-            Si += - num_diss_params.ion.vperp_dissipation_coefficient*Dvperp(Dvperp(dfni))
+            Si += - num_diss_params.ion.vperp_dissipation_coefficient/vperp*Dvperp(vperp*Dvperp(dfni))
         end
         if num_diss_params.ion.r_dissipation_coefficient > 0.0 && include_num_diss_in_MMS
             Si += - rfac*num_diss_params.ion.r_dissipation_coefficient*Dr(Dr(dfni))
@@ -677,8 +714,10 @@ using IfElse
         
         Source_n = expand_derivatives(Sn)
         
-        Source_i_func = build_function(Source_i, vpa, vperp, z, r, t, expression=Val{false})
-        Source_n_func = build_function(Source_n, vz, vr, vzeta, z, r, t, expression=Val{false})
+        Source_i_func_inner = build_function(Source_i, vpa, vperp, z, r, t, expression=Val{false})
+        Source_i_func = (args...) -> Symbolics.value(Source_i_func_inner(args...))
+        Source_n_func_inner = build_function(Source_n, vz, vr, vzeta, z, r, t, expression=Val{false})
+        Source_n_func = (args...) -> Symbolics.value(Source_n_func_inner(args...))
         
         if expand_derivatives(Dt(Source_i)) == 0 && expand_derivatives(Dt(Source_n)) == 0
             time_independent_sources = true
@@ -686,7 +725,8 @@ using IfElse
             time_independent_sources = false
         end
         
-        return time_independent_sources, Source_i_func, Source_n_func
+        return time_independent_sources, Source_i_func, string(Source_i), Source_n_func,
+               string(Source_n)
     end 
     
 end

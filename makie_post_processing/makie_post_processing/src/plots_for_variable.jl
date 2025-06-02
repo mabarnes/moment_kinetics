@@ -168,7 +168,7 @@ function plots_for_variable(run_info, variable_name; plot_prefix, has_rdim=true,
         end
         if has_rdim && has_zdim && input.animate_vs_z_r
             animate_vs_z_r(run_info, variable_name; is=is, data=variable, input=input,
-                           outfile=variable_prefix * "vs_r." * input.animation_ext,
+                           outfile=variable_prefix * "vs_z_r." * input.animation_ext,
                            kwargs...)
         end
         if input.steady_state_residual

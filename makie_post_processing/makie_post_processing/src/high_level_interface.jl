@@ -276,12 +276,7 @@ function makie_post_process(run_dir::Union{String,Vector{String}},
 
     #mk_1D1V_term_size_diagnostics(run_info, run_info_dfns, plot_prefix)
 
-    if all(ri === nothing for ri ∈ run_info_dfns)
-        nvperp = nothing
-    else
-        nvperp = maximum(ri.vperp.n_global for ri ∈ run_info_dfns if ri !== nothing)
-    end
-    manufactured_solutions_analysis(run_info; plot_prefix=plot_prefix, nvperp=nvperp)
+    manufactured_solutions_analysis(run_info; plot_prefix=plot_prefix)
     manufactured_solutions_analysis_dfns(run_info_dfns; plot_prefix=plot_prefix)
 
     timing_data(run_info; plot_prefix=plot_prefix, this_input_dict=input_dict)

@@ -3597,6 +3597,8 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
                                     if startswith(k, "time:") || startswith(k, "ncalls:") ||
                                        startswith(k, "allocs:"))
 
+    groups = get_subgroup_keys(fids0[1])
+
     if parallel_io
         files = fids0
     else
@@ -3609,7 +3611,7 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
     end
 
     run_info = (run_name=run_name, run_prefix=base_prefix, parallel_io=parallel_io,
-                ext=ext, nblocks=nblocks, files=files, input=input,
+                ext=ext, nblocks=nblocks, files=files, groups=groups, input=input,
                 n_ion_species=n_ion_species, n_neutral_species=n_neutral_species,
                 evolve_moments=evolve_moments, t_input=t_input, composition=composition,
                 species=species, collisions=collisions, geometry=geometry,
