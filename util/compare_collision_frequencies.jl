@@ -1,5 +1,7 @@
 using moment_kinetics
-using Plots
+using makie_post_processing
+using makie_post_processing: CairoMakie
+using .CairoMakie
 using Unitful
 
 function compare_collision_frequencies(input_file::String,
@@ -30,7 +32,7 @@ function compare_collision_frequencies(input_file::String,
     # pitch angle scattering D cref^2 d^2f/dv_∥^2 ~ D d^2f/dξ^2, so D is similar to a
     # (normalised) collision frequency.
     if num_diss_params.ion.vpa_dissipation_coefficient < 0.0
-        nu_vpa_diss = 0.0
+        nu_vpa_diss = 0.0 / Unitful.s
     else
         nu_vpa_diss = num_diss_params.ion.vpa_dissipation_coefficient /
                       dimensional_parameters["timenorm"]
@@ -114,50 +116,62 @@ function compare_collision_frequencies(input_file::String,
     if output_file !== nothing
         println("")
 
-        temp, file_ext = splitext(output_file)
-        temp, ext = splitext(temp)
-        basename, iblock = splitext(temp)
-        iblock = parse(moment_kinetics.type_definitions.mk_int, iblock[2:end])
-        fid = moment_kinetics.load_data.open_readonly_output_file(basename, ext[2:end];
-                                                                  iblock=iblock)
+        run_info = get_run_info(output_file)
+        z = run_info.z
+        density = get_variable(run_info, "density")
+        parallel_pressure = get_variable(run_info, "parallel_pressure")
 
-        z = moment_kinetics.load_data.load_coordinate_data(fid, "z")
-
-        density, parallel_flow, parallel_pressure, parallel_heat_flux, thermal_speed,
-        evolve_ppar = moment_kinetics.load_data.load_charged_particle_moments_data(fid)
-
-        neutral_density, neutral_uz, neutral_pz, neutral_qz, neutral_thermal_speed =
-        moment_kinetics.load_data.load_neutral_particle_moments_data(fid)
+        has_neutrals = run_info.n_neutral_species > 0
+        if has_neutrals
+            neutral_density = get_variable(run_info, "density_neutral")
+        end
 
         parallel_temperature = parallel_pressure ./ density
+        parallel_thermal_speed = @. sqrt(2.0 * parallel_temperature)
 
         # Ignoring variations in logLambda...
-        nu_ii = @. dimensional_parameters["nu_ii0"] * density / parallel_temperature^1.5
+        nu_ii = @. dimensional_parameters["coulomb_collision_frequency_ii0"] * density / parallel_thermal_speed^3
         println("nu_ii ", nu_ii[z.n_global÷2,1,1,end])
 
-        # Neutral collison rates:
-        # The ionization term in the ion/neutral kinetic equations is ±R_ion*n_e*f_n.
-        # R_ion*n_e is an 'ionization rate' that just needs unnormalising - it gives the
-        # (inverse of the) characteristic time that it takes a neutral atom to be ionized.
-        nu_ionization = @. collisions.ionization * density[:,:,1,:] /
-                           dimensional_parameters["timenorm"]
-        println("nu_ionization ", nu_ionization[z.n_global÷2,1,end])
-        # The charge-exchange term in the ion kinetic equation is -R_in*(n_n*f_i-n_i*f_n).
-        # So the rate at which ions experience CX reactions is R_in*n_n
-        nu_cx = @. collisions.charge_exchange * neutral_density[:,:,1,:] /
-                   dimensional_parameters["timenorm"]
-        println("nu_cx ", nu_cx[z.n_global÷2,1,end])
-
         # Make plot (using values from the final time point)
-        plot(legend=:outerright, xlabel="z", ylabel="frequency", ylims=(0.0, :auto))
-        @views plot!(z.grid, nu_ii[:,1,1,end], label="nu_ii")
-        @views plot!(z.grid, nu_ionization[:,1,end], label="nu_ionization")
-        @views plot!(z.grid, nu_cx[:,1,end], label="nu_cx")
-        hline!([nu_vpa_diss], label="nu_vpa_diss")
-        ylabel!("frequency (s^-1)")
+        fig, ax, legend_place = get_1d_ax(; get_legend_place=:right, xlabel="z",
+                                          ylabel="frequency (s^-1)")
 
-        savefig(joinpath(io_input.output_dir,
-                         io_input.run_name * "_collision_frequencies.pdf"))
+        # Makie.jl seems to get confused with units of s^-1, so just strip units when
+        # plotting.
+        @views lines!(ax, z.grid, Unitful.ustrip(nu_ii[:,1,1,end]); label="nu_ii")
+
+        if has_neutrals
+            # Neutral collison rates:
+            # The ionization term in the ion/neutral kinetic equations is ±R_ion*n_e*f_n.
+            # R_ion*n_e is an 'ionization rate' that just needs unnormalising - it gives the
+            # (inverse of the) characteristic time that it takes a neutral atom to be ionized.
+            nu_ionization = @. collisions.ionization * density[:,:,1,:] /
+                               dimensional_parameters["timenorm"]
+            println("nu_ionization ", nu_ionization[z.n_global÷2,1,end])
+            # The charge-exchange term in the ion kinetic equation is -R_in*(n_n*f_i-n_i*f_n).
+            # So the rate at which ions experience CX reactions is R_in*n_n
+            nu_cx = @. collisions.charge_exchange * neutral_density[:,:,1,:] /
+                       dimensional_parameters["timenorm"]
+            println("nu_cx ", nu_cx[z.n_global÷2,1,end])
+
+            @views lines!(ax, z.grid, Unitful.ustrip(nu_ionization[:,1,end]); label="nu_ionization")
+            @views lines!(ax, z.grid, Unitful.ustrip(nu_cx[:,1,end]); label="nu_cx")
+        end
+
+        # Using hlines!() would result in taking the colour from a different colour cycler
+        # than lines! uses, so we would get a line with the same colour as an existing
+        # one.
+        #hlines!(ax, [Unitful.ustrip(nu_vpa_diss)], label="nu_vpa_diss")
+        lines!(ax, z.grid, fill(Unitful.ustrip(nu_vpa_diss), z.n), label="nu_vpa_diss")
+
+        ylims!(ax, 0.0, nothing)
+
+        Legend(legend_place, ax)
+
+        save(joinpath(io_input.output_dir,
+                      io_input.run_name * "_collision_frequencies.pdf"),
+             fig)
     end
 
     return nothing
