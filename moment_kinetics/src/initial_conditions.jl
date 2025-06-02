@@ -2176,7 +2176,7 @@ function convert_full_f_ion_to_normalised!(f, density, upar, p, vth, vperp, vpa,
             vpa.scratch .= vpagrid_to_dzdt(vpa.grid, vth[iz], upar[iz], evolve_p,
                                            evolve_upar)
             if evolve_p
-                @. vperp.scratch .= vperp.grid / vth[iz]
+                @. vperp.scratch .= vperp.grid * vth[iz]
             else
                 vperp.scratch .= vperp.grid
             end
