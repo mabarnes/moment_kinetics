@@ -22,6 +22,9 @@ function compare_collision_frequencies(input_file::String,
     println("Omega_e0 ", dimensional_parameters["Omega_e0"])
     println("rho_e0 ", dimensional_parameters["rho_e0"])
 
+    # Characteristic rate for parallel streaming
+    println("vth_i0/Lz ", dimensional_parameters["vthi0"] / dimensional_parameters["Lz"])
+
     # Effective collision frequency for dissipation?
     # v_∥ dissipation term is D d^2f/dv_∥^2. Inserting factors of c_ref, this is a bit like
     # pitch angle scattering D cref^2 d^2f/dv_∥^2 ~ D d^2f/dξ^2, so D is similar to a
