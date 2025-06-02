@@ -870,121 +870,121 @@ https://people.maths.ox.ac.uk/trefethen/8all.pdf
 full list of Chapters may be obtained here 
 https://people.maths.ox.ac.uk/trefethen/pdetext.html
 """
-    function cheb_derivative_matrix_elementwise!(D::Array{Float64,2},n::Int64)
-        
-        # define Gauss-Lobatto Chebyshev points in reversed order x_j = { -1, ... , 1}
-        # consistent with use in elements of the grid
-        x = Array{Float64,1}(undef,n)
-        for j in 1:n
-            x[j] = cospi((n-j)/(n-1))
-        end
-        
-        # zero matrix before allocating values
-        D[:,:] .= 0.0
-        
-        # top row 
-        j = 1
-        c_j = 2.0 
-        c_k = 1.0
-        for k in 2:n-1
-            D[j,k] = Djk(x,j,k,c_j,c_k)
-        end
-        k = n 
-        c_k = 2.0
+function cheb_derivative_matrix_elementwise!(D::Array{Float64,2},n::Int64)
+    
+    # define Gauss-Lobatto Chebyshev points in reversed order x_j = { -1, ... , 1}
+    # consistent with use in elements of the grid
+    x = Array{Float64,1}(undef,n)
+    for j in 1:n
+        x[j] = cospi((n-j)/(n-1))
+    end
+    
+    # zero matrix before allocating values
+    D[:,:] .= 0.0
+    
+    # top row 
+    j = 1
+    c_j = 2.0 
+    c_k = 1.0
+    for k in 2:n-1
         D[j,k] = Djk(x,j,k,c_j,c_k)
-        
-        # bottom row 
-        j = n
-        c_j = 2.0 
-        c_k = 1.0
-        for k in 2:n-1
-            D[j,k] = Djk(x,j,k,c_j,c_k)
-        end
-        k = 1
-        c_k = 2.0
+    end
+    k = n 
+    c_k = 2.0
+    D[j,k] = Djk(x,j,k,c_j,c_k)
+    
+    # bottom row 
+    j = n
+    c_j = 2.0 
+    c_k = 1.0
+    for k in 2:n-1
         D[j,k] = Djk(x,j,k,c_j,c_k)
-        
-        #left column
-        k = 1
-        c_j = 1.0 
-        c_k = 2.0
-        for j in 2:n-1
-            D[j,k] = Djk(x,j,k,c_j,c_k)
-        end
-        
-        #right column
-        k = n
-        c_j = 1.0 
-        c_k = 2.0
-        for j in 2:n-1
-            D[j,k] = Djk(x,j,k,c_j,c_k)
-        end
-        
-        
-        # top left, bottom right
-        #D[n,n] = (2.0*(n - 1.0)^2 + 1.0)/6.0
-        #D[1,1] = -(2.0*(n - 1.0)^2 + 1.0)/6.0        
-        # interior rows and columns
-        for j in 2:n-1
-            #D[j,j] = Djj(x,j)
-            for k in 2:n-1
-                if j == k 
-                    continue
-                end
-                c_k = 1.0
-                c_j = 1.0
-                D[j,k] = Djk(x,j,k,c_j,c_k)
+    end
+    k = 1
+    c_k = 2.0
+    D[j,k] = Djk(x,j,k,c_j,c_k)
+    
+    #left column
+    k = 1
+    c_j = 1.0 
+    c_k = 2.0
+    for j in 2:n-1
+        D[j,k] = Djk(x,j,k,c_j,c_k)
+    end
+    
+    #right column
+    k = n
+    c_j = 1.0 
+    c_k = 2.0
+    for j in 2:n-1
+        D[j,k] = Djk(x,j,k,c_j,c_k)
+    end
+    
+    
+    # top left, bottom right
+    #D[n,n] = (2.0*(n - 1.0)^2 + 1.0)/6.0
+    #D[1,1] = -(2.0*(n - 1.0)^2 + 1.0)/6.0        
+    # interior rows and columns
+    for j in 2:n-1
+        #D[j,j] = Djj(x,j)
+        for k in 2:n-1
+            if j == k 
+                continue
             end
-        end
-        
-        # calculate diagonal entries to guarantee that
-        # D * (1, 1, ..., 1, 1) = (0, 0, ..., 0, 0)
-        for j in 1:n
-            D[j,j] = -sum(D[j,:])
+            c_k = 1.0
+            c_j = 1.0
+            D[j,k] = Djk(x,j,k,c_j,c_k)
         end
     end
-    function Djk(x::Array{Float64,1},j::Int64,k::Int64,c_j::Float64,c_k::Float64)
-        return  (c_j/c_k)*((-1)^(k+j))/(x[j] - x[k])
+    
+    # calculate diagonal entries to guarantee that
+    # D * (1, 1, ..., 1, 1) = (0, 0, ..., 0, 0)
+    for j in 1:n
+        D[j,j] = -sum(D[j,:])
     end
+end
+function Djk(x::Array{Float64,1},j::Int64,k::Int64,c_j::Float64,c_k::Float64)
+    return  (c_j/c_k)*((-1)^(k+j))/(x[j] - x[k])
+end
  """
  Derivative matrix for Chebyshev-Radau grid using the FFT.
  Note that a similar function could be constructed for the 
  Chebyshev-Lobatto grid, if desired.
  """
-    function cheb_derivative_matrix_elementwise_radau_by_FFT!(D::Array{Float64,2}, coord, f, df, fext, forward)
-        ff_buffer = Array{Float64,1}(undef,coord.ngrid)
-        df_buffer = Array{Float64,1}(undef,coord.ngrid)
-        # use response matrix approach to calculate derivative matrix D 
-        for j in 1:coord.ngrid 
-            ff_buffer .= 0.0 
-            ff_buffer[j] = 1.0
-            @views chebyshev_radau_derivative_single_element!(df_buffer[:], ff_buffer[:],
-                f[:,1], df, fext, forward, coord)
-            @. D[:,j] = df_buffer[:] # assign appropriate column of derivative matrix 
-        end
-        # correct diagonal elements to gurantee numerical stability
-        # gives D*[1.0, 1.0, ... 1.0] = [0.0, 0.0, ... 0.0]
-        for j in 1:coord.ngrid
-            D[j,j] = 0.0
-            D[j,j] = -sum(D[j,:])
-        end
+function cheb_derivative_matrix_elementwise_radau_by_FFT!(D::Array{Float64,2}, coord, f, df, fext, forward)
+    ff_buffer = Array{Float64,1}(undef,coord.ngrid)
+    df_buffer = Array{Float64,1}(undef,coord.ngrid)
+    # use response matrix approach to calculate derivative matrix D 
+    for j in 1:coord.ngrid 
+        ff_buffer .= 0.0 
+        ff_buffer[j] = 1.0
+        @views chebyshev_radau_derivative_single_element!(df_buffer[:], ff_buffer[:],
+            f[:,1], df, fext, forward, coord)
+        @. D[:,j] = df_buffer[:] # assign appropriate column of derivative matrix 
     end
-    
-    function cheb_lower_endpoint_derivative_vector_elementwise_radau_by_FFT!(D::Array{Float64,1}, coord, f, df, fext, forward)
-        ff_buffer = Array{Float64,1}(undef,coord.ngrid)
-        df_buffer = Array{Float64,1}(undef,coord.ngrid)
-        # use response matrix approach to calculate derivative vector D 
-        for j in 1:coord.ngrid 
-            ff_buffer .= 0.0 
-            ff_buffer[j] = 1.0
-            @views df_buffer = chebyshev_radau_derivative_lower_endpoint(ff_buffer[:],
-                f[:,1], df, fext, forward, coord)
-            D[j] = df_buffer # assign appropriate value of derivative vector 
-        end
-        # correct diagonal elements to gurantee numerical stability
-        # gives D*[1.0, 1.0, ... 1.0] = [0.0, 0.0, ... 0.0]
-        D[1] = 0.0
-        D[1] = -sum(D[:])
+    # correct diagonal elements to gurantee numerical stability
+    # gives D*[1.0, 1.0, ... 1.0] = [0.0, 0.0, ... 0.0]
+    for j in 1:coord.ngrid
+        D[j,j] = 0.0
+        D[j,j] = -sum(D[j,:])
     end
+end
+
+function cheb_lower_endpoint_derivative_vector_elementwise_radau_by_FFT!(D::Array{Float64,1}, coord, f, df, fext, forward)
+    ff_buffer = Array{Float64,1}(undef,coord.ngrid)
+    df_buffer = Array{Float64,1}(undef,coord.ngrid)
+    # use response matrix approach to calculate derivative vector D 
+    for j in 1:coord.ngrid 
+        ff_buffer .= 0.0 
+        ff_buffer[j] = 1.0
+        @views df_buffer = chebyshev_radau_derivative_lower_endpoint(ff_buffer[:],
+            f[:,1], df, fext, forward, coord)
+        D[j] = df_buffer # assign appropriate value of derivative vector 
+    end
+    # correct diagonal elements to gurantee numerical stability
+    # gives D*[1.0, 1.0, ... 1.0] = [0.0, 0.0, ... 0.0]
+    D[1] = 0.0
+    D[1] = -sum(D[:])
+end
 
 end
