@@ -518,7 +518,11 @@ function single_element_interpolate!(result, newgrid, f, imin, imax, ielement, c
     scale = 2.0 / (coord.grid[imax] - coord.grid[imin])
 
     # Get Chebyshev coefficients
-    chebyshev_forward_transform!(cheby_f, chebyshev.fext, f, chebyshev.forward, coord.ngrid)
+    if chebyshev.is_lobatto
+        chebyshev_forward_transform!(cheby_f, chebyshev.fext, f, chebyshev.forward, coord.ngrid)
+    else
+        chebyshev_radau_forward_transform!(cheby_f, chebyshev.fext, f, chebyshev.forward, coord.ngrid)
+    end
 
     if length(cheby_f) == 2
         # Handle this case specially because the generic algorithm below uses cheby_f[3]
