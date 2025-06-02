@@ -775,92 +775,92 @@ function chebyshev_backward_transform!(ff, fext, chebyf, transform, n)
 end
 
 function chebyshev_radau_forward_transform!(chebyf, fext, ff, transform, n)
-        @inbounds begin
-            for j ∈ 1:n
-                fext[j] = complex(ff[n-j+1],0.0)
-            end
-            for j ∈ 1:n-1
-                fext[n+j] = fext[n-j+1]
-            end
+    @inbounds begin
+        for j ∈ 1:n
+            fext[j] = complex(ff[n-j+1],0.0)
         end
-        #println("ff",ff)
-        #println("fext",fext)
-        # perform the forward, complex-to-complex FFT in-place (cheby.fext is overwritten)
-        transform*fext
-        #println("fext",fext)
-        # use reality + evenness of f to eliminate unncessary information
-        # and obtain Chebyshev spectral coefficients for this element
-        # also sort out normalisation
-        @inbounds begin
-            nfft = 2*n - 1
-            for j ∈ 2:n
-                chebyf[j] = 2.0*real(fext[j])/nfft
-            end
-            chebyf[1] = real(fext[1])/nfft
+        for j ∈ 1:n-1
+            fext[n+j] = fext[n-j+1]
         end
-        return nothing
     end
+    #println("ff",ff)
+    #println("fext",fext)
+    # perform the forward, complex-to-complex FFT in-place (cheby.fext is overwritten)
+    transform*fext
+    #println("fext",fext)
+    # use reality + evenness of f to eliminate unncessary information
+    # and obtain Chebyshev spectral coefficients for this element
+    # also sort out normalisation
+    @inbounds begin
+        nfft = 2*n - 1
+        for j ∈ 2:n
+            chebyf[j] = 2.0*real(fext[j])/nfft
+        end
+        chebyf[1] = real(fext[1])/nfft
+    end
+    return nothing
+end
+
+"""
+"""
+function chebyshev_radau_backward_transform!(ff, fext, chebyf, transform, n)
+    # chebyf as input contains Chebyshev spectral coefficients
+    # need to use reality condition to extend onto negative frequency domain
+    @inbounds begin
+        # first, fill in values for fext corresponding to positive frequencies
+        for j ∈ 2:n
+            fext[j] = chebyf[j]*0.5
+        end
+        # next, fill in values for fext corresponding to negative frequencies
+        # using fext(-k) = conjg(fext(k)) = fext(k)
+        # usual FFT ordering with j=1 <-> k=0, followed by ascending k up to kmax
+        # and then descending from -kmax down to -dk
+        for j ∈ 1:n-1
+            fext[n+j] = fext[n-j+1]
+        end
+        # fill in zero frequency mode, which is special in that it does not require
+        # the 1/2 scale factor
+        fext[1] = chebyf[1]
+    end
+    #println("chebyf",chebyf)
+    #println("fext",fext)
+    # perform the backward, complex-to-complex FFT in-place (fext is overwritten)
+    transform*fext
+    #println("fext",fext)
     
-    """
-    """
-    function chebyshev_radau_backward_transform!(ff, fext, chebyf, transform, n)
-        # chebyf as input contains Chebyshev spectral coefficients
-        # need to use reality condition to extend onto negative frequency domain
-        @inbounds begin
-            # first, fill in values for fext corresponding to positive frequencies
-            for j ∈ 2:n
-                fext[j] = chebyf[j]*0.5
-            end
-            # next, fill in values for fext corresponding to negative frequencies
-            # using fext(-k) = conjg(fext(k)) = fext(k)
-            # usual FFT ordering with j=1 <-> k=0, followed by ascending k up to kmax
-            # and then descending from -kmax down to -dk
-            for j ∈ 1:n-1
-                fext[n+j] = fext[n-j+1]
-            end
-            # fill in zero frequency mode, which is special in that it does not require
-            # the 1/2 scale factor
-            fext[1] = chebyf[1]
+    @inbounds begin
+        for j ∈ 1:n
+            ff[j] = real(fext[n-j+1])
         end
-        #println("chebyf",chebyf)
-        #println("fext",fext)
-        # perform the backward, complex-to-complex FFT in-place (fext is overwritten)
-        transform*fext
-        #println("fext",fext)
-        
-        @inbounds begin
-            for j ∈ 1:n
-                ff[j] = real(fext[n-j+1])
-            end
-        end
-        return nothing
     end
-    function chebyshev_radau_derivative_single_element!(df, ff, cheby_f, cheby_df, cheby_fext, forward, coord)
-        # calculate the Chebyshev coefficients of the real-space function ff and return
-        # as cheby_f
-        chebyshev_radau_forward_transform!(cheby_f, cheby_fext, ff, forward, coord.ngrid)
-        # calculate the Chebyshev coefficients of the derivative of ff with respect to coord.grid
-        chebyshev_spectral_derivative!(cheby_df, cheby_f)
-        # inverse Chebyshev transform to get df/dcoord
-        chebyshev_radau_backward_transform!(df, cheby_fext, cheby_df, forward, coord.ngrid)
+    return nothing
+end
+function chebyshev_radau_derivative_single_element!(df, ff, cheby_f, cheby_df, cheby_fext, forward, coord)
+    # calculate the Chebyshev coefficients of the real-space function ff and return
+    # as cheby_f
+    chebyshev_radau_forward_transform!(cheby_f, cheby_fext, ff, forward, coord.ngrid)
+    # calculate the Chebyshev coefficients of the derivative of ff with respect to coord.grid
+    chebyshev_spectral_derivative!(cheby_df, cheby_f)
+    # inverse Chebyshev transform to get df/dcoord
+    chebyshev_radau_backward_transform!(df, cheby_fext, cheby_df, forward, coord.ngrid)
+end
+function chebyshev_radau_derivative_lower_endpoint(ff, cheby_f, cheby_df, cheby_fext, forward, coord)
+    # calculate the Chebyshev coefficients of the real-space function ff and return
+    # as cheby_f
+    chebyshev_radau_forward_transform!(cheby_f, cheby_fext, ff, forward, coord.ngrid)
+    # calculate the Chebyshev coefficients of the derivative of ff with respect to coord.grid
+    chebyshev_spectral_derivative!(cheby_df, cheby_f)
+    # form the derivative at x = - 1 using that T_n(-1) = (-1)^n
+    # and converting the normalisation factors to undo the normalisation in the FFT
+    # df = d0 + sum_n=1 (-1)^n d_n with d_n the coeffs
+    # of the Cheb derivative in the Fourier representation
+    # df = sum_n=0,N-1 d_n T_n(x)
+    df = cheby_df[1]
+    for i in 2:coord.ngrid
+        df += ((-1)^(i-1))*cheby_df[i]
     end
-    function chebyshev_radau_derivative_lower_endpoint(ff, cheby_f, cheby_df, cheby_fext, forward, coord)
-        # calculate the Chebyshev coefficients of the real-space function ff and return
-        # as cheby_f
-        chebyshev_radau_forward_transform!(cheby_f, cheby_fext, ff, forward, coord.ngrid)
-        # calculate the Chebyshev coefficients of the derivative of ff with respect to coord.grid
-        chebyshev_spectral_derivative!(cheby_df, cheby_f)
-        # form the derivative at x = - 1 using that T_n(-1) = (-1)^n
-        # and converting the normalisation factors to undo the normalisation in the FFT
-        # df = d0 + sum_n=1 (-1)^n d_n with d_n the coeffs
-        # of the Cheb derivative in the Fourier representation
-        # df = sum_n=0,N-1 d_n T_n(x)
-        df = cheby_df[1]
-        for i in 2:coord.ngrid
-            df += ((-1)^(i-1))*cheby_df[i]
-        end
-        return df
-    end
+    return df
+end
 
 
 """
