@@ -728,7 +728,6 @@ function enforce_zero_incoming_bc!(pdf, z::coordinate, vperp::coordinate, vpa::c
                     (I0*(J3^2 - J2*J4) + I1*(J1*J4 - J2*J3) + I2*(J2^2 - J1*J3))
                 B = (1.5*J3 + A*(I1*J4 - I2*J3)) / (J3^2 - J2*J4)
                 C = (1.5 - A*I2 - B*J3) / J4
-                println("A = ", A, " B = ", B, " C = ", C)
                 #println("I0 = ", I0, " I1 = ", I1, " I2 = ", I2)
                 #println("J1 = ", J1, " J2 = ", J2, " J3 = ", J3, " J4 = ", J4)
 
@@ -774,7 +773,7 @@ function enforce_zero_incoming_bc!(pdf, z::coordinate, vperp::coordinate, vpa::c
                 A = 1.0 / (I0 - I1*J1/J2)
                 B = -A*I1/J2
                 @. f = A*f + B*vpa.grid*vpa.scratch2*f
-                println("A = ", A, " B = ", B)
+
 
             elseif evolve_density
                 I0 = integral((vperp,vpa)->(1), f, vperp, vpa)
