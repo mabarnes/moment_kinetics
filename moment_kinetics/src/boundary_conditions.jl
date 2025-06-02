@@ -637,7 +637,7 @@ function enforce_zero_incoming_bc!(pdf, z::coordinate, vperp::coordinate, vpa::c
                 @. vpa.scratch2 = f * abs(vpa.scratch) / (sqrt(2.0) + abs(vpa.scratch)) / (1.0 + (4.0 * vpa.scratch / vpa.L)^4)
                 J1 = integral(vpa.scratch2, vpa.grid, vpa.wgts)
                 J2 = integral(vpa.scratch2, vpa.grid, 2, vpa.wgts)
-                println("J1 = ", J1, ", J2 = ", J2)
+
 
                 # Given a corrected distribution function
                 #   F = A * Fhat + B*wpa * s*vpa/vth / (1 + s*|vpa/vth|) / (1 +(4*vpa/vth/Lvpa)^4) * Fhat
@@ -659,7 +659,7 @@ function enforce_zero_incoming_bc!(pdf, z::coordinate, vperp::coordinate, vpa::c
 
                 A = 1.0 / (I0 - I1*J1/J2)
                 B = -A*I1/J2
-                println("A = ", A, " B = ", B)
+        
 
                 @. f = A*f + B*vpa.grid*vpa.scratch2
             elseif evolve_density
@@ -729,8 +729,8 @@ function enforce_zero_incoming_bc!(pdf, z::coordinate, vperp::coordinate, vpa::c
                 B = (1.5*J3 + A*(I1*J4 - I2*J3)) / (J3^2 - J2*J4)
                 C = (1.5 - A*I2 - B*J3) / J4
                 println("A = ", A, " B = ", B, " C = ", C)
-                println("I0 = ", I0, " I1 = ", I1, " I2 = ", I2)
-                println("J1 = ", J1, " J2 = ", J2, " J3 = ", J3, " J4 = ", J4)
+                #println("I0 = ", I0, " I1 = ", I1, " I2 = ", I2)
+                #println("J1 = ", J1, " J2 = ", J2, " J3 = ", J3, " J4 = ", J4)
 
                 @. f = A*f + B*vpa.grid*vpa.scratch2*f + C*vpa.grid*vpa.grid*vpa.scratch2*f
             elseif evolve_upar
@@ -774,6 +774,7 @@ function enforce_zero_incoming_bc!(pdf, z::coordinate, vperp::coordinate, vpa::c
                 A = 1.0 / (I0 - I1*J1/J2)
                 B = -A*I1/J2
                 @. f = A*f + B*vpa.grid*vpa.scratch2*f
+                println("A = ", A, " B = ", B)
 
             elseif evolve_density
                 I0 = integral((vperp,vpa)->(1), f, vperp, vpa)
