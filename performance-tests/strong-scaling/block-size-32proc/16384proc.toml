@@ -1,0 +1,158 @@
+[r]
+ngrid = 5
+discretization = "gausslegendre_pseudospectral"
+nelement = 32
+nelement_local = 1
+
+[inner_r_bc_1]
+bc = "Dirichlet"
+
+[outer_r_bc_1]
+bc = "Dirichlet"
+
+[z]
+ngrid = 5
+discretization = "gausslegendre_pseudospectral"
+nelement = 32
+nelement_local = 2
+bc = "wall"
+
+[vpa]
+ngrid = 6
+discretization = "gausslegendre_pseudospectral"
+nelement = 31
+L = 51.96152422706631
+element_spacing_option = "coarse_tails8.660254037844386"
+bc = "zero"
+
+#[vz]
+#ngrid = 6
+#discretization = "gausslegendre_pseudospectral"
+#nelement = 31
+#L = 62.35382907247958
+#element_spacing_option = "coarse_tails8.660254037844386"
+#bc = "zero"
+
+[timestepping]
+type = "SSPRK4"
+nstep = 1000
+dt = 5.0e-6
+nwrite = 1000
+nwrite_dfns = 1000
+
+[evolve_moments]
+density = false
+parallel_flow = false
+pressure = false
+moments_conservation = false
+
+[composition]
+n_ion_species = 1
+n_neutral_species = 0
+T_wall = 0.1
+T_e = 0.2
+recycling_fraction = 0.5
+
+[krook_collisions]
+use_krook = true
+
+[reactions]
+electron_ionization_frequency = 0.0
+ionization_frequency = 0.5
+charge_exchange_frequency = 1.0
+
+[ion_source_1]
+active = true
+r_profile = "sinusoid"
+r_width = 1.0
+r_relative_minimum = 0.9
+z_profile = "gaussian"
+z_width = 0.125
+source_strength = 3.0
+source_T = 2.0
+
+[ion_source_2]
+active = true
+r_profile = "constant"
+z_profile = "wall_exp_decay"
+z_width = 0.125
+source_strength = 10.0
+source_T = 0.1
+
+[ion_species_1]
+initial_temperature = 0.03333333333333333
+initial_density = 1.0
+
+[r_IC_ion_species_1]
+initialization_option = "sinusoid"
+temperature_amplitude = 0.0
+density_amplitude = 0.001
+density_phase = 0.0
+upar_amplitude = 0.0
+temperature_phase = 0.0
+upar_phase = 0.0
+
+[z_IC_ion_species_1]
+initialization_option = "gaussian"
+density_amplitude = 0.001
+temperature_amplitude = 0.0
+density_phase = 0.0
+upar_amplitude = 1.4142135623730951
+temperature_phase = 0.0
+upar_phase = 0.0
+
+[vpa_IC_ion_species_1]
+initialization_option = "gaussian"
+density_amplitude = 1.0
+temperature_amplitude = 0.0
+density_phase = 0.0
+upar_amplitude = 0.0
+temperature_phase = 0.0
+upar_phase = 0.0
+
+#[neutral_species_1]
+#initial_temperature = 0.3333333333333333
+#initial_density = 1.0
+#
+#[r_IC_neutral_species_1]
+#initialization_option = "sinusoid"
+#temperature_amplitude = 0.0
+#density_amplitude = 0.001
+#density_phase = 1.0
+#upar_amplitude = 0.0
+#temperature_phase = 0.0
+#upar_phase = 0.0
+#
+#[z_IC_neutral_species_1]
+#initialization_option = "gaussian"
+#temperature_amplitude = 0.0
+#density_amplitude = 0.001
+#density_phase = 0.0
+#upar_amplitude = -1.4142135623730951
+#temperature_phase = 0.0
+#upar_phase = 0.0
+#
+#[vz_IC_neutral_species_1]
+#initialization_option = "gaussian"
+#density_amplitude = 1.0
+#temperature_amplitude = 0.0
+#density_phase = 0.0
+#upar_amplitude = 0.0
+#temperature_phase = 0.0
+#upar_phase = 0.0
+
+[ion_numerical_dissipation]
+#vpa_dissipation_coefficient = 1.0e-1
+#vpa_dissipation_coefficient = 1.0e-2
+#vpa_dissipation_coefficient = 1.0e-3
+force_minimum_pdf_value = 0.0
+
+[electron_numerical_dissipation]
+#vpa_dissipation_coefficient = 2.0
+force_minimum_pdf_value = 0.0
+
+[neutral_numerical_dissipation]
+#vz_dissipation_coefficient = 1.0e-1
+#vz_dissipation_coefficient = 1.0e-2
+#vz_dissipation_coefficient = 1.0e-3
+force_minimum_pdf_value = 0.0
