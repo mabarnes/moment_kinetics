@@ -547,6 +547,8 @@ function check_coordinate_input(coord, coord_name, io)
         println(io,">$coord_name.bc = 'both_zero'.  enforcing zero BC in $coord_name.")
     elseif coord.bc == "periodic"
         println(io,">$coord_name.bc = 'periodic'.  enforcing periodicity in $coord_name.")
+    elseif coord_name == "r" && coord.bc == "Dirichlet"
+        println(io,">$coord_name.bc = 'Dirichlet'.  enforcing Dirichlet bc in $coord_name.")
     elseif coord_name == "z" && coord.bc == "wall"
         println(io,">$coord_name.bc = 'wall'.  enforcing wall BC in $coord_name.")
     elseif coord.bc == "none"
