@@ -18,10 +18,6 @@ if mk_preferences["use_plots"] == "y"
         Pkg.add("Plots")
         Pkg.develop(path=joinpath("plots_post_processing", "plots_post_processing"))
         Pkg.precompile()
-
-        if batch_system && mk_preferences["submit_precompilation"] == "y"
-            run(`./precompile-plots-post-processing-submit.sh`)
-        end
     else
         Pkg.add("Plots")
         Pkg.develop(path=joinpath("plots_post_processing", "plots_post_processing"))
