@@ -206,43 +206,64 @@ echo "Using Julia at $JULIA"
 echo
 echo "$JULIA" > .julia_default.txt
 
-# Get the location for the .julia directory, in case this has to have a
-# non-default value, e.g. because the user's home directory is not accessible
-# from compute nodes.
-if [[ -f .julia_directory_default.txt ]]; then
-  JULIA_DIRECTORY=$(cat .julia_directory_default.txt)
+if [ x$MACHINE == xarcher ]; then
+  JULIA_DEPOT_IN_TMP=true
+
+  # Julia depot is created in /tmp/ so that it can be copied into /tmp/ on each
+  # of the compute nodes for parallel jobs, to work around an issue where Julia
+  # hangs while starting up on >~2048 MPI processes.
+  JULIA_DIRECTORY=/tmp/$USER/compute-node-temp.julia
+
+  mkdir -p /tmp/$USER/
+
+  # Clean up the temporary directory when this script exits for any reason
+  # (this might not be done automatically on login nodes).
+  # https://stackoverflow.com/a/53063602
+  trap "rm -rf /tmp/$USER" EXIT SIGHUP SIGINT SIGQUIT SIGILL SIGTRAP SIGABRT SIGBUS SIGFPE SIGKILL SIGUSR1 SIGSEGV SIGUSR2 SIGTERM SIGSTOP SIGTSTP
+
+  # Re-use existing tar'ed depot directory if it exists.
+  if [ -e compute-note-temp.julia.tar.bz ]; then
+    tar -xjf compute-note-temp.julia.tar.bz -C /tmp/$USER/
+  fi
 else
-  # If we do not have an existing setting, try using $JULIA_DEPOT_PATH (if that
-  # is not set, then we end up with an empty default, which means use the
-  # standard default location).
-  JULIA_DIRECTORY=$JULIA_DEPOT_PATH
+  # Get the location for the .julia directory, in case this has to have a
+  # non-default value, e.g. because the user's home directory is not accessible
+  # from compute nodes.
+  if [[ -f .julia_directory_default.txt ]]; then
+    JULIA_DIRECTORY=$(cat .julia_directory_default.txt)
+  else
+    # If we do not have an existing setting, try using $JULIA_DEPOT_PATH (if that
+    # is not set, then we end up with an empty default, which means use the
+    # standard default location).
+    JULIA_DIRECTORY=$JULIA_DEPOT_PATH
+  fi
+  echo "It can be useful or necessary to set a non-default location for the "
+  echo ".julia directory. Leave this empty if the default location is OK."
+  echo "Enter a name for a subdirectory of the current directory, e.g. "
+  echo "'.julia', to isolate the julia used for this instance of "
+  echo "moment_kinetics - this might be useful to ensure a 'clean' install or "
+  echo "to check whether some error is related to conflicting or corrupted "
+  echo "dependencies or cached precompilation files, etc."
+  echo "Enter location that should be used for the .julia directory [$JULIA_DIRECTORY]:"
+  # Use '-e' option to get path auto-completion
+  read -e -p "> "  input
+  if [ ! -z "$input" ]; then
+    JULIA_DIRECTORY=$input
+  fi
+  # Convert input (which might be a relative path) to an absolute path.
+  # Note that here we do not require the directory to exist already - if it does
+  # not exist then Julia will create it.
+  # Use Python's `os.path` module instead of GNU coreutils `realpath` as
+  # `realpath` may not be available on all systems (e.g. some MacOS versions),
+  # but we already assume Python is available.
+  # Use `os.path.abspath` rather than `os.path.realpath` to skip resolving
+  # symlinks (if we did resolve symlinks, it might make the path look different
+  # than expected).
+  if [ ! -z "$JULIA_DIRECTORY" ]; then
+    JULIA_DIRECTORY=$(/usr/bin/env python3 -c "import os; print(os.path.abspath('$JULIA_DIRECTORY'))")
+  fi
+  echo
 fi
-echo "It can be useful or necessary to set a non-default location for the "
-echo ".julia directory. Leave this empty if the default location is OK."
-echo "Enter a name for a subdirectory of the current directory, e.g. "
-echo "'.julia', to isolate the julia used for this instance of "
-echo "moment_kinetics - this might be useful to ensure a 'clean' install or "
-echo "to check whether some error is related to conflicting or corrupted "
-echo "dependencies or cached precompilation files, etc."
-echo "Enter location that should be used for the .julia directory [$JULIA_DIRECTORY]:"
-# Use '-e' option to get path auto-completion
-read -e -p "> "  input
-if [ ! -z "$input" ]; then
-  JULIA_DIRECTORY=$input
-fi
-# Convert input (which might be a relative path) to an absolute path.
-# Note that here we do not require the directory to exist already - if it does
-# not exist then Julia will create it.
-# Use Python's `os.path` module instead of GNU coreutils `realpath` as
-# `realpath` may not be available on all systems (e.g. some MacOS versions),
-# but we already assume Python is available.
-# Use `os.path.abspath` rather than `os.path.realpath` to skip resolving
-# symlinks (if we did resolve symlinks, it might make the path look different
-# than expected).
-if [ ! -z "$JULIA_DIRECTORY" ]; then
-  JULIA_DIRECTORY=$(/usr/bin/env python3 -c "import os; print(os.path.abspath('$JULIA_DIRECTORY'))")
-fi
-echo
 echo "Using julia_directory=$JULIA_DIRECTORY"
 echo
 echo $JULIA_DIRECTORY > .julia_directory_default.txt
@@ -290,11 +311,36 @@ if [ -f machines/shared/compile_dependencies.sh ]; then
 fi
 
 bin/julia --project $OPTIMIZATION_FLAGS machines/shared/add_dependencies_to_project.jl
+if [ x$JULIA_DEPOT_IN_TMP == xtrue ]; then
+  # tar up the Julia depot directory from /tmp/$USER so that we can save it and
+  # unpack it in future on compute nodes.
+  tar cjf compute-node-temp.julia.tar.bz -C /tmp/$USER/ compute-node-temp.julia/
+fi
 # Don't use bin/julia for machine_setup_stage_two.jl because that script modifies bin/julia.
 # It is OK to not use it here, because JULIA_DEPOT_PATH has been set within this script
 $JULIA --project $OPTIMIZATION_FLAGS machines/shared/machine_setup_stage_two.jl
 bin/julia --project $POSTPROC_OPTIMIZATION_FLAGS machines/shared/makie_post_processing_setup.jl
 bin/julia --project $POSTPROC_OPTIMIZATION_FLAGS machines/shared/plots_post_processing_setup.jl
+
+SUBMIT_PRECOMPILATION=$(bin/julia --project machines/shared/get_mk_preference.jl submit_precompilation)
+USE_MAKIE=$(bin/julia --project machines/shared/get_mk_preference.jl use_makie)
+USE_PLOTS=$(bin/julia --project machines/shared/get_mk_preference.jl use_plots)
+if [[ $USE_MAKIE == "y" || $USE_PLOTS == "y" ]]; then
+  if [ x$JULIA_DEPOT_IN_TMP == xtrue ]; then
+    # More packages have been added to the depot when the plotting package(s)
+    # were added, so re-create the tar.
+    tar cjf compute-node-temp.julia.tar.bz -C /tmp/$USER/ compute-node-temp.julia/
+  fi
+
+  if [[ $SUBMIT_PRECOMPILATION == "y" ]]; then
+    if [[ $USE_MAKIE == "y" ]]; then
+      ./precompile-makie-post-processing-submit.sh
+    fi
+    if [[ $USE_PLOTS == "y" ]]; then
+      ./precompile-plots-post-processing-submit.sh
+    fi
+  fi
+fi
 
 echo
 echo "Finished!"
