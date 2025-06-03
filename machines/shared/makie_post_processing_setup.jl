@@ -18,10 +18,6 @@ if mk_preferences["use_makie"] == "y"
         Pkg.add(["Makie", "CairoMakie"])
         Pkg.develop(path=joinpath("makie_post_processing", "makie_post_processing"))
         Pkg.precompile()
-
-        if batch_system && mk_preferences["submit_precompilation"] == "y"
-            run(`./precompile-makie-post-processing-submit.sh`)
-        end
     else
         Pkg.add(["Makie", "CairoMakie"])
         Pkg.develop(path=joinpath("makie_post_processing", "makie_post_processing"))
