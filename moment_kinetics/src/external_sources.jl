@@ -489,6 +489,11 @@ function get_source_profile(profile_type, width, relative_minimum, coord)
     elseif profile_type == "super_gaussian_4"
         x = coord.grid
         return @. (1.0 - relative_minimum) * exp(-(x / width)^4) + relative_minimum
+    elseif profile_type == "sinusoid"
+        x = coord.grid
+        L = coord.L
+        # Abuse 'width' parameter here and use it to set the mode number.
+        return @. (1.0 + (1.0 - relative_minimum) * sin(2.0 * π * width * x / L))
     else
         error("Unrecognised source profile type '$profile_type'.")
     end
