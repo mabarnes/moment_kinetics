@@ -212,7 +212,11 @@ if [ x$MACHINE == xarcher ]; then
   # Julia depot is created in /tmp/ so that it can be copied into /tmp/ on each
   # of the compute nodes for parallel jobs, to work around an issue where Julia
   # hangs while starting up on >~2048 MPI processes.
-  JULIA_DIRECTORY=/tmp/$USER/compute-node-temp.julia
+  # Here we set $JULIA_DEPOT_PATH explicitly so that it gets used within this
+  # script to set up the depot under /tmp, but do not set JULIA_DIRECTORY so
+  # that when julia is run on the login nodes, the default JULIA_DIRECTORY is
+  # used (which will be in the user's home directory).
+  export JULIA_DEPOT_PATH=/tmp/$USER/compute-node-temp.julia
 
   mkdir -p /tmp/$USER/
 

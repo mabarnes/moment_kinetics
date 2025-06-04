@@ -32,6 +32,8 @@ else
   exit 1
 fi
 
+export JULIA_DEPOT_PATH=/tmp/$USER/compute-node-temp.julia
+
 bin/julia --project -O3 precompile.jl
 
 # Don't re-save the tar file, because it might overwrite one being created by

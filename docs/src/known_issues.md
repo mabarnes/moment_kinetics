@@ -44,3 +44,9 @@ The process is:
 If new dependency packages are installed or if any dependencies are updated, it
 is probably best to re-run `machines/machine_setup.sh` so that these packages
 get precompiled and saved in `compute-node-temp.julia.tar.bz`.
+
+Since we are already copying the depot into `/tmp/$USER` we also copy across
+the `julia` executable and the `moment_kinetics.so` (or `makie_postproc.so` or
+`plots_postproc.so`) library file, so that they can be accessed from the
+node-local RAM for efficiency, as suggested by
+https://docs.archer2.ac.uk/user-guide/scheduler/#large-jobs.
