@@ -748,8 +748,8 @@ function enforce_zero_incoming_bc!(pdf, z::coordinate, vperp::coordinate, vpa::c
                 @. vpa.scratch2 = abs(vpa.scratch) / (sqrt(2.0) + abs(vpa.scratch)) / (1.0 + (4.0 * vpa.scratch / vpa.L)^4)                
                 vpa_L = vpa.L
 
-                J1 = integral((vperp,vpa)->(vpa*abs(vpa+upar[iz])/(sqrt(2.0)+abs(vpa+upar[iz]))/(1.0+(4.0*(vpa+upar[iz])/vpa_L)^4)), f, vperp, vpa)
-                J2 = integral((vperp,vpa)->(vpa^2*abs(vpa+upar[iz])/(sqrt(2.0)+abs(vpa+upar[iz]))/(1.0+(4.0*(vpa+upar[iz])/vpa_L)^4)), f, vperp, vpa)
+                J1 = integral((vperp,vpa)->(vpa*abs((vpa+upar[iz])/vth)/(sqrt(2.0)+abs((vpa+upar[iz])/vth))/(1.0+(4.0*((vpa+upar[iz])/vth)/vpa_L)^4)), f, vperp, vpa)
+                J2 = integral((vperp,vpa)->(vpa^2*abs((vpa+upar[iz])/vth)/(sqrt(2.0)+abs((vpa+upar[iz])/vth))/(1.0+(4.0*((vpa+upar[iz])/vth)/vpa_L)^4)), f, vperp, vpa)
 
 
                 # Given a corrected distribution function
