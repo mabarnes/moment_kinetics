@@ -469,20 +469,50 @@ end
 
 function single_element_interpolate!(result, newgrid, f, imin, imax, ielement, coord,
                                      chebyshev::chebyshev_base_info, derivative::Val{0})
+    # if coord.name == "vperp"
+    # println("vperp oldgrid: ")
+    # display(coord.grid)
+    # println("vperp newgrid: ")
+    # display(newgrid)
+    # # println("vperp 12345 chebyshev.is_lobatto: ", chebyshev.is_lobatto)
+    # end
+    # if coord.name == "vpa"# && f[1] > 1.0e-7
+    #     display(result)
+    #     println("vpa oldgrid: ")
+    #     display(coord.grid)
+    #     println("vpa newgrid: ")
+    #     display(newgrid)
+    # end
     # Temporary buffer to store Chebyshev coefficients
     cheby_f = chebyshev.df
 
     # Need to transform newgrid values to a scaled z-coordinate associated with the
     # Chebyshev coefficients to get the interpolated function values. Transform is a
     # shift and scale so that the element coordinate goes from -1 to 1
+
     shift = coord.element_shift[ielement]
     scale = 1/coord.element_scale[ielement]
+    # println("name: ", coord.name)
+    # println("shift: ", shift, " scale: ", scale)
+    
+
     # Get Chebyshev coefficients
     if chebyshev.is_lobatto
         chebyshev_forward_transform!(cheby_f, chebyshev.fext, f, chebyshev.forward, coord.ngrid)
     else
         chebyshev_radau_forward_transform!(cheby_f, chebyshev.fext, f, chebyshev.forward, coord.ngrid)
     end
+    # if coord.name == "vpa"# && f[1] > 1.0e-7
+    # println("result before single_element_interpolate!:")
+    # display(result)
+    # println("cheby_f: ")
+    # display(cheby_f)
+    # println("chebyshev grid: ")
+    # z = zeros(length(newgrid))
+    # @. z = scale * (newgrid - shift)
+    # display(z)
+    # end
+
     for i ∈ 1:length(newgrid)
         x = newgrid[i]
         z = scale * (x - shift)
@@ -496,6 +526,11 @@ function single_element_interpolate!(result, newgrid, f, imin, imax, ielement, c
         end
     end
 
+    # if coord.name == "vpa"# && f[1] > 1.0e-7
+    # println("result after single_element_interpolate!:")
+    # display(result)
+    # end
+    
     return nothing
 end
 

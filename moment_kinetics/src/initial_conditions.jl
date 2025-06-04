@@ -2185,15 +2185,31 @@ function convert_full_f_ion_to_normalised!(f, density, upar, p, vth, vperp, vpa,
             # scale the output grid by 1/vgrid_scale_factor
             vpa.scratch ./= vgrid_scale_factor[iz]
             vperp.scratch ./= vgrid_scale_factor[iz]
+            # println("WORKING NOW AT Z VALUE iz == $iz")
             @loop_vperp ivperp begin
                 @views vpa.scratch2 .= f[:,ivperp,iz] # Copy to use as input to interpolation
                 @views interpolate_to_grid_1d!(f[:,ivperp,iz], vpa.scratch, vpa.scratch2,
                                                vpa, vpa_spectral)
             end
+            # println("vpa old grid for z = $iz = ")
+            # display(vpa.grid)
+            # println("vpa new grid for z = $iz = ")
+            # display(vpa.scratch)
+            # println("coord.element_shift end = ", vpa.element_shift[end])
+            # println("coord.element_scale end = ", vpa.element_scale[end])
+            
+            # if iz > 70 
+            # error("stop")
+            # end
             @loop_vpa ivpa begin
                 @views vperp.scratch2 .= f[ivpa,:,iz] # Copy to use as input to interpolation
                 @views interpolate_to_grid_1d!(f[ivpa,:,iz], vperp.scratch,
                                                vperp.scratch2, vperp, vperp_spectral)
+                # if ivpa == 100
+                #     # For debugging, print the values of the interpolated f
+                #     println("HERE IS THE INTERPOLATED f FOR vpa = 100")
+                #     @show f[ivpa,:,iz]
+                # end
             end
         end
     end
