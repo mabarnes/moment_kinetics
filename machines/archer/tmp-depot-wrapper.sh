@@ -10,6 +10,11 @@ if [ $SLURM_LOCALID -eq 0 ]; then
   # Don't need the tar file any more, so delete to save memory
   rm /tmp/$USER/compute-node-temp.julia.tar.bz
 
+  # Move julia executable and .so library into the subdirectory so that they
+  # get cleaned up at the end.
+  mv /tmp/julia-dir /tmp/$USER/
+  mv /tmp/*.so /tmp/$USER/
+
   touch /tmp/$USER/ready
 else
   # https://unix.stackexchange.com/a/185370
@@ -17,6 +22,8 @@ else
     sleep 0.1
   done
 fi
+
+export JULIA_DEPOT_PATH=/tmp/$USER/compute-node-temp.julia
 
 # Execute the arguments to this wrapper script
 "$@"
