@@ -561,6 +561,7 @@ function enforce_zero_incoming_bc!(pdf, z::coordinate, vperp::coordinate, vpa::c
         @boundscheck size(pdf,2) == 1
         if vperp.n == 1
             f = @view pdf[:,1,iz]
+            ftest = @view pdf[:,:,iz]
             if evolve_p && evolve_upar
                 I0 = integral(f, vpa.wgts)
                 I1 = integral(f, vpa.grid, vpa.wgts)
@@ -619,7 +620,9 @@ function enforce_zero_incoming_bc!(pdf, z::coordinate, vperp::coordinate, vpa::c
                     (I0*(J3^2 - J2*J4) + I1*(J1*J4 - J2*J3) + I2*(J2^2 - J1*J3))
                 B = (1.5*J3 + A*(I1*J4 - I2*J3)) / (J3^2 - J2*J4)
                 C = (1.5 - A*I2 - B*J3) / J4
-                println("in boundary_conditions.jl: A = $A, B = $B, C = $C")
+                # println("in boundary_conditions.jl: A = $A, B = $B, C = $C")
+                # println("I0 = $I0, I1 = $I1, I2 = $I2")
+                println("J1 = $J1, J2 = $J2, J3 = $J3, J4 = $J4")
                 @. f = A*f + B*vpa.grid*vpa.scratch2 + C*vpa.grid*vpa.grid*vpa.scratch2
             elseif evolve_upar
                 I0 = integral(f, vpa.wgts)
@@ -659,7 +662,9 @@ function enforce_zero_incoming_bc!(pdf, z::coordinate, vperp::coordinate, vpa::c
 
                 A = 1.0 / (I0 - I1*J1/J2)
                 B = -A*I1/J2
-        
+                # println("in boundary_conditions.jl: A = $A, B = $B")
+                # println("I0 = $I0, I1 = $I1")
+                println("J1 = $J1, J2 = $J2")
 
                 @. f = A*f + B*vpa.grid*vpa.scratch2
             elseif evolve_density
@@ -690,12 +695,27 @@ function enforce_zero_incoming_bc!(pdf, z::coordinate, vperp::coordinate, vpa::c
 
                 @. vpa.scratch2 = abs(vpa.scratch) / (one_over_scale_factor + abs(vpa.scratch)) / (1.0 + (4.0 * vpa.scratch / vpa.L)^4)
                 vpa_L = vpa.L
-
-                J1 = integral((vperp,vpa)->(vpa*abs(vpa+upar[iz]/vth)/(one_over_scale_factor+abs(vpa+upar[iz]/vth))/(1.0+(4.0*(vpa+upar[iz]/vth)/vpa_L)^4)), f, vperp, vpa)
-                J2 = integral((vperp,vpa)->(vpa^2*abs(vpa+upar[iz]/vth)/(one_over_scale_factor+abs(vpa+upar[iz]/vth))/(1.0+(4.0*(vpa+upar[iz]/vth)/vpa_L)^4)), f, vperp, vpa)
-                J3 = integral((vperp,vpa)->(vpa^3*abs(vpa+upar[iz]/vth)/(one_over_scale_factor+abs(vpa+upar[iz]/vth))/(1.0+(4.0*(vpa+upar[iz]/vth)/vpa_L)^4)), f, vperp, vpa)
-                J4 = integral((vperp,vpa)->(vpa^4*abs(vpa+upar[iz]/vth)/(one_over_scale_factor+abs(vpa+upar[iz]/vth))/(1.0+(4.0*(vpa+upar[iz]/vth)/vpa_L)^4)), f, vperp, vpa)
-                println("J1 = $J1, J2 = $J2, J3 = $J3, J4 = $J4")
+                # println("for evolve_ppar: ")
+                # println("vperp.wgts = ")
+                # display(vperp.wgts[3])
+                # println("vpa.wgts = ")
+                # display(vpa.wgts[3])
+                # println("upar here is ", upar[iz])
+                println("vth here is ", vth)
+                # println("vpa_L is ", vpa_L)
+                # println("vperp.grid = ")
+                # display(vperp.grid[3])
+                # println("vpa.grid = ")
+                # display(vpa.grid[3])
+                #println("f[1:10:end,1:4:end] = ")
+                #display(f[1:10:end,1:4:end])
+                J1 = integral((vperp,vpa)->(vpa * abs(vpa+upar[iz]/vth)/(one_over_scale_factor+abs(vpa+upar[iz]/vth))/(1.0+(4.0*(vpa+upar[iz]/vth)/vpa_L)^4)), f, vperp, vpa)
+                J2 = integral((vperp,vpa)->(vpa^2 * abs(vpa+upar[iz]/vth)/(one_over_scale_factor+abs(vpa+upar[iz]/vth))/(1.0+(4.0*(vpa+upar[iz]/vth)/vpa_L)^4)), f, vperp, vpa)
+                J3 = integral((vperp,vpa)->(vpa^3 * abs(vpa+upar[iz]/vth)/(one_over_scale_factor+abs(vpa+upar[iz]/vth))/(1.0+(4.0*(vpa+upar[iz]/vth)/vpa_L)^4)), f, vperp, vpa)
+                J4 = integral((vperp,vpa)->(vpa^4 * abs(vpa+upar[iz]/vth)/(one_over_scale_factor+abs(vpa+upar[iz]/vth))/(1.0+(4.0*(vpa+upar[iz]/vth)/vpa_L)^4)), f, vperp, vpa)
+                # println("J1 = $J1, J2 = $J2, J3 = $J3, J4 = $J4")
+                # println("I0 = ", I0, " I1 = ", I1, " I2 = ", I2)
+                
                 # Given a corrected distribution function
                 #   F = A * Fhat + (B*wpa + C*wpa*2) * s*vpa/vth / (1 + s*|vpa/vth|) / (1 +(4*vpa/vth/Lvpa)^4) * Fhat
                 # the constraints (assuming 1D1V)
@@ -730,14 +750,16 @@ function enforce_zero_incoming_bc!(pdf, z::coordinate, vperp::coordinate, vpa::c
                 B = (1.5*J3 + A*(I1*J4 - I2*J3)) / (J3^2 - J2*J4)
                 C = (1.5 - A*I2 - B*J3) / J4
 
-                
+                println("in boundary_conditions.jl: A = $A, B = $B, C = $C")
+                println("I0 = $I0, I1 = $I1, I2 = $I2")
+                println("J1 = $J1, J2 = $J2, J3 = $J3, J4 = $J4")
                 #println("I0 = ", I0, " I1 = ", I1, " I2 = ", I2)
                 #println("J1 = ", J1, " J2 = ", J2, " J3 = ", J3, " J4 = ", J4)
-                println("in boundary_conditions.jl: A = $A, B = $B, C = $C")
-                println("vperp.wgts = ")
-                display(vperp.wgts[3])
-                println("vpa.wgts = ")
-                display(vpa.wgts[3])
+                #println("in boundary_conditions.jl: A = $A, B = $B, C = $C")
+                # println("vperp.wgts = ")
+                # display(vperp.wgts[3])
+                # println("vpa.wgts = ")
+                # display(vpa.wgts[3])
                 @. f = A*f + B*vpa.grid*vpa.scratch2*f + C*vpa.grid*vpa.grid*vpa.scratch2*f
             elseif evolve_upar
                 I0 = integral((vperp,vpa)->(1), f, vperp, vpa)
@@ -754,10 +776,25 @@ function enforce_zero_incoming_bc!(pdf, z::coordinate, vperp::coordinate, vpa::c
                 # T/Tref = 1, or for the 1V case at ~sqrt(2 T_∥ / m_i) when T_∥/Tref = 1.
                 @. vpa.scratch2 = abs(vpa.scratch) / (sqrt(2.0) + abs(vpa.scratch)) / (1.0 + (4.0 * vpa.scratch / vpa.L)^4)                
                 vpa_L = vpa.L
-
+                # println("for evolve_upar: ")
+                # println("vperp.wgts = ")
+                # display(vperp.wgts[3])
+                # println("vpa.wgts = ")
+                # display(vpa.wgts[3])
+                # println("vperp.grid = ")
+                # display(vperp.grid[3])
+                # println("vpa.grid = ")
+                # display(vpa.grid[3])
+                # println("upar here is ", upar[iz])
+                println("vth here is ", vth)
+                # println("vpa_L is ", vpa_L)
+                # println("f[1:10:end,1:4:end] = ")
+                # display(f[1:10:end,1:4:end])
+                #J1 = integral((vperp,vpa)->(vpa*abs(vpa+upar[iz]/vth)/(sqrt(2.0)+abs(vpa+upar[iz]/vth))/(1.0+(4.0*(vpa+upar[iz]/vth)/vpa_L)^4)), f, vperp, vpa)
                 J1 = integral((vperp,vpa)->(vpa*abs((vpa+upar[iz])/vth)/(sqrt(2.0)+abs((vpa+upar[iz])/vth))/(1.0+(4.0*((vpa+upar[iz])/vth)/vpa_L)^4)), f, vperp, vpa)
                 J2 = integral((vperp,vpa)->(vpa^2*abs((vpa+upar[iz])/vth)/(sqrt(2.0)+abs((vpa+upar[iz])/vth))/(1.0+(4.0*((vpa+upar[iz])/vth)/vpa_L)^4)), f, vperp, vpa)
-                println("J1 = $J1, J2 = $J2")
+
+                # println("I0 = ", I0, " I1 = ", I1)
 
                 # Given a corrected distribution function
                 #   F = A * Fhat + B*wpa * s*vpa/vth / (1 + s*|vpa/vth|) / (1 +(4*vpa/vth/Lvpa)^4) * Fhat
@@ -781,11 +818,11 @@ function enforce_zero_incoming_bc!(pdf, z::coordinate, vperp::coordinate, vpa::c
                 B = -A*I1/J2
                 @. f = A*f + B*vpa.grid*vpa.scratch2*f
                 println("J1 = $J1, J2 = $J2")
-                println("in boundary_conditions.jl: A = $A, B = $B")
-                println("vperp.wgts = ")
-                display(vperp.wgts[3])
-                println("vpa.wgts = ")
-                display(vpa.wgts[3])
+                # println("in boundary_conditions.jl: A = $A, B = $B")
+                # println("vperp.wgts = ")
+                # display(vperp.wgts[3])
+                # println("vpa.wgts = ")
+                # display(vpa.wgts[3])
             elseif evolve_density
                 I0 = integral((vperp,vpa)->(1), f, vperp, vpa)
                 @. f = f / I0

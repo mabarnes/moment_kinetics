@@ -66,7 +66,7 @@ function hard_force_moment_constraints!(f, moments, vpa, vperp)
             (I0*(I3^2 - I2*I4) + I1*I1*I4 - 2.0*I1*I2*I3 + I2^3)
         B = (1.5*I3 + A*(I1*I4 - I2*I3)) / (I3^2 - I2*I4)
         C = (1.5 - A*I2 - B*I3) / I4
-
+        #println("in moment_constraints.jl, A = ", A, ", B = ", B, ", C = ", C)
         @. f = (A + B*vpa.grid + C*vpa.grid*vpa.grid)*f
     elseif moments.evolve_upar
         # fnew = (A + B*wpa)*f
