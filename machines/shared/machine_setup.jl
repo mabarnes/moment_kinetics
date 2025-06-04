@@ -308,7 +308,11 @@ function machine_setup_moment_kinetics(machine::String; no_force_exit::Bool=fals
         ispath(envname) && rm(envname)
         open(envname, "w") do io
             write(io, template)
-            if julia_directory != ""
+
+            # Don't do the following on ARCHER2 because the depot has to be copied onto
+            # the compute notes within batch jobs, but sometimes scripts want to use the
+            # julia.env on the login nodes.
+            if machine != "archer" && julia_directory != ""
                 println("\n** Setting JULIA_DEPOT_PATH=$julia_directory in `julia.env`\n")
                 println(io, "\nexport JULIA_DEPOT_PATH=$julia_directory")
             end
@@ -370,12 +374,6 @@ function machine_setup_moment_kinetics(machine::String; no_force_exit::Bool=fals
         needs_account = true
     elseif machine == "archer"
         needs_account = true
-        if julia_directory == ""
-            error("On ARCHER2, the `julia_directory` setting is required, because the "
-                  * "default location for the `.julia` directory is in your home "
-                  * "directory and the `/home/` filesystem is not available on the "
-                  * "compute nodes.")
-        end
     elseif machine == "marconi"
         needs_account = true
     else

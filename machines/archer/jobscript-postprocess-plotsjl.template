@@ -26,11 +26,16 @@ export QT_QPA_PLATFORM=offscreen
 if [ -e compute-node-temp.julia.tar.bz ]; then
   # Distribute the tar'ed Julia depot to all compute nodes, saving it to the /tmp/ directory which lives in RAM.
   sbcast --compress=none compute-node-temp.julia.tar.bz  /tmp/compute-node-temp.julia.tar.bz
+
+  # Copy the julia directory (found from the name of the executable) and
+  # moment_kinetics.so to the compute nodes for efficiency.
+  cp -ra $(dirname $(dirname $(cat .julia_default.txt))) /tmp/julia-dir
+  cp -a plots_postproc.so  /tmp/plots_postproc.so
 else
   echo "compute-node-temp.julia.tar.bz but is required: run machines/machine_setup.sh to create it."
   exit 1
 fi
 
-machines/archer/tmp-depot-wrapper.sh bin/julia -Jplots_postproc.so --project=plots_post_processing/ run_post_processing.jl RUNDIR
+machines/archer/tmp-depot-wrapper.sh /tmp/$USER/julia-dir/bin/julia -J /tmp/$USER/plots_postproc.so --project=plots_post_processing/ run_post_processing.jl RUNDIR
 
 echo "finished post-processing RUNDIR $(date)"
