@@ -47,15 +47,19 @@ function update_speed_vperp!(vperp_advect, vpa, vperp, z, r, z_advect, r_advect,
         dBdr = geometry.dBdr
         dBdz = geometry.dBdz
         Bmag = geometry.Bmag
+        z_speed = z_advect.speed
+        r_speed = r_advect.speed
+        vperp_speed = vperp_advect.speed
+        vperp_grid = vperp.grid
         rfac = 0.0
         if r.n > 1
             rfac = 1.0
         end
         @inbounds begin
             @loop_r_z_vpa ir iz ivpa begin
-                @. @views dzdt = z_advect.speed[iz,ivpa,:,ir]
-                @. @views drdt = rfac*r_advect.speed[ir,ivpa,:,iz]
-                @. @views vperp_advect.speed[:,ivpa,iz,ir] = (0.5*vperp.grid[:]/Bmag[iz,ir])*(dzdt[:]*dBdz[iz,ir] + drdt[:]*dBdr[iz,ir])
+                @. @views dzdt = z_speed[iz,ivpa,:,ir]
+                @. @views drdt = rfac*r_speed[ir,ivpa,:,iz]
+                @. @views vperp_speed[:,ivpa,iz,ir] = (0.5*vperp_grid[:]/Bmag[iz,ir])*(dzdt[:]*dBdz[iz,ir] + drdt[:]*dBdr[iz,ir])
             end
         end
     elseif vperp.advection.option == "constant"

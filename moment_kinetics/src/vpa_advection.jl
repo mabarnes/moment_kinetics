@@ -371,13 +371,17 @@ function update_speed_default!(advect, fields, fvec, moments, vpa, vperp, z, r, 
         bzed = geometry.bzed
         dBdz = geometry.dBdz
         Bmag = geometry.Bmag
+        gEz = fields.gEz
         @inbounds @fastmath begin
-            @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
-                # mu, the adiabatic invariant
-                mu = 0.5*(vperp.grid[ivperp]^2)/Bmag[iz,ir]
-                # bzed = B_z/B
-                advect[is].speed[ivpa,ivperp,iz,ir] = (bzed[iz,ir]*fields.gEz[ivperp,iz,ir,is] -
-                                                       mu*bzed[iz,ir]*dBdz[iz,ir])
+            @loop_s is begin
+                this_speed = advect[is].speed
+                @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
+                    # mu, the adiabatic invariant
+                    mu = 0.5*(vperp.grid[ivperp]^2)/Bmag[iz,ir]
+                    # bzed = B_z/B
+                    this_speed[ivpa,ivperp,iz,ir] = (bzed[iz,ir]*gEz[ivperp,iz,ir,is] -
+                                                     mu*bzed[iz,ir]*dBdz[iz,ir])
+                end
             end
         end
     end
