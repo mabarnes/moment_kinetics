@@ -28,9 +28,10 @@ do a single stage time advance (potentially as part of a multi-stage RK scheme)
                                moments.evolve_upar, moments.evolve_p, vpa, vperp, z, r,
                                geometry, is)
         # update adv_fac
-        speed = advect[is].speed
+        this_adv_fac = advect[is].adv_fac
+        this_speed = advect[is].speed
         @loop_z_vperp_vpa iz ivperp ivpa begin
-            @. advect[is].adv_fac[:,ivpa,ivperp,iz] = -dt * speed[:,ivpa,ivperp,iz]
+            @views @. this_adv_fac[:,ivpa,ivperp,iz] = -dt * this_speed[:,ivpa,ivperp,iz]
         end
     end
     # calculate the upwind derivative along r
