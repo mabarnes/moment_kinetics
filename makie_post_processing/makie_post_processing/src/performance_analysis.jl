@@ -493,3 +493,246 @@ function timing_data(run_info; plot_prefix=nothing, threshold=nothing,
 
     return times_fig, ncalls_fig, allocs_fig
 end
+
+"""
+    parallel_scaling(run_info; plot_prefix, this_input_dict=nothing,
+                     weak=false)
+
+Analyse the parallel scaling of a set of simulations. By default 'strong scaling' (run
+time compared to number of processes, for a fixed simulation grid size), if `weak=true` is
+passed instead does 'weak scaling' (the simulation grid size is varied in proportion to
+the number of processes).
+
+If `efficiency_reference_nproc` is set to a positive number in the input, the efficiency
+is calculated relative to the run with this number of processes (which is assumed to be
+one of the runs in run_info).
+
+Note that there is no check that the grid size (or number of timesteps, etc.) stays the
+same (for strong scaling) or varies with the number of processes (for weak scaling). This
+function assumes that the runs input in `run_info` form a well-defined 'strong/weak
+scaling' scan - if not then the plots are meaningless.
+"""
+function parallel_scaling(run_info; plot_prefix=nothing, this_input_dict=nothing,
+                          weak=false)
+    if !isa(run_info, Vector) || length(run_info) == 1
+        # Doesn't make sense to do a strong scaling plot with only one run.
+        return nothing
+    end
+
+    if this_input_dict !== nothing
+        input = Dict_to_NamedTuple(this_input_dict["timing_data"])
+    else
+        input = Dict_to_NamedTuple(input_dict["timing_data"])
+    end
+
+    if input !== nothing && !input.plot_scaling
+        return nothing
+    end
+
+    if weak
+        println("Plotting weak scaling analysis")
+    else
+        println("Plotting strong scaling analysis")
+    end
+
+    timing_group = "timing_data"
+
+    nproc = mk_int[]
+    for ri ∈ run_info
+        push!(nproc, ri.nrank)
+    end
+
+    sorting_indices = sortperm(nproc)
+    nproc = nproc[sorting_indices]
+
+    if input.efficiency_reference_nproc < 0
+        # Just compare against the first point
+        reference_index = 1
+    else
+        reference_index = findfirst((x)->x==input.efficiency_reference_nproc, nproc)
+    end
+    reference_nproc = nproc[reference_index]
+
+    function add_to_plots(variable_name, ax_time, ax_efficiency; scatter=false,
+                          plot_ideal=false)
+        run_time = mk_float[]
+        for ri ∈ run_info
+            # Use the total time in `ssp_rk!()` as the thing to compare, so that we exclude
+            # file I/O time, which may be relatively large in short runs done for parallel
+            # scaling timings, but should be insignificant in production runs due to the large
+            # number of steps between outputs.
+            # Use `it` to select the last time point of each simulation, which gives the total
+            # cumulative time spent in `ssp_rk!()`.
+            # Convert from nanoseconds to seconds.
+            push!(run_time,
+                  get_variable(ri, variable_name;
+                               group=timing_group, it=ri.nt)[1] / 1.0e9)
+        end
+
+        # All variables that this function is called for should have names starting with
+        # "time:moment_kinetics;time_advance! step;", so remove this preface from the
+        # names we put in the legend.
+        variable_label = split(variable_name, "time:moment_kinetics;time_advance! step;")[2]
+
+        run_time = run_time[sorting_indices]
+
+        reference_time = run_time[reference_index]
+
+        if scatter
+            scatter!(ax_time, nproc, run_time, label=variable_label,
+                     inspector_label=(self,i,p) -> "$(self.label[])\nx: $(p[1])\ny: $(p[2])")
+        else
+            lines!(ax_time, nproc, run_time, label=variable_label,
+                   inspector_label=(self,i,p) -> "$(self.label[])\nx: $(p[1])\ny: $(p[2])")
+        end
+
+        if plot_ideal
+            # Plot ideal scaling
+            if weak
+                ideal_scaling = fill(reference_time, length(nproc))
+            else
+                ideal_scaling = @. reference_time * reference_nproc / nproc
+            end
+            lines!(ax_time, nproc, ideal_scaling; linestyle=:dash, color=:grey)
+        end
+
+        # Make a plot of the efficiency vs. some point in the scan
+        if weak
+            efficiency = @. reference_time / run_time
+        else
+            efficiency = @. reference_time / run_time * reference_nproc / nproc
+        end
+
+        if scatter
+            scatter!(ax_efficiency, nproc, efficiency, label=variable_label,
+                     inspector_label=(self,i,p) -> "$(self.label[])\nx: $(p[1])\ny: $(p[2])")
+        else
+            lines!(ax_efficiency, nproc, efficiency, label=variable_label,
+                   inspector_label=(self,i,p) -> "$(self.label[])\nx: $(p[1])\ny: $(p[2])")
+        end
+
+        if plot_ideal
+            # Plot ideal scaling
+            hlines!(ax_efficiency, 1.0; linestyle=:dash, color=:grey)
+        end
+    end
+
+    fig_time, ax_time = get_1d_ax(xlabel="nproc", ylabel="run time (s)")
+    fig_efficiency, ax_efficiency = get_1d_ax(xlabel="nproc", ylabel="efficiency vs. nproc=$reference_nproc")
+
+    add_to_plots("time:moment_kinetics;time_advance! step;ssp_rk!", ax_time,
+                 ax_efficiency; scatter=true, plot_ideal=true)
+
+    if length(unique(nproc)) > 1
+        # If there is only one nproc, does not make much sense to log-scale it, and trying
+        # to would cause an error.
+        ax_time.xscale = log2
+        ax_efficiency.xscale = log2
+    end
+    if !weak
+        ax_time.yscale = log10
+    end
+
+    if input.plot_scaling_all_timers
+        fig_time_all, ax_time_all, legend_place_time_all =
+            get_1d_ax(xlabel="nproc", ylabel="run time (s)", get_legend_place=:below)
+        fig_efficiency_all, ax_efficiency_all, legend_place_efficiency_all =
+            get_1d_ax(xlabel="nproc", ylabel="efficiency vs. nproc=$reference_nproc",
+                      get_legend_place=:below)
+
+        plot_ideal = true
+        for variable_name ∈ run_info[1].timing_variable_names
+            if !startswith(variable_name, "time:moment_kinetics;time_advance! step;ssp_rk!")
+                # Only plot variables that are time variables and part of the time advance
+                continue
+            end
+            add_to_plots(variable_name, ax_time_all, ax_efficiency_all; plot_ideal)
+            # Only plot the 'ideal scaling' for the first variable, to avoid clutter.
+            plot_ideal = false
+        end
+
+        if length(unique(nproc)) > 1
+            # If there is only one nproc, does not make much sense to log-scale it, and
+            # trying to would cause an error.
+            ax_time_all.xscale = log2
+            ax_efficiency_all.xscale = log2
+        end
+        if !weak
+            ax_time_all.yscale = log10
+        end
+
+        # Ensure the first row width is 3/4 of the column width so that the plot does not
+        # get squashed by the legend
+        rowsize!(fig_time_all.layout, 1, Aspect(1, 3/4))
+        resize_to_layout!(fig_time_all)
+
+        # Ensure the first row width is 3/4 of the column width so that the plot does not
+        # get squashed by the legend
+        rowsize!(fig_efficiency_all.layout, 1, Aspect(1, 3/4))
+        resize_to_layout!(fig_efficiency_all)
+    end
+
+    if plot_prefix === nothing && string(Makie.current_backend()) == "GLMakie"
+        # Can make interactive plots
+
+        backend = Makie.current_backend()
+
+        DataInspector(fig_time)
+        display(backend.Screen(), fig_time)
+
+        DataInspector(fig_efficiency)
+        display(backend.Screen(), fig_efficiency)
+
+        if input.plot_scaling_all_timers
+            DataInspector(fig_time_all)
+            display(backend.Screen(), fig_time_all)
+
+            DataInspector(fig_efficiency_all)
+            display(backend.Screen(), fig_efficiency_all)
+        end
+    else
+        if plot_prefix !== nothing
+            if weak
+                outfile = plot_prefix * "weak_scaling.pdf"
+            else
+                outfile = plot_prefix * "strong_scaling.pdf"
+            end
+            save(outfile, fig_time)
+        end
+
+        if plot_prefix !== nothing
+            if weak
+                outfile = plot_prefix * "weak_scaling_efficiency.pdf"
+            else
+                outfile = plot_prefix * "strong_scaling_efficiency.pdf"
+            end
+            save(outfile, fig_efficiency)
+        end
+
+        if input.plot_scaling_all_timers
+            Legend(legend_place_time_all, ax_time_all; tellheight=true, tellwidth=true)
+            Legend(legend_place_efficiency_all, ax_efficiency_all; tellheight=true,
+                   tellwidth=true)
+
+            if plot_prefix !== nothing
+                if weak
+                    outfile = plot_prefix * "weak_scaling_all.pdf"
+                else
+                    outfile = plot_prefix * "strong_scaling_all.pdf"
+                end
+                save(outfile, fig_time_all)
+            end
+
+            if plot_prefix !== nothing
+                if weak
+                    outfile = plot_prefix * "weak_scaling_efficiency_all.pdf"
+                else
+                    outfile = plot_prefix * "strong_scaling_efficiency_all.pdf"
+                end
+                save(outfile, fig_efficiency_all)
+            end
+        end
+    end
+
+    return nothing
+end
