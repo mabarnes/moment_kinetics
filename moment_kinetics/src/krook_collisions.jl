@@ -78,10 +78,6 @@ Currently Krook collisions
                          dt) = begin
     @begin_s_r_z_region()
 
-    if vperp.n > 1 && (moments.evolve_density || moments.evolve_upar || moments.evolve_p)
-        nothing #error("Krook collisions not implemented for 2V moment-kinetic cases yet")
-    end
-
     if vperp.n == 1
         Maxwellian_prefactor = 1.0 / sqrt(π)
     else
