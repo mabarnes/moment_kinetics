@@ -46,6 +46,7 @@ using ..collision_frequencies: get_collision_frequency_ii
 using ..input_structs
 using ..moment_kinetics_structs: moments_ion_substruct, moments_electron_substruct,
                                  moments_neutral_substruct
+using ..timer_utils
 
 
 #global tmpsum1 = 0.0
@@ -1364,8 +1365,9 @@ end
 """
 Pre-calculate spatial derivatives of the moments that will be needed for the time advance
 """
-function calculate_ion_moment_derivatives!(moments, scratch, scratch_dummy, z, z_spectral,
-                                           ion_mom_diss_coeff)
+@timeit global_timer calculate_ion_moment_derivatives!(moments, scratch, scratch_dummy, z,
+                                                       z_spectral,
+                                                       ion_mom_diss_coeff) = begin
     @begin_s_r_region()
 
     density = scratch.density
@@ -1456,8 +1458,10 @@ end
 """
 Pre-calculate spatial derivatives of the electron moments that will be needed for the time advance
 """
-function calculate_electron_moment_derivatives!(moments, scratch, scratch_dummy, z, z_spectral,
-                                                electron_mom_diss_coeff, electron_model)
+@timeit global_timer calculate_electron_moment_derivatives!(moments, scratch,
+                                                            scratch_dummy, z, z_spectral,
+                                                            electron_mom_diss_coeff,
+                                                            electron_model) = begin
     @begin_r_region()
 
     dens = scratch.electron_density
@@ -2253,8 +2257,9 @@ end
 Pre-calculate spatial derivatives of the neutral moments that will be needed for the time
 advance
 """
-function calculate_neutral_moment_derivatives!(moments, scratch, scratch_dummy, z,
-                                               z_spectral, neutral_mom_diss_coeff)
+@timeit global_timer calculate_neutral_moment_derivatives!(moments, scratch,
+                                                           scratch_dummy, z, z_spectral,
+                                                           neutral_mom_diss_coeff) = begin
     @begin_sn_r_region()
 
     density = scratch.density_neutral
@@ -2342,9 +2347,10 @@ end
 """
 update velocity moments that are calculable from the evolved ion pdf
 """
-function update_derived_moments!(new_scratch, moments, vpa, vperp, z, r, composition,
-                                 r_spectral, geometry, gyroavs, scratch_dummy, z_advect,
-                                 collisions, diagnostic_moments)
+@timeit global_timer update_derived_moments!(new_scratch, moments, vpa, vperp, z, r,
+                                             composition, r_spectral, geometry, gyroavs,
+                                             scratch_dummy, z_advect, collisions,
+                                             diagnostic_moments) = begin
 
     if composition.ion_physics == gyrokinetic_ions
         ff = scratch_dummy.buffer_vpavperpzrs_1
@@ -2409,8 +2415,8 @@ end
 """
 update velocity moments that are calculable from the evolved neutral pdf
 """
-function update_derived_moments_neutral!(new_scratch, moments, vz, vr, vzeta, z, r,
-                                         composition)
+@timeit global_timer update_derived_moments_neutral!(new_scratch, moments, vz, vr, vzeta,
+                                                     z, r, composition) = begin
 
     if !moments.evolve_density
         update_neutral_density!(new_scratch.density_neutral, moments.neutral.dens_updated,

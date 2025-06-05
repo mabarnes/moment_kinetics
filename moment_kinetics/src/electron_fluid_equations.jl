@@ -20,6 +20,7 @@ using ..input_structs
 using ..timer_utils
 using ..moment_kinetics_structs: electron_pdf_substruct
 using ..nonlinear_solvers
+using ..timer_utils
 using ..type_definitions: mk_float
 
 using MPI
@@ -139,8 +140,8 @@ function calculate_electron_upar_from_charge_conservation_no_r!(upar_e, updated,
     return nothing
 end
 
-function calculate_electron_moments!(scratch, pdf, moments, composition, collisions, r, z,
-                                     vperp, vpa)
+@timeit global_timer calculate_electron_moments!(scratch, pdf, moments, composition,
+                                                 collisions, r, z, vperp, vpa) = begin
     @begin_z_region()
 
     if length(scratch.pdf_electron) > 0
