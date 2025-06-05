@@ -1416,7 +1416,8 @@ function enforce_neutral_r_boundary_condition!(
             end1[ivz,ivr,ivzeta,iz,isn] = f[ivz,ivr,ivzeta,iz,1,isn]
             end2[ivz,ivr,ivzeta,iz,isn] = f[ivz,ivr,ivzeta,iz,nr,isn]
         end
-        reconcile_element_boundaries_MPI!(f, end1, end2, buffer1, buffer2, r)
+        reconcile_element_boundaries_MPI!(f, end1, end2, buffer1, buffer2, r;
+                                          neutrals=true)
 
         # Hacky way to get buffers to use for moment communication, to avoid having to
         # pass in even more buffers. We know that the distribution function buffers are
@@ -1435,17 +1436,20 @@ function enforce_neutral_r_boundary_condition!(
             moment_end1[iz,isn] = density[iz,1,isn]
             moment_end2[iz,isn] = density[iz,nr,isn]
         end
-        reconcile_element_boundaries_MPI!(density, end1, end2, buffer1, buffer2, r)
+        reconcile_element_boundaries_MPI!(density, end1, end2, buffer1, buffer2, r;
+                                          neutrals=true)
         @loop_sn_z isn iz begin
             moment_end1[iz,isn] = uz[iz,1,isn]
             moment_end2[iz,isn] = uz[iz,nr,isn]
         end
-        reconcile_element_boundaries_MPI!(uz, end1, end2, buffer1, buffer2, r)
+        reconcile_element_boundaries_MPI!(uz, end1, end2, buffer1, buffer2, r;
+                                          neutrals=true)
         @loop_sn_z isn iz begin
             moment_end1[iz,isn] = p[iz,1,isn]
             moment_end2[iz,isn] = p[iz,nr,isn]
         end
-        reconcile_element_boundaries_MPI!(p, end1, end2, buffer1, buffer2, r)
+        reconcile_element_boundaries_MPI!(p, end1, end2, buffer1, buffer2, r;
+                                          neutrals=true)
     end
 
     for (ir, sections_tuple) ∈ ((1, r_boundaries.inner_sections),
@@ -1593,7 +1597,8 @@ function enforce_neutral_z_boundary_condition!(pdf, density, uz, pz, moments, de
             end2[ivz,ivr,ivzeta,ir,isn] = pdf[ivz,ivr,ivzeta,nz,ir,isn]
         end
         # check on periodic bc occurs within this call below
-        reconcile_element_boundaries_MPI!(pdf, end1, end2, buffer1, buffer2, z)
+        reconcile_element_boundaries_MPI!(pdf, end1, end2, buffer1, buffer2, z;
+                                          neutrals=true)
     end
 
     zero = 1.0e-14
