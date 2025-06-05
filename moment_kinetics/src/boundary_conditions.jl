@@ -648,17 +648,17 @@ function enforce_zero_incoming_bc!(pdf, z::coordinate, vperp::coordinate, vpa::c
             vpa_L = vpa.L
 
             
-            J1 = integral((vperp,vpa)->(vpa*abs((vpa+upar[iz])/vth)/(sqrt(2.0)+abs((vpa+upar[iz])/vth))/(1.0+(4.0*((vpa+upar[iz])/vth)/vpa_L)^4)), f, vperp, vpa)
-            J2 = integral((vperp,vpa)->(vpa^2*abs((vpa+upar[iz])/vth)/(sqrt(2.0)+abs((vpa+upar[iz])/vth))/(1.0+(4.0*((vpa+upar[iz])/vth)/vpa_L)^4)), f, vperp, vpa)
+            J1 = integral((vperp,vpa)->(vpa*abs(vpa+upar[iz])/(sqrt(2.0)+abs(vpa+upar[iz]))/(1.0+(4.0*(vpa+upar[iz])/vpa_L)^4)), f, vperp, vpa)
+            J2 = integral((vperp,vpa)->(vpa^2*abs(vpa+upar[iz])/(sqrt(2.0)+abs(vpa+upar[iz]))/(1.0+(4.0*(vpa+upar[iz])/vpa_L)^4)), f, vperp, vpa)
 
             # Given a corrected distribution function
-            #   F = A * Fhat + B*wpa * s*vpa/vth / (1 + s*|vpa/vth|) / (1 +(4*vpa/vth/Lvpa)^4) * Fhat
+            #   F = A * Fhat + B*wpa * s*vpa / (1 + s*|vpa|) / (1 +(4*vpa/Lvpa)^4) * Fhat
             # the constraints 
             #   ∫d^3w F = 1
             #   ∫d^3w wpa F = 0
             # and defining the integrals
             #   In = ∫d^3w wpa^n * F
-            #   Jn = ∫d^3w wpa^n * s*vpa/vth / (1 + s*|vpa/vth|) / (1 +(4*vpa/vth/Lvpa)^4) * F
+            #   Jn = ∫d^3w wpa^n * s*vpa / (1 + s*|vpa|) / (1 +(4*vpa/Lvpa)^4) * F
             # we can substitute F into the constraint equations and solve for A and B
             #   A I0 + B J1 = 1
             #   A I1 + B J2 = 0
