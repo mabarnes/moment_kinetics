@@ -27,7 +27,9 @@ initial state, and when applying boundary conditions.
 
 Note this function assumes the input is given at a single spatial position.
 """
-function hard_force_moment_constraints!(f, moments, vpa, vperp)
+@timeit global_timer hard_force_moment_constraints!(f, moments, vpa, vperp) = begin
+
+    f1d = @view f[:,1]
     if moments.evolve_p
         # fnew = (A + B*wpa + C*(wpa^2 + wperp^2))*f
         # Constraints:
@@ -149,7 +151,7 @@ Notes:
 * this function assumes the input is given at a single spatial position.
 * currently only works with '1V' runs, where vz is the only velocity-space dimension
 """
-function hard_force_moment_constraints_neutral!(f, moments, vz)
+@timeit global_timer hard_force_moment_constraints_neutral!(f, moments, vz) = begin
     f1d = @view f[:,1,1]
     if moments.evolve_p
         # fnew = (A + B*wz + C*wz^2)*f
