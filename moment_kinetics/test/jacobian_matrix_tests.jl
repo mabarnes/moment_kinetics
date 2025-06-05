@@ -271,7 +271,7 @@ function test_electron_z_advection(test_input; rtol=(2.5e2*epsilon)^2)
             f .*= 1.0 .+ 1.0e-4 .* reshape(vpa.grid.^3, vpa.n, 1, 1) .* reshape(sin.(2.0.*π.*z.grid./z.L), 1, 1, z.n)
             # Ensure initial electron distribution function obeys constraints
         end
-        hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa)
+        hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa, vperp)
         delta_f = allocate_shared_float(size(f)...)
         f_amplitude = epsilon * maximum(f)
         # Use exp(sin()) in vpa so that perturbation does not have any symmetry that makes
@@ -611,7 +611,7 @@ function test_electron_vpa_advection(test_input; rtol=(3.0e2*epsilon)^2)
             f .*= 1.0 .+ 1.0e-4 .* reshape(vpa.grid.^3, vpa.n, 1, 1) .* reshape(sin.(2.0.*π.*z.grid./z.L), 1, 1, z.n)
         end
         # Ensure initial electron distribution function obeys constraints
-        hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa)
+        hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa, vperp)
         delta_f = allocate_shared_float(size(f)...)
         f_amplitude = epsilon * maximum(f)
         # Use exp(sin()) in vpa so that perturbation does not have any symmetry that makes
@@ -962,7 +962,7 @@ function test_contribution_from_electron_pdf_term(test_input; rtol=(4.0e2*epsilo
             f .*= 1.0 .+ 1.0e-4 .* reshape(vpa.grid.^3, vpa.n, 1, 1) .* reshape(sin.(2.0.*π.*z.grid./z.L), 1, 1, z.n)
         end
         # Ensure initial electron distribution function obeys constraints
-        hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa)
+        hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa, vperp)
         delta_f = allocate_shared_float(size(f)...)
         f_amplitude = epsilon * maximum(f)
         # Use exp(sin()) in vpa so that perturbation does not have any symmetry that makes
@@ -1273,7 +1273,7 @@ function test_electron_dissipation_term(test_input; rtol=(1.0e1*epsilon)^2)
             f .*= 1.0 .+ 1.0e-4 .* reshape(vpa.grid.^3, vpa.n, 1, 1) .* reshape(sin.(2.0.*π.*z.grid./z.L), 1, 1, z.n)
         end
         # Ensure initial electron distribution function obeys constraints
-        hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa)
+        hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa, vperp)
         delta_f = allocate_shared_float(size(f)...)
         f_amplitude = epsilon * maximum(f)
         # Use exp(sin()) in vpa so that perturbation does not have any symmetry that makes
@@ -1577,7 +1577,7 @@ function test_electron_krook_collisions(test_input; rtol=(2.0e1*epsilon)^2)
             f .*= 1.0 .+ 1.0e-4 .* reshape(vpa.grid.^3, vpa.n, 1, 1) .* reshape(sin.(2.0.*π.*z.grid./z.L), 1, 1, z.n)
         end
         # Ensure initial electron distribution function obeys constraints
-        hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa)
+        hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa, vperp)
         delta_f = allocate_shared_float(size(f)...)
         f_amplitude = epsilon * maximum(f)
         # Use exp(sin()) in vpa so that perturbation does not have any symmetry that makes
@@ -1905,7 +1905,7 @@ function test_external_electron_source(test_input; rtol=(3.0e1*epsilon)^2)
             f .*= 1.0 .+ 1.0e-4 .* reshape(vpa.grid.^3, vpa.n, 1, 1) .* reshape(sin.(2.0.*π.*z.grid./z.L), 1, 1, z.n)
         end
         # Ensure initial electron distribution function obeys constraints
-        hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa)
+        hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa, vperp)
         delta_f = allocate_shared_float(size(f)...)
         f_amplitude = epsilon * maximum(f)
         # Use exp(sin()) in vpa so that perturbation does not have any symmetry that makes
@@ -2232,7 +2232,7 @@ function test_electron_implicit_constraint_forcing(test_input; rtol=(2.5e0*epsil
             f .*= 1.0 .+ 1.0e-4 .* reshape(vpa.grid.^3, vpa.n, 1, 1) .* reshape(sin.(2.0.*π.*z.grid./z.L), 1, 1, z.n)
         end
         # Ensure initial electron distribution function obeys constraints
-        hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa)
+        hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa, vperp)
         delta_f = allocate_shared_float(size(f)...)
         f_amplitude = epsilon * maximum(f)
         # Use exp(sin()) in vpa so that perturbation does not have any symmetry that makes
@@ -2571,7 +2571,7 @@ function test_electron_energy_equation(test_input; rtol=(6.0e2*epsilon)^2)
             f .*= 1.0 .+ 1.0e-4 .* reshape(vpa.grid.^3, vpa.n, 1, 1) .* reshape(sin.(2.0.*π.*z.grid./z.L), 1, 1, z.n)
         end
         # Ensure initial electron distribution function obeys constraints
-        hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa)
+        hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa, vperp)
         delta_f = allocate_shared_float(size(f)...)
         f_amplitude = epsilon * maximum(f)
         @begin_serial_region()
@@ -2834,7 +2834,7 @@ function test_ion_dt_forcing_of_electron_p(test_input; rtol=(1.5e1*epsilon)^2)
             f .*= 1.0 .+ 1.0e-4 .* reshape(vpa.grid.^3, vpa.n, 1, 1) .* reshape(sin.(2.0.*π.*z.grid./z.L), 1, 1, z.n)
         end
         # Ensure initial electron distribution function obeys constraints
-        hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa)
+        hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa, vperp)
         delta_f = allocate_shared_float(size(f)...)
         f_amplitude = epsilon * maximum(f)
         # Use exp(sin()) in vpa so that perturbation does not have any symmetry that makes
@@ -3094,7 +3094,7 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
             f .*= 1.0 .+ 1.0e-4 .* reshape(vpa.grid.^3, vpa.n, 1, 1) .* reshape(sin.(2.0.*π.*z.grid./z.L), 1, 1, z.n)
         end
         # Ensure initial electron distribution function obeys constraints
-        hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa)
+        hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa, vperp)
         delta_f = allocate_shared_float(size(f)...)
         f_amplitude = epsilon * maximum(f)
         # Use exp(sin()) in vpa so that perturbation does not have any symmetry that makes
@@ -3554,7 +3554,7 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2)
             f .*= 1.0 .+ 1.0e-4 .* reshape(vpa.grid.^3, vpa.n, 1, 1) .* reshape(sin.(2.0.*π.*z.grid./z.L), 1, 1, z.n)
         end
         # Ensure initial electron distribution function obeys constraints
-        hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa)
+        hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa, vperp)
         # enforce the boundary condition(s) on the electron pdf
         @views enforce_boundary_condition_on_electron_pdf!(
                    f, phi, vth, upar, z, vperp, vpa, vperp_spectral, vpa_spectral,
