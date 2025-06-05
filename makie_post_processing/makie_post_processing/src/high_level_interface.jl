@@ -280,6 +280,8 @@ function makie_post_process(run_dir::Union{String,Vector{String}},
     manufactured_solutions_analysis_dfns(run_info_dfns; plot_prefix=plot_prefix)
 
     timing_data(run_info; plot_prefix=plot_prefix, this_input_dict=input_dict)
+    parallel_scaling(run_info; plot_prefix=plot_prefix, this_input_dict=input_dict)
+    parallel_scaling(run_info; plot_prefix=plot_prefix, this_input_dict=input_dict, weak=true)
 
     for ri ∈ run_info
         close_run_info(ri)
