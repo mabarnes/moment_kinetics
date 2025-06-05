@@ -419,6 +419,7 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
     set_defaults_and_check_section!(
         this_input_dict, "timing_data", warn_unexpected;
         plot=false,
+        plot_scaling=false,
         threshold=1.0e-2,
         include_patterns=String[],
         exclude_patterns=String[],

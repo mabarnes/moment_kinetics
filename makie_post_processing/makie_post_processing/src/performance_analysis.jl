@@ -493,3 +493,200 @@ function timing_data(run_info; plot_prefix=nothing, threshold=nothing,
 
     return times_fig, ncalls_fig, allocs_fig
 end
+
+"""
+    strong_scaling(run_info; plot_prefix, this_input_dict=nothing,
+                   efficiency_reference_nproc=nothing)
+
+Analyse the 'strong scaling': run time compared to number of processes, for a fixed
+simulation grid size.
+
+If `efficiency_reference_nproc` is passed, the efficiency is calculated relative to the
+run with this number of processes (which is assumed to be one of the runs in run_info).
+
+Note that there is no check that the grid size (or number of timesteps, etc.) stays the
+same. This function assumes that the runs input in `run_info` form a well-defined 'strong
+scaling' scan - if not then the plots are meaningless.
+"""
+function strong_scaling(run_info; plot_prefix, this_input_dict=nothing,
+                        efficiency_reference_nproc=nothing)
+    if !isa(run_info, Vector) || length(run_info) == 1
+        # Doesn't make sense to do a strong scaling plot with only one run.
+        return nothing
+    end
+
+    if this_input_dict !== nothing
+        input = Dict_to_NamedTuple(this_input_dict["timing_data"])
+    else
+        input = nothing
+    end
+
+    if input !== nothing && !input.plot_scaling
+        return nothing
+    end
+
+    println("Plotting strong scaling analysis")
+
+    timing_group = "timing_data"
+
+    nproc = mk_int[]
+    run_time = mk_float[]
+    for ri ∈ run_info
+        push!(nproc, ri.nrank)
+
+        # Use the total time in `ssp_rk!()` as the thing to compare, so that we exclude
+        # file I/O time, which may be relatively large in short runs done for parallel
+        # scaling timings, but should be insignificant in production runs due to the large
+        # number of steps between outputs.
+        # Use `it` to select the last time point of each simulation, which gives the total
+        # cumulative time spent in `ssp_rk!()`.
+        # Convert from nanoseconds to seconds.
+        push!(run_time,
+              get_variable(ri, "time:moment_kinetics;time_advance! step;ssp_rk!";
+                           group=timing_group, it=ri.nt)[1] / 1.0e9)
+    end
+
+    sorting_indices = sortperm(nproc)
+    nproc = nproc[sorting_indices]
+    run_time = run_time[sorting_indices]
+
+    fig, ax = get_1d_ax(xlabel="nproc", ylabel="run time (s)")
+    scatter!(ax, nproc, run_time)
+
+    # Plot ideal scaling
+    plot_1d(nproc, @. run_time[1] * nproc[1] / nproc; ax=ax, linestyle=:dash, color=:grey)
+
+    ax.xscale = log2
+    ax.yscale = log10
+
+    if plot_prefix !== nothing
+        outfile = plot_prefix * "strong_scaling.pdf"
+        save(outfile, fig)
+    end
+
+    # Make a plot of the efficiency vs. some point in the scan
+    if efficiency_reference_nproc === nothing
+        # Just compare against the first point
+        reference_index = 1
+    else
+        reference_index = findfirst((x)->x==efficiency_reference_nproc, nproc)
+    end
+    reference_nproc = nproc[reference_index]
+    reference_time = run_time[reference_index]
+
+    efficiency = @. reference_time / run_time * reference_nproc / nproc
+
+    fig, ax = get_1d_ax(xlabel="nproc", ylabel="efficiency vs. nproc=$reference_nproc")
+    scatter!(ax, nproc, efficiency)
+
+    # Plot ideal scaling
+    hlines!(ax, 1.0; linestyle=:dash, color=:grey)
+
+    ax.xscale = log2
+
+    if plot_prefix !== nothing
+        outfile = plot_prefix * "strong_scaling_efficiency.pdf"
+        save(outfile, fig)
+    end
+
+    return nothing
+end
+
+"""
+    weak_scaling(run_info; plot_prefix, this_input_dict=nothing,
+                 efficiency_reference_nproc=nothing)
+
+Analyse the 'weak scaling': run time compared to number of processes, where the simulation
+grid size is varied in proportion to the number of processes.
+
+If `efficiency_reference_nproc` is passed, the efficiency is calculated relative to the
+run with this number of processes (which is assumed to be one of the runs in run_info).
+
+Note that there is no check that the grid size (or number of timesteps, etc.) is
+proportional to the number of processes. This function assumes that the runs input in
+`run_info` form a well-defined 'weak scaling' scan - if not then the plots are
+meaningless.
+"""
+function weak_scaling(run_info; plot_prefix, this_input_dict=nothing,
+                      efficiency_reference_nproc=nothing)
+    if !isa(run_info, Vector) || length(run_info) == 1
+        # Doesn't make sense to do a weak scaling plot with only one run.
+        return nothing
+    end
+
+    if this_input_dict !== nothing
+        input = Dict_to_NamedTuple(this_input_dict["timing_data"])
+    else
+        input = nothing
+    end
+
+    if input !== nothing && !input.plot_scaling
+        return nothing
+    end
+
+    println("Plotting weak scaling analysis")
+
+    timing_group = "timing_data"
+
+    nproc = mk_int[]
+    run_time = mk_float[]
+    for ri ∈ run_info
+        push!(nproc, ri.nrank)
+
+        # Use the total time in `ssp_rk!()` as the thing to compare, so that we exclude
+        # file I/O time, which may be relatively large in short runs done for parallel
+        # scaling timings, but should be insignificant in production runs due to the large
+        # number of steps between outputs.
+        # Use `it` to select the last time point of each simulation, which gives the total
+        # cumulative time spent in `ssp_rk!()`.
+        # Convert from nanoseconds to seconds.
+        push!(run_time,
+              get_variable(ri, "time:moment_kinetics;time_advance! step;ssp_rk!";
+                           group=timing_group, it=ri.nt)[1] / 1.0e9)
+    end
+
+    sorting_indices = sortperm(nproc)
+    nproc = nproc[sorting_indices]
+    run_time = run_time[sorting_indices]
+
+    fig, ax = get_1d_ax(xlabel="nproc", ylabel="run time (s)")
+    scatter!(ax, nproc, run_time)
+
+    # Plot ideal scaling
+    plot_1d(nproc, fill(run_time[1], length(nproc)); ax=ax, linestyle=:dash, color=:grey)
+
+    ax.xscale = log2
+    ax.yscale = log10
+
+    if plot_prefix !== nothing
+        outfile = plot_prefix * "weak_scaling.pdf"
+        save(outfile, fig)
+    end
+
+    # Make a plot of the efficiency vs. some point in the scan
+    if efficiency_reference_nproc === nothing
+        # Just compare against the first point
+        reference_index = 1
+    else
+        reference_index = findfirst((x)->x==efficiency_reference_nproc, nproc)
+    end
+    reference_nproc = nproc[reference_index]
+    reference_time = run_time[reference_index]
+
+    efficiency = @. reference_time / run_time
+
+    fig, ax = get_1d_ax(xlabel="nproc", ylabel="efficiency vs. nproc=$reference_nproc")
+    scatter!(ax, nproc, efficiency)
+
+    # Plot ideal scaling
+    hlines!(1.0; linestyle=:dash, color=:grey)
+
+    ax.xscale = log2
+
+    if plot_prefix !== nothing
+        outfile = plot_prefix * "weak_scaling_efficiency.pdf"
+        save(outfile, fig)
+    end
+
+    return nothing
+end
