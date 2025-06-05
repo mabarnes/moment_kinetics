@@ -45,7 +45,7 @@ Pass `include_legend=false` to remove legends from the figures. This is mostly u
 interactive figures where hovering over the lines can show what they are, so that the
 legend is not needed.
 """
-function timing_data(run_info::Tuple; plot_prefix=nothing, threshold=nothing,
+function timing_data(run_info::Vector{Any}; plot_prefix=nothing, threshold=nothing,
                      include_patterns=nothing, exclude_patterns=nothing, ranks=nothing,
                      this_input_dict=nothing, figsize=nothing, include_legend=true)
 

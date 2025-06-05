@@ -9,9 +9,8 @@ using moment_kinetics.type_definitions: OptionsDict
 test_output_directory = tempname()
 mkpath(test_output_directory)
 
-input_dict = Dict("output" => OptionsDict("run_name"=>"precompilation",
-                                          "base_directory" => test_output_directory),
-                  "timestepping" => OptionsDict("nstep" => 1, "dt" => 2.0e-11))
+input_dict = OptionsDict("output" => OptionsDict("run_name"=>"precompilation",
+                                                 "base_directory" => test_output_directory),
+                         "timestepping" => OptionsDict("nstep" => 1, "dt" => 2.0e-11))
 
-to = TimerOutput()
-run_moment_kinetics(to, input_dict)
+run_moment_kinetics(input_dict)

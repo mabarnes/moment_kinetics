@@ -120,6 +120,11 @@ test_input_split3["timestepping"] = recursive_merge(test_input_split3["timestepp
                                                     OptionsDict("dt" => 7.0710678118654756e-6,
                                                                 "write_error_diagnostics" => true,
                                                                 "write_steady_state_diagnostics" => true))
+if global_size[] > 2 && global_size[] % 2 == 0
+    # Test using distributed-memory
+    test_input_split3["z"]["nelement_local"] = test_input_split3["z"]["nelement"] ÷ 2
+end
+
 
 # default inputs for adaptive timestepping tests
 test_input_adaptive = recursive_merge(test_input,
@@ -147,6 +152,10 @@ test_input_adaptive["timestepping"] = recursive_merge(test_input_adaptive["times
                                                                   "nwrite" => 1000,
                                                                   "split_operators" => false),
                                                      )
+if global_size[] > 2 && global_size[] % 2 == 0
+    # Test using distributed-memory
+    test_input_adaptive["z"]["nelement_local"] = test_input_adaptive["z"]["nelement"] ÷ 2
+end
 
 test_input_adaptive_split1 = recursive_merge(test_input_adaptive,
                                              OptionsDict("output" => OptionsDict("run_name" => "adaptive split1"),

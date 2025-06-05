@@ -7,8 +7,8 @@ comparison of temperature, L_T and dT_dz. They would only be for making sure
 lengthscales and mean free path calculations are sensible.
 """
 function collisionality_plots(run_info, plot_prefix=nothing)
-    if !isa(run_info, Tuple)
-        run_info = (run_info,)
+    if !isa(run_info, AbstractVector)
+        run_info = Any[run_info]
     end
     input = Dict_to_NamedTuple(input_dict["collisionality_plots"])
 

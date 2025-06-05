@@ -15,6 +15,7 @@ using ..reference_parameters
 
 # Import moment_kinetics so we can refer to it in docstrings
 import ..moment_kinetics
+using moment_kinetics.type_definitions: OptionsDict
 
 using Dates
 using Glob
@@ -37,14 +38,14 @@ Get many parameters for the simulation setup given by `input` or in the file
 `input_filename`, in SI units and eV, returned as an OrderedDict.
 """
 function get_unnormalized_parameters end
-function get_unnormalized_parameters(input::AbstractDict)
-    io_input, evolve_moments, t_params, z, z_spectral, r, r_spectral, vpa, vpa_spectral,
+function get_unnormalized_parameters(input::OptionsDict, warn_unexpected::Bool=false)
+    io_input, evolve_moments, t_input, z, z_spectral, r, r_spectral, vpa, vpa_spectral,
         vperp, vperp_spectral, gyrophase, gyrophase_spectral, vz, vz_spectral, vr,
         vr_spectral, vzeta, vzeta_spectral, composition, species, collisions, geometry,
         drive_input, external_source_settings, num_diss_params, manufactured_solns_input =
             mk_input(input)
 
-    reference_params = setup_reference_parameters(input)
+    reference_params = setup_reference_parameters(input, warn_unexpected)
 
     Nnorm = reference_params.Nref * Unitful.m^(-3)
     Tnorm = reference_params.Tref * eV
@@ -53,32 +54,61 @@ function get_unnormalized_parameters(input::AbstractDict)
     cnorm = reference_params.cref * Unitful.m / Unitful.s
     timenorm = reference_params.timeref * Unitful.s
 
-    # Assume single ion species so normalised ion mass is always 1
-    mi = reference_params.mref * Unitful.kg
-
     parameters = OrderedDict{String,Any}()
     parameters["run_name"] = io_input.run_name
+
+    # Assume single ion species so normalised ion mass is always 1
+    m_i = reference_params.mref * Unitful.kg
+    parameters["m_i"] = m_i
+    m_e = electron_mass * Unitful.kg
+    parameters["m_e"] = m_e
 
     parameters["Nnorm"] = Nnorm
     parameters["Tnorm"] = Tnorm
     parameters["Lnorm"] = Lnorm
+    parameters["timenorm"] = timenorm
 
-    parameters["Lz"] = Lnorm * z_input.L
+    parameters["Lz"] = Lnorm * z.L
 
-    parameters["cs0"] = cnorm
+    parameters["cs0"] = sqrt(2.0) * cnorm
+    parameters["vthi0"] = sqrt(2.0) * cnorm
+    parameters["vthe0"] = sqrt(2.0 / composition.me_over_mi) * cnorm
 
-    dt = t_params.dt * timenorm
+    dt = t_input["dt"] * timenorm
     parameters["dt"] = dt
-    parameters["output time step"] = dt * t_params.nwrite
-    parameters["total simulated time"] = dt * t_params.nstep
+    parameters["output time step"] = dt * t_input["nwrite"]
+    parameters["total simulated time"] = dt * t_input["nstep"]
 
     parameters["T_e"] = Tnorm * composition.T_e
     parameters["T_wall"] = Tnorm * composition.T_wall
 
     parameters["CX_rate_coefficient"] = collisions.reactions.charge_exchange_frequency / Nnorm / timenorm
     parameters["ionization_rate_coefficient"] = collisions.reactions.ionization_frequency / Nnorm / timenorm
-    parameters["coulomb_collision_frequency0"] =
-        collisions.krook.nu_ii0 / timenorm
+    # Dimensionless thermal speeds at T=Tnorm - need to divide by vth0^3 to get collision
+    # frequency at reference parameters because of way nuii0 is defined in code.
+    vthi0 = sqrt(2.0)
+    vthe0 = sqrt(2.0 / composition.me_over_mi)
+    parameters["coulomb_collision_frequency_ii0"] =
+        get_reference_collision_frequency_ii(reference_params) / vthi0^3 / timenorm
+    parameters["coulomb_collision_frequency_ee0"] =
+        get_reference_collision_frequency_ee(reference_params) / vthe0^3 / timenorm
+    parameters["coulomb_collision_frequency_ei0"] =
+        get_reference_collision_frequency_ei(reference_params) / vthe0^3 / timenorm
+    parameters["coulomb_collision_frequency_ie0"] =
+        parameters["coulomb_collision_frequency_ei0"] * composition.me_over_mi
+    parameters["krook_collision_frequency_ii0"] =
+        collisions.krook.nuii0 / vthi0^3 / timenorm
+    parameters["krook_collision_frequency_ee0"] =
+        collisions.krook.nuee0 / vthe0^3 / timenorm
+    parameters["krook_collision_frequency_ei0"] =
+        collisions.krook.nuei0 / vthe0^3 / timenorm
+
+    # Include some useful derived quantities
+    pcharge = proton_charge * Unitful.C
+    parameters["Omega_i0"] = pcharge * Bnorm / m_i
+    parameters["Omega_e0"] = pcharge * Bnorm / m_e
+    parameters["rho_i0"] = parameters["vthi0"] / parameters["Omega_i0"]
+    parameters["rho_e0"] = parameters["vthe0"] / parameters["Omega_e0"]
 
     return parameters
 end

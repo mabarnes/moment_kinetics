@@ -27,9 +27,9 @@ jobs:
           julia --project -O3 -e 'import Pkg; Pkg.precompile()'
           julia --project -O3 precompile.jl
           # Need to use openmpi so that we can use `--oversubscribe` to allow using more MPI ranks than physical cores
-          ./mpiexecjl -np 3 --oversubscribe julia -J moment_kinetics.so --project -O3 moment_kinetics/test/runtests.jl --ci --debug 1
-          ./mpiexecjl -np 4 --oversubscribe julia -J moment_kinetics.so --project -O3 moment_kinetics/test/runtests.jl --ci --debug 1
           ./mpiexecjl -np 2 --oversubscribe julia -J moment_kinetics.so --project -O3 moment_kinetics/test/runtests.jl --ci --debug 1 --long
+          ./mpiexecjl -np 4 --oversubscribe julia -J moment_kinetics.so --project -O3 moment_kinetics/test/runtests.jl --ci --debug 1
+          ./mpiexecjl -np 3 --oversubscribe julia -J moment_kinetics.so --project -O3 moment_kinetics/test/runtests.jl --ci --debug 1
           # Note: MPI.jl's default implementation is mpich, which has a similar option
           # `--with-device=ch3:sock`, but that needs to be set when compiling mpich.
         shell: bash

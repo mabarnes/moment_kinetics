@@ -14,7 +14,7 @@ test_input = OptionsDict(
                           "T_e" => 1.0,
                           "T_wall" => 1.0),    
     "output" => OptionsDict("run_name" => "MMS-2D-wall_cheb-with-neutrals"),
-    "recations" => OptionsDict("charge_exchange_frequency" => 0.0,
+    "reactions" => OptionsDict("charge_exchange_frequency" => 0.0,
                                "ionization_frequency" => 0.0),
     "timestepping" => OptionsDict("nstep" => 3,
                                        "dt" => 1.e-8,
@@ -56,6 +56,11 @@ test_input = OptionsDict(
     "geometry" => OptionsDict("rhostar" => 1.0,),
 )
 
+test_input_Dirichlet_r = deepcopy(test_input)
+test_input_Dirichlet_r["output"]["run_name"] = "MMS-2D-wall_cheb-with-neutrals-Dirichlet"
+test_input_Dirichlet_r["r"]["bc"] => "Dirichlet"
+
 test_input_list = [
      test_input,
+     test_input_Dirichlet_r,
     ]

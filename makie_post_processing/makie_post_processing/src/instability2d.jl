@@ -4,14 +4,14 @@ using moment_kinetics.analysis: get_r_perturbation, get_Fourier_modes_2D,
 using LsqFit
 
 """
-    instability2D_plots(run_info::Tuple, variable_name; plot_prefix, zind=nothing)
+    instability2D_plots(run_info::Vector{Any}, variable_name; plot_prefix, zind=nothing)
     instability2D_plots(run_info, variable_name; plot_prefix, zind=nothing,
                         axes_and_observables=nothing)
 
 Make plots of `variable_name` for analysis of 2D instability.
 
 The information for the runs to analyse and plot is passed in `run_info` (as returned by
-[`get_run_info`](@ref)). If `run_info` is a Tuple, make plots comparing the runs, shown in
+[`get_run_info`](@ref)). If `run_info` is a Vector, make plots comparing the runs, shown in
 a horizontal row..
 
 Settings are read from the `[instability2D]` section of the input.
@@ -20,9 +20,9 @@ Settings are read from the `[instability2D]` section of the input.
 will be saved with the format `plot_prefix<some_identifying_string>.pdf` for plots and
 `plot_prefix<some_identifying_string>.gif`, etc. for animations.
 
-When `run_info` is not a Tuple, `axes_and_observables` can be passed to add plots and
+When `run_info` is not a Vector, `axes_and_observables` can be passed to add plots and
 animations to existing figures, although this is not very convenient - see the use of this
-argument when called from the `run_info::Tuple` method.
+argument when called from the `run_info::Vector{Any}` method.
 
 If `zind` is not passed, it is calculated as the z-index where the mode seems to have
 the maximum growth rate for this variable.
@@ -30,7 +30,8 @@ Returns `zind`.
 """
 function instability2D_plots end
 
-function instability2D_plots(run_info::Tuple, variable_name; plot_prefix, zind=nothing)
+function instability2D_plots(run_info::Vector{Any}, variable_name; plot_prefix,
+                             zind=nothing)
     println("2D instability plots for $variable_name")
     flush(stdout)
 
@@ -39,7 +40,7 @@ function instability2D_plots(run_info::Tuple, variable_name; plot_prefix, zind=n
     instability2D_options = Dict_to_NamedTuple(input_dict["instability2D"])
 
     if zind === nothing
-        zind = Tuple(nothing for _ in 1:n_runs)
+        zind = [nothing for _ in 1:n_runs]
     end
 
     if n_runs == 1
@@ -50,7 +51,7 @@ function instability2D_plots(run_info::Tuple, variable_name; plot_prefix, zind=n
     end
 
     figs = []
-    axes_and_observables = Tuple([] for _ ∈ 1:n_runs)
+    axes_and_observables = [[] for _ ∈ 1:n_runs]
     if instability2D_options.plot_1d
         fig, ax = get_1d_ax(n_runs; title="$var_symbol 1D Fourier components", yscale=log10)
         push!(figs, fig)
