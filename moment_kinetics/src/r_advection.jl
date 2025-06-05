@@ -42,9 +42,9 @@ do a single stage time advance (potentially as part of a multi-stage RK scheme)
 
     # advance r-advection equation
     @loop_s_z_vperp_vpa is iz ivperp ivpa begin
-        @. @views r.scratch = scratch_dummy.buffer_vpavperpzrs_1[ivpa,ivperp,iz,:,is]
         @views advance_f_df_precomputed!(f_out[ivpa,ivperp,iz,:,is],
-          r.scratch, advect[is], ivpa, ivperp, iz, r, dt)
+          scratch_dummy.buffer_vpavperpzrs_1[ivpa,ivperp,iz,:,is], advect[is], ivpa,
+          ivperp, iz, r, dt)
     end
 end
 
