@@ -29,7 +29,8 @@ FOLLOWFROM=""
 POSTPROC_FOLLOWFROM=""
 MAKIEPOSTPROCESS=1
 WARN_OLD_SYSIMAGE=0
-while getopts "haf:g:m:n:p:oq:st:u:w" opt; do
+PERFORMANCE_RUN=1
+while getopts "haf:g:m:n:p:oq:st:u:wx" opt; do
   case $opt in
     h)
       echo "Submit jobs for a simulation (using INPUT_FILE for input) and post-processing to the queue
@@ -46,7 +47,8 @@ Usage: submit-run.sh [option] INPUT_FILE
 -s             Only create submission scripts, do not actually submit jobs
 -t TIME        The run time, e.g. 24:00:00
 -u TIME        The run time for the post-processing, e.g. 1:00:00
--w             Suppress the warning given when system image(s) are older than source code files"
+-w             Suppress the warning given when system image(s) are older than source code files
+-x             Run a 'performance test' using performance-tests/run_for_performance_test.jl instead run_moment_kinetics.jl."
       exit 1
       ;;
     a)
@@ -85,6 +87,9 @@ Usage: submit-run.sh [option] INPUT_FILE
     w)
       WARN_OLD_SYSIMAGE=1
       ;;
+    x)
+      PERFORMANCE_RUN=0
+      ;;
   esac
 done
 
@@ -120,9 +125,15 @@ RUNNAME=$(util/get-run-name.jl $INPUTFILE)
 RUNDIR=runs/$RUNNAME/
 mkdir -p $RUNDIR
 
+if [[ $PERFORMANCE_RUN -eq 0 ]]; then
+  RUNSCRIPT=performance-tests/run_for_performance_test.jl
+else
+  RUNSCRIPT=run_moment_kinetics.jl
+fi
+
 # Create a submission script for the run
 RUNJOBSCRIPT=${RUNDIR}$RUNNAME.job
-sed -e "s|NODES|$NODES|" -e "s|RUNTIME|$RUNTIME|" -e "s|ACCOUNT|$ACCOUNT|" -e "s|PARTITION|$PARTITION|" -e "s|QOS|$QOS|" -e "s|RUNDIR|$RUNDIR|" -e "s|INPUTFILE|$INPUTFILE|" machines/$MACHINE/jobscript-run.template > $RUNJOBSCRIPT
+sed -e "s|NODES|$NODES|" -e "s|RUNTIME|$RUNTIME|" -e "s|ACCOUNT|$ACCOUNT|" -e "s|PARTITION|$PARTITION|" -e "s|QOS|$QOS|" -e "s|RUNDIR|$RUNDIR|" -e "s|INPUTFILE|$INPUTFILE|" -e "s|RUNSCRIPT|$RUNSCRIPT|" machines/$MACHINE/jobscript-run.template > $RUNJOBSCRIPT
 
 if [[ "$WARN_OLD_SYSIMAGE" -eq 0 ]]; then
   # Check that source code has not been changed since moment_kinetics.so was created

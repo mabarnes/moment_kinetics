@@ -39,6 +39,6 @@ else
   exit 1
 fi
 
-srun --distribution=block:block --hint=nomultithread --ntasks=$SLURM_NTASKS machines/archer/tmp-depot-wrapper.sh /tmp/$USER/julia-dir/bin/julia -J /tmp/$USER/moment_kinetics.so --project -O3 run_moment_kinetics.jl INPUTFILE
+srun --distribution=block:block --hint=nomultithread --ntasks=$SLURM_NTASKS machines/archer/tmp-depot-wrapper.sh /tmp/$USER/julia-dir/bin/julia -J /tmp/$USER/moment_kinetics.so --project -O3 RUNSCRIPT INPUTFILE
 
 echo "finished INPUTFILE $(date)"

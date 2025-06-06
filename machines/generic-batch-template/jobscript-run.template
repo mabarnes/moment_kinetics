@@ -19,6 +19,6 @@ source julia.env
 echo "running INPUTFILE $(date)"
 
 # May need to change this if mpirun` is not what should be used on your system
-mpirun -np $SLURM_NTASKS bin/julia -Jmoment_kinetics.so --project -O3 run_moment_kinetics.jl INPUTFILE
+mpirun -np $SLURM_NTASKS bin/julia -Jmoment_kinetics.so --project -O3 RUNSCRIPT INPUTFILE
 
 echo "finished INPUTFILE $(date)"
