@@ -511,7 +511,7 @@ same (for strong scaling) or varies with the number of processes (for weak scali
 function assumes that the runs input in `run_info` form a well-defined 'strong/weak
 scaling' scan - if not then the plots are meaningless.
 """
-function parallel_scaling(run_info; plot_prefix, this_input_dict=nothing,
+function parallel_scaling(run_info; plot_prefix=nothing, this_input_dict=nothing,
                           efficiency_reference_nproc=nothing, weak=false)
     if !isa(run_info, Vector) || length(run_info) == 1
         # Doesn't make sense to do a strong scaling plot with only one run.
@@ -521,7 +521,7 @@ function parallel_scaling(run_info; plot_prefix, this_input_dict=nothing,
     if this_input_dict !== nothing
         input = Dict_to_NamedTuple(this_input_dict["timing_data"])
     else
-        input = nothing
+        input = Dict_to_NamedTuple(input_dict["timing_data"])
     end
 
     if input !== nothing && !input.plot_scaling
@@ -578,9 +578,11 @@ function parallel_scaling(run_info; plot_prefix, this_input_dict=nothing,
         reference_time = run_time[reference_index]
 
         if scatter
-            scatter!(ax_time, nproc, run_time, label=variable_label)
+            scatter!(ax_time, nproc, run_time, label=variable_label,
+                     inspector_label=(self,i,p) -> "$(self.label[])\nx: $(p[1])\ny: $(p[2])")
         else
-            lines!(ax_time, nproc, run_time, label=variable_label)
+            lines!(ax_time, nproc, run_time, label=variable_label,
+                   inspector_label=(self,i,p) -> "$(self.label[])\nx: $(p[1])\ny: $(p[2])")
         end
 
         if plot_ideal
@@ -601,9 +603,11 @@ function parallel_scaling(run_info; plot_prefix, this_input_dict=nothing,
         end
 
         if scatter
-            scatter!(ax_efficiency, nproc, efficiency, label=variable_label)
+            scatter!(ax_efficiency, nproc, efficiency, label=variable_label,
+                     inspector_label=(self,i,p) -> "$(self.label[])\nx: $(p[1])\ny: $(p[2])")
         else
-            lines!(ax_efficiency, nproc, efficiency, label=variable_label)
+            lines!(ax_efficiency, nproc, efficiency, label=variable_label,
+                   inspector_label=(self,i,p) -> "$(self.label[])\nx: $(p[1])\ny: $(p[2])")
         end
 
         if plot_ideal
@@ -623,25 +627,7 @@ function parallel_scaling(run_info; plot_prefix, this_input_dict=nothing,
         ax_time.yscale = log10
     end
 
-    if plot_prefix !== nothing
-        if weak
-            outfile = plot_prefix * "weak_scaling.pdf"
-        else
-            outfile = plot_prefix * "strong_scaling.pdf"
-        end
-        save(outfile, fig_time)
-    end
-
     ax_efficiency.xscale = log2
-
-    if plot_prefix !== nothing
-        if weak
-            outfile = plot_prefix * "weak_scaling_efficiency.pdf"
-        else
-            outfile = plot_prefix * "strong_scaling_efficiency.pdf"
-        end
-        save(outfile, fig_efficiency)
-    end
 
     if input.plot_scaling_all_timers
         fig_time_all, ax_time_all, legend_place_time_all =
@@ -673,15 +659,6 @@ function parallel_scaling(run_info; plot_prefix, this_input_dict=nothing,
         rowsize!(fig_time_all.layout, 1, Aspect(1, 3/4))
         resize_to_layout!(fig_time_all)
 
-        if plot_prefix !== nothing
-            if weak
-                outfile = plot_prefix * "weak_scaling_all.pdf"
-            else
-                outfile = plot_prefix * "strong_scaling_all.pdf"
-            end
-            save(outfile, fig_time_all)
-        end
-
         Legend(legend_place_efficiency_all, ax_efficiency_all; tellheight=true,
                tellwidth=true)
 
@@ -691,14 +668,63 @@ function parallel_scaling(run_info; plot_prefix, this_input_dict=nothing,
         # get squashed by the legend
         rowsize!(fig_efficiency_all.layout, 1, Aspect(1, 3/4))
         resize_to_layout!(fig_efficiency_all)
+    end
+
+    if plot_prefix === nothing && string(Makie.current_backend()) == "GLMakie"
+        # Can make interactive plots
+
+        backend = Makie.current_backend()
+
+        DataInspector(fig_time)
+        display(backend.Screen(), fig_time)
+
+        DataInspector(fig_efficiency)
+        display(backend.Screen(), fig_efficiency)
+
+        if input.plot_scaling_all_timers
+            DataInspector(fig_time_all)
+            display(backend.Screen(), fig_time_all)
+
+            DataInspector(fig_efficiency_all)
+            display(backend.Screen(), fig_efficiency_all)
+        end
+    else
+        if plot_prefix !== nothing
+            if weak
+                outfile = plot_prefix * "weak_scaling.pdf"
+            else
+                outfile = plot_prefix * "strong_scaling.pdf"
+            end
+            save(outfile, fig_time)
+        end
 
         if plot_prefix !== nothing
             if weak
-                outfile = plot_prefix * "weak_scaling_efficiency_all.pdf"
+                outfile = plot_prefix * "weak_scaling_efficiency.pdf"
             else
-                outfile = plot_prefix * "strong_scaling_efficiency_all.pdf"
+                outfile = plot_prefix * "strong_scaling_efficiency.pdf"
             end
-            save(outfile, fig_efficiency_all)
+            save(outfile, fig_efficiency)
+        end
+
+        if input.plot_scaling_all_timers
+            if plot_prefix !== nothing
+                if weak
+                    outfile = plot_prefix * "weak_scaling_all.pdf"
+                else
+                    outfile = plot_prefix * "strong_scaling_all.pdf"
+                end
+                save(outfile, fig_time_all)
+            end
+
+            if plot_prefix !== nothing
+                if weak
+                    outfile = plot_prefix * "weak_scaling_efficiency_all.pdf"
+                else
+                    outfile = plot_prefix * "strong_scaling_efficiency_all.pdf"
+                end
+                save(outfile, fig_efficiency_all)
+            end
         end
     end
 
