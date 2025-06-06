@@ -1381,6 +1381,11 @@ Pre-calculate spatial derivatives of the moments that will be needed for the tim
 @timeit global_timer calculate_ion_moment_derivatives!(moments, scratch, scratch_dummy, z,
                                                        z_spectral,
                                                        ion_mom_diss_coeff) = begin
+    if !(moments.evolve_density || moments.evolve_upar || moments.evolve_p)
+        # Nothing to do in this function.
+        return nothing
+    end
+
     @begin_s_r_region()
 
     density = scratch.density
