@@ -680,6 +680,9 @@ end
                   receive_buffer2::AbstractArray{mk_float,Mdims},
                   coord; neutrals=nothing) where {Ndims,Mdims} = begin
 	
+    nrank = coord.nrank
+    irank = coord.irank
+
     # synchronize buffers
     # -- this all-to-all block communicate here requires that this function is NOT called from within a parallelised loop
     # -- or from a @serial_region or from an if statment isolating a single rank on a block
@@ -689,8 +692,6 @@ end
 
         # now deal with endpoints that are stored across ranks
         comm = coord.comm
-        nrank = coord.nrank
-        irank = coord.irank
         #send_buffer = coord.send_buffer
         #receive_buffer = coord.receive_buffer
         # sending pattern is cyclic. First we send data form irank -> irank + 1
@@ -738,12 +739,12 @@ end
     if irank == nrank-1
         if coord.bc == "periodic"
             #update the extreme upper endpoint with data from irank = 0
-            apply_centred!(receive_buffer2, dfdx_upper_endpoints)
+            apply_centred!(receive_buffer2, dfdx_upper_endpoints, coord.name; neutrals)
         else #directly use value from Cheb
             receive_buffer2 = dfdx_upper_endpoints
         end
     else # enforce continuity at upper endpoint
-        apply_centred!(receive_buffer2, dfdx_upper_endpoints)
+        apply_centred!(receive_buffer2, dfdx_upper_endpoints, coord.name; neutrals)
     end
     #now update the df1d array -- using a slice appropriate to the dimension reconciled
     assign_endpoint!(df1d, receive_buffer2, "upper", coord; neutrals)
@@ -1011,6 +1012,9 @@ end
                   receive_buffer2::AbstractArray{mk_float,Mdims},
                   coord; neutrals=nothing) where {Ndims,Mdims} = begin
 	
+    nrank = coord.nrank
+    irank = coord.irank
+
     # synchronize buffers
     # -- this all-to-all block communicate here requires that this function is NOT called from within a parallelised loop
     # -- or from a @serial_region or from an if statment isolating a single rank on a block
@@ -1019,8 +1023,6 @@ end
     @serial_region begin
         # now deal with endpoints that are stored across ranks
         comm = coord.comm
-        nrank = coord.nrank
-        irank = coord.irank
         #send_buffer = coord.send_buffer
         #receive_buffer = coord.receive_buffer
         # sending pattern is cyclic. First we send data form irank -> irank + 1
