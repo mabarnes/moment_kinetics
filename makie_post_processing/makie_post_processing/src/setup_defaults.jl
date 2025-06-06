@@ -424,7 +424,8 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
         include_patterns=String[],
         exclude_patterns=String[],
         ranks=mk_int[],
-        figsize=[600,800]
+        figsize=[600,800],
+        efficiency_reference_nproc=-1,
        )
 
     # We allow top-level options in the post-processing input file

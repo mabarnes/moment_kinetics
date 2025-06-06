@@ -557,14 +557,23 @@ function parallel_scaling(run_info; plot_prefix, this_input_dict=nothing,
     nproc = nproc[sorting_indices]
     run_time = run_time[sorting_indices]
 
+    if input.efficiency_reference_nproc < 0
+        # Just compare against the first point
+        reference_index = 1
+    else
+        reference_index = findfirst((x)->x==input.efficiency_reference_nproc, nproc)
+    end
+    reference_nproc = nproc[reference_index]
+    reference_time = run_time[reference_index]
+
     fig, ax = get_1d_ax(xlabel="nproc", ylabel="run time (s)")
     scatter!(ax, nproc, run_time)
 
     # Plot ideal scaling
     if weak
-        ideal_scaling = fill(run_time[1], length(nproc))
+        ideal_scaling = fill(reference_time, length(nproc))
     else
-        ideal_scaling = @. run_time[1] * nproc[1] / nproc
+        ideal_scaling = @. reference_time * reference_nproc / nproc
     end
     plot_1d(nproc, ideal_scaling; ax=ax, linestyle=:dash, color=:grey)
 
@@ -583,15 +592,6 @@ function parallel_scaling(run_info; plot_prefix, this_input_dict=nothing,
     end
 
     # Make a plot of the efficiency vs. some point in the scan
-    if efficiency_reference_nproc === nothing
-        # Just compare against the first point
-        reference_index = 1
-    else
-        reference_index = findfirst((x)->x==efficiency_reference_nproc, nproc)
-    end
-    reference_nproc = nproc[reference_index]
-    reference_time = run_time[reference_index]
-
     if weak
         efficiency = @. reference_time / run_time
     else
