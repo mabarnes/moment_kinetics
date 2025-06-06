@@ -30,10 +30,10 @@ bc = "zero"
 
 [timestepping]
 type = "SSPRK4"
-nstep = 100
+nstep = 1000
 dt = 5.0e-6
-nwrite = 100
-nwrite_dfns = 100
+nwrite = 1000
+nwrite_dfns = 1000
 
 [evolve_moments]
 density = false
