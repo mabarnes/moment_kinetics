@@ -359,12 +359,12 @@ vperp_dissipation_coefficient = 0.1
 @timeit global_timer vperp_dissipation!(
                          f_out, f_in, vperp, spectral, dt, diffusion_coefficient) = begin
     
-    @begin_s_r_z_vpa_region()
-
     if diffusion_coefficient <= 0.0 || vperp.n == 1
         return nothing
     end
     
+    @begin_s_r_z_vpa_region()
+
     @loop_s_r_z_vpa is ir iz ivpa begin
         @views laplacian_derivative!(vperp.scratch, f_in[ivpa,:,iz,ir,is], vperp, spectral)
         @views @. f_out[ivpa,:,iz,ir,is] += dt * diffusion_coefficient * vperp.scratch
