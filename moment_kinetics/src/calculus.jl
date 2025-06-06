@@ -517,6 +517,161 @@ function assign_endpoint!(df1d::AbstractArray{mk_float,Ndims},
     end
 end
 
+function apply_centred!(buffer::AbstractArray{mk_float,0},
+                        endpoints::AbstractArray{mk_float,0}, coord_name::String;
+                        neutrals=nothing)
+    #buffer contains off-process endpoint
+    #adv_fac < 0 is positive advection speed
+    #adv_fac > 0 is negative advection speed
+    #endpoint is local on-process endpoint
+    #sgn = 1 for send irank -> irank + 1
+    #sgn = -1 for send irank + 1 -> irank
+    #loop over all indices in array
+    @begin_serial_region()
+    @serial_region begin
+        buffer[] = 0.5*(buffer[] + endpoints[])
+    end
+end
+
+function apply_centred!(buffer::AbstractArray{mk_float,1},
+                        endpoints::AbstractArray{mk_float,1}, coord_name::String;
+                        neutrals=nothing)
+    #buffer contains off-process endpoint
+    #adv_fac < 0 is positive advection speed
+    #adv_fac > 0 is negative advection speed
+    #endpoint is local on-process endpoint
+    #sgn = 1 for send irank -> irank + 1
+    #sgn = -1 for send irank + 1 -> irank
+    #loop over all indices in array
+    if coord_name == "r"
+        @begin_z_region
+        @loop_z iz begin
+            buffer[iz] = 0.5*(buffer[iz] + endpoints[iz])
+        end
+    elseif coord_name == "z"
+        @begin_r_region
+        @loop_r ir begin
+            buffer[ir] = 0.5*(buffer[ir] + endpoints[ir])
+        end
+    else
+        error("Unsupported dimension '$coord_name'.")
+    end
+end
+
+function apply_centred!(buffer::AbstractArray{mk_float,2},
+                        endpoints::AbstractArray{mk_float,2}, coord_name::String;
+                        neutrals)
+    #buffer contains off-process endpoint
+    #adv_fac < 0 is positive advection speed
+    #adv_fac > 0 is negative advection speed
+    #endpoint is local on-process endpoint
+    #sgn = 1 for send irank -> irank + 1
+    #sgn = -1 for send irank + 1 -> irank
+    #loop over all indices in array
+    if coord_name == "r"
+        if neutrals
+            @begin_sn_z_region
+            @loop_sn_z isn iz begin
+                buffer[iz,isn] = 0.5*(buffer[iz,isn] + endpoints[iz,isn])
+            end
+        else
+            @begin_s_z_region
+            @loop_s_z is iz begin
+                buffer[iz,is] = 0.5*(buffer[iz,is] + endpoints[iz,is])
+            end
+        end
+    elseif coord_name == "z"
+        if neutrals
+            @begin_sn_r_region
+            @loop_sn_r isn ir begin
+                buffer[ir,isn] = 0.5*(buffer[ir,isn] + endpoints[ir,isn])
+            end
+        else
+            @begin_s_r_region
+            @loop_s_r is ir begin
+                buffer[ir,is] = 0.5*(buffer[ir,is] + endpoints[ir,is])
+            end
+        end
+    else
+        error("Unsupported dimension '$coord_name'.")
+    end
+end
+
+function apply_centred!(buffer::AbstractArray{mk_float,3},
+                        endpoints::AbstractArray{mk_float,3}, coord_name::String;
+                        neutrals=nothing)
+    #buffer contains off-process endpoint
+    #adv_fac < 0 is positive advection speed
+    #adv_fac > 0 is negative advection speed
+    #endpoint is local on-process endpoint
+    #sgn = 1 for send irank -> irank + 1
+    #sgn = -1 for send irank + 1 -> irank
+    #loop over all indices in array
+    if coord_name == "r"
+        @begin_z_vperp_vpa_region
+        @loop_z_vperp_vpa iz ivperp ivpa begin
+            buffer[ivpa,ivperp,iz] = 0.5*(buffer[ivpa,ivperp,iz] + endpoints[ivpa,ivperp,iz])
+        end
+    elseif coord_name == "z"
+        @begin_r_vperp_vpa_region
+        @loop_r_vperp_vpa ir ivperp ivpa begin
+            buffer[ivpa,ivperp,ir] = 0.5*(buffer[ivpa,ivperp,ir] + endpoints[ivpa,ivperp,ir])
+        end
+    else
+        error("Unsupported dimension '$coord_name'.")
+    end
+end
+
+function apply_centred!(buffer::AbstractArray{mk_float,4},
+                        endpoints::AbstractArray{mk_float,4}, coord_name::String;
+                        neutrals=nothing)
+    #buffer contains off-process endpoint
+    #adv_fac < 0 is positive advection speed
+    #adv_fac > 0 is negative advection speed
+    #endpoint is local on-process endpoint
+    #sgn = 1 for send irank -> irank + 1
+    #sgn = -1 for send irank + 1 -> irank
+    #loop over all indices in array
+    if coord_name == "r"
+        @begin_s_z_vperp_vpa_region
+        @loop_s_z_vperp_vpa is iz ivperp ivpa begin
+            buffer[ivpa,ivperp,iz,is] = 0.5*(buffer[ivpa,ivperp,iz,is] + endpoints[ivpa,ivperp,iz,is])
+        end
+    elseif coord_name == "z"
+        @begin_s_r_vperp_vpa_region
+        @loop_s_r_vperp_vpa is ir ivperp ivpa begin
+            buffer[ivpa,ivperp,ir,is] = 0.5*(buffer[ivpa,ivperp,ir,is] + endpoints[ivpa,ivperp,ir,is])
+        end
+    else
+        error("Unsupported dimension '$coord_name'.")
+    end
+end
+
+function apply_centred!(buffer::AbstractArray{mk_float,5},
+                        endpoints::AbstractArray{mk_float,5}, coord_name::String;
+                        neutrals=nothing)
+    #buffer contains off-process endpoint
+    #adv_fac < 0 is positive advection speed
+    #adv_fac > 0 is negative advection speed
+    #endpoint is local on-process endpoint
+    #sgn = 1 for send irank -> irank + 1
+    #sgn = -1 for send irank + 1 -> irank
+    #loop over all indices in array
+    if coord_name == "r"
+        @begin_sn_z_vzeta_vr_vz_region
+        @loop_sn_z_vzeta_vr_vz isn iz ivzeta ivr ivz begin
+            buffer[ivz,ivr,ivzeta,iz,isn] = 0.5*(buffer[ivz,ivr,ivzeta,iz,isn] + endpoints[ivz,ivr,ivzeta,iz,isn])
+        end
+    elseif coord_name == "z"
+        @begin_sn_r_vzeta_vr_vz_region
+        @loop_sn_r_vzeta_vr_vz isn ir ivzeta ivr ivz begin
+            buffer[ivz,ivr,ivzeta,ir,isn] = 0.5*(buffer[ivz,ivr,ivzeta,ir,isn] + endpoints[ivz,ivr,ivzeta,ir,isn])
+        end
+    else
+        error("Unsupported dimension '$coord_name'.")
+    end
+end
+
 @timeit_debug global_timer reconcile_element_boundaries_MPI!(
                   df1d::AbstractArray{mk_float,Ndims},
                   dfdx_lower_endpoints::AbstractArray{mk_float,Mdims},
@@ -561,37 +716,61 @@ end
         stats = MPI.Waitall([rreq1, sreq1, rreq2, sreq2])
         #print("$irank: Received $isrc -> $irank = $receive_buffer1\n")
         #print("$irank: Received $isrc -> $irank = $receive_buffer2\n")
-
-        # now update receive buffers, taking into account the reconciliation
-        if irank == 0
-            if coord.bc == "periodic"
-                #update the extreme lower endpoint with data from irank = nrank -1	
-                receive_buffer1 .= 0.5*(receive_buffer1 .+ dfdx_lower_endpoints)
-            else #directly use value from Cheb
-                receive_buffer1 .= dfdx_lower_endpoints
-            end
-        else # enforce continuity at lower endpoint
-            receive_buffer1 .= 0.5*(receive_buffer1 .+ dfdx_lower_endpoints)
-        end
-        #now update the df1d array -- using a slice appropriate to the dimension reconciled
-        assign_endpoint!(df1d, receive_buffer1, "lower", coord)
-
-        if irank == nrank-1
-            if coord.bc == "periodic"
-                #update the extreme upper endpoint with data from irank = 0
-                receive_buffer2 .= 0.5*(receive_buffer2 .+ dfdx_upper_endpoints)
-            else #directly use value from Cheb
-                receive_buffer2 .= dfdx_upper_endpoints
-            end
-        else # enforce continuity at upper endpoint
-            receive_buffer2 .= 0.5*(receive_buffer2 .+ dfdx_upper_endpoints)
-        end
-        #now update the df1d array -- using a slice appropriate to the dimension reconciled
-        assign_endpoint!(df1d, receive_buffer2, "upper", coord)
-
     end
+
     # synchronize buffers
     @_block_synchronize()
+
+    # now update receive buffers, taking into account the reconciliation
+    if irank == 0
+        if coord.bc == "periodic"
+            #update the extreme lower endpoint with data from irank = nrank -1	
+            apply_centred!(receive_buffer1, dfdx_lower_endpoints, coord.name; neutrals)
+        else #directly use value from Cheb
+            receive_buffer1 = dfdx_lower_endpoints
+        end
+    else # enforce continuity at lower endpoint
+        apply_centred!(receive_buffer1, dfdx_lower_endpoints, coord.name; neutrals)
+    end
+    #now update the df1d array -- using a slice appropriate to the dimension reconciled
+    assign_endpoint!(df1d, receive_buffer1, "lower", coord; neutrals)
+
+    if irank == nrank-1
+        if coord.bc == "periodic"
+            #update the extreme upper endpoint with data from irank = 0
+            apply_centred!(receive_buffer2, dfdx_upper_endpoints)
+        else #directly use value from Cheb
+            receive_buffer2 = dfdx_upper_endpoints
+        end
+    else # enforce continuity at upper endpoint
+        apply_centred!(receive_buffer2, dfdx_upper_endpoints)
+    end
+    #now update the df1d array -- using a slice appropriate to the dimension reconciled
+    assign_endpoint!(df1d, receive_buffer2, "upper", coord; neutrals)
+end
+
+function apply_adv_fac!(buffer::AbstractArray{mk_float,0},
+                        adv_fac::AbstractArray{mk_float,10},
+                        endpoints::AbstractArray{mk_float,10}, sgn::mk_int,
+                        coord_name::String; neutrals=nothing)
+    #buffer contains off-process endpoint
+    #adv_fac < 0 is positive advection speed
+    #adv_fac > 0 is negative advection speed
+    #endpoint is local on-process endpoint
+    #sgn = 1 for send irank -> irank + 1
+    #sgn = -1 for send irank + 1 -> irank
+    #loop over all indices in array
+    @begin_serial_region
+    @serial_region begin
+        if sgn*adv_fac[] > 0.0
+            # replace buffer value with endpoint value
+            buffer[] = endpoints[]
+        elseif sgn*adv_fac[] < 0.0
+            #do nothing
+        else #average values
+            buffer[] = 0.5*(buffer[] + endpoints[])
+        end
+    end
 end
 
 function apply_adv_fac!(buffer::AbstractArray{mk_float,1},
@@ -871,6 +1050,9 @@ end
         #print("$irank: Received $isrc -> $irank = $receive_buffer2\n")
     end
 
+    # synchronize buffers
+    @_block_synchronize()
+
     # now update receive buffers, taking into account the reconciliation
     if irank == 0
         if coord.bc == "periodic"
@@ -906,8 +1088,7 @@ end
     #now update the df1d array -- using a slice appropriate to the dimension reconciled
     assign_endpoint!(df1d,receive_buffer2,"upper",coord)
 
-    # synchronize buffers
-    @_block_synchronize()
+    return nothing
 end
 
 # Special version for pdf_electron with no r-dimension, which has the same number of
