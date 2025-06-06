@@ -1477,8 +1477,6 @@ source amplitude.
 @timeit global_timer external_ion_source_controller!(
                          ion_external_source_controller_integral, fvec_in, moments,
                          ion_source_settings, index, vperp, dt) = begin
-    @begin_r_z_region()
-
     is = 1
     ion_moments = moments.ion
     density = @view fvec_in.density[:,:,1]
@@ -1487,6 +1485,8 @@ source amplitude.
 
     if ion_source_settings.source_type == "Maxwellian"
         if moments.evolve_p
+            @begin_r_z_region()
+
             if vperp.n == 1
                 @loop_r_z ir iz begin
                     ion_moments.external_source_pressure_amplitude[iz,ir,index] =
@@ -1509,6 +1509,8 @@ source amplitude.
         end
     elseif ion_source_settings.source_type == "energy"
         if moments.evolve_upar
+            @begin_r_z_region()
+
             @loop_r_z ir iz begin
                 ion_moments.external_source_momentum_amplitude[iz,ir,index] =
                     - density[iz,ir] * upar[iz,ir] *
@@ -1518,6 +1520,8 @@ source amplitude.
             end
         end
         if moments.evolve_p
+            @begin_r_z_region()
+
             if vperp.n == 1
                 @loop_r_z ir iz begin
                     ion_moments.external_source_pressure_amplitude[iz,ir,index] =
