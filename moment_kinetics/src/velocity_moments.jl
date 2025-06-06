@@ -1622,8 +1622,6 @@ Pre-calculate spatial derivatives of the electron moments that will be needed fo
     # calculate the zed derivative of the electron temperature
     @views derivative_z!(moments.electron.dT_dz, moments.electron.temp, buffer_r_1, buffer_r_2,
                          buffer_r_3, buffer_r_4, z_spectral, z)
-    @views derivative_z!(moments.electron.dvth_dz, moments.electron.vth, buffer_r_1,
-                         buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
 
     # centred second derivative for dissipation
     if electron_mom_diss_coeff > 0.0
