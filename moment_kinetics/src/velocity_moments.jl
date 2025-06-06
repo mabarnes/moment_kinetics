@@ -1480,6 +1480,12 @@ Pre-calculate spatial derivatives of the electron moments that will be needed fo
                                                             scratch_dummy, z, z_spectral,
                                                             electron_mom_diss_coeff,
                                                             electron_model) = begin
+    if electron_model ∈ (boltzmann_electron_response,
+                         boltzmann_electron_response_with_simple_sheath)
+        # Don't need any electron derivatives with Boltzmann response electrons.
+        return nothing
+    end
+
     @begin_r_region()
 
     dens = scratch.electron_density
