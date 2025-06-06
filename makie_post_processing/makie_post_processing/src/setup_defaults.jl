@@ -425,6 +425,7 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
         exclude_patterns=String[],
         ranks=mk_int[],
         figsize=[600,800],
+        plot_scaling_all_timers=false,
         efficiency_reference_nproc=-1,
        )
 

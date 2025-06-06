@@ -537,25 +537,12 @@ function parallel_scaling(run_info; plot_prefix, this_input_dict=nothing,
     timing_group = "timing_data"
 
     nproc = mk_int[]
-    run_time = mk_float[]
     for ri ∈ run_info
         push!(nproc, ri.nrank)
-
-        # Use the total time in `ssp_rk!()` as the thing to compare, so that we exclude
-        # file I/O time, which may be relatively large in short runs done for parallel
-        # scaling timings, but should be insignificant in production runs due to the large
-        # number of steps between outputs.
-        # Use `it` to select the last time point of each simulation, which gives the total
-        # cumulative time spent in `ssp_rk!()`.
-        # Convert from nanoseconds to seconds.
-        push!(run_time,
-              get_variable(ri, "time:moment_kinetics;time_advance! step;ssp_rk!";
-                           group=timing_group, it=ri.nt)[1] / 1.0e9)
     end
 
     sorting_indices = sortperm(nproc)
     nproc = nproc[sorting_indices]
-    run_time = run_time[sorting_indices]
 
     if input.efficiency_reference_nproc < 0
         # Just compare against the first point
@@ -564,22 +551,76 @@ function parallel_scaling(run_info; plot_prefix, this_input_dict=nothing,
         reference_index = findfirst((x)->x==input.efficiency_reference_nproc, nproc)
     end
     reference_nproc = nproc[reference_index]
-    reference_time = run_time[reference_index]
 
-    fig, ax = get_1d_ax(xlabel="nproc", ylabel="run time (s)")
-    scatter!(ax, nproc, run_time)
+    function add_to_plots(variable_name, ax_time, ax_efficiency; scatter=false,
+                          plot_ideal=false)
+        run_time = mk_float[]
+        for ri ∈ run_info
+            # Use the total time in `ssp_rk!()` as the thing to compare, so that we exclude
+            # file I/O time, which may be relatively large in short runs done for parallel
+            # scaling timings, but should be insignificant in production runs due to the large
+            # number of steps between outputs.
+            # Use `it` to select the last time point of each simulation, which gives the total
+            # cumulative time spent in `ssp_rk!()`.
+            # Convert from nanoseconds to seconds.
+            push!(run_time,
+                  get_variable(ri, variable_name;
+                               group=timing_group, it=ri.nt)[1] / 1.0e9)
+        end
 
-    # Plot ideal scaling
-    if weak
-        ideal_scaling = fill(reference_time, length(nproc))
-    else
-        ideal_scaling = @. reference_time * reference_nproc / nproc
+        # All variables that this function is called for should have names starting with
+        # "time:moment_kinetics;time_advance! step;", so remove this preface from the
+        # names we put in the legend.
+        variable_label = split(variable_name, "time:moment_kinetics;time_advance! step;")[2]
+
+        run_time = run_time[sorting_indices]
+
+        reference_time = run_time[reference_index]
+
+        if scatter
+            scatter!(ax_time, nproc, run_time, label=variable_label)
+        else
+            lines!(ax_time, nproc, run_time, label=variable_label)
+        end
+
+        if plot_ideal
+            # Plot ideal scaling
+            if weak
+                ideal_scaling = fill(reference_time, length(nproc))
+            else
+                ideal_scaling = @. reference_time * reference_nproc / nproc
+            end
+            lines!(ax_time, nproc, ideal_scaling; linestyle=:dash, color=:grey)
+        end
+
+        # Make a plot of the efficiency vs. some point in the scan
+        if weak
+            efficiency = @. reference_time / run_time
+        else
+            efficiency = @. reference_time / run_time * reference_nproc / nproc
+        end
+
+        if scatter
+            scatter!(ax_efficiency, nproc, efficiency, label=variable_label)
+        else
+            lines!(ax_efficiency, nproc, efficiency, label=variable_label)
+        end
+
+        if plot_ideal
+            # Plot ideal scaling
+            hlines!(ax_efficiency, 1.0; linestyle=:dash, color=:grey)
+        end
     end
-    plot_1d(nproc, ideal_scaling; ax=ax, linestyle=:dash, color=:grey)
 
-    ax.xscale = log2
+    fig_time, ax_time = get_1d_ax(xlabel="nproc", ylabel="run time (s)")
+    fig_efficiency, ax_efficiency = get_1d_ax(xlabel="nproc", ylabel="efficiency vs. nproc=$reference_nproc")
+
+    add_to_plots("time:moment_kinetics;time_advance! step;ssp_rk!", ax_time,
+                 ax_efficiency; scatter=true, plot_ideal=true)
+
+    ax_time.xscale = log2
     if !weak
-        ax.yscale = log10
+        ax_time.yscale = log10
     end
 
     if plot_prefix !== nothing
@@ -588,23 +629,10 @@ function parallel_scaling(run_info; plot_prefix, this_input_dict=nothing,
         else
             outfile = plot_prefix * "strong_scaling.pdf"
         end
-        save(outfile, fig)
+        save(outfile, fig_time)
     end
 
-    # Make a plot of the efficiency vs. some point in the scan
-    if weak
-        efficiency = @. reference_time / run_time
-    else
-        efficiency = @. reference_time / run_time * reference_nproc / nproc
-    end
-
-    fig, ax = get_1d_ax(xlabel="nproc", ylabel="efficiency vs. nproc=$reference_nproc")
-    scatter!(ax, nproc, efficiency)
-
-    # Plot ideal scaling
-    hlines!(ax, 1.0; linestyle=:dash, color=:grey)
-
-    ax.xscale = log2
+    ax_efficiency.xscale = log2
 
     if plot_prefix !== nothing
         if weak
@@ -612,7 +640,66 @@ function parallel_scaling(run_info; plot_prefix, this_input_dict=nothing,
         else
             outfile = plot_prefix * "strong_scaling_efficiency.pdf"
         end
-        save(outfile, fig)
+        save(outfile, fig_efficiency)
+    end
+
+    if input.plot_scaling_all_timers
+        fig_time_all, ax_time_all, legend_place_time_all =
+            get_1d_ax(xlabel="nproc", ylabel="run time (s)", get_legend_place=:below)
+        fig_efficiency_all, ax_efficiency_all, legend_place_efficiency_all =
+            get_1d_ax(xlabel="nproc", ylabel="efficiency vs. nproc=$reference_nproc",
+                      get_legend_place=:below)
+
+        plot_ideal = true
+        for variable_name ∈ run_info[1].timing_variable_names
+            if !startswith(variable_name, "time:moment_kinetics;time_advance! step;ssp_rk!")
+                # Only plot variables that are time variables and part of the time advance
+                continue
+            end
+            add_to_plots(variable_name, ax_time_all, ax_efficiency_all; plot_ideal)
+            # Only plot the 'ideal scaling' for the first variable, to avoid clutter.
+            plot_ideal = false
+        end
+
+        Legend(legend_place_time_all, ax_time_all; tellheight=true, tellwidth=true)
+
+        ax_time_all.xscale = log2
+        if !weak
+            ax_time_all.yscale = log10
+        end
+
+        # Ensure the first row width is 3/4 of the column width so that the plot does not
+        # get squashed by the legend
+        rowsize!(fig_time_all.layout, 1, Aspect(1, 3/4))
+        resize_to_layout!(fig_time_all)
+
+        if plot_prefix !== nothing
+            if weak
+                outfile = plot_prefix * "weak_scaling_all.pdf"
+            else
+                outfile = plot_prefix * "strong_scaling_all.pdf"
+            end
+            save(outfile, fig_time_all)
+        end
+
+        Legend(legend_place_efficiency_all, ax_efficiency_all; tellheight=true,
+               tellwidth=true)
+
+        ax_efficiency_all.xscale = log2
+
+        # Ensure the first row width is 3/4 of the column width so that the plot does not
+        # get squashed by the legend
+        rowsize!(fig_efficiency_all.layout, 1, Aspect(1, 3/4))
+        resize_to_layout!(fig_efficiency_all)
+
+        if plot_prefix !== nothing
+            if weak
+                outfile = plot_prefix * "weak_scaling_efficiency_all.pdf"
+            else
+                outfile = plot_prefix * "strong_scaling_efficiency_all.pdf"
+            end
+            save(outfile, fig_efficiency_all)
+        end
     end
 
     return nothing
