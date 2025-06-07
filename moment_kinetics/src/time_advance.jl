@@ -3481,6 +3481,14 @@ end
             end
             # for now update moments.neutral object directly for diagnostic moments
             # that are not used in Runga-Kutta steps
+            update_neutral_ur!(moments.neutral.ur, moments.neutral.ur_updated,
+                               moments.neutral.dens, moments.neutral.vth,
+                               pdf.neutral.norm, vz, vr, vzeta, z, r, composition,
+                               moments.evolve_density, moments.evolve_p)
+            update_neutral_uzeta!(moments.neutral.uzeta, moments.neutral.uzeta_updated,
+                                  moments.neutral.dens, moments.neutral.vth,
+                                  pdf.neutral.norm, vz, vr, vzeta, z, r, composition,
+                                  moments.evolve_density, moments.evolve_p)
             update_neutral_pr!(moments.neutral.pr, moments.neutral.pr_updated,
                                moments.neutral.dens, moments.neutral.ur,
                                moments.neutral.vth, pdf.neutral.norm, vz, vr, vzeta, z, r,
@@ -3491,15 +3499,6 @@ end
                                   moments.neutral.vth, pdf.neutral.norm, vz, vr, vzeta, z,
                                   r, composition, moments.evolve_density,
                                   moments.evolve_upar, moments.evolve_p)
-            # get particle fluxes (n.b. bad naming convention uz -> means -> n uz here)
-            update_neutral_ur!(moments.neutral.ur, moments.neutral.ur_updated,
-                               moments.neutral.dens, moments.neutral.vth,
-                               pdf.neutral.norm, vz, vr, vzeta, z, r, composition,
-                               moments.evolve_density, moments.evolve_p)
-            update_neutral_uzeta!(moments.neutral.uzeta, moments.neutral.uzeta_updated,
-                                  moments.neutral.dens, moments.neutral.vth,
-                                  pdf.neutral.norm, vz, vr, vzeta, z, r, composition,
-                                  moments.evolve_density, moments.evolve_p)
         end
         @begin_serial_region()
         @serial_region begin
