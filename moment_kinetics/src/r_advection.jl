@@ -33,10 +33,11 @@ do a single stage time advance (potentially as part of a multi-stage RK scheme)
         end
     end
     # calculate the upwind derivative along r
-    derivative_r!(scratch_dummy.buffer_vpavperpzrs_1, scratch_dummy.buffer_vpavperpzrs_2,
-        advect, scratch_dummy.buffer_vpavperpzs_1, scratch_dummy.buffer_vpavperpzs_2,
-        scratch_dummy.buffer_vpavperpzs_3,scratch_dummy.buffer_vpavperpzs_4,
-        scratch_dummy.buffer_vpavperpzs_5,scratch_dummy.buffer_vpavperpzs_6, r_spectral,r)
+    derivative_r!(scratch_dummy.buffer_vpavperpzrs_1, fvec_in.pdf, advect,
+                  scratch_dummy.buffer_vpavperpzs_1, scratch_dummy.buffer_vpavperpzs_2,
+                  scratch_dummy.buffer_vpavperpzs_3,scratch_dummy.buffer_vpavperpzs_4,
+                  scratch_dummy.buffer_vpavperpzs_5,scratch_dummy.buffer_vpavperpzs_6,
+                  r_spectral,r)
 
     # advance r-advection equation
     @loop_s_z_vperp_vpa is iz ivperp ivpa begin
