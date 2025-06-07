@@ -648,8 +648,6 @@ function parallel_scaling(run_info; plot_prefix=nothing, this_input_dict=nothing
             plot_ideal = false
         end
 
-        Legend(legend_place_time_all, ax_time_all; tellheight=true, tellwidth=true)
-
         ax_time_all.xscale = log2
         if !weak
             ax_time_all.yscale = log10
@@ -659,9 +657,6 @@ function parallel_scaling(run_info; plot_prefix=nothing, this_input_dict=nothing
         # get squashed by the legend
         rowsize!(fig_time_all.layout, 1, Aspect(1, 3/4))
         resize_to_layout!(fig_time_all)
-
-        Legend(legend_place_efficiency_all, ax_efficiency_all; tellheight=true,
-               tellwidth=true)
 
         ax_efficiency_all.xscale = log2
 
@@ -709,6 +704,10 @@ function parallel_scaling(run_info; plot_prefix=nothing, this_input_dict=nothing
         end
 
         if input.plot_scaling_all_timers
+            Legend(legend_place_time_all, ax_time_all; tellheight=true, tellwidth=true)
+            Legend(legend_place_efficiency_all, ax_efficiency_all; tellheight=true,
+                   tellwidth=true)
+
             if plot_prefix !== nothing
                 if weak
                     outfile = plot_prefix * "weak_scaling_all.pdf"
