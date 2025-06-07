@@ -496,15 +496,16 @@ end
 
 """
     parallel_scaling(run_info; plot_prefix, this_input_dict=nothing,
-                     efficiency_reference_nproc=nothing, weak=false)
+                     weak=false)
 
 Analyse the parallel scaling of a set of simulations. By default 'strong scaling' (run
 time compared to number of processes, for a fixed simulation grid size), if `weak=true` is
 passed instead does 'weak scaling' (the simulation grid size is varied in proportion to
 the number of processes).
 
-If `efficiency_reference_nproc` is passed, the efficiency is calculated relative to the
-run with this number of processes (which is assumed to be one of the runs in run_info).
+If `efficiency_reference_nproc` is set to a positive number in the input, the efficiency
+is calculated relative to the run with this number of processes (which is assumed to be
+one of the runs in run_info).
 
 Note that there is no check that the grid size (or number of timesteps, etc.) stays the
 same (for strong scaling) or varies with the number of processes (for weak scaling). This
@@ -512,7 +513,7 @@ function assumes that the runs input in `run_info` form a well-defined 'strong/w
 scaling' scan - if not then the plots are meaningless.
 """
 function parallel_scaling(run_info; plot_prefix=nothing, this_input_dict=nothing,
-                          efficiency_reference_nproc=nothing, weak=false)
+                          weak=false)
     if !isa(run_info, Vector) || length(run_info) == 1
         # Doesn't make sense to do a strong scaling plot with only one run.
         return nothing
