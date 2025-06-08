@@ -67,12 +67,12 @@ function setup_makie_post_processing_input!(new_input_dict::AbstractDict{String,
 
     convert_to_OrderedDicts!(new_input_dict)
 
-    if isa(run_info_moments, Tuple)
+    if isa(run_info_moments, AbstractVector)
         has_moments = any(ri !== nothing for ri ∈ run_info_moments)
     else
         has_moments = run_info_moments !== nothing
     end
-    if isa(run_info_dfns, Tuple)
+    if isa(run_info_dfns, AbstractVector)
         has_dfns = any(ri !== nothing for ri ∈ run_info_dfns)
     else
         has_dfns = run_info_dfns !== nothing
@@ -109,9 +109,9 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
     # Put entries from new_input_dict into this_input_dict
     merge!(this_input_dict, deepcopy(new_input_dict))
 
-    if !isa(run_info, Tuple)
-        # Make sure run_info is a Tuple
-        run_info= (run_info,)
+    if !isa(run_info, AbstractVector)
+        # Make sure run_info is a Vector
+        run_info= Any[run_info]
     end
     has_run_info = any(ri !== nothing for ri ∈ run_info)
 
@@ -278,6 +278,12 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
         # Sort keys to make dict easier to read
         sort!(this_input_dict[variable_name])
     end
+
+    set_defaults_and_check_section!(
+        this_input_dict, "compare_runs", warn_unexpected;
+        enable=false,
+        interpolate_to_other_grid=false,
+       )
 
     set_defaults_and_check_section!(
         this_input_dict, "wall_pdf", warn_unexpected;

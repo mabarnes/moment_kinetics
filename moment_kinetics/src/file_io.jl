@@ -427,8 +427,9 @@ open the necessary output files
 """
 function setup_file_io(io_input, boundary_distributions, vz, vr, vzeta, vpa, vperp, z, r,
                        composition, collisions, evolve_density, evolve_upar, evolve_p,
-                       external_source_settings, input_dict, restart_time_index,
-                       previous_runs_info, time_for_setup, t_params, nl_solver_params)
+                       external_source_settings, manufactured_source_list, input_dict,
+                       restart_time_index, previous_runs_info, time_for_setup, t_params,
+                       nl_solver_params)
 
     @begin_serial_region()
     @serial_region begin
@@ -453,15 +454,17 @@ function setup_file_io(io_input, boundary_distributions, vz, vr, vzeta, vpa, vpe
         io_moments = setup_moments_io(out_prefix, io_input, vz, vr, vzeta, vpa, vperp, r,
                                       z, composition, collisions, evolve_density,
                                       evolve_upar, evolve_p, external_source_settings,
-                                      input_dict, comm_inter_block[], restart_time_index,
+                                      manufactured_source_list, input_dict,
+                                      comm_inter_block[], restart_time_index,
                                       previous_runs_info, time_for_setup, t_params,
                                       nl_solver_params)
         io_dfns = setup_dfns_io(out_prefix, io_input, boundary_distributions, r, z, vperp,
                                 vpa, vzeta, vr, vz, composition, collisions,
                                 evolve_density, evolve_upar, evolve_p,
-                                external_source_settings, input_dict, comm_inter_block[],
-                                restart_time_index, previous_runs_info, time_for_setup,
-                                t_params, nl_solver_params)
+                                external_source_settings, manufactured_source_list,
+                                input_dict, comm_inter_block[], restart_time_index,
+                                previous_runs_info, time_for_setup, t_params,
+                                nl_solver_params)
 
         return ascii, io_moments, io_dfns
     end
@@ -742,6 +745,47 @@ function write_overview!(fid, composition, collisions, parallel_io, evolve_densi
                             description="time taken for setup of moment_kinetics (excluding file I/O)",
                             units="minutes")
     end
+    return nothing
+end
+
+"""
+Write time-independent information about manufactured solutions
+"""
+function write_manufactured_solutions!(fid, parallel_io, manufactured_source_list, vz, vr,
+                                       vzeta, vpa, vperp, z, r, dfns::Bool)
+    if manufactured_source_list === nothing
+        # Not using manufactured solutions
+        return nothing
+    end
+
+    @serial_region begin
+        manufactured_solutions = create_io_group(fid, "manufactured_solutions")
+
+        write_single_value!(manufactured_solutions, "Source_i_expression",
+                            manufactured_source_list.Source_i_expression;
+                            parallel_io=parallel_io,
+                            description="Symbolic expression for ion manufactured source.")
+
+        if :Source_i_array ∈ keys(manufactured_source_list) && length(manufactured_source_list.Source_i_array) > 0
+            write_single_value!(manufactured_solutions, "Source_i_array",
+                                manufactured_source_list.Source_i_array, vpa, vperp, r, z;
+                                parallel_io=parallel_io,
+                                description="Time-independent ion manufactured source array.")
+        end
+
+        write_single_value!(manufactured_solutions, "Source_n_expression",
+                            manufactured_source_list.Source_n_expression;
+                            parallel_io=parallel_io,
+                            description="Symbolic expression for neutral manufactured source.")
+
+        if :Source_n_array ∈ keys(manufactured_source_list) && length(manufactured_source_list.Source_n_array) > 0
+            write_single_value!(manufactured_solutions, "Source_n_array",
+                                manufactured_source_list.Source_n_array, vz, vr, vzeta, r, z;
+                                parallel_io=parallel_io,
+                                description="Time-independent neutral manufactured source array.")
+        end
+    end
+
     return nothing
 end
 
@@ -1172,26 +1216,18 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
 
         dynamic_keys = collect(keys(dynamic))
         for failure_var ∈ keys(t_params.failure_caused_by)
-            # Only write these variables if they were created in the output file, because
-            # sometimes (e.g. for debug_io=true) they are not needed.
-            if failure_var ∈ dynamic_keys
-                create_dynamic_variable!(
-                    dynamic, "failure_caused_by_$failure_var", mk_int;
-                    parallel_io=parallel_io,
-                    description="cumulative count of how many times $failure_var caused "
-                                * "a timestep failure for the run")
-            end
+            create_dynamic_variable!(
+                dynamic, "failure_caused_by_$failure_var", mk_int;
+                parallel_io=parallel_io,
+                description="cumulative count of how many times $failure_var caused "
+                            * "a timestep failure for the run")
         end
         for limit_var ∈ keys(t_params.limit_caused_by)
-            # Only write these variables if they were created in the output file, because
-            # sometimes (e.g. for debug_io=true) they are not needed.
-            if limit_var ∈ dynamic_keys
-                create_dynamic_variable!(
-                    dynamic, "limit_caused_by_$limit_var", mk_int;
-                    parallel_io=parallel_io,
-                    description="cumulative count of how many times $limit_var limited "
-                                * "the timestep for the run")
-            end
+            create_dynamic_variable!(
+                dynamic, "limit_caused_by_$limit_var", mk_int;
+                parallel_io=parallel_io,
+                description="cumulative count of how many times $limit_var limited "
+                            * "the timestep for the run")
         end
 
         io_dt_before_last_fail = create_dynamic_variable!(
@@ -2094,9 +2130,9 @@ setup file i/o for moment variables
 """
 function setup_moments_io(prefix, io_input, vz, vr, vzeta, vpa, vperp, r, z,
                           composition, collisions, evolve_density, evolve_upar,
-                          evolve_p, external_source_settings, input_dict,
-                          io_comm, restart_time_index, previous_runs_info, time_for_setup,
-                          t_params, nl_solver_params)
+                          evolve_p, external_source_settings, manufactured_source_list,
+                          input_dict, io_comm, restart_time_index, previous_runs_info,
+                          time_for_setup, t_params, nl_solver_params)
     @serial_region begin
         moments_prefix = string(prefix, ".moments")
         parallel_io = io_input.parallel_io
@@ -2111,6 +2147,9 @@ function setup_moments_io(prefix, io_input, vz, vr, vzeta, vpa, vperp, r, z,
         # write some overview information to the output file
         write_overview!(fid, composition, collisions, parallel_io, evolve_density,
                         evolve_upar, evolve_p, time_for_setup)
+
+        write_manufactured_solutions!(fid, parallel_io, manufactured_source_list, vz, vr,
+                                      vzeta, vpa, vperp, z, r, false)
 
         # write provenance tracking information to the output file
         write_provenance_tracking_info!(fid, parallel_io, io_input.run_id,
@@ -2247,9 +2286,9 @@ setup file i/o for distribution function variables
 """
 function setup_dfns_io(prefix, io_input, boundary_distributions, r, z, vperp, vpa, vzeta,
                        vr, vz, composition, collisions, evolve_density, evolve_upar,
-                       evolve_p, external_source_settings, input_dict, io_comm,
-                       restart_time_index, previous_runs_info, time_for_setup, t_params,
-                       nl_solver_params; is_debug=false)
+                       evolve_p, external_source_settings, manufactured_source_list,
+                       input_dict, io_comm, restart_time_index, previous_runs_info,
+                       time_for_setup, t_params, nl_solver_params; is_debug=false)
 
     @serial_region begin
         dfns_prefix = string(prefix, ".dfns")
@@ -2266,6 +2305,9 @@ function setup_dfns_io(prefix, io_input, boundary_distributions, r, z, vperp, vp
         # write some overview information to the output file
         write_overview!(fid, composition, collisions, parallel_io, evolve_density,
                         evolve_upar, evolve_p, time_for_setup)
+
+        write_manufactured_solutions!(fid, parallel_io, manufactured_source_list, vz, vr,
+                                      vzeta, vpa, vperp, z, r, true)
 
         # write provenance tracking information to the output file
         write_provenance_tracking_info!(fid, parallel_io, io_input.run_id,
@@ -3367,6 +3409,13 @@ function write_debug_data_to_binary(this_scratch, moments, fields, composition, 
                                   composition.n_neutral_species, t_params.debug_io,
                                   nothing, 0.0, t_params, (), r, z, vperp, vpa, vzeta, vr,
                                   vz; is_debug=true, label=label, istage=istage)
+
+    # This call shouldn't be necessary, as the next @begin_*_region() call following the
+    # return from this functions should synchronize, but synchronize here anyway just to
+    # be on the safe side - this will only affect runs with debug_io=true set, so
+    # performance is not a concern.
+    @_block_synchronize()
+
     return nothing
 end
 

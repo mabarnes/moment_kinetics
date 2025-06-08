@@ -36,9 +36,10 @@ using ..velocity_moments: integrate_over_positive_vz, integrate_over_negative_vz
 using ..velocity_moments: create_moments_ion, create_moments_electron, create_moments_neutral
 using ..velocity_moments: get_density, get_upar, get_p, get_neutral_density, get_neutral_uz, get_neutral_p
 using ..velocity_moments: update_ion_qpar!
-using ..velocity_moments: update_neutral_density!, update_neutral_pz!, update_neutral_pr!, update_neutral_pzeta!
+using ..velocity_moments: update_neutral_density!, update_neutral_pz!, update_neutral_pr!, update_neutral_pzeta!, update_neutral_p!
 using ..velocity_moments: update_neutral_uz!, update_neutral_ur!, update_neutral_uzeta!, update_neutral_qz!
-using ..velocity_moments: update_ppar!, update_upar!, update_density!, update_pperp!, update_vth!, reset_moments_status!
+using ..velocity_moments: update_p!, update_ppar!, update_upar!, update_density!,
+                          update_pperp!, update_vth!, reset_moments_status!
 using ..electron_fluid_equations: calculate_electron_density!
 using ..electron_fluid_equations: calculate_electron_upar_from_charge_conservation!
 using ..electron_fluid_equations: calculate_electron_qpar!, electron_fluid_qpar_boundary_condition!
@@ -1920,7 +1921,9 @@ end
 
 function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, vperp, z, r, n_ion_species, n_neutral_species, 
                                               geometry, composition, species, manufactured_solns_input, collisions)
-    manufactured_solns_list = manufactured_solutions(r.L,z.L,r.bc,z.bc,geometry,composition,r.n)
+    manufactured_solns_list = manufactured_solutions(manufactured_solns_input, r.L, z.L,
+                                                     r.bc, z.bc, geometry, composition,
+                                                     species, r.n, vperp.n, vzeta.n, vr.n)
     dfni_func = manufactured_solns_list.dfni_func
     densi_func = manufactured_solns_list.densi_func
     dfnn_func = manufactured_solns_list.dfnn_func
@@ -1941,17 +1944,41 @@ function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, 
                  moments.ion.dens, moments.ion.ppar, pdf.ion.norm,
                  vpa, vperp, z, r, composition, moments.evolve_density,
                  moments.evolve_p)
-    update_ppar!(moments.ion.ppar, moments.ion.p_updated,
-                 moments.ion.dens, moments.ion.upar, pdf.ion.norm,
-                 vpa, vperp, z, r, composition, moments.evolve_density,
-                 moments.evolve_upar)
-    update_pperp!(moments.ion.pperp, pdf.ion.norm, vpa, vperp, z, r, composition)
+    update_p!(moments.ion.p, moments.ion.p_updated, moments.ion.dens, moments.ion.upar,
+              pdf.ion.norm, vpa, vperp, z, r, composition, moments.evolve_density,
+              moments.evolve_upar)
+    update_ppar!(moments.ion.ppar, moments.ion.dens, moments.ion.upar, moments.ion.p,
+                 pdf.ion.norm, vpa, vperp, z, r, composition, moments.evolve_density,
+                 moments.evolve_upar, moments.evolve_p)
+    update_pperp!(moments.ion.pperp, moments.ion.p, moments.ion.ppar, vperp, z, r,
+                  composition)
     update_ion_qpar!(moments.ion.qpar, moments.ion.qpar_updated,
                  moments.ion.dens, moments.ion.upar,
                  moments.ion.vth, moments.ion.dT_dz, pdf.ion.norm, vpa, vperp, z, r,
                  composition, drift_kinetic_ions, collisions, moments.evolve_density, moments.evolve_upar,
                  moments.evolve_p)
-    update_vth!(moments.ion.vth, moments.ion.p, moments.ion.dens, vperp, z, r, composition)
+    update_vth!(moments.ion.vth, moments.ion.p, moments.ion.dens, z, r, composition)
+
+    @begin_serial_region()
+    @serial_region begin
+        # If electrons are being used, they will be initialized properly later. Here
+        # we only set the values to avoid false positives from the debug checks
+        # (when @debug_track_initialized is active).
+        moments.electron.dens .= 0.0
+        moments.electron.upar .= 0.0
+        moments.electron.p .= 0.0
+        moments.electron.ppar .= 0.0
+        moments.electron.pperp .= 0.0
+        moments.electron.qpar .= 0.0
+        moments.electron.temp .= 0.0
+        moments.electron.constraints_A_coefficient .= 1.0
+        moments.electron.constraints_B_coefficient .= 0.0
+        moments.electron.constraints_C_coefficient .= 0.0
+        if composition.electron_physics ∈ (kinetic_electrons,
+                                           kinetic_electrons_with_temperature_equation)
+            pdf.electron.norm .= 0.0
+        end
+    end
 
     if n_neutral_species > 0
         @begin_sn_r_z_region()
@@ -1962,17 +1989,8 @@ function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, 
             end
         end
         # get consistent moments with manufactured solutions
-        update_neutral_density!(moments.neutral.dens, pdf.neutral.norm, vz, vr, vzeta, z, r, composition)
-        update_neutral_qz!(moments.neutral.qz, pdf.neutral.norm, vz, vr, vzeta, z, r, composition)
-        update_neutral_pz!(moments.neutral.pz, pdf.neutral.norm, vz, vr, vzeta, z, r, composition)
-        update_neutral_pr!(moments.neutral.pr, pdf.neutral.norm, vz, vr, vzeta, z, r, composition)
-        update_neutral_pzeta!(moments.neutral.pzeta, pdf.neutral.norm, vz, vr, vzeta, z, r, composition)
-        #update ptot (isotropic pressure)
-        @begin_sn_r_z_region()
-        @loop_sn_r_z isn ir iz begin
-            moments.neutral.p[iz,ir,isn] = (moments.neutral.pz[iz,ir,isn] + moments.neutral.pr[iz,ir,isn] + moments.neutral.pzeta[iz,ir,isn])/3.0
-        end
-        # nb bad naming convention uz -> n uz below
+        update_neutral_density!(moments.neutral.dens, moments.neutral.dens_updated,
+                                pdf.neutral.norm, vz, vr, vzeta, z, r, composition)
         update_neutral_uz!(moments.neutral.uz, moments.neutral.uz_updated,
                            moments.neutral.dens, moments.neutral.vth, pdf.neutral.norm,
                            vz, vr, vzeta, z, r, composition, moments.evolve_density,
@@ -1981,16 +1999,33 @@ function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, 
                            moments.neutral.dens, moments.neutral.vth, pdf.neutral.norm,
                            vz, vr, vzeta, z, r, composition, moments.evolve_density,
                            moments.evolve_p)
-        update_neutral_uzeta!(moments.neutral.uzeta, pdf.neutral.norm, vz, vr, vzeta, z, r, composition)
-        # now convert from particle particle flux to parallel flow
-        @begin_sn_r_z_region()
-        @loop_sn_r_z isn ir iz begin
-            moments.neutral.uz[iz,ir,isn] /= moments.neutral.dens[iz,ir,isn]
-            moments.neutral.ur[iz,ir,isn] /= moments.neutral.dens[iz,ir,isn]
-            moments.neutral.uzeta[iz,ir,isn] /= moments.neutral.dens[iz,ir,isn]
-            # get vth for neutrals
-            moments.neutral.vth[iz,ir,isn] = sqrt(2.0*moments.neutral.ptot[iz,ir,isn]/moments.neutral.dens[iz,ir,isn])
-        end
+        update_neutral_uzeta!(moments.neutral.uzeta, moments.neutral.uzeta_updated,
+                              moments.neutral.dens, moments.neutral.vth, pdf.neutral.norm,
+                              vz, vr, vzeta, z, r, composition, moments.evolve_density,
+                              moments.evolve_p)
+        update_neutral_p!(moments.neutral.p, moments.neutral.p_updated,
+                          moments.neutral.dens, moments.neutral.uz, moments.neutral.ur,
+                          moments.neutral.uzeta, moments.neutral.vth, pdf.neutral.norm,
+                          vz, vr, vzeta, z, r, composition, moments.evolve_density,
+                          moments.evolve_upar, moments.evolve_p)
+        update_neutral_pz!(moments.neutral.pz, moments.neutral.pz_updated,
+                           moments.neutral.dens, moments.neutral.uz, moments.neutral.p,
+                           moments.neutral.vth, pdf.neutral.norm, vz, vr, vzeta, z, r,
+                           composition, moments.evolve_density, moments.evolve_upar,
+                           moments.evolve_p)
+        update_neutral_pr!(moments.neutral.pr, moments.neutral.pr_updated,
+                           moments.neutral.dens, moments.neutral.ur, moments.neutral.vth,
+                           pdf.neutral.norm, vz, vr, vzeta, z, r, composition,
+                           moments.evolve_density, moments.evolve_upar, moments.evolve_p)
+        update_neutral_pzeta!(moments.neutral.pzeta, moments.neutral.pzeta_updated,
+                              moments.neutral.dens, moments.neutral.uzeta,
+                              moments.neutral.vth, pdf.neutral.norm, vz, vr, vzeta, z, r,
+                              composition, moments.evolve_density, moments.evolve_upar,
+                              moments.evolve_p)
+        update_neutral_qz!(moments.neutral.qz, moments.neutral.qz_updated,
+                           moments.neutral.dens, moments.neutral.uz, moments.neutral.vth,
+                           pdf.neutral.norm, vz, vr, vzeta, z, r, composition,
+                           moments.evolve_density, moments.evolve_upar, moments.evolve_p)
     end
     return nothing
 end

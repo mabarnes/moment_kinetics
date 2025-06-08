@@ -7,14 +7,15 @@ Plots to check moment constraints. Comparison plots not currently supported.
 """
 function check_moment_constraints end
 
-function check_moment_constraints(run_info::Tuple, is_neutral; input, plot_prefix)
+function check_moment_constraints(run_info::Vector{Any}, is_neutral; input, plot_prefix)
     if !input.check_moments
         return nothing
     end
 
     # For now, don't support comparison plots
     if length(run_info) > 1
-        error("Comparison plots not supported by check_moment_constraints()")
+        println("Comparison plots not supported by check_moment_constraints()")
+        return nothing
     end
     return check_moment_constraints(run_info[1], is_neutral; input=input,
                                     plot_prefix=plot_prefix)
@@ -130,8 +131,8 @@ function constraints_plots(run_info; plot_prefix=plot_prefix)
     try
         println("Making plots of moment constraints coefficients")
 
-        if !isa(run_info, Tuple)
-            run_info = (run_info,)
+        if !isa(run_info, AbstractVector)
+            run_info = Any[run_info]
         end
 
         it0 = input.it0

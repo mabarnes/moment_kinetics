@@ -624,7 +624,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
             n_variables += 1
         end
     end
-    if t_input["debug_io"]
+    if t_input["debug_io"] && block_rank[] == 0
         if t_input["nstep"] > 10
             println("You have enabled debug_io while setting a large value for "
                     * "nstep=$(t_input["nstep"]) > 10. Reducing to nstep=10 to avoid "
@@ -657,13 +657,19 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
         # input to be written to debug file.
         fake_input_dict = OptionsDict(k => v for (k,v) ∈ input_dict
                                       if k != "_section_check_store")
+        @begin_serial_region()
         debug_io = setup_dfns_io(joinpath(io_input.output_dir, "debug"), debug_io_input,
                                  boundary_distributions, r, z, vperp, vpa, vzeta, vr, vz,
                                  composition, collisions, moments.evolve_density,
                                  moments.evolve_upar, moments.evolve_p,
-                                 external_source_settings, fake_input_dict,
+                                 external_source_settings, nothing, fake_input_dict,
                                  comm_inter_block[], 1, nothing, 0.0, fake_t_params, ();
                                  is_debug=true)
+    elseif t_input["debug_io"]
+        # Need to synchronize shared-memory blocks before/after I/O. Set debug_io=true so
+        # we can distinguish from no-debug-IO case on block_rank[]>0 processes.
+        @begin_serial_region() # To match one in `t_input["debug_io"] && block_rank[] == 0` branch
+        debug_io = true
     else
         debug_io = nothing
     end
@@ -1041,7 +1047,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
                                                         composition, geometry.input, collisions,
                                                         num_diss_params, species)
     else
-        manufactured_source_list = false # dummy Bool to be passed as argument instead of list
+        manufactured_source_list = nothing
     end
 
     if !restarting
@@ -1523,7 +1529,7 @@ function setup_implicit_advance_flags(moments, composition, t_params, collisions
         advance_electron_pdf = true
     end
 
-    manufactured_solns_test = manufactured_solns_input.use_for_advance
+    manufactured_solns_test = false
 
     return advance_info(advance_vpa_advection, advance_vperp_advection, advance_z_advection, advance_r_advection,
                         advance_neutral_z_advection, advance_neutral_r_advection,
@@ -2747,7 +2753,8 @@ appropriate.
         update_electron_speed_vpa!(electron_vpa_advect[1], moments.electron.dens,
                                    moments.electron.upar,
                                    scratch[t_params.n_rk_stages+1].electron_p, moments,
-                                   vpa.grid, external_source_settings.electron)
+                                   composition.me_over_mi, vpa.grid,
+                                   external_source_settings.electron)
         electron_vpa_CFL = get_minimum_CFL_vpa(electron_vpa_advect[1].speed, vpa)
         if block_rank[] == 0
             CFL_limits["electron_CFL_vpa"] = t_params.CFL_prefactor * electron_vpa_CFL

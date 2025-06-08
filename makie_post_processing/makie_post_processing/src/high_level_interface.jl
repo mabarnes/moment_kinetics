@@ -6,7 +6,7 @@ using TOML
 """
     makie_post_process(run_dir...;
                        input_file::String=default_input_file_name,
-                       restart_index::Union{Nothing,mk_int,Tuple}=nothing,
+                       restart_index::Union{Nothing,mk_int,AbstractVector}=nothing,
                        plot_prefix::Union{Nothing,AbstractString}=nothing)
 
 Run post processing with input read from a TOML file
@@ -21,7 +21,7 @@ the corresponding `.dfns.h5` file exists).
 `restart_index` specifies which restart to read if there are multiple restarts. The
 default (`nothing`) reads all restarts and concatenates them. An integer value reads the
 restart with that index - `-1` indicates the latest restart (which does not have an
-index). A tuple with the same length as `run_dir` can also be passed to give a different
+index). A Vector with the same length as `run_dir` can also be passed to give a different
 `restart_index` for each run.
 
 `plot_prefix` can be specified to give the prefix (directory and first part of file name)
@@ -32,7 +32,7 @@ If `input_file` does not exist, prints warning and uses default options.
 """
 function makie_post_process(run_dir...;
                             input_file::String=default_input_file_name,
-                            restart_index::Union{Nothing,mk_int,Tuple}=nothing,
+                            restart_index::Union{Nothing,mk_int,AbstractVector}=nothing,
                             plot_prefix::Union{Nothing,AbstractString}=nothing)
     if isfile(input_file)
         new_input_dict = TOML.parsefile(input_file)
@@ -42,20 +42,20 @@ function makie_post_process(run_dir...;
         new_input_dict = OrderedDict{String,Any}()
     end
 
-    return makie_post_process(run_dir, new_input_dict; restart_index=restart_index,
+    return makie_post_process([run_dir...], new_input_dict; restart_index=restart_index,
                               plot_prefix=plot_prefix)
 end
 
 """
-    makie_post_process(run_dir::Union{String,Tuple},
+    makie_post_process(run_dir::Union{String,Vector{String}},
                        new_input_dict::Dict{String,Any};
-                       restart_index::Union{Nothing,mk_int,Tuple}=nothing,
+                       restart_index::Union{Nothing,mk_int,AbstractVector}=nothing,
                        plot_prefix::Union{Nothing,AbstractString}=nothing)
 
 Run post prossing, with (non-default) input given in a Dict
 
-`run_dir...` is the path to the directory to plot from. If more than one `run_dir` is
-given, plots comparing the runs in `run_dir...` are made.
+`run_dir` is the path to the directory to plot from. If `run_dir` is a `Vector{String}`,
+plots comparing the runs in `run_dir` are made.
 A moment_kinetics binary output file can also be passed as `run_dir`, in which case the
 filename is only used to infer the directory and `run_name`, so it is possible for example
 to pass a `.moments.h5` output file and still make distribution function plots (as long as
@@ -66,30 +66,30 @@ the corresponding `.dfns.h5` file exists).
 `restart_index` specifies which restart to read if there are multiple restarts. The
 default (`nothing`) reads all restarts and concatenates them. An integer value reads the
 restart with that index - `-1` indicates the latest restart (which does not have an
-index). A tuple with the same length as `run_dir` can also be passed to give a different
+index). A Vector with the same length as `run_dir` can also be passed to give a different
 `restart_index` for each run.
 
 `plot_prefix` can be specified to give the prefix (directory and first part of file name)
 to use when saving plots/animations. By default the run directory and run name are used if
 there is only one run, and "comparison_plots/compare_" is used if there are multiple runs.
 """
-function makie_post_process(run_dir::Union{String,Tuple},
+function makie_post_process(run_dir::Union{String,Vector{String}},
                             new_input_dict::AbstractDict{String,Any};
-                            restart_index::Union{Nothing,mk_int,Tuple}=nothing,
+                            restart_index::Union{Nothing,mk_int,AbstractVector}=nothing,
                             plot_prefix::Union{Nothing,AbstractString}=nothing)
     if isa(run_dir, String)
         # Make run_dir a one-element tuple if it is not a tuple
-        run_dir = (run_dir,)
+        run_dir = [run_dir]
     end
     # Normalise by removing any trailing slashes - with a slash basename() would return an
     # empty string
-    run_dir = Tuple(rstrip(ri, '/') for ri ∈ run_dir)
+    run_dir = [rstrip(ri, '/') for ri ∈ run_dir]
 
     new_input_dict = convert_to_OrderedDicts!(new_input_dict)
 
-    if !isa(restart_index, Tuple)
-        # Convert scalar restart_index to Tuple so we can treat everything the same below
-        restart_index = Tuple(restart_index for _ ∈ run_dir)
+    if !isa(restart_index, AbstractVector)
+        # Convert scalar restart_index to Vector so we can treat everything the same below
+        restart_index = [restart_index for _ ∈ run_dir]
     end
 
     # Special handling for itime_* and itime_*_dfns because they are needed in order to
@@ -104,14 +104,14 @@ function makie_post_process(run_dir::Union{String,Tuple},
     run_info_moments = get_run_info(zip(run_dir, restart_index)..., itime_min=itime_min,
                                     itime_max=itime_max, itime_skip=itime_skip,
                                     do_setup=false)
-    if !isa(run_info_moments, Tuple)
-        run_info_moments = (run_info_moments,)
+    if !isa(run_info_moments, AbstractVector)
+        run_info_moments = Any[run_info_moments]
     end
     run_info_dfns = get_run_info(zip(run_dir, restart_index)..., itime_min=itime_min_dfns,
                                  itime_max=itime_max_dfns, itime_skip=itime_skip_dfns,
                                  dfns=true, do_setup=false)
-    if !isa(run_info_dfns, Tuple)
-        run_info_dfns = (run_info_dfns,)
+    if !isa(run_info_dfns, AbstractVector)
+        run_info_dfns = Any[run_info_dfns]
     end
 
     if all(ri === nothing for ri in (run_info_moments..., run_info_dfns...))
@@ -192,8 +192,8 @@ function makie_post_process(run_dir::Union{String,Tuple},
     do_steady_state_residuals = any(input_dict[v]["steady_state_residual"]
                                     for v ∈ all_moment_variables)
     if do_steady_state_residuals
-        textoutput_files = Tuple(ri.run_prefix * "_residuals.txt"
-                                 for ri in run_info if ri !== nothing)
+        textoutput_files = [ri.run_prefix * "_residuals.txt"
+                            for ri in run_info if ri !== nothing]
         for (f, ri) in zip(textoutput_files, run_info)
             # Write the time into the output file. Also overwrites any existing file so we
             # can append for each variable below
@@ -239,6 +239,10 @@ function makie_post_process(run_dir::Union{String,Tuple},
         end
     end
 
+    compare_runs(run_info, run_info_dfns; has_electrons, has_neutrals,
+                 plot_prefix=plot_prefix, has_rdim=has_rdim, has_zdim=has_zdim,
+                 is_1V=is_1V, has_dfns=has_dfns)
+
     plot_charged_pdf_2D_at_wall(run_info_dfns; plot_prefix=plot_prefix)
     if has_electrons
         plot_charged_pdf_2D_at_wall(run_info_dfns; plot_prefix=plot_prefix, electron=true)
@@ -272,12 +276,7 @@ function makie_post_process(run_dir::Union{String,Tuple},
 
     #mk_1D1V_term_size_diagnostics(run_info, run_info_dfns, plot_prefix)
 
-    if all(ri === nothing for ri ∈ run_info_dfns)
-        nvperp = nothing
-    else
-        nvperp = maximum(ri.vperp.n_global for ri ∈ run_info_dfns if ri !== nothing)
-    end
-    manufactured_solutions_analysis(run_info; plot_prefix=plot_prefix, nvperp=nvperp)
+    manufactured_solutions_analysis(run_info; plot_prefix=plot_prefix)
     manufactured_solutions_analysis_dfns(run_info_dfns; plot_prefix=plot_prefix)
 
     timing_data(run_info; plot_prefix=plot_prefix, this_input_dict=input_dict)
@@ -337,6 +336,55 @@ function generate_example_input_file(filename::String=default_input_file_name;
     # Write to output file
     open(filename, write=true, truncate=overwrite, append=false) do io
         print(io, file_contents)
+    end
+
+    return nothing
+end
+
+"""
+    generate_maximal_input_file(filename::String=default_input_file_name;
+                                overwrite::Bool=false)
+
+Generate an input file with all `Bool` options set to `true`, and no other options
+present. Intended mostly for setting up tests to check that `makie_post_process` runs
+without errors.
+
+`handle_errors` is set to `false` (although it is a `Bool`) so that any errors are not
+caught, and so will register as a test failure.
+"""
+function generate_maximal_input_file(filename::String=default_input_file_name;
+                                     overwrite::Bool=false)
+
+    if ispath(filename) && !overwrite
+        error("$filename already exists. If you want to overwrite it, pass "
+              * "`overwrite=true` to `generate_example_input_file()`.")
+    end
+
+    # Get example input, then convert to a String formatted as the contents of a TOML
+    # file
+    input_dict = generate_example_input_Dict()
+
+    # Filter out any non-Bool options, set "handle_errors" to false, and all other Bool
+    # options to true.
+    function filter_input!(d)
+        for (k,v) ∈ d
+            if isa(v, AbstractDict)
+                filter_input!(v)
+            elseif k == "handle_errors"
+                d[k] = false
+            elseif isa(v, Bool)
+                d[k] = true
+            else
+                pop!(d, k)
+            end
+        end
+        return nothing
+    end
+    filter_input!(input_dict)
+
+    # Write to output file
+    open(filename, write=true, truncate=overwrite, append=false) do io
+        TOML.print(io, input_dict)
     end
 
     return nothing

@@ -133,6 +133,11 @@ test_input_chebyshev_simple_sheath = recursive_merge(
     OptionsDict("output" => OptionsDict("run_name" => "chebyshev_pseudospectral_simple_sheath"),
          "composition" => OptionsDict("electron_physics" => "boltzmann_electron_response_with_simple_sheath")))
 
+test_input_chebyshev_debug_io = recursive_merge(
+    test_input_chebyshev,
+    OptionsDict("output" => OptionsDict("run_name" => "chebyshev_pseudospectral_debug_io"),
+                "timestepping" => OptionsDict("debug_io" => true)))
+
 test_input_list = [
      #test_input_finite_difference,
      #test_input_finite_difference_simple_sheath,
@@ -143,6 +148,7 @@ test_input_list = [
      #test_input_chebyshev_1D1V,
      #test_input_chebyshev_split1_1D1V,
      #test_input_chebyshev_split2_1D1V,
-     #test_input_chebyshev_split3_1D1V,
-     test_input_chebyshev_simple_sheath_1D1V,
+     test_input_chebyshev_split3_1D1V,
+     #test_input_chebyshev_simple_sheath_1D1V,
+     test_input_chebyshev_debug_io,
     ]
