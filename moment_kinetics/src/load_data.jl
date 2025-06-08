@@ -4511,7 +4511,7 @@ function _get_variable_internal(run_info, variable_name::Symbol;
                                run_info.collisions, 0.0, run_info.z_spectral,
                                run_info.composition, run_info.geometry,
                                run_info.external_source_settings.ion,
-                               run_info.num_diss_params)
+                               run_info.num_diss_params, run_info.z)
             end
         end
         get_dnupar_dt!(variable, all_moments)
