@@ -4511,7 +4511,7 @@ function _get_variable_internal(run_info, variable_name::Symbol;
                                run_info.collisions, 0.0, run_info.z_spectral,
                                run_info.composition, run_info.geometry,
                                run_info.external_source_settings.ion,
-                               run_info.num_diss_params)
+                               run_info.num_diss_params, run_info.z)
             end
         end
         get_dnupar_dt!(variable, all_moments)
@@ -4669,10 +4669,18 @@ function _get_variable_internal(run_info, variable_name::Symbol;
         vth = get_variable(run_info, "thermal_speed_neutral"; kwargs...)
         variable = @. 0.5 * vth * (dp_dt / p - dn_dt / n)
     elseif variable_name == :mfp
+        # this is mean free path for krook collision purposes, but it should be the same collision
+        # frequency used for other collision operators in general, as it encompasses the magnitude
+        # of collision frequency
         vth = get_variable(run_info, "thermal_speed"; kwargs...)
-        nu_ii = get_variable(run_info, "collision_frequency_ii"; kwargs...)
-        variable = vth ./ nu_ii
+        nu_ii = get_variable(run_info, "Krook_collision_frequency_ii"; kwargs...)
+        if run_info.vperp.n == 1
+            variable = sqrt(3.0) .* vth ./ nu_ii
+        else
+            variable = vth ./ nu_ii
+        end
     elseif variable_name == :L_T
+        # same in 1V and 2V because it's just ratio of T to dT/dz
         dT_dz = get_variable(run_info, "dT_dz"; kwargs...)
         temp = get_variable(run_info, "temperature"; kwargs...)
         # We define gradient lengthscale of T as LT^-1 = dln(T)/dz (ignore negative sign
@@ -4680,7 +4688,7 @@ function _get_variable_internal(run_info, variable_name::Symbol;
         variable = abs.(temp .* dT_dz.^(-1))
         # flat points in temperature have diverging LT, so ignore those with NaN
         # using a hard coded 10.0 tolerance for now
-        variable[variable .> 10.0] .= NaN
+        variable[variable .> 50.0] .= NaN
     elseif variable_name == :L_n
         ddens_dz = get_variable(run_info, "ddens_dz"; kwargs...)
         n = get_variable(run_info, "density"; kwargs...)
@@ -4689,7 +4697,7 @@ function _get_variable_internal(run_info, variable_name::Symbol;
         variable = abs.(n .* ddens_dz.^(-1))
         # flat points in temperature have diverging Ln, so ignore those with NaN
         # using a hard coded 10.0 tolerance for now
-        variable[variable .> 10.0] .= NaN
+        variable[variable .> 50.0] .= NaN
     elseif variable_name == :L_upar
         dupar_dz = get_variable(run_info, "dupar_dz"; kwargs...)
         upar = get_variable(run_info, "parallel_flow"; kwargs...)
@@ -4698,17 +4706,31 @@ function _get_variable_internal(run_info, variable_name::Symbol;
         variable = abs.(upar .* dupar_dz.^(-1))
         # flat points in temperature have diverging Lupar, so ignore those with NaN
         # using a hard coded 10.0 tolerance for now
-        variable[variable .> 10.0] .= NaN
+        variable[variable .> 50.0] .= NaN
     elseif variable_name == :coll_krook_heat_flux
         n = get_variable(run_info, "density"; kwargs...)
         vth = get_variable(run_info, "thermal_speed"; kwargs...)
         dT_dz = get_variable(run_info, "dT_dz"; kwargs...)
-        nu_ii = get_variable(run_info, "collision_frequency_ii"; kwargs...)
-        variable = @. -(1/2) * 3/2 * n * vth^2 * dT_dz / nu_ii
+        if run_info.vperp.n == 1
+            Krook_vth = sqrt(3.0) * vth
+        else
+            Krook_vth = vth
+        end
+        Krook_nu_ii = get_variable(run_info, "Krook_collision_frequency_ii"; kwargs...)
+        variable = @. -(1/2) * 3/2 * n * Krook_vth^2 * 3 * dT_dz / Krook_nu_ii
     elseif variable_name == :collision_frequency_ii
         n = get_variable(run_info, "density"; kwargs...)
         vth = get_variable(run_info, "thermal_speed"; kwargs...)
         variable = get_collision_frequency_ii(run_info.collisions, n, vth)
+    elseif variable_name == :Krook_collision_frequency_ii
+        n = get_variable(run_info, "density"; kwargs...)
+        vth = get_variable(run_info, "thermal_speed"; kwargs...)
+        if run_info.vperp.n == 1
+            Krook_vth = sqrt(3.0) * vth
+        else
+            Krook_vth = vth
+        end
+        variable = get_collision_frequency_ii(run_info.collisions, n, Krook_vth)
     elseif variable_name == :collision_frequency_ee
         n = get_variable(run_info, "electron_density"; kwargs...)
         vth = get_variable(run_info, "electron_thermal_speed"; kwargs...)
@@ -4729,7 +4751,7 @@ function _get_variable_internal(run_info, variable_name::Symbol;
 
         # Adiabatic index. Not too clear what value should be (see e.g. [Riemann 1991,
         # below eq. (39)], or discussion of Bohm criterion in Stangeby's book.
-        gamma = 3.0
+        gamma = 1.0 # 3.0
 
         variable = @. sqrt((T_e + gamma*T_i))
     elseif variable_name == :mach_number
