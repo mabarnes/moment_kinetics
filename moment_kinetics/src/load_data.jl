@@ -4722,7 +4722,7 @@ function _get_variable_internal(run_info, variable_name::Symbol;
         n = get_variable(run_info, "density"; kwargs...)
         vth = get_variable(run_info, "thermal_speed"; kwargs...)
         variable = get_collision_frequency_ii(run_info.collisions, n, vth)
-    elseif variable_name == "Krook_collision_frequency_ii"
+    elseif variable_name == :Krook_collision_frequency_ii
         n = get_variable(run_info, "density"; kwargs...)
         vth = get_variable(run_info, "thermal_speed"; kwargs...)
         if run_info.vperp.n == 1
