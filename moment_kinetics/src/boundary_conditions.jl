@@ -562,12 +562,11 @@ function enforce_zero_incoming_bc!(pdf, z::coordinate, vperp::coordinate, vpa::c
     for (iz, vth) ∈ zip(z_range, vth_list)
         # moment-kinetic approach only implemented for 1V case so far
         @boundscheck size(pdf,2) == 1
-
-        f = @view pdf[:,1,iz]
+        f = @view pdf[:,:,iz]
         if evolve_p && evolve_upar
-            I0 = integral(f, vpa.wgts)
-            I1 = integral(f, vpa.grid, vpa.wgts)
-            I2 = integral(f, vpa.grid, 2, vpa.wgts)
+            I0 = integral((vperp,vpa)->(1), f, vperp, vpa)
+            I1 = integral((vperp,vpa)->(vpa), f, vperp, vpa)
+            I2 = integral((vperp,vpa)->(vpa^2 + vperp^2), f, vperp, vpa)
 
             # Store v_parallel with upar shift removed in vpa.scratch
             @. vpa.scratch = vpa.grid + upar[iz]/vth
@@ -583,50 +582,58 @@ function enforce_zero_incoming_bc!(pdf, z::coordinate, vperp::coordinate, vpa::c
             else
                 one_over_scale_factor = 1.0
             end
-            @. vpa.scratch2 = f * abs(vpa.scratch) / (one_over_scale_factor + abs(vpa.scratch)) / (1.0 + (4.0 * vpa.scratch / vpa.L)^4)
-            J1 = integral(vpa.scratch2, vpa.grid, vpa.wgts)
-            J2 = integral(vpa.scratch2, vpa.grid, 2, vpa.wgts)
-            J3 = integral(vpa.scratch2, vpa.grid, 3, vpa.wgts)
-            J4 = integral(vpa.scratch2, vpa.grid, 4, vpa.wgts)
 
+            @. vpa.scratch2 = abs(vpa.scratch) / (one_over_scale_factor + abs(vpa.scratch)) / (1.0 + (4.0 * vpa.scratch / vpa.L)^4)
+            vpa_L = vpa.L
+
+            J1 = integral((vperp,vpa)->(vpa * abs(vpa+upar[iz]/vth)/(one_over_scale_factor+abs(vpa+upar[iz]/vth))/(1.0+(4.0*(vpa+upar[iz]/vth)/vpa_L)^4)), f, vperp, vpa)
+            J2 = integral((vperp,vpa)->((vpa^2+vperp^2) * abs(vpa+upar[iz]/vth)/(one_over_scale_factor+abs(vpa+upar[iz]/vth))/(1.0+(4.0*(vpa+upar[iz]/vth)/vpa_L)^4)), f, vperp, vpa)
+            J3 = integral((vperp,vpa)->(vpa * (vpa^2+vperp^2) * abs(vpa+upar[iz]/vth)/(one_over_scale_factor+abs(vpa+upar[iz]/vth))/(1.0+(4.0*(vpa+upar[iz]/vth)/vpa_L)^4)), f, vperp, vpa)
+            J4 = integral((vperp,vpa)->((vpa^2+vperp^2)^2 * abs(vpa+upar[iz]/vth)/(one_over_scale_factor+abs(vpa+upar[iz]/vth))/(1.0+(4.0*(vpa+upar[iz]/vth)/vpa_L)^4)), f, vperp, vpa)
+            J5 = integral((vperp,vpa)->(vpa^2 * abs(vpa+upar[iz]/vth)/(one_over_scale_factor+abs(vpa+upar[iz]/vth))/(1.0+(4.0*(vpa+upar[iz]/vth)/vpa_L)^4)), f, vperp, vpa)
+
+            
             # Given a corrected distribution function
-            #   F = A * Fhat + (B*wpa + C*wpa*2) * s*vpa/vth / (1 + s*|vpa/vth|) / (1 +(4*vpa/vth/Lvpa)^4) * Fhat
-            # the constraints (assuming 1D1V)
+            #   F = A * Fhat + (B*wpa + C*wpa^2) * s*|vpa/vth| / (1 + s*|vpa/vth|) / (1 +(4*vpa/vth/Lvpa)^4) * Fhat
+            # calling the prefactor in the second term on the RHS (coefficient of (B*wpa + C*wpa^2)*Fhat) as P(vpa,vperp,z,t),
+            #
+            # the constraints 
             #   ∫d^3w F = 1
             #   ∫d^3w wpa F = 0
-            #   ∫d^3w w^2 F = ∫d^3w wpa^2 F = 3/2
+            #   ∫d^3w (wpa + wperp)^2 F = 3/2
+            #
             # and defining the integrals
-            #   In = ∫d^3w wpa^n * F
-            #   Jn = ∫d^3w wpa^n * s*vpa/vth / (1 + s*|vpa/vth|) / (1 +(4*vpa/vth/Lvpa)^4) * F
+            # I0 = ∫d^3w F
+            # I1 = ∫d^3w wpa F
+            # I2 = ∫d^3w (wpa^2 + wperp^2) F
+            # J1 = ∫d^3w wpa * P * F
+            # J2 = ∫d^3w (wpa^2 + wperp^2) * P * F
+            # J3 = ∫d^3w wpa * (wpa^2 + wperp^2) * P * F
+            # J4 = ∫d^3w (wpa^2 + wperp^2)^2 * P * F
+            # J5 = ∫d^3w wpa^2 * P * F
+            #
+            #
             # we can substitute F into the constraint equations and solve for A, B, and C
             #   A I0 + B J1 + C J2 = 1
-            #   A I1 + B J2 + C J3 = 0
+            #   A I1 + B J5 + C J3 = 0
             #   A I2 + B J3 + C J4 = 3/2
             # ⇒
-            #   C = (3/2 - A I2 - B J3) / J4
-            #   B J2 = -A I1 - C J3
-            #   B J2 J4 = -A I1 J4 - (3/2 - A I2 - B J3) J3
-            #   B (J2 J4 - J3^2) = -3/2 J3 - A (I1 J4 - I2 J3)
-            #   B = (3/2 J3 + A (I1 J4 - I2 J3)) / (J3^2 - J2 J4)
-            #   A I0 = 1 - B J1 - C J2
-            #   A I0 J4 = J4 - B J1 J4 - (3/2 - A I2 - B J3) J2
-            #   A (I0 J4 - I2 J2) = J4 - 3/2 J2 - B (J1 J4 - J3 J2)
-            #   A (I0 J4 - I2 J2) (J3^2 - J2 J4) = (J4 - 3/2 J2) (J3^2 - J2 J4) - (3/2 J3 + A (I1 J4 - I2 J3)) (J1 J4 - J3 J2)
-            #   A [(I0 J4 - I2 J2) (J3^2 - J2 J4) + (I1 J4 - I2 J3) (J1 J4 - J3 J2)] = (J4 - 3/2 J2) (J3^2 - J2 J4) - 3/2 J3 (J1 J4 - J3 J2)
-            #   A [I0 J4 J3^2 - I0 J2 J4^2 - I2 J2 J3^2 + I2 J2^2 J4 + I1 J1 J4^2 - I1 J2 J3 J4 - I2 J1 J3 J4 + I2 J2 J3^2] = J3^2 J4 - J2 J4^2 - 3/2 J2 J3^2 + 3/2 J2^2 J4 - 3/2 J1 J3 J4 + 3/2 J2 J3^2
-            #   A [I0 J4 J3^2 - I0 J2 J4^2 + I2 J2^2 J4 + I1 J1 J4^2 - I1 J2 J3 J4 - I2 J1 J3 J4] = J3^2 J4 - J2 J4^2 + 3/2 J2^2 J4 - 3/2 J1 J3 J4
-            #   A [I0 J3^2 - I0 J2 J4 + I2 J2^2 + I1 J1 J4 - I1 J2 J3 - I2 J1 J3] = J3^2 - J2 J4 + 3/2 J2^2 - 3/2 J1 J3
-            #   A = [J3^2 - J2 J4 + 3/2 (J2^2 - J1 J3)] / [I0 (J3^2 - J2 J4) + I1 (J1 J4 - J2 J3) + I2 (J2^2 - J1 J3)]
+            # inverting 3x3 matrix to get A B and C as functions of the coefficients: 
+            # 
+            # determinant = I0*(J5*J4 - J3^2) - J1 * (I1*J4 - I2*J3) + J2*(I1*J3 - I2*J5)
+            # A = (J4*J5 - J3^2 + 1.5*(J1*J3 - J2*J5)) / determinant
+            # B = (J3*I2 - I1*J4 + 1.5*(J2*I1 - I0*J3)) / determinant
+            # C = (I1*J3 - J5*I2 + 1.5*(I0*J5 - I1*J1)) / determinant
 
-            A = (J3^2 - J2*J4 + 1.5*(J2^2 - J1*J3)) /
-                (I0*(J3^2 - J2*J4) + I1*(J1*J4 - J2*J3) + I2*(J2^2 - J1*J3))
-            B = (1.5*J3 + A*(I1*J4 - I2*J3)) / (J3^2 - J2*J4)
-            C = (1.5 - A*I2 - B*J3) / J4
+            determinant = I0*(J5*J4 - J3^2) - J1 * (I1*J4 - I2*J3) + J2*(I1*J3 - I2*J5)
+            A = (J4*J5 - J3^2 + 1.5*(J1*J3 - J2*J5)) / determinant
+            B = (J3*I2 - I1*J4 + 1.5*(J2*I1 - I0*J3)) / determinant
+            C = (I1*J3 - J5*I2 + 1.5*(I0*J5 - I1*J1)) / determinant
 
-            @. f = A*f + B*vpa.grid*vpa.scratch2 + C*vpa.grid*vpa.grid*vpa.scratch2
+            @. f = A*f + B*vpa.grid*vpa.scratch2*f + C*vpa.grid*vpa.grid*vpa.scratch2*f
         elseif evolve_upar
-            I0 = integral(f, vpa.wgts)
-            I1 = integral(f, vpa.grid, vpa.wgts)
+            I0 = integral((vperp,vpa)->(1), f, vperp, vpa)
+            I1 = integral((vperp,vpa)->(vpa), f, vperp, vpa)
 
             # Store v_parallel with upar shift removed in vpa.scratch
             @. vpa.scratch = vpa.grid + upar[iz]
@@ -637,18 +644,21 @@ function enforce_zero_incoming_bc!(pdf, z::coordinate, vperp::coordinate, vpa::c
             # another.
             # Factor sqrt(2) below is chosen so that the transition happens at ~vth when
             # T/Tref = 1, or for the 1V case at ~sqrt(2 T_∥ / m_i) when T_∥/Tref = 1.
-            @. vpa.scratch2 = f * abs(vpa.scratch) / (sqrt(2.0) + abs(vpa.scratch)) / (1.0 + (4.0 * vpa.scratch / vpa.L)^4)
-            J1 = integral(vpa.scratch2, vpa.grid, vpa.wgts)
-            J2 = integral(vpa.scratch2, vpa.grid, 2, vpa.wgts)
+            @. vpa.scratch2 = abs(vpa.scratch) / (sqrt(2.0) + abs(vpa.scratch)) / (1.0 + (4.0 * vpa.scratch / vpa.L)^4)                
+            vpa_L = vpa.L
+
+            
+            J1 = integral((vperp,vpa)->(vpa*abs(vpa+upar[iz])/(sqrt(2.0)+abs(vpa+upar[iz]))/(1.0+(4.0*(vpa+upar[iz])/vpa_L)^4)), f, vperp, vpa)
+            J2 = integral((vperp,vpa)->(vpa^2*abs(vpa+upar[iz])/(sqrt(2.0)+abs(vpa+upar[iz]))/(1.0+(4.0*(vpa+upar[iz])/vpa_L)^4)), f, vperp, vpa)
 
             # Given a corrected distribution function
-            #   F = A * Fhat + B*wpa * s*vpa/vth / (1 + s*|vpa/vth|) / (1 +(4*vpa/vth/Lvpa)^4) * Fhat
-            # the constraints (assuming 1D1V)
+            #   F = A * Fhat + B*wpa * s*vpa / (1 + s*|vpa|) / (1 +(4*vpa/Lvpa)^4) * Fhat
+            # the constraints 
             #   ∫d^3w F = 1
             #   ∫d^3w wpa F = 0
             # and defining the integrals
             #   In = ∫d^3w wpa^n * F
-            #   Jn = ∫d^3w wpa^n * s*vpa/vth / (1 + s*|vpa/vth|) / (1 +(4*vpa/vth/Lvpa)^4) * F
+            #   Jn = ∫d^3w wpa^n * s*vpa / (1 + s*|vpa|) / (1 +(4*vpa/Lvpa)^4) * F
             # we can substitute F into the constraint equations and solve for A and B
             #   A I0 + B J1 = 1
             #   A I1 + B J2 = 0
@@ -661,10 +671,9 @@ function enforce_zero_incoming_bc!(pdf, z::coordinate, vperp::coordinate, vpa::c
 
             A = 1.0 / (I0 - I1*J1/J2)
             B = -A*I1/J2
-
-            @. f = A*f + B*vpa.grid*vpa.scratch2
+            @. f = A*f + B*vpa.grid*vpa.scratch2*f
         elseif evolve_density
-            I0 = integral(f, vpa.wgts)
+            I0 = integral((vperp,vpa)->(1), f, vperp, vpa)
             @. f = f / I0
         end
     end

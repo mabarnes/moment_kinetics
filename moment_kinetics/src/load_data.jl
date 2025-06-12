@@ -3427,8 +3427,8 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
             while true
                 # Test if output files exist for this value of counter
                 prefix_with_count = base_prefix * "_$counter"
-                if length(glob(basename(prefix_with_count) * ".initial_elctron*.h5", dirname(prefix_with_count))) > 0 ||
-                    length(glob(basename(prefix_with_count) * ".initial_elctron*.cdf", dirname(prefix_with_count))) > 0
+                if length(glob(basename(prefix_with_count) * ".initial_electron*.h5", dirname(prefix_with_count))) > 0 ||
+                    length(glob(basename(prefix_with_count) * ".initial_electron*.cdf", dirname(prefix_with_count))) > 0
 
                     push!(run_prefixes, prefix_with_count)
                 else

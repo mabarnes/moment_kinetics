@@ -2232,7 +2232,7 @@ function apply_electron_bc_and_constraints!(this_scratch, phi, moments, r, z, vp
             @views hard_force_moment_constraints!(latest_pdf[:,:,iz,ir],
                                                   (evolve_density=true,
                                                    evolve_upar=true,
-                                                   evolve_p=true), vpa)
+                                                   evolve_p=true), vpa, vperp)
     end
 end
 
@@ -2326,7 +2326,7 @@ function apply_electron_bc_and_constraints_no_r!(f_electron, phi, moments, r, z,
             @views hard_force_moment_constraints!(f_electron[:,:,iz],
                                                   (evolve_density=true,
                                                    evolve_upar=true,
-                                                   evolve_p=true), vpa)
+                                                   evolve_p=true), vpa, vperp)
     end
 
     return ""
