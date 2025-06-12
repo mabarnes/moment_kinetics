@@ -40,6 +40,7 @@ function update_speed_vperp!(vperp_advect, fvec, vpa, vperp, z, r, z_advect, r_a
     @boundscheck vperp.n == size(vperp_advect[1].speed,1) || throw(BoundsError(vperp_advect[1]))
     @boundscheck vpa.n == size(vperp_advect[1].speed,2) || throw(BoundsError(vperp_advect[1]))
     @boundscheck r.n == size(vperp_advect[1].speed,4) || throw(BoundsError(vperp_advect[1]))
+    @begin_s_r_z_vpa_region()
     if vperp.advection.option == "default"
         update_speed_vperp_default!(vperp_advect, fvec, vpa, vperp, z, r, z_advect, r_advect, geometry, moments)
     elseif vperp.advection.option == "constant"

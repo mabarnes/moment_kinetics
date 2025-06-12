@@ -990,10 +990,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
     # vperp_advect[is].speed, so z_advect and r_advect must always be updated before
     # vperp_advect is updated and used.
     if vperp.n > 1
-        @begin_serial_region()
-        @serial_region begin
-            update_speed_vperp!(vperp_advect, scratch[1], vpa, vperp, z, r, z_advect, r_advect, geometry, moments)
-        end
+        update_speed_vperp!(vperp_advect, scratch[1], vpa, vperp, z, r, z_advect, r_advect, geometry, moments)
     end
     
     ##
