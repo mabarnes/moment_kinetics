@@ -548,14 +548,14 @@ Calculate the primitive of f using second-order accurate trapezium rule; result 
 in coord.scratch_2d.
 """
 function elementwise_indefinite_integration!(coord, f, not_spectral::finite_difference_info)
-    return primitive_finite_difference!(coord, f, coord.finite_difference_option)
+    return primitive_finite_difference_integration!(coord, f, coord.finite_difference_option)
 end
 
 """
 """
-function primitive_finite_difference!(coord, f, finite_difference_option)
+function primitive_finite_difference_integration!(coord, f, finite_difference_option)
 	# space here to add different integration methods, if required
-	primitive_second_order!(coord, f)
+	primitive_second_order_integration!(coord, f)
 	return nothing
 end
 
@@ -564,7 +564,7 @@ Integrate the input function f and return as pf
 using second-order trapezium rule.
 Do the integral on each element separately.
 """
-function primitive_second_order!(coord, f)
+function primitive_second_order_integration!(coord, f)
 	n = length(f)
 	ngrid = coord.ngrid
 	nelement = coord.nelement_local
