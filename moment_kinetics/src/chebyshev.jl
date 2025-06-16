@@ -44,8 +44,8 @@ struct chebyshev_base_info{TForward <: FFTW.cFFTWPlan, TBackward <: AbstractFFTs
     Dmat::Array{mk_float,2}
     # elementwise differentiation vector (ngrid) for the point x = -1
     D0::Array{mk_float,1}
-    # elementwise antidifferentiation matrix
-    Amat::Array{mk_float,2}
+    # elementwise integration matrix (ngrid*ngrid)
+    indefinite_integration_matrix::Array{mk_float,2}
 end
 
 struct chebyshev_info{TForward <: FFTW.cFFTWPlan, TBackward <: AbstractFFTs.ScaledPlan} <: discretization_info
@@ -144,12 +144,14 @@ function setup_chebyshev_pseudospectral_lobatto(coord, fftw_flags)
     cheb_derivative_matrix_elementwise!(Dmat,coord.ngrid)
     D0 = allocate_float(coord.ngrid)
     D0 .= Dmat[1,:]
-    Amat = allocate_float(coord.ngrid, coord.ngrid)
+    indefinite_integration_matrix = allocate_float(coord.ngrid, coord.ngrid)
     x = chebyshevpoints(coord.ngrid)
-    integration_matrix!(Amat,x,coord.ngrid)
+    integration_matrix!(indefinite_integration_matrix,x,coord.ngrid)
     # return a structure containing the information needed to carry out
     # a 1D Chebyshev transform
-    return chebyshev_base_info(fext, fcheby, dcheby, forward_transform, backward_transform, Dmat, D0, Amat)
+    return chebyshev_base_info(fext, fcheby, dcheby, forward_transform,
+                               backward_transform, Dmat, D0,
+                               indefinite_integration_matrix)
 end
 
 function setup_chebyshev_pseudospectral_radau(coord, fftw_flags)
@@ -170,12 +172,14 @@ function setup_chebyshev_pseudospectral_radau(coord, fftw_flags)
         cheb_derivative_matrix_elementwise_radau_by_FFT!(Dmat, coord, fcheby, dcheby, fext, forward_transform)
         D0 = allocate_float(coord.ngrid)
         cheb_lower_endpoint_derivative_vector_elementwise_radau_by_FFT!(D0, coord, fcheby, dcheby, fext, forward_transform)
-        Amat = allocate_float(coord.ngrid, coord.ngrid)
+        indefinite_integration_matrix = allocate_float(coord.ngrid, coord.ngrid)
         x = chebyshev_radau_points(coord.ngrid)
-        integration_matrix!(Amat,x,coord.ngrid)
+        integration_matrix!(indefinite_integration_matrix,x,coord.ngrid)
         # return a structure containing the information needed to carry out
         # a 1D Chebyshev transform
-        return chebyshev_base_info(fext, fcheby, dcheby, forward_transform, backward_transform, Dmat, D0, Amat)
+        return chebyshev_base_info(fext, fcheby, dcheby, forward_transform,
+                                   backward_transform, Dmat, D0,
+                                   indefinite_integration_matrix)
 end
 
 """
@@ -1011,9 +1015,9 @@ function elementwise_indefinite_integration!(coord, ff, chebyshev::chebyshev_inf
     # imax is the maximum index on the full grid for this (jth) element
     imax = coord.imax[j]        
     if coord.radau_first_element && coord.irank == 0 # differentiate this element with the Radau scheme
-        @views mul!(pf[:,j],chebyshev.radau.Amat[:,:],ff[imin:imax])
+        @views mul!(pf[:,j],chebyshev.radau.indefinite_integration_matrix[:,:],ff[imin:imax])
     else #differentiate using the Lobatto scheme
-        @views mul!(pf[:,j],chebyshev.lobatto.Amat[:,:],ff[imin:imax])
+        @views mul!(pf[:,j],chebyshev.lobatto.indefinite_integration_matrix[:,:],ff[imin:imax])
     end
     # transform back to the physical coordinate scale
     for i in 1:coord.ngrid
@@ -1025,7 +1029,7 @@ function elementwise_indefinite_integration!(coord, ff, chebyshev::chebyshev_inf
         imin = coord.imin[j]-k
         # imax is the maximum index on the full grid for this (jth) element
         imax = coord.imax[j]
-        @views mul!(pf[:,j],chebyshev.lobatto.Amat[:,:],ff[imin:imax])        
+        @views mul!(pf[:,j],chebyshev.lobatto.indefinite_integration_matrix[:,:],ff[imin:imax])
         # transform back to the physical coordinate scale
         for i in 1:coord.ngrid
             pf[i,j] *= coord.element_scale[j]

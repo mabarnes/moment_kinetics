@@ -47,7 +47,7 @@ struct gausslegendre_base_info
     # elementwise differentiation matrix (ngrid*ngrid)
     Dmat::Array{mk_float,2}
     # elementwise integration matrix (ngrid*ngrid)
-    Amat::Array{mk_float,2}
+    indefinite_integration_matrix::Array{mk_float,2}
     # local mass matrix type 0
     M0::Array{mk_float,2}
     # local mass matrix type 1
@@ -190,8 +190,8 @@ function setup_gausslegendre_pseudospectral_lobatto(coord; collision_operator_di
     w = mk_float.(w)
     Dmat = allocate_float(coord.ngrid, coord.ngrid)
     gausslobattolegendre_differentiation_matrix!(Dmat,x,coord.ngrid)
-    Amat = allocate_float(coord.ngrid, coord.ngrid)
-    integration_matrix!(Amat,x,coord.ngrid)
+    indefinite_integration_matrix = allocate_float(coord.ngrid, coord.ngrid)
+    integration_matrix!(indefinite_integration_matrix,x,coord.ngrid)
     
     M0 = allocate_float(coord.ngrid, coord.ngrid)
     GaussLegendre_weak_product_matrix!(M0,coord.ngrid,x,w,"M0")
@@ -254,8 +254,9 @@ function setup_gausslegendre_pseudospectral_lobatto(coord; collision_operator_di
         Y30 = allocate_float(0, 0, 0)
         Y31 = allocate_float(0, 0, 0)
     end
-    return gausslegendre_base_info(Dmat,Amat,M0,M1,M2,S0,S1,
-            K0,K1,K2,P0,P1,P2,D0,Y00,Y01,Y10,Y11,Y20,Y21,Y30,Y31)
+    return gausslegendre_base_info(Dmat,indefinite_integration_matrix, M0, M1, M2, S0, S1,
+                                   K0, K1, K2, P0, P1, P2, D0, Y00, Y01, Y10, Y11, Y20,
+                                   Y21, Y30, Y31)
 end
 
 """
@@ -273,8 +274,8 @@ function setup_gausslegendre_pseudospectral_radau(coord; collision_operator_dim=
     # elemental differentiation matrix
     Dmat = allocate_float(coord.ngrid, coord.ngrid)
     gaussradaulegendre_differentiation_matrix!(Dmat,x,coord.ngrid)
-    Amat = allocate_float(coord.ngrid, coord.ngrid)
-    integration_matrix!(Amat,xreverse,coord.ngrid)
+    indefinite_integration_matrix = allocate_float(coord.ngrid, coord.ngrid)
+    integration_matrix!(indefinite_integration_matrix,xreverse,coord.ngrid)
 
     M0 = allocate_float(coord.ngrid, coord.ngrid)
     GaussLegendre_weak_product_matrix!(M0,coord.ngrid,xreverse,wreverse,"M0",radau=true)
@@ -335,8 +336,9 @@ function setup_gausslegendre_pseudospectral_radau(coord; collision_operator_dim=
         Y30 = allocate_float(0, 0, 0)
         Y31 = allocate_float(0, 0, 0)
     end
-    return gausslegendre_base_info(Dmat,Amat,M0,M1,M2,S0,S1,
-            K0,K1,K2,P0,P1,P2,D0,Y00,Y01,Y10,Y11,Y20,Y21,Y30,Y31)
+    return gausslegendre_base_info(Dmat, indefinite_integration_matrix, M0, M1, M2, S0,
+                                   S1, K0, K1, K2, P0, P1, P2, D0, Y00, Y01, Y10, Y11,
+                                   Y20, Y21, Y30, Y31)
 end 
 """
 A function that takes the indefinite integral in each element of `coord.grid`,
@@ -357,9 +359,9 @@ function elementwise_indefinite_integration!(coord, ff, gausslegendre::gausslege
     # imax is the maximum index on the full grid for this (jth) element
     imax = coord.imax[j]        
     if coord.radau_first_element && coord.irank == 0 # differentiate this element with the Radau scheme
-        @views mul!(pf[:,j],gausslegendre.radau.Amat[:,:],ff[imin:imax])
+        @views mul!(pf[:,j],gausslegendre.radau.indefinite_integration_matrix[:,:],ff[imin:imax])
     else #differentiate using the Lobatto scheme
-        @views mul!(pf[:,j],gausslegendre.lobatto.Amat[:,:],ff[imin:imax])
+        @views mul!(pf[:,j],gausslegendre.lobatto.indefinite_integration_matrix[:,:],ff[imin:imax])
     end
     # transform back to the physical coordinate scale
     for i in 1:coord.ngrid
@@ -371,7 +373,7 @@ function elementwise_indefinite_integration!(coord, ff, gausslegendre::gausslege
         imin = coord.imin[j]-k
         # imax is the maximum index on the full grid for this (jth) element
         imax = coord.imax[j]
-        @views mul!(pf[:,j],gausslegendre.lobatto.Amat[:,:],ff[imin:imax])        
+        @views mul!(pf[:,j],gausslegendre.lobatto.indefinite_integration_matrix[:,:],ff[imin:imax])
         # transform back to the physical coordinate scale
         for i in 1:coord.ngrid
             pf[i,j] *= coord.element_scale[j]

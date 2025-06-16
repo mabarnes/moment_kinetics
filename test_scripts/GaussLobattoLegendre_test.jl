@@ -71,8 +71,8 @@ using moment_kinetics.type_definitions: OptionsDict
             # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
             # errors due to communicators not being fully set up.
             y, y_spectral = define_coordinate(input, y_name; collision_operator_dim=true, ignore_MPI=true)
-            print_matrix(y_spectral.lobatto.Amat,"Amat",y.ngrid,y.ngrid)
-            print_matrix(y_spectral.radau.Amat,"Amat",y.ngrid,y.ngrid)
+            print_matrix(y_spectral.lobatto.indefinite_integration_matrix,"indefinite_integration_matrix",y.ngrid,y.ngrid)
+            print_matrix(y_spectral.radau.indefinite_integration_matrix,"indefinite_integration_matrix",y.ngrid,y.ngrid)
             ones = Array{Float64,1}(undef,y.n)
             result = Array{Float64,1}(undef,y.n)
             
