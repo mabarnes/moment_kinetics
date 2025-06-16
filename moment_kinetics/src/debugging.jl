@@ -55,7 +55,7 @@ const active_debug_macros = Vector{String}(undef, 0)
 
 """
 """
-_debug_level = 3 #get_options()["debug"]
+_debug_level = get_options()["debug"]
 
 for (macroname, minlevel, macro_docstring) ∈ macronames
     m = Symbol(macroname)
