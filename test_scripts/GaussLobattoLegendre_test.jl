@@ -11,7 +11,7 @@ import moment_kinetics
 using moment_kinetics.gauss_legendre
 using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.calculus: derivative!, second_derivative!, laplacian_derivative!
-using moment_kinetics.calculus: mass_matrix_solve!
+using moment_kinetics.calculus: mass_matrix_solve!, indefinite_integral!
 using moment_kinetics.type_definitions: OptionsDict
 
 
@@ -71,7 +71,34 @@ using moment_kinetics.type_definitions: OptionsDict
             # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
             # errors due to communicators not being fully set up.
             y, y_spectral = define_coordinate(input, y_name; collision_operator_dim=true, ignore_MPI=true)
-            #print_matrix(Mmat,"Mmat",y.n,y.n)
+            print_matrix(y_spectral.lobatto.indefinite_integration_matrix,"indefinite_integration_matrix",y.ngrid,y.ngrid)
+            print_matrix(y_spectral.radau.indefinite_integration_matrix,"indefinite_integration_matrix",y.ngrid,y.ngrid)
+            ones = Array{Float64,1}(undef,y.n)
+            result = Array{Float64,1}(undef,y.n)
+            
+            ones .= 1.0
+            indefinite_integral!(result, ones, y, y_spectral)
+            #println(result)
+            if y.name=="vpa" || y.name =="z"
+                yllim = y.grid[1]
+            else
+                yllim = 0.0
+            end
+            @. result += yllim
+            #println(result)
+            @. result -= y.grid
+            println("max(abs(err)) integration of constant: ",maximum(abs.(result)))
+
+            cosine = Array{Float64,1}(undef,y.n)
+            for iy in 1:y.n
+                cosine[iy] = cos(y.grid[iy]-yllim)
+            end
+            indefinite_integral!(result, cosine, y, y_spectral)
+            for iy in 1:y.n
+                result[iy] -= sin(y.grid[iy]-yllim)
+            end
+            println("max(abs(err)) integration of cosine: ",maximum(abs.(result)))
+            #println(result)
             #print_matrix(y_spectral.radau.M0,"local radau mass matrix M0",y.ngrid,y.ngrid)
             #print_matrix(y_spectral.radau.M1,"local radau mass matrix M1",y.ngrid,y.ngrid)
             #print_matrix(y_spectral.lobatto.M0,"local mass matrix M0",y.ngrid,y.ngrid)
