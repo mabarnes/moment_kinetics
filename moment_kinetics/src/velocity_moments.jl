@@ -2390,9 +2390,11 @@ function update_derived_moments!(new_scratch, moments, vpa, vperp, z, r, composi
 
     # if diagnostic time step/RK stage
     # update the diagnostic chodura condition
-    # if diagnostic_moments
-    #     update_chodura!(moments,ff,vpa,vperp,z,r,r_spectral,composition,geometry,scratch_dummy,z_advect)
-    # end
+    if diagnostic_moments
+        if composition.ion_physics != coll_krook_ions
+            update_chodura!(moments,ff,vpa,vperp,z,r,r_spectral,composition,geometry,scratch_dummy,z_advect)
+        end
+    end
     # update the thermal speed
     @begin_s_r_z_region()
     try #below block causes DomainError if ppar < 0 or density, so exit cleanly if possible
