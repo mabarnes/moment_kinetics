@@ -340,47 +340,6 @@ function setup_gausslegendre_pseudospectral_radau(coord; collision_operator_dim=
                                    S1, K0, K1, K2, P0, P1, P2, D0, Y00, Y01, Y10, Y11,
                                    Y20, Y21, Y30, Y31)
 end 
-"""
-A function that takes the indefinite integral in each element of `coord.grid`,
-leaving the result (element-wise) in `coord.scratch_2d`.
-"""
-function elementwise_indefinite_integration!(coord, ff, gausslegendre::gausslegendre_info)
-    # the primitive of f
-    pf = coord.scratch_2d
-    # define local variable nelement for convenience
-    nelement = coord.nelement_local
-    # check array bounds
-    @boundscheck nelement == size(pf,2) && coord.ngrid == size(pf,1) || throw(BoundsError(pf))
-    
-    # variable k will be used to avoid double counting of overlapping point
-    k = 0
-    j = 1 # the first element
-    imin = coord.imin[j]-k
-    # imax is the maximum index on the full grid for this (jth) element
-    imax = coord.imax[j]        
-    if coord.radau_first_element && coord.irank == 0 # differentiate this element with the Radau scheme
-        @views mul!(pf[:,j],gausslegendre.radau.indefinite_integration_matrix[:,:],ff[imin:imax])
-    else #differentiate using the Lobatto scheme
-        @views mul!(pf[:,j],gausslegendre.lobatto.indefinite_integration_matrix[:,:],ff[imin:imax])
-    end
-    # transform back to the physical coordinate scale
-    for i in 1:coord.ngrid
-        pf[i,j] *= coord.element_scale[j]
-    end
-    # calculate the derivative on each element
-    @inbounds for j ∈ 2:nelement
-        k = 1 
-        imin = coord.imin[j]-k
-        # imax is the maximum index on the full grid for this (jth) element
-        imax = coord.imax[j]
-        @views mul!(pf[:,j],gausslegendre.lobatto.indefinite_integration_matrix[:,:],ff[imin:imax])
-        # transform back to the physical coordinate scale
-        for i in 1:coord.ngrid
-            pf[i,j] *= coord.element_scale[j]
-        end
-    end
-    return nothing
-end
 
 """
 A function that takes the first derivative in each element of `coord.grid`,
