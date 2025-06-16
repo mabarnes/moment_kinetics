@@ -597,7 +597,7 @@ function update_moments!(moments, ff_in, gyroavs::gyro_operators, vpa, vperp, z,
                                             ff[:,:,:,:,is], vpa, vperp, z, r,
                                             moments.evolve_density, moments.evolve_upar,
                                             moments.evolve_p, composition.ion_physics,
-                                            collisions)
+                                            collisions, composition.T_e)
             moments.ion.qpar_updated[is] = true
         end
     end
@@ -605,8 +605,9 @@ function update_moments!(moments, ff_in, gyroavs::gyro_operators, vpa, vperp, z,
     update_vth!(moments.ion.vth, moments.ion.p, moments.ion.dens, z, r, composition)
     # update the Chodura diagnostic -- note that the pdf should be the unnormalised one
     # so this will break for the split moments cases
-    update_chodura!(moments,ff,vpa,vperp,z,r,r_spectral,composition,geometry,scratch_dummy,z_advect)
-        
+    if composition.ion_physics != coll_krook_ions
+        update_chodura!(moments,ff,vpa,vperp,z,r,r_spectral,composition,geometry,scratch_dummy,z_advect)
+    end
     return nothing
 end
 
@@ -976,7 +977,7 @@ function update_ion_qpar!(qpar, qpar_updated, density, upar, vth, dT_dz, pdf, vp
             @views update_ion_qpar_species!(qpar[:,:,is], density[:,:,is], upar[:,:,is],
                                         vth[:,:,is], dT_dz, pdf[:,:,:,:,is], vpa, vperp, z, r,
                                         evolve_density, evolve_upar, evolve_p,
-                                        ion_physics, collisions)
+                                        ion_physics, collisions, composition.T_e)
             qpar_updated[is] = true
         end
     end
@@ -986,13 +987,13 @@ end
 calculate the updated parallel heat flux (qpar) for a given species
 """
 function update_ion_qpar_species!(qpar, density, upar, vth, dT_dz, ff, vpa, vperp, z, r, evolve_density,
-                                  evolve_upar, evolve_p, ion_physics, collisions)
+                                  evolve_upar, evolve_p, ion_physics, collisions, T_e)
     if ion_physics ∈ (drift_kinetic_ions, gyrokinetic_ions)
         calculate_ion_qpar_from_pdf!(qpar, density, upar, vth, ff, vpa, vperp, z, r, evolve_density,
                                      evolve_upar, evolve_p)
     elseif ion_physics == coll_krook_ions
         calculate_ion_qpar_from_coll_krook!(qpar, density, upar, vth, dT_dz, z, r, vperp, collisions, evolve_density, 
-                                            evolve_upar, evolve_p)
+                                            evolve_upar, evolve_p, T_e)
     else
         throw(ArgumentError("ion model $ion_physics not implemented for qpar calculation"))
     end
@@ -1044,18 +1045,29 @@ end
 """
 calculate parallel heat flux if ion composition flag is coll_krook fluid ions
 """
-function calculate_ion_qpar_from_coll_krook!(qpar, density, upar, vth, dT_dz, z, r, vperp, collisions, evolve_density, evolve_upar, evolve_p)
+function calculate_ion_qpar_from_coll_krook!(qpar, density, upar, vth, dT_dz, z, r, vperp, collisions, evolve_density, evolve_upar, evolve_p, T_e)
     # Note that this is a braginskii heat flux for ions using the krook operator. The full Fokker-Planck operator
     # Braginskii heat flux is different! This also assumes one ion species, and so no friction between ions.
     @boundscheck r.n == size(qpar, 2) || throw(BoundsError(qpar))
     @boundscheck z.n == size(qpar, 1) || throw(BoundsError(qpar))
 
+    if vperp.n == 1
+        # For 1V need to use parallel temperature for Maxwellian in Krook
+        # operator, and for consistency with old 1D1V results also calculate
+        # collision frequency using parallel temperature.
+        Krook_vth = sqrt(3.0) * vth
+        adjust_1V = 1.0 / sqrt(3.0)
+    else
+        Krook_vth = vth
+        adjust_1V = 1.0
+    end
+    
     # calculate coll_krook heat flux. Currently only works for one ion species! (hence the 1 in dT_dz[iz,ir,1])
     if evolve_density && evolve_upar && evolve_p
         @begin_r_z_region()
         @loop_r_z ir iz begin
-            nu_ii = get_collision_frequency_ii(collisions, density[iz,ir], vth[iz,ir])
-            qpar[iz,ir] = -(1/2) * 3/2 * density[iz,ir] * vth[iz,ir]^2 /nu_ii * dT_dz[iz,ir,1]
+            nu_ii = get_collision_frequency_ii(collisions, density[iz,ir], Krook_vth[iz,ir])
+            qpar[iz,ir] = -(3/2) * 1/2 * density[iz,ir] * Krook_vth[iz,ir]^2 /nu_ii * 3 * dT_dz[iz,ir,1]
         end
     else
         throw(ArgumentError("coll_krook heat flux simulation requires evolve_density, 
@@ -1091,20 +1103,21 @@ function calculate_ion_qpar_from_coll_krook!(qpar, density, upar, vth, dT_dz, z,
     # also depends on whether we're 1V or 2V - as in 1V gamma_i = 2.5, 
     # in 2V gamma_i = 3.5.
 
-    if vperp.n == 1
-        gamma_i = 2.5
-        convective_coefficient = 1.5
-    else
-        gamma_i = 3.5
-        convective_coefficient = 2.5
-    end
     @loop_r ir begin
         for iz ∈ z_indices
-            this_p = vth[iz,ir]^2 * density[iz,ir]/2.0
+            this_p = Krook_vth[iz,ir]^2 * density[iz,ir] * 1/2
             this_upar = upar[iz,ir]
             this_dens = density[iz,ir]
             particle_flux = this_dens * this_upar
-            T_i = vth[iz,ir]^2
+            T_i = 1/2 * Krook_vth[iz,ir]^2
+
+            if vperp.n == 1
+                gamma_i = 2 + T_e/(2 * T_i)
+                convective_coefficient = 1.5
+            else
+                gamma_i = 3.5
+                convective_coefficient = 2.5
+            end
 
             # Stangeby (2.92)
             total_heat_flux = gamma_i * T_i * particle_flux
@@ -2378,7 +2391,9 @@ function update_derived_moments!(new_scratch, moments, vpa, vperp, z, r, composi
     # if diagnostic time step/RK stage
     # update the diagnostic chodura condition
     if diagnostic_moments
-        update_chodura!(moments,ff,vpa,vperp,z,r,r_spectral,composition,geometry,scratch_dummy,z_advect)
+        if composition.ion_physics != coll_krook_ions
+            update_chodura!(moments,ff,vpa,vperp,z,r,r_spectral,composition,geometry,scratch_dummy,z_advect)
+        end
     end
     # update the thermal speed
     @begin_s_r_z_region()

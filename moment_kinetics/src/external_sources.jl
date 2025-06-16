@@ -1660,7 +1660,6 @@ source amplitude.
                 T_mid = ion_moments.temp[ion_source_settings.PI_temperature_target_iz,
                                 ion_source_settings.PI_temperature_target_ir, is]
                 T_error = ion_source_settings.PI_temperature_target - T_mid
-
                 # Only want a source, so never allow amplitude to be negative
                 amplitude = max(ion_source_settings.source_strength +
                     ion_source_settings.PI_temperature_controller_P * T_error +

@@ -7,6 +7,7 @@ export force_balance!
 using ..calculus: derivative!
 using ..looping
 using ..timer_utils
+using ..input_structs: coll_krook_ions
 
 """
 use the force balance equation d(nu)/dt + d(ppar + n*upar*upar)/dz =
@@ -16,7 +17,7 @@ to update the parallel particle flux dens*upar for each species
 @timeit global_timer force_balance!(
                          upar_out, density_out, fvec, moments, fields, collisions, dt,
                          spectral, composition, geometry, ion_source_settings,
-                         num_diss_params) = begin
+                         num_diss_params, z) = begin
     @begin_s_r_z_region()
 
     dnupar_dt = moments.ion.dnupar_dt
@@ -71,6 +72,33 @@ to update the parallel particle flux dens*upar for each species
         upar_out[iz,ir,is] = (density[iz,ir,is]*upar[iz,ir,is] + dt * dnupar_dt[iz,ir,is]) / density_out[iz,ir,is]
     end
 
+    if composition.ion_physics == coll_krook_ions
+        # boundary condition for fluid simulation on ion flow at wall is that flow must be at least sonic.
+        if z.irank == 0 && (z.irank == z.nrank - 1)
+            z_indices = (1, z.n)
+        elseif z.irank == 0
+            z_indices = (1,)
+        elseif z.irank == z.nrank - 1
+            z_indices = (z.n,)
+        else
+            return nothing
+        end
+        T_e = composition.T_e
+        @loop_s_r is ir begin
+            for iz ∈ z_indices
+                # set the ion flow to local sound speed at wall
+                if iz == 1
+                    if upar_out[iz,ir,is] > -sqrt(T_e + moments.ion.temp[iz,ir,is])
+                        upar_out[iz,ir,is] = -sqrt(T_e + moments.ion.temp[iz,ir,is])
+                    end
+                else
+                    if upar_out[iz,ir,is] < sqrt(T_e + moments.ion.temp[iz,ir,is])
+                        upar_out[iz,ir,is] = sqrt(T_e + moments.ion.temp[iz,ir,is])
+                    end
+                end
+            end
+        end
+    end
     return nothing
 end
 
