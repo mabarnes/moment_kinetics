@@ -1,13 +1,13 @@
 [ion_source_1]
 z_profile = "constant"
-source_strength = 1.0
+source_strength = 1.4142135623730951
 source_T = 0.25
 
 [evolve_moments]
 density = false
 parallel_flow = false
-parallel_pressure = false
 moments_conservation = false
+pressure = false
 
 [z]
 ngrid = 5
@@ -27,7 +27,7 @@ discretization = "chebyshev_pseudospectral"
 [vpa]
 ngrid = 6
 nelement = 15
-L = 6.0
+L = 8.485281374238571
 bc = "zero"
 #discretization = "chebyshev_pseudospectral"
 discretization = "gausslegendre_pseudospectral"
@@ -35,7 +35,7 @@ discretization = "gausslegendre_pseudospectral"
 [vz]
 ngrid = 6
 nelement = 15
-L = 6.0
+L = 8.485281374238571
 bc = "zero"
 #discretization = "chebyshev_pseudospectral"
 discretization = "gausslegendre_pseudospectral"
@@ -43,7 +43,7 @@ discretization = "gausslegendre_pseudospectral"
 [vperp]
 ngrid = 5
 nelement = 4
-L = 3.0
+L = 4.242640687119286
 #bc = "periodic"
 #discretization = "finite_difference"
 #discretization = "chebyshev_pseudospectral"
@@ -72,11 +72,11 @@ temperature_phase = 0.0
 
 [fokker_planck_collisions]
 use_fokker_planck = true
-nuii = 1.0
+nuii = 4.0
 frequency_option = "manual"
 
 [timestepping]
 nstep = 50
-dt = 1.0e-4
+dt = 7.071067811865475e-5
 nwrite = 10
 nwrite_dfns = 10

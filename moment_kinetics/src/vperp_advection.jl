@@ -17,10 +17,10 @@ using ..r_advection: update_speed_r!
                          moments, fields, t) = begin
     
     # if appropriate, update z and r speeds
-    update_z_r_speeds!(z_advect, r_advect, fvec_in, moments, fields,
-                            geometry, vpa, vperp, z, r, t)
+    update_z_r_speeds!(z_advect, r_advect, fvec_in, moments, fields, geometry, vpa, vperp,
+                       z, r, t)
     
-    begin_s_r_z_vpa_region()
+    @begin_s_r_z_vpa_region()
     @loop_s is begin
         # get the updated speed along the vperp direction using the current f
         @views update_speed_vperp!(vperp_advect[is], vpa, vperp, z, r, z_advect[is], r_advect[is], geometry)
@@ -72,9 +72,9 @@ function update_z_r_speeds!(z_advect, r_advect, fvec_in, moments, fields,
                             geometry, vpa, vperp, z, r, t)
     update_z_speed = (z.n == 1 && geometry.input.option == "0D-Spitzer-test")
     if update_z_speed
-    # make sure z speed is physical despite
-    # 0D nature of simulation
-        begin_s_r_vperp_vpa_region()
+        # make sure z speed is physical despite
+        # 0D nature of simulation
+        @begin_s_r_vperp_vpa_region()
         @loop_s is begin
             # get the updated speed along the z direction using the current f
             @views update_speed_z!(z_advect[is], fvec_in.upar[:,:,is],
@@ -85,14 +85,14 @@ function update_z_r_speeds!(z_advect, r_advect, fvec_in, moments, fields,
     
     update_r_speed = (r.n == 1 && geometry.input.option == "0D-Spitzer-test")
     if update_r_speed
-    # make sure r speed is physical despite
-    # 0D nature of simulation
-        begin_s_z_vperp_vpa_region()
+        # make sure r speed is physical despite
+        # 0D nature of simulation
+        @begin_s_z_vperp_vpa_region()
         @loop_s is begin
             # get the updated speed along the r direction using the current f
-            update_speed_r!(r_advect[is], fvec_in.upar[:,:,is],
-                               moments.ion.vth[:,:,is], fields, moments.evolve_upar,
-                               moments.evolve_ppar, vpa, vperp, z, r, geometry, is)
+            @views update_speed_r!(r_advect[is], fvec_in.upar[:,:,is],
+                                   moments.ion.vth[:,:,is], fields, moments.evolve_upar,
+                                   moments.evolve_ppar, vpa, vperp, z, r, geometry, is)
         end
     end
     return nothing

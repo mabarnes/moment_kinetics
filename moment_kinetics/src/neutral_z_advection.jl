@@ -18,32 +18,20 @@ do a single stage time advance (potentially as part of a multi-stage RK scheme)
                          f_out, fvec_in, moments, advect, r, z, vzeta, vr, vz, dt, t,
                          spectral, composition, scratch_dummy) = begin
 
-    begin_sn_r_vzeta_vr_vz_region()
+    @begin_sn_r_vzeta_vr_vz_region()
 
     @loop_sn isn begin
         # get the updated speed along the z direction using the current f
         @views update_speed_neutral_z!(advect[isn], fvec_in.uz_neutral[:,:,isn],
                                        moments.neutral.vth[:,:,isn], moments.evolve_upar,
-                                       moments.evolve_ppar, vz, vr, vzeta, z, r, t)
+                                       moments.evolve_p, vz, vr, vzeta, z, r, t)
         # update adv_fac
         @loop_r_vzeta_vr_vz ir ivzeta ivr ivz begin
-            # take the normalized pdf contained in fvec_in.pdf and remove the normalization,
-            # returning the true (un-normalized) particle distribution function in z.scratch
-            @views unnormalize_pdf!(
-                scratch_dummy.buffer_vzvrvzetazrsn_2[ivz,ivr,ivzeta,:,ir,isn],
-                fvec_in.pdf_neutral[ivz,ivr,ivzeta,:,ir,isn],
-                fvec_in.density_neutral[:,ir,isn], moments.neutral.vth[:,ir,isn],
-                moments.evolve_density, moments.evolve_ppar)
-            @views adjust_advection_speed!(advect[isn].speed[:,ivz,ivr,ivzeta,ir],
-                                           fvec_in.density_neutral[:,ir,isn],
-                                           moments.neutral.vth[:,ir,isn],
-                                           moments.evolve_density, moments.evolve_ppar)
             @views @. advect[isn].adv_fac[:,ivz,ivr,ivzeta,ir] = -dt*advect[isn].speed[:,ivz,ivr,ivzeta,ir]
         end
     end
     #calculate the upwind derivative
-    derivative_z!(scratch_dummy.buffer_vzvrvzetazrsn_1,
-                  scratch_dummy.buffer_vzvrvzetazrsn_2, advect,
+    derivative_z!(scratch_dummy.buffer_vzvrvzetazrsn_1, fvec_in.pdf_neutral, advect,
                   scratch_dummy.buffer_vzvrvzetarsn_1, scratch_dummy.buffer_vzvrvzetarsn_2,
                   scratch_dummy.buffer_vzvrvzetarsn_3, scratch_dummy.buffer_vzvrvzetarsn_4,
                   scratch_dummy.buffer_vzvrvzetarsn_5, scratch_dummy.buffer_vzvrvzetarsn_6,
@@ -58,37 +46,9 @@ do a single stage time advance (potentially as part of a multi-stage RK scheme)
 end
 
 """
-"""
-function adjust_advection_speed!(speed, dens, vth, evolve_density, evolve_ppar)
-    if evolve_ppar
-        for i in eachindex(speed)
-            speed[i] *= vth[i]/dens[i]
-        end
-    elseif evolve_density
-        for i in eachindex(speed)
-            speed[i] /= dens[i]
-        end
-    end
-    return nothing
-end
-
-"""
-"""
-function unnormalize_pdf!(unnorm, norm, dens, vth, evolve_density, evolve_ppar)
-    if evolve_ppar
-        @. unnorm = norm * dens/vth
-    elseif evolve_density
-        @. unnorm = norm * dens
-    else
-        @. unnorm = norm
-    end
-    return nothing
-end
-
-"""
 calculate the advection speed in the z-direction at each grid point
 """
-function update_speed_neutral_z!(advect, uz, vth, evolve_upar, evolve_ppar, vz, vr, vzeta,
+function update_speed_neutral_z!(advect, uz, vth, evolve_upar, evolve_p, vz, vr, vzeta,
                                  z, r, t)
     @boundscheck r.n == size(advect.speed,5) || throw(BoundsError(advect))
     @boundscheck vzeta.n == size(advect.speed,4) || throw(BoundsError(advect))
@@ -100,7 +60,7 @@ function update_speed_neutral_z!(advect, uz, vth, evolve_upar, evolve_ppar, vz, 
             @loop_r_vzeta_vr_vz ir ivzeta ivr ivz begin
                 @. advect.speed[:,ivz,ivr,ivzeta,ir] = vz.grid[ivz]
             end
-            if evolve_ppar
+            if evolve_p
                 @loop_r_vzeta_vr_vz ir ivzeta ivr ivz begin
                     @views @. advect.speed[:,ivz,ivr,ivzeta,ir] *= vth[:,ir]
                 end

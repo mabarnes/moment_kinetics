@@ -12,7 +12,7 @@ using ..timer_utils
 using ..type_definitions: mk_float, mk_int
 using MPI
 using ..communication: block_rank
-using ..communication: _block_synchronize
+using ..communication: @_block_synchronize
 using ..looping
 
 using LinearAlgebra
@@ -490,7 +490,7 @@ end
     # synchronize buffers
     # -- this all-to-all block communicate here requires that this function is NOT called from within a parallelised loop
     # -- or from a @serial_region or from an if statment isolating a single rank on a block
-    _block_synchronize()
+    @_block_synchronize()
     #if block_rank[] == 0 # lead process on this shared-memory block
     @serial_region begin
 
@@ -553,7 +553,7 @@ end
 
     end
     # synchronize buffers
-    _block_synchronize()
+    @_block_synchronize()
 end
 
 function apply_adv_fac!(buffer::AbstractArray{mk_float,Ndims},adv_fac::AbstractArray{mk_float,Ndims},endpoints::AbstractArray{mk_float,Ndims},sgn::mk_int) where Ndims
@@ -590,7 +590,7 @@ function apply_adv_fac!(buffer::AbstractArray{mk_float,Ndims},adv_fac::AbstractA
     # synchronize buffers
     # -- this all-to-all block communicate here requires that this function is NOT called from within a parallelised loop
     # -- or from a @serial_region or from an if statment isolating a single rank on a block
-    _block_synchronize()
+    @_block_synchronize()
     #if block_rank[] == 0 # lead process on this shared-memory block
     @serial_region begin
         # now deal with endpoints that are stored across ranks
@@ -654,7 +654,7 @@ function apply_adv_fac!(buffer::AbstractArray{mk_float,Ndims},adv_fac::AbstractA
 
     end
     # synchronize buffers
-    _block_synchronize()
+    @_block_synchronize()
 end
 
 # Special version for pdf_electron with no r-dimension, which has the same number of
@@ -669,7 +669,7 @@ end
     # synchronize buffers
     # -- this all-to-all block communicate here requires that this function is NOT called from within a parallelised loop
     # -- or from a @serial_region or from an if statment isolating a single rank on a block
-    _block_synchronize()
+    @_block_synchronize()
     #if block_rank[] == 0 # lead process on this shared-memory block
     @serial_region begin
 
@@ -732,7 +732,7 @@ end
 
     end
     # synchronize buffers
-    _block_synchronize()
+    @_block_synchronize()
 end
 
 # Special version for pdf_electron with no r-dimension, which has the same number of
@@ -749,7 +749,7 @@ end
     # synchronize buffers
     # -- this all-to-all block communicate here requires that this function is NOT called from within a parallelised loop
     # -- or from a @serial_region or from an if statment isolating a single rank on a block
-    _block_synchronize()
+    @_block_synchronize()
     #if block_rank[] == 0 # lead process on this shared-memory block
     @serial_region begin
         # now deal with endpoints that are stored across ranks
@@ -813,7 +813,7 @@ end
 
     end
     # synchronize buffers
-    _block_synchronize()
+    @_block_synchronize()
 end
 
 """
@@ -866,6 +866,62 @@ function integral(integrand, v, n, wgts)
     return integral
 end
 
+"""
+Compute the 1D integral `∫dv prefactor(v)*integrand`
+
+In this variant `v` should be a `coordinate` object.
+"""
+function integral(prefactor::Function, integrand, v)
+    @boundscheck v.n == length(integrand) || throw(BoundsError(integrand))
+    v_grid = v.grid
+    wgts = v.wgts
+    integral = 0.0
+    @inbounds for i ∈ eachindex(v_grid)
+        integral += prefactor(v[i]) * integrand[i] * wgts[i]
+    end
+    return integral
+end
+
+"""
+Compute the 2D integral `∫d^2vperp.dvpa prefactor(vperp,vpa)*integrand`
+
+In this variant `vperp` and `vpa` should be `coordinate` objects.
+"""
+function integral(prefactor::Function, integrand, vperp, vpa)
+    @boundscheck (vpa.n, vperp.n) == size(integrand) || throw(BoundsError(integrand))
+    vperp_grid = vperp.grid
+    vperp_wgts = vperp.wgts
+    vpa_grid = vpa.grid
+    vpa_wgts = vpa.wgts
+    integral = 0.0
+    for ivperp ∈ eachindex(vperp_grid), ivpa ∈ eachindex(vpa_grid)
+        integral += prefactor(vperp_grid[ivperp], vpa_grid[ivpa]) *
+                    integrand[ivpa, ivperp] * vperp_wgts[ivperp] * vpa_wgts[ivpa]
+    end
+    return integral
+end
+
+"""
+Compute the 3D integral `∫dvzeta.dvr.dvz prefactor(vzeta,vr,vz)*integrand`
+
+In this variant `vzeta`, `vr`, and `vz` should be `coordinate` objects.
+"""
+function integral(prefactor::Function, integrand, vzeta, vr, vz)
+    @boundscheck (vz.n, vr.n, vzeta.n) == size(integrand) || throw(BoundsError(integrand))
+    vzeta_grid = vzeta.grid
+    vzeta_wgts = vzeta.wgts
+    vr_grid = vr.grid
+    vr_wgts = vr.wgts
+    vz_grid = vz.grid
+    vz_wgts = vz.wgts
+    integral = 0.0
+    for ivzeta ∈ eachindex(vzeta_grid), ivr ∈ eachindex(vr_grid), ivz ∈ eachindex(vz_grid)
+        integral += prefactor(vzeta_grid[ivzeta], vr_grid[ivr], vz_grid[ivz]) *
+                    integrand[ivz, ivr, ivzeta] * vzeta_wgts[ivzeta] * vr_wgts[ivr] *
+                    vz_wgts[ivz]
+    end
+    return integral
+end
 
 """
 2D velocity integration routines

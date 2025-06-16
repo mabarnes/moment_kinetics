@@ -38,8 +38,11 @@ macronames = [
     ("debug_shared_array_allocate", 4,
      "Check that allocate_shared() was called from the same place on every process."),
 
-    ("debug_block_synchronize", 4,
-     "Check _block_synchronize() was called from the same place on every process."),
+    ("debug_block_synchronize_quick", 1,
+     "Check _block_synchronize() was called from the same place on every process, with quick check of call site."),
+
+    ("debug_block_synchronize_backtrace", 4,
+     "Check _block_synchronize() was called from the same place on every process, checking the full backtrace of each call."),
 
     ("debug_detect_redundant_block_synchronize", 5,
      "Check if any _block_synchronize() call could have been skipped without resulting "

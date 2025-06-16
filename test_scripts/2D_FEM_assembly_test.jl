@@ -15,7 +15,7 @@ using moment_kinetics.fokker_planck: init_fokker_planck_collisions_weak_form
 using moment_kinetics.fokker_planck: fokker_planck_collision_operator_weak_form!
 using moment_kinetics.fokker_planck: conserving_corrections!
 using moment_kinetics.calculus: derivative!
-using moment_kinetics.velocity_moments: get_density, get_upar, get_ppar, get_pperp, get_pressure
+using moment_kinetics.velocity_moments: get_density, get_upar, get_p, get_ppar, get_pperp
 using moment_kinetics.communication
 using moment_kinetics.communication: MPISharedArray
 using moment_kinetics.looping
@@ -125,7 +125,7 @@ end
                                        r=1, z=1, vperp=vperp.n, vpa=vpa.n,
                                        vzeta=1, vr=1, vz=1)
         nc_global = vpa.n*vperp.n
-        begin_serial_region()
+        @begin_serial_region()
         start_init_time = now()
         if boundary_data_option == direct_integration
             precompute_weights = true
@@ -251,7 +251,7 @@ end
         end
         rpbd_exact = allocate_rosenbluth_potential_boundary_data(vpa,vperp)
 
-        begin_s_r_z_anyv_region()
+        @begin_s_r_z_anyv_region()
 
         # use known test function to provide exact data
         calculate_rosenbluth_potential_boundary_data_exact!(rpbd_exact,
@@ -284,8 +284,8 @@ end
              algebraic_solve_for_d2Gdvperp2=false,calculate_GG=true,calculate_dGdvperp=true,boundary_data_option=boundary_data_option)
         # extract C[Fs,Fs'] result
         # and Rosenbluth potentials for testing
-        begin_s_r_z_anyv_region()
-        begin_anyv_vperp_vpa_region()
+        @begin_s_r_z_anyv_region()
+        @begin_anyv_vperp_vpa_region()
         @loop_vperp_vpa ivperp ivpa begin
             C_M_num[ivpa,ivperp] = fkpl_arrays.CC[ivpa,ivperp]
             G_M_num[ivpa,ivperp] = fkpl_arrays.GG[ivpa,ivperp]
@@ -300,7 +300,7 @@ end
         
         init_time = Dates.value(finish_init_time - start_init_time)
         calculate_time = Dates.value(now() - finish_init_time)
-        begin_serial_region()
+        @begin_serial_region()
         fkerr = allocate_error_data()
         @serial_region begin
             println("finished C calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
@@ -342,10 +342,11 @@ end
         end
         if test_self_operator
             delta_n = get_density(C_M_num, vpa, vperp)
-            delta_upar = get_upar(C_M_num, vpa, vperp, dens)
-            delta_ppar = msp*get_ppar(C_M_num, vpa, vperp, upar)
-            delta_pperp = msp*get_pperp(C_M_num, vpa, vperp)
-            delta_pressure = get_pressure(delta_ppar,delta_pperp)
+            delta_upar = get_upar(C_M_num, dens, vpa, vperp, false)
+            delta_pressure = msp*get_p(C_M_num, nothing, upar, vpa, vperp, false, false)
+            delta_ppar = msp*get_ppar(nothing, upar, nothing, nothing, C_M_num, vpa,
+                                      vperp, false, false, false)
+            delta_pperp = get_pperp(delta_pressure, delta_ppar)
             @serial_region begin
                 println("delta_n: ", delta_n)
                 println("delta_upar: ", delta_upar)

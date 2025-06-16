@@ -23,7 +23,7 @@ test_input_finite_difference = OptionsDict("composition" => OptionsDict("n_ion_s
                                                                         "T_e" => 1.0,
                                                                         "T_wall" => 1.0),
                                            "ion_species_1" => OptionsDict("initial_density" => 1.0,
-                                                                          "initial_temperature" => 1.0),
+                                                                          "initial_temperature" => 0.3333333333333333),
                                            "z_IC_ion_species_1" => OptionsDict("initialization_option" => "gaussian",
                                                                                "density_amplitude" => 0.0,
                                                                                "density_phase" => 0.0,
@@ -39,14 +39,14 @@ test_input_finite_difference = OptionsDict("composition" => OptionsDict("n_ion_s
                                                                                  "temperature_amplitude" => 0.0,
                                                                                  "temperature_phase" => 0.0),
                                            "neutral_species_1" => OptionsDict("initial_density" => 1.0,
-                                                                              "initial_temperature" => 1.0),
+                                                                              "initial_temperature" => 0.3333333333333333),
                                            "z_IC_neutral_species_1" => OptionsDict("initialization_option" => "gaussian",
                                                                                    "density_amplitude" => 0.001,
                                                                                    "density_phase" => 0.0,
                                                                                    "upar_amplitude" => 0.0,
                                                                                    "upar_phase" => 0.0,
                                                                                    "temperature_amplitude" => 0.0,
-                                                                                   "temperature_phase" => 0.0),  
+                                                                                   "temperature_phase" => 0.0),
                                            "vz_IC_neutral_species_1" => OptionsDict("initialization_option" => "gaussian",
                                                                                     "density_amplitude" => 1.0,
                                                                                     "density_phase" => 0.0,
@@ -57,12 +57,12 @@ test_input_finite_difference = OptionsDict("composition" => OptionsDict("n_ion_s
                                            "output" => OptionsDict("run_name" => "finite_difference"),
                                            "evolve_moments" => OptionsDict("density" => false,
                                                                            "parallel_flow" => false,
-                                                                           "parallel_pressure" => false,
+                                                                           "pressure" => false,
                                                                            "moments_conservation" => false),
-                                           "reactions" => OptionsDict("charge_exchange_frequency" => 2.0,
-                                                                      "ionization_frequency" => 2.0),
+                                           "reactions" => OptionsDict("charge_exchange_frequency" => 2.8284271247461903,
+                                                                      "ionization_frequency" => 2.8284271247461903),
                                            "timestepping" => OptionsDict("nstep" => 10000,
-                                                                         "dt" => 1.0e-5,
+                                                                         "dt" => 7.0710678118654756e-6,
                                                                          "nwrite" => 100,
                                                                          "split_operators" => false),
                                            "r" => OptionsDict("ngrid" => 1,
@@ -76,12 +76,12 @@ test_input_finite_difference = OptionsDict("composition" => OptionsDict("n_ion_s
                                                               "element_spacing_option" => "uniform"),
                                            "vpa" => OptionsDict("ngrid" => 400,
                                                                 "nelement" => 1,
-                                                                "L" => 8.0,
+                                                                "L" => 11.313708498984761,
                                                                 "bc" => "periodic",
                                                                 "discretization" => "finite_difference"),
                                            "vz" => OptionsDict("ngrid" => 400,
                                                                "nelement" => 1,
-                                                               "L" => 8.0,
+                                                               "L" => 11.313708498984761,
                                                                "bc" => "periodic",
                                                                "discretization" => "finite_difference"),
                                           )
@@ -131,9 +131,9 @@ test_input_chebyshev_sqrt_grid_even = recursive_merge(test_input_finite_differen
 # different discretizations, taken from a Chebyshev run with z_grid=9,
 # z_nelement=8, nstep=40000, dt=0.00025
 cross_compare_points = collect(LinRange(-0.5, 0.5, 7))
-cross_compare_phi = [-1.1689445031600723, -0.7419935821024918, -0.7028946489842773,
-                     -0.6917192346866861, -0.7028946489842764, -0.7419935821024903,
-                     -1.1689445031600707]
+cross_compare_phi = [-1.168944495073113, -0.7419936034715402, -0.7028946661416742,
+                     -0.6917192497940869, -0.7028946661416738, -0.7419936034715399,
+                     -1.1689444950731127]
 
 """
 Run a test for a single set of parameters
@@ -244,8 +244,7 @@ function runtests()
                       -0.7812620574297168, -0.7233303715713063, -0.700387877851292,
                       -0.695727529425101, -0.6933149075958859, -0.6992504158371133,
                       -0.7115788158947632, -0.7596015227027635, -0.7957765261319207,
-                      -0.876303296785542, -1.1471244373220089],
-                     2.e-3)
+                      -0.876303296785542, -1.1471244373220089], 2.e-3)
         end
         @testset "Chebyshev sqrt grid even" begin
             test_input_chebyshev_sqrt_grid_even["output"]["base_directory"] = test_output_directory
@@ -255,8 +254,7 @@ function runtests()
                       -0.7149147557607726, -0.6950077350352664, -0.6923365041825125,
                       -0.6950077350352668, -0.7149147557607729, -0.7264644278204795,
                       -0.7552111126205917, -0.8360177041481733, -0.8714447622540994,
-                      -1.0054529856552, -1.213617044609118],
-                     2.e-3)
+                      -1.0054529856552, -1.213617044609118], 2.e-3)
         end
     end
 

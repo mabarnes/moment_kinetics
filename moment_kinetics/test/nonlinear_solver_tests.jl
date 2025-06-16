@@ -72,7 +72,7 @@ function linear_test()
             if serial_solve
                 residual .= A * x - b
             else
-                begin_serial_region()
+                @begin_serial_region()
                 @serial_region begin
                     residual .= A * x - b
                 end
@@ -102,7 +102,7 @@ function linear_test()
             v = allocate_shared_float(n)
             w = allocate_shared_float(n)
 
-            begin_serial_region()
+            @begin_serial_region()
             @serial_region begin
                 x .= 0.0
                 residual .= 0.0
@@ -130,7 +130,7 @@ function linear_test()
 
             @test isapprox(x, x_direct; atol=100.0*atol)
         else
-            begin_serial_region()
+            @begin_serial_region()
             @serial_region begin
                 x_direct = A \ b
 
@@ -195,7 +195,7 @@ function nonlinear_test()
                 D = abs(x[i])^2.5
                 residual[i] = D * (x[i-1] - 2.0 * x[i]) - b[i]
             else
-                begin_serial_region()
+                @begin_serial_region()
                 @serial_region begin
                     i = 1
                     D = abs(x[i])^2.5
@@ -236,7 +236,7 @@ function nonlinear_test()
             v .= 0.0
             w .= 0.0
         else
-            begin_serial_region()
+            @begin_serial_region()
             @serial_region begin
                 x .= 1.0
                 residual .= 0.0
@@ -265,7 +265,7 @@ function nonlinear_test()
         if serial_solve
             @test isapprox(residual, zeros(n); atol=4.0*atol)
         else
-            begin_serial_region()
+            @begin_serial_region()
             @serial_region begin
                 @test isapprox(residual, zeros(n); atol=4.0*atol)
             end

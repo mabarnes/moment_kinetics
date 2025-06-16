@@ -13,7 +13,6 @@ export em_fields_input
 export ion_source_data, electron_source_data, neutral_source_data
 export collisions_input, reactions, electron_fluid_collisions, krook_collisions_input,
        fkpl_collisions_input, mxwl_diff_collisions_input
-export io_input
 export pp_input
 export geometry_input
 export set_defaults_and_check_top_level!, set_defaults_and_check_section!,
@@ -27,6 +26,26 @@ using DataStructures: SortedDict
 using MPI
 using OrderedCollections: OrderedDict
 using TOML
+
+"""
+"""
+@enum kinetic_electron_solver_type begin
+    implicit_time_evolving
+    implicit_p_implicit_pseudotimestep
+    implicit_steady_state
+    explicit_time_evolving
+    implicit_p_explicit_pseudotimestep
+    explicit_pseudotimestep
+    null_kinetic_electrons
+end
+export kinetic_electron_solver_type
+export implicit_time_evolving
+export implicit_p_implicit_pseudotimestep
+export implicit_steady_state
+export explicit_time_evolving
+export implicit_p_explicit_pseudotimestep
+export explicit_pseudotimestep
+export null_kinetic_electrons
 
 """
 `t_error_sum` is included so that a type which might be mk_float or Float128 can be set by
@@ -53,8 +72,8 @@ struct time_info{Terrorsum <: Real, T_debug_output, T_electron, Trkimp, Timpzero
     moments_output_counter::Base.RefValue{mk_int}
     dfns_output_counter::Base.RefValue{mk_int}
     failure_counter::Base.RefValue{mk_int}
-    failure_caused_by::Vector{mk_int}
-    limit_caused_by::Vector{mk_int}
+    failure_caused_by::OrderedDict{String,mk_int}
+    limit_caused_by::OrderedDict{String,mk_int}
     nwrite_moments::mk_int
     nwrite_dfns::mk_int
     moments_output_times::Vector{mk_float}
@@ -78,12 +97,10 @@ struct time_info{Terrorsum <: Real, T_debug_output, T_electron, Trkimp, Timpzero
     minimum_dt::mk_float
     maximum_dt::mk_float
     implicit_braginskii_conduction::Bool
-    implicit_electron_advance::Bool
-    implicit_electron_time_evolving::Bool
+    kinetic_electron_solver::kinetic_electron_solver_type
+    electron_preconditioner_type::Telectronprecon
     implicit_ion_advance::Bool
     implicit_vpa_advection::Bool
-    implicit_electron_ppar::Bool
-    electron_preconditioner_type::Telectronprecon
     constraint_forcing_rate::mk_float
     decrease_dt_iteration_threshold::mk_int
     increase_dt_iteration_threshold::mk_int
@@ -94,11 +111,12 @@ struct time_info{Terrorsum <: Real, T_debug_output, T_electron, Trkimp, Timpzero
     write_after_fixed_step_count::Bool
     error_sum_zero::Terrorsum
     split_operators::Bool
+    print_nT_live::Bool
     steady_state_residual::Bool
     converged_residual_value::mk_float
     use_manufactured_solns_for_advance::Bool
     stopfile::String
-    debug_io::T_debug_output # Currently only used by electrons
+    debug_io::T_debug_output
     electron::T_electron
 end
 
@@ -184,6 +202,7 @@ export ion_physics_type
 export gyrokinetic_ions
 export drift_kinetic_ions
 export coll_krook_ions
+
 """
 """
 Base.@kwdef struct spatial_initial_condition_input

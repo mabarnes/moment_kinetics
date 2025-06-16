@@ -3,6 +3,11 @@
 using HDF5
 using MPI
 
+# To create unlimited-length arrays of strings, pick a fixed width to pad a Vector{UInt8}
+# version of the Strings to, as HDF5.jl does not support arrays of variable-length strings
+# when using parallel I/O (as of version 0.17.2).
+const string_array_size = 256
+
 function io_has_parallel(::Val{hdf5})
     return HDF5.has_parallel()
 end
@@ -221,6 +226,15 @@ function create_dynamic_variable!(file_or_group::HDF5.H5DataStore, name, type,
                                   coords::Union{coordinate,NamedTuple}...; parallel_io,
                                   description=nothing, units=nothing)
 
+    if type === String
+        # To create unlimited-length arrays of strings, use a fixed-width array of UInt8
+        # as HDF5.jl does not support arrays of variable-length strings when using
+        # parallel I/O (as of version 0.17.2).
+        return create_dataset(file_or_group, name, UInt8,
+                              ((string_array_size, 1), (string_array_size, -1));
+                              chunk=(string_array_size, 1))
+    end
+
     if any(isa(c, mk_int) ? c < 0 : c.n < 0 for c ∈ coords)
         error("Got a negative `n` in $coords")
     end
@@ -259,7 +273,7 @@ function extend_time_index!(h5, t_idx)
 end
 
 function append_to_dynamic_var(io_var::HDF5.Dataset,
-                               data::Union{Nothing,Number,AbstractArray{T,N}}, t_idx,
+                               data::Union{Nothing,Number,String,AbstractArray{T,N}}, t_idx,
                                parallel_io::Bool,
                                coords::Union{coordinate,NamedTuple,Integer}...;
                                only_root=false, write_from_this_rank=nothing) where {T,N}
@@ -289,6 +303,26 @@ function append_to_dynamic_var(io_var::HDF5.Dataset,
             # random). An exception is if `write_from_this_rank=true` was passed - this
             # should only be passed on one process.
             io_var[t_idx] = data
+        end
+    elseif isa(data, String)
+        if !parallel_io || write_from_this_rank === true ||
+                (write_from_this_rank === nothing && global_rank[] == 0)
+            # A scalar value is required to be the same on all processes, so when using
+            # parallel I/O, only write from one process to avoid overwriting (which would
+            # mean processes having to wait, and make which process wrote the final value
+            # random). An exception is if `write_from_this_rank=true` was passed - this
+            # should only be passed on one process.
+            #
+            # HDF5.jl does not currently (v0.17.2) support writing variable-length Strings
+            # when using parallel I/O, so instead we convert to fixed-length UInt8 arrays,
+            # and pad to the fixed size.
+            temparray = zeros(UInt8, string_array_size)
+            data_vec = Vector{UInt8}(data)
+            if length(data_vec) > string_array_size
+                data_vec = data_vec[1:string_array_size]
+            end
+            temparray[1:length(data_vec)] .= data_vec
+            io_var[:,t_idx] = temparray
         end
     elseif N == 1
         io_var[global_ranges[1], t_idx] = @view data[local_ranges[1]]

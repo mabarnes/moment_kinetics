@@ -24,14 +24,14 @@ using ..timer_utils
     @boundscheck r.n == size(f_out,4) || throw(BoundsError(f_out))
     @boundscheck composition.n_ion_species == size(f_out,5) || throw(BoundsError(f_out))
     
-    begin_r_z_region()
+    @begin_r_z_region()
 
     if moments.evolve_density
         # For now, assume species index `is` corresponds to the neutral
         # species index `isn`.
         @loop_s_r_z is ir iz begin
             isn = is
-            if moments.evolve_ppar
+            if moments.evolve_p
                 # will need the ratio of thermal speeds both to interpolate between vpa grids
                 # for different species and to account for different normalizations of each species' pdf
                 vth_ratio = moments.ion.vth[iz,ir,is]/moments.neutral.vth[iz,ir,isn]
@@ -44,7 +44,7 @@ using ..timer_utils
             # values of dz/dt; as charge exchange and ionization collisions require
             # the evaluation of the pdf for species s' to obtain the update for species s,
             # will thus have to interpolate between the different vpa grids
-            if moments.evolve_upar && moments.evolve_ppar
+            if moments.evolve_upar && moments.evolve_p
                 # if evolve_ppar = true and evolve_upar = true, vpa coordinate is
                 # wpahat_s = (vpa-upar_s)/vth_s;
                 # we have f_{s'}(wpahat_{s'}) = f_{s'}((wpahat_s * vth_s + upar_s - upar_{s'}) / vth_{s'});
@@ -60,7 +60,7 @@ using ..timer_utils
                 # in terms of the vpahat_{s'} coordinate:
                 # (vpahat_s)_j = (vpahat_{s'})_j * vth_{s'} / vth_{s}
                 new_grid = @. vpa.scratch = vpa.grid / vth_ratio
-            elseif !moments.evolve_ppar
+            elseif !moments.evolve_p
                 # if evolve_ppar = false and evolve_upar = true, vpa coordinate is
                 # wpa_s = vpa-upar_s;
                 # we have f_{s'}(wpa_{s'}) = f_{s'}((wpa_s + upar_s - upar_{s'};
@@ -117,7 +117,7 @@ end
     @boundscheck composition.n_neutral_species == size(f_neutral_out,6) || throw(BoundsError(f_neutral_out))
 
     if !moments.evolve_density
-        begin_sn_r_z_vz_region()
+        @begin_sn_r_z_vz_region()
 
         ionization = collisions.reactions.ionization_frequency
         @loop_sn isn begin
@@ -152,7 +152,7 @@ end
     
     ionization_frequency = collisions.reactions.ionization_frequency
     
-    begin_s_r_z_vperp_vpa_region()
+    @begin_s_r_z_vperp_vpa_region()
 
     # ion ionization rate =   < f_n > n_e R_ion
     # neutral "ionization" (depopulation) rate =   -  f_n  n_e R_ion
@@ -186,7 +186,7 @@ end
     # neutral "ionization" (depopulation) rate =   -  f_n  n_e R_ion
     #NB: used quasineutrality to replace electron density n_e with ion density
     #NEEDS GENERALISATION TO n_ion_species > 1 (missing species charge: Sum_i Z_i n_i = n_e)
-    begin_sn_r_z_vzeta_vr_vz_region()
+    @begin_sn_r_z_vzeta_vr_vz_region()
     @loop_sn isn begin
         for is ∈ 1:composition.n_ion_species
             @loop_r_z_vzeta_vr_vz ir iz ivzeta ivr ivz begin

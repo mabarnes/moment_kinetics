@@ -22,11 +22,11 @@ test_input = OptionsDict("composition" => OptionsDict("n_ion_species" => 1,
                                                       "T_wall" => 0.1,
                                                       "recycling_fraction" => 0.5),
                          "ion_species_1" => OptionsDict("initial_density" => 1.0,
-                                                        "initial_temperature" => 1.0),
+                                                        "initial_temperature" => 0.3333333333333333),
                          "z_IC_ion_species_1" => OptionsDict("initialization_option" => "gaussian",
                                                              "density_amplitude" => 0.0,
                                                              "density_phase" => 0.0,
-                                                             "upar_amplitude" => 1.0,
+                                                             "upar_amplitude" => 1.4142135623730951,
                                                              "upar_phase" => 0.0,
                                                              "temperature_amplitude" => 0.0,
                                                              "temperature_phase" => 0.0),
@@ -38,14 +38,14 @@ test_input = OptionsDict("composition" => OptionsDict("n_ion_species" => 1,
                                                                "temperature_amplitude" => 0.0,
                                                                "temperature_phase" => 0.0),
                          "neutral_species_1" => OptionsDict("initial_density" => 1.0,
-                                                            "initial_temperature" => 1.0),
+                                                            "initial_temperature" => 0.3333333333333333),
                          "z_IC_neutral_species_1" => OptionsDict("initialization_option" => "gaussian",
                                                                  "density_amplitude" => 0.001,
                                                                  "density_phase" => 0.0,
-                                                                 "upar_amplitude" => -1.0,
+                                                                 "upar_amplitude" => 1.4142135623730951,
                                                                  "upar_phase" => 0.0,
                                                                  "temperature_amplitude" => 0.0,
-                                                                 "temperature_phase" => 0.0),  
+                                                                 "temperature_phase" => 0.0),
                          "vz_IC_neutral_species_1" => OptionsDict("initialization_option" => "gaussian",
                                                                   "density_amplitude" => 1.0,
                                                                   "density_phase" => 0.0,
@@ -56,12 +56,12 @@ test_input = OptionsDict("composition" => OptionsDict("n_ion_species" => 1,
                          "output" => OptionsDict("run_name" => "full-f"),
                          "evolve_moments" => OptionsDict("density" => false,
                                                          "parallel_flow" => false,
-                                                         "parallel_pressure" => false,
+                                                         "pressure" => false,
                                                          "moments_conservation" => false),
-                         "reactions" => OptionsDict("charge_exchange_frequency" => 0.75,
-                                                    "ionization_frequency" => 0.5),
+                         "reactions" => OptionsDict("charge_exchange_frequency" => 1.0606601717798214,
+                                                    "ionization_frequency" => 0.7071067811865476),
                          "timestepping" => OptionsDict("nstep" => 1000,
-                                                       "dt" => 1.0e-4,
+                                                       "dt" => 7.071067811865475e-5,
                                                        "nwrite" => 1000,
                                                        "split_operators" => false),
                          "r" => OptionsDict("ngrid" => 1,
@@ -73,21 +73,21 @@ test_input = OptionsDict("composition" => OptionsDict("n_ion_species" => 1,
                                             "element_spacing_option" => "sqrt"),
                          "vpa" => OptionsDict("ngrid" => 10,
                                               "nelement" => 15,
-                                              "L" => 18.0,
+                                              "L" => 25.455844122715714,
                                               "bc" => "zero",
                                               "discretization" => "chebyshev_pseudospectral",
-                                              "element_spacing_option" => "coarse_tails"),
+                                              "element_spacing_option" => "coarse_tails7.0710678118654755"),
                          "vz" => OptionsDict("ngrid" => 10,
                                              "nelement" => 15,
-                                             "L" => 18.0,
+                                             "L" => 25.455844122715714,
                                              "bc" => "zero",
                                              "discretization" => "chebyshev_pseudospectral",
-                                             "element_spacing_option" => "coarse_tails"),
+                                             "element_spacing_option" => "coarse_tails7.0710678118654755"),
                          "ion_source_1" => OptionsDict("active" => true,
-                                                     "z_profile" => "gaussian",
-                                                     "z_width" => 0.125,
-                                                     "source_strength" => 2.0,
-                                                     "source_T" => 2.0),
+                                                       "z_profile" => "gaussian",
+                                                       "z_width" => 0.125,
+                                                       "source_strength" => 2.8284271247461903,
+                                                       "source_T" => 2.0),
                         )
 
 if global_size[] > 2 && global_size[] % 2 == 0
@@ -104,14 +104,20 @@ test_input_split2 = recursive_merge(test_input_split1,
                                                 "evolve_moments" => OptionsDict("parallel_flow" => true)))
 test_input_split3 = recursive_merge(test_input_split2,
                                     OptionsDict("output" => OptionsDict("run_name" => "split3"),
-                                                "z" => OptionsDict("nelement" => 16),
-                                                "vpa" => OptionsDict("nelement" => 31),
-                                                "vz" => OptionsDict("nelement" => 31),
-                                                "evolve_moments" => OptionsDict("parallel_pressure" => true),
-                                                "ion_numerical_dissipation" => OptionsDict("force_minimum_pdf_value" => 0.0, "vpa_dissipation_coefficient" => 1e-2),
-                                                "neutral_numerical_dissipation" => OptionsDict("force_minimum_pdf_value" => 0.0, "vz_dissipation_coefficient" => 1e-2)))
+                                                "z" => OptionsDict("ngrid" => 5,
+                                                                   "nelement" => 32),
+                                                "vpa" => OptionsDict("nelement" => 31,
+                                                                     "L" => 31.17691453623979,
+                                                                     "element_spacing_option" => "coarse_tails8.660254037844386"),
+                                                "vz" => OptionsDict("nelement" => 31,
+                                                                     "L" => 31.17691453623979,
+                                                                     "element_spacing_option" => "coarse_tails8.660254037844386"),
+                                                "evolve_moments" => OptionsDict("pressure" => true),
+                                                "ion_numerical_dissipation" => OptionsDict("force_minimum_pdf_value" => 0.0),
+                                                "neutral_numerical_dissipation" => OptionsDict("force_minimum_pdf_value" => 0.0)
+                                               ))
 test_input_split3["timestepping"] = recursive_merge(test_input_split3["timestepping"],
-                                                    OptionsDict("dt" => 1.0e-5,
+                                                    OptionsDict("dt" => 7.0710678118654756e-6,
                                                                 "write_error_diagnostics" => true,
                                                                 "write_steady_state_diagnostics" => true))
 
@@ -134,8 +140,8 @@ test_input_adaptive = recursive_merge(test_input,
 test_input_adaptive["timestepping"] = recursive_merge(test_input_adaptive["timestepping"],
                                                       OptionsDict("type" => "Fekete4(3)",
                                                                   "nstep" => 5000,
-                                                                  "dt" => 1.0e-5,
-                                                                  "minimum_dt" => 1.0e-5,
+                                                                  "dt" => 7.0710678118654756e-6,
+                                                                  "minimum_dt" => 7.0710678118654756e-6,
                                                                   "CFL_prefactor" => 1.0,
                                                                   "step_update_prefactor" => 0.5,
                                                                   "nwrite" => 1000,
@@ -153,20 +159,20 @@ test_input_adaptive_split2["timestepping"] = recursive_merge(test_input_adaptive
                                                              OptionsDict("step_update_prefactor" => 0.4))
 test_input_adaptive_split3 = recursive_merge(test_input_adaptive_split2,
                                              OptionsDict("output" => OptionsDict("run_name" => "adaptive split3"),
-                                                         "evolve_moments" => OptionsDict("parallel_pressure" => true),
-                                                         "ion_numerical_dissipation" => OptionsDict("force_minimum_pdf_value" => 0.0,
-                                                                                                "vpa_dissipation_coefficient" => 1e-2),
-                                                         "neutral_numerical_dissipation" => OptionsDict("force_minimum_pdf_value" => 0.0,
-                                                                                                        "vz_dissipation_coefficient" => 1e-2)))
+                                                         "evolve_moments" => OptionsDict("pressure" => true),
+                                                         "vpa" => OptionsDict("element_spacing_option" => "coarse_tails8.660254037844386"),
+                                                         "vz" => OptionsDict("element_spacing_option" => "coarse_tails8.660254037844386"),
+                                                         "ion_numerical_dissipation" => OptionsDict("force_minimum_pdf_value" => 0.0),
+                                                         "neutral_numerical_dissipation" => OptionsDict("force_minimum_pdf_value" => 0.0)))
 # The initial conditions seem to make the split3 case hard to advance without any
 # failures. In a real simulation, would just set the minimum_dt higher to try to get
 # through this without crashing. For this test, want the timestep to adapt (not just sit
 # at minimum_dt), so just set a very small timestep.
 test_input_adaptive_split3["timestepping"] = recursive_merge(test_input_adaptive_split3["timestepping"],
-                                                             OptionsDict("dt" => 1.0e-7,
+                                                             OptionsDict("dt" => 7.071067811865474e-8,
                                                                          "rtol" => 2.0e-4,
-                                                                         "atol" => 2.0e-10,
-                                                                         "minimum_dt" => 1.0e-7,
+                                                                         "atol" => 7.978845608028654e-11,
+                                                                         "minimum_dt" => 7.071067811865474e-8,
                                                                          "step_update_prefactor" => 0.064))
 
 # Test exact_output_times option in full-f/split1/split2 cases
@@ -177,7 +183,7 @@ test_input_adaptive_split2["timestepping"]["exact_output_times"] = true
 """
 Run a test for a single set of parameters
 """
-function run_test(test_input, expected_phi; rtol=4.e-14, atol=1.e-15, args...)
+function run_test(test_input, expected_phi; rtol=4.e-14, atol=1.e-14, args...)
     # by passing keyword arguments to run_test, args becomes a Tuple of Pairs which can be
     # used to update the default inputs
 
@@ -233,7 +239,7 @@ function run_test(test_input, expected_phi; rtol=4.e-14, atol=1.e-15, args...)
             println("data tested would be: ", actual_phi)
             @test false
         else
-            @test isapprox(actual_phi, expected_phi, rtol=rtol, atol=atol)
+            @test elementwise_isapprox(actual_phi, expected_phi, rtol=rtol, atol=atol)
         end
     end
 end
@@ -248,70 +254,71 @@ function runtests()
         @long @testset "Full-f" begin
             test_input["output"]["base_directory"] = test_output_directory
             run_test(test_input,
-                     [-0.0546579889285807, -0.019016549127873168, -0.0014860800466385304,
-                      0.0009959205072609873, 0.0018297472055798175, 0.001071042733974246,
-                      0.0010872542779497558, 0.0034088344425557424, 0.006495346769181668,
-                      0.014654320273015945, 0.03434558121245117, 0.0357330046889818,
-                      0.02209990163293976, 0.0072248464387002585, 0.004816169992667908,
-                      0.001426397872859017, 0.001056590777701787, 0.0014051997473547636,
-                      0.002295772235866664, -0.0002868846663738925, -0.010975801853574857,
-                      -0.04842263416979855])
+                     [-0.08248729935092564, -0.0068871583342621084, 0.039072432627366205,
+                      0.04693870010589992, 0.05150706650565362, 0.04863426346608422,
+                      0.0473083638177342, 0.04470973516451102, 0.04499280855240238,
+                      0.04954730803537196, 0.06518108834766248, 0.06636324426299682,
+                      0.05510570743405892, 0.04525268506850688, 0.04462918792987642,
+                      0.046236393436293884, 0.04848556048397911, 0.05023315101138076,
+                      0.05183197614172413, 0.04149963707449863, 0.014868291243593535,
+                      -0.06917188928099624])
         end
         @long @testset "Split 1" begin
             test_input_split1["output"]["base_directory"] = test_output_directory
             run_test(test_input_split1,
-                     [-0.054564400690150644, -0.01880050885497155, -0.0013804889155909434,
-                      0.0009426267362423344, 0.0018708794999890794, 0.0010048035580616115,
-                      0.0010869046046222948, 0.0034056101774940675, 0.0064957786740579455,
-                      0.01465251207308323, 0.034345864665430555, 0.03573156224898501,
-                      0.022099994048796447, 0.007223371167561782, 0.004815984673023357,
-                      0.0014246219209092864, 0.0010492088800026246, 0.001358555443115789,
-                      0.002355419499405167, -9.616282952819355e-5, -0.010989980720963986,
-                      -0.04820698953610652])
+                     [-0.08227633463338031, -0.0071358543437329116, 0.03928189120789499,
+                      0.04721955765691388, 0.05122739409762711, 0.04910057401688113,
+                      0.04704742545272498, 0.04490556032129777, 0.044808028630569895,
+                      0.0495822812342297, 0.06518219267369472, 0.0663799710068059,
+                      0.05509147172366616, 0.045315712030082195, 0.044456099676376606,
+                      0.04646245178090258, 0.048357365450345, 0.05063961127735492,
+                      0.051580462480704026, 0.04049988898861208, 0.015026988159329766,
+                      -0.06816429195564531])
         end
         @long @testset "Split 2" begin
             test_input_split2["output"]["base_directory"] = test_output_directory
             run_test(test_input_split2,
-                     [-0.055351930552923125, -0.0200209368236471, -0.0010274232338285407,
-                      0.0011445828881595096, 0.001990016623266284, 0.0011847791295251302,
-                      0.0012178159250162924, 0.003389968304925306, 0.006471876165122262,
-                      0.014666710317521392, 0.034363113016583055, 0.03570763645228305,
-                      0.022015422551673866, 0.007249734444536539, 0.004848925796605709,
-                      0.0012928880774780984, 0.0009085783825923187, 0.0014263120887848147,
-                      0.0023594712302784752, 0.0002954708425330566, -0.009955206404411004,
-                      -0.04714624635817171])
+                     [-0.07540720242558024, -0.012215936614592013, 0.03719872765590104,
+                      0.04698103121369704, 0.05165670496014653, 0.04858108758621746,
+                      0.0471560227622779, 0.04479278749716742, 0.04504127679218328,
+                      0.04950353293493882, 0.06523358923266383, 0.06629669682555932,
+                      0.05503302217925922, 0.04535511633539406, 0.04455941812203692,
+                      0.04604589649002669, 0.04841777101341742, 0.05027051359300514,
+                      0.05168079983767343, 0.04238354065327748, 0.012679178294098465,
+                      -0.06448944047879421])
         end
         @long @testset "Split 3" begin
             test_input_split3["output"]["base_directory"] = test_output_directory
             run_test(test_input_split3,
-                     [-0.036195418620494954, -0.030489030308458488, -0.028975057418733397,
-                      -0.02856021807109163, -0.025513413807863268, -0.0219696963676536,
-                      -0.019843060635768725, -0.013329641098584045, -0.009865951845346884,
-                      -0.005274664099474674, 0.0021551620276032725, 0.004604147727212109,
-                      0.011494982185711863, 0.017553116141190095, 0.020142011471035323,
-                      0.02711278698585964, 0.0304955647516801, 0.03404001571064709,
-                      0.039318184954120955, 0.040888755835348824, 0.04435714972215338,
-                      0.04581950770664514, 0.04569761337067911, 0.04311624840495188,
-                      0.0405404864794332, 0.0378656646347818, 0.032230200940856144,
-                      0.030099328699440486, 0.024820489910128835, 0.018584207663623988,
-                      0.01620878075694702, 0.00875792663483109, 0.003998273774255805,
-                      2.6225005465422193e-5, -0.007645978144613239, -0.010283112908873734,
-                      -0.01555130379029211, -0.02119151686032106, -0.022798520707706906,
-                      -0.026895590584576676, -0.02875783077548144, -0.029235490314989378,
-                      -0.03231930055546638])
+                     [-0.04193263648303976, -0.029252245961908147, -0.02442862865278743,
+                      -0.023495424780076817, -0.021218702925586936, -0.0175137673174747,
+                      -0.014147249354188124, -0.010578808249367246,
+                      -0.0054123391485627935, 0.0002496409027928137, 0.004696874850572911,
+                      0.009073612343120277, 0.014872636546990831, 0.020638240855909998,
+                      0.024828897215039916, 0.02873872765245768, 0.03355964489516307,
+                      0.03800723296691896, 0.04109627070324763, 0.04386632942913408,
+                      0.04685146950915689, 0.04834447861643572, 0.047986299492812835,
+                      0.046434795212366146, 0.04324402903754499, 0.03942532151501047,
+                      0.03625638152568082, 0.03278650998309304, 0.027824317716378874,
+                      0.022537980746503067, 0.0183501045099858, 0.013934577339079934,
+                      0.008010459888136036, 0.0022238610414135186, -0.0020340880648959266,
+                      -0.006273371184150506, -0.011509711109921564, -0.01608354415559066,
+                      -0.019068436253618693, -0.02165307457245153, -0.02374536776323688,
+                      -0.026193225296752082, -0.03316168704620608], rtol=0.0, 
+                     atol=1.0e-13)
         end
 
-        fullf_expected_output = [-0.04372543535228032, -0.02233515082616229,
-                                 -0.012793688037658377, -0.010786492944264052,
-                                 -0.007051439902278702, -0.0001605908774545327,
-                                 0.005982619745890949, 0.0118094191749825,
-                                 0.01954207152061524, 0.02978202423468538,
-                                 0.039384279904624404, 0.042446003403153604,
-                                 0.03181914367119813, 0.021111423438351817,
-                                 0.015103049638495273, 0.009135485828230407,
-                                 0.0010369322036392606, -0.005949066066045502,
-                                 -0.00942148866222427, -0.011607485576226423,
-                                 -0.020871221194795328, -0.03762871759968933]
+        fullf_expected_output = [-0.06485643672684559, -0.01393132401823833,
+                                 0.011101377561621318, 0.014316795271888227,
+                                 0.017153423792138713, 0.022446026558875336,
+                                 0.02704022128763932, 0.0312708246641749,
+                                 0.03687198166300583, 0.04513610953946474,
+                                 0.05365557522739836, 0.05644944131511773,
+                                 0.04690174365954638, 0.038059023968408545,
+                                 0.03363220794997435, 0.029342946872462045,
+                                 0.02335249209150473, 0.018006020904528016,
+                                 0.01533652544061934, 0.013618448370696435,
+                                 -0.011068038048902508, -0.05202549530770043]
         @testset "Adaptive timestep - full-f" begin
             test_input_adaptive["output"]["base_directory"] = test_output_directory
             run_test(test_input_adaptive,
@@ -320,40 +327,38 @@ function runtests()
         @testset "Adaptive timestep - split 1" begin
             test_input_adaptive_split1["output"]["base_directory"] = test_output_directory
             run_test(test_input_adaptive_split1,
-                     [-0.04375862714017892, -0.022363510973059945, -0.012739964397542611,
-                      -0.010806509398868007, -0.007052551067569563,
-                      -0.0001618866835357178, 0.005980921838191561, 0.011808361372364367,
-                      0.019540868336503224, 0.02978014755372564, 0.03938085813395519,
-                      0.042446888380863836, 0.031821059258512106, 0.021109010112552534,
-                      0.015101702015235266, 0.009134407186439548, 0.0010347434646523774,
-                      -0.005951302261109976, -0.009412276056941643, -0.011636393512121094,
-                      -0.020739923046188418, -0.03769486232955374], rtol=6.0e-4,
-                     atol=2.0e-12)
+                     [-0.06481156248488046, -0.013538803385323265, 0.011323667220073967,
+                      0.014114887050256292, 0.017191717681080885, 0.02238431047775197,
+                      0.027048121467700623, 0.031265619584043225, 0.03687116571351925,
+                      0.04513292687646795, 0.05365135451877774, 0.056449651183667585,
+                      0.04690045402594628, 0.038054818778305306, 0.033631107189163366,
+                      0.029328697021190592, 0.02336956047980598, 0.017931456213012606,
+                      0.015430873876177927, 0.013019311204642696, -0.01005690972539733,
+                      -0.05241542841909974], rtol=6.0e-4, atol=2.0e-12)
         end
         @testset "Adaptive timestep - split 2" begin
             test_input_adaptive_split2["output"]["base_directory"] = test_output_directory
             run_test(test_input_adaptive_split2,
-                     [-0.0440004026002034, -0.022740771274011903, -0.012908307424861458,
-                      -0.010957840207013755, -0.007098397545728348,
-                      -0.00020528082369771782, 0.0059601664366275495,
-                      0.011802849958075045, 0.019546525347314055, 0.02976627257948505,
-                      0.03937863700013744, 0.0424357099316342, 0.03182280591999282,
-                      0.021097437598690982, 0.015088139859851357, 0.009141943563305855,
-                      0.0010114496202298438, -0.0059305646605444726,
-                      -0.009328644946126851, -0.011284802819960504, -0.020872565412882932,
-                      -0.03785398593006839], rtol=6.0e-4, atol=2.0e-12)
+                     [-0.0657608236268271, -0.014190436712130003, 0.010968614554922509,
+                      0.014365160035706915, 0.0172322487273797, 0.022428056290294318,
+                      0.02698995818587201, 0.0312381471067878, 0.03683052762194124,
+                      0.045132400084352924, 0.05365988862697188, 0.05641900300526736,
+                      0.04690765450535961, 0.03807661571669711, 0.03371937764416954,
+                      0.029312757797190604, 0.023326353109475284, 0.01804787967483964,
+                      0.015433406790148586, 0.013580473449141255, -0.009739014707901247,
+                      -0.0524306423232703], rtol=6.0e-4, atol=2.0e-12)
         end
         @testset "Adaptive timestep - split 3" begin
             test_input_adaptive_split3["output"]["base_directory"] = test_output_directory
             run_test(test_input_adaptive_split3,
-                     [-0.0346196925024167, -0.03200201693849987, -0.02713764319615098,
-                      -0.02092311349672712, -0.010150026206894121, 0.0027883420935253572,
-                      0.012835791449600767, 0.02209326318113659, 0.03303078703903627,
-                      0.04152829640863164, 0.04538051487359227, 0.04624543438581702,
-                      0.04254876799453081, 0.03481104153755928, 0.027077084096581314,
-                      0.01788382934269672, 0.00478320487966262, -0.0077618876322877485,
-                      -0.016292009420807548, -0.024131976958124225, -0.031559093785483404,
-                      -0.0341657304695615], rtol=6.0e-4, atol=2.0e-12)
+                     [-0.034365284173257286, -0.03174419604712593, -0.0268868752546732,
+                      -0.02068073646930811, -0.00992276648582255, 0.0029962667912489267,
+                      0.013027765095553695, 0.022269773126771912, 0.033187984215071624,
+                      0.04166938473091811, 0.04551362270498313, 0.04637663998599519,
+                      0.042687804867641926, 0.034964968149446475, 0.02724494541583088,
+                      0.01806746476857576, 0.004988029198591618, -0.0075380980824496695,
+                      -0.016056024620199446, -0.023885297522794335, -0.03130293304134906,
+                      -0.033910172140015765], rtol=6.0e-4, atol=2.0e-12)
         end
 
         @long @testset "Check other timestep - $type" for

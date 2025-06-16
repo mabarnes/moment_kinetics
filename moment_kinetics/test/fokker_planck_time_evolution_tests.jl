@@ -35,8 +35,8 @@ end
 
 const expected_zero_impose_regularity =
   expected_data(
-   [-3.0, -2.5, -2.0, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0],
-   [0.155051025721682, 0.644948974278318, 1.000000000000000, 1.500000000000000, 2.000000000000000, 2.500000000000000, 3.000000000000000],
+   sqrt(2) .* [-3.0, -2.5, -2.0, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0],
+   sqrt(2) .* [0.155051025721682, 0.644948974278318, 1.000000000000000, 1.500000000000000, 2.000000000000000, 2.500000000000000, 3.000000000000000],
    # Expected phi:
    [-1.268504994982021, -1.276675261324553],
    # Expected n_ion:
@@ -44,17 +44,17 @@ const expected_zero_impose_regularity =
    # Expected upar_ion:
    [0.0, 0.0],
    # Expected ppar_ion:
-   [0.17964315932116812, 0.148762861611732],
+   2.0 .* [0.17964315932116812, 0.148762861611732],
    # Expected pperp_ion
-   [0.14325820846660123, 0.15798027481288696],
+   2.0 .* [0.14325820846660123, 0.15798027481288696],
    # Expected qpar_ion
    [0.0, 0.0],
    # Expected v_t_ion
-   [1.0511726083010418, 1.0538484394097123],
+   sqrt(2) .* [1.0511726083010418, 1.0538484394097123],
    # Expected dSdt
-   [0.0, 1.1831920390587679e-5],
+   sqrt(2) .* [0.0, 1.1831920390587679e-5],
    # Expected f_ion:
-   [0.0 0.0 0.0 0.0 0.0 0.0 0.0;
+   (1.0 / (2.0 * π)^1.5) .* [0.0 0.0 0.0 0.0 0.0 0.0 0.0;
     0.0006193406755051616 0.0004775754345362236 0.0002663153958159559 7.630063837899157e-5 1.3259062818903743e-5 1.3974949395295016e-6 0.0;
     0.005876140721904817 0.0045311095648138235 0.00252673012465705 0.000723920301085391 0.00012579848546344195 1.3259062818903743e-5 0.0;
     0.0338148551171386 0.026074735222541223 0.01454032793443568 0.004165873701136042 0.000723920300962911 7.630063836608227e-5 0.0;
@@ -82,8 +82,8 @@ const expected_zero_impose_regularity =
     0.0 0.0 0.0 0.0 0.0 0.0 0.0])
 const expected_zero = 
 expected_data(
-   [-3.0, -2.5, -2.0, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0],
-   [0.155051025721682, 0.644948974278318, 1.000000000000000, 1.500000000000000, 2.000000000000000, 2.500000000000000, 3.000000000000000],
+   sqrt(2) .* [-3.0, -2.5, -2.0, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0],
+   sqrt(2) .* [0.155051025721682, 0.644948974278318, 1.000000000000000, 1.500000000000000, 2.000000000000000, 2.500000000000000, 3.000000000000000],
    # Expected phi:
    [-1.254259088243025, -1.254259088243286],
    # Expected n_ion:
@@ -91,17 +91,17 @@ expected_data(
    # Expected upar_ion:
    [0.0, 0.0],
    # Expected ppar_ion:
-   [0.182220654804438, 0.156448883483764],
+   2.0 .* [0.182220654804438, 0.156448883483764],
    # Expected pperp_ion
-   [0.143306715174515, 0.156192600834786],
+   2.0 .* [0.143306715174515, 0.156192600834786],
    # Expected qpar_ion
    [0.0, 0.0],
    # Expected v_t_ion
-   [1.046701532502699, 1.046701532502689],
+   sqrt(2) .* [1.046701532502699, 1.046701532502689],
    # Expected dSdt
-   [0.000000000000000, -0.000000000865997],
+   sqrt(2) .* [0.000000000000000, -0.000000000865997],
    # Expected f_ion:
-   [0.000000000000000 0.000000000000000 0.000000000000000 0.000000000000000 0.000000000000000 0.000000000000000 0.000000000000000 ;
+   (1.0 / (2.0 * π)^1.5) .* [0.000000000000000 0.000000000000000 0.000000000000000 0.000000000000000 0.000000000000000 0.000000000000000 0.000000000000000 ;
     0.000706724195475 0.000477575434536 0.000266315395816 0.000076300638379 0.000013259062819 0.000001397494940 0.000000000000000 ;
     0.006705212475828 0.004531109564814 0.002526730124657 0.000723920301085 0.000125798485463 0.000013259062819 0.000000000000000 ;
     0.038585833650058 0.026074735222541 0.014540327934436 0.004165873701136 0.000723920300963 0.000076300638366 0.000000000000000 ;
@@ -130,8 +130,8 @@ expected_data(
 
 const expected_none_bc = 
 expected_data(
-   [-3.0, -2.5, -2.0, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0],
-   [0.155051025721682, 0.644948974278318, 1.000000000000000, 1.500000000000000, 2.000000000000000, 2.500000000000000, 3.000000000000000],
+   sqrt(2) .* [-3.0, -2.5, -2.0, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0],
+   sqrt(2) .* [0.155051025721682, 0.644948974278318, 1.000000000000000, 1.500000000000000, 2.000000000000000, 2.500000000000000, 3.000000000000000],
    # Expected phi:
    [-1.254104813718096, -1.254104813718360],
    # Expected n_ion:
@@ -139,17 +139,17 @@ expected_data(
    # Expected upar_ion:
    [0.0, 0.0],
    # Expected ppar_ion:
-   [0.182321263834348, 0.154595996906667],
+   2.0 .* [0.182321263834348, 0.154595996906667],
    # Expected pperp_ion
-   [0.143470130069393, 0.157332763533171],
+   2.0 .* [0.143470130069393, 0.157332763533171],
    # Expected qpar_ion
    [0.0, 0.0],
    # Expected v_t_ion
-   [1.047097792428007, 1.047097792428005],
+   sqrt(2) .* [1.047097792428007, 1.047097792428005],
    # Expected dSdt
-   [0.000000000000000, 0.000000019115425],
+   sqrt(2) .* [0.000000000000000, 0.000000019115425],
    # Expected f_ion:
-   [0.000045179366280 0.000030530376095 0.000017024973661 0.000004877736620 0.000000847623528 0.000000089338863 0.000000005711242 ;
+   (1.0 / (2.0 * π)^1.5) .* [0.000045179366280 0.000030530376095 0.000017024973661 0.000004877736620 0.000000847623528 0.000000089338863 0.000000005711242 ;
     0.000706724195475 0.000477575434536 0.000266315395816 0.000076300638379 0.000013259062819 0.000001397494940 0.000000089338863 ;
     0.006705212475828 0.004531109564814 0.002526730124657 0.000723920301085 0.000125798485463 0.000013259062819 0.000000847623528 ;
     0.038585833650058 0.026074735222541 0.014540327934436 0.004165873701136 0.000723920300963 0.000076300638366 0.000004877736619 ;
@@ -205,7 +205,7 @@ for k in 1:ntind
      end
 end
 # a moment
-n_ion_zrst, upar_ion_zrst, ppar_ion_zrst, pperp_ion_zrst, qpar_ion_zrst, v_t_ion_zrst, dSdt_zrst = load_ion_moments_data(fid,extended_moments=true)
+n_ion_zrst, upar_ion_zrst, p_ion_zrst, ppar_ion_zrst, pperp_ion_zrst, qpar_ion_zrst, v_t_ion_zrst, dSdt_zrst = load_ion_moments_data(fid,extended_moments=true)
 for k in 1:ntind
    @printf("%.15f", n_ion_zrst[1,1,1,k])
    if k < ntind
@@ -237,20 +237,21 @@ test_input_gauss_legendre = OptionsDict("output" => OptionsDict("run_name" => "g
                                                                             "upar_phase" => 0.0,
                                                                             "temperature_amplitude" => 0.0,
                                                                             "temperature_phase" => 0.0),
-
                                         "vpa" => OptionsDict("ngrid" => 3,
-                                                             "L" => 6.0,
+                                                             "L" => 8.485281374238571,
                                                              "nelement" => 6,
                                                              "bc" => "zero",
                                                              "discretization" => "gausslegendre_pseudospectral"),
                                         "vperp" => OptionsDict("ngrid" => 3,
                                                                "nelement" => 3,
-                                                               "L" => 3.0,
+                                                               "L" => 4.242640687119286,
                                                                "discretization" => "gausslegendre_pseudospectral"),
                                         "reactions" => OptionsDict("ionization_frequency" => 0.0,
                                                                    "charge_exchange_frequency" => 0.0),
-                                        "fokker_planck_collisions" => OptionsDict("use_fokker_planck" => true, "nuii" => 1.0, "frequency_option" => "manual"),
-                                        "evolve_moments" => OptionsDict("parallel_pressure" => false,
+                                        "fokker_planck_collisions" => OptionsDict("use_fokker_planck" => true,
+                                                                                  "nuii" => 4.0,
+                                                                                  "frequency_option" => "manual"),
+                                        "evolve_moments" => OptionsDict("pressure" => false,
                                                                         "moments_conservation" => false,
                                                                         "parallel_flow" => false,
                                                                         "density" => false),
@@ -264,11 +265,10 @@ test_input_gauss_legendre = OptionsDict("output" => OptionsDict("run_name" => "g
                                                            "nelement" => 1,
                                                            "nelement_local" => 1,
                                                            "bc" => "periodic"),
-                                        "timestepping" => OptionsDict("dt" => 0.01,
+                                        "timestepping" => OptionsDict("dt" => 0.0070710678118654745,
                                                                       "nstep" => 5000,
                                                                       "nwrite" => 5000,
-                                                                      "nwrite_dfns" => 5000),
-                                       )
+                                                                      "nwrite_dfns" => 5000))
 
 
 """
@@ -345,7 +345,7 @@ function run_test(test_input, expected, rtol, atol, upar_rtol=nothing; args...)
             phi_zrt, Er_zrt, Ez_zrt = load_fields_data(fid)
 
             # load velocity moments data
-            n_ion_zrst, upar_ion_zrst, ppar_ion_zrst, 
+            n_ion_zrst, upar_ion_zrst, p_ion_zrst,  ppar_ion_zrst,
             pperp_ion_zrst, qpar_ion_zrst, v_t_ion_zrst, dSdt_zrst = load_ion_moments_data(fid,extended_moments=true)
             
             close(fid)
@@ -400,7 +400,7 @@ function run_test(test_input, expected, rtol, atol, upar_rtol=nothing; args...)
                 @test isapprox(expected.qpar_ion[tind], qpar_ion[tind], atol=atol)
                 @test isapprox(expected.v_t_ion[tind], v_t_ion[tind], atol=atol)
                 @test isapprox(expected.dSdt[tind], dSdt[tind], atol=atol)
-                @. f_err = abs(expected.f_ion - f_ion)
+                @. f_err = abs(expected.f_ion[:,:,tind] - f_ion[:,:,tind])
                 max_f_err = maximum(f_err)
                 @test isapprox(max_f_err, 0.0, atol=atol)
                 @test isapprox(expected.f_ion[:,:,tind], f_ion[:,:,tind], atol=atol)
@@ -426,7 +426,7 @@ function runtests()
             run_name = "gausslegendre_pseudospectral"
             vperp_bc = "zero-impose-regularity"
             run_test(test_input_gauss_legendre,
-             expected_zero_impose_regularity, 1.0e-14, 1.0e-14;
+             expected_zero_impose_regularity, 2.0e-14, 1.0e-14;
              vperp=OptionsDict("bc" => vperp_bc))
         end
         @testset "Gauss Legendre no enforced regularity condition at vperp = 0" begin

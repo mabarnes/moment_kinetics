@@ -10,8 +10,8 @@ nuii = 0.0
 [evolve_moments]
 density = false
 parallel_flow = false
-parallel_pressure = false
 moments_conservation = false
+pressure = false
 
 [z]
 ngrid = 1
@@ -30,14 +30,14 @@ discretization = "chebyshev_pseudospectral"
 [vpa]
 ngrid = 5
 nelement = 16
-L = 6.0
+L = 8.485281374238571
 bc = "zero"
 discretization = "gausslegendre_pseudospectral"
 
 [vperp]
 ngrid = 5
 nelement = 8
-L = 3.0
+L = 4.242640687119286
 bc = "zero"
 discretization = "gausslegendre_pseudospectral"
 
@@ -64,13 +64,13 @@ temperature_phase = 0.0
 
 [timestepping]
 nstep = 2000
-dt = 1.0e-3
+dt = 0.0007071067811865475
 nwrite = 2000
 nwrite_dfns = 2000
 split_operators = false
 
 [ion_numerical_dissipation]
-vpa_dissipation_coefficient = 0.1
-vperp_dissipation_coefficient = 0.1
+vpa_dissipation_coefficient = 0.28284271247461906
+vperp_dissipation_coefficient = 0.28284271247461906
 z_dissipation_coefficient = -1.0
 r_dissipation_coefficient = -1.0

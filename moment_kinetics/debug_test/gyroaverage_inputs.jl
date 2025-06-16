@@ -11,7 +11,7 @@ test_input = OptionsDict(
                           "T_wall" => 1.0),
     "evolve_moments" => OptionsDict("density" => false,
                                     "parallel_flow" => false,
-                                    "parallel_pressure" => false,
+                                    "pressure" => false,
                                     "moments_conservation" => false),
     "ion_species_1" => OptionsDict("initial_density" => 1.0,
                             "initial_temperature" => 1.0),
