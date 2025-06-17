@@ -1367,7 +1367,7 @@ The full set of dimensionless variables are related to the dimensional ones by
 \hat{S}_{s,\mathrm{mom}} &= \frac{L_\mathrm{ref} S_{s,\mathrm{mom}}}{m_\mathrm{i} n_\mathrm{ref} c_\mathrm{ref}^2} \\
 \hat{S}_{s,E} &= \frac{L_\mathrm{ref} S_{s,E}}{c_\mathrm{ref} m_\mathrm{i} n_\mathrm{ref} T_\mathrm{ref}} \\
 \hat{S}_{s,p} &= \frac{L_\mathrm{ref} S_{s,p}}{c_\mathrm{ref} m_\mathrm{i} n_\mathrm{ref} T_\mathrm{ref}} \\
-\hat{C}_{ii}(\hat{f_i}, \hat{f_i}) &= \frac{L_\mathrm{ref} n_\mathrm{ref}}{c_\mathrm{ref}^4} C_{ii}(f_i, f_i) \\
+\hat{C}_{ii}(\hat{f_i}, \hat{f_i}) &= \frac{L_\mathrm{ref} c_\mathrm{ref}^2}{n_\mathrm{ref}} C_{ii}(f_i, f_i) \\
 \hat{f}_\mathrm{Kw} &= c_\mathrm{ref}^4 f_\mathrm{Kw} \\
 \hat{\bar{f}}_\mathrm{Kw} &= c_\mathrm{ref}^2 \bar{f}_\mathrm{Kw} \\
 \end{align}

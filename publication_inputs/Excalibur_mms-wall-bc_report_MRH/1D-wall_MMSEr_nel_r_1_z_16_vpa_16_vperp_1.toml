@@ -1,0 +1,82 @@
+[ion_numerical_dissipation]
+vpa_dissipation_coefficient = 0.0
+#z_dissipation_coefficient = 0.1
+r_dissipation_coefficient = 0.0
+
+[vperp]
+ngrid = 1
+discretization = "chebyshev_pseudospectral"
+nelement = 1
+L = 6.0
+bc = "periodic"
+
+[r]
+ngrid = 1
+discretization = "chebyshev_pseudospectral"
+nelement = 1
+nelement_local = 1
+bc = "periodic"
+
+[evolve_moments]
+pressure = false
+density = false
+moments_conservation = false
+parallel_flow = false
+
+[reactions]
+ionization_frequency = 0.0
+charge_exchange_frequency = 0.0
+
+[ion_species_1]
+initial_temperature = 1.0
+initial_density = 0.5
+
+[manufactured_solns]
+use_for_advance = true
+epsilon_offset = 0.1
+use_vpabar_in_mms_dfni = true
+
+[vpa]
+ngrid = 17
+discretization = "chebyshev_pseudospectral"
+nelement = 16
+L = 12.0
+bc = "zero"
+
+[geometry]
+Er_constant = 0.5
+rhostar = 0.5773502691896258 # = 1/2 [change to Lz] * 1/sqrt(1-1/2^2) [compensate bzeta]
+pitch = 0.5
+
+[z]
+ngrid = 17
+discretization = "chebyshev_pseudospectral"
+nelement = 16
+nelement_local = 16
+bc = "wall"
+L = 0.5
+
+[composition]
+T_wall = 1.0
+T_e = 0.5
+electron_physics = "boltzmann_electron_response"
+n_ion_species = 1
+n_neutral_species = 0
+
+[em_fields]
+force_Er_zero_at_wall = false
+
+[z_IC_ion_species_1]
+initialization_option = "sinusoid"
+density_amplitude = 0.001
+temperature_amplitude = 0.0
+density_phase = 0.0
+upar_amplitude = 0.0
+temperature_phase = 0.0
+upar_phase = 0.0
+
+[timestepping]
+nstep = 4000
+dt = 0.00025
+nwrite = 400
+nwrite_dfns = 400

@@ -48,32 +48,32 @@ calculate_steady_state_residual(run_info, variable_name; is=1, data=nothing,
 Calculate and plot the 'residuals' for `variable_name`.
 
 The information for the runs to plot is passed in `run_info` (as returned by
-[`get_run_info`](@ref)). If `run_info` is a Tuple, comparison plots are made where plots
+[`get_run_info`](@ref)). If `run_info` is a Vector, comparison plots are made where plots
 from the different runs are displayed in a horizontal row.
 
 If the variable has a species dimension, `is` selects which species to analyse.
 
 By default the variable will be loaded from file. If the data has already been loaded, it
-can be passed to `data` instead. `data` should be a Tuple of the same length as `run_info`
-if `run_info` is a Tuple.
+can be passed to `data` instead. `data` should be a Vector of the same length as `run_info`
+if `run_info` is a Vector.
 
 If `plot_prefix` is passed, it gives the path and prefix for plots to be saved to. They
 will be saved with the format `plot_prefix<some_identifying_string>.pdf`.
 
 `fig_axes` can be passed an OrderedDict of Tuples as returned by
 [`_get_steady_state_residual_fig_axes`](@ref) - each tuple contains the Figure `fig` and
-Axis or Tuple{Axis} `ax` to which to add the plot corresponding to its key. If `run_info`
-is a Tuple, `ax` for each entry must be a Tuple of the same length.
+Axis or Vector{Axis} `ax` to which to add the plot corresponding to its key. If `run_info`
+is a Vector, `ax` for each entry must be a Vector of the same length.
 """
 function calculate_steady_state_residual end
 
-function calculate_steady_state_residual(run_info::Tuple, variable_name; is=1,
+function calculate_steady_state_residual(run_info::Vector{Any}, variable_name; is=1,
                                          data=nothing, plot_prefix=nothing,
                                          fig_axes=nothing)
     try
         n_runs = length(run_info)
         if data === nothing
-            data = Tuple(nothing for _ ∈ 1:n_runs)
+            data = [nothing for _ ∈ 1:n_runs]
         end
         if fig_axes === nothing
             fig_axes = _get_steady_state_residual_fig_axes(length(run_info))

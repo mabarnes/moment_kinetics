@@ -4,7 +4,7 @@
 Make plots/animations of the ion distribution function at wall boundaries.
 
 The information for the runs to plot is passed in `run_info` (as returned by
-[`get_run_info`](@ref)). If `run_info` is a Tuple, comparison plots are made where line
+[`get_run_info`](@ref)). If `run_info` is a Vector, comparison plots are made where line
 plots/animations from the different runs are overlayed on the same axis, and heatmap
 plots/animations are displayed in a horizontal row.
 
@@ -12,7 +12,7 @@ Settings are read from the `[wall_pdf]` section of the input.
 
 `plot_prefix` is required and gives the path and prefix for plots to be saved to. They
 will be saved with the format `plot_prefix<some_identifying_string>.pdf`. When `run_info`
-is not a Tuple, `plot_prefix` is optional - plots/animations will be saved only if it is
+is not a Vector, `plot_prefix` is optional - plots/animations will be saved only if it is
 passed.
 
 If `electron=true` is passed, plot electron distribution function instead of ion
@@ -311,7 +311,7 @@ end
 Make plots/animations of the neutral particle distribution function at wall boundaries.
 
 The information for the runs to plot is passed in `run_info` (as returned by
-[`get_run_info`](@ref)). If `run_info` is a Tuple, comparison plots are made where line
+[`get_run_info`](@ref)). If `run_info` is a Vector, comparison plots are made where line
 plots/animations from the different runs are overlayed on the same axis, and heatmap
 plots/animations are displayed in a horizontal row.
 
@@ -319,7 +319,7 @@ Settings are read from the `[wall_pdf_neutral]` section of the input.
 
 `plot_prefix` is required and gives the path and prefix for plots to be saved to. They
 will be saved with the format `plot_prefix<some_identifying_string>.pdf`. When `run_info`
-is not a Tuple, `plot_prefix` is optional - plots/animations will be saved only if it is
+is not a Vector, `plot_prefix` is optional - plots/animations will be saved only if it is
 passed.
 """
 function plot_neutral_pdf_2D_at_wall(run_info; plot_prefix)

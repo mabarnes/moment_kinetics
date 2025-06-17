@@ -188,6 +188,25 @@ const top_level_update_map = OptionsDict(
     "vr_element_spacing_option" => ("vr", "element_spacing_option"),
 
     "force_Er_zero_at_wall" => ("em_fields", "force_Er_zero_at_wall"),
+
+    "dt" => ("timestepping", "dt"),
+    "nstep" => ("timestepping", "nstep"),
+    "nwrite" => ("timestepping", "nwrite"),
+    "nwrite_dfns" => ("timestepping", "nwrite_dfns"),
+    "use_semi_lagrange" => nothing,
+    "n_rk_stages" => nothing,
+    "split_operators" => nothing,
+
+    "rhostar" => ("geometry", "rhostar"),
+    "Bzed" => ("geometry", "Bzed"),
+    "Bmag" => ("geometry", "Bmag"),
+    "Er_constant" => ("geometry", "Er_constant"),
+
+    "use_manufactured_solns_for_init" => ("manufactured_solns", "use_for_init"),
+    "use_manufactured_solns_for_advance" => ("manufactured_solns", "use_for_advance"),
+    "epsilon_offset" => ("manufactured_solns", "epsilon_offset"),
+    "use_vpabar_in_mms_dfni" => ("manufactured_solns", "use_vpabar_in_mms_dfni"),
+    "alpha_switch" => ("manufactured_solns", "alpha_switch"),
    )
 
 # If the "new option" is a String, it is the name of the option within the same section
@@ -402,10 +421,10 @@ function update_input_dict(original_input::DictType;
         if k == "constant_ionization_rate"
             if v
                 println("constant_ionization_rate is no longer supported.")
-                println("It can be replaced using the ion source term (with the value that was `ionization_frequency` set as the `source_amplitude`), with a section like:")
-                println("[ion_source]")
+                println("It can be replaced using the ion source term (with the value that was `ionization_frequency` set as the `source_strength`), with a section like:")
+                println("[ion_source_1]")
                 println("z_profile = \"constant\"")
-                println("source_amplitude = 1.0")
+                println("source_strength = 1.0")
                 println("souce_T = 0.25")
                 error("constant_ionization_rate is no longer supported")
             else
@@ -426,9 +445,13 @@ function update_input_dict(original_input::DictType;
             end
             updated_input[""]["combine_outer"] = original_input["combine_outer"]
         else
-            new_section_name, new_key = top_level_update_map[k]
-            updated_input[new_section_name] = get(updated_input, new_section_name, DictType())
-            updated_input[new_section_name][new_key] = v
+            if top_level_update_map[k] === nothing
+                # Just drop this option, assuming it was only ever set to a default value
+            else
+                new_section_name, new_key = top_level_update_map[k]
+                updated_input[new_section_name] = get(updated_input, new_section_name, DictType())
+                updated_input[new_section_name][new_key] = v
+            end
         end
     end
 
