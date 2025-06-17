@@ -116,18 +116,11 @@ function interpolate_to_grid_1d!(result, newgrid, f, coord, spectral,
         imax = coord.imax[1]
         kmin = kstart[1]
         kmax = kstart[2] - 1
-        # if coord.name == "vperp"
-        # println("in first kstart, first_element_spectral is:")
-        # display(first_element_spectral)
-        # end
         @views single_element_interpolate!(result[kmin:kmax], newgrid[kmin:kmax],
                                            f[imin:imax], imin, imax, 1, coord,
                                            first_element_spectral, derivative)
     end
     @inbounds for j ∈ 2:nelement
-        # if coord.name == "vperp"
-        # println("in next kstart, first_element_spectral=$first_element_spectral")
-        # end
         kmin = kstart[j]
         kmax = kstart[j+1] - 1
         if kmin <= kmax
