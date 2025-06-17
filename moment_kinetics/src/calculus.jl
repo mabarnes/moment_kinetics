@@ -2,9 +2,14 @@
 """
 module calculus
 
+# Import moment_kinetics so that we can refer to it in docstrings
+import moment_kinetics
+
 export derivative!, second_derivative!, laplacian_derivative!
+export elementwise_indefinite_integration!
 export reconcile_element_boundaries_MPI!
 export integral
+export indefinite_integral!
 
 using ..moment_kinetics_structs: discretization_info, null_spatial_dimension_info,
                                  null_velocity_dimension_info, weak_discretization_info
@@ -29,6 +34,55 @@ calculates a derivative without upwinding information.
 Result is stored in coord.scratch_2d.
 """
 function elementwise_derivative! end
+
+"""
+"""
+function elementwise_indefinite_integration! end
+
+"""
+    indefinite_integral!(pf, f, coord, spectral)
+
+Indefinite line integral. 
+
+This function is designed to work on local-in-memory data only,
+with distributed-memory MPI not implemented here.
+A function which integrates along a line which is distributed
+in memory exists in [`moment_kinetics.em_fields`](@ref) as 
+`calculate_phi_from_Epar!()`. The distributed-memory functionality could
+be ported to a generic function, similiar to how the derivative!
+functions are generalised in [`moment_kinetics.derivatives`](@ref).
+"""
+function indefinite_integral!(pf, f, coord, spectral::discretization_info)
+    # get the indefinite integral at each grid point within each element and store in
+    # coord.scratch_2d
+    elementwise_indefinite_integration!(coord, f, spectral)
+    # map the integral from the elemental grid to the full grid;
+    # taking care to match integral constants at the boundaries
+    # we assume that the lower limit of the indefinite integral
+    # is the lowest value in coord.grid
+    indefinite_integral_elements_to_full_grid!(pf, coord)
+end
+
+"""
+"""
+function indefinite_integral_elements_to_full_grid!(pf, coord)
+    pf2d = coord.scratch_2d
+    nelement_local = coord.nelement_local
+    ngrid = coord.ngrid
+    igrid_full = coord.igrid_full   
+    j = 1 # the first element
+    for i in 1:ngrid
+        pf[i] = pf2d[i,j]
+    end
+    for j in 2:nelement_local
+        ilast = igrid_full[ngrid,j-1] # the grid index of the last point in the previous element
+        for k in 2:coord.ngrid
+            i = coord.igrid_full[k,j] # the index in the full grid
+            pf[i] = pf2d[k,j] + pf[ilast]
+        end
+    end
+    return nothing
+end
 
 """
     derivative!(df, f, coord, adv_fac, spectral)
@@ -986,5 +1040,49 @@ function integral(integrand, vx, px, wgtsx, vy, py, wgtsy, vz, pz, wgtsz)
     return integral
 end
 
+
+# Indefinite integral routines
+
+"""
+A function that takes the indefinite integral in each element of `coord.grid`,
+leaving the result (element-wise) in `coord.scratch_2d`.
+"""
+function elementwise_indefinite_integration!(coord, ff, spectral::discretization_info)
+    # the primitive of f
+    pf = coord.scratch_2d
+    # define local variable nelement for convenience
+    nelement = coord.nelement_local
+    # check array bounds
+    @boundscheck nelement == size(pf,2) && coord.ngrid == size(pf,1) || throw(BoundsError(pf))
+
+    # variable k will be used to avoid double counting of overlapping point
+    k = 0
+    j = 1 # the first element
+    imin = coord.imin[j]-k
+    # imax is the maximum index on the full grid for this (jth) element
+    imax = coord.imax[j]
+    if coord.radau_first_element && coord.irank == 0 # differentiate this element with the Radau scheme
+        @views mul!(pf[:,j],spectral.radau.indefinite_integration_matrix[:,:],ff[imin:imax])
+    else #differentiate using the Lobatto scheme
+        @views mul!(pf[:,j],spectral.lobatto.indefinite_integration_matrix[:,:],ff[imin:imax])
+    end
+    # transform back to the physical coordinate scale
+    for i in 1:coord.ngrid
+        pf[i,j] *= coord.element_scale[j]
+    end
+    # calculate the derivative on each element
+    @inbounds for j ∈ 2:nelement
+        k = 1
+        imin = coord.imin[j]-k
+        # imax is the maximum index on the full grid for this (jth) element
+        imax = coord.imax[j]
+        @views mul!(pf[:,j],spectral.lobatto.indefinite_integration_matrix[:,:],ff[imin:imax])
+        # transform back to the physical coordinate scale
+        for i in 1:coord.ngrid
+            pf[i,j] *= coord.element_scale[j]
+        end
+    end
+    return nothing
+end
 
 end

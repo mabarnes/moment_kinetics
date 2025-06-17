@@ -20,6 +20,7 @@ export setup_gausslegendre_pseudospectral
 export GaussLegendre_weak_product_matrix!
 export ielement_global_func
 export get_QQ_local!
+export integration_matrix!
 
 using FastGaussQuadrature
 using LegendrePolynomials: Pl, dnPl
@@ -28,10 +29,11 @@ using SparseArrays: sparse, AbstractSparseArray
 using SparseMatricesCSR
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float
-import ..calculus: elementwise_derivative!, mass_matrix_solve!
+import ..calculus: elementwise_derivative!, mass_matrix_solve!,
+                   elementwise_indefinite_integration!
 import ..interpolation: single_element_interpolate!,
                         fill_single_element_interpolation_matrix!
-using ..lagrange_polynomials: lagrange_poly_optimised, lagrange_poly_derivative_optimised
+using ..lagrange_polynomials: lagrange_poly_optimised, lagrange_poly_derivative_optimised, lagrange_poly
 using ..moment_kinetics_structs: weak_discretization_info
 
 
@@ -46,6 +48,8 @@ struct gausslegendre_base_info
     is_lobatto::Bool
     # elementwise differentiation matrix (ngrid*ngrid)
     Dmat::Array{mk_float,2}
+    # elementwise integration matrix (ngrid*ngrid)
+    indefinite_integration_matrix::Array{mk_float,2}
     # local mass matrix type 0
     M0::Array{mk_float,2}
     # local mass matrix type 1
@@ -188,6 +192,8 @@ function setup_gausslegendre_pseudospectral_lobatto(coord; collision_operator_di
     w = mk_float.(w)
     Dmat = allocate_float(coord.ngrid, coord.ngrid)
     gausslobattolegendre_differentiation_matrix!(Dmat,x,coord.ngrid)
+    indefinite_integration_matrix = allocate_float(coord.ngrid, coord.ngrid)
+    integration_matrix!(indefinite_integration_matrix,x,coord.ngrid)
     
     M0 = allocate_float(coord.ngrid, coord.ngrid)
     GaussLegendre_weak_product_matrix!(M0,coord.ngrid,x,w,"M0")
@@ -250,8 +256,9 @@ function setup_gausslegendre_pseudospectral_lobatto(coord; collision_operator_di
         Y30 = allocate_float(0, 0, 0)
         Y31 = allocate_float(0, 0, 0)
     end
-    return gausslegendre_base_info(true,Dmat,M0,M1,M2,S0,S1,
-            K0,K1,K2,P0,P1,P2,D0,Y00,Y01,Y10,Y11,Y20,Y21,Y30,Y31)
+    return gausslegendre_base_info(true,Dmat,indefinite_integration_matrix, M0, M1, M2, S0, S1,
+                                   K0, K1, K2, P0, P1, P2, D0, Y00, Y01, Y10, Y11, Y20,
+                                   Y21, Y30, Y31)
 end
 
 """
@@ -269,7 +276,9 @@ function setup_gausslegendre_pseudospectral_radau(coord; collision_operator_dim=
     # elemental differentiation matrix
     Dmat = allocate_float(coord.ngrid, coord.ngrid)
     gaussradaulegendre_differentiation_matrix!(Dmat,x,coord.ngrid)
-    
+    indefinite_integration_matrix = allocate_float(coord.ngrid, coord.ngrid)
+    integration_matrix!(indefinite_integration_matrix,xreverse,coord.ngrid)
+
     M0 = allocate_float(coord.ngrid, coord.ngrid)
     GaussLegendre_weak_product_matrix!(M0,coord.ngrid,xreverse,wreverse,"M0",radau=true)
     M1 = allocate_float(coord.ngrid, coord.ngrid)
@@ -329,8 +338,9 @@ function setup_gausslegendre_pseudospectral_radau(coord; collision_operator_dim=
         Y30 = allocate_float(0, 0, 0)
         Y31 = allocate_float(0, 0, 0)
     end
-    return gausslegendre_base_info(false,Dmat,M0,M1,M2,S0,S1,
-            K0,K1,K2,P0,P1,P2,D0,Y00,Y01,Y10,Y11,Y20,Y21,Y30,Y31)
+    return gausslegendre_base_info(false,Dmat, indefinite_integration_matrix, M0, M1, M2, S0,
+                                   S1, K0, K1, K2, P0, P1, P2, D0, Y00, Y01, Y10, Y11,
+                                   Y20, Y21, Y30, Y31)
 end 
 
 """
@@ -462,6 +472,65 @@ Function to carry out a 1D (global) mass matrix solve.
 function mass_matrix_solve!(f, b, spectral::gausslegendre_info)
     # invert mass matrix system
     ldiv!(f, spectral.mass_matrix_lu, b)
+    return nothing
+end
+
+"""
+Function to calculate the elemental anti-differentiation (integration) matrix.
+This function forms the primitive
+```math
+F(x) = \\int^x_{x_{\\rm min}} f(x^\\prime) d x^\\prime
+```
+of the function 
+```math
+f(x) = \\sum_j f_j l_j(x),
+```
+where \$l_j(x)\$ is the \$j^{\\rm th}\$ Lagrange polynomial on the element and \$f_j = f(x_j)\$,
+with \$x_j\$ \$j^{\\rm th}\$ collocation point on the element. We find \$F(x)\$ at the collocation
+points on the element, giving a series of integrals to evaluate:
+```math
+F(x_i) = \\int^{x_i}_{-1} f(x^\\prime) d x^\\prime = \\sum_j f_j \\int^{x_i}_{-1} l_j(x^\\prime) d x^\\prime,
+```
+where we have used that \$x_{\\rm min} = -1\$ on the elemental grid.
+Changing to a normalised coordinate \$y\$ suitable for Gaussian quadrature 
+```math
+x^\\prime = \\frac{x_i + 1}{2} y + \\frac{x_i - 1}{2}
+```
+we can write the operation in matrix form:
+```math
+F(x_i) = \\sum_{j}A_{ij}f_j,
+```
+with the matrix \$A_{ij}\$ defined by
+```math
+A_{ij} = \\left(\\frac{x_i + 1}{2}\\right) \\int^1_{-1} l_j \\left( \\frac{(x_i + 1)y + x_i - 1}{2} \\right) dy,
+```
+or in discretised form
+```math
+A_{ij} = \\left(\\frac{x_i + 1}{2}\\right) \\sum_k l_j \\left( \\frac{(x_i + 1)y_k + x_i - 1}{2} \\right) w_k,
+```
+with \$y_k\$ and \$w_k\$ Gauss-quadrature points and weights, respectively.
+"""
+function integration_matrix!(A::Array{Float64,2},x::Array{Float64,1},ngrid::Int64)
+    nquad = 2*ngrid
+    zz, wz = gausslegendre(nquad)
+    # set lower limit
+    for j in 1:ngrid
+        A[1,j] = 0.0
+    end
+    # set the remaining points
+    for i in 1:ngrid
+        for j in 1:ngrid
+            xi = x[i] # limit of ith integral
+            scale = 0.5*(xi + 1)
+            shift = 0.5*(xi - 1)
+            # calculate the sum with Gaussian quadrature
+            A[i,j] = 0.0
+            for k in 1:nquad
+                xval = scale*zz[k] + shift
+                A[i,j] += scale*lagrange_poly(j,x,xval)*wz[k]
+            end
+        end
+    end
     return nothing
 end
 
