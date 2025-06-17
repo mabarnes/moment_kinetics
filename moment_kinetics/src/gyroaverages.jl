@@ -16,7 +16,7 @@ using ..lagrange_polynomials: lagrange_poly
 using ..input_structs: gyrokinetic_ions
 using ..looping
 using ..timer_utils
-using ..communication: MPISharedArray, comm_block, _block_synchronize
+using ..communication: MPISharedArray, comm_block, @_block_synchronize
 
 struct gyro_operators
     # matrix for applying a gyroaverage to a function F(r,vpa,vperp) at fixed r, with R = r - rhovec and rhovec = b x v / Omega
@@ -58,7 +58,7 @@ function init_gyro_operators(vperp,z,r,gyrophase,geometry,composition;print_info
        # init the matrix!
        # the first two indices are to be summed over
        # the other indices are the "field" positions of the resulting gyroaveraged quantity
-       begin_serial_region()
+       @begin_serial_region()
        @serial_region begin
            zlist = allocate_float(gyrophase.n)
            rlist = allocate_float(gyrophase.n)
@@ -159,7 +159,7 @@ function init_gyro_operators(vperp,z,r,gyrophase,geometry,composition;print_info
         end
            
         # Broadcast the values in gyroloopsizes across the shared-memory block
-        _block_synchronize()
+        @_block_synchronize()
         # initialise the arrays containing the indexing information
         # use the fact that the first index cannot be larger than the size of z.n*r.n
         # and accept that we are storing undefined values in exchange for storing the useful
@@ -187,7 +187,7 @@ function init_gyro_operators(vperp,z,r,gyrophase,geometry,composition;print_info
                 end
             end
         end
-        _block_synchronize()
+        @_block_synchronize()
         if print_info
             println("Finished: init_gyro_operators")
         end
@@ -269,7 +269,7 @@ and filling the result into an array of shape (vperp,z,r,s)
     izpgyroindex = gyro.izpgyroindex
     irpgyroindex = gyro.irpgyroindex
     
-    begin_s_r_z_vperp_region()
+    @begin_s_r_z_vperp_region()
     @loop_s_r_z_vperp is ir iz ivperp begin
         nsum = gyroloopsizes[ivperp,iz,ir,is]
         @views izplist = izpgyroindex[1:nsum,ivperp,iz,ir,is]
@@ -311,7 +311,7 @@ and filling the result into an of the same shape
     izpgyroindex = gyro.izpgyroindex
     irpgyroindex = gyro.irpgyroindex
     
-    begin_s_r_z_vperp_vpa_region()
+    @begin_s_r_z_vperp_vpa_region()
     @loop_s_r_z_vperp is ir iz ivperp begin
         nsum = gyroloopsizes[ivperp,iz,ir,is]
         @views izplist = izpgyroindex[1:nsum,ivperp,iz,ir,is]

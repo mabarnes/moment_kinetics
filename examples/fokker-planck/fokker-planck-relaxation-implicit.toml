@@ -6,7 +6,7 @@ ionization_frequency = 0.0
 [evolve_moments]
 density = false
 parallel_flow = false
-parallel_pressure = false
+pressure = false
 moments_conservation = false
 
 [z]

@@ -7,7 +7,7 @@ export update_phi!
 
 using ..type_definitions: mk_float
 using ..array_allocation: allocate_shared_float
-using ..communication: _block_synchronize
+using ..communication: @_block_synchronize
 using ..input_structs
 using ..looping
 using ..moment_kinetics_structs: em_fields_struct
@@ -54,10 +54,10 @@ function update_phi!(fields, fvec, vperp, z, r, composition, collisions, moments
     @boundscheck size(fvec.density,3) == composition.n_ion_species || throw(BoundsError(fvec.density))
     # Update phi using the set of processes that handles the first ion species
     # Means we get at least some parallelism, even though we have to sum
-    # over species, and reduces number of _block_synchronize() calls needed
+    # over species, and reduces number of @_block_synchronize() calls needed
     # when there is only one species.
     
-    begin_serial_region()#(no_synchronize=true)
+    @begin_serial_region()#(true)
 
     dens_e = fvec.electron_density
     # in serial as both s, r and z required locally
@@ -68,9 +68,9 @@ function update_phi!(fields, fvec, vperp, z, r, composition, collisions, moments
         # If composition.electron_physics ==
         # boltzmann_electron_response_with_simple_sheath, all ranks need to read
         # fvec.density at iz=1, so need to synchronize here.
-        # Use _block_synchronize() directly because we stay in a z_s type region, even
+        # Use @_block_synchronize() directly because we stay in a z_s type region, even
         # though synchronization is needed here.
-        _block_synchronize()
+        @_block_synchronize()
     end
     #@loop_r ir begin # radial locations uncoupled so perform boltzmann solve 
                            # for each radial position in parallel if possible 
@@ -80,12 +80,12 @@ function update_phi!(fields, fvec, vperp, z, r, composition, collisions, moments
     jpar_i = @view scratch_dummy.buffer_rs_1[:,:,1]
     N_e = @view scratch_dummy.buffer_rs_2[:,:,1]
     if composition.electron_physics == boltzmann_electron_response
-        begin_serial_region()
+        @begin_serial_region()
         @serial_region begin
             N_e .= 1.0
         end
     elseif composition.electron_physics == boltzmann_electron_response_with_simple_sheath
-        begin_serial_region()
+        @begin_serial_region()
         @serial_region begin
             # calculate Sum_{i} Z_i n_i u_i = J_||i at z = 0
             jpar_i .= 0.0
@@ -124,7 +124,7 @@ function update_phi!(fields, fvec, vperp, z, r, composition, collisions, moments
         calculate_phi_from_Epar!(fields.phi, fields.Ez, r, z)
     end
     ## can calculate phi at z = L and hence phi_wall(z=L) using jpar_i at z =L if needed
-    _block_synchronize()
+    @_block_synchronize()
 
     ## calculate the electric fields after obtaining phi
     #Er = - d phi / dr 
@@ -154,6 +154,10 @@ function update_phi!(fields, fvec, vperp, z, r, composition, collisions, moments
                     scratch_dummy.buffer_rs_1[:,1], scratch_dummy.buffer_rs_2[:,1],
                     scratch_dummy.buffer_rs_3[:,1], scratch_dummy.buffer_rs_4[:,1],
                     z_spectral,z)
+        else
+            @loop_r_z ir iz begin
+                fields.Ez[iz,ir] = 0.0
+            end
         end
     end
 
@@ -177,7 +181,7 @@ end
 function calculate_phi_from_Epar!(phi, Epar, r, z)
     # simple calculation of phi from Epar for now. Assume phi is already set at the
     # lower-ze boundary, e.g. by the kinetic electron boundary condition.
-    begin_serial_region()
+    @begin_serial_region()
 
     dz = z.cell_width
     @serial_region begin

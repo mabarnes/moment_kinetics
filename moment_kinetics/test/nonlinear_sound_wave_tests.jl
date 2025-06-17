@@ -132,7 +132,7 @@ function run_test(test_input, rtol, atol, upar_rtol=nothing; args...)
                     f_neutral[:,iz,isn,it] .*= n_neutral[iz,isn,it]
                 end
             end
-            if input["evolve_moments"]["parallel_pressure"]
+            if input["evolve_moments"]["pressure"]
                 for it ∈ 1:length(time), is ∈ 1:n_ion_species, iz ∈ 1:z.n
                     f_ion[:,iz,is,it] ./= v_t_ion[iz,is,it]
                 end
@@ -190,13 +190,13 @@ function run_test(test_input, rtol, atol, upar_rtol=nothing; args...)
         #println()
         #newgrid_f_ion = cat(interpolate_to_grid_vpa(expected.vpa, interpolate_to_grid_z(expected.z, f_ion[:, :, :, 1], z, z_spectral), vpa, vpa_spectral)[:,:,1],
         #                        interpolate_to_grid_vpa(expected.vpa, interpolate_to_grid_z(expected.z, f_ion[:, :, :, 2], z, z_spectral), vpa, vpa_spectral)[:,:,1];
-        #                        dims=4)
+        #                        dims=3)
         #println("f_ion ", size(newgrid_f_ion))
         #println(newgrid_f_ion)
         #println()
         #newgrid_f_neutral = cat(interpolate_to_grid_vpa(expected.vpa, interpolate_to_grid_z(expected.z, f_neutral[:, :, :, 1], z, z_spectral), vpa, vpa_spectral)[:,:,1],
         #                        interpolate_to_grid_vpa(expected.vpa, interpolate_to_grid_z(expected.z, f_neutral[:, :, :, 2], z, z_spectral), vpa, vpa_spectral)[:,:,1];
-        #                        dims=4)
+        #                        dims=3)
         #println("f_neutral ", size(newgrid_f_neutral))
         #println(newgrid_f_neutral)
         #println()
@@ -208,16 +208,16 @@ function run_test(test_input, rtol, atol, upar_rtol=nothing; args...)
                 # Check ion particle moments and f
                 ######################################
 
-                newgrid_n_ion = interpolate_to_grid_z(expected.z, n_ion[:, :, tind], z, z_spectral)
+                newgrid_n_ion = interpolate_to_grid_z(expected.z, n_ion[:, 1, tind], z, z_spectral)
                 @test isapprox(expected.n_ion[:, tind], newgrid_n_ion[:,1], rtol=rtol)
 
-                newgrid_upar_ion = interpolate_to_grid_z(expected.z, upar_ion[:, :, tind], z, z_spectral)
+                newgrid_upar_ion = interpolate_to_grid_z(expected.z, upar_ion[:, 1, tind], z, z_spectral)
                 @test isapprox(expected.upar_ion[:, tind], newgrid_upar_ion[:,1], rtol=upar_rtol, atol=atol)
 
-                newgrid_ppar_ion = interpolate_to_grid_z(expected.z, ppar_ion[:, :, tind], z, z_spectral)
+                newgrid_ppar_ion = interpolate_to_grid_z(expected.z, ppar_ion[:, 1, tind], z, z_spectral)
                 @test isapprox(expected.ppar_ion[:, tind], newgrid_ppar_ion[:,1], rtol=rtol)
 
-                newgrid_vth_ion = @. sqrt(2.0*newgrid_ppar_ion/newgrid_n_ion)
+                newgrid_vth_ion = @. sqrt(2.0*newgrid_ppar_ion/3.0/newgrid_n_ion) # Divide by 3 because vth is defined with the full pressure, which for 1D1V where T_⟂=0 is T=T_∥/3
                 newgrid_f_ion = interpolate_to_grid_z(expected.z, f_ion[:, :, :, tind], z, z_spectral)
                 temp = newgrid_f_ion
                 newgrid_f_ion = fill(NaN, length(expected.vpa),
@@ -229,7 +229,7 @@ function run_test(test_input, rtol, atol, upar_rtol=nothing; args...)
                     if input["evolve_moments"]["parallel_flow"]
                         wpa .-= newgrid_upar_ion[iz,1]
                     end
-                    if input["evolve_moments"]["parallel_pressure"]
+                    if input["evolve_moments"]["pressure"]
                         wpa ./= newgrid_vth_ion[iz,1]
                     end
                     newgrid_f_ion[:,iz,1] = interpolate_to_grid_vpa(wpa, temp[:,iz,1], vpa, vpa_spectral)
@@ -240,15 +240,15 @@ function run_test(test_input, rtol, atol, upar_rtol=nothing; args...)
                 ######################################
 
                 newgrid_n_neutral = interpolate_to_grid_z(expected.z, n_neutral[:, :, tind], z, z_spectral)
-                @test isapprox(expected.n_neutral[:, tind], newgrid_n_neutral[:,:,1], rtol=rtol)
+                @test isapprox(expected.n_neutral[:, tind], newgrid_n_neutral[:,1,1], rtol=rtol)
 
                 newgrid_upar_neutral = interpolate_to_grid_z(expected.z, upar_neutral[:, :, tind], z, z_spectral)
-                @test isapprox(expected.upar_neutral[:, tind], newgrid_upar_neutral[:,:,1], rtol=upar_rtol, atol=atol)
+                @test isapprox(expected.upar_neutral[:, tind], newgrid_upar_neutral[:,1,1], rtol=upar_rtol, atol=atol)
 
                 newgrid_ppar_neutral = interpolate_to_grid_z(expected.z, ppar_neutral[:, :, tind], z, z_spectral)
-                @test isapprox(expected.ppar_neutral[:, tind], newgrid_ppar_neutral[:,:,1], rtol=rtol)
+                @test isapprox(expected.ppar_neutral[:, tind], newgrid_ppar_neutral[:,1,1], rtol=rtol)
 
-                newgrid_vth_neutral = @. sqrt(2.0*newgrid_ppar_neutral/newgrid_n_neutral)
+                newgrid_vth_neutral = @. sqrt(2.0/3.0*newgrid_ppar_neutral/newgrid_n_neutral)
                 newgrid_f_neutral = interpolate_to_grid_z(expected.z, f_neutral[:, :, :, tind], z, z_spectral)
                 temp = newgrid_f_neutral
                 newgrid_f_neutral = fill(NaN, length(expected.vpa),
@@ -260,7 +260,7 @@ function run_test(test_input, rtol, atol, upar_rtol=nothing; args...)
                     if input["evolve_moments"]["parallel_flow"]
                         wpa .-= newgrid_upar_neutral[iz,1]
                     end
-                    if input["evolve_moments"]["parallel_pressure"]
+                    if input["evolve_moments"]["pressure"]
                         wpa ./= newgrid_vth_neutral[iz,1]
                     end
                     newgrid_f_neutral[:,iz,1] = interpolate_to_grid_vpa(wpa, temp[:,iz,1], vpa, vpa_spectral)

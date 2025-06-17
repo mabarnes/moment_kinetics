@@ -10,7 +10,7 @@ using moment_kinetics.looping
 using moment_kinetics.array_allocation: allocate_float, allocate_shared_float
 using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.type_definitions: mk_float, mk_int
-using moment_kinetics.velocity_moments: get_density, get_upar, get_ppar, get_pperp, get_pressure
+using moment_kinetics.velocity_moments: get_density, get_upar, get_p, get_ppar, get_pperp
 using moment_kinetics.input_structs: direct_integration, multipole_expansion, delta_f_multipole
 
 using moment_kinetics.fokker_planck: init_fokker_planck_collisions_weak_form, fokker_planck_collision_operator_weak_form!
@@ -102,7 +102,7 @@ function runtests()
             # scale factor for change of reference speed
             scalefac = cref_ion/cref_electron
 
-            begin_serial_region()
+            @begin_serial_region()
             @serial_region begin
                 @loop_vperp_vpa ivperp ivpa begin
                     Fe[ivpa,ivperp] = F_Maxwellian(dense,upare,vthe,vpa,vperp,ivpa,ivperp)
@@ -112,7 +112,7 @@ function runtests()
                 end
             end
 
-            begin_s_r_z_anyv_region()
+            @begin_s_r_z_anyv_region()
             interpolate_2D_vspace!(Fe_interp_ion_units,Fe,vpa,vperp,scalefac)
             #println("Fe",Fe)
             #println("Fe interp",Fe_interp_ion_units)
@@ -122,7 +122,7 @@ function runtests()
             #println("Fi interp", Fi_interp_electron_units)
             #println("Fi exact",Fi_exact_electron_units)
 
-            begin_serial_region()
+            @begin_serial_region()
             # check the result
             @serial_region begin
                 # for electron data on ion grids
@@ -151,7 +151,7 @@ function runtests()
             vpa, vpa_spectral, vperp, vperp_spectral = create_grids(ngrid,nelement_vpa,nelement_vperp,
                                                                         Lvpa=2.0,Lvperp=1.0)
             nc_global = vpa.n*vperp.n
-            begin_serial_region()
+            @begin_serial_region()
             fkpl_arrays = init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_spectral,
                                                                   precompute_weights=false, print_to_screen=print_to_screen)
             KKpar2D_with_BC_terms_sparse = fkpl_arrays.KKpar2D_with_BC_terms_sparse
@@ -215,7 +215,7 @@ function runtests()
                 nelement_vperp = 4
                 vpa, vpa_spectral, vperp, vperp_spectral = create_grids(ngrid,nelement_vpa,nelement_vperp,
                                                                             Lvpa=12.0,Lvperp=6.0)
-                begin_serial_region()
+                @begin_serial_region()
                 if boundary_data_option == direct_integration
                     precompute_weights = true
                 else
@@ -252,7 +252,7 @@ function runtests()
                 dHdvperp_M_err = allocate_float(vpa.n,vperp.n)
 
                 dens, upar, vth = 1.0, 1.0, 1.0
-                begin_serial_region()
+                @begin_serial_region()
                 for ivperp in 1:vperp.n
                     for ivpa in 1:vpa.n
                         F_M[ivpa,ivperp] = F_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
@@ -268,7 +268,7 @@ function runtests()
                 end
                 rpbd_exact = allocate_rosenbluth_potential_boundary_data(vpa,vperp)
                 # use known test function to provide exact data
-                begin_s_r_z_anyv_region()
+                @begin_s_r_z_anyv_region()
                 calculate_rosenbluth_potential_boundary_data_exact!(rpbd_exact,
                       H_M_exact,dHdvpa_M_exact,dHdvperp_M_exact,G_M_exact,
                       dGdvperp_M_exact,d2Gdvperp2_M_exact,
@@ -283,8 +283,8 @@ function runtests()
                      boundary_data_option=boundary_data_option)
                 # extract C[Fs,Fs'] result
                 # and Rosenbluth potentials for testing
-                begin_s_r_z_anyv_region()
-                begin_anyv_vperp_vpa_region()
+                @begin_s_r_z_anyv_region()
+                @begin_anyv_vperp_vpa_region()
                 @loop_vperp_vpa ivperp ivpa begin
                     G_M_num[ivpa,ivperp] = fkpl_arrays.GG[ivpa,ivperp]
                     H_M_num[ivpa,ivperp] = fkpl_arrays.HH[ivpa,ivperp]
@@ -295,7 +295,7 @@ function runtests()
                     d2Gdvpa2_M_num[ivpa,ivperp] = fkpl_arrays.d2Gdvpa2[ivpa,ivperp]
                     d2Gdvperpdvpa_M_num[ivpa,ivperp] = fkpl_arrays.d2Gdvperpdvpa[ivpa,ivperp]
                 end
-                begin_serial_region()
+                @begin_serial_region()
                 @serial_region begin
                     # test the boundary data
                     max_H_boundary_data_err, max_dHdvpa_boundary_data_err,
@@ -308,7 +308,7 @@ function runtests()
                         atol_max_dHdvperp = 5.0e-8
                         atol_max_G = 5.0e-7
                         atol_max_dGdvperp = 5.0e-7
-                        atol_max_d2Gdvperp2 = 5.0e-8
+                        atol_max_d2Gdvperp2 = 5.0e-7
                         atol_max_d2Gdvperpdvpa = 5.0e-7
                         atol_max_d2Gdvpap2 = 1.0e-6
                     else
@@ -326,7 +326,7 @@ function runtests()
                     @test max_dHdvperp_boundary_data_err < atol_max_dHdvperp
                     @test max_G_boundary_data_err < atol_max_G
                     @test max_dGdvperp_boundary_data_err < atol_max_dGdvperp
-                    @test max_d2Gdvperpdvpa_boundary_data_err < atol_max_d2Gdvperpdvpa
+                    @test max_d2Gdvperp2_boundary_data_err < atol_max_d2Gdvperp2
                     @test max_d2Gdvperpdvpa_boundary_data_err < atol_max_d2Gdvperpdvpa
                     @test max_d2Gdvpa2_boundary_data_err < atol_max_d2Gdvpap2
                     # test the elliptic solvers
@@ -401,7 +401,7 @@ function runtests()
             nelement_vperp = 4
             vpa, vpa_spectral, vperp, vperp_spectral = create_grids(ngrid,nelement_vpa,nelement_vperp,
                                                                         Lvpa=12.0,Lvperp=6.0)
-            begin_serial_region()
+            @begin_serial_region()
             fkpl_arrays = init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_spectral,
                                                                   precompute_weights=true, print_to_screen=print_to_screen)
 
@@ -429,7 +429,7 @@ function runtests()
                 ms = 1.0
                 msp = 1.0
                 nussp = 1.0
-                begin_serial_region()
+                @begin_serial_region()
                 for ivperp in 1:vperp.n
                     for ivpa in 1:vpa.n
                         Fs_M[ivpa,ivperp] = F_Maxwellian(denss,upars,vths,vpa,vperp,ivpa,ivperp)
@@ -439,7 +439,7 @@ function runtests()
                                                                         nussp,vpa,vperp,ivpa,ivperp)
                     end
                 end
-                begin_s_r_z_anyv_region()
+                @begin_s_r_z_anyv_region()
                 fokker_planck_collision_operator_weak_form!(Fs_M,F_M,ms,msp,nussp,
                                                  fkpl_arrays,
                                                  vperp, vpa, vperp_spectral, vpa_spectral,
@@ -452,32 +452,32 @@ function runtests()
                     # enforce the boundary conditions on CC before it is used for timestepping
                     enforce_vpavperp_BCs!(fkpl_arrays.CC,vpa,vperp,vpa_spectral,vperp_spectral)
                     # make ad-hoc conserving corrections
-                    conserving_corrections!(fkpl_arrays.CC,Fs_M,vpa,vperp,dummy_array)
+                    conserving_corrections!(fkpl_arrays.CC,Fs_M,vpa,vperp)
                 end
                 # extract C[Fs,Fs'] result
-                begin_s_r_z_anyv_region()
-                begin_anyv_vperp_vpa_region()
+                @begin_s_r_z_anyv_region()
+                @begin_anyv_vperp_vpa_region()
                 @loop_vperp_vpa ivperp ivpa begin
                     C_M_num[ivpa,ivperp] = fkpl_arrays.CC[ivpa,ivperp]
                 end
-                begin_serial_region()
+                @begin_serial_region()
                 @serial_region begin
                     C_M_max, C_M_L2 = print_test_data(C_M_exact,C_M_num,C_M_err,"C_M",vpa,vperp,dummy_array,print_to_screen=print_to_screen)
                     if test_self_operator && !test_numerical_conserving_terms && !use_Maxwellian_Rosenbluth_coefficients && !use_Maxwellian_field_particle_distribution
-                        atol_max = 6.0e-4
-                        atol_L2 = 7.0e-6
+                        atol_max = 6.0e-4/π^1.5
+                        atol_L2 = 7.0e-6/π^1.5
                     elseif test_self_operator && test_numerical_conserving_terms && !use_Maxwellian_Rosenbluth_coefficients && !use_Maxwellian_field_particle_distribution
-                        atol_max = 7.0e-4
-                        atol_L2 = 7.0e-6
+                        atol_max = 7.0e-4/π^1.5
+                        atol_L2 = 7.0e-6/π^1.5
                     elseif test_self_operator && !test_numerical_conserving_terms && use_Maxwellian_Rosenbluth_coefficients && !use_Maxwellian_field_particle_distribution
-                        atol_max = 8.0e-4
-                        atol_L2 = 8.1e-6
+                        atol_max = 8.0e-4/π^1.5
+                        atol_L2 = 8.1e-6/π^1.5
                     elseif test_self_operator && !test_numerical_conserving_terms && !use_Maxwellian_Rosenbluth_coefficients && use_Maxwellian_field_particle_distribution
-                        atol_max = 1.1e-3
-                        atol_L2 = 9.0e-6
+                        atol_max = 1.1e-3/π^1.5
+                        atol_L2 = 9.0e-6/π^1.5
                     else
-                        atol_max = 7.0e-2
-                        atol_L2 = 6.0e-4
+                        atol_max = 7.0e-2/π^1.5
+                        atol_L2 = 6.0e-4/π^1.5
                     end
                     @test C_M_max < atol_max
                     @test C_M_L2 < atol_L2
@@ -495,18 +495,19 @@ function runtests()
                         end
                         @test isapprox(dSdt, rtol ; atol=atol)
                         delta_n = get_density(C_M_num, vpa, vperp)
-                        delta_upar = get_upar(C_M_num, vpa, vperp, dens)
-                        delta_ppar = msp*get_ppar(C_M_num, vpa, vperp, upar)
-                        delta_pperp = msp*get_pperp(C_M_num, vpa, vperp)
-                        delta_pressure = get_pressure(delta_ppar,delta_pperp)
+                        delta_upar = get_upar(C_M_num, dens, vpa, vperp, false)
+                        delta_pressure = msp*get_p(C_M_num, dens, upar, vpa, vperp, false, false)
+                        delta_ppar = msp*get_ppar(dens, upar, nothing, vth, C_M_num,
+                                                  vpa, vperp, false, false, false)
+                        delta_pperp = get_pperp(delta_pressure, delta_ppar)
                         rtol, atol = 0.0, 1.0e-12
                         @test isapprox(delta_n, rtol ; atol=atol)
                         rtol, atol = 0.0, 1.0e-9
                         @test isapprox(delta_upar, rtol ; atol=atol)
                         if algebraic_solve_for_d2Gdvperp2
-                            rtol, atol = 0.0, 1.0e-7
+                            rtol, atol = 0.0, 1.0e-7*2
                         else
-                            rtol, atol = 0.0, 1.0e-8
+                            rtol, atol = 0.0, 1.0e-8*2
                         end
                         @test isapprox(delta_pressure, rtol ; atol=atol)
                         if print_to_screen
@@ -519,15 +520,16 @@ function runtests()
                         rtol, atol = 0.0, 6.0e-7
                         @test isapprox(dSdt, rtol ; atol=atol)
                         delta_n = get_density(C_M_num, vpa, vperp)
-                        delta_upar = get_upar(C_M_num, vpa, vperp, dens)
-                        delta_ppar = msp*get_ppar(C_M_num, vpa, vperp, upar)
-                        delta_pperp = msp*get_pperp(C_M_num, vpa, vperp)
-                        delta_pressure = get_pressure(delta_ppar,delta_pperp)
+                        delta_upar = get_upar(C_M_num, dens, vpa, vperp, false)
+                        delta_pressure = msp*get_p(C_M_num, dens, upar, vpa, vperp, false, false)
+                        delta_ppar = msp*get_ppar(dens, upar, nothing, vth, C_M_num, vpa, vperp, false,
+                                              false, false)
+                        delta_pperp = get_pperp(delta_pressure, delta_ppar)
                         rtol, atol = 0.0, 1.0e-15
                         @test isapprox(delta_n, rtol ; atol=atol)
                         rtol, atol = 0.0, 1.0e-15
                         @test isapprox(delta_upar, rtol ; atol=atol)
-                        rtol, atol = 0.0, 1.0e-15
+                        rtol, atol = 0.0, 1.0e-15*2
                         @test isapprox(delta_pressure, rtol ; atol=atol)
                         if print_to_screen
                             println("dSdt: $dSdt should be >0.0")
@@ -537,7 +539,7 @@ function runtests()
                         end
                     else
                         atol = 1.0e-4
-                        @test isapprox(dSdt, 2.543251178128757 ; atol=atol)
+                        @test isapprox(dSdt, 2.543251178128757 / pi^1.5 ; atol=atol)
                         delta_n = get_density(C_M_num, vpa, vperp)
                         rtol, atol = 0.0, 1.0e-12
                         @test isapprox(delta_n, rtol ; atol=atol)
@@ -558,7 +560,7 @@ function runtests()
             nelement_vperp = 8
             vpa, vpa_spectral, vperp, vperp_spectral = create_grids(ngrid,nelement_vpa,nelement_vperp,
                                                                         Lvpa=12.0,Lvperp=6.0)
-            begin_serial_region()
+            @begin_serial_region()
             fkpl_arrays = init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_spectral,
                                                                   precompute_weights=true, print_to_screen=print_to_screen)
 
@@ -586,7 +588,7 @@ function runtests()
                 nsprime = size(msp,1)
                 nuref = 1.0
 
-                begin_serial_region()
+                @begin_serial_region()
                 for ivperp in 1:vperp.n
                     for ivpa in 1:vpa.n
                         Fs_M[ivpa,ivperp] = F_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
@@ -605,7 +607,7 @@ function runtests()
                         end
                     end
                 end
-                begin_s_r_z_anyv_region()
+                @begin_s_r_z_anyv_region()
                 @views fokker_planck_collision_operator_weak_form_Maxwellian_Fsp!(Fs_M[:,:],
                                      nuref,mref,Zref,msp,Zsp,denssp,uparsp,vthsp,
                                      fkpl_arrays,vperp,vpa,vperp_spectral,vpa_spectral)
@@ -616,16 +618,16 @@ function runtests()
                     density_conserving_correction!(fkpl_arrays.CC,Fs_M,vpa,vperp,dummy_array)
                 end
                 # extract C[Fs,Fs'] result
-                begin_s_r_z_anyv_region()
-                begin_anyv_vperp_vpa_region()
+                @begin_s_r_z_anyv_region()
+                @begin_anyv_vperp_vpa_region()
                 @loop_vperp_vpa ivperp ivpa begin
                     C_M_num[ivpa,ivperp] = fkpl_arrays.CC[ivpa,ivperp]
                 end
-                begin_serial_region()
+                @begin_serial_region()
                 @serial_region begin
                     C_M_max, C_M_L2 = print_test_data(C_M_exact,C_M_num,C_M_err,"C_M",vpa,vperp,dummy_array,print_to_screen=print_to_screen)
-                    atol_max = 7.0e-2
-                    atol_L2 = 6.0e-4
+                    atol_max = 7.0e-2/π^1.5
+                    atol_L2 = 6.0e-4/π^1.5
                     @test C_M_max < atol_max
                     @test C_M_L2 < atol_L2
                     if !test_numerical_conserving_terms
@@ -655,7 +657,7 @@ function runtests()
             nelement_vperp = 4
             vpa, vpa_spectral, vperp, vperp_spectral = create_grids(ngrid,nelement_vpa,nelement_vperp,
                                                                         Lvpa=12.0,Lvperp=6.0)
-            begin_serial_region()
+            @begin_serial_region()
             fkpl_arrays = init_fokker_planck_collisions_direct_integration(vperp,vpa,precompute_weights=true,print_to_screen=print_to_screen)
             dummy_array = allocate_float(vpa.n,vperp.n)
             F_M = allocate_float(vpa.n,vperp.n)
@@ -685,7 +687,7 @@ function runtests()
             dHdvperp_M_err = allocate_float(vpa.n,vperp.n)
 
             dens, upar, vth = 1.0, 1.0, 1.0
-            begin_serial_region()
+            @begin_serial_region()
             for ivperp in 1:vperp.n
                 for ivpa in 1:vpa.n
                     F_M[ivpa,ivperp] = F_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
@@ -700,11 +702,11 @@ function runtests()
                 end
             end
             # calculate the potentials numerically
-            begin_s_r_z_anyv_region()
+            @begin_s_r_z_anyv_region()
             calculate_rosenbluth_potentials_via_direct_integration!(G_M_num,H_M_num,dHdvpa_M_num,dHdvperp_M_num,
              d2Gdvpa2_M_num,dGdvperp_M_num,d2Gdvperpdvpa_M_num,d2Gdvperp2_M_num,F_M,
              vpa,vperp,vpa_spectral,vperp_spectral,fkpl_arrays)
-            begin_serial_region()
+            @begin_serial_region()
             @serial_region begin
                 # test the integration
                 # to recalculate absolute tolerances atol, set print_to_screen = true

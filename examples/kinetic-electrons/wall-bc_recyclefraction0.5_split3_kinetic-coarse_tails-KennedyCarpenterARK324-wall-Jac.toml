@@ -3,26 +3,26 @@ ngrid = 1
 nelement = 1
 
 [evolve_moments]
-parallel_pressure = true
 density = true
 moments_conservation = true
 parallel_flow = true
+pressure = true
 
 [reactions]
 electron_ionization_frequency = 0.0
-ionization_frequency = 0.5
-charge_exchange_frequency = 0.75
+ionization_frequency = 0.7071067811865476
+charge_exchange_frequency = 1.0606601717798214
 
 [vz]
 ngrid = 6
 discretization = "gausslegendre_pseudospectral"
 nelement = 31
-L = 36.0
-element_spacing_option = "coarse_tails"
+L = 62.35382907247958
+element_spacing_option = "coarse_tails8.660254037844386"
 bc = "zero"
 
 [ion_species_1]
-initial_temperature = 0.1
+initial_temperature = 0.03333333333333333
 initial_density = 1.0
 
 [krook_collisions]
@@ -32,8 +32,8 @@ use_krook = true
 ngrid = 6
 discretization = "gausslegendre_pseudospectral"
 nelement = 31
-L = 30.0
-element_spacing_option = "coarse_tails"
+L = 51.96152422706631
+element_spacing_option = "coarse_tails8.660254037844386"
 bc = "zero"
 
 [z]
@@ -58,7 +58,7 @@ initialization_option = "gaussian"
 temperature_amplitude = 0.0
 density_amplitude = 0.001
 density_phase = 0.0
-upar_amplitude = -1.0
+upar_amplitude = -1.4142135623730951
 temperature_phase = 0.0
 upar_phase = 0.0
 
@@ -84,26 +84,25 @@ initialization_option = "gaussian"
 density_amplitude = 0.001
 temperature_amplitude = 0.0
 density_phase = 0.0
-upar_amplitude = 1.0
+upar_amplitude = 1.4142135623730951
 temperature_phase = 0.0
 upar_phase = 0.0
 
 [neutral_species_1]
-initial_temperature = 1.0
+initial_temperature = 0.3333333333333333
 initial_density = 1.0
 
 [timestepping]
 type = "KennedyCarpenterARK324"
-implicit_electron_advance = false
-implicit_electron_ppar = true
+kinetic_electron_solver = "implicit_p_implicit_pseudotimestep"
 implicit_ion_advance = false
 implicit_vpa_advection = false
 nstep = 1000000
-dt = 1.0e-5
+dt = 7.0710678118654756e-6
 nwrite = 1000
 nwrite_dfns = 1000
 steady_state_residual = true
-converged_residual_value = 1.0e-3
+converged_residual_value = 0.0014142135623730952
 
 #write_after_fixed_step_count = true
 #nstep = 1
@@ -113,20 +112,20 @@ converged_residual_value = 1.0e-3
 [electron_timestepping]
 nstep = 5000000
 #nstep = 1
-dt = 1.0e-5
+dt = 7.0710678118654756e-6
 #maximum_dt = 1.0e-8
 nwrite = 10000
 nwrite_dfns = 100000
 #type = "SSPRK4"
 type = "Fekete4(3)"
-rtol = 1.0e-3
+rtol = 0.001
 atol = 1.0e-14
-minimum_dt = 1.0e-9
+minimum_dt = 7.071067811865476e-10
 decrease_dt_iteration_threshold = 100
 increase_dt_iteration_threshold = 20
 cap_factor_ion_dt = 10.0
 initialization_residual_value = 2.5
-converged_residual_value = 1.0e-2
+converged_residual_value = 0.014142135623730952
 include_wall_bc_in_preconditioner = true
 
 #debug_io = 1
@@ -142,7 +141,7 @@ preconditioner_update_interval = 100
 active = true
 z_profile = "gaussian"
 z_width = 0.125
-source_strength = 2.0
+source_strength = 2.8284271247461903
 source_T = 2.0
 
 [ion_numerical_dissipation]
@@ -152,7 +151,7 @@ source_T = 2.0
 force_minimum_pdf_value = 0.0
 
 [electron_numerical_dissipation]
-vpa_dissipation_coefficient = 2.0
+vpa_dissipation_coefficient = 8.485281374238571
 force_minimum_pdf_value = 0.0
 
 [neutral_numerical_dissipation]
