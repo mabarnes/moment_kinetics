@@ -1,7 +1,8 @@
 using moment_kinetics.load_data: get_run_info_no_setup, postproc_load_variable,
-                                 close_run_info
+                                 close_run_info, get_group
+using moment_kinetics.load_data: load_variable as low_level_load_variable
 
-function convert_to_string(array::Vector{UInt8})
+function convert_to_string(array::AbstractVector{UInt8})
     s = String(array)
     s = replace(s, "\0" => "")
     return s
@@ -46,7 +47,8 @@ function regression_test_debug_comparison(filenameA, filenameB;
                                           tolerance=1.0e-13,
                                           conversions=Dict{String,Any}(),
                                           ignore=(), print_index_ranges=true,
-                                          print_changed=false, print_deltas=false)
+                                          print_changed=false, print_deltas=false,
+                                          return_changed=false)
 
     A = get_run_info_no_setup(filenameA; dfns=true)
     B = get_run_info_no_setup(filenameB; dfns=true)
@@ -55,6 +57,126 @@ function regression_test_debug_comparison(filenameA, filenameB;
     variable_names = A.variable_names
     conversions_keys = collect(keys(conversions))
 
+    # first check some time-independent variables, if they exist
+    ############################################################
+
+    changed_static_variables = Tuple[]
+    function check_static_var(name, group_name="overview")
+        if !(group_name ∈ A.groups)
+            return nothing
+        end
+        if name ∈ ignore
+            return nothing
+        end
+        if name ∈ conversions_keys
+            c = conversions[name]
+            if c isa Tuple
+                conversion_factor = c[2]
+                old_name = c[1]
+            else
+                conversion_factor = c
+                old_name = name
+            end
+        else
+            conversion_factor = 1
+            old_name = name
+        end
+        newv = nothing
+        oldv = nothing
+        try
+            # Can't use postproc_load_variable() here because that function assumes that
+            # the variable is time-dependent.
+            newv = low_level_load_variable(get_group(A, group_name), name)
+            oldv = low_level_load_variable(get_group(B, group_name), old_name)
+        catch
+            # If variables were not found, nothing to compare
+        finally
+            println("checking $group_name:$name")
+
+            if name == old_name
+                names_to_save = (group_name, name)
+            else
+                names_to_save = (group_name, name, old_name)
+            end
+            if newv isa Number
+                newv .*= conversion_factor
+                if all(newv[i] .!= oldv[i]) && !all(abs.(newv[i] .- oldv[i]) .≤ tolerance)
+                    push!(changed_static_variables, names_to_save)
+                end
+            elseif conversion_factor != 1
+                error("Cannot convert non-numeric $name by conversion_factor=$conversion_factor")
+            else
+                if newv != oldv
+                    push!(changed_static_variables, names_to_save)
+                end
+            end
+        end
+    end
+
+    # Quantities from manufactured solutions testing
+    check_static_var("Source_i_expression", "manufactured_solutions")
+    check_static_var("Source_n_expression", "manufactured_solutions")
+    check_static_var("Source_i_array", "manufactured_solutions")
+    check_static_var("Source_n_array", "manufactured_solutions")
+
+    if !isempty(changed_static_variables)
+        println("Differences found in static variables")
+        println("$changed_static_variables")
+        if print_changed
+            for v ∈ changed_static_variables
+                if length(v) ≥ 3 && isa(v[3], String)
+                    group_name, vA, vB = v[1:3]
+                else
+                    group_name = v[1]
+                    vA = vB = v[2]
+                end
+                valA = low_level_load_variable(get_group(A, group_name), vA)
+                valB = low_level_load_variable(get_group(B, group_name), vB)
+                if vA ∈ conversions_keys
+                    c = conversions[vA]
+                    if c isa Tuple
+                        valA .*= c[2]
+                    else
+                        valA .*= c
+                    end
+                end
+
+                println()
+                println("$vA A\n", valA)
+                println("$vB B\n", valB)
+                println("diff\n", valA .- valB)
+            end
+        end
+        if return_changed
+            changed_vars = []
+            for v ∈ changed_static_variables
+                if length(v) ≥ 3 && isa(v[3], String)
+                    group_name, vA, vB = v[1:3]
+                else
+                    group_name = v[1]
+                    vA = vB = v[2]
+                end
+                valA = low_level_load_variable(get_group(A, group_name), vA)
+                valB = low_level_load_variable(get_group(B, group_name), vB)
+                if vA ∈ conversions_keys
+                    c = conversions[vA]
+                    if c isa Tuple
+                        valA .*= c[2]
+                    else
+                        valA .*= c
+                    end
+                end
+                push!(changed_vars, (valA, valB))
+            end
+        else
+            changed_vars = nothing
+        end
+
+        return changed_vars
+    end
+
+    # check the time-dependent variables
+    ####################################
     for it ∈ 1:nt_min
         changed_variables = Tuple[]
         for v ∈ variable_names
@@ -93,7 +215,7 @@ function regression_test_debug_comparison(filenameA, filenameB;
                 # `newv`.
                 mininds = CartesianIndex((length(newv)+1 for _ ∈ 1:ndims(newv))...)
                 for i ∈ CartesianIndices(newv)
-                    if newv[i] != oldv[i] && abs(newv[i] - oldv[i]) ≤ tolerance
+                    if newv[i] != oldv[i] && !(abs(newv[i] - oldv[i]) ≤ tolerance)
                         mininds = min(mininds, i)
                         maxinds = max(maxinds, i)
                     end
@@ -219,10 +341,39 @@ function regression_test_debug_comparison(filenameA, filenameB;
                     end
                 end
             end
+            if return_changed
+                changed_vars = []
+                for v ∈ changed_variables
+                    if length(v) ≥ 2 && isa(v[2], String)
+                        vA, vB = v[1:2]
+                    else
+                        vA = vB = v[1]
+                    end
+                    valA = postproc_load_variable(A, vA; it=it)
+                    valB = postproc_load_variable(B, vB; it=it)
+                    if vA ∈ conversions_keys
+                        c = conversions[vA]
+                        if c isa Tuple
+                            valA .*= c[2]
+                            if it > 1 && print_deltas
+                                deltaA .*= c[2]
+                            end
+                        else
+                            valA .*= c
+                            if it > 1 && print_deltas
+                                deltaA .*= c
+                            end
+                        end
+                    end
+                    push!(changed_vars, (valA, valB))
+                end
+            else
+                changed_vars = nothing
+            end
 
             close_run_info(A)
             close_run_info(B)
-            return nothing
+            return changed_vars
         end
     end
 

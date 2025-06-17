@@ -14,8 +14,8 @@ will be saved with the format `plot_prefix_timestep_diagnostics.pdf`.
 """
 function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=nothing,
                               electron=false)
-    if !isa(run_info, Tuple)
-        run_info = (run_info,)
+    if !isa(run_info, AbstractVector)
+        run_info = Any[run_info]
     end
 
     input = Dict_to_NamedTuple(input_dict["timestep_diagnostics"])

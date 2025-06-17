@@ -629,7 +629,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
             n_variables += 1
         end
     end
-    if t_input["debug_io"]
+    if t_input["debug_io"] && block_rank[] == 0
         if t_input["nstep"] > 10
             println("You have enabled debug_io while setting a large value for "
                     * "nstep=$(t_input["nstep"]) > 10. Reducing to nstep=10 to avoid "
@@ -662,13 +662,19 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
         # input to be written to debug file.
         fake_input_dict = OptionsDict(k => v for (k,v) ∈ input_dict
                                       if k != "_section_check_store")
+        @begin_serial_region()
         debug_io = setup_dfns_io(joinpath(io_input.output_dir, "debug"), debug_io_input,
                                  boundary_distributions, r, z, vperp, vpa, vzeta, vr, vz,
                                  composition, collisions, moments.evolve_density,
                                  moments.evolve_upar, moments.evolve_p,
-                                 external_source_settings, fake_input_dict,
+                                 external_source_settings, nothing, fake_input_dict,
                                  comm_inter_block[], 1, nothing, 0.0, fake_t_params, ();
                                  is_debug=true)
+    elseif t_input["debug_io"]
+        # Need to synchronize shared-memory blocks before/after I/O. Set debug_io=true so
+        # we can distinguish from no-debug-IO case on block_rank[]>0 processes.
+        @begin_serial_region() # To match one in `t_input["debug_io"] && block_rank[] == 0` branch
+        debug_io = true
     else
         debug_io = nothing
     end
@@ -1050,7 +1056,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
                                                         composition, geometry.input, collisions,
                                                         num_diss_params, species)
     else
-        manufactured_source_list = false # dummy Bool to be passed as argument instead of list
+        manufactured_source_list = nothing
     end
 
     if !restarting
@@ -1534,7 +1540,7 @@ function setup_implicit_advance_flags(moments, composition, t_params, collisions
         advance_electron_pdf = true
     end
 
-    manufactured_solns_test = manufactured_solns_input.use_for_advance
+    manufactured_solns_test = false
 
     return advance_info(advance_vpa_advection, advance_vperp_advection, advance_z_advection, advance_r_advection,
                         advance_neutral_z_advection, advance_neutral_r_advection,
@@ -2060,12 +2066,11 @@ function  time_advance!(pdf, scratch, scratch_implicit, scratch_electron, t_para
                               "t = ", rpad(string(round(t_params.t[], sigdigits=6)), 7), "  ",
                               "nstep = ", rpad(string(t_params.step_counter[]), 7), "  ")
                         if t_params.print_nT_live
-                            midpoint = Int64(round(size(moments.ion.dens)[1]/2))
+                            midpoint = Int64(round((1+size(moments.ion.dens)[1])/2))
                             print("midpoint density: ", 
-                            rpad(string(round(moments.ion.dens[midpoint,1,1], sigdigits = 4)), 7))
+                            rpad(string(round(moments.ion.dens[midpoint,1,1], sigdigits = 8)), 7))
                             print("   midpoint temperature: ", 
-                            rpad(string(round(moments.ion.p[midpoint,1,1]/(
-                            moments.ion.dens[midpoint,1,1]), sigdigits = 4)), 7), "\n")
+                            rpad(string(round(moments.ion.temp[midpoint,1,1], sigdigits = 8)), 7), "\n")
                         end
                         if t_params.adaptive
                             print("nfail = ", rpad(string(t_params.failure_counter[]), 7), "  ",
@@ -3590,7 +3595,7 @@ implementation), a call needs to be made with `dt` scaled by some coefficient.
     if advance.force_balance
         force_balance!(fvec_out.upar, fvec_out.density, fvec_in, moments, fields,
                        collisions, dt, z_spectral, composition, geometry,
-                       external_source_settings.ion, num_diss_params)
+                       external_source_settings.ion, num_diss_params, z)
         write_debug_IO("force_balance!")
     end
     if advance.energy

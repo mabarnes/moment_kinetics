@@ -276,7 +276,8 @@ enforce boundary conditions on neutral particle distribution function
             pz_neutral, moments, density_ion, upar_ion, Er, boundary_distributions,
             z_adv, z, vzeta, vr, vz, composition, geometry,
             scratch_dummy.buffer_vzvrvzetarsn_1, scratch_dummy.buffer_vzvrvzetarsn_2,
-            scratch_dummy.buffer_vzvrvzetarsn_3, scratch_dummy.buffer_vzvrvzetarsn_4)
+            scratch_dummy.buffer_vzvrvzetarsn_3, scratch_dummy.buffer_vzvrvzetarsn_4,
+            scratch_dummy.buffer_vzvrvzetarsn_5)
     end
     if r.n > 1
         @begin_sn_z_vzeta_vr_vz_region()
@@ -342,7 +343,8 @@ function enforce_neutral_z_boundary_condition!(pdf, density, uz, pz, moments, de
                                                upar_ion, Er, boundary_distributions, adv,
                                                z, vzeta, vr, vz, composition, geometry,
                                                end1::AbstractArray{mk_float,5}, end2::AbstractArray{mk_float,5},
-                                               buffer1::AbstractArray{mk_float,5}, buffer2::AbstractArray{mk_float,5})
+                                               buffer1::AbstractArray{mk_float,5}, buffer2::AbstractArray{mk_float,5},
+                                               buffer3::AbstractArray{mk_float,5})
 
 
     if z.nelement_global > z.nelement_local
@@ -447,7 +449,8 @@ function enforce_neutral_z_boundary_condition!(pdf, density, uz, pz, moments, de
                     pdf[:,:,:,:,ir,isn], z, vzeta, vr, vz, pz[:,ir,isn], uz[:,ir,isn],
                     density[:,ir,isn], ion_flux_0, ion_flux_L, boundary_distributions,
                     T_wall_over_m, composition.recycling_fraction, moments.evolve_p,
-                    moments.evolve_upar, moments.evolve_density, zero, buffer1)
+                    moments.evolve_upar, moments.evolve_density, zero,
+                    buffer3[:,:,:,ir,isn])
             end
         end
     end
@@ -709,13 +712,12 @@ i.e., the incoming flux of neutrals equals the sum of the ion/neutral outgoing f
 function enforce_neutral_wall_bc!(pdf, z, vzeta, vr, vz, pz, uz, density, wall_flux_0,
                                   wall_flux_L, boundary_distributions, T_wall_over_m,
                                   recycling_fraction, evolve_p, evolve_upar,
-                                  evolve_density, zero, buffer_vzvrvzetarsn)
+                                  evolve_density, zero, pdf_buffer)
 
     # Reduce the ion flux by `recycling_fraction` to account for ions absorbed by the
     # wall.
     wall_flux_0 *= recycling_fraction
     wall_flux_L *= recycling_fraction
-    pdf_buffer = @view buffer_vzvrvzetarsn[:,:,:,1,1]
 
     if !evolve_density && !evolve_upar
         knudsen_cosine = boundary_distributions.knudsen
