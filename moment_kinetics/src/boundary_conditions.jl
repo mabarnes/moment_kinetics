@@ -562,7 +562,6 @@ function enforce_zero_incoming_bc!(pdf, z::coordinate, vperp::coordinate, vpa::c
         error("No boundary in this block, should have returned already")
     end
     for (iz, vth) ∈ zip(z_range, vth_list)
-        # moment-kinetic approach only implemented for 1V case so far
         @boundscheck size(pdf,2) == 1
         f = @view pdf[:,:,iz]
         if evolve_p && evolve_upar
