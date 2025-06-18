@@ -87,8 +87,7 @@ upar_phase = 0.0
 #type = "KennedyCarpenterARK324"
 type = "Fekete4(3)"
 kinetic_electron_solver = "explicit_pseudotimestep"
-implicit_ion_advance = false
-implicit_vpa_advection = false
+kinetic_ion_solver = "full_explicit_ion_advance"
 nstep = 1000000
 dt = 7.071067811865475e-7
 minimum_dt = 7.071067811865474e-8
@@ -103,8 +102,8 @@ converged_residual_value = 0.0014142135623730952
 #[timestepping]
 ##type = "KennedyCarpenterARK324"
 #type = "Fekete4(3)"
-#implicit_ion_advance = false
-#implicit_vpa_advection = false
+#kinetic_ion_solver = "full_explicit_ion_advance"
+#
 #nstep = 1000000
 #dt = 1.0e-6
 #minimum_dt = 1.0e-7

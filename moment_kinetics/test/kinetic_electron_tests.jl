@@ -90,8 +90,7 @@ kinetic_input["output"]["run_name"] = "kinetic_electron_test"
 kinetic_input["composition"]["electron_physics"] = "kinetic_electrons"
 kinetic_input["timestepping"] = OptionsDict("type" => "PareschiRusso2(2,2,2)",
                                             "kinetic_electron_solver" => "implicit_p_implicit_pseudotimestep",
-                                            "implicit_ion_advance" => false,
-                                            "implicit_vpa_advection" => false,
+                                            "kinetic_ion_solver" => "full_explicit_ion_advance",
                                             "nstep" => 100,
                                             "dt" => 7.0710678118654756e-6,
                                             "nwrite" => 100,

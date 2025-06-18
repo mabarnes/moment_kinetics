@@ -69,8 +69,7 @@ test_input = OptionsDict("composition" => OptionsDict("n_ion_species" => 1,
                          # tolerances without needing to match iteration counts (which
                          # could be affected by rounding errors, etc.).
                          "timestepping" => OptionsDict("type" => "KennedyCarpenterARK437",
-                                                       "implicit_ion_advance" => false,
-                                                       "implicit_vpa_advection" => false,
+                                                       "kinetic_ion_solver" => "full_explicit_ion_advance",
                                                        "nstep" => 10000,
                                                        "dt" => 7.071067811865475e-7,
                                                        "minimum_dt" => 7.071067811865474e-8,
