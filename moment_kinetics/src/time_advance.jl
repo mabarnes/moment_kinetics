@@ -544,6 +544,8 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
                              advection_structs, io_input, restarting,
                              restart_electron_physics, input_dict;
                              skip_electron_solve=false)
+    
+
     # define some local variables for convenience/tidiness
     n_ion_species = composition.n_ion_species
     n_neutral_species = composition.n_neutral_species
@@ -988,12 +990,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
     # vperp_advect[is].speed, so z_advect and r_advect must always be updated before
     # vperp_advect is updated and used.
     if vperp.n > 1
-        @begin_serial_region()
-        @serial_region begin
-            for is ∈ 1:n_ion_species
-                @views update_speed_vperp!(vperp_advect[is], vpa, vperp, z, r, z_advect[is], r_advect[is], geometry)
-            end
-        end
+        update_speed_vperp!(vperp_advect, scratch[1], vpa, vperp, z, r, z_advect, r_advect, geometry, moments)
     end
     
     ##
@@ -1055,6 +1052,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
         # ensure initial pdf has no negative values
         force_minimum_pdf_value!(pdf.ion.norm, num_diss_params.ion.force_minimum_pdf_value)
         force_minimum_pdf_value_neutral!(pdf.neutral.norm, num_diss_params.neutral.force_minimum_pdf_value)
+
         # enforce boundary conditions and moment constraints to ensure a consistent initial
         # condition
         enforce_boundary_conditions!(
@@ -1063,10 +1061,12 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
             vpa.bc, z.bc, r.bc, vpa, vperp, z, r, vpa_spectral, vperp_spectral,
             vpa_advect, vperp_advect, z_advect, r_advect, composition, scratch_dummy,
             advance.r_diffusion, advance.vpa_diffusion, advance.vperp_diffusion)
+
         # Ensure normalised pdf exactly obeys integral constraints if evolving moments
         if moments.evolve_density && moments.enforce_conservation
-            hard_force_moment_constraints!(pdf.ion.norm, moments, vpa)
+            hard_force_moment_constraints!(pdf.ion.norm, moments, vpa, vperp)
         end
+
         # update moments in case they were affected by applying boundary conditions or
         # constraints to the pdf
         reset_moments_status!(moments)
@@ -1170,6 +1170,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
             scratch[t_params.n_rk_stages+1].p_neutral[iz,ir,isn] = moments.neutral.p[iz,ir,isn]
         end
     end
+
     # calculate the electron-ion parallel friction force
     calculate_electron_parallel_friction_force!(moments.electron.parallel_friction, moments.electron.dens,
         moments.electron.upar, moments.ion.upar, moments.electron.dT_dz,
@@ -1189,6 +1190,8 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
 
     # Ensure all processes are synchronized at the end of the setup
     @_block_synchronize()
+
+    
 
     return moments, spectral_objects, scratch, scratch_implicit, scratch_electron,
            scratch_dummy, advance, advance_implicit, t_params, fp_arrays, gyroavs,
@@ -2510,7 +2513,7 @@ moments and moment derivatives
             advance.vperp_diffusion)
 
         if moments.evolve_density && moments.enforce_conservation
-            hard_force_moment_constraints!(this_scratch.pdf, moments, vpa)
+            hard_force_moment_constraints!(this_scratch.pdf, moments, vpa, vperp)
         end
 
         if (composition.electron_physics ∈ (kinetic_electrons,
@@ -3695,7 +3698,7 @@ implementation), a call needs to be made with `dt` scaled by some coefficient.
         end
 
         if advance.source_terms
-            source_terms!(fvec_out.pdf, fvec_in, moments, vpa, z, r, dt, z_spectral,
+            source_terms!(fvec_out.pdf, fvec_in, moments, vpa, vperp, z, r, dt, z_spectral,
                         composition, collisions, external_source_settings.ion)
             write_debug_IO("source_terms!")
         end
@@ -4038,7 +4041,7 @@ Do a backward-Euler timestep for all terms in the ion kinetic equation.
 
     @begin_s_r_z_region()
     @loop_s_r_z is ir iz begin
-        @views hard_force_moment_constraints!(f_old[:,:,iz,ir,is], moments, vpa)
+        @views hard_force_moment_constraints!(f_old[:,:,iz,ir,is], moments, vpa, vperp)
     end
 
     @begin_s_r_region()
@@ -4166,7 +4169,7 @@ Do a backward-Euler timestep for all terms in the ion kinetic equation.
     # Also apply the bc to the forward-Euler updated values which are the initial state
     # for 'f_new'.
     apply_bc!(fvec_out.pdf)
-    hard_force_moment_constraints!(fvec_out.pdf, moments, vpa)
+    hard_force_moment_constraints!(fvec_out.pdf, moments, vpa, vperp)
 
     # Define a function whose input is `f_new`, so that when it's output
     # `residual` is zero, f_new is the result of a backward-Euler timestep:

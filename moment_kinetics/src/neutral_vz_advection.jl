@@ -49,7 +49,7 @@ function update_speed_neutral_vz!(advect, fields, fvec, moments, vz, vr, vzeta, 
     @boundscheck vz.n == size(advect[1].speed,1) || throw(BoundsError(advect[1].speed))
     if vz.advection.option == "default"
         # dvpa/dt = Ze/m ⋅ E_parallel
-        update_speed_default_neutral!(advect, fields, fvec, moments, vz, z, r,
+        update_speed_neutral_vz_default!(advect, fields, fvec, moments, vz, z, r,
                                       composition, collisions, neutral_source_settings)
     elseif vz.advection.option == "constant"
         @begin_serial_region()
@@ -57,7 +57,7 @@ function update_speed_neutral_vz!(advect, fields, fvec, moments, vz, vr, vzeta, 
             # Not usually used - just run in serial
             # dvpa/dt = constant
             @loop_sn isn begin
-                update_speed_constant_neutral!(advect[isn], vz, 1:vr.n, 1:vzeta.n, 1:z.n, 1:r.n)
+                update_speed_neutral_vz_constant!(advect[isn], vz, 1:vr.n, 1:vzeta.n, 1:z.n, 1:r.n)
             end
         end
     elseif vpa.advection.option == "linear"
@@ -66,7 +66,7 @@ function update_speed_neutral_vz!(advect, fields, fvec, moments, vz, vr, vzeta, 
             # Not usually used - just run in serial
             # dvpa/dt = constant ⋅ (vpa + L_vpa/2)
             @loop_sn isn begin
-                update_speed_linear_neutral!(advect[isn], vz, 1:vr.n, 1:vzeta.n, 1:z.n, 1:r.n)
+                update_speed_neutral_vz_linear!(advect[isn], vz, 1:vr.n, 1:vzeta.n, 1:z.n, 1:r.n)
             end
         end
     end
@@ -75,7 +75,7 @@ end
 
 """
 """
-function update_speed_default_neutral!(advect, fields, fvec, moments, vz, z, r,
+function update_speed_neutral_vz_default!(advect, fields, fvec, moments, vz, z, r,
                                        composition, collisions, neutral_source_settings)
     if moments.evolve_p && moments.evolve_upar
         update_speed_n_u_p_evolution_neutral!(advect, fvec, moments, vz, z, r,
@@ -182,7 +182,7 @@ end
 """
 update the advection speed dvpa/dt = constant
 """
-function update_speed_constant_neutral!(advect, vz, vr_range, vzeta_range, z_range, r_range)
+function update_speed_neutral_vz_constant!(advect, vz, vr_range, vzeta_range, z_range, r_range)
     #@inbounds @fastmath begin
     for ir ∈ r_range
         for iz ∈ z_range
@@ -197,7 +197,7 @@ end
 """
 update the advection speed dvpa/dt = const*(vpa + L/2)
 """
-function update_speed_linear_neutral(advect, vz, vr_range, vzeta_range, z_range, r_range)
+function update_speed_neutral_vz_linear(advect, vz, vr_range, vzeta_range, z_range, r_range)
     @inbounds @fastmath begin
         for ir ∈ r_range
             for iz ∈ z_range

@@ -940,6 +940,9 @@ end
 Compute the 2D integral `∫d^2vperp.dvpa prefactor(vperp,vpa)*integrand`
 
 In this variant `vperp` and `vpa` should be `coordinate` objects.
+
+Note that vperp_wgts contains the extra factor of vperp required for the
+Jacobian.
 """
 function integral(prefactor::Function, integrand, vperp, vpa)
     @boundscheck (vpa.n, vperp.n) == size(integrand) || throw(BoundsError(integrand))
