@@ -151,13 +151,9 @@ function setup_chebyshev_pseudospectral_lobatto(coord, fftw_flags)
     integration_matrix!(indefinite_integration_matrix,x,coord.ngrid)
     # return a structure containing the information needed to carry out
     # a 1D Chebyshev transform
-<<<<<<< 2V_Krook
-    return chebyshev_base_info(fext, true, fcheby, dcheby, forward_transform, backward_transform, Dmat, D0)
-=======
-    return chebyshev_base_info(fext, fcheby, dcheby, forward_transform,
+    return chebyshev_base_info(fext, true, fcheby, dcheby, forward_transform,
                                backward_transform, Dmat, D0,
                                indefinite_integration_matrix)
->>>>>>> master
 end
 
 function setup_chebyshev_pseudospectral_radau(coord, fftw_flags)
@@ -183,13 +179,9 @@ function setup_chebyshev_pseudospectral_radau(coord, fftw_flags)
         integration_matrix!(indefinite_integration_matrix,x,coord.ngrid)
         # return a structure containing the information needed to carry out
         # a 1D Chebyshev transform
-<<<<<<< 2V_Krook
-        return chebyshev_base_info(fext, false, fcheby, dcheby, forward_transform, backward_transform, Dmat, D0)
-=======
-        return chebyshev_base_info(fext, fcheby, dcheby, forward_transform,
+        return chebyshev_base_info(fext, false, fcheby, dcheby, forward_transform,
                                    backward_transform, Dmat, D0,
                                    indefinite_integration_matrix)
->>>>>>> master
 end
 
 """
