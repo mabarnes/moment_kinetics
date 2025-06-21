@@ -7,8 +7,8 @@
 module manufactured_solns_ext
 
 using moment_kinetics.input_structs
-using moment_kinetics.input_structs: geometry_input
 using moment_kinetics.looping
+using moment_kinetics.moment_kinetics_structs
 using moment_kinetics.type_definitions: mk_int, mk_float
 
 import moment_kinetics.manufactured_solns: manufactured_solutions, manufactured_sources_setup,
@@ -579,9 +579,10 @@ using IfElse
     end
 
     function manufactured_sources_setup(manufactured_solns_input, r_coord, z_coord, vperp_coord,
-            vpa_coord, vzeta_coord, vr_coord, vz_coord, composition, 
-            geometry_input_data::geometry_input, collisions,
-            num_diss_params, species)
+            vpa_coord, vzeta_coord, vr_coord, vz_coord, boundaries::boundary_info,
+            composition, geometry_input_data::geometry_input, collisions, num_diss_params,
+            species)
+
         geometry = geometry_sym(geometry_input_data,z_coord.L,r_coord.L,r_coord.n)
         ion_species = species.ion[1]
         if composition.n_neutral_species > 0
@@ -590,28 +591,64 @@ using IfElse
             neutral_species = nothing
         end
 
+        if length(boundaries.r.inner_sections) > 1 || length(boundaries.r.outer_sections) > 1
+            error("Manufactured solutions do not support multiple radial boundary sections")
+        end
+        r_bc_type = typeof(boundaries.r.inner_sections[1].ion)
+        if typeof(boundaries.r.outer_sections[1].ion) !== r_bc_type
+            error("Inner and outer radial boundary conditions are different "
+                  * "- unsupported by manufactured solutions")
+        end
+        if r_bc_type === ion_r_boundary_section_periodic
+            r_bc = "periodic"
+            if (typeof(boundaries.r.inner_sections.electron) !== electron_r_boundary_section_periodic
+                || typeof(boundaries.r.outer_sections.electron) !== electron_r_boundary_section_periodic)
+                error("Electron radial boundary settings different from ion settings "
+                      * "- unsupported by manufactured solutions")
+            end
+            if (typeof(boundaries.r.inner_sections.neutral) !== neutral_r_boundary_section_periodic
+                || typeof(boundaries.r.outer_sections.neutral) !== neutral_r_boundary_section_periodic)
+                error("Neutral radial boundary settings different from ion settings "
+                      * "- unsupported by manufactured solutions")
+            end
+        elseif r_bc_type === ion_r_boundary_section_Dirichlet
+            r_bc = "Dirichlet"
+            if (typeof(boundaries.r.inner_sections.electron) !== electron_r_boundary_section_Dirichlet
+                || typeof(boundaries.r.outer_sections.electron) !== electron_r_boundary_section_Dirichlet)
+                error("Electron radial boundary settings different from ion settings "
+                      * "- unsupported by manufactured solutions")
+            end
+            if (typeof(boundaries.r.inner_sections.neutral) !== neutral_r_boundary_section_Dirichlet
+                || typeof(boundaries.r.outer_sections.neutral) !== neutral_r_boundary_section_Dirichlet)
+                error("Neutral radial boundary settings different from ion settings "
+                      * "- unsupported by manufactured solutions")
+            end
+        else
+            error("Radial boundary type $r_bc_type not supported in manufactured solutions")
+        end
+
         # ion manufactured solutions
-        densi = densi_sym(r_coord.L, z_coord.L, r_coord.bc, z_coord.bc, composition,
+        densi = densi_sym(r_coord.L, z_coord.L, r_bc, z_coord.bc, composition,
                           manufactured_solns_input, ion_species)
-        upari = upari_sym(r_coord.L, z_coord.L, r_coord.bc, z_coord.bc, composition, geometry, r_coord.n, manufactured_solns_input, ion_species)
-        vthi = vthi_sym(r_coord.L, z_coord.L, r_coord.bc, z_coord.bc, composition, manufactured_solns_input,
+        upari = upari_sym(r_coord.L, z_coord.L, r_bc, z_coord.bc, composition, geometry, r_coord.n, manufactured_solns_input, ion_species)
+        vthi = vthi_sym(r_coord.L, z_coord.L, r_bc, z_coord.bc, composition, manufactured_solns_input,
                           ion_species, vperp_coord.n)
-        dfni = dfni_sym(r_coord.L, z_coord.L, r_coord.bc, z_coord.bc, composition,
+        dfni = dfni_sym(r_coord.L, z_coord.L, r_bc, z_coord.bc, composition,
                         geometry, r_coord.n, vperp_coord.n, manufactured_solns_input,
                         ion_species)
         #dfni in vr vz vzeta coordinates
-        vrvzvzeta_dfni = cartesian_dfni_sym(r_coord.L, z_coord.L, r_coord.bc, z_coord.bc,
+        vrvzvzeta_dfni = cartesian_dfni_sym(r_coord.L, z_coord.L, r_bc, z_coord.bc,
                                             composition, vperp_coord.n,
                                             manufactured_solns_input, ion_species)
 
         # neutral manufactured solutions
-        densn = densn_sym(r_coord.L,z_coord.L, r_coord.bc, z_coord.bc, geometry,
+        densn = densn_sym(r_coord.L,z_coord.L, r_bc, z_coord.bc, geometry,
                           composition, manufactured_solns_input, neutral_species)
-        dfnn = dfnn_sym(r_coord.L, z_coord.L, r_coord.bc, z_coord.bc, geometry,
+        dfnn = dfnn_sym(r_coord.L, z_coord.L, r_bc, z_coord.bc, geometry,
                         composition, vzeta_coord.n, vr_coord.n, manufactured_solns_input,
                         neutral_species)
         # gyroaverage < dfnn > in vpa vperp coordinates
-        gav_dfnn = gyroaveraged_dfnn_sym(r_coord.L, z_coord.L, r_coord.bc, z_coord.bc,
+        gav_dfnn = gyroaveraged_dfnn_sym(r_coord.L, z_coord.L, r_bc, z_coord.bc,
                                          geometry, composition, vzeta_coord.n, vr_coord.n,
                                          manufactured_solns_input, neutral_species)
 
@@ -649,7 +686,7 @@ using IfElse
         end
         
         # calculate the electric fields and the potential
-        Er, Ez, phi = electric_fields(r_coord.L, z_coord.L, r_coord.bc, z_coord.bc,
+        Er, Ez, phi = electric_fields(r_coord.L, z_coord.L, r_bc, z_coord.bc,
                                       composition, geometry, r_coord.n, manufactured_solns_input,
                                       ion_species)
 

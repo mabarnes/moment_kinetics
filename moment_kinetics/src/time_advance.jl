@@ -1040,7 +1040,8 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
     if(advance.manufactured_solns_test)
         manufactured_source_list = manufactured_sources(manufactured_solns_input, r, z,
                                                         vperp, vpa, vzeta, vr, vz,
-                                                        composition, geometry.input, collisions,
+                                                        boundaries, composition,
+                                                        geometry.input, collisions,
                                                         num_diss_params, species)
     else
         manufactured_source_list = nothing
