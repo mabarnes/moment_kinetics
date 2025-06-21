@@ -72,14 +72,15 @@ end
 # break if used outside the moment_kinetics module.
 @timeit global_timer manufactured_sources(
                          manufactured_solns_input, r_coord, z_coord, vperp_coord,
-                         vpa_coord, vzeta_coord, vr_coord, vz_coord, composition,
-                         geometry, collisions, num_diss_params, species) = begin
+                         vpa_coord, vzeta_coord, vr_coord, vz_coord, boundaries,
+                         composition, geometry, collisions, num_diss_params,
+                         species) = begin
 
     time_independent_sources, Source_i_func, Source_i_expression, Source_n_func,
     Source_n_expression =
         manufactured_sources_setup(manufactured_solns_input, r_coord, z_coord,
-            vperp_coord, vpa_coord, vzeta_coord, vr_coord, vz_coord, composition,
-            geometry, collisions, num_diss_params, species)
+            vperp_coord, vpa_coord, vzeta_coord, vr_coord, vz_coord, boundaries,
+            composition, geometry, collisions, num_diss_params, species)
 
     if time_independent_sources
         # Time independent, so store arrays instead of functions

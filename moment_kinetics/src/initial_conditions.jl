@@ -133,12 +133,12 @@ with a self-consistent initial condition
 function init_pdf_and_moments!(pdf, moments, fields, geometry, composition, r, z, vperp,
                                vpa, vzeta, vr, vz, z_spectral, r_spectral, vperp_spectral,
                                vpa_spectral, vzeta_spectral, vr_spectral, vz_spectral,
-                               species, collisions, external_source_settings,
+                               r_bc, species, collisions, external_source_settings,
                                manufactured_solns_input, t_input, num_diss_params,
                                advection_structs, io_input, input_dict)
     if manufactured_solns_input.use_for_init
         init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, vperp, z,
-                                             r, composition.n_ion_species,
+                                             r, r_bc, composition.n_ion_species,
                                              composition.n_neutral_species,
                                              geometry.input, composition, species,
                                              manufactured_solns_input, collisions)
@@ -1915,10 +1915,12 @@ function init_electron_pdf_over_density_and_boundary_phi!(pdf, phi, density, upa
     return nothing
 end
 
-function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, vperp, z, r, n_ion_species, n_neutral_species, 
-                                              geometry, composition, species, manufactured_solns_input, collisions)
+function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, vperp, z,
+                                              r, r_bc, n_ion_species, n_neutral_species,
+                                              geometry, composition, species,
+                                              manufactured_solns_input, collisions)
     manufactured_solns_list = manufactured_solutions(manufactured_solns_input, r.L, z.L,
-                                                     r.bc, z.bc, geometry, composition,
+                                                     r_bc, z.bc, geometry, composition,
                                                      species, r.n, vperp.n, vzeta.n, vr.n)
     dfni_func = manufactured_solns_list.dfni_func
     densi_func = manufactured_solns_list.densi_func

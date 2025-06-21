@@ -276,12 +276,26 @@ parallel loop ranges, and are only used by the tests in `debug_test/`.
 
     if restart === false
         restarting = false
+
+        # Hacky way to get a radial boundary condition setting that is needed to set up
+        # manufactured solutions initial condition. Would be better to use the
+        # `boundaries::boundary_info` object, but creating that requires the initialised
+        # distribution functions, so cannot be created before the distribution functions.
+        r_bc = "Neumann"
+        if "inner_r_bc_1" ∈ keys(input_dict) && "bc" ∈ keys(input_dict["inner_r_bc_1"])
+            r_bc = input_dict["inner_r_bc_1"]["bc"]
+            # Don't do any checks here that all radial boundary conditions are the same,
+            # as is required by current manufactured solutions code, because here we are
+            # not checking whether this run is using manufactured solutions or not.  These
+            # checks will be done when `manufactured_sources_setup()` is called.
+        end
+
         # initialize f(z,vpa) and the lowest three v-space moments (density(z), upar(z) and ppar(z)),
         # each of which may be evolved separately depending on input choices.
         init_pdf_and_moments!(pdf, moments, fields, geometry, composition, r, z, vperp,
                               vpa, vzeta, vr, vz, z_spectral, r_spectral, vperp_spectral,
                               vpa_spectral, vzeta_spectral, vr_spectral, vz_spectral,
-                              species, collisions, external_source_settings,
+                              r_bc, species, collisions, external_source_settings,
                               manufactured_solns_input, t_input, num_diss_params,
                               advection_structs, io_input, input_dict)
         # initialize time variable
