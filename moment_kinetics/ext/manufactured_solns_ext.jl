@@ -474,12 +474,9 @@ using IfElse
         return Er_expanded, Ez_expanded, phi
     end
 
-    function manufactured_solutions(manufactured_solns_input, Lr, Lz,
-                                    boundaries::boundary_info, z_bc,
+    function manufactured_solutions(manufactured_solns_input, Lr, Lz, r_bc, z_bc,
                                     geometry_input_data::geometry_input, composition,
                                     species, nr, nvperp, nvzeta, nvr)
-
-        r_bc = get_mms_r_bc(boundaries)
 
         # calculate the geometry symbolically
         geometry = geometry_sym(geometry_input_data,Lz,Lr,nr)
