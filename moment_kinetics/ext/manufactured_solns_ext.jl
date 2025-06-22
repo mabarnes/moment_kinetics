@@ -594,25 +594,25 @@ using IfElse
         end
         if r_bc_type === ion_r_boundary_section_periodic
             r_bc = "periodic"
-            if (typeof(boundaries.r.inner_sections.electron) !== electron_r_boundary_section_periodic
-                || typeof(boundaries.r.outer_sections.electron) !== electron_r_boundary_section_periodic)
+            if (typeof(boundaries.r.inner_sections[1].electron) !== electron_r_boundary_section_periodic
+                || typeof(boundaries.r.outer_sections[1].electron) !== electron_r_boundary_section_periodic)
                 error("Electron radial boundary settings different from ion settings "
                       * "- unsupported by manufactured solutions")
             end
-            if (typeof(boundaries.r.inner_sections.neutral) !== neutral_r_boundary_section_periodic
-                || typeof(boundaries.r.outer_sections.neutral) !== neutral_r_boundary_section_periodic)
+            if (typeof(boundaries.r.inner_sections[1].neutral) !== neutral_r_boundary_section_periodic
+                || typeof(boundaries.r.outer_sections[1].neutral) !== neutral_r_boundary_section_periodic)
                 error("Neutral radial boundary settings different from ion settings "
                       * "- unsupported by manufactured solutions")
             end
         elseif r_bc_type === ion_r_boundary_section_Dirichlet
             r_bc = "Dirichlet"
-            if (typeof(boundaries.r.inner_sections.electron) !== electron_r_boundary_section_Dirichlet
-                || typeof(boundaries.r.outer_sections.electron) !== electron_r_boundary_section_Dirichlet)
+            if (typeof(boundaries.r.inner_sections[1].electron) !== electron_r_boundary_section_Dirichlet
+                || typeof(boundaries.r.outer_sections[1].electron) !== electron_r_boundary_section_Dirichlet)
                 error("Electron radial boundary settings different from ion settings "
                       * "- unsupported by manufactured solutions")
             end
-            if (typeof(boundaries.r.inner_sections.neutral) !== neutral_r_boundary_section_Dirichlet
-                || typeof(boundaries.r.outer_sections.neutral) !== neutral_r_boundary_section_Dirichlet)
+            if (typeof(boundaries.r.inner_sections[1].neutral) !== neutral_r_boundary_section_Dirichlet
+                || typeof(boundaries.r.outer_sections[1].neutral) !== neutral_r_boundary_section_Dirichlet)
                 error("Neutral radial boundary settings different from ion settings "
                       * "- unsupported by manufactured solutions")
             end
