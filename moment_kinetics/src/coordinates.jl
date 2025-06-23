@@ -202,7 +202,7 @@ function get_coordinate_input(input_dict, name; ignore_MPI=false,
     if coord_input_dict["nelement_local"] == -1 || ignore_MPI
         coord_input_dict["nelement_local"] = coord_input_dict["nelement"]
     end
-    if name == "r" && coord_input_dict["bc"] != "default"
+    if !warn_unexpected && name == "r" && coord_input_dict["bc"] != "default"
         error("Radial boundary conditions should be set in [inner_r_bc_*] and "
               * "[outer_r_bc_*] sections, not in [r], but got "
               * "bc=$(coord_input_dict["bc"]) in [r] section.")

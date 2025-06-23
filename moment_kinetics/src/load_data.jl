@@ -252,7 +252,8 @@ end
 
 """
     load_coordinate_data(fid, name; printout=false, irank=nothing, nrank=nothing,
-                         run_directory=nothing, ignore_MPI=true)
+                         run_directory=nothing, warn_unexpected=false,
+                         ignore_MPI=true)
 
 Load data for the coordinate `name` from a file-handle `fid`.
 
@@ -271,7 +272,8 @@ shared memory scratch arrays (`ignore_MPI=true` will be passed through to
 [`define_coordinate`](@ref)).
 """
 function load_coordinate_data(fid, name; printout=false, irank=nothing, nrank=nothing,
-                              run_directory=nothing, ignore_MPI=true)
+                              run_directory=nothing, warn_unexpected=false,
+                              ignore_MPI=true)
     if printout
         println("Loading $name coordinate data...")
     end
@@ -369,7 +371,7 @@ function load_coordinate_data(fid, name; printout=false, irank=nothing, nrank=no
         input["element_spacing_option"] = "uniform"
     end
 
-    coord, spectral = define_coordinate(OptionsDict(name => input), name;
+    coord, spectral = define_coordinate(OptionsDict(name => input), name, warn_unexpected;
                                         parallel_io=parallel_io,
                                         run_directory=run_directory,
                                         ignore_MPI=ignore_MPI, irank=irank, nrank=nrank,
@@ -2980,23 +2982,23 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
     evolve_density, evolve_upar, evolve_p = load_mk_options(file_final_restart)
 
     z_local, z_local_spectral, z_chunk_size =
-        load_coordinate_data(file_final_restart, "z")
+        load_coordinate_data(file_final_restart, "z"; warn_unexpected=true)
     r_local, r_local_spectral, r_chunk_size =
-        load_coordinate_data(file_final_restart, "r")
+        load_coordinate_data(file_final_restart, "r"; warn_unexpected=true)
     r, r_spectral, z, z_spectral = construct_global_zr_coords(r_local, z_local)
 
     vperp, vperp_spectral, vperp_chunk_size =
-        load_coordinate_data(file_final_restart, "vperp")
+        load_coordinate_data(file_final_restart, "vperp"; warn_unexpected=true)
     vpa, vpa_spectral, vpa_chunk_size =
-        load_coordinate_data(file_final_restart, "vpa")
+        load_coordinate_data(file_final_restart, "vpa"; warn_unexpected=true)
 
     if n_neutral_species > 0
         vzeta, vzeta_spectral, vzeta_chunk_size =
-            load_coordinate_data(file_final_restart, "vzeta")
+            load_coordinate_data(file_final_restart, "vzeta"; warn_unexpected=true)
         vr, vr_spectral, vr_chunk_size =
-            load_coordinate_data(file_final_restart, "vr")
+            load_coordinate_data(file_final_restart, "vr"; warn_unexpected=true)
         vz, vz_spectral, vz_chunk_size =
-            load_coordinate_data(file_final_restart, "vz")
+            load_coordinate_data(file_final_restart, "vz"; warn_unexpected=true)
     else
         dummy_adv_input = advection_input("default", 1.0, 0.0, 0.0)
         dummy_comm = MPI.COMM_NULL
@@ -5157,8 +5159,10 @@ function construct_global_zr_coords(r_local, z_local; ignore_MPI=true)
                           )
     end
 
-    r_global, r_global_spectral = define_coordinate(make_global_input(r_local), "r"; ignore_MPI=ignore_MPI)
-    z_global, z_global_spectral = define_coordinate(make_global_input(z_local), "z"; ignore_MPI=ignore_MPI)
+    r_global, r_global_spectral = define_coordinate(make_global_input(r_local), "r", true;
+                                                    ignore_MPI=ignore_MPI)
+    z_global, z_global_spectral = define_coordinate(make_global_input(z_local), "z", true;
+                                                    ignore_MPI=ignore_MPI)
 
     return r_global, r_global_spectral, z_global, z_global_spectral
 end
