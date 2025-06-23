@@ -79,6 +79,10 @@ struct em_fields_struct
     Er::MPISharedArray{mk_float,ndim_field}
     # Ez is the parallel electric field
     Ez::MPISharedArray{mk_float,ndim_field}
+    # r-component of the ExB drift velocity
+    vEr::MPISharedArray{mk_float,ndim_field}
+    # z-component of the ExB drift velocity
+    vEz::MPISharedArray{mk_float,ndim_field}
     # gphi is the gyroaveraged electrostatic potential
     gphi::MPISharedArray{mk_float,ndim_gyrofield}
     # gEr is the gyroaveraged radial electric field
@@ -136,18 +140,28 @@ struct moments_ion_substruct{ndim_moment_wall}
     # v_norm_fac accounts for this: it is vth if using the above definition for the parallel velocity,
     # and it is one otherwise
     v_norm_fac::Union{MPISharedArray{mk_float,ndim_moment},Nothing}
+    # this is the r-derivative of the particle density
+    ddens_dr::Union{MPISharedArray{mk_float,ndim_moment},Nothing}
+    # this is the upwinded r-derivative of the particle density
+    ddens_dr_upwind::Union{MPISharedArray{mk_float,ndim_moment},Nothing}
     # this is the z-derivative of the particle density
     ddens_dz::Union{MPISharedArray{mk_float,ndim_moment},Nothing}
     # this is the upwinded z-derivative of the particle density
     ddens_dz_upwind::Union{MPISharedArray{mk_float,ndim_moment},Nothing}
     # this is the second-z-derivative of the particle density
     d2dens_dz2::Union{MPISharedArray{mk_float,ndim_moment},Nothing}
+    # this is the r-derivative of the parallel flow
+    dupar_dr::Union{MPISharedArray{mk_float,ndim_moment},Nothing}
+    # this is the upwinded r-derivative of the parallel flow
+    dupar_dr_upwind::Union{MPISharedArray{mk_float,ndim_moment},Nothing}
     # this is the z-derivative of the parallel flow
     dupar_dz::Union{MPISharedArray{mk_float,ndim_moment},Nothing}
     # this is the upwinded z-derivative of the parallel flow
     dupar_dz_upwind::Union{MPISharedArray{mk_float,ndim_moment},Nothing}
     # this is the second-z-derivative of the parallel flow
     d2upar_dz2::Union{MPISharedArray{mk_float,ndim_moment},Nothing}
+    # this is the upwinded r-derivative of the pressure
+    dp_dr_upwind::Union{MPISharedArray{mk_float,ndim_moment},Nothing}
     # this is the z-derivative of the pressure
     dp_dz::Union{MPISharedArray{mk_float,ndim_moment},Nothing}
     # this is the upwinded z-derivative of the pressure
@@ -158,6 +172,8 @@ struct moments_ion_substruct{ndim_moment_wall}
     dppar_dz::Union{MPISharedArray{mk_float,ndim_moment},Nothing}
     # this is the z-derivative of the parallel heat flux
     dqpar_dz::Union{MPISharedArray{mk_float,ndim_moment},Nothing}
+    # this is the r-derivative of the thermal speed
+    dvth_dr::Union{MPISharedArray{mk_float,ndim_moment},Nothing}
     # this is the z-derivative of the thermal speed
     dvth_dz::Union{MPISharedArray{mk_float,ndim_moment},Nothing}
     # this is the z-derivative of the temperature

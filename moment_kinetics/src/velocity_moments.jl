@@ -98,16 +98,24 @@ function create_moments_ion(nz, nr, n_species, evolve_density, evolve_upar,
     end
 
     if evolve_density
-        ddens_dz = allocate_shared_float(nz, nr, n_species)
         ddens_dz_upwind = allocate_shared_float(nz, nr, n_species)
+        ddens_dz = allocate_shared_float(nz, nr, n_species)
+        ddens_dr_upwind = allocate_shared_float(nz, nr, n_species)
+        ddens_dr = allocate_shared_float(nz, nr, n_species)
         ddens_dt = allocate_shared_float(nz, nr, n_species)
         @serial_region begin
             # Initialise time derivatives so that we can use them without errors when
             # initialising advection speeds. Note the initial values of the speeds are
             # never actually used, as they are updated again in the first timestep.
             ddens_dt .= 0.0
+            if nr == 1
+                ddens_dr_upwind .= 0.0
+                ddens_dr .= 0.0
+            end
         end
     else
+        ddens_dr_upwind = nothing
+        ddens_dr = nothing
         ddens_dz = nothing
         ddens_dz_upwind = nothing
         ddens_dt = nothing
@@ -124,6 +132,8 @@ function create_moments_ion(nz, nr, n_species, evolve_density, evolve_upar,
         dupar_dz = nothing
     end
     if evolve_upar
+        dupar_dr = allocate_shared_float(nz, nr, n_species)
+        dupar_dr_upwind = allocate_shared_float(nz, nr, n_species)
         dupar_dz_upwind = allocate_shared_float(nz, nr, n_species)
         dupar_dt = allocate_shared_float(nz, nr, n_species)
         dnupar_dt = allocate_shared_float(nz, nr, n_species)
@@ -133,8 +143,14 @@ function create_moments_ion(nz, nr, n_species, evolve_density, evolve_upar,
             # never actually used, as they are updated again in the first timestep.
             dupar_dt .= 0.0
             dnupar_dt .= 0.0
+            if nr == 1
+                dupar_dr .= 0.0
+                dupar_dr_upwind .= 0.0
+            end
         end
     else
+        dupar_dr = nothing
+        dupar_dr_upwind = nothing
         dupar_dz_upwind = nothing
         dupar_dt = nothing
         dnupar_dt = nothing
@@ -151,10 +167,12 @@ function create_moments_ion(nz, nr, n_species, evolve_density, evolve_upar,
         dppar_dz = nothing
     end
     if evolve_p
+        dp_dr_upwind = allocate_shared_float(nz, nr, n_species)
         dp_dz = allocate_shared_float(nz, nr, n_species)
         dp_dz_upwind = allocate_shared_float(nz, nr, n_species)
         d2p_dz2 = allocate_shared_float(nz, nr, n_species)
         dqpar_dz = allocate_shared_float(nz, nr, n_species)
+        dvth_dr = allocate_shared_float(nz, nr, n_species)
         dvth_dz = allocate_shared_float(nz, nr, n_species)
         dT_dz = allocate_shared_float(nz, nr, n_species)
         dp_dt = allocate_shared_float(nz, nr, n_species)
@@ -165,12 +183,18 @@ function create_moments_ion(nz, nr, n_species, evolve_density, evolve_upar,
             # never actually used, as they are updated again in the first timestep.
             dp_dt .= 0.0
             dvth_dt .= 0.0
+            if nr == 1
+                dvth_dr .= 0.0
+                dp_dr_upwind .= 0.0
+            end
         end
     else
+        dp_dr_upwind = nothing
         dp_dz = nothing
         dp_dz_upwind = nothing
         d2p_dz2 = nothing
         dqpar_dz = nothing
+        dvth_dr = nothing
         dvth_dz = nothing
         dT_dz = nothing
         dp_dt = nothing
@@ -236,8 +260,9 @@ function create_moments_ion(nz, nr, n_species, evolve_density, evolve_upar,
         parallel_flow_updated, pressure, pressure_updated, parallel_pressure,
         perpendicular_pressure, parallel_heat_flux, parallel_heat_flux_updated,
         thermal_speed, temperature, chodura_integral_lower, chodura_integral_upper,
-        v_norm_fac, ddens_dz, ddens_dz_upwind, d2dens_dz2, dupar_dz, dupar_dz_upwind,
-        d2upar_dz2, dp_dz, dp_dz_upwind, d2p_dz2, dppar_dz, dqpar_dz, dvth_dz, dT_dz,
+        v_norm_fac, ddens_dr, ddens_dr_upwind, ddens_dz, ddens_dz_upwind, d2dens_dz2,
+        dupar_dr, dupar_dr_upwind, dupar_dz, dupar_dz_upwind, d2upar_dz2, dp_dr_upwind,
+        dp_dz, dp_dz_upwind, d2p_dz2, dppar_dz, dqpar_dz, dvth_dr, dvth_dz, dT_dz,
         ddens_dt, dupar_dt, dnupar_dt, dp_dt, dvth_dt, entropy_production,
         external_source_amplitude, external_source_density_amplitude,
         external_source_momentum_amplitude, external_source_pressure_amplitude,
@@ -1388,7 +1413,8 @@ end
 """
 Pre-calculate spatial derivatives of the moments that will be needed for the time advance
 """
-function calculate_ion_moment_derivatives!(moments, scratch, scratch_dummy, z, z_spectral,
+function calculate_ion_moment_derivatives!(moments, fields, geometry, scratch,
+                                           scratch_dummy, r, z, r_spectral, z_spectral,
                                            ion_mom_diss_coeff)
     @begin_s_r_region()
 
@@ -1398,6 +1424,7 @@ function calculate_ion_moment_derivatives!(moments, scratch, scratch_dummy, z, z
     ppar = moments.ion.ppar
     qpar = moments.ion.qpar
     vth = moments.ion.vth
+    bz = geometry.bzed
     dummy_zrs = scratch_dummy.dummy_zrs
     buffer_r_1 = scratch_dummy.buffer_rs_1
     buffer_r_2 = scratch_dummy.buffer_rs_2
@@ -1405,16 +1432,17 @@ function calculate_ion_moment_derivatives!(moments, scratch, scratch_dummy, z, z
     buffer_r_4 = scratch_dummy.buffer_rs_4
     buffer_r_5 = scratch_dummy.buffer_rs_5
     buffer_r_6 = scratch_dummy.buffer_rs_6
+    buffer_z_1 = scratch_dummy.buffer_zs_1
+    buffer_z_2 = scratch_dummy.buffer_zs_2
+    buffer_z_3 = scratch_dummy.buffer_zs_3
+    buffer_z_4 = scratch_dummy.buffer_zs_4
+    buffer_z_5 = scratch_dummy.buffer_zs_5
+    buffer_z_6 = scratch_dummy.buffer_zs_6
+
+    # Non-upwinded derivatives
     if moments.evolve_density
         @views derivative_z!(moments.ion.ddens_dz, density, buffer_r_1,
                              buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
-        # Upwinded using upar as advection velocity, to be used in continuity equation
-        @loop_s_r_z is ir iz begin
-            dummy_zrs[iz,ir,is] = -upar[iz,ir,is]
-        end
-        @views derivative_z!(moments.ion.ddens_dz_upwind, density,
-                             dummy_zrs, buffer_r_1, buffer_r_2, buffer_r_3, buffer_r_4,
-                             buffer_r_5, buffer_r_6, z_spectral, z)
     end
     if moments.evolve_density && ion_mom_diss_coeff > 0.0
 
@@ -1425,16 +1453,6 @@ function calculate_ion_moment_derivatives!(moments, scratch, scratch_dummy, z, z
     if moments.evolve_density || moments.evolve_upar || moments.evolve_p
         @views derivative_z!(moments.ion.dupar_dz, upar, buffer_r_1,
                              buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
-    end
-    if moments.evolve_upar
-        # Upwinded using upar as advection velocity, to be used in force-balance
-        # equation
-        @loop_s_r_z is ir iz begin
-            dummy_zrs[iz,ir,is] = -upar[iz,ir,is]
-        end
-        @views derivative_z!(moments.ion.dupar_dz_upwind, upar, dummy_zrs,
-                             buffer_r_1, buffer_r_2, buffer_r_3, buffer_r_4,
-                             buffer_r_5, buffer_r_6, z_spectral, z)
     end
     if moments.evolve_upar && ion_mom_diss_coeff > 0.0
         # centred second derivative for dissipation
@@ -1448,13 +1466,6 @@ function calculate_ion_moment_derivatives!(moments, scratch, scratch_dummy, z, z
     if moments.evolve_p
         @views derivative_z!(moments.ion.dp_dz, p, buffer_r_1,
                              buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
-        # Upwinded using upar as advection velocity, to be used in energy equation
-        @loop_s_r_z is ir iz begin
-            dummy_zrs[iz,ir,is] = -upar[iz,ir,is]
-        end
-        @views derivative_z!(moments.ion.dp_dz_upwind, p, dummy_zrs,
-                             buffer_r_1, buffer_r_2, buffer_r_3, buffer_r_4,
-                             buffer_r_5, buffer_r_6, z_spectral, z)
 
         if ion_mom_diss_coeff > 0.0
             # centred second derivative for dissipation
@@ -1475,6 +1486,92 @@ function calculate_ion_moment_derivatives!(moments, scratch, scratch_dummy, z, z
         @views derivative_z!(moments.ion.dT_dz, dummy_zrs, buffer_r_1,
                             buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
     end
+
+    # z-upwinded derivatives
+    vEz = fields.vEz
+    if moments.evolve_density
+        # Upwinded with z-advection velocity, to be used in continuity equation
+        @loop_s_r_z is ir iz begin
+            dummy_zrs[iz,ir,is] = -(vEz[iz,ir] + bz[iz,ir] * upar[iz,ir,is])
+        end
+        @views derivative_z!(moments.ion.ddens_dz_upwind, density, dummy_zrs, buffer_r_1,
+                             buffer_r_2, buffer_r_3, buffer_r_4, buffer_r_5, buffer_r_6,
+                             z_spectral, z)
+    end
+    if moments.evolve_upar
+        # Upwinded using upar as advection velocity, to be used in force-balance
+        # equation
+        if !moments.evolve_density
+            # If evolving density this was already calculated
+            @loop_s_r_z is ir iz begin
+                dummy_zrs[iz,ir,is] = -(vEz[iz,ir] + bz[iz,ir] * upar[iz,ir,is])
+            end
+        end
+        @views derivative_z!(moments.ion.dupar_dz_upwind, upar, dummy_zrs, buffer_r_1,
+                             buffer_r_2, buffer_r_3, buffer_r_4, buffer_r_5, buffer_r_6,
+                             z_spectral, z)
+    end
+    if moments.evolve_p
+        # Upwinded using upar as advection velocity, to be used in energy equation
+        if !(moments.evolve_density || moments.evolve_upar)
+            # If evolving density or upar this was already calculated
+            @loop_s_r_z is ir iz begin
+                dummy_zrs[iz,ir,is] = -(vEz[iz,ir] + bz[iz,ir] * upar[iz,ir,is])
+            end
+        end
+        @views derivative_z!(moments.ion.dp_dz_upwind, p, dummy_zrs, buffer_r_1,
+                             buffer_r_2, buffer_r_3, buffer_r_4, buffer_r_5, buffer_r_6,
+                             z_spectral, z)
+    end
+
+    # r derivatives
+    if r.n > 1
+        @begin_s_z_region()
+
+        vEr = fields.vEr
+        if moments.evolve_density
+            @views derivative_r!(moments.ion.ddens_dr, density, buffer_z_1, buffer_z_2,
+                                 buffer_z_3, buffer_z_4, r_spectral, r)
+            # Upwinded with r-advection velocity, to be used in continuity equation
+            @loop_s_r_z is ir iz begin
+                dummy_zrs[iz,ir,is] = -vEr[iz,ir]
+            end
+            @views derivative_r!(moments.ion.ddens_dr_upwind, density,
+                                 dummy_zrs, buffer_z_1, buffer_z_2, buffer_z_3, buffer_z_4,
+                                 buffer_z_5, buffer_z_6, r_spectral, r)
+        end
+        if moments.evolve_upar
+            @views derivative_r!(moments.ion.dupar_dr, upar, buffer_z_1, buffer_z_2,
+                                 buffer_z_3, buffer_z_4, r_spectral, r)
+            # Upwinded using upar as advection velocity, to be used in force-balance
+            # equation
+            if !moments.evolve_density
+                # If evolving density this was already calculated
+                @loop_s_r_z is ir iz begin
+                    dummy_zrs[iz,ir,is] = -vEr[iz,ir]
+                end
+            end
+            @views derivative_r!(moments.ion.dupar_dr_upwind, upar, dummy_zrs, buffer_z_1,
+                                 buffer_z_2, buffer_z_3, buffer_z_4, buffer_z_5,
+                                 buffer_z_6, r_spectral, r)
+        end
+        if moments.evolve_p
+            @views derivative_r!(moments.ion.dvth_dr, vth, buffer_z_1,
+                                 buffer_z_2, buffer_z_3, buffer_z_4, r_spectral, r)
+            # Upwinded using upar as advection velocity, to be used in energy equation
+            if !(moments.evolve_density || moments.evolve_upar)
+                # If evolving density or upar this was already calculated
+                @loop_s_r_z is ir iz begin
+                    dummy_zrs[iz,ir,is] = -vEr[iz,ir]
+                end
+            end
+            @views derivative_r!(moments.ion.dp_dr_upwind, p, dummy_zrs, buffer_z_1,
+                                 buffer_z_2, buffer_z_3, buffer_z_4, buffer_z_5,
+                                 buffer_z_6, r_spectral, r)
+        end
+    end
+
+    return nothing
 end
 
 """

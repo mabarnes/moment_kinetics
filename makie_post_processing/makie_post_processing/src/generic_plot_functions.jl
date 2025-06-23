@@ -1522,9 +1522,9 @@ function animate_2d(xcoord, ycoord, data; frame_index=nothing, ax=nothing, fig=n
 
     # Use transform to allow user to do something like data = abs.(data)
     if colorscale !== nothing
-        extrama_check_colorscale = colorscale
+        extrema_check_colorscale = colorscale
     else
-        extrama_check_colorscale = identity
+        extrema_check_colorscale = identity
     end
     if isa(data, VariableCache)
         datamin, datamax = variable_cache_extrema(data; transform=transform)
@@ -1534,7 +1534,7 @@ function animate_2d(xcoord, ycoord, data; frame_index=nothing, ax=nothing, fig=n
         data = transform.(data)
         heatmap_data = @lift(@view data[:,:,$ind])
     end
-    if !isfinite(extrama_check_colorscale(datamin)) && !isfinite(extrama_check_colorscale(datamax))
+    if !isfinite(extrema_check_colorscale(datamin)) && !isfinite(extrema_check_colorscale(datamax))
         # Would error because the color scale has zero size, so pick some arbitrary
         # non-identical limits
         kwargs = tuple(kwargs..., :colorrange=>(1.0 - 1.0e-3, 1.0 + 1.0e-3))

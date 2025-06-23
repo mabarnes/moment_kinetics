@@ -13,17 +13,27 @@ use the continuity equation dn/dt + d(n*upar)/dz to update the density n for all
 species
 """
 @timeit global_timer continuity_equation!(
-                         dens_out, fvec_in, moments, composition, dt, spectral,
-                         ionization, ion_source_settings, num_diss_params) = begin
+                         dens_out, fvec_in, fields, moments, composition, geometry, dt,
+                         spectral, ionization, ion_source_settings,
+                         num_diss_params) = begin
     @begin_s_r_z_region()
 
     ddens_dt = moments.ion.ddens_dt
 
+    vEr = fields.vEr
+    vEz = fields.vEz
+    n = fvec_in.density
+    upar = fvec_in.upar
+    dn_dr_upwind = moments.ion.ddens_dr_upwind
+    dn_dz_upwind = moments.ion.ddens_dz_upwind
+    du_dz = moments.ion.dupar_dz
+    bz = geometry.bzed
     @loop_s_r_z is ir iz begin
         # Use ddens_dz is upwinded using upar
         ddens_dt[iz,ir,is] =
-            -(fvec_in.upar[iz,ir,is]*moments.ion.ddens_dz_upwind[iz,ir,is] +
-              fvec_in.density[iz,ir,is]*moments.ion.dupar_dz[iz,ir,is])
+            -(vEr[iz,ir] * dn_dr_upwind[iz,ir,is]
+              + (vEz[iz,ir] + bz[iz,ir] * upar[iz,ir,is]) * dn_dz_upwind[iz,ir,is]
+              + bz[iz,ir] * n[iz,ir,is] * du_dz[iz,ir,is])
     end
 
     # update the density to account for ionization collisions;

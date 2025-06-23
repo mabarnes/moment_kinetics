@@ -121,6 +121,8 @@ struct scratch_dummy_arrays
     buffer_zs_2::MPISharedArray{mk_float,2}
     buffer_zs_3::MPISharedArray{mk_float,2}
     buffer_zs_4::MPISharedArray{mk_float,2}
+    buffer_zs_5::MPISharedArray{mk_float,2}
+    buffer_zs_6::MPISharedArray{mk_float,2}
     buffer_zsn_1::MPISharedArray{mk_float,2}
     buffer_zsn_2::MPISharedArray{mk_float,2}
     buffer_zsn_3::MPISharedArray{mk_float,2}
@@ -939,7 +941,8 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
     # 'speed' in advect objects, which are needed for boundary conditions on the
     # distribution function which is then used to (possibly) re-calculate the moments
     # after which the initial values of moment derivatives are re-calculated.
-    calculate_ion_moment_derivatives!(moments, scratch[1], scratch_dummy, z, z_spectral, 
+    calculate_ion_moment_derivatives!(moments, fields, geometry, scratch[1],
+                                      scratch_dummy, r, z, r_spectral, z_spectral,
                                       ion_mom_diss_coeff)
     calculate_neutral_moment_derivatives!(moments, scratch[1], scratch_dummy, z, z_spectral, 
                                           neutral_mom_diss_coeff)
@@ -959,9 +962,9 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
         # initialise the r advection speed
         @begin_s_z_vperp_vpa_region()
         @loop_s is begin
-            @views update_speed_r!(r_advect[is], moments.ion.upar[:,:,is],
-                                   moments.ion.vth[:,:,is], fields, moments.evolve_upar,
-                                   moments.evolve_p, vpa, vperp, z, r, geometry, is)
+            @views update_speed_r!(r_advect[is], fields, moments.evolve_density,
+                                   moments.evolve_upar, moments.evolve_p, vpa, vperp, z,
+                                   r, geometry, is)
         end
         # enforce prescribed boundary condition in r on the distribution function f
     end
@@ -979,9 +982,9 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
 
     # initialise the vpa advection speed
     @begin_s_r_z_vperp_region()
-    update_speed_vpa!(vpa_advect, fields, scratch[1], moments, vpa, vperp, z, r,
-                      composition, collisions, external_source_settings.ion, 0.0,
-                      geometry)
+    update_speed_vpa!(vpa_advect, fields, scratch[1], moments, r_advect, z_advect, vpa,
+                      vperp, z, r, composition, collisions, external_source_settings.ion,
+                      0.0, geometry)
 
     # initialise the vperp advection speed
     # Note that z_advect and r_advect are arguments of update_speed_vperp!
@@ -1176,7 +1179,8 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
         composition.me_over_mi, collisions.electron_fluid.nu_ei,
         composition.electron_physics)
 
-    calculate_ion_moment_derivatives!(moments, scratch[1], scratch_dummy, z, z_spectral, 
+    calculate_ion_moment_derivatives!(moments, fields, geometry, scratch[1],
+                                      scratch_dummy, r, z, r_spectral, z_spectral,
                                       ion_mom_diss_coeff)
     calculate_electron_moment_derivatives!(moments, scratch[1], scratch_dummy, z, z_spectral, 
                                       electron_mom_diss_coeff, composition.electron_physics)
@@ -1575,6 +1579,8 @@ function setup_dummy_and_buffer_arrays(nr, nz, nvpa, nvperp, nvz, nvr, nvzeta,
     buffer_zs_2 = allocate_shared_float(nz,nspecies_ion)
     buffer_zs_3 = allocate_shared_float(nz,nspecies_ion)
     buffer_zs_4 = allocate_shared_float(nz,nspecies_ion)
+    buffer_zs_5 = allocate_shared_float(nz,nspecies_ion)
+    buffer_zs_6 = allocate_shared_float(nz,nspecies_ion)
     buffer_zsn_1 = allocate_shared_float(nz,nspecies_neutral)
     buffer_zsn_2 = allocate_shared_float(nz,nspecies_neutral)
     buffer_zsn_3 = allocate_shared_float(nz,nspecies_neutral)
@@ -1703,7 +1709,7 @@ function setup_dummy_and_buffer_arrays(nr, nz, nvpa, nvperp, nvz, nvr, nvzeta,
     return scratch_dummy_arrays(dummy_s,dummy_sr,dummy_vpavperp,dummy_zrs,dummy_zrsn,
         buffer_z_1,buffer_z_2,buffer_z_3,buffer_z_4,
         buffer_r_1,buffer_r_2,buffer_r_3,buffer_r_4,
-        buffer_zs_1,buffer_zs_2,buffer_zs_3,buffer_zs_4,
+        buffer_zs_1,buffer_zs_2,buffer_zs_3,buffer_zs_4,buffer_zs_5,buffer_zs_6,
         buffer_zsn_1,buffer_zsn_2,buffer_zsn_3,buffer_zsn_4,
         buffer_rs_1,buffer_rs_2,buffer_rs_3,buffer_rs_4,buffer_rs_5,buffer_rs_6,
         buffer_rsn_1,buffer_rsn_2,buffer_rsn_3,buffer_rsn_4,buffer_rsn_5,buffer_rsn_6,
@@ -2540,7 +2546,8 @@ moments and moment derivatives
             r_spectral, geometry, gyroavs, scratch_dummy, z_advect, collisions, false)
     end
 
-    calculate_ion_moment_derivatives!(moments, this_scratch, scratch_dummy, z, z_spectral,
+    calculate_ion_moment_derivatives!(moments, fields, geometry, this_scratch,
+                                      scratch_dummy, r, z, r_spectral, z_spectral,
                                       num_diss_params.ion.moment_dissipation_coefficient)
 
     calculate_electron_moments!(this_scratch, pdf, moments, composition, collisions, r, z,
@@ -2724,9 +2731,9 @@ appropriate.
         # ion vpa-advection
         @begin_r_z_vperp_region()
         ion_vpa_CFL = Inf
-        update_speed_vpa!(vpa_advect, fields, scratch[t_params.n_rk_stages+1], moments, vpa, vperp, z, r,
-                          composition, collisions, external_source_settings.ion, t_params.t[],
-                          geometry)
+        update_speed_vpa!(vpa_advect, fields, scratch[t_params.n_rk_stages+1], moments,
+                          r_advect, z_advect, vpa, vperp, z, r, composition, collisions,
+                          external_source_settings.ion, t_params.t[], geometry)
         @loop_s is begin
             this_minimum = get_minimum_CFL_vpa(vpa_advect[is].speed, vpa)
             @serial_region begin
@@ -3570,8 +3577,9 @@ implementation), a call needs to be made with `dt` scaled by some coefficient.
 
     # Start advance for moments
     if advance.continuity
-        continuity_equation!(fvec_out.density, fvec_in, moments, composition, dt,
-                             z_spectral, collisions.reactions.ionization_frequency,
+        continuity_equation!(fvec_out.density, fvec_in, fields, moments, composition,
+                             geometry, dt, z_spectral,
+                             collisions.reactions.ionization_frequency,
                              external_source_settings.ion, num_diss_params)
         write_debug_IO("continuity_equation!")
     end
@@ -3582,8 +3590,9 @@ implementation), a call needs to be made with `dt` scaled by some coefficient.
         write_debug_IO("force_balance!")
     end
     if advance.energy
-        energy_equation!(fvec_out.p, fvec_in, moments, collisions, dt, z_spectral,
-                         composition, external_source_settings.ion, num_diss_params)
+        energy_equation!(fvec_out.p, fvec_in, moments, fields, collisions, dt, z_spectral,
+                         composition, geometry, external_source_settings.ion,
+                         num_diss_params)
         write_debug_IO("energy_equation!")
     end
     if advance.neutral_continuity
@@ -3660,13 +3669,6 @@ implementation), a call needs to be made with `dt` scaled by some coefficient.
 
     # Start advance for distribution functions
     if composition.ion_physics ∈ (drift_kinetic_ions, gyrokinetic_ions)
-        # vpa_advection! advances the 1D advection equation in vpa.
-        if advance.vpa_advection
-            vpa_advection!(fvec_out.pdf, fvec_in, fields, moments, vpa_advect, vpa, vperp, z, r, dt, t,
-                vpa_spectral, composition, collisions, external_source_settings.ion, geometry)
-            write_debug_IO("vpa_advection!")
-        end
-
         # z_advection! advances 1D advection equation in z
         # apply z-advection operation to ion species
         if advance.z_advection
@@ -3681,6 +3683,17 @@ implementation), a call needs to be made with `dt` scaled by some coefficient.
                         dt, r_spectral, composition, geometry, scratch_dummy)
             write_debug_IO("r_advection!")
         end
+
+        # vpa_advection! advances the 1D advection equation in vpa.
+        # Note this must be called after r_advection!() and z_advection!() so that the r-
+        # and z-advection speeds have been updated.
+        if advance.vpa_advection
+            vpa_advection!(fvec_out.pdf, fvec_in, fields, moments, vpa_advect, r_advect,
+                           z_advect, vpa, vperp, z, r, dt, t, vpa_spectral, composition,
+                           collisions, external_source_settings.ion, geometry)
+            write_debug_IO("vpa_advection!")
+        end
+
         # vperp_advection requires information about z and r advection
         # so call vperp_advection! only after z and r advection routines
         if advance.vperp_advection
@@ -3691,8 +3704,9 @@ implementation), a call needs to be made with `dt` scaled by some coefficient.
         end
 
         if advance.source_terms
-            source_terms!(fvec_out.pdf, fvec_in, moments, vpa, vperp, z, r, dt, z_spectral,
-                        composition, collisions, external_source_settings.ion)
+            source_terms!(fvec_out.pdf, fvec_in, moments, r_advect, z_advect, vpa, vperp,
+                          z, r, dt, z_spectral, composition, collisions,
+                          external_source_settings.ion)
             write_debug_IO("source_terms!")
         end
 
@@ -3981,11 +3995,11 @@ end
         success = success && ion_success
     elseif advance.vpa_advection
         ion_success = implicit_vpa_advection!(fvec_out.pdf, fvec_in, fields, moments,
-                                              z_advect, vpa_advect, vpa, vperp, z, r, dt,
-                                              t_params.t[], r_spectral, z_spectral,
-                                              vpa_spectral, composition, collisions,
-                                              external_source_settings.ion, geometry,
-                                              nl_solver_params.vpa_advection,
+                                              r_advect, z_advect, vpa_advect, vpa, vperp,
+                                              z, r, dt, t_params.t[], r_spectral,
+                                              z_spectral, vpa_spectral, composition,
+                                              collisions, external_source_settings.ion,
+                                              geometry, nl_solver_params.vpa_advection,
                                               advance.vpa_diffusion, num_diss_params,
                                               gyroavs, scratch_dummy)
         success = success && ion_success
@@ -4076,8 +4090,9 @@ Do a backward-Euler timestep for all terms in the ion kinetic equation.
     if vpa.n > 1
         # calculate the vpa advection speed, to ensure it is correct when used to apply the
         # boundary condition
-        update_speed_vpa!(vpa_advect, fields, fvec_in, moments, vpa, vperp, z, r, composition,
-                          collisions, external_source_settings.ion, t, geometry)
+        update_speed_vpa!(vpa_advect, fields, fvec_in, moments, r_advect, z_advect, vpa,
+                          vperp, z, r, composition, collisions,
+                          external_source_settings.ion, t, geometry)
     end
     if z.n > 1
         @loop_s is begin
@@ -4091,9 +4106,9 @@ Do a backward-Euler timestep for all terms in the ion kinetic equation.
     if r.n > 1
         @loop_s is begin
             # get the updated speed along the r direction using the current f
-            @views update_speed_r!(r_advect[is], fvec_in.upar[:,:,is],
-                                   moments.ion.vth[:,:,is], fields, moments.evolve_upar,
-                                   moments.evolve_p, vpa, vperp, z, r, geometry, is)
+            @views update_speed_r!(r_advect[is], fields, moments.evolve_density,
+                                   moments.evolve_upar, moments.evolve_p, vpa, vperp, z,
+                                   r, geometry, is)
         end
     end
     if vperp.n > 1
@@ -4193,8 +4208,8 @@ Do a backward-Euler timestep for all terms in the ion kinetic equation.
         update_derived_moments!(new_scratch, moments, vpa, vperp, z, r, composition,
                                 r_spectral, geometry, gyroavs, scratch_dummy, z_advect,
                                 collisions, false)
-        calculate_ion_moment_derivatives!(moments, new_scratch, scratch_dummy, z,
-                                          z_spectral,
+        calculate_ion_moment_derivatives!(moments, fields, geometry, new_scratch,
+                                          scratch_dummy, r, z, r_spectral, z_spectral,
                                           num_diss_params.ion.moment_dissipation_coefficient)
 
         euler_time_advance!(residual_scratch, new_scratch, pdf, fields, moments,

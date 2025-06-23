@@ -29,10 +29,18 @@ function setup_em_fields(nvperp, nz, nr, n_ion_species, em_input)
     phi0 = allocate_shared_float(nz,nr)
     Er = allocate_shared_float(nz,nr)
     Ez = allocate_shared_float(nz,nr)
+    vEr = allocate_shared_float(nz,nr)
+    vEz = allocate_shared_float(nz,nr)
     gphi = allocate_shared_float(nvperp,nz,nr,n_ion_species)
     gEr = allocate_shared_float(nvperp,nz,nr,n_ion_species)
     gEz = allocate_shared_float(nvperp,nz,nr,n_ion_species)
-    return em_fields_struct(phi, phi0, Er, Ez, gphi, gEr, gEz,
+    @begin_serial_region()
+    @serial_region begin
+        # Ensure these fields are never used uninitialised.
+        vEr .= 0.0
+        vEz .= 0.0
+    end
+    return em_fields_struct(phi, phi0, Er, Ez, vEr, vEz, gphi, gEr, gEz,
                             em_input.force_Er_zero_at_wall)
 end
 
@@ -184,7 +192,31 @@ function update_phi!(fields, fvec, vperp, z, r, composition, collisions, moments
         end
     end
 
+    # Pre-calculate the ExB drift velocity as it will be needed in several places (moment
+    # equations and kinetic equations).
+    Er = fields.Er
+    Ez = fields.Er
+    vEr = fields.vEr
+    vEz = fields.vEr
+    rhostar = geometry.rhostar
+    jacobian = geometry.jacobian
+    bzeta = geometry.bzeta
+    Bmag = geometry.Bmag
+    @begin_r_z_region()
+    @loop_r_z ir iz begin
+        vEr[iz,ir] = get_vEr(rhostar, jacobian[iz,ir], bzeta[iz,ir], Bmag[iz,ir], Ez[iz,ir])
+        vEz[iz,ir] = get_vEz(rhostar, jacobian[iz,ir], bzeta[iz,ir], Bmag[iz,ir], Er[iz,ir])
+    end
+
     return nothing
+end
+
+@inline function get_vEr(rhostar, jacobian, bzeta, Bmag, Ez)
+    return @. rhostar * jacobian * bzeta / Bmag * Ez
+end
+
+@inline function get_vEz(rhostar, jacobian, bzeta, Bmag, Er)
+    return @. -rhostar * jacobian * bzeta / Bmag * Er
 end
 
 function calculate_phi_from_Epar!(phi, Epar, r, z, z_spectral)

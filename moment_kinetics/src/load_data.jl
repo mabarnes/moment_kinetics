@@ -24,6 +24,7 @@ using ..coordinates: coordinate, define_coordinate
 using ..electron_fluid_equations: electron_energy_equation!
 using ..electron_vpa_advection: update_electron_speed_vpa!
 using ..electron_z_advection: update_electron_speed_z!
+using ..em_fields: get_vEr, get_vEz
 using ..energy_equation: energy_equation!, neutral_energy_equation!
 using ..file_io: check_io_implementation, get_group, get_subgroup_keys, get_variable_keys
 using ..force_balance: force_balance!, neutral_force_balance!
@@ -36,6 +37,7 @@ using ..looping
 using ..moment_kinetics_input: mk_input
 using ..neutral_vz_advection: update_speed_neutral_vz!
 using ..neutral_z_advection: update_speed_neutral_z!
+using ..r_advection: update_speed_r!
 using ..type_definitions: mk_float, mk_int, OptionsDict
 using ..utils: get_CFL!, get_minimum_CFL_z, get_minimum_CFL_vpa, get_minimum_CFL_neutral_z,
                get_minimum_CFL_neutral_vz, enum_from_string
@@ -59,14 +61,16 @@ const timestep_diagnostic_variables = ("time_for_run", "step_counter", "dt",
                                        "electron_failures_per_output",
                                        "electron_failure_caused_by_per_output",
                                        "electron_average_successful_dt")
-const em_variables = ("phi", "Er", "Ez")
+const em_variables = ("phi", "Er", "Ez", "vEr", "vEz")
 const ion_moment_variables = ("density", "parallel_flow", "pressure", "parallel_pressure",
                               "thermal_speed", "temperature", "parallel_heat_flux",
                               "collision_frequency_ii", "sound_speed", "mach_number",
                               "total_energy", "total_energy_flux")
-const ion_moment_gradient_variables = ("ddens_dz", "ddens_dz_upwind", "dupar_dz",
-                                       "dupar_dz_upwind", "dp_dz", "dp_dz_upwind",
-                                       "dppar_dz", "dppar_dz_upwind", "dvth_dz", "dT_dz",
+const ion_moment_gradient_variables = ("ddens_dr", "ddens_dr_upwind", "ddens_dz",
+                                       "ddens_dz_upwind", "dupar_dr", "dupar_dr_upwind",
+                                       "dupar_dz", "dupar_dz_upwind", "dp_dr_upwind",
+                                       "dp_dz", "dp_dz_upwind", "dppar_dz",
+                                       "dppar_dz_upwind", "dvth_dr", "dvth_dz", "dT_dz",
                                        "dqpar_dz")
 const electron_moment_variables = ("electron_density", "electron_parallel_flow",
                                    "electron_pressure", "electron_parallel_pressure",
@@ -3577,11 +3581,13 @@ function _get_fake_moments_fields_scratch(all_moments, it; ion_extra::Tuple=(),
 
     ion_moments = make_struct(; dens=:density, upar=:parallel_flow,
         p=:pressure, ppar=:parallel_pressure, qpar=:parallel_heat_flux,
-        vth=:thermal_speed, temp=:temperature, ddens_dz=:ddens_dz,
-        ddens_dz_upwind=:ddens_dz_upwind, dupar_dz=:dupar_dz,
-        dupar_dz_upwind=:dupar_dz_upwind, dp_dz=:dp_dz, dp_dz_upwind=:dp_dz_upwind,
-        dppar_dz=:dppar_dz, dppar_dz_upwind=:dppar_dz_upwind, dvth_dz=:dvth_dz,
-        dT_dz=:dT_dz, dqpar_dz=:dqpar_dz,
+        vth=:thermal_speed, temp=:temperature, ddens_dr=:ddens_dr,
+        ddens_dr_upwind=:ddens_dr_upwind, ddens_dz=:ddens_dz,
+        ddens_dz_upwind=:ddens_dz_upwind, dupar_dr=:dupar_dr,
+        dupar_dr_upwind=:dupar_dr_upwind, dupar_dz=:dupar_dz,
+        dupar_dz_upwind=:dupar_dz_upwind, dp_dr_upwind=:dp_dr_upwind, dp_dz=:dp_dz,
+        dp_dz_upwind=:dp_dz_upwind, dppar_dz=:dppar_dz, dppar_dz_upwind=:dppar_dz_upwind,
+        dvth_dr=:dvth_dr, dvth_dz=:dvth_dz, dT_dz=:dT_dz, dqpar_dz=:dqpar_dz,
         external_source_amplitude=:external_source_amplitude,
         external_source_density_amplitude=:external_source_density_amplitude,
         external_source_momentum_amplitude=:external_source_momentum_amplitude,
@@ -3618,7 +3624,7 @@ function _get_fake_moments_fields_scratch(all_moments, it; ion_extra::Tuple=(),
 
     moments = (; ion=ion_moments, electron=electron_moments, neutral=neutral_moments)
 
-    fields = make_struct(; phi=:phi, Er=:Er, Ez=:Ez)
+    fields = make_struct(; phi=:phi, Er=:Er, Ez=:Ez, vEr=:vEr, vEz=:vEz)
 
     fvec = make_struct(; density=:density, upar=:parallel_flow, p=:pressure,
         electron_density=:electron_density, electron_upar=:electron_parallel_flow,
@@ -3781,6 +3787,38 @@ function _get_variable_internal(run_info, variable_name::Symbol;
         return variable
     end
 
+    function get_r_derivative_of_loaded_variable(x)
+        dx_dr = similar(x)
+        if run_info.r.n == 1
+            dx_dr .= 0.0
+            return dx_dr
+        end
+        if :ir ∈ keys(kwargs) && kwargs[:ir] !== nothing
+            error("Cannot take r-derivative when ir!==nothing")
+        end
+        if :is ∈ keys(kwargs) && isa(kwargs[:is], mk_int) && :iz ∈ keys(kwargs) && isa(kwargs[:iz], mk_int)
+            for it ∈ 1:size(dx_dr, 2)
+                @views derivative!(dx_dr[:,it], x[:,it], run_info.r, run_info.r_spectral)
+            end
+        elseif :iz ∈ keys(kwargs) && isa(kwargs[:iz], mk_int)
+            for it ∈ 1:size(dx_dr, 3), is ∈ 1:size(dx_dr, 2)
+                @views derivative!(dx_dr[:,is,it], x[:,is,it], run_info.r,
+                                   run_info.r_spectral)
+            end
+        elseif :is ∈ keys(kwargs) && isa(kwargs[:is], mk_int)
+            for it ∈ 1:size(dx_dr, 3), iz ∈ 1:run_info.z.n
+                @views derivative!(dx_dr[iz,:,it], x[iz,:,it], run_info.r,
+                                   run_info.r_spectral)
+            end
+        else
+            for it ∈ 1:size(dx_dr, 4), is ∈ 1:size(dx_dr, 3), iz ∈ size(dx_dr, 1)
+                @views derivative!(dx_dr[iz,:,is,it], x[iz,:,is,it], run_info.r,
+                                   run_info.r_spectral)
+            end
+        end
+        return dx_dr
+    end
+
     function get_z_derivative_of_loaded_variable(x)
         dx_dz = similar(x)
         if :iz ∈ keys(kwargs) && kwargs[:iz] !== nothing
@@ -3796,12 +3834,12 @@ function _get_variable_internal(run_info, variable_name::Symbol;
                                    run_info.z_spectral)
             end
         elseif :is ∈ keys(kwargs) && isa(kwargs[:is], mk_int)
-            for it ∈ 1:size(dx_dz, 3), ir ∈ 1:run_info.r.n
-                @views derivative!(dx_dz[:,is,it], x[:,is,it], run_info.z,
+            for it ∈ 1:size(dx_dz, 3), ir ∈ 1:size(dx_dz, 2)
+                @views derivative!(dx_dz[:,ir,it], x[:,ir,it], run_info.z,
                                    run_info.z_spectral)
             end
         else
-            for it ∈ 1:size(dx_dz, 4), is ∈ 1:size(dx_dz, 3), ir ∈ 1:run_info.r.n
+            for it ∈ 1:size(dx_dz, 4), is ∈ 1:size(dx_dz, 3), ir ∈ 1:size(dx_dz, 2)
                 @views derivative!(dx_dz[:,ir,is,it], x[:,ir,is,it], run_info.z,
                                    run_info.z_spectral)
             end
@@ -3809,30 +3847,65 @@ function _get_variable_internal(run_info, variable_name::Symbol;
         return dx_dz
     end
 
-    function get_upwind_z_derivative(x, upar)
+    function get_upwind_r_derivative(x, ur)
+        dx_dr = similar(x)
+        if :ir ∈ keys(kwargs) && kwargs[:ir] !== nothing
+            error("Cannot take r-derivative when ir!==nothing")
+        end
+
+        if run_info.r.n == 1
+            dx_dr .= 0.0
+            return dx_dr
+        end
+
+        if :is ∈ keys(kwargs) && isa(kwargs[:is], mk_int) && :ir ∈ keys(kwargs) && isa(kwargs[:ir], mk_int)
+            for it ∈ 1:size(dx_dr, 2)
+                @views derivative!(dx_dr[:,it], x[:,it], run_info.r, .-ur[:,it],
+                                   run_info.r_spectral)
+            end
+        elseif :iz ∈ keys(kwargs) && isa(kwargs[:iz], mk_int)
+            for it ∈ 1:size(dx_dr, 3), is ∈ 1:size(dx_dr, 2)
+                @views derivative!(dx_dr[:,is,it], x[:,is,it], run_info.r,
+                                   .-ur[:,is,it], run_info.r_spectral)
+            end
+        elseif :is ∈ keys(kwargs) && isa(kwargs[:is], mk_int)
+            for it ∈ 1:size(dx_dr, 3), iz ∈ 1:size(dx_dr, 1)
+                @views derivative!(dx_dr[iz,:,it], x[iz,:,it], run_info.r,
+                                   .-ur[iz,:,it], run_info.r_spectral)
+            end
+        else
+            for it ∈ 1:size(dx_dr, 4), is ∈ 1:size(dx_dr, 3), iz ∈ 1:size(dx_dr, 1)
+                @views derivative!(dx_dr[iz,:,is,it], x[iz,:,is,it], run_info.r,
+                                   .-ur[iz,:,is,it], run_info.r_spectral)
+            end
+        end
+        return dx_dr
+    end
+
+    function get_upwind_z_derivative(x, uz)
         dx_dz = similar(x)
         if :iz ∈ keys(kwargs) && kwargs[:iz] !== nothing
             error("Cannot take z-derivative when iz!==nothing")
         end
         if :is ∈ keys(kwargs) && isa(kwargs[:is], mk_int) && :ir ∈ keys(kwargs) && isa(kwargs[:ir], mk_int)
             for it ∈ 1:size(dx_dz, 2)
-                @views derivative!(dx_dz[:,it], x[:,it], run_info.z, .-upar[:,it],
+                @views derivative!(dx_dz[:,it], x[:,it], run_info.z, .-uz[:,it],
                                    run_info.z_spectral)
             end
         elseif :ir ∈ keys(kwargs) && isa(kwargs[:ir], mk_int)
             for it ∈ 1:size(dx_dz, 3), is ∈ 1:size(dx_dz, 2)
                 @views derivative!(dx_dz[:,is,it], x[:,is,it], run_info.z,
-                                   .-upar[:,is,it], run_info.z_spectral)
+                                   .-uz[:,is,it], run_info.z_spectral)
             end
         elseif :is ∈ keys(kwargs) && isa(kwargs[:is], mk_int)
-            for it ∈ 1:size(dx_dz, 3), ir ∈ 1:run_info.r.n
+            for it ∈ 1:size(dx_dz, 3), ir ∈ 1:size(dx_dz, 2)
                 @views derivative!(dx_dz[:,ir,it], x[:,ir,it], run_info.z,
-                                   .-upar[:,ir,it], run_info.z_spectral)
+                                   .-uz[:,ir,it], run_info.z_spectral)
             end
         else
-            for it ∈ 1:size(dx_dz, 4), is ∈ 1:size(dx_dz, 3), ir ∈ 1:run_info.r.n
+            for it ∈ 1:size(dx_dz, 4), is ∈ 1:size(dx_dz, 3), ir ∈ 1:size(dx_dz, 2)
                 @views derivative!(dx_dz[:,ir,is,it], x[:,ir,is,it], run_info.z,
-                                   .-upar[:,ir,is,it], run_info.z_spectral)
+                                   .-uz[:,ir,is,it], run_info.z_spectral)
             end
         end
         return dx_dz
@@ -3857,32 +3930,67 @@ function _get_variable_internal(run_info, variable_name::Symbol;
         return dx_dz
     end
 
+    function get_ion_r_upwind_factor()
+        vEr = get_variable(run_info, "vEr"; kwargs...)
+        nz, nr, nt = size(vEr)
+        ns = run_info.n_ion_species
+        vEr = reshape(vEr, (nz, nr, 1, nt))
+        return cat((vEr for _ ∈ 1:ns)...; dims=3)
+    end
+
+    function get_ion_z_upwind_factor()
+        upar = get_variable(run_info, "parallel_flow"; kwargs...)
+        nz, nr, ns, nt = size(upar)
+        vEz = reshape(get_variable(run_info, "vEz"; kwargs...), (nz, nr, 1, nt))
+        bz = reshape(run_info.geometry.bzed, (nz, nr, 1, 1))
+        return @. (vEz + bz * upar)
+    end
+
     if variable_name == :temperature
         vth = get_variable(run_info, "thermal_speed"; kwargs...)
         variable = 0.5 * vth.^2
+    elseif variable_name == :ddens_dr
+        variable = get_r_derivative(run_info, "density"; kwargs...)
+    elseif variable_name == :ddens_dr_upwind
+        n = get_variable(run_info, "density"; kwargs...)
+        u = get_ion_r_upwind_factor()
+        variable = get_upwind_r_derivative(n, u)
     elseif variable_name == :ddens_dz
         variable = get_z_derivative(run_info, "density"; kwargs...)
     elseif variable_name == :ddens_dz_upwind
         n = get_variable(run_info, "density"; kwargs...)
+        u = get_ion_z_upwind_factor()
+        variable = get_upwind_z_derivative(n, u)
+    elseif variable_name == :dupar_dr
+        variable = get_r_derivative(run_info, "parallel_flow"; kwargs...)
+    elseif variable_name == :dupar_dr_upwind
         upar = get_variable(run_info, "parallel_flow"; kwargs...)
-        variable = get_upwind_z_derivative(n, upar)
+        u = get_ion_r_upwind_factor()
+        variable = get_upwind_r_derivative(upar, u)
     elseif variable_name == :dupar_dz
         variable = get_z_derivative(run_info, "parallel_flow"; kwargs...)
     elseif variable_name == :dupar_dz_upwind
         upar = get_variable(run_info, "parallel_flow"; kwargs...)
-        variable = get_upwind_z_derivative(upar, upar)
+        u = get_ion_z_upwind_factor()
+        variable = get_upwind_z_derivative(upar, u)
+    elseif variable_name == :dp_dr_upwind
+        p = get_variable(run_info, "pressure"; kwargs...)
+        u = get_ion_r_upwind_factor()
+        variable = get_upwind_r_derivative(p, u)
     elseif variable_name == :dp_dz
         variable = get_z_derivative(run_info, "pressure"; kwargs...)
     elseif variable_name == :dp_dz_upwind
         p = get_variable(run_info, "pressure"; kwargs...)
-        upar = get_variable(run_info, "parallel_flow"; kwargs...)
-        variable = get_upwind_z_derivative(p, upar)
+        u = get_ion_z_upwind_factor()
+        variable = get_upwind_z_derivative(p, u)
     elseif variable_name == :dppar_dz
         variable = get_z_derivative(run_info, "parallel_pressure"; kwargs...)
     elseif variable_name == :dppar_dz_upwind
         ppar = get_variable(run_info, "parallel_pressure"; kwargs...)
-        upar = get_variable(run_info, "parallel_flow"; kwargs...)
-        variable = get_upwind_z_derivative(ppar, upar)
+        u = get_ion_z_upwind_factor()
+        variable = get_upwind_z_derivative(ppar, u)
+    elseif variable_name == :dvth_dr
+        variable = get_r_derivative(run_info, "thermal_speed"; kwargs...)
     elseif variable_name == :dvth_dz
         variable = get_z_derivative(run_info, "thermal_speed"; kwargs...)
     elseif variable_name == :dT_dz
@@ -3949,8 +4057,8 @@ function _get_variable_internal(run_info, variable_name::Symbol;
                                                      ion_extra=(:ddens_dt=>variable,))
                 # Dummy first argument, because we actually want the 'side effect' of
                 # filling the time derivative array in `moments`.
-                continuity_equation!(dummy, fvec, moments, run_info.composition, 0.0,
-                                     run_info.z_spectral,
+                continuity_equation!(dummy, fvec, fields, moments, run_info.composition,
+                                     run_info.geometry, 0.0, run_info.z_spectral,
                                      run_info.collisions.reactions.ionization_frequency,
                                      run_info.external_source_settings.ion,
                                      run_info.num_diss_params)
@@ -3999,9 +4107,9 @@ function _get_variable_internal(run_info, variable_name::Symbol;
                                                      ion_extra=(:dp_dt=>variable,))
                 # Dummy first argument, because we actually want the 'side effect' of
                 # filling the time derivative array in `moments`.
-                energy_equation!(dummy, fvec, moments, run_info.collisions, 0.0,
+                energy_equation!(dummy, fvec, moments, fields, run_info.collisions, 0.0,
                                  run_info.z_spectral, run_info.composition,
-                                 run_info.external_source_settings.ion,
+                                 run_info.geometry, run_info.external_source_settings.ion,
                                  run_info.num_diss_params)
             end
         end
@@ -4132,6 +4240,14 @@ function _get_variable_internal(run_info, variable_name::Symbol;
         p = get_variable(run_info, "p_neutral"; kwargs...)
         vth = get_variable(run_info, "thermal_speed_neutral"; kwargs...)
         variable = @. 0.5 * vth * (dp_dt / p - dn_dt / n)
+    elseif variable_name == :vEr
+        variable = get_vEr(run_info.geometry.rhostar, run_info.geometry.jacobian,
+                           run_info.geometry.bzeta, run_info.geometry.Bmag,
+                           get_variable(run_info, "Ez"; kwargs...))
+    elseif variable_name == :vEz
+        variable = get_vEz(run_info.geometry.rhostar, run_info.geometry.jacobian,
+                           run_info.geometry.bzeta, run_info.geometry.Bmag,
+                           get_variable(run_info, "Er"; kwargs...))
     elseif variable_name == :mfp
         # this is mean free path for krook collision purposes, but it should be the same collision
         # frequency used for other collision operators in general, as it encompasses the magnitude
@@ -4272,6 +4388,69 @@ function _get_variable_internal(run_info, variable_name::Symbol;
             # for 2V/3V cases.
             variable = @. qpar + 0.75*n*vth^2*upar + 0.5*n*upar^3
         end
+    elseif variable_name == :r_advect_speed
+        # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
+        # to get_variable() in this case. Instead select a slice of the result.
+        Ez = get_variable(run_info, "Ez")
+        vEr = get_variable(run_info, "vEr")
+        nz, nr, nt = size(Ez)
+        nspecies = run_info.n_ion_species
+        nvperp = run_info.vperp.n
+        nvpa = run_info.vpa.n
+
+        speed = allocate_float(nr, nvpa, nvperp, nz, nspecies, nt)
+        gEz = allocate_float(nvperp, nz, nr, nspecies, nt)
+        for it ∈ 1:nt, is ∈ 1:nspecies, ir ∈ 1:nr, iz ∈ 1:nz
+            # Don't support gyroaveraging here (yet)
+            gEz[:,iz,ir,is,it] .= Ez[iz,ir,it]
+        end
+
+        setup_distributed_memory_MPI(1,1,1,1)
+        setup_loop_ranges!(0, 1; s=nspecies, sn=run_info.n_neutral_species, r=nr, z=nz,
+                           vperp=nvperp, vpa=nvpa, vzeta=run_info.vzeta.n,
+                           vr=run_info.vr.n, vz=run_info.vz.n)
+        for it ∈ 1:nt, is ∈ 1:nspecies
+            @begin_serial_region()
+            # Only need some struct with a 'speed' variable
+            advect = (speed=@view(speed[:,:,:,:,is,it]),)
+            # Only need Er
+            fields = (gEz=@view(gEz[:,:,:,is,it]), vEr=@view(vEr[:,:,it]))
+            @views update_speed_r!(advect, fields, run_info.evolve_density,
+                                   run_info.evolve_upar, run_info.evolve_p, run_info.vpa,
+                                   run_info.vperp, run_info.z, run_info.r,
+                                   run_info.geometry, is)
+        end
+
+        # Horrible hack so that we can get the speed back without rearranging the
+        # dimensions, if we want that to pass it to a utility function from the main code
+        # (e.g. to calculate a CFL limit).
+        if normalize_advection_speed_shape
+            variable = allocate_float(nvpa, nvperp, nz, nr, nspecies, nt)
+            for it ∈ 1:nt, is ∈ 1:nspecies, ir ∈ 1:nr, iz ∈ 1:nz, ivperp ∈ 1:nvperp, ivpa ∈ 1:nvpa
+                variable[ivpa,ivperp,iz,ir,is,it] = speed[ir,ivpa,ivperp,iz,is,it]
+            end
+            variable = select_slice_of_variable(variable; kwargs...)
+        else
+            variable = speed
+            if :it ∈ keys(kwargs)
+                variable = selectdim(variable, 6, kwargs[:it])
+            end
+            if :is ∈ keys(kwargs)
+                variable = selectdim(variable, 5, kwargs[:is])
+            end
+            if :iz ∈ keys(kwargs)
+                variable = selectdim(variable, 4, kwargs[:iz])
+            end
+            if :ivperp ∈ keys(kwargs)
+                variable = selectdim(variable, 3, kwargs[:ivperp])
+            end
+            if :ivpa ∈ keys(kwargs)
+                variable = selectdim(variable, 2, kwargs[:ivpa])
+            end
+            if :ir ∈ keys(kwargs)
+                variable = selectdim(variable, 1, kwargs[:ir])
+            end
+        end
     elseif variable_name == :z_advect_speed
         # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
         # to get_variable() in this case. Instead select a slice of the result.
@@ -4283,6 +4462,7 @@ function _get_variable_internal(run_info, variable_name::Symbol;
 
         speed = allocate_float(nz, nvpa, nvperp, nr, nspecies, nt)
         Er = get_variable(run_info, "Er")
+        vEz = get_variable(run_info, "vEz")
         gEr = allocate_float(nvperp, nz, nr, nspecies, nt)
         for it ∈ 1:nt, is ∈ 1:nspecies, ir ∈ 1:nr, iz ∈ 1:nz
             # Don't support gyroaveraging here (yet)
@@ -4298,7 +4478,7 @@ function _get_variable_internal(run_info, variable_name::Symbol;
             # Only need some struct with a 'speed' variable
             advect = (speed=@view(speed[:,:,:,:,is,it]),)
             # Only need Er
-            fields = (gEr=@view(gEr[:,:,:,is,it]),)
+            fields = (gEr=@view(gEr[:,:,:,is,it]), vEz=@view(vEz[:,:,it]))
             @views update_speed_z!(advect, upar[:,:,is,it], vth[:,:,is,it],
                                    run_info.evolve_upar, run_info.evolve_p, fields,
                                    run_info.vpa, run_info.vperp, run_info.z, run_info.r,
@@ -4340,11 +4520,10 @@ function _get_variable_internal(run_info, variable_name::Symbol;
         upar = get_variable(run_info, "parallel_flow"; kwargs...)
         p = get_variable(run_info, "pressure"; kwargs...)
         vth = get_variable(run_info, "thermal_speed"; kwargs...)
-        dupar_dz = similar(upar)
+        dupar_dr = get_r_derivative_of_loaded_variable(upar)
         dupar_dz = get_z_derivative_of_loaded_variable(upar)
-        dp_dz = similar(p)
         dp_dz = get_z_derivative_of_loaded_variable(p)
-        dvth_dz = similar(vth)
+        dvth_dr = get_r_derivative_of_loaded_variable(vth)
         dvth_dz = get_z_derivative_of_loaded_variable(vth)
         dqpar_dz = get_z_derivative(run_info, "parallel_heat_flux"; kwargs...)
         dupar_dt = get_variable(run_info, "dupar_dt"; kwargs...)
@@ -4393,6 +4572,11 @@ function _get_variable_internal(run_info, variable_name::Symbol;
         setup_loop_ranges!(0, 1; s=nspecies, sn=run_info.n_neutral_species, r=nr, z=nz,
                            vperp=nvperp, vpa=nvpa, vzeta=run_info.vzeta.n,
                            vr=run_info.vr.n, vz=run_info.vz.n)
+
+        r_speed = get_variable(run_info, "r_advect_speed";
+                               normalize_advection_speed_shape=false, kwargs...)
+        z_speed = get_variable(run_info, "z_advect_speed";
+                               normalize_advection_speed_shape=false, kwargs...)
         
         # Use neutrals for fvec calculation in moment_kinetic version only when 
         # n_neutrals != 0
@@ -4406,10 +4590,14 @@ function _get_variable_internal(run_info, variable_name::Symbol;
             @begin_serial_region()
             # Only need some struct with a 'speed' variable
             advect = [(speed=@view(speed[:,:,:,:,is,it]),) for is ∈ 1:nspecies]
+            r_advect = [(speed=@view(r_speed[:,:,:,:,is,it]),) for is ∈ 1:nspecies]
+            z_advect = [(speed=@view(z_speed[:,:,:,:,is,it]),) for is ∈ 1:nspecies]
             # Only need Ez
-            fields = (gEz=@view(gEz[:,:,:,:,it]),)
+            fields = (gEz=@view(gEz[:,:,:,:,it]), Ez=@view(Ez[:,:,it]))
             @views moments = (ion=(dp_dz=dp_dz[:,:,:,it],
+                                   dupar_dr=dupar_dr[:,:,:,it],
                                    dupar_dz=dupar_dz[:,:,:,it],
+                                   dvth_dr=dvth_dr[:,:,:,it],
                                    dvth_dz=dvth_dz[:,:,:,it],
                                    dqpar_dz=dqpar_dz[:,:,:,it],
                                    vth=vth[:,:,:,it],
@@ -4434,8 +4622,8 @@ function _get_variable_internal(run_info, variable_name::Symbol;
                                upar=upar[:,:,:,it],
                                p=p[:,:,:,it])
             end
-            @views update_speed_vpa!(advect, fields, fvec, moments, run_info.vpa,
-                                     run_info.vperp, run_info.z, run_info.r,
+            @views update_speed_vpa!(advect, fields, fvec, moments, r_advect, z_advect,
+                                     run_info.vpa, run_info.vperp, run_info.z, run_info.r,
                                      run_info.composition, run_info.collisions,
                                      run_info.external_source_settings.ion,
                                      run_info.time[it], run_info.geometry)
@@ -4507,11 +4695,8 @@ function _get_variable_internal(run_info, variable_name::Symbol;
         p = get_variable(run_info, "electron_pressure"; kwargs...)
         ppar = get_variable(run_info, "electron_parallel_pressure"; kwargs...)
         vth = get_variable(run_info, "electron_thermal_speed"; kwargs...)
-        dp_dz = similar(p)
         dp_dz = get_z_derivative_of_loaded_variable(p)
-        dppar_dz = similar(ppar)
         dppar_dz = get_z_derivative_of_loaded_variable(ppar)
-        dvth_dz = similar(vth)
         dvth_dz = get_z_derivative_of_loaded_variable(vth)
         dqpar_dz = get_z_derivative(run_info, "electron_parallel_heat_flux"; kwargs...)
         if any(x -> x.active, run_info.external_source_settings.electron)
@@ -4635,9 +4820,7 @@ function _get_variable_internal(run_info, variable_name::Symbol;
         p_neutral = get_variable(run_info, "p_neutral"; kwargs...)
         vth = get_variable(run_info, "thermal_speed_neutral"; kwargs...)
         duz_dz = get_z_derivative_of_loaded_variable(uz_neutral)
-        dp_dz = similar(p_neutral)
         dp_dz = get_z_derivative_of_loaded_variable(p_neutral)
-        dvth_dz = similar(vth)
         dvth_dz = get_z_derivative_of_loaded_variable(vth)
         dqz_dz = get_z_derivative(run_info, "qz_neutral"; kwargs...)
         dp_dt = get_variable(run_info, "p_neutral")
@@ -5017,6 +5200,55 @@ function _get_variable_internal(run_info, variable_name::Symbol;
     end
 
     return variable
+end
+
+"""
+    get_r_derivative(run_info, variable_name; kwargs...)
+
+Get (i.e. load or calculate) `variable_name` from `run_info` and calculate its
+r-derivative. Returns the r-derivative
+
+`kwargs...` are passed through to `get_variable()`.
+"""
+function get_r_derivative(run_info, variable_name; kwargs...)
+    variable = get_variable(run_info, variable_name; kwargs...)
+    r_deriv = similar(variable)
+
+    if ndims(variable) == 3
+        # EM field
+        nz, nr, nt = size(variable)
+        for it ∈ 1:nt, iz ∈ 1:nz
+            @views derivative!(r_deriv[iz,:,it], variable[iz,:,it], run_info.r,
+                               run_info.r_spectral)
+        end
+    elseif ndims(variable) == 4
+        # Moment variable (ion or neutral)
+        nz, nr, nspecies, nt = size(variable)
+        for it ∈ 1:nt, is ∈ 1:nspecies, iz ∈ 1:nz
+            @views derivative!(r_deriv[iz,:,is,it], variable[iz,:,is,it], run_info.r,
+                               run_info.r_spectral)
+        end
+    elseif ndims(variable) == 6
+        # Ion distribution function
+        nvpa, nvperp, nz, nr, nspecies, nt = size(variable)
+        for it ∈ 1:nt, is ∈ 1:nspecies, iz ∈ 1:nz, ivperp ∈ 1:nvperp, ivpa ∈ 1:nvpa
+            @views derivative!(r_deriv[ivpa,ivperp,iz,:,is,it],
+                               variable[ivpa,ivperp,iz,:,is,it], run_info.r,
+                               run_info.r_spectral)
+        end
+    elseif ndims(variable) == 7
+        # Neutral distribution function
+        nvz, nvr, nvzeta, nz, nr, nspecies, nt = size(variable)
+        for it ∈ 1:nt, is ∈ 1:nspecies, iz ∈ 1:nz, ivzeta ∈ 1:nvzeta, ivr ∈ 1:nvr, ivz ∈ 1:nvz
+            @views derivative!(r_deriv[ivz,ivr,ivzeta,iz,:,is,it],
+                               variable[ivz,ivr,ivzeta,iz,:,is,it], run_info.r,
+                               run_info.r_spectral)
+        end
+    else
+        error("Unsupported number of dimensions ($(ndims(variable))) for $variable_name")
+    end
+
+    return r_deriv
 end
 
 """

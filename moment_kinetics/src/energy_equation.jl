@@ -13,18 +13,30 @@ using ..timer_utils
 evolve the parallel pressure by solving the energy equation
 """
 @timeit global_timer energy_equation!(
-                         p_out, fvec, moments, collisions, dt, spectral, composition,
-                         ion_source_settings, num_diss_params) = begin
+                         p_out, fvec, moments, fields, collisions, dt, spectral,
+                         composition, geometry, ion_source_settings,
+                         num_diss_params) = begin
 
     @begin_s_r_z_region()
 
+    upar = fvec.upar
+    p = fvec.p
+    ppar = moments.ion.ppar
+    dupar_dz = moments.ion.dupar_dz
+    dp_dr_upwind = moments.ion.dp_dr_upwind
+    dp_dz_upwind = moments.ion.dp_dz_upwind
+    dqpar_dz = moments.ion.dqpar_dz
     dp_dt = moments.ion.dp_dt
+    vEr = fields.vEr
+    vEz = fields.vEz
+    bz = geometry.bzed
 
     @loop_s_r_z is ir iz begin
-        dp_dt[iz,ir,is] = (-fvec.upar[iz,ir,is]*moments.ion.dp_dz_upwind[iz,ir,is]
-                           -fvec.p[iz,ir,is]*moments.ion.dupar_dz[iz,ir,is]
-                           - 2.0/3.0*moments.ion.dqpar_dz[iz,ir,is]
-                           - 2.0/3.0*moments.ion.ppar[iz,ir,is]*moments.ion.dupar_dz[iz,ir,is])
+        dp_dt[iz,ir,is] = -(vEr[iz,ir] * dp_dr_upwind[iz,ir,is]
+                            + (vEz[iz,ir] + bz[iz,ir] * upar[iz,ir,is]) * dp_dz_upwind[iz,ir,is]
+                            + bz[iz,ir] * p[iz,ir,is] * dupar_dz[iz,ir,is]
+                            + 2.0/3.0 * bz[iz,ir] * dqpar_dz[iz,ir,is]
+                            + 2.0/3.0 * bz[iz,ir] * ppar[iz,ir,is]*moments.ion.dupar_dz[iz,ir,is])
     end
 
 
