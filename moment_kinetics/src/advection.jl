@@ -111,7 +111,7 @@ function update_rhs!(advection, i_outer, j_outer, k_outer, f_current, coord, dt,
         advection.speed[:,i_outer,j_outer,k_outer], coord.n, dt)
 
     # calculate df/dcoord
-    @views derivative!(coord.scratch, f_current, coord, advection.adv_fac[:,i_outer,j_outer,k_outer], spectral)
+    @views derivative!(coord.scratch, f_current, coord, advection.adv_fac[:,i_outer,j_outer,k_outer], spectral, false)
     #@views derivative!(coord.scratch, f_current, coord, spectral)
     
     #derivative!(coord.scratch, f_current, coord, spectral)
@@ -129,7 +129,7 @@ function update_rhs!(advection, i_outer, j_outer, k_outer, l_outer, f_current, c
         advection.speed[:,i_outer,j_outer,k_outer,l_outer], coord.n, dt)
     
     # calculate df/dcoord
-    @views derivative!(coord.scratch, f_current, coord, advection.adv_fac[:,i_outer,j_outer,k_outer,l_outer], spectral)
+    @views derivative!(coord.scratch, f_current, coord, advection.adv_fac[:,i_outer,j_outer,k_outer,l_outer], spectral, false)
     #@views derivative!(coord.scratch, f_current, coord, spectral)
     
     #derivative!(coord.scratch, f_current, coord, spectral)

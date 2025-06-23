@@ -2416,7 +2416,7 @@ advance
                              neutrals=true)
         # Upwinded using upar as advection velocity, to be used in continuity equation
         @loop_sn_r_z isn ir iz begin
-            dummy_zrsn[iz,ir,isn] = -uz[iz,ir,isn]
+            dummy_zrsn[iz,ir,isn] = -uz[iz,ir,isn] / vth[iz,ir,isn]
         end
         @views derivative_z!(moments.neutral.ddens_dz_upwind, density,
                              dummy_zrsn, buffer_r_1, buffer_r_2, buffer_r_3, buffer_r_4,
@@ -2437,7 +2437,7 @@ advance
         # Upwinded using upar as advection velocity, to be used in force-balance
         # equation
         @loop_sn_r_z isn ir iz begin
-            dummy_zrsn[iz,ir,isn] = -uz[iz,ir,isn]
+            dummy_zrsn[iz,ir,isn] = -uz[iz,ir,isn] / vth[iz,ir,isn]
         end
         @views derivative_z!(moments.neutral.duz_dz_upwind, uz, dummy_zrsn,
                              buffer_r_1, buffer_r_2, buffer_r_3, buffer_r_4,
@@ -2457,7 +2457,7 @@ advance
                              buffer_r_4, z_spectral, z; neutrals=true)
         # Upwinded using upar as advection velocity, to be used in energy equation
         @loop_sn_r_z isn ir iz begin
-            dummy_zrsn[iz,ir,isn] = -uz[iz,ir,isn]
+            dummy_zrsn[iz,ir,isn] = -uz[iz,ir,isn] / vth[iz,ir,isn]
         end
         @views derivative_z!(moments.neutral.dp_dz_upwind, p, dummy_zrsn,
                              buffer_r_1, buffer_r_2, buffer_r_3, buffer_r_4,

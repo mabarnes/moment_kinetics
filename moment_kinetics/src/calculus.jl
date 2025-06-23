@@ -21,8 +21,11 @@ using ..communication: block_rank
 using ..communication: @_block_synchronize, @_anyzv_subblock_synchronize
 using ..debugging
 using ..looping
+using ..moment_kinetics_structs
 
 using LinearAlgebra
+
+const moment_upwind_smoothing_width = 2.0
 
 """
     elementwise_derivative!(coord, f, adv_fac, spectral)
@@ -97,13 +100,13 @@ end
 
 Upwinding derivative.
 """
-function derivative!(df, f, coord, adv_fac, spectral::discretization_info)
+function derivative!(df, f, coord, adv_fac, spectral::discretization_info, is_moment)
     # get the derivative at each grid point within each element and store in
     # coord.scratch_2d
     elementwise_derivative!(coord, f, adv_fac, spectral)
     # map the derivative from the elemental grid to the full grid;
     # at element boundaries, use the derivative from the upwind element.
-    derivative_elements_to_full_grid!(df, coord.scratch_2d, coord, adv_fac)
+    derivative_elements_to_full_grid!(df, coord.scratch_2d, coord, adv_fac, is_moment)
 end
 
 """
@@ -336,12 +339,16 @@ end
 
 """
 """
-function derivative_elements_to_full_grid!(df1d, df2d, coord, adv_fac::AbstractArray{mk_float,1})
+function derivative_elements_to_full_grid!(df1d, df2d, coord, adv_fac::AbstractArray{mk_float,1}, is_moment)
     # no changes need to be made for the derivative at points away from element boundaries
     elements_to_full_grid_interior_pts!(df1d, df2d, coord)
     # resolve the multi-valued nature of the derivative at element boundaries
     # by using the derivative from the upwind element
-    reconcile_element_boundaries_upwind!(df1d, df2d, coord, adv_fac)
+    if is_moment
+        reconcile_element_boundaries_smoothed_upwind!(df1d, df2d, coord, adv_fac)
+    else
+        reconcile_element_boundaries_upwind!(df1d, df2d, coord, adv_fac)
+    end
     return nothing
 end
 
@@ -442,6 +449,61 @@ function reconcile_element_boundaries_upwind!(df1d, df2d, coord, adv_fac::Abstra
                 # use average value
                 df1d[coord.imax[im1]] = 0.5*(df2d[1,ielem]+df2d[coord.ngrid,im1])
             end
+        end
+    end
+    return nothing
+end
+
+"""
+Smoothed upwind function. When `adv_fac = 0.0`, gives 'centred' result (mean of
+`lower_value` and `upper_value`). When `adv_fac` is large and negative (corresponding to
+positive advection speed), tends to `lower_value`, when `adv_fac` is large and positive
+(corresponding to negative speed) tends to `upper_value`.
+
+To be used only for moment equation, not for advection in kinetic equation. For moments,
+where information is not coming strictly from 'upstream' (as advection of moments is an
+integral over velocity space of advection of the distribution function, so has some
+contribution from particles coming from both directions), rather switching the upwind
+sharply depending on the sign of the velocity do a smooth transition. For the moments, the
+input `adv_fac` is upar/vth, so that having a transition width set to a constant number is
+a sensible (?) thing to do.
+"""
+function smooth_upwind_combination(lower_value, upper_value, adv_fac)
+    upper_weight = 0.5 + 0.5 * tanh(moment_upwind_smoothing_width * adv_fac)
+    return upper_weight * upper_value + (1.0 - upper_weight) * lower_value
+end
+
+"""
+if at the boundary point within the element, must carefully
+choose which value of df to use; this is because
+df is multi-valued at the overlapping point at the boundary
+between neighboring elements.
+here we choose to use the value of df from the upwind element.
+"""
+function reconcile_element_boundaries_smoothed_upwind!(df1d, df2d, coord, adv_fac::AbstractArray{mk_float,1})
+    # note that the first ngrid points are classified as belonging to the first element
+    # and the next ngrid-1 points belonging to second element, etc.
+
+    # first deal with domain boundaries
+    if coord.bc == "periodic" && coord.nelement_global == coord.nelement_local
+        # consider left domain boundary
+        df1d[1] = smooth_upwind_combination(df2d[coord.ngrid,coord.nelement_local],
+                                            df2d[1,1], adv_fac[1])
+        # right domain boundary
+        df1d[coord.n] = df1d[1]
+    else
+        df1d[1] = df2d[1,1]
+        df1d[coord.n] = df2d[coord.ngrid,coord.nelement_local]
+    end
+    # next consider remaining elements, if any.
+    # only need to consider interior element boundaries
+    if coord.nelement_local > 1
+        for ielem ∈ 2:coord.nelement_local
+            im1 = ielem-1
+            # consider left element boundary
+            df1d[coord.imax[im1]] = smooth_upwind_combination(df2d[coord.ngrid,im1],
+                                                              df2d[1,ielem],
+                                                              adv_fac[coord.imax[im1]])
         end
     end
     return nothing
@@ -864,9 +926,9 @@ end
 end
 
 function apply_adv_fac!(buffer::AbstractArray{mk_float,0},
-                        adv_fac::AbstractArray{mk_float,10},
-                        endpoints::AbstractArray{mk_float,10}, sgn::mk_int,
-                        coord_name::String; neutrals=false)
+                        adv_fac::AbstractArray{mk_float,0},
+                        endpoints::AbstractArray{mk_float,0}, sgn::mk_int,
+                        coord_name::String, is_moment::Bool; neutrals=false)
     #buffer contains off-process endpoint
     #adv_fac < 0 is positive advection speed
     #adv_fac > 0 is negative advection speed
@@ -876,14 +938,7 @@ function apply_adv_fac!(buffer::AbstractArray{mk_float,0},
     #loop over all indices in array
     @begin_serial_region
     @serial_region begin
-        if sgn*adv_fac[] > 0.0
-            # replace buffer value with endpoint value
-            buffer[] = endpoints[]
-        elseif sgn*adv_fac[] < 0.0
-            #do nothing
-        else #average values
-            buffer[] = 0.5*(buffer[] + endpoints[])
-        end
+        buffer[] = smooth_upwind_combination(buffer[], endpoints[], sgn * adv_fac[])
     end
 end
 
@@ -970,26 +1025,12 @@ function apply_adv_fac!(buffer::AbstractArray{mk_float,1},
     if coord_name == "r"
         @begin_z_region
         @loop_z iz begin
-            if sgn*adv_fac[iz] > 0.0
-                # replace buffer value with endpoint value
-                buffer[iz] = endpoints[iz]
-            elseif sgn*adv_fac[iz] < 0.0
-                #do nothing
-            else #average values
-                buffer[iz] = 0.5*(buffer[iz] + endpoints[iz])
-            end
+            buffer[iz] = smooth_upwind_combination(buffer[iz], endpoints[iz], sgn * adv_fac[iz])
         end
     elseif coord_name == "z"
         @begin_r_region
         @loop_r ir begin
-            if sgn*adv_fac[ir] > 0.0
-                # replace buffer value with endpoint value
-                buffer[ir] = endpoints[ir]
-            elseif sgn*adv_fac[ir] < 0.0
-                #do nothing
-            else #average values
-                buffer[ir] = 0.5*(buffer[ir] + endpoints[ir])
-            end
+            buffer[ir] = smooth_upwind_combination(buffer[ir], endpoints[ir], sgn * adv_fac[ir])
         end
     else
         error("Unsupported dimension '$coord_name'.")
@@ -1011,52 +1052,24 @@ function apply_adv_fac!(buffer::AbstractArray{mk_float,2},
         if neutrals
             @begin_sn_z_region
             @loop_sn_z isn iz begin
-                if sgn*adv_fac[iz,isn] > 0.0
-                    # replace buffer value with endpoint value
-                    buffer[iz,isn] = endpoints[iz,isn]
-                elseif sgn*adv_fac[iz,isn] < 0.0
-                    #do nothing
-                else #average values
-                    buffer[iz,isn] = 0.5*(buffer[iz,isn] + endpoints[iz,isn])
-                end
+                buffer[iz,isn] = smooth_upwind_combination(buffer[iz,isn], endpoints[iz,isn], sgn * adv_fac[iz,isn])
             end
         else
             @begin_s_z_region
             @loop_s_z is iz begin
-                if sgn*adv_fac[iz,is] > 0.0
-                    # replace buffer value with endpoint value
-                    buffer[iz,is] = endpoints[iz,is]
-                elseif sgn*adv_fac[iz,is] < 0.0
-                    #do nothing
-                else #average values
-                    buffer[iz,is] = 0.5*(buffer[iz,is] + endpoints[iz,is])
-                end
+                buffer[iz,is] = smooth_upwind_combination(buffer[iz,is], endpoints[iz,is], sgn * adv_fac[iz,is])
             end
         end
     elseif coord_name == "z"
         if neutrals
             @begin_sn_r_region
             @loop_sn_r isn ir begin
-                if sgn*adv_fac[ir,isn] > 0.0
-                    # replace buffer value with endpoint value
-                    buffer[ir,isn] = endpoints[ir,isn]
-                elseif sgn*adv_fac[ir,isn] < 0.0
-                    #do nothing
-                else #average values
-                    buffer[ir,isn] = 0.5*(buffer[ir,isn] + endpoints[ir,isn])
-                end
+                buffer[ir,isn] = smooth_upwind_combination(buffer[ir,isn], endpoints[ir,isn], sgn * adv_fac[ir,isn])
             end
         else
             @begin_s_r_region
             @loop_s_r is ir begin
-                if sgn*adv_fac[ir,is] > 0.0
-                    # replace buffer value with endpoint value
-                    buffer[ir,is] = endpoints[ir,is]
-                elseif sgn*adv_fac[ir,is] < 0.0
-                    #do nothing
-                else #average values
-                    buffer[ir,is] = 0.5*(buffer[ir,is] + endpoints[ir,is])
-                end
+                buffer[ir,is] = smooth_upwind_combination(buffer[ir,is], endpoints[ir,is], sgn * adv_fac[ir,is])
             end
         end
     else

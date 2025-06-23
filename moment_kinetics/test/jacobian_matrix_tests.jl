@@ -469,7 +469,7 @@ function test_get_pdf_term(test_input::AbstractDict, label::String, get_term::Fu
         #calculate the upwind derivative of the electron pdf w.r.t. wpa
         @loop_z_vperp iz ivperp begin
             @views derivative!(dpdf_dvpa[:,ivperp,iz], f[:,ivperp,iz], vpa,
-                               vpa_advect[1].adv_fac[:,ivperp,iz,ir], vpa_spectral)
+                               vpa_advect[1].adv_fac[:,ivperp,iz,ir], vpa_spectral, false)
         end
 
         d2pdf_dvpa2 = @view scratch_dummy.buffer_vpavperpzr_3[:,:,:,ir]
@@ -1435,7 +1435,7 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
         #calculate the upwind derivative of the electron pdf w.r.t. wpa
         @loop_z_vperp iz ivperp begin
             @views derivative!(dpdf_dvpa[:,ivperp,iz], f[:,ivperp,iz], vpa,
-                               vpa_advect[1].adv_fac[:,ivperp,iz,ir], vpa_spectral)
+                               vpa_advect[1].adv_fac[:,ivperp,iz,ir], vpa_spectral, false)
         end
         vpa_speed = @view vpa_advect[1].speed[:,:,:,ir]
 
@@ -1948,7 +1948,7 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2)
         #calculate the upwind derivative of the electron pdf w.r.t. wpa
         @loop_z_vperp iz ivperp begin
             @views derivative!(dpdf_dvpa[:,ivperp,iz], f[:,ivperp,iz], vpa,
-                               vpa_advect[1].adv_fac[:,ivperp,iz,ir], vpa_spectral)
+                               vpa_advect[1].adv_fac[:,ivperp,iz,ir], vpa_spectral, false)
         end
 
         jacobian = nl_solver_params.electron_advance.preconditioners[1][2]

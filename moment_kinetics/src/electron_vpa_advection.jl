@@ -43,7 +43,7 @@ calculate the wpa-advection term for the electron kinetic equation
     #calculate the upwind derivative of the electron pdf w.r.t. wpa
     @loop_z_vperp iz ivperp begin
         @views derivative!(dpdf_dvpa[:,ivperp,iz], pdf_in[:,ivperp,iz], vpa,
-                           advect[1].adv_fac[:,ivperp,iz,ir], spectral)
+                           advect[1].adv_fac[:,ivperp,iz,ir], spectral, false)
     end
     #@loop_z_vperp iz ivperp begin
     #    @views second_derivative!(d2pdf_dvpa2[:,ivperp,iz], pdf_in[:,ivperp,iz], vpa, spectral)
