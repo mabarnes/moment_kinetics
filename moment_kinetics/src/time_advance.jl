@@ -737,7 +737,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
     if composition.n_neutral_species > 0
         t_params.limit_caused_by["neutral_pdf_accuracy"] = 0
         t_params.limit_caused_by["neutral_CFL_z"] = 0
-        t_params.limit_caused_by["neutral_CFL_vpa"] = 0
+        t_params.limit_caused_by["neutral_CFL_vz"] = 0
         t_params.failure_caused_by["neutral_pdf_accuracy"] = 0
 
         if moments.evolve_density
