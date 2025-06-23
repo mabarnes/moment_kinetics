@@ -19,8 +19,11 @@ using MPI
 using ..communication: block_rank
 using ..communication: @_block_synchronize
 using ..looping
+using ..moment_kinetics_structs
 
 using LinearAlgebra
+
+const moment_upwind_smoothing_width = 2.0
 
 """
     elementwise_derivative!(coord, f, adv_fac, spectral)
@@ -89,13 +92,13 @@ end
 
 Upwinding derivative.
 """
-function derivative!(df, f, coord, adv_fac, spectral::discretization_info)
+function derivative!(df, f, coord, adv_fac, spectral::discretization_info, is_moment)
     # get the derivative at each grid point within each element and store in
     # coord.scratch_2d
     elementwise_derivative!(coord, f, adv_fac, spectral)
     # map the derivative from the elemental grid to the full grid;
     # at element boundaries, use the derivative from the upwind element.
-    derivative_elements_to_full_grid!(df, coord.scratch_2d, coord, adv_fac)
+    derivative_elements_to_full_grid!(df, coord.scratch_2d, coord, adv_fac, is_moment)
 end
 
 """
@@ -326,12 +329,16 @@ end
 
 """
 """
-function derivative_elements_to_full_grid!(df1d, df2d, coord, adv_fac::AbstractArray{mk_float,1})
+function derivative_elements_to_full_grid!(df1d, df2d, coord, adv_fac::AbstractArray{mk_float,1}, is_moment)
     # no changes need to be made for the derivative at points away from element boundaries
     elements_to_full_grid_interior_pts!(df1d, df2d, coord)
     # resolve the multi-valued nature of the derivative at element boundaries
     # by using the derivative from the upwind element
-    reconcile_element_boundaries_upwind!(df1d, df2d, coord, adv_fac)
+    if is_moment
+        reconcile_element_boundaries_smoothed_upwind!(df1d, df2d, coord, adv_fac)
+    else
+        reconcile_element_boundaries_upwind!(df1d, df2d, coord, adv_fac)
+    end
     return nothing
 end
 
@@ -432,6 +439,61 @@ function reconcile_element_boundaries_upwind!(df1d, df2d, coord, adv_fac::Abstra
                 # use average value
                 df1d[coord.imax[im1]] = 0.5*(df2d[1,ielem]+df2d[coord.ngrid,im1])
             end
+        end
+    end
+    return nothing
+end
+
+"""
+Smoothed upwind function. When `adv_fac = 0.0`, gives 'centred' result (mean of
+`lower_value` and `upper_value`). When `adv_fac` is large and negative (corresponding to
+positive advection speed), tends to `lower_value`, when `adv_fac` is large and positive
+(corresponding to negative speed) tends to `upper_value`.
+
+To be used only for moment equation, not for advection in kinetic equation. For moments,
+where information is not coming strictly from 'upstream' (as advection of moments is an
+integral over velocity space of advection of the distribution function, so has some
+contribution from particles coming from both directions), rather switching the upwind
+sharply depending on the sign of the velocity do a smooth transition. For the moments, the
+input `adv_fac` is upar/vth, so that having a transition width set to a constant number is
+a sensible (?) thing to do.
+"""
+function smooth_upwind_combination(lower_value, upper_value, adv_fac)
+    upper_weight = 0.5 + 0.5 * tanh(moment_upwind_smoothing_width * adv_fac)
+    return upper_weight * upper_value + (1.0 - upper_weight) * lower_value
+end
+
+"""
+if at the boundary point within the element, must carefully
+choose which value of df to use; this is because
+df is multi-valued at the overlapping point at the boundary
+between neighboring elements.
+here we choose to use the value of df from the upwind element.
+"""
+function reconcile_element_boundaries_smoothed_upwind!(df1d, df2d, coord, adv_fac::AbstractArray{mk_float,1})
+    # note that the first ngrid points are classified as belonging to the first element
+    # and the next ngrid-1 points belonging to second element, etc.
+
+    # first deal with domain boundaries
+    if coord.bc == "periodic" && coord.nelement_global == coord.nelement_local
+        # consider left domain boundary
+        df1d[1] = smooth_upwind_combination(df2d[coord.ngrid,coord.nelement_local],
+                                            df2d[1,1], adv_fac[1])
+        # right domain boundary
+        df1d[coord.n] = df1d[1]
+    else
+        df1d[1] = df2d[1,1]
+        df1d[coord.n] = df2d[coord.ngrid,coord.nelement_local]
+    end
+    # next consider remaining elements, if any.
+    # only need to consider interior element boundaries
+    if coord.nelement_local > 1
+        for ielem ∈ 2:coord.nelement_local
+            im1 = ielem-1
+            # consider left element boundary
+            df1d[coord.imax[im1]] = smooth_upwind_combination(df2d[coord.ngrid,im1],
+                                                              df2d[1,ielem],
+                                                              adv_fac[coord.imax[im1]])
         end
     end
     return nothing
@@ -611,25 +673,33 @@ end
 end
 
 function apply_adv_fac!(buffer::AbstractArray{mk_float,Ndims},adv_fac::AbstractArray{mk_float,Ndims},endpoints::AbstractArray{mk_float,Ndims},sgn::mk_int) where Ndims
-		#buffer contains off-process endpoint
-		#adv_fac < 0 is positive advection speed
-		#adv_fac > 0 is negative advection speed
-		#endpoint is local on-process endpoint
-		#sgn = 1 for send irank -> irank + 1
-		#sgn = -1 for send irank + 1 -> irank
-		#loop over all indices in array
-		for i in eachindex(buffer,adv_fac,endpoints)
-			if sgn*adv_fac[i] > 0.0
-			# replace buffer value with endpoint value
-				buffer[i] = endpoints[i]
-			elseif sgn*adv_fac[i] < 0.0
-				#do nothing
-			else #average values
-				buffer[i] = 0.5*(buffer[i] + endpoints[i])
-			end
-		end
-		
-	end
+    #buffer contains off-process endpoint
+    #adv_fac < 0 is positive advection speed
+    #adv_fac > 0 is negative advection speed
+    #endpoint is local on-process endpoint
+    #sgn = 1 for send irank -> irank + 1
+    #sgn = -1 for send irank + 1 -> irank
+    #loop over all indices in array
+    if Ndims > ndim_moment
+        # Distribution function derivative
+        for i in eachindex(buffer,adv_fac,endpoints)
+            if sgn*adv_fac[i] > 0.0
+                # replace buffer value with endpoint value
+                buffer[i] = endpoints[i]
+            elseif sgn*adv_fac[i] < 0.0
+                #do nothing
+            else #average values
+                buffer[i] = 0.5*(buffer[i] + endpoints[i])
+            end
+        end
+    else
+        for i in eachindex(buffer,adv_fac,endpoints)
+            buffer[i] = smooth_upwind_combination(buffer[i], endpoints[i], sgn * adv_fac[i])
+        end
+    end
+
+    return nothing
+end
 	
 @timeit_debug global_timer reconcile_element_boundaries_MPI!(
                   df1d::AbstractArray{mk_float,Ndims},

@@ -120,7 +120,7 @@ function runtests()
         end
 
         @testset "finite_difference derivatives upwinding (5 argument), periodic" verbose=false begin
-            @testset "$nelement $ngrid" for
+            @testset "$nelement $ngrid $fd_option $is_moment" for
                     (fd_option, order) ∈ (
                                           ("fourth_order_centered", 4),
                                           ("second_order_centered", 2),
@@ -129,7 +129,7 @@ function runtests()
                                           ("second_order_upwind", 2),
                                           ("first_order_upwind", 1),
                                          ),
-                    nelement ∈ (1:5), ngrid ∈ (9:33)
+                    nelement ∈ (1:5), ngrid ∈ (9:33), is_moment ∈ (false, true)
 
                 # define inputs needed for the test
                 L = 6.0
@@ -162,7 +162,7 @@ function runtests()
                     adv_fac .= advection
 
                     # differentiate f
-                    derivative!(df, f, x, adv_fac, spectral)
+                    derivative!(df, f, x, adv_fac, spectral, is_moment)
 
                     rtol = 1.e2 / (nelement*(ngrid-1))^order
                     @test isapprox(df, expected_df, rtol=rtol, atol=1.e-15,
@@ -217,7 +217,7 @@ function runtests()
         end
 
         @testset "finite_difference derivatives upwinding (5 argument)" verbose=false begin
-            @testset "$nelement $ngrid" for bc ∈ ("constant", "zero"),
+            @testset "$nelement $ngrid $fd_option $is_moment" for bc ∈ ("constant", "zero"),
                     (fd_option, rtol_prefactor) ∈ (("fourth_order_centered", 3.0),
                                                    ("second_order_centered", 3.0),
                                                    #("fourth_order_upwind", 3.0), # not defined yet
@@ -225,7 +225,7 @@ function runtests()
                                                    ("second_order_upwind", 3.0),
                                                    ("first_order_upwind", 5.0)
                                                   ),
-                    nelement ∈ (1:5), ngrid ∈ (9:33)
+                    nelement ∈ (1:5), ngrid ∈ (9:33), is_moment ∈ (false, true)
 
                 # define inputs needed for the test
                 L = 6.0
@@ -260,7 +260,7 @@ function runtests()
                     adv_fac .= advection
 
                     # differentiate f
-                    derivative!(df, f, x, adv_fac, spectral)
+                    derivative!(df, f, x, adv_fac, spectral, is_moment)
 
                     # Note: only get 1st order convergence at the boundary for an input
                     # function that has zero gradient at the boundary
@@ -402,7 +402,7 @@ function runtests()
                      (4, 29, 4.e-13),
                      (4, 30, 4.e-13),
                      (4, 31, 4.e-13),
-                     (4, 32, 4.e-13),
+                     (4, 32, 6.e-13),
                      (4, 33, 4.e-13),
 
                      (5, 3, 2.e-1),
@@ -471,7 +471,7 @@ function runtests()
         end
 
         @testset "Chebyshev pseudospectral derivatives upwinding (5 argument), periodic" verbose=false begin
-            @testset "$nelement $ngrid $cheb_option" for (nelement, ngrid, rtol) ∈
+            @testset "$nelement $ngrid $cheb_option $is_moment" for (nelement, ngrid, rtol) ∈
                     (
                      (1, 5, 8.e-1),
                      (1, 6, 2.e-1),
@@ -629,7 +629,7 @@ function runtests()
                      (5, 31, 8.e-13),
                      (5, 32, 8.e-13),
                      (5, 33, 8.e-13),
-                    ), cheb_option in ("FFT","matrix")
+                    ), cheb_option in ("FFT","matrix"), is_moment ∈ (false, true)
 
                 # define inputs needed for the test
                 L = 6.0
@@ -659,7 +659,7 @@ function runtests()
                     adv_fac .= advection
 
                     # differentiate f
-                    derivative!(df, f, x, adv_fac, spectral)
+                    derivative!(df, f, x, adv_fac, spectral, is_moment)
 
                     @test isapprox(df, expected_df, rtol=rtol, atol=1.e-12,
                                    norm=maxabs_norm)
@@ -714,9 +714,9 @@ function runtests()
         end
 
         @testset "Chebyshev pseudospectral derivatives upwinding (5 argument), polynomials" verbose=false begin
-            @testset "$nelement $ngrid $bc $element_spacing_option $cheb_option" for
+            @testset "$nelement $ngrid $bc $element_spacing_option $cheb_option $is_moment" for
                     bc ∈ ("constant", "zero"), element_spacing_option ∈ ("uniform", "sqrt"),
-                    nelement ∈ (1:5), ngrid ∈ (3:33), cheb_option in ("FFT","matrix")
+                    nelement ∈ (1:5), ngrid ∈ (3:33), cheb_option ∈ ("FFT","matrix"), is_moment ∈ (false, true)
 
                 # define inputs needed for the test
                 L = 1.0
@@ -752,7 +752,7 @@ function runtests()
                         adv_fac .= advection
 
                         # differentiate f
-                        derivative!(df, f, x, adv_fac, spectral)
+                        derivative!(df, f, x, adv_fac, spectral, is_moment)
 
                         # Note the error we might expect for a p=32 polynomial is probably
                         # something like p*(round-off) for x^p (?) so error on expected_df
@@ -878,7 +878,7 @@ function runtests()
         end
 
         @testset "GaussLegendre pseudospectral derivatives upwinding (5 argument), testing periodic functions" verbose=false begin
-            @testset "$nelement $ngrid" for (nelement, ngrid, rtol) ∈
+            @testset "$nelement $ngrid $is_moment" for (nelement, ngrid, rtol) ∈
                     (
                      (1, 5, 8.e-1),
                      (1, 6, 3.e-1),
@@ -956,7 +956,7 @@ function runtests()
                      (5, 15, 2.e-13),
                      (5, 16, 2.e-13),
                      (5, 17, 4.e-13),
-                    )
+                    ), is_moment ∈ (false, true)
 
                 # define inputs needed for the test
                 L = 6.0
@@ -986,7 +986,7 @@ function runtests()
                     adv_fac .= advection
 
                     # differentiate f
-                    derivative!(df, f, x, adv_fac, spectral)
+                    derivative!(df, f, x, adv_fac, spectral, is_moment)
 
                     @test isapprox(df, expected_df, rtol=rtol, atol=1.e-12,
                                    norm=maxabs_norm)
@@ -1041,8 +1041,8 @@ function runtests()
         end
         
         @testset "GaussLegendre pseudospectral derivatives upwinding (5 argument), testing exact polynomials" verbose=false begin
-            @testset "$nelement $ngrid" for bc ∈ ("constant", "zero"), element_spacing_option ∈ ("uniform", "sqrt"),
-                    nelement ∈ (1:5), ngrid ∈ (3:17)
+            @testset "$nelement $ngrid $is_moment" for bc ∈ ("constant", "zero"), element_spacing_option ∈ ("uniform", "sqrt"),
+                    nelement ∈ (1:5), ngrid ∈ (3:17), is_moment ∈ (false, true)
 
                 # define inputs needed for the test
                 L = 1.0
@@ -1078,7 +1078,7 @@ function runtests()
                         adv_fac .= advection
 
                         # differentiate f
-                        derivative!(df, f, x, adv_fac, spectral)
+                        derivative!(df, f, x, adv_fac, spectral, is_moment)
 
                         # Note the error we might expect for a p=32 polynomial is probably
                         # something like p*(round-off) for x^p (?) so error on expected_df

@@ -1428,7 +1428,7 @@ global_rank[] == 0 && println("recalculating precon")
             #calculate the upwind derivative of the electron pdf w.r.t. wpa
             @loop_z_vperp iz ivperp begin
                 @views derivative!(dpdf_dvpa[:,ivperp,iz], f_electron_new[:,ivperp,iz], vpa,
-                                   vpa_advect[1].adv_fac[:,ivperp,iz,ir], vpa_spectral)
+                                   vpa_advect[1].adv_fac[:,ivperp,iz,ir], vpa_spectral, false)
             end
 
             zeroth_moment = z.scratch_shared
@@ -4985,7 +4985,7 @@ in the time derivative term as it is for the non-boundary points.]
     #calculate the upwind derivative of the electron pdf w.r.t. wpa
     @loop_z_vperp iz ivperp begin
         @views derivative!(dpdf_dvpa[:,ivperp,iz], f[:,ivperp,iz], vpa,
-                           vpa_advect[1].adv_fac[:,ivperp,iz,ir], vpa_spectral)
+                           vpa_advect[1].adv_fac[:,ivperp,iz,ir], vpa_spectral, false)
     end
 
     zeroth_moment = z.scratch_shared

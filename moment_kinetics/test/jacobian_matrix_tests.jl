@@ -639,7 +639,7 @@ function test_electron_vpa_advection(test_input; rtol=(3.0e2*epsilon)^2)
         #calculate the upwind derivative of the electron pdf w.r.t. wpa
         @loop_z_vperp iz ivperp begin
             @views derivative!(dpdf_dvpa[:,ivperp,iz], f[:,ivperp,iz], vpa,
-                               vpa_advect[1].adv_fac[:,ivperp,iz,ir], vpa_spectral)
+                               vpa_advect[1].adv_fac[:,ivperp,iz,ir], vpa_spectral, false)
         end
 
         jacobian_matrix = allocate_shared_float(total_size, total_size)
@@ -3168,7 +3168,7 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
         #calculate the upwind derivative of the electron pdf w.r.t. wpa
         @loop_z_vperp iz ivperp begin
             @views derivative!(dpdf_dvpa[:,ivperp,iz], f[:,ivperp,iz], vpa,
-                               vpa_advect[1].adv_fac[:,ivperp,iz,ir], vpa_spectral)
+                               vpa_advect[1].adv_fac[:,ivperp,iz,ir], vpa_spectral, false)
         end
 
         zeroth_moment = z.scratch_shared
@@ -3591,7 +3591,7 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2)
         #calculate the upwind derivative of the electron pdf w.r.t. wpa
         @loop_z_vperp iz ivperp begin
             @views derivative!(dpdf_dvpa[:,ivperp,iz], f[:,ivperp,iz], vpa,
-                               vpa_advect[1].adv_fac[:,ivperp,iz,ir], vpa_spectral)
+                               vpa_advect[1].adv_fac[:,ivperp,iz,ir], vpa_spectral, false)
         end
 
         jacobian_matrix = allocate_shared_float(total_size, total_size)
