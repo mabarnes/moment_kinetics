@@ -87,8 +87,6 @@ function derivative_finite_difference!(df, f, del, adv_fac, bc, finite_differenc
 		upwind_second_order!(df, f, del, adv_fac, bc, igrid, ielement)
 	elseif finite_difference_option == "third_order_upwind"
 		upwind_third_order!(df, f, del, adv_fac, bc, igrid, ielement)
-	elseif finite_difference_option == "fourth_order_upwind"
-		upwind_fourth_order!(df, f, del, bc, igrid, ielement)
 	elseif finite_difference_option == "second_order_centered"
 		centered_second_order!(df, f, del, bc, igrid, ielement)
 	elseif finite_difference_option == "fourth_order_centered"

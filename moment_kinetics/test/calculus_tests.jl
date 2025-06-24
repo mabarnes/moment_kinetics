@@ -128,7 +128,6 @@ function runtests()
                     (fd_option, order) ∈ (
                                           ("fourth_order_centered", 4),
                                           ("second_order_centered", 2),
-                                          ("fourth_order_upwind", 4),
                                           ("third_order_upwind", 3),
                                           ("second_order_upwind", 2),
                                           ("first_order_upwind", 1),
@@ -138,7 +137,6 @@ function runtests()
                 # define inputs needed for the test
                 L = 6.0
                 bc = "periodic"
-                fd_option = "fourth_order_centered"
                 element_spacing_option = "uniform" # dummy value
                 # create the coordinate struct 'x'
                 # This test runs effectively in serial, so implicitly uses
@@ -224,7 +222,6 @@ function runtests()
             @testset "$nelement $ngrid" for bc ∈ ("constant", "zero"),
                     (fd_option, rtol_prefactor) ∈ (("fourth_order_centered", 3.0),
                                                    ("second_order_centered", 3.0),
-                                                   #("fourth_order_upwind", 3.0), # not defined yet
                                                    ("third_order_upwind", 3.0),
                                                    ("second_order_upwind", 3.0),
                                                    ("first_order_upwind", 5.0)
