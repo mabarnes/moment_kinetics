@@ -4353,22 +4353,22 @@ function _get_variable_internal(run_info, variable_name::Symbol;
         if :is ∈ keys(kwargs) && isa(kwargs[:is], mk_int) && :ir ∈ keys(kwargs) && isa(kwargs[:ir], mk_int)
             for it ∈ 1:size(dx_dz, 2)
                 @views derivative!(dx_dz[:,it], x[:,it], run_info.z, .-upar[:,it],
-                                   run_info.z_spectral)
+                                   run_info.z_spectral, true)
             end
         elseif :ir ∈ keys(kwargs) && isa(kwargs[:ir], mk_int)
             for it ∈ 1:size(dx_dz, 3), is ∈ 1:size(dx_dz, 2)
                 @views derivative!(dx_dz[:,is,it], x[:,is,it], run_info.z,
-                                   .-upar[:,is,it], run_info.z_spectral)
+                                   .-upar[:,is,it], run_info.z_spectral, true)
             end
         elseif :is ∈ keys(kwargs) && isa(kwargs[:is], mk_int)
             for it ∈ 1:size(dx_dz, 3), ir ∈ 1:run_info.r.n
                 @views derivative!(dx_dz[:,ir,it], x[:,ir,it], run_info.z,
-                                   .-upar[:,ir,it], run_info.z_spectral)
+                                   .-upar[:,ir,it], run_info.z_spectral, true)
             end
         else
             for it ∈ 1:size(dx_dz, 4), is ∈ 1:size(dx_dz, 3), ir ∈ 1:run_info.r.n
                 @views derivative!(dx_dz[:,ir,is,it], x[:,ir,is,it], run_info.z,
-                                   .-upar[:,ir,is,it], run_info.z_spectral)
+                                   .-upar[:,ir,is,it], run_info.z_spectral, true)
             end
         end
         return dx_dz

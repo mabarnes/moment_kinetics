@@ -616,7 +616,7 @@ function derivative_r!(dfdr::AbstractArray{mk_float,2}, f::AbstractArray{mk_floa
 
     # differentiate f w.r.t r
     @loop_z iz begin
-        @views derivative!(dfdr[iz,:], f[iz,:], r, adv_fac[:,iz], r_spectral)
+        @views derivative!(dfdr[iz,:], f[iz,:], r, adv_fac[:,iz], r_spectral, true)
         # get external endpoints to reconcile via MPI
         dfdr_lower_endpoints[iz] = r.scratch_2d[1,1]
         dfdr_upper_endpoints[iz] = r.scratch_2d[end,end]
@@ -645,7 +645,7 @@ function derivative_r!(dfdr::AbstractArray{mk_float,3}, f::AbstractArray{mk_floa
     # differentiate f w.r.t r
     if neutrals
         @loop_sn_z isn iz begin
-            @views derivative!(dfdr[iz,:,isn], f[iz,:,isn], r, adv_fac[:,iz,isn], r_spectral)
+            @views derivative!(dfdr[iz,:,isn], f[iz,:,isn], r, adv_fac[:,iz,isn], r_spectral, true)
             # get external endpoints to reconcile via MPI
             dfdr_lower_endpoints[iz,isn] = r.scratch_2d[1,1]
             dfdr_upper_endpoints[iz,isn] = r.scratch_2d[end,end]
@@ -654,7 +654,7 @@ function derivative_r!(dfdr::AbstractArray{mk_float,3}, f::AbstractArray{mk_floa
         end
     else
         @loop_s_z is iz begin
-            @views derivative!(dfdr[iz,:,is], f[iz,:,is], r, adv_fac[:,iz,is], r_spectral)
+            @views derivative!(dfdr[iz,:,is], f[iz,:,is], r, adv_fac[:,iz,is], r_spectral, true)
             # get external endpoints to reconcile via MPI
             dfdr_lower_endpoints[iz,is] = r.scratch_2d[1,1]
             dfdr_upper_endpoints[iz,is] = r.scratch_2d[end,end]
@@ -690,7 +690,7 @@ function derivative_r!(dfdr::AbstractArray{mk_float,5}, f::AbstractArray{mk_floa
 
 	# differentiate f w.r.t r
 	@loop_s_z_vperp_vpa is iz ivperp ivpa begin
-		@views derivative!(dfdr[ivpa,ivperp,iz,:,is], f[ivpa,ivperp,iz,:,is], r, advect[is].adv_fac[:,ivpa,ivperp,iz], r_spectral)
+		@views derivative!(dfdr[ivpa,ivperp,iz,:,is], f[ivpa,ivperp,iz,:,is], r, advect[is].adv_fac[:,ivpa,ivperp,iz], r_spectral, false)
 		# get external endpoints to reconcile via MPI
 		dfdr_lower_endpoints[ivpa,ivperp,iz,is] = r.scratch_2d[1,1]
 		dfdr_upper_endpoints[ivpa,ivperp,iz,is] = r.scratch_2d[end,end]
@@ -722,7 +722,7 @@ function derivative_r!(dfdr::AbstractArray{mk_float,6}, f::AbstractArray{mk_floa
 	# differentiate f w.r.t r
 	@loop_sn_z_vzeta_vr_vz isn iz ivzeta ivr ivz begin
 		@views derivative!(dfdr[ivz,ivr,ivzeta,iz,:,isn], f[ivz,ivr,ivzeta,iz,:,isn],
-                            r, advect[isn].adv_fac[:,ivz,ivr,ivzeta,iz], r_spectral)
+                            r, advect[isn].adv_fac[:,ivz,ivr,ivzeta,iz], r_spectral, false)
 		# get external endpoints to reconcile via MPI
 		dfdr_lower_endpoints[ivz,ivr,ivzeta,iz,isn] = r.scratch_2d[1,1]
 		dfdr_upper_endpoints[ivz,ivr,ivzeta,iz,isn] = r.scratch_2d[end,end]
@@ -761,7 +761,7 @@ function derivative_z!(dfdz::AbstractArray{mk_float,2}, f::AbstractArray{mk_floa
 
     # differentiate f w.r.t z
     @loop_r ir begin
-        @views derivative!(dfdz[:,ir], f[:,ir], z, adv_fac[:,ir], z_spectral)
+        @views derivative!(dfdz[:,ir], f[:,ir], z, adv_fac[:,ir], z_spectral, true)
         # get external endpoints to reconcile via MPI
         dfdz_lower_endpoints[ir] = z.scratch_2d[1,1]
         dfdz_upper_endpoints[ir] = z.scratch_2d[end,end]
@@ -789,7 +789,7 @@ function derivative_z!(dfdz::AbstractArray{mk_float,3}, f::AbstractArray{mk_floa
     # differentiate f w.r.t z
     if neutrals
         @loop_sn_r isn ir begin
-            @views derivative!(dfdz[:,ir,isn], f[:,ir,isn], z, adv_fac[:,ir,isn], z_spectral)
+            @views derivative!(dfdz[:,ir,isn], f[:,ir,isn], z, adv_fac[:,ir,isn], z_spectral, true)
             # get external endpoints to reconcile via MPI
             dfdz_lower_endpoints[ir,isn] = z.scratch_2d[1,1]
             dfdz_upper_endpoints[ir,isn] = z.scratch_2d[end,end]
@@ -798,7 +798,7 @@ function derivative_z!(dfdz::AbstractArray{mk_float,3}, f::AbstractArray{mk_floa
         end
     else
         @loop_s_r is ir begin
-            @views derivative!(dfdz[:,ir,is], f[:,ir,is], z, adv_fac[:,ir,is], z_spectral)
+            @views derivative!(dfdz[:,ir,is], f[:,ir,is], z, adv_fac[:,ir,is], z_spectral, true)
             # get external endpoints to reconcile via MPI
             dfdz_lower_endpoints[ir,is] = z.scratch_2d[1,1]
             dfdz_upper_endpoints[ir,is] = z.scratch_2d[end,end]
@@ -833,7 +833,7 @@ function derivative_z_pdf_vpavperpz!(dfdz::AbstractArray{mk_float,3}, f::Abstrac
 
     # differentiate f w.r.t z
     @loop_vperp_vpa ivperp ivpa begin
-        @views derivative!(dfdz[ivpa,ivperp,:], f[ivpa,ivperp,:], z, adv_fac[:,ivpa,ivperp], z_spectral)
+        @views derivative!(dfdz[ivpa,ivperp,:], f[ivpa,ivperp,:], z, adv_fac[:,ivpa,ivperp], z_spectral, false)
         # get external endpoints to reconcile via MPI
         dfdz_lower_endpoints[ivpa,ivperp] = z.scratch_2d[1,1]
         dfdz_upper_endpoints[ivpa,ivperp] = z.scratch_2d[end,end]
@@ -863,7 +863,7 @@ function derivative_z!(dfdz::AbstractArray{mk_float,5}, f::AbstractArray{mk_floa
 
 	# differentiate f w.r.t z
 	@loop_s_r_vperp_vpa is ir ivperp ivpa begin
-		@views derivative!(dfdz[ivpa,ivperp,:,ir,is], f[ivpa,ivperp,:,ir,is], z, advect[is].adv_fac[:,ivpa,ivperp,ir], z_spectral)
+		@views derivative!(dfdz[ivpa,ivperp,:,ir,is], f[ivpa,ivperp,:,ir,is], z, advect[is].adv_fac[:,ivpa,ivperp,ir], z_spectral, false)
 		# get external endpoints to reconcile via MPI
 		dfdz_lower_endpoints[ivpa,ivperp,ir,is] = z.scratch_2d[1,1]
 		dfdz_upper_endpoints[ivpa,ivperp,ir,is] = z.scratch_2d[end,end]
@@ -894,7 +894,7 @@ function derivative_z!(dfdz::AbstractArray{mk_float,4}, f::AbstractArray{mk_floa
 
     # differentiate the pdf f w.r.t z
     @loop_r_vperp_vpa ir ivperp ivpa begin
-            @views derivative!(dfdz[ivpa,ivperp,:,ir], f[ivpa,ivperp,:,ir], z, advect[1].adv_fac[:,ivpa,ivperp,ir], z_spectral)
+            @views derivative!(dfdz[ivpa,ivperp,:,ir], f[ivpa,ivperp,:,ir], z, advect[1].adv_fac[:,ivpa,ivperp,ir], z_spectral, false)
             # get external endpoints to reconcile via MPI
             dfdz_lower_endpoints[ivpa,ivperp,ir] = z.scratch_2d[1,1]
             dfdz_upper_endpoints[ivpa,ivperp,ir] = z.scratch_2d[end,end]
@@ -926,7 +926,7 @@ function derivative_z!(dfdz::AbstractArray{mk_float,6}, f::AbstractArray{mk_floa
 	# differentiate f w.r.t z
 	@loop_sn_r_vzeta_vr_vz isn ir ivzeta ivr ivz begin
 		@views derivative!(dfdz[ivz,ivr,ivzeta,:,ir,isn], f[ivz,ivr,ivzeta,:,ir,isn],
-                            z, advect[isn].adv_fac[:,ivz,ivr,ivzeta,ir], z_spectral)
+                            z, advect[isn].adv_fac[:,ivz,ivr,ivzeta,ir], z_spectral, false)
 		# get external endpoints to reconcile via MPI
 		dfdz_lower_endpoints[ivz,ivr,ivzeta,ir,isn] = z.scratch_2d[1,1]
 		dfdz_upper_endpoints[ivz,ivr,ivzeta,ir,isn] = z.scratch_2d[end,end]

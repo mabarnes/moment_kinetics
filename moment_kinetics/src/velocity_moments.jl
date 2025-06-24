@@ -1397,9 +1397,10 @@ function calculate_ion_moment_derivatives!(moments, scratch, scratch_dummy, z, z
     if moments.evolve_density
         @views derivative_z!(moments.ion.ddens_dz, density, buffer_r_1,
                              buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
-        # Upwinded using upar as advection velocity, to be used in continuity equation
+        # Upwinded using upar/vth as adv_fac, so that smooth-upwind algorithm operates on
+        # this normalised flow speed. To be used in continuity equation.
         @loop_s_r_z is ir iz begin
-            dummy_zrs[iz,ir,is] = -upar[iz,ir,is]
+            dummy_zrs[iz,ir,is] = -upar[iz,ir,is] / vth[iz,ir,is]
         end
         @views derivative_z!(moments.ion.ddens_dz_upwind, density,
                              dummy_zrs, buffer_r_1, buffer_r_2, buffer_r_3, buffer_r_4,
@@ -1416,10 +1417,10 @@ function calculate_ion_moment_derivatives!(moments, scratch, scratch_dummy, z, z
                              buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
     end
     if moments.evolve_upar
-        # Upwinded using upar as advection velocity, to be used in force-balance
-        # equation
+        # Upwinded using upar/vth as adv_fac, so that smooth-upwind algorithm operates on
+        # this normalised flow speed. To be used in force-balance equation.
         @loop_s_r_z is ir iz begin
-            dummy_zrs[iz,ir,is] = -upar[iz,ir,is]
+            dummy_zrs[iz,ir,is] = -upar[iz,ir,is] / vth[iz,ir,is]
         end
         @views derivative_z!(moments.ion.dupar_dz_upwind, upar, dummy_zrs,
                              buffer_r_1, buffer_r_2, buffer_r_3, buffer_r_4,
@@ -1437,9 +1438,10 @@ function calculate_ion_moment_derivatives!(moments, scratch, scratch_dummy, z, z
     if moments.evolve_p
         @views derivative_z!(moments.ion.dp_dz, p, buffer_r_1,
                              buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
-        # Upwinded using upar as advection velocity, to be used in energy equation
+        # Upwinded using upar/vth as adv_fac, so that smooth-upwind algorithm operates on
+        # this normalised flow speed. To be used in energy equation.
         @loop_s_r_z is ir iz begin
-            dummy_zrs[iz,ir,is] = -upar[iz,ir,is]
+            dummy_zrs[iz,ir,is] = -upar[iz,ir,is] / vth[iz,ir,is]
         end
         @views derivative_z!(moments.ion.dp_dz_upwind, p, dummy_zrs,
                              buffer_r_1, buffer_r_2, buffer_r_3, buffer_r_4,
@@ -2289,7 +2291,7 @@ function calculate_neutral_moment_derivatives!(moments, scratch, scratch_dummy, 
                              neutrals=true)
         # Upwinded using upar as advection velocity, to be used in continuity equation
         @loop_sn_r_z isn ir iz begin
-            dummy_zrsn[iz,ir,isn] = -uz[iz,ir,isn]
+            dummy_zrsn[iz,ir,isn] = -uz[iz,ir,isn] / vth[iz,ir,isn]
         end
         @views derivative_z!(moments.neutral.ddens_dz_upwind, density,
                              dummy_zrsn, buffer_r_1, buffer_r_2, buffer_r_3, buffer_r_4,
@@ -2310,7 +2312,7 @@ function calculate_neutral_moment_derivatives!(moments, scratch, scratch_dummy, 
         # Upwinded using upar as advection velocity, to be used in force-balance
         # equation
         @loop_sn_r_z isn ir iz begin
-            dummy_zrsn[iz,ir,isn] = -uz[iz,ir,isn]
+            dummy_zrsn[iz,ir,isn] = -uz[iz,ir,isn] / vth[iz,ir,isn]
         end
         @views derivative_z!(moments.neutral.duz_dz_upwind, uz, dummy_zrsn,
                              buffer_r_1, buffer_r_2, buffer_r_3, buffer_r_4,
@@ -2330,7 +2332,7 @@ function calculate_neutral_moment_derivatives!(moments, scratch, scratch_dummy, 
                              buffer_r_4, z_spectral, z; neutrals=true)
         # Upwinded using upar as advection velocity, to be used in energy equation
         @loop_sn_r_z isn ir iz begin
-            dummy_zrsn[iz,ir,isn] = -uz[iz,ir,isn]
+            dummy_zrsn[iz,ir,isn] = -uz[iz,ir,isn] / vth[iz,ir,isn]
         end
         @views derivative_z!(moments.neutral.dp_dz_upwind, p, dummy_zrsn,
                              buffer_r_1, buffer_r_2, buffer_r_3, buffer_r_4,
