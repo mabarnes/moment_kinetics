@@ -353,8 +353,10 @@ Base.@kwdef struct ion_source_data
     source_strength::mk_float
     # For use with "energy" option, Krook source (...)
     source_n::mk_float
-    # Temperature of source (variation along z can be introduced later)
+    # Amplitude of temperature source
     source_T::mk_float
+    # Temperature of source
+    source_T_array::MPISharedArray{mk_float,2}
     # birth speed for "alphas" option
     source_v0::mk_float
     # birth vpa for "beam" option
@@ -378,6 +380,19 @@ Base.@kwdef struct ion_source_data
     # relative minimum of source in z, acts as the baseline (so you can elevate
     # your gaussian source above 0, for example)
     z_relative_minimum::mk_float
+    # profile for source_T_array in r ('constant' or 'gaussian' or 'parabolic' etc.)
+    r_profile_T::String
+    # width of source_T_array in r (doesn't apply to constant profile)
+    r_width_T::mk_float
+    # relative minimum of source_T_array in r, acts as the baseline
+    r_relative_minimum_T::mk_float
+    # profile for source_T_array in z ('constant' or 'gaussian' or 'parabolic' etc.)
+    z_profile_T::String
+    # width of source_T_array in z (doesn't apply to constant profile)
+    z_width_T::mk_float
+    # relative minimum of source_T_array in z, acts as the baseline (so you can elevate
+    # your gaussian source above 0, for example)
+    z_relative_minimum_T::mk_float
     # velocity profile for the source, Maxwellian would be default, can have beams too 
     source_type::String #"Maxwellian" "energy", "alphas", "alphas-with-losses", "beam", "beam-with-losses"
     # proportional integral controllers - for when you want to find a source profile that matches
@@ -418,8 +433,23 @@ Base.@kwdef struct electron_source_data
     # source strength (in the case of an ion energy source) and source Temperature
     # can be different. The other four are set by the ion source data.
     source_strength::mk_float
+    # Amplitude of temperature source
     source_T::mk_float
+    source_T_array::MPISharedArray{mk_float,2}
     active::Bool
+    # profile for source_T_array in r ('constant' or 'gaussian' or 'parabolic' etc.)
+    r_profile_T::String
+    # width of source_T_array in r (doesn't apply to constant profile)
+    r_width_T::mk_float
+    # relative minimum of source_T_array in r, acts as the baseline
+    r_relative_minimum_T::mk_float
+    # profile for source_T_array in z ('constant' or 'gaussian' or 'parabolic' etc.)
+    z_profile_T::String
+    # width of source_T_array in z (doesn't apply to constant profile)
+    z_width_T::mk_float
+    # relative minimum of source_T_array in z, acts as the baseline (so you can elevate
+    # your gaussian source above 0, for example)
+    z_relative_minimum_T::mk_float
     r_amplitude::Vector{mk_float}
     z_amplitude::Vector{mk_float}
     source_type::String
@@ -433,8 +463,10 @@ Base.@kwdef struct neutral_source_data
     source_strength::mk_float
     # For use with "energy" option, Krook source (...)
     source_n::mk_float
-    # Temperature of source (variation along z can be introduced later)
+    # Amplitude of temperature source
     source_T::mk_float
+    # Temperature of source (variation along z can be introduced later)
+    source_T_array::MPISharedArray{mk_float,2}
     # birth speed for "alphas" option
     source_v0::mk_float
     # birth vpa for "beam" option
@@ -458,6 +490,19 @@ Base.@kwdef struct neutral_source_data
     # relative minimum of source in z, acts as the baseline (so you can elevate
     # your gaussian source above 0, for example)
     z_relative_minimum::mk_float
+    # profile for source_T_array in r ('constant' or 'gaussian' or 'parabolic' etc.)
+    r_profile_T::String
+    # width of source_T_array in r (doesn't apply to constant profile)
+    r_width_T::mk_float
+    # relative minimum of source_T_array in r, acts as the baseline
+    r_relative_minimum_T::mk_float
+    # profile for source_T_array in z ('constant' or 'gaussian' or 'parabolic' etc.)
+    z_profile_T::String
+    # width of source_T_array in z (doesn't apply to constant profile)
+    z_width_T::mk_float
+    # relative minimum of source_T_array in z, acts as the baseline (so you can elevate
+    # your gaussian source above 0, for example)
+    z_relative_minimum_T::mk_float
     # velocity profile for the source, Maxwellian would be default, can have beams too 
     source_type::String #"Maxwellian" "energy", "alphas", "alphas-with-losses", "beam", "beam-with-losses"
     # proportional integral controllers - for when you want to find a source profile that matches

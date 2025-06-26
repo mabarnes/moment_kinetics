@@ -26,6 +26,7 @@ using ..electron_vpa_advection: update_electron_speed_vpa!
 using ..electron_z_advection: update_electron_speed_z!
 using ..em_fields: get_vEr, get_vEz
 using ..energy_equation: energy_equation!, neutral_energy_equation!
+using ..external_sources: setup_external_sources!
 using ..file_io: check_io_implementation, get_group, get_subgroup_keys, get_variable_keys
 using ..force_balance: force_balance!, neutral_force_balance!
 using ..input_structs
@@ -2978,9 +2979,13 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
 
     # obtain input options from moment_kinetics_input.jl
     # and check input to catch errors
-    io_input, evolve_moments, t_input, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _,
-        composition, species, collisions, geometry, drive_input, external_source_settings,
-        num_diss_params, manufactured_solns_input = mk_input(input; warn_unexpected=true)
+    io_input, evolve_moments, t_input, z, _, r, _, _, _, _, _, _, _, _, _, _, _, _, _,
+        composition, species, collisions, geometry, drive_input, num_diss_params,
+        manufactured_solns_input = mk_input(input; warn_unexpected=true)
+
+    external_source_settings = setup_external_sources!(input, r, z,
+                                                       composition.electron_physics, true;
+                                                       ignore_MPI=true)
 
     n_ion_species, n_neutral_species = load_species_data(file_final_restart)
     evolve_density, evolve_upar, evolve_p = load_mk_options(file_final_restart)

@@ -42,7 +42,7 @@ function get_unnormalized_parameters(input::OptionsDict, warn_unexpected::Bool=f
     io_input, evolve_moments, t_input, z, z_spectral, r, r_spectral, vpa, vpa_spectral,
         vperp, vperp_spectral, gyrophase, gyrophase_spectral, vz, vz_spectral, vr,
         vr_spectral, vzeta, vzeta_spectral, composition, species, collisions, geometry,
-        drive_input, external_source_settings, num_diss_params, manufactured_solns_input =
+        drive_input, num_diss_params, manufactured_solns_input =
             mk_input(input)
 
     reference_params = setup_reference_parameters(input, warn_unexpected)
