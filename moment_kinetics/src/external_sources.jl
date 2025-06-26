@@ -549,6 +549,9 @@ function get_source_profile(profile_type, width, relative_minimum, coord)
     elseif profile_type == "gaussian"
         x = coord.grid
         return @. (1.0 - relative_minimum) * exp(-(x / width)^2) + relative_minimum
+    elseif profile_type == "exponential"
+        x = coord.grid .- coord.grid[1]
+        return @. (1.0 - relative_minimum) * exp(-(x / width)) + relative_minimum
     elseif profile_type == "parabolic"
         x = coord.grid
         profile = @. (1.0 - relative_minimum) * (1.0 - (2.0 * x / width)^2) + relative_minimum
