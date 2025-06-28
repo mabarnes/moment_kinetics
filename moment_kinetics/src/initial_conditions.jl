@@ -2082,8 +2082,9 @@ function convert_full_f_ion_to_normalised!(f, density, upar, p, vth, vperp, vpa,
         if evolve_p || evolve_upar
             # The values to interpolate *to* are the v_parallel/vperp values corresponding
             # to the w_parallel/w_perp grid
-            vpa.scratch .= vpagrid_to_dzdt(vpa.grid, vth[iz], upar[iz], evolve_p,
-                                           evolve_upar)
+            # We actually want v_∥ here, not v_z, so pass bz=1, vEz=0
+            vpa.scratch .= vpagrid_to_dzdt(vpa.grid, vth[iz], upar[iz], 1.0, 0.0,
+                                           evolve_p, evolve_upar)
             if evolve_p
                 @. vperp.scratch .= vperp.grid * vth[iz]
             else
@@ -2176,7 +2177,8 @@ function convert_full_f_neutral_to_normalised!(f, density, uz, p, vth, vzeta, vr
         if evolve_p || evolve_upar
             # The values to interpolate *to* are the vz/vzeta/vr values corresponding to
             # the wz/wzeta/wr grid.
-            vz.scratch .= vpagrid_to_dzdt(vz.grid, vth[iz], uz[iz], evolve_p,
+            # We actually want v_∥ here, not v_z, so pass bz=1, vEz=0
+            vz.scratch .= vpagrid_to_dzdt(vz.grid, vth[iz], uz[iz], 1.0, 0.0, evolve_p,
                                           evolve_upar)
             if evolve_p
                 @. vzeta.scratch = vzeta.grid * vth[iz]

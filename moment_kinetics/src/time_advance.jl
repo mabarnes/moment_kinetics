@@ -204,10 +204,6 @@ struct scratch_dummy_arrays
     buffer_vzvrvzetazrsn_1::MPISharedArray{mk_float,6}
     buffer_vzvrvzetazrsn_2::MPISharedArray{mk_float,6}
     
-    buffer_vpavperp_1::MPISharedArray{mk_float,2}
-    buffer_vpavperp_2::MPISharedArray{mk_float,2}
-    buffer_vpavperp_3::MPISharedArray{mk_float,2}
-
     buffer_vpavperpzr_1::MPISharedArray{mk_float,4}
     buffer_vpavperpzr_2::MPISharedArray{mk_float,4}
     buffer_vpavperpzr_3::MPISharedArray{mk_float,4}
@@ -1059,10 +1055,11 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
         # enforce boundary conditions and moment constraints to ensure a consistent initial
         # condition
         enforce_boundary_conditions!(
-            pdf.ion.norm, moments.ion.dens, moments.ion.upar, moments.ion.p, fields.phi,
+            pdf.ion.norm, moments.ion.dens, moments.ion.upar, moments.ion.p, fields,
             boundaries, moments, vpa, vperp, z, r, vpa_spectral, vperp_spectral,
-            vpa_advect, vperp_advect, z_advect, r_advect, composition, scratch_dummy,
-            advance.r_diffusion, advance.vpa_diffusion, advance.vperp_diffusion)
+            vpa_advect, vperp_advect, z_advect, r_advect, composition, geometry,
+            scratch_dummy, advance.r_diffusion, advance.vpa_diffusion,
+            advance.vperp_diffusion)
 
         # Ensure normalised pdf exactly obeys integral constraints if evolving moments
         if moments.evolve_density && moments.enforce_conservation
@@ -1699,10 +1696,6 @@ function setup_dummy_and_buffer_arrays(nr, nz, nvpa, nvperp, nvz, nvr, nvzeta,
     buffer_vzvrvzetazrsn_1 = allocate_shared_float(nvz,nvr,nvzeta,nz,nr,nspecies_neutral)
     buffer_vzvrvzetazrsn_2 = allocate_shared_float(nvz,nvr,nvzeta,nz,nr,nspecies_neutral)
     
-    buffer_vpavperp_1 = allocate_shared_float(nvpa,nvperp)
-    buffer_vpavperp_2 = allocate_shared_float(nvpa,nvperp)
-    buffer_vpavperp_3 = allocate_shared_float(nvpa,nvperp)
-    
     int_buffer_rs_1 = allocate_shared_int(nr,nspecies_ion)
     int_buffer_rs_2 = allocate_shared_int(nr,nspecies_ion)
 
@@ -1723,7 +1716,6 @@ function setup_dummy_and_buffer_arrays(nr, nz, nvpa, nvperp, nvz, nvr, nvzeta,
         buffer_vzvrvzetazsn_1,buffer_vzvrvzetazsn_2,buffer_vzvrvzetazsn_3,buffer_vzvrvzetazsn_4,buffer_vzvrvzetazsn_5,buffer_vzvrvzetazsn_6,
         buffer_vzvrvzetarsn_1,buffer_vzvrvzetarsn_2,buffer_vzvrvzetarsn_3,buffer_vzvrvzetarsn_4,buffer_vzvrvzetarsn_5,buffer_vzvrvzetarsn_6,
         buffer_vzvrvzetazrsn_1, buffer_vzvrvzetazrsn_2,
-        buffer_vpavperp_1,buffer_vpavperp_2,buffer_vpavperp_3,
         buffer_vpavperpzr_1, buffer_vpavperpzr_2,buffer_vpavperpzr_3,buffer_vpavperpzr_4,buffer_vpavperpzr_5,buffer_vpavperpzr_6,
         buffer_vpavperpr_1, buffer_vpavperpr_2, buffer_vpavperpr_3, buffer_vpavperpr_4, buffer_vpavperpr_5, buffer_vpavperpr_6,
         int_buffer_rs_1,int_buffer_rs_2)
@@ -2513,8 +2505,9 @@ moments and moment derivatives
         enforce_boundary_conditions!(this_scratch, moments, fields, boundaries, vpa,
                                      vperp, z, r, vpa_spectral, vperp_spectral,
                                      vpa_advect, vperp_advect, z_advect, r_advect,
-                                     composition, scratch_dummy, advance.r_diffusion,
-                                     advance.vpa_diffusion, advance.vperp_diffusion)
+                                     composition, geometry, scratch_dummy,
+                                     advance.r_diffusion, advance.vpa_diffusion,
+                                     advance.vperp_diffusion)
 
         if moments.evolve_density && moments.enforce_conservation
             hard_force_moment_constraints!(this_scratch.pdf, moments, vpa, vperp)
@@ -2863,9 +2856,11 @@ appropriate.
                 density = @view scratch[t_params.n_rk_stages+1].density[:,ir,is]
                 upar = @view scratch[t_params.n_rk_stages+1].upar[:,ir,is]
                 p = @view scratch[t_params.n_rk_stages+1].p[:,ir,is]
-                phi = fields.phi[:,ir]
+                phi = @view fields.phi[:,ir]
+                vEz = @view fields.vEz[:,ir]
+                bz = @view geometry.bzed[:,ir]
                 last_negative_vpa_ind, first_positive_vpa_ind =
-                    get_ion_z_boundary_cutoff_indices(density, upar,
+                    get_ion_z_boundary_cutoff_indices(density, upar, vEz, bz,
                                                       moments.ion.vth[1,ir,is],
                                                       moments.ion.vth[end,ir,is],
                                                       moments.evolve_upar,

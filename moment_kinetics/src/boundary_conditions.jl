@@ -720,10 +720,10 @@ enforce boundary conditions in vpa and z on the evolved pdf;
 also enforce boundary conditions in z on all separately evolved velocity space moments of the pdf
 """
 @timeit global_timer enforce_boundary_conditions!(
-                         f, density, upar, p, phi, boundaries::boundary_info, moments,
+                         f, density, upar, p, fields, boundaries::boundary_info, moments,
                          vpa, vperp, z, r, vpa_spectral, vperp_spectral, vpa_adv,
-                         vperp_adv, z_adv, r_adv, composition, scratch_dummy, r_diffusion,
-                         vpa_diffusion, vperp_diffusion) = begin
+                         vperp_adv, z_adv, r_adv, composition, geometry, scratch_dummy,
+                         r_diffusion, vpa_diffusion, vperp_diffusion) = begin
 
     if vpa.n > 1
         @begin_s_r_z_vperp_region()
@@ -744,13 +744,13 @@ also enforce boundary conditions in z on all separately evolved velocity space m
         @begin_s_r_vperp_vpa_region()
         # enforce the z BC on the evolved velocity space moments of the pdf
         enforce_z_boundary_condition_moments!(density, moments, z.bc)
-        enforce_z_boundary_condition!(f, density, upar, p, phi, moments, z.bc, z_adv, z,
-                                      vperp, vpa, composition,
+        enforce_z_boundary_condition!(f, density, upar, p, fields, moments, z.bc, z_adv,
+                                      z, vperp, vpa, composition, geometry,
                                       scratch_dummy.buffer_vpavperprs_1,
                                       scratch_dummy.buffer_vpavperprs_2,
                                       scratch_dummy.buffer_vpavperprs_3,
                                       scratch_dummy.buffer_vpavperprs_4,
-                                      scratch_dummy.buffer_vpavperp_1)
+                                      scratch_dummy.dummy_vpavperp)
 
     end
     if r.n > 1
@@ -766,13 +766,13 @@ function enforce_boundary_conditions!(fvec_out::scratch_pdf, moments,
                                       fields::em_fields_struct, boundaries::boundary_info,
                                       vpa, vperp, z, r, vpa_spectral, vperp_spectral,
                                       vpa_adv, vperp_adv, z_adv, r_adv, composition,
-                                      scratch_dummy, r_diffusion, vpa_diffusion,
+                                      geometry, scratch_dummy, r_diffusion, vpa_diffusion,
                                       vperp_diffusion)
     enforce_boundary_conditions!(fvec_out.pdf, fvec_out.density, fvec_out.upar,
-                                 fvec_out.p, fields.phi, boundaries, moments, vpa, vperp,
-                                 z, r, vpa_spectral, vperp_spectral, vpa_adv, vperp_adv,
-                                 z_adv, r_adv, composition, scratch_dummy, r_diffusion,
-                                 vpa_diffusion, vperp_diffusion)
+                                 fvec_out.p, fields, boundaries, moments, vpa, vperp, z,
+                                 r, vpa_spectral, vperp_spectral, vpa_adv, vperp_adv,
+                                 z_adv, r_adv, composition, geometry, scratch_dummy,
+                                 r_diffusion, vpa_diffusion, vperp_diffusion)
 end
 
 """
@@ -946,9 +946,12 @@ end
 
 """
 enforce boundary conditions on ion particle f in z
+
+`vpavperp_buffer` should be an unshared array, as it is used inside a
+shared-memory-parallelised loop.
 """
-function enforce_z_boundary_condition!(pdf, density, upar, p, phi, moments, bc::String,
-                                       adv, z, vperp, vpa, composition,
+function enforce_z_boundary_condition!(pdf, density, upar, p, fields, moments, bc::String,
+                                       adv, z, vperp, vpa, composition, geometry,
                                        end1::AbstractArray{mk_float,4},
                                        end2::AbstractArray{mk_float,4},
                                        buffer1::AbstractArray{mk_float,4},
@@ -1035,14 +1038,15 @@ function enforce_z_boundary_condition!(pdf, density, upar, p, phi, moments, bc::
                 @loop_r ir begin
                     @views enforce_zero_incoming_bc!(
                         pdf[:,:,:,ir,is], z, vperp, vpa, density[:,ir,is], upar[:,ir,is],
-                        p[:,ir,is], moments.evolve_upar, moments.evolve_p, zero,
-                        phi[:,ir], vpavperp_buffer)
+                        p[:,ir,is], fields.vEz[:,ir,is], geometry.bzed[:,ir],
+                        moments.evolve_upar, moments.evolve_p, zero, fields.phi[:,ir],
+                        vpavperp_buffer)
                 end
             else
                 @loop_r ir begin
                     @views enforce_zero_incoming_bc!(pdf[:,:,:,ir,is],
                                                      adv[is].speed[:,:,:,ir], z, zero,
-                                                     phi[:,ir],
+                                                     fields.phi[:,ir],
                                                      z.boundary_parameters.epsz)
                 end
             end
@@ -1600,30 +1604,32 @@ function enforce_zero_incoming_bc!(pdf, speed, z, zero, phi, epsz)
         end
     end
 end
-function get_ion_z_boundary_cutoff_indices(density, upar, vth0, vthL, evolve_upar,
-                                           evolve_p, z, vpa, zero, phi)
+function get_ion_z_boundary_cutoff_indices(density, upar, vEz, bz, vth0, vthL,
+                                           evolve_upar, evolve_p, z, vpa, zero, phi)
     epsz = z.boundary_parameters.epsz
     if z.irank == 0
         deltaphi = phi[2] - phi[1]
-        vcut = deltaphi > 0 ? sqrt(2.0 * deltaphi)*(epsz^0.25) : 0.0
-        @. vpa.scratch = vpagrid_to_dzdt(vpa.grid, vth0, upar[1], evolve_p, evolve_upar)
-        last_negative_vpa_ind = searchsortedlast(vpa.scratch, min(-zero, -vcut))
+        vz_cut = deltaphi > 0 ? bz[1] * sqrt(2.0 * deltaphi)*(epsz^0.25) : 0.0
+        @. vpa.scratch = vpagrid_to_dzdt(vpa.grid, vth0, upar[1], bz[1], vEz[1], evolve_p,
+                                         evolve_upar)
+        last_negative_vpa_ind = searchsortedlast(vpa.scratch, min(-zero, -vz_cut))
     else
         last_negative_vpa_ind = nothing
     end
     if z.irank == z.nrank - 1
         deltaphi = phi[end-1] - phi[end]
-        vcut = deltaphi > 0 ? sqrt(2.0 * deltaphi)*(epsz^0.25) : 0.0
-        @. vpa.scratch2 = vpagrid_to_dzdt(vpa.grid, vthL, upar[end], evolve_p,
-                                          evolve_upar)
-        first_positive_vpa_ind = searchsortedfirst(vpa.scratch2, max(zero, vcut))
+        vz_cut = deltaphi > 0 ? bz[end] * sqrt(2.0 * deltaphi)*(epsz^0.25) : 0.0
+        @. vpa.scratch2 = vpagrid_to_dzdt(vpa.grid, vthL, upar[end], bz[end], vEz[end],
+                                          evolve_p, evolve_upar)
+        first_positive_vpa_ind = searchsortedfirst(vpa.scratch2, max(zero, vz_cut))
     else
         first_positive_vpa_ind = nothing
     end
     return last_negative_vpa_ind, first_positive_vpa_ind
 end
 function enforce_zero_incoming_bc!(pdf, z::coordinate, vperp::coordinate, vpa::coordinate,
-                                   density, upar, p, evolve_upar, evolve_p, zero, phi, vpavperp_buffer)
+                                   density, upar, p, vEz, bz, evolve_upar, evolve_p, zero,
+                                   phi, vpavperp_buffer)
     if z.irank != 0 && z.irank != z.nrank - 1
         # No z-boundary in this block
         return nothing
@@ -1639,7 +1645,7 @@ function enforce_zero_incoming_bc!(pdf, z::coordinate, vperp::coordinate, vpa::c
 
     # absolute velocity at left boundary
     last_negative_vpa_ind, first_positive_vpa_ind =
-        get_ion_z_boundary_cutoff_indices(density, upar, vth0, vthL, evolve_upar,
+        get_ion_z_boundary_cutoff_indices(density, upar, vEz, bz, vth0, vthL, evolve_upar,
                                           evolve_p, z, vpa, zero, phi)
     if z.irank == 0
         pdf[last_negative_vpa_ind+1:end, :, 1] .= 0.0
@@ -1672,8 +1678,14 @@ function enforce_zero_incoming_bc!(pdf, z::coordinate, vperp::coordinate, vpa::c
             I1 = integral((vperp,vpa)->(vpa), f, vperp, vpa)
             I2 = integral((vperp,vpa)->(vpa^2 + vperp^2), f, vperp, vpa)
 
-            # Store v_parallel with upar shift removed in vpa.scratch
-            @. vpa.scratch = vpa.grid + upar[iz]/vth
+            # The velocities where ions do not come back from the wall are (see TN-07
+            # report "2D drift kinetic model with wall boundary conditions")
+            # v^z ≶ 0
+            # b^z v_∥ + vEz ≶ 0
+            # b^z (vth*w_∥ + u_∥) + vEz ≶ 0
+            # Store v_parallel/vth with cutoff shift removed (which is equal to
+            # v^z/vth/b^z) in vpa.scratch
+            @. vpa.scratch = vpa.grid + (upar[iz] + vEz[iz] / bz[iz])/vth
             # Introduce factors to ensure corrections go smoothly to zero near
             # v_parallel=0, and that there are no large corrections aw large w_parallel as
             # those can have a strong effect on the parallel heat flux and make
@@ -1739,8 +1751,14 @@ function enforce_zero_incoming_bc!(pdf, z::coordinate, vperp::coordinate, vpa::c
             I0 = integral((vperp,vpa)->(1), f, vperp, vpa)
             I1 = integral((vperp,vpa)->(vpa), f, vperp, vpa)
 
-            # Store v_parallel with upar shift removed in vpa.scratch
-            @. vpa.scratch = vpa.grid + upar[iz]
+            # The velocities where ions do not come back from the wall are (see TN-07
+            # report "2D drift kinetic model with wall boundary conditions")
+            # v^z ≶ 0
+            # b^z v_∥ + vEz ≶ 0
+            # b^z (w_∥ + u_∥) + vEz ≶ 0
+            # Store v_parallel with cutoff shift removed (which is equal to
+            # v^z/b^z) in vpa.scratch
+            @. vpa.scratch = vpa.grid + upar[iz] + vEz[iz] / bz[iz]
             # Introduce factors to ensure corrections go smoothly to zero near
             # v_parallel=0, and that there are no large corrections aw large w_parallel as
             # those can have a strong effect on the parallel heat flux and make
@@ -1948,7 +1966,8 @@ function enforce_neutral_wall_bc!(pdf, z, vzeta, vr, vz, pz, uz, density, wall_f
             else
                 vth = nothing
             end
-            @. vz.scratch2 = vpagrid_to_dzdt(vz.grid, vth, uz[1], evolve_p, evolve_upar)
+            @. vz.scratch2 = vpagrid_to_dzdt(vz.grid, vth, uz[1], 1.0, 0.0, evolve_p,
+                                             evolve_upar)
 
             # First apply boundary condition that total neutral outflux is equal to ion
             # influx to uz
@@ -2084,7 +2103,8 @@ function enforce_neutral_wall_bc!(pdf, z, vzeta, vr, vz, pz, uz, density, wall_f
             else
                 vth = nothing
             end
-            @. vz.scratch2 = vpagrid_to_dzdt(vz.grid, vth, uz[end], evolve_p, evolve_upar)
+            @. vz.scratch2 = vpagrid_to_dzdt(vz.grid, vth, uz[end], 1.0, 0.0, evolve_p,
+                                             evolve_upar)
 
             # First apply boundary condition that total neutral outflux is equal to ion
             # influx to uz
@@ -2211,17 +2231,17 @@ end
 """
 create an array of dz/dt values corresponding to the given vpagrid values
 """
-function vpagrid_to_dzdt(vpagrid, vth, upar, evolve_p, evolve_upar)
+function vpagrid_to_dzdt(vpagrid, vth, upar, bz, vEz, evolve_p, evolve_upar)
     if evolve_p
         if evolve_upar
-            return vpagrid .* vth .+ upar
+            return @. bz * (vpagrid * vth + upar) + vEz
         else
-            return vpagrid .* vth
+            return @. bz * vpagrid * vth + vEz
         end
     elseif evolve_upar
-        return vpagrid .+ upar
+        return @. bz * (vpagrid + upar) + vEz
     else
-        return vpagrid
+        return @. bz * vpagrid + vEz
     end
 end
 

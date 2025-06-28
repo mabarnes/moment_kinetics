@@ -3344,8 +3344,9 @@ function zero_z_boundary_condition_points(residual, z, vpa, moments, ir)
         v_unnorm = vpa.scratch
         zero = 1.0e-14
         if z.irank == 0
+            # We actually want v_∥ here, not v_z, so pass bz=1, vEz=0
             v_unnorm .= vpagrid_to_dzdt(vpa.grid, moments.electron.vth[1,ir],
-                                        moments.electron.upar[1,ir], true, true)
+                                        moments.electron.upar[1,ir], 1.0, 0.0, true, true)
             @loop_vperp_vpa ivperp ivpa begin
                 if v_unnorm[ivpa] > -zero
                     residual[ivpa,ivperp,1] = 0.0
@@ -3353,8 +3354,10 @@ function zero_z_boundary_condition_points(residual, z, vpa, moments, ir)
             end
         end
         if z.irank == z.nrank - 1
+            # We actually want v_∥ here, not v_z, so pass bz=1, vEz=0
             v_unnorm .= vpagrid_to_dzdt(vpa.grid, moments.electron.vth[end,ir],
-                                        moments.electron.upar[end,ir], true, true)
+                                        moments.electron.upar[end,ir], 1.0, 0.0, true,
+                                        true)
             @loop_vperp_vpa ivperp ivpa begin
                 if v_unnorm[ivpa] < zero
                     residual[ivpa,ivperp,end] = 0.0
