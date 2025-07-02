@@ -2408,20 +2408,8 @@ function update_derived_moments!(new_scratch, moments, vpa, vperp, z, r, composi
     end
     # update the thermal speed
     @begin_s_r_z_region()
-    try #below block causes DomainError if ppar < 0 or density, so exit cleanly if possible
-        update_vth!(moments.ion.vth, new_scratch.p, new_scratch.density, z, r,
-                    composition)
-    catch e
-        if global_size[] > 1
-            println("ERROR: error calculating vth in time_advance.jl")
-            println(e)
-            display(stacktrace(catch_backtrace()))
-            flush(stdout)
-            flush(stderr)
-            MPI.Abort(comm_world, 1)
-        end
-        rethrow(e)
-    end
+    update_vth!(moments.ion.vth, new_scratch.p, new_scratch.density, z, r,
+                composition)
     # update the parallel heat flux
     update_ion_qpar!(moments.ion.qpar, moments.ion.qpar_updated, new_scratch.density,
                      new_scratch.upar, moments.ion.vth, moments.ion.dT_dz, ff, vpa, vperp,
