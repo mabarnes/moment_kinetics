@@ -264,6 +264,12 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                     CFL_vars = String[]
                     implicit_CFL_vars = String[]
 
+                    if ri.r.n > 1
+                        push!(CFL_vars, "minimum_CFL_ion_r")
+                        if occursin("ARK", ri.t_input["type"]) && ri.t_input["implicit_ion_advance"]
+                            push!(implicit_CFL_vars, "minimum_CFL_ion_r")
+                        end
+                    end
                     push!(CFL_vars, "minimum_CFL_ion_z")
                     if occursin("ARK", ri.t_input["type"]) && ri.t_input["implicit_ion_advance"]
                         push!(implicit_CFL_vars, "minimum_CFL_ion_z")
@@ -271,6 +277,12 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                     push!(CFL_vars, "minimum_CFL_ion_vpa")
                     if occursin("ARK", ri.t_input["type"]) && (ri.t_input["implicit_ion_advance"] || ri.t_input["implicit_vpa_advection"])
                         push!(implicit_CFL_vars, "minimum_CFL_ion_vpa")
+                    end
+                    if ri.vperp.n > 1
+                        push!(CFL_vars, "minimum_CFL_ion_vpa")
+                        if occursin("ARK", ri.t_input["type"]) && (ri.t_input["implicit_ion_advance"] || ri.t_input["implicit_vpa_advection"])
+                            push!(implicit_CFL_vars, "minimum_CFL_ion_vpa")
+                        end
                     end
                     if ri.n_neutral_species > 0
                         push!(CFL_vars, "minimum_CFL_neutral_z", "minimum_CFL_neutral_vz")
@@ -620,6 +632,19 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                 error("plot_prefix is required when animate_CFL=true")
             end
             if !electron
+                if any(ri.r.n > 1 for ri ∈ run_info)
+                    data = get_variable(run_info, "CFL_ion_r")
+                    datamin = minimum(minimum(d) for d ∈ data)
+                    animate_vs_vpa_z(run_info, "CFL_ion_r"; data=data, it=it,
+                                     outfile=plot_prefix * "CFL_ion_r_vs_vpa_z.gif",
+                                     colorscale=log10,
+                                     transform=x->positive_or_nan(x; epsilon=1.e-30),
+                                     colorrange=(datamin, datamin * 1000.0),
+                                     axis_args=Dict(:bottomspinevisible=>false,
+                                                    :topspinevisible=>false,
+                                                    :leftspinevisible=>false,
+                                                    :rightspinevisible=>false))
+                end
                 data = get_variable(run_info, "CFL_ion_z")
                 datamin = minimum(minimum(d) for d ∈ data)
                 animate_vs_vpa_z(run_info, "CFL_ion_z"; data=data, it=it,
@@ -642,6 +667,19 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                                                 :topspinevisible=>false,
                                                 :leftspinevisible=>false,
                                                 :rightspinevisible=>false))
+                if any(ri.vperp.n > 1 for ri ∈ run_info)
+                    data = get_variable(run_info, "CFL_ion_vperp")
+                    datamin = minimum(minimum(d) for d ∈ data)
+                    animate_vs_vpa_z(run_info, "CFL_ion_vperp"; data=data, it=it,
+                                     outfile=plot_prefix * "CFL_ion_vperp_vs_vpa_z.gif",
+                                     colorscale=log10,
+                                     transform=x->positive_or_nan(x; epsilon=1.e-30),
+                                     colorrange=(datamin, datamin * 1000.0),
+                                     axis_args=Dict(:bottomspinevisible=>false,
+                                                    :topspinevisible=>false,
+                                                    :leftspinevisible=>false,
+                                                    :rightspinevisible=>false))
+                end
             end
             if electron || any(ri.composition.electron_physics ∈ (kinetic_electrons,
                                                                   kinetic_electrons_with_temperature_equation)

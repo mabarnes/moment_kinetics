@@ -40,7 +40,8 @@ using ..neutral_vz_advection: update_speed_neutral_vz!
 using ..neutral_z_advection: update_speed_neutral_z!
 using ..r_advection: update_speed_r!
 using ..type_definitions: mk_float, mk_int, OptionsDict
-using ..utils: get_CFL!, get_minimum_CFL_z, get_minimum_CFL_vpa, get_minimum_CFL_neutral_z,
+using ..utils: get_CFL!, get_minimum_CFL_r, get_minimum_CFL_z, get_minimum_CFL_vpa,
+               get_minimum_CFL_vperp, get_minimum_CFL_neutral_z,
                get_minimum_CFL_neutral_vz, enum_from_string
 using ..vpa_advection: update_speed_vpa!
 using ..z_advection: update_speed_z!
@@ -4394,7 +4395,7 @@ function _get_variable_internal(run_info, variable_name::Symbol;
             variable = @. qpar + 0.75*n*vth^2*upar + 0.5*n*upar^3
         end
     elseif variable_name == :r_advect_speed
-        # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
+        # update_speed_r!() requires all dimensions to be present, so do *not* pass kwargs
         # to get_variable() in this case. Instead select a slice of the result.
         Ez = get_variable(run_info, "Ez")
         vEr = get_variable(run_info, "vEr")
@@ -4563,8 +4564,8 @@ function _get_variable_internal(run_info, variable_name::Symbol;
         nvperp = run_info.vperp.n
         nvpa = run_info.vpa.n
 
-        # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
-        # to get_variable() in this case. Instead select a slice of the result.
+        # update_speed_vpa!() requires all dimensions to be present, so do *not* pass
+        # kwargs to get_variable() in this case. Instead select a slice of the result.
         Ez = get_variable(run_info, "Ez")
         gEz = allocate_float(nvperp, nz, nr, nspecies, nt)
         for it ∈ 1:nt, is ∈ 1:nspecies, ir ∈ 1:nr, iz ∈ 1:nz
@@ -4637,8 +4638,9 @@ function _get_variable_internal(run_info, variable_name::Symbol;
         variable = speed
         variable = select_slice_of_variable(variable; kwargs...)
      elseif variable_name == :electron_z_advect_speed
-        # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
-        # to get_variable() in this case. Instead select a slice of the result.
+        # update_speed_electron_z!() requires all dimensions to be present, so do *not*
+        # pass kwargs to get_variable() in this case. Instead select a slice of the
+        # result.
         upar = get_variable(run_info, "electron_parallel_flow")
         vth = get_variable(run_info, "electron_thermal_speed")
         nz, nr, nt = size(upar)
@@ -4693,8 +4695,9 @@ function _get_variable_internal(run_info, variable_name::Symbol;
             end
         end
     elseif variable_name == :electron_vpa_advect_speed
-        # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
-        # to get_variable() in this case. Instead select a slice of the result.
+        # update_speed_electron_vpa!() requires all dimensions to be present, so do *not*
+        # pass kwargs to get_variable() in this case. Instead select a slice of the
+        # result.
         density = get_variable(run_info, "electron_density"; kwargs...)
         upar = get_variable(run_info, "electron_parallel_flow"; kwargs...)
         p = get_variable(run_info, "electron_pressure"; kwargs...)
@@ -4755,8 +4758,9 @@ function _get_variable_internal(run_info, variable_name::Symbol;
         variable = speed
         variable = select_slice_of_variable(variable; kwargs...)
     elseif variable_name == :neutral_z_advect_speed
-        # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
-        # to get_variable() in this case. Instead select a slice of the result.
+        # update_speed_neutral_z!() requires all dimensions to be present, so do *not*
+        # pass kwargs to get_variable() in this case. Instead select a slice of the
+        # result.
         uz = get_variable(run_info, "parallel_flow")
         vth = get_variable(run_info, "thermal_speed_neutral")
         nz, nr, nspecies, nt = size(uz)
@@ -4814,8 +4818,9 @@ function _get_variable_internal(run_info, variable_name::Symbol;
             end
         end
     elseif variable_name == :neutral_vz_advect_speed
-        # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
-        # to get_variable() in this case. Instead select a slice of the result.
+        # update_speed_neutral_vz!() requires all dimensions to be present, so do *not*
+        # pass kwargs to get_variable() in this case. Instead select a slice of the
+        # result.
         Ez = get_variable(run_info, "Ez"; kwargs...)
         density = get_variable(run_info, "density"; kwargs...)
         upar = get_variable(run_info, "parallel_flow"; kwargs...)
@@ -4964,6 +4969,22 @@ function _get_variable_internal(run_info, variable_name::Symbol;
             # Don't want a meaningless Inf...
             variable[1] = 0.0
         end
+    elseif variable_name == :CFL_ion_r
+        # update_speed_r!() requires all dimensions to be present, so do *not* pass kwargs
+        # to get_variable() in this case. Instead select a slice of the result.
+        speed = get_variable(run_info, "r_advect_speed";
+                             normalize_advection_speed_shape=false)
+        nr, nvpa, nvperp, nz, nspecies, nt = size(speed)
+        CFL = similar(speed)
+        for it ∈ 1:nt
+            @views get_CFL!(CFL[:,:,:,:,:,it], speed[:,:,:,:,:,it], run_info.r)
+        end
+
+        variable = allocate_float(nvpa, nvperp, nz, nr, nspecies, nt)
+        for it ∈ 1:nt, is ∈ 1:nspecies, ir ∈ 1:nr, iz ∈ 1:nz, ivperp ∈ 1:nvperp, ivpa ∈ 1:nvpa
+            variable[ivpa,ivperp,iz,ir,is,it] = CFL[ir,ivpa,ivperp,iz,is,it]
+        end
+        variable = select_slice_of_variable(variable; kwargs...)
     elseif variable_name == :CFL_ion_z
         # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
         # to get_variable() in this case. Instead select a slice of the result.
@@ -4981,8 +5002,8 @@ function _get_variable_internal(run_info, variable_name::Symbol;
         end
         variable = select_slice_of_variable(variable; kwargs...)
     elseif variable_name == :CFL_ion_vpa
-        # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
-        # to get_variable() in this case. Instead select a slice of the result.
+        # update_speed_vpa!() requires all dimensions to be present, so do *not* pass
+        # kwargs to get_variable() in this case. Instead select a slice of the result.
         speed = get_variable(run_info, "vpa_advect_speed")
         nt = size(speed, 6)
         CFL = similar(speed)
@@ -4992,9 +5013,26 @@ function _get_variable_internal(run_info, variable_name::Symbol;
 
         variable = CFL
         variable = select_slice_of_variable(variable; kwargs...)
+    elseif variable_name == :CFL_ion_vperp
+        # update_speed_vperp!() requires all dimensions to be present, so do *not* pass
+        # kwargs to get_variable() in this case. Instead select a slice of the result.
+        speed = get_variable(run_info, "vperp_advect_speed";
+                             normalize_advection_speed_shape=false)
+        nvperp, nvpa, nz, nr, nspecies, nt = size(speed)
+        CFL = similar(speed)
+        for it ∈ 1:nt
+            @views get_CFL!(CFL[:,:,:,:,:,it], speed[:,:,:,:,:,it], run_info.vperp)
+        end
+
+        variable = allocate_float(nvpa, nvperp, nz, nr, nspecies, nt)
+        for it ∈ 1:nt, is ∈ 1:nspecies, ir ∈ 1:nr, iz ∈ 1:nz, ivperp ∈ 1:nvperp, ivpa ∈ 1:nvpa
+            variable[ivpa,ivperp,iz,ir,is,it] = CFL[ivperp,ivpa,iz,ir,is,it]
+        end
+        variable = select_slice_of_variable(variable; kwargs...)
     elseif variable_name == :CFL_electron_z
-        # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
-        # to get_variable() in this case. Instead select a slice of the result.
+        # update_speed_electron_z!() requires all dimensions to be present, so do *not*
+        # pass kwargs to get_variable() in this case. Instead select a slice of the
+        # result.
         speed = get_variable(run_info, "electron_z_advect_speed";
                              normalize_advection_speed_shape=false)
         nz, nvpa, nvperp, nr, nt = size(speed)
@@ -5009,8 +5047,9 @@ function _get_variable_internal(run_info, variable_name::Symbol;
         end
         variable = select_slice_of_variable(variable; kwargs...)
     elseif variable_name == :CFL_electron_vpa
-        # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
-        # to get_variable() in this case. Instead select a slice of the result.
+        # update_speed_electron_vpa!() requires all dimensions to be present, so do *not*
+        # pass kwargs to get_variable() in this case. Instead select a slice of the
+        # result.
         speed = get_variable(run_info, "electron_vpa_advect_speed")
         nt = size(speed, 5)
         CFL = similar(speed)
@@ -5021,8 +5060,9 @@ function _get_variable_internal(run_info, variable_name::Symbol;
         variable = CFL
         variable = select_slice_of_variable(variable; kwargs...)
     elseif variable_name == :CFL_neutral_z
-        # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
-        # to get_variable() in this case. Instead select a slice of the result.
+        # update_speed_neutral_z!() requires all dimensions to be present, so do *not*
+        # pass kwargs to get_variable() in this case. Instead select a slice of the
+        # result.
         speed = get_variable(run_info, "neutral_z_advect_speed";
                              normalize_advection_speed_shape=false)
         nz, nvz, nvr, nvzeta, nr, nspecies, nt = size(speed)
@@ -5037,8 +5077,9 @@ function _get_variable_internal(run_info, variable_name::Symbol;
         end
         variable = select_slice_of_variable(variable; kwargs...)
     elseif variable_name == :CFL_neutral_vz
-        # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
-        # to get_variable() in this case. Instead select a slice of the result.
+        # update_speed-neutral_vz!() requires all dimensions to be present, so do *not*
+        # pass kwargs to get_variable() in this case. Instead select a slice of the
+        # result.
         speed = get_variable(run_info, "neutral_vz_advect_speed")
         nt = size(speed, 7)
         CFL = similar(speed)
@@ -5047,6 +5088,23 @@ function _get_variable_internal(run_info, variable_name::Symbol;
         end
 
         variable = CFL
+        variable = select_slice_of_variable(variable; kwargs...)
+    elseif variable_name == :minimum_CFL_ion_r
+        # update_speed_r!() requires all dimensions to be present, so do *not* pass kwargs
+        # to get_variable() in this case. Instead select a slice of the result.
+        speed = get_variable(run_info, "r_advect_speed";
+                             normalize_advection_speed_shape=false)
+        nt = size(speed, 6)
+        nspecies = size(speed, 5)
+        variable = allocate_float(nt)
+        @begin_serial_region()
+        for it ∈ 1:nt
+            min_CFL = Inf
+            for is ∈ 1:nspecies
+                min_CFL = min(min_CFL, get_minimum_CFL_r(@view(speed[:,:,:,:,is,it]), run_info.r))
+            end
+            variable[it] = min_CFL
+        end
         variable = select_slice_of_variable(variable; kwargs...)
     elseif variable_name == :minimum_CFL_ion_z
         # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
@@ -5066,8 +5124,8 @@ function _get_variable_internal(run_info, variable_name::Symbol;
         end
         variable = select_slice_of_variable(variable; kwargs...)
     elseif variable_name == :minimum_CFL_ion_vpa
-        # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
-        # to get_variable() in this case. Instead select a slice of the result.
+        # update_speed_vpa!() requires all dimensions to be present, so do *not* pass
+        # kwargs to get_variable() in this case. Instead select a slice of the result.
         speed = get_variable(run_info, "vpa_advect_speed")
         nt = size(speed, 6)
         nspecies = size(speed, 5)
@@ -5081,9 +5139,26 @@ function _get_variable_internal(run_info, variable_name::Symbol;
             variable[it] = min_CFL
         end
         variable = select_slice_of_variable(variable; kwargs...)
+    elseif variable_name == :minimum_CFL_ion_vperp
+        # update_speed_vperp!() requires all dimensions to be present, so do *not* pass
+        # kwargs to get_variable() in this case. Instead select a slice of the result.
+        speed = get_variable(run_info, "vperp_advect_speed")
+        nt = size(speed, 6)
+        nspecies = size(speed, 5)
+        variable = allocate_float(nt)
+        @begin_serial_region()
+        for it ∈ 1:nt
+            min_CFL = Inf
+            for is ∈ 1:nspecies
+                min_CFL = min(min_CFL, get_minimum_CFL_vperp(@view(speed[:,:,:,:,is,it]), run_info.vperp))
+            end
+            variable[it] = min_CFL
+        end
+        variable = select_slice_of_variable(variable; kwargs...)
     elseif variable_name == :minimum_CFL_electron_z
-        # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
-        # to get_variable() in this case. Instead select a slice of the result.
+        # update_speed_electron_z!() requires all dimensions to be present, so do *not*
+        # pass kwargs to get_variable() in this case. Instead select a slice of the
+        # result.
         speed = get_variable(run_info, "electron_z_advect_speed";
                              normalize_advection_speed_shape=false)
         nt = size(speed, 5)
@@ -5095,8 +5170,9 @@ function _get_variable_internal(run_info, variable_name::Symbol;
         end
         variable = select_slice_of_variable(variable; kwargs...)
     elseif variable_name == :minimum_CFL_electron_vpa
-        # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
-        # to get_variable() in this case. Instead select a slice of the result.
+        # update_speed_electron_vpa!() requires all dimensions to be present, so do *not*
+        # pass kwargs to get_variable() in this case. Instead select a slice of the
+        # result.
         speed = get_variable(run_info, "electron_vpa_advect_speed")
         nt = size(speed, 5)
         variable = allocate_float(nt)
@@ -5107,8 +5183,9 @@ function _get_variable_internal(run_info, variable_name::Symbol;
         end
         variable = select_slice_of_variable(variable; kwargs...)
     elseif variable_name == :minimum_CFL_neutral_z
-        # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
-        # to get_variable() in this case. Instead select a slice of the result.
+        # update_speed_neutral_z!() requires all dimensions to be present, so do *not*
+        # pass kwargs to get_variable() in this case. Instead select a slice of the
+        # result.
         speed = get_variable(run_info, "neutral_z_advect_speed";
                              normalize_advection_speed_shape=false)
         nt = size(speed, 7)
@@ -5124,8 +5201,9 @@ function _get_variable_internal(run_info, variable_name::Symbol;
         end
         variable = select_slice_of_variable(variable; kwargs...)
     elseif variable_name == :minimum_CFL_neutral_vz
-        # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
-        # to get_variable() in this case. Instead select a slice of the result.
+        # update_speed_neutral_vz!() requires all dimensions to be present, so do *not*
+        # pass kwargs to get_variable() in this case. Instead select a slice of the
+        # result.
         speed = get_variable(run_info, "neutral_vz_advect_speed")
         nt = size(speed, 7)
         nspecies = size(speed, 6)

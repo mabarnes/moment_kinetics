@@ -82,8 +82,9 @@ using ..runge_kutta: rk_update_evolved_moments!, rk_update_evolved_moments_neutr
                      rk_update_variable!, rk_loworder_solution!,
                      setup_runge_kutta_coefficients!, local_error_norm,
                      adaptive_timestep_update_t_params!
-using ..utils: to_minutes, get_minimum_CFL_z, get_minimum_CFL_vpa,
-               get_minimum_CFL_neutral_z, get_minimum_CFL_neutral_vz
+using ..utils: to_minutes, get_minimum_CFL_r, get_minimum_CFL_z, get_minimum_CFL_vpa,
+               get_minimum_CFL_vperp, get_minimum_CFL_neutral_z,
+               get_minimum_CFL_neutral_vz
 using ..electron_fluid_equations: calculate_electron_moments!
 using ..electron_fluid_equations: calculate_electron_density!
 using ..electron_fluid_equations: calculate_electron_upar_from_charge_conservation!
@@ -689,7 +690,13 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
     # ion pdf
     t_params.limit_caused_by["pdf_accuracy"] = 0
     if !t_params.implicit_ion_advance
+        if r.n > 1
+            t_params.limit_caused_by["CFL_r"] = 0
+        end
         t_params.limit_caused_by["CFL_z"] = 0
+        if vperp.n > 1
+            t_params.limit_caused_by["CFL_vperp"] = 0
+        end
     end
     if !(t_params.implicit_ion_advance || t_params.implicit_vpa_advection)
         t_params.limit_caused_by["CFL_vpa"] = 0
@@ -2687,7 +2694,7 @@ appropriate.
 
     n_ion_species = composition.n_ion_species
     n_neutral_species = composition.n_neutral_species
-    vpa_advect, r_advect, z_advect = advect_objects.vpa_advect, advect_objects.r_advect, advect_objects.z_advect
+    vperp_advect, vpa_advect, r_advect, z_advect = advect_objects.vperp_advect, advect_objects.vpa_advect, advect_objects.r_advect, advect_objects.z_advect
     electron_z_advect, electron_vpa_advect = advect_objects.electron_z_advect, advect_objects.electron_vpa_advect
     neutral_z_advect, neutral_r_advect, neutral_vz_advect = advect_objects.neutral_z_advect, advect_objects.neutral_r_advect, advect_objects.neutral_vz_advect
     evolve_density, evolve_upar, evolve_p = moments.evolve_density, moments.evolve_upar, moments.evolve_p
@@ -2700,13 +2707,28 @@ appropriate.
     # Test CFL conditions for advection in kinetic equation to give stability limit for
     # timestep
     #
-    # ion z-advection
+    # ion r-advection
     # No need to synchronize here, as we just called @_block_synchronize()
     # Don't parallelise over species here, because get_minimum_CFL_*() does an MPI
     # reduction over the shared-memory block, so all processes must calculate the same
     # species at the same time.
-    @begin_r_vperp_vpa_region(true)
+    @begin_z_vperp_vpa_region(true)
+    if !t_params.implicit_ion_advance && r.n > 1
+        ion_r_CFL = Inf
+        @loop_s is begin
+            update_speed_r!(r_advect[is], fields, evolve_density, evolve_upar, evolve_p,
+                            vpa, vperp, z, r, geometry, is)
+            this_minimum = get_minimum_CFL_r(r_advect[is].speed, r)
+            @serial_region begin
+                ion_r_CFL = min(ion_r_CFL, this_minimum)
+            end
+        end
+        CFL_limits["CFL_r"] = t_params.CFL_prefactor * ion_r_CFL
+    end
+
     if !t_params.implicit_ion_advance
+        # ion z-advection
+        @begin_r_vperp_vpa_region()
         ion_z_CFL = Inf
         @loop_s is begin
             update_speed_z!(z_advect[is], moments.ion.upar, moments.ion.vth, evolve_upar,
@@ -2734,6 +2756,21 @@ appropriate.
             end
         end
         CFL_limits["CFL_vpa"] = t_params.CFL_prefactor * ion_vpa_CFL
+    end
+
+    if !t_params.implicit_ion_advance && vperp.n > 1
+        # ion vperp-advection
+        @begin_r_z_vpa_region()
+        ion_vperp_CFL = Inf
+        update_speed_vperp!(vperp_advect, scratch[t_params.n_rk_stages+1], vpa, vperp, z,
+                            r, z_advect, r_advect, geometry, moments)
+        @loop_s is begin
+            this_minimum = get_minimum_CFL_vperp(vperp_advect[is].speed, vperp)
+            @serial_region begin
+                ion_vperp_CFL = min(ion_vperp_CFL, this_minimum)
+            end
+        end
+        CFL_limits["CFL_vperp"] = t_params.CFL_prefactor * ion_vperp_CFL
     end
 
     if t_params.kinetic_electron_solver == explicit_time_evolving
@@ -4107,14 +4144,11 @@ Do a backward-Euler timestep for all terms in the ion kinetic equation.
         end
     end
     if vperp.n > 1
-        # calculate the vpa advection speed, to ensure it is correct when used to apply the
-        # boundary condition
+        # calculate the vperp advection speed, to ensure it is correct when used to apply
+        # the boundary condition
         @begin_s_r_z_vpa_region()
-        @loop_s is begin
-            # get the updated speed along the r direction using the current f
-            @views update_speed_vperp!(vperp_advect[is], vpa, vperp, z, r, z_advect[is],
-                                       r_advect[is], geometry)
-        end
+        update_speed_vperp!(vperp_advect, fvec_in, vpa, vperp, z, r, z_advect, r_advect,
+                            geometry, moments)
     end
 
     function apply_bc!(x)

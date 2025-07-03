@@ -377,6 +377,34 @@ end
 # Utility functions for timestepping
 
 """
+    get_minimum_CFL_r(speed, r)
+
+Calculate the minimum (over a shared-memory block) of the CFL factor 'speed/(grid
+spacing)' (with no prefactor) corresponding to advection speed `speed` for advection in
+the r direction.
+
+Reduces the result over the shared-memory block (handling distributed parallelism is left
+to the calling site). The result is only to be used on rank-0 of the shared-memory block.
+"""
+function get_minimum_CFL_r(speed::AbstractArray{T,4} where T, r)
+    min_CFL = Inf
+
+    dr = r.cell_width
+    nr = r.n
+    @loop_z_vperp_vpa iz ivperp ivpa begin
+        for ir ∈ 1:nr
+            min_CFL = min(min_CFL, abs(dr[ir] / speed[ir,ivpa,ivperp,iz]))
+        end
+    end
+
+    if comm_block[] !== MPI.COMM_NULL
+        min_CFL = MPI.Reduce(min_CFL, min, comm_block[]; root=0)
+    end
+
+    return min_CFL
+end
+
+"""
     get_minimum_CFL_z(speed, z)
 
 Calculate the minimum (over a shared-memory block) of the CFL factor 'speed/(grid
@@ -394,6 +422,34 @@ function get_minimum_CFL_z(speed::AbstractArray{T,4} where T, z)
     @loop_r_vperp_vpa ir ivperp ivpa begin
         for iz ∈ 1:nz
             min_CFL = min(min_CFL, abs(dz[iz] / speed[iz,ivpa,ivperp,ir]))
+        end
+    end
+
+    if comm_block[] !== MPI.COMM_NULL
+        min_CFL = MPI.Reduce(min_CFL, min, comm_block[]; root=0)
+    end
+
+    return min_CFL
+end
+
+"""
+    get_minimum_CFL_vperp(speed, vperp)
+
+Calculate the minimum (over a shared-memory block) of the CFL factor 'speed/(grid
+spacing)' (with no prefactor) corresponding to advection speed `speed` for advection in
+the vperp direction.
+
+Reduces the result over the shared-memory block (handling distributed parallelism is left
+to the calling site). The result is only to be used on rank-0 of the shared-memory block.
+"""
+function get_minimum_CFL_vperp(speed::AbstractArray{T,4} where T, vperp)
+    min_CFL = Inf
+
+    dvperp = vperp.cell_width
+    nvperp = vperp.n
+    @loop_r_z_vpa ir iz ivpa begin
+        for ivperp ∈ 1:nvperp
+            min_CFL = min(min_CFL, abs(dvperp[ivperp] / speed[ivperp,ivpa,iz,ir]))
         end
     end
 
