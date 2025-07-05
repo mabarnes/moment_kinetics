@@ -3675,6 +3675,138 @@ function get_variable(run_info, variable_name; normalize_advection_speed_shape=t
                                   kwargs...)
 end
 
+# Select a slice of an time-series sized variable
+function select_slice_of_variable(variable::AbstractVector; it=nothing,
+                                  is=nothing, ir=nothing, iz=nothing, ivperp=nothing,
+                                  ivpa=nothing, ivzeta=nothing, ivr=nothing,
+                                  ivz=nothing)
+    if it !== nothing
+        variable = selectdim(variable, 1, it)
+    end
+
+    return variable
+end
+
+# Select a slice of an EM field sized variable
+function select_slice_of_variable(variable::AbstractArray{T,3} where T; it=nothing,
+                                  is=nothing, ir=nothing, iz=nothing, ivperp=nothing,
+                                  ivpa=nothing, ivzeta=nothing, ivr=nothing,
+                                  ivz=nothing)
+    if it !== nothing
+        variable = selectdim(variable, 3, it)
+    end
+    if ir !== nothing
+        variable = selectdim(variable, 2, ir)
+    end
+    if iz !== nothing
+        variable = selectdim(variable, 1, iz)
+    end
+
+    return variable
+end
+
+# Select a slice of a moment sized variable
+function select_slice_of_variable(variable::AbstractArray{T,4} where T; it=nothing,
+                                  is=nothing, ir=nothing, iz=nothing, ivperp=nothing,
+                                  ivpa=nothing, ivzeta=nothing, ivr=nothing,
+                                  ivz=nothing)
+    if it !== nothing
+        variable = selectdim(variable, 4, it)
+    end
+    if is !== nothing
+        variable = selectdim(variable, 3, is)
+    end
+    if ir !== nothing
+        variable = selectdim(variable, 2, ir)
+    end
+    if iz !== nothing
+        variable = selectdim(variable, 1, iz)
+    end
+
+    return variable
+end
+
+# Select a slice of an ion distribution function sized variable
+function select_slice_of_variable(variable::AbstractArray{T,6} where T; it=nothing,
+                                  is=nothing, ir=nothing, iz=nothing, ivperp=nothing,
+                                  ivpa=nothing, ivzeta=nothing, ivr=nothing,
+                                  ivz=nothing)
+    if it !== nothing
+        variable = selectdim(variable, 6, it)
+    end
+    if is !== nothing
+        variable = selectdim(variable, 5, is)
+    end
+    if ir !== nothing
+        variable = selectdim(variable, 4, ir)
+    end
+    if iz !== nothing
+        variable = selectdim(variable, 3, iz)
+    end
+    if ivperp !== nothing
+        variable = selectdim(variable, 2, ivperp)
+    end
+    if ivpa !== nothing
+        variable = selectdim(variable, 1, ivpa)
+    end
+
+    return variable
+end
+
+# Select a slice of an electron distribution function sized variable
+function select_slice_of_variable(variable::AbstractArray{T,5} where T; it=nothing,
+                                  is=nothing, ir=nothing, iz=nothing, ivperp=nothing,
+                                  ivpa=nothing, ivzeta=nothing, ivr=nothing,
+                                  ivz=nothing)
+    if it !== nothing
+        variable = selectdim(variable, 5, it)
+    end
+    if ir !== nothing
+        variable = selectdim(variable, 4, ir)
+    end
+    if iz !== nothing
+        variable = selectdim(variable, 3, iz)
+    end
+    if ivperp !== nothing
+        variable = selectdim(variable, 2, ivperp)
+    end
+    if ivpa !== nothing
+        variable = selectdim(variable, 1, ivpa)
+    end
+
+    return variable
+end
+
+# Select a slice of a neutral distribution function sized variable
+function select_slice_of_variable(variable::AbstractArray{T,7} where T; it=nothing,
+                                  is=nothing, ir=nothing, iz=nothing, ivperp=nothing,
+                                  ivpa=nothing, ivzeta=nothing, ivr=nothing,
+                                  ivz=nothing)
+    if it !== nothing
+        variable = selectdim(variable, 7, it)
+    end
+    if is !== nothing
+        variable = selectdim(variable, 6, is)
+    end
+    if ir !== nothing
+        variable = selectdim(variable, 5, ir)
+    end
+    if iz !== nothing
+        variable = selectdim(variable, 4, iz)
+    end
+    if ivzeta !== nothing
+        variable = selectdim(variable, 3, ivzeta)
+    end
+    if ivr !== nothing
+        variable = selectdim(variable, 2, ivr)
+    end
+    if ivz !== nothing
+        variable = selectdim(variable, 1, ivz)
+    end
+
+    return variable
+end
+
 # Define internal function with a `Symbol` argument because this allows the compiler to
 # optimize out (most of?) the large if-elseif-... chain below to improve the compile time.
 function _get_variable_internal(run_info, variable_name::Symbol;
@@ -3686,99 +3818,6 @@ function _get_variable_internal(run_info, variable_name::Symbol;
                                sn=run_info.composition.n_neutral_species, r=run_info.r.n,
                                z=run_info.z.n, vperp=run_info.vperp.n, vpa=run_info.vpa.n,
                                vzeta=run_info.vzeta.n, vr=run_info.vr.n, vz=run_info.vz.n)
-
-    # Select a slice of an time-series sized variable
-    function select_slice_of_variable(variable::AbstractVector; it=nothing,
-                                      is=nothing, ir=nothing, iz=nothing, ivperp=nothing,
-                                      ivpa=nothing, ivzeta=nothing, ivr=nothing,
-                                      ivz=nothing)
-        if it !== nothing
-            variable = selectdim(variable, 1, kwargs[:it])
-        end
-
-        return variable
-    end
-
-    # Select a slice of an ion distribution function sized variable
-    function select_slice_of_variable(variable::AbstractArray{T,6} where T; it=nothing,
-                                      is=nothing, ir=nothing, iz=nothing, ivperp=nothing,
-                                      ivpa=nothing, ivzeta=nothing, ivr=nothing,
-                                      ivz=nothing)
-        if it !== nothing
-            variable = selectdim(variable, 6, kwargs[:it])
-        end
-        if is !== nothing
-            variable = selectdim(variable, 5, kwargs[:is])
-        end
-        if ir !== nothing
-            variable = selectdim(variable, 4, kwargs[:ir])
-        end
-        if iz !== nothing
-            variable = selectdim(variable, 3, kwargs[:iz])
-        end
-        if ivperp !== nothing
-            variable = selectdim(variable, 2, kwargs[:ivperp])
-        end
-        if ivpa !== nothing
-            variable = selectdim(variable, 1, kwargs[:ivpa])
-        end
-
-        return variable
-    end
-
-    # Select a slice of an electron distribution function sized variable
-    function select_slice_of_variable(variable::AbstractArray{T,5} where T; it=nothing,
-                                      is=nothing, ir=nothing, iz=nothing, ivperp=nothing,
-                                      ivpa=nothing, ivzeta=nothing, ivr=nothing,
-                                      ivz=nothing)
-        if it !== nothing
-            variable = selectdim(variable, 5, kwargs[:it])
-        end
-        if ir !== nothing
-            variable = selectdim(variable, 4, kwargs[:ir])
-        end
-        if iz !== nothing
-            variable = selectdim(variable, 3, kwargs[:iz])
-        end
-        if ivperp !== nothing
-            variable = selectdim(variable, 2, kwargs[:ivperp])
-        end
-        if ivpa !== nothing
-            variable = selectdim(variable, 1, kwargs[:ivpa])
-        end
-
-        return variable
-    end
-
-    # Select a slice of a neutral distribution function sized variable
-    function select_slice_of_variable(variable::AbstractArray{T,7} where T; it=nothing,
-                                      is=nothing, ir=nothing, iz=nothing, ivperp=nothing,
-                                      ivpa=nothing, ivzeta=nothing, ivr=nothing,
-                                      ivz=nothing)
-        if it !== nothing
-            variable = selectdim(variable, 7, kwargs[:it])
-        end
-        if is !== nothing
-            variable = selectdim(variable, 6, kwargs[:is])
-        end
-        if ir !== nothing
-            variable = selectdim(variable, 5, kwargs[:ir])
-        end
-        if iz !== nothing
-            variable = selectdim(variable, 4, kwargs[:iz])
-        end
-        if ivzeta !== nothing
-            variable = selectdim(variable, 3, kwargs[:ivzeta])
-        end
-        if ivr !== nothing
-            variable = selectdim(variable, 2, kwargs[:ivr])
-        end
-        if ivz !== nothing
-            variable = selectdim(variable, 1, kwargs[:ivz])
-        end
-
-        return variable
-    end
 
     # Get a 'per step' value from a saved 'cumulative' value. E.g. 'iterations per step'
     # from a saved 'cumulative total iterations'
@@ -3862,70 +3901,6 @@ function _get_variable_internal(run_info, variable_name::Symbol;
         return dx_dz
     end
 
-    function get_upwind_r_derivative(x, ur)
-        dx_dr = similar(x)
-        if :ir ∈ keys(kwargs) && kwargs[:ir] !== nothing
-            error("Cannot take r-derivative when ir!==nothing")
-        end
-
-        if run_info.r.n == 1
-            dx_dr .= 0.0
-            return dx_dr
-        end
-
-        if :is ∈ keys(kwargs) && isa(kwargs[:is], mk_int) && :ir ∈ keys(kwargs) && isa(kwargs[:ir], mk_int)
-            for it ∈ 1:size(dx_dr, 2)
-                @views derivative!(dx_dr[:,it], x[:,it], run_info.r, .-ur[:,it],
-                                   run_info.r_spectral)
-            end
-        elseif :iz ∈ keys(kwargs) && isa(kwargs[:iz], mk_int)
-            for it ∈ 1:size(dx_dr, 3), is ∈ 1:size(dx_dr, 2)
-                @views derivative!(dx_dr[:,is,it], x[:,is,it], run_info.r,
-                                   .-ur[:,is,it], run_info.r_spectral)
-            end
-        elseif :is ∈ keys(kwargs) && isa(kwargs[:is], mk_int)
-            for it ∈ 1:size(dx_dr, 3), iz ∈ 1:size(dx_dr, 1)
-                @views derivative!(dx_dr[iz,:,it], x[iz,:,it], run_info.r,
-                                   .-ur[iz,:,it], run_info.r_spectral)
-            end
-        else
-            for it ∈ 1:size(dx_dr, 4), is ∈ 1:size(dx_dr, 3), iz ∈ 1:size(dx_dr, 1)
-                @views derivative!(dx_dr[iz,:,is,it], x[iz,:,is,it], run_info.r,
-                                   .-ur[iz,:,is,it], run_info.r_spectral)
-            end
-        end
-        return dx_dr
-    end
-
-    function get_upwind_z_derivative(x, uz)
-        dx_dz = similar(x)
-        if :iz ∈ keys(kwargs) && kwargs[:iz] !== nothing
-            error("Cannot take z-derivative when iz!==nothing")
-        end
-        if :is ∈ keys(kwargs) && isa(kwargs[:is], mk_int) && :ir ∈ keys(kwargs) && isa(kwargs[:ir], mk_int)
-            for it ∈ 1:size(dx_dz, 2)
-                @views derivative!(dx_dz[:,it], x[:,it], run_info.z, .-uz[:,it],
-                                   run_info.z_spectral)
-            end
-        elseif :ir ∈ keys(kwargs) && isa(kwargs[:ir], mk_int)
-            for it ∈ 1:size(dx_dz, 3), is ∈ 1:size(dx_dz, 2)
-                @views derivative!(dx_dz[:,is,it], x[:,is,it], run_info.z,
-                                   .-uz[:,is,it], run_info.z_spectral)
-            end
-        elseif :is ∈ keys(kwargs) && isa(kwargs[:is], mk_int)
-            for it ∈ 1:size(dx_dz, 3), ir ∈ 1:size(dx_dz, 2)
-                @views derivative!(dx_dz[:,ir,it], x[:,ir,it], run_info.z,
-                                   .-uz[:,ir,it], run_info.z_spectral)
-            end
-        else
-            for it ∈ 1:size(dx_dz, 4), is ∈ 1:size(dx_dz, 3), ir ∈ 1:size(dx_dz, 2)
-                @views derivative!(dx_dz[:,ir,is,it], x[:,ir,is,it], run_info.z,
-                                   .-uz[:,ir,is,it], run_info.z_spectral)
-            end
-        end
-        return dx_dz
-    end
-
     function get_electron_z_derivative(x)
         dx_dz = similar(x)
         if :iz ∈ keys(kwargs) && kwargs[:iz] !== nothing
@@ -3937,28 +3912,12 @@ function _get_variable_internal(run_info, variable_name::Symbol;
                                    run_info.z_spectral)
             end
         else
-            for it ∈ 1:size(dx_dz, 3), ir ∈ 1:run_info.r.n
+            for it ∈ 1:size(dx_dz, 3), ir ∈ 1:size(dx_dz, 2)
                 @views derivative!(dx_dz[:,ir,it], x[:,ir,it], run_info.z,
                                    run_info.z_spectral)
             end
         end
         return dx_dz
-    end
-
-    function get_ion_r_upwind_factor()
-        vEr = get_variable(run_info, "vEr"; kwargs...)
-        nz, nr, nt = size(vEr)
-        ns = run_info.n_ion_species
-        vEr = reshape(vEr, (nz, nr, 1, nt))
-        return cat((vEr for _ ∈ 1:ns)...; dims=3)
-    end
-
-    function get_ion_z_upwind_factor()
-        upar = get_variable(run_info, "parallel_flow"; kwargs...)
-        nz, nr, ns, nt = size(upar)
-        vEz = reshape(get_variable(run_info, "vEz"; kwargs...), (nz, nr, 1, nt))
-        bz = reshape(run_info.geometry.bzed, (nz, nr, 1, 1))
-        return @. (vEz + bz * upar)
     end
 
     if variable_name == :temperature
@@ -3967,43 +3926,29 @@ function _get_variable_internal(run_info, variable_name::Symbol;
     elseif variable_name == :ddens_dr
         variable = get_r_derivative(run_info, "density"; kwargs...)
     elseif variable_name == :ddens_dr_upwind
-        n = get_variable(run_info, "density"; kwargs...)
-        u = get_ion_r_upwind_factor()
-        variable = get_upwind_r_derivative(n, u)
+        variable = get_upwind_r_derivative(run_info, "density"; kwargs...)
     elseif variable_name == :ddens_dz
         variable = get_z_derivative(run_info, "density"; kwargs...)
     elseif variable_name == :ddens_dz_upwind
-        n = get_variable(run_info, "density"; kwargs...)
-        u = get_ion_z_upwind_factor()
-        variable = get_upwind_z_derivative(n, u)
+        variable = get_upwind_z_derivative(run_info, "density"; kwargs...)
     elseif variable_name == :dupar_dr
         variable = get_r_derivative(run_info, "parallel_flow"; kwargs...)
     elseif variable_name == :dupar_dr_upwind
-        upar = get_variable(run_info, "parallel_flow"; kwargs...)
-        u = get_ion_r_upwind_factor()
-        variable = get_upwind_r_derivative(upar, u)
+        variable = get_upwind_r_derivative(run_info, "parallel_flow"; kwargs...)
     elseif variable_name == :dupar_dz
         variable = get_z_derivative(run_info, "parallel_flow"; kwargs...)
     elseif variable_name == :dupar_dz_upwind
-        upar = get_variable(run_info, "parallel_flow"; kwargs...)
-        u = get_ion_z_upwind_factor()
-        variable = get_upwind_z_derivative(upar, u)
+        variable = get_upwind_z_derivative(run_info, "parallel_flow"; kwargs...)
     elseif variable_name == :dp_dr_upwind
-        p = get_variable(run_info, "pressure"; kwargs...)
-        u = get_ion_r_upwind_factor()
-        variable = get_upwind_r_derivative(p, u)
+        variable = get_upwind_r_derivative(run_info, "pressure"; kwargs...)
     elseif variable_name == :dp_dz
         variable = get_z_derivative(run_info, "pressure"; kwargs...)
     elseif variable_name == :dp_dz_upwind
-        p = get_variable(run_info, "pressure"; kwargs...)
-        u = get_ion_z_upwind_factor()
-        variable = get_upwind_z_derivative(p, u)
+        variable = get_upwind_z_derivative(run_info, "pressure"; kwargs...)
     elseif variable_name == :dppar_dz
         variable = get_z_derivative(run_info, "parallel_pressure"; kwargs...)
     elseif variable_name == :dppar_dz_upwind
-        ppar = get_variable(run_info, "parallel_pressure"; kwargs...)
-        u = get_ion_z_upwind_factor()
-        variable = get_upwind_z_derivative(ppar, u)
+        variable = get_upwind_z_derivative(run_info, "parallel_pressure"; kwargs...)
     elseif variable_name == :dvth_dr
         variable = get_r_derivative(run_info, "thermal_speed"; kwargs...)
     elseif variable_name == :dvth_dz
@@ -4036,20 +3981,18 @@ function _get_variable_internal(run_info, variable_name::Symbol;
     elseif variable_name == :neutral_ddens_dz
         variable = get_z_derivative(run_info, "density_neutral"; kwargs...)
     elseif variable_name == :neutral_ddens_dz_upwind
-        n = get_variable(run_info, "density_neutral"; kwargs...)
-        uz = get_variable(run_info, "uz_neutral"; kwargs...)
-        variable = get_upwind_z_derivative(n, uz)
+        variable = get_upwind_z_derivative(run_info, "density_neutral"; neutral=true,
+                                           kwargs...)
     elseif variable_name == :neutral_duz_dz
         variable = get_z_derivative(run_info, "uz_neutral"; kwargs...)
     elseif variable_name == :neutral_duz_dz_upwind
-        uz = get_variable(run_info, "uz_neutral"; kwargs...)
-        variable = get_upwind_z_derivative(uz, uz)
+        variable = get_upwind_z_derivative(run_info, "uz_neutral"; neutral=true,
+                                           kwargs...)
     elseif variable_name == :neutral_dp_dz
         variable = get_z_derivative(run_info, "p_neutral"; kwargs...)
     elseif variable_name == :neutral_dp_dz_upwind
-        p = get_variable(run_info, "p_neutral"; kwargs...)
-        uz = get_variable(run_info, "uz_neutral"; kwargs...)
-        variable = get_upwind_z_derivative(p, uz)
+        variable = get_upwind_z_derivative(run_info, "p_neutral"; neutral=true,
+                                           kwargs...)
     elseif variable_name == :neutral_dpz_dz
         variable = get_z_derivative(run_info, "pz_neutral"; kwargs...)
     elseif variable_name == :neutral_dvth_dz
@@ -4264,11 +4207,13 @@ function _get_variable_internal(run_info, variable_name::Symbol;
     elseif variable_name == :vEr
         variable = get_vEr(run_info.geometry.rhostar, run_info.geometry.jacobian,
                            run_info.geometry.bzeta, run_info.geometry.Bmag,
-                           get_variable(run_info, "Ez"; kwargs...))
+                           get_variable(run_info, "Ez"))
+        variable = select_slice_of_variable(variable; kwargs...)
     elseif variable_name == :vEz
         variable = get_vEz(run_info.geometry.rhostar, run_info.geometry.jacobian,
                            run_info.geometry.bzeta, run_info.geometry.Bmag,
-                           get_variable(run_info, "Er"; kwargs...))
+                           get_variable(run_info, "Er"))
+        variable = select_slice_of_variable(variable; kwargs...)
     elseif variable_name == :mfp
         # this is mean free path for krook collision purposes, but it should be the same collision
         # frequency used for other collision operators in general, as it encompasses the magnitude
@@ -5309,7 +5254,11 @@ r-derivative. Returns the r-derivative
 `kwargs...` are passed through to `get_variable()`.
 """
 function get_r_derivative(run_info, variable_name; kwargs...)
-    variable = get_variable(run_info, variable_name; kwargs...)
+    if :ir ∈ keys(kwargs)
+        variable = get_variable(run_info, variable_name)
+    else
+        variable = get_variable(run_info, variable_name; kwargs...)
+    end
     r_deriv = similar(variable)
 
     if ndims(variable) == 3
@@ -5346,6 +5295,78 @@ function get_r_derivative(run_info, variable_name; kwargs...)
         error("Unsupported number of dimensions ($(ndims(variable))) for $variable_name")
     end
 
+    if :ir ∈ keys(kwargs)
+        r_deriv = select_slice_of_variable(r_deriv; kwargs...)
+    end
+
+    return r_deriv
+end
+
+"""
+    get_upwind_r_derivative(run_info, variable_name; kwargs...)
+
+Get (i.e. load or calculate) `variable_name` from `run_info` and calculate its
+upwinded r-derivative. Returns the upwinded r-derivative
+
+`kwargs...` are passed through to `get_variable()`.
+"""
+function get_upwind_r_derivative(run_info, variable_name; neutral=false, kwargs...)
+    if neutral
+        if :ir ∈ keys(kwargs)
+            variable = get_variable(run_info, variable_name)
+            ur = get_variable(run_info, "neutral_ur")
+        else
+            variable = get_variable(run_info, variable_name; kwargs...)
+            ur = get_variable(run_info, "neutral_ur"; kwargs...)
+        end
+    else
+        if :ir ∈ keys(kwargs)
+            variable = get_variable(run_info, variable_name)
+            vEr = get_variable(run_info, "vEr")
+        else
+            variable = get_variable(run_info, variable_name; kwargs...)
+            vEr = get_variable(run_info, "vEr"; kwargs...)
+        end
+
+        nz, nr, nt = size(vEr)
+        ns = run_info.n_ion_species
+        vEr = reshape(vEr, (nz, nr, 1, nt))
+        ur = cat((vEr for _ ∈ 1:ns)...; dims=3)
+    end
+
+    r_deriv = similar(variable)
+
+    if run_info.r.n == 1
+        r_deriv .= 0.0
+        return r_deriv
+    end
+
+    if :is ∈ keys(kwargs) && isa(kwargs[:is], mk_int) && :iz ∈ keys(kwargs) && isa(kwargs[:iz], mk_int)
+        for it ∈ 1:size(r_deriv, 2)
+            @views derivative!(r_deriv[:,it], variable[:,it], run_info.r, .-ur[:,it],
+                               run_info.r_spectral)
+        end
+    elseif :iz ∈ keys(kwargs) && isa(kwargs[:iz], mk_int)
+        for it ∈ 1:size(r_deriv, 3), is ∈ 1:size(r_deriv, 2)
+            @views derivative!(r_deriv[:,is,it], variable[:,is,it], run_info.r,
+                               .-ur[:,is,it], run_info.r_spectral)
+        end
+    elseif :is ∈ keys(kwargs) && isa(kwargs[:is], mk_int)
+        for it ∈ 1:size(r_deriv, 3), iz ∈ 1:size(r_deriv, 1)
+            @views derivative!(r_deriv[iz,:,it], variable[iz,:,it], run_info.r,
+                               .-ur[iz,:,it], run_info.r_spectral)
+        end
+    else
+        for it ∈ 1:size(r_deriv, 4), is ∈ 1:size(r_deriv, 3), iz ∈ 1:size(r_deriv, 1)
+            @views derivative!(r_deriv[iz,:,is,it], variable[iz,:,is,it], run_info.r,
+                               .-ur[iz,:,is,it], run_info.r_spectral)
+        end
+    end
+
+    if :ir ∈ keys(kwargs)
+        r_deriv = select_slice_of_variable(r_deriv; kwargs...)
+    end
+
     return r_deriv
 end
 
@@ -5358,6 +5379,11 @@ z-derivative. Returns the z-derivative
 `kwargs...` are passed through to `get_variable()`.
 """
 function get_z_derivative(run_info, variable_name; kwargs...)
+    if :iz ∈ keys(kwargs)
+        variable = get_variable(run_info, variable_name)
+    else
+        variable = get_variable(run_info, variable_name; kwargs...)
+    end
     variable = get_variable(run_info, variable_name; kwargs...)
     z_deriv = similar(variable)
 
@@ -5393,6 +5419,83 @@ function get_z_derivative(run_info, variable_name; kwargs...)
         end
     else
         error("Unsupported number of dimensions ($(ndims(variable))) for $variable_name")
+    end
+
+    if :iz ∈ keys(kwargs)
+        z_deriv = select_slice_of_variable(z_deriv; kwargs...)
+    end
+
+    return z_deriv
+end
+
+"""
+    get_upwind_z_derivative(run_info, variable_name; kwargs...)
+
+Get (i.e. load or calculate) `variable_name` from `run_info` and calculate its
+upwinded z-derivative. Returns the upwinded z-derivative
+
+`kwargs...` are passed through to `get_variable()`.
+"""
+function get_upwind_z_derivative(run_info, variable_name; neutral=false, kwargs...)
+    if neutral
+        if :iz ∈ keys(kwargs)
+            variable = get_variable(run_info, variable_name)
+            uz = get_variable(run_info, "neutral_uz")
+            nz, nr, ns, nt = size(uz)
+        else
+            variable = get_variable(run_info, variable_name; kwargs...)
+            uz = get_variable(run_info, "neutral_uz"; kwargs...)
+            nz, nr, ns, nt = size(uz)
+        end
+    else
+        if :iz ∈ keys(kwargs)
+            variable = get_variable(run_info, variable_name)
+            upar = get_variable(run_info, "parallel_flow")
+            nz, nr, ns, nt = size(upar)
+            vEz = reshape(get_variable(run_info, "vEz"), (nz, nr, 1, nt))
+        else
+            variable = get_variable(run_info, variable_name; kwargs...)
+            upar = get_variable(run_info, "parallel_flow"; kwargs...)
+            nz, nr, ns, nt = size(upar)
+            vEz = reshape(get_variable(run_info, "vEz"; kwargs...), (nz, nr, 1, nt))
+        end
+        if :ir ∈ keys(kwargs)
+            ir = kwargs[:ir]
+        else
+            ir = 1:run_info.r.n
+        end
+
+        bz = reshape(run_info.geometry.bzed[:,ir], (nz, nr, 1, 1))
+        uz = @. (vEz + bz * upar)
+    end
+
+    variable = get_variable(run_info, variable_name; kwargs...)
+    z_deriv = similar(variable)
+
+    if :is ∈ keys(kwargs) && isa(kwargs[:is], mk_int) && :ir ∈ keys(kwargs) && isa(kwargs[:ir], mk_int)
+        for it ∈ 1:size(z_deriv, 2)
+            @views derivative!(z_deriv[:,it], variable[:,it], run_info.z, .-uz[:,it],
+                               run_info.z_spectral)
+        end
+    elseif :ir ∈ keys(kwargs) && isa(kwargs[:ir], mk_int)
+        for it ∈ 1:size(z_deriv, 3), is ∈ 1:size(z_deriv, 2)
+            @views derivative!(z_deriv[:,is,it], variable[:,is,it], run_info.z,
+                               .-uz[:,is,it], run_info.z_spectral)
+        end
+    elseif :is ∈ keys(kwargs) && isa(kwargs[:is], mk_int)
+        for it ∈ 1:size(z_deriv, 3), ir ∈ 1:size(z_deriv, 2)
+            @views derivative!(z_deriv[:,ir,it], variable[:,ir,it], run_info.z,
+                               .-uz[:,ir,it], run_info.z_spectral)
+        end
+    else
+        for it ∈ 1:size(z_deriv, 4), is ∈ 1:size(z_deriv, 3), ir ∈ 1:size(z_deriv, 2)
+            @views derivative!(z_deriv[:,ir,is,it], variable[:,ir,is,it], run_info.z,
+                               .-uz[:,ir,is,it], run_info.z_spectral)
+        end
+    end
+
+    if :iz ∈ keys(kwargs)
+        z_deriv = select_slice_of_variable(z_deriv; kwargs...)
     end
 
     return z_deriv
