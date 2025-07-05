@@ -4002,7 +4002,7 @@ function _get_variable_internal(run_info, variable_name::Symbol;
     elseif variable_name == :neutral_dqz_dz
         variable = get_z_derivative(run_info, "qz_neutral"; kwargs...)
     elseif variable_name == :ddens_dt
-        all_moments = _get_all_moment_variables(run_info; kwargs...)
+        all_moments = _get_all_moment_variables(run_info)
         variable = similar(all_moments.density)
         # Define function here to minimise effect type instability due to
         # get_all_moment_variables returning NamedTuples
@@ -4023,8 +4023,9 @@ function _get_variable_internal(run_info, variable_name::Symbol;
             end
         end
         get_ddens_dt!(variable, all_moments)
+        variable = select_slice_of_variable(variable; kwargs...)
     elseif variable_name == :dnupar_dt
-        all_moments = _get_all_moment_variables(run_info; kwargs...)
+        all_moments = _get_all_moment_variables(run_info)
         variable = similar(all_moments.parallel_flow)
         # Define function here to minimise effect type instability due to
         # get_all_moment_variables returning NamedTuples
@@ -4045,6 +4046,7 @@ function _get_variable_internal(run_info, variable_name::Symbol;
             end
         end
         get_dnupar_dt!(variable, all_moments)
+        variable = select_slice_of_variable(variable; kwargs...)
     elseif variable_name == :dupar_dt
         dn_dt = get_variable(run_info, "ddens_dt"; kwargs...)
         dnupar_dt = get_variable(run_info, "dnupar_dt"; kwargs...)
@@ -4052,7 +4054,7 @@ function _get_variable_internal(run_info, variable_name::Symbol;
         upar = get_variable(run_info, "parallel_flow"; kwargs...)
         variable = @. dnupar_dt / n - upar / n * dn_dt
     elseif variable_name == :dp_dt
-        all_moments = _get_all_moment_variables(run_info; kwargs...)
+        all_moments = _get_all_moment_variables(run_info)
         variable = similar(all_moments.pressure)
         # Define function here to minimise effect type instability due to
         # get_all_moment_variables returning NamedTuples
@@ -4072,6 +4074,7 @@ function _get_variable_internal(run_info, variable_name::Symbol;
             end
         end
         get_dp_dt!(variable, all_moments)
+        variable = select_slice_of_variable(variable; kwargs...)
     elseif variable_name == :dvth_dt
         dn_dt = get_variable(run_info, "ddens_dt"; kwargs...)
         dp_dt = get_variable(run_info, "dp_dt"; kwargs...)
@@ -4083,7 +4086,7 @@ function _get_variable_internal(run_info, variable_name::Symbol;
         # Try to load electron pressure to check that electrons are present in the output.
         _ = get_variable(run_info, "electron_pressure"; kwargs...)
 
-        all_moments = _get_all_moment_variables(run_info; kwargs...)
+        all_moments = _get_all_moment_variables(run_info)
         variable = similar(all_moments.electron_pressure)
         # Define function here to minimise effect type instability due to
         # get_all_moment_variables returning NamedTuples
@@ -4110,6 +4113,7 @@ function _get_variable_internal(run_info, variable_name::Symbol;
             end
         end
         get_electron_dp_dt!(variable, all_moments)
+        variable = select_slice_of_variable(variable; kwargs...)
     elseif variable_name == :electron_dvth_dt
         # Try to load electron pressure to check that electrons are present in the output.
         _ = get_variable(run_info, "electron_pressure"; kwargs...)
@@ -4127,7 +4131,7 @@ function _get_variable_internal(run_info, variable_name::Symbol;
         vth = get_variable(run_info, "electron_thermal_speed"; kwargs...)
         variable = @. 0.5 * vth * dp_dt / p
     elseif variable_name == :neutral_ddens_dt
-        all_moments = _get_all_moment_variables(run_info; kwargs...)
+        all_moments = _get_all_moment_variables(run_info)
         variable = similar(all_moments.density)
         # Define function here to minimise effect type instability due to
         # get_all_moment_variables returning NamedTuples
@@ -4148,8 +4152,9 @@ function _get_variable_internal(run_info, variable_name::Symbol;
             end
         end
         get_neutral_ddens_dt!(variable, all_moments)
+        variable = select_slice_of_variable(variable; kwargs...)
     elseif variable_name == :neutral_dnuz_dt
-        all_moments = _get_all_moment_variables(run_info; kwargs...)
+        all_moments = _get_all_moment_variables(run_info)
         variable = similar(all_moments.uz_neutral)
         # Define function here to minimise effect type instability due to
         # get_all_moment_variables returning NamedTuples
@@ -4170,6 +4175,7 @@ function _get_variable_internal(run_info, variable_name::Symbol;
             end
         end
         get_neutral_dnuz_dt!(variable, all_moments)
+        variable = select_slice_of_variable(variable; kwargs...)
     elseif variable_name == :neutral_duz_dt
         dn_dt = get_variable(run_info, "neutral_ddens_dt"; kwargs...)
         dnuz_dt = get_variable(run_info, "neutral_dnuz_dt"; kwargs...)
@@ -4177,7 +4183,7 @@ function _get_variable_internal(run_info, variable_name::Symbol;
         uz = get_variable(run_info, "uz_neutral"; kwargs...)
         variable = @. dnuz_dt / n - uz / n * dn_dt
     elseif variable_name == :neutral_dp_dt
-        all_moments = _get_all_moment_variables(run_info; kwargs...)
+        all_moments = _get_all_moment_variables(run_info)
         variable = similar(all_moments.p_neutral)
         # Define function here to minimise effect type instability due to
         # get_all_moment_variables returning NamedTuples
@@ -4197,6 +4203,7 @@ function _get_variable_internal(run_info, variable_name::Symbol;
             end
         end
         get_neutral_duz_dt!(variable, all_moments)
+        variable = select_slice_of_variable(variable; kwargs...)
     elseif variable_name == :neutral_dvth_dt
         dn_dt = get_variable(run_info, "neutral_ddens_dt"; kwargs...)
         dp_dt = get_variable(run_info, "neutral_dp_dt"; kwargs...)
