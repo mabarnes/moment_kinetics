@@ -74,11 +74,13 @@ const ion_moment_gradient_variables = ("ddens_dr", "ddens_dr_upwind", "ddens_dz"
                                        "dp_dz", "dp_dz_upwind", "dppar_dz",
                                        "dppar_dz_upwind", "dvth_dr", "dvth_dz", "dT_dz",
                                        "dqpar_dz")
+const ion_moment_ddt_variables = ("ddens_dt", "dnupar_dt", "dupar_dt", "dp_dt", "dvth_dt")
 const electron_moment_variables = ("electron_density", "electron_parallel_flow",
                                    "electron_pressure", "electron_parallel_pressure",
                                    "electron_thermal_speed", "electron_temperature",
                                    "electron_parallel_heat_flux",
                                    "collision_frequency_ee", "collision_frequency_ei")
+const electron_moment_ddt_variables = ("electron_dp_dt", "electron_dvth_dt")
 const electron_moment_gradient_variables = ("electron_ddens_dz", "electron_dupar_dz",
                                             "electron_dp_dz", "electron_dvth_dz",
                                             "electron_dT_dz", "electron_dqpar_dz")
@@ -91,6 +93,9 @@ const neutral_moment_gradient_variables = ("neutral_ddens_dz", "neutral_ddens_dz
                                            "neutral_dp_dz", "neutral_dp_dz_upwind",
                                            "neutral_dpz_dz", "neutral_dvth_dz",
                                            "neutral_dT_dz", "neutral_dqz_dz")
+const neutral_moment_ddt_variables = ("neutral_ddens_dt", "neutral_dnupar_dt",
+                                      "neutral_dupar_dt", "neutral_dp_dt",
+                                      "neutral_dvth_dt")
 const ion_source_variables = ("external_source_amplitude",
                               "external_source_density_amplitude",
                               "external_source_momentum_amplitude",
@@ -107,15 +112,19 @@ const electron_source_variables = ("external_source_electron_amplitude",
                                    "external_source_electron_pressure_amplitude")
 const all_source_variables = tuple(ion_source_variables..., electron_source_variables...,
                                    neutral_source_variables...)
-const all_moment_variables = tuple(em_variables..., ion_moment_variables...,
-                                   electron_moment_variables...,
-                                   neutral_moment_variables...,
-                                   ion_moment_gradient_variables...,
-                                   electron_moment_gradient_variables...,
-                                   neutral_moment_gradient_variables...,
-                                   ion_source_variables..., 
-                                   electron_source_variables...,
-                                   neutral_source_variables...)
+const all_moment_variables_no_ddt = tuple(em_variables..., ion_moment_variables...,
+                                          electron_moment_variables...,
+                                          neutral_moment_variables...,
+                                          ion_moment_gradient_variables...,
+                                          electron_moment_gradient_variables...,
+                                          neutral_moment_gradient_variables...,
+                                          ion_source_variables...,
+                                          electron_source_variables...,
+                                          neutral_source_variables...)
+const all_moment_variables = tuple(all_moment_variables_no_ddt...,
+                                   ion_moment_ddt_variables...,
+                                   electron_moment_ddt_variables...,
+                                   neutral_moment_ddt_variables...)
 const ion_dfn_variables = ("f",)
 const electron_dfn_variables = ("f_electron",)
 const neutral_dfn_variables = ("f_neutral",)
@@ -3550,7 +3559,7 @@ function _get_all_moment_variables(run_info; it=nothing, kwargs...)
         it = it:it
     end
     pairs = Pair{Symbol,Any}[]
-    for v ∈ all_moment_variables
+    for v ∈ all_moment_variables_no_ddt
         try
             push!(pairs, Symbol(v)=>get_variable(run_info, v; it=it, kwargs...))
         catch e
@@ -4128,6 +4137,9 @@ function _get_variable_internal(run_info, variable_name::Symbol;
         vth = get_variable(run_info, "thermal_speed"; kwargs...)
         variable = @. 0.5 * vth * (dp_dt / p - dn_dt / n)
     elseif variable_name == :electron_dp_dt
+        # Try to load electron pressure to check that electrons are present in the output.
+        _ = get_variable(run_info, "electron_pressure"; kwargs...)
+
         all_moments = _get_all_moment_variables(run_info; kwargs...)
         variable = similar(all_moments.electron_pressure)
         # Define function here to minimise effect type instability due to
@@ -4156,6 +4168,9 @@ function _get_variable_internal(run_info, variable_name::Symbol;
         end
         get_electron_dp_dt!(variable, all_moments)
     elseif variable_name == :electron_dvth_dt
+        # Try to load electron pressure to check that electrons are present in the output.
+        _ = get_variable(run_info, "electron_pressure"; kwargs...)
+
         # Note that this block neglects any contribution of dn/dt to dvth/dt because the
         # operator splitting between implicit/explicit operators in the code means that
         # when dvth/dt is calculated for electrons, the (ion) density does not change in
