@@ -24,7 +24,6 @@ discretization = "chebyshev_pseudospectral"
 ngrid = 1
 nelement = 1
 nelement_local = 1
-bc = "periodic"
 discretization = "chebyshev_pseudospectral"
 
 [vpa]
@@ -74,3 +73,9 @@ vpa_dissipation_coefficient = 0.28284271247461906
 vperp_dissipation_coefficient = 0.28284271247461906
 z_dissipation_coefficient = -1.0
 r_dissipation_coefficient = -1.0
+
+[inner_r_bc_1]
+bc = "periodic"
+
+[outer_r_bc_1]
+bc = "periodic"

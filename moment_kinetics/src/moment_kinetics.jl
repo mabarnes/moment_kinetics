@@ -90,6 +90,7 @@ using .file_io: setup_file_io, finish_file_io
 using .file_io: write_data_to_ascii
 using .file_io: write_all_moments_data_to_binary, write_all_dfns_data_to_binary,
                 write_final_timing_data_to_binary
+using .boundary_conditions: create_boundary_info
 using .command_line_options: get_options
 using .communication
 using .communication: @_block_synchronize
@@ -263,7 +264,7 @@ parallel loop ranges, and are only used by the tests in `debug_test/`.
                              em_input)
 
     # Allocate arrays and create the pdf and moments structs
-    pdf, moments, boundary_distributions =
+    pdf, moments =
         allocate_pdf_and_moments(composition, r, z, vperp, vpa, vzeta, vr, vz,
                                  evolve_moments, collisions, external_source_settings,
                                  num_diss_params, t_input)
@@ -275,13 +276,26 @@ parallel loop ranges, and are only used by the tests in `debug_test/`.
 
     if restart === false
         restarting = false
+
+        # Hacky way to get a radial boundary condition setting that is needed to set up
+        # manufactured solutions initial condition. Would be better to use the
+        # `boundaries::boundary_info` object, but creating that requires the initialised
+        # distribution functions, so cannot be created before the distribution functions.
+        r_bc = "Neumann"
+        if "inner_r_bc_1" ∈ keys(input_dict) && "bc" ∈ keys(input_dict["inner_r_bc_1"])
+            r_bc = input_dict["inner_r_bc_1"]["bc"]
+            # Don't do any checks here that all radial boundary conditions are the same,
+            # as is required by current manufactured solutions code, because here we are
+            # not checking whether this run is using manufactured solutions or not.  These
+            # checks will be done when `manufactured_sources_setup()` is called.
+        end
+
         # initialize f(z,vpa) and the lowest three v-space moments (density(z), upar(z) and ppar(z)),
         # each of which may be evolved separately depending on input choices.
-        init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geometry,
-                              composition, r, z, vperp, vpa, vzeta, vr, vz,
-                              z_spectral, r_spectral, vperp_spectral, vpa_spectral,
-                              vzeta_spectral, vr_spectral, vz_spectral, species,
-                              collisions, external_source_settings,
+        init_pdf_and_moments!(pdf, moments, fields, geometry, composition, r, z, vperp,
+                              vpa, vzeta, vr, vz, z_spectral, r_spectral, vperp_spectral,
+                              vpa_spectral, vzeta_spectral, vr_spectral, vz_spectral,
+                              r_bc, species, collisions, external_source_settings,
                               manufactured_solns_input, t_input, num_diss_params,
                               advection_structs, io_input, input_dict)
         # initialize time variable
@@ -308,10 +322,9 @@ parallel loop ranges, and are only used by the tests in `debug_test/`.
         # Reload pdf and moments from an existing output file
         code_time, dt, dt_before_last_fail, electron_dt, electron_dt_before_last_fail,
         previous_runs_info, restart_time_index, restart_electron_physics =
-            reload_evolving_fields!(pdf, moments, fields, boundary_distributions,
-                                    backup_prefix_iblock, restart_time_index,
-                                    composition, geometry, r, z, vpa, vperp, vzeta, vr,
-                                    vz)
+            reload_evolving_fields!(pdf, moments, fields, backup_prefix_iblock,
+                                    restart_time_index, composition, geometry, r, z, vpa,
+                                    vperp, vzeta, vr, vz)
 
         @begin_serial_region()
         @serial_region begin
@@ -334,6 +347,11 @@ parallel loop ranges, and are only used by the tests in `debug_test/`.
         @_block_synchronize()
     end
 
+    zero = 1.0e-14
+    boundaries = create_boundary_info(input_dict, pdf, moments, r, z, vperp, vpa, vzeta,
+                                      vr, vz, r_spectral, composition, zero;
+                                      warn_unexpected=warn_unexpected_input)
+
     # Broadcast code_time from the root process of each shared-memory block (on which it
     # might have been loaded from a restart file).
     code_time = MPI.Bcast(code_time, 0, comm_block[])::mk_float
@@ -348,10 +366,9 @@ parallel loop ranges, and are only used by the tests in `debug_test/`.
             vz_spectral, vr_spectral, vzeta_spectral, vpa_spectral, vperp_spectral,
             z_spectral, r_spectral, composition, moments, t_input, code_time, dt,
             dt_before_last_fail, electron_dt, electron_dt_before_last_fail, collisions,
-            species, geometry, boundary_distributions, external_source_settings,
-            num_diss_params, manufactured_solns_input, advection_structs, io_input,
-            restarting, restart_electron_physics, input_dict;
-            skip_electron_solve=skip_electron_solve)
+            species, geometry, boundaries, external_source_settings, num_diss_params,
+            manufactured_solns_input, advection_structs, io_input, restarting,
+            restart_electron_physics, input_dict; skip_electron_solve=skip_electron_solve)
 
     # This is the closest we can get to the end time of the setup before writing it to the
     # output file
@@ -360,12 +377,11 @@ parallel loop ranges, and are only used by the tests in `debug_test/`.
 
     if write_output
         # setup i/o
-        ascii_io, io_moments, io_dfns = setup_file_io(io_input, boundary_distributions,
-            vz, vr, vzeta, vpa, vperp, z, r, composition, collisions,
-            moments.evolve_density, moments.evolve_upar, moments.evolve_p,
-            external_source_settings, manufactured_source_list, input_dict,
-            restart_time_index, previous_runs_info, time_for_setup, t_params,
-            nl_solver_params)
+        ascii_io, io_moments, io_dfns = setup_file_io(io_input, vz, vr, vzeta, vpa,
+            vperp, z, r, composition, collisions, moments.evolve_density,
+            moments.evolve_upar, moments.evolve_p, external_source_settings,
+            manufactured_source_list, input_dict, restart_time_index, previous_runs_info,
+            time_for_setup, t_params, nl_solver_params)
         # write initial data to ascii files
         write_data_to_ascii(pdf, moments, fields, vz, vr, vzeta, vpa, vperp, z, r,
             t_params.t[], composition.n_ion_species, composition.n_neutral_species,
@@ -392,9 +408,9 @@ parallel loop ranges, and are only used by the tests in `debug_test/`.
     return pdf, scratch, scratch_implicit, scratch_electron, t_params, vz, vr,
            vzeta, vpa, vperp, gyrophase, z, r, moments, fields, spectral_objects,
            advection_structs, composition, collisions, geometry, gyroavs,
-           boundary_distributions, external_source_settings, num_diss_params,
-           nl_solver_params, advance, advance_implicit, fp_arrays, scratch_dummy,
-           manufactured_source_list, ascii_io, io_moments, io_dfns
+           boundaries, external_source_settings, num_diss_params, nl_solver_params,
+           advance, advance_implicit, fp_arrays, scratch_dummy, manufactured_source_list,
+           ascii_io, io_moments, io_dfns
 end
 
 """

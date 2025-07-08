@@ -539,10 +539,9 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
                              moments, t_input, code_time, dt_reload,
                              dt_before_last_fail_reload, electron_dt_reload,
                              electron_dt_before_last_fail_reload, collisions, species,
-                             geometry, boundary_distributions, external_source_settings,
-                             num_diss_params, manufactured_solns_input,
-                             advection_structs, io_input, restarting,
-                             restart_electron_physics, input_dict;
+                             geometry, boundaries, external_source_settings,
+                             num_diss_params, manufactured_solns_input, advection_structs,
+                             io_input, restarting, restart_electron_physics, input_dict;
                              skip_electron_solve=false)
     
 
@@ -661,12 +660,11 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
                                       if k != "_section_check_store")
         @begin_serial_region()
         debug_io = setup_dfns_io(joinpath(io_input.output_dir, "debug"), debug_io_input,
-                                 boundary_distributions, r, z, vperp, vpa, vzeta, vr, vz,
-                                 composition, collisions, moments.evolve_density,
-                                 moments.evolve_upar, moments.evolve_p,
-                                 external_source_settings, nothing, fake_input_dict,
-                                 comm_inter_block[], 1, nothing, 0.0, fake_t_params, ();
-                                 is_debug=true)
+                                 r, z, vperp, vpa, vzeta, vr, vz, composition, collisions,
+                                 moments.evolve_density, moments.evolve_upar,
+                                 moments.evolve_p, external_source_settings, nothing,
+                                 1, fake_input_dict, comm_inter_block[], nothing, 0.0,
+                                 fake_t_params, (); is_debug=true)
     elseif t_input["debug_io"]
         # Need to synchronize shared-memory blocks before/after I/O. Set debug_io=true so
         # we can distinguish from no-debug-IO case on block_rank[]>0 processes.
@@ -873,7 +871,8 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
         fp_arrays = nothing
     end
     # create gyroaverage matrix arrays
-    gyroavs = init_gyro_operators(vperp,z,r,gyrophase,geometry,composition)
+    gyroavs = init_gyro_operators(vperp, z, r, gyrophase, geometry, boundaries,
+                                  composition)
 
     # Now that `t_params` and `scratch` have been created, initialize electrons if
     # necessary
@@ -1041,7 +1040,8 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
     if(advance.manufactured_solns_test)
         manufactured_source_list = manufactured_sources(manufactured_solns_input, r, z,
                                                         vperp, vpa, vzeta, vr, vz,
-                                                        composition, geometry.input, collisions,
+                                                        boundaries, composition,
+                                                        geometry.input, collisions,
                                                         num_diss_params, species)
     else
         manufactured_source_list = nothing
@@ -1056,9 +1056,8 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
         # enforce boundary conditions and moment constraints to ensure a consistent initial
         # condition
         enforce_boundary_conditions!(
-            pdf.ion.norm, boundary_distributions.pdf_rboundary_ion,
-            moments.ion.dens, moments.ion.upar, moments.ion.p, fields.phi, moments,
-            vpa.bc, z.bc, r.bc, vpa, vperp, z, r, vpa_spectral, vperp_spectral,
+            pdf.ion.norm, moments.ion.dens, moments.ion.upar, moments.ion.p, fields.phi,
+            boundaries, moments, vpa, vperp, z, r, vpa_spectral, vperp_spectral,
             vpa_advect, vperp_advect, z_advect, r_advect, composition, scratch_dummy,
             advance.r_diffusion, advance.vpa_diffusion, advance.vperp_diffusion)
 
@@ -1077,12 +1076,12 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
             # Note, so far vr and vzeta do not need advect objects, so pass `nothing` for
             # those as a placeholder
             enforce_neutral_boundary_conditions!(
-                pdf.neutral.norm, pdf.ion.norm, boundary_distributions,
-                moments.neutral.dens, moments.neutral.uz, moments.neutral.p, moments,
-                moments.ion.dens, moments.ion.upar, fields.Er, vzeta_spectral,
-                vr_spectral, vz_spectral, neutral_r_advect, neutral_z_advect, nothing,
-                nothing, neutral_vz_advect, r, z, vzeta, vr, vz, composition, geometry,
-                scratch_dummy, advance.r_diffusion, advance.vz_diffusion)
+                pdf.neutral.norm, pdf.ion.norm, moments.neutral.dens, moments.neutral.uz,
+                moments.neutral.p, boundaries, moments, moments.ion.dens,
+                moments.ion.upar, fields.Er, vzeta_spectral, vr_spectral, vz_spectral,
+                neutral_r_advect, neutral_z_advect, nothing, nothing, neutral_vz_advect,
+                r, z, vzeta, vr, vz, composition, geometry, scratch_dummy,
+                advance.r_diffusion, advance.vz_diffusion)
             if moments.evolve_density && moments.enforce_conservation
                 hard_force_moment_constraints_neutral!(pdf.neutral.norm, moments, vz)
             end
@@ -1381,7 +1380,7 @@ function setup_advance_flags(moments, composition, t_params, collisions,
 
         # *_diffusion flags are set regardless of whether diffusion is included in explicit or
         # implicit part of timestep, because they are used for boundary conditions, not to
-        # controll which terms are advanced.
+        # control which terms are advanced.
         #
         # flag to determine if a d^2/dr^2 operator is present
         r_diffusion = (num_diss_params.ion.r_dissipation_coefficient > 0.0)
@@ -1503,7 +1502,7 @@ function setup_implicit_advance_flags(moments, composition, t_params, collisions
     end
     # *_diffusion flags are set regardless of whether diffusion is included in explicit or
     # implicit part of timestep, because they are used for boundary conditions, not to
-    # controll which terms are advanced.
+    # control which terms are advanced.
     #
     # flag to determine if a d^2/dr^2 operator is present
     r_diffusion = (num_diss_params.ion.r_dissipation_coefficient > 0.0)
@@ -1870,13 +1869,13 @@ df/dt + δv⋅∂f/∂z = 0, with δv(z,t)=v(z,t)-v₀(z)
 for prudent choice of v₀, expect δv≪v so that explicit
 time integrator can be used without severe CFL condition
 """
-function  time_advance!(pdf, scratch, scratch_implicit, scratch_electron, t_params, vz,
-                        vr, vzeta, vpa, vperp, gyrophase, z, r, moments, fields,
-                        spectral_objects, advect_objects, composition, collisions,
-                        geometry, gyroavs, boundary_distributions,
-                        external_source_settings, num_diss_params, nl_solver_params,
-                        advance, advance_implicit, fp_arrays, scratch_dummy,
-                        manufactured_source_list, ascii_io, io_moments, io_dfns)
+function time_advance!(pdf, scratch, scratch_implicit, scratch_electron, t_params, vz, vr,
+                       vzeta, vpa, vperp, gyrophase, z, r, moments, fields,
+                       spectral_objects, advect_objects, composition, collisions,
+                       geometry, gyroavs, boundaries, external_source_settings,
+                       num_diss_params, nl_solver_params, advance, advance_implicit,
+                       fp_arrays, scratch_dummy, manufactured_source_list, ascii_io,
+                       io_moments, io_dfns)
 
     @debug_detect_redundant_block_synchronize begin
         # Only want to check for redundant _block_synchronize() calls during the
@@ -1943,11 +1942,11 @@ function  time_advance!(pdf, scratch, scratch_implicit, scratch_electron, t_para
                                            t_params, vz, vr, vzeta, vpa, vperp, gyrophase,
                                            z, r, moments, fields, spectral_objects,
                                            advect_objects, composition, collisions, geometry,
-                                           gyroavs, boundary_distributions,
-                                           external_source_settings, num_diss_params,
-                                           nl_solver_params, advance, advance_implicit,
-                                           fp_arrays, scratch_dummy, manufactured_source_list,
-                                           diagnostic_checks, t_params.step_counter[])
+                                           gyroavs, boundaries, external_source_settings,
+                                           num_diss_params, nl_solver_params, advance,
+                                           advance_implicit, fp_arrays, scratch_dummy,
+                                           manufactured_source_list, diagnostic_checks,
+                                           t_params.step_counter[])
             end
             # update the time
             t_params.t[] += t_params.previous_dt[]
@@ -2419,17 +2418,17 @@ function time_advance_no_splitting!(pdf, scratch, scratch_implicit, scratch_elec
                                     t_params, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
                                     moments, fields, spectral_objects, advect_objects,
                                     composition, collisions, geometry, gyroavs,
-                                    boundary_distributions, external_source_settings,
-                                    num_diss_params, nl_solver_params, advance,
-                                    advance_implicit, fp_arrays, scratch_dummy,
-                                    manufactured_source_list, diagnostic_checks, istep)
+                                    boundaries, external_source_settings, num_diss_params,
+                                    nl_solver_params, advance, advance_implicit,
+                                    fp_arrays, scratch_dummy, manufactured_source_list,
+                                    diagnostic_checks, istep)
 
     ssp_rk!(pdf, scratch, scratch_implicit, scratch_electron, t_params, vz, vr, vzeta,
             vpa, vperp, gyrophase, z, r, moments, fields, spectral_objects,
             advect_objects, composition, collisions, geometry, gyroavs,
-            boundary_distributions, external_source_settings, num_diss_params,
-            nl_solver_params, advance, advance_implicit, fp_arrays, scratch_dummy,
-            manufactured_source_list, diagnostic_checks, istep)
+            boundaries, external_source_settings, num_diss_params, nl_solver_params,
+            advance, advance_implicit, fp_arrays, scratch_dummy, manufactured_source_list,
+            diagnostic_checks, istep)
 
     return nothing
 end
@@ -2474,14 +2473,13 @@ Apply boundary conditions and moment constraints to updated pdfs and calculate d
 moments and moment derivatives
 """
 @timeit global_timer apply_all_bcs_constraints_update_moments!(
-                         this_scratch, pdf, moments, fields, boundary_distributions,
-                         scratch_electron, vz, vr, vzeta, vpa, vperp, z, r,
-                         spectral_objects, advect_objects, composition, collisions,
-                         geometry, gyroavs, external_source_settings, num_diss_params,
-                         t_params, nl_solver_params, advance, scratch_dummy,
-                         diagnostic_moments, max_electron_pdf_iterations,
-                         max_electron_sim_time; pdf_bc_constraints=true,
-                         update_electrons=true) = begin
+                         this_scratch, pdf, moments, fields, boundaries, scratch_electron,
+                         vz, vr, vzeta, vpa, vperp, z, r, spectral_objects,
+                         advect_objects, composition, collisions, geometry, gyroavs,
+                         external_source_settings, num_diss_params, t_params,
+                         nl_solver_params, advance, scratch_dummy, diagnostic_moments,
+                         max_electron_pdf_iterations, max_electron_sim_time;
+                         pdf_bc_constraints=true, update_electrons=true) = begin
 
     @begin_s_r_z_region()
 
@@ -2506,11 +2504,11 @@ moments and moment derivatives
         # should be set to zero at the sheath boundary according to the final upar has a
         # non-zero contribution from one or more of the terms.  NB: probably need to do the
         # same for the evolved moments
-        enforce_boundary_conditions!(this_scratch, moments, fields,
-            boundary_distributions.pdf_rboundary_ion, vpa.bc, z.bc, r.bc, vpa, vperp, z, r,
-            vpa_spectral, vperp_spectral, vpa_advect, vperp_advect, z_advect, r_advect,
-            composition, scratch_dummy, advance.r_diffusion, advance.vpa_diffusion,
-            advance.vperp_diffusion)
+        enforce_boundary_conditions!(this_scratch, moments, fields, boundaries, vpa,
+                                     vperp, z, r, vpa_spectral, vperp_spectral,
+                                     vpa_advect, vperp_advect, z_advect, r_advect,
+                                     composition, scratch_dummy, advance.r_diffusion,
+                                     advance.vpa_diffusion, advance.vperp_diffusion)
 
         if moments.evolve_density && moments.enforce_conservation
             hard_force_moment_constraints!(this_scratch.pdf, moments, vpa, vperp)
@@ -2619,13 +2617,13 @@ moments and moment derivatives
             # has a non-zero contribution from one or more of the terms.  NB: probably need to
             # do the same for the evolved moments Note, so far vr and vzeta do not need advect
             # objects, so pass `nothing` for those as a placeholder
-            enforce_neutral_boundary_conditions!(this_scratch.pdf_neutral, this_scratch.pdf,
-                boundary_distributions, this_scratch.density_neutral, this_scratch.uz_neutral,
-                this_scratch.p_neutral, moments, this_scratch.density, this_scratch.upar,
-                fields.Er, vzeta_spectral, vr_spectral, vz_spectral, neutral_r_advect,
-                neutral_z_advect, nothing, nothing, neutral_vz_advect, r, z, vzeta, vr, vz,
-                composition, geometry, scratch_dummy, advance.r_diffusion,
-                advance.vz_diffusion)
+            enforce_neutral_boundary_conditions!(this_scratch.pdf_neutral,
+                this_scratch.pdf, this_scratch.density_neutral, this_scratch.uz_neutral,
+                this_scratch.p_neutral, boundaries, moments, this_scratch.density,
+                this_scratch.upar, fields.Er, vzeta_spectral, vr_spectral, vz_spectral,
+                neutral_r_advect, neutral_z_advect, nothing, nothing, neutral_vz_advect,
+                r, z, vzeta, vr, vz, composition, geometry, scratch_dummy,
+                advance.r_diffusion, advance.vz_diffusion)
 
             if moments.evolve_density && moments.enforce_conservation
                 hard_force_moment_constraints_neutral!(this_scratch.pdf_neutral, moments,
@@ -2659,24 +2657,22 @@ end
 
 """
     adaptive_timestep_update!(scratch, scratch_implicit, scratch_electron,
-                              t_params, pdf, moments, fields, boundary_distributions,
-                              composition, collisions, geometry,
-                              external_source_settings, spectral_objects,
-                              advect_objects, gyroavs, num_diss_params,
-                              nl_solver_params, advance, scratch_dummy, r, z, vperp,
-                              vpa, vzeta, vr, vz, success, nl_max_its_fraction,
-                              nl_total_its_soft_limit,
-                              nl_total_its_soft_limit_reduce_dt)
+                              t_params, pdf, moments, fields, boundaries, composition,
+                              collisions, geometry, external_source_settings,
+                              spectral_objects, advect_objects, gyroavs, num_diss_params,
+                              nl_solver_params, advance, scratch_dummy, r, z, vperp, vpa,
+                              vzeta, vr, vz, success, nl_max_its_fraction,
+                              nl_total_its_soft_limit, nl_total_its_soft_limit_reduce_dt)
 
 Check the error estimate for the embedded RK method and adjust the timestep if
 appropriate.
 """
 @timeit global_timer adaptive_timestep_update!(
                          scratch, scratch_implicit, scratch_electron, t_params, pdf,
-                         moments, fields, boundary_distributions, composition, collisions,
-                         geometry, external_source_settings, spectral_objects,
-                         advect_objects, gyroavs, num_diss_params, nl_solver_params,
-                         advance, scratch_dummy, r, z, vperp, vpa, vzeta, vr, vz, success,
+                         moments, fields, boundaries, composition, collisions, geometry,
+                         external_source_settings, spectral_objects, advect_objects,
+                         gyroavs, num_diss_params, nl_solver_params, advance,
+                         scratch_dummy, r, z, vperp, vpa, vzeta, vr, vz, success,
                          nl_max_its_fraction, nl_total_its_soft_limit,
                          nl_total_its_soft_limit_reduce_dt) = begin
     #error_norm_method = "Linf"
@@ -2834,16 +2830,16 @@ appropriate.
                     scratch[t_params.n_rk_stages+1].p_neutral,
                     scratch[t_params.n_rk_stages+1].neutral_external_source_controller_integral)
     apply_all_bcs_constraints_update_moments!(
-        loworder_constraints_scratch, pdf, moments, fields, boundary_distributions,
-        scratch_electron, vz, vr, vzeta, vpa, vperp, z, r, spectral_objects,
-        advect_objects, composition, collisions, geometry, gyroavs,
-        external_source_settings, num_diss_params, t_params, nl_solver_params, advance,
-        scratch_dummy, false, 0, 0.0; update_electrons=false)
+        loworder_constraints_scratch, pdf, moments, fields, boundaries, scratch_electron,
+        vz, vr, vzeta, vpa, vperp, z, r, spectral_objects, advect_objects, composition,
+        collisions, geometry, gyroavs, external_source_settings, num_diss_params,
+        t_params, nl_solver_params, advance, scratch_dummy, false, 0, 0.0;
+        update_electrons=false)
 
     # Re-calculate moment derivatives in the `moments` struct, in case they were changed
     # by the previous call
     apply_all_bcs_constraints_update_moments!(
-        scratch[t_params.n_rk_stages+1], pdf, moments, fields, boundary_distributions,
+        scratch[t_params.n_rk_stages+1], pdf, moments, fields, boundaries,
         scratch_electron, vz, vr, vzeta, vpa, vperp, z, r, spectral_objects,
         advect_objects, composition, collisions, geometry, gyroavs,
         external_source_settings, num_diss_params, t_params, nl_solver_params, advance,
@@ -3150,10 +3146,10 @@ end
 @timeit global_timer ssp_rk!(pdf, scratch, scratch_implicit, scratch_electron, t_params,
                              vz, vr, vzeta, vpa, vperp, gyrophase, z, r, moments, fields,
                              spectral_objects, advect_objects, composition, collisions,
-                             geometry, gyroavs, boundary_distributions,
-                             external_source_settings, num_diss_params, nl_solver_params,
-                             advance, advance_implicit, fp_arrays, scratch_dummy,
-                             manufactured_source_list,diagnostic_checks, istep) = begin
+                             geometry, gyroavs, boundaries, external_source_settings,
+                             num_diss_params, nl_solver_params, advance, advance_implicit,
+                             fp_arrays, scratch_dummy, manufactured_source_list,
+                             diagnostic_checks, istep) = begin
 
     # Convenience wrapper for calls to write debug information within this function.
     function write_debug_IO(this_scratch, istage, label)
@@ -3303,10 +3299,10 @@ end
                                                                        implicit_p_explicit_pseudotimestep)
                 bcs_constraints_success = apply_all_bcs_constraints_update_moments!(
                     scratch_implicit[istage], pdf, moments, fields,
-                    boundary_distributions, scratch_electron, vz, vr, vzeta, vpa, vperp,
-                    z, r, spectral_objects, advect_objects, composition, collisions,
-                    geometry, gyroavs, external_source_settings, num_diss_params,
-                    t_params, nl_solver_params, advance, scratch_dummy, false,
+                    boundaries, scratch_electron, vz, vr, vzeta, vpa, vperp, z, r,
+                    spectral_objects, advect_objects, composition, collisions, geometry,
+                    gyroavs, external_source_settings, num_diss_params, t_params,
+                    nl_solver_params, advance, scratch_dummy, false,
                     max_electron_pdf_iterations, max_electron_sim_time;
                     update_electrons=update_electrons)
                 write_debug_IO(scratch_implicit[istage], istage,
@@ -3361,13 +3357,12 @@ end
                                                                    implicit_p_explicit_pseudotimestep))
         diagnostic_moments = diagnostic_checks && istage == n_rk_stages
         bcs_constraints_success = apply_all_bcs_constraints_update_moments!(
-            scratch[istage+1], pdf, moments, fields, boundary_distributions,
-            scratch_electron, vz, vr, vzeta, vpa, vperp, z, r, spectral_objects,
-            advect_objects, composition, collisions, geometry, gyroavs,
-            external_source_settings, num_diss_params, t_params, nl_solver_params,
-            advance, scratch_dummy, diagnostic_moments, max_electron_pdf_iterations,
-            max_electron_sim_time; pdf_bc_constraints=apply_bc_constraints,
-            update_electrons=update_electrons)
+            scratch[istage+1], pdf, moments, fields, boundaries, scratch_electron, vz, vr,
+            vzeta, vpa, vperp, z, r, spectral_objects, advect_objects, composition,
+            collisions, geometry, gyroavs, external_source_settings, num_diss_params,
+            t_params, nl_solver_params, advance, scratch_dummy, diagnostic_moments,
+            max_electron_pdf_iterations, max_electron_sim_time;
+            pdf_bc_constraints=apply_bc_constraints, update_electrons=update_electrons)
         write_debug_IO(scratch[istage+1], istage,
                        "apply_all_bcs_constraints_update_moments!")
         if bcs_constraints_success != ""
@@ -3416,8 +3411,8 @@ end
         end
         adaptive_timestep_update!(scratch, scratch_implicit, scratch_electron,
                                   t_params, pdf, moments, fields,
-                                  boundary_distributions, composition, collisions,
-                                  geometry, external_source_settings, spectral_objects,
+                                  boundaries, composition, collisions, geometry,
+                                  external_source_settings, spectral_objects,
                                   advect_objects, gyroavs, num_diss_params,
                                   nl_solver_params, advance, scratch_dummy, r, z, vperp,
                                   vpa, vzeta, vr, vz, success, nl_max_its_fraction,

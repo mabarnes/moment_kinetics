@@ -535,7 +535,18 @@ function check_coordinate_input(coord, coord_name, io)
         input_option_error("$coord_name.discretization", coord.discretization)
     end
     # boundary_option determines coord boundary condition
-    if coord.bc == "constant"
+    if coord_name == "r"
+        # Radial boundary conditions are not set in the coordinate input
+        if coord.discretization == "finite_difference" && coord.n > 1
+            error("finite_difference discretization is not supported for the radial "
+                  * "dimension because it does not (yet?) support boundary conditions "
+                  * "implemented using `r_boundary_section`s.")
+        elseif coord.bc != "default"
+            error("Radial boundary conditions should be set in [inner_r_bc_*] and "
+                  * "[outer_r_bc_*] sections, not in [r], but got "
+                  * "bc=$(coord_input_dict["bc"]) in [r] section.")
+        end
+    elseif coord.bc == "constant"
         println(io,">$coord_name.bc = 'constant'.  enforcing constant incoming BC in $coord_name.")
     elseif coord.bc == "zero"
         println(io,">$coord_name.bc = 'zero'.  enforcing zero incoming BC in $coord_name. Enforcing zero at both boundaries if diffusion operator is present.")

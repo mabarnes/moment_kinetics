@@ -7,7 +7,6 @@ export init_pdf_and_moments!
 export initialize_electrons!
 
 # functional testing 
-export create_boundary_distributions
 export create_pdf
 
 # package
@@ -30,7 +29,7 @@ using ..file_io: setup_electron_io, write_electron_state, finish_electron_io
 using ..load_data: reload_electron_data!
 using ..moment_constraints: hard_force_moment_constraints!
 using ..moment_kinetics_structs: scratch_pdf, pdf_substruct, electron_pdf_substruct,
-                                 pdf_struct, moments_struct, boundary_distributions_struct
+                                 pdf_struct, moments_struct
 using ..nonlinear_solvers: nl_solver_info
 using ..velocity_moments: integrate_over_positive_vz, integrate_over_negative_vz
 using ..velocity_moments: create_moments_ion, create_moments_electron, create_moments_neutral
@@ -93,10 +92,7 @@ function allocate_pdf_and_moments(composition, r, z, vperp, vpa, vzeta, vr, vz,
                              evolve_moments.parallel_flow,
                              evolve_moments.pressure)
 
-    boundary_distributions = create_boundary_distributions(vz, vr, vzeta, vpa, vperp, z,
-                                                           composition)
-
-    return pdf, moments, boundary_distributions
+    return pdf, moments
 end
 
 """
@@ -134,15 +130,15 @@ end
 creates the normalised pdfs and the velocity-space moments and populates them
 with a self-consistent initial condition
 """
-function init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geometry, composition, r, z,
-                               vperp, vpa, vzeta, vr, vz, z_spectral, r_spectral,
-                               vperp_spectral, vpa_spectral, vzeta_spectral, vr_spectral,
-                               vz_spectral, species, collisions, external_source_settings,
+function init_pdf_and_moments!(pdf, moments, fields, geometry, composition, r, z, vperp,
+                               vpa, vzeta, vr, vz, z_spectral, r_spectral, vperp_spectral,
+                               vpa_spectral, vzeta_spectral, vr_spectral, vz_spectral,
+                               r_bc, species, collisions, external_source_settings,
                                manufactured_solns_input, t_input, num_diss_params,
                                advection_structs, io_input, input_dict)
     if manufactured_solns_input.use_for_init
         init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, vperp, z,
-                                             r, composition.n_ion_species,
+                                             r, r_bc, composition.n_ion_species,
                                              composition.n_neutral_species,
                                              geometry.input, composition, species,
                                              manufactured_solns_input, collisions)
@@ -213,9 +209,9 @@ function init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geo
         # note that wpa = vpa - upar, unless moments.evolve_p = true, in which case wpa = (vpa - upar)/vth
         # the definition of pdf.norm changes accordingly from pdf_unnorm / density to pdf_unnorm * vth / density
         # when evolve_p = true.
-        initialize_pdf!(pdf, moments, boundary_distributions, composition, r, z, vperp,
-                        vpa, vzeta, vr, vz, vperp_spectral, vpa_spectral, vzeta_spectral,
-                        vr_spectral, vz_spectral, species)
+        initialize_pdf!(pdf, moments, composition, r, z, vperp, vpa, vzeta, vr, vz,
+                        vperp_spectral, vpa_spectral, vzeta_spectral, vr_spectral,
+                        vz_spectral, species)
 
         @begin_s_r_z_region()
         # calculate the initial parallel heat flux from the initial un-normalised pdf. Even if coll_krook fluid is being
@@ -281,9 +277,6 @@ function init_pdf_and_moments!(pdf, moments, fields, boundary_distributions, geo
     @serial_region begin
         moments.ion.dSdt .= 0.0
     end
-
-    init_boundary_distributions!(boundary_distributions, pdf, vz, vr, vzeta, vpa, vperp,
-                                 z, r, composition)
 
     return nothing
 end
@@ -526,9 +519,9 @@ end
 
 """
 """
-function initialize_pdf!(pdf, moments, boundary_distributions, composition, r, z, vperp,
-                         vpa, vzeta, vr, vz, vperp_spectral, vpa_spectral, vzeta_spectral,
-                         vr_spectral, vz_spectral, species)
+function initialize_pdf!(pdf, moments, composition, r, z, vperp, vpa, vzeta, vr, vz,
+                         vperp_spectral, vpa_spectral, vzeta_spectral, vr_spectral,
+                         vz_spectral, species)
     wall_flux_0 = allocate_float(r.n, composition.n_ion_species)
     wall_flux_L = allocate_float(r.n, composition.n_ion_species)
 
@@ -569,12 +562,12 @@ function initialize_pdf!(pdf, moments, boundary_distributions, composition, r, z
             # species index `is`, to get the `wall_flux_0` and `wall_flux_L` for the
             # initial condition.
             @views init_neutral_pdf_over_density!(
-                pdf.neutral.norm[:,:,:,:,ir,isn], boundary_distributions,
-                species.neutral[isn], composition, vz, vr, vzeta, z, vzeta_spectral,
-                vr_spectral, vz_spectral, moments.neutral.dens[:,ir,isn],
-                moments.neutral.uz[:,ir,isn], moments.neutral.p[:,ir,isn],
-                moments.neutral.vth[:,ir,isn], moments.neutral.v_norm_fac[:,ir,isn],
-                moments.evolve_density, moments.evolve_upar, moments.evolve_p,
+                pdf.neutral.norm[:,:,:,:,ir,isn], species.neutral[isn], composition, vz,
+                vr, vzeta, z, vzeta_spectral, vr_spectral, vz_spectral,
+                moments.neutral.dens[:,ir,isn], moments.neutral.uz[:,ir,isn],
+                moments.neutral.p[:,ir,isn], moments.neutral.vth[:,ir,isn],
+                moments.neutral.v_norm_fac[:,ir,isn], moments.evolve_density,
+                moments.evolve_upar, moments.evolve_p,
                 wall_flux_0[ir,min(isn,composition.n_ion_species)],
                 wall_flux_L[ir,min(isn,composition.n_ion_species)])
             @loop_z iz begin
@@ -1428,11 +1421,10 @@ end
 
 """
 """
-function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, composition,
-                                        vz, vr, vzeta, z, vzeta_spectral, vr_spectral,
-                                        vz_spectral, density, uz, p, vth, v_norm_fac,
-                                        evolve_density, evolve_upar, evolve_p,
-                                        wall_flux_0, wall_flux_L)
+function init_neutral_pdf_over_density!(pdf, spec, composition, vz, vr, vzeta, z,
+                                        vzeta_spectral, vr_spectral, vz_spectral, density,
+                                        uz, p, vth, v_norm_fac, evolve_density,
+                                        evolve_upar, evolve_p, wall_flux_0, wall_flux_L)
 
     zero = 1.0e-14
 
@@ -1923,10 +1915,12 @@ function init_electron_pdf_over_density_and_boundary_phi!(pdf, phi, density, upa
     return nothing
 end
 
-function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, vperp, z, r, n_ion_species, n_neutral_species, 
-                                              geometry, composition, species, manufactured_solns_input, collisions)
+function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, vperp, z,
+                                              r, r_bc, n_ion_species, n_neutral_species,
+                                              geometry, composition, species,
+                                              manufactured_solns_input, collisions)
     manufactured_solns_list = manufactured_solutions(manufactured_solns_input, r.L, z.L,
-                                                     r.bc, z.bc, geometry, composition,
+                                                     r_bc, z.bc, geometry, composition,
                                                      species, r.n, vperp.n, vzeta.n, vr.n)
     dfni_func = manufactured_solns_list.dfni_func
     densi_func = manufactured_solns_list.densi_func
@@ -2031,126 +2025,6 @@ function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, 
                            pdf.neutral.norm, vz, vr, vzeta, z, r, composition,
                            moments.evolve_density, moments.evolve_upar, moments.evolve_p)
     end
-    return nothing
-end
-
-function init_knudsen_cosine!(knudsen_cosine, vz, vr, vzeta, vpa, vperp, composition, zero)
-
-    @begin_serial_region()
-    @serial_region begin
-        integrand = zeros(mk_float, vz.n, vr.n, vzeta.n)
-
-        T_wall_over_m = composition.T_wall / composition.mn_over_mi
-
-        if vzeta.n > 1 && vr.n > 1
-            # 3V specification of neutral wall emission distribution for boundary condition
-            if composition.use_test_neutral_wall_pdf
-                # use test distribution that is easy for integration scheme to handle
-                for ivzeta in 1:vzeta.n
-                    for ivr in 1:vr.n
-                        for ivz in 1:vz.n
-                            v_transverse = sqrt(vzeta.grid[ivzeta]^2 + vr.grid[ivr]^2)
-                            v_normal = abs(vz.grid[ivz])
-                            knudsen_cosine[ivz,ivr,ivzeta] = (1.0/π/T_wall_over_m^2.5)*v_normal*exp( - 0.5 * (v_normal^2 + v_transverse^2) / T_wall_over_m)
-                            integrand[ivz,ivr,ivzeta] = vz.grid[ivz]*knudsen_cosine[ivz,ivr,ivzeta]
-                        end
-                    end
-                end
-            else # get the true Knudsen cosine distribution for neutral particle wall emission
-                for ivzeta in 1:vzeta.n
-                    for ivr in 1:vr.n
-                        for ivz in 1:vz.n
-                            v_transverse = sqrt(vzeta.grid[ivzeta]^2 + vr.grid[ivr]^2)
-                            v_normal = abs(vz.grid[ivz])
-                            v_tot = sqrt(v_normal^2 + v_transverse^2)
-                            if  v_tot > zero
-                                prefac = v_normal/v_tot
-                            else
-                                prefac = 0.0
-                            end
-                            knudsen_cosine[ivz,ivr,ivzeta] = (0.75/π/T_wall_over_m^2)*prefac*exp( - 0.5 * (v_normal^2 + v_transverse^2) / T_wall_over_m )
-                            integrand[ivz,ivr,ivzeta] = vz.grid[ivz]*knudsen_cosine[ivz,ivr,ivzeta]
-                        end
-                    end
-                end
-            end
-            normalisation = integrate_over_positive_vz(integrand, vz.grid, vz.wgts,
-                                                       vz.scratch, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
-            # uncomment this line to test:
-            #println("normalisation should be 1, it is = ", normalisation)
-            #correct knudsen_cosine to conserve particle fluxes numerically
-            @. knudsen_cosine /= normalisation
-
-        elseif vzeta.n == 1 && vr.n == 1
-            # get the marginalised Knudsen cosine distribution after integrating over vperp
-            # appropriate for 1V model
-
-            # Knudsen cosine distribution does not have separate T_∥ and T_⟂, so is
-            # marginalised rather than setting T_⟂=0, therefore no need to convert to a
-            # thermal speed defined with the parallel temperature in 1V case.
-
-            @. vz.scratch = 3.0 * sqrt(π) * (0.5 / T_wall_over_m)^1.5 * abs(vz.grid) * erfc(sqrt(0.5 / T_wall_over_m) * abs(vz.grid))
-            normalisation = integrate_over_positive_vz(vz.grid .* vz.scratch, vz.grid, vz.wgts, vz.scratch2,
-                                                       vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
-            # uncomment this line to test:
-            #println("normalisation should be 1, it is = ", normalisation)
-            #correct knudsen_cosine to conserve particle fluxes numerically
-            @. vz.scratch /= normalisation
-            @. knudsen_cosine[:,1,1] = vz.scratch[:]
-
-        end
-    end
-    return knudsen_cosine
-end
-
-function init_rboundary_pdfs!(rboundary_ion, rboundary_neutral, pdf::pdf_struct, vz,
-                              vr, vzeta, vpa, vperp, z, r, composition)
-    n_ion_species = composition.n_ion_species
-    n_neutral_species = composition.n_neutral_species
-    n_neutral_species_alloc = max(1, n_neutral_species)
-
-    @begin_s_z_region() #do not parallelise r here
-    @loop_s_z_vperp_vpa is iz ivperp ivpa begin
-        rboundary_ion[ivpa,ivperp,iz,1,is] = pdf.ion.norm[ivpa,ivperp,iz,1,is]
-        rboundary_ion[ivpa,ivperp,iz,end,is] = pdf.ion.norm[ivpa,ivperp,iz,end,is]
-    end
-    if n_neutral_species > 0
-        @begin_sn_z_region() #do not parallelise r here
-        @loop_sn_z_vzeta_vr_vz isn iz ivzeta ivr ivz begin
-            rboundary_neutral[ivz,ivr,ivzeta,iz,1,isn] = pdf.neutral.norm[ivz,ivr,ivzeta,iz,1,isn]
-            rboundary_neutral[ivz,ivr,ivzeta,iz,end,isn] = pdf.neutral.norm[ivz,ivr,ivzeta,iz,end,isn]
-        end
-    end
-    return rboundary_ion, rboundary_neutral
-end
-
-"""
-Allocate arrays for distributions to be applied as boundary conditions to the pdf at
-various boundaries. Also initialise the Knudsen cosine distribution here so it can be used
-when initialising the neutral pdf.
-"""
-function create_boundary_distributions(vz, vr, vzeta, vpa, vperp, z, composition)
-    zero = 1.0e-14
-
-    #initialise knudsen distribution for neutral wall bc
-    knudsen_cosine = allocate_shared_float(vz.n, vr.n, vzeta.n)
-    #initialise knudsen distribution for neutral wall bc - can be done here as this only
-    #depends on T_wall, which has already been set
-    init_knudsen_cosine!(knudsen_cosine, vz, vr, vzeta, vpa, vperp, composition, zero)
-    #initialise fixed-in-time radial boundary condition based on initial condition values
-    pdf_rboundary_ion = allocate_shared_float(vpa.n, vperp.n, z.n, 2,
-                                                  composition.n_ion_species)
-    pdf_rboundary_neutral =  allocate_shared_float(vz.n, vr.n, vzeta.n, z.n, 2,
-                                                   composition.n_neutral_species)
-
-    return boundary_distributions_struct(knudsen_cosine, pdf_rboundary_ion, pdf_rboundary_neutral)
-end
-
-function init_boundary_distributions!(boundary_distributions, pdf, vz, vr, vzeta, vpa, vperp, z, r, composition)
-    #initialise fixed-in-time radial boundary condition based on initial condition values
-    init_rboundary_pdfs!(boundary_distributions.pdf_rboundary_ion,
-                         boundary_distributions.pdf_rboundary_neutral, pdf, vz, vr, vzeta,
-                         vpa, vperp, z, r, composition)
     return nothing
 end
 
