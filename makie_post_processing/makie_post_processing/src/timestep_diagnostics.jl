@@ -1,3 +1,4 @@
+using moment_kinetics.analysis: _steady_state_absolute_residual
 using moment_kinetics.input_structs
 
 """
@@ -756,6 +757,10 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
     end
     all_variable_names = union((ri.variable_names for ri ∈ run_info_dfns)...)
 
+    has_r_dim = any(ri.r.n > 1 for ri ∈ run_info_dfns)
+
+    #error_norm_method = "Linf"
+    error_norm_method = "L2"
     if input.plot_timestep_residual
         try
             for variable_name ∈ variable_list
@@ -765,18 +770,41 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                     continue
                 end
                 residual_name = variable_name * "_timestep_residual"
+                function get_residual(ri)
+                    rtol = ri.t_input["rtol"]
+                    atol = ri.t_input["atol"]
+                    var = get_variable(ri, variable_name)
+                    loworder_var = get_variable(ri, loworder_name)
+                    if error_norm_method == "Linf"
+                        r = @. abs(loworder_var - var) / (rtol * abs(var) + atol)
+                    elseif error_norm_method == "L2"
+                        r = @. ((loworder_var - var) / (rtol * abs(var) + atol))^2
+                    else
+                        error("Unrecognised error_norm_method=\"$error_norm_method\".")
+                    end
+                    return r
+                end
+                residual = (get_residual(ri) for ri ∈ run_info_dfns)
                 if variable_name == "f_neutral"
                     plot_vs_vz_z(run_info_dfns, residual_name;
-                                 input=this_input_dict[variable_name],
+                                 data=residual, input=this_input_dict[variable_name],
                                  outfile=plot_prefix * residual_name * "_vs_vz_z.pdf")
                 elseif variable_name ∈ ("f", "f_electron")
                     plot_vs_vpa_z(run_info_dfns, residual_name;
-                                  input=this_input_dict[variable_name],
+                                  data=residual, input=this_input_dict[variable_name],
                                   outfile=plot_prefix * residual_name * "_vs_vpa_z.pdf")
                 else
                     plot_vs_z(run_info_dfns, residual_name;
-                              input=this_input_dict[variable_name],
+                              data=residual, input=this_input_dict[variable_name],
                               outfile=plot_prefix * residual_name * "_vs_z.pdf")
+                    if has_r_dim
+                        plot_vs_r(run_info_dfns, residual_name;
+                                  data=residual, input=this_input_dict[variable_name],
+                                  outfile=plot_prefix * residual_name * "_vs_r.pdf")
+                        plot_vs_z_r(run_info_dfns, residual_name;
+                                    data=residual, input=this_input_dict[variable_name],
+                                    outfile=plot_prefix * residual_name * "_vs_z_r.pdf")
+                    end
                 end
             end
         catch e
@@ -795,18 +823,42 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                     continue
                 end
                 residual_name = variable_name * "_timestep_residual"
+                function get_residual_t(ri)
+                    rtol = ri.t_input["rtol"]
+                    atol = ri.t_input["atol"]
+                    var = get_variable(ri, variable_name; it=it)
+                    loworder_var = get_variable(ri, loworder_name; it=it)
+                    if error_norm_method == "Linf"
+                        r = @. abs(loworder_var - var) / (rtol * abs(var) + atol)
+                    elseif error_norm_method == "L2"
+                        r = @. ((loworder_var - var) / (rtol * abs(var) + atol))^2
+                    else
+                        error("Unrecognised error_norm_method=\"$error_norm_method\".")
+                    end
+                    return r
+                end
+                residual = (get_residual_t(ri) for ri ∈ run_info_dfns)
                 if variable_name == "f_neutral"
                     animate_vs_vz_z(run_info_dfns, residual_name;
-                                    input=this_input_dict[variable_name],
+                                    data=residual, input=this_input_dict[variable_name],
                                     outfile=plot_prefix * residual_name * "_vs_vz_z." * this_input_dict[variable_name]["animation_ext"])
                 elseif variable_name ∈ ("f", "f_electron")
                     animate_vs_vpa_z(run_info_dfns, residual_name;
-                                     input=this_input_dict[variable_name],
+                                     data=residual, input=this_input_dict[variable_name],
                                      outfile=plot_prefix * residual_name * "_vs_vpa_z." * this_input_dict[variable_name]["animation_ext"])
                 else
                     animate_vs_z(run_info_dfns, residual_name;
-                                 input=this_input_dict[variable_name],
+                                 data=residual, input=this_input_dict[variable_name],
                                  outfile=plot_prefix * residual_name * "_vs_z." * this_input_dict[variable_name]["animation_ext"])
+                    if has_r_dim
+                        animate_vs_r(run_info_dfns, residual_name; data=residual,
+                                     input=this_input_dict[variable_name],
+                                     outfile=plot_prefix * residual_name * "_vs_r." * this_input_dict[variable_name]["animation_ext"])
+                        animate_vs_z_r(run_info_dfns, residual_name;
+                                       data=residual,
+                                       input=this_input_dict[variable_name],
+                                       outfile=plot_prefix * residual_name * "_vs_z_r." * this_input_dict[variable_name]["animation_ext"])
+                    end
                 end
             end
         catch e
@@ -825,18 +877,28 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                     continue
                 end
                 error_name = variable_name * "_timestep_error"
+                error = (get_variable(run_info_dfns, variable_name) .-
+                         get_variable(run_info_dfns, loworder_name))
                 if variable_name == "f_neutral"
                     plot_vs_vz_z(run_info_dfns, error_name;
-                                 input=this_input_dict[variable_name],
+                                 data=error, input=this_input_dict[variable_name],
                                  outfile=plot_prefix * error_name * "_vs_vz_z.pdf")
                 elseif variable_name ∈ ("f", "f_electron")
                     plot_vs_vpa_z(run_info_dfns, error_name;
-                                  input=this_input_dict[variable_name],
+                                  data=error, input=this_input_dict[variable_name],
                                   outfile=plot_prefix * error_name * "_vs_vpa_z.pdf")
                 else
                     plot_vs_z(run_info_dfns, error_name;
-                              input=this_input_dict[variable_name],
+                              data=error, input=this_input_dict[variable_name],
                               outfile=plot_prefix * error_name * "_vs_z.pdf")
+                    if has_r_dim
+                        plot_vs_r(run_info_dfns, error_name;
+                                  data=error, input=this_input_dict[variable_name],
+                                  outfile=plot_prefix * error_name * "_vs_r.pdf")
+                        plot_vs_z_r(run_info_dfns, error_name;
+                                    data=error, input=this_input_dict[variable_name],
+                                    outfile=plot_prefix * error_name * "_vs_z_r.pdf")
+                    end
                 end
             end
         catch e
@@ -855,18 +917,25 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                     continue
                 end
                 error_name = variable_name * "_timestep_error"
+                error = (get_variable(run_info_dfns, variable_name; it=it) .-
+                         get_variable(run_info_dfns, loworder_name; it=it))
                 if variable_name == "f_neutral"
                     animate_vs_vz_z(run_info_dfns, error_name;
-                                    input=this_input_dict[variable_name],
+                                    data=error, input=this_input_dict[variable_name],
                                     outfile=plot_prefix * error_name * "_vs_vz_z." * this_input_dict[variable_name]["animation_ext"])
                 elseif variable_name ∈ ("f", "f_electron")
                     animate_vs_vpa_z(run_info_dfns, error_name;
-                                     input=this_input_dict[variable_name],
+                                     data=error, input=this_input_dict[variable_name],
                                      outfile=plot_prefix * error_name * "_vs_vpa_z." * this_input_dict[variable_name]["animation_ext"])
                 else
                     animate_vs_z(run_info_dfns, error_name;
-                                 input=this_input_dict[variable_name],
+                                 data=error, input=this_input_dict[variable_name],
                                  outfile=plot_prefix * error_name * "_vs_z." * this_input_dict[variable_name]["animation_ext"])
+                    if has_r_dim
+                        animate_vs_z_r(run_info_dfns, error_name;
+                                       data=error, input=this_input_dict[variable_name],
+                                       outfile=plot_prefix * error_name * "_vs_z_r." * this_input_dict[variable_name]["animation_ext"])
+                    end
                 end
             end
         catch e
@@ -879,24 +948,40 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
     if input.plot_steady_state_residual
         try
             for variable_name ∈ variable_list
-                loworder_name = variable_name * "_loworder"
-                if loworder_name ∉ all_variable_names
+                start_last_timestep_name = variable_name * "_start_last_timestep"
+                if start_last_timestep_name ∉ all_variable_names
                     # No data to calculate residual for this variable
                     continue
                 end
                 residual_name = variable_name * "_steady_state_residual"
+                var = get_variable(run_info_dfns, variable_name)
+                start_last_timestep_var = get_variable(run_info_dfns, start_last_timestep_name)
+                dt = get_variable(run_info_dfns, "dt")
+                residual = [_steady_state_absolute_residual(
+                               this_var, this_start_last_timestep_var,
+                               reshape(this_dt, (1 for _ ∈ 1:ndims(this_var)-1)..., size(this_dt)...))
+                            for (this_var, this_start_last_timestep_var, this_dt)
+                            ∈ zip(var, start_last_timestep_var, dt)]
                 if variable_name == "f_neutral"
                     plot_vs_vz_z(run_info_dfns, residual_name;
-                                 input=this_input_dict[variable_name],
+                                 data=residual, input=this_input_dict[variable_name],
                                  outfile=plot_prefix * residual_name * "_vs_vz_z.pdf")
                 elseif variable_name ∈ ("f", "f_electron")
                     plot_vs_vpa_z(run_info_dfns, residual_name;
-                                  input=this_input_dict[variable_name],
+                                  data=residual, input=this_input_dict[variable_name],
                                   outfile=plot_prefix * residual_name * "_vs_vpa_z.pdf")
                 else
                     plot_vs_z(run_info_dfns, residual_name;
-                              input=this_input_dict[variable_name],
+                              data=residual, input=this_input_dict[variable_name],
                               outfile=plot_prefix * residual_name * "_vs_z.pdf")
+                    if has_r_dim
+                        plot_vs_r(run_info_dfns, residual_name;
+                                  data=residual, input=this_input_dict[variable_name],
+                                  outfile=plot_prefix * residual_name * "_vs_r.pdf")
+                        plot_vs_z_r(run_info_dfns, residual_name;
+                                    data=residual, input=this_input_dict[variable_name],
+                                    outfile=plot_prefix * residual_name * "_vs_z_r.pdf")
+                    end
                 end
             end
         catch e
@@ -909,24 +994,41 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
     if input.animate_steady_state_residual
         try
             for variable_name ∈ variable_list
-                loworder_name = variable_name * "_loworder"
-                if loworder_name ∉ all_variable_names
+                start_last_timestep_name = variable_name * "_start_last_timestep"
+                if start_last_timestep_name ∉ all_variable_names
                     # No data to calculate residual for this variable
                     continue
                 end
                 residual_name = variable_name * "_steady_state_residual"
+                var = get_variable(run_info_dfns, variable_name; it=it)
+                start_last_timestep_var = get_variable(run_info_dfns, start_last_timestep_name; it=it)
+                dt = get_variable(run_info_dfns, "dt"; it=it)
+                residual = [_steady_state_absolute_residual(
+                               this_var, this_start_last_timestep_var,
+                               reshape(this_dt, (1 for _ ∈ 1:ndims(this_var)-1)..., size(this_dt)...))
+                            for (this_var, this_start_last_timestep_var, this_dt)
+                            ∈ zip(var, start_last_timestep_var, dt)]
                 if variable_name == "f_neutral"
                     animate_vs_vz_z(run_info_dfns, residual_name;
-                                    input=this_input_dict[variable_name],
+                                    data=residual, input=this_input_dict[variable_name],
                                     outfile=plot_prefix * residual_name * "_vs_vz_z." * this_input_dict[variable_name]["animation_ext"])
                 elseif variable_name ∈ ("f", "f_electron")
                     animate_vs_vpa_z(run_info_dfns, residual_name;
-                                     input=this_input_dict[variable_name],
+                                     data=residual, input=this_input_dict[variable_name],
                                      outfile=plot_prefix * residual_name * "_vs_vpa_z." * this_input_dict[variable_name]["animation_ext"])
                 else
                     animate_vs_z(run_info_dfns, residual_name;
-                                 input=this_input_dict[variable_name],
+                                 data=residual, input=this_input_dict[variable_name],
                                  outfile=plot_prefix * residual_name * "_vs_z." * this_input_dict[variable_name]["animation_ext"])
+                    if has_r_dim
+                        animate_vs_r(run_info_dfns, residual_name;
+                                     data=residual, input=this_input_dict[variable_name],
+                                     outfile=plot_prefix * residual_name * "_vs_r." * this_input_dict[variable_name]["animation_ext"])
+                        animate_vs_z_r(run_info_dfns, residual_name;
+                                       data=residual,
+                                       input=this_input_dict[variable_name],
+                                       outfile=plot_prefix * residual_name * "_vs_z_r." * this_input_dict[variable_name]["animation_ext"])
+                    end
                 end
             end
         catch e
