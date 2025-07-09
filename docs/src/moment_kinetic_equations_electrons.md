@@ -216,7 +216,7 @@ Reduction to 1D1V
 
 We can take the $T_{e\perp}=0$ limit of the equations and marginalise over
 $v_\perp$/$w_\perp$ to reduce to 1D1V in a very similar way [as for the
-ions](@ref ion_reduction_to_1d1v).
+ions](@ref ion_reduction_to_2d1v).
 
 Quasineutrality and force balance keep the same form, and the energy equation
 becomes

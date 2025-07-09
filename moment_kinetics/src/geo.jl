@@ -65,10 +65,14 @@ end
 """
     function get_default_rhostar(reference_params)
 
-Calculate the normalised ion gyroradius at reference parameters
+Calculate
+\$c_\\mathrm{ref} / \\Omega_\\mathrm{ref} L_\\mathrm{ref} = m_i c_\\mathrm{ref} / e B_\\mathrm{ref} L_\\mathrm{ref}\$.
+
+This is similar to the de-dimensionalised ion gyroradius at reference parameters, which
+would be sqrt(2)*rhostar, as \$v_{Ti}(T_\\mathrm{ref}) = \\sqrt{2 T_\\mathrm{ref} / m_i} = \\sqrt{2} c_\\mathrm{ref}\$.
 """
 function get_default_rhostar(reference_params)
-    return sqrt(2) * reference_params.cref / reference_params.Omegaref / reference_params.Lref
+    return reference_params.cref / reference_params.Omegaref / reference_params.Lref
 end
 
 """

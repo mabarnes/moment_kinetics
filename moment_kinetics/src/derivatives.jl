@@ -616,7 +616,9 @@ function derivative_r!(dfdr::AbstractArray{mk_float,2}, f::AbstractArray{mk_floa
 
     # differentiate f w.r.t r
     @loop_z iz begin
-        @views derivative!(dfdr[iz,:], f[iz,:], r, adv_fac[:,iz], r_spectral)
+        # Note that for moments, `adv_fac` has its dimensions in the same order as the
+        # moment arrays, not with the derivative dimension moved to be left-most index.
+        @views derivative!(dfdr[iz,:], f[iz,:], r, adv_fac[iz,:], r_spectral)
         # get external endpoints to reconcile via MPI
         dfdr_lower_endpoints[iz] = r.scratch_2d[1,1]
         dfdr_upper_endpoints[iz] = r.scratch_2d[end,end]
@@ -645,21 +647,27 @@ function derivative_r!(dfdr::AbstractArray{mk_float,3}, f::AbstractArray{mk_floa
     # differentiate f w.r.t r
     if neutrals
         @loop_sn_z isn iz begin
-            @views derivative!(dfdr[iz,:,isn], f[iz,:,isn], r, adv_fac[:,iz,isn], r_spectral)
+            # Note that for moments, `adv_fac` has its dimensions in the same order as the
+            # moment arrays, not with the derivative dimension moved to be left-most
+            # index.
+            @views derivative!(dfdr[iz,:,isn], f[iz,:,isn], r, adv_fac[iz,:,isn], r_spectral)
             # get external endpoints to reconcile via MPI
             dfdr_lower_endpoints[iz,isn] = r.scratch_2d[1,1]
             dfdr_upper_endpoints[iz,isn] = r.scratch_2d[end,end]
-            adv_fac_lower_buffer[iz,isn] = adv_fac[1,iz,isn]
-            adv_fac_upper_buffer[iz,isn] = adv_fac[end,iz,isn]
+            adv_fac_lower_buffer[iz,isn] = adv_fac[iz,1,isn]
+            adv_fac_upper_buffer[iz,isn] = adv_fac[iz,end,isn]
         end
     else
         @loop_s_z is iz begin
-            @views derivative!(dfdr[iz,:,is], f[iz,:,is], r, adv_fac[:,iz,is], r_spectral)
+            # Note that for moments, `adv_fac` has its dimensions in the same order as the
+            # moment arrays, not with the derivative dimension moved to be left-most
+            # index.
+            @views derivative!(dfdr[iz,:,is], f[iz,:,is], r, adv_fac[iz,:,is], r_spectral)
             # get external endpoints to reconcile via MPI
             dfdr_lower_endpoints[iz,is] = r.scratch_2d[1,1]
             dfdr_upper_endpoints[iz,is] = r.scratch_2d[end,end]
-            adv_fac_lower_buffer[iz,is] = adv_fac[1,iz,is]
-            adv_fac_upper_buffer[iz,is] = adv_fac[end,iz,is]
+            adv_fac_lower_buffer[iz,is] = adv_fac[iz,1,is]
+            adv_fac_upper_buffer[iz,is] = adv_fac[iz,end,is]
         end
     end
 

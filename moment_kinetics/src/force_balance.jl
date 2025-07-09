@@ -25,12 +25,26 @@ to update the parallel particle flux dens*upar for each species
     # account for momentum flux contribution to force balance
     density = fvec.density
     upar = fvec.upar
+    ddens_dr_upwind = moments.ion.ddens_dr_upwind
+    ddens_dz_upwind = moments.ion.ddens_dz_upwind
+    dupar_dr_upwind = moments.ion.dupar_dr_upwind
+    dupar_dz_upwind = moments.ion.dupar_dz_upwind
+    dupar_dz = moments.ion.dupar_dz
+    dppar_dz = moments.ion.dppar_dz
+    Ez = fields.Ez
+    vEr = fields.vEr
+    vEz = fields.vEz
+    bz = geometry.bzed
     @loop_s_r_z is ir iz begin
-        dnupar_dt[iz,ir,is] = -(moments.ion.dppar_dz[iz,ir,is] +
-                                upar[iz,ir,is]*upar[iz,ir,is]*moments.ion.ddens_dz_upwind[iz,ir,is] +
-                                2.0*density[iz,ir,is]*upar[iz,ir,is]*moments.ion.dupar_dz_upwind[iz,ir,is] -
-                                geometry.bzed[iz,ir]*fields.Ez[iz,ir]*density[iz,ir,is])
-    end
+        dnupar_dt[iz,ir,is] =
+            -(vEr[iz,ir] * (density[iz,ir,is] * dupar_dr_upwind[iz,ir,is]
+                            + upar[iz,ir,is] * ddens_dr_upwind[iz,ir,is])
+              + (vEz[iz,ir] + bz[iz,ir] * upar[iz,ir,is]) * (density[iz,ir,is] * dupar_dz_upwind[iz,ir,is]
+                                                             + upar[iz,ir,is] * ddens_dz_upwind[iz,ir,is])
+              + bz[iz,ir] * density[iz,ir,is] * upar[iz,ir,is] * dupar_dz[iz,ir,is]
+              + bz[iz,ir] * dppar_dz[iz,ir,is]
+              - bz[iz,ir] * Ez[iz,ir] * density[iz,ir,is])
+        end
 
     for index ∈ eachindex(ion_source_settings)
         if ion_source_settings[index].active && false

@@ -73,6 +73,8 @@ function allocate_shared_float(dims...; comm=nothing)
             @debug_track_initialized begin
                 # Track initialization as if the array was not initialized to NaN
                 array.is_initialized .= false
+                # Track usage as if this array has not been written
+                array.is_written .= false
             end
         end
         if this_comm !== nothing

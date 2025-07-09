@@ -417,11 +417,6 @@ function mk_input(input_dict=OptionsDict("output" => OptionsDict("run_name" => "
                                               run_directory=run_directory,
                                               ignore_MPI=ignore_MPI)
 
-    external_source_settings = setup_external_sources!(input_dict, r, z,
-                                                       composition.electron_physics,
-                                                       warn_unexpected;
-                                                       ignore_MPI=ignore_MPI)
-
     geometry = init_magnetic_geometry(geometry_in,z,r)
     if any(geometry.dBdz .!= 0.0) &&
             (evolve_moments.density || evolve_moments.parallel_flow ||
@@ -458,8 +453,7 @@ function mk_input(input_dict=OptionsDict("output" => OptionsDict("run_name" => "
                   r_spectral, vpa, vpa_spectral, vperp, vperp_spectral, gyrophase,
                   gyrophase_spectral, vz, vz_spectral, vr, vr_spectral, vzeta,
                   vzeta_spectral, composition, species_immutable, collisions, geometry,
-                  em_input, external_source_settings, num_diss_params,
-                  manufactured_solns_input)
+                  em_input, num_diss_params, manufactured_solns_input)
     println(io, "\nAll inputs returned from mk_input():")
     println(io, all_inputs)
     close(io)

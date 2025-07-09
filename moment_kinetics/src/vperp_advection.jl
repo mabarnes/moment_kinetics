@@ -16,7 +16,8 @@ using ..r_advection: update_speed_r!
                          vperp_spectral, composition, z_advect, r_advect, geometry,
                          moments, fields, t) = begin
     
-    # if appropriate, update z and r speeds
+    # if appropriate, update z and r speeds (except for the 'Spitzer test', this function
+    # does nothing because the r- and z-speeds have already been calculated).
     update_z_r_speeds!(z_advect, r_advect, fvec_in, moments, fields, geometry, vpa, vperp,
                        z, r, t)
     # get the updated speed along the vperp direction using the current f
@@ -54,10 +55,8 @@ end
 update speed vperp default
 """
 function update_speed_vperp_default!(vperp_advect, fvec, vpa, vperp, z, r, z_advect, r_advect, geometry, moments)
-    if moments.evolve_p && moments.evolve_upar
+    if moments.evolve_p
         update_speed_vperp_n_u_p_evolution!(vperp_advect, fvec, vpa, vperp, z, r, z_advect, r_advect, geometry, moments)
-    elseif moments.evolve_p
-        update_speed_vperp_n_p_evolution!(vperp_advect, fvec, vpa, vperp, z, r, z_advect, r_advect, geometry, moments)
     elseif moments.evolve_upar
         update_speed_vperp_n_u_evolution!(vperp_advect, vpa, vperp, z, r, z_advect, r_advect, geometry, moments)
     elseif moments.evolve_density
@@ -73,49 +72,32 @@ update vperp advection speed when n, u, p are evolved separately
 function update_speed_vperp_n_u_p_evolution!(vperp_advect, fvec, vpa, vperp, z, r, z_advect, r_advect, geometry, moments)
     upar = fvec.upar
     vth = moments.ion.vth
+    dvth_dr = moments.ion.dvth_dr
     dvth_dz = moments.ion.dvth_dz
     dvth_dt = moments.ion.dvth_dt
     wperp = vperp.grid
-    wpa = vpa.grid
     @loop_s is begin
         speed = vperp_advect[is].speed
+        r_speed = r_advect[is].speed
+        z_speed = z_advect[is].speed
         @loop_r ir begin
             @loop_z_vpa iz ivpa begin
-                # update perpendicular advection speed, which is only nonzero because of the
-                # normalisation by thermal speed, so wperp grid is constantly stretching and
-                # compressing to account for changing local temperatures while maintaining 
-                # a normalised perpendicular speed.
-                @. speed[:,ivpa,iz,ir] = 
-                    - (1/vth[iz,ir,is]) * wperp * (dvth_dt[iz,ir,is] + 
-                    (wpa[ivpa] * vth[iz,ir,is] + upar[iz,ir,is]) * dvth_dz[iz,ir,is])
+                @loop_vperp ivperp begin
+                    # update perpendicular advection speed, which is only nonzero because of the
+                    # normalisation by thermal speed, so wperp grid is constantly stretching and
+                    # compressing to account for changing local temperatures while maintaining
+                    # a normalised perpendicular speed.
+                    speed[ivperp,ivpa,iz,ir] =
+                        - (1/vth[iz,ir,is]) * wperp[ivperp] * (
+                            dvth_dt[iz,ir,is]
+                            + r_speed[ir,ivpa,ivperp,iz] * dvth_dr[iz,ir,is]
+                            + z_speed[iz,ivpa,ivperp,ir] * dvth_dz[iz,ir,is])
+                end
             end
         end
     end
-end
 
-"""
-update vperp advection speed when n, p are evolved separately
-"""
-function update_speed_vperp_n_p_evolution!(vperp_advect, fvec, vpa, vperp, z, r, z_advect, r_advect, geometry, moments)
-    vth = moments.ion.vth
-    dvth_dz = moments.ion.dvth_dz
-    dvth_dt = moments.ion.dvth_dt
-    wperp = vperp.grid
-    wpa = vpa.grid
-    @loop_s is begin
-        speed = vperp_advect[is].speed
-        @loop_r ir begin
-            @loop_z_vpa iz ivpa begin
-                # update perpendicular advection speed, which is only nonzero because of the
-                # normalisation by thermal speed, so wperp grid is constantly stretching and
-                # compressing to account for changing local temperatures while maintaining 
-                # a normalised perpendicular speed.
-                @. speed[:,ivpa,iz,ir] = 
-                    - (1/vth[iz,ir,is]) * wperp * (dvth_dt[iz,ir,is] + 
-                    (wpa * vth[iz,ir,is]) * dvth_dz[iz,ir,is])
-            end
-        end
-    end
+    return nothing
 end
 
 """
@@ -123,7 +105,7 @@ update vperp advection speed when n, u are evolved separately
 """
 function update_speed_vperp_n_u_evolution!(vperp_advect, vpa, vperp, z, r, z_advect, r_advect, geometry, moments)
     # with no perpendicular advection terms, the advection speed is zero
-    nothing
+    return nothing
 end
 
 """
@@ -131,7 +113,7 @@ update vperp advection speed when n is evolved separately
 """
 function update_speed_vperp_n_evolution!(vperp_advect, vpa, vperp, z, r, z_advect, r_advect, geometry, moments)
     # with no perpendicular advection terms, the advection speed is zero
-    nothing
+    return nothing
 end
 
 function update_speed_vperp_DK!(vperp_advect, vpa, vperp, z, r, z_advect, r_advect, geometry, moments)
@@ -195,8 +177,7 @@ function update_z_r_speeds!(z_advect, r_advect, fvec_in, moments, fields,
         @begin_s_z_vperp_vpa_region()
         @loop_s is begin
             # get the updated speed along the r direction using the current f
-            @views update_speed_r!(r_advect[is], fvec_in.upar[:,:,is],
-                                   moments.ion.vth[:,:,is], fields, moments.evolve_upar,
+            @views update_speed_r!(r_advect[is], fields, moments.evolve_upar,
                                    moments.evolve_ppar, vpa, vperp, z, r, geometry, is)
         end
     end
