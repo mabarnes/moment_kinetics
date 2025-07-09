@@ -278,6 +278,7 @@ function backward_Euler_fokker_planck_self_collisions_test(;
             Fold[ivpa,ivperp] /= densfac
         end
     end
+    @_block_synchronize()
     # dummy arrays
     Fdummy1 = allocate_shared_float(vpa.n,vperp.n)
     Fdummy2 = allocate_shared_float(vpa.n,vperp.n)
