@@ -230,7 +230,7 @@ end
 Struct to store the boundary data for all of the
 Rosenbluth potentials required for the calculation.
 """
-struct rosenbluth_potential_boundary_data
+struct rosenbluth_potential_boundary_data{T <: AbstractVector{mk_float}}
     H_data::vpa_vperp_boundary_data
     dHdvpa_data::vpa_vperp_boundary_data
     dHdvperp_data::vpa_vperp_boundary_data
@@ -239,6 +239,7 @@ struct rosenbluth_potential_boundary_data
     d2Gdvperp2_data::vpa_vperp_boundary_data
     d2Gdvperpdvpa_data::vpa_vperp_boundary_data
     d2Gdvpa2_data::vpa_vperp_boundary_data
+    integrals_buffer::T
 end
 
 """
@@ -1190,9 +1191,10 @@ function allocate_rosenbluth_potential_boundary_data(vpa,vperp)
     d2Gdvperp2_data = allocate_boundary_data(vpa,vperp)
     d2Gdvperpdvpa_data = allocate_boundary_data(vpa,vperp)
     d2Gdvpa2_data = allocate_boundary_data(vpa,vperp)
+    integrals_buffer = allocate_shared_float(25; comm=comm_anyv_subblock[])
     return rosenbluth_potential_boundary_data(H_data,dHdvpa_data,
         dHdvperp_data,G_data,dGdvperp_data,d2Gdvperp2_data,
-        d2Gdvperpdvpa_data,d2Gdvpa2_data)
+        d2Gdvperpdvpa_data,d2Gdvpa2_data, integrals_buffer)
 end
 
 """
@@ -1327,7 +1329,7 @@ function calculate_rosenbluth_potential_boundary_data!(rpbd::rosenbluth_potentia
     return nothing
 end
 
-function multipole_H(vpa::mk_float,vperp::mk_float,Inn_vec::Vector{mk_float})
+function multipole_H(vpa::mk_float,vperp::mk_float,Inn_vec::AbstractVector{mk_float})
    (I00, I10, I20, I30, I40, I50, I60, I70, I80,
    I02, I12, I22, I32, I42, I52, I62,
    I04, I14, I24, I34, I44,
@@ -1364,7 +1366,7 @@ function multipole_H(vpa::mk_float,vperp::mk_float,Inn_vec::Vector{mk_float})
    return H_series
 end
 
-function multipole_dHdvpa(vpa::mk_float,vperp::mk_float,Inn_vec::Vector{mk_float})
+function multipole_dHdvpa(vpa::mk_float,vperp::mk_float,Inn_vec::AbstractVector{mk_float})
    (I00, I10, I20, I30, I40, I50, I60, I70, I80,
    I02, I12, I22, I32, I42, I52, I62,
    I04, I14, I24, I34, I44,
@@ -1401,7 +1403,7 @@ function multipole_dHdvpa(vpa::mk_float,vperp::mk_float,Inn_vec::Vector{mk_float
    return dHdvpa_series
 end
 
-function multipole_dHdvperp(vpa::mk_float,vperp::mk_float,Inn_vec::Vector{mk_float})
+function multipole_dHdvperp(vpa::mk_float,vperp::mk_float,Inn_vec::AbstractVector{mk_float})
    (I00, I10, I20, I30, I40, I50, I60, I70, I80,
    I02, I12, I22, I32, I42, I52, I62,
    I04, I14, I24, I34, I44,
@@ -1438,7 +1440,7 @@ function multipole_dHdvperp(vpa::mk_float,vperp::mk_float,Inn_vec::Vector{mk_flo
    return dHdvperp_series
 end
 
-function multipole_G(vpa::mk_float,vperp::mk_float,Inn_vec::Vector{mk_float})
+function multipole_G(vpa::mk_float,vperp::mk_float,Inn_vec::AbstractVector{mk_float})
    (I00, I10, I20, I30, I40, I50, I60, I70, I80,
    I02, I12, I22, I32, I42, I52, I62,
    I04, I14, I24, I34, I44,
@@ -1475,7 +1477,7 @@ function multipole_G(vpa::mk_float,vperp::mk_float,Inn_vec::Vector{mk_float})
    return G_series
 end
 
-function multipole_dGdvperp(vpa::mk_float,vperp::mk_float,Inn_vec::Vector{mk_float})
+function multipole_dGdvperp(vpa::mk_float,vperp::mk_float,Inn_vec::AbstractVector{mk_float})
    (I00, I10, I20, I30, I40, I50, I60, I70, I80,
    I02, I12, I22, I32, I42, I52, I62,
    I04, I14, I24, I34, I44,
@@ -1512,7 +1514,7 @@ function multipole_dGdvperp(vpa::mk_float,vperp::mk_float,Inn_vec::Vector{mk_flo
    return dGdvperp_series
 end
 
-function multipole_d2Gdvperp2(vpa::mk_float,vperp::mk_float,Inn_vec::Vector{mk_float})
+function multipole_d2Gdvperp2(vpa::mk_float,vperp::mk_float,Inn_vec::AbstractVector{mk_float})
    (I00, I10, I20, I30, I40, I50, I60, I70, I80,
    I02, I12, I22, I32, I42, I52, I62,
    I04, I14, I24, I34, I44,
@@ -1549,7 +1551,7 @@ function multipole_d2Gdvperp2(vpa::mk_float,vperp::mk_float,Inn_vec::Vector{mk_f
    return d2Gdvperp2_series
 end
 
-function multipole_d2Gdvperpdvpa(vpa::mk_float,vperp::mk_float,Inn_vec::Vector{mk_float})
+function multipole_d2Gdvperpdvpa(vpa::mk_float,vperp::mk_float,Inn_vec::AbstractVector{mk_float})
    (I00, I10, I20, I30, I40, I50, I60, I70, I80,
    I02, I12, I22, I32, I42, I52, I62,
    I04, I14, I24, I34, I44,
@@ -1586,7 +1588,7 @@ function multipole_d2Gdvperpdvpa(vpa::mk_float,vperp::mk_float,Inn_vec::Vector{m
    return d2Gdvperpdvpa_series
 end
 
-function multipole_d2Gdvpa2(vpa::mk_float,vperp::mk_float,Inn_vec::Vector{mk_float})
+function multipole_d2Gdvpa2(vpa::mk_float,vperp::mk_float,Inn_vec::AbstractVector{mk_float})
    (I00, I10, I20, I30, I40, I50, I60, I70, I80,
    I02, I12, I22, I32, I42, I52, I62,
    I04, I14, I24, I34, I44,
@@ -1777,67 +1779,129 @@ function calculate_rosenbluth_potential_boundary_data_multipole!(rpbd::rosenblut
     pdf,vpa,vperp,vpa_spectral,vperp_spectral;
     calculate_GG=false,calculate_dGdvperp=false)
     @inbounds begin
-        # get required moments of pdf
-        I00, I10, I20, I30, I40, I50, I60, I70, I80 = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
-        I02, I12, I22, I32, I42, I52, I62 = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
-        I04, I14, I24, I34, I44 = 0.0, 0.0, 0.0, 0.0, 0.0
-        I06, I16, I26 = 0.0, 0.0, 0.0
-        I08 = 0.0
-
-        @begin_anyv_region()
-        @anyv_serial_region begin
-           I00 = integral(pdf, vpa.grid, 0, vpa.wgts, vperp.grid, 0, vperp.wgts)
-           I10 = integral(pdf, vpa.grid, 1, vpa.wgts, vperp.grid, 0, vperp.wgts)
-           I20 = integral(pdf, vpa.grid, 2, vpa.wgts, vperp.grid, 0, vperp.wgts)
-           I30 = integral(pdf, vpa.grid, 3, vpa.wgts, vperp.grid, 0, vperp.wgts)
-           I40 = integral(pdf, vpa.grid, 4, vpa.wgts, vperp.grid, 0, vperp.wgts)
-           I50 = integral(pdf, vpa.grid, 5, vpa.wgts, vperp.grid, 0, vperp.wgts)
-           I60 = integral(pdf, vpa.grid, 6, vpa.wgts, vperp.grid, 0, vperp.wgts)
-           I70 = integral(pdf, vpa.grid, 7, vpa.wgts, vperp.grid, 0, vperp.wgts)
-           I80 = integral(pdf, vpa.grid, 8, vpa.wgts, vperp.grid, 0, vperp.wgts)
-           I02 = integral(pdf, vpa.grid, 0, vpa.wgts, vperp.grid, 2, vperp.wgts)
-           I12 = integral(pdf, vpa.grid, 1, vpa.wgts, vperp.grid, 2, vperp.wgts)
-           I22 = integral(pdf, vpa.grid, 2, vpa.wgts, vperp.grid, 2, vperp.wgts)
-           I32 = integral(pdf, vpa.grid, 3, vpa.wgts, vperp.grid, 2, vperp.wgts)
-           I42 = integral(pdf, vpa.grid, 4, vpa.wgts, vperp.grid, 2, vperp.wgts)
-           I52 = integral(pdf, vpa.grid, 5, vpa.wgts, vperp.grid, 2, vperp.wgts)
-           I62 = integral(pdf, vpa.grid, 6, vpa.wgts, vperp.grid, 2, vperp.wgts)
-           I04 = integral(pdf, vpa.grid, 0, vpa.wgts, vperp.grid, 4, vperp.wgts)
-           I14 = integral(pdf, vpa.grid, 1, vpa.wgts, vperp.grid, 4, vperp.wgts)
-           I24 = integral(pdf, vpa.grid, 2, vpa.wgts, vperp.grid, 4, vperp.wgts)
-           I34 = integral(pdf, vpa.grid, 3, vpa.wgts, vperp.grid, 4, vperp.wgts)
-           I44 = integral(pdf, vpa.grid, 4, vpa.wgts, vperp.grid, 4, vperp.wgts)
-
-           I06 = integral(pdf, vpa.grid, 0, vpa.wgts, vperp.grid, 6, vperp.wgts)
-           I16 = integral(pdf, vpa.grid, 1, vpa.wgts, vperp.grid, 6, vperp.wgts)
-           I26 = integral(pdf, vpa.grid, 2, vpa.wgts, vperp.grid, 6, vperp.wgts)
-
-           I08 = integral(pdf, vpa.grid, 0, vpa.wgts, vperp.grid, 8, vperp.wgts)
-        end
-        # Broadcast integrals to all processes in the 'anyv' subblock
-        Inn_vec = [I00, I10, I20, I30, I40, I50, I60, I70, I80,
-                    I02, I12, I22, I32, I42, I52, I62,
-                    I04, I14, I24, I34, I44,
-                    I06, I16, I26,
-                    I08]
-        if comm_anyv_subblock[] != MPI.COMM_NULL
-            MPI.Bcast!(Inn_vec, 0, comm_anyv_subblock[])
-        end
-        # ensure data is synchronized
         @_anyv_subblock_synchronize()
+
+        # get required moments of pdf
+        integrals_buffer = rpbd.integrals_buffer
+        I00 = @view integrals_buffer[1:1]
+        I10 = @view integrals_buffer[2:2]
+        I20 = @view integrals_buffer[3:3]
+        I30 = @view integrals_buffer[4:4]
+        I40 = @view integrals_buffer[5:5]
+        I50 = @view integrals_buffer[6:6]
+        I60 = @view integrals_buffer[7:7]
+        I70 = @view integrals_buffer[8:8]
+        I80 = @view integrals_buffer[9:9]
+        I02 = @view integrals_buffer[10:10]
+        I12 = @view integrals_buffer[11:11]
+        I22 = @view integrals_buffer[12:12]
+        I32 = @view integrals_buffer[13:13]
+        I42 = @view integrals_buffer[14:14]
+        I52 = @view integrals_buffer[15:15]
+        I62 = @view integrals_buffer[16:16]
+        I04 = @view integrals_buffer[17:17]
+        I14 = @view integrals_buffer[18:18]
+        I24 = @view integrals_buffer[19:19]
+        I34 = @view integrals_buffer[20:20]
+        I44 = @view integrals_buffer[21:21]
+        I06 = @view integrals_buffer[22:22]
+        I16 = @view integrals_buffer[23:23]
+        I26 = @view integrals_buffer[24:24]
+        I08 = @view integrals_buffer[25:25]
+
+        # Round-robin integrals among processes in the anyv subblock
+        if anyv_subblock_rank[] == (0 % anyv_subblock_size[])
+            I00[] = integral(pdf, vpa.grid, 0, vpa.wgts, vperp.grid, 0, vperp.wgts)
+        end
+        if anyv_subblock_rank[] == (1 % anyv_subblock_size[])
+            I10[] = integral(pdf, vpa.grid, 1, vpa.wgts, vperp.grid, 0, vperp.wgts)
+        end
+        if anyv_subblock_rank[] == (2 % anyv_subblock_size[])
+            I20[] = integral(pdf, vpa.grid, 2, vpa.wgts, vperp.grid, 0, vperp.wgts)
+        end
+        if anyv_subblock_rank[] == (3 % anyv_subblock_size[])
+            I30[] = integral(pdf, vpa.grid, 3, vpa.wgts, vperp.grid, 0, vperp.wgts)
+        end
+        if anyv_subblock_rank[] == (4 % anyv_subblock_size[])
+            I40[] = integral(pdf, vpa.grid, 4, vpa.wgts, vperp.grid, 0, vperp.wgts)
+        end
+        if anyv_subblock_rank[] == (5 % anyv_subblock_size[])
+            I50[] = integral(pdf, vpa.grid, 5, vpa.wgts, vperp.grid, 0, vperp.wgts)
+        end
+        if anyv_subblock_rank[] == (6 % anyv_subblock_size[])
+            I60[] = integral(pdf, vpa.grid, 6, vpa.wgts, vperp.grid, 0, vperp.wgts)
+        end
+        if anyv_subblock_rank[] == (7 % anyv_subblock_size[])
+            I70[] = integral(pdf, vpa.grid, 7, vpa.wgts, vperp.grid, 0, vperp.wgts)
+        end
+        if anyv_subblock_rank[] == (8 % anyv_subblock_size[])
+            I80[] = integral(pdf, vpa.grid, 8, vpa.wgts, vperp.grid, 0, vperp.wgts)
+        end
+        if anyv_subblock_rank[] == (9 % anyv_subblock_size[])
+            I02[] = integral(pdf, vpa.grid, 0, vpa.wgts, vperp.grid, 2, vperp.wgts)
+        end
+        if anyv_subblock_rank[] == (10 % anyv_subblock_size[])
+            I12[] = integral(pdf, vpa.grid, 1, vpa.wgts, vperp.grid, 2, vperp.wgts)
+        end
+        if anyv_subblock_rank[] == (11 % anyv_subblock_size[])
+            I22[] = integral(pdf, vpa.grid, 2, vpa.wgts, vperp.grid, 2, vperp.wgts)
+        end
+        if anyv_subblock_rank[] == (12 % anyv_subblock_size[])
+            I32[] = integral(pdf, vpa.grid, 3, vpa.wgts, vperp.grid, 2, vperp.wgts)
+        end
+        if anyv_subblock_rank[] == (13 % anyv_subblock_size[])
+            I42[] = integral(pdf, vpa.grid, 4, vpa.wgts, vperp.grid, 2, vperp.wgts)
+        end
+        if anyv_subblock_rank[] == (14 % anyv_subblock_size[])
+            I52[] = integral(pdf, vpa.grid, 5, vpa.wgts, vperp.grid, 2, vperp.wgts)
+        end
+        if anyv_subblock_rank[] == (15 % anyv_subblock_size[])
+            I62[] = integral(pdf, vpa.grid, 6, vpa.wgts, vperp.grid, 2, vperp.wgts)
+        end
+        if anyv_subblock_rank[] == (16 % anyv_subblock_size[])
+            I04[] = integral(pdf, vpa.grid, 0, vpa.wgts, vperp.grid, 4, vperp.wgts)
+        end
+        if anyv_subblock_rank[] == (17 % anyv_subblock_size[])
+            I14[] = integral(pdf, vpa.grid, 1, vpa.wgts, vperp.grid, 4, vperp.wgts)
+        end
+        if anyv_subblock_rank[] == (18 % anyv_subblock_size[])
+            I24[] = integral(pdf, vpa.grid, 2, vpa.wgts, vperp.grid, 4, vperp.wgts)
+        end
+        if anyv_subblock_rank[] == (19 % anyv_subblock_size[])
+            I34[] = integral(pdf, vpa.grid, 3, vpa.wgts, vperp.grid, 4, vperp.wgts)
+        end
+        if anyv_subblock_rank[] == (20 % anyv_subblock_size[])
+            I44[] = integral(pdf, vpa.grid, 4, vpa.wgts, vperp.grid, 4, vperp.wgts)
+        end
+
+        if anyv_subblock_rank[] == (21 % anyv_subblock_size[])
+            I06[] = integral(pdf, vpa.grid, 0, vpa.wgts, vperp.grid, 6, vperp.wgts)
+        end
+        if anyv_subblock_rank[] == (22 % anyv_subblock_size[])
+            I16[] = integral(pdf, vpa.grid, 1, vpa.wgts, vperp.grid, 6, vperp.wgts)
+        end
+        if anyv_subblock_rank[] == (23 % anyv_subblock_size[])
+            I26[] = integral(pdf, vpa.grid, 2, vpa.wgts, vperp.grid, 6, vperp.wgts)
+        end
+
+        if anyv_subblock_rank[] == (24 % anyv_subblock_size[])
+            I08[] = integral(pdf, vpa.grid, 0, vpa.wgts, vperp.grid, 8, vperp.wgts)
+        end
+        @_anyv_subblock_synchronize()
+
         # evaluate the multipole formulae
-        calculate_boundary_data_multipole_H!(rpbd.H_data,vpa,vperp,Inn_vec)
-        calculate_boundary_data_multipole_dHdvpa!(rpbd.dHdvpa_data,vpa,vperp,Inn_vec)
-        calculate_boundary_data_multipole_dHdvperp!(rpbd.dHdvperp_data,vpa,vperp,Inn_vec)
+        calculate_boundary_data_multipole_H!(rpbd.H_data,vpa,vperp,integrals_buffer)
+        calculate_boundary_data_multipole_dHdvpa!(rpbd.dHdvpa_data,vpa,vperp,integrals_buffer)
+        calculate_boundary_data_multipole_dHdvperp!(rpbd.dHdvperp_data,vpa,vperp,integrals_buffer)
         if calculate_GG
-            calculate_boundary_data_multipole_G!(rpbd.G_data,vpa,vperp,Inn_vec)
+            calculate_boundary_data_multipole_G!(rpbd.G_data,vpa,vperp,integrals_buffer)
         end
         if calculate_dGdvperp
-            calculate_boundary_data_multipole_dGdvperp!(rpbd.dGdvperp_data,vpa,vperp,Inn_vec)
+            calculate_boundary_data_multipole_dGdvperp!(rpbd.dGdvperp_data,vpa,vperp,integrals_buffer)
         end
-        calculate_boundary_data_multipole_d2Gdvperp2!(rpbd.d2Gdvperp2_data,vpa,vperp,Inn_vec)
-        calculate_boundary_data_multipole_d2Gdvperpdvpa!(rpbd.d2Gdvperpdvpa_data,vpa,vperp,Inn_vec)
-        calculate_boundary_data_multipole_d2Gdvpa2!(rpbd.d2Gdvpa2_data,vpa,vperp,Inn_vec)
+        calculate_boundary_data_multipole_d2Gdvperp2!(rpbd.d2Gdvperp2_data,vpa,vperp,integrals_buffer)
+        calculate_boundary_data_multipole_d2Gdvperpdvpa!(rpbd.d2Gdvperpdvpa_data,vpa,vperp,integrals_buffer)
+        calculate_boundary_data_multipole_d2Gdvpa2!(rpbd.d2Gdvpa2_data,vpa,vperp,integrals_buffer)
 
         return nothing
     end
