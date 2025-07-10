@@ -2736,54 +2736,56 @@ function calculate_test_particle_preconditioner!(pdf,delta_t,ms,msp,nussp,
     function interior_loop(YY0perp, YY1perp, YY2perp, YY3perp, MMperp, YY0par, YY1par,
                            YY2par, YY3par, MMpar, PPpar, ivpa_local, ivperp_local,
                            ielement_vpa, ielement_vperp)
-        for jvperpp_local in 1:vperp.ngrid
-            for jvpap_local in 1:vpa.ngrid
-                # carry out the matrix sum on each 2D element
-                # mass matrix contribution
-                # don't need these indices because we just overwrite
-                # the constructor values, not the indices
-                # ic_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
-                # icp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,jvpap_local,jvperpp_local)
-                icsc = icsc_func(ivpa_local,jvpap_local,ielement_vpa,
-                        ngrid_vpa,nelement_vpa,
-                        ivperp_local,jvperpp_local,
-                        ielement_vperp,
-                        ngrid_vperp,nelement_vperp)
-                #assemble_constructor_data!(CC2D_sparse_constructor,
-                #                    icsc,ic_global,icp_global,
-                #                    (MMpar[ivpa_local,jvpap_local]*
-                #                    MMperp[ivperp_local,jvperpp_local]))
-                assemble_constructor_value!(CC2D_sparse_constructor,icsc,
-                                    (MMpar[ivpa_local,jvpap_local]*
-                                    MMperp[ivperp_local,jvperpp_local]))
-                # treat div ( dvpadt F) without integration by parts
-                #                    + delta_t * dvpadt * PPpar[ivpa_local,jvpap_local]*
-                #                       MMperp[ivperp_local,jvperpp_local]))
-            end
-            # collision operator contribution
-            jvperpp = vperp.igrid_full[jvperpp_local,ielement_vperp]
-            for kvperpp_local in 1:vperp.ngrid
-                kvperpp = vperp.igrid_full[kvperpp_local,ielement_vperp]
-                for jvpap_local in 1:vpa.ngrid
-                    jvpap = vpa.igrid_full[jvpap_local,ielement_vpa]
+        @inbounds begin
+            for jvperpp_local in 1:ngrid_vperp
+                for jvpap_local in 1:ngrid_vpa
+                    # carry out the matrix sum on each 2D element
+                    # mass matrix contribution
+                    # don't need these indices because we just overwrite
+                    # the constructor values, not the indices
+                    # ic_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
+                    # icp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,jvpap_local,jvperpp_local)
                     icsc = icsc_func(ivpa_local,jvpap_local,ielement_vpa,
                             ngrid_vpa,nelement_vpa,
                             ivperp_local,jvperpp_local,
                             ielement_vperp,
                             ngrid_vperp,nelement_vperp)
-                    for kvpap_local in 1:vpa.ngrid
-                        kvpap = vpa.igrid_full[kvpap_local,ielement_vpa]
-                        # first three lines represent parallel flux terms
-                        # second three lines represent perpendicular flux terms
-                        assemble_constructor_value!(CC2D_sparse_constructor,icsc,
-                        -delta_t*(-nussp*(YY0perp[kvperpp_local,jvperpp_local,ivperp_local]*YY2par[kvpap_local,jvpap_local,ivpa_local]*d2Gdvpa2[kvpap,kvperpp] +
-                                            YY3perp[kvperpp_local,jvperpp_local,ivperp_local]*YY1par[kvpap_local,jvpap_local,ivpa_local]*d2Gdvperpdvpa[kvpap,kvperpp] -
-                                            2.0*(ms/msp)*YY0perp[kvperpp_local,jvperpp_local,ivperp_local]*YY1par[kvpap_local,jvpap_local,ivpa_local]*dHdvpa[kvpap,kvperpp] +
-                                            # end parallel flux, start of perpendicular flux
-                                            YY1perp[kvperpp_local,jvperpp_local,ivperp_local]*YY3par[kvpap_local,jvpap_local,ivpa_local]*d2Gdvperpdvpa[kvpap,kvperpp] +
-                                            YY2perp[kvperpp_local,jvperpp_local,ivperp_local]*YY0par[kvpap_local,jvpap_local,ivpa_local]*d2Gdvperp2[kvpap,kvperpp] -
-                                            2.0*(ms/msp)*YY1perp[kvperpp_local,jvperpp_local,ivperp_local]*YY0par[kvpap_local,jvpap_local,ivpa_local]*dHdvperp[kvpap,kvperpp]))
-                                            )
+                    #assemble_constructor_data!(CC2D_sparse_constructor,
+                    #                    icsc,ic_global,icp_global,
+                    #                    (MMpar[ivpa_local,jvpap_local]*
+                    #                    MMperp[ivperp_local,jvperpp_local]))
+                    assemble_constructor_value!(CC2D_sparse_constructor,icsc,
+                                        (MMpar[ivpa_local,jvpap_local]*
+                                        MMperp[ivperp_local,jvperpp_local]))
+                    # treat div ( dvpadt F) without integration by parts
+                    #                    + delta_t * dvpadt * PPpar[ivpa_local,jvpap_local]*
+                    #                       MMperp[ivperp_local,jvperpp_local]))
+                end
+                # collision operator contribution
+                jvperpp = vperp_igrid_full[jvperpp_local,ielement_vperp]
+                for kvperpp_local in 1:ngrid_vperp
+                    kvperpp = vperp_igrid_full[kvperpp_local,ielement_vperp]
+                    for jvpap_local in 1:ngrid_vpa
+                        jvpap = vpa_igrid_full[jvpap_local,ielement_vpa]
+                        icsc = icsc_func(ivpa_local,jvpap_local,ielement_vpa,
+                                ngrid_vpa,nelement_vpa,
+                                ivperp_local,jvperpp_local,
+                                ielement_vperp,
+                                ngrid_vperp,nelement_vperp)
+                        for kvpap_local in 1:ngrid_vpa
+                            kvpap = vpa_igrid_full[kvpap_local,ielement_vpa]
+                            # first three lines represent parallel flux terms
+                            # second three lines represent perpendicular flux terms
+                            assemble_constructor_value!(CC2D_sparse_constructor,icsc,
+                            -delta_t*(-nussp*(YY0perp[kvperpp_local,jvperpp_local,ivperp_local]*YY2par[kvpap_local,jvpap_local,ivpa_local]*d2Gdvpa2[kvpap,kvperpp] +
+                                                YY3perp[kvperpp_local,jvperpp_local,ivperp_local]*YY1par[kvpap_local,jvpap_local,ivpa_local]*d2Gdvperpdvpa[kvpap,kvperpp] -
+                                                2.0*(ms/msp)*YY0perp[kvperpp_local,jvperpp_local,ivperp_local]*YY1par[kvpap_local,jvpap_local,ivpa_local]*dHdvpa[kvpap,kvperpp] +
+                                                # end parallel flux, start of perpendicular flux
+                                                YY1perp[kvperpp_local,jvperpp_local,ivperp_local]*YY3par[kvpap_local,jvpap_local,ivpa_local]*d2Gdvperpdvpa[kvpap,kvperpp] +
+                                                YY2perp[kvperpp_local,jvperpp_local,ivperp_local]*YY0par[kvpap_local,jvpap_local,ivpa_local]*d2Gdvperp2[kvpap,kvperpp] -
+                                                2.0*(ms/msp)*YY1perp[kvperpp_local,jvperpp_local,ivperp_local]*YY0par[kvpap_local,jvpap_local,ivpa_local]*dHdvperp[kvpap,kvperpp]))
+                                                )
+                        end
                     end
                 end
             end
@@ -2896,8 +2898,10 @@ function calculate_test_particle_preconditioner!(pdf,delta_t,ms,msp,nussp,
                                                   MMperp, YY0par, YY1par, YY2par, YY3par,
                                                   MMpar, PPpar, ivpa_local, ivperp_local,
                                                   ielement_vpa, ielement_vperp)
-            for jvperpp_local in 1:vperp.ngrid
-                for jvpap_local in 1:vpa.ngrid
+            vperp_bc = vperp.bc
+            vpa_bc = vpa.bc
+            for jvperpp_local in 1:ngrid_vperp
+                for jvpap_local in 1:ngrid_vpa
                     #ic_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
                     #icp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,jvpap_local,jvperpp_local)
                     icsc = icsc_func(ivpa_local,jvpap_local,ielement_vpa,
@@ -2907,18 +2911,18 @@ function calculate_test_particle_preconditioner!(pdf,delta_t,ms,msp,nussp,
                             ngrid_vperp,nelement_vperp)
 
                     lower_boundary_row_vpa = (ielement_vpa == 1 && ivpa_local == 1)
-                    upper_boundary_row_vpa = (ielement_vpa == vpa.nelement_local && ivpa_local == vpa.ngrid)
+                    upper_boundary_row_vpa = (ielement_vpa == nelement_vpa && ivpa_local == ngrid_vpa)
                     lower_boundary_row_vperp = (ielement_vperp == 1 && ivperp_local == 1)
-                    upper_boundary_row_vperp = (ielement_vperp == vperp.nelement_local && ivperp_local == vperp.ngrid)
+                    upper_boundary_row_vperp = (ielement_vperp == nelement_vperp && ivperp_local == ngrid_vperp)
 
-                    if lower_boundary_row_vpa && vpa.bc == "zero"
+                    if lower_boundary_row_vpa && vpa_bc == "zero"
                         if jvpap_local == 1 && ivperp_local == jvperpp_local
                             assign_constructor_value!(CC2D_sparse_constructor,icsc,1.0)
                         else
                             assign_constructor_value!(CC2D_sparse_constructor,icsc,0.0)
                         end
-                    elseif upper_boundary_row_vpa && vpa.bc == "zero"
-                        if jvpap_local == vpa.ngrid && ivperp_local == jvperpp_local
+                    elseif upper_boundary_row_vpa && vpa_bc == "zero"
+                        if jvpap_local == ngrid_vpa && ivperp_local == jvperpp_local
                             assign_constructor_value!(CC2D_sparse_constructor,icsc,1.0)
                         else
                             assign_constructor_value!(CC2D_sparse_constructor,icsc,0.0)
@@ -2929,8 +2933,8 @@ function calculate_test_particle_preconditioner!(pdf,delta_t,ms,msp,nussp,
                         else
                             assign_constructor_value!(CC2D_sparse_constructor,icsc,0.0)
                         end
-                    elseif upper_boundary_row_vperp && vperp.bc == "zero"
-                        if jvperpp_local == vperp.ngrid && ivpa_local == jvpap_local
+                    elseif upper_boundary_row_vperp && vperp_bc == "zero"
+                        if jvperpp_local == ngrid_vperp && ivpa_local == jvpap_local
                             assign_constructor_value!(CC2D_sparse_constructor,icsc,1.0)
                         else
                             assign_constructor_value!(CC2D_sparse_constructor,icsc,0.0)
@@ -2956,8 +2960,8 @@ function calculate_test_particle_preconditioner!(pdf,delta_t,ms,msp,nussp,
                 MMpar = YY_arrays.MMpar[:,:,ielement_vpa]
                 PPpar = YY_arrays.PPpar[:,:,ielement_vpa]
                 # loop over field positions in each element
-                for ivperp_local in 1:vperp.ngrid-1
-                    for ivpa_local in 1:vpa.ngrid-1
+                for ivperp_local in 1:ngrid_vperp-1
+                    for ivpa_local in 1:ngrid_vpa-1
                         boundary_condition_interior_loop(YY0perp, YY1perp, YY2perp,
                                                          YY3perp, MMperp, YY0par, YY1par,
                                                          YY2par, YY3par, MMpar,
@@ -2984,8 +2988,8 @@ function calculate_test_particle_preconditioner!(pdf,delta_t,ms,msp,nussp,
                 MMpar = YY_arrays.MMpar[:,:,ielement_vpa]
                 PPpar = YY_arrays.PPpar[:,:,ielement_vpa]
                 # loop over field positions in each element
-                ivperp_local = vperp.ngrid
-                for ivpa_local in 1:vpa.ngrid-1
+                ivperp_local = ngrid_vperp
+                for ivpa_local in 1:ngrid_vpa-1
                     boundary_condition_interior_loop(YY0perp, YY1perp, YY2perp, YY3perp,
                                                      MMperp, YY0par, YY1par, YY2par,
                                                      YY3par, MMpar, PPpar, ivpa_local,
@@ -3337,6 +3341,7 @@ function assemble_explicit_collision_operator_rhs_parallel_inner_loop(
                 for jvpap_local in 1:ngrid_vpa
                     jvpap = vpa_igrid_full_view[jvpap_local]
                     pdfjj = pdfs[jvpap,jvperpp]
+                    temp = 0.0
                     for kvpap_local in 1:ngrid_vpa
                         kvpap = vpa_igrid_full_view[kvpap_local]
                         YY0par_kj = YY0par[kvpap_local,jvpap_local]
@@ -3344,17 +3349,19 @@ function assemble_explicit_collision_operator_rhs_parallel_inner_loop(
                         d2Gspdvperpdvpa_kk = d2Gspdvperpdvpa[kvpap,kvperpp]
                         # first three lines represent parallel flux terms
                         # second three lines represent perpendicular flux terms
-                        result += -nussp*(YY0perp_kj*YY2par[kvpap_local,jvpap_local]*pdfjj*d2Gspdvpa2[kvpap,kvperpp] +
-                                            YY3perp_kj*YY1par_kj*pdfjj*d2Gspdvperpdvpa_kk -
-                                            2.0*(ms/msp)*YY0perp_kj*YY1par_kj*pdfjj*dHspdvpa[kvpap,kvperpp] +
-                                            # end parallel flux, start of perpendicular flux
-                                            YY1perp_kj*YY3par[kvpap_local,jvpap_local]*pdfjj*d2Gspdvperpdvpa_kk +
-                                            YY2perp_kj*YY0par_kj*pdfjj*d2Gspdvperp2[kvpap,kvperpp] -
-                                            2.0*(ms/msp)*YY1perp_kj*YY0par_kj*pdfjj*dHspdvperp[kvpap,kvperpp])
+                        temp += (YY0perp_kj*YY2par[kvpap_local,jvpap_local]*d2Gspdvpa2[kvpap,kvperpp] +
+                                 YY3perp_kj*YY1par_kj*d2Gspdvperpdvpa_kk -
+                                 2.0*(ms/msp)*YY0perp_kj*YY1par_kj*dHspdvpa[kvpap,kvperpp] +
+                                 # end parallel flux, start of perpendicular flux
+                                 YY1perp_kj*YY3par[kvpap_local,jvpap_local]*d2Gspdvperpdvpa_kk +
+                                 YY2perp_kj*YY0par_kj*d2Gspdvperp2[kvpap,kvperpp] -
+                                 2.0*(ms/msp)*YY1perp_kj*YY0par_kj*dHspdvperp[kvpap,kvperpp])
                     end
+                    result += temp * pdfjj
                 end
             end
         end
+        result *= -nussp
 
         return result
     end
