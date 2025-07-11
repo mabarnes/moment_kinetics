@@ -130,13 +130,17 @@ function backward_Euler_linearised_collisions_test(;
     end
     @_anyv_subblock_synchronize()
     # calculate the linearised advance matrix 
-    calculate_test_particle_preconditioner!(FMaxwell,delta_t,ms,ms,nuss,
-        vpa,vperp,vpa_spectral,vperp_spectral,fkpl_arrays, 
-        use_Maxwellian_Rosenbluth_coefficients=use_Maxwellian_Rosenbluth_coefficients_in_preconditioner,
-        boundary_data_option=boundary_data_option)
+    @loop_s_r_z is ir iz begin
+        calculate_test_particle_preconditioner!(FMaxwell,delta_t,ms,ms,nuss,
+            vpa,vperp,vpa_spectral,vperp_spectral,fkpl_arrays, 
+            use_Maxwellian_Rosenbluth_coefficients=use_Maxwellian_Rosenbluth_coefficients_in_preconditioner,
+            boundary_data_option=boundary_data_option)
+    end
     for it in 1:ntime
-        advance_linearised_test_particle_collisions!(pdf,fkpl_arrays,
-                        vpa,vperp,vpa_spectral,vperp_spectral)
+        @loop_s_r_z is ir iz begin
+            advance_linearised_test_particle_collisions!(pdf,fkpl_arrays,
+                            vpa,vperp,vpa_spectral,vperp_spectral)
+        end
     end
     # now check distribution
     test_F_Maxwellian(FMaxwell,pdf,
@@ -313,14 +317,16 @@ function backward_Euler_fokker_planck_self_collisions_test(;
 
     for it in 1:ntime
         @begin_s_r_z_anyv_region()
-        fokker_planck_self_collisions_backward_euler_step!(Fold, delta_t, ms, nuss, fkpl_arrays,
-            coords, spectral,
-            nl_solver_params,
-            test_numerical_conserving_terms=test_numerical_conserving_terms,
-            test_particle_preconditioner=test_particle_preconditioner,
-            test_linearised_advance=test_linearised_advance,
-            use_Maxwellian_Rosenbluth_coefficients_in_preconditioner=use_Maxwellian_Rosenbluth_coefficients_in_preconditioner,
-            boundary_data_option=boundary_data_option)
+        @loop_s_r_z is ir iz begin
+            fokker_planck_self_collisions_backward_euler_step!(Fold, delta_t, ms, nuss, fkpl_arrays,
+                coords, spectral,
+                nl_solver_params,
+                test_numerical_conserving_terms=test_numerical_conserving_terms,
+                test_particle_preconditioner=test_particle_preconditioner,
+                test_linearised_advance=test_linearised_advance,
+                use_Maxwellian_Rosenbluth_coefficients_in_preconditioner=use_Maxwellian_Rosenbluth_coefficients_in_preconditioner,
+                boundary_data_option=boundary_data_option)
+        end
         @begin_serial_region()
         # update the pdf
         @serial_region begin
@@ -397,21 +403,20 @@ function numerical_error_corrections_test(;
 
     @begin_s_r_z_anyv_region()
     CC = fkpl_arrays.CC
-    # fill CC with a pdf that definitely has a density, mean flow, and pressure (unlike C[F,F])
-    @loop_vperp_vpa ivperp ivpa begin
-        CC[ivpa,ivperp] = F_Maxwellian(denss,upars,vths,vpa,vperp,ivpa,ivperp)
+    @loop_s_r_z is ir iz begin
+        # fill CC with a pdf that definitely has a density, mean flow, and pressure (unlike C[F,F])
+        @loop_vperp_vpa ivperp ivpa begin
+            CC[ivpa,ivperp] = F_Maxwellian(denss,upars,vths,vpa,vperp,ivpa,ivperp)
+        end
+        @begin_anyv_vperp_vpa_region()
+        # make ad-hoc conserving corrections to remove the denisty, mean flow, and pressure
+        conserving_corrections!(CC,pdf_in,vpa,vperp)
     end
-    @begin_anyv_vperp_vpa_region()
-    # make ad-hoc conserving corrections to remove the denisty, mean flow, and pressure
-    conserving_corrections!(CC,pdf_in,vpa,vperp)
     
-    # extract result
-    @begin_anyv_vperp_vpa_region()
-    @loop_vperp_vpa ivperp ivpa begin
-        C_num[ivpa,ivperp] = CC[ivpa,ivperp]
-    end
     @begin_serial_region()
     @serial_region begin
+        # extract result
+        C_num .= CC
         # check CC now has zero density, flow, and pressure moments
         dn = get_density(C_num, vpa, vperp)
         du = get_upar(C_num, 1.0, vpa, vperp, false)
@@ -487,14 +492,16 @@ function runtests()
             end
 
             @begin_s_r_z_anyv_region()
-            interpolate_2D_vspace!(Fe_interp_ion_units,Fe,vpa,vperp,scalefac)
-            #println("Fe",Fe)
-            #println("Fe interp",Fe_interp_ion_units)
-            #println("Fe exact",Fe_exact_ion_units)
-            interpolate_2D_vspace!(Fi_interp_electron_units,Fi,vpa,vperp,1.0/scalefac)
-            #println("Fi",Fi)
-            #println("Fi interp", Fi_interp_electron_units)
-            #println("Fi exact",Fi_exact_electron_units)
+            @loop_s_r_z is ir iz begin
+                interpolate_2D_vspace!(Fe_interp_ion_units,Fe,vpa,vperp,scalefac)
+                #println("Fe",Fe)
+                #println("Fe interp",Fe_interp_ion_units)
+                #println("Fe exact",Fe_exact_ion_units)
+                interpolate_2D_vspace!(Fi_interp_electron_units,Fi,vpa,vperp,1.0/scalefac)
+                #println("Fi",Fi)
+                #println("Fi interp", Fi_interp_electron_units)
+                #println("Fi exact",Fi_exact_electron_units)
+            end
 
             @begin_serial_region()
             # check the result
@@ -643,31 +650,32 @@ function runtests()
                 rpbd_exact = allocate_rosenbluth_potential_boundary_data(vpa,vperp)
                 # use known test function to provide exact data
                 @begin_s_r_z_anyv_region()
-                calculate_rosenbluth_potential_boundary_data_exact!(rpbd_exact,
-                      H_M_exact,dHdvpa_M_exact,dHdvperp_M_exact,G_M_exact,
-                      dGdvperp_M_exact,d2Gdvperp2_M_exact,
-                      d2Gdvperpdvpa_M_exact,d2Gdvpa2_M_exact,vpa,vperp)
-                # calculate the potentials numerically
-                calculate_rosenbluth_potentials_via_elliptic_solve!(
-                     fkpl_arrays.GG, fkpl_arrays.HH, fkpl_arrays.dHdvpa, fkpl_arrays.dHdvperp,
-                     fkpl_arrays.d2Gdvpa2, fkpl_arrays.dGdvperp, fkpl_arrays.d2Gdvperpdvpa,
-                     fkpl_arrays.d2Gdvperp2, F_M, vpa, vperp, vpa_spectral, vperp_spectral,
-                     fkpl_arrays; algebraic_solve_for_d2Gdvperp2=false,
-                     calculate_GG=true, calculate_dGdvperp=true,
-                     boundary_data_option=boundary_data_option)
-                # extract C[Fs,Fs'] result
-                # and Rosenbluth potentials for testing
-                @begin_s_r_z_anyv_region()
-                @begin_anyv_vperp_vpa_region()
-                @loop_vperp_vpa ivperp ivpa begin
-                    G_M_num[ivpa,ivperp] = fkpl_arrays.GG[ivpa,ivperp]
-                    H_M_num[ivpa,ivperp] = fkpl_arrays.HH[ivpa,ivperp]
-                    dHdvpa_M_num[ivpa,ivperp] = fkpl_arrays.dHdvpa[ivpa,ivperp]
-                    dHdvperp_M_num[ivpa,ivperp] = fkpl_arrays.dHdvperp[ivpa,ivperp]
-                    dGdvperp_M_num[ivpa,ivperp] = fkpl_arrays.dGdvperp[ivpa,ivperp]
-                    d2Gdvperp2_M_num[ivpa,ivperp] = fkpl_arrays.d2Gdvperp2[ivpa,ivperp]
-                    d2Gdvpa2_M_num[ivpa,ivperp] = fkpl_arrays.d2Gdvpa2[ivpa,ivperp]
-                    d2Gdvperpdvpa_M_num[ivpa,ivperp] = fkpl_arrays.d2Gdvperpdvpa[ivpa,ivperp]
+                @loop_s_r_z is ir iz begin
+                    calculate_rosenbluth_potential_boundary_data_exact!(rpbd_exact,
+                          H_M_exact,dHdvpa_M_exact,dHdvperp_M_exact,G_M_exact,
+                          dGdvperp_M_exact,d2Gdvperp2_M_exact,
+                          d2Gdvperpdvpa_M_exact,d2Gdvpa2_M_exact,vpa,vperp)
+                    # calculate the potentials numerically
+                    calculate_rosenbluth_potentials_via_elliptic_solve!(
+                         fkpl_arrays.GG, fkpl_arrays.HH, fkpl_arrays.dHdvpa, fkpl_arrays.dHdvperp,
+                         fkpl_arrays.d2Gdvpa2, fkpl_arrays.dGdvperp, fkpl_arrays.d2Gdvperpdvpa,
+                         fkpl_arrays.d2Gdvperp2, F_M, vpa, vperp, vpa_spectral, vperp_spectral,
+                         fkpl_arrays; algebraic_solve_for_d2Gdvperp2=false,
+                         calculate_GG=true, calculate_dGdvperp=true,
+                         boundary_data_option=boundary_data_option)
+                    # extract C[Fs,Fs'] result
+                    # and Rosenbluth potentials for testing
+                    @begin_anyv_vperp_vpa_region()
+                    @loop_vperp_vpa ivperp ivpa begin
+                        G_M_num[ivpa,ivperp] = fkpl_arrays.GG[ivpa,ivperp]
+                        H_M_num[ivpa,ivperp] = fkpl_arrays.HH[ivpa,ivperp]
+                        dHdvpa_M_num[ivpa,ivperp] = fkpl_arrays.dHdvpa[ivpa,ivperp]
+                        dHdvperp_M_num[ivpa,ivperp] = fkpl_arrays.dHdvperp[ivpa,ivperp]
+                        dGdvperp_M_num[ivpa,ivperp] = fkpl_arrays.dGdvperp[ivpa,ivperp]
+                        d2Gdvperp2_M_num[ivpa,ivperp] = fkpl_arrays.d2Gdvperp2[ivpa,ivperp]
+                        d2Gdvpa2_M_num[ivpa,ivperp] = fkpl_arrays.d2Gdvpa2[ivpa,ivperp]
+                        d2Gdvperpdvpa_M_num[ivpa,ivperp] = fkpl_arrays.d2Gdvperpdvpa[ivpa,ivperp]
+                    end
                 end
                 @begin_serial_region()
                 @serial_region begin
@@ -814,28 +822,26 @@ function runtests()
                     end
                 end
                 @begin_s_r_z_anyv_region()
-                fokker_planck_collision_operator_weak_form!(Fs_M,F_M,ms,msp,nussp,
-                                                 fkpl_arrays,
-                                                 vperp, vpa, vperp_spectral, vpa_spectral,
-                                                 test_assembly_serial=test_parallelism,
-                                                 use_Maxwellian_Rosenbluth_coefficients=use_Maxwellian_Rosenbluth_coefficients,
-                                                 use_Maxwellian_field_particle_distribution=use_Maxwellian_field_particle_distribution,
-                                                 algebraic_solve_for_d2Gdvperp2=algebraic_solve_for_d2Gdvperp2,
-                                                 calculate_GG = false, calculate_dGdvperp=false)
-                if test_numerical_conserving_terms && test_self_operator
-                    # enforce the boundary conditions on CC before it is used for timestepping
-                    enforce_vpavperp_BCs!(fkpl_arrays.CC,vpa,vperp,vpa_spectral,vperp_spectral)
-                    # make ad-hoc conserving corrections
-                    conserving_corrections!(fkpl_arrays.CC,Fs_M,vpa,vperp)
-                end
-                # extract C[Fs,Fs'] result
-                @begin_s_r_z_anyv_region()
-                @begin_anyv_vperp_vpa_region()
-                @loop_vperp_vpa ivperp ivpa begin
-                    C_M_num[ivpa,ivperp] = fkpl_arrays.CC[ivpa,ivperp]
+                @loop_s_r_z is ir iz begin
+                    fokker_planck_collision_operator_weak_form!(Fs_M,F_M,ms,msp,nussp,
+                                                     fkpl_arrays,
+                                                     vperp, vpa, vperp_spectral, vpa_spectral,
+                                                     test_assembly_serial=test_parallelism,
+                                                     use_Maxwellian_Rosenbluth_coefficients=use_Maxwellian_Rosenbluth_coefficients,
+                                                     use_Maxwellian_field_particle_distribution=use_Maxwellian_field_particle_distribution,
+                                                     algebraic_solve_for_d2Gdvperp2=algebraic_solve_for_d2Gdvperp2,
+                                                     calculate_GG = false, calculate_dGdvperp=false)
+                    if test_numerical_conserving_terms && test_self_operator
+                        # enforce the boundary conditions on CC before it is used for timestepping
+                        enforce_vpavperp_BCs!(fkpl_arrays.CC,vpa,vperp,vpa_spectral,vperp_spectral)
+                        # make ad-hoc conserving corrections
+                        conserving_corrections!(fkpl_arrays.CC,Fs_M,vpa,vperp)
+                    end
                 end
                 @begin_serial_region()
                 @serial_region begin
+                    # extract C[Fs,Fs'] result
+                    C_M_num .= fkpl_arrays.CC
                     C_M_max, C_M_L2 = print_test_data(C_M_exact,C_M_num,C_M_err,"C_M",vpa,vperp,dummy_array,print_to_screen=print_to_screen)
                     if test_self_operator && !test_numerical_conserving_terms && !use_Maxwellian_Rosenbluth_coefficients && !use_Maxwellian_field_particle_distribution
                         atol_max = 6.0e-4/π^1.5
@@ -982,23 +988,21 @@ function runtests()
                     end
                 end
                 @begin_s_r_z_anyv_region()
-                @views fokker_planck_collision_operator_weak_form_Maxwellian_Fsp!(Fs_M[:,:],
-                                     nuref,mref,Zref,msp,Zsp,denssp,uparsp,vthsp,
-                                     fkpl_arrays,vperp,vpa,vperp_spectral,vpa_spectral)
-                if test_numerical_conserving_terms
-                    # enforce the boundary conditions on CC before it is used for timestepping
-                    enforce_vpavperp_BCs!(fkpl_arrays.CC,vpa,vperp,vpa_spectral,vperp_spectral)
-                    # make ad-hoc conserving corrections
-                    density_conserving_correction!(fkpl_arrays.CC,Fs_M,vpa,vperp)
-                end
-                # extract C[Fs,Fs'] result
-                @begin_s_r_z_anyv_region()
-                @begin_anyv_vperp_vpa_region()
-                @loop_vperp_vpa ivperp ivpa begin
-                    C_M_num[ivpa,ivperp] = fkpl_arrays.CC[ivpa,ivperp]
+                @loop_s_r_z i ir iz begin
+                    @views fokker_planck_collision_operator_weak_form_Maxwellian_Fsp!(Fs_M[:,:],
+                                         nuref,mref,Zref,msp,Zsp,denssp,uparsp,vthsp,
+                                         fkpl_arrays,vperp,vpa,vperp_spectral,vpa_spectral)
+                    if test_numerical_conserving_terms
+                        # enforce the boundary conditions on CC before it is used for timestepping
+                        enforce_vpavperp_BCs!(fkpl_arrays.CC,vpa,vperp,vpa_spectral,vperp_spectral)
+                        # make ad-hoc conserving corrections
+                        density_conserving_correction!(fkpl_arrays.CC,Fs_M,vpa,vperp)
+                    end
                 end
                 @begin_serial_region()
                 @serial_region begin
+                    # extract C[Fs,Fs'] result
+                    C_M_num .= fkpl_arrays.CC
                     C_M_max, C_M_L2 = print_test_data(C_M_exact,C_M_num,C_M_err,"C_M",vpa,vperp,dummy_array,print_to_screen=print_to_screen)
                     atol_max = 7.0e-2/π^1.5
                     atol_L2 = 6.0e-4/π^1.5
@@ -1077,9 +1081,11 @@ function runtests()
             end
             # calculate the potentials numerically
             @begin_s_r_z_anyv_region()
-            calculate_rosenbluth_potentials_via_direct_integration!(G_M_num,H_M_num,dHdvpa_M_num,dHdvperp_M_num,
-             d2Gdvpa2_M_num,dGdvperp_M_num,d2Gdvperpdvpa_M_num,d2Gdvperp2_M_num,F_M,
-             vpa,vperp,vpa_spectral,vperp_spectral,fkpl_arrays)
+            @loop_s_r_z is ir iz begin
+                calculate_rosenbluth_potentials_via_direct_integration!(G_M_num,H_M_num,dHdvpa_M_num,dHdvperp_M_num,
+                                                                        d2Gdvpa2_M_num,dGdvperp_M_num,d2Gdvperpdvpa_M_num,d2Gdvperp2_M_num,F_M,
+                                                                        vpa,vperp,vpa_spectral,vperp_spectral,fkpl_arrays)
+            end
             @begin_serial_region()
             @serial_region begin
                 # test the integration
