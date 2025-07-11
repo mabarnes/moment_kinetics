@@ -202,7 +202,7 @@ function get_best_ranges(block_rank, block_size, dims, dim_sizes)
     # Find ranges for 'dims', which should be parallelized
     dim_sizes_list = (dim_sizes[d] for d ∈ dims)
     best_split = get_best_split_from_sizes(block_size, dim_sizes_list)
-    effective_block_size = prod(best_split) # May be ess than block_size
+    effective_block_size = prod(best_split) # May be less than block_size
     ranges = get_ranges_from_split(block_rank, effective_block_size, best_split,
                                    dim_sizes_list)
     result = Dict(d=>r for (d,r) ∈ zip(dims, ranges))

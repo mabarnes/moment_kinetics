@@ -39,14 +39,18 @@ export get_local_Cssp_coefficients!, init_fokker_planck_collisions
 # testing
 export symmetric_matrix_inverse
 export fokker_planck_collision_operator_weak_form!
+export fokker_planck_self_collision_operator_weak_form!
+# implicit advance
+export setup_fp_nl_solve, implicit_ion_fokker_planck_self_collisions!,
+       fokker_planck_self_collisions_backward_euler_step!
 
 using SpecialFunctions: ellipk, ellipe, erf
 using FastGaussQuadrature
 using Dates
-using LinearAlgebra: lu, ldiv!
+using LinearAlgebra: lu, ldiv!, mul!
 using MPI
 using OrderedCollections: OrderedDict
-using ..type_definitions: mk_float, mk_int
+using ..type_definitions: mk_float, mk_int, OptionsDict
 using ..array_allocation: allocate_float, allocate_shared_float
 using ..communication
 using ..velocity_moments: get_density, get_upar, get_p, get_ppar, get_pperp, get_qpar, get_rmom
@@ -54,25 +58,30 @@ using ..looping
 using ..timer_utils
 using ..input_structs: fkpl_collisions_input, set_defaults_and_check_section!
 using ..input_structs: multipole_expansion, direct_integration
+using ..looping: get_best_ranges
 using ..reference_parameters: get_reference_collision_frequency_ii
-using ..fokker_planck_calculus: init_Rosenbluth_potential_integration_weights!
-using ..fokker_planck_calculus: init_Rosenbluth_potential_boundary_integration_weights!
-using ..fokker_planck_calculus: allocate_boundary_integration_weights
-using ..fokker_planck_calculus: allocate_rosenbluth_potential_boundary_data
-using ..fokker_planck_calculus: fokkerplanck_arrays_direct_integration_struct, fokkerplanck_weakform_arrays_struct
-using ..fokker_planck_calculus: assemble_matrix_operators_dirichlet_bc
-using ..fokker_planck_calculus: assemble_matrix_operators_dirichlet_bc_sparse
-using ..fokker_planck_calculus: assemble_explicit_collision_operator_rhs_serial!
-using ..fokker_planck_calculus: assemble_explicit_collision_operator_rhs_parallel!
-using ..fokker_planck_calculus: assemble_explicit_collision_operator_rhs_parallel_analytical_inputs!
-using ..fokker_planck_calculus: calculate_YY_arrays, enforce_vpavperp_BCs!
-using ..fokker_planck_calculus: calculate_rosenbluth_potential_boundary_data!
-using ..fokker_planck_calculus: elliptic_solve!, algebraic_solve!
-using ..fokker_planck_calculus: calculate_rosenbluth_potentials_via_elliptic_solve!
-using ..fokker_planck_test: Cssp_fully_expanded_form, calculate_collisional_fluxes, H_Maxwellian, dGdvperp_Maxwellian
-using ..fokker_planck_test: d2Gdvpa2_Maxwellian, d2Gdvperpdvpa_Maxwellian, d2Gdvperp2_Maxwellian, dHdvpa_Maxwellian, dHdvperp_Maxwellian
-using ..fokker_planck_test: F_Maxwellian, dFdvpa_Maxwellian, dFdvperp_Maxwellian
+using ..fokker_planck_calculus: init_Rosenbluth_potential_integration_weights!,
+                                init_Rosenbluth_potential_boundary_integration_weights!,
+                                allocate_boundary_integration_weights,
+                                allocate_rosenbluth_potential_boundary_data,
+                                fokkerplanck_arrays_direct_integration_struct, fokkerplanck_weakform_arrays_struct,
+                                assemble_matrix_operators_dirichlet_bc,
+                                assemble_matrix_operators_dirichlet_bc_sparse,
+                                assemble_explicit_collision_operator_rhs_serial!,
+                                assemble_explicit_collision_operator_rhs_parallel!,
+                                assemble_explicit_collision_operator_rhs_parallel_analytical_inputs!,
+                                calculate_YY_arrays, enforce_vpavperp_BCs!,
+                                calculate_rosenbluth_potential_boundary_data!,
+                                elliptic_solve!, algebraic_solve!, allocate_preconditioner_matrix,
+                                calculate_rosenbluth_potentials_via_elliptic_solve!,
+                                calculate_rosenbluth_potentials_via_analytical_Maxwellian!,
+                                calculate_test_particle_preconditioner!,
+                                advance_linearised_test_particle_collisions!
+using ..fokker_planck_test: Cssp_fully_expanded_form, calculate_collisional_fluxes,
+                            d2Gdvpa2_Maxwellian, d2Gdvperpdvpa_Maxwellian, d2Gdvperp2_Maxwellian, dHdvpa_Maxwellian, dHdvperp_Maxwellian,
+                            F_Maxwellian, dFdvpa_Maxwellian, dFdvperp_Maxwellian
 using ..reference_parameters: setup_reference_parameters
+using ..nonlinear_solvers: setup_nonlinear_solve, newton_solve!
 
 """
 Function for reading Fokker Planck collision operator input parameters. 
@@ -97,6 +106,7 @@ function setup_fkpl_collisions_input(toml_input::AbstractDict, warn_unexpected::
         self_collisions = true,
         use_conserving_corrections = true,
         boundary_data_option = direct_integration,
+        use_test_particle_preconditioner = true,
         slowing_down_test = false,
         sd_density = 1.0,
         sd_temp = 0.01,
@@ -226,7 +236,32 @@ function init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_sp
     FF = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
     dFdvpa = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
     dFdvperp = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
-    
+    # preconditioner matrix
+    CC2D_sparse, CC2D_sparse_constructor, lu_obj_CC2D = allocate_preconditioner_matrix(vpa,vperp,vpa_spectral,vperp_spectral)
+    rhs_advection = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
+    # dummy arrays for JFNK
+    Fnew = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
+    Fresidual = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
+    F_delta_x = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
+    F_rhs_delta = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
+    Fv = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
+    Fw = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
+
+    # Set up indices for shared-memory parallelised 2D loops over elements, rather than the
+    # usual loops over grid points. Used for the FP preconditioner matrix calculation.
+    # Hacky use of `get_best_ranges()` - the function requires the Dict to contain the
+    # sizes of all dimensions even though we only want vperp/vpa here.
+    if anyv_subblock_rank[] < 0
+        # This process does not participate in anyv-parallelised loops
+        parallel_indices = Dict(:vperp=>1:0, :vpa=>1:0)
+    else
+        parallel_indices = get_best_ranges(anyv_subblock_rank[], anyv_subblock_size[],
+                                           (:vperp, :vpa),
+                                           Dict(:vperp=>vperp.nelement_local,
+                                                :vpa=>vpa.nelement_local, :s=>1, :sn=>1,
+                                                :r=>1, :z=>1, :vzeta=>1, :vr=>1, :vz=>1))
+    end
+
     fka = fokkerplanck_weakform_arrays_struct(bwgt,rpbd,MM2D_sparse,KKpar2D_sparse,KKperp2D_sparse,
                                            KKpar2D_with_BC_terms_sparse,KKperp2D_with_BC_terms_sparse,
                                            LP2D_sparse,LV2D_sparse,LB2D_sparse,PUperp2D_sparse,PPparPUperp2D_sparse,
@@ -234,7 +269,11 @@ function init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_sp
                                            lu_obj_MM,lu_obj_LP,lu_obj_LV,lu_obj_LB,
                                            YY_arrays, S_dummy, Q_dummy, rhsvpavperp, rhsvpavperp_copy1, rhsvpavperp_copy2, rhsvpavperp_copy3,
                                            CC, GG, HH, dHdvpa, dHdvperp, dGdvperp, d2Gdvperp2, d2Gdvpa2, d2Gdvperpdvpa,
-                                           FF, dFdvpa, dFdvperp)
+                                           FF, dFdvpa, dFdvperp, 
+                                           CC2D_sparse, CC2D_sparse_constructor, lu_obj_CC2D,
+                                           rhs_advection, Fnew, Fresidual, F_delta_x,
+                                           F_rhs_delta, Fv, Fw, parallel_indices[:vperp],
+                                           parallel_indices[:vpa])
     return fka
 end
 
@@ -278,7 +317,8 @@ where the Rosenbluth potentials are specified using analytical results.
     # for beam ions has unit density
     ns = 1.0 # initial density of evolved ions (hardcode to be the same as initial conditions)
     # get electron density from quasineutrality ne = sum_s Zs ns
-    densp = [fkin.sd_density, fkin.sd_q*fkin.sd_density+ns*Zs] 
+    densp = [fkin.sd_density, fkin.sd_q*fkin.sd_density+ns*Zs]
+ 
     uparsp = [0.0, 0.0]
     vthsp = [sqrt(2.0*fkin.sd_temp/msp[1]), sqrt(2.0*fkin.sd_temp/msp[2])]
     
@@ -293,8 +333,7 @@ where the Rosenbluth potentials are specified using analytical results.
         enforce_vpavperp_BCs!(fkpl_arrays.CC,vpa,vperp,vpa_spectral,vperp_spectral)
         # make sure that the cross-species terms conserve density
         if use_conserving_corrections
-            density_conserving_correction!(fkpl_arrays.CC, pdf_in[:,:,iz,ir,is], vpa, vperp,
-                                fkpl_arrays.S_dummy)
+            density_conserving_correction!(fkpl_arrays.CC, pdf_in[:,:,iz,ir,is], vpa, vperp)
         end
         # advance this part of s,r,z with the resulting sum_s' C[Fs,Fs']
         @begin_anyv_vperp_vpa_region()
@@ -315,7 +354,6 @@ Function for advancing with the explicit, weak-form, self-collision operator.
                          pdf_out, pdf_in, dSdt, composition, collisions, dt,
                          fkpl_arrays::fokkerplanck_weakform_arrays_struct, r, z, vperp,
                          vpa, vperp_spectral, vpa_spectral, scratch_dummy;
-                         test_assembly_serial=false, impose_zero_gradient_BC=false,
                          diagnose_entropy_production=false) = begin
     # N.B. only self-collisions are currently supported
     # This can be modified by adding a loop over s' below
@@ -338,23 +376,18 @@ Function for advancing with the explicit, weak-form, self-collision operator.
     ms, msp = 1.0, 1.0 # generalise!
     nuref = collisions.fkpl.nuii # generalise!
     Zi = collisions.fkpl.Zi # generalise!
-    nussp = nuref*(Zi^4) # include charge number factor for self collisions
+    nuss = nuref*(Zi^4) # include charge number factor for self collisions
     use_conserving_corrections = collisions.fkpl.use_conserving_corrections
     boundary_data_option = collisions.fkpl.boundary_data_option
     # N.B. parallelisation using special 'anyv' region
     @begin_s_r_z_anyv_region()
     @loop_s_r_z is ir iz begin
         # first argument is Fs, and second argument is Fs' in C[Fs,Fs'] 
-        @views fokker_planck_collision_operator_weak_form!(
-            pdf_in[:,:,iz,ir,is], pdf_in[:,:,iz,ir,is], ms, msp, nussp, fkpl_arrays,
+        @views fokker_planck_self_collision_operator_weak_form!(
+            pdf_in[:,:,iz,ir,is], ms, nuss, fkpl_arrays,
             vperp, vpa, vperp_spectral, vpa_spectral, 
-            boundary_data_option = boundary_data_option)
-        # enforce the boundary conditions on CC before it is used for timestepping
-        enforce_vpavperp_BCs!(fkpl_arrays.CC,vpa,vperp,vpa_spectral,vperp_spectral)
-        # make ad-hoc conserving corrections
-        if use_conserving_corrections
-            conserving_corrections!(fkpl_arrays.CC, pdf_in[:,:,iz,ir,is], vpa, vperp)
-        end
+            boundary_data_option = boundary_data_option,
+            use_conserving_corrections = use_conserving_corrections)
         # advance this part of s,r,z with the resulting C[Fs,Fs]
         @begin_anyv_vperp_vpa_region()
         CC = fkpl_arrays.CC
@@ -362,20 +395,33 @@ Function for advancing with the explicit, weak-form, self-collision operator.
             pdf_out[ivpa,ivperp,iz,ir,is] += dt*CC[ivpa,ivperp]
         end
         if diagnose_entropy_production
-            # assign dummy array
-            lnfC = fkpl_arrays.rhsvpavperp
-            @loop_vperp_vpa ivperp ivpa begin
-                lnfC[ivpa,ivperp] = log(abs(pdf_in[ivpa,ivperp,iz,ir,is]) + 1.0e-15)*CC[ivpa,ivperp]
-            end
-            @begin_anyv_region()
-            @anyv_serial_region begin
-                dSdt[iz,ir,is] = -get_density(lnfC,vpa,vperp)
-            end
+            calculate_entropy_production!(dSdt, pdf_in, fkpl_arrays, vpa, vperp,
+                                        iz, ir, is)
         end
     end
     return nothing
 end
 
+@timeit fokker_planck_self_collision_operator_weak_form!(
+                         pdf_in, ms, nuss,
+                         fkpl_arrays::fokkerplanck_weakform_arrays_struct, vperp, vpa,
+                         vperp_spectral, vpa_spectral; 
+                         boundary_data_option=direct_integration,
+                         use_conserving_corrections=false) = begin
+    # first argument is Fs, and second argument is Fs' in C[Fs,Fs'] 
+    @views fokker_planck_collision_operator_weak_form!(
+        pdf_in, pdf_in, ms, ms, nuss, fkpl_arrays,
+        vperp, vpa, vperp_spectral, vpa_spectral,
+        boundary_data_option = boundary_data_option)
+    CC = fkpl_arrays.CC
+    # enforce the boundary conditions on CC before it is used for timestepping
+    enforce_vpavperp_BCs!(CC,vpa,vperp,vpa_spectral,vperp_spectral)
+    # make ad-hoc conserving corrections appropriate only for the self operator
+    if use_conserving_corrections
+        conserving_corrections!(CC, pdf_in, vpa, vperp)
+    end
+    return nothing
+end
 
 """
 Function for evaluating \$C_{ss'} = C_{ss'}[F_s,F_{s'}]\$
@@ -428,27 +474,8 @@ with \$\\gamma_\\mathrm{ref} = 2 \\pi e^4 \\ln \\Lambda_{ii} / (4 \\pi
     dFdvperp = fkpl_arrays.dFdvperp
     
     if use_Maxwellian_Rosenbluth_coefficients
-        @begin_anyv_region()
-        dens = get_density(ffsp_in,vpa,vperp)
-        upar = get_upar(ffsp_in, dens, vpa, vperp, false)
-        pressure = get_p(ffsp_in, dens, upar, vpa, vperp, false, false)
-        vth = sqrt(2.0*pressure/dens)
-        ppar = get_ppar(dens, upar, pressure, vth, ffsp_in, vpa, vperp, false, false,
-                        false)
-        pperp = get_pperp(pressure, ppar)
-        @begin_anyv_vperp_vpa_region()
-        @loop_vperp_vpa ivperp ivpa begin
-            HH[ivpa,ivperp] = H_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
-            d2Gdvpa2[ivpa,ivperp] = d2Gdvpa2_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
-            d2Gdvperp2[ivpa,ivperp] = d2Gdvperp2_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
-            dGdvperp[ivpa,ivperp] = dGdvperp_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
-            d2Gdvperpdvpa[ivpa,ivperp] = d2Gdvperpdvpa_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
-            dHdvpa[ivpa,ivperp] = dHdvpa_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
-            dHdvperp[ivpa,ivperp] = dHdvperp_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
-        end
-        # Need to synchronize as these arrays may be read outside the locally-owned set of
-        # ivperp, ivpa indices in assemble_explicit_collision_operator_rhs_parallel!()
-        @_anyv_subblock_synchronize()
+        calculate_rosenbluth_potentials_via_analytical_Maxwellian!(GG,HH,dHdvpa,dHdvperp,
+                 d2Gdvpa2,dGdvperp,d2Gdvperpdvpa,d2Gdvperp2,ffsp_in,vpa,vperp,msp)
     else
         calculate_rosenbluth_potentials_via_elliptic_solve!(GG,HH,dHdvpa,dHdvperp,
              d2Gdvpa2,dGdvperp,d2Gdvperpdvpa,d2Gdvperp2,ffsp_in,
@@ -463,10 +490,7 @@ with \$\\gamma_\\mathrm{ref} = 2 \\pi e^4 \\ln \\Lambda_{ii} / (4 \\pi
         dens = get_density(ffsp_in,vpa,vperp)
         upar = get_upar(ffsp_in, dens, vpa, vperp, false)
         pressure = get_p(ffsp_in, dens, upar, vpa, vperp, false, false)
-        vth = sqrt(2.0*pressure/dens)
-        ppar = get_ppar(dens, upar, pressure, vth, ffsp_in, vpa, vperp, false, false,
-                        false)
-        pperp = get_pperp(pressure, ppar)
+        vth = sqrt(2.0*pressure/(dens*msp))
         @begin_anyv_vperp_vpa_region()
         @loop_vperp_vpa ivperp ivpa begin
             FF[ivpa,ivperp] = F_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
@@ -639,7 +663,8 @@ A_{01} & A_{11} & A_{12} \\\\
 A_{02} & A_{12} & A_{22} \\\\
 \\end{array}
 ```
-appropriate for moment numerical conserving terms. 
+appropriate for moment numerical conserving terms.
+ 
 """
 function symmetric_matrix_inverse(A00,A01,A02,A11,A12,A22,b0,b1,b2)
     # matrix determinant
@@ -688,7 +713,6 @@ function conserving_corrections!(CC,pdf_in,vpa,vperp)
         vth = sqrt(2.0*pressure/dens)
         ppar = get_ppar(dens, upar, pressure, vth, pdf_in, vpa, vperp, false, false,
                         false)
-        pperp = get_pperp(pressure, ppar)
         qpar = get_qpar(pdf_in, dens, upar, pressure, vth, vpa, vperp, false, false,
                         false)
         rmom = get_rmom(pdf_in, upar, vpa, vperp)
@@ -697,12 +721,10 @@ function conserving_corrections!(CC,pdf_in,vpa,vperp)
         dn = get_density(CC, vpa, vperp)
         du = get_upar(CC, 1.0, vpa, vperp, false)
         dp = get_p(CC, dens, upar, vpa, vperp, false, false)
-        dppar = get_ppar(dens, upar, pressure, vth, CC, vpa, vperp, false, false, false)
-        dpperp = get_pperp(dp, dppar)
-
+        
         # form the appropriate matrix coefficients
         b0, b1, b2 = dn, du - upar*dn, 3.0*dp
-        A00, A02, A11, A12, A22 = dens, 3.0*pressure, ppar, qpar, rmom
+        A00, A02, A11, A12, A22 = dens, 3.0*pressure, ppar, 2.0*qpar, rmom
 
         # obtain the coefficients for the corrections
         (x0, x1, x2) = symmetric_matrix_inverse(A00,A02,A11,A12,A22,b0,b1,b2)
@@ -732,7 +754,7 @@ C_{ss^\\prime} = C^\\ast_{ss}[F_s,F_{s^\\prime}] - x_0 F_s
 where \$C^\\ast_{ss}[F_s,F_{s^\\prime}]\$ is the weak-form collision operator computed using 
 the finite-element implementation.
 """
-function density_conserving_correction!(CC,pdf_in,vpa,vperp,dummy_vpavperp)
+function density_conserving_correction!(CC,pdf_in,vpa,vperp)
     @begin_anyv_region()
     x0 = 0.0
     @anyv_serial_region begin
@@ -762,6 +784,29 @@ function density_conserving_correction!(CC,pdf_in,vpa,vperp,dummy_vpavperp)
     @loop_vperp_vpa ivperp ivpa begin
         CC[ivpa,ivperp] -= x0*pdf_in[ivpa,ivperp]
     end
+end
+
+"""
+Function to calculate entropy production, in place.
+"""
+function calculate_entropy_production!(dSdt,pdf,fkpl_arrays,vpa,vperp,
+                                iz::mk_int,ir::mk_int,is::mk_int)
+    # Note that we pass spatial indices here to permit
+    # use of the shared-memory parallelism to calculate
+    # and return a float value in an array
+    @begin_anyv_vperp_vpa_region()
+
+    CC = fkpl_arrays.CC
+    # assign dummy array
+    lnfC = fkpl_arrays.rhsvpavperp
+    @loop_vperp_vpa ivperp ivpa begin
+        lnfC[ivpa,ivperp] = log(abs(pdf[ivpa,ivperp,iz,ir,is]) + 1.0e-15)*CC[ivpa,ivperp]
+    end
+    @begin_anyv_region()
+    @anyv_serial_region begin
+        dSdt[iz,ir,is] = -get_density(lnfC,vpa,vperp)
+    end
+    return nothing
 end
 
 
@@ -844,5 +889,205 @@ function init_fokker_planck_collisions_direct_integration(vperp,vpa; precompute_
     return fka
 end
 
+#################################################
+# Functions associated with implicit timestepping
+#################################################
+
+"""
+Function to setup nonlinear_solver struct for implicit
+Fokker-Planck collisions. An input namelist of form
+
+```
+    [fokker_planck_collisions_nonlinear_solver]
+    atol = 1.0e-10
+    rtol = 0.0
+    ...
+```
+is used, with the same defaults as the main
+`[nonlinear_solver]` namelist, apart from `atol`
+and `rtol`, which are set to their own defaults here.
+"""
+function setup_fp_nl_solve(implicit_ion_fp_collisions::Bool,
+        # the main input namelist in dict format
+        input_dict::OptionsDict,
+        #coords = (vperp=vperp,vpa=vpa)
+        coords)
+    # section name in TOML input for nonlinear solver
+    # options for FP collisions
+    section_name = "fokker_planck_collisions_nonlinear_solver"
+    # Default values of atol, rtol
+    # for which implicit FP collisions have
+    # been tested. Taking large timesteps
+    # with smaller atol challenges the solver
+    # with bc="zero".
+    default_atol = 1.0e-10
+    default_rtol = 0.0
+    return setup_nonlinear_solve(
+        implicit_ion_fp_collisions,
+        input_dict,
+        coords; serial_solve=false, anyv_region=true,
+        section_name = section_name,
+        default_atol=default_atol, default_rtol=default_rtol)
+end
+
+function implicit_ion_fokker_planck_self_collisions!(pdf_out, pdf_in, dSdt, 
+                    composition, collisions, fkpl_arrays, 
+                    vpa, vperp, z, r, delta_t, spectral_objects,
+                    nl_solver_params; diagnose_entropy_production=false,
+                    test_linearised_advance=false,
+                    use_Maxwellian_Rosenbluth_coefficients_in_preconditioner=false,
+                    use_end_of_step_corrections=true)
+    # bounds checking
+    n_ion_species = composition.n_ion_species
+    @boundscheck vpa.n == size(pdf_out,1) || throw(BoundsError(pdf_out))
+    @boundscheck vperp.n == size(pdf_out,2) || throw(BoundsError(pdf_out))
+    @boundscheck z.n == size(pdf_out,3) || throw(BoundsError(pdf_out))
+    @boundscheck r.n == size(pdf_out,4) || throw(BoundsError(pdf_out))
+    @boundscheck n_ion_species == size(pdf_out,5) || throw(BoundsError(pdf_out))
+    @boundscheck vpa.n == size(pdf_in,1) || throw(BoundsError(pdf_in))
+    @boundscheck vperp.n == size(pdf_in,2) || throw(BoundsError(pdf_in))
+    @boundscheck z.n == size(pdf_in,3) || throw(BoundsError(pdf_in))
+    @boundscheck r.n == size(pdf_in,4) || throw(BoundsError(pdf_in))
+    @boundscheck n_ion_species == size(pdf_in,5) || throw(BoundsError(pdf_in))
+    @boundscheck z.n == size(dSdt,1) || throw(BoundsError(dSdt))
+    @boundscheck r.n == size(dSdt,2) || throw(BoundsError(dSdt))
+    @boundscheck n_ion_species == size(dSdt,3) || throw(BoundsError(dSdt))
+
+    # diagnostic parameter for user
+    success = true
+
+    # masses and collision frequencies
+    ms, msp = 1.0, 1.0 # generalise!
+    nuref = collisions.fkpl.nuii # generalise!
+    Zi = collisions.fkpl.Zi # generalise!
+    nuss = nuref*(Zi^4) # include charge number factor for self collisions
+    use_conserving_corrections = collisions.fkpl.use_conserving_corrections
+    boundary_data_option = collisions.fkpl.boundary_data_option
+    test_particle_preconditioner = collisions.fkpl.use_test_particle_preconditioner
+    # coords for vperp vpa newton_solve!
+    coords = (vperp=vperp,vpa=vpa)
+    # N.B. parallelisation using special 'anyv' region
+    @begin_s_r_z_anyv_region()
+    @loop_s_r_z is ir iz begin
+        @views Fold = pdf_in[:,:,iz,ir,is]
+        local_success = fokker_planck_self_collisions_backward_euler_step!(Fold, delta_t, ms, nuss, fkpl_arrays,
+                            coords, spectral_objects,
+                            nl_solver_params;
+                            test_numerical_conserving_terms=use_conserving_corrections,
+                            test_linearised_advance=test_linearised_advance,
+                            test_particle_preconditioner=test_particle_preconditioner,
+                            use_Maxwellian_Rosenbluth_coefficients_in_preconditioner=use_Maxwellian_Rosenbluth_coefficients_in_preconditioner,
+                            boundary_data_option=boundary_data_option)
+        # global success true only if local_success true
+        success = success && local_success
+        Fnew = fkpl_arrays.Fnew
+        if use_conserving_corrections && use_end_of_step_corrections
+            # ad-hoc end-of-step corrections
+            @begin_anyv_vperp_vpa_region()
+            deltaF = fkpl_arrays.rhsvpavperp
+            @loop_vperp_vpa ivperp ivpa begin
+                deltaF[ivpa,ivperp] = Fnew[ivpa,ivperp] - Fold[ivpa,ivperp]
+            end
+            # correct deltaF = F^n+1 - F^n so it has no change in moments n, u, p
+            # this introduces errors of the size of the distance between F^n+1 and the 
+            # "correct" root that should have been found by the iterative solve, i.e.,
+            # errors of size ~ atol.
+            conserving_corrections!(deltaF, Fold, vpa, vperp)
+            # update Fnew
+            @loop_vperp_vpa ivperp ivpa begin
+                Fnew[ivpa,ivperp] = deltaF[ivpa,ivperp] + Fold[ivpa,ivperp]
+            end
+        end
+        
+        # store Fnew = F^n+1 in the appropriate distribution function array
+        @begin_anyv_vperp_vpa_region()
+        @loop_vperp_vpa ivperp ivpa begin
+            pdf_out[ivpa,ivperp,iz,ir,is] = Fnew[ivpa,ivperp]
+        end
+
+        if diagnose_entropy_production
+            calculate_entropy_production!(dSdt, pdf_out, fkpl_arrays, vpa, vperp,
+                                        iz, ir, is)
+        end
+    end
+    return success
+end
+
+function fokker_planck_self_collisions_backward_euler_step!(Fold, delta_t, ms, nuss, fkpl_arrays,
+                        coords, spectral,
+                        nl_solver_params;
+                        test_numerical_conserving_terms=false,
+                        test_linearised_advance=false,
+                        test_particle_preconditioner=true,
+                        use_Maxwellian_Rosenbluth_coefficients_in_preconditioner=false,
+                        boundary_data_option=multipole_expansion)
+
+    vperp, vperp_spectral = coords.vperp, spectral.vperp_spectral
+    vpa, vpa_spectral = coords.vpa, spectral.vpa_spectral
+
+    # residual function to be used for Newton-Krylov
+    # residual(vpa, vperp) = F^(n+1) - F^n - dt * C[F^n+1,F^n+1]
+    function residual_func!(Fresidual, Fnew; krylov=false)
+        fokker_planck_self_collision_operator_weak_form!(
+                        Fnew, ms, nuss,
+                        fkpl_arrays, vperp, vpa,
+                        vperp_spectral, vpa_spectral; 
+                        boundary_data_option=boundary_data_option,
+                        use_conserving_corrections=test_numerical_conserving_terms)
+
+        @begin_anyv_vperp_vpa_region()
+        @loop_vperp_vpa ivperp ivpa begin
+            Fresidual[ivpa,ivperp] = Fnew[ivpa,ivperp] - Fold[ivpa,ivperp] - delta_t * (fkpl_arrays.CC[ivpa,ivperp])
+        end
+        return nothing
+    end
+
+    if test_particle_preconditioner
+        # test particle preconditioner CC2D_sparse is the matrix
+        # K_ijkl = int phi_i(vpa)phi_j(vperp) ( phi_k(vpa)phi_l(vperp) - dt C[ phi_k(vpa)phi_l(vperp) , F^n(vpa,vperp) ])  vperp d vperp d vpa,
+        # such that K * F^n+1 = M * F^n advances the linearised collision operator due
+        # to test particle collisions only (differential piece of C).
+        # CC2D_sparse is the approximate Jacobian for the residual Fresidual.
+        calculate_test_particle_preconditioner!(Fold,delta_t,ms,ms,nuss,
+            vpa,vperp,vpa_spectral,vperp_spectral,fkpl_arrays, 
+            use_Maxwellian_Rosenbluth_coefficients=use_Maxwellian_Rosenbluth_coefficients_in_preconditioner,
+            boundary_data_option=boundary_data_option)
+    
+        function test_particle_precon!(x)
+            # let K * dF = C[dF,F^n]
+            # function to solve K * F^n+1 = M * F^n
+            # and return F^n+1 in place in x
+            pdf = x
+            advance_linearised_test_particle_collisions!(pdf,fkpl_arrays,
+                                vpa,vperp,vpa_spectral,vperp_spectral)
+            return nothing
+        end 
+        right_preconditioner = test_particle_precon!
+    else
+        right_preconditioner = nothing
+    end
+    # initial condition for Fnew for JFNK or linearised advance below
+    Fnew = fkpl_arrays.Fnew
+    @begin_anyv_vperp_vpa_region()
+    @loop_vperp_vpa ivperp ivpa begin
+        Fnew[ivpa,ivperp] = Fold[ivpa,ivperp]
+    end
+    if test_linearised_advance
+        test_particle_precon!(Fnew)
+    else
+        Fresidual = fkpl_arrays.Fresidual
+        F_delta_x = fkpl_arrays.F_delta_x
+        F_rhs_delta = fkpl_arrays.F_rhs_delta
+        Fv = fkpl_arrays.Fv
+        Fw = fkpl_arrays.Fw
+        success = newton_solve!(Fnew, residual_func!, Fresidual, F_delta_x, F_rhs_delta, Fv, Fw, nl_solver_params;
+                    coords, right_preconditioner=right_preconditioner)
+        # apply BCs on result, if non-natural BCs are imposed
+        # should only introduce error of order ~ atol
+        enforce_vpavperp_BCs!(Fnew,vpa,vperp,vpa_spectral,vperp_spectral)
+    end
+    @_anyv_subblock_synchronize()
+    return success
+end
 
 end
