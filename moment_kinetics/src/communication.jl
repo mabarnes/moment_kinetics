@@ -821,11 +821,11 @@ end
     """
     function debug_check_shared_memory(; comm=comm_block[], kwargs...)
         if comm == comm_anyv_subblock[]
-            for (arraynum, array) ∈ enumerate(global_anyv_debugmpisharedarray_store)
+            for array ∈ global_anyv_debugmpisharedarray_store
                 debug_check_shared_array(array; comm=comm, kwargs...)
             end
         else
-            for (arraynum, array) ∈ enumerate(global_debugmpisharedarray_store)
+            for array ∈ global_debugmpisharedarray_store
                 debug_check_shared_array(array; comm=comm, kwargs...)
             end
         end
@@ -903,7 +903,7 @@ debugging routines need to be updated.
         # * If an element is written to, only the rank that writes to it should read it.
         #
         @debug_detect_redundant_block_synchronize previous_was_unnecessary = true
-        for (arraynum, array) ∈ enumerate(global_debugmpisharedarray_store)
+        for array ∈ global_debugmpisharedarray_store
 
             debug_check_shared_array(array)
 
@@ -973,6 +973,11 @@ debugging routines need to be updated.
             end
         end
 
+        # Also check 'anyv' arrays, as these are synchronized by this call.
+        # `missing` passed as the call_site argument here indicates that the check of
+        # call_site has already been done.
+        _anyv_subblock_synchronize(missing)
+
         MPI.Barrier(comm_block[])
     end
 end
@@ -1004,7 +1009,7 @@ end
 """
 Internal function called by `anyv` synchronization macros.
 """
-function _anyv_subblock_synchronize(call_site::Union{Nothing,UInt64})
+function _anyv_subblock_synchronize(call_site::Union{Nothing,Missing,UInt64})
     if comm_anyv_subblock[] == MPI.COMM_NULL
         # No synchronization to do for a null communicator
         return nothing
@@ -1040,9 +1045,13 @@ function _anyv_subblock_synchronize(call_site::Union{Nothing,UInt64})
             error("Got call_site=nothing. This should not happen when debugging with "
                   * "@debug_block_synchronize_quick.")
         end
-        all_hashes = MPI.Allgather(call_site, comm_block[])
-        if !all(h -> h == all_hashes[1], all_hashes)
-            error("_anyv_subblock_synchronize() called inconsistently")
+        # If call_site===missing, then this function was called from inside
+        # _block_synchronize(), and the call site was already checked there.
+        if call_site !== missing
+            all_hashes = MPI.Allgather(call_site, comm_block[])
+            if !all(h -> h == all_hashes[1], all_hashes)
+                error("_anyv_subblock_synchronize() called inconsistently")
+            end
         end
     end
 
@@ -1054,7 +1063,7 @@ function _anyv_subblock_synchronize(call_site::Union{Nothing,UInt64})
         # * If an element is written to, only the rank that writes to it should read it.
         #
         @debug_detect_redundant_block_synchronize previous_was_unnecessary = true
-        for (arraynum, array) ∈ enumerate(global_anyv_debugmpisharedarray_store)
+        for array ∈ global_anyv_debugmpisharedarray_store
 
             debug_check_shared_array(array; comm=comm_anyv_subblock[])
 
