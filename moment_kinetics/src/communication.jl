@@ -1048,7 +1048,7 @@ function _anyv_subblock_synchronize(call_site::Union{Nothing,Missing,UInt64})
         # If call_site===missing, then this function was called from inside
         # _block_synchronize(), and the call site was already checked there.
         if call_site !== missing
-            all_hashes = MPI.Allgather(call_site, comm_block[])
+            all_hashes = MPI.Allgather(call_site, comm_anyv_subblock[])
             if !all(h -> h == all_hashes[1], all_hashes)
                 error("_anyv_subblock_synchronize() called inconsistently")
             end
