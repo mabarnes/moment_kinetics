@@ -61,21 +61,21 @@ function select_slice(variable::AbstractArray{T,3}, dims::Symbol...; input=nothi
 
     if it !== nothing
         it0 = it
-    elseif input === nothing || :it0 ∉ input
+    elseif input === nothing || :it0 ∉ keys(input)
         it0 = size(variable, 3)
     else
         it0 = input.it0
     end
     if ir !== nothing
         ir0 = ir
-    elseif input === nothing || :ir0 ∉ input
+    elseif input === nothing || :ir0 ∉ keys(input)
         ir0 = max(size(variable, 2) ÷ 3, 1)
     else
         ir0 = input.ir0
     end
     if iz !== nothing
         iz0 = iz
-    elseif input === nothing || :iz0 ∉ input
+    elseif input === nothing || :iz0 ∉ keys(input)
         iz0 = max(size(variable, 1) ÷ 3, 1)
     else
         iz0 = input.iz0
@@ -101,21 +101,21 @@ function select_slice(variable::AbstractArray{T,4}, dims::Symbol...; input=nothi
 
     if it !== nothing
         it0 = it
-    elseif input === nothing || :it0 ∉ input
+    elseif input === nothing || :it0 ∉ keys(input)
         it0 = size(variable, 4)
     else
         it0 = input.it0
     end
     if ir !== nothing
         ir0 = ir
-    elseif input === nothing || :ir0 ∉ input
+    elseif input === nothing || :ir0 ∉ keys(input)
         ir0 = max(size(variable, 2) ÷ 3, 1)
     else
         ir0 = input.ir0
     end
     if iz !== nothing
         iz0 = iz
-    elseif input === nothing || :iz0 ∉ input
+    elseif input === nothing || :iz0 ∉ keys(input)
         iz0 = max(size(variable, 1) ÷ 3, 1)
     else
         iz0 = input.iz0
@@ -143,35 +143,35 @@ function select_slice(variable::AbstractArray{T,5}, dims::Symbol...; input=nothi
 
     if it !== nothing
         it0 = it
-    elseif input === nothing || :it0 ∉ input
+    elseif input === nothing || :it0 ∉ keys(input)
         it0 = size(variable, 5)
     else
         it0 = input.it0
     end
     if ir !== nothing
         ir0 = ir
-    elseif input === nothing || :ir0 ∉ input
+    elseif input === nothing || :ir0 ∉ keys(input)
         ir0 = max(size(variable, 4) ÷ 3, 1)
     else
         ir0 = input.ir0
     end
     if iz !== nothing
         iz0 = iz
-    elseif input === nothing || :iz0 ∉ input
+    elseif input === nothing || :iz0 ∉ keys(input)
         iz0 = max(size(variable, 3) ÷ 3, 1)
     else
         iz0 = input.iz0
     end
     if ivperp !== nothing
         ivperp0 = ivperp
-    elseif input === nothing || :ivperp0 ∉ input
+    elseif input === nothing || :ivperp0 ∉ keys(input)
         ivperp0 = max(size(variable, 2) ÷ 3, 1)
     else
         ivperp0 = input.ivperp0
     end
     if ivpa !== nothing
         ivpa0 = ivpa
-    elseif input === nothing || :ivpa0 ∉ input
+    elseif input === nothing || :ivpa0 ∉ keys(input)
         ivpa0 = max(size(variable, 1) ÷ 3, 1)
     else
         ivpa0 = input.ivpa0
@@ -204,35 +204,35 @@ function select_slice(variable::AbstractArray{T,6}, dims::Symbol...; input=nothi
 
     if it !== nothing
         it0 = it
-    elseif input === nothing || :it0 ∉ input
+    elseif input === nothing || :it0 ∉ keys(input)
         it0 = size(variable, 6)
     else
         it0 = input.it0
     end
     if ir !== nothing
         ir0 = ir
-    elseif input === nothing || :ir0 ∉ input
+    elseif input === nothing || :ir0 ∉ keys(input)
         ir0 = max(size(variable, 4) ÷ 3, 1)
     else
         ir0 = input.ir0
     end
     if iz !== nothing
         iz0 = iz
-    elseif input === nothing || :iz0 ∉ input
+    elseif input === nothing || :iz0 ∉ keys(input)
         iz0 = max(size(variable, 3) ÷ 3, 1)
     else
         iz0 = input.iz0
     end
     if ivperp !== nothing
         ivperp0 = ivperp
-    elseif input === nothing || :ivperp0 ∉ input
+    elseif input === nothing || :ivperp0 ∉ keys(input)
         ivperp0 = max(size(variable, 2) ÷ 3, 1)
     else
         ivperp0 = input.ivperp0
     end
     if ivpa !== nothing
         ivpa0 = ivpa
-    elseif input === nothing || :ivpa0 ∉ input
+    elseif input === nothing || :ivpa0 ∉ keys(input)
         ivpa0 = max(size(variable, 1) ÷ 3, 1)
     else
         ivpa0 = input.ivpa0
@@ -266,42 +266,42 @@ function select_slice(variable::AbstractArray{T,7}, dims::Symbol...; input=nothi
 
     if it !== nothing
         it0 = it
-    elseif input === nothing || :it0 ∉ input
+    elseif input === nothing || :it0 ∉ keys(input)
         it0 = size(variable, 7)
     else
         it0 = input.it0
     end
     if ir !== nothing
         ir0 = ir
-    elseif input === nothing || :ir0 ∉ input
+    elseif input === nothing || :ir0 ∉ keys(input)
         ir0 = max(size(variable, 5) ÷ 3, 1)
     else
         ir0 = input.ir0
     end
     if iz !== nothing
         iz0 = iz
-    elseif input === nothing || :iz0 ∉ input
+    elseif input === nothing || :iz0 ∉ keys(input)
         iz0 = max(size(variable, 4) ÷ 3, 1)
     else
         iz0 = input.iz0
     end
     if ivzeta !== nothing
         ivzeta0 = ivzeta
-    elseif input === nothing || :ivzeta0 ∉ input
+    elseif input === nothing || :ivzeta0 ∉ keys(input)
         ivzeta0 = max(size(variable, 3) ÷ 3, 1)
     else
         ivzeta0 = input.ivzeta0
     end
     if ivr !== nothing
         ivr0 = ivr
-    elseif input === nothing || :ivr0 ∉ input
+    elseif input === nothing || :ivr0 ∉ keys(input)
         ivr0 = max(size(variable, 2) ÷ 3, 1)
     else
         ivr0 = input.ivr0
     end
     if ivz !== nothing
         ivz0 = ivz
-    elseif input === nothing || :ivz0 ∉ input
+    elseif input === nothing || :ivz0 ∉ keys(input)
         ivz0 = max(size(variable, 1) ÷ 3, 1)
     else
         ivz0 = input.ivz0
