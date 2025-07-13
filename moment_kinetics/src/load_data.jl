@@ -3581,7 +3581,12 @@ function _get_fake_moments_fields_scratch(all_moments, it; ion_extra::Tuple=(),
     function make_struct(; kwargs...)
         function get_var(variable_name_or_array)
             if isa(variable_name_or_array, Symbol)
-                var = all_moments[variable_name_or_array]
+                if variable_name_or_array ∉ keys(all_moments)
+                    nz, nr, _, nt = size(all_moments[:density])
+                    var = zeros(nr, nz, 0, nt)
+                else
+                    var = all_moments[variable_name_or_array]
+                end
             else
                 var = variable_name_or_array
             end
@@ -3589,8 +3594,6 @@ function _get_fake_moments_fields_scratch(all_moments, it; ion_extra::Tuple=(),
         end
         return (; (field_name=>get_var(variable_name_or_array)
                    for (field_name, variable_name_or_array) ∈ kwargs
-                   if !isa(variable_name_or_array, Symbol)
-                      || variable_name_or_array ∈ keys(all_moments)
                   )...)
     end
 
