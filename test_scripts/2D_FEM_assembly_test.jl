@@ -251,7 +251,7 @@ end
         end
         rpbd_exact = allocate_rosenbluth_potential_boundary_data(vpa,vperp)
 
-        @begin_s_r_z_anyv_region()
+        @begin_r_z_anysv_region()
 
         # use known test function to provide exact data
         calculate_rosenbluth_potential_boundary_data_exact!(rpbd_exact,
@@ -284,8 +284,8 @@ end
              algebraic_solve_for_d2Gdvperp2=false,calculate_GG=true,calculate_dGdvperp=true,boundary_data_option=boundary_data_option)
         # extract C[Fs,Fs'] result
         # and Rosenbluth potentials for testing
-        @begin_s_r_z_anyv_region()
-        @begin_anyv_vperp_vpa_region()
+        @begin_r_z_anysv_region()
+        @begin_anysv_vperp_vpa_region()
         @loop_vperp_vpa ivperp ivpa begin
             C_M_num[ivpa,ivperp] = fkpl_arrays.CC[ivpa,ivperp]
             G_M_num[ivpa,ivperp] = fkpl_arrays.GG[ivpa,ivperp]

@@ -2,7 +2,7 @@ using moment_kinetics: setup_moment_kinetics, cleanup_moment_kinetics!
 using moment_kinetics.time_advance: time_advance!
 using moment_kinetics.communication
 using moment_kinetics.looping: all_dimensions, dimension_combinations,
-                               anyv_dimension_combinations
+                               anysv_dimension_combinations
 using moment_kinetics.type_definitions: OptionsDict
 using moment_kinetics.Glob
 using moment_kinetics.Primes
@@ -52,7 +52,7 @@ function runtests(; restart=false)
     # Only need to test dimension combinations that are actually used for parallel loops
     # in some part of the code
     dimension_combinations_to_test = [c for c in tuple(dimension_combinations...,
-                                                       anyv_dimension_combinations...)
+                                                       anysv_dimension_combinations...)
                                       if dimension_combination_is_used(c)]
 
     @testset "$test_type" begin
@@ -69,7 +69,7 @@ function runtests(; restart=false)
                 continue
             end
 
-            if :anyv ∈ debug_loop_type
+            if :anysv ∈ debug_loop_type
                 dims_to_test = debug_loop_type[2:end]
             else
                 dims_to_test = debug_loop_type

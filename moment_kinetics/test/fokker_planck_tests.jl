@@ -108,36 +108,36 @@ function backward_Euler_linearised_collisions_test(;
     dummy_array = allocate_float(vpa.n,vperp.n)
     FMaxwell = allocate_shared_float(vpa.n,vperp.n)
     FMaxwell_err = allocate_shared_float(vpa.n,vperp.n)
-    # make sure to use anyv communicator for any array that is modified in fokker_planck.jl functions
-    pdf = allocate_shared_float(vpa.n,vperp.n; comm=comm_anyv_subblock[])
+    # make sure to use anysv communicator for any array that is modified in fokker_planck.jl functions
+    pdf = allocate_shared_float(vpa.n,vperp.n; comm=comm_anysv_subblock[])
     @begin_serial_region()
     @serial_region begin
         @loop_vperp_vpa ivperp ivpa begin
             FMaxwell[ivpa,ivperp] = F_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
         end
     end
-    @begin_s_r_z_anyv_region()
-    @begin_anyv_region()
-    @anyv_serial_region begin
-        @loop_vperp_vpa ivperp ivpa begin
-            pdf[ivpa,ivperp] = F_Beam(vpa0,vperp0,vth0,vpa,vperp,ivpa,ivperp)
+    @begin_r_z_anysv_region()
+    @loop_r_z ir iz begin
+        @begin_anysv_region()
+        @anysv_serial_region begin
+            @loop_vperp_vpa ivperp ivpa begin
+                pdf[ivpa,ivperp] = F_Beam(vpa0,vperp0,vth0,vpa,vperp,ivpa,ivperp)
+            end
+            # normalise to unit density
+            @views densfac = get_density(pdf,vpa,vperp)
+            @loop_vperp_vpa ivperp ivpa begin
+                pdf[ivpa,ivperp] /= densfac
+            end
         end
-        # normalise to unit density
-        @views densfac = get_density(pdf,vpa,vperp)
-        @loop_vperp_vpa ivperp ivpa begin
-            pdf[ivpa,ivperp] /= densfac
-        end
-    end
-    @_anyv_subblock_synchronize()
-    # calculate the linearised advance matrix 
-    @loop_s_r_z is ir iz begin
+        @_anysv_subblock_synchronize()
+        # calculate the linearised advance matrix
         calculate_test_particle_preconditioner!(FMaxwell,delta_t,ms,ms,nuss,
             vpa,vperp,vpa_spectral,vperp_spectral,fkpl_arrays, 
             use_Maxwellian_Rosenbluth_coefficients=use_Maxwellian_Rosenbluth_coefficients_in_preconditioner,
             boundary_data_option=boundary_data_option)
     end
     for it in 1:ntime
-        @loop_s_r_z is ir iz begin
+        @loop_r_z ir iz begin
             advance_linearised_test_particle_collisions!(pdf,fkpl_arrays,
                             vpa,vperp,vpa_spectral,vperp_spectral)
         end
@@ -316,8 +316,8 @@ function backward_Euler_fokker_planck_self_collisions_test(;
                                         OptionsDict(), coords)
 
     for it in 1:ntime
-        @begin_s_r_z_anyv_region()
-        @loop_s_r_z is ir iz begin
+        @begin_r_z_anysv_region()
+        @loop_r_z ir iz begin
             fokker_planck_self_collisions_backward_euler_step!(Fold, delta_t, ms, nuss, fkpl_arrays,
                 coords, spectral,
                 nl_solver_params,
@@ -401,18 +401,16 @@ function numerical_error_corrections_test(;
         @test isapprox(rmom, 27.57985752143237, atol=3*atol)
     end
 
-    @begin_s_r_z_anyv_region()
+    @begin_r_z_anysv_region()
     CC = fkpl_arrays.CC
-    @loop_s_r_z is ir iz begin
+    @loop_r_z ir iz begin
         # fill CC with a pdf that definitely has a density, mean flow, and pressure (unlike C[F,F])
         @loop_vperp_vpa ivperp ivpa begin
             CC[ivpa,ivperp] = F_Maxwellian(denss,upars,vths,vpa,vperp,ivpa,ivperp)
         end
-        @begin_anyv_vperp_vpa_region()
+        @begin_anysv_vperp_vpa_region()
         # make ad-hoc conserving corrections to remove the denisty, mean flow, and pressure
-    @loop_s_r_z is ir iz begin
         conserving_corrections!(CC,pdf_in,vpa,vperp)
-    end
     end
     
     @begin_serial_region()
@@ -493,8 +491,8 @@ function runtests()
                 end
             end
 
-            @begin_s_r_z_anyv_region()
-            @loop_s_r_z is ir iz begin
+            @begin_r_z_anysv_region()
+            @loop_r_z ir iz begin
                 interpolate_2D_vspace!(Fe_interp_ion_units,Fe,vpa,vperp,scalefac)
                 #println("Fe",Fe)
                 #println("Fe interp",Fe_interp_ion_units)
@@ -651,8 +649,8 @@ function runtests()
                 end
                 rpbd_exact = allocate_rosenbluth_potential_boundary_data(vpa,vperp)
                 # use known test function to provide exact data
-                @begin_s_r_z_anyv_region()
-                @loop_s_r_z is ir iz begin
+                @begin_r_z_anysv_region()
+                @loop_r_z ir iz begin
                     calculate_rosenbluth_potential_boundary_data_exact!(rpbd_exact,
                           H_M_exact,dHdvpa_M_exact,dHdvperp_M_exact,G_M_exact,
                           dGdvperp_M_exact,d2Gdvperp2_M_exact,
@@ -667,7 +665,7 @@ function runtests()
                          boundary_data_option=boundary_data_option)
                     # extract C[Fs,Fs'] result
                     # and Rosenbluth potentials for testing
-                    @begin_anyv_vperp_vpa_region()
+                    @begin_anysv_vperp_vpa_region()
                     @loop_vperp_vpa ivperp ivpa begin
                         G_M_num[ivpa,ivperp] = fkpl_arrays.GG[ivpa,ivperp]
                         H_M_num[ivpa,ivperp] = fkpl_arrays.HH[ivpa,ivperp]
@@ -823,8 +821,8 @@ function runtests()
                                                                         nussp,vpa,vperp,ivpa,ivperp)
                     end
                 end
-                @begin_s_r_z_anyv_region()
-                @loop_s_r_z is ir iz begin
+                @begin_r_z_anysv_region()
+                @loop_r_z ir iz begin
                     fokker_planck_collision_operator_weak_form!(Fs_M,F_M,ms,msp,nussp,
                                                      fkpl_arrays,
                                                      vperp, vpa, vperp_spectral, vpa_spectral,
@@ -989,8 +987,8 @@ function runtests()
                         end
                     end
                 end
-                @begin_s_r_z_anyv_region()
-                @loop_s_r_z i ir iz begin
+                @begin_r_z_anysv_region()
+                @loop_r_z ir iz begin
                     @views fokker_planck_collision_operator_weak_form_Maxwellian_Fsp!(Fs_M[:,:],
                                          nuref,mref,Zref,msp,Zsp,denssp,uparsp,vthsp,
                                          fkpl_arrays,vperp,vpa,vperp_spectral,vpa_spectral)
@@ -1082,8 +1080,8 @@ function runtests()
                 end
             end
             # calculate the potentials numerically
-            @begin_s_r_z_anyv_region()
-            @loop_s_r_z is ir iz begin
+            @begin_r_z_anysv_region()
+            @loop_r_z ir iz begin
                 calculate_rosenbluth_potentials_via_direct_integration!(G_M_num,H_M_num,dHdvpa_M_num,dHdvperp_M_num,
                                                                         d2Gdvpa2_M_num,dGdvperp_M_num,d2Gdvperpdvpa_M_num,d2Gdvperp2_M_num,F_M,
                                                                         vpa,vperp,vpa_spectral,vperp_spectral,fkpl_arrays)
