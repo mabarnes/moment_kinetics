@@ -10,7 +10,7 @@ export d2Gdvpa2_Maxwellian, dGdvperp_Maxwellian, d2Gdvperpdvpa_Maxwellian, d2Gdv
 export dHdvpa_Maxwellian, dHdvperp_Maxwellian, Cssp_Maxwellian_inputs
 export F_Maxwellian, dFdvpa_Maxwellian, dFdvperp_Maxwellian
 export d2Fdvpa2_Maxwellian, d2Fdvperpdvpa_Maxwellian, d2Fdvperp2_Maxwellian
-export H_Maxwellian, G_Maxwellian
+export H_Maxwellian, G_Maxwellian, F_Beam
 
 export Cssp_fully_expanded_form, calculate_collisional_fluxes
 
@@ -211,6 +211,16 @@ function F_Maxwellian(dens::mk_float,upar::mk_float,vth::mk_float,
                         vpa,vperp,ivpa,ivperp)
     eta = eta_func(upar,vth,vpa,vperp,ivpa,ivperp)
     fac = (dens/(vth^3)/π^1.5)*exp(-eta^2)
+    return fac
+end
+
+"""
+Function computing \$ F_{\\rm Beam} \$.
+"""
+function F_Beam(vpa0::mk_float,vperp0::mk_float,vth0::mk_float,
+                        vpa,vperp,ivpa,ivperp)
+    w2 = (vpa.grid[ivpa]-vpa0)^2 + (vperp.grid[ivperp]-vperp0)^2
+    fac = exp(-(w2)/(vth0^2))
     return fac
 end
 

@@ -146,6 +146,10 @@ struct coordinate{T <: AbstractVector{mk_float}, Ti <: AbstractVector{mk_int}, T
     other_nodes::Array{mk_float,3}
     # One over the denominators of the Lagrange polynomials
     one_over_denominator::Array{mk_float,2}
+    # mask_up -- mask function for use imposing bc at upper wall
+    mask_up::Array{mk_float,1}
+    # mask_low -- mask function for use imposing bc at lower wall
+    mask_low::Array{mk_float,1}
 end
 
 """
@@ -409,6 +413,19 @@ function define_coordinate(coord_input::NamedTuple; parallel_io::Bool=false,
         end
     end
 
+    mask_low = allocate_float(n_local)
+    mask_low .= 1.0
+    mask_up = allocate_float(n_local)
+    mask_up .= 1.0
+    zeroval = 1.0e-8
+    for i in 1:n_local
+        if grid[i] > zeroval
+            mask_low[i] = 0.0
+        end
+        if grid[i] < -zeroval
+            mask_up[i] = 0.0
+        end
+    end
     coord = coordinate(coord_input.name, n_global, n_local, coord_input.ngrid,
         coord_input.nelement, coord_input.nelement_local, nrank, irank,
         mk_float(coord_input.L), grid, cell_width, igrid, ielement, imin, imax,
@@ -421,7 +438,7 @@ function define_coordinate(coord_input::NamedTuple; parallel_io::Bool=false,
         scratch_2d, copy(scratch_2d), advection, send_buffer, receive_buffer, comm,
         local_io_range, global_io_range, element_scale, element_shift,
         coord_input.element_spacing_option, element_boundaries, radau_first_element,
-        other_nodes, one_over_denominator)
+        other_nodes, one_over_denominator, mask_up, mask_low)
 
     if coord.n == 1 && coord.name == "vperp"
         spectral = null_vperp_dimension_info()

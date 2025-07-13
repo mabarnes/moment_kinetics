@@ -239,7 +239,9 @@ const sections_update_map = OptionsDict(
                                                                                   ),
                                   "kinetic_electron_solver" => OrderedDict{Any,Any}("implicit_ppar_implicit_pseudotimestep" => OptionsDict("timestepping" => OptionsDict("kinetic_electron_solver" => "implicit_p_implicit_pseudotimestep")),
                                                                                     "implicit_ppar_explicit_pseudotimestep" => OptionsDict("timestepping" => OptionsDict("kinetic_electron_solver" => "implicit_p_explicit_pseudotimestep")),
-                                                                                   )
+                                                                                   ),
+                                  "implicit_ion_advance" => Dict(true => Dict("timestepping" => Dict("kinetic_ion_solver" => "full_implicit_ion_advance"))),
+                                  "implicit_vpa_advection" => Dict(true => Dict("timestepping" => Dict("kinetic_ion_solver" => "implicit_ion_vpa_advection"))),                                         
                                  ),
     "r" => OptionsDict("bc" => (Pair("inner_r_bc_1", "bc"), Pair("outer_r_bc_1", "bc")),
                       )

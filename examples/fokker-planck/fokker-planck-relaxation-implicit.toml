@@ -1,0 +1,87 @@
+# cheap input file for a 0D2V relaxation to a collisional Maxwellian distribution with self-ion collisions.
+[reactions]
+charge_exchange_frequency = 0.0
+ionization_frequency = 0.0
+
+[evolve_moments]
+density = false
+parallel_flow = false
+moments_conservation = false
+pressure = false
+
+[z]
+ngrid = 1
+nelement = 1
+nelement_local = 1
+discretization = "chebyshev_pseudospectral"
+
+[r]
+ngrid = 1
+nelement = 1
+nelement_local = 1
+discretization = "chebyshev_pseudospectral"
+
+[vpa]
+ngrid = 5
+nelement = 8
+L = 6.3639610306789285
+bc = "none"
+discretization = "gausslegendre_pseudospectral"
+
+[vperp]
+ngrid = 5
+nelement = 4
+L = 3.1819805153394642
+bc = "none"
+discretization = "gausslegendre_pseudospectral"
+# Fokker-Planck operator requires the "gausslegendre_pseudospectral
+# options for the vpa and vperp grids
+
+[composition]
+n_ion_species = 1
+n_neutral_species = 0
+electron_physics = "boltzmann_electron_response"
+T_e = 1.0
+T_wall = 1.0
+
+[ion_species_1]
+initial_density = 1.0
+initial_temperature = 1.0
+
+[z_IC_ion_species_1]
+initialization_option = "sinusoid"
+density_amplitude = 0.0
+density_phase = 0.0
+upar_amplitude = 0.0
+upar_phase = 0.0
+temperature_amplitude = 0.0
+temperature_phase = 0.0
+
+[vpa_IC_ion_species_1]
+initialization_option = "directed-beam"
+vpa0 = 0.0
+vperp0 = 1.4142135623730951
+vth0 = 0.7071067811865476
+
+[fokker_planck_collisions]
+use_fokker_planck = true
+# nuii sets the normalised input C[F,F] Fokker-Planck collision frequency
+nuii = 4.0
+frequency_option = "manual"
+boundary_data_option="multipole_expansion"
+#boundary_data_option="delta_f_multipole"
+#boundary_data_option="direct_integration"
+
+[fokker_planck_collisions_nonlinear_solver]
+rtol = 0.0
+atol = 1.0e-10
+nonlinear_max_iterations = 50
+
+[timestepping]
+nstep = 10
+dt = 0.7071067811865476e-3
+nwrite = 1
+nwrite_dfns = 1
+kinetic_ion_solver = "implicit_ion_fp_collisions"
+#type = "KennedyCarpenterARK324"
+type = "PareschiRusso3(4,3,3)"

@@ -48,6 +48,22 @@ export explicit_pseudotimestep
 export null_kinetic_electrons
 
 """
+"""
+@enum kinetic_ion_solver_type begin
+    full_implicit_ion_advance
+    implicit_ion_vpa_advection
+    implicit_ion_fp_collisions
+    full_explicit_ion_advance
+    null_kinetic_ions
+end
+export kinetic_ion_solver_type
+export full_implicit_ion_advance
+export implicit_ion_vpa_advection
+export implicit_ion_fp_collisions
+export full_explicit_ion_advance
+export null_kinetic_ions
+
+"""
 `t_error_sum` is included so that a type which might be mk_float or Float128 can be set by
 an option but known at compile time when a `time_info` struct is passed as a function
 argument.
@@ -99,8 +115,10 @@ struct time_info{Terrorsum <: Real, T_debug_output, T_electron, Trkimp, Timpzero
     implicit_braginskii_conduction::Bool
     kinetic_electron_solver::kinetic_electron_solver_type
     electron_preconditioner_type::Telectronprecon
+    kinetic_ion_solver::kinetic_ion_solver_type
     implicit_ion_advance::Bool
     implicit_vpa_advection::Bool
+    use_implicit_ion_fp_collisions::Bool
     constraint_forcing_rate::mk_float
     decrease_dt_iteration_threshold::mk_int
     increase_dt_iteration_threshold::mk_int
@@ -141,7 +159,7 @@ struct advance_info
     krook_collisions_ii::Bool
     mxwl_diff_collisions_ii::Bool
     mxwl_diff_collisions_nn::Bool
-    explicit_weakform_fp_collisions::Bool
+    fp_collisions::Bool
     external_source::Bool
     ion_numerical_dissipation::Bool
     neutral_numerical_dissipation::Bool
@@ -594,6 +612,8 @@ Base.@kwdef struct fkpl_collisions_input
     use_conserving_corrections::Bool
     # enum option to determine which method is used to provide boundary data for Rosenbluth potential calculations.
     boundary_data_option::boundary_data_type
+    # option to determine in the test particle preconditioner is used in an implicit solve
+    use_test_particle_preconditioner::Bool
     # option to determine if cross-collisions against fixed Maxwellians are used
     slowing_down_test::Bool
     # Setting to switch between different options for Fokker-Planck collision frequency input

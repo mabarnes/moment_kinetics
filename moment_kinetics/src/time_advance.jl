@@ -30,7 +30,7 @@ using ..velocity_moments: calculate_ion_moment_derivatives!, calculate_neutral_m
 using ..velocity_moments: calculate_electron_moment_derivatives!, update_derived_electron_moment_time_derivatives!
 using ..velocity_grid_transforms: vzvrvzeta_to_vpavperp!, vpavperp_to_vzvrvzeta!
 using ..boundary_conditions: enforce_boundary_conditions!, get_ion_z_boundary_cutoff_indices
-using ..boundary_conditions: enforce_neutral_boundary_conditions!
+using ..boundary_conditions: enforce_neutral_boundary_conditions!, enforce_vperp_boundary_condition!
 using ..boundary_conditions: vpagrid_to_dzdt, enforce_v_boundary_condition_local!
 using ..input_structs
 using ..moment_constraints: hard_force_moment_constraints!,
@@ -74,6 +74,7 @@ using ..energy_equation: energy_equation!, neutral_energy_equation!
 using ..em_fields: setup_em_fields, update_phi!
 using ..fokker_planck: init_fokker_planck_collisions_weak_form, explicit_fokker_planck_collisions_weak_form!
 using ..fokker_planck: explicit_fp_collisions_weak_form_Maxwellian_cross_species!
+using ..fokker_planck: setup_fp_nl_solve, implicit_ion_fokker_planck_self_collisions!
 using ..gyroaverages: init_gyro_operators, gyroaverage_pdf!
 using ..manufactured_solns: manufactured_sources
 using ..timer_utils
@@ -93,7 +94,6 @@ using ..electron_fluid_equations: calculate_electron_parallel_friction_force!
 using ..electron_fluid_equations: electron_energy_equation!, update_electron_vth_temperature!,
                                   electron_braginskii_conduction!,
                                   implicit_braginskii_conduction!
-using ..input_structs: braginskii_fluid
 using ..derivatives: derivative_z!
 @debug_detect_redundant_block_synchronize using ..communication: debug_detect_redundant_is_active
 
@@ -399,15 +399,14 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
             error("kinetic_electron_solver=$(t_input["kinetic_electron_solver"]) "
                   * "not supported when using a fully explicit timestep")
         end
-        t_input["implicit_ion_advance"] = false
-        t_input["implicit_vpa_advection"] = false
+        t_input["kinetic_ion_solver"] = full_explicit_ion_advance
     else
         if composition.electron_physics != braginskii_fluid
             t_input["implicit_braginskii_conduction"] = false
         end
     end
 
-    if electron !== nothing && t_input["implicit_vpa_advection"]
+    if electron !== nothing && (t_input["kinetic_ion_solver"] == implicit_ion_vpa_advection)
         error("implicit_vpa_advection does not work at the moment. Need to figure out "
               * "what to do with constraints, as explicit and implicit parts would not "
               * "preserve constaints separately.")
@@ -433,6 +432,7 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
 
         kinetic_electron_solver = null_kinetic_electrons # This option is only used from the ion time_info struct
         electron_preconditioner_type = nothing
+        kinetic_ion_solver = null_kinetic_ions
         decrease_dt_iteration_threshold = t_input["decrease_dt_iteration_threshold"]
         increase_dt_iteration_threshold = t_input["increase_dt_iteration_threshold"]
         cap_factor_ion_dt = mk_float(t_input["cap_factor_ion_dt"])
@@ -442,6 +442,7 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
         electron_t_params = nothing
     elseif electron === false
         kinetic_electron_solver = null_kinetic_electrons
+        kinetic_ion_solver = t_input["kinetic_ion_solver"]
         electron_preconditioner_type = nothing
         decrease_dt_iteration_threshold = -1
         increase_dt_iteration_threshold = typemax(mk_int)
@@ -474,7 +475,7 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
         else
             electron_preconditioner_type = Val(:none)
         end
-
+        kinetic_ion_solver = t_input["kinetic_ion_solver"]
         decrease_dt_iteration_threshold = -1
         increase_dt_iteration_threshold = typemax(mk_int)
         cap_factor_ion_dt = Inf
@@ -511,8 +512,12 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
                      mk_float(t_input["minimum_dt"]), mk_float(t_input["maximum_dt"]),
                      electron !== nothing && t_input["implicit_braginskii_conduction"],
                      kinetic_electron_solver, electron_preconditioner_type,
-                     electron !== nothing && t_input["implicit_ion_advance"],
-                     electron !== nothing && t_input["implicit_vpa_advection"],
+                     # read main ion algorithm flag
+                     kinetic_ion_solver,
+                     # set useful derived parameters
+                     electron !== nothing && (t_input["kinetic_ion_solver"] == full_implicit_ion_advance),
+                     electron !== nothing && (t_input["kinetic_ion_solver"] == implicit_ion_vpa_advection),
+                     electron !== nothing && (t_input["kinetic_ion_solver"] == implicit_ion_fp_collisions),
                      mk_float(t_input["constraint_forcing_rate"]),
                      decrease_dt_iteration_threshold, increase_dt_iteration_threshold,
                      mk_float(cap_factor_ion_dt), mk_int(max_pseudotimesteps),
@@ -826,10 +831,14 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
         error("Cannot use implicit_ion_advance and implicit_vpa_advection at the same "
               * "time")
     end
+    nl_solver_ion_fp_collisions = setup_fp_nl_solve(t_params.use_implicit_ion_fp_collisions,
+                                                    input_dict, (vperp=vperp, vpa=vpa))
+
     nl_solver_params = (electron_conduction=electron_conduction_nl_solve_parameters,
                         electron_advance=nl_solver_electron_advance_params,
                         ion_advance=nl_solver_ion_advance_params,
-                        vpa_advection=nl_solver_vpa_advection_params,)
+                        vpa_advection=nl_solver_vpa_advection_params,
+                        ion_fp_collisions=nl_solver_ion_fp_collisions)
 
     # Check that no unexpected sections or top-level options were passed (helps to catch
     # typos in input files). Needs to be called after calls to `setup_nonlinear_solve()`
@@ -864,7 +873,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
                                                   vzeta.n, composition.n_ion_species,
                                                   n_neutral_species_alloc, t_params)
     # create arrays for Fokker-Planck collisions 
-    if advance.explicit_weakform_fp_collisions
+    if advance.fp_collisions || advance_implicit.fp_collisions
         if collisions.fkpl.boundary_data_option == direct_integration
             precompute_weights = true
         else
@@ -1252,7 +1261,7 @@ function setup_advance_flags(moments, composition, t_params, collisions,
     vpa_diffusion = false
     vperp_diffusion = false
     vz_diffusion = false
-    explicit_weakform_fp_collisions = false
+    fp_collisions = false
     # all advance flags remain false if using operator-splitting
     # otherwise, check to see if the flags need to be set to true
     if !t_params.split_operators
@@ -1263,10 +1272,10 @@ function setup_advance_flags(moments, composition, t_params, collisions,
         advance_vperp_advection = vperp.n > 1 && !t_params.implicit_ion_advance
         advance_z_advection = z.n > 1 && !t_params.implicit_ion_advance
         advance_r_advection = r.n > 1 && !t_params.implicit_ion_advance
-        if collisions.fkpl.nuii > 0.0 && vperp.n > 1 && !t_params.implicit_ion_advance
-            explicit_weakform_fp_collisions = true
+        if collisions.fkpl.nuii > 0.0 && vperp.n > 1 && !t_params.use_implicit_ion_fp_collisions
+            fp_collisions = true
         else
-            explicit_weakform_fp_collisions = false    
+            fp_collisions = false
         end
         # if neutrals present, check to see if different ion-neutral
         # collisions are enabled
@@ -1409,7 +1418,7 @@ function setup_advance_flags(moments, composition, t_params, collisions,
                         advance_neutral_ionization, advance_ion_ionization_1V,
                         advance_neutral_ionization_1V, advance_krook_collisions_ii,
                         advance_maxwell_diffusion_ii, advance_maxwell_diffusion_nn,
-                        explicit_weakform_fp_collisions,
+                        fp_collisions,
                         advance_external_source, advance_ion_numerical_dissipation,
                         advance_neutral_numerical_dissipation, advance_sources,
                         advance_continuity, advance_force_balance, advance_energy,
@@ -1468,7 +1477,7 @@ function setup_implicit_advance_flags(moments, composition, t_params, collisions
     vpa_diffusion = false
     vperp_diffusion = false
     vz_diffusion = false
-    explicit_weakform_fp_collisions = false
+    fp_collisions = false
     if t_params.split_operators
         error("Implicit timesteps do not support `t_params.split_operators=true`")
     end
@@ -1503,10 +1512,12 @@ function setup_implicit_advance_flags(moments, composition, t_params, collisions
         advance_external_source = any(x -> x.active, external_source_settings.ion)
         advance_ion_numerical_dissipation = true
         advance_sources = moments.evolve_density || moments.evolve_upar || moments.evolve_p
-        explicit_weakform_fp_collisions = collisions.fkpl.nuii > 0.0 && vperp.n > 1
+        fp_collisions = collisions.fkpl.nuii > 0.0 && vperp.n > 1
     elseif t_params.implicit_vpa_advection
         advance_vpa_advection = true
         advance_ion_numerical_dissipation = true
+    elseif t_params.use_implicit_ion_fp_collisions
+        fp_collisions = collisions.fkpl.nuii > 0.0 && vperp.n > 1
     end
     # *_diffusion flags are set regardless of whether diffusion is included in explicit or
     # implicit part of timestep, because they are used for boundary conditions, not to
@@ -1548,7 +1559,7 @@ function setup_implicit_advance_flags(moments, composition, t_params, collisions
                         advance_neutral_ionization, advance_ion_ionization_1V,
                         advance_neutral_ionization_1V, advance_krook_collisions_ii,
                         advance_maxwell_diffusion_ii, advance_maxwell_diffusion_nn,
-                        explicit_weakform_fp_collisions,
+                        fp_collisions,
                         advance_external_source, advance_ion_numerical_dissipation,
                         advance_neutral_numerical_dissipation, advance_sources,
                         advance_continuity, advance_force_balance, advance_energy,
@@ -3421,6 +3432,7 @@ end
         if t_params.kinetic_electron_solver ∈ (implicit_steady_state, implicit_time_evolving)
             params_to_check = (nl_solver_params.ion_advance,
                                nl_solver_params.vpa_advection,
+                               nl_solver_params.ion_fp_collisions,
                                nl_solver_params.electron_conduction,
                                nl_solver_params.electron_advance)
         else
@@ -3430,6 +3442,7 @@ end
             # compared to their maximum values
             params_to_check = (nl_solver_params.ion_advance,
                                nl_solver_params.vpa_advection,
+                               nl_solver_params.ion_fp_collisions,
                                nl_solver_params.electron_conduction)
             if t_params.electron !== nothing
                 electron_time_advance_fraction =
@@ -3889,7 +3902,7 @@ implementation), a call needs to be made with `dt` scaled by some coefficient.
             write_debug_IO("r_dissipation_neutral!")
         end
         # advance with the Fokker-Planck self-collision operator
-        if advance.explicit_weakform_fp_collisions
+        if advance.fp_collisions
             update_entropy_diagnostic = (istage == 1)
             if collisions.fkpl.self_collisions
                 # self collisions for each species
@@ -4014,7 +4027,7 @@ end
                                                   nl_solver_params.electron_conduction)
     end
 
-    if nl_solver_params.ion_advance !== nothing
+    if t_params.kinetic_ion_solver == full_implicit_ion_advance
         ion_success = implicit_ion_advance!(fvec_out, fvec_in, pdf, fields, moments,
                                             advect_objects, vz, vr, vzeta, vpa, vperp,
                                             gyrophase, z, r, t_params, dt,
@@ -4025,7 +4038,7 @@ end
                                             gyroavs, nl_solver_params.ion_advance,
                                             advance, fp_arrays, istage)
         success = success && ion_success
-    elseif advance.vpa_advection
+    elseif t_params.kinetic_ion_solver == implicit_ion_vpa_advection
         ion_success = implicit_vpa_advection!(fvec_out.pdf, fvec_in, fields, moments,
                                               r_advect, z_advect, vpa_advect, vpa, vperp,
                                               z, r, dt, t_params.t[], r_spectral,
@@ -4035,8 +4048,14 @@ end
                                               advance.vpa_diffusion, num_diss_params,
                                               gyroavs, scratch_dummy)
         success = success && ion_success
+    elseif t_params.kinetic_ion_solver == implicit_ion_fp_collisions
+        # backward Euler advance d F / d t = C[F, F]
+        ion_success = implicit_ion_fokker_planck_self_collisions!(fvec_out.pdf, fvec_in.pdf, moments.ion.dSdt, 
+        composition, collisions, fp_arrays, 
+        vpa, vperp, z, r, dt, spectral_objects,
+        nl_solver_params.ion_fp_collisions; diagnose_entropy_production=true)
+        success = success && ion_success
     end
-
     return success
 end
 
@@ -4164,7 +4183,7 @@ Do a backward-Euler timestep for all terms in the ion kinetic equation.
         if vperp.n > 1
             @begin_s_r_z_vpa_region()
             enforce_vperp_boundary_condition!(x, vperp.bc, vperp, vperp_spectral,
-                                              vperp_adv, vperp_diffusion)
+                                              vperp_advect, advance.vperp_diffusion)
         end
 
         if z.bc == "wall" && (z.irank == 0 || z.irank == z.nrank - 1)
