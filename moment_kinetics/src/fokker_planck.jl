@@ -58,6 +58,7 @@ using ..looping
 using ..timer_utils
 using ..input_structs: fkpl_collisions_input, set_defaults_and_check_section!
 using ..input_structs: multipole_expansion, direct_integration
+using ..looping: get_best_ranges
 using ..reference_parameters: get_reference_collision_frequency_ii
 using ..fokker_planck_calculus: init_Rosenbluth_potential_integration_weights!,
                                 init_Rosenbluth_potential_boundary_integration_weights!,
@@ -245,6 +246,22 @@ function init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_sp
     F_rhs_delta = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
     Fv = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
     Fw = allocate_shared_float(nvpa,nvperp; comm=comm_anyv_subblock[])
+
+    # Set up indices for shared-memory parallelised 2D loops over elements, rather than the
+    # usual loops over grid points. Used for the FP preconditioner matrix calculation.
+    # Hacky use of `get_best_ranges()` - the function requires the Dict to contain the
+    # sizes of all dimensions even though we only want vperp/vpa here.
+    if anyv_subblock_rank[] < 0
+        # This process does not participate in anyv-parallelised loops
+        parallel_indices = Dict(:vperp=>1:0, :vpa=>1:0)
+    else
+        parallel_indices = get_best_ranges(anyv_subblock_rank[], anyv_subblock_size[],
+                                           (:vperp, :vpa),
+                                           Dict(:vperp=>vperp.nelement_local,
+                                                :vpa=>vpa.nelement_local, :s=>1, :sn=>1,
+                                                :r=>1, :z=>1, :vzeta=>1, :vr=>1, :vz=>1))
+    end
+
     fka = fokkerplanck_weakform_arrays_struct(bwgt,rpbd,MM2D_sparse,KKpar2D_sparse,KKperp2D_sparse,
                                            KKpar2D_with_BC_terms_sparse,KKperp2D_with_BC_terms_sparse,
                                            LP2D_sparse,LV2D_sparse,LB2D_sparse,PUperp2D_sparse,PPparPUperp2D_sparse,
@@ -254,7 +271,9 @@ function init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_sp
                                            CC, GG, HH, dHdvpa, dHdvperp, dGdvperp, d2Gdvperp2, d2Gdvpa2, d2Gdvperpdvpa,
                                            FF, dFdvpa, dFdvperp, 
                                            CC2D_sparse, CC2D_sparse_constructor, lu_obj_CC2D,
-                                           rhs_advection, Fnew, Fresidual, F_delta_x, F_rhs_delta, Fv, Fw)
+                                           rhs_advection, Fnew, Fresidual, F_delta_x,
+                                           F_rhs_delta, Fv, Fw, parallel_indices[:vperp],
+                                           parallel_indices[:vpa])
     return fka
 end
 

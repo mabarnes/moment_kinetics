@@ -235,7 +235,8 @@ function test_implicit_collisions_wrapper(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=
     test_dense_construction=false,standalone=true,
     test_numerical_conserving_terms=false,
     boundary_data_option=multipole_expansion,
-    use_end_of_step_corrections=true)
+    use_end_of_step_corrections=true,
+    diagnose=true)
     
     nelement_local_vpa = nelement_vpa # number of elements per rank
     nelement_global_vpa = nelement_local_vpa # total number of elements 
@@ -371,6 +372,7 @@ function test_implicit_collisions_wrapper(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=
                                          input_toml, coords)
 
     #println(nl_solver_params.preconditioners)
+    start_run_time = now()
     for it in 1:ntime
         success = implicit_ion_fokker_planck_self_collisions!(fvpavperpzrs_new, fvpavperpzrs_old, dSdt, 
                                         composition, collisions, fkpl_arrays, 
@@ -379,24 +381,24 @@ function test_implicit_collisions_wrapper(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=
                                         test_linearised_advance=test_linearised_advance,
                                         use_Maxwellian_Rosenbluth_coefficients_in_preconditioner=use_Maxwellian_Rosenbluth_coefficients_in_preconditioner,
                                         use_end_of_step_corrections=use_end_of_step_corrections)
-        @begin_serial_region()
+        @begin_s_r_z_vperp_region()
         # update the pdf
-        @serial_region begin
-            @loop_s_r_z is ir iz begin
-                @loop_vperp_vpa ivperp ivpa begin
-                    fvpavperpzrs_old[ivpa,ivperp,iz,ir,is] = fvpavperpzrs_new[ivpa,ivperp,iz,ir,is]
-                end
+        @loop_s_r_z is ir iz begin
+            @loop_vperp_vpa ivperp ivpa begin
+                fvpavperpzrs_old[ivpa,ivperp,iz,ir,is] = fvpavperpzrs_new[ivpa,ivperp,iz,ir,is]
             end
         end
         # diagnose Fold
         time += delta_t
-        @views diagnose_F_Maxwellian(fvpavperpzrs_old[:,:,1,1,1],Fdummy1,Fdummy2,Fdummy3,vpa,vperp,time,ms,it)
-        # update outputs
-        @serial_region begin
-            println("dSdt = ", dSdt[1,1,1])
-            @loop_s_r_z is ir iz begin
-                @loop_vperp_vpa ivperp ivpa begin
-                    fvpavperpzrst[ivpa,ivperp,iz,ir,is,it+1] = fvpavperpzrs_old[ivpa,ivperp,iz,ir,is]
+        if diagnose
+            @views diagnose_F_Maxwellian(fvpavperpzrs_old[:,:,1,1,1],Fdummy1,Fdummy2,Fdummy3,vpa,vperp,time,ms,it)
+            # update outputs
+            @serial_region begin
+                println("dSdt = ", dSdt[1,1,1])
+                @loop_s_r_z is ir iz begin
+                    @loop_vperp_vpa ivperp ivpa begin
+                        fvpavperpzrst[ivpa,ivperp,iz,ir,is,it+1] = fvpavperpzrs_old[ivpa,ivperp,iz,ir,is]
+                    end
                 end
             end
         end
@@ -406,7 +408,7 @@ function test_implicit_collisions_wrapper(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=
         @views diagnose_F_gif(fvpavperpzrst[:,:,1,1,1,:],vpa,vperp,ntime)
     end
     println("init time (ms): ", Dates.value(finish_init_time - start_init_time))
-    println("run time (ms): ", Dates.value(finish_run_time - finish_init_time))
+    println("run time (ms): ", Dates.value(finish_run_time - start_run_time))
 end
     
 if abspath(PROGRAM_FILE) == @__FILE__
