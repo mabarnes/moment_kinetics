@@ -4135,7 +4135,10 @@ function _get_variable_internal(run_info, variable_name::Symbol;
         variable = @. 0.5 * vth * dp_dt / p
     elseif variable_name == :neutral_ddens_dt
         all_moments = _get_all_moment_variables(run_info)
-        variable = similar(all_moments.density)
+        if :density_neutral ∉ keys(all_moments)
+            throw(KeyError("density_neutral not present"))
+        end
+        variable = similar(all_moments.density_neutral)
         # Define function here to minimise effect type instability due to
         # get_all_moment_variables returning NamedTuples
         function get_neutral_ddens_dt!(variable, all_moments)
@@ -4158,6 +4161,9 @@ function _get_variable_internal(run_info, variable_name::Symbol;
         variable = select_slice_of_variable(variable; kwargs...)
     elseif variable_name == :neutral_dnuz_dt
         all_moments = _get_all_moment_variables(run_info)
+        if :uz_neutral ∉ keys(all_moments)
+            throw(KeyError("uz_neutral not present"))
+        end
         variable = similar(all_moments.uz_neutral)
         # Define function here to minimise effect type instability due to
         # get_all_moment_variables returning NamedTuples
@@ -4187,6 +4193,9 @@ function _get_variable_internal(run_info, variable_name::Symbol;
         variable = @. dnuz_dt / n - uz / n * dn_dt
     elseif variable_name == :neutral_dp_dt
         all_moments = _get_all_moment_variables(run_info)
+        if :p_neutral ∉ keys(all_moments)
+            throw(KeyError("p_neutral not present"))
+        end
         variable = similar(all_moments.p_neutral)
         # Define function here to minimise effect type instability due to
         # get_all_moment_variables returning NamedTuples
