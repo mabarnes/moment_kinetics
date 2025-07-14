@@ -4108,8 +4108,8 @@ function _get_variable_internal(run_info, variable_name::Symbol;
                                           moments.ion.dens, moments.ion.upar,
                                           moments.ion.p, moments.neutral.dens,
                                           moments.neutral.uz, moments.neutral.p,
-                                          moments.neutral.p, moments.electron,
-                                          run_info.collisions, 0.0, run_info.composition,
+                                          moments.electron, run_info.collisions, 0.0,
+                                          run_info.composition,
                                           run_info.external_source_settings.electron,
                                           run_info.num_diss_params, run_info.r,
                                           run_info.z)
