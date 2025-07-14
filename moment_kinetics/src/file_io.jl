@@ -172,16 +172,19 @@ struct io_moments_info{Tfile, Ttime, Tphi, Tmomi, Tmome, Tmomn, Tchodura_lower,
 
     # handles for external source variables
     external_source_amplitude::Texti1
+    external_source_T_array::Texti1
     external_source_density_amplitude::Texti2
     external_source_momentum_amplitude::Texti3
     external_source_pressure_amplitude::Texti4
     external_source_controller_integral::Texti5
     external_source_neutral_amplitude::Textn1
+    external_source_neutral_T_array::Textn1
     external_source_neutral_density_amplitude::Textn2
     external_source_neutral_momentum_amplitude::Textn3
     external_source_neutral_pressure_amplitude::Textn4
     external_source_neutral_controller_integral::Textn5
     external_source_electron_amplitude::Texte1
+    external_source_electron_T_array::Texte1
     external_source_electron_density_amplitude::Texte2
     external_source_electron_momentum_amplitude::Texte3
     external_source_electron_pressure_amplitude::Texte4
@@ -306,6 +309,7 @@ struct io_initial_electron_info{Tfile, Tfe, Tmom, Texte1, Texte2, Texte3, Texte4
     electron_thermal_speed::Tmom
     # handles for external source terms
     external_source_electron_amplitude::Texte1
+    external_source_electron_T_array::Texte1
     external_source_electron_density_amplitude::Texte2
     external_source_electron_momentum_amplitude::Texte3
     external_source_electron_pressure_amplitude::Texte4
@@ -560,7 +564,7 @@ function setup_electron_io(io_input, vpa, vperp, z, r, composition, collisions,
         io_electron_upar_loworder, io_electron_upar_start_last_timestep, io_electron_ppar,
         io_electron_ppar_loworder, io_electron_ppar_start_last_timestep, io_electron_qpar,
         io_electron_vth, external_source_electron_amplitude,
-        external_source_electron_density_amplitude,
+        external_source_electron_T_array, external_source_electron_density_amplitude,
         external_source_electron_momentum_amplitude,
         external_source_electron_pressure_amplitude,
         electron_constraints_A_coefficient, electron_constraints_B_coefficient,
@@ -634,6 +638,7 @@ function reopen_initial_electron_io(file_info)
                                         getvar("electron_parallel_heat_flux"),
                                         getvar("electron_thermal_speed"),
                                         getvar("external_source_electron_amplitude"),
+                                        getvar("external_source_electron_T_array"),
                                         getvar("external_source_electron_density_amplitude"),
                                         getvar("external_source_electron_momentum_amplitude"),
                                         getvar("external_source_electron_pressure_amplitude"),
@@ -1111,11 +1116,11 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
         io_density, io_density_loworder, io_density_start_last_timestep, io_upar,
         io_upar_loworder, io_upar_start_last_timestep, io_p, io_p_loworder,
         io_p_start_last_timestep, io_ppar, io_pperp, io_qpar, io_vth, io_dSdt,
-        external_source_amplitude, external_source_density_amplitude,
-        external_source_momentum_amplitude, external_source_pressure_amplitude,
-        external_source_controller_integral, io_chodura_lower, io_chodura_upper,
-        ion_constraints_A_coefficient, ion_constraints_B_coefficient,
-        ion_constraints_C_coefficient =
+        external_source_amplitude, external_source_T_array,
+        external_source_density_amplitude, external_source_momentum_amplitude,
+        external_source_pressure_amplitude, external_source_controller_integral,
+        io_chodura_lower, io_chodura_upper, ion_constraints_A_coefficient,
+        ion_constraints_B_coefficient, ion_constraints_C_coefficient =
             define_dynamic_ion_moment_variables!(fid, n_ion_species, r, z, parallel_io,
                                                  external_source_settings, evolve_density,
                                                  evolve_upar, evolve_p,
@@ -1127,7 +1132,7 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
         io_electron_upar_loworder, io_electron_upar_start_last_timestep, io_electron_p,
         io_electron_p_loworder, io_electron_p_start_last_timestep, io_electron_ppar,
         io_electron_qpar, io_electron_vth, external_source_electron_amplitude,
-        external_source_electron_density_amplitude,
+        external_source_electron_T_array, external_source_electron_density_amplitude,
         external_source_electron_momentum_amplitude,
         external_source_electron_pressure_amplitude,
         electron_constraints_A_coefficient, electron_constraints_B_coefficient,
@@ -1147,7 +1152,7 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
         io_uz_neutral_start_last_timestep, io_p_neutral, io_p_neutral_loworder,
         io_p_neutral_start_last_timestep, io_pz_neutral, io_qz_neutral,
         io_thermal_speed_neutral, external_source_neutral_amplitude,
-        external_source_neutral_density_amplitude,
+        external_source_neutral_T_array, external_source_neutral_density_amplitude,
         external_source_neutral_momentum_amplitude,
         external_source_neutral_pressure_amplitude,
         external_source_neutral_controller_integral, neutral_constraints_A_coefficient,
@@ -1240,16 +1245,18 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
                                io_p_neutral_start_last_timestep, io_pz_neutral,
                                io_qz_neutral, io_thermal_speed_neutral,
                                external_source_amplitude,
-                               external_source_density_amplitude,
+                               external_source_T_array, external_source_density_amplitude,
                                external_source_momentum_amplitude,
                                external_source_pressure_amplitude,
                                external_source_controller_integral,
                                external_source_neutral_amplitude,
+                               external_source_neutral_T_array,
                                external_source_neutral_density_amplitude,
                                external_source_neutral_momentum_amplitude,
                                external_source_neutral_pressure_amplitude,
                                external_source_neutral_controller_integral,
                                external_source_electron_amplitude,
+                               external_source_electron_T_array,
                                external_source_electron_density_amplitude,
                                external_source_electron_momentum_amplitude,
                                external_source_electron_pressure_amplitude,
@@ -1424,6 +1431,10 @@ function define_dynamic_ion_moment_variables!(fid, n_ion_species, r::coordinate,
             dynamic, "external_source_amplitude", mk_float, z, r, n_sources;
             parallel_io=parallel_io, description="Amplitude of the external source for ions",
             units="n_ref/c_ref^3*c_ref/L_ref")
+        external_source_T_array = create_dynamic_variable!(
+            dynamic, "external_source_T_array", mk_float, z, r, n_sources;
+            parallel_io=parallel_io, description="Temperature of the external source for ions",
+            units="T_ref")
         if evolve_density
             external_source_density_amplitude = create_dynamic_variable!(
                 dynamic, "external_source_density_amplitude", mk_float, z, r, n_sources;
@@ -1468,6 +1479,7 @@ function define_dynamic_ion_moment_variables!(fid, n_ion_species, r::coordinate,
         end
     else
         external_source_amplitude = nothing
+        external_source_T_array = nothing
         external_source_density_amplitude = nothing
         external_source_momentum_amplitude = nothing
         external_source_pressure_amplitude = nothing
@@ -1517,7 +1529,7 @@ function define_dynamic_ion_moment_variables!(fid, n_ion_species, r::coordinate,
     return io_density, io_density_loworder, io_density_start_last_timestep, io_upar,
            io_upar_loworder, io_upar_start_last_timestep, io_p, io_p_loworder,
            io_p_start_last_timestep, io_ppar, io_pperp, io_qpar, io_vth, io_dSdt,
-           external_source_amplitude, external_source_density_amplitude,
+           external_source_amplitude, external_source_T_array, external_source_density_amplitude,
            external_source_momentum_amplitude, external_source_pressure_amplitude,
            external_source_controller_integral, io_chodura_lower, io_chodura_upper,
            ion_constraints_A_coefficient, ion_constraints_B_coefficient,
@@ -1640,6 +1652,10 @@ function define_dynamic_electron_moment_variables!(fid, r::coordinate, z::coordi
             dynamic, "external_source_electron_amplitude", mk_float, z, r, n_sources;
             parallel_io=parallel_io, description="Amplitude of the external source for electrons",
             units="n_ref/c_ref^3*c_ref/L_ref")
+        external_source_electron_T_array = create_dynamic_variable!(
+            dynamic, "external_source_electron_T_array", mk_float, z, r, n_sources;
+            parallel_io=parallel_io, description="Temperature of the external source for electrons",
+            units="T_ref")
         external_source_electron_density_amplitude = create_dynamic_variable!(
             dynamic, "external_source_electron_density_amplitude", mk_float, z, r, n_sources;
             parallel_io=parallel_io, description="Amplitude of the external density source for electrons",
@@ -1654,6 +1670,7 @@ function define_dynamic_electron_moment_variables!(fid, r::coordinate, z::coordi
             units="n_ref*T_ref*c_ref/L_ref")
     else
         external_source_electron_amplitude = nothing
+        external_source_electron_T_array = nothing
         external_source_electron_density_amplitude = nothing
         external_source_electron_momentum_amplitude = nothing
         external_source_electron_pressure_amplitude = nothing
@@ -1728,7 +1745,8 @@ function define_dynamic_electron_moment_variables!(fid, r::coordinate, z::coordi
            io_electron_upar_loworder, io_electron_upar_start_last_timestep,
            io_electron_p, io_electron_p_loworder, io_electron_p_start_last_timestep,
            io_electron_ppar, io_electron_qpar, io_electron_vth,
-           external_source_electron_amplitude, external_source_electron_density_amplitude,
+           external_source_electron_amplitude, external_source_electron_T_array,
+           external_source_electron_density_amplitude,
            external_source_electron_momentum_amplitude,
            external_source_electron_pressure_amplitude,
            electron_constraints_A_coefficient, electron_constraints_B_coefficient,
@@ -1851,6 +1869,10 @@ function define_dynamic_neutral_moment_variables!(fid, n_neutral_species, r::coo
             dynamic, "external_source_neutral_amplitude", mk_float, z, r, n_sources;
             parallel_io=parallel_io, description="Amplitude of the external source for neutrals",
             units="n_ref/c_ref^3*c_ref/L_ref")
+        external_source_neutral_T_array = create_dynamic_variable!(
+            dynamic, "external_source_neutral_T_array", mk_float, z, r, n_sources;
+            parallel_io=parallel_io, description="Temperature of the external source for neutrals",
+            units="T_ref")
         if evolve_density
             external_source_neutral_density_amplitude = create_dynamic_variable!(
                 dynamic, "external_source_neutral_density_amplitude", mk_float, z, r, n_sources;
@@ -1893,6 +1915,7 @@ function define_dynamic_neutral_moment_variables!(fid, n_neutral_species, r::coo
         end
     else
         external_source_neutral_amplitude = nothing
+        external_source_neutral_T_array = nothing
         external_source_neutral_density_amplitude = nothing
         external_source_neutral_momentum_amplitude = nothing
         external_source_neutral_pressure_amplitude = nothing
@@ -1926,7 +1949,7 @@ function define_dynamic_neutral_moment_variables!(fid, n_neutral_species, r::coo
            io_uz_neutral_start_last_timestep, io_p_neutral, io_p_neutral_loworder,
            io_p_neutral_start_last_timestep, io_pz_neutral, io_qz_neutral,
            io_thermal_speed_neutral, external_source_neutral_amplitude,
-           external_source_neutral_density_amplitude,
+           external_source_neutral_T_array, external_source_neutral_density_amplitude,
            external_source_neutral_momentum_amplitude,
            external_source_neutral_pressure_amplitude,
            external_source_neutral_controller_integral, neutral_constraints_A_coefficient,
@@ -2211,16 +2234,19 @@ function reopen_moments_io(file_info)
                                getvar("pz_neutral"), getvar("qz_neutral"),
                                getvar("thermal_speed_neutral"),
                                getvar("external_source_amplitude"),
+                               getvar("external_source_T_array"),
                                getvar("external_source_density_amplitude"),
                                getvar("external_source_momentum_amplitude"),
                                getvar("external_source_pressure_amplitude"),
                                getvar("external_source_controller_integral"),
                                getvar("external_source_neutral_amplitude"),
+                               getvar("external_source_neutral_T_array"),
                                getvar("external_source_neutral_density_amplitude"),
                                getvar("external_source_neutral_momentum_amplitude"),
                                getvar("external_source_neutral_pressure_amplitude"),
                                getvar("external_source_neutral_controller_integral"),
                                getvar("external_source_electron_amplitude"),
+                               getvar("external_source_electron_T_array"),
                                getvar("external_source_electron_density_amplitude"),
                                getvar("external_source_electron_momentum_amplitude"),
                                getvar("external_source_electron_pressure_amplitude"),
@@ -2385,16 +2411,19 @@ function reopen_dfns_io(file_info)
                                      getvar("pz_neutral"), getvar("qz_neutral"),
                                      getvar("thermal_speed_neutral"),
                                      getvar("external_source_amplitude"),
+                                     getvar("external_source_T_array"),
                                      getvar("external_source_density_amplitude"),
                                      getvar("external_source_momentum_amplitude"),
                                      getvar("external_source_pressure_amplitude"),
                                      getvar("external_source_controller_integral"),
                                      getvar("external_source_neutral_amplitude"),
+                                     getvar("external_source_neutral_T_array"),
                                      getvar("external_source_neutral_density_amplitude"),
                                      getvar("external_source_neutral_momentum_amplitude"),
                                      getvar("external_source_neutral_pressure_amplitude"),
                                      getvar("external_source_neutral_controller_integral"),
                                      getvar("external_source_electron_amplitude"),
+                                     getvar("external_source_electron_T_array"),
                                      getvar("external_source_electron_density_amplitude"),
                                      getvar("external_source_electron_momentum_amplitude"),
                                      getvar("external_source_electron_pressure_amplitude"),
@@ -3010,6 +3039,9 @@ function write_ion_moments_data_to_binary(scratch, moments, n_ion_species, t_par
             append_to_dynamic_var(io_moments.external_source_amplitude,
                                   moments.ion.external_source_amplitude, t_idx,
                                   parallel_io, z, r, n_sources)
+            append_to_dynamic_var(io_moments.external_source_T_array,
+                                  moments.ion.external_source_T_array, t_idx,
+                                  parallel_io, z, r, n_sources)
             if moments.evolve_density
                 append_to_dynamic_var(io_moments.external_source_density_amplitude,
                                       moments.ion.external_source_density_amplitude,
@@ -3113,6 +3145,9 @@ function write_electron_moments_data_to_binary(scratch, moments, t_params, elect
             n_sources = size(moments.electron.external_source_amplitude)[3]
             append_to_dynamic_var(io_moments.external_source_electron_amplitude,
                                   moments.electron.external_source_amplitude, t_idx,
+                                  parallel_io, z, r, n_sources)
+            append_to_dynamic_var(io_moments.external_source_electron_T_array,
+                                  moments.electron.external_source_T_array, t_idx,
                                   parallel_io, z, r, n_sources)
             append_to_dynamic_var(io_moments.external_source_electron_density_amplitude,
                                   moments.electron.external_source_density_amplitude,
@@ -3238,6 +3273,9 @@ function write_neutral_moments_data_to_binary(scratch, moments, n_neutral_specie
             n_sources = size(moments.neutral.external_source_amplitude)[3]
             append_to_dynamic_var(io_moments.external_source_neutral_amplitude,
                                   moments.neutral.external_source_amplitude, t_idx,
+                                  parallel_io, z, r, n_sources)
+            append_to_dynamic_var(io_moments.external_source_neutral_T_array,
+                                  moments.neutral.external_source_T_array, t_idx,
                                   parallel_io, z, r, n_sources)
             if moments.evolve_density
                 append_to_dynamic_var(io_moments.external_source_neutral_density_amplitude,
