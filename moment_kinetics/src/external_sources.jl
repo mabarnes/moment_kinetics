@@ -609,6 +609,8 @@ function initialize_external_source_amplitude!(moments, external_source_settings
                         ion_source_settings[index].source_strength *
                         ion_source_settings[index].r_amplitude[ir] *
                         ion_source_settings[index].z_amplitude[iz]
+                    moments.ion.external_source_T_array[iz,ir,index] =
+                        ion_source_settings[index].source_T_array[iz,ir]
                 end
                 if moments.evolve_density
                     @loop_r_z ir iz begin
@@ -653,6 +655,8 @@ function initialize_external_source_amplitude!(moments, external_source_settings
                         ion_source_settings[index].source_strength *
                         ion_source_settings[index].r_amplitude[ir] *
                         ion_source_settings[index].z_amplitude[iz]
+                    moments.ion.external_source_T_array[iz,ir,index] =
+                        ion_source_settings[index].source_T_array[iz,ir]
                 end
                 if moments.evolve_density
                     @loop_r_z ir iz begin
@@ -701,6 +705,8 @@ function initialize_external_source_amplitude!(moments, external_source_settings
                         electron_source_settings[index].source_strength *
                         electron_source_settings[index].r_amplitude[ir] *
                         electron_source_settings[index].z_amplitude[iz]
+                    moments.electron.external_source_T_array[iz,ir,index] =
+                        electron_source_settings[index].source_T_array[iz,ir]
                 end
                 @loop_r_z ir iz begin
                     moments.electron.external_source_density_amplitude[iz,ir,index] = 0.0
@@ -737,6 +743,8 @@ function initialize_external_source_amplitude!(moments, external_source_settings
                 @loop_r_z ir iz begin
                     moments.electron.external_source_amplitude[iz,ir,index] =
                         moments.ion.external_source_amplitude[iz,ir,index]
+                    moments.electron.external_source_T_array[iz,ir,index] =
+                        electron_source_settings[index].source_T_array[iz,ir]
                 end
                 if moments.evolve_density
                     @loop_r_z ir iz begin
@@ -791,6 +799,8 @@ function initialize_external_source_amplitude!(moments, external_source_settings
                             neutral_source_settings[index].source_strength *
                             neutral_source_settings[index].r_amplitude[ir] *
                             neutral_source_settings[index].z_amplitude[iz]
+                        moments.neutral.external_source_T_array[iz,ir,index] =
+                            neutral_source_settings[index].source_T_array[iz,ir]
                     end
                     if moments.evolve_density
                         @loop_r_z ir iz begin
@@ -835,6 +845,8 @@ function initialize_external_source_amplitude!(moments, external_source_settings
                             neutral_source_settings[index].source_strength *
                             neutral_source_settings[index].r_amplitude[ir] *
                             neutral_source_settings[index].z_amplitude[iz]
+                        moments.neutral.external_source_T_array[iz,ir,index] =
+                            neutral_source_settings[index].source_T_array[iz,ir]
                     end
                     if moments.evolve_density
                         @loop_r_z ir iz begin
