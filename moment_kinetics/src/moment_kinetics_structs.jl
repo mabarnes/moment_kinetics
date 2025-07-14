@@ -192,6 +192,8 @@ struct moments_ion_substruct{ndim_moment_wall}
     dSdt::MPISharedArray{mk_float,ndim_moment}
     # Spatially varying amplitude of the external source term (third index is for different sources)
     external_source_amplitude::MPISharedArray{mk_float,ndim_moment}
+    # Spatially varying temperature of the external source term (third index is for different sources)
+    external_source_T_array::MPISharedArray{mk_float,ndim_moment}
     # Spatially varying amplitude of the density moment of the external source term
     external_source_density_amplitude::MPISharedArray{mk_float,ndim_moment}
     # Spatially varying amplitude of the parallel momentum moment of the external source
@@ -247,6 +249,8 @@ struct moments_electron_substruct{ndim_moment_electron_source}
     parallel_friction::MPISharedArray{mk_float,ndim_moment_electron}
     # Spatially varying amplitude of the external source term
     external_source_amplitude::MPISharedArray{mk_float,ndim_moment_electron_source}
+    # Spatially varying Temperature of the external source term
+    external_source_T_array::MPISharedArray{mk_float,ndim_moment_electron_source}
     # Spatially varying amplitude of the density moment of the external source term
     external_source_density_amplitude::MPISharedArray{mk_float,ndim_moment_electron_source}
     # Spatially varying amplitude of the parallel momentum moment of the external source
@@ -380,6 +384,8 @@ struct moments_neutral_substruct
     dvth_dt::Union{MPISharedArray{mk_float,ndim_moment},Nothing}
     # Spatially varying amplitude of the external source term
     external_source_amplitude::MPISharedArray{mk_float,ndim_moment}
+    # Spatially varying Temperature of the external source term
+    external_source_T_array::MPISharedArray{mk_float,ndim_moment}
     # Spatially varying amplitude of the density moment of the external source term
     external_source_density_amplitude::MPISharedArray{mk_float,ndim_moment}
     # Spatially varying amplitude of the parallel momentum moment of the external source
