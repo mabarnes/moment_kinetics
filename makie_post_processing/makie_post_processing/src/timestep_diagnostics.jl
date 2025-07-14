@@ -639,7 +639,7 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
             if !electron
                 if any(ri.r.n > 1 for ri ∈ run_info)
                     data = get_variable(run_info, "CFL_ion_r")
-                    datamin = minimum(minimum(d) for d ∈ data)
+                    datamin = NaNMath.minimum(collect(NaNMath.minimum(d) for d ∈ data))
                     animate_vs_vpa_z(run_info, "CFL_ion_r"; data=data, it=it,
                                      outfile=plot_prefix * "CFL_ion_r_vs_vpa_z.gif",
                                      colorscale=log10,
@@ -651,7 +651,7 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                                                     :rightspinevisible=>false))
                 end
                 data = get_variable(run_info, "CFL_ion_z")
-                datamin = minimum(minimum(d) for d ∈ data)
+                datamin = NaNMath.minimum(collect(NaNMath.minimum(d) for d ∈ data))
                 animate_vs_vpa_z(run_info, "CFL_ion_z"; data=data, it=it,
                                  outfile=plot_prefix * "CFL_ion_z_vs_vpa_z.gif",
                                  colorscale=log10,
@@ -662,7 +662,7 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                                                 :leftspinevisible=>false,
                                                 :rightspinevisible=>false))
                 data = get_variable(run_info, "CFL_ion_vpa")
-                datamin = minimum(minimum(d) for d ∈ data)
+                datamin = NaNMath.minimum(collect(NaNMath.minimum(d) for d ∈ data))
                 animate_vs_vpa_z(run_info, "CFL_ion_vpa"; data=data, it=it,
                                  outfile=plot_prefix * "CFL_ion_vpa_vs_vpa_z.gif",
                                  colorscale=log10,
@@ -674,7 +674,7 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                                                 :rightspinevisible=>false))
                 if any(ri.vperp.n > 1 for ri ∈ run_info)
                     data = get_variable(run_info, "CFL_ion_vperp")
-                    datamin = minimum(minimum(d) for d ∈ data)
+                    datamin = NaNMath.minimum(collect(NaNMath.minimum(d) for d ∈ data))
                     animate_vs_vpa_z(run_info, "CFL_ion_vperp"; data=data, it=it,
                                      outfile=plot_prefix * "CFL_ion_vperp_vs_vpa_z.gif",
                                      colorscale=log10,
@@ -690,7 +690,7 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                                                                   kinetic_electrons_with_temperature_equation)
                                for ri ∈ run_info)
                 data = get_variable(run_info, "CFL_electron_z")
-                datamin = minimum(minimum(d) for d ∈ data)
+                datamin = NaNMath.minimum(collect(NaNMath.minimum(d) for d ∈ data))
                 animate_vs_vpa_z(run_info, "CFL_electron_z"; data=data, it=it,
                                  outfile=plot_prefix * "CFL_electron_z_vs_vpa_z.gif",
                                  colorscale=log10,
@@ -701,7 +701,7 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                                                 :leftspinevisible=>false,
                                                 :rightspinevisible=>false))
                 data = get_variable(run_info, "CFL_electron_vpa")
-                datamin = minimum(minimum(d) for d ∈ data)
+                datamin = NaNMath.minimum(collect(NaNMath.minimum(d) for d ∈ data))
                 animate_vs_vpa_z(run_info, "CFL_electron_vpa"; data=data, it=it,
                                  outfile=plot_prefix * "CFL_electron_vpa_vs_vpa_z.gif",
                                  colorscale=log10,
@@ -714,7 +714,7 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
             end
             if !electron && any(ri.n_neutral_species > 0 for ri ∈ run_info)
                 data = get_variable(run_info, "CFL_neutral_z")
-                datamin = minimum(minimum(d) for d ∈ data)
+                datamin = NaNMath.minimum(collect(NaNMath.minimum(d) for d ∈ data))
                 animate_vs_vz_z(run_info, "CFL_neutral_z"; data=data, it=it,
                                 outfile=plot_prefix * "CFL_neutral_z_vs_vz_z.gif",
                                 colorscale=log10,
@@ -725,7 +725,7 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                                                :leftspinevisible=>false,
                                                :rightspinevisible=>false))
                 data = get_variable(run_info, "CFL_neutral_vz")
-                datamin = minimum(minimum(d) for d ∈ data)
+                datamin = NaNMath.minimum(collect(NaNMath.minimum(d) for d ∈ data))
                 animate_vs_vz_z(run_info, "CFL_neutral_vz"; data=data, it=it,
                                 outfile=plot_prefix * "CFL_neutral_vz_vs_vz_z.gif",
                                 colorscale=log10,
