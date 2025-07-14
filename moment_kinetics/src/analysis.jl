@@ -879,7 +879,6 @@ function get_unnormalised_f_1d(f, density, vth, evolve_density, evolve_ppar)
         else
             #return reshape(x, (1 for _ ∈ 1:n_v_dims)..., size(x)...)
             result = reshape(x, (1 for _ ∈ 1:n_v_dims)..., size(x)...)
-            println("check size result ", size(result))
             return result
         end
     end
