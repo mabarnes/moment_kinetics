@@ -10,7 +10,7 @@ export enforce_neutral_boundary_conditions!
 using LinearAlgebra: dot
 using SpecialFunctions: erfc
 
-using ..array_allocation: allocate_shared_float
+using ..array_allocation: allocate_shared_float, allocate_shared_bool
 using ..calculus: integral, reconcile_element_boundaries_MPI!
 using ..communication
 using ..coordinates: coordinate
@@ -219,8 +219,83 @@ function create_r_boundary_info(input_dict, pdf, moments, r, z, vperp, vpa, vzet
         end
     end
 
+    ion_error_norm_skip_inner = allocate_shared_bool(z.n)
+    ion_error_norm_skip_outer = allocate_shared_bool(z.n)
+    electron_error_norm_skip_inner = allocate_shared_bool(z.n)
+    electron_error_norm_skip_outer = allocate_shared_bool(z.n)
+    neutral_error_norm_skip_inner = allocate_shared_bool(z.n)
+    neutral_error_norm_skip_outer = allocate_shared_bool(z.n)
+    @begin_serial_region()
+    @serial_region begin
+        if r.irank == 0
+            for s ∈ inner_sections
+                if (isa(s.ion, ion_r_boundary_section_Neumann)
+                    || isa(s.ion, ion_r_boundary_section_Dirichlet))
+
+                    ion_error_norm_skip_inner[s.z_range] .= true
+                else
+                    ion_error_norm_skip_inner[s.z_range] .= false
+                end
+                if (isa(s.electron, electron_r_boundary_section_Neumann)
+                    || isa(s.electron, electron_r_boundary_section_Dirichlet))
+
+                    electron_error_norm_skip_inner[s.z_range] .= true
+                else
+                    electron_error_norm_skip_inner[s.z_range] .= false
+                end
+                if (isa(s.neutral, neutral_r_boundary_section_Neumann)
+                    || isa(s.neutral, neutral_r_boundary_section_Dirichlet))
+
+                    neutral_error_norm_skip_inner[s.z_range] .= true
+                else
+                    neutral_error_norm_skip_inner[s.z_range] .= false
+                end
+            end
+        else
+            ion_error_norm_skip_inner .= false
+            electron_error_norm_skip_inner .= false
+            neutral_error_norm_skip_inner .= false
+        end
+
+        if r.irank == r.nrank - 1
+            for s ∈ outer_sections
+                if (isa(s.ion, ion_r_boundary_section_Neumann)
+                    || isa(s.ion, ion_r_boundary_section_Dirichlet))
+
+                    ion_error_norm_skip_outer[s.z_range] .= true
+                else
+                    ion_error_norm_skip_outer[s.z_range] .= false
+                end
+                if (isa(s.electron, electron_r_boundary_section_Neumann)
+                    || isa(s.electron, electron_r_boundary_section_Dirichlet))
+
+                    electron_error_norm_skip_outer[s.z_range] .= true
+                else
+                    electron_error_norm_skip_outer[s.z_range] .= false
+                end
+                if (isa(s.neutral, neutral_r_boundary_section_Neumann)
+                    || isa(s.neutral, neutral_r_boundary_section_Dirichlet))
+
+                    neutral_error_norm_skip_outer[s.z_range] .= true
+                else
+                    neutral_error_norm_skip_outer[s.z_range] .= false
+                end
+            end
+        else
+            ion_error_norm_skip_outer .= false
+            electron_error_norm_skip_outer .= false
+            neutral_error_norm_skip_outer .= false
+        end
+    end
+
     r_boundaries = r_boundary_info(Tuple(s for s ∈ inner_sections if s !== nothing),
-                                   Tuple(s for s ∈ outer_sections if s !== nothing))
+                                   Tuple(s for s ∈ outer_sections if s !== nothing),
+                                   ion_error_norm_skip_inner,
+                                   electron_error_norm_skip_inner,
+                                   neutral_error_norm_skip_inner,
+                                   ion_error_norm_skip_outer,
+                                   electron_error_norm_skip_outer,
+                                   neutral_error_norm_skip_outer)
 
     # Check that all boundary points are handled
     if r.irank == 0 && r.n > 1

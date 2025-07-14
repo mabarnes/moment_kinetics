@@ -935,10 +935,15 @@ function local_error_norm end
 
 function local_error_norm(f_loworder::MPISharedArray{mk_float,2},
                           f::MPISharedArray{mk_float,2}, rtol, atol; method="Linf",
-                          skip_r_inner=false, skip_z_lower=false, error_sum_zero=0.0)
+                          skip_r_inner, skip_r_outer, skip_z_lower=false,
+                          error_sum_zero=0.0)
+    nr = size(f, 2)
     if method == "Linf"
         f_max = -Inf
         @loop_r_z ir iz begin
+            if (skip_r_inner[iz] && ir == 1) || (skip_r_outer[iz] && ir == nr)
+                continue
+            end
             error_norm = abs(f_loworder[iz,ir] - f[iz,ir]) / (rtol*abs(f[iz,ir]) + atol)
             f_max = max(f_max, error_norm)
         end
@@ -946,7 +951,8 @@ function local_error_norm(f_loworder::MPISharedArray{mk_float,2},
     elseif method == "L2"
         L2sum = error_sum_zero
         @loop_r_z ir iz begin
-            if (skip_r_inner && ir == 1) || (skip_z_lower && iz == 1)
+            if (skip_r_inner[iz] && ir == 1) || (skip_r_outer[iz] && ir == nr) ||
+                    (skip_z_lower && iz == 1)
                 continue
             end
             error_norm = ((f_loworder[iz,ir] - f[iz,ir]) / (rtol*abs(f[iz,ir]) + atol))^2
@@ -954,13 +960,6 @@ function local_error_norm(f_loworder::MPISharedArray{mk_float,2},
         end
         # Will sum results from different processes in shared memory block after returning
         # from this function.
-        nz, nr = size(f_loworder)
-        if skip_r_inner
-            nr -= 1
-        end
-        if skip_z_lower
-            nz -= 1
-        end
         return L2sum
     else
         error("Unrecognized method '$method'")
@@ -968,17 +967,24 @@ function local_error_norm(f_loworder::MPISharedArray{mk_float,2},
 end
 function local_error_norm(f_loworder::MPISharedArray{mk_float,3},
                           f::MPISharedArray{mk_float,3}, rtol, atol, neutral=false;
-                          method="Linf", skip_r_inner=false, skip_z_lower=false,
+                          method="Linf", skip_r_inner, skip_r_outer, skip_z_lower=false,
                           error_sum_zero=0.0)
+    nr = size(f, 2)
     if method == "Linf"
         f_max = -Inf
         if neutral
             @loop_sn_r_z isn ir iz begin
+                if (skip_r_inner[iz] && ir == 1) || (skip_r_outer[iz] && ir == nr)
+                    continue
+                end
                 error_norm = abs(f_loworder[iz,ir,isn] - f[iz,ir,isn]) / (rtol*abs(f[iz,ir,isn]) + atol)
                 f_max = max(f_max, error_norm)
             end
         else
             @loop_s_r_z is ir iz begin
+                if (skip_r_inner[iz] && ir == 1) || (skip_r_outer[iz] && ir == nr)
+                    continue
+                end
                 error_norm = abs(f_loworder[iz,ir,is] - f[iz,ir,is]) / (rtol*abs(f[iz,ir,is]) + atol)
                 f_max = max(f_max, error_norm)
             end
@@ -988,7 +994,8 @@ function local_error_norm(f_loworder::MPISharedArray{mk_float,3},
         L2sum = error_sum_zero
         if neutral
             @loop_sn_r_z isn ir iz begin
-                if (skip_r_inner && ir == 1) || (skip_z_lower && iz == 1)
+                if (skip_r_inner[iz] && ir == 1) || (skip_r_outer[iz] && ir == nr) ||
+                        (skip_z_lower && iz == 1)
                     continue
                 end
                 error_norm = ((f_loworder[iz,ir,isn] - f[iz,ir,isn]) / (rtol*abs(f[iz,ir,isn]) + atol))^2
@@ -996,7 +1003,8 @@ function local_error_norm(f_loworder::MPISharedArray{mk_float,3},
             end
         else
             @loop_s_r_z is ir iz begin
-                if (skip_r_inner && ir == 1) || (skip_z_lower && iz == 1)
+                if (skip_r_inner[iz] && ir == 1) || (skip_r_outer[iz] && ir == nr) ||
+                        (skip_z_lower && iz == 1)
                     continue
                 end
                 error_norm = ((f_loworder[iz,ir,is] - f[iz,ir,is]) / (rtol*abs(f[iz,ir,is]) + atol))^2
@@ -1005,13 +1013,6 @@ function local_error_norm(f_loworder::MPISharedArray{mk_float,3},
         end
         # Will sum results from different processes in shared memory block after returning
         # from this function.
-        nz, nr, nspecies = size(f_loworder)
-        if skip_r_inner
-            nr -= 1
-        end
-        if skip_z_lower
-            nz -= 1
-        end
         return L2sum
     else
         error("Unrecognized method '$method'")
@@ -1019,34 +1020,37 @@ function local_error_norm(f_loworder::MPISharedArray{mk_float,3},
 end
 function local_error_norm(f_loworder::MPISharedArray{mk_float,4},
                           f::MPISharedArray{mk_float,4}, rtol, atol; method="Linf",
-                          skip_r_inner=false, skip_z_lower=false, error_sum_zero=0.0)
+                          skip_r_inner, skip_r_outer, skip_z_lower=false,
+                          error_sum_zero=0.0)
+    nr = size(f, 4)
     if method == "Linf"
         f_max = -Inf
-        @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
-            error_norm = abs(f_loworder[ivpa,ivperp,iz,ir] - f[ivpa,ivperp,iz,ir]) /
-                         (rtol*abs(f[ivpa,ivperp,iz,ir]) + atol)
-            f_max = max(f_max, error_norm)
+        @loop_r_z ir iz begin
+            if (skip_r_inner[iz] && ir == 1) || (skip_r_outer[iz] && ir == nr)
+                continue
+            end
+            @loop_vperp_vpa ivperp ivpa begin
+                error_norm = abs(f_loworder[ivpa,ivperp,iz,ir] - f[ivpa,ivperp,iz,ir]) /
+                             (rtol*abs(f[ivpa,ivperp,iz,ir]) + atol)
+                f_max = max(f_max, error_norm)
+            end
         end
         return f_max
     elseif method == "L2"
         L2sum = error_sum_zero
-        @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
-            if (skip_r_inner && ir == 1) || (skip_z_lower && iz == 1)
+        @loop_r_z ir iz begin
+            if (skip_r_inner[iz] && ir == 1) || (skip_r_outer[iz] && ir == nr) ||
+                    (skip_z_lower && iz == 1)
                 continue
             end
-            error_norm = ((f_loworder[ivpa,ivperp,iz,ir] - f[ivpa,ivperp,iz,ir]) /
-                          (rtol*abs(f[ivpa,ivperp,iz,ir]) + atol))^2
-            L2sum += error_norm
+            @loop_vperp_vpa ivperp ivpa begin
+                error_norm = ((f_loworder[ivpa,ivperp,iz,ir] - f[ivpa,ivperp,iz,ir]) /
+                              (rtol*abs(f[ivpa,ivperp,iz,ir]) + atol))^2
+                L2sum += error_norm
+            end
         end
         # Will sum results from different processes in shared memory block after returning
         # from this function.
-        nvpa, nvperp, nz, nr = size(f_loworder)
-        if skip_r_inner
-            nr -= 1
-        end
-        if skip_z_lower
-            nz -= 1
-        end
         return L2sum
     else
         error("Unrecognized method '$method'")
@@ -1054,34 +1058,37 @@ function local_error_norm(f_loworder::MPISharedArray{mk_float,4},
 end
 function local_error_norm(f_loworder::MPISharedArray{mk_float,5},
                           f::MPISharedArray{mk_float,5}, rtol, atol; method="Linf",
-                          skip_r_inner=false, skip_z_lower=false, error_sum_zero=0.0)
+                          skip_r_inner, skip_r_outer, skip_z_lower=false,
+                          error_sum_zero=0.0)
+    nr = size(f, 4)
     if method == "Linf"
         f_max = -Inf
-        @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
-            error_norm = abs(f_loworder[ivpa,ivperp,iz,ir,is] - f[ivpa,ivperp,iz,ir,is]) /
-                         (rtol*abs(f[ivpa,ivperp,iz,ir,is]) + atol)
-            f_max = max(f_max, error_norm)
+        @loop_s_r_z is ir iz begin
+            if (skip_r_inner[iz] && ir == 1) || (skip_r_outer[iz] && ir == nr)
+                continue
+            end
+            @loop_vperp_vpa ivperp ivpa begin
+                error_norm = abs(f_loworder[ivpa,ivperp,iz,ir,is] - f[ivpa,ivperp,iz,ir,is]) /
+                             (rtol*abs(f[ivpa,ivperp,iz,ir,is]) + atol)
+                f_max = max(f_max, error_norm)
+            end
         end
         return f_max
     elseif method == "L2"
         L2sum = error_sum_zero
-        @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
-            if (skip_r_inner && ir == 1) || (skip_z_lower && iz == 1)
+        @loop_s_r_z is ir iz begin
+            if (skip_r_inner[iz] && ir == 1) || (skip_r_outer[iz] && ir == nr) ||
+                    (skip_z_lower && iz == 1)
                 continue
             end
-            error_norm = ((f_loworder[ivpa,ivperp,iz,ir,is] - f[ivpa,ivperp,iz,ir,is]) /
-                          (rtol*abs(f[ivpa,ivperp,iz,ir,is]) + atol))^2
-            L2sum += error_norm
+            @loop_vperp_vpa ivperp ivpa begin
+                error_norm = ((f_loworder[ivpa,ivperp,iz,ir,is] - f[ivpa,ivperp,iz,ir,is]) /
+                              (rtol*abs(f[ivpa,ivperp,iz,ir,is]) + atol))^2
+                L2sum += error_norm
+            end
         end
         # Will sum results from different processes in shared memory block after returning
         # from this function.
-        nvpa, nvperp, nz, nr, nspecies = size(f_loworder)
-        if skip_r_inner
-            nr -= 1
-        end
-        if skip_z_lower
-            nz -= 1
-        end
         return L2sum
     else
         error("Unrecognized method '$method'")
@@ -1089,24 +1096,34 @@ function local_error_norm(f_loworder::MPISharedArray{mk_float,5},
 end
 function local_error_norm(f_loworder::MPISharedArray{mk_float,6},
                           f::MPISharedArray{mk_float,6}, rtol, atol; method="Linf",
-                          skip_r_inner=false, skip_z_lower=false, error_sum_zero=0.0)
+                          skip_r_inner, skip_r_outer, skip_z_lower=false,
+                          error_sum_zero=0.0)
+    nr = size(f, 5)
     if method == "Linf"
         f_max = -Inf
-        @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
-            error_norm = abs(f_loworder[ivz,ivr,ivzeta,iz,ir,isn] - f[ivz,ivr,ivzeta,iz,ir,isn]) /
-                         (rtol*abs(f[ivz,ivr,ivzeta,iz,ir,isn]) + atol)
-            f_max = max(f_max, error_norm)
+        @loop_sn_r_z isn ir iz begin
+            if (skip_r_inner[iz] && ir == 1) || (skip_r_outer[iz] && ir == nr)
+                continue
+            end
+            @loop_vzeta_vr_vz ivzeta ivr ivz begin
+                error_norm = abs(f_loworder[ivz,ivr,ivzeta,iz,ir,isn] - f[ivz,ivr,ivzeta,iz,ir,isn]) /
+                             (rtol*abs(f[ivz,ivr,ivzeta,iz,ir,isn]) + atol)
+                f_max = max(f_max, error_norm)
+            end
         end
         return f_max
     elseif method == "L2"
         L2sum = error_sum_zero
-        @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
-            if (skip_r_inner && ir == 1) || (skip_z_lower && iz == 1)
+        @loop_sn_r_z isn ir iz begin
+            if (skip_r_inner[iz] && ir == 1) || (skip_r_outer[iz] && ir == nr) ||
+                    (skip_z_lower && iz == 1)
                 continue
             end
-            error_norm = ((f_loworder[ivz,ivr,ivzeta,iz,ir,isn] - f_loworder[ivz,ivr,ivzeta,iz,ir,isn]) /
-                          (rtol*abs(f[ivz,ivr,ivzeta,iz,ir,isn]) + atol))^2
-            L2sum += error_norm
+            @loop_vzeta_vr_vz ivzeta ivr ivz begin
+                error_norm = ((f_loworder[ivz,ivr,ivzeta,iz,ir,isn] - f_loworder[ivz,ivr,ivzeta,iz,ir,isn]) /
+                              (rtol*abs(f[ivz,ivr,ivzeta,iz,ir,isn]) + atol))^2
+                L2sum += error_norm
+            end
         end
         # Will sum results from different processes in shared memory block after returning
         # from this function.

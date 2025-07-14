@@ -2927,7 +2927,9 @@ appropriate.
     end
     ion_pdf_error = local_error_norm(scratch[2].pdf, scratch[t_params.n_rk_stages+1].pdf,
                                      t_params.rtol, t_params.atol;
-                                     method=error_norm_method, skip_r_inner=skip_r_inner,
+                                     method=error_norm_method,
+                                     skip_r_inner=boundaries.r.ion_error_norm_skip_inner,
+                                     skip_r_outer=boundaries.r.ion_error_norm_skip_outer,
                                      skip_z_lower=skip_z_lower,
                                      error_sum_zero=t_params.error_sum_zero)
     error_norms["pdf_accuracy"] = ion_pdf_error
@@ -2940,7 +2942,9 @@ appropriate.
         ion_n_err = local_error_norm(scratch[2].density,
                                      scratch[t_params.n_rk_stages+1].density,
                                      t_params.rtol, t_params.atol;
-                                     method=error_norm_method, skip_r_inner=skip_r_inner,
+                                     method=error_norm_method,
+                                     skip_r_inner=boundaries.r.ion_error_norm_skip_inner,
+                                     skip_r_outer=boundaries.r.ion_error_norm_skip_outer,
                                      skip_z_lower=skip_z_lower,
                                      error_sum_zero=t_params.error_sum_zero)
         error_norms["density_accuracy"] = ion_n_err
@@ -2951,7 +2955,9 @@ appropriate.
         ion_u_err = local_error_norm(scratch[2].upar,
                                      scratch[t_params.n_rk_stages+1].upar, t_params.rtol,
                                      t_params.atol; method=error_norm_method,
-                                     skip_r_inner=skip_r_inner, skip_z_lower=skip_z_lower,
+                                     skip_r_inner=boundaries.r.ion_error_norm_skip_inner,
+                                     skip_r_outer=boundaries.r.ion_error_norm_skip_outer,
+                                     skip_z_lower=skip_z_lower,
                                      error_sum_zero=t_params.error_sum_zero)
         error_norms["upar_accuracy"] = ion_u_err
         push!(total_points, z.n_global * r.n_global * n_ion_species)
@@ -2961,7 +2967,9 @@ appropriate.
         ion_p_err = local_error_norm(scratch[2].p,
                                      scratch[t_params.n_rk_stages+1].p, t_params.rtol,
                                      t_params.atol; method=error_norm_method,
-                                     skip_r_inner=skip_r_inner, skip_z_lower=skip_z_lower,
+                                     skip_r_inner=boundaries.r.ion_error_norm_skip_inner,
+                                     skip_r_outer=boundaries.r.ion_error_norm_skip_outer,
+                                     skip_z_lower=skip_z_lower,
                                      error_sum_zero=t_params.error_sum_zero)
         error_norms["p_accuracy"] = ion_p_err
         push!(total_points, z.n_global * r.n_global * n_ion_species)
@@ -2974,7 +2982,8 @@ appropriate.
                                           scratch[t_params.n_rk_stages+1].electron_p,
                                           t_params.rtol, t_params.atol;
                                           method=error_norm_method,
-                                          skip_r_inner=skip_r_inner,
+                                          skip_r_inner=boundaries.r.electron_error_norm_skip_inner,
+                                          skip_r_outer=boundaries.r.electron_error_norm_skip_outer,
                                           skip_z_lower=skip_z_lower,
                                           error_sum_zero=t_params.error_sum_zero)
         error_norms["electron_p_accuracy"] = electron_p_err
@@ -2987,7 +2996,8 @@ appropriate.
                                                   scratch[t_params.n_rk_stages+1].pdf_electron,
                                                   t_params.rtol, t_params.atol;
                                                   method=error_norm_method,
-                                                  skip_r_inner=skip_r_inner,
+                                                  skip_r_inner=boundaries.r.electron_error_norm_skip_inner,
+                                                  skip_r_outer=boundaries.r.electron_error_norm_skip_outer,
                                                   skip_z_lower=skip_z_lower,
                                                   error_sum_zero=t_params.error_sum_zero)
             error_norms["electron_pdf_accuracy"] = electron_pdf_error
@@ -3034,7 +3044,8 @@ appropriate.
                                           scratch[t_params.n_rk_stages+1].pdf_neutral,
                                           t_params.rtol, t_params.atol;
                                           method=error_norm_method,
-                                          skip_r_inner=skip_r_inner,
+                                          skip_r_inner=boundaries.r.neutral_error_norm_skip_inner,
+                                          skip_r_outer=boundaries.r.neutral_error_norm_skip_outer,
                                           skip_z_lower=skip_z_lower,
                                           error_sum_zero=t_params.error_sum_zero)
         error_norms["neutral_pdf_accuracy"] = neut_pdf_error
@@ -3049,7 +3060,8 @@ appropriate.
                                           scratch[t_params.n_rk_stages+1].density_neutral,
                                           t_params.rtol, t_params.atol, true;
                                           method=error_norm_method,
-                                          skip_r_inner=skip_r_inner,
+                                          skip_r_inner=boundaries.r.neutral_error_norm_skip_inner,
+                                          skip_r_outer=boundaries.r.neutral_error_norm_skip_outer,
                                           skip_z_lower=skip_z_lower,
                                           error_sum_zero=t_params.error_sum_zero)
             error_norms["neutral_density_accuracy"] = neut_n_err
@@ -3061,7 +3073,8 @@ appropriate.
                                           scratch[t_params.n_rk_stages+1].uz_neutral,
                                           t_params.rtol, t_params.atol, true;
                                           method=error_norm_method,
-                                          skip_r_inner=skip_r_inner,
+                                          skip_r_inner=boundaries.r.neutral_error_norm_skip_inner,
+                                          skip_r_outer=boundaries.r.neutral_error_norm_skip_outer,
                                           skip_z_lower=skip_z_lower,
                                           error_sum_zero=t_params.error_sum_zero)
             error_norms["neutral_uz_accuracy"] = neut_u_err
@@ -3073,7 +3086,8 @@ appropriate.
                                           scratch[t_params.n_rk_stages+1].p_neutral,
                                           t_params.rtol, t_params.atol, true;
                                           method=error_norm_method,
-                                          skip_r_inner=skip_r_inner,
+                                          skip_r_inner=boundaries.r.neutral_error_norm_skip_inner,
+                                          skip_r_outer=boundaries.r.neutral_error_norm_skip_outer,
                                           skip_z_lower=skip_z_lower,
                                           error_sum_zero=t_params.error_sum_zero)
             error_norms["neutral_p_accuracy"] = neut_p_err

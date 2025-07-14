@@ -550,6 +550,12 @@ struct r_boundary_info{Tinner <: NTuple{M,r_boundary_section} where M,
                        Touter <: NTuple{N,r_boundary_section} where N}
     inner_sections::Tinner
     outer_sections::Touter
+    ion_error_norm_skip_inner::MPISharedArray{Bool,1}
+    ion_error_norm_skip_outer::MPISharedArray{Bool,1}
+    electron_error_norm_skip_inner::MPISharedArray{Bool,1}
+    electron_error_norm_skip_outer::MPISharedArray{Bool,1}
+    neutral_error_norm_skip_inner::MPISharedArray{Bool,1}
+    neutral_error_norm_skip_outer::MPISharedArray{Bool,1}
 end
 
 struct z_boundary_info
