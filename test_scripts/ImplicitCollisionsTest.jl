@@ -267,7 +267,7 @@ function test_implicit_collisions_wrapper(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=
         "z"=>OptionsDict("ngrid"=> 1, "nelement"=> 1,
                             "nelement_local"=> 1, "bc"=>"none"),
         "r"=>OptionsDict("ngrid"=> 1, "nelement"=> 1,
-                            "nelement_local"=> 1, "bc"=>"none"),
+                            "nelement_local"=> 1),
     )
     #println("made inputs")
     #println("vpa: ngrid: ",ngrid," nelement: ",nelement_local_vpa, " Lvpa: ",Lvpa)
@@ -319,6 +319,13 @@ function test_implicit_collisions_wrapper(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=
     fvpavperpzrs_old = allocate_shared_float(vpa.n,vperp.n,nz,nr,ns)
     fvpavperpzrs_new = allocate_shared_float(vpa.n,vperp.n,nz,nr,ns)
     dSdt = allocate_shared_float(nz,nr,ns)
+    # variables needed to control moment kinetic normalisation factors
+    # not the density or vth assocated with the pdf solved for in
+    # the fokker_planck.jl functions.
+    mk_density = allocate_shared_float(nz,nr,ns)
+    mk_vth = allocate_shared_float(nz,nr,ns)
+    evolve_p = false
+    evolve_density = false
     @serial_region begin
         @loop_s_r_z is ir iz begin
             @loop_vperp_vpa ivperp ivpa begin
@@ -374,7 +381,8 @@ function test_implicit_collisions_wrapper(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=
     #println(nl_solver_params.preconditioners)
     start_run_time = now()
     for it in 1:ntime
-        success = implicit_ion_fokker_planck_self_collisions!(fvpavperpzrs_new, fvpavperpzrs_old, dSdt, 
+        success = implicit_ion_fokker_planck_self_collisions!(fvpavperpzrs_new, fvpavperpzrs_old, dSdt,
+                                        mk_density, mk_vth, evolve_p, evolve_density,
                                         composition, collisions, fkpl_arrays, 
                                         vpa, vperp, z, r, delta_t, spectral_objects,
                                         nl_solver_params; diagnose_entropy_production=true,
