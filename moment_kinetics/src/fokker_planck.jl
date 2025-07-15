@@ -352,7 +352,9 @@ end
 Function for advancing with the explicit, weak-form, self-collision operator.
 """
 @timeit global_timer explicit_fokker_planck_collisions_weak_form!(
-                         pdf_out, pdf_in, dSdt, composition, collisions, dt,
+                         pdf_out, pdf_in,
+                         dSdt, density, vth, evolve_p, evolve_density,
+                         composition, collisions, dt,
                          fkpl_arrays::fokkerplanck_weakform_arrays_struct, r, z, vperp,
                          vpa, vperp_spectral, vpa_spectral, scratch_dummy;
                          diagnose_entropy_production=false) = begin
@@ -384,9 +386,11 @@ Function for advancing with the explicit, weak-form, self-collision operator.
     @begin_r_z_anysv_region()
     @loop_r_z ir iz begin
         is = 1
+        prefactor = moment_kinetic_collision_frequency_prefactor(density[iz,ir,is],
+                                            vth[iz,ir,is], evolve_p, evolve_density)
         # first argument is Fs, and second argument is Fs' in C[Fs,Fs'] 
         @views fokker_planck_self_collision_operator_weak_form!(
-            pdf_in[:,:,iz,ir,is], ms, nuss, fkpl_arrays,
+            pdf_in[:,:,iz,ir,is], ms, nuss*prefactor, fkpl_arrays,
             vperp, vpa, vperp_spectral, vpa_spectral, 
             boundary_data_option = boundary_data_option,
             use_conserving_corrections = use_conserving_corrections)
@@ -811,6 +815,25 @@ function calculate_entropy_production!(dSdt,pdf,fkpl_arrays,vpa,vperp,
     return nothing
 end
 
+"""
+Function to account for the normalisation of the
+moment kinetic normalised distribution function
+by multiplying the input collision frequency by
+the normalisation factors.
+
+Only applicable for self collisions.
+"""
+function moment_kinetic_collision_frequency_prefactor(density::mk_float, vth::mk_float,
+                                                    evolve_p::Bool, evolve_density::Bool)
+    if evolve_p && evolve_density
+        collision_prefactor = density/(vth^3)
+    elseif evolve_density
+        collision_prefactor = density
+    else
+        collision_prefactor = 1.0
+    end
+    return collision_prefactor
+end
 
 ######################################################
 # end functions associated with the weak-form operator
@@ -932,7 +955,8 @@ function setup_fp_nl_solve(implicit_ion_fp_collisions::Bool,
         default_atol=default_atol, default_rtol=default_rtol)
 end
 
-function implicit_ion_fokker_planck_self_collisions!(pdf_out, pdf_in, dSdt, 
+function implicit_ion_fokker_planck_self_collisions!(pdf_out, pdf_in,
+                    dSdt, density, vth, evolve_p, evolve_density,
                     composition, collisions, fkpl_arrays, 
                     vpa, vperp, z, r, delta_t, spectral_objects,
                     nl_solver_params; diagnose_entropy_production=false,
@@ -972,8 +996,10 @@ function implicit_ion_fokker_planck_self_collisions!(pdf_out, pdf_in, dSdt,
     @begin_r_z_anysv_region()
     @loop_r_z ir iz begin
         is = 1
+        prefactor = moment_kinetic_collision_frequency_prefactor(density[iz,ir,is],
+                                            vth[iz,ir,is], evolve_p, evolve_density)
         @views Fold = pdf_in[:,:,iz,ir,is]
-        local_success = fokker_planck_self_collisions_backward_euler_step!(Fold, delta_t, ms, nuss, fkpl_arrays,
+        local_success = fokker_planck_self_collisions_backward_euler_step!(Fold, delta_t, ms, nuss*prefactor, fkpl_arrays,
                             coords, spectral_objects,
                             nl_solver_params;
                             test_numerical_conserving_terms=use_conserving_corrections,
