@@ -3906,8 +3906,9 @@ implementation), a call needs to be made with `dt` scaled by some coefficient.
             update_entropy_diagnostic = (istage == 1)
             if collisions.fkpl.self_collisions
                 # self collisions for each species
-                explicit_fokker_planck_collisions_weak_form!(fvec_out.pdf,fvec_in.pdf,moments.ion.dSdt,composition,
-                                    collisions,dt,fp_arrays,r,z,vperp,vpa,vperp_spectral,vpa_spectral,scratch_dummy,
+                explicit_fokker_planck_collisions_weak_form!(fvec_out.pdf,fvec_in.pdf,moments.ion.dSdt,
+                                    fvec_in.density,moments.ion.vth,moments.evolve_p,moments.evolve_density,
+                                    composition,collisions,dt,fp_arrays,r,z,vperp,vpa,vperp_spectral,vpa_spectral,scratch_dummy,
                                                         diagnose_entropy_production = update_entropy_diagnostic)
                 write_debug_IO("explicit_fokker_planck_collisions_weak_form!")
             end
@@ -4051,9 +4052,10 @@ end
     elseif t_params.kinetic_ion_solver == implicit_ion_fp_collisions
         # backward Euler advance d F / d t = C[F, F]
         ion_success = implicit_ion_fokker_planck_self_collisions!(fvec_out.pdf, fvec_in.pdf, moments.ion.dSdt, 
-        composition, collisions, fp_arrays, 
-        vpa, vperp, z, r, dt, spectral_objects,
-        nl_solver_params.ion_fp_collisions; diagnose_entropy_production=true)
+                                fvec_in.density,moments.ion.vth,moments.evolve_p,moments.evolve_density,
+                                composition, collisions, fp_arrays,
+                                vpa, vperp, z, r, dt, spectral_objects,
+                                nl_solver_params.ion_fp_collisions; diagnose_entropy_production=true)
         success = success && ion_success
     end
     return success
