@@ -17,7 +17,7 @@ using ..nonlinear_solvers: newton_solve!
 using ..velocity_moments: update_derived_moments!, calculate_ion_moment_derivatives!
 
 using ..array_allocation: allocate_float
-using ..boundary_conditions: vpagrid_to_dzdt
+using ..boundary_conditions: vpagrid_to_vpa
 using ..calculus: second_derivative!
 using LinearAlgebra
 using SparseArrays
@@ -88,9 +88,9 @@ end
             speed = @view vpa_advect[is].speed[:,ivperp,iz,ir]
 
             if z.irank == 0 && iz == 1
-                @. vpa.scratch = vpagrid_to_dzdt(vpa.grid, moments.ion.vth[iz,ir,is],
-                                                 fvec_in.upar[iz,ir,is],
-                                                 moments.evolve_p, moments.evolve_upar)
+                @. vpa.scratch = vpagrid_to_vpa(vpa.grid, moments.ion.vth[iz,ir,is],
+                                                fvec_in.upar[iz,ir,is], moments.evolve_p,
+                                                moments.evolve_upar)
                 icut_lower_z = vpa.n
                 for ivpa ∈ vpa.n:-1:1
                     # for left boundary in zed (z = -Lz/2), want
@@ -102,9 +102,9 @@ end
                 end
             end
             if z.irank == z.nrank - 1 && iz == z.n
-                @. vpa.scratch = vpagrid_to_dzdt(vpa.grid, moments.ion.vth[iz,ir,is],
-                                                 fvec_in.upar[iz,ir,is],
-                                                 moments.evolve_p, moments.evolve_upar)
+                @. vpa.scratch = vpagrid_to_vpa(vpa.grid, moments.ion.vth[iz,ir,is],
+                                                fvec_in.upar[iz,ir,is], moments.evolve_p,
+                                                moments.evolve_upar)
                 icut_upper_z = 0
                 for ivpa ∈ 1:vpa.n
                     # for right boundary in zed (z = Lz/2), want

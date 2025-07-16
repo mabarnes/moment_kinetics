@@ -5,7 +5,7 @@ module JacobianMatrixTests
 include("setup.jl")
 
 using moment_kinetics: setup_moment_kinetics, cleanup_moment_kinetics!
-using moment_kinetics.analysis: vpagrid_to_dzdt
+using moment_kinetics.analysis: vpagrid_to_vpa
 using moment_kinetics.array_allocation: allocate_shared_float
 using moment_kinetics.boundary_conditions: enforce_v_boundary_condition_local!,
                                            enforce_vperp_boundary_condition!,
@@ -453,9 +453,7 @@ function test_electron_z_advection(test_input; rtol=(2.5e2*epsilon)^2)
                 zero = 1.0e-14
                 if z.irank == 0
                     iz = 1
-                    # We actually want v_∥ here, not v_z, so pass bz=1, vEz=0
-                    v_unnorm .= vpagrid_to_dzdt(vpa.grid, vth[iz], upar[iz], 1.0, 0.0,
-                                                true, true)
+                    v_unnorm .= vpagrid_to_vpa(vpa.grid, vth[iz], upar[iz], true, true)
                     @loop_vperp_vpa ivperp ivpa begin
                         if v_unnorm[ivpa] > -zero
                             residual[ivpa,ivperp,iz] = 0.0
@@ -464,9 +462,7 @@ function test_electron_z_advection(test_input; rtol=(2.5e2*epsilon)^2)
                 end
                 if z.irank == z.nrank - 1
                     iz = z.n
-                    # We actually want v_∥ here, not v_z, so pass bz=1, vEz=0
-                    v_unnorm .= vpagrid_to_dzdt(vpa.grid, vth[iz], upar[iz], 1.0, 0.0,
-                                                true, true)
+                    v_unnorm .= vpagrid_to_vpa(vpa.grid, vth[iz], upar[iz], true, true)
                     @loop_vperp_vpa ivperp ivpa begin
                         if v_unnorm[ivpa] < zero
                             residual[ivpa,ivperp,iz] = 0.0
@@ -792,9 +788,7 @@ function test_electron_vpa_advection(test_input; rtol=(3.0e2*epsilon)^2)
                 zero = 1.0e-14
                 if z.irank == 0
                     iz = 1
-                    # We actually want v_∥ here, not v_z, so pass bz=1, vEz=0
-                    v_unnorm .= vpagrid_to_dzdt(vpa.grid, vth[iz], upar[iz], 1.0, 0.0,
-                                                true, true)
+                    v_unnorm .= vpagrid_to_vpa(vpa.grid, vth[iz], upar[iz], true, true)
                     @loop_vperp_vpa ivperp ivpa begin
                         if v_unnorm[ivpa] > -zero
                             residual[ivpa,ivperp,iz] = 0.0
@@ -803,9 +797,7 @@ function test_electron_vpa_advection(test_input; rtol=(3.0e2*epsilon)^2)
                 end
                 if z.irank == z.nrank - 1
                     iz = z.n
-                    # We actually want v_∥ here, not v_z, so pass bz=1, vEz=0
-                    v_unnorm .= vpagrid_to_dzdt(vpa.grid, vth[iz], upar[iz], 1.0, 0.0,
-                                                true, true)
+                    v_unnorm .= vpagrid_to_vpa(vpa.grid, vth[iz], upar[iz], true, true)
                     @loop_vperp_vpa ivperp ivpa begin
                         if v_unnorm[ivpa] < zero
                             residual[ivpa,ivperp,iz] = 0.0
@@ -1142,9 +1134,7 @@ function test_contribution_from_electron_pdf_term(test_input; rtol=(4.0e2*epsilo
                 zero = 1.0e-14
                 if z.irank == 0
                     iz = 1
-                    # We actually want v_∥ here, not v_z, so pass bz=1, vEz=0
-                    v_unnorm .= vpagrid_to_dzdt(vpa.grid, vth[iz], upar[iz], 1.0, 0.0,
-                                                true, true)
+                    v_unnorm .= vpagrid_to_vpa(vpa.grid, vth[iz], upar[iz], true, true)
                     @loop_vperp_vpa ivperp ivpa begin
                         if v_unnorm[ivpa] > -zero
                             residual[ivpa,ivperp,iz] = 0.0
@@ -1153,9 +1143,7 @@ function test_contribution_from_electron_pdf_term(test_input; rtol=(4.0e2*epsilo
                 end
                 if z.irank == z.nrank - 1
                     iz = z.n
-                    # We actually want v_∥ here, not v_z, so pass bz=1, vEz=0
-                    v_unnorm .= vpagrid_to_dzdt(vpa.grid, vth[iz], upar[iz], 1.0, 0.0,
-                                                true, true)
+                    v_unnorm .= vpagrid_to_vpa(vpa.grid, vth[iz], upar[iz], true, true)
                     @loop_vperp_vpa ivperp ivpa begin
                         if v_unnorm[ivpa] < zero
                             residual[ivpa,ivperp,iz] = 0.0
@@ -1437,9 +1425,7 @@ function test_electron_dissipation_term(test_input; rtol=(1.0e1*epsilon)^2)
                 zero = 1.0e-14
                 if z.irank == 0
                     iz = 1
-                    # We actually want v_∥ here, not v_z, so pass bz=1, vEz=0
-                    v_unnorm .= vpagrid_to_dzdt(vpa.grid, vth[iz], upar[iz], 1.0, 0.0,
-                                                true, true)
+                    v_unnorm .= vpagrid_to_vpa(vpa.grid, vth[iz], upar[iz], true, true)
                     @loop_vperp_vpa ivperp ivpa begin
                         if v_unnorm[ivpa] > -zero
                             residual[ivpa,ivperp,iz] = 0.0
@@ -1448,9 +1434,7 @@ function test_electron_dissipation_term(test_input; rtol=(1.0e1*epsilon)^2)
                 end
                 if z.irank == z.nrank - 1
                     iz = z.n
-                    # We actually want v_∥ here, not v_z, so pass bz=1, vEz=0
-                    v_unnorm .= vpagrid_to_dzdt(vpa.grid, vth[iz], upar[iz], 1.0, 0.0,
-                                                true, true)
+                    v_unnorm .= vpagrid_to_vpa(vpa.grid, vth[iz], upar[iz], true, true)
                     @loop_vperp_vpa ivperp ivpa begin
                         if v_unnorm[ivpa] < zero
                             residual[ivpa,ivperp,iz] = 0.0
@@ -1762,10 +1746,8 @@ function test_electron_krook_collisions(test_input; rtol=(2.0e1*epsilon)^2)
                 zero = 1.0e-14
                 if z.irank == 0
                     iz = 1
-                    # We actually want v_∥ here, not v_z, so pass bz=1, vEz=0
-                    v_unnorm .= vpagrid_to_dzdt(vpa.grid, vth[iz], upar_test[iz], 1.0,
-                                                0.0, true,
-                                                true)
+                    v_unnorm .= vpagrid_to_vpa(vpa.grid, vth[iz], upar_test[iz], true,
+                                               true)
                     @loop_vperp_vpa ivperp ivpa begin
                         if v_unnorm[ivpa] > -zero
                             residual[ivpa,ivperp,iz] = 0.0
@@ -1774,10 +1756,8 @@ function test_electron_krook_collisions(test_input; rtol=(2.0e1*epsilon)^2)
                 end
                 if z.irank == z.nrank - 1
                     iz = z.n
-                    # We actually want v_∥ here, not v_z, so pass bz=1, vEz=0
-                    v_unnorm .= vpagrid_to_dzdt(vpa.grid, vth[iz], upar_test[iz], 1.0,
-                                                0.0, true,
-                                                true)
+                    v_unnorm .= vpagrid_to_vpa(vpa.grid, vth[iz], upar_test[iz], true,
+                                               true)
                     @loop_vperp_vpa ivperp ivpa begin
                         if v_unnorm[ivpa] < zero
                             residual[ivpa,ivperp,iz] = 0.0
@@ -2092,9 +2072,7 @@ function test_external_electron_source(test_input; rtol=(3.0e1*epsilon)^2)
                 zero = 1.0e-14
                 if z.irank == 0
                     iz = 1
-                    # We actually want v_∥ here, not v_z, so pass bz=1, vEz=0
-                    v_unnorm .= vpagrid_to_dzdt(vpa.grid, vth[iz], upar[iz], 1.0, 0.0,
-                                                true, true)
+                    v_unnorm .= vpagrid_to_vpa(vpa.grid, vth[iz], upar[iz], true, true)
                     @loop_vperp_vpa ivperp ivpa begin
                         if v_unnorm[ivpa] > -zero
                             residual[ivpa,ivperp,iz] = 0.0
@@ -2103,9 +2081,7 @@ function test_external_electron_source(test_input; rtol=(3.0e1*epsilon)^2)
                 end
                 if z.irank == z.nrank - 1
                     iz = z.n
-                    # We actually want v_∥ here, not v_z, so pass bz=1, vEz=0
-                    v_unnorm .= vpagrid_to_dzdt(vpa.grid, vth[iz], upar[iz], 1.0, 0.0,
-                                                true, true)
+                    v_unnorm .= vpagrid_to_vpa(vpa.grid, vth[iz], upar[iz], true, true)
                     @loop_vperp_vpa ivperp ivpa begin
                         if v_unnorm[ivpa] < zero
                             residual[ivpa,ivperp,iz] = 0.0
@@ -2434,9 +2410,7 @@ function test_electron_implicit_constraint_forcing(test_input; rtol=(2.5e0*epsil
                 zero = 1.0e-14
                 if z.irank == 0
                     iz = 1
-                    # We actually want v_∥ here, not v_z, so pass bz=1, vEz=0
-                    v_unnorm .= vpagrid_to_dzdt(vpa.grid, vth[iz], upar[iz], 1.0, 0.0,
-                                                true, true)
+                    v_unnorm .= vpagrid_to_vpa(vpa.grid, vth[iz], upar[iz], true, true)
                     @loop_vperp_vpa ivperp ivpa begin
                         if v_unnorm[ivpa] > -zero
                             residual[ivpa,ivperp,iz] = 0.0
@@ -2445,9 +2419,7 @@ function test_electron_implicit_constraint_forcing(test_input; rtol=(2.5e0*epsil
                 end
                 if z.irank == z.nrank - 1
                     iz = z.n
-                    # We actually want v_∥ here, not v_z, so pass bz=1, vEz=0
-                    v_unnorm .= vpagrid_to_dzdt(vpa.grid, vth[iz], upar[iz], 1.0, 0.0,
-                                                true, true)
+                    v_unnorm .= vpagrid_to_vpa(vpa.grid, vth[iz], upar[iz], true, true)
                     @loop_vperp_vpa ivperp ivpa begin
                         if v_unnorm[ivpa] < zero
                             residual[ivpa,ivperp,iz] = 0.0
