@@ -31,7 +31,7 @@ using ..velocity_moments: calculate_electron_moment_derivatives!, update_derived
 using ..velocity_grid_transforms: vzvrvzeta_to_vpavperp!, vpavperp_to_vzvrvzeta!
 using ..boundary_conditions: enforce_boundary_conditions!, get_ion_z_boundary_cutoff_indices
 using ..boundary_conditions: enforce_neutral_boundary_conditions!, enforce_vperp_boundary_condition!
-using ..boundary_conditions: vpagrid_to_dzdt, enforce_v_boundary_condition_local!
+using ..boundary_conditions: vpagrid_to_vpa, enforce_v_boundary_condition_local!
 using ..input_structs
 using ..moment_constraints: hard_force_moment_constraints!,
                             hard_force_moment_constraints_neutral!,
@@ -2907,7 +2907,7 @@ appropriate.
                 phi = @view fields.phi[:,ir]
                 vEz = @view fields.vEz[:,ir]
                 bz = @view geometry.bzed[:,ir]
-                last_negative_vpa_ind, first_positive_vpa_ind =
+                last_negative_vpa_ind, _, first_positive_vpa_ind, _ =
                     get_ion_z_boundary_cutoff_indices(density, upar, vEz, bz,
                                                       moments.ion.vth[1,ir,is],
                                                       moments.ion.vth[end,ir,is],
@@ -4106,10 +4106,9 @@ Do a backward-Euler timestep for all terms in the ion kinetic equation.
     @loop_s_r is ir begin
         if z.irank == 0
             iz = 1
-            @. vpa.scratch = vpagrid_to_dzdt(vpa.grid, moments.ion.vth[iz,ir,is],
-                                             fvec_in.upar[iz,ir,is],
-                                             moments.evolve_p,
-                                             moments.evolve_upar)
+            @. vpa.scratch = vpagrid_to_vpa(vpa.grid, moments.ion.vth[iz,ir,is],
+                                            fvec_in.upar[iz,ir,is], moments.evolve_p,
+                                            moments.evolve_upar)
             icut_lower_z[ir,is] = vpa.n
             for ivpa ∈ vpa.n:-1:1
                 # for left boundary in zed (z = -Lz/2), want
@@ -4122,10 +4121,9 @@ Do a backward-Euler timestep for all terms in the ion kinetic equation.
         end
         if z.irank == z.nrank - 1
             iz = z.n
-            @. vpa.scratch = vpagrid_to_dzdt(vpa.grid, moments.ion.vth[iz,ir,is],
-                                             fvec_in.upar[iz,ir,is],
-                                             moments.evolve_p,
-                                             moments.evolve_upar)
+            @. vpa.scratch = vpagrid_to_vpa(vpa.grid, moments.ion.vth[iz,ir,is],
+                                            fvec_in.upar[iz,ir,is], moments.evolve_p,
+                                            moments.evolve_upar)
             icut_upper_z[ir,is] = 0
             for ivpa ∈ 1:vpa.n
                 # for right boundary in zed (z = Lz/2), want

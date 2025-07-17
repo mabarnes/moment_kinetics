@@ -2,7 +2,7 @@ using moment_kinetics.analysis: get_unnormalised_f_dzdt_1d, get_unnormalised_f_c
                                 get_unnormalised_f_1d, vpagrid_to_v_parallel_2d,
                                 get_unnormalised_f_2d
 using moment_kinetics.array_allocation: allocate_float
-using moment_kinetics.initial_conditions: vpagrid_to_dzdt
+using moment_kinetics.initial_conditions: vpagrid_to_vpa
 
 using Combinatorics
 
@@ -2073,9 +2073,8 @@ function animate_f_unnorm_vs_vpa(run_info; f_over_vpa2=false, input=nothing,
                                          run_info.evolve_density, run_info.evolve_p)
 
         if f_over_vpa2
-            # We actually want v_∥ here, not v_z, so pass bz=1, vEz=0
-            this_dzdt = vpagrid_to_dzdt(vcoord.grid, vth[it], upar[it], 1.0, 0.0,
-                                        run_info.evolve_p, run_info.evolve_upar)
+            this_dzdt = vpagrid_to_vpa(vcoord.grid, vth[it], upar[it], run_info.evolve_p,
+                                       run_info.evolve_upar)
             this_dzdt2 = this_dzdt.^2
             for i ∈ eachindex(this_dzdt2)
                 if this_dzdt2[i] == 0.0
@@ -2095,9 +2094,8 @@ function animate_f_unnorm_vs_vpa(run_info; f_over_vpa2=false, input=nothing,
     fmin = Inf
     fmax = -Inf
     for it ∈ 1:run_info.nt
-        # We actually want v_∥ here, not v_z, so pass bz=1, vEz=0
-        this_dzdt = vpagrid_to_dzdt(vcoord.grid, vth[it], upar[it], 1.0, 0.0,
-                                    run_info.evolve_p, run_info.evolve_upar)
+        this_dzdt = vpagrid_to_vpa(vcoord.grid, vth[it], upar[it], run_info.evolve_p,
+                                   run_info.evolve_upar)
         this_dzdtmin, this_dzdtmax = extrema(this_dzdt)
         dzdtmin = min(dzdtmin, this_dzdtmin)
         dzdtmax = max(dzdtmax, this_dzdtmax)
@@ -2124,9 +2122,8 @@ function animate_f_unnorm_vs_vpa(run_info; f_over_vpa2=false, input=nothing,
                 fmin - 0.01*yheight, fmax + 0.01*yheight)
     end
 
-    # We actually want v_∥ here, not v_z, so pass bz=1, vEz=0
-    dzdt = @lift vpagrid_to_dzdt(vcoord.grid, vth[$frame_index], upar[$frame_index], 1.0,
-                                 0.0, run_info.evolve_p, run_info.evolve_upar)
+    dzdt = @lift vpagrid_to_vpa(vcoord.grid, vth[$frame_index], upar[$frame_index],
+                                run_info.evolve_p, run_info.evolve_upar)
     f_unnorm = @lift transform.(get_this_f_unnorm($frame_index))
 
     l = plot_1d(dzdt, f_unnorm; ax=ax, label=run_info.run_name, yscale=yscale, kwargs...)

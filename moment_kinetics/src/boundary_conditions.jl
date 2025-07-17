@@ -1610,22 +1610,24 @@ function get_ion_z_boundary_cutoff_indices(density, upar, vEz, bz, vth0, vthL,
     if z.irank == 0
         deltaphi = phi[2] - phi[1]
         vz_cut = deltaphi > 0 ? bz[1] * sqrt(2.0 * deltaphi)*(epsz^0.25) : 0.0
-        @. vpa.scratch = vpagrid_to_dzdt(vpa.grid, vth0, upar[1], bz[1], vEz[1], evolve_p,
-                                         evolve_upar)
-        last_negative_vpa_ind = searchsortedlast(vpa.scratch, min(-zero, -vz_cut))
+        vpa_cut = (vz_cut - vEz[1]) / bz[1]
+        wpa_cut_lower = vpa_to_wpa(vpa_cut, vth0, upar[1], evolve_p, evolve_upar)
+        last_negative_vpa_ind = searchsortedlast(vpa.grid, wpa_cut_lower)
     else
+        wpa_cut_lower = nothing
         last_negative_vpa_ind = nothing
     end
     if z.irank == z.nrank - 1
         deltaphi = phi[end-1] - phi[end]
         vz_cut = deltaphi > 0 ? bz[end] * sqrt(2.0 * deltaphi)*(epsz^0.25) : 0.0
-        @. vpa.scratch2 = vpagrid_to_dzdt(vpa.grid, vthL, upar[end], bz[end], vEz[end],
-                                          evolve_p, evolve_upar)
-        first_positive_vpa_ind = searchsortedfirst(vpa.scratch2, max(zero, vz_cut))
+        vpa_cut = (vz_cut - vEz[end]) / bz[end]
+        wpa_cut_upper = vpa_to_wpa(vpa_cut, vthL, upar[end], evolve_p, evolve_upar)
+        first_positive_vpa_ind = searchsortedfirst(vpa.grid, wpa_cut_upper)
     else
+        wpa_cut_upper = nothing
         first_positive_vpa_ind = nothing
     end
-    return last_negative_vpa_ind, first_positive_vpa_ind
+    return last_negative_vpa_ind, wpa_cut_lower, first_positive_vpa_ind, wpa_cut_upper
 end
 function enforce_zero_incoming_bc!(pdf, z::coordinate, vperp::coordinate, vpa::coordinate,
                                    density, upar, p, vEz, bz, evolve_upar, evolve_p, zero,
@@ -1644,15 +1646,31 @@ function enforce_zero_incoming_bc!(pdf, z::coordinate, vperp::coordinate, vpa::c
     vthL = sqrt(2.0 * p[end] / density[end])
 
     # absolute velocity at left boundary
-    last_negative_vpa_ind, first_positive_vpa_ind =
+    last_negative_vpa_ind, wpa_cut_lower, first_positive_vpa_ind, wpa_cut_upper =
         get_ion_z_boundary_cutoff_indices(density, upar, vEz, bz, vth0, vthL, evolve_upar,
                                           evolve_p, z, vpa, zero, phi)
     if z.irank == 0
-        pdf[last_negative_vpa_ind+1:end, :, 1] .= 0.0
+        pdf[last_negative_vpa_ind+1:end,:,1] .= 0.0
+        # Limit last non-zero grid point to be less than the linear fit between the
+        # second-last non-zero point and zero at the cut-off velocity. This ensures that
+        # there is no jump when the cut-off velocity passes this grid point, but the
+        # boundary condition can also be re-applied giving the exact same result.
+        @. pdf[last_negative_vpa_ind,:,1] = min(pdf[last_negative_vpa_ind,:,1],
+                                                pdf[last_negative_vpa_ind-1,:,1] *
+                                                (wpa_cut_lower - vpa.grid[last_negative_vpa_ind]) /
+                                                (vpa.grid[last_negative_vpa_ind+1] - vpa.grid[last_negative_vpa_ind]))
     end
     # absolute velocity at right boundary
     if z.irank == z.nrank - 1
-        pdf[1:first_positive_vpa_ind-1, :, end] .= 0.0
+        pdf[1:first_positive_vpa_ind-1,:,end] .= 0.0
+        # Limit first non-zero grid point to be less than the linear fit between the
+        # second non-zero point and zero at the cut-off velocity. This ensures that
+        # there is no jump when the cut-off velocity passes this grid point, but the
+        # boundary condition can also be re-applied giving the exact same result.
+        @. pdf[first_positive_vpa_ind,:,end] = min(pdf[first_positive_vpa_ind,:,end],
+                                                   pdf[first_positive_vpa_ind+1,:,end] *
+                                                 (vpa.grid[first_positive_vpa_ind] - wpa_cut_upper) /
+                                                 (vpa.grid[first_positive_vpa_ind] - vpa.grid[first_positive_vpa_ind-1]))
     end
 
     # Special constraint-forcing code that tries to keep the modifications smooth at
@@ -1966,8 +1984,7 @@ function enforce_neutral_wall_bc!(pdf, z, vzeta, vr, vz, pz, uz, density, wall_f
             else
                 vth = nothing
             end
-            @. vz.scratch2 = vpagrid_to_dzdt(vz.grid, vth, uz[1], 1.0, 0.0, evolve_p,
-                                             evolve_upar)
+            @. vz.scratch2 = vpagrid_to_vpa(vz.grid, vth, uz[1], evolve_p, evolve_upar)
 
             # First apply boundary condition that total neutral outflux is equal to ion
             # influx to uz
@@ -2103,8 +2120,7 @@ function enforce_neutral_wall_bc!(pdf, z, vzeta, vr, vz, pz, uz, density, wall_f
             else
                 vth = nothing
             end
-            @. vz.scratch2 = vpagrid_to_dzdt(vz.grid, vth, uz[end], 1.0, 0.0, evolve_p,
-                                             evolve_upar)
+            @. vz.scratch2 = vpagrid_to_vpa(vz.grid, vth, uz[end], evolve_p, evolve_upar)
 
             # First apply boundary condition that total neutral outflux is equal to ion
             # influx to uz
@@ -2229,19 +2245,36 @@ function enforce_neutral_wall_bc!(pdf, z, vzeta, vr, vz, pz, uz, density, wall_f
 end
 
 """
-create an array of dz/dt values corresponding to the given vpagrid values
+create an array of v_∥ values corresponding to the given vpagrid values
 """
-function vpagrid_to_dzdt(vpagrid, vth, upar, bz, vEz, evolve_p, evolve_upar)
+function vpagrid_to_vpa(vpagrid, vth, upar, evolve_p, evolve_upar)
     if evolve_p
         if evolve_upar
-            return @. bz * (vpagrid * vth + upar) + vEz
+            return @. vpagrid * vth + upar
         else
-            return @. bz * vpagrid * vth + vEz
+            return @. vpagrid * vth
         end
     elseif evolve_upar
-        return @. bz * (vpagrid + upar) + vEz
+        return @. vpagrid + upar
     else
-        return @. bz * vpagrid + vEz
+        return vpagrid
+    end
+end
+
+"""
+create an array of w_∥ values corresponding to the given vpa values
+"""
+function vpa_to_wpa(vpa, vth, upar, evolve_p, evolve_upar)
+    if evolve_p
+        if evolve_upar
+            return @. (vpa - upar) / vth
+        else
+            return @. vpa / vth
+        end
+    elseif evolve_upar
+        return @. vpa - upar
+    else
+        return vpa
     end
 end
 

@@ -10,7 +10,7 @@ using ..array_allocation: allocate_float, allocate_int
 using ..calculus: integral
 using ..communication
 using ..coordinates: coordinate
-using ..boundary_conditions: vpagrid_to_dzdt
+using ..boundary_conditions: vpagrid_to_vpa
 using ..interpolation: interpolate_to_grid_1d
 using ..load_data: open_readonly_output_file, get_nranks, load_pdf_data, load_rank_data
 using ..load_data: load_distributed_ion_pdf_slice
@@ -183,9 +183,8 @@ function check_Chodura_condition(r, z, vperp, vpa, dens, upar, vth, temp_e, comp
         # Lower target
         ##############
 
-        # We actually want v_∥ here, not v_z, so pass bz=1, vEz=0
-        v_parallel = vpagrid_to_dzdt(vpa.grid, vth[1,ir,is,it], upar[1,ir,is,it], 1.0,
-                                     0.0, evolve_p, evolve_upar)
+        v_parallel = vpagrid_to_vpa(vpa.grid, vth[1,ir,is,it], upar[1,ir,is,it], evolve_p,
+                                    evolve_upar)
         vpabar = @. v_parallel - 0.5 * geometry.rhostar * Er[1,ir,it] / geometry.bzed[1,ir]
 
         # Get rid of a zero if it is there to avoid a blow up - f should be zero at that
@@ -226,9 +225,8 @@ function check_Chodura_condition(r, z, vperp, vpa, dens, upar, vth, temp_e, comp
         # Upper target
         ##############
 
-        # We actually want v_∥ here, not v_z, so pass bz=1, vEz=0
-        v_parallel = vpagrid_to_dzdt(vpa.grid, vth[end,ir,is,it], upar[end,ir,is,it], 1.0,
-                                     0.0, evolve_p, evolve_upar)
+        v_parallel = vpagrid_to_vpa(vpa.grid, vth[end,ir,is,it], upar[end,ir,is,it],
+                                    evolve_p, evolve_upar)
         vpabar = @. v_parallel - 0.5 * geometry.rhostar * Er[end,ir,it] / geometry.bzed[end,ir]
 
         # Get rid of a zero if it is there to avoid a blow up - f should be zero at that
@@ -864,8 +862,7 @@ Inputs should depend only on vpa.
 function get_unnormalised_f_dzdt_1d(f, vpa_grid, density, upar, vth, evolve_density,
                                     evolve_upar, evolve_ppar)
 
-    # We actually want v_∥ here, not v_z, so pass bz=1, vEz=0
-    dzdt = vpagrid_to_dzdt(vpa_grid, vth, upar, 1.0, 0.0, evolve_ppar, evolve_upar)
+    dzdt = vpagrid_to_vpa(vpa_grid, vth, upar, evolve_ppar, evolve_upar)
 
     f_unnorm = get_unnormalised_f_1d(f, density, vth, evolve_density, evolve_ppar)
 
@@ -915,9 +912,8 @@ function vpagrid_to_v_parallel_2d(vpa_grid, vth, upar, evolve_ppar, evolve_upar)
     nz = length(vth)
     v_parallel_2d = zeros(nvpa, nz)
     for iz ∈ 1:nz
-        # We actually want v_∥ here, not v_z, so pass bz=1, vEz=0
-        @views v_parallel_2d[:,iz] .= vpagrid_to_dzdt(vpa_grid, vth[iz], upar[iz], 1.0,
-                                                      0.0, evolve_ppar, evolve_upar)
+        @views v_parallel_2d[:,iz] .= vpagrid_to_vpa(vpa_grid, vth[iz], upar[iz],
+                                                     evolve_ppar, evolve_upar)
     end
     return v_parallel_2d
 end
