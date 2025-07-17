@@ -829,8 +829,9 @@ also enforce boundary conditions in z on all separately evolved velocity space m
 
     end
     if r.n > 1
-        enforce_r_boundary_condition!(f, density, upar, p, boundaries.r, r_adv, vpa,
-                                      vperp, z, r, composition,
+        moment_r_speed = fields.vEr # For now, allow only ExB drift of ion moments
+        enforce_r_boundary_condition!(f, density, upar, p, moment_r_speed, boundaries.r,
+                                      r_adv, vpa, vperp, z, r, composition,
                                       scratch_dummy.buffer_vpavperpzs_1,
                                       scratch_dummy.buffer_vpavperpzs_2,
                                       scratch_dummy.buffer_vpavperpzs_3,
@@ -856,6 +857,7 @@ enforce boundary conditions on ions in r
 function enforce_r_boundary_condition!(f::AbstractArray{mk_float,ndim_pdf_ion},
         density::AbstractArray{mk_float,ndim_moment},
         upar::AbstractArray{mk_float,ndim_moment}, p::AbstractArray{mk_float,ndim_moment},
+        moment_r_speed::AbstractArray{mk_float,ndim_field},
         r_boundaries::r_boundary_info, adv, vpa, vperp, z, r, composition,
         end1::AbstractArray{mk_float,ndim_pdf_ion_boundary},
         end2::AbstractArray{mk_float,ndim_pdf_ion_boundary},
@@ -863,6 +865,7 @@ function enforce_r_boundary_condition!(f::AbstractArray{mk_float,ndim_pdf_ion},
         buffer2::AbstractArray{mk_float,ndim_pdf_ion_boundary}, r_diffusion::Bool)
 
     nr = r.n
+    zero = 1.0e-10
 
     if r.nelement_global > r.nelement_local
         # reconcile internal element boundaries across processes
@@ -943,7 +946,6 @@ function enforce_r_boundary_condition!(f::AbstractArray{mk_float,ndim_pdf_ion},
                     end
                 end
             elseif isa(ion_section, ion_r_boundary_section_Dirichlet)
-                zero = 1.0e-10
                 # use the old distribution to force the new distribution to have
                 # consistant-in-time values at the boundary
                 # with bc = "Dirichlet" and r_diffusion = false
@@ -953,9 +955,11 @@ function enforce_r_boundary_condition!(f::AbstractArray{mk_float,ndim_pdf_ion},
                 f_boundary = ion_section.pdf
                 @begin_s_vperp_vpa_region()
                 @loop_s is begin
+                    adv_speed = adv[is].speed
                     for (iz_section, iz) ∈ enumerate(section.z_range)
                         @loop_vperp_vpa ivperp ivpa begin
-                            if r_diffusion || adv[is].speed[ir,ivpa,ivperp,iz] > zero
+                            if r_diffusion || (ir == 1 ? adv[is].speed[ir,ivpa,ivperp,iz] > zero
+                                                       : adv[is].speed[ir,ivpa,ivperp,iz] < -zero)
                                 f[ivpa,ivperp,iz,ir,is] = f_boundary[ivpa,ivperp,iz_section,is]
                             end
                         end
@@ -967,15 +971,19 @@ function enforce_r_boundary_condition!(f::AbstractArray{mk_float,ndim_pdf_ion},
                 @begin_s_region()
                 @loop_s is begin
                     for (iz_section, iz) ∈ enumerate(section.z_range)
-                        # For now, assume always have r-diffusion for moments
-                        #if r_diffusion || moment_speed[ir,iz] > zero
+                        if r_diffusion || (ir == 1 ? moment_r_speed[iz,ir] > zero
+                                                   : moment_r_speed[iz,ir] < -zero)
                             density[iz,ir,is] = n_boundary[iz_section,is]
                             upar[iz,ir,is] = u_boundary[iz_section,is]
                             p[iz,ir,is] = p[iz_section,is]
-                        #end
+                        end
                     end
                 end
             elseif isa(ion_section, ion_r_boundary_section_Neumann)
+                # with bc = "Neumann" and r_diffusion = false
+                # impose bc for incoming parts of velocity space only (Hyperbolic PDE)
+                # with bc = "Neumann" and r_diffusion = true
+                # impose bc on both sides of the domain to accomodate a diffusion operator d^2 / d r^2
                 one_over_logarithmic_gradient_value_minus_Db =
                     ion_section.one_over_logarithmic_gradient_value_minus_Db
                 derivative_coefficients = ion_section.derivative_coefficients
@@ -986,30 +994,37 @@ function enforce_r_boundary_condition!(f::AbstractArray{mk_float,ndim_pdf_ion},
                 end
                 @begin_s_vperp_vpa_region()
                 @loop_s is begin
+                    adv_speed = adv[is].speed
                     for (iz_section, iz) ∈ enumerate(section.z_range)
                         @loop_vperp_vpa ivperp ivpa begin
-                            @views f[ivpa,ivperp,iz,ir,is] =
-                                dot(derivative_coefficients,
-                                    f[ivpa,ivperp,iz,other_elements_range,is]) *
-                                one_over_logarithmic_gradient_value_minus_Db
+                            if r_diffusion || (ir == 1 ? adv[is].speed[ir,ivpa,ivperp,iz] > zero
+                                                       : adv[is].speed[ir,ivpa,ivperp,iz] < -zero)
+                                @views f[ivpa,ivperp,iz,ir,is] =
+                                    dot(derivative_coefficients,
+                                        f[ivpa,ivperp,iz,other_elements_range,is]) *
+                                    one_over_logarithmic_gradient_value_minus_Db
+                            end
                         end
                     end
                 end
                 @begin_s_region()
                 @loop_s is begin
                     for iz ∈ section.z_range
-                        @views density[iz,ir,is] =
-                            dot(derivative_coefficients,
-                                density[iz,other_elements_range,is]) *
-                            one_over_logarithmic_gradient_value_minus_Db
-                        @views upar[iz,ir,is] =
-                            dot(derivative_coefficients,
-                                upar[iz,other_elements_range,is]) *
-                            one_over_logarithmic_gradient_value_minus_Db
-                        @views p[iz,ir,is] =
-                            dot(derivative_coefficients,
-                                p[iz,other_elements_range,is]) *
-                            one_over_logarithmic_gradient_value_minus_Db
+                        if r_diffusion || (ir == 1 ? moment_r_speed[iz,ir] > zero
+                                                   : moment_r_speed[iz,ir] < -zero)
+                            @views density[iz,ir,is] =
+                                dot(derivative_coefficients,
+                                    density[iz,other_elements_range,is]) *
+                                one_over_logarithmic_gradient_value_minus_Db
+                            @views upar[iz,ir,is] =
+                                dot(derivative_coefficients,
+                                    upar[iz,other_elements_range,is]) *
+                                one_over_logarithmic_gradient_value_minus_Db
+                            @views p[iz,ir,is] =
+                                dot(derivative_coefficients,
+                                    p[iz,other_elements_range,is]) *
+                                one_over_logarithmic_gradient_value_minus_Db
+                        end
                     end
                 end
             else
@@ -1135,6 +1150,7 @@ enforce boundary conditions on electrons in r
 function enforce_electron_r_boundary_condition!(f::AbstractArray{mk_float,ndim_pdf_electron},
         density::AbstractArray{mk_float,ndim_field},
         upar::AbstractArray{mk_float,ndim_field}, p::AbstractArray{mk_float,ndim_field},
+        moment_r_speed::AbstractArray{mk_float,ndim_field},
         r_boundaries::r_boundary_info, adv, vpa, vperp, z, r, composition,
         end1::AbstractArray{mk_float,ndim_pdf_electron_boundary},
         end2::AbstractArray{mk_float,ndim_pdf_electron_boundary},
@@ -1142,6 +1158,7 @@ function enforce_electron_r_boundary_condition!(f::AbstractArray{mk_float,ndim_p
         buffer2::AbstractArray{mk_float,ndim_pdf_electron_boundary}, r_diffusion::Bool)
 
     nr = r.n
+    zero = 1.0e-10
 
     if r.nelement_global > r.nelement_local
         # reconcile internal element boundaries across processes
@@ -1216,7 +1233,6 @@ function enforce_electron_r_boundary_condition!(f::AbstractArray{mk_float,ndim_p
                     end
                 end
             elseif isa(electron_section, electron_r_boundary_section_Dirichlet)
-                zero = 1.0e-10
                 # use the old distribution to force the new distribution to have
                 # consistant-in-time values at the boundary
                 # with bc = "Dirichlet" and r_diffusion = false
@@ -1227,7 +1243,8 @@ function enforce_electron_r_boundary_condition!(f::AbstractArray{mk_float,ndim_p
                 @begin_vperp_vpa_region()
                 for (iz_section, iz) ∈ enumerate(section.z_range)
                     @loop_vperp_vpa ivperp ivpa begin
-                        if r_diffusion || adv[1].speed[ir,ivpa,ivperp,iz] > zero
+                        if r_diffusion || (ir == 1 ? adv[1].speed[ir,ivpa,ivperp,iz] > zero
+                                                   : adv[1].speed[ir,ivpa,ivperp,iz] < -zero)
                             f[ivpa,ivperp,iz,ir] = f_boundary[ivpa,ivperp,iz_section]
                         end
                     end
@@ -1238,15 +1255,19 @@ function enforce_electron_r_boundary_condition!(f::AbstractArray{mk_float,ndim_p
                 @begin_serial_region()
                 @serial_region begin
                     for (iz_section, iz) ∈ enumerate(section.z_range)
-                        # For now, assume always have r-diffusion for moments
-                        #if r_diffusion || moment_speed[ir,iz] > zero
+                        if r_diffusion || (ir == 1 ? moment_r_speed[iz,ir] > zero
+                                                   : moment_r_speed[iz,ir] < -zero)
                             density[iz,ir] = n_boundary[iz_section]
                             upar[iz,ir] = u_boundary[iz_section]
                             p[iz,ir] = p[iz_section]
-                        #end
+                        end
                     end
                 end
             elseif isa(electron_section, electron_r_boundary_section_Neumann)
+                # with bc = "Neumann" and r_diffusion = false
+                # impose bc for incoming parts of velocity space only (Hyperbolic PDE)
+                # with bc = "Neumann" and r_diffusion = true
+                # impose bc on both sides of the domain to accomodate a diffusion operator d^2 / d r^2
                 one_over_logarithmic_gradient_value_minus_Db =
                     electron_section.one_over_logarithmic_gradient_value_minus_Db
                 derivative_coefficients = electron_section.derivative_coefficients
@@ -1258,27 +1279,33 @@ function enforce_electron_r_boundary_condition!(f::AbstractArray{mk_float,ndim_p
                 @begin_vperp_vpa_region()
                 for (iz_section, iz) ∈ enumerate(section.z_range)
                     @loop_vperp_vpa ivperp ivpa begin
-                        @views f[ivpa,ivperp,iz,ir,is] =
-                            dot(derivative_coefficients,
-                                f[ivpa,ivperp,iz,other_elements_range,is]) *
-                            one_over_logarithmic_gradient_value_minus_Db
+                        if r_diffusion || (ir == 1 ? adv[1].speed[ir,ivpa,ivperp,iz] > zero
+                                                   : adv[1].speed[ir,ivpa,ivperp,iz] < -zero)
+                            @views f[ivpa,ivperp,iz,ir,is] =
+                                dot(derivative_coefficients,
+                                    f[ivpa,ivperp,iz,other_elements_range,is]) *
+                                one_over_logarithmic_gradient_value_minus_Db
+                        end
                     end
                 end
                 @begin_serial_region()
                 @serial_region begin
                     for iz ∈ section.z_range
-                        @views density[iz,ir] =
-                            dot(derivative_coefficients,
-                                density[iz,other_elements_range]) *
-                            one_over_logarithmic_gradient_value_minus_Db
-                        @views upar[iz,ir] =
-                            dot(derivative_coefficients,
-                                upar[iz,other_elements_range]) *
-                            one_over_logarithmic_gradient_value_minus_Db
-                        @views p[iz,ir] =
-                            dot(derivative_coefficients,
-                                p[iz,other_elements_range]) *
-                            one_over_logarithmic_gradient_value_minus_Db
+                        if r_diffusion || (ir == 1 ? moment_r_speed[iz,ir] > zero
+                                                   : moment_r_speed[iz,ir] < -zero)
+                            @views density[iz,ir] =
+                                dot(derivative_coefficients,
+                                    density[iz,other_elements_range]) *
+                                one_over_logarithmic_gradient_value_minus_Db
+                            @views upar[iz,ir] =
+                                dot(derivative_coefficients,
+                                    upar[iz,other_elements_range]) *
+                                one_over_logarithmic_gradient_value_minus_Db
+                            @views p[iz,ir] =
+                                dot(derivative_coefficients,
+                                    p[iz,other_elements_range]) *
+                                one_over_logarithmic_gradient_value_minus_Db
+                        end
                     end
                 end
             else
@@ -1292,11 +1319,12 @@ end
 enforce boundary conditions on neutral particle distribution function
 """
 @timeit global_timer enforce_neutral_boundary_conditions!(
-                         f_neutral, f_ion, density_neutral, uz_neutral, p_neutral,
-                         boundaries::boundary_info, moments, density_ion, upar_ion, Er,
-                         vzeta_spectral, vr_spectral, vz_spectral, r_adv, z_adv,
-                         vzeta_adv, vr_adv, vz_adv, r, z, vzeta, vr, vz, composition,
-                         geometry, scratch_dummy, r_diffusion, vz_diffusion) = begin
+                         f_neutral, f_ion, density_neutral, uz_neutral, ur_neutral,
+                         p_neutral, boundaries::boundary_info, moments, density_ion,
+                         upar_ion, Er, vzeta_spectral, vr_spectral, vz_spectral, r_adv,
+                         z_adv, vzeta_adv, vr_adv, vz_adv, r, z, vzeta, vr, vz,
+                         composition, geometry, scratch_dummy, r_diffusion,
+                         vz_diffusion) = begin
 
     # without acceleration of neutrals bc on vz vr vzeta should not be required as no
     # advection or diffusion in these coordinates
@@ -1343,7 +1371,7 @@ enforce boundary conditions on neutral particle distribution function
     end
     if r.n > 1
         enforce_neutral_r_boundary_condition!(f_neutral, density_neutral, uz_neutral,
-            p_neutral, boundaries.r, r_adv, vz, vr, vzeta, z, r, composition,
+            ur_neutral, p_neutral, boundaries.r, r_adv, vz, vr, vzeta, z, r, composition,
             scratch_dummy.buffer_vzvrvzetazsn_1, scratch_dummy.buffer_vzvrvzetazsn_2,
             scratch_dummy.buffer_vzvrvzetazsn_3, scratch_dummy.buffer_vzvrvzetazsn_4,
             r_diffusion)
@@ -1356,8 +1384,9 @@ enforce boundary conditions on neutrals in r
 function enforce_neutral_r_boundary_condition!(
         f::AbstractArray{mk_float,ndim_pdf_neutral},
         density::AbstractArray{mk_float,ndim_moment},
-        uz::AbstractArray{mk_float,ndim_moment}, p::AbstractArray{mk_float,ndim_moment},
-        r_boundaries::r_boundary_info, adv, vz, vr, vzeta, z, r, composition,
+        uz::AbstractArray{mk_float,ndim_moment}, ur::AbstractArray{mk_float,ndim_moment},
+        p::AbstractArray{mk_float,ndim_moment}, r_boundaries::r_boundary_info, adv, vz,
+        vr, vzeta, z, r, composition,
         end1::AbstractArray{mk_float,ndim_pdf_neutral_boundary},
         end2::AbstractArray{mk_float,ndim_pdf_neutral_boundary},
         buffer1::AbstractArray{mk_float,ndim_pdf_neutral_boundary},
@@ -1456,7 +1485,8 @@ function enforce_neutral_r_boundary_condition!(
                 @loop_sn isn begin
                     for (iz_section, iz) ∈ enumerate(section.z_range)
                         @loop_vzeta_vr_vz ivzeta ivr ivz begin
-                            if r_diffusion || adv[isn].speed[ir,ivz,ivr,ivzeta,iz] > zero
+                            if r_diffusion || (ir == 1 ? adv[isn].speed[ir,ivz,ivr,ivzeta,iz] > zero
+                                                       : adv[isn].speed[ir,ivz,ivr,ivzeta,iz] < -zero)
                                 f[ivz,ivr,ivzeta,iz,ir,isn] = f_boundary[ivz,ivr,ivzeta,iz_section,isn]
                             end
                         end
@@ -1468,15 +1498,19 @@ function enforce_neutral_r_boundary_condition!(
                 @begin_sn_region()
                 @loop_sn isn begin
                     for (iz_section, iz) ∈ enumerate(section.z_range)
-                        # For now, assume always have r-diffusion for moments
-                        #if r_diffusion || moment_speed[ir,iz] > zero
+                        if r_diffusion || (ir == 1 ? ur[iz,ir,isn] > zero
+                                                   : ur[iz,ir,isn] < -zero)
                             density[iz,ir,isn] = n_boundary[iz_section,isn]
                             uz[iz,ir,isn] = u_boundary[iz_section,isn]
                             p[iz,ir,isn] = p[iz_section,isn]
-                        #end
+                        end
                     end
                 end
             elseif isa(neutral_section, neutral_r_boundary_section_Neumann)
+                # with bc = "Neumann" and r_diffusion = false
+                # impose bc for incoming parts of velocity space only (Hyperbolic PDE)
+                # with bc = "Neumann" and r_diffusion = true
+                # impose bc on both sides of the domain to accomodate a diffusion operator d^2 / d r^2
                 one_over_logarithmic_gradient_value_minus_Db =
                     neutral_section.one_over_logarithmic_gradient_value_minus_Db
                 derivative_coefficients = neutral_section.derivative_coefficients
@@ -1489,28 +1523,34 @@ function enforce_neutral_r_boundary_condition!(
                 @loop_sn isn begin
                     for (iz_section, iz) ∈ enumerate(section.z_range)
                         @loop_vzeta_vr_vz ivzeta ivr ivz begin
-                            @views f[ivz,ivr,ivzeta,iz,ir,isn] =
-                                dot(derivative_coefficients,
-                                    f[ivz,ivr,ivzeta,iz,other_elements_range,isn]) *
-                                one_over_logarithmic_gradient_value_minus_Db
+                            if r_diffusion || (ir == 1 ? adv[isn].speed[ir,ivz,ivr,ivzeta,iz] > zero
+                                                       : adv[isn].speed[ir,ivz,ivr,ivzeta,iz] < -zero)
+                                @views f[ivz,ivr,ivzeta,iz,ir,isn] =
+                                    dot(derivative_coefficients,
+                                        f[ivz,ivr,ivzeta,iz,other_elements_range,isn]) *
+                                    one_over_logarithmic_gradient_value_minus_Db
+                            end
                         end
                     end
                 end
                 @begin_sn_region()
                 @loop_sn isn begin
                     for iz ∈ section.z_range
-                        @views density[iz,ir,isn] =
-                            dot(derivative_coefficients,
-                                density[iz,other_elements_range,isn]) *
-                            one_over_logarithmic_gradient_value_minus_Db
-                        @views uz[iz,ir,isn] =
-                            dot(derivative_coefficients,
-                                uz[iz,other_elements_range,isn]) *
-                            one_over_logarithmic_gradient_value_minus_Db
-                        @views p[iz,ir,isn] =
-                            dot(derivative_coefficients,
-                                p[iz,other_elements_range,isn]) *
-                            one_over_logarithmic_gradient_value_minus_Db
+                        if r_diffusion || (ir == 1 ? ur[iz,ir,isn] > zero
+                                                   : ur[iz,ir,isn] < -zero)
+                            @views density[iz,ir,isn] =
+                                dot(derivative_coefficients,
+                                    density[iz,other_elements_range,isn]) *
+                                one_over_logarithmic_gradient_value_minus_Db
+                            @views uz[iz,ir,isn] =
+                                dot(derivative_coefficients,
+                                    uz[iz,other_elements_range,isn]) *
+                                one_over_logarithmic_gradient_value_minus_Db
+                            @views p[iz,ir,isn] =
+                                dot(derivative_coefficients,
+                                    p[iz,other_elements_range,isn]) *
+                                one_over_logarithmic_gradient_value_minus_Db
+                        end
                     end
                 end
             else
