@@ -1093,11 +1093,11 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
             # those as a placeholder
             enforce_neutral_boundary_conditions!(
                 pdf.neutral.norm, pdf.ion.norm, moments.neutral.dens, moments.neutral.uz,
-                moments.neutral.p, boundaries, moments, moments.ion.dens,
-                moments.ion.upar, fields.Er, vzeta_spectral, vr_spectral, vz_spectral,
-                neutral_r_advect, neutral_z_advect, nothing, nothing, neutral_vz_advect,
-                r, z, vzeta, vr, vz, composition, geometry, scratch_dummy,
-                advance.r_diffusion, advance.vz_diffusion)
+                moments.neutral.ur, moments.neutral.p, boundaries, moments,
+                moments.ion.dens, moments.ion.upar, fields.Er, vzeta_spectral,
+                vr_spectral, vz_spectral, neutral_r_advect, neutral_z_advect, nothing,
+                nothing, neutral_vz_advect, r, z, vzeta, vr, vz, composition, geometry,
+                scratch_dummy, advance.r_diffusion, advance.vz_diffusion)
             if moments.evolve_density && moments.enforce_conservation
                 hard_force_moment_constraints_neutral!(pdf.neutral.norm, moments, vz)
             end
@@ -2637,11 +2637,11 @@ moments and moment derivatives
             # objects, so pass `nothing` for those as a placeholder
             enforce_neutral_boundary_conditions!(this_scratch.pdf_neutral,
                 this_scratch.pdf, this_scratch.density_neutral, this_scratch.uz_neutral,
-                this_scratch.p_neutral, boundaries, moments, this_scratch.density,
-                this_scratch.upar, fields.Er, vzeta_spectral, vr_spectral, vz_spectral,
-                neutral_r_advect, neutral_z_advect, nothing, nothing, neutral_vz_advect,
-                r, z, vzeta, vr, vz, composition, geometry, scratch_dummy,
-                advance.r_diffusion, advance.vz_diffusion)
+                moments.neutral.ur, this_scratch.p_neutral, boundaries, moments,
+                this_scratch.density, this_scratch.upar, fields.Er, vzeta_spectral,
+                vr_spectral, vz_spectral, neutral_r_advect, neutral_z_advect, nothing,
+                nothing, neutral_vz_advect, r, z, vzeta, vr, vz, composition, geometry,
+                scratch_dummy, advance.r_diffusion, advance.vz_diffusion)
 
             if moments.evolve_density && moments.enforce_conservation
                 hard_force_moment_constraints_neutral!(this_scratch.pdf_neutral, moments,
