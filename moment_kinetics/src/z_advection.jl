@@ -64,13 +64,14 @@ function update_speed_z!(advect, upar, vth, evolve_upar, evolve_p, fields, vpa, 
         geofac = z.scratch
         cvdriftz = geometry.cvdriftz
         gbdriftz = geometry.gbdriftz
+        vEz = fields.vEz
         if evolve_p
             @loop_r_vperp_vpa ir ivperp ivpa begin
-                @. @views advect.speed[:,ivpa,ivperp,ir] = (vth[:,ir] * vpa.grid[ivpa] + upar[:,ir]) * bzed[:,ir]
+                @. @views advect.speed[:,ivpa,ivperp,ir] = vEz[:,ir] + (vth[:,ir] * vpa.grid[ivpa] + upar[:,ir]) * bzed[:,ir]
             end
         elseif evolve_upar
             @loop_r_vperp_vpa ir ivperp ivpa begin
-                @. @views advect.speed[:,ivpa,ivperp,ir] = (vpa.grid[ivpa] + upar[:,ir]) * bzed[:,ir]
+                @. @views advect.speed[:,ivpa,ivperp,ir] = vEz[:,ir] + (vpa.grid[ivpa] + upar[:,ir]) * bzed[:,ir]
             end
         else
             @loop_r_vperp_vpa ir ivperp ivpa begin

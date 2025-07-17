@@ -195,9 +195,9 @@ function update_phi!(fields, fvec, vperp, z, r, composition, collisions, moments
     # Pre-calculate the ExB drift velocity as it will be needed in several places (moment
     # equations and kinetic equations).
     Er = fields.Er
-    Ez = fields.Er
+    Ez = fields.Ez
     vEr = fields.vEr
-    vEz = fields.vEr
+    vEz = fields.vEz
     rhostar = geometry.rhostar
     jacobian = geometry.jacobian
     bzeta = geometry.bzeta
