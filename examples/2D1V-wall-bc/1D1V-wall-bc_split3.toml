@@ -79,7 +79,7 @@ bc = "zero"
 type = "Fekete4(3)"
 nstep = 10000000
 dt = 1.0e-5
-minimum_dt = 1.0e-6
+minimum_dt = 3.0e-5
 #maximum_dt = 5.0e-5
 rtol = 1.0e-5
 atol = 1.0e-12
@@ -87,6 +87,8 @@ nwrite = 25000
 nwrite_dfns = 25000
 steady_state_residual = true
 converged_residual_value = 0.01
+
+CFL_prefactor = 3.0
 
 [ion_numerical_dissipation]
 #vpa_dissipation_coefficient = 1.0e-1
