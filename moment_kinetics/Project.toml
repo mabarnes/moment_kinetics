@@ -50,6 +50,12 @@ IfElse = "615f187c-cbe4-4ef1-ba3b-2fcf58d6d173"
 NCDatasets = "85f8d34a-cbdd-5861-8df4-14fed0d494ab"
 Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
 
+[sources]
+FiniteElementMatrices = {rev = "main", url = "https://github.com/moment-kinetics/FiniteElementMatrices.git"}
+FokkerPlanck = {rev = "main", url = "https://github.com/moment-kinetics/FokkerPlanck.git"}
+JacobianFreeNewtonKrylov = {rev = "main", url = "https://github.com/moment-kinetics/JacobianFreeNewtonKrylov.git"}
+LagrangePolynomials = {rev = "main", url = "https://github.com/moment-kinetics/LagrangePolynomials.git"}
+
 [extensions]
 file_io_netcdf = "NCDatasets"
 manufactured_solns_ext = ["Symbolics", "IfElse"]
@@ -68,9 +74,3 @@ Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
 test = ["Random", "Test", "NCDatasets"]
-
-[sources]
-FiniteElementMatrices = {url = "https://github.com/moment-kinetics/FiniteElementMatrices"}
-FokkerPlanck = {url = "https://github.com/moment-kinetics/FokkerPlanck"}
-JacobianFreeNewtonKrylov = {url = "https://github.com/moment-kinetics/JacobianFreeNewtonKrylov"}
-LagrangePolynomials = {url = "https://github.com/moment-kinetics/LagrangePolynomials"}
