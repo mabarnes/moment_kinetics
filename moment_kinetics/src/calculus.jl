@@ -282,7 +282,11 @@ function second_derivative!(d2f, f, coord, spectral::weak_discretization_info)
         error("mass_matrix_solve!() does not support a "
               * "distributed coordinate")
     end
-    mass_matrix_solve!(d2f, coord.scratch3, spectral)
+    # Do mass-matrix solve into a buffer array, to ensure that the output array is always
+    # a contiguous array, not a view into another array that might have a stride bigger
+    # than 1.
+    mass_matrix_solve!(coord.scratch4, coord.scratch3, spectral)
+    d2f .= coord.scratch4
 
     if coord.bc == "periodic"
         # d2f[end] here should be equal to d2f[1] up to rounding errors...
