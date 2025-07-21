@@ -1488,7 +1488,7 @@ function setup_advance_flags(moments, composition, t_params, collisions,
         # control which terms are advanced.
         #
         # flag to determine if a d^2/dr^2 operator is present
-        r_diffusion = (num_diss_params.ion.r_dissipation_coefficient > 0.0)
+        r_diffusion = (num_diss_params.ion.r_dissipation_coefficient > 0.0) || (num_diss_params.ion.moment_dissipation_coefficient > 0.0)
         # flag to determine if a d^2/dvpa^2 operator is present
         # When using implicit_vpa_advection, the vpa diffusion is included in the implicit
         # step
@@ -1612,7 +1612,7 @@ function setup_implicit_advance_flags(moments, composition, t_params, collisions
     # control which terms are advanced.
     #
     # flag to determine if a d^2/dr^2 operator is present
-    r_diffusion = (num_diss_params.ion.r_dissipation_coefficient > 0.0)
+    r_diffusion = (num_diss_params.ion.r_dissipation_coefficient > 0.0) || (num_diss_params.ion.moment_dissipation_coefficient > 0.0)
     # flag to determine if a d^2/dvpa^2 operator is present
     # When using implicit_vpa_advection, the vpa diffusion is included in the implicit
     # step

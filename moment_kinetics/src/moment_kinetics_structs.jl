@@ -151,6 +151,8 @@ struct moments_ion_substruct{ndim_moment_wall}
     ddens_dz_upwind::Union{MPISharedArray{mk_float,ndim_moment},Nothing}
     # this is the second-z-derivative of the particle density
     d2dens_dz2::Union{MPISharedArray{mk_float,ndim_moment},Nothing}
+    # this is the second-r-derivative of the particle density
+    d2dens_dr2::Union{MPISharedArray{mk_float,ndim_moment},Nothing}
     # this is the r-derivative of the parallel flow
     dupar_dr::Union{MPISharedArray{mk_float,ndim_moment},Nothing}
     # this is the upwinded r-derivative of the parallel flow
@@ -161,6 +163,8 @@ struct moments_ion_substruct{ndim_moment_wall}
     dupar_dz_upwind::Union{MPISharedArray{mk_float,ndim_moment},Nothing}
     # this is the second-z-derivative of the parallel flow
     d2upar_dz2::Union{MPISharedArray{mk_float,ndim_moment},Nothing}
+    # this is the second-r-derivative of the parallel flow
+    d2upar_dr2::Union{MPISharedArray{mk_float,ndim_moment},Nothing}
     # this is the upwinded r-derivative of the pressure
     dp_dr_upwind::Union{MPISharedArray{mk_float,ndim_moment},Nothing}
     # this is the z-derivative of the pressure
@@ -169,6 +173,8 @@ struct moments_ion_substruct{ndim_moment_wall}
     dp_dz_upwind::Union{MPISharedArray{mk_float,ndim_moment},Nothing}
     # this is the second-z-derivative of the pressure
     d2p_dz2::Union{MPISharedArray{mk_float,ndim_moment},Nothing}
+    # this is the second-r-derivative of the pressure
+    d2p_dr2::Union{MPISharedArray{mk_float,ndim_moment},Nothing}
     # this is the z-derivative of the parallel pressure
     dppar_dz::Union{MPISharedArray{mk_float,ndim_moment},Nothing}
     # this is the z-derivative of the parallel heat flux
