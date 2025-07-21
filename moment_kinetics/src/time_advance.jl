@@ -737,6 +737,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
     # define some local variables for convenience/tidiness
     n_ion_species = composition.n_ion_species
     n_neutral_species = composition.n_neutral_species
+    ion_mom_diss_coeff = num_diss_params.ion.moment_dissipation_coefficient
 
     if composition.electron_physics != restart_electron_physics
 
@@ -886,10 +887,21 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
     if !t_params.implicit_ion_advance
         if r.n > 1
             t_params.limit_caused_by["CFL_r"] = 0
+            if ion_mom_diss_coeff > 0.0
+                t_params.limit_caused_by["CFL_r_diffusion"] = 0
+            end
         end
         t_params.limit_caused_by["CFL_z"] = 0
+        if vpa.n > 1
+            if num_diss_params.ion.vpa_dissipation_coefficient > 0.0
+                t_params.limit_caused_by["CFL_vpa_diffusion"] = 0
+            end
+        end
         if vperp.n > 1
             t_params.limit_caused_by["CFL_vperp"] = 0
+            if num_diss_params.ion.vperp_dissipation_coefficient > 0.0
+                t_params.limit_caused_by["CFL_vperp_diffusion"] = 0
+            end
         end
     end
     if !(t_params.implicit_ion_advance || t_params.implicit_vpa_advection)
@@ -2988,6 +3000,13 @@ appropriate.
         CFL_limits["CFL_r"] = t_params.CFL_prefactor * ion_r_CFL
     end
 
+    if advance.r_diffusion && r.n > 1
+        Dr = max(num_diss_params.ion.r_dissipation_coefficient,
+                 num_diss_params.ion.moment_dissipation_coefficient)
+        CFL_limits["CFL_r_diffusion"] = (t_params.CFL_prefactor * minimum(r.cell_width)^2
+                                         / Dr)
+    end
+
     if !t_params.implicit_ion_advance
         # ion z-advection
         @begin_r_vperp_vpa_region()
@@ -3033,6 +3052,15 @@ appropriate.
             end
         end
         CFL_limits["CFL_vperp"] = t_params.CFL_prefactor * ion_vperp_CFL
+    end
+
+    if advance.vpa_diffusion && vpa.n > 1
+        CFL_limits["CFL_vpa_diffusion"] = (t_params.CFL_prefactor * minimum(vpa.cell_width)^2
+                                           / num_diss_params.ion.vpa_dissipation_coefficient)
+    end
+    if advance.vperp_diffusion && vperp.n > 1
+        CFL_limits["CFL_vperp_diffusion"] = (t_params.CFL_prefactor * minimum(vperp.cell_width)^2
+                                             / num_diss_params.ion.vpa_dissipation_coefficient)
     end
 
     if t_params.kinetic_electron_solver == explicit_time_evolving
