@@ -51,9 +51,9 @@ evolve the parallel pressure by solving the energy equation
 
     diffusion_coefficient = num_diss_params.ion.moment_dissipation_coefficient
     if diffusion_coefficient > 0.0
-        @loop_s_r_z is ir iz begin
-            dp_dt[iz,ir,is] += diffusion_coefficient*moments.ion.d2ppar_dz2[iz,ir,is]
-        end
+#        @loop_s_r_z is ir iz begin
+#            dp_dt[iz,ir,is] += diffusion_coefficient*moments.ion.d2ppar_dz2[iz,ir,is]
+#        end
     end
 
     # add in contributions due to charge exchange/ionization collisions

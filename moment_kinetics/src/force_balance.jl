@@ -58,9 +58,9 @@ to update the parallel particle flux dens*upar for each species
     # Ad-hoc diffusion to stabilise numerics...
     diffusion_coefficient = num_diss_params.ion.moment_dissipation_coefficient
     if diffusion_coefficient > 0.0
-        @loop_s_r_z is ir iz begin
-            dnupar_dt[iz,ir,is] += diffusion_coefficient*moments.ion.d2upar_dz2[iz,ir,is]*density[iz,ir,is]
-        end
+#        @loop_s_r_z is ir iz begin
+#            dnupar_dt[iz,ir,is] += diffusion_coefficient*moments.ion.d2upar_dz2[iz,ir,is]*density[iz,ir,is]
+#        end
     end
 
     # if neutrals present account for charge exchange and/or ionization collisions
