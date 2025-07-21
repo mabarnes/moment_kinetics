@@ -125,8 +125,10 @@ function create_moments_ion(z, r, composition, evolve_density, evolve_upar,
     if evolve_density && num_diss_params.ion.moment_dissipation_coefficient > 0.0
 
         d2dens_dz2 = allocate_shared_float(z, r, composition.ion_species_coord)
+        d2dens_dr2 = allocate_shared_float(z, r, composition.ion_species_coord)
     else
         d2dens_dz2 = nothing
+        d2dens_dr2 = nothing
     end
     if evolve_density || evolve_upar || evolve_p
         dupar_dz = allocate_shared_float(z, r, composition.ion_species_coord)
@@ -160,8 +162,10 @@ function create_moments_ion(z, r, composition, evolve_density, evolve_upar,
     if evolve_upar && num_diss_params.ion.moment_dissipation_coefficient > 0.0
 
         d2upar_dz2 = allocate_shared_float(z, r, composition.ion_species_coord)
+        d2upar_dr2 = allocate_shared_float(z, r, composition.ion_species_coord)
     else
         d2upar_dz2 = nothing
+        d2upar_dr2 = nothing
     end
     if evolve_upar
         dppar_dz = allocate_shared_float(z, r, composition.ion_species_coord)
@@ -173,6 +177,7 @@ function create_moments_ion(z, r, composition, evolve_density, evolve_upar,
         dp_dz = allocate_shared_float(z, r, composition.ion_species_coord)
         dp_dz_upwind = allocate_shared_float(z, r, composition.ion_species_coord)
         d2p_dz2 = allocate_shared_float(z, r, composition.ion_species_coord)
+        d2p_dr2 = allocate_shared_float(z, r, composition.ion_species_coord)
         dqpar_dz = allocate_shared_float(z, r, composition.ion_species_coord)
         dvth_dr = allocate_shared_float(z, r, composition.ion_species_coord)
         dvth_dz = allocate_shared_float(z, r, composition.ion_species_coord)
@@ -195,6 +200,7 @@ function create_moments_ion(z, r, composition, evolve_density, evolve_upar,
         dp_dz = nothing
         dp_dz_upwind = nothing
         d2p_dz2 = nothing
+        d2p_dr2 = nothing
         dqpar_dz = nothing
         dvth_dr = nothing
         dvth_dz = nothing
@@ -265,10 +271,10 @@ function create_moments_ion(z, r, composition, evolve_density, evolve_upar,
         perpendicular_pressure, parallel_heat_flux, parallel_heat_flux_updated,
         thermal_speed, temperature, chodura_integral_lower, chodura_integral_upper,
         v_norm_fac, ddens_dr, ddens_dr_upwind, ddens_dz, ddens_dz_upwind, d2dens_dz2,
-        dupar_dr, dupar_dr_upwind, dupar_dz, dupar_dz_upwind, d2upar_dz2, dp_dr_upwind,
-        dp_dz, dp_dz_upwind, d2p_dz2, dppar_dz, dqpar_dz, dvth_dr, dvth_dz, dT_dz,
-        ddens_dt, dupar_dt, dnupar_dt, dp_dt, dvth_dt, entropy_production,
-        external_source_amplitude, external_source_T_array,
+        d2dens_dr2, dupar_dr, dupar_dr_upwind, dupar_dz, dupar_dz_upwind, d2upar_dz2,
+        d2upar_dr2, dp_dr_upwind, dp_dz, dp_dz_upwind, d2p_dz2, d2p_dr2, dppar_dz,
+        dqpar_dz, dvth_dr, dvth_dz, dT_dz, ddens_dt, dupar_dt, dnupar_dt, dp_dt, dvth_dt,
+        entropy_production, external_source_amplitude, external_source_T_array,
         external_source_density_amplitude, external_source_momentum_amplitude,
         external_source_pressure_amplitude, external_source_controller_integral,
         constraints_A_coefficient, constraints_B_coefficient, constraints_C_coefficient)
@@ -1459,6 +1465,8 @@ Pre-calculate spatial derivatives of the moments that will be needed for the tim
         # centred second derivative for dissipation
         @views second_derivative_z!(moments.ion.d2dens_dz2, density, buffer_r_1,
                                     buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
+        @views second_derivative_r!(moments.ion.d2dens_dr2, density, buffer_z_1,
+                                    buffer_z_2, buffer_z_3, buffer_z_4, r_spectral, r)
     end
     if moments.evolve_density || moments.evolve_upar || moments.evolve_p
         @views derivative_z!(moments.ion.dupar_dz, upar, buffer_r_1,
@@ -1468,6 +1476,8 @@ Pre-calculate spatial derivatives of the moments that will be needed for the tim
         # centred second derivative for dissipation
         @views second_derivative_z!(moments.ion.d2upar_dz2, upar, buffer_r_1, buffer_r_2,
                                     buffer_r_3, buffer_r_4, z_spectral, z)
+        @views second_derivative_r!(moments.ion.d2upar_dr2, upar, buffer_z_1, buffer_z_2,
+                                    buffer_z_3, buffer_z_4, r_spectral, r)
     end
     if moments.evolve_upar
         @views derivative_z!(moments.ion.dppar_dz, ppar, buffer_r_1,
@@ -1481,6 +1491,8 @@ Pre-calculate spatial derivatives of the moments that will be needed for the tim
             # centred second derivative for dissipation
             @views second_derivative_z!(moments.ion.d2p_dz2, p, buffer_r_1,
                                         buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
+            @views second_derivative_r!(moments.ion.d2p_dr2, p, buffer_z_1,
+                                        buffer_z_2, buffer_z_3, buffer_z_4, r_spectral, r)
         end
 
         @views derivative_z!(moments.ion.dqpar_dz, qpar, buffer_r_1,

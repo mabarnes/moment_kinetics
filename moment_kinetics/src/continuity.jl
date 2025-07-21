@@ -57,7 +57,8 @@ species
     diffusion_coefficient = num_diss_params.ion.moment_dissipation_coefficient
     if diffusion_coefficient > 0.0
         @loop_s_r_z is ir iz begin
-            ddens_dt[iz,ir,is] += diffusion_coefficient*moments.ion.d2dens_dz2[iz,ir,is]
+#            ddens_dt[iz,ir,is] += diffusion_coefficient*moments.ion.d2dens_dz2[iz,ir,is]
+            ddens_dt[iz,ir,is] += diffusion_coefficient*moments.ion.d2dens_dr2[iz,ir,is]
         end
     end
 
