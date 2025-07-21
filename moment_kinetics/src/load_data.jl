@@ -3035,6 +3035,10 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
         vz_chunk_size = 1
     end
 
+    looping.setup_loop_ranges!(block_rank[], block_size[]; s=composition.n_ion_species,
+                               sn=composition.n_neutral_species, r=r.n, z=z.n,
+                               vperp=vperp.n, vpa=vpa.n, vzeta=vzeta.n, vr=vr.n, vz=vz.n)
+
     zero = 1.0e-14
     boundaries = create_boundary_info(input, nothing, nothing, r, z, vperp, vpa, vzeta,
                                       vr, vz, r_spectral, composition, zero;
@@ -3042,7 +3046,7 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
 
     overview = get_group(fids0[1], "overview")
     nrank = load_variable(overview, "nrank")
-    block_size = load_variable(overview, "block_size")
+    loaded_block_size = load_variable(overview, "block_size")
 
     # Get variable names just from the first restart, for simplicity
     variable_names = get_variable_keys(get_group(fids0[1], "dynamic_data"))
@@ -3119,7 +3123,7 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
                 z_local=z_local, r_spectral=r_spectral, z_spectral=z_spectral,
                 vperp_spectral=vperp_spectral, vpa_spectral=vpa_spectral,
                 vzeta_spectral=vzeta_spectral, vr_spectral=vr_spectral,
-                vz_spectral=vz_spectral, nrank=nrank, block_size=block_size,
+                vz_spectral=vz_spectral, nrank=nrank, block_size=loaded_block_size,
                 r_chunk_size=r_chunk_size, z_chunk_size=z_chunk_size,
                 vperp_chunk_size=vperp_chunk_size, vpa_chunk_size=vpa_chunk_size,
                 vzeta_chunk_size=vzeta_chunk_size, vr_chunk_size=vr_chunk_size,
