@@ -17,6 +17,7 @@ export load_species_data
 export read_distributed_zr_data!
 
 using ..array_allocation: allocate_float, allocate_int
+using ..boundary_conditions: create_boundary_info
 using ..calculus: derivative!
 using ..communication
 using ..continuity: continuity_equation!, neutral_continuity_equation!
@@ -36,6 +37,7 @@ using ..collision_frequencies: get_collision_frequency_ii, get_collision_frequen
                                 get_collision_frequency_ei
 using ..looping
 using ..moment_kinetics_input: mk_input
+using ..moment_kinetics_structs
 using ..neutral_vz_advection: update_speed_neutral_vz!
 using ..neutral_z_advection: update_speed_neutral_z!
 using ..r_advection: update_speed_r!
@@ -3033,6 +3035,11 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
         vz_chunk_size = 1
     end
 
+    zero = 1.0e-14
+    boundaries = create_boundary_info(input, nothing, nothing, r, z, vperp, vpa, vzeta,
+                                      vr, vz, r_spectral, composition, zero;
+                                      warn_unexpected=true)
+
     overview = get_group(fids0[1], "overview")
     nrank = load_variable(overview, "nrank")
     block_size = load_variable(overview, "block_size")
@@ -3101,10 +3108,10 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
                 n_ion_species=n_ion_species, n_neutral_species=n_neutral_species,
                 evolve_moments=evolve_moments, t_input=t_input, composition=composition,
                 species=species, collisions=collisions, geometry=geometry,
-                drive_input=drive_input, num_diss_params=num_diss_params,
+                boundaries=boundaries, drive_input=drive_input,
+                num_diss_params=num_diss_params,
                 external_source_settings=external_source_settings,
-                evolve_density=evolve_density, evolve_upar=evolve_upar,
-                evolve_p=evolve_p,
+                evolve_density=evolve_density, evolve_upar=evolve_upar, evolve_p=evolve_p,
                 manufactured_solns_input=manufactured_solns_input, nt=nt,
                 nt_unskipped=nt_unskipped, restarts_nt=restarts_nt, itime_min=itime_min,
                 itime_skip=itime_skip, itime_max=itime_max, time=time, r=r, z=z,

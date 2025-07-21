@@ -532,24 +532,24 @@ struct neutral_r_boundary_section_Neumann <: neutral_r_boundary_section
 end
 
 struct ion_r_boundary_section_Dirichlet <: ion_r_boundary_section
-    pdf::MPISharedArray{mk_float,ndim_pdf_ion_boundary}
-    density::MPISharedArray{mk_float,ndim_moment_boundary}
-    upar::MPISharedArray{mk_float,ndim_moment_boundary}
-    p::MPISharedArray{mk_float,ndim_moment_boundary}
+    pdf::Union{MPISharedArray{mk_float,ndim_pdf_ion_boundary}}
+    density::Union{MPISharedArray{mk_float,ndim_moment_boundary}}
+    upar::Union{MPISharedArray{mk_float,ndim_moment_boundary}}
+    p::Union{MPISharedArray{mk_float,ndim_moment_boundary}}
 end
 
 struct electron_r_boundary_section_Dirichlet <: electron_r_boundary_section
-    pdf::MPISharedArray{mk_float,ndim_pdf_electron_boundary}
-    density::MPISharedArray{mk_float,ndim_electron_moment_boundary}
-    upar::MPISharedArray{mk_float,ndim_electron_moment_boundary}
-    p::MPISharedArray{mk_float,ndim_electron_moment_boundary}
+    pdf::Union{MPISharedArray{mk_float,ndim_pdf_electron_boundary}}
+    density::Union{MPISharedArray{mk_float,ndim_electron_moment_boundary}}
+    upar::Union{MPISharedArray{mk_float,ndim_electron_moment_boundary}}
+    p::Union{MPISharedArray{mk_float,ndim_electron_moment_boundary}}
 end
 
 struct neutral_r_boundary_section_Dirichlet <: neutral_r_boundary_section
-    pdf::MPISharedArray{mk_float,ndim_pdf_neutral_boundary}
-    density::MPISharedArray{mk_float,ndim_moment_boundary}
-    uz::MPISharedArray{mk_float,ndim_moment_boundary}
-    p::MPISharedArray{mk_float,ndim_moment_boundary}
+    pdf::Union{MPISharedArray{mk_float,ndim_pdf_neutral_boundary}}
+    density::Union{MPISharedArray{mk_float,ndim_moment_boundary}}
+    uz::Union{MPISharedArray{mk_float,ndim_moment_boundary}}
+    p::Union{MPISharedArray{mk_float,ndim_moment_boundary}}
 end
 
 struct r_boundary_info{Tinner <: NTuple{M,r_boundary_section} where M,

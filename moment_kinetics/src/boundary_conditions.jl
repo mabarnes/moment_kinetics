@@ -112,18 +112,33 @@ function create_r_boundary_info(input_dict, pdf, moments, r, z, vperp, vpa, vzet
                                 r_spectral, composition; warn_unexpected)
     inner_input, outer_input = read_r_sections_input(input_dict, warn_unexpected)
 
-    ion_pdf_inner = @view pdf.ion.norm[:,:,:,1,:]
-    ion_density_inner = @view moments.ion.dens[:,1,:]
-    ion_upar_inner = @view moments.ion.upar[:,1,:]
-    ion_p_inner = @view moments.ion.p[:,1,:]
-    electron_pdf_inner = pdf.electron === nothing ? nothing : @view pdf.electron.norm[:,:,:,1]
-    electron_density_inner = @view moments.electron.dens[:,1]
-    electron_upar_inner = @view moments.electron.upar[:,1]
-    electron_p_inner = @view moments.electron.p[:,1]
-    neutral_pdf_inner = @view pdf.neutral.norm[:,:,:,:,1,:]
-    neutral_density_inner = @view moments.neutral.dens[:,1,:]
-    neutral_uz_inner = @view moments.neutral.uz[:,1,:]
-    neutral_p_inner = @view moments.neutral.p[:,1,:]
+    if pdf !== nothing && moments !== nothing
+        ion_pdf_inner = @view pdf.ion.norm[:,:,:,1,:]
+        ion_density_inner = @view moments.ion.dens[:,1,:]
+        ion_upar_inner = @view moments.ion.upar[:,1,:]
+        ion_p_inner = @view moments.ion.p[:,1,:]
+        electron_pdf_inner = pdf.electron === nothing ? nothing : @view pdf.electron.norm[:,:,:,1]
+        electron_density_inner = @view moments.electron.dens[:,1]
+        electron_upar_inner = @view moments.electron.upar[:,1]
+        electron_p_inner = @view moments.electron.p[:,1]
+        neutral_pdf_inner = @view pdf.neutral.norm[:,:,:,:,1,:]
+        neutral_density_inner = @view moments.neutral.dens[:,1,:]
+        neutral_uz_inner = @view moments.neutral.uz[:,1,:]
+        neutral_p_inner = @view moments.neutral.p[:,1,:]
+    else
+        ion_pdf_inner = nothing
+        ion_density_inner = nothing
+        ion_upar_inner = nothing
+        ion_p_inner = nothing
+        electron_pdf_inner = nothing
+        electron_density_inner = nothing
+        electron_upar_inner = nothing
+        electron_p_inner = nothing
+        neutral_pdf_inner = nothing
+        neutral_density_inner = nothing
+        neutral_uz_inner = nothing
+        neutral_p_inner = nothing
+    end
 
     # Only inner-r shared-memory block needs to apply r-boundary conditions.
     # Note that 1D simulations cannot have r-boundaries
@@ -143,18 +158,33 @@ function create_r_boundary_info(input_dict, pdf, moments, r, z, vperp, vpa, vzet
         inner_sections = ()
     end
 
-    ion_pdf_outer = @view pdf.ion.norm[:,:,:,end,:]
-    ion_density_outer = @view moments.ion.dens[:,end,:]
-    ion_upar_outer = @view moments.ion.upar[:,end,:]
-    ion_p_outer = @view moments.ion.p[:,end,:]
-    electron_pdf_outer = pdf.electron === nothing ? nothing : @view pdf.electron.norm[:,:,:,end]
-    electron_density_outer = @view moments.electron.dens[:,end]
-    electron_upar_outer = @view moments.electron.upar[:,end]
-    electron_p_outer = @view moments.electron.p[:,end]
-    neutral_pdf_outer = @view pdf.neutral.norm[:,:,:,:,end,:]
-    neutral_density_outer = @view moments.neutral.dens[:,end,:]
-    neutral_uz_outer = @view moments.neutral.uz[:,end,:]
-    neutral_p_outer = @view moments.neutral.p[:,end,:]
+    if pdf !== nothing && moments !== nothing
+        ion_pdf_outer = @view pdf.ion.norm[:,:,:,end,:]
+        ion_density_outer = @view moments.ion.dens[:,end,:]
+        ion_upar_outer = @view moments.ion.upar[:,end,:]
+        ion_p_outer = @view moments.ion.p[:,end,:]
+        electron_pdf_outer = pdf.electron === nothing ? nothing : @view pdf.electron.norm[:,:,:,end]
+        electron_density_outer = @view moments.electron.dens[:,end]
+        electron_upar_outer = @view moments.electron.upar[:,end]
+        electron_p_outer = @view moments.electron.p[:,end]
+        neutral_pdf_outer = @view pdf.neutral.norm[:,:,:,:,end,:]
+        neutral_density_outer = @view moments.neutral.dens[:,end,:]
+        neutral_uz_outer = @view moments.neutral.uz[:,end,:]
+        neutral_p_outer = @view moments.neutral.p[:,end,:]
+    else
+        ion_pdf_outer = nothing
+        ion_density_outer = nothing
+        ion_upar_outer = nothing
+        ion_p_outer = nothing
+        electron_pdf_outer = nothing
+        electron_density_outer = nothing
+        electron_upar_outer = nothing
+        electron_p_outer = nothing
+        neutral_pdf_outer = nothing
+        neutral_density_outer = nothing
+        neutral_uz_outer = nothing
+        neutral_p_outer = nothing
+    end
 
     # Only outer-r shared-memory block needs to apply r-boundary conditions.
     # Note that 1D simulations cannot have r-boundaries
@@ -561,41 +591,52 @@ function create_r_section(this_input, ion_pdf, ion_density, ion_upar, ion_p, ele
             end
         elseif this_input["$(species)_bc"] == "pin_initial"
             if species == "ion"
-                bc_ion_pdf = allocate_shared_float(vpa.n, vperp.n, length(z_range),
-                                                   composition.n_ion_species)
-                bc_ion_density = allocate_shared_float(length(z_range), composition.n_ion_species)
-                bc_ion_upar = allocate_shared_float(length(z_range), composition.n_ion_species)
-                bc_ion_p = allocate_shared_float(length(z_range), composition.n_ion_species)
+                if ion_pdf === nothing
+                    bc_ion_pdf = allocate_shared_float(vpa.n, vperp.n, length(z_range),
+                                                       composition.n_ion_species)
+                    bc_ion_density = allocate_shared_float(length(z_range), composition.n_ion_species)
+                    bc_ion_upar = allocate_shared_float(length(z_range), composition.n_ion_species)
+                    bc_ion_p = allocate_shared_float(length(z_range), composition.n_ion_species)
 
-                @begin_s_region()
-                @loop_s is begin
-                    @views bc_ion_pdf[:,:,z_range,is] = ion_pdf[:,:,z_range,is]
-                    @views bc_ion_density[z_range,is] = ion_density[z_range,is]
-                    @views bc_ion_upar[z_range,is] = ion_upar[z_range,is]
-                    @views bc_ion_p[z_range,is] = ion_p[z_range,is]
+                    @begin_s_region()
+                    @loop_s is begin
+                        @views bc_ion_pdf[:,:,z_range,is] = ion_pdf[:,:,z_range,is]
+                        @views bc_ion_density[z_range,is] = ion_density[z_range,is]
+                        @views bc_ion_upar[z_range,is] = ion_upar[z_range,is]
+                        @views bc_ion_p[z_range,is] = ion_p[z_range,is]
+                    end
+
+                    this_section = ion_r_boundary_section_Dirichlet(bc_ion_pdf,
+                                                                    bc_ion_density,
+                                                                    bc_ion_upar, bc_ion_p)
+                else
+                    this_section = ion_r_boundary_section_Dirichlet(nothing, nothing,
+                                                                    nothing, nothing)
                 end
-
-                this_section = ion_r_boundary_section_Dirichlet(bc_ion_pdf,
-                                                                bc_ion_density,
-                                                                bc_ion_upar, bc_ion_p)
             elseif species == "electron"
                 if electron_pdf === nothing
                     bc_electron_pdf = zeros(0, 0, 0)
                 else
                     bc_electron_pdf = allocate_shared_float(vpa.n, vperp.n, length(z_range))
                 end
-                bc_electron_density = allocate_shared_float(length(z_range))
-                bc_electron_upar = allocate_shared_float(length(z_range))
-                bc_electron_p = allocate_shared_float(length(z_range))
+                if electron_pdf === nothing && electron_density === nothing
+                    bc_electron_density = allocate_shared_float(length(z_range))
+                    bc_electron_upar = allocate_shared_float(length(z_range))
+                    bc_electron_p = allocate_shared_float(length(z_range))
 
-                @begin_serial_region()
-                @serial_region begin
-                    if electron_pdf !== nothing
-                        @views bc_electron_pdf[:,:,z_range] = electron_pdf[:,:,z_range]
+                    @begin_serial_region()
+                    @serial_region begin
+                        if electron_pdf !== nothing
+                            @views bc_electron_pdf[:,:,z_range] = electron_pdf[:,:,z_range]
+                        end
+                        @views bc_electron_density[z_range] = electron_density[z_range]
+                        @views bc_electron_upar[z_range] = electron_upar[z_range]
+                        @views bc_electron_p[z_range] = electron_p[z_range]
                     end
-                    @views bc_electron_density[z_range] = electron_density[z_range]
-                    @views bc_electron_upar[z_range] = electron_upar[z_range]
-                    @views bc_electron_p[z_range] = electron_p[z_range]
+                else
+                    bc_electron_density = nothing
+                    bc_electron_upar = nothing
+                    bc_electron_p = nothing
                 end
 
                 this_section = electron_r_boundary_section_pin_initial(bc_electron_pdf,
@@ -603,28 +644,35 @@ function create_r_section(this_input, ion_pdf, ion_density, ion_upar, ion_p, ele
                                                                        bc_electron_upar,
                                                                        bc_electron_p)
             elseif species == "neutral"
-                bc_neutral_pdf = allocate_shared_float(vz.n, vr.n, vzeta.n,
-                                                       length(z_range),
-                                                       composition.n_neutral_species)
-                bc_neutral_density = allocate_shared_float(length(z_range),
+                if neutral_pdf === nothing
+                    bc_neutral_pdf = allocate_shared_float(vz.n, vr.n, vzeta.n,
+                                                           length(z_range),
                                                            composition.n_neutral_species)
-                bc_neutral_upar = allocate_shared_float(length(z_range),
-                                                        composition.n_neutral_species)
-                bc_neutral_p = allocate_shared_float(length(z_range),
-                                                     composition.n_neutral_species)
+                    bc_neutral_density = allocate_shared_float(length(z_range),
+                                                               composition.n_neutral_species)
+                    bc_neutral_upar = allocate_shared_float(length(z_range),
+                                                            composition.n_neutral_species)
+                    bc_neutral_p = allocate_shared_float(length(z_range),
+                                                         composition.n_neutral_species)
 
-                @begin_sn_region()
-                @loop_sn isn begin
-                    @views bc_neutral_pdf[:,:,z_range,isn] = neutral_pdf[:,:,z_range,isn]
-                    @views bc_neutral_density[z_range,isn] = neutral_density[z_range,isn]
-                    @views bc_neutral_uz[z_range,isn] = neutral_uz[z_range,isn]
-                    @views bc_neutral_p[z_range,isn] = neutral_p[z_range,isn]
+                    @begin_sn_region()
+                    @loop_sn isn begin
+                        @views bc_neutral_pdf[:,:,z_range,isn] = neutral_pdf[:,:,z_range,isn]
+                        @views bc_neutral_density[z_range,isn] = neutral_density[z_range,isn]
+                        @views bc_neutral_uz[z_range,isn] = neutral_uz[z_range,isn]
+                        @views bc_neutral_p[z_range,isn] = neutral_p[z_range,isn]
+                    end
+
+                    this_section = neutral_r_boundary_section_pin_initial(bc_neutral_pdf,
+                                                                          bc_neutral_density,
+                                                                          bc_neutral_uz,
+                                                                          bc_neutral_p)
+                else
+                    this_section = neutral_r_boundary_section_pin_initial(nothing,
+                                                                          nothing,
+                                                                          nothing,
+                                                                          nothing)
                 end
-
-                this_section = neutral_r_boundary_section_pin_initial(bc_neutral_pdf,
-                                                                      bc_neutral_density,
-                                                                      bc_neutral_uz,
-                                                                      bc_neutral_p)
             else
                 error("Unrecognised species=$species")
             end
