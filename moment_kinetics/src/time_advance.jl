@@ -72,9 +72,9 @@ using ..continuity: continuity_equation!, neutral_continuity_equation!
 using ..force_balance: force_balance!, neutral_force_balance!
 using ..energy_equation: energy_equation!, neutral_energy_equation!
 using ..em_fields: setup_em_fields, update_phi!
-using ..fokker_planck: init_fokker_planck_collisions_weak_form, explicit_fokker_planck_collisions_weak_form!
+using ..fokker_planck: init_fp_collisions, explicit_fokker_planck_collisions_weak_form!
 using ..fokker_planck: explicit_fp_collisions_weak_form_Maxwellian_cross_species!
-using ..fokker_planck: setup_fp_nl_solve, implicit_ion_fokker_planck_self_collisions!
+using ..fokker_planck: implicit_ion_fokker_planck_self_collisions!
 using ..gyroaverages: init_gyro_operators, gyroaverage_pdf!
 using ..manufactured_solns: manufactured_sources
 using ..timer_utils
@@ -792,7 +792,14 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
             error("$field is set to `true` in both `advance` and `advance_implicit`")
         end
     end
-
+    
+    # create arrays for Fokker-Planck collisions 
+    if advance.fp_collisions || advance_implicit.fp_collisions
+        fp_arrays = init_fp_collisions(input_dict, collisions.fkpl, vpa, vperp)
+    else
+        fp_arrays = nothing
+    end
+    
     # Set up parameters for Jacobian-free Newton-Krylov solver used for implicit part of
     # timesteps.
     electron_conduction_nl_solve_parameters = setup_nonlinear_solve(t_params.implicit_braginskii_conduction,
@@ -831,14 +838,13 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
         error("Cannot use implicit_ion_advance and implicit_vpa_advection at the same "
               * "time")
     end
-    nl_solver_ion_fp_collisions = setup_fp_nl_solve(t_params.use_implicit_ion_fp_collisions,
-                                                    input_dict, (vperp=vperp, vpa=vpa))
-
+    
     nl_solver_params = (electron_conduction=electron_conduction_nl_solve_parameters,
                         electron_advance=nl_solver_electron_advance_params,
                         ion_advance=nl_solver_ion_advance_params,
                         vpa_advection=nl_solver_vpa_advection_params,
-                        ion_fp_collisions=nl_solver_ion_fp_collisions)
+                        #ion_fp_collisions=fp_arrays.nl_solver_data
+                        )
 
     # Check that no unexpected sections or top-level options were passed (helps to catch
     # typos in input files). Needs to be called after calls to `setup_nonlinear_solve()`
@@ -872,18 +878,6 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
     scratch_dummy = setup_dummy_and_buffer_arrays(r.n, z.n, vpa.n, vperp.n, vz.n, vr.n,
                                                   vzeta.n, composition.n_ion_species,
                                                   n_neutral_species_alloc, t_params)
-    # create arrays for Fokker-Planck collisions 
-    if advance.fp_collisions || advance_implicit.fp_collisions
-        if collisions.fkpl.boundary_data_option == direct_integration
-            precompute_weights = true
-        else
-            precompute_weights = false
-        end
-        fp_arrays = init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_spectral;
-                      precompute_weights=precompute_weights)
-    else
-        fp_arrays = nothing
-    end
     # create gyroaverage matrix arrays
     gyroavs = init_gyro_operators(vperp, z, r, gyrophase, geometry, boundaries,
                                   composition)
@@ -3432,7 +3426,7 @@ end
         if t_params.kinetic_electron_solver ∈ (implicit_steady_state, implicit_time_evolving)
             params_to_check = (nl_solver_params.ion_advance,
                                nl_solver_params.vpa_advection,
-                               nl_solver_params.ion_fp_collisions,
+                               #nl_solver_params.ion_fp_collisions,
                                nl_solver_params.electron_conduction,
                                nl_solver_params.electron_advance)
         else
@@ -3442,7 +3436,7 @@ end
             # compared to their maximum values
             params_to_check = (nl_solver_params.ion_advance,
                                nl_solver_params.vpa_advection,
-                               nl_solver_params.ion_fp_collisions,
+                               #nl_solver_params.ion_fp_collisions,
                                nl_solver_params.electron_conduction)
             if t_params.electron !== nothing
                 electron_time_advance_fraction =
@@ -3908,14 +3902,14 @@ implementation), a call needs to be made with `dt` scaled by some coefficient.
                 # self collisions for each species
                 explicit_fokker_planck_collisions_weak_form!(fvec_out.pdf,fvec_in.pdf,moments.ion.dSdt,
                                     fvec_in.density,moments.ion.vth,moments.evolve_p,moments.evolve_density,
-                                    composition,collisions,dt,fp_arrays,r,z,vperp,vpa,vperp_spectral,vpa_spectral,scratch_dummy,
+                                    composition,collisions,dt,fp_arrays,r,z,vperp,vpa,
                                                         diagnose_entropy_production = update_entropy_diagnostic)
                 write_debug_IO("explicit_fokker_planck_collisions_weak_form!")
             end
             if collisions.fkpl.slowing_down_test
             # include cross-collsions with fixed Maxwellian backgrounds
                 explicit_fp_collisions_weak_form_Maxwellian_cross_species!(fvec_out.pdf,fvec_in.pdf,moments.ion.dSdt,
-                                composition,collisions,dt,fp_arrays,r,z,vperp,vpa,vperp_spectral,vpa_spectral,
+                                composition,collisions,dt,fp_arrays,r,z,vperp,vpa,
                                                 diagnose_entropy_production = update_entropy_diagnostic)
                 write_debug_IO("explicit_fp_collisions_weak_form_Maxwellian_cross_species!")
             end
@@ -4054,8 +4048,7 @@ end
         ion_success = implicit_ion_fokker_planck_self_collisions!(fvec_out.pdf, fvec_in.pdf, moments.ion.dSdt, 
                                 fvec_in.density,moments.ion.vth,moments.evolve_p,moments.evolve_density,
                                 composition, collisions, fp_arrays,
-                                vpa, vperp, z, r, dt, spectral_objects,
-                                nl_solver_params.ion_fp_collisions; diagnose_entropy_production=true)
+                                vpa, vperp, z, r, dt; diagnose_entropy_production=true)
         success = success && ion_success
     end
     return success

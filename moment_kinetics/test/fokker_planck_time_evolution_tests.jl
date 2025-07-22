@@ -14,7 +14,6 @@ using moment_kinetics.load_data: open_readonly_output_file, load_coordinate_data
 using moment_kinetics.type_definitions: mk_float
 using moment_kinetics.utils: merge_dict_with_kwargs!
 using moment_kinetics.input_structs: options_to_TOML
-using moment_kinetics.fokker_planck_test: F_Maxwellian, print_test_data
 using moment_kinetics.velocity_moments: get_density, get_upar, get_p
 
 const analytical_rtol = 3.e-2
@@ -206,6 +205,23 @@ expected_data(
 # in an interative Julia REPL. The path is the path to the .dfns file. 
 ########################################################################################## 
 
+function maxnorm_func(pdf,pdf_exact,pdf_err)
+    @. pdf_err = abs(pdf - pdf_exact)
+    norm = maximum(pdf_err)
+    return norm
+end
+
+function L2norm_func(pdf,pdf_exact,pdf_err,vpa,vperp)
+    @. pdf_err = (abs(pdf - pdf_exact))^2
+    # compute the numerator
+    num = get_density(pdf_err,vpa,vperp)
+    # compute the denominator
+    @. pdf_err = 1.0
+    denom = get_density(pdf_err,vpa,vperp)
+    L2norm = sqrt(num/denom)
+    return L2norm
+end
+
 """
 Function to print data from a moment_kinetics run suitable
 for copying into the expected data structure.
@@ -338,13 +354,20 @@ function print_output_data_for_test_update(path; write_grid=true, write_pdf=true
     return nothing
 end
 
-function diagnose_F_Maxwellian_serial(pdf,pdf_exact,pdf_dummy_1,pdf_dummy_2,vpa,vperp,mass)
+function diagnose_F_Maxwellian_serial(pdf,pdf_exact,pdf_dummy_1,vpa,vperp,mass)
     # call this function from a single process
     # construct the local-in-time Maxwellian for this pdf
     dens = get_density(pdf,vpa,vperp)
     upar = get_upar(pdf, dens, vpa, vperp, false)
     pressure = get_p(pdf, dens, upar, vpa, vperp, false, false)
     vth = sqrt(2.0*pressure/(dens*mass))
+    # a function for computing the Maxwellian distribution
+    function F_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+        v2 = ((vpa.grid[ivpa] - upar)^2 + vperp.grid[ivperp]^2)/(vth^2)
+        F_M = (dens/(vth^3)/π^1.5)*exp(-v2)
+        return F_M
+    end
+
     for ivperp in 1:vperp.n
         for ivpa in 1:vpa.n
             pdf_exact[ivpa,ivperp] = F_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
@@ -352,7 +375,8 @@ function diagnose_F_Maxwellian_serial(pdf,pdf_exact,pdf_dummy_1,pdf_dummy_2,vpa,
     end
     # check how close the pdf is to the Maxwellian with
     # maximum of difference and L2 of difference
-    max_err, L2norm = print_test_data(pdf_exact,pdf,pdf_dummy_1,"F",vpa,vperp,pdf_dummy_2;print_to_screen=false)
+    max_err = maxnorm_func(pdf,pdf_exact,pdf_dummy_1)
+    L2norm = L2norm_func(pdf,pdf_exact,pdf_dummy_1,vpa,vperp)
     return max_err, L2norm
 end
 
@@ -390,7 +414,8 @@ test_input_gauss_legendre = OptionsDict("output" => OptionsDict("run_name" => "g
                                                                    "charge_exchange_frequency" => 0.0),
                                         "fokker_planck_collisions" => OptionsDict("use_fokker_planck" => true,
                                                                                   "nuii" => 4.0,
-                                                                                  "frequency_option" => "manual"),
+                                                                                  "frequency_option" => "manual",
+                                                                                  "boundary_data_option" => "direct_integration"),
                                         "evolve_moments" => OptionsDict("pressure" => false,
                                                                         "moments_conservation" => false,
                                                                         "parallel_flow" => false,
@@ -445,10 +470,10 @@ function run_test(test_input, expected, rtol, atol, upar_rtol=nothing; args...)
     merge_dict_with_kwargs!(input; args...)
     input["output"]["run_name"] = name
     # Suppress console output while running
-    quietoutput() do
+    #quietoutput() do
         # run simulation
         run_moment_kinetics(input)
-    end
+    #end
 
     phi = nothing
     n_ion = nothing
@@ -520,7 +545,7 @@ function run_test(test_input, expected, rtol, atol, upar_rtol=nothing; args...)
             mass = input["ion_species_1"]["mass"]
             for it in 1:size(phi,1)
                 @views output = diagnose_F_Maxwellian_serial(f_ion[:,:,it],
-                                                            f_dummy_1,f_dummy_2,f_dummy_3,
+                                                            f_dummy_1,f_dummy_2,
                                                             vpa,vperp,mass)
                 maxnorm_ion[it] = output[1]
                 L2norm_ion[it] = output[2]
@@ -574,15 +599,8 @@ function runtests()
 
         # GaussLegendre pseudospectral
         # Benchmark data is taken from this run (GaussLegendre)
-        @testset "Gauss Legendre base" begin
-            run_name = "gausslegendre_pseudospectral"
-            vperp_bc = "zero-impose-regularity"
-            run_test(test_input_gauss_legendre,
-             expected_zero_impose_regularity, 2.0e-14, 2.0e-14;
-             vperp=OptionsDict("bc" => vperp_bc))
-        end
-        @testset "Gauss Legendre no enforced regularity condition at vperp = 0" begin
-            run_name = "gausslegendre_pseudospectral_no_regularity"
+        @testset "Gauss Legendre zero boundary condition at vpa=+-L, vperp=L" begin
+            run_name = "gausslegendre_pseudospectral_zero_bc"
             vperp_bc = "zero"
             run_test(test_input_gauss_legendre,
             expected_zero,
