@@ -624,7 +624,13 @@ function run_test(test_input, expected, rtol, atol, upar_rtol=nothing; args...)
         if isa(value, AbstractDict)
             return string(string(key)[1], (stringify_arg(k, v) for (k, v) in value)...)
         else
-            return string(string(key)[1], value)
+            val = string(value)
+            n = length(val)
+            maxlength = 3
+            if n < 3
+                maxlength = n
+            end
+            return string(string(key)[1], string(value)[1:maxlength])
         end
     end
     name = input["output"]["run_name"]
