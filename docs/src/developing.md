@@ -246,9 +246,7 @@ macro (which disables bounds checks within the block, but the effect of
 `@inbounds` does not propagate down into functions called within the block). If
 performance-critical code that you write is within an `@loop`, then you do not
 need to do anything. However if it is not within an `@loop`, then you should
-add `@inbounds begin ... end` around any performance critical code. You can see
-examples of this being done in
-[`moment_kinetics.fokker_planck_calculus`](@ref).
+add `@inbounds begin ... end` around any performance critical code.
 
 ## [Parallel I/O](@id parallel_io_section)
 

@@ -19,10 +19,10 @@ by direct integration of the Green's functions. These functions are
 supported for the purposes of testing and debugging.
 
 Lower-level routines are provided by functions from
-[`moment_kinetics.fokker_planck_calculus`](@ref).
+[FokkerPlanck](https://github.com/moment-kinetics/FokkerPlanck).
 
-Parallelisation of the collision operator uses a special 'anysv' region type, see
-[Collision operator and `anysv` region](@ref).
+The collision operator here is serial in the velocity space,
+but trivially parallel in space.
 """
 module fokker_planck
 
