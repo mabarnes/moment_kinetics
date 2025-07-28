@@ -22,6 +22,7 @@ using ..moment_kinetics_structs: null_spatial_dimension_info,
 
 using MPI
 using OrderedCollections: OrderedDict
+using LagrangePolynomials: lagrange_poly_data
 
 """
 structure containing basic information related to coordinates
@@ -142,14 +143,10 @@ struct coordinate{T <: AbstractVector{mk_float}, Ti <: AbstractVector{mk_int}, T
     element_boundaries::Array{mk_float,1}
     # Does the coordinate use a 'Radau' discretization for the first element?
     radau_first_element::Bool
-    # 'Other' nodes where the j'th Lagrange polynomial (which is 1 at x[j]) is equal to 0
-    other_nodes::Array{mk_float,3}
-    # One over the denominators of the Lagrange polynomials
-    one_over_denominator::Array{mk_float,2}
-    # mask_up -- mask function for use imposing bc at upper wall
-    mask_up::Array{mk_float,1}
-    # mask_low -- mask function for use imposing bc at lower wall
-    mask_low::Array{mk_float,1}
+    # data for calculating Lagrange polynomials on the elements,
+    # in the same normalisation as `grid` i.e., not on the reference coordinates on [-1,1],
+    # but on the coordinate that runs from [grid_min,grid_max] on each element.
+    lagrange_data::Union{Array{lagrange_poly_data,1},Nothing}
 end
 
 """
@@ -387,41 +384,13 @@ function define_coordinate(coord_input::NamedTuple; parallel_io::Bool=false,
     end
 
     # Precompute some values for Lagrange polynomial evaluation
-    other_nodes = allocate_float(coord_input.ngrid-1, coord_input.ngrid,
-                                 coord_input.nelement_local)
-    one_over_denominator = allocate_float(coord_input.ngrid, coord_input.nelement_local)
-    for ielement ∈ 1:coord_input.nelement_local
-        if ielement == 1
-            this_imin = imin[ielement]
-        else
-            this_imin = imin[ielement] - 1
+    if coord_input.ngrid > 1
+        lagrange_data = Array{lagrange_poly_data,1}(undef,coord_input.nelement_local)
+        for ielement ∈ 1:coord_input.nelement_local
+            lagrange_data[ielement] = lagrange_poly_data(grid[igrid_full[1,ielement]:igrid_full[end,ielement]])
         end
-        this_imax = imax[ielement]
-        this_grid = grid[this_imin:this_imax]
-        for j ∈ 1:coord_input.ngrid
-            @views other_nodes[1:j-1,j,ielement] .= this_grid[1:j-1]
-            @views other_nodes[j:end,j,ielement] .= this_grid[j+1:end]
-
-            if coord_input.ngrid == 1
-                one_over_denominator[j,ielement] = 1.0
-            else
-                one_over_denominator[j,ielement] = 1.0 / prod(this_grid[j] - n for n ∈ @view other_nodes[:,j,ielement])
-            end
-        end
-    end
-
-    mask_low = allocate_float(n_local)
-    mask_low .= 1.0
-    mask_up = allocate_float(n_local)
-    mask_up .= 1.0
-    zeroval = 1.0e-8
-    for i in 1:n_local
-        if grid[i] > zeroval
-            mask_low[i] = 0.0
-        end
-        if grid[i] < -zeroval
-            mask_up[i] = 0.0
-        end
+    else
+        lagrange_data = nothing
     end
     coord = coordinate(coord_input.name, n_global, n_local, coord_input.ngrid,
         coord_input.nelement, coord_input.nelement_local, nrank, irank,
@@ -435,7 +404,7 @@ function define_coordinate(coord_input::NamedTuple; parallel_io::Bool=false,
         scratch_2d, copy(scratch_2d), advection, send_buffer, receive_buffer, comm,
         local_io_range, global_io_range, element_scale, element_shift,
         coord_input.element_spacing_option, element_boundaries, radau_first_element,
-        other_nodes, one_over_denominator, mask_up, mask_low)
+        lagrange_data)
 
     if coord.n == 1 && coord.name == "vperp"
         spectral = null_vperp_dimension_info()

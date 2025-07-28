@@ -21,12 +21,14 @@ import ..calculus: elementwise_derivative!, mass_matrix_solve!,
                    elementwise_indefinite_integration!
 import ..interpolation: single_element_interpolate!,
                         fill_single_element_interpolation_matrix!
-using ..lagrange_polynomials: lagrange_poly_optimised, lagrange_poly_derivative_optimised, lagrange_poly
 using ..moment_kinetics_structs: weak_discretization_info
 using FiniteElementMatrices: element_coordinates,
                             lagrange_x,
                             d_lagrange_dx,
                             finite_element_matrix
+using LagrangePolynomials: lagrange_poly,
+                        lagrange_poly_derivative,
+                        lagrange_poly_data
 
 """
 A struct for passing around elemental matrices
@@ -219,20 +221,18 @@ function single_element_interpolate!(result, newgrid, f, imin, imax, ielement, c
                                      gausslegendre::gausslegendre_base_info,
                                      derivative::Val{0})
     n_new = length(newgrid)
-
+    lpoly_data = coord.lagrange_data[ielement]
     i = 1
-    other_nodes = @view coord.other_nodes[:,i,ielement]
-    one_over_denominator = coord.one_over_denominator[i,ielement]
+    ith_lpoly_data = lpoly_data.lpoly_data[i]
     this_f = f[i]
     for j ∈ 1:n_new
-        result[j] = this_f * lagrange_poly_optimised(other_nodes, one_over_denominator, newgrid[j])
+        result[j] = this_f * lagrange_poly(ith_lpoly_data, newgrid[j])
     end
     for i ∈ 2:coord.ngrid
-        other_nodes = @view coord.other_nodes[:,i,ielement]
-        one_over_denominator = coord.one_over_denominator[i,ielement]
+        ith_lpoly_data = lpoly_data.lpoly_data[i]
         this_f = f[i]
         for j ∈ 1:n_new
-            result[j] += this_f * lagrange_poly_optimised(other_nodes, one_over_denominator, newgrid[j])
+            result[j] += this_f * lagrange_poly(ith_lpoly_data, newgrid[j])
         end
     end
 
@@ -247,20 +247,18 @@ function single_element_interpolate!(result, newgrid, f, imin, imax, ielement, c
                                      gausslegendre::gausslegendre_base_info,
                                      derivative::Val{1})
     n_new = length(newgrid)
-
+    lpoly_data = coord.lagrange_data[ielement]
     i = 1
-    other_nodes = @view coord.other_nodes[:,i,ielement]
-    one_over_denominator = coord.one_over_denominator[i,ielement]
+    ith_lpoly_data = lpoly_data.lpoly_data[i]
     this_f = f[i]
     for j ∈ 1:n_new
-        result[j] = this_f * lagrange_poly_derivative_optimised(other_nodes, one_over_denominator, newgrid[j])
+        result[j] = this_f * lagrange_poly_derivative(ith_lpoly_data, newgrid[j])
     end
     for i ∈ 2:coord.ngrid
-        other_nodes = @view coord.other_nodes[:,i,ielement]
-        one_over_denominator = coord.one_over_denominator[i,ielement]
+        ith_lpoly_data = lpoly_data.lpoly_data[i]
         this_f = f[i]
         for j ∈ 1:n_new
-            result[j] += this_f * lagrange_poly_derivative_optimised(other_nodes, one_over_denominator, newgrid[j])
+            result[j] += this_f * lagrange_poly_derivative(ith_lpoly_data, newgrid[j])
         end
     end
 
@@ -271,12 +269,11 @@ function fill_single_element_interpolation_matrix!(
              matrix_slice, newgrid, jelement, coord,
              gausslegendre::gausslegendre_base_info)
     n_new = length(newgrid)
-
+    lpoly_data = coord.lagrange_data[jelement]
     for j ∈ 1:coord.ngrid
-        other_nodes = @view coord.other_nodes[:,j,jelement]
-        one_over_denominator = coord.one_over_denominator[j,jelement]
+        jth_lpoly_data = lpoly_data.lpoly_data[j]
         for i ∈ 1:n_new
-            matrix_slice[i,j] = lagrange_poly_optimised(other_nodes, one_over_denominator, newgrid[i])
+            matrix_slice[i,j] = lagrange_poly(jth_lpoly_data, newgrid[i])
         end
     end
 
@@ -328,6 +325,7 @@ A_{ij} = \\left(\\frac{x_i + 1}{2}\\right) \\sum_k l_j \\left( \\frac{(x_i + 1)y
 with \$y_k\$ and \$w_k\$ Gauss-quadrature points and weights, respectively.
 """
 function integration_matrix!(A::Array{Float64,2},x::Array{Float64,1},ngrid::Int64)
+    lpoly_data = lagrange_poly_data(x)
     nquad = 2*ngrid
     zz, wz = gausslegendre(nquad)
     # set lower limit
@@ -344,7 +342,8 @@ function integration_matrix!(A::Array{Float64,2},x::Array{Float64,1},ngrid::Int6
             A[i,j] = 0.0
             for k in 1:nquad
                 xval = scale*zz[k] + shift
-                A[i,j] += scale*lagrange_poly(j,x,xval)*wz[k]
+                jth_lpoly_data = lpoly_data.lpoly_data[j]
+                A[i,j] += scale*lagrange_poly(jth_lpoly_data,xval)*wz[k]
             end
         end
     end
