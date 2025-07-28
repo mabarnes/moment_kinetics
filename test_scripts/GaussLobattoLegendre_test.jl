@@ -99,28 +99,6 @@ using moment_kinetics.type_definitions: OptionsDict
             end
             println("max(abs(err)) integration of cosine: ",maximum(abs.(result)))
             #println(result)
-            #print_matrix(y_spectral.radau.M0,"local radau mass matrix M0",y.ngrid,y.ngrid)
-            #print_matrix(y_spectral.radau.M1,"local radau mass matrix M1",y.ngrid,y.ngrid)
-            #print_matrix(y_spectral.lobatto.M0,"local mass matrix M0",y.ngrid,y.ngrid)
-            #print_matrix(y_spectral.lobatto.M1,"local mass matrix M1",y.ngrid,y.ngrid)
-            #print_matrix(y_spectral.mass_matrix,"global mass matrix",y.n,y.n)
-            #print_matrix(y_spectral.lobatto.S0,"local S0 matrix",y.ngrid,y.ngrid)
-            #print_matrix(y_spectral.lobatto.S1,"local S1 matrix",y.ngrid,y.ngrid)
-            #print_matrix(y_spectral.S_matrix,"global S matrix",y.n,y.n)
-            #print_matrix(y_spectral.radau.K0,"local radau K matrix K0",y.ngrid,y.ngrid)
-            #print_matrix(y_spectral.radau.K1,"local radau K matrix K1",y.ngrid,y.ngrid)
-            #print_matrix(y_spectral.lobatto.K0,"local K matrix K0",y.ngrid,y.ngrid)
-            #print_matrix(y_spectral.lobatto.K1,"local K matrix K1",y.ngrid,y.ngrid)
-            #print_matrix(y_spectral.radau.P0,"local radau P matrix P0",y.ngrid,y.ngrid)
-            #print_matrix(y_spectral.lobatto.P0,"local P matrix P0",y.ngrid,y.ngrid)
-            #print_matrix(y_spectral.K_matrix,"global K matrix",y.n,y.n)
-            #print_matrix(y_spectral.L_matrix,"global L matrix",y.n,y.n)
-            #@views y_spectral.K_matrix[1,:] *= (4.0/3.0)
-            #print_matrix(y_spectral.K_matrix,"global K matrix (hacked) ",y.n,y.n)
-            #print_matrix(y_spectral.radau.Dmat,"local radau D matrix Dmat",y.ngrid,y.ngrid)
-            #print_vector(y_spectral.radau.D0,"local radau D matrix D0",y.ngrid)
-            #print_matrix(y_spectral.lobatto.Dmat,"local lobatto D matrix Dmat",y.ngrid,y.ngrid)
-            #print_vector(y_spectral.lobatto.D0,"local lobatto D matrix D0",y.ngrid)
             
             f_exact = Array{Float64,1}(undef,y.n)
             f_num = Array{Float64,1}(undef,y.n)
@@ -169,7 +147,7 @@ using moment_kinetics.type_definitions: OptionsDict
                 if y.name == "vpa" 
                     F_exact = sqrt(pi)
                 elseif y.name == "vperp"
-                    F_exact = 1.0
+                    F_exact = pi
                 end
                 # do a test integration
                 #println(f_exact)
@@ -188,12 +166,6 @@ using moment_kinetics.type_definitions: OptionsDict
                 println("max(d2f_err) (double first derivative by interpolation): ",maximum(d2f_err))  
             end
             if y.name == "vpa"
-                mul!(b,y_spectral.S_matrix,f_exact)
-                mass_matrix_solve!(df_num,b,y_spectral)
-                @. df_err = df_num - df_exact
-                #println("df_num (weak form): ",df_num)
-                #println("df_exact (weak form): ",df_exact)
-                println("max(df_err) (weak form): ",maximum(df_err))
                 second_derivative!(d2f_num, f_exact, y, y_spectral)
                 #mul!(b,y_spectral.K_matrix,f_exact)
                 #mass_matrix_solve!(d2f_num,b,y_spectral)
@@ -220,14 +192,6 @@ using moment_kinetics.type_definitions: OptionsDict
                 savefig(outfile)
                 
             elseif y.name == "vperp"
-                #println("condition: ",cond(y_spectral.mass_matrix)) 
-                mul!(b,y_spectral.S_matrix,g_exact)
-                mass_matrix_solve!(divg_num,b,y_spectral)
-                @. divg_err = abs(divg_num - divg_exact)
-                #println("divg_b (weak form): ",b)
-                #println("divg_num (weak form): ",divg_num)
-                #println("divg_exact (weak form): ",divg_exact)
-                println("max(divg_err) (weak form): ",maximum(divg_err))
                 
                 second_derivative!(d2f_num, f_exact, y, y_spectral)
                 #mul!(b,y_spectral.K_matrix,f_exact)
