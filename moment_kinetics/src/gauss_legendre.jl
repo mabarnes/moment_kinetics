@@ -54,42 +54,14 @@ struct gausslegendre_base_info
     M0::Array{mk_float,2}
     # local mass matrix type 1
     M1::Array{mk_float,2}
-    # local mass matrix type 2
-    M2::Array{mk_float,2}
-    # local S (weak derivative) matrix type 0
-    S0::Array{mk_float,2}
-    # local S (weak derivative) matrix type 1
-    S1::Array{mk_float,2}
     # local K (weak second derivative) matrix type 0
     K0::Array{mk_float,2}
     # local K (weak second derivative) matrix type 1
     K1::Array{mk_float,2}
-    # local K (weak second derivative) matrix type 2
-    K2::Array{mk_float,2}
     # local P (weak derivative no integration by parts) matrix type 0
     P0::Array{mk_float,2}
-    # local P (weak derivative no integration by parts) matrix type 1
-    P1::Array{mk_float,2}
-    # local P (weak derivative no integration by parts) matrix type 2
-    P2::Array{mk_float,2}
     # boundary condition differentiation matrix (for vperp grid using radau points)
     D0::Array{mk_float,1}
-    # local nonlinear diffusion matrix Y00
-    Y00::Array{mk_float,3}
-    # local nonlinear diffusion matrix Y01
-    Y01::Array{mk_float,3}
-    # local nonlinear diffusion matrix Y10
-    Y10::Array{mk_float,3}
-    # local nonlinear diffusion matrix Y11
-    Y11::Array{mk_float,3}
-    # local nonlinear diffusion matrix Y20
-    Y20::Array{mk_float,3}
-    # local nonlinear diffusion matrix Y21
-    Y21::Array{mk_float,3}
-    # local nonlinear diffusion matrix Y30
-    Y30::Array{mk_float,3}
-    # local nonlinear diffusion matrix Y31
-    Y31::Array{mk_float,3}
 end
 
 """
@@ -102,9 +74,6 @@ struct gausslegendre_info{TSparse, TSparseCSR, TLU, TLmat, TLmatLU} <: weak_disc
     radau::gausslegendre_base_info
     # global (1D) mass matrix
     mass_matrix::Array{mk_float,2}
-    # global (1D) weak derivative matrix
-    #S_matrix::Array{mk_float,2}
-    S_matrix::TSparse
     # global (1D) weak second derivative matrix
     K_matrix::TSparse
     # global (1D) weak Laplacian derivative matrix
@@ -131,16 +100,10 @@ end
 """
 Function to create `gausslegendre_info` struct.
 """
-function setup_gausslegendre_pseudospectral(coord; collision_operator_dim=true)
-    lobatto = setup_gausslegendre_pseudospectral_lobatto(coord,collision_operator_dim=collision_operator_dim)
-    radau = setup_gausslegendre_pseudospectral_radau(coord,collision_operator_dim=collision_operator_dim)
+function setup_gausslegendre_pseudospectral(coord)
+    lobatto = setup_gausslegendre_pseudospectral_lobatto(coord)
+    radau = setup_gausslegendre_pseudospectral_radau(coord)
 
-    if collision_operator_dim
-        S_matrix = allocate_float(coord.n,coord.n)
-        setup_global_weak_form_matrix!(S_matrix, lobatto, radau, coord, "S")
-    else
-        S_matrix = allocate_float(0, 0)
-    end
     mass_matrix = allocate_float(coord.n,coord.n)
     K_matrix = allocate_float(coord.n,coord.n)
     L_matrix = allocate_float(coord.n,coord.n)
@@ -166,7 +129,7 @@ function setup_gausslegendre_pseudospectral(coord; collision_operator_dim=true)
 
     Qmat = allocate_float(coord.ngrid,coord.ngrid)
 
-    return gausslegendre_info(lobatto,radau,mass_matrix,sparse(S_matrix),sparse(K_matrix),sparse(L_matrix),sparse(D_matrix),convert(SparseMatrixCSR{1,mk_float,mk_int},D_matrix),dense_second_deriv_matrix,L_matrix_with_bc,
+    return gausslegendre_info(lobatto,radau,mass_matrix,sparse(K_matrix),sparse(L_matrix),sparse(D_matrix),convert(SparseMatrixCSR{1,mk_float,mk_int},D_matrix),dense_second_deriv_matrix,L_matrix_with_bc,
                               mass_matrix_lu,L_matrix_lu,Qmat)
 end
 
@@ -183,10 +146,8 @@ end
 
 """
 Function that creates the `gausslegendre_base_info` struct for Lobatto points.
-If `collision_operator_dim = true`, assign the elemental matrices used to
-implement the Fokker-Planck collision operator.
 """
-function setup_gausslegendre_pseudospectral_lobatto(coord; collision_operator_dim=true)
+function setup_gausslegendre_pseudospectral_lobatto(coord)
     x, w = gausslobatto(coord.ngrid)
     x = mk_float.(x)
     w = mk_float.(w)
@@ -208,65 +169,14 @@ function setup_gausslegendre_pseudospectral_lobatto(coord; collision_operator_di
     D0 = allocate_float(coord.ngrid)
     #@. D0 = Dmat[1,:] # values at lower extreme of element
     GaussLegendre_derivative_vector!(D0,-1.0,coord.ngrid,x,w)
-    
-    if collision_operator_dim
-        M2 = allocate_float(coord.ngrid, coord.ngrid)
-        GaussLegendre_weak_product_matrix!(M2,coord.ngrid,x,w,"M2")
-        S0 = allocate_float(coord.ngrid, coord.ngrid)
-        GaussLegendre_weak_product_matrix!(S0,coord.ngrid,x,w,"S0")
-        S1 = allocate_float(coord.ngrid, coord.ngrid)
-        GaussLegendre_weak_product_matrix!(S1,coord.ngrid,x,w,"S1")
-        K2 = allocate_float(coord.ngrid, coord.ngrid)
-        GaussLegendre_weak_product_matrix!(K2,coord.ngrid,x,w,"K2")
-        P1 = allocate_float(coord.ngrid, coord.ngrid)
-        GaussLegendre_weak_product_matrix!(P1,coord.ngrid,x,w,"P1")
-        P2 = allocate_float(coord.ngrid, coord.ngrid)
-        GaussLegendre_weak_product_matrix!(P2,coord.ngrid,x,w,"P2")
-
-        Y00 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
-        Y01 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
-        Y10 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
-        Y11 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
-        Y20 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
-        Y21 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
-        Y30 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
-        Y31 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
-        GaussLegendre_weak_product_matrix!(Y00,coord.ngrid,x,w,"Y00")
-        GaussLegendre_weak_product_matrix!(Y01,coord.ngrid,x,w,"Y01")
-        GaussLegendre_weak_product_matrix!(Y10,coord.ngrid,x,w,"Y10")
-        GaussLegendre_weak_product_matrix!(Y11,coord.ngrid,x,w,"Y11")
-        GaussLegendre_weak_product_matrix!(Y20,coord.ngrid,x,w,"Y20")
-        GaussLegendre_weak_product_matrix!(Y21,coord.ngrid,x,w,"Y21")
-        GaussLegendre_weak_product_matrix!(Y30,coord.ngrid,x,w,"Y30")
-        GaussLegendre_weak_product_matrix!(Y31,coord.ngrid,x,w,"Y31")
-    else
-        M2 = allocate_float(0, 0)
-        S0 = allocate_float(0, 0)
-        S1 = allocate_float(0, 0)
-        K2 = allocate_float(0, 0)
-        P1 = allocate_float(0, 0)
-        P2 = allocate_float(0, 0)
-
-        Y00 = allocate_float(0, 0, 0)
-        Y01 = allocate_float(0, 0, 0)
-        Y10 = allocate_float(0, 0, 0)
-        Y11 = allocate_float(0, 0, 0)
-        Y20 = allocate_float(0, 0, 0)
-        Y21 = allocate_float(0, 0, 0)
-        Y30 = allocate_float(0, 0, 0)
-        Y31 = allocate_float(0, 0, 0)
-    end
-    return gausslegendre_base_info(true,Dmat,indefinite_integration_matrix, M0, M1, M2, S0, S1,
-                                   K0, K1, K2, P0, P1, P2, D0, Y00, Y01, Y10, Y11, Y20,
-                                   Y21, Y30, Y31)
+    return gausslegendre_base_info(true,Dmat,indefinite_integration_matrix, M0, M1,
+                                   K0, K1, P0, D0)
 end
 
 """
-Function that creates the `gausslegendre_base_info` struct for Lobatto points.
-If `collision_operator_dim = true`, assign the elemental matrices used to
-implement the Fokker-Planck collision operator.
+Function that creates the `gausslegendre_base_info` struct for Radau points.
 """
-function setup_gausslegendre_pseudospectral_radau(coord; collision_operator_dim=true)
+function setup_gausslegendre_pseudospectral_radau(coord)
     # Gauss-Radau points on [-1,1)
     x, w = gaussradau(coord.ngrid)
     x = mk_float.(x)
@@ -291,56 +201,8 @@ function setup_gausslegendre_pseudospectral_radau(coord; collision_operator_dim=
     GaussLegendre_weak_product_matrix!(P0,coord.ngrid,xreverse,wreverse,"P0",radau=true)
     D0 = allocate_float(coord.ngrid)
     GaussLegendre_derivative_vector!(D0,-1.0,coord.ngrid,xreverse,wreverse,radau=true)
-    if collision_operator_dim
-        M2 = allocate_float(coord.ngrid, coord.ngrid)
-        GaussLegendre_weak_product_matrix!(M2,coord.ngrid,xreverse,wreverse,"M2",radau=true)
-        S0 = allocate_float(coord.ngrid, coord.ngrid)
-        GaussLegendre_weak_product_matrix!(S0,coord.ngrid,xreverse,wreverse,"S0",radau=true)
-        S1 = allocate_float(coord.ngrid, coord.ngrid)
-        GaussLegendre_weak_product_matrix!(S1,coord.ngrid,xreverse,wreverse,"S1",radau=true)
-        K2 = allocate_float(coord.ngrid, coord.ngrid)
-        GaussLegendre_weak_product_matrix!(K2,coord.ngrid,xreverse,wreverse,"K2",radau=true)
-        P1 = allocate_float(coord.ngrid, coord.ngrid)
-        GaussLegendre_weak_product_matrix!(P1,coord.ngrid,xreverse,wreverse,"P1",radau=true)
-        P2 = allocate_float(coord.ngrid, coord.ngrid)
-        GaussLegendre_weak_product_matrix!(P2,coord.ngrid,xreverse,wreverse,"P2",radau=true)
-
-        Y00 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
-        Y01 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
-        Y10 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
-        Y11 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
-        Y20 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
-        Y21 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
-        Y30 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
-        Y31 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
-        GaussLegendre_weak_product_matrix!(Y00,coord.ngrid,xreverse,wreverse,"Y00",radau=true)
-        GaussLegendre_weak_product_matrix!(Y01,coord.ngrid,xreverse,wreverse,"Y01",radau=true)
-        GaussLegendre_weak_product_matrix!(Y10,coord.ngrid,xreverse,wreverse,"Y10",radau=true)
-        GaussLegendre_weak_product_matrix!(Y11,coord.ngrid,xreverse,wreverse,"Y11",radau=true)
-        GaussLegendre_weak_product_matrix!(Y20,coord.ngrid,xreverse,wreverse,"Y20",radau=true)
-        GaussLegendre_weak_product_matrix!(Y21,coord.ngrid,xreverse,wreverse,"Y21",radau=true)
-        GaussLegendre_weak_product_matrix!(Y30,coord.ngrid,xreverse,wreverse,"Y30",radau=true)
-        GaussLegendre_weak_product_matrix!(Y31,coord.ngrid,xreverse,wreverse,"Y31",radau=true)
-    else
-        M2 = allocate_float(0, 0)
-        S0 = allocate_float(0, 0)
-        S1 = allocate_float(0, 0)
-        K2 = allocate_float(0, 0)
-        P1 = allocate_float(0, 0)
-        P2 = allocate_float(0, 0)
-
-        Y00 = allocate_float(0, 0, 0)
-        Y01 = allocate_float(0, 0, 0)
-        Y10 = allocate_float(0, 0, 0)
-        Y11 = allocate_float(0, 0, 0)
-        Y20 = allocate_float(0, 0, 0)
-        Y21 = allocate_float(0, 0, 0)
-        Y30 = allocate_float(0, 0, 0)
-        Y31 = allocate_float(0, 0, 0)
-    end
-    return gausslegendre_base_info(false,Dmat, indefinite_integration_matrix, M0, M1, M2, S0,
-                                   S1, K0, K1, K2, P0, P1, P2, D0, Y00, Y01, Y10, Y11,
-                                   Y20, Y21, Y30, Y31)
+    return gausslegendre_base_info(false,Dmat, indefinite_integration_matrix, M0, M1,
+                                    K0, K1, P0, D0)
 end 
 
 """

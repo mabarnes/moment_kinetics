@@ -45,8 +45,7 @@ function runtests()
             # create the coordinate struct 'z'
             # This test runs effectively in serial, so use `ignore_MPI=true` to avoid
             # errors due to communicators not being fully set up.
-            z, spectral = define_test_coordinate(input; ignore_MPI=true,
-                                                 collision_operator_dim=false)
+            z, spectral = define_test_coordinate(input; ignore_MPI=true)
 
             test_grid = [z for z in range(-zlim, zlim, length=ntest)]
 

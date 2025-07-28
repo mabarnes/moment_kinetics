@@ -251,11 +251,9 @@ end
 
 """
     define_coordinate(input_dict, name; parallel_io::Bool=false,
-                      run_directory=nothing, ignore_MPI=false,
-                      collision_operator_dim::Bool=true)
+                      run_directory=nothing, ignore_MPI=false)
     define_coordinate(coord_input::NamedTuple; parallel_io::Bool=false,
-                      run_directory=nothing, ignore_MPI=false,
-                      collision_operator_dim::Bool=true, irank=0, nrank=1,
+                      run_directory=nothing, ignore_MPI=false, irank=0, nrank=1,
                       comm=MPI.COMM_NULL)
 
 Create arrays associated with a given coordinate, setup the coordinate grid, and populate
@@ -276,8 +274,7 @@ function define_coordinate(input_dict, name, warn_unexpected::Bool=false; kwargs
 end
 
 function define_coordinate(coord_input::NamedTuple; parallel_io::Bool=false,
-                           run_directory=nothing, ignore_MPI=false,
-                           collision_operator_dim::Bool=true, irank=0, nrank=1,
+                           run_directory=nothing, ignore_MPI=false, irank=0, nrank=1,
                            comm=MPI.COMM_NULL)
 
     if coord_input.name ∉ ("r", "z")
@@ -459,7 +456,7 @@ function define_coordinate(coord_input::NamedTuple; parallel_io::Bool=false,
     elseif coord_input.discretization == "gausslegendre_pseudospectral"
         # create arrays needed for explicit GaussLegendre pseudospectral treatment in this
         # coordinate and create the matrices for differentiation
-        spectral = setup_gausslegendre_pseudospectral(coord, collision_operator_dim=collision_operator_dim)
+        spectral = setup_gausslegendre_pseudospectral(coord)
         # obtain the local derivatives of the uniform grid with respect to the used grid
         derivative!(coord.duniform_dgrid, coord.uniform_grid, coord, spectral)
     else
@@ -474,7 +471,7 @@ end
 
 """
     define_test_coordinate(input_dict::AbstractDict; kwargs...)
-    define_test_coordinate(name; collision_operator_dim=true, kwargs...)
+    define_test_coordinate(name; kwargs...)
 
 Wrapper for `define_coordinate()` to make creating a coordinate for tests slightly less
 verbose.
@@ -484,7 +481,7 @@ When passing `input_dict`, it must contain a "name" field, and can contain other
 are not passed. `kwargs` are the keyword arguments for [`define_coordinate`](@ref).
 
 The second form allows the coordinate input options to be passed as keyword arguments. For
-this form, apart from `collision_operator_dim`, the keyword arguments of
+this form, the keyword arguments of
 [`define_coordinate`](@ref) cannot be passed, and `ignore_MPI=true` is always set, as this
 is most often useful for tests.
 """
@@ -494,11 +491,10 @@ function define_test_coordinate(input_dict::AbstractDict; kwargs...)
     name = pop!(input_dict, "name")
     return define_coordinate(OptionsDict(name => input_dict), name; kwargs...)
 end
-function define_test_coordinate(name; collision_operator_dim=true, kwargs...)
+function define_test_coordinate(name; kwargs...)
     coord_input_dict = OptionsDict(String(k) => v for (k,v) in kwargs)
     coord_input_dict["name"] = name
     return define_test_coordinate(coord_input_dict;
-                                  collision_operator_dim=collision_operator_dim,
                                   ignore_MPI=true)
 end
 

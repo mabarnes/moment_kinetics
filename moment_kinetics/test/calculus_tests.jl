@@ -51,8 +51,7 @@ function runtests()
                                                      discretization=discretization,
                                                      finite_difference_option=fd_option,
                                                      cheb_option=cheb_option, bc=bc,
-                                                     element_spacing_option=element_spacing_option,
-                                                     collision_operator_dim=false)
+                                                     element_spacing_option=element_spacing_option)
                 # create array for the function f(x) to be differentiated/integrated
                 f = Array{Float64,1}(undef, x.n)
                 # create array for the derivative df/dx
@@ -97,8 +96,7 @@ function runtests()
                                                      discretization="finite_difference",
                                                      finite_difference_option=fd_option,
                                                      bc=bc,
-                                                     element_spacing_option=element_spacing_option,
-                                                     collision_operator_dim=false)
+                                                     element_spacing_option=element_spacing_option)
 
                 # create array for the derivative df/dx and the expected result
                 df = Array{Float64,1}(undef, x.n)
@@ -145,8 +143,7 @@ function runtests()
                                                      discretization="finite_difference",
                                                      finite_difference_option=fd_option,
                                                      bc=bc,
-                                                     element_spacing_option=element_spacing_option,
-                                                     collision_operator_dim=false)
+                                                     element_spacing_option=element_spacing_option)
 
                 # create array for the derivative df/dx and the expected result
                 df = Array{Float64,1}(undef, x.n)
@@ -189,8 +186,7 @@ function runtests()
                                                      discretization="finite_difference",
                                                      finite_difference_option=fd_option,
                                                      bc=bc,
-                                                     element_spacing_option=element_spacing_option,
-                                                     collision_operator_dim=false)
+                                                     element_spacing_option=element_spacing_option)
 
                 # create array for the derivative df/dx and the expected result
                 df = Array{Float64,1}(undef, x.n)
@@ -239,8 +235,7 @@ function runtests()
                                                      discretization="finite_difference",
                                                      finite_difference_option=fd_option,
                                                      bc=bc,
-                                                     element_spacing_option=element_spacing_option,
-                                                     collision_operator_dim=false)
+                                                     element_spacing_option=element_spacing_option)
 
                 # create array for the derivative df/dx and the expected result
                 df = Array{Float64,1}(undef, x.n)
@@ -450,8 +445,7 @@ function runtests()
                                                      nelement=nelement, L=L,
                                                      discretization="chebyshev_pseudospectral",
                                                      cheb_option=cheb_option, bc=bc,
-                                                     element_spacing_option=element_spacing_option,
-                                                     collision_operator_dim=false)
+                                                     element_spacing_option=element_spacing_option)
 
                 offset = randn(rng)
                 phase = 0.42
@@ -643,8 +637,7 @@ function runtests()
                                                      nelement=nelement, L=L,
                                                      discretization="chebyshev_pseudospectral",
                                                      cheb_option=cheb_option, bc=bc,
-                                                     element_spacing_option=element_spacing_option,
-                                                     collision_operator_dim=false)
+                                                     element_spacing_option=element_spacing_option)
 
                 offset = randn(rng)
                 phase = 0.42
@@ -683,8 +676,7 @@ function runtests()
                                                      nelement=nelement, L=L,
                                                      discretization="chebyshev_pseudospectral",
                                                      cheb_option=cheb_option, bc=bc,
-                                                     element_spacing_option=element_spacing_option,
-                                                     collision_operator_dim=false)
+                                                     element_spacing_option=element_spacing_option)
                 # test polynomials up to order ngrid-1
                 for n ∈ 0:ngrid-1
                     # create array for the function f(x) to be differentiated/integrated
@@ -729,8 +721,7 @@ function runtests()
                                                      nelement=nelement, L=L,
                                                      discretization="chebyshev_pseudospectral",
                                                      cheb_option=cheb_option, bc=bc,
-                                                     element_spacing_option=element_spacing_option,
-                                                     collision_operator_dim=false)
+                                                     element_spacing_option=element_spacing_option)
                 # test polynomials up to order ngrid-1
                 for n ∈ 0:ngrid-1
                     # create array for the function f(x) to be differentiated/integrated
@@ -857,8 +848,7 @@ function runtests()
                 x, spectral = define_test_coordinate("coord"; ngrid=ngrid,
                                                      nelement=nelement, L=L,
                                                      discretization="gausslegendre_pseudospectral",
-                                                     bc=bc,
-                                                     collision_operator_dim=false)
+                                                     bc=bc)
 
                 offset = randn(rng)
                 phase = 0.42
@@ -970,8 +960,7 @@ function runtests()
                                                      nelement=nelement, L=L,
                                                      discretization="gausslegendre_pseudospectral",
                                                      bc=bc,
-                                                     element_spacing_option=element_spacing_option,
-                                                     collision_operator_dim=false)
+                                                     element_spacing_option=element_spacing_option)
 
                 offset = randn(rng)
                 phase = 0.42
@@ -1010,8 +999,7 @@ function runtests()
                                                      nelement=nelement, L=L,
                                                      discretization="gausslegendre_pseudospectral",
                                                      bc=bc,
-                                                     element_spacing_option=element_spacing_option,
-                                                     collision_operator_dim=false)
+                                                     element_spacing_option=element_spacing_option)
                 # test polynomials up to order ngrid-1
                 for n ∈ 0:ngrid-1
                     # create array for the function f(x) to be differentiated/integrated
@@ -1055,8 +1043,7 @@ function runtests()
                                                      nelement=nelement, L=L,
                                                      discretization="gausslegendre_pseudospectral",
                                                      bc=bc,
-                                                     element_spacing_option=element_spacing_option,
-                                                     collision_operator_dim=false)
+                                                     element_spacing_option=element_spacing_option)
                 # test polynomials up to order ngrid-1
                 for n ∈ 0:ngrid-1
                     # create array for the function f(x) to be differentiated/integrated
@@ -1264,8 +1251,7 @@ function runtests()
                                                      nelement=nelement, L=L,
                                                      discretization="chebyshev_pseudospectral",
                                                      cheb_option=cheb_option, bc=bc,
-                                                     element_spacing_option=element_spacing_option,
-                                                     collision_operator_dim=false)
+                                                     element_spacing_option=element_spacing_option)
 
                 offset = randn(rng)
                 phase = 0.42
@@ -1356,8 +1342,7 @@ function runtests()
                                                      nelement=nelement, L=L,
                                                      discretization="chebyshev_pseudospectral",
                                                      cheb_option=cheb_option, bc=bc,
-                                                     element_spacing_option=element_spacing_option,
-                                                     collision_operator_dim=false)
+                                                     element_spacing_option=element_spacing_option)
 
                 f = @. exp(-x.grid^2)
                 expected_d2f = @. 4.0*(x.grid^2 - 1.0)*exp(-x.grid^2)
@@ -1456,8 +1441,7 @@ function runtests()
                                                      nelement=nelement, L=L,
                                                      discretization="gausslegendre_pseudospectral",
                                                      bc=bc,
-                                                     element_spacing_option=element_spacing_option,
-                                                     collision_operator_dim=false)
+                                                     element_spacing_option=element_spacing_option)
 
                 offset = randn(rng)
                 phase = 0.42
@@ -1557,8 +1541,7 @@ function runtests()
                                                      nelement=nelement, L=L,
                                                      discretization="gausslegendre_pseudospectral",
                                                      bc=bc,
-                                                     element_spacing_option=element_spacing_option,
-                                                     collision_operator_dim=false)
+                                                     element_spacing_option=element_spacing_option)
 
                 f = @. exp(-x.grid^2)
                 expected_d2f = @. 4.0*(x.grid^2 - 1.0)*exp(-x.grid^2)
@@ -1654,8 +1637,7 @@ function runtests()
                                                      nelement=nelement, L=L,
                                                      discretization="gausslegendre_pseudospectral",
                                                      bc=bc,
-                                                     element_spacing_option=element_spacing_option,
-                                                     collision_operator_dim=false)
+                                                     element_spacing_option=element_spacing_option)
                 expected_f = @. exp(-x.grid^2)
                 # Test solver for
                 #   Laplacian_f = 1/x * d/dx(x*df/dx)
@@ -1747,8 +1729,7 @@ function runtests()
                                                      nelement=nelement, L=L,
                                                      discretization="gausslegendre_pseudospectral",
                                                      bc=bc,
-                                                     element_spacing_option=element_spacing_option,
-                                                     collision_operator_dim=false)
+                                                     element_spacing_option=element_spacing_option)
                 expected_f = @. exp(-x.grid^2)
                 # Test solver for
                 #   d2f = d^2f/dx^2
@@ -1843,8 +1824,7 @@ function runtests()
                                                      nelement=nelement, L=L,
                                                      discretization="gausslegendre_pseudospectral",
                                                      bc=bc,
-                                                     element_spacing_option=element_spacing_option,
-                                                     collision_operator_dim=false)
+                                                     element_spacing_option=element_spacing_option)
                 expected_f = @. sin((2.0*pi*x.grid/x.L) + phase)
                 # Test solver for
                 #   d2f = d^2f/dx^2
@@ -1951,8 +1931,7 @@ function runtests()
                                                      nelement=nelement, L=L,
                                                      discretization=discretization,
                                                      bc=bc,
-                                                     element_spacing_option=element_spacing_option,
-                                                     collision_operator_dim=false)
+                                                     element_spacing_option=element_spacing_option)
                 xllim = x.element_boundaries[1] # lower endpoint
                 f = @. cos(x.grid - xllim)
                 expected_pf = @. sin(x.grid - xllim)
@@ -2043,8 +2022,7 @@ function runtests()
                                                      nelement=nelement, L=L,
                                                      discretization="finite_difference",
                                                      bc=bc,
-                                                     element_spacing_option=element_spacing_option,
-                                                     collision_operator_dim=false)
+                                                     element_spacing_option=element_spacing_option)
                 xllim = x.element_boundaries[1] # lower endpoint
                 f = @. cos(x.grid - xllim)
                 expected_pf = @. sin(x.grid - xllim)
