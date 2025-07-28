@@ -5,12 +5,6 @@ module gauss_legendre
 
 export gausslobattolegendre_differentiation_matrix!
 export gaussradaulegendre_differentiation_matrix!
-export GaussLegendreLobatto_mass_matrix!
-export GaussLegendre_mass_matrix_1!
-export GaussLegendreLobatto_inverse_mass_matrix!
-export GaussLegendreLobatto_K_matrix!
-export GaussLegendreLobatto_S_matrix!
-export GaussLegendre_S_matrix_1!
 export scaled_gauss_legendre_lobatto_grid
 export scaled_gauss_legendre_radau_grid
 export gausslegendre_derivative!
@@ -18,8 +12,6 @@ export gausslegendre_apply_Kmat!
 export gausslegendre_apply_Lmat!
 export setup_gausslegendre_pseudospectral
 export GaussLegendre_weak_product_matrix!
-export ielement_global_func
-export get_QQ_local!
 export integration_matrix!
 
 using FastGaussQuadrature
@@ -682,164 +674,6 @@ function GaussLegendre_weak_product_matrix!(QQ::Array{mk_float,2},ngrid,x,wgts,o
 end
 
 """
-Assign abitrary weak (nonlinear) inner product matrix `Q` on a 1D line with Jacobian equal to 1.
-matrix `Q` acts on two vectors `x1` and `x2` such that the quadratic form 
-`y = x1 * Q * x2` is also a vector. See documentation of corresponding function
-for linear inner product matrices.
-"""
-function GaussLegendre_weak_product_matrix!(QQ::Array{mk_float,3},ngrid,x,wgts,option;radau=false)
-    # coefficient in expansion of 
-    # lagrange polys in terms of Legendre polys
-    gamma = allocate_float(ngrid)
-    for i in 1:ngrid-1
-        gamma[i] = Legendre_h_n(i-1)
-    end
-    if radau
-        gamma[ngrid] = Legendre_h_n(ngrid-1)
-    else
-        gamma[ngrid] = 2.0/(ngrid - 1)
-    end
-    # appropriate inner product of Legendre polys
-    # definition depends on required matrix 
-    # for Y00: AA = < P_i P_j P_k >
-    # for Y01: AA = < P_i P_j P_k x >
-    # for Y10: AA = < P_i P_j P'_k >
-    # for Y11: AA = < P_i P_j P'_k x >
-    # for Y20: AA = < P_i P'_j P'_k >
-    # for Y21: AA = < P_i P'_j P'_k x >
-    # for Y31: AA = < P_i P'_j P_k x >
-    # for Y30: AA = < P_i P'_j P_k >
-    AA = allocate_float(ngrid,ngrid,ngrid)
-    nquad = 2*ngrid
-    zz, wz = gausslegendre(nquad)
-    @. AA = 0.0
-    if option == "Y00"
-        for k in 1:ngrid
-            for j in 1:ngrid
-                for i in 1:ngrid
-                    for q in 1:nquad
-                        AA[i,j,k] += wz[q]*Pl(zz[q],i-1)*Pl(zz[q],j-1)*Pl(zz[q],k-1)
-                    end
-                end
-            end
-        end
-    elseif option == "Y01"
-        for k in 1:ngrid
-            for j in 1:ngrid
-                for i in 1:ngrid
-                    for q in 1:nquad
-                        AA[i,j,k] += zz[q]*wz[q]*Pl(zz[q],i-1)*Pl(zz[q],j-1)*Pl(zz[q],k-1)
-                    end
-                end
-            end
-        end
-    elseif option == "Y10"
-        for k in 1:ngrid
-            for j in 1:ngrid
-                for i in 1:ngrid
-                    for q in 1:nquad
-                        AA[i,j,k] += wz[q]*Pl(zz[q],i-1)*Pl(zz[q],j-1)*dnPl(zz[q],k-1,1)
-                    end
-                end
-            end
-        end
-    elseif option == "Y11"
-        for k in 1:ngrid
-            for j in 1:ngrid
-                for i in 1:ngrid
-                    for q in 1:nquad
-                        AA[i,j,k] += zz[q]*wz[q]*Pl(zz[q],i-1)*Pl(zz[q],j-1)*dnPl(zz[q],k-1,1)
-                    end
-                end
-            end
-        end
-    elseif option == "Y20"
-        for k in 1:ngrid
-            for j in 1:ngrid
-                for i in 1:ngrid
-                    for q in 1:nquad
-                        AA[i,j,k] += wz[q]*Pl(zz[q],i-1)*dnPl(zz[q],j-1,1)*dnPl(zz[q],k-1,1)
-                    end
-                end
-            end
-        end
-    elseif option == "Y21"
-        for k in 1:ngrid
-            for j in 1:ngrid
-                for i in 1:ngrid
-                    for q in 1:nquad
-                        AA[i,j,k] += zz[q]*wz[q]*Pl(zz[q],i-1)*dnPl(zz[q],j-1,1)*dnPl(zz[q],k-1,1)
-                    end
-                end
-            end
-        end
-    elseif option == "Y31"
-        for k in 1:ngrid
-            for j in 1:ngrid
-                for i in 1:ngrid
-                    for q in 1:nquad
-                        AA[i,j,k] += zz[q]*wz[q]*Pl(zz[q],i-1)*dnPl(zz[q],j-1,1)*Pl(zz[q],k-1)
-                    end
-                end
-            end
-        end
-    elseif option == "Y30"
-        for k in 1:ngrid
-            for j in 1:ngrid
-                for i in 1:ngrid
-                    for q in 1:nquad
-                        AA[i,j,k] += wz[q]*Pl(zz[q],i-1)*dnPl(zz[q],j-1,1)*Pl(zz[q],k-1)
-                    end
-                end
-            end
-        end
-    end
-    
-    QQ .= 0.0
-    for k in 1:ngrid
-        for j in 1:ngrid
-            for i in 1:ngrid
-                for l in 1:ngrid
-                    for m in 1:ngrid
-                        for n in 1:ngrid
-                            QQ[i,j,k] += wgts[i]*wgts[j]*wgts[k]*Pl(x[i],n-1)*Pl(x[j],m-1)*Pl(x[k],l-1)*AA[n,m,l]/(gamma[n]*gamma[m]*gamma[l])
-                        end
-                    end
-                end
-            end
-        end
-    end
-    return nothing
-end
-
-"""
-Function for computing the scale factor on a grid with uniformed spaced element boundaries.
-Unused.
-"""
-function scale_factor_func(L,nelement_global)
-    return 0.5*L/float(nelement_global)
-end
-
-"""
-Function for computing the shift factor on a grid with uniformed spaced element boundaries.
-Unused.
-"""
-function shift_factor_func(L,nelement_global,nelement_local,irank,ielement_local)
-    #ielement_global = ielement_local # for testing + irank*nelement_local
-    ielement_global = ielement_local + irank*nelement_local # proper line for future distributed memory MPI use
-    shift = L*((float(ielement_global)-0.5)/float(nelement_global) - 0.5)
-    return shift
-end
-
-"""
-Function for finding the elemental index in the global distributed-memory grid.
-Distributed-memory for global finite-element operators is not yet supported.
-"""
-function ielement_global_func(nelement_local,irank,ielement_local)
-    return ielement_global = ielement_local + irank*nelement_local
-end
-
-"""
 Function for setting up the full Gauss-Legendre-Lobatto
 grid and collocation point weights.
 """
@@ -1102,22 +936,12 @@ function get_QQ_local!(QQ::AbstractArray{mk_float,2},ielement,
   
         if option == "M"
             get_MM_local!(QQ,ielement,lobatto,radau,coord)
-        elseif option == "R"
-            get_MR_local!(QQ,ielement,lobatto,radau,coord)
-        elseif option == "N"
-            get_MN_local!(QQ,ielement,lobatto,radau,coord)
         elseif option == "P"
             get_PP_local!(QQ,ielement,lobatto,radau,coord)
-        elseif option == "U"
-            get_PU_local!(QQ,ielement,lobatto,radau,coord)
-        elseif option == "S"
-            get_SS_local!(QQ,ielement,lobatto,radau,coord)
         elseif option == "K"
             get_KK_local!(QQ,ielement,lobatto,radau,coord)
         elseif option == "K_with_BC_terms"
             get_KK_local!(QQ,ielement,lobatto,radau,coord,explicit_BC_terms=true)
-        elseif option == "J"
-            get_KJ_local!(QQ,ielement,lobatto,radau,coord)
         elseif option == "L"
             get_LL_local!(QQ,ielement,lobatto,radau,coord)
         elseif option == "L_with_BC_terms"
@@ -1156,37 +980,6 @@ function get_MM_local!(QQ,ielement,
         else # assume integrals of form int^infty_-infty (.) d vpa
             @. QQ = lobatto.M0*scale_factor
         end 
-        return nothing
-end
-
-function get_SS_local!(QQ,ielement,
-        lobatto::gausslegendre_base_info,
-        radau::gausslegendre_base_info, 
-        coord)
-        
-        scale_factor = coord.element_scale[ielement]
-        shift_factor = coord.element_shift[ielement]
-        if coord.name == "vperp" # assume integrals of form int^infty_0 (.) vperp d vperp
-            # extra scale and shift factors required because of vperp in integral
-            if ielement > 1 || coord.irank > 0 # lobatto points
-                @. QQ =  shift_factor*lobatto.S0 + scale_factor*lobatto.S1
-                # boundary terms from integration by parts
-                imin = coord.imin[ielement] - 1
-                imax = coord.imax[ielement]
-                QQ[1,1] -= coord.grid[imin]
-                QQ[coord.ngrid,coord.ngrid] += coord.grid[imax]
-            else # radau points 
-                @. QQ =  shift_factor*radau.S0 + scale_factor*radau.S1
-                # boundary terms from integration by parts
-                imax = coord.imax[ielement]
-                QQ[coord.ngrid,coord.ngrid] += coord.grid[imax]
-            end
-        else # assume integrals of form int^infty_-infty (.) d vpa
-            @. QQ = lobatto.S0
-            # boundary terms from integration by parts
-            QQ[1,1] -= 1.0
-            QQ[coord.ngrid,coord.ngrid] += 1.0
-        end
         return nothing
 end
 
@@ -1241,39 +1034,6 @@ function get_KK_local!(QQ,ielement,
                     @. QQ[coord.ngrid,:] += lobatto.Dmat[coord.ngrid,:]/scale_factor
                 end
             end
-        end
-        return nothing
-end
-
-"""
-If called for `coord.name = vperp` elemental matrix `KJ` on the \$i^{th}\$ element is
-```math
- (KJ)_{jk} = -\\int^{v_\\perp^U}_{v_\\perp^L} \\frac{\\partial\\varphi_j(v_\\perp)}{\\partial v_\\perp}\\frac{\\partial\\varphi_k(v_\\perp)}{\\partial v_\\perp} v_\\perp^2 d v_\\perp
- = -\\int^1_{-1} (c_i + x s_i)^2l_j^\\prime(x)l_k^\\prime(x) d x /s_i
-```
-with \$c_i\$ and \$s_i\$ the appropriate shift and scale factors, respectively. 
-Otherwise, if called for any other coordinate elemental matrix `KJ` is the same as `LL` (see `get_LL_local()!`).
-"""
-function get_KJ_local!(QQ,ielement,
-        lobatto::gausslegendre_base_info,
-        radau::gausslegendre_base_info, 
-        coord)
-        
-        scale_factor = coord.element_scale[ielement]
-        shift_factor = coord.element_shift[ielement]
-        if coord.name == "vperp" # assume integrals of form int^infty_0 (.) vperp d vperp
-            # extra scale and shift factors required because of vperp^2 in integral
-            if ielement > 1 || coord.irank > 0 # lobatto points
-                @. QQ = (lobatto.K0*((shift_factor^2)/scale_factor) +
-                         lobatto.K1*2.0*shift_factor +
-                         lobatto.K2*scale_factor)
-            else # radau points 
-                @. QQ =  (radau.K0*((shift_factor^2)/scale_factor) +
-                         radau.K1*2.0*shift_factor +
-                         radau.K2*scale_factor)
-            end
-        else # assume integrals of form int^infty_-infty (.) d vpa
-            @. QQ = lobatto.K0/scale_factor
         end
         return nothing
 end
@@ -1349,65 +1109,6 @@ function get_DD_local!(QQ, ielement, lobatto::gausslegendre_base_info,
 end
 
 """
-If called for `coord.name = vperp` elemental matrix `MN` on the \$i^{th}\$ element is
-```math
- (MN)_{jk} = \\int^{v_\\perp^U}_{v_\\perp^L}  \\varphi_j(v_\\perp)\\varphi_k(v_\\perp) d v_\\perp = \\int^1_{-1} l_j(x)l_k(x) s_i d x 
-```
-with \$c_i\$ and \$s_i\$ the appropriate shift and scale factors, respectively. 
-Otherwise, if called for any other coordinate elemental matrix `MN` is the same as `MM` (see `get_MM_local!()`).
-"""
-function get_MN_local!(QQ,ielement,
-        lobatto::gausslegendre_base_info,
-        radau::gausslegendre_base_info, 
-        coord)
-        
-        scale_factor = coord.element_scale[ielement]
-        if coord.name == "vperp" # assume integrals of form int^infty_0 (.) vperp d vperp
-            # extra scale and shift factors required because of vperp in integral
-            if ielement > 1 || coord.irank > 0 # lobatto points
-                @. QQ =  lobatto.M0*scale_factor
-            else # radau points 
-                @. QQ =  radau.M0*scale_factor
-            end
-        else # assume integrals of form int^infty_-infty (.) d vpa
-            @. QQ = lobatto.M0*scale_factor
-        end 
-        return nothing
-end
-
-"""
-If called for `coord.name = vperp` elemental matrix `MR` on the \$i^{th}\$ element is
-```math
- (MR)_{jk} = \\int^{v_\\perp^U}_{v_\\perp^L}  \\varphi_j(v_\\perp)\\varphi_k(v_\\perp) v_\\perp^2 d v_\\perp = \\int^1_{-1} (c_i + s_i x)^2 l_j(x)l_k(x) s_i d x 
-```
-with \$c_i\$ and \$s_i\$ the appropriate shift and scale factors, respectively. 
-Otherwise, if called for any other coordinate elemental matrix `MR` is the same as `MM` (see `get_MM_local!()`).
-"""
-function get_MR_local!(QQ,ielement,
-        lobatto::gausslegendre_base_info,
-        radau::gausslegendre_base_info, 
-        coord)
-        
-        scale_factor = coord.element_scale[ielement]
-        shift_factor = coord.element_shift[ielement]
-        if coord.name == "vperp" # assume integrals of form int^infty_0 (.) vperp d vperp
-            # extra scale and shift factors required because of vperp in integral
-            if ielement > 1 || coord.irank > 0 # lobatto points
-                @. QQ =  (lobatto.M0*shift_factor^2 +
-                          lobatto.M1*2.0*shift_factor*scale_factor +
-                          lobatto.M2*scale_factor^2)*scale_factor
-            else # radau points 
-                @. QQ =  (radau.M0*shift_factor^2 +
-                          radau.M1*2.0*shift_factor*scale_factor +
-                          radau.M2*scale_factor^2)*scale_factor
-            end
-        else # assume integrals of form int^infty_-infty (.) d vpa
-            @. QQ = lobatto.M0*scale_factor
-        end 
-        return nothing
-end
-
-"""
 If called for `coord.name = vperp` elemental matrix `PP` on the \$i^{th}\$ element is
 ```math
  P_{jk} = \\int^{v_\\perp^U}_{v_\\perp^L}  \\varphi_j(v_\\perp)\\frac{\\partial\\varphi_k(v_\\perp)}{\\partial v_\\perp} v_\\perp d v_\\perp
@@ -1438,192 +1139,5 @@ function get_PP_local!(QQ,ielement,
         end 
         return nothing
 end
-
-"""
-If called for `coord.name = vperp` elemental matrix `PP` on the \$i^{th}\$ element is
-```math
- (PU)_{jk} = \\int^{v_\\perp^U}_{v_\\perp^L}  \\varphi_j(v_\\perp)\\frac{\\partial\\varphi_k(v_\\perp)}{\\partial v_\\perp} v_\\perp^2 d v_\\perp
- = \\int^1_{-1} (c_i + x s_i)^2l_j(x)l_k^\\prime(x) d x 
-```
-with \$c_i\$ and \$s_i\$ the appropriate shift and scale factors, respectively. 
-Otherwise, if called for any other coordinate elemental matrix `PU` is the same as `PP` see `get_PP_local!()`.
-"""
-function get_PU_local!(QQ,ielement,
-        lobatto::gausslegendre_base_info,
-        radau::gausslegendre_base_info, 
-        coord)
-        
-        scale_factor = coord.element_scale[ielement]
-        shift_factor = coord.element_shift[ielement]
-        if coord.name == "vperp" # assume integrals of form int^infty_0 (.) vperp d vperp
-            # extra scale and shift factors required because of vperp in integral
-            if ielement > 1 || coord.irank > 0 # lobatto points
-                @. QQ =  (lobatto.P0*shift_factor^2 + 
-                          lobatto.P1*2.0*shift_factor*scale_factor +
-                          lobatto.P2*scale_factor^2)
-            else # radau points 
-                @. QQ =  (radau.P0*shift_factor^2 + 
-                          radau.P1*2.0*shift_factor*scale_factor +
-                          radau.P2*scale_factor^2)
-            end
-        else # assume integrals of form int^infty_-infty (.) d vpa
-            @. QQ = lobatto.P0
-        end 
-        return nothing
-end
-
-"""
-Construction function for nonlinear diffusion matrices, only
-used in the assembly of the collision operator
-"""
-function get_QQ_local!(QQ::AbstractArray{mk_float,3},
-        ielement,lobatto::gausslegendre_base_info,
-        radau::gausslegendre_base_info, 
-        coord,option)
-  
-        if option == "YY0" # mass-like matrix
-            get_YY0_local!(QQ,ielement,lobatto,radau,coord)
-        elseif option == "YY1" # first-derivative-like matrix
-            get_YY1_local!(QQ,ielement,lobatto,radau,coord)
-        elseif option == "YY2" # second-derivative-like matrix
-            get_YY2_local!(QQ,ielement,lobatto,radau,coord)
-        elseif option == "YY3" # first-derivative-like matrix
-            get_YY3_local!(QQ,ielement,lobatto,radau,coord)
-        end
-        return nothing
-end
-
-"""
-If called for `coord.name = vperp` elemental matrix `YY0` on the \$i^{th}\$ element is
-```math
- (YY0)_{jkm} = \\int^{v_\\perp^U}_{v_\\perp^L}  \\varphi_j(v_\\perp)\\varphi_k(v_\\perp)\\varphi_m(v_\\perp) v_\\perp d v_\\perp
- = \\int^1_{-1} (c_i + x s_i)l_j(x)l_k(x)l_m(x) s_i d x 
-```
-with \$c_i\$ and \$s_i\$ the appropriate shift and scale factors, respectively. 
-Otherwise, if called for any other coordinate elemental matrix `YY0` is 
-```math
- (YY0)_{jkm} = \\int^{v_\\|^U}_{v_\\|^L}  \\varphi_j(v_\\|)\\varphi_k(v_\\|)\\varphi_m(v_\\|) d v_\\|
- = \\int^1_{-1} l_j(x)l_k(x)l_m(x) s_i d x.
-```
-"""
-function get_YY0_local!(QQ,ielement,
-        lobatto::gausslegendre_base_info,
-        radau::gausslegendre_base_info, 
-        coord)
-        
-        scale_factor = coord.element_scale[ielement]
-        shift_factor = coord.element_shift[ielement]
-        if coord.name == "vperp" # assume integrals of form int^infty_0 (.) vperp d vperp
-            # extra scale and shift factors required because of vperp in integral
-            if ielement > 1 || coord.irank > 0 # lobatto points
-                @. QQ =  (shift_factor*lobatto.Y00 + scale_factor*lobatto.Y01)*scale_factor
-            else # radau points 
-                @. QQ =  (shift_factor*radau.Y00 + scale_factor*radau.Y01)*scale_factor
-            end
-        else # assume integrals of form int^infty_-infty (.) d vpa
-            @. QQ = lobatto.Y00*scale_factor
-        end 
-        return nothing
-end
-
-"""
-If called for `coord.name = vperp` elemental matrix `YY1` on the \$i^{th}\$ element is
-```math
- (YY1)_{jkm} = \\int^{v_\\perp^U}_{v_\\perp^L}  \\varphi_j(v_\\perp)\\varphi_k(v_\\perp)\\frac{\\partial\\varphi_m(v_\\perp)}{\\partial v_\\perp} v_\\perp d v_\\perp
- = \\int^1_{-1} (c_i + x s_i)l_j(x)l_k(x)l_m^\\prime(x) d x 
-```
-with \$c_i\$ and \$s_i\$ the appropriate shift and scale factors, respectively. 
-Otherwise, if called for any other coordinate elemental matrix `YY1` is 
-```math
- (YY1)_{jkm} = \\int^{v_\\|^U}_{v_\\|^L}  \\varphi_j(v_\\|)\\varphi_k(v_\\|)\\frac{\\partial\\varphi_m(v_\\|)}{\\partial v_\\|} d v_\\|
- = \\int^1_{-1} l_j(x)l_k(x)l_m^\\prime(x) d x.
-```
-"""
-function get_YY1_local!(QQ,ielement,
-        lobatto::gausslegendre_base_info,
-        radau::gausslegendre_base_info, 
-        coord)
-        
-        scale_factor = coord.element_scale[ielement]
-        shift_factor = coord.element_shift[ielement]
-        if coord.name == "vperp" # assume integrals of form int^infty_0 (.) vperp d vperp
-            # extra scale and shift factors required because of vperp in integral
-            if ielement > 1 || coord.irank > 0 # lobatto points
-                @. QQ =  shift_factor*lobatto.Y10 + scale_factor*lobatto.Y11
-            else # radau points 
-                @. QQ =  shift_factor*radau.Y10 + scale_factor*radau.Y11
-            end
-        else # assume integrals of form int^infty_-infty (.) d vpa
-            @. QQ = lobatto.Y10
-        end 
-        return nothing
-end
-
-"""
-If called for `coord.name = vperp` elemental matrix `YY2` on the \$i^{th}\$ element is
-```math
- (YY2)_{jkm} = \\int^{v_\\perp^U}_{v_\\perp^L}  \\varphi_j(v_\\perp)\\frac{\\partial\\varphi_k(v_\\|)}{\\partial v_\\|}\\frac{\\partial\\varphi_m(v_\\perp)}{\\partial v_\\perp} v_\\perp d v_\\perp
- = \\int^1_{-1} (c_i + x s_i)l_j(x)l_k^\\prime(x)l_m^\\prime(x) d x/s_i 
-```
-with \$c_i\$ and \$s_i\$ the appropriate shift and scale factors, respectively. 
-Otherwise, if called for any other coordinate elemental matrix `YY2` is 
-```math
- (YY2)_{jkm} = \\int^{v_\\|^U}_{v_\\|^L}  \\varphi_j(v_\\|)\\frac{\\partial\\varphi_k(v_\\|)}{\\partial v_\\|}\\frac{\\partial\\varphi_m(v_\\|)}{\\partial v_\\|} d v_\\|
- = \\int^1_{-1} l_j(x)l_k^\\prime(x)l_m^\\prime(x) d x /s_i.
-```
-"""
-function get_YY2_local!(QQ,ielement,
-        lobatto::gausslegendre_base_info,
-        radau::gausslegendre_base_info, 
-        coord)
-        
-        scale_factor = coord.element_scale[ielement]
-        shift_factor = coord.element_shift[ielement]
-        if coord.name == "vperp" # assume integrals of form int^infty_0 (.) vperp d vperp
-            # extra scale and shift factors required because of vperp in integral
-            if ielement > 1 || coord.irank > 0 # lobatto points
-                @. QQ =  (shift_factor/scale_factor)*lobatto.Y20 + lobatto.Y21
-            else # radau points 
-                @. QQ =  (shift_factor/scale_factor)*radau.Y20 + radau.Y21
-            end
-        else # assume integrals of form int^infty_-infty (.) d vpa
-            @. QQ = lobatto.Y20/scale_factor
-        end 
-        return nothing
-end
-
-"""
-If called for `coord.name = vperp` elemental matrix `YY3` on the \$i^{th}\$ element is
-```math
- (YY3)_{jkm} = \\int^{v_\\perp^U}_{v_\\perp^L}  \\varphi_j(v_\\perp)\\frac{\\partial\\varphi_k(v_\\|)}{\\partial v_\\|}\\varphi_m(v_\\perp) v_\\perp d v_\\perp
- = \\int^1_{-1} (c_i + x s_i)l_j(x)l_k^\\prime(x)l_m(x) d x 
-```
-with \$c_i\$ and \$s_i\$ the appropriate shift and scale factors, respectively. 
-Otherwise, if called for any other coordinate elemental matrix `YY3` is 
-```math
- (YY3)_{jkm} = \\int^{v_\\|^U}_{v_\\|^L}  \\varphi_j(v_\\|)\\frac{\\partial\\varphi_k(v_\\|)}{\\partial v_\\|}\\varphi_m(v_\\|) d v_\\|
- = \\int^1_{-1} l_j(x)l_k^\\prime(x)l_m(x) d x.
-```
-"""
-function get_YY3_local!(QQ,ielement,
-        lobatto::gausslegendre_base_info,
-        radau::gausslegendre_base_info, 
-        coord)
-        
-        scale_factor = coord.element_scale[ielement]
-        shift_factor = coord.element_shift[ielement]
-        if coord.name == "vperp" # assume integrals of form int^infty_0 (.) vperp d vperp
-            # extra scale and shift factors required because of vperp in integral
-            if ielement > 1 || coord.irank > 0 # lobatto points
-                @. QQ =  shift_factor*lobatto.Y30 + scale_factor*lobatto.Y31
-            else # radau points 
-                @. QQ =  shift_factor*radau.Y30 + scale_factor*radau.Y31
-            end
-        else # assume integrals of form int^infty_-infty (.) d vpa
-            @. QQ = lobatto.Y30
-        end 
-        return nothing
-end
-
 
 end
