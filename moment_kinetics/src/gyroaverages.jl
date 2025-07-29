@@ -12,12 +12,12 @@ export gyroaverage_pdf!
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float, allocate_shared_float
 using ..array_allocation: allocate_int, allocate_shared_int
-using ..lagrange_polynomials: lagrange_poly
 using ..moment_kinetics_structs: ion_r_boundary_section_periodic
 using ..input_structs: gyrokinetic_ions
 using ..looping
 using ..timer_utils
 using ..communication: MPISharedArray, comm_block, @_block_synchronize
+using LagrangePolynomials: lagrange_poly
 
 struct gyro_operators
     # matrix for applying a gyroaverage to a function F(r,vpa,vperp) at fixed r, with R = r - rhovec and rhovec = b x v / Omega
@@ -142,12 +142,16 @@ function init_gyro_operators(vperp, z, r, gyrophase, geometry, boundaries, compo
                    # sum over all contributing Lagrange polynomials from each
                    # collocation point in the element
                    icounter = 0
+                   r_lpoly_data = r.lagrange_data[irel]
+                   z_lpoly_data = r.lagrange_data[izel]
                    for irgrid in 1:r.ngrid
                        irp = r.igrid_full[irgrid,irel]
-                       rpoly = lagrange_poly(irgrid,rnodes,rlist[igyro])
+                       irgrid_lpoly_data = r_lpoly_data.lpoly_data[irgrid]
+                       rpoly = lagrange_poly(irgrid_lpoly_data,rlist[igyro])
                        for izgrid in 1:z.ngrid
                            izp = z.igrid_full[izgrid,izel]
-                           zpoly = lagrange_poly(izgrid,znodes,zlist[igyro])
+                           izgrid_lpoly_data = z_lpoly_data.lpoly_data[izgrid]
+                           zpoly = lagrange_poly(izgrid_lpoly_data,zlist[igyro])
                            # add the contribution from this z',r'
                            gyromatrix[izp,irp,ivperp,iz,ir,is] += gyrowgt*rpoly*zpoly
                            icounter +=1

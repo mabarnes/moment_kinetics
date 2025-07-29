@@ -64,8 +64,7 @@ function linear_test()
                                advection_input("", 0.0, 0.0, 0.0), zeros(mk_float, 0),
                                zeros(mk_float, 0), MPI.COMM_NULL, 1:n, 1:n,
                                zeros(mk_float, 0), zeros(mk_float, 0), "",
-                               zeros(mk_float, 0), false, zeros(mk_float, 0, 0, 0),
-                               zeros(mk_float, 0, 0), zeros(mk_float, 0), zeros(mk_float, 0))
+                               zeros(mk_float, 0), false, nothing)
         coords = NamedTuple(c => the_coord for c ∈ coord_names)
 
         function rhs_func!(residual, x; krylov=false)
@@ -178,8 +177,7 @@ function nonlinear_test()
                                advection_input("", 0.0, 0.0, 0.0), zeros(mk_float, 0),
                                zeros(mk_float, 0), MPI.COMM_NULL, 1:n, 1:n,
                                zeros(mk_float, 0), zeros(mk_float, 0), "",
-                               zeros(mk_float, 0), false, zeros(mk_float, 0, 0, 0),
-                               zeros(mk_float, 0, 0), zeros(mk_float, 0), zeros(mk_float, 0))
+                               zeros(mk_float, 0), false, nothing)
         coords = NamedTuple(c => the_coord for c ∈ coord_names)
 
         function rhs_func!(residual, x; krylov=false)

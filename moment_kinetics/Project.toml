@@ -10,9 +10,13 @@ DataStructures = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 FFTW = "7a1cc6ca-52ef-59f5-83cd-3a7055c09341"
 FastGaussQuadrature = "442a2c76-b920-505d-bb47-c5924d526838"
+FiniteElementMatrices = "21a267ae-cf5f-40e4-86cc-2968ca96a734"
+FokkerPlanck = "6a6b5c72-6869-4c05-b853-2893d318cc38"
 Glob = "c27321d9-0574-5035-807b-f59d2c89b15c"
 HDF5 = "f67ccb44-e63f-5c2f-98bd-6dc0ccc4ba2f"
 Interpolations = "a98d9a8b-a2ab-59e6-89dd-64a1c18fca59"
+JacobianFreeNewtonKrylov = "ea74541f-29a8-443c-83cd-bcc24bd49708"
+LagrangePolynomials = "fb83b288-ce1a-45f4-939e-c34c34051e49"
 LegendrePolynomials = "3db4a2ba-fc88-11e8-3e01-49c72059a882"
 LibGit2 = "76f85450-5226-5b5a-8eaa-529ad045b433"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
@@ -46,13 +50,23 @@ IfElse = "615f187c-cbe4-4ef1-ba3b-2fcf58d6d173"
 NCDatasets = "85f8d34a-cbdd-5861-8df4-14fed0d494ab"
 Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
 
+[sources]
+FiniteElementMatrices = {rev = "main", url = "https://github.com/moment-kinetics/FiniteElementMatrices.git"}
+FokkerPlanck = {rev = "main", url = "https://github.com/moment-kinetics/FokkerPlanck.git"}
+JacobianFreeNewtonKrylov = {rev = "main", url = "https://github.com/moment-kinetics/JacobianFreeNewtonKrylov.git"}
+LagrangePolynomials = {rev = "main", url = "https://github.com/moment-kinetics/LagrangePolynomials.git"}
+
 [extensions]
 file_io_netcdf = "NCDatasets"
 manufactured_solns_ext = ["Symbolics", "IfElse"]
 
 [compat]
-julia = "1.9.0"
+FiniteElementMatrices = "0.1.0"
+FokkerPlanck = "0.1.0"
+JacobianFreeNewtonKrylov = "0.1.0"
+LagrangePolynomials = "0.1.0"
 StableRNGs = "1"
+julia = "1.9.0"
 
 [extras]
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"

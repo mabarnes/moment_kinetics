@@ -78,13 +78,6 @@ collisions_input1 = recursive_merge(wall_bc_cheb_input, OptionsDict("composition
                                                                     "vperp" => OptionsDict("discretization" => "gausslegendre_pseudospectral"),
                                                                     "vpa" => OptionsDict("discretization" => "gausslegendre_pseudospectral"),
                                                                    ))
-collisions_input2 = recursive_merge(wall_bc_cheb_input, OptionsDict("composition" => OptionsDict("n_neutral_species" => 0),
-                                                                    "krook_collisions" => OptionsDict("use_krook" => true),
-                                                                    "fokker_planck_collisions" => OptionsDict("use_fokker_planck" => true, "self_collisions" => true, "slowing_down_test" => true),
-                                                                    "vperp" => OptionsDict("discretization" => "gausslegendre_pseudospectral",
-                                                                                           "bc" => "zero-impose-regularity"),
-                                                                    "vpa" => OptionsDict("discretization" => "gausslegendre_pseudospectral"),
-                                                                   ))
 collisions_input3 = recursive_merge(wall_bc_cheb_input, OptionsDict("composition" => OptionsDict("n_neutral_species" => 0),
                                                                     "fokker_planck_collisions" => OptionsDict("use_fokker_planck" => true, "self_collisions" => true, "boundary_data_option" => "delta_f_multipole"),
                                                                     "vperp" => OptionsDict("discretization" => "gausslegendre_pseudospectral"),
@@ -132,7 +125,7 @@ kinetic_electron_input = recursive_merge(cheb_input, OptionsDict("evolve_moments
                                                                                                         "no_restart" => true),
                                                                 ))
 
-push!(inputs_list, collisions_input1, collisions_input2,
+push!(inputs_list, collisions_input1,
  collisions_input3, collisions_input4, collisions_input5,
  geo_input1, kinetic_electron_input)
 
