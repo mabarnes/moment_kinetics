@@ -166,11 +166,7 @@ function instability2D_plots(run_info, variable_name; plot_prefix, zind=nothing,
 
     time = run_info.time
 
-    if variable_name == "temperature"
-        variable = get_variable(run_info, "thermal_speed").^2
-    else
-        variable = get_variable(run_info, variable_name)
-    end
+    variable = get_variable(run_info, variable_name)
 
     if ndims(variable) == 4
         # Only support single species runs in this routine, so pick is=1

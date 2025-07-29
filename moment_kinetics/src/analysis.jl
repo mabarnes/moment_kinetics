@@ -429,28 +429,38 @@ function get_Fourier_modes_2D(non_uniform_data::AbstractArray{T,3}, r::coordinat
                               r_spectral, z::coordinate, z_spectral) where T
     nt = size(non_uniform_data, 3)
 
-    uniform_points_per_element_r = r.ngrid ÷ 4
-    n_uniform_r = r.nelement_global * uniform_points_per_element_r
-    uniform_spacing_r = r.L / n_uniform_r
-    uniform_grid_r = collect(1:n_uniform_r).*uniform_spacing_r .+ 0.5.*uniform_spacing_r .- 0.5.*r.L
+    if z.discretization == "fourier_pseudospectral"
+        # Grid is already uniform and fourier-transformable
+        intermediate = non_uniform_data
+    else
+        uniform_points_per_element_z = z.ngrid ÷ 4
+        n_uniform_z = z.nelement_global * uniform_points_per_element_z
+        uniform_spacing_z = z.L / n_uniform_z
+        uniform_grid_z = collect(1:n_uniform_z).*uniform_spacing_z .+ 0.5.*uniform_spacing_z .- 0.5.*z.L
 
-    uniform_points_per_element_z = z.ngrid ÷ 4
-    n_uniform_z = z.nelement_global * uniform_points_per_element_z
-    uniform_spacing_z = z.L / n_uniform_z
-    uniform_grid_z = collect(1:n_uniform_z).*uniform_spacing_z .+ 0.5.*uniform_spacing_z .- 0.5.*z.L
-
-    intermediate = allocate_float(n_uniform_z, r.n, nt)
-    for it ∈ 1:nt, ir ∈ 1:r.n
-        @views intermediate[:,ir,it] =
-        interpolate_to_grid_1d(uniform_grid_z, non_uniform_data[:,ir,it], z,
-                               z_spectral)
+        intermediate = allocate_float(n_uniform_z, r.n, nt)
+        for it ∈ 1:nt, ir ∈ 1:r.n
+            @views intermediate[:,ir,it] =
+            interpolate_to_grid_1d(uniform_grid_z, non_uniform_data[:,ir,it], z,
+                                   z_spectral)
+        end
     end
 
-    uniform_data = allocate_float(n_uniform_z, n_uniform_r, nt)
-    for it ∈ 1:nt, iz ∈ 1:n_uniform_z
-        @views uniform_data[iz,:,it] =
-        interpolate_to_grid_1d(uniform_grid_r, non_uniform_data[iz,:,it], r,
-                               r_spectral)
+    if r.discretization == "fourier_pseudospectral"
+        # Grid is already uniform and fourier-transformable
+        uniform_data = intermediate
+    else
+        uniform_points_per_element_r = r.ngrid ÷ 4
+        n_uniform_r = r.nelement_global * uniform_points_per_element_r
+        uniform_spacing_r = r.L / n_uniform_r
+        uniform_grid_r = collect(1:n_uniform_r).*uniform_spacing_r .+ 0.5.*uniform_spacing_r .- 0.5.*r.L
+
+        uniform_data = allocate_float(n_uniform_z, n_uniform_r, nt)
+        for it ∈ 1:nt, iz ∈ 1:n_uniform_z
+            @views uniform_data[iz,:,it] =
+            interpolate_to_grid_1d(uniform_grid_r, non_uniform_data[iz,:,it], r,
+                                   r_spectral)
+        end
     end
 
     fourier_data = fft(uniform_data, (1,2))
@@ -517,16 +527,21 @@ function get_Fourier_modes_1D(non_uniform_data::AbstractArray{T,3}, r::coordinat
     # Analyse the Fourier modes at zind
     ###################################
     non_uniform_data = @view non_uniform_data[zind,:,:]
-    uniform_points_per_element_r = r.ngrid ÷ 4
-    n_uniform_r = r.nelement_global * uniform_points_per_element_r
-    uniform_spacing_r = r.L / n_uniform_r
-    uniform_grid_r = collect(0:(n_uniform_r-1)).*uniform_spacing_r .+ 0.5.*uniform_spacing_r .- 0.5.*r.L
+    if r.discretization == "fourier_pseudospectral"
+        # Grid is already uniform and fourier-transformable
+        uniform_data = non_uniform_data
+    else
+        uniform_points_per_element_r = r.ngrid ÷ 4
+        n_uniform_r = r.nelement_global * uniform_points_per_element_r
+        uniform_spacing_r = r.L / n_uniform_r
+        uniform_grid_r = collect(0:(n_uniform_r-1)).*uniform_spacing_r .+ 0.5.*uniform_spacing_r .- 0.5.*r.L
 
-    uniform_data = allocate_float(n_uniform_r, nt)
-    for it ∈ 1:nt
-        @views uniform_data[:,it] =
-        interpolate_to_grid_1d(uniform_grid_r, non_uniform_data[:,it], r,
-                               r_spectral)
+        uniform_data = allocate_float(n_uniform_r, nt)
+        for it ∈ 1:nt
+            @views uniform_data[:,it] =
+            interpolate_to_grid_1d(uniform_grid_r, non_uniform_data[:,it], r,
+                                   r_spectral)
+        end
     end
 
     fourier_data = fft(uniform_data, 1)
