@@ -67,6 +67,9 @@ struct coordinate{T <: AbstractVector{mk_float}, Ti <: AbstractVector{mk_int}, T
     cheb_option::String
     # bc is the boundary condition option for this coordinate
     bc::String
+    # Flag indicating whether dimension is periodic. Useful because periodic dimensions
+    # require some extra special handling.
+    periodic::Bool
     # struct containing some parameters that may be used for applying the boundary
     # condition.
     boundary_parameters::Tbparams
@@ -206,9 +209,9 @@ function get_coordinate_input(input_dict, name; ignore_MPI=false,
     if coord_input_dict["nelement_local"] == -1 || ignore_MPI
         coord_input_dict["nelement_local"] = coord_input_dict["nelement"]
     end
-    if !warn_unexpected && name == "r" && coord_input_dict["bc"] != "default"
-        error("Radial boundary conditions should be set in [inner_r_bc_*] and "
-              * "[outer_r_bc_*] sections, not in [r], but got "
+    if !warn_unexpected && name == "r" && coord_input_dict["bc"] ∉ ("default", "periodic")
+        error("Radial boundary conditions other than \"periodic\" should be set in "
+              * "[inner_r_bc_*] and [outer_r_bc_*] sections, not in [r], but got "
               * "bc=$(coord_input_dict["bc"]) in [r] section.")
     end
     if name == "vperp" && coord_input_dict["bc"] == "default"
@@ -413,6 +416,8 @@ function define_coordinate(coord_input::NamedTuple; parallel_io::Bool=false,
         end
     end
 
+    periodic = (coord_input.bc == "periodic")
+
     mask_low = allocate_float(n_local)
     mask_low .= 1.0
     mask_up = allocate_float(n_local)
@@ -430,15 +435,15 @@ function define_coordinate(coord_input::NamedTuple; parallel_io::Bool=false,
         coord_input.nelement, coord_input.nelement_local, nrank, irank,
         mk_float(coord_input.L), grid, cell_width, igrid, ielement, imin, imax,
         igrid_full, coord_input.discretization, coord_input.finite_difference_option,
-        coord_input.cheb_option, coord_input.bc, coord_input.boundary_parameters, wgts,
-        uniform_grid, duniform_dgrid, scratch, copy(scratch), copy(scratch),
+        coord_input.cheb_option, coord_input.bc, periodic,
+        coord_input.boundary_parameters, wgts, uniform_grid, duniform_dgrid, scratch,
         copy(scratch), copy(scratch), copy(scratch), copy(scratch), copy(scratch),
-        copy(scratch), copy(scratch), scratch_int_nelement_plus_1, scratch_shared,
-        scratch_shared2, scratch_shared3, scratch_shared_int, scratch_shared_int2,
-        scratch_2d, copy(scratch_2d), advection, send_buffer, receive_buffer, comm,
-        local_io_range, global_io_range, element_scale, element_shift,
-        coord_input.element_spacing_option, element_boundaries, radau_first_element,
-        other_nodes, one_over_denominator, mask_up, mask_low)
+        copy(scratch), copy(scratch), copy(scratch), copy(scratch),
+        scratch_int_nelement_plus_1, scratch_shared, scratch_shared2, scratch_shared3,
+        scratch_shared_int, scratch_shared_int2, scratch_2d, copy(scratch_2d), advection,
+        send_buffer, receive_buffer, comm, local_io_range, global_io_range, element_scale,
+        element_shift, coord_input.element_spacing_option, element_boundaries,
+        radau_first_element, other_nodes, one_over_denominator, mask_up, mask_low)
 
     if coord.n == 1 && coord.name == "vperp"
         spectral = null_vperp_dimension_info()

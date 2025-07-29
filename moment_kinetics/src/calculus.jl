@@ -162,18 +162,7 @@ function second_derivative!(d2f, f, coord, spectral)
                                                         coord.scratch2_2d[:,ielement])
     end
 
-    if coord.bc ∈ ("wall", "zero", "both_zero")
-        # For stability don't contribute to evolution at boundaries, in case these
-        # points are not set by a boundary condition.
-        # Full grid may be across processes and bc only applied to extreme ends of the
-        # domain.
-        if coord.irank == 0
-            d2f[1] = 0.0
-        end
-        if coord.irank == coord.nrank - 1
-            d2f[end] = 0.0
-        end
-    elseif coord.bc == "periodic"
+    if coord.periodic
         # Need to get first derivatives from opposite ends of grid
         if coord.nelement_local != coord.nelement_global
             error("Distributed memory MPI not yet supported here")
@@ -189,7 +178,16 @@ function second_derivative!(d2f, f, coord, spectral)
         # exactly equal.
         d2f[end] = d2f[1]
     else
-        error("Unsupported bc '$(coord.bc)'")
+        # For stability don't contribute to evolution at boundaries, in case these
+        # points are not set by a boundary condition.
+        # Full grid may be across processes and bc only applied to extreme ends of the
+        # domain.
+        if coord.irank == 0
+            d2f[1] = 0.0
+        end
+        if coord.irank == coord.nrank - 1
+            d2f[end] = 0.0
+        end
     end
     return nothing
 end
@@ -282,9 +280,13 @@ function second_derivative!(d2f, f, coord, spectral::weak_discretization_info)
         error("mass_matrix_solve!() does not support a "
               * "distributed coordinate")
     end
-    mass_matrix_solve!(d2f, coord.scratch3, spectral)
+    # Do mass-matrix solve into a buffer array, to ensure that the output array is always
+    # a contiguous array, not a view into another array that might have a stride bigger
+    # than 1.
+    mass_matrix_solve!(coord.scratch4, coord.scratch3, spectral)
+    d2f .= coord.scratch4
 
-    if coord.bc == "periodic"
+    if coord.periodic
         # d2f[end] here should be equal to d2f[1] up to rounding errors...
         @boundscheck isapprox(d2f[end], d2f[1]; atol=1.0e-14)
         # ...but in the matrix operations arithmetic operations are not necessarily in
@@ -304,9 +306,9 @@ function laplacian_derivative!(d2f, f, coord, spectral::weak_discretization_info
     # for all other coord.name, do exactly the same as second_derivative! above.
     mul!(coord.scratch3, spectral.L_matrix, f)
 
-    if coord.bc == "periodic" && coord.name == "vperp"
+    if coord.periodic && coord.name == "vperp"
         error("laplacian_derivative!() cannot handle periodic boundaries for vperp")
-    elseif coord.bc == "periodic"
+    elseif coord.periodic
         if coord.nrank > 1
             error("laplacian_derivative!() cannot handle periodic boundaries for a "
                   * "distributed coordinate")
@@ -380,7 +382,7 @@ function reconcile_element_boundaries_upwind!(df1d, df2d, coord, adv_fac::Abstra
     # and the next ngrid-1 points belonging to second element, etc.
 
     # first deal with domain boundaries
-    if coord.bc == "periodic" && coord.nelement_global == coord.nelement_local
+    if coord.periodic && coord.nelement_global == coord.nelement_local
         # consider left domain boundary
         if adv_fac[1] > 0.0
             # adv_fac > 0 corresponds to negative advection speed, so
@@ -449,7 +451,7 @@ function reconcile_element_boundaries_centered!(df1d, df2d, coord)
     # note that the first ngrid points are classified as belonging to the first element
     # and the next ngrid-1 points belonging to second element, etc.
 	# first deal with domain boundaries
-	if coord.bc == "periodic" && coord.nelement_local == coord.nelement_global
+	if coord.periodic && coord.nelement_local == coord.nelement_global
 		# consider left domain boundary
 		df1d[1] = 0.5*(df2d[1,1]+df2d[coord.ngrid,coord.nelement_local])
 		# consider right domain boundary
@@ -580,7 +582,7 @@ end
 
         # now update receive buffers, taking into account the reconciliation
         if irank == 0
-            if coord.bc == "periodic"
+            if coord.periodic
                 #update the extreme lower endpoint with data from irank = nrank -1	
                 receive_buffer1 .= 0.5*(receive_buffer1 .+ dfdx_lower_endpoints)
             else #directly use value from Cheb
@@ -593,7 +595,7 @@ end
         assign_endpoint!(df1d,receive_buffer1,"lower",coord)
 
         if irank == nrank-1
-            if coord.bc == "periodic"
+            if coord.periodic
                 #update the extreme upper endpoint with data from irank = 0
                 receive_buffer2 .= 0.5*(receive_buffer2 .+ dfdx_upper_endpoints)
             else #directly use value from Cheb
@@ -681,7 +683,7 @@ function apply_adv_fac!(buffer::AbstractArray{mk_float,Ndims},adv_fac::AbstractA
 
         # now update receive buffers, taking into account the reconciliation
         if irank == 0
-            if coord.bc == "periodic"
+            if coord.periodic
                 # depending on adv_fac, update the extreme lower endpoint with data from irank = nrank -1	
                 apply_adv_fac!(receive_buffer1,adv_fac_lower_endpoints,dfdx_lower_endpoints,1)
             else # directly use value from Cheb at extreme lower point
@@ -694,7 +696,7 @@ function apply_adv_fac!(buffer::AbstractArray{mk_float,Ndims},adv_fac::AbstractA
         assign_endpoint!(df1d,receive_buffer1,"lower",coord)
 
         if irank == nrank-1
-            if coord.bc == "periodic"
+            if coord.periodic
                 # depending on adv_fac, update the extreme upper endpoint with data from irank = 0
                 apply_adv_fac!(receive_buffer2,adv_fac_upper_endpoints,dfdx_upper_endpoints,-1)
             else #directly use value from Cheb
@@ -759,7 +761,7 @@ end
 
         # now update receive buffers, taking into account the reconciliation
         if irank == 0
-            if coord.bc == "periodic"
+            if coord.periodic
                 #update the extreme lower endpoint with data from irank = nrank -1	
                 receive_buffer1 .= 0.5*(receive_buffer1 .+ dfdx_lower_endpoints)
             else #directly use value from Cheb
@@ -772,7 +774,7 @@ end
         @views df1d[:,:,1] .= receive_buffer1
 
         if irank == nrank-1
-            if coord.bc == "periodic"
+            if coord.periodic
                 #update the extreme upper endpoint with data from irank = 0
                 receive_buffer2 .= 0.5*(receive_buffer2 .+ dfdx_upper_endpoints)
             else #directly use value from Cheb
@@ -840,7 +842,7 @@ end
 
         # now update receive buffers, taking into account the reconciliation
         if irank == 0
-            if coord.bc == "periodic"
+            if coord.periodic
                 # depending on adv_fac, update the extreme lower endpoint with data from irank = nrank -1	
                 apply_adv_fac!(receive_buffer1,adv_fac_lower_endpoints,dfdx_lower_endpoints,1)
             else # directly use value from Cheb at extreme lower point
@@ -853,7 +855,7 @@ end
         @views df1d[:,:,1] .= receive_buffer1
 
         if irank == nrank-1
-            if coord.bc == "periodic"
+            if coord.periodic
                 # depending on adv_fac, update the extreme upper endpoint with data from irank = 0
                 apply_adv_fac!(receive_buffer2,adv_fac_upper_endpoints,dfdx_upper_endpoints,-1)
             else #directly use value from Cheb

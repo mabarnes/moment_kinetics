@@ -271,7 +271,7 @@ function setup_serial_MPI()
     # set up the global variables
     iblock_index[] = 0
     block_rank[] = 0
-    block_size[] = 0
+    block_size[] = 1
     n_blocks[] = 1
     comm_block[] = MPI.COMM_SELF
 

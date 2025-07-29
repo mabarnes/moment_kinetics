@@ -789,10 +789,20 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                     plot_vs_vz_z(run_info_dfns, residual_name;
                                  data=residual, input=this_input_dict[variable_name],
                                  outfile=plot_prefix * residual_name * "_vs_vz_z.pdf")
+                    if has_r_dim
+                        plot_vs_vz_r(run_info_dfns, residual_name;
+                                     data=residual, input=this_input_dict[variable_name],
+                                     outfile=plot_prefix * residual_name * "_vs_vz_r.pdf")
+                    end
                 elseif variable_name ∈ ("f", "f_electron")
                     plot_vs_vpa_z(run_info_dfns, residual_name;
                                   data=residual, input=this_input_dict[variable_name],
                                   outfile=plot_prefix * residual_name * "_vs_vpa_z.pdf")
+                    if has_r_dim
+                        plot_vs_vpa_r(run_info_dfns, residual_name;
+                                      data=residual, input=this_input_dict[variable_name],
+                                      outfile=plot_prefix * residual_name * "_vs_vpa_r.pdf")
+                    end
                 else
                     plot_vs_z(run_info_dfns, residual_name;
                               data=residual, input=this_input_dict[variable_name],
@@ -842,10 +852,20 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                     animate_vs_vz_z(run_info_dfns, residual_name;
                                     data=residual, input=this_input_dict[variable_name],
                                     outfile=plot_prefix * residual_name * "_vs_vz_z." * this_input_dict[variable_name]["animation_ext"])
+                    if has_r_dim
+                        animate_vs_vz_r(run_info_dfns, residual_name;
+                                        data=residual, input=this_input_dict[variable_name],
+                                        outfile=plot_prefix * residual_name * "_vs_vz_r." * this_input_dict[variable_name]["animation_ext"])
+                    end
                 elseif variable_name ∈ ("f", "f_electron")
                     animate_vs_vpa_z(run_info_dfns, residual_name;
                                      data=residual, input=this_input_dict[variable_name],
                                      outfile=plot_prefix * residual_name * "_vs_vpa_z." * this_input_dict[variable_name]["animation_ext"])
+                    if has_r_dim
+                        animate_vs_vpa_r(run_info_dfns, residual_name;
+                                         data=residual, input=this_input_dict[variable_name],
+                                         outfile=plot_prefix * residual_name * "_vs_vpa_r." * this_input_dict[variable_name]["animation_ext"])
+                    end
                 else
                     animate_vs_z(run_info_dfns, residual_name;
                                  data=residual, input=this_input_dict[variable_name],
@@ -883,10 +903,20 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                     plot_vs_vz_z(run_info_dfns, error_name;
                                  data=error, input=this_input_dict[variable_name],
                                  outfile=plot_prefix * error_name * "_vs_vz_z.pdf")
+                    if has_r_dim
+                        plot_vs_vz_r(run_info_dfns, error_name;
+                                     data=error, input=this_input_dict[variable_name],
+                                     outfile=plot_prefix * error_name * "_vs_vz_r.pdf")
+                    end
                 elseif variable_name ∈ ("f", "f_electron")
                     plot_vs_vpa_z(run_info_dfns, error_name;
                                   data=error, input=this_input_dict[variable_name],
                                   outfile=plot_prefix * error_name * "_vs_vpa_z.pdf")
+                    if has_r_dim
+                        plot_vs_vpa_r(run_info_dfns, error_name;
+                                      data=error, input=this_input_dict[variable_name],
+                                      outfile=plot_prefix * error_name * "_vs_vpa_r.pdf")
+                    end
                 else
                     plot_vs_z(run_info_dfns, error_name;
                               data=error, input=this_input_dict[variable_name],
@@ -923,10 +953,20 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                     animate_vs_vz_z(run_info_dfns, error_name;
                                     data=error, input=this_input_dict[variable_name],
                                     outfile=plot_prefix * error_name * "_vs_vz_z." * this_input_dict[variable_name]["animation_ext"])
+                    if has_r_dim
+                        animate_vs_vz_r(run_info_dfns, error_name;
+                                        data=error, input=this_input_dict[variable_name],
+                                        outfile=plot_prefix * error_name * "_vs_vz_r." * this_input_dict[variable_name]["animation_ext"])
+                    end
                 elseif variable_name ∈ ("f", "f_electron")
                     animate_vs_vpa_z(run_info_dfns, error_name;
                                      data=error, input=this_input_dict[variable_name],
                                      outfile=plot_prefix * error_name * "_vs_vpa_z." * this_input_dict[variable_name]["animation_ext"])
+                    if has_r_dim
+                        animate_vs_vpa_r(run_info_dfns, error_name;
+                                         data=error, input=this_input_dict[variable_name],
+                                         outfile=plot_prefix * error_name * "_vs_vpa_r." * this_input_dict[variable_name]["animation_ext"])
+                    end
                 else
                     animate_vs_z(run_info_dfns, error_name;
                                  data=error, input=this_input_dict[variable_name],

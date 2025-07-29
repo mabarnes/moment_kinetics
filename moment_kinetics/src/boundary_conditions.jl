@@ -32,7 +32,12 @@ function create_boundary_info(input_dict, pdf, moments, r, z, vperp, vpa, vzeta,
                                                 composition, zero))
 end
 
-function read_r_sections_input(input_dict, warn_unexpected)
+function read_r_sections_input(input_dict, periodic, warn_unexpected)
+    if periodic
+        default_bc = "periodic"
+    else
+        default_bc = "Neumann"
+    end
     inner_sections_counter = 1
     inner_input = OptionsDict[]
     element_lower = 1
@@ -42,7 +47,7 @@ function read_r_sections_input(input_dict, warn_unexpected)
         this_input = deepcopy(set_defaults_and_check_section!(
             input_dict, section_name, warn_unexpected;
             nelement=-1,
-            bc="Neumann",
+            bc=default_bc,
             ion_bc="default",
             electron_bc="default",
             neutral_bc="default",
@@ -69,6 +74,15 @@ function read_r_sections_input(input_dict, warn_unexpected)
         end
     end
 
+    if periodic && (!single_section
+                    || inner_input[1]["bc"] != "periodic"
+                    || inner_input[1]["ion_bc"] ∉ ("default", "periodic")
+                    || inner_input[1]["electron_bc"] ∉ ("default", "periodic")
+                    || inner_input[1]["neutral_bc"] ∉ ("default", "periodic"))
+        error("When r is periodic, cannot specify different boundary conditions with "
+              * "inner_r_bc_* or outer_r_bc_*")
+    end
+
     outer_sections_counter = 1
     outer_input = OptionsDict[]
     element_lower = 1
@@ -78,7 +92,7 @@ function read_r_sections_input(input_dict, warn_unexpected)
         this_input = deepcopy(set_defaults_and_check_section!(
             input_dict, section_name, warn_unexpected;
             nelement=-1,
-            bc="Neumann",
+            bc=default_bc,
             ion_bc="default",
             electron_bc="default",
             neutral_bc="default",
@@ -105,25 +119,50 @@ function read_r_sections_input(input_dict, warn_unexpected)
         end
     end
 
+    if periodic && (!single_section
+                    || outer_input[1]["bc"] != "periodic"
+                    || outer_input[1]["ion_bc"] ∉ ("default", "periodic")
+                    || outer_input[1]["electron_bc"] ∉ ("default", "periodic")
+                    || outer_input[1]["neutral_bc"] ∉ ("default", "periodic"))
+        error("When r is periodic, cannot specify different boundary conditions with "
+              * "inner_r_bc_* or outer_r_bc_*")
+    end
+
     return inner_input, outer_input
 end
 
 function create_r_boundary_info(input_dict, pdf, moments, r, z, vperp, vpa, vzeta, vr, vz,
                                 r_spectral, composition; warn_unexpected)
-    inner_input, outer_input = read_r_sections_input(input_dict, warn_unexpected)
+    inner_input, outer_input = read_r_sections_input(input_dict, r.periodic,
+                                                     warn_unexpected)
 
-    ion_pdf_inner = @view pdf.ion.norm[:,:,:,1,:]
-    ion_density_inner = @view moments.ion.dens[:,1,:]
-    ion_upar_inner = @view moments.ion.upar[:,1,:]
-    ion_p_inner = @view moments.ion.p[:,1,:]
-    electron_pdf_inner = pdf.electron === nothing ? nothing : @view pdf.electron.norm[:,:,:,1]
-    electron_density_inner = @view moments.electron.dens[:,1]
-    electron_upar_inner = @view moments.electron.upar[:,1]
-    electron_p_inner = @view moments.electron.p[:,1]
-    neutral_pdf_inner = @view pdf.neutral.norm[:,:,:,:,1,:]
-    neutral_density_inner = @view moments.neutral.dens[:,1,:]
-    neutral_uz_inner = @view moments.neutral.uz[:,1,:]
-    neutral_p_inner = @view moments.neutral.p[:,1,:]
+    if pdf !== nothing && moments !== nothing
+        ion_pdf_inner = @view pdf.ion.norm[:,:,:,1,:]
+        ion_density_inner = @view moments.ion.dens[:,1,:]
+        ion_upar_inner = @view moments.ion.upar[:,1,:]
+        ion_p_inner = @view moments.ion.p[:,1,:]
+        electron_pdf_inner = pdf.electron === nothing ? nothing : @view pdf.electron.norm[:,:,:,1]
+        electron_density_inner = @view moments.electron.dens[:,1]
+        electron_upar_inner = @view moments.electron.upar[:,1]
+        electron_p_inner = @view moments.electron.p[:,1]
+        neutral_pdf_inner = @view pdf.neutral.norm[:,:,:,:,1,:]
+        neutral_density_inner = @view moments.neutral.dens[:,1,:]
+        neutral_uz_inner = @view moments.neutral.uz[:,1,:]
+        neutral_p_inner = @view moments.neutral.p[:,1,:]
+    else
+        ion_pdf_inner = nothing
+        ion_density_inner = nothing
+        ion_upar_inner = nothing
+        ion_p_inner = nothing
+        electron_pdf_inner = nothing
+        electron_density_inner = nothing
+        electron_upar_inner = nothing
+        electron_p_inner = nothing
+        neutral_pdf_inner = nothing
+        neutral_density_inner = nothing
+        neutral_uz_inner = nothing
+        neutral_p_inner = nothing
+    end
 
     # Only inner-r shared-memory block needs to apply r-boundary conditions.
     # Note that 1D simulations cannot have r-boundaries
@@ -143,18 +182,33 @@ function create_r_boundary_info(input_dict, pdf, moments, r, z, vperp, vpa, vzet
         inner_sections = ()
     end
 
-    ion_pdf_outer = @view pdf.ion.norm[:,:,:,end,:]
-    ion_density_outer = @view moments.ion.dens[:,end,:]
-    ion_upar_outer = @view moments.ion.upar[:,end,:]
-    ion_p_outer = @view moments.ion.p[:,end,:]
-    electron_pdf_outer = pdf.electron === nothing ? nothing : @view pdf.electron.norm[:,:,:,end]
-    electron_density_outer = @view moments.electron.dens[:,end]
-    electron_upar_outer = @view moments.electron.upar[:,end]
-    electron_p_outer = @view moments.electron.p[:,end]
-    neutral_pdf_outer = @view pdf.neutral.norm[:,:,:,:,end,:]
-    neutral_density_outer = @view moments.neutral.dens[:,end,:]
-    neutral_uz_outer = @view moments.neutral.uz[:,end,:]
-    neutral_p_outer = @view moments.neutral.p[:,end,:]
+    if pdf !== nothing && moments !== nothing
+        ion_pdf_outer = @view pdf.ion.norm[:,:,:,end,:]
+        ion_density_outer = @view moments.ion.dens[:,end,:]
+        ion_upar_outer = @view moments.ion.upar[:,end,:]
+        ion_p_outer = @view moments.ion.p[:,end,:]
+        electron_pdf_outer = pdf.electron === nothing ? nothing : @view pdf.electron.norm[:,:,:,end]
+        electron_density_outer = @view moments.electron.dens[:,end]
+        electron_upar_outer = @view moments.electron.upar[:,end]
+        electron_p_outer = @view moments.electron.p[:,end]
+        neutral_pdf_outer = @view pdf.neutral.norm[:,:,:,:,end,:]
+        neutral_density_outer = @view moments.neutral.dens[:,end,:]
+        neutral_uz_outer = @view moments.neutral.uz[:,end,:]
+        neutral_p_outer = @view moments.neutral.p[:,end,:]
+    else
+        ion_pdf_outer = nothing
+        ion_density_outer = nothing
+        ion_upar_outer = nothing
+        ion_p_outer = nothing
+        electron_pdf_outer = nothing
+        electron_density_outer = nothing
+        electron_upar_outer = nothing
+        electron_p_outer = nothing
+        neutral_pdf_outer = nothing
+        neutral_density_outer = nothing
+        neutral_uz_outer = nothing
+        neutral_p_outer = nothing
+    end
 
     # Only outer-r shared-memory block needs to apply r-boundary conditions.
     # Note that 1D simulations cannot have r-boundaries
@@ -328,8 +382,6 @@ function create_r_section(this_input, ion_pdf, ion_density, ion_upar, ion_p, ele
             this_input["$(species)_bc"] = this_input["bc"]
         end
         if this_input["$(species)_bc"] == "periodic"
-            # No boundary condition to impose, periodicity is imposed by communication
-            # when calculating derivatives.
             if species == "ion"
                 this_section = ion_r_boundary_section_periodic()
             elseif species == "electron"
@@ -561,41 +613,52 @@ function create_r_section(this_input, ion_pdf, ion_density, ion_upar, ion_p, ele
             end
         elseif this_input["$(species)_bc"] == "pin_initial"
             if species == "ion"
-                bc_ion_pdf = allocate_shared_float(vpa.n, vperp.n, length(z_range),
-                                                   composition.n_ion_species)
-                bc_ion_density = allocate_shared_float(length(z_range), composition.n_ion_species)
-                bc_ion_upar = allocate_shared_float(length(z_range), composition.n_ion_species)
-                bc_ion_p = allocate_shared_float(length(z_range), composition.n_ion_species)
+                if ion_pdf === nothing
+                    bc_ion_pdf = allocate_shared_float(vpa.n, vperp.n, length(z_range),
+                                                       composition.n_ion_species)
+                    bc_ion_density = allocate_shared_float(length(z_range), composition.n_ion_species)
+                    bc_ion_upar = allocate_shared_float(length(z_range), composition.n_ion_species)
+                    bc_ion_p = allocate_shared_float(length(z_range), composition.n_ion_species)
 
-                @begin_s_region()
-                @loop_s is begin
-                    @views bc_ion_pdf[:,:,z_range,is] = ion_pdf[:,:,z_range,is]
-                    @views bc_ion_density[z_range,is] = ion_density[z_range,is]
-                    @views bc_ion_upar[z_range,is] = ion_upar[z_range,is]
-                    @views bc_ion_p[z_range,is] = ion_p[z_range,is]
+                    @begin_s_region()
+                    @loop_s is begin
+                        @views bc_ion_pdf[:,:,z_range,is] = ion_pdf[:,:,z_range,is]
+                        @views bc_ion_density[z_range,is] = ion_density[z_range,is]
+                        @views bc_ion_upar[z_range,is] = ion_upar[z_range,is]
+                        @views bc_ion_p[z_range,is] = ion_p[z_range,is]
+                    end
+
+                    this_section = ion_r_boundary_section_Dirichlet(bc_ion_pdf,
+                                                                    bc_ion_density,
+                                                                    bc_ion_upar, bc_ion_p)
+                else
+                    this_section = ion_r_boundary_section_Dirichlet(nothing, nothing,
+                                                                    nothing, nothing)
                 end
-
-                this_section = ion_r_boundary_section_Dirichlet(bc_ion_pdf,
-                                                                bc_ion_density,
-                                                                bc_ion_upar, bc_ion_p)
             elseif species == "electron"
                 if electron_pdf === nothing
                     bc_electron_pdf = zeros(0, 0, 0)
                 else
                     bc_electron_pdf = allocate_shared_float(vpa.n, vperp.n, length(z_range))
                 end
-                bc_electron_density = allocate_shared_float(length(z_range))
-                bc_electron_upar = allocate_shared_float(length(z_range))
-                bc_electron_p = allocate_shared_float(length(z_range))
+                if electron_pdf === nothing && electron_density === nothing
+                    bc_electron_density = allocate_shared_float(length(z_range))
+                    bc_electron_upar = allocate_shared_float(length(z_range))
+                    bc_electron_p = allocate_shared_float(length(z_range))
 
-                @begin_serial_region()
-                @serial_region begin
-                    if electron_pdf !== nothing
-                        @views bc_electron_pdf[:,:,z_range] = electron_pdf[:,:,z_range]
+                    @begin_serial_region()
+                    @serial_region begin
+                        if electron_pdf !== nothing
+                            @views bc_electron_pdf[:,:,z_range] = electron_pdf[:,:,z_range]
+                        end
+                        @views bc_electron_density[z_range] = electron_density[z_range]
+                        @views bc_electron_upar[z_range] = electron_upar[z_range]
+                        @views bc_electron_p[z_range] = electron_p[z_range]
                     end
-                    @views bc_electron_density[z_range] = electron_density[z_range]
-                    @views bc_electron_upar[z_range] = electron_upar[z_range]
-                    @views bc_electron_p[z_range] = electron_p[z_range]
+                else
+                    bc_electron_density = nothing
+                    bc_electron_upar = nothing
+                    bc_electron_p = nothing
                 end
 
                 this_section = electron_r_boundary_section_pin_initial(bc_electron_pdf,
@@ -603,28 +666,35 @@ function create_r_section(this_input, ion_pdf, ion_density, ion_upar, ion_p, ele
                                                                        bc_electron_upar,
                                                                        bc_electron_p)
             elseif species == "neutral"
-                bc_neutral_pdf = allocate_shared_float(vz.n, vr.n, vzeta.n,
-                                                       length(z_range),
-                                                       composition.n_neutral_species)
-                bc_neutral_density = allocate_shared_float(length(z_range),
+                if neutral_pdf === nothing
+                    bc_neutral_pdf = allocate_shared_float(vz.n, vr.n, vzeta.n,
+                                                           length(z_range),
                                                            composition.n_neutral_species)
-                bc_neutral_upar = allocate_shared_float(length(z_range),
-                                                        composition.n_neutral_species)
-                bc_neutral_p = allocate_shared_float(length(z_range),
-                                                     composition.n_neutral_species)
+                    bc_neutral_density = allocate_shared_float(length(z_range),
+                                                               composition.n_neutral_species)
+                    bc_neutral_upar = allocate_shared_float(length(z_range),
+                                                            composition.n_neutral_species)
+                    bc_neutral_p = allocate_shared_float(length(z_range),
+                                                         composition.n_neutral_species)
 
-                @begin_sn_region()
-                @loop_sn isn begin
-                    @views bc_neutral_pdf[:,:,z_range,isn] = neutral_pdf[:,:,z_range,isn]
-                    @views bc_neutral_density[z_range,isn] = neutral_density[z_range,isn]
-                    @views bc_neutral_uz[z_range,isn] = neutral_uz[z_range,isn]
-                    @views bc_neutral_p[z_range,isn] = neutral_p[z_range,isn]
+                    @begin_sn_region()
+                    @loop_sn isn begin
+                        @views bc_neutral_pdf[:,:,z_range,isn] = neutral_pdf[:,:,z_range,isn]
+                        @views bc_neutral_density[z_range,isn] = neutral_density[z_range,isn]
+                        @views bc_neutral_uz[z_range,isn] = neutral_uz[z_range,isn]
+                        @views bc_neutral_p[z_range,isn] = neutral_p[z_range,isn]
+                    end
+
+                    this_section = neutral_r_boundary_section_pin_initial(bc_neutral_pdf,
+                                                                          bc_neutral_density,
+                                                                          bc_neutral_uz,
+                                                                          bc_neutral_p)
+                else
+                    this_section = neutral_r_boundary_section_pin_initial(nothing,
+                                                                          nothing,
+                                                                          nothing,
+                                                                          nothing)
                 end
-
-                this_section = neutral_r_boundary_section_pin_initial(bc_neutral_pdf,
-                                                                      bc_neutral_density,
-                                                                      bc_neutral_uz,
-                                                                      bc_neutral_p)
             else
                 error("Unrecognised species=$species")
             end
@@ -754,8 +824,9 @@ also enforce boundary conditions in z on all separately evolved velocity space m
 
     end
     if r.n > 1
-        enforce_r_boundary_condition!(f, density, upar, p, boundaries.r, r_adv, vpa,
-                                      vperp, z, r, composition,
+        moment_r_speed = fields.vEr # For now, allow only ExB drift of ion moments
+        enforce_r_boundary_condition!(f, density, upar, p, moment_r_speed, boundaries.r,
+                                      r_adv, vpa, vperp, z, r, composition,
                                       scratch_dummy.buffer_vpavperpzs_1,
                                       scratch_dummy.buffer_vpavperpzs_2,
                                       scratch_dummy.buffer_vpavperpzs_3,
@@ -781,6 +852,7 @@ enforce boundary conditions on ions in r
 function enforce_r_boundary_condition!(f::AbstractArray{mk_float,ndim_pdf_ion},
         density::AbstractArray{mk_float,ndim_moment},
         upar::AbstractArray{mk_float,ndim_moment}, p::AbstractArray{mk_float,ndim_moment},
+        moment_r_speed::AbstractArray{mk_float,ndim_field},
         r_boundaries::r_boundary_info, adv, vpa, vperp, z, r, composition,
         end1::AbstractArray{mk_float,ndim_pdf_ion_boundary},
         end2::AbstractArray{mk_float,ndim_pdf_ion_boundary},
@@ -788,6 +860,7 @@ function enforce_r_boundary_condition!(f::AbstractArray{mk_float,ndim_pdf_ion},
         buffer2::AbstractArray{mk_float,ndim_pdf_ion_boundary}, r_diffusion::Bool)
 
     nr = r.n
+    zero = 1.0e-10
 
     if r.nelement_global > r.nelement_local
         # reconcile internal element boundaries across processes
@@ -868,7 +941,6 @@ function enforce_r_boundary_condition!(f::AbstractArray{mk_float,ndim_pdf_ion},
                     end
                 end
             elseif isa(ion_section, ion_r_boundary_section_Dirichlet)
-                zero = 1.0e-10
                 # use the old distribution to force the new distribution to have
                 # consistant-in-time values at the boundary
                 # with bc = "Dirichlet" and r_diffusion = false
@@ -878,9 +950,11 @@ function enforce_r_boundary_condition!(f::AbstractArray{mk_float,ndim_pdf_ion},
                 f_boundary = ion_section.pdf
                 @begin_s_vperp_vpa_region()
                 @loop_s is begin
+                    adv_speed = adv[is].speed
                     for (iz_section, iz) ∈ enumerate(section.z_range)
                         @loop_vperp_vpa ivperp ivpa begin
-                            if r_diffusion || adv[is].speed[ir,ivpa,ivperp,iz] > zero
+                            if r_diffusion || (ir == 1 ? adv[is].speed[ir,ivpa,ivperp,iz] > zero
+                                                       : adv[is].speed[ir,ivpa,ivperp,iz] < -zero)
                                 f[ivpa,ivperp,iz,ir,is] = f_boundary[ivpa,ivperp,iz_section,is]
                             end
                         end
@@ -892,15 +966,19 @@ function enforce_r_boundary_condition!(f::AbstractArray{mk_float,ndim_pdf_ion},
                 @begin_s_region()
                 @loop_s is begin
                     for (iz_section, iz) ∈ enumerate(section.z_range)
-                        # For now, assume always have r-diffusion for moments
-                        #if r_diffusion || moment_speed[ir,iz] > zero
+                        if r_diffusion || (ir == 1 ? moment_r_speed[iz,ir] > zero
+                                                   : moment_r_speed[iz,ir] < -zero)
                             density[iz,ir,is] = n_boundary[iz_section,is]
                             upar[iz,ir,is] = u_boundary[iz_section,is]
                             p[iz,ir,is] = p[iz_section,is]
-                        #end
+                        end
                     end
                 end
             elseif isa(ion_section, ion_r_boundary_section_Neumann)
+                # with bc = "Neumann" and r_diffusion = false
+                # impose bc for incoming parts of velocity space only (Hyperbolic PDE)
+                # with bc = "Neumann" and r_diffusion = true
+                # impose bc on both sides of the domain to accomodate a diffusion operator d^2 / d r^2
                 one_over_logarithmic_gradient_value_minus_Db =
                     ion_section.one_over_logarithmic_gradient_value_minus_Db
                 derivative_coefficients = ion_section.derivative_coefficients
@@ -911,30 +989,37 @@ function enforce_r_boundary_condition!(f::AbstractArray{mk_float,ndim_pdf_ion},
                 end
                 @begin_s_vperp_vpa_region()
                 @loop_s is begin
+                    adv_speed = adv[is].speed
                     for (iz_section, iz) ∈ enumerate(section.z_range)
                         @loop_vperp_vpa ivperp ivpa begin
-                            @views f[ivpa,ivperp,iz,ir,is] =
-                                dot(derivative_coefficients,
-                                    f[ivpa,ivperp,iz,other_elements_range,is]) *
-                                one_over_logarithmic_gradient_value_minus_Db
+                            if r_diffusion || (ir == 1 ? adv[is].speed[ir,ivpa,ivperp,iz] > zero
+                                                       : adv[is].speed[ir,ivpa,ivperp,iz] < -zero)
+                                @views f[ivpa,ivperp,iz,ir,is] =
+                                    dot(derivative_coefficients,
+                                        f[ivpa,ivperp,iz,other_elements_range,is]) *
+                                    one_over_logarithmic_gradient_value_minus_Db
+                            end
                         end
                     end
                 end
                 @begin_s_region()
                 @loop_s is begin
                     for iz ∈ section.z_range
-                        @views density[iz,ir,is] =
-                            dot(derivative_coefficients,
-                                density[iz,other_elements_range,is]) *
-                            one_over_logarithmic_gradient_value_minus_Db
-                        @views upar[iz,ir,is] =
-                            dot(derivative_coefficients,
-                                upar[iz,other_elements_range,is]) *
-                            one_over_logarithmic_gradient_value_minus_Db
-                        @views p[iz,ir,is] =
-                            dot(derivative_coefficients,
-                                p[iz,other_elements_range,is]) *
-                            one_over_logarithmic_gradient_value_minus_Db
+                        if r_diffusion || (ir == 1 ? moment_r_speed[iz,ir] > zero
+                                                   : moment_r_speed[iz,ir] < -zero)
+                            @views density[iz,ir,is] =
+                                dot(derivative_coefficients,
+                                    density[iz,other_elements_range,is]) *
+                                one_over_logarithmic_gradient_value_minus_Db
+                            @views upar[iz,ir,is] =
+                                dot(derivative_coefficients,
+                                    upar[iz,other_elements_range,is]) *
+                                one_over_logarithmic_gradient_value_minus_Db
+                            @views p[iz,ir,is] =
+                                dot(derivative_coefficients,
+                                    p[iz,other_elements_range,is]) *
+                                one_over_logarithmic_gradient_value_minus_Db
+                        end
                     end
                 end
             else
@@ -1021,7 +1106,7 @@ function enforce_z_boundary_condition!(pdf, density, upar, p, fields, moments, b
             end
         end
     # 'periodic' BC enforces periodicity by taking the average of the boundary points
-    elseif bc == "periodic" && z.nelement_global == z.nelement_local
+    elseif z.periodic && z.nelement_global == z.nelement_local
         @begin_s_r_vperp_vpa_region()
         @loop_s_r_vperp_vpa is ir ivperp ivpa begin
             pdf[ivpa,ivperp,1,ir,is] = 0.5*(pdf[ivpa,ivperp,z.n,ir,is]+pdf[ivpa,ivperp,1,ir,is])
@@ -1060,6 +1145,7 @@ enforce boundary conditions on electrons in r
 function enforce_electron_r_boundary_condition!(f::AbstractArray{mk_float,ndim_pdf_electron},
         density::AbstractArray{mk_float,ndim_field},
         upar::AbstractArray{mk_float,ndim_field}, p::AbstractArray{mk_float,ndim_field},
+        moment_r_speed::AbstractArray{mk_float,ndim_field},
         r_boundaries::r_boundary_info, adv, vpa, vperp, z, r, composition,
         end1::AbstractArray{mk_float,ndim_pdf_electron_boundary},
         end2::AbstractArray{mk_float,ndim_pdf_electron_boundary},
@@ -1067,6 +1153,7 @@ function enforce_electron_r_boundary_condition!(f::AbstractArray{mk_float,ndim_p
         buffer2::AbstractArray{mk_float,ndim_pdf_electron_boundary}, r_diffusion::Bool)
 
     nr = r.n
+    zero = 1.0e-10
 
     if r.nelement_global > r.nelement_local
         # reconcile internal element boundaries across processes
@@ -1141,7 +1228,6 @@ function enforce_electron_r_boundary_condition!(f::AbstractArray{mk_float,ndim_p
                     end
                 end
             elseif isa(electron_section, electron_r_boundary_section_Dirichlet)
-                zero = 1.0e-10
                 # use the old distribution to force the new distribution to have
                 # consistant-in-time values at the boundary
                 # with bc = "Dirichlet" and r_diffusion = false
@@ -1152,7 +1238,8 @@ function enforce_electron_r_boundary_condition!(f::AbstractArray{mk_float,ndim_p
                 @begin_vperp_vpa_region()
                 for (iz_section, iz) ∈ enumerate(section.z_range)
                     @loop_vperp_vpa ivperp ivpa begin
-                        if r_diffusion || adv[1].speed[ir,ivpa,ivperp,iz] > zero
+                        if r_diffusion || (ir == 1 ? adv[1].speed[ir,ivpa,ivperp,iz] > zero
+                                                   : adv[1].speed[ir,ivpa,ivperp,iz] < -zero)
                             f[ivpa,ivperp,iz,ir] = f_boundary[ivpa,ivperp,iz_section]
                         end
                     end
@@ -1163,15 +1250,19 @@ function enforce_electron_r_boundary_condition!(f::AbstractArray{mk_float,ndim_p
                 @begin_serial_region()
                 @serial_region begin
                     for (iz_section, iz) ∈ enumerate(section.z_range)
-                        # For now, assume always have r-diffusion for moments
-                        #if r_diffusion || moment_speed[ir,iz] > zero
+                        if r_diffusion || (ir == 1 ? moment_r_speed[iz,ir] > zero
+                                                   : moment_r_speed[iz,ir] < -zero)
                             density[iz,ir] = n_boundary[iz_section]
                             upar[iz,ir] = u_boundary[iz_section]
                             p[iz,ir] = p[iz_section]
-                        #end
+                        end
                     end
                 end
             elseif isa(electron_section, electron_r_boundary_section_Neumann)
+                # with bc = "Neumann" and r_diffusion = false
+                # impose bc for incoming parts of velocity space only (Hyperbolic PDE)
+                # with bc = "Neumann" and r_diffusion = true
+                # impose bc on both sides of the domain to accomodate a diffusion operator d^2 / d r^2
                 one_over_logarithmic_gradient_value_minus_Db =
                     electron_section.one_over_logarithmic_gradient_value_minus_Db
                 derivative_coefficients = electron_section.derivative_coefficients
@@ -1183,27 +1274,33 @@ function enforce_electron_r_boundary_condition!(f::AbstractArray{mk_float,ndim_p
                 @begin_vperp_vpa_region()
                 for (iz_section, iz) ∈ enumerate(section.z_range)
                     @loop_vperp_vpa ivperp ivpa begin
-                        @views f[ivpa,ivperp,iz,ir,is] =
-                            dot(derivative_coefficients,
-                                f[ivpa,ivperp,iz,other_elements_range,is]) *
-                            one_over_logarithmic_gradient_value_minus_Db
+                        if r_diffusion || (ir == 1 ? adv[1].speed[ir,ivpa,ivperp,iz] > zero
+                                                   : adv[1].speed[ir,ivpa,ivperp,iz] < -zero)
+                            @views f[ivpa,ivperp,iz,ir,is] =
+                                dot(derivative_coefficients,
+                                    f[ivpa,ivperp,iz,other_elements_range,is]) *
+                                one_over_logarithmic_gradient_value_minus_Db
+                        end
                     end
                 end
                 @begin_serial_region()
                 @serial_region begin
                     for iz ∈ section.z_range
-                        @views density[iz,ir] =
-                            dot(derivative_coefficients,
-                                density[iz,other_elements_range]) *
-                            one_over_logarithmic_gradient_value_minus_Db
-                        @views upar[iz,ir] =
-                            dot(derivative_coefficients,
-                                upar[iz,other_elements_range]) *
-                            one_over_logarithmic_gradient_value_minus_Db
-                        @views p[iz,ir] =
-                            dot(derivative_coefficients,
-                                p[iz,other_elements_range]) *
-                            one_over_logarithmic_gradient_value_minus_Db
+                        if r_diffusion || (ir == 1 ? moment_r_speed[iz,ir] > zero
+                                                   : moment_r_speed[iz,ir] < -zero)
+                            @views density[iz,ir] =
+                                dot(derivative_coefficients,
+                                    density[iz,other_elements_range]) *
+                                one_over_logarithmic_gradient_value_minus_Db
+                            @views upar[iz,ir] =
+                                dot(derivative_coefficients,
+                                    upar[iz,other_elements_range]) *
+                                one_over_logarithmic_gradient_value_minus_Db
+                            @views p[iz,ir] =
+                                dot(derivative_coefficients,
+                                    p[iz,other_elements_range]) *
+                                one_over_logarithmic_gradient_value_minus_Db
+                        end
                     end
                 end
             else
@@ -1217,11 +1314,12 @@ end
 enforce boundary conditions on neutral particle distribution function
 """
 @timeit global_timer enforce_neutral_boundary_conditions!(
-                         f_neutral, f_ion, density_neutral, uz_neutral, p_neutral,
-                         boundaries::boundary_info, moments, density_ion, upar_ion, Er,
-                         vzeta_spectral, vr_spectral, vz_spectral, r_adv, z_adv,
-                         vzeta_adv, vr_adv, vz_adv, r, z, vzeta, vr, vz, composition,
-                         geometry, scratch_dummy, r_diffusion, vz_diffusion) = begin
+                         f_neutral, f_ion, density_neutral, uz_neutral, ur_neutral,
+                         p_neutral, boundaries::boundary_info, moments, density_ion,
+                         upar_ion, Er, vzeta_spectral, vr_spectral, vz_spectral, r_adv,
+                         z_adv, vzeta_adv, vr_adv, vz_adv, r, z, vzeta, vr, vz,
+                         composition, geometry, scratch_dummy, r_diffusion,
+                         vz_diffusion) = begin
 
     # without acceleration of neutrals bc on vz vr vzeta should not be required as no
     # advection or diffusion in these coordinates
@@ -1268,7 +1366,7 @@ enforce boundary conditions on neutral particle distribution function
     end
     if r.n > 1
         enforce_neutral_r_boundary_condition!(f_neutral, density_neutral, uz_neutral,
-            p_neutral, boundaries.r, r_adv, vz, vr, vzeta, z, r, composition,
+            ur_neutral, p_neutral, boundaries.r, r_adv, vz, vr, vzeta, z, r, composition,
             scratch_dummy.buffer_vzvrvzetazsn_1, scratch_dummy.buffer_vzvrvzetazsn_2,
             scratch_dummy.buffer_vzvrvzetazsn_3, scratch_dummy.buffer_vzvrvzetazsn_4,
             r_diffusion)
@@ -1281,14 +1379,16 @@ enforce boundary conditions on neutrals in r
 function enforce_neutral_r_boundary_condition!(
         f::AbstractArray{mk_float,ndim_pdf_neutral},
         density::AbstractArray{mk_float,ndim_moment},
-        uz::AbstractArray{mk_float,ndim_moment}, p::AbstractArray{mk_float,ndim_moment},
-        r_boundaries::r_boundary_info, adv, vz, vr, vzeta, z, r, composition,
+        uz::AbstractArray{mk_float,ndim_moment}, ur::AbstractArray{mk_float,ndim_moment},
+        p::AbstractArray{mk_float,ndim_moment}, r_boundaries::r_boundary_info, adv, vz,
+        vr, vzeta, z, r, composition,
         end1::AbstractArray{mk_float,ndim_pdf_neutral_boundary},
         end2::AbstractArray{mk_float,ndim_pdf_neutral_boundary},
         buffer1::AbstractArray{mk_float,ndim_pdf_neutral_boundary},
         buffer2::AbstractArray{mk_float,ndim_pdf_neutral_boundary}, r_diffusion::Bool)
 
     nr = r.n
+    zero = 1.0e-10
 
     if r.nelement_global > r.nelement_local
         # reconcile internal element boundaries across processes
@@ -1369,7 +1469,6 @@ function enforce_neutral_r_boundary_condition!(
                     end
                 end
             elseif isa(neutral_section, neutral_r_boundary_section_Dirichlet)
-                zero = 1.0e-10
                 # use the old distribution to force the new distribution to have
                 # consistant-in-time values at the boundary
                 # with bc = "Dirichlet" and r_diffusion = false
@@ -1381,7 +1480,8 @@ function enforce_neutral_r_boundary_condition!(
                 @loop_sn isn begin
                     for (iz_section, iz) ∈ enumerate(section.z_range)
                         @loop_vzeta_vr_vz ivzeta ivr ivz begin
-                            if r_diffusion || adv[isn].speed[ir,ivz,ivr,ivzeta,iz] > zero
+                            if r_diffusion || (ir == 1 ? adv[isn].speed[ir,ivz,ivr,ivzeta,iz] > zero
+                                                       : adv[isn].speed[ir,ivz,ivr,ivzeta,iz] < -zero)
                                 f[ivz,ivr,ivzeta,iz,ir,isn] = f_boundary[ivz,ivr,ivzeta,iz_section,isn]
                             end
                         end
@@ -1393,15 +1493,19 @@ function enforce_neutral_r_boundary_condition!(
                 @begin_sn_region()
                 @loop_sn isn begin
                     for (iz_section, iz) ∈ enumerate(section.z_range)
-                        # For now, assume always have r-diffusion for moments
-                        #if r_diffusion || moment_speed[ir,iz] > zero
+                        if r_diffusion || (ir == 1 ? ur[iz,ir,isn] > zero
+                                                   : ur[iz,ir,isn] < -zero)
                             density[iz,ir,isn] = n_boundary[iz_section,isn]
                             uz[iz,ir,isn] = u_boundary[iz_section,isn]
                             p[iz,ir,isn] = p[iz_section,isn]
-                        #end
+                        end
                     end
                 end
             elseif isa(neutral_section, neutral_r_boundary_section_Neumann)
+                # with bc = "Neumann" and r_diffusion = false
+                # impose bc for incoming parts of velocity space only (Hyperbolic PDE)
+                # with bc = "Neumann" and r_diffusion = true
+                # impose bc on both sides of the domain to accomodate a diffusion operator d^2 / d r^2
                 one_over_logarithmic_gradient_value_minus_Db =
                     neutral_section.one_over_logarithmic_gradient_value_minus_Db
                 derivative_coefficients = neutral_section.derivative_coefficients
@@ -1414,28 +1518,34 @@ function enforce_neutral_r_boundary_condition!(
                 @loop_sn isn begin
                     for (iz_section, iz) ∈ enumerate(section.z_range)
                         @loop_vzeta_vr_vz ivzeta ivr ivz begin
-                            @views f[ivz,ivr,ivzeta,iz,ir,isn] =
-                                dot(derivative_coefficients,
-                                    f[ivz,ivr,ivzeta,iz,other_elements_range,isn]) *
-                                one_over_logarithmic_gradient_value_minus_Db
+                            if r_diffusion || (ir == 1 ? adv[isn].speed[ir,ivz,ivr,ivzeta,iz] > zero
+                                                       : adv[isn].speed[ir,ivz,ivr,ivzeta,iz] < -zero)
+                                @views f[ivz,ivr,ivzeta,iz,ir,isn] =
+                                    dot(derivative_coefficients,
+                                        f[ivz,ivr,ivzeta,iz,other_elements_range,isn]) *
+                                    one_over_logarithmic_gradient_value_minus_Db
+                            end
                         end
                     end
                 end
                 @begin_sn_region()
                 @loop_sn isn begin
                     for iz ∈ section.z_range
-                        @views density[iz,ir,isn] =
-                            dot(derivative_coefficients,
-                                density[iz,other_elements_range,isn]) *
-                            one_over_logarithmic_gradient_value_minus_Db
-                        @views uz[iz,ir,isn] =
-                            dot(derivative_coefficients,
-                                uz[iz,other_elements_range,isn]) *
-                            one_over_logarithmic_gradient_value_minus_Db
-                        @views p[iz,ir,isn] =
-                            dot(derivative_coefficients,
-                                p[iz,other_elements_range,isn]) *
-                            one_over_logarithmic_gradient_value_minus_Db
+                        if r_diffusion || (ir == 1 ? ur[iz,ir,isn] > zero
+                                                   : ur[iz,ir,isn] < -zero)
+                            @views density[iz,ir,isn] =
+                                dot(derivative_coefficients,
+                                    density[iz,other_elements_range,isn]) *
+                                one_over_logarithmic_gradient_value_minus_Db
+                            @views uz[iz,ir,isn] =
+                                dot(derivative_coefficients,
+                                    uz[iz,other_elements_range,isn]) *
+                                one_over_logarithmic_gradient_value_minus_Db
+                            @views p[iz,ir,isn] =
+                                dot(derivative_coefficients,
+                                    p[iz,other_elements_range,isn]) *
+                                one_over_logarithmic_gradient_value_minus_Db
+                        end
                     end
                 end
             else
@@ -1521,7 +1631,7 @@ function enforce_neutral_z_boundary_condition!(pdf, density, uz, pz, moments, de
             end
         end
     # 'periodic' BC enforces periodicity by taking the average of the boundary points
-    elseif z.bc == "periodic" && z.nelement_global == z.nelement_local
+    elseif z.periodic && z.nelement_global == z.nelement_local
         @begin_sn_r_vzeta_vr_vz_region()
         @loop_sn_r_vzeta_vr_vz isn ir ivzeta ivr ivz begin
             pdf[ivz,ivr,ivzeta,1,ir,isn] = 0.5*(pdf[ivz,ivr,ivzeta,1,ir,isn] +
@@ -2322,7 +2432,7 @@ function enforce_v_boundary_condition_local!(f, bc, speed, v_diffusion, v, v_spe
         D0 = v_spectral.lobatto.Dmat[end,:]
         # adjust F(vpa = L/2) so that d F / d vpa = 0 at vpa = L/2
         f[end] = -sum(D0[1:v.ngrid-1].*f[end-v.ngrid+1:end-1])/D0[v.ngrid]
-    elseif bc == "periodic"
+    elseif v.periodic
         f[1] = 0.5*(f[1]+f[end])
         f[end] = f[1]
     elseif bc == "none"

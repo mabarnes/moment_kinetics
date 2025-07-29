@@ -2222,8 +2222,8 @@ function apply_electron_bc_and_constraints!(this_scratch, phi, moments, r, z, vp
     A = moments.electron.constraints_A_coefficient
     B = moments.electron.constraints_B_coefficient
     C = moments.electron.constraints_C_coefficient
-    skip_first = z.irank == 0 && z.bc != "periodic"
-    skip_last = z.irank == z.nrank - 1 && z.bc != "periodic"
+    skip_first = z.irank == 0 && !z.periodic
+    skip_last = z.irank == z.nrank - 1 && !z.periodic
     @loop_r_z ir iz begin
         if (iz == 1 && skip_first) || (iz == z.n && skip_last)
             continue
@@ -2316,8 +2316,8 @@ function apply_electron_bc_and_constraints_no_r!(f_electron, phi, moments, r, z,
     A = moments.electron.constraints_A_coefficient
     B = moments.electron.constraints_B_coefficient
     C = moments.electron.constraints_C_coefficient
-    skip_first = z.irank == 0 && z.bc != "periodic"
-    skip_last = z.irank == z.nrank - 1 && z.bc != "periodic"
+    skip_first = z.irank == 0 && !z.periodic
+    skip_last = z.irank == z.nrank - 1 && !z.periodic
     @loop_z iz begin
         if (iz == 1 && skip_first) || (iz == z.n && skip_last)
             continue
@@ -2866,7 +2866,7 @@ end
         enforce_vperp_boundary_condition!(pdf, vperp.bc, vperp, vperp_spectral, ir)
     end
 
-    if z.bc == "periodic"
+    if z.periodic
         # Nothing more to do for z-periodic boundary conditions
         return true
     elseif z.bc == "constant"

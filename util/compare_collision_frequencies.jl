@@ -9,11 +9,10 @@ function compare_collision_frequencies(input_file::String,
 
     input = moment_kinetics.moment_kinetics_input.read_input_file(input_file)
 
-    io_input, evolve_moments, t_input, z, z_spectral, r, r_spectral, vpa,
-    vpa_spectral, vperp, vperp_spectral, gyrophase, gyrophase_spectral, vz, vz_spectral,
-    vr, vr_spectral, vzeta, vzeta_spectral, composition, species, collisions,
-    geometry, em_input, external_source_settings, num_diss_params,
-    manufactured_solns_input =
+    io_input, evolve_moments, t_input, z, z_spectral, r, r_spectral, vpa, vpa_spectral,
+    vperp, vperp_spectral, gyrophase, gyrophase_spectral, vz, vz_spectral, vr,
+    vr_spectral, vzeta, vzeta_spectral, composition, species, collisions, geometry,
+    em_input, num_diss_params, manufactured_solns_input =
         moment_kinetics.moment_kinetics_input.mk_input(input)
 
     dimensional_parameters =

@@ -1108,7 +1108,7 @@ function calculate_ion_qpar_from_coll_krook!(qpar, density, upar, vth, dT_dz, z,
     # (in this case shape function) whose cutoff boundary condition can hold the parallel heat
     # flux in check. See Stangeby textbook, equations (2.92) and (2.93), and the paragraph between.
 
-    if z.bc == "periodic"
+    if z.bc != "wall"
         # There's no wall boundary condition here, do nothing (qpar can be what it wants)
         return nothing
     end
