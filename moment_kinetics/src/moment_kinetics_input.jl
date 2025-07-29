@@ -547,9 +547,9 @@ function check_coordinate_input(coord, coord_name, io)
             error("finite_difference discretization is not supported for the radial "
                   * "dimension because it does not (yet?) support boundary conditions "
                   * "implemented using `r_boundary_section`s.")
-        elseif coord.bc != "default"
-            error("Radial boundary conditions should be set in [inner_r_bc_*] and "
-                  * "[outer_r_bc_*] sections, not in [r], but got "
+        elseif coord.bc ∉ ("default", "periodic")
+            error("Radial boundary conditions other than \"periodic\" should be set in "
+                  * "[inner_r_bc_*] and [outer_r_bc_*] sections, not in [r], but got "
                   * "bc=$(coord_input_dict["bc"]) in [r] section.")
         end
     elseif coord.bc == "constant"
@@ -562,7 +562,7 @@ function check_coordinate_input(coord, coord_name, io)
         println(io,">$coord_name.bc = 'zero_gradient'.  enforcing zero gradients at both limits of $coord_name domain.")
     elseif coord.bc == "both_zero"
         println(io,">$coord_name.bc = 'both_zero'.  enforcing zero BC in $coord_name.")
-    elseif coord.bc == "periodic"
+    elseif coord.periodic
         println(io,">$coord_name.bc = 'periodic'.  enforcing periodicity in $coord_name.")
     elseif coord_name == "z" && coord.bc == "wall"
         println(io,">$coord_name.bc = 'wall'.  enforcing wall BC in $coord_name.")

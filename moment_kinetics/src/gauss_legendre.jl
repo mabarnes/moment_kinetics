@@ -147,7 +147,7 @@ function setup_gausslegendre_pseudospectral(coord; collision_operator_dim=true)
     D_matrix = allocate_float(coord.n,coord.n)
 
     dirichlet_bc = (coord.bc in ["zero", "constant"]) # and further options in future
-    periodic_bc = (coord.bc == "periodic")
+    periodic_bc = coord.periodic
     setup_global_weak_form_matrix!(mass_matrix, lobatto, radau, coord, "M"; periodic_bc=periodic_bc)
     setup_global_weak_form_matrix!(K_matrix, lobatto, radau, coord, "K_with_BC_terms"; periodic_bc=periodic_bc)
     setup_global_weak_form_matrix!(L_matrix, lobatto, radau, coord, "L_with_BC_terms")
@@ -1370,7 +1370,7 @@ function get_KK_local!(QQ,ielement,
             end
         else # assume integrals of form int^infty_-infty (.) d vpa
             @. QQ = lobatto.K0/scale_factor
-            if coord.bc != "periodic"
+            if !coord.periodic
                 # boundary terms from integration by parts
                 if explicit_BC_terms && ielement == 1 && coord.irank == 0
                     @. QQ[1,:] -= lobatto.Dmat[1,:]/scale_factor
@@ -1461,7 +1461,7 @@ function get_LL_local!(QQ,ielement,
             end
         else # d^2 (.) d vpa^2 -- assume integrals of form int^infty_-infty (.) d vpa
             @. QQ = lobatto.K0/scale_factor
-            if coord.bc != "periodic"
+            if !coord.periodic
                 # boundary terms from integration by parts
                 if explicit_BC_terms && ielement == 1 && coord.irank == 0
                     @. QQ[1,:] -= lobatto.Dmat[1,:]/scale_factor

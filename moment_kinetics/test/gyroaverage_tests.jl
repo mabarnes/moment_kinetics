@@ -123,8 +123,6 @@ function gyroaverage_test(absolute_error; rhostar=0.1, pitch=0.5, ngrid=5, kr=2,
                              "nelement_local"=>r_nelement_local, "L"=>r_L,
                              "discretization"=>discretization, "cheb_option"=>cheb_option,
                              "element_spacing_option"=>element_spacing_option),
-            "inner_r_bc_1"=>OptionsDict("bc"=>r_bc),
-            "outer_r_bc_1"=>OptionsDict("bc"=>r_bc),
             "z"=>OptionsDict("ngrid"=>z_ngrid, "nelement"=>z_nelement_global,
                              "nelement_local"=>z_nelement_local, "L"=>z_L,
                              "discretization"=>discretization, "cheb_option"=>cheb_option,
@@ -150,6 +148,12 @@ function gyroaverage_test(absolute_error; rhostar=0.1, pitch=0.5, ngrid=5, kr=2,
             "composition" => OptionsDict("n_ion_species" => 1, "n_neutral_species" => 0,
                                          "ion_physics" => "gyrokinetic_ions"),
         )
+        if r_bc == "periodic"
+            test_input["r"]["bc"] = "periodic"
+        else
+            test_input["inner_r_bc_1"] = OptionsDict("bc"=>r_bc)
+            test_input["outer_r_bc_1"] = OptionsDict("bc"=>r_bc)
+        end
 
         fields = composition = r = z = vperp = vpa = geometry = gyroavs = nothing
         quietoutput() do

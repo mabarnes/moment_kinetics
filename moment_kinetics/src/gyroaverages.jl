@@ -66,16 +66,11 @@ function init_gyro_operators(vperp, z, r, gyrophase, geometry, boundaries, compo
            rlist = allocate_float(gyrophase.n)
            zelementlist = allocate_int(gyrophase.n)
            relementlist = allocate_int(gyrophase.n)
-           z_periodic = (z.bc == "periodic")
+           z_periodic = z.periodic
            if length(boundaries.r.inner_sections) > 1 || length(boundaries.r.outer_sections) > 1
                error("gyroaverages do not support multiple r boundary conditions yet")
-           elseif isa(boundaries.r.inner_sections[1].ion, ion_r_boundary_section_periodic)
-               # Have already checked that periodic bc are consistent between inner and
-               # outer boundaries.
-               r_periodic = true
-           else
-               r_periodic = false
            end
+           r_periodic = r.periodic
            
            @loop_s_r_z_vperp is ir iz ivperp begin
                #println("ivperp, iz, ir: ",ivperp," ",iz," ",ir)

@@ -32,7 +32,12 @@ function create_boundary_info(input_dict, pdf, moments, r, z, vperp, vpa, vzeta,
                                                 composition, zero))
 end
 
-function read_r_sections_input(input_dict, warn_unexpected)
+function read_r_sections_input(input_dict, periodic, warn_unexpected)
+    if periodic
+        default_bc = "periodic"
+    else
+        default_bc = "Neumann"
+    end
     inner_sections_counter = 1
     inner_input = OptionsDict[]
     element_lower = 1
@@ -42,7 +47,7 @@ function read_r_sections_input(input_dict, warn_unexpected)
         this_input = deepcopy(set_defaults_and_check_section!(
             input_dict, section_name, warn_unexpected;
             nelement=-1,
-            bc="Neumann",
+            bc=default_bc,
             ion_bc="default",
             electron_bc="default",
             neutral_bc="default",
@@ -69,6 +74,15 @@ function read_r_sections_input(input_dict, warn_unexpected)
         end
     end
 
+    if periodic && (!single_section
+                    || inner_input[1]["bc"] != "periodic"
+                    || inner_input[1]["ion_bc"] ∉ ("default", "periodic")
+                    || inner_input[1]["electron_bc"] ∉ ("default", "periodic")
+                    || inner_input[1]["neutral_bc"] ∉ ("default", "periodic"))
+        error("When r is periodic, cannot specify different boundary conditions with "
+              * "inner_r_bc_* or outer_r_bc_*")
+    end
+
     outer_sections_counter = 1
     outer_input = OptionsDict[]
     element_lower = 1
@@ -78,7 +92,7 @@ function read_r_sections_input(input_dict, warn_unexpected)
         this_input = deepcopy(set_defaults_and_check_section!(
             input_dict, section_name, warn_unexpected;
             nelement=-1,
-            bc="Neumann",
+            bc=default_bc,
             ion_bc="default",
             electron_bc="default",
             neutral_bc="default",
@@ -105,12 +119,22 @@ function read_r_sections_input(input_dict, warn_unexpected)
         end
     end
 
+    if periodic && (!single_section
+                    || outer_input[1]["bc"] != "periodic"
+                    || outer_input[1]["ion_bc"] ∉ ("default", "periodic")
+                    || outer_input[1]["electron_bc"] ∉ ("default", "periodic")
+                    || outer_input[1]["neutral_bc"] ∉ ("default", "periodic"))
+        error("When r is periodic, cannot specify different boundary conditions with "
+              * "inner_r_bc_* or outer_r_bc_*")
+    end
+
     return inner_input, outer_input
 end
 
 function create_r_boundary_info(input_dict, pdf, moments, r, z, vperp, vpa, vzeta, vr, vz,
                                 r_spectral, composition; warn_unexpected)
-    inner_input, outer_input = read_r_sections_input(input_dict, warn_unexpected)
+    inner_input, outer_input = read_r_sections_input(input_dict, r.periodic,
+                                                     warn_unexpected)
 
     if pdf !== nothing && moments !== nothing
         ion_pdf_inner = @view pdf.ion.norm[:,:,:,1,:]
@@ -358,8 +382,6 @@ function create_r_section(this_input, ion_pdf, ion_density, ion_upar, ion_p, ele
             this_input["$(species)_bc"] = this_input["bc"]
         end
         if this_input["$(species)_bc"] == "periodic"
-            # No boundary condition to impose, periodicity is imposed by communication
-            # when calculating derivatives.
             if species == "ion"
                 this_section = ion_r_boundary_section_periodic()
             elseif species == "electron"
@@ -1084,7 +1106,7 @@ function enforce_z_boundary_condition!(pdf, density, upar, p, fields, moments, b
             end
         end
     # 'periodic' BC enforces periodicity by taking the average of the boundary points
-    elseif bc == "periodic" && z.nelement_global == z.nelement_local
+    elseif z.periodic && z.nelement_global == z.nelement_local
         @begin_s_r_vperp_vpa_region()
         @loop_s_r_vperp_vpa is ir ivperp ivpa begin
             pdf[ivpa,ivperp,1,ir,is] = 0.5*(pdf[ivpa,ivperp,z.n,ir,is]+pdf[ivpa,ivperp,1,ir,is])
@@ -1609,7 +1631,7 @@ function enforce_neutral_z_boundary_condition!(pdf, density, uz, pz, moments, de
             end
         end
     # 'periodic' BC enforces periodicity by taking the average of the boundary points
-    elseif z.bc == "periodic" && z.nelement_global == z.nelement_local
+    elseif z.periodic && z.nelement_global == z.nelement_local
         @begin_sn_r_vzeta_vr_vz_region()
         @loop_sn_r_vzeta_vr_vz isn ir ivzeta ivr ivz begin
             pdf[ivz,ivr,ivzeta,1,ir,isn] = 0.5*(pdf[ivz,ivr,ivzeta,1,ir,isn] +
@@ -2410,7 +2432,7 @@ function enforce_v_boundary_condition_local!(f, bc, speed, v_diffusion, v, v_spe
         D0 = v_spectral.lobatto.Dmat[end,:]
         # adjust F(vpa = L/2) so that d F / d vpa = 0 at vpa = L/2
         f[end] = -sum(D0[1:v.ngrid-1].*f[end-v.ngrid+1:end-1])/D0[v.ngrid]
-    elseif bc == "periodic"
+    elseif v.periodic
         f[1] = 0.5*(f[1]+f[end])
         f[end] = f[1]
     elseif bc == "none"
