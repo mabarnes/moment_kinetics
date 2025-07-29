@@ -97,16 +97,19 @@ const neutral_moment_ddt_variables = ("neutral_ddens_dt", "neutral_dnupar_dt",
                                       "neutral_dupar_dt", "neutral_dp_dt",
                                       "neutral_dvth_dt")
 const ion_source_variables = ("external_source_amplitude",
+                              "external_source_T_array",
                               "external_source_density_amplitude",
                               "external_source_momentum_amplitude",
                               "external_source_pressure_amplitude",
                               "external_source_controller_integral")
 const neutral_source_variables = ("external_source_neutral_amplitude",
+                                  "external_source_neutral_T_array",
                                   "external_source_neutral_density_amplitude",
                                   "external_source_neutral_momentum_amplitude",
                                   "external_source_neutral_pressure_amplitude",
                                   "external_source_neutral_controller_integral")
 const electron_source_variables = ("external_source_electron_amplitude",
+                                   "external_source_electron_T_array",
                                    "external_source_electron_density_amplitude",
                                    "external_source_electron_momentum_amplitude",
                                    "external_source_electron_pressure_amplitude")

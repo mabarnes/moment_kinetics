@@ -206,6 +206,7 @@ function create_moments_ion(nz, nr, n_species, evolve_density, evolve_upar,
     n_sources = length(ion_source_settings)
     if any(x -> x.active, ion_source_settings)
         external_source_amplitude = allocate_shared_float(nz, nr, n_sources)
+        external_source_T_array = allocate_shared_float(nz, nr, n_sources)
         if evolve_density
             external_source_density_amplitude = allocate_shared_float(nz, nr, n_sources)
         else
@@ -233,6 +234,7 @@ function create_moments_ion(nz, nr, n_species, evolve_density, evolve_upar,
         end
     else
         external_source_amplitude = allocate_shared_float(1, 1, n_sources)
+        external_source_T_array = allocate_shared_float(1, 1, n_sources)
         external_source_density_amplitude = allocate_shared_float(1, 1, n_sources)
         external_source_momentum_amplitude = allocate_shared_float(1, 1, n_sources)
         external_source_pressure_amplitude = allocate_shared_float(1, 1, n_sources)
@@ -264,10 +266,10 @@ function create_moments_ion(nz, nr, n_species, evolve_density, evolve_upar,
         dupar_dr, dupar_dr_upwind, dupar_dz, dupar_dz_upwind, d2upar_dz2, dp_dr_upwind,
         dp_dz, dp_dz_upwind, d2p_dz2, dppar_dz, dqpar_dz, dvth_dr, dvth_dz, dT_dz,
         ddens_dt, dupar_dt, dnupar_dt, dp_dt, dvth_dt, entropy_production,
-        external_source_amplitude, external_source_density_amplitude,
-        external_source_momentum_amplitude, external_source_pressure_amplitude,
-        external_source_controller_integral, constraints_A_coefficient,
-        constraints_B_coefficient, constraints_C_coefficient)
+        external_source_amplitude, external_source_T_array,
+        external_source_density_amplitude, external_source_momentum_amplitude,
+        external_source_pressure_amplitude, external_source_controller_integral,
+        constraints_A_coefficient, constraints_B_coefficient, constraints_C_coefficient)
 end
 
 """
@@ -302,6 +304,7 @@ function create_moments_electron(nz, nr, electron_model, num_diss_params, n_sour
     parallel_friction_force = allocate_shared_float(nz, nr)
     # allocate arrays used for external sources (third index is for the different sources)
     external_source_amplitude = allocate_shared_float(nz, nr, n_sources)
+    external_source_T_array = allocate_shared_float(nz, nr, n_sources)
     external_source_density_amplitude = allocate_shared_float(nz, nr, n_sources)
     external_source_momentum_amplitude = allocate_shared_float(nz, nr, n_sources)
     external_source_pressure_amplitude = allocate_shared_float(nz, nr, n_sources)
@@ -373,11 +376,11 @@ function create_moments_electron(nz, nr, electron_model, num_diss_params, n_sour
         parallel_flow_updated, pressure, pressure_updated, parallel_pressure,
         perpendicular_pressure, temperature, temperature_updated, parallel_heat_flux,
         parallel_heat_flux_updated, thermal_speed, parallel_friction_force,
-        external_source_amplitude, external_source_density_amplitude,
-        external_source_momentum_amplitude, external_source_pressure_amplitude,
-        v_norm_fac, ddens_dz, dupar_dz, dp_dz, d2p_dz2, dppar_dz, dqpar_dz, dT_dz,
-        dT_dz_upwind, dvth_dz, dp_dt, dT_dt, dvth_dt, constraints_A_coefficient,
-        constraints_B_coefficient, constraints_C_coefficient)
+        external_source_amplitude, external_source_T_array,
+        external_source_density_amplitude, external_source_momentum_amplitude,
+        external_source_pressure_amplitude, v_norm_fac, ddens_dz, dupar_dz, dp_dz,
+        d2p_dz2, dppar_dz, dqpar_dz, dT_dz, dT_dz_upwind, dvth_dz, dp_dt, dT_dt, dvth_dt,
+        constraints_A_coefficient, constraints_B_coefficient, constraints_C_coefficient)
 end
 
 # neutral particles have natural mean velocities 
@@ -505,6 +508,7 @@ function create_moments_neutral(nz, nr, n_species, evolve_density, evolve_upar,
     n_sources = length(neutral_source_settings)
     if any(x -> x.active, neutral_source_settings)
         external_source_amplitude = allocate_shared_float(nz, nr, n_sources)
+        external_source_T_array = allocate_shared_float(nz, nr, n_sources)
         if evolve_density
             external_source_density_amplitude = allocate_shared_float(nz, nr, n_sources)
         else
@@ -532,6 +536,7 @@ function create_moments_neutral(nz, nr, n_species, evolve_density, evolve_upar,
         end
     else
         external_source_amplitude = allocate_shared_float(1, 1, n_sources)
+        external_source_T_array = allocate_shared_float(1, 1, n_sources)
         external_source_density_amplitude = allocate_shared_float(1, 1, n_sources)
         external_source_momentum_amplitude = allocate_shared_float(1, 1, n_sources)
         external_source_pressure_amplitude = allocate_shared_float(1, 1, n_sources)
@@ -560,10 +565,10 @@ function create_moments_neutral(nz, nr, n_species, evolve_density, evolve_upar,
         pzeta, pzeta_updated, qz, qz_updated, vth, v_norm_fac, ddens_dz, ddens_dz_upwind,
         d2dens_dz2, duz_dz, duz_dz_upwind, d2uz_dz2, dp_dz, dp_dz_upwind, d2p_dz2, dpz_dz,
         dqz_dz, dvth_dz, ddens_dt, duz_dt, dnuz_dt, dp_dt, dvth_dt,
-        external_source_amplitude, external_source_density_amplitude,
-        external_source_momentum_amplitude, external_source_pressure_amplitude,
-        external_source_controller_integral, constraints_A_coefficient,
-        constraints_B_coefficient, constraints_C_coefficient)
+        external_source_amplitude, external_source_T_array,
+        external_source_density_amplitude, external_source_momentum_amplitude,
+        external_source_pressure_amplitude, external_source_controller_integral,
+        constraints_A_coefficient, constraints_B_coefficient, constraints_C_coefficient)
 end
 
 """
