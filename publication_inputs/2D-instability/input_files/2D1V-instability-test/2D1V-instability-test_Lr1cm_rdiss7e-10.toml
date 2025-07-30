@@ -1,0 +1,107 @@
+[composition]
+T_wall = 0.1
+T_e = 0.2
+n_ion_species = 1
+n_neutral_species = 0
+
+[evolve_moments]
+density = false
+parallel_flow = false
+pressure = false
+
+[krook_collisions]
+use_krook = true
+
+[geometry]
+option = "constant-helical"
+pitch = 0.1
+
+[ion_source_1]
+active = true
+z_profile = "parabolic"
+z_width = 0.1
+z_relative_minimum = 0.5
+z_profile_T = "parabolic"
+z_width_T = 0.1
+z_relative_minimum_T = 0.5
+source_strength = 3.0
+source_T = 2.0
+
+[ion_species_1]
+initial_temperature = 0.03333333333333333
+initial_density = 1.0
+
+[z_IC_ion_species_1]
+initialization_option = "gaussian"
+density_amplitude = 0.001
+temperature_amplitude = 0.0
+density_phase = 0.0
+upar_amplitude = 1.0
+temperature_phase = 0.0
+upar_phase = 0.0
+width = 0.0125
+
+[vpa_IC_ion_species_1]
+initialization_option = "gaussian"
+density_amplitude = 1.0
+temperature_amplitude = 0.0
+density_phase = 0.0
+upar_amplitude = 0.0
+temperature_phase = 0.0
+upar_phase = 0.0
+
+[r]
+ngrid = 5
+discretization = "gausslegendre_pseudospectral"
+nelement = 4
+bc = "periodic"
+L = 1.0e-3 # equivalent to 1cm
+
+[z]
+ngrid = 5
+discretization = "gausslegendre_pseudospectral"
+nelement = 16
+#nelement_local = 8
+bc = "wall"
+element_spacing_option = "sqrt"
+L = 0.1 # 1m vertical height with pitch=0.1 corresponds to 10m of parallel connection length.
+
+[vpa]
+ngrid = 6
+discretization = "gausslegendre_pseudospectral"
+nelement = 15
+L = 40.0
+element_spacing_option = "coarse_tails8"
+bc = "zero"
+
+[timestepping]
+type = "Fekete4(3)"
+nstep = 1000000
+dt = 1.0e-5
+minimum_dt = 1.0e-5
+CFL_prefactor = 3.0
+rtol = 1.0e-5
+atol = 1.0e-12
+add_random_noise = 1.0e-9
+random_noise_seed = 1234
+nwrite = 25000
+nwrite_dfns = 25000
+steady_state_residual = true
+converged_residual_value = 1.0e-5
+
+[ion_numerical_dissipation]
+r_dissipation_coefficient = 7.0e-10
+#vpa_dissipation_coefficient = 1.0e-1
+#vpa_dissipation_coefficient = 1.0e-2
+#vpa_dissipation_coefficient = 1.0e-3
+#force_minimum_pdf_value = 0.0
+
+[electron_numerical_dissipation]
+#vpa_dissipation_coefficient = 2.0
+#force_minimum_pdf_value = 0.0
+
+[neutral_numerical_dissipation]
+#vz_dissipation_coefficient = 1.0e-1
+#vz_dissipation_coefficient = 1.0e-2
+#vz_dissipation_coefficient = 1.0e-3
+#force_minimum_pdf_value = 0.0
