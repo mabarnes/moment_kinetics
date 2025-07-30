@@ -10,6 +10,7 @@ export setup_dummy_and_buffer_arrays
 using MPI
 using OrderedCollections
 using Quadmath
+using Random
 using ..type_definitions
 using ..array_allocation: allocate_float, allocate_shared_float, allocate_shared_int, allocate_shared_bool
 using ..communication
@@ -849,6 +850,39 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
     check_sections!(input_dict)
 
     @begin_serial_region()
+
+    if t_input["add_random_noise"] > 0.0
+        # Add random noise to the ion/electron density to seed turbulence/instabilities.
+        @serial_region begin
+            rng = Random.default_rng()
+            if t_input["random_noise_seed"] ≥ 0
+                # Allow the seed to be specified so that simulaions are reproducible (at
+                # least when using a given version of Julia, Random, etc.).
+                # Add global_rank[] to ensure that all MPI processes get a different seed,
+                # so that the random numbers are not repeated between different processes.
+                Random.seed!(rng, t_input["random_noise_seed"] + global_rank[])
+            end
+            noise = 1.0 .+ t_input["add_random_noise"] .* rand(rng, mk_float, size(moments.ion.dens)...)
+            moments.ion.dens .*= noise
+
+            if !moments.evolve_density
+                # Also need to update distribution function when density is not normalised
+                # out.
+                for is ∈ 1:composition.n_ion_species, ir ∈ 1:r.n, iz ∈ 1:z.n
+                    pdf.ion.norm[:,:,iz,ir,is] .*= noise[iz,ir,is]
+                end
+            end
+        end
+        @_block_synchronize()
+        halo_swap!(moments.ion.dens, r, z)
+        if !moments.evolve_density
+            halo_swap!(pdf.ion.norm, r, z)
+        end
+        @_block_synchronize()
+        @serial_region begin
+            @views moments.electron.dens .= moments.ion.dens[:,:,1]
+        end
+    end
 
     # create an array of structs containing scratch arrays for the pdf and low-order moments
     # that may be evolved separately via fluid equations

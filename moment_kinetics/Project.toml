@@ -26,6 +26,7 @@ Preferences = "21216c6a-2e73-6563-6e65-726566657250"
 Primes = "27ebfcd6-29c5-5fa9-bf4b-fb8fc14df3ae"
 Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 Quadmath = "be4d8f0f-7fa4-5f49-b795-2f01399ab2dd"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 Revise = "295af30f-e4ad-537b-8983-00126c2a3abe"
 Roots = "f2b01f46-fcfa-551c-844a-d8ac1e96c665"
 SHA = "ea8e919c-243c-51af-8825-aaa63cd721ce"
@@ -51,8 +52,9 @@ file_io_netcdf = "NCDatasets"
 manufactured_solns_ext = ["Symbolics", "IfElse"]
 
 [compat]
-julia = "1.9.0"
+Random = "1.11.0"
 StableRNGs = "1"
+julia = "1.9.0"
 
 [extras]
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"

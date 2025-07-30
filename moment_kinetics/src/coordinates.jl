@@ -26,7 +26,8 @@ using OrderedCollections: OrderedDict
 """
 structure containing basic information related to coordinates
 """
-struct coordinate{T <: AbstractVector{mk_float}, Ti <: AbstractVector{mk_int}, Tbparams}
+struct coordinate{T <: AbstractVector{mk_float}, Ti <: AbstractVector{mk_int}, Tbparams,
+                  Tnext <: Union{mk_int,Cint}, Tprev <: Union{mk_int,Cint}}
     # name is the name of the variable associated with this coordiante
     name::String
     # n_global is the total number of grid points associated with this coordinate
@@ -43,6 +44,12 @@ struct coordinate{T <: AbstractVector{mk_float}, Ti <: AbstractVector{mk_int}, T
     nrank::mk_int
     # irank is the rank of this process
     irank::mk_int
+    # nextrank is the rank of the next process on the communicator for this coordinate
+    # (may be MPI.PROC_NULL if this is the last process and the dimension is not periodic)
+    nextrank::Tnext
+    # prevrank is the rank of the previous process on the communicator for this coordinate
+    # (may be MPI.PROC_NULL if this is the first process and the dimension is not periodic)
+    prevrank::Tprev
     # L is the box length in this coordinate
     L::mk_float
     # grid is the location of the grid points
@@ -417,6 +424,24 @@ function define_coordinate(coord_input::NamedTuple; parallel_io::Bool=false,
     end
 
     periodic = (coord_input.bc == "periodic")
+    if irank == nrank - 1
+        if periodic
+            nextrank = 0
+        else
+            nextrank = MPI.PROC_NULL
+        end
+    else
+        nextrank = irank + 1
+    end
+    if irank == 0
+        if periodic
+            prevrank = nrank - 1
+        else
+            prevrank = MPI.PROC_NULL
+        end
+    else
+        prevrank = irank - 1
+    end
 
     mask_low = allocate_float(n_local)
     mask_low .= 1.0
@@ -432,8 +457,8 @@ function define_coordinate(coord_input::NamedTuple; parallel_io::Bool=false,
         end
     end
     coord = coordinate(coord_input.name, n_global, n_local, coord_input.ngrid,
-        coord_input.nelement, coord_input.nelement_local, nrank, irank,
-        mk_float(coord_input.L), grid, cell_width, igrid, ielement, imin, imax,
+        coord_input.nelement, coord_input.nelement_local, nrank, irank, nextrank,
+        prevrank, mk_float(coord_input.L), grid, cell_width, igrid, ielement, imin, imax,
         igrid_full, coord_input.discretization, coord_input.finite_difference_option,
         coord_input.cheb_option, coord_input.bc, periodic,
         coord_input.boundary_parameters, wgts, uniform_grid, duniform_dgrid, scratch,

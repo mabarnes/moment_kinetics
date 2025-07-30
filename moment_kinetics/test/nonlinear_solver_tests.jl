@@ -50,7 +50,7 @@ function linear_test()
         z = collect(0:n-1) ./ (n-1)
         b = @. - z * (1.0 - z)
 
-        the_coord = coordinate("foo", n, n, n, 1, 1, 1, 0, 1.0, zeros(mk_float, 0),
+        the_coord = coordinate("foo", n, n, n, 1, 1, 1, 0, 0, 0, 1.0, zeros(mk_float, 0),
                                zeros(mk_float, 0), zeros(mk_int, 0), zeros(mk_int, 0),
                                zeros(mk_int, 0), zeros(mk_int, 0), zeros(mk_int, 0, 0),
                                "", "", "", "", false, nothing, zeros(mk_float, 0),
@@ -164,7 +164,7 @@ function nonlinear_test()
         z = collect(0:n-1) ./ (n-1)
         b = @. - z * (1.0 - z)
 
-        the_coord = coordinate("foo", n, n, n, 1, 1, 1, 0, 1.0, zeros(mk_float, 0),
+        the_coord = coordinate("foo", n, n, n, 1, 1, 1, 0, 0, 0, 1.0, zeros(mk_float, 0),
                                zeros(mk_float, 0), zeros(mk_int, 0), zeros(mk_int, 0),
                                zeros(mk_int, 0), zeros(mk_int, 0), zeros(mk_int, 0, 0),
                                "", "", "", "", false, nothing, zeros(mk_float, 0),

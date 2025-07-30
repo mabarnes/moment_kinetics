@@ -179,6 +179,8 @@ function mk_input(input_dict=OptionsDict("output" => OptionsDict("run_name" => "
         exact_output_times=false,
         type="SSPRK4",
         split_operators=false,
+        add_random_noise=-1.0,
+        random_noise_seed=-1,
         print_nT_live=false,
         steady_state_residual=false,
         converged_residual_value=-1.0,

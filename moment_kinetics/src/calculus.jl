@@ -547,7 +547,6 @@ end
     # -- this all-to-all block communicate here requires that this function is NOT called from within a parallelised loop
     # -- or from a @serial_region or from an if statment isolating a single rank on a block
     @_block_synchronize()
-    #if block_rank[] == 0 # lead process on this shared-memory block
     @serial_region begin
 
         # now deal with endpoints that are stored across ranks
@@ -562,23 +561,13 @@ end
         # receive_buffer[1] is for data received, send_buffer[1] is data to be sent
 
         # pass data from irank -> irank + 1, receive data from irank - 1
-        idst = mod(irank+1,nrank) # destination rank for sent data
-        isrc = mod(irank-1,nrank) # source rank for received data
-        #MRH what value should tag take here and below? Esp if nrank >= 32
-        rreq1 = MPI.Irecv!(receive_buffer1, comm; source=isrc, tag=1)
-        sreq1 = MPI.Isend(dfdx_upper_endpoints, comm; dest=idst, tag=1)
-        #print("$irank: Sending   $irank -> $idst = $dfdx_upper_endpoints\n")
+        rreq1 = MPI.Irecv!(receive_buffer1, comm; source=coord.prevrank, tag=1)
+        sreq1 = MPI.Isend(dfdx_upper_endpoints, comm; dest=coord.nextrank, tag=1)
 
         # pass data from irank -> irank - 1, receive data from irank + 1
-        idst = mod(irank-1,nrank) # destination rank for sent data
-        isrc = mod(irank+1,nrank) # source rank for received data
-        #MRH what value should tag take here and below? Esp if nrank >= 32
-        rreq2 = MPI.Irecv!(receive_buffer2, comm; source=isrc, tag=2)
-        sreq2 = MPI.Isend(dfdx_lower_endpoints, comm; dest=idst, tag=2)
-        #print("$irank: Sending   $irank -> $idst = $dfdx_lower_endpoints\n")
+        rreq2 = MPI.Irecv!(receive_buffer2, comm; source=coord.nextrank, tag=2)
+        sreq2 = MPI.Isend(dfdx_lower_endpoints, comm; dest=coord.prevrank, tag=2)
         stats = MPI.Waitall([rreq1, sreq1, rreq2, sreq2])
-        #print("$irank: Received $isrc -> $irank = $receive_buffer1\n")
-        #print("$irank: Received $isrc -> $irank = $receive_buffer2\n")
 
         # now update receive buffers, taking into account the reconciliation
         if irank == 0
@@ -662,24 +651,14 @@ function apply_adv_fac!(buffer::AbstractArray{mk_float,Ndims},adv_fac::AbstractA
 
         # send highest end point on THIS rank
         # pass data from irank -> irank + 1, receive data from irank - 1
-        idst = mod(irank+1,nrank) # destination rank for sent data
-        isrc = mod(irank-1,nrank) # source rank for received data
-        #MRH what value should tag take here and below? Esp if nrank >= 32
-        rreq1 = MPI.Irecv!(receive_buffer1, comm; source=isrc, tag=1)
-        sreq1 = MPI.Isend(dfdx_upper_endpoints, comm; dest=idst, tag=1)
-        #print("$irank: Sending   $irank -> $idst = $dfdx_upper_endpoints\n")
+        rreq1 = MPI.Irecv!(receive_buffer1, comm; source=coord.prevrank, tag=1)
+        sreq1 = MPI.Isend(dfdx_upper_endpoints, comm; dest=coord.nextrank, tag=1)
 
         # send lowest end point on THIS rank
         # pass data from irank -> irank - 1, receive data from irank + 1
-        idst = mod(irank-1,nrank) # destination rank for sent data
-        isrc = mod(irank+1,nrank) # source rank for received data
-        #MRH what value should tag take here and below? Esp if nrank >= 32
-        rreq2 = MPI.Irecv!(receive_buffer2, comm; source=isrc, tag=2)
-        sreq2 = MPI.Isend(dfdx_lower_endpoints, comm; dest=idst, tag=2)
-        #print("$irank: Sending   $irank -> $idst = $dfdx_lower_endpoints\n")
+        rreq2 = MPI.Irecv!(receive_buffer2, comm; source=coord.nextrank, tag=2)
+        sreq2 = MPI.Isend(dfdx_lower_endpoints, comm; dest=coord.prevrank, tag=2)
         stats = MPI.Waitall([rreq1, sreq1, rreq2, sreq2])
-        #print("$irank: Received $isrc -> $irank = $receive_buffer1\n")
-        #print("$irank: Received $isrc -> $irank = $receive_buffer2\n")
 
         # now update receive buffers, taking into account the reconciliation
         if irank == 0
@@ -741,23 +720,13 @@ end
         # receive_buffer[1] is for data received, send_buffer[1] is data to be sent
 
         # pass data from irank -> irank + 1, receive data from irank - 1
-        idst = mod(irank+1,nrank) # destination rank for sent data
-        isrc = mod(irank-1,nrank) # source rank for received data
-        #MRH what value should tag take here and below? Esp if nrank >= 32
-        rreq1 = MPI.Irecv!(receive_buffer1, comm; source=isrc, tag=1)
-        sreq1 = MPI.Isend(dfdx_upper_endpoints, comm; dest=idst, tag=1)
-        #print("$irank: Sending   $irank -> $idst = $dfdx_upper_endpoints\n")
+        rreq1 = MPI.Irecv!(receive_buffer1, comm; source=coord.prevrank, tag=1)
+        sreq1 = MPI.Isend(dfdx_upper_endpoints, comm; dest=coord.nextrank, tag=1)
 
         # pass data from irank -> irank - 1, receive data from irank + 1
-        idst = mod(irank-1,nrank) # destination rank for sent data
-        isrc = mod(irank+1,nrank) # source rank for received data
-        #MRH what value should tag take here and below? Esp if nrank >= 32
-        rreq2 = MPI.Irecv!(receive_buffer2, comm; source=isrc, tag=2)
-        sreq2 = MPI.Isend(dfdx_lower_endpoints, comm; dest=idst, tag=2)
-        #print("$irank: Sending   $irank -> $idst = $dfdx_lower_endpoints\n")
+        rreq2 = MPI.Irecv!(receive_buffer2, comm; source=coord.nextrank, tag=2)
+        sreq2 = MPI.Isend(dfdx_lower_endpoints, comm; dest=coord.prevrank, tag=2)
         stats = MPI.Waitall([rreq1, sreq1, rreq2, sreq2])
-        #print("$irank: Received $isrc -> $irank = $receive_buffer1\n")
-        #print("$irank: Received $isrc -> $irank = $receive_buffer2\n")
 
         # now update receive buffers, taking into account the reconciliation
         if irank == 0
@@ -821,24 +790,14 @@ end
 
         # send highest end point on THIS rank
         # pass data from irank -> irank + 1, receive data from irank - 1
-        idst = mod(irank+1,nrank) # destination rank for sent data
-        isrc = mod(irank-1,nrank) # source rank for received data
-        #MRH what value should tag take here and below? Esp if nrank >= 32
-        rreq1 = MPI.Irecv!(receive_buffer1, comm; source=isrc, tag=1)
-        sreq1 = MPI.Isend(dfdx_upper_endpoints, comm; dest=idst, tag=1)
-        #print("$irank: Sending   $irank -> $idst = $dfdx_upper_endpoints\n")
+        rreq1 = MPI.Irecv!(receive_buffer1, comm; source=coord.prevrank, tag=1)
+        sreq1 = MPI.Isend(dfdx_upper_endpoints, comm; dest=coord.nextrank, tag=1)
 
         # send lowest end point on THIS rank
         # pass data from irank -> irank - 1, receive data from irank + 1
-        idst = mod(irank-1,nrank) # destination rank for sent data
-        isrc = mod(irank+1,nrank) # source rank for received data
-        #MRH what value should tag take here and below? Esp if nrank >= 32
-        rreq2 = MPI.Irecv!(receive_buffer2, comm; source=isrc, tag=2)
-        sreq2 = MPI.Isend(dfdx_lower_endpoints, comm; dest=idst, tag=2)
-        #print("$irank: Sending   $irank -> $idst = $dfdx_lower_endpoints\n")
+        rreq2 = MPI.Irecv!(receive_buffer2, comm; source=coord.nextrank, tag=2)
+        sreq2 = MPI.Isend(dfdx_lower_endpoints, comm; dest=coord.prevrank, tag=2)
         stats = MPI.Waitall([rreq1, sreq1, rreq2, sreq2])
-        #print("$irank: Received $isrc -> $irank = $receive_buffer1\n")
-        #print("$irank: Received $isrc -> $irank = $receive_buffer2\n")
 
         # now update receive buffers, taking into account the reconciliation
         if irank == 0
