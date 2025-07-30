@@ -93,8 +93,8 @@ function setup_gausslegendre_pseudospectral(coord)
         @. refnodes = (coord.grid[imin:imax] - shift)/scale
         fem_coord_input[ielement] = element_coordinates(refnodes,scale,shift)
     end
-    lobatto = setup_gausslegendre_pseudospectral_lobatto(coord)
-    radau = setup_gausslegendre_pseudospectral_radau(coord)
+    lobatto = setup_gausslegendre_pseudospectral_base(coord,is_lobatto=true)
+    radau = setup_gausslegendre_pseudospectral_base(coord,is_lobatto=false)
 
     mass_matrix = allocate_float(coord.n,coord.n)
     K_matrix = allocate_float(coord.n,coord.n)
@@ -126,41 +126,33 @@ function setup_gausslegendre_pseudospectral(coord)
 end
 
 """
-Function that creates the `gausslegendre_base_info` struct for Lobatto points.
+Function that creates the `gausslegendre_base_info` struct for Lobatto and Radau points.
+Could be generalised to other sets of collocation points.
 """
-function setup_gausslegendre_pseudospectral_lobatto(coord)
-    x, w = gausslobatto(coord.ngrid)
-    x = mk_float.(x)
-    w = mk_float.(w)
+function setup_gausslegendre_pseudospectral_base(coord; is_lobatto=true)
+    if is_lobatto
+        x, w = gausslobatto(coord.ngrid)
+        x = mk_float.(x)
+        w = mk_float.(w)
+    else
+        # assume Radau points on (-1,1]
+        # Gauss-Radau points on [-1,1)
+        xr, wr = gaussradau(coord.ngrid)
+        # Gauss-Radau points on (-1,1]
+        x = mk_float.(-reverse(xr))
+        w = mk_float.(reverse(wr))
+    end
     Dmat = allocate_float(coord.ngrid, coord.ngrid)
     differentiation_matrix!(Dmat,x)
     indefinite_integration_matrix = allocate_float(coord.ngrid, coord.ngrid)
     integration_matrix!(indefinite_integration_matrix,x,coord.ngrid)
     D0 = allocate_float(coord.ngrid)
-    #@. D0 = Dmat[1,:] # values at lower extreme of element
+    # D0 is the vector such that D0*f = df/dcoord at lower extreme of element
+    # For Radau elements, we cannot get this information from Dmat[1,:], as
+    # Dmat*f = df/dcoord gets df/dcoord on grid points only.
     derivative_vector!(D0,-1.0,x)
-    return gausslegendre_base_info(true,Dmat,indefinite_integration_matrix,D0)
+    return gausslegendre_base_info(is_lobatto,Dmat,indefinite_integration_matrix,D0)
 end
-
-"""
-Function that creates the `gausslegendre_base_info` struct for Radau points.
-"""
-function setup_gausslegendre_pseudospectral_radau(coord)
-    # Gauss-Radau points on [-1,1)
-    x, w = gaussradau(coord.ngrid)
-    x = mk_float.(x)
-    w = mk_float.(w)
-    # Gauss-Radau points on (-1,1] 
-    xreverse, wreverse = -reverse(x), reverse(w)
-    # elemental differentiation matrix
-    Dmat = allocate_float(coord.ngrid, coord.ngrid)
-    differentiation_matrix!(Dmat,xreverse)
-    indefinite_integration_matrix = allocate_float(coord.ngrid, coord.ngrid)
-    integration_matrix!(indefinite_integration_matrix,xreverse,coord.ngrid)
-    D0 = allocate_float(coord.ngrid)
-    derivative_vector!(D0,-1.0,xreverse)
-    return gausslegendre_base_info(false,Dmat, indefinite_integration_matrix,D0)
-end 
 
 """
 A function that takes the first derivative in each element of `coord.grid`,
