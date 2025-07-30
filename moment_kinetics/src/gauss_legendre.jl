@@ -133,12 +133,12 @@ function setup_gausslegendre_pseudospectral_lobatto(coord)
     x = mk_float.(x)
     w = mk_float.(w)
     Dmat = allocate_float(coord.ngrid, coord.ngrid)
-    element_differentiation_matrix!(Dmat,x)
+    differentiation_matrix!(Dmat,x)
     indefinite_integration_matrix = allocate_float(coord.ngrid, coord.ngrid)
     integration_matrix!(indefinite_integration_matrix,x,coord.ngrid)
     D0 = allocate_float(coord.ngrid)
     #@. D0 = Dmat[1,:] # values at lower extreme of element
-    GaussLegendre_derivative_vector!(D0,-1.0,coord.ngrid,x,w)
+    derivative_vector!(D0,-1.0,x)
     return gausslegendre_base_info(true,Dmat,indefinite_integration_matrix,D0)
 end
 
@@ -154,11 +154,11 @@ function setup_gausslegendre_pseudospectral_radau(coord)
     xreverse, wreverse = -reverse(x), reverse(w)
     # elemental differentiation matrix
     Dmat = allocate_float(coord.ngrid, coord.ngrid)
-    element_differentiation_matrix!(Dmat,xreverse)
+    differentiation_matrix!(Dmat,xreverse)
     indefinite_integration_matrix = allocate_float(coord.ngrid, coord.ngrid)
     integration_matrix!(indefinite_integration_matrix,xreverse,coord.ngrid)
     D0 = allocate_float(coord.ngrid)
-    GaussLegendre_derivative_vector!(D0,-1.0,coord.ngrid,xreverse,wreverse,radau=true)
+    derivative_vector!(D0,-1.0,xreverse)
     return gausslegendre_base_info(false,Dmat, indefinite_integration_matrix,D0)
 end 
 
@@ -359,7 +359,7 @@ FiniteElementMatrices, valid for any set of nodes x.
 
 Note that D has does not include a scaling factor
 """
-function element_differentiation_matrix!(D::Array{mk_float,2},x::Array{mk_float,1})
+function differentiation_matrix!(D::Array{mk_float,2},x::Array{mk_float,1})
     ngrid = size(x,1)
     @boundscheck ngrid == size(D,1) && ngrid == size(D,2)
     # create the data needed to evaluate weak-form matrices for the nodes x
@@ -381,45 +381,27 @@ function element_differentiation_matrix!(D::Array{mk_float,2},x::Array{mk_float,
 end
 
 """
-Gauss-Legendre derivative at arbitrary x values, for boundary condition on Radau points.
+Derivative at arbitrary x values.
     D0 -- the vector
     xj -- the x location where the derivative is evaluated 
     ngrid -- number of points in x
     x -- the grid from -1, 1
 Note that D0 is not scaled to the physical grid with a scaling factor.
 """
-function GaussLegendre_derivative_vector!(D0,xj,ngrid,x,wgts;radau=false)
-    # coefficient in expansion of 
-    # lagrange polys in terms of Legendre polys
-    gamma = allocate_float(ngrid)
-    for i in 1:ngrid-1
-        gamma[i] = Legendre_h_n(i-1)
-    end
-    if radau
-        gamma[ngrid] = Legendre_h_n(ngrid-1)
-    else
-        gamma[ngrid] = 2.0/(ngrid - 1)
-    end
-    
+function derivative_vector!(D0,xj,x)
+    ngrid = size(x,1)
+    @boundscheck ngrid == size(D0,1)
+    # precompute quantities for Lagrange interpolation
+    lpoly_data = lagrange_poly_data(x)
     @. D0 = 0.0
     for i in 1:ngrid
-        for k in 1:ngrid
-            D0[i] += wgts[i]*Pl(x[i],k-1)*dnPl(xj,k-1,1)/gamma[k]
-        end
+        ith_lpoly_data = lpoly_data.lpoly_data[i]
+        D0[i] += lagrange_poly_derivative(ith_lpoly_data,xj)
     end
     # set `diagonal' value
     D0[1] = 0.0
     D0[1] = -sum(D0[:])
-    #@. D0 *= 2.0*float(nelement_global)/L
 end
-
-"""
-Result of the inner product of Legendre polynomials of order k.
-"""
-function Legendre_h_n(k)
-    h_n = 2.0/(2.0*k + 1)
-    return h_n
-end 
 
 """
 Function for setting up the full Gauss-Legendre-Lobatto
