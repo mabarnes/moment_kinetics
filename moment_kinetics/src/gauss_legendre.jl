@@ -133,7 +133,7 @@ function setup_gausslegendre_pseudospectral_lobatto(coord)
     x = mk_float.(x)
     w = mk_float.(w)
     Dmat = allocate_float(coord.ngrid, coord.ngrid)
-    gausslobattolegendre_differentiation_matrix!(Dmat,x,coord.ngrid)
+    element_differentiation_matrix!(Dmat,x)
     indefinite_integration_matrix = allocate_float(coord.ngrid, coord.ngrid)
     integration_matrix!(indefinite_integration_matrix,x,coord.ngrid)
     D0 = allocate_float(coord.ngrid)
@@ -154,7 +154,7 @@ function setup_gausslegendre_pseudospectral_radau(coord)
     xreverse, wreverse = -reverse(x), reverse(w)
     # elemental differentiation matrix
     Dmat = allocate_float(coord.ngrid, coord.ngrid)
-    gaussradaulegendre_differentiation_matrix!(Dmat,x,coord.ngrid)
+    element_differentiation_matrix!(Dmat,xreverse)
     indefinite_integration_matrix = allocate_float(coord.ngrid, coord.ngrid)
     integration_matrix!(indefinite_integration_matrix,xreverse,coord.ngrid)
     D0 = allocate_float(coord.ngrid)
@@ -351,75 +351,32 @@ function integration_matrix!(A::Array{Float64,2},x::Array{Float64,1},ngrid::Int6
 end
 
 """
-Formula for Gauss-Legendre-Lobatto differentiation matrix taken from p196 of Chpt `The Spectral Elemtent Method' of 
-`Computational Seismology'. Heiner Igel First Edition. Published in 2017 by Oxford University Press.
-Or https://doc.nektar.info/tutorials/latest/fundamentals/differentiation/fundamentals-differentiationch2.html
+Formula for Elemental differentiation matrix computed using
+FiniteElementMatrices, valid for any set of nodes x.
 
     D -- differentiation matrix 
-    x -- Gauss-Legendre-Lobatto points in [-1,1]
-    ngrid -- number of points per element (incl. boundary points)
+    x -- Collocation points in [-1,1]
 
 Note that D has does not include a scaling factor
 """
-function gausslobattolegendre_differentiation_matrix!(D::Array{mk_float,2},x::Array{mk_float,1},ngrid::mk_int)
-    D[:,:] .= 0.0
-    for ix in 1:ngrid
-        for ixp in 1:ngrid
-            if !(ix == ixp)
-                D[ix,ixp] = (Pl(x[ix],ngrid-1)/Pl(x[ixp],ngrid-1))/(x[ix]-x[ixp])
-            end
-        end
-    end
-    # uncomment for analytical diagonal values 
-    #D[1,1] = -0.25*(ngrid - 1)*ngrid
-    #D[ngrid,ngrid] = 0.25*(ngrid - 1)*ngrid
-    #for ix in 1:ngrid-1
-    #   D[ix,ix] = 0.0
-    #end
+function element_differentiation_matrix!(D::Array{mk_float,2},x::Array{mk_float,1})
+    ngrid = size(x,1)
+    @boundscheck ngrid == size(D,1) && ngrid == size(D,2)
+    # create the data needed to evaluate weak-form matrices for the nodes x
+    # with scale = 1.0, shift = 0.0, so final matrix is computed for reference nodes
+    fem_coord_input = element_coordinates(x,1.0,0.0)
+    # mass matrix on these nodes
+    M = finite_element_matrix(lagrange_x,lagrange_x,0,fem_coord_input)
+    # differentiation matrix on these nodes
+    P = finite_element_matrix(lagrange_x,d_lagrange_dx,0,fem_coord_input)
+    luM = lu(M)
+    # get differentiation matrix
+    ldiv!(D,luM,P)
     # get diagonal values from sum of nonzero off diagonal values 
     for ix in 1:ngrid
+        D[ix,ix] = 0.0
         D[ix,ix] = -sum(D[ix,:])
     end 
-    return nothing
-end
-
-"""
-Formula for Gauss-Legendre-Radau differentiation matrix taken from
-https://doc.nektar.info/tutorials/latest/fundamentals/differentiation/fundamentals-differentiationch2.html
-
-    D -- differentiation matrix 
-    x -- Gauss-Legendre-Radau points in [-1,1)
-    ngrid -- number of points per element (incl. boundary points)
-
-Note that D has does not include a scaling factor
-"""
-function gaussradaulegendre_differentiation_matrix!(D::Array{mk_float,2},x::Array{mk_float,1},ngrid::Int64)
-    D[:,:] .= 0.0
-    for ix in 1:ngrid
-        for ixp in 1:ngrid
-            if !(ix == ixp)
-                D[ix,ixp] = (Pl(x[ix],ngrid-1)/Pl(x[ixp],ngrid-1))*((1.0 - x[ixp])/(1.0 - x[ix]))/(x[ix]-x[ixp])
-            end
-        end
-    end
-    # uncomment for analytical diagonal values 
-    #D[1,1] = -0.25*(ngrid - 1)*(ngrid + 1)
-    #for ix in 2:ngrid
-    #   D[ix,ix] = 0.5/(1.0 - x[ix])
-    #end
-    # get diagonal values from sum of nonzero off diagonal values 
-    for ix in 1:ngrid
-        D[ix,ix] = -sum(D[ix,:])
-    end
-    
-    # get into correct order for a grid on (-1,1]
-    Dreverse = copy(D)
-    for ix in 1:ngrid
-        for ixp in 1:ngrid
-            Dreverse[ngrid-ix+1,ngrid-ixp+1] = -D[ix,ixp]
-        end
-    end
-    D .= Dreverse
     return nothing
 end
 
