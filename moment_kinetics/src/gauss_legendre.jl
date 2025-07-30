@@ -11,7 +11,6 @@ export setup_gausslegendre_pseudospectral
 export integration_matrix!
 
 using FastGaussQuadrature
-using LegendrePolynomials: Pl, dnPl
 using LinearAlgebra: mul!, lu, ldiv!
 using SparseArrays: sparse, AbstractSparseArray
 using SparseMatricesCSR

@@ -17,7 +17,6 @@ HDF5 = "f67ccb44-e63f-5c2f-98bd-6dc0ccc4ba2f"
 Interpolations = "a98d9a8b-a2ab-59e6-89dd-64a1c18fca59"
 JacobianFreeNewtonKrylov = "ea74541f-29a8-443c-83cd-bcc24bd49708"
 LagrangePolynomials = "fb83b288-ce1a-45f4-939e-c34c34051e49"
-LegendrePolynomials = "3db4a2ba-fc88-11e8-3e01-49c72059a882"
 LibGit2 = "76f85450-5226-5b5a-8eaa-529ad045b433"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 LsqFit = "2fda8390-95c7-5789-9bda-21331edee243"
@@ -73,4 +72,4 @@ Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["Random", "Test", "NCDatasets"]
+test = ["Random", "Test"]
