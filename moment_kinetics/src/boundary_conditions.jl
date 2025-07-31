@@ -242,6 +242,9 @@ function create_r_boundary_info(input_dict, pdf, moments, r, z, vperp, vpa, vzet
                       * "r-boundary for iz=$(s_inner.z_range) but no "
                       * "corresponding section found on the outer r-boundary.")
             end
+        elseif r.discretization == "fourier_pseudospectral"
+            error("r dimension is not fully periodic. Cannot use fourier_pseudospectral "
+                  * "for r dimension.")
         end
         if isa(s_inner.electron, electron_r_boundary_section_periodic)
             if r.nelement_local != r.nelement_global
@@ -256,6 +259,9 @@ function create_r_boundary_info(input_dict, pdf, moments, r, z, vperp, vpa, vzet
                       * "r-boundary for iz=$(s_inner.z_range) but no "
                       * "corresponding section found on the outer r-boundary.")
             end
+        elseif r.discretization == "fourier_pseudospectral"
+            error("r dimension is not fully periodic. Cannot use fourier_pseudospectral "
+                  * "for r dimension.")
         end
         if isa(s_inner.neutral, neutral_r_boundary_section_periodic)
             if r.nelement_local != r.nelement_global
@@ -270,6 +276,9 @@ function create_r_boundary_info(input_dict, pdf, moments, r, z, vperp, vpa, vzet
                       * "r-boundary for iz=$(s_inner.z_range) but no "
                       * "corresponding section found on the outer r-boundary.")
             end
+        elseif r.discretization == "fourier_pseudospectral"
+            error("r dimension is not fully periodic. Cannot use fourier_pseudospectral "
+                  * "for r dimension.")
         end
     end
 

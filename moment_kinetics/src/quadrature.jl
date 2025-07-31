@@ -7,6 +7,23 @@ export composite_simpson_weights
 using ..array_allocation: allocate_float
 
 """
+trapezium_weights creates, computes, and returns an array for the 1D integration weights
+associated with each grid point using the trapezium rule.
+"""
+function trapezium_weights(grid)
+    n = length(grid)
+    wgts = allocate_float(n)
+    # assume equal grid spacing
+    h = grid[2]-grid[1]
+
+    wgts[1] = h / 2.0
+    wgts[2:end-1] .= h
+    wgts[end] = h / 2.0
+
+    return wgts
+end
+
+"""
 composite_simpson_weights creates, computes, and returns an array for the
 1D integration weights associated with each grid point using composite Simpson's rule
 """

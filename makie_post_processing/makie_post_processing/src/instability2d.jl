@@ -166,11 +166,7 @@ function instability2D_plots(run_info, variable_name; plot_prefix, zind=nothing,
 
     time = run_info.time
 
-    if variable_name == "temperature"
-        variable = get_variable(run_info, "thermal_speed").^2
-    else
-        variable = get_variable(run_info, variable_name)
-    end
+    variable = get_variable(run_info, variable_name)
 
     if ndims(variable) == 4
         # Only support single species runs in this routine, so pick is=1
@@ -191,10 +187,10 @@ function instability2D_plots(run_info, variable_name; plot_prefix, zind=nothing,
                 end
             end
         end
-        function get_phase_velocity(phase, time, amplitude)
+        function get_real_frequency(phase, time, amplitude)
             # Assume that once the amplitude reaches 2x initial amplitude that the mode is
             # well established, so will be able to measure phase velocity
-            startind = findfirst(x -> x>amplitude[1], amplitude)
+            startind = findfirst(x -> x>2*amplitude[1], amplitude)
             if startind === nothing
                 startind = 1
             end
@@ -203,10 +199,10 @@ function instability2D_plots(run_info, variable_name; plot_prefix, zind=nothing,
             linear_model(x, param) = @. param[1]*x+param[2]
             fit = @views curve_fit(linear_model, time[startind:end], phase[startind:end],
                                    [0.0, 0.0])
-            phase_velocity = fit.param[1]
+            real_frequency = fit.param[1]
             phase_offset = fit.param[2]
 
-            return phase_velocity, phase_offset, startind
+            return real_frequency, phase_offset, startind
         end
         function get_growth_rate(amplitude, time)
             # Assume that once the amplitude reaches 2x initial amplitude that the mode is
@@ -287,13 +283,13 @@ function instability2D_plots(run_info, variable_name; plot_prefix, zind=nothing,
             phase = angle.(var[2,:])
             unravel_phase!(phase)
 
-            phase_velocity, phase_offset, startind =
-                get_phase_velocity(phase, time, @view amplitude[2,:])
-
             # ikr=2 is the n_r=1 mode, so...
-            omega_2 = phase_velocity*kr_2
+            omega_2, phase_offset, startind =
+                get_real_frequency(phase, time, @view amplitude[2,:])
 
-            println("for $symbol, kr=$kr_2, phase velocity is $phase_velocity, omega=$omega_2")
+            phase_velocity_2 = omega_2 / kr_2
+
+            println("for $symbol, kr=$kr_2, omega=$omega_2, phase velocity is $phase_velocity_2")
             println(mode_stats_file, "omega = $omega_2")
 
             if axes_and_observables === nothing
@@ -306,7 +302,7 @@ function instability2D_plots(run_info, variable_name; plot_prefix, zind=nothing,
             end
 
             plot_1d(time, phase, ax=ax, label="phase")
-            plot_1d(time, phase_offset.+phase_velocity.*time, ax=ax, label="fit")
+            plot_1d(time, phase_offset.+omega_2.*time, ax=ax, label="fit")
             vlines!(ax, [time[startind]], linestyle=:dot)
             axislegend(ax)
 

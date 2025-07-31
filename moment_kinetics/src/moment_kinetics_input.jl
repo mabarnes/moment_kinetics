@@ -534,6 +534,9 @@ function check_coordinate_input(coord, coord_name, io)
     elseif coord.discretization == "gausslegendre_pseudospectral"
         print(io,">$coord_name.discretization = 'gausslegendre_pseudospectral'.  ")
         println(io,"using a Gauss-Legendre-Lobatto pseudospectral method in $coord_name.")
+    elseif coord.discretization == "fourier_pseudospectral"
+        print(io,">$coord_name.discretization = 'fourier_pseudospectral'.  ")
+        println(io,"using a Fourier pseudospectral method in $coord_name.")
     elseif coord.discretization == "finite_difference"
         println(io,">$coord_name.discretization = 'finite_difference', ",
             "and $coord_name.finite_difference_option = ", coord.finite_difference_option,

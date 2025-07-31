@@ -22,7 +22,7 @@ function runtests()
         println("calculus tests")
         @testset "fundamental theorem of calculus" begin
             @testset "$discretization $ngrid $nelement $cheb_option" for
-                    (discretization, element_spacing_option, etol, cheb_option) ∈ (("finite_difference", "uniform", 1.0e-15, ""), ("chebyshev_pseudospectral", "uniform", 1.0e-15, "FFT"), ("chebyshev_pseudospectral", "uniform", 2.0e-15, "matrix"), ("chebyshev_pseudospectral", "sqrt", 1.0e-2, "FFT"), ("gausslegendre_pseudospectral", "uniform", 1.0e-14, "")),
+                    (discretization, element_spacing_option, etol, cheb_option) ∈ (("finite_difference", "uniform", 1.0e-15, ""), ("chebyshev_pseudospectral", "uniform", 1.0e-15, "FFT"), ("chebyshev_pseudospectral", "uniform", 2.0e-15, "matrix"), ("chebyshev_pseudospectral", "sqrt", 1.0e-2, "FFT"), ("gausslegendre_pseudospectral", "uniform", 1.0e-14, ""), ("fourier_pseudospectral", "uniform", 2.0e-15, "")),
                     ngrid ∈ (5,6,7,8,9,10), nelement ∈ (1, 2, 3, 4, 5)
 
                 if discretization == "finite_difference" && (ngrid - 1) * nelement % 2 == 1
@@ -33,10 +33,14 @@ function runtests()
                     # exact, so this test would fail
                     continue
                 end
+                if discretization == "fourier_pseudospectral" && nelement > 1
+                    # fourier_pseudospectral requires a single element.
+                    continue
+                end
 
                 # define inputs needed for the test
                 L = 6.0
-                if discretization == "finite_difference"
+                if discretization ∈ ("finite_difference", "fourier_pseudospectral")
                     bc = "periodic"
                 else
                     bc = "none"
@@ -1091,6 +1095,145 @@ function runtests()
             end
         end
 
+        @testset "Fourier pseudospectral derivatives (4 argument), periodic" verbose=false begin
+            @testset "$ngrid" for (ngrid, rtol) ∈
+                    (
+                     (5, 2.e-13),
+                     (6, 2.e-13),
+                     (7, 2.e-13),
+                     (8, 2.e-13),
+                     (9, 2.e-13),
+                     (10, 2.e-13),
+                     (11, 2.e-13),
+                     (12, 2.e-13),
+                     (13, 2.e-13),
+                     (14, 2.e-13),
+                     (15, 2.e-13),
+                     (16, 2.e-13),
+                     (17, 2.e-13),
+                     (18, 2.e-13),
+                     (19, 2.e-13),
+                     (20, 2.e-13),
+                     (21, 2.e-13),
+                     (22, 2.e-13),
+                     (23, 2.e-13),
+                     (24, 2.e-13),
+                     (25, 2.e-13),
+                     (26, 2.e-13),
+                     (27, 2.e-13),
+                     (28, 2.e-13),
+                     (29, 2.e-13),
+                     (30, 2.e-13),
+                     (31, 2.e-13),
+                     (32, 2.e-13),
+                     (33, 2.e-13),
+                    )
+
+                # define inputs needed for the test
+                nelement = 1
+                L = 6.0
+                bc = "periodic"
+                element_spacing_option = "uniform"
+                # create the coordinate struct 'x'
+                # This test runs effectively in serial, so implicitly uses
+                # `ignore_MPI=true` to avoid errors due to communicators not being fully
+                # set up.
+                x, spectral = define_test_coordinate("coord"; ngrid=ngrid,
+                                                     nelement=nelement, L=L,
+                                                     discretization="fourier_pseudospectral",
+                                                     cheb_option="", bc=bc,
+                                                     element_spacing_option=element_spacing_option,
+                                                     collision_operator_dim=false)
+
+                offset = randn(rng)
+                phase = 0.42
+                f = @. sinpi(2.0 * x.grid / L + phase) + offset
+                expected_df = @. 2.0 * π / L * cospi(2.0 * x.grid / L + phase)
+
+                # create array for the derivative df/dx
+                df = similar(f)
+
+                # differentiate f
+                derivative!(df, f, x, spectral)
+
+                @test isapprox(df, expected_df, rtol=rtol, atol=1.e-14,
+                               norm=maxabs_norm)
+                @test df[1] == df[end]
+            end
+        end
+
+        @testset "Fourier pseudospectral derivatives upwinding (5 argument), periodic" verbose=false begin
+            @testset "$ngrid" for (ngrid, rtol) ∈
+                    (
+                     (5, 2.e-13),
+                     (6, 2.e-13),
+                     (7, 2.e-13),
+                     (8, 2.e-13),
+                     (9, 2.e-13),
+                     (10, 2.e-13),
+                     (11, 2.e-13),
+                     (12, 2.e-13),
+                     (13, 2.e-13),
+                     (14, 2.e-13),
+                     (15, 2.e-13),
+                     (16, 2.e-13),
+                     (17, 2.e-13),
+                     (18, 2.e-13),
+                     (19, 2.e-13),
+                     (20, 2.e-13),
+                     (21, 2.e-13),
+                     (22, 2.e-13),
+                     (23, 2.e-13),
+                     (24, 2.e-13),
+                     (25, 2.e-13),
+                     (26, 2.e-13),
+                     (27, 2.e-13),
+                     (28, 2.e-13),
+                     (29, 2.e-13),
+                     (30, 2.e-13),
+                     (31, 2.e-13),
+                     (32, 2.e-13),
+                     (33, 2.e-13),
+                    )
+
+                # define inputs needed for the test
+                nelement = 1
+                L = 6.0
+                bc = "periodic"
+                element_spacing_option = "uniform"
+                # create the coordinate struct 'x'
+                # This test runs effectively in serial, so implicitly uses
+                # `ignore_MPI=true` to avoid errors due to communicators not being fully
+                # set up.
+                x, spectral = define_test_coordinate("coord"; ngrid=ngrid,
+                                                     nelement=nelement, L=L,
+                                                     discretization="fourier_pseudospectral",
+                                                     cheb_option="", bc=bc,
+                                                     element_spacing_option=element_spacing_option,
+                                                     collision_operator_dim=false)
+
+                offset = randn(rng)
+                phase = 0.42
+                f = @. sinpi(2.0 * x.grid / L + phase) + offset
+                expected_df = @. 2.0 * π / L * cospi(2.0 * x.grid / L + phase)
+
+                # create array for the derivative df/dx
+                df = similar(f)
+
+                for advection ∈ (-1.0, 0.0, 1.0)
+                    adv_fac = similar(f)
+                    adv_fac .= advection
+
+                    # differentiate f
+                    derivative!(df, f, x, adv_fac, spectral)
+
+                    @test isapprox(df, expected_df, rtol=rtol, atol=1.e-12,
+                                   norm=maxabs_norm)
+                    @test df[1] == df[end]
+                end
+            end
+        end
+
         @testset "Chebyshev pseudospectral second derivatives (4 argument), periodic" verbose=false begin
             @testset "$nelement $ngrid $cheb_option" for (nelement, ngrid, rtol) ∈
                     (
@@ -1867,6 +2010,73 @@ function runtests()
                 #println("$nelement $ngrid $err $maxfe $maxf $minf")
                 @test isapprox(f, expected_f, rtol=rtol, atol=1.e-10,
                                norm=maxabs_norm)
+            end
+        end
+
+        @testset "Fourier pseudospectral second derivatives (4 argument), periodic" verbose=false begin
+            @testset "$ngrid" for (ngrid, rtol) ∈
+                    (
+                     (5, 2.e-13),
+                     (6, 2.e-13),
+                     (7, 2.e-13),
+                     (8, 2.e-13),
+                     (9, 2.e-13),
+                     (10, 2.e-13),
+                     (11, 2.e-13),
+                     (12, 2.e-13),
+                     (13, 2.e-13),
+                     (14, 2.e-13),
+                     (15, 2.e-13),
+                     (16, 2.e-13),
+                     (17, 2.e-13),
+                     (18, 2.e-13),
+                     (19, 2.e-13),
+                     (20, 2.e-13),
+                     (21, 2.e-13),
+                     (22, 2.e-13),
+                     (23, 2.e-13),
+                     (24, 2.e-13),
+                     (25, 2.e-13),
+                     (26, 2.e-13),
+                     (27, 2.e-13),
+                     (28, 2.e-13),
+                     (29, 2.e-13),
+                     (30, 2.e-13),
+                     (31, 2.e-13),
+                     (32, 2.e-13),
+                     (33, 2.e-13),
+                    )
+
+                # define inputs needed for the test
+                nelement = 1
+                L = 6.0
+                bc = "periodic"
+                element_spacing_option = "uniform"
+                # create the coordinate struct 'x'
+                # This test runs effectively in serial, so implicitly uses
+                # `ignore_MPI=true` to avoid errors due to communicators not being fully
+                # set up.
+                x, spectral = define_test_coordinate("coord"; ngrid=ngrid,
+                                                     nelement=nelement, L=L,
+                                                     discretization="fourier_pseudospectral",
+                                                     cheb_option="", bc=bc,
+                                                     element_spacing_option=element_spacing_option,
+                                                     collision_operator_dim=false)
+
+                offset = randn(rng)
+                phase = 0.42
+                f = @. sinpi(2.0 * x.grid / L + phase) + offset
+                expected_d2f = @. -4.0 * π^2 / L^2 * sinpi(2.0 * x.grid / L + phase)
+
+                # create array for the derivative d2f/dx2
+                d2f = similar(f)
+
+                # differentiate f
+                second_derivative!(d2f, f, x, spectral)
+
+                @test isapprox(d2f, expected_d2f, rtol=rtol, atol=1.e-10,
+                               norm=maxabs_norm)
+                @test d2f[1] == d2f[end]
             end
         end
 

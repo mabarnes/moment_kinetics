@@ -13,9 +13,10 @@ using ..calculus: derivative!
 using ..chebyshev: scaled_chebyshev_grid, scaled_chebyshev_radau_grid, setup_chebyshev_pseudospectral
 using ..communication
 using ..finite_differences: finite_difference_info
+using ..fourier: setup_fourier_pseudospectral
 using ..gauss_legendre: scaled_gauss_legendre_lobatto_grid, scaled_gauss_legendre_radau_grid, setup_gausslegendre_pseudospectral
 using ..input_structs
-using ..quadrature: composite_simpson_weights
+using ..quadrature: trapezium_weights, composite_simpson_weights
 using ..input_structs
 using ..moment_kinetics_structs: null_spatial_dimension_info,
                                  null_velocity_dimension_info, null_vperp_dimension_info
@@ -492,6 +493,12 @@ function define_coordinate(coord_input::NamedTuple; parallel_io::Bool=false,
         spectral = setup_gausslegendre_pseudospectral(coord, collision_operator_dim=collision_operator_dim)
         # obtain the local derivatives of the uniform grid with respect to the used grid
         derivative!(coord.duniform_dgrid, coord.uniform_grid, coord, spectral)
+    elseif coord_input.discretization == "fourier_pseudospectral"
+        if coord.bc ∉ ("periodic", "default")
+            error("fourier_pseudospectral discretization can only be used for a periodic dimension")
+        end
+        spectral = setup_fourier_pseudospectral(coord, run_directory; ignore_MPI=ignore_MPI)
+        derivative!(coord.duniform_dgrid, coord.uniform_grid, coord, spectral)
     else
         # finite_difference_info is just a type so that derivative methods, etc., dispatch
         # to the finite difference versions, it does not contain any information.
@@ -748,6 +755,15 @@ function init_grid(ngrid, nelement_local, n_global, n_local, irank, L, element_s
         else
             grid, wgts = scaled_gauss_legendre_lobatto_grid(ngrid, nelement_local, n_local, element_scale, element_shift, imin, imax)
         end
+    elseif discretization == "fourier_pseudospectral"
+        if name == "vperp"
+            error("vperp is not periodic, so cannot use fourier_pseudospectral discretization.")
+        end
+        if nelement_local > 1
+            error("fourier_pseudospectral requires a single element")
+        end
+        grid = uniform_grid
+        wgts = trapezium_weights(grid)
     elseif discretization == "finite_difference"
         if name == "vperp"
             # initialize equally spaced grid defined on [0,L]
