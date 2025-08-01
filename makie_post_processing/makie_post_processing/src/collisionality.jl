@@ -6,9 +6,12 @@ There are also functions to check the calculations of the mean free path and the
 comparison of temperature, L_T and dT_dz. They would only be for making sure
 lengthscales and mean free path calculations are sensible.
 """
-function collisionality_plots(run_info, plot_prefix=nothing)
+function collisionality_plots(run_info, run_info_dfns, plot_prefix=nothing)
     if !isa(run_info, AbstractVector)
         run_info = Any[run_info]
+    end
+    if !isa(run_info_dfns, AbstractVector)
+        run_info_dfns = Any[run_info_dfns]
     end
     input = Dict_to_NamedTuple(input_dict["collisionality_plots"])
 
@@ -345,6 +348,178 @@ function collisionality_plots(run_info, plot_prefix=nothing)
                 orientation=:vertical)
             outfile = variable_prefix * "_vs_z." * input.animation_ext
             save_animation(fig, frame_index, nt, outfile)
+        end
+
+        if run_info_dfns[1].dfns && input.plot_compare_Maxwellian
+            f_input = Dict_to_NamedTuple(input_dict["f"])
+
+            f = get_variable(run_info_dfns, "f_unnorm"; it=f_input.it0, is=1, ir=f_input.ir0, ivperp=f_input.ivperp0)
+            f_M = get_variable(run_info_dfns, "local_Maxwellian"; it=f_input.it0, is=1, ir=f_input.ir0, ivperp=f_input.ivperp0)
+
+            fig, ax, colorbar_place = get_2d_ax(3*length(run_info_dfns); xlabel="wpa", ylabel="z")
+
+            for i ∈ length(run_info_dfns)
+                plot_2d(run_info_dfns[i].vpa.grid, run_info_dfns[i].z.grid, f[i];
+                        title="f", xlabel="wpa", ylabel="z", ax=ax[(i-1)*3+1],
+                        colorbar_place=colorbar_place[(i-1)*3+1])
+                plot_2d(run_info_dfns[i].vpa.grid, run_info_dfns[i].z.grid, f_M[i];
+                        title="f_M", xlabel="wpa", ylabel="z", ax=ax[(i-1)*3+2],
+                        colorbar_place=colorbar_place[(i-1)*3+2])
+                plot_2d(run_info_dfns[i].vpa.grid, run_info_dfns[i].z.grid, f[i].-f_M[i];
+                        title="f - f_M", xlabel="wpa", ylabel="z", ax=ax[(i-1)*3+3],
+                        colorbar_place=colorbar_place[(i-1)*3+3])
+            end
+
+            save(plot_prefix * "Maxwellian_difference_vs_vpa_z.pdf", fig)
+
+            iz0 = f_input.iz0
+            fig, ax, legend_place = get_1d_ax(2; xlabel="wpa", get_legend_place=:below)
+
+            for i ∈ length(run_info_dfns)
+                plot_vs_vpa(run_info_dfns[i], "f"; data=f[i][:,iz0], label="f", ax=ax[1])
+                plot_vs_vpa(run_info_dfns[i], "f_M"; data=f_M[i][:,iz0], label="f_M", ax=ax[1])
+                plot_vs_vpa(run_info_dfns[i], "f - f_M"; data=f[i][:,iz0].-f_M[i][:,iz0],
+                            ax=ax[2])
+            end
+            ax[1].ylabel = "f"
+            Legend(legend_place[1], ax[1]; tellheight=true, tellwidth=false)
+            ax[2].ylabel = "f - f_M"
+            Legend(legend_place[2], ax[2]; tellheight=true, tellwidth=false)
+
+            save(plot_prefix * "Maxwellian_difference_vs_vpa.pdf", fig)
+
+            fig, ax, colorbar_place = get_2d_ax(3*length(run_info_dfns); xlabel="wpa", ylabel="z")
+
+            for i ∈ length(run_info_dfns)
+                plot_2d(run_info_dfns[i].vpa.grid, run_info_dfns[i].z.grid, f[i];
+                        title="f", xlabel="wpa", ylabel="z", ax=ax[(i-1)*3+1],
+                        colorbar_place=colorbar_place[(i-1)*3+1], colorscale=log10,
+                        transform=x->positive_or_nan(x; epsilon=1.e-16))
+                plot_2d(run_info_dfns[i].vpa.grid, run_info_dfns[i].z.grid, f_M[i];
+                        title="f_M", xlabel="wpa", ylabel="z", ax=ax[(i-1)*3+2],
+                        colorbar_place=colorbar_place[(i-1)*3+2], colorscale=log10,
+                        transform=x->positive_or_nan(x; epsilon=1.e-16))
+                plot_2d(run_info_dfns[i].vpa.grid, run_info_dfns[i].z.grid, f[i].-f_M[i];
+                        title="f - f_M", xlabel="wpa", ylabel="z", ax=ax[(i-1)*3+3],
+                        colorbar_place=colorbar_place[(i-1)*3+3], colorscale=log10,
+                        transform=x->positive_or_nan(abs(x); epsilon=1.e-16))
+            end
+
+            save(plot_prefix * "Maxwellian_difference_log_vs_vpa_z.pdf", fig)
+
+            iz0 = f_input.iz0
+            fig, ax, legend_place = get_1d_ax(; yscale=log10, xlabel="wpa",
+                                              get_legend_place=:below)
+
+            for i ∈ length(run_info_dfns)
+                plot_vs_vpa(run_info_dfns[i], "f"; data=f[i][:,iz0], label="f", ax=ax,
+                            transform=x->positive_or_nan(x; epsilon=1.e-16))
+                plot_vs_vpa(run_info_dfns[i], "f_M"; data=f_M[i][:,iz0], label="f_M", ax=ax,
+                            transform=x->positive_or_nan(x; epsilon=1.e-16))
+                plot_vs_vpa(run_info_dfns[i], "f - f_M"; data=f[i][:,iz0].-f_M[i][:,iz0],
+                            label="f - f_M", ax=ax,
+                            transform=x->positive_or_nan(abs(x); epsilon=1.e-16))
+            end
+            ax.ylabel = "f"
+            Legend(legend_place, ax; tellheight=true, tellwidth=false)
+
+            save(plot_prefix * "Maxwellian_difference_log_vs_vpa.pdf", fig)
+        end
+
+        if run_info_dfns[1].dfns && input.animate_compare_Maxwellian
+            f_input = Dict_to_NamedTuple(input_dict["f"])
+
+            f = get_variable(run_info_dfns, "f_unnorm"; is=1, ir=f_input.ir0, ivperp=f_input.ivperp0)
+            f_M = get_variable(run_info_dfns, "local_Maxwellian"; is=1, ir=f_input.ir0, ivperp=f_input.ivperp0)
+
+            fig, ax, colorbar_place = get_2d_ax(3*length(run_info_dfns); xlabel="wpa", ylabel="z")
+            frame_index = Observable(1)
+
+            for i ∈ length(run_info_dfns)
+                animate_2d(run_info_dfns[i].vpa.grid, run_info_dfns[i].z.grid, f[i];
+                           title="f", xlabel="wpa", ylabel="z", ax=ax[(i-1)*3+1],
+                           colorbar_place=colorbar_place[(i-1)*3+1],
+                           frame_index=frame_index)
+
+                animate_2d(run_info_dfns[i].vpa.grid, run_info_dfns[i].z.grid, f_M[i];
+                           title="f_M", xlabel="wpa", ylabel="z", ax=ax[(i-1)*3+2],
+                           colorbar_place=colorbar_place[(i-1)*3+2],
+                           frame_index=frame_index)
+
+                animate_2d(run_info_dfns[i].vpa.grid, run_info_dfns[i].z.grid,
+                           f[i].-f_M[i]; title="f - f_M", xlabel="wpa", ylabel="z",
+                           ax=ax[(i-1)*3+3], colorbar_place=colorbar_place[(i-1)*3+3],
+                           frame_index=frame_index)
+            end
+
+            save_animation(fig, frame_index, nt, plot_prefix * "Maxwellian_difference_vs_vpa_z.gif")
+
+            iz0 = f_input.iz0
+            fig, ax, legend_place = get_1d_ax(2; xlabel="wpa", get_legend_place=:below)
+            frame_index = Observable(1)
+
+            for i ∈ 1:length(run_info)
+                animate_vs_vpa(run_info_dfns[i], "f"; data=f[i][:,iz0,:], label="f",
+                               ax=ax[1], frame_index=frame_index)
+                animate_vs_vpa(run_info_dfns[i], "f_M"; data=f_M[i][:,iz0,:], label="f_M",
+                               ax=ax[1], frame_index=frame_index)
+                animate_vs_vpa(run_info_dfns[i], "f - f_M";
+                               data=f[i][:,iz0,:].-f_M[i][:,iz0,:], ax=ax[2],
+                               frame_index=frame_index)
+            end
+            ax[1].ylabel = "f"
+            Legend(legend_place[1], ax[1]; tellheight=true, tellwidth=false)
+            ax[2].ylabel = "f - f_M"
+            Legend(legend_place[2], ax[2]; tellheight=true, tellwidth=false)
+
+            save_animation(fig, frame_index, nt, plot_prefix * "Maxwellian_difference_vs_vpa.gif")
+
+            fig, ax, colorbar_place = get_2d_ax(3*length(run_info_dfns); xlabel="wpa", ylabel="z")
+            frame_index = Observable(1)
+
+            for i ∈ length(run_info_dfns)
+                animate_2d(run_info_dfns[i].vpa.grid, run_info_dfns[i].z.grid, f[i];
+                           title="f", xlabel="wpa", ylabel="z", ax=ax[(i-1)*3+1],
+                           colorbar_place=colorbar_place[(i-1)*3+1],
+                           frame_index=frame_index, colorscale=log10,
+                           transform=x->positive_or_nan(x; epsilon=1.e-16))
+
+                animate_2d(run_info_dfns[i].vpa.grid, run_info_dfns[i].z.grid, f_M[i];
+                           title="f_M", xlabel="wpa", ylabel="z", ax=ax[(i-1)*3+2],
+                           colorbar_place=colorbar_place[(i-1)*3+2],
+                           frame_index=frame_index, colorscale=log10,
+                           transform=x->positive_or_nan(x; epsilon=1.e-16))
+
+                animate_2d(run_info_dfns[i].vpa.grid, run_info_dfns[i].z.grid,
+                           f[i].-f_M[i]; title="f - f_M", xlabel="wpa", ylabel="z",
+                           ax=ax[(i-1)*3+3], colorbar_place=colorbar_place[(i-1)*3+3],
+                           frame_index=frame_index, colorscale=log10,
+                           transform=x->positive_or_nan(abs(x); epsilon=1.e-16))
+            end
+
+            save_animation(fig, frame_index, nt, plot_prefix * "Maxwellian_difference_log_vs_vpa_z.gif")
+
+            iz0 = f_input.iz0
+            fig, ax, legend_place = get_1d_ax(; yscale=log10, xlabel="wpa",
+                                              get_legend_place=:below)
+            frame_index = Observable(1)
+
+            for i ∈ 1:length(run_info)
+                animate_vs_vpa(run_info_dfns[i], "f"; data=f[i][:,iz0,:], label="f",
+                               ax=ax, frame_index=frame_index,
+                               transform=x->positive_or_nan(x; epsilon=1.e-16))
+                animate_vs_vpa(run_info_dfns[i], "f_M"; data=f_M[i][:,iz0,:], label="f_M",
+                               ax=ax, frame_index=frame_index,
+                               transform=x->positive_or_nan(x; epsilon=1.e-16))
+                animate_vs_vpa(run_info_dfns[i], "f - f_M"; label="f - f_M",
+                               data=f[i][:,iz0,:].-f_M[i][:,iz0,:], ax=ax,
+                               frame_index=frame_index,
+                               transform=x->positive_or_nan(abs(x); epsilon=1.e-16))
+            end
+            ax.ylabel = "f"
+            Legend(legend_place, ax; tellheight=true, tellwidth=false)
+
+            save_animation(fig, frame_index, nt, plot_prefix * "Maxwellian_difference_log_vs_vpa.gif")
         end
     end
 end
