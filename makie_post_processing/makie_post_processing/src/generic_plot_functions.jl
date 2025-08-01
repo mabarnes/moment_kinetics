@@ -129,7 +129,7 @@ for dim ∈ one_dimension_combinations
                                          ylabel=get_variable_symbol(var_name),
                                          yscale=yscale, axis_args...)
                      for (d, ri) ∈ zip(data, run_info)
-                         $function_name(ri, var_name, is=is, data=d, input=input, ax=ax,
+                         $function_name(ri, var_name; is=is, data=d, input=input, ax=ax,
                                         transform=transform, label=ri.run_name,
                                         $idim=$idim, kwargs...)
                      end

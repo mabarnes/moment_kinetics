@@ -428,6 +428,8 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
         animate_Lupar_Ln_LT_mfp_vs_z = false,
         plot_overlay_coll_krook_heat_flux = false,
         animate_overlay_coll_krook_heat_flux = false,
+        plot_compare_Maxwellian = false,
+        animate_compare_Maxwellian = false,
         animation_ext = "gif"
        )
     # set_defaults_and_check_section!(
