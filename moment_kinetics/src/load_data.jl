@@ -5156,6 +5156,18 @@ function _get_variable_internal(run_info, variable_name::Symbol;
             # for 2V/3V cases.
             variable = @. qpar + 0.75*n*vth^2*upar + 0.5*n*upar^3
         end
+    elseif variable_name == :local_Maxwellian
+        n = append_dims_to_variable(get_variable(run_info, "density"; kwargs...), :ivpa, :ivperp)
+        u = append_dims_to_variable(get_variable(run_info, "parallel_flow"; kwargs...), :ivpa, :ivperp)
+        vth = append_dims_to_variable(get_variable(run_info, "thermal_speed"; kwargs...), :ivpa, :ivperp)
+        vperp = get_variable(run_info, "vperp_unnorm"; kwargs...)
+        vpa = get_variable(run_info, "vpa_unnorm"; kwargs...)
+        if run_info.vperp.n == 1
+            vth .*= sqrt(3)
+            variable = @. n / (sqrt(π) * vth) * exp(-(vperp^2 + (vpa - u)^2) / vth^2)
+        else
+            variable = @. n / (sqrt(π) * vth)^3 * exp(-(vperp^2 + (vpa - u)^2) / vth^2)
+        end
     elseif variable_name == :r_advect_speed
         # update_speed_r!() requires all dimensions to be present, so do *not* pass kwargs
         # to get_variable() in this case. Instead select a slice of the result.
