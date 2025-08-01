@@ -4588,9 +4588,162 @@ function _get_variable_internal(run_info, variable_name::Symbol;
         return dx_dz
     end
 
+    function append_dims_to_variable(v, dims...)
+        for d ∈ dims
+            if !(d ∈ keys(kwargs) && isa(kwargs[d], Integer))
+                if isa(v, AbstractArray)
+                    v = reshape(v, 1, size(v)...)
+                else
+                    v = [v]
+                end
+            end
+        end
+        return v
+    end
+    function prepend_dims_to_variable(v, dims...)
+        for d ∈ dims
+            if !(d ∈ keys(kwargs) && isa(kwargs[d], Integer))
+                if isa(v, AbstractArray)
+                    v = reshape(v, size(v)..., 1)
+                else
+                    v = [v]
+                end
+            end
+        end
+        return v
+    end
+
     if variable_name == :temperature
         vth = get_variable(run_info, "thermal_speed"; kwargs...)
         variable = 0.5 * vth.^2
+    elseif variable_name == :f_unnorm
+        variable = get_variable(run_info, "f"; kwargs...)
+        if run_info.evolve_p
+            vth = append_dims_to_variable(get_variable(run_info, "thermal_speed"; kwargs...), :ivperp, :ivpa)
+            if run_info.vperp.n == 1
+                variable ./= vth
+            else
+                variable ./= vth^3
+            end
+        end
+        if run_info.evolve_density
+            n = append_dims_to_variable(get_variable(run_info, "density"; kwargs...), :ivperp, :ivpa)
+            variable .*= n
+        end
+    elseif variable_name == :f_electron_unnorm
+        variable = get_variable(run_info, "f_electron"; kwargs...)
+        if run_info.evolve_p
+            vth = append_dims_to_variable(get_variable(run_info, "electron_thermal_speed"; kwargs...), :ivperp, :ivpa)
+            if run_info.vperp.n == 1
+                variable ./= vth
+            else
+                variable ./= vth^3
+            end
+        end
+        if run_info.evolve_density
+            n = append_dims_to_variable(get_variable(run_info, "electron_density"; kwargs...), :ivperp, :ivpa)
+            variable .*= n
+        end
+    elseif variable_name == :f_neutral_unnorm
+        variable = get_variable(run_info, "f_neutral"; kwargs...)
+        if run_info.evolve_p
+            vth = append_dims_to_variable(get_variable(run_info, "thermal_speed_neutral"; kwargs...), :ivzeta, :ivr, :ivz)
+            if run_info.vperp.n == 1
+                variable ./= vth
+            else
+                variable ./= vth^3
+            end
+        end
+        if run_info.evolve_density
+            n = append_dims_to_variable(get_variable(run_info, "density_neutral"; kwargs...), :ivzeta, :ivr, :ivz)
+            variable = variable .* n
+        end
+    elseif variable_name == :vperp_unnorm
+        variable = run_info.vperp.grid
+        if :ivperp ∈ keys(kwargs)
+            variable = variable[kwargs[:ivperp]]
+        end
+        variable = prepend_dims_to_variable(variable, :iz, :ir, :is)
+        variable = append_dims_to_variable(variable, :ivpa)
+        if run_info.evolve_p
+            vth = append_dims_to_variable(get_variable(run_info, "thermal_speed"; kwargs...), :ivpa, :ivperp)
+            variable = variable .* vth
+        end
+    elseif variable_name == :vpa_unnorm
+        variable = run_info.vpa.grid
+        if :ivpa ∈ keys(kwargs)
+            variable = variable[kwargs[:ivpa]]
+        end
+        variable = prepend_dims_to_variable(variable, :ivperp, :iz, :ir, :is)
+        if run_info.evolve_p
+            vth = append_dims_to_variable(get_variable(run_info, "thermal_speed"; kwargs...), :ivpa, :ivperp)
+            variable = variable .* vth
+        end
+        if run_info.evolve_upar
+            u = append_dims_to_variable(get_variable(run_info, "parallel_flow"; kwargs...), :ivpa, :ivperp)
+            variable = variable .+ u
+        end
+    elseif variable_name == :electron_vperp_unnorm
+        variable = run_info.vperp.grid
+        if :ivperp ∈ keys(kwargs)
+            variable = variable[kwargs[:ivperp]]
+        end
+        variable = prepend_dims_to_variable(variable, :iz, :ir)
+        variable = append_dims_to_variable(variable, :ivpa)
+        if run_info.evolve_p
+            vth = append_dims_to_variable(get_variable(run_info, "electron_thermal_speed"; kwargs...), :ivpa, :ivperp)
+            variable = variable .* vth
+        end
+    elseif variable_name == :electron_vpa_unnorm
+        variable = run_info.vpa.grid
+        if :ivpa ∈ keys(kwargs)
+            variable = variable[kwargs[:ivpa]]
+        end
+        variable = prepend_dims_to_variable(variable, :ivperp, :iz, :ir)
+        if run_info.evolve_p
+            vth = append_dims_to_variable(get_variable(run_info, "electron_thermal_speed"; kwargs...), :ivpa, :ivperp)
+            variable = variable .* vth
+        end
+        if run_info.evolve_upar
+            u = append_dims_to_variable(get_variable(run_info, "electron_parallel_flow"; kwargs...), :ivpa, :ivperp)
+            variable = variable .+ u
+        end
+    elseif variable_name == :vzeta_unnorm
+        variable = run_info.vzeta.grid
+        if :ivzeta ∈ keys(kwargs)
+            variable = variable[kwargs[:ivzeta]]
+        end
+        variable = prepend_dims_to_variable(variable, :iz, :ir, :is)
+        variable = append_dims_to_variable(variable, :ivz, :ivr)
+        if run_info.evolve_p
+            vth = append_dims_to_variable(get_variable(run_info, "neutral_thermal_speed"; kwargs...), :ivz, :ivr, :ivzeta)
+            variable = variable .* vth
+        end
+    elseif variable_name == :vr_unnorm
+        variable = run_info.vr.grid
+        if :ivr ∈ keys(kwargs)
+            variable = variable[kwargs[:ivr]]
+        end
+        variable = prepend_dims_to_variable(variable, :ivzeta, :iz, :ir, :is)
+        variable = append_dims_to_variable(variable, :ivz)
+        if run_info.evolve_p
+            vth = append_dims_to_variable(get_variable(run_info, "neutral_thermal_speed"; kwargs...), :ivz, :ivr, :ivzeta)
+            variable = variable .* vth
+        end
+    elseif variable_name == :vz_unnorm
+        variable = run_info.vz.grid
+        if :ivz ∈ keys(kwargs)
+            variable = variable[kwargs[:ivz]]
+        end
+        variable = prepend_dims_to_variable(variable, :ivr, :ivzeta, :iz, :ir, :is)
+        if run_info.evolve_p
+            vth = append_dims_to_variable(get_variable(run_info, "neutral_thermal_speed"; kwargs...), :ivz, :ivr, :ivzeta)
+            variable = variable .* vth
+        end
+        if run_info.evolve_upar
+            u = append_dims_to_variable(get_variable(run_info, "neutral_uz"; kwargs...), :ivz, :ivr, :ivzeta)
+            variable = variable .+ u
+        end
     elseif variable_name == :ddens_dr
         variable = get_r_derivative(run_info, "density"; kwargs...)
     elseif variable_name == :ddens_dr_upwind
