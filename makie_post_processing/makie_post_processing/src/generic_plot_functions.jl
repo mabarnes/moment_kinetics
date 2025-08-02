@@ -1389,8 +1389,16 @@ function animate_1d(xcoord, data; frame_index=nothing, ax=nothing, fig=nothing,
     end
 
     if ax === nothing
-        fig, ax = get_1d_ax(; title=title, xlabel=xlabel, ylabel=ylabel, yscale=yscale,
-                            axis_args...)
+        fig, ax = get_1d_ax(; yscale=yscale, axis_args...)
+    end
+    if title !== nothing
+        ax.title = title
+    end
+    if xlabel !== nothing
+        ax.xlabel = xlabel
+    end
+    if ylabel !== nothing
+        ax.ylabel = ylabel
     end
 
     if !isa(data, VariableCache)
@@ -1500,12 +1508,15 @@ function animate_2d(xcoord, ycoord, data; frame_index=nothing, ax=nothing, fig=n
     colormap = parse_colormap(colormap)
 
     if ax === nothing
-        fig, ax, colorbar_place = get_2d_ax(; title=title, axis_args...)
+        fig, ax, colorbar_place = get_2d_ax(; axis_args...)
     end
     if frame_index === nothing
         ind = Observable(1)
     else
         ind = frame_index
+    end
+    if title !== nothing
+        ax.title = title
     end
     if xlabel !== nothing
         ax.xlabel = xlabel
