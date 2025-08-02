@@ -1541,8 +1541,8 @@ function animate_2d(xcoord, ycoord, data; frame_index=nothing, ax=nothing, fig=n
         datamin, datamax = variable_cache_extrema(data; transform=transform)
         heatmap_data = @lift(transform.(get_cache_slice(data, $ind)))
     else
-        datamin, datamax = NaNMath.extrema(data)
         data = transform.(data)
+        datamin, datamax = NaNMath.extrema(data)
         heatmap_data = @lift(@view data[:,:,$ind])
     end
     if !isfinite(extrema_check_colorscale(datamin)) && !isfinite(extrema_check_colorscale(datamax))
