@@ -59,15 +59,32 @@ function get_cache_slice(variable_cache::VariableCache, tind)
                      local_tind)
 end
 
-function variable_cache_extrema(variable_cache::VariableCache; transform=identity)
+function variable_cache_extrema(variable_cache::VariableCache; transform=identity,
+                                time_dependent::Bool=false)
     # Bit of a hack to iterate through all chunks that can be in the cache
     chunk_size = variable_cache.t_chunk_size
-    data_min = data_max = NaN
-    for it ∈ ((i - 1) * chunk_size + 1 for i ∈ 1:(variable_cache.n_tinds ÷ chunk_size))
-        get_cache_slice(variable_cache, it)
-        this_min, this_max = NaNMath.extrema(transform.(variable_cache.data_chunk))
-        data_min = NaNMath.min(data_min, this_min)
-        data_max = NaNMath.max(data_max, this_max)
+    if time_dependent
+        data_min = fill(Inf, variable_cache.n_tinds)
+        data_max = fill(-Inf, variable_cache.n_tinds)
+        for it ∈ ((i - 1) * chunk_size + 1 for i ∈ 1:(variable_cache.n_tinds ÷ chunk_size))
+            get_cache_slice(variable_cache, it)
+            # Don't use NaNMath functions here because those don't support `dims`
+            # argument.
+            this_min = minimum(transform.(variable_cache.data_chunk),
+                               dims=1:ndims(variable_cache)-1)
+            this_max = maximum(transform.(variable_cache.data_chunk),
+                               dims=1:ndims(variable_cache)-1)
+            data_min[it:min(it + chunk_size - 1, variable_cache.n_tinds)] .= vec(this_min)
+            data_max[it:min(it + chunk_size - 1, variable_cache.n_tinds)] .= vec(this_max)
+        end
+    else
+        data_min = data_max = NaN
+        for it ∈ ((i - 1) * chunk_size + 1 for i ∈ 1:(variable_cache.n_tinds ÷ chunk_size))
+            get_cache_slice(variable_cache, it)
+            this_min, this_max = NaNMath.extrema(transform.(variable_cache.data_chunk))
+            data_min = NaNMath.min(data_min, this_min)
+            data_max = NaNMath.max(data_max, this_max)
+        end
     end
 
     return data_min, data_max
