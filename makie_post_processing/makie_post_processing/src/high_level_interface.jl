@@ -253,20 +253,7 @@ function makie_post_process(run_dir::Union{String,Vector{String}},
 
     constraints_plots(run_info; plot_prefix=plot_prefix)
 
-    if has_rdim
-        # Plots for 2D instability do not make sense for 1D simulations
-        instability_input = input_dict["instability2D"]
-        if any((instability_input["plot_1d"], instability_input["plot_2d"],
-                instability_input["animate_perturbations"]))
-            # Get zind from the first variable in the loop (phi), and use the same one for
-            # all subseqeunt variables.
-            zind = Union{mk_int,Nothing}[nothing for _ ∈ run_info_moments]
-            for variable_name ∈ ("phi", "density", "temperature")
-                zind = instability2D_plots(run_info_moments, variable_name,
-                                           plot_prefix=plot_prefix, zind=zind)
-            end
-        end
-    end
+    instability2D_plots(run_info_moments, run_info_dfns; plot_prefix=plot_prefix)
 
     Chodura_condition_plots(run_info_dfns, plot_prefix=plot_prefix)
 
