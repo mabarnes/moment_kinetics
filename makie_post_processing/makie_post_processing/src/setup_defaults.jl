@@ -348,6 +348,7 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
         plot_1d=false,
         plot_2d=false,
         animate_perturbations=false,
+        compare_perturbed_Maxwellian=false,
         colormap=this_input_dict["colormap"],
         animation_ext=this_input_dict["animation_ext"],
        )
