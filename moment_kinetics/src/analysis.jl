@@ -410,14 +410,29 @@ function field_line_average(fld, wgts, L)
 end
 
 """
-Return (v - mean(v, dims=2))
+Get `v` minus its \$r\$-average
 """
+function get_r_perturbation end
 function get_r_perturbation(v::AbstractArray{T,3}) where T
     # Get background as r-average of the variable, assuming the background is constant
     # in r
     background = mean(v, dims=2)
     perturbation = v .- background
-    return perturbation
+    return background, perturbation
+end
+function get_r_perturbation(v::AbstractArray{T,4}) where T
+    # Get background as r-average of the variable, assuming the background is constant
+    # in r
+    background = mean(v, dims=2)
+    perturbation = v .- background
+    return background, perturbation
+end
+function get_r_perturbation(v::AbstractArray{T,6}) where T
+    # Get background as r-average of the variable, assuming the background is constant
+    # in r
+    background = mean(v, dims=4)
+    perturbation = v .- background
+    return background, perturbation
 end
 
 """
