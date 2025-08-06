@@ -15,11 +15,13 @@ module communication
 export allocate_shared, block_rank, block_size, n_blocks, comm_block, comm_inter_block,
        iblock_index, comm_world, finalize_comms!, halo_swap!, initialize_comms!,
        global_rank, MPISharedArray, global_size, comm_anysv_subblock, anysv_subblock_rank,
-       anysv_subblock_size, anysv_isubblock_index, anysv_nsubblocks_per_block
+       anysv_subblock_size, anysv_isubblock_index, anysv_nsubblocks_per_block,
+       comm_anyzv_subblock, anyzv_subblock_rank, anyzv_subblock_size,
+       anyzv_isubblock_index, anyzv_nsubblocks_per_block
 export setup_distributed_memory_MPI
 export setup_distributed_memory_MPI_for_weights_precomputation
 export setup_serial_MPI
-export @_block_synchronize, @_anysv_subblock_synchronize
+export @_block_synchronize, @_anysv_subblock_synchronize, @_anyzv_subblock_synchronize
 
 using LinearAlgebra
 using MPI
@@ -71,6 +73,20 @@ MPI.jl delete the communicator.
 """
 const comm_anysv_subblock = Ref(MPI.COMM_NULL)
 
+"""
+Communicator for the local velocity-space subset of a shared-memory block in a 'anyzv'
+region
+
+The 'anyzv' region is used to parallelise the kinetic electron solve. See
+[`moment_kinetics.looping.get_best_anyzv_split`](@ref).
+
+Must use a `Ref{MPI.Comm}` to allow a non-const `MPI.Comm` to be stored. Need to actually
+assign to this and not just copy a pointer into the `.val` member because otherwise the
+`MPI.Comm` object created by `MPI.Comm_split()` would be deleted, which probably makes
+MPI.jl delete the communicator.
+"""
+const comm_anyzv_subblock = Ref(MPI.COMM_NULL)
+
 # Use Ref for these variables so that they can be made `const` (so have a definite
 # type), but contain a value assigned at run-time.
 """
@@ -108,6 +124,22 @@ const anysv_isubblock_index = Ref{Union{mk_int,Nothing}}()
 """
 """
 const anysv_nsubblocks_per_block = Ref{mk_int}()
+
+"""
+"""
+const anyzv_subblock_rank = Ref{mk_int}()
+
+"""
+"""
+const anyzv_subblock_size = Ref{mk_int}()
+
+"""
+"""
+const anyzv_isubblock_index = Ref{Union{mk_int,Nothing}}()
+
+"""
+"""
+const anyzv_nsubblocks_per_block = Ref{mk_int}()
 
 """
 """
@@ -568,6 +600,11 @@ end
     # in different anysv sub-blocks, so debug checks within an anysv region should only
     # consider the anysv-specific arrays.
     const global_anysv_debugmpisharedarray_store = Vector{DebugMPISharedArray}(undef, 0)
+    # 'anyzv' regions require a separate array store, because within an anyzv region,
+    # processes in the same shared memory block may still not be synchronized if they are
+    # in different anyzv sub-blocks, so debug checks within an anyzv region should only
+    # consider the anyzv-specific arrays.
+    const global_anyzv_debugmpisharedarray_store = Vector{DebugMPISharedArray}(undef, 0)
 end
 
 """
@@ -688,6 +725,8 @@ function allocate_shared(T, dims; comm=nothing, maybe_debug=true)
             debug_array = DebugMPISharedArray(array, comm)
             if comm == comm_anysv_subblock[]
                 push!(global_anysv_debugmpisharedarray_store, debug_array)
+            elseif comm == comm_anyzv_subblock[]
+                push!(global_anyzv_debugmpisharedarray_store, debug_array)
             else
                 push!(global_debugmpisharedarray_store, debug_array)
             end
@@ -824,6 +863,10 @@ end
     function debug_check_shared_memory(; comm=comm_block[], kwargs...)
         if comm == comm_anysv_subblock[]
             for array ∈ global_anysv_debugmpisharedarray_store
+                debug_check_shared_array(array; comm=comm, kwargs...)
+            end
+        elseif comm == comm_anyzv_subblock[]
+            for array ∈ global_anyzv_debugmpisharedarray_store
                 debug_check_shared_array(array; comm=comm, kwargs...)
             end
         else
@@ -975,10 +1018,11 @@ debugging routines need to be updated.
             end
         end
 
-        # Also check 'anysv' arrays, as these are synchronized by this call.
+        # Also check 'anysv' and 'anyzv' arrays, as these are synchronized by this call.
         # `missing` passed as the call_site argument here indicates that the check of
         # call_site has already been done.
         _anysv_subblock_synchronize(missing)
+        _anyzv_subblock_synchronize(missing)
 
         MPI.Barrier(comm_block[])
     end
@@ -1141,6 +1185,162 @@ function _anysv_subblock_synchronize(call_site::Union{Nothing,Missing,UInt64})
 end
 
 """
+Call an MPI Barrier for all processors in an 'anyzv' sub-block.
+
+The 'anyzv' region is used to parallelise the kinetic electron implicit solve. See
+[`moment_kinetics.looping.get_best_anyzv_split`](@ref).
+
+Used to synchronise processors that are working on the same shared-memory array(s)
+between operations, to avoid race conditions. Should be even cheaper than
+[`@_block_synchronize`](@ref) because it only requires communication on a smaller
+communicator.
+
+Note: `_anyzv_subblock_synchronize()` may be called different numbers of times on different
+sub-blocks, depending on iteration counts and how the r-dimension is split up.
+`@debug_detect_redundant_block_synchronize` is not implemented (yet?) for
+`_anyzv_subblock_synchronize()`.
+"""
+macro _anyzv_subblock_synchronize()
+    id_hash = @debug_block_synchronize_quick_ifelse(
+                   hash(string(@__FILE__, @__LINE__)),
+                   nothing
+                  )
+    return :( _anyzv_subblock_synchronize($id_hash) )
+end
+
+"""
+Internal function called by `anyzv` synchronization macros.
+"""
+function _anyzv_subblock_synchronize(call_site::Union{Nothing,Missing,UInt64})
+    if comm_anyzv_subblock[] == MPI.COMM_NULL
+        # No synchronization to do for a null communicator
+        return nothing
+    end
+
+    MPI.Barrier(comm_anyzv_subblock[])
+
+    @debug_block_synchronize_backtrace begin
+        st = stacktrace()
+        stackstring = string([string(s, "\n") for s ∈ st]...)
+
+        # Only include file and line number in the string that we hash so that
+        # function calls with different signatures are not seen as different
+        # (e.g. time_advance!() with I/O arguments on rank-0 but not on other
+        # ranks).
+        signaturestring = string([string(s.file, s.line) for s ∈ st]...)
+
+        hash = sha256(signaturestring)
+        all_hashes = reshape(MPI.Allgather(hash, comm_anyzv_subblock[]), length(hash),
+                             MPI.Comm_size(comm_anyzv_subblock[]))
+        for i ∈ 1:block_size[]
+            h = all_hashes[:, i]
+            if h != hash
+                error("_anyzv_subblock_synchronize() called inconsistently\n",
+                      "rank $(block_rank[]) called from:\n",
+                      stackstring)
+            end
+        end
+    end
+
+    @debug_block_synchronize_quick begin
+        if call_site === nothing
+            error("Got call_site=nothing. This should not happen when debugging with "
+                  * "@debug_block_synchronize_quick.")
+        end
+        # If call_site===missing, then this function was called from inside
+        # _block_synchronize(), and the call site was already checked there.
+        if call_site !== missing
+            all_hashes = MPI.Allgather(call_site, comm_anyzv_subblock[])
+            if !all(h -> h == all_hashes[1], all_hashes)
+                error("_anyzv_subblock_synchronize() called inconsistently")
+            end
+        end
+    end
+
+    @debug_shared_array begin
+        # Check for potential race conditions:
+        # * Between _block_synchronize() any element of an array should be written to by
+        #   at most one rank.
+        # * If an element is not written to, any rank can read it.
+        # * If an element is written to, only the rank that writes to it should read it.
+        #
+        @debug_detect_redundant_block_synchronize previous_was_unnecessary = true
+        for array ∈ global_anyzv_debugmpisharedarray_store
+
+            debug_check_shared_array(array; comm=comm_anyzv_subblock[])
+
+            @debug_detect_redundant_block_synchronize begin
+                # debug_detect_redundant_is_active[] is set to true at the beginning of
+                # time_advance!() so that we do not do these checks during
+                # initialization: they cause problems with @debug_initialize_NaN during
+                # array allocation; generally it does not matter if there are a few
+                # extra _block_synchronize() calls during initialization, so it is not
+                # worth the effort to trim them down to the absolute minimum.
+                if debug_detect_redundant_is_active[]
+
+                    if !debug_check_shared_array(array; check_redundant=true,
+                                                 comm_anyzv_subblock)
+                        # If there was a failure for at least one array, the previous
+                        # _block_synchronize was necessary - if the previous call was not
+                        # there, for this array array.is_read and array.is_written would
+                        # have the values of combined_is_read and combined_is_written,
+                        # and would fail the debug_check_shared_array() above this
+                        # @debug_detect_redundant_block_synchronize block.
+                        previous_was_unnecessary = false
+                    end
+
+                    array.previous_is_read .= array.is_read
+                    array.previous_is_written .= array.is_written
+                else
+                    # If checking is inactive, set as if at 'previous' the array was
+                    # always read/written so that the next set of checks don't detect a
+                    # 'redundant' call which is actually only 'redundant' just after an
+                    # inactive region (e.g. initialisation or writing output).
+                    array.previous_is_read .= true
+                    array.previous_is_written .= true
+                end
+            end
+
+            array.is_read .= false
+            array.is_written .= false
+        end
+        @debug_detect_redundant_block_synchronize begin
+            if debug_detect_redundant_is_active[]
+                # Check the previous call was unnecessary on all processes, not just
+                # this one
+                previous_was_unnecessary = MPI.Allreduce(previous_was_unnecessary,
+                                                         MPI.Op(&, Bool), comm_anyzv_subblock[])
+
+                if (previous_was_unnecessary && global_size[] > 1)
+                    # The intention of this debug block is to detect when calls to
+                    # _block_synchronize() are not necessary and can be removed. It's not
+                    # obvious that this will always work - it might be that a call to
+                    # _block_synchronize() is necessary with some options, but not
+                    # necessary with others. Hopefully it will be possible to handle
+                    # this by moving the _block_synchronize() call inside appropriate
+                    # if-clauses. If not, it might be necessary to define something like
+                    # _block_synchronize_ignore_redundant() to skip this check because
+                    # the check is ambiguous.
+                    #
+                    # If we are running in serial (global_size[] == 1), then none of the
+                    # _block_synchronize() calls are 'necessary', so this check is not
+                    # useful.
+                    error("Previous call to _block_synchronize() was not necessary. "
+                          * "Call was from:\n"
+                          * "$(previous_block_synchronize_stackstring[])")
+                end
+
+                st = stacktrace()
+                stackstring = string([string(s, "\n") for s ∈ st]...)
+                previous_block_synchronize_stackstring[] = stackstring
+            end
+        end
+
+        MPI.Barrier(comm_anyzv_subblock[])
+    end
+end
+
+"""
     halo_swap!(x::AbstractArray, r, z)
 
 Enforce consistency of 'halo cells' - i.e. the grid points on block boundaries (in the
@@ -1291,6 +1491,7 @@ end
 function free_shared_arrays()
     @debug_shared_array resize!(global_debugmpisharedarray_store, 0)
     @debug_shared_array resize!(global_anysv_debugmpisharedarray_store, 0)
+    @debug_shared_array resize!(global_anyzv_debugmpisharedarray_store, 0)
 
     for w ∈ global_Win_store
         MPI.free(w)
