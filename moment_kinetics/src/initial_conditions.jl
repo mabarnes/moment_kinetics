@@ -685,13 +685,12 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
         max_electron_pdf_iterations = nothing
         max_electron_sim_time = max(2.0, t_params.electron.max_pseudotime)
         if t_params.electron.debug_io !== nothing
-            io_electron = setup_electron_io(t_params.electron.debug_io[1], vpa, vperp, z,
-                                            r, composition, collisions,
-                                            moments.evolve_density, moments.evolve_upar,
-                                            moments.evolve_p, external_source_settings,
-                                            t_params.electron,
-                                            t_params.electron.debug_io[2], -1, nothing,
-                                            "electron_debug")
+            setup_electron_io(t_params.electron.debug_io[1], vpa, vperp, z, r,
+                              composition, collisions, moments.evolve_density,
+                              moments.evolve_upar, moments.evolve_p,
+                              external_source_settings, t_params.electron,
+                              t_params.electron.debug_io[2], -1, nothing,
+                              "electron_debug")
         end
         if code_time > 0.0
             tind = searchsortedfirst(t_params.electron.moments_output_times, code_time)
@@ -734,7 +733,6 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
                                                 nl_solver_params.electron_advance,
                                                 max_electron_pdf_iterations,
                                                 max_electron_sim_time;
-                                                io_electron=io_initial_electron,
                                                 initial_time=code_time,
                                                 residual_tolerance=t_input["initialization_residual_value"],
                                                 evolve_p=true,
@@ -812,7 +810,6 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
                                          nl_solver_params.electron_advance,
                                          max_electron_pdf_iterations,
                                          max_electron_sim_time;
-                                         io_electron=io_initial_electron,
                                          evolve_p=true, ion_dt=t_params.dt[],
                                          solution_method=electron_solution_method)
             end
@@ -823,11 +820,9 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
 
             # Write the converged initial state for the electrons to a file so that it can be
             # re-used if the simulation is re-run.
-            t_params.electron.moments_output_counter[] += 1
             write_electron_state(scratch_electron, moments, fields.phi, t_params.electron,
-                                 io_initial_electron,
-                                 t_params.electron.moments_output_counter[], -1.0, 0.0, r,
-                                 z, vperp, vpa; pdf_electron_converged=true)
+                                 io_initial_electron, 2, -1.0, 0.0, r, z, vperp, vpa;
+                                 pdf_electron_converged=true)
             finish_electron_io(io_initial_electron)
         end
 
