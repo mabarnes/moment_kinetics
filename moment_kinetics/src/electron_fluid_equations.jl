@@ -673,50 +673,6 @@ function add_electron_energy_equation_to_v_only_Jacobian!(
 end
 
 """
-    electron_energy_residual!(residual, electron_p_out, electron_p, in,
-                              fvec_in, moments, collisions, composition,
-                              external_source_settings, num_diss_params, z, dt, ir)
-
-The residual is a function whose input is `electron_p`, so that when it's output
-`residual` is zero, electron_p is the result of a backward-Euler timestep:
-  (f_out - f_in) / dt = RHS(f_out)
-⇒ (f_out - f_in) - dt*RHS(f_out) = 0
-
-This function assumes any needed moment derivatives are already calculated using
-`electron_p_out` and stored in `moments.electron`.
-
-Note that this function operates on a single point in `r`, given by `ir`, and `residual`,
-`electron_p_out`, and `electron_p_in` should have no r-dimension.
-"""
-function electron_energy_residual!(residual, electron_p_out, electron_p, in,
-                                   fvec_in, moments, collisions, composition,
-                                   external_source_settings, num_diss_params, z, dt, ir)
-    @begin_z_region()
-    @loop_z iz begin
-        residual[iz] = electron_p_in[iz]
-    end
-    @views electron_energy_equation_no_r!(residual, fvec_in.electron_density[:,ir],
-                                          electron_p_out, fvec_in.electron_density[:,ir],
-                                          fvec_in.electron_upar[:,ir],
-                                          moments.electron.ppar[:,ir],
-                                          fvec_in.density[:,ir,:], fvec_in.upar[:,ir,:],
-                                          fvec_in.p[:,ir,:],
-                                          fvec_in.density_neutral[:,ir,:],
-                                          fvec_in.uz_neutral[:,ir,:],
-                                          fvec_in.p_neutral[:,ir,:], moments.electron,
-                                          collisions, dt, composition,
-                                          external_source_settings.electron,
-                                          num_diss_params, z, ir)
-    # Now
-    #   residual = f_in + dt*RHS(f_out)
-    # so update to desired residual
-    @begin_z_region()
-    @loop_z iz begin
-        residual[iz] = (electron_p_out[iz] - residual[iz])
-    end
-end
-
-"""
 Add just the braginskii conduction contribution to the electron pressure, and assume that
 we have to calculate qpar and dqpar_dz from p within this function (they are not
 pre-calculated).
