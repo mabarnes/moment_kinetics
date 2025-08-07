@@ -1047,15 +1047,15 @@ function calculate_electron_qpar_from_pdf_no_r!(qpar, dens, vth, pdf, vperp, vpa
     end
 end
 
-function update_electron_vth_temperature!(moments, p, dens, composition)
-    @begin_r_z_region()
+function update_electron_vth_temperature!(moments, p, dens, composition, ir)
+    @begin_z_region()
 
-    temp = moments.electron.temp
-    vth = moments.electron.vth
-    @loop_r_z ir iz begin
-        this_p = max(p[iz,ir], 0.0)
-        temp[iz,ir] = this_p / dens[iz,ir]
-        vth[iz,ir] = sqrt(2.0 * temp[iz,ir] / composition.me_over_mi)
+    temp = @view moments.electron.temp[:,ir]
+    vth = @view moments.electron.vth[:,ir]
+    @loop_z iz begin
+        this_p = max(p[iz], 0.0)
+        temp[iz] = this_p / dens[iz]
+        vth[iz] = sqrt(2.0 * temp[iz] / composition.me_over_mi)
     end
     moments.electron.temp_updated[] = true
 
