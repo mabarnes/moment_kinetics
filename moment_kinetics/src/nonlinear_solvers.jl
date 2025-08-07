@@ -594,7 +594,7 @@ end
                                rtol, atol, x) = begin
     z = coords.z
 
-    @begin_z_region()
+    @begin_anyzv_z_region()
 
     local_norm = 0.0
     if z.irank < z.nrank - 1
@@ -611,16 +611,16 @@ end
         end
     end
 
-    @_block_synchronize()
+    @_anyzv_subblock_synchronize()
     global_norm = Ref(local_norm)
-    @timeit_debug global_timer "MPI.Reduce! comm_block" MPI.Reduce!(global_norm, +, comm_block[]) # global_norm is the norm_square for the block
+    @timeit_debug global_timer "MPI.Reduce! comm_anyzv_subblock" MPI.Reduce!(global_norm, +, comm_block[]) # global_norm is the norm_square for the block
 
-    if block_rank[] == 0
-        @timeit_debug global_timer "MPI.Allreduce! comm_inter_block" MPI.Allreduce!(global_norm, +, comm_inter_block[]) # global_norm is the norm_square for the whole grid
+    if anyzv_subblock_rank[] == 0
+        @timeit_debug global_timer "MPI.Allreduce! z.comm" MPI.Allreduce!(global_norm, +, z.comm) # global_norm is the norm_square for the whole grid
         global_norm[] = sqrt(global_norm[] / z.n_global)
     end
-    @_block_synchronize()
-    @timeit_debug global_timer "MPI.Bcast! comm_block" MPI.Bcast!(global_norm, comm_block[]; root=0)
+    @_anyzv_subblock_synchronize()
+    @timeit_debug global_timer "MPI.Bcast! comm_anyzv_subblock" MPI.Bcast!(global_norm, comm_anyzv_subblock[]; root=0)
 
     return global_norm[]
 end
@@ -785,7 +785,7 @@ end
 
     z = coords.z
 
-    @begin_z_region()
+    @begin_anyzv_z_region()
 
     z = coords.z
 
@@ -804,12 +804,12 @@ end
         end
     end
 
-    @_block_synchronize()
+    @_anyzv_subblock_synchronize()
     global_dot = Ref(local_dot)
-    @timeit_debug global_timer "MPI.Reduce! comm_block" MPI.Reduce!(global_dot, +, comm_block[]) # global_dot is the dot for the block
+    @timeit_debug global_timer "MPI.Reduce! comm_anyzv_subblock" MPI.Reduce!(global_dot, +, comm_anyzv_subblock[]) # global_dot is the dot for the block
 
     if block_rank[] == 0
-        @timeit_debug global_timer "MPI.Allreduce! comm_inter_block" MPI.Allreduce!(global_dot, +, comm_inter_block[]) # global_dot is the dot for the whole grid
+        @timeit_debug global_timer "MPI.Allreduce! z.comm" MPI.Allreduce!(global_dot, +, z.comm) # global_dot is the dot for the whole grid
         global_dot[] = global_dot[] / z.n_global
     end
 
@@ -964,7 +964,7 @@ end
 @timeit_debug global_timer parallel_map(
                   ::Val{:z}, func, result::AbstractArray{mk_float, 1}) = begin
 
-    @begin_z_region()
+    @begin_anyzv_z_region()
 
     @loop_z iz begin
         result[iz] = func()
@@ -975,7 +975,7 @@ end
 @timeit_debug global_timer parallel_map(
                   ::Val{:z}, func, result::AbstractArray{mk_float, 1}, x1) = begin
 
-    @begin_z_region()
+    @begin_anyzv_z_region()
 
     @loop_z iz begin
         result[iz] = func(x1[iz])
@@ -986,7 +986,7 @@ end
 @timeit_debug global_timer parallel_map(
                   ::Val{:z}, func, result::AbstractArray{mk_float, 1}, x1, x2) = begin
 
-    @begin_z_region()
+    @begin_anyzv_z_region()
 
     if isa(x2, AbstractArray)
         @loop_z iz begin
@@ -1003,7 +1003,7 @@ end
 @timeit_debug global_timer parallel_map(
                   ::Val{:z}, func, result::AbstractArray{mk_float, 1}, x1, x2, x3) = begin
 
-    @begin_z_region()
+    @begin_anyzv_z_region()
 
     if isa(x3, AbstractArray)
         @loop_z iz begin
@@ -1317,7 +1317,7 @@ end
 @timeit_debug global_timer parallel_delta_x_calc(
                   ::Val{:z}, delta_x::AbstractArray{mk_float, 1}, V, y) = begin
 
-    @begin_z_region()
+    @begin_anyzv_z_region()
 
     ny = length(y)
     @loop_z iz begin
