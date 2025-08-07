@@ -115,9 +115,8 @@ OUTPUT:
                          scratch_dummy, t_params, collisions, composition,
                          external_source_settings, num_diss_params, nl_solver_params,
                          max_electron_pdf_iterations, max_electron_sim_time;
-                         io_electron=nothing, initial_time=nothing,
-                         residual_tolerance=nothing, evolve_p=false, ion_dt=nothing,
-                         solution_method="backward_euler") = begin
+                         initial_time=nothing, residual_tolerance=nothing, evolve_p=false,
+                         ion_dt=nothing, solution_method="backward_euler") = begin
 
     # solve the electron kinetic equation using the specified method
     if solution_method == "artificial_time_derivative"
@@ -125,16 +124,15 @@ OUTPUT:
             collisions, composition, r, z, vperp, vpa, z_spectral, vperp_spectral,
             vpa_spectral, z_advect, vpa_advect, scratch_dummy, t_params,
             external_source_settings, num_diss_params, max_electron_pdf_iterations,
-            max_electron_sim_time; io_electron=io_electron, initial_time=initial_time,
+            max_electron_sim_time; initial_time=initial_time,
             residual_tolerance=residual_tolerance, evolve_p=evolve_p, ion_dt=ion_dt)
     elseif solution_method == "backward_euler"
         return electron_backward_euler_pseudotimestepping!(scratch, pdf, moments, phi,
             collisions, composition, r, z, vperp, vpa, z_spectral, vperp_spectral,
             vpa_spectral, z_advect, vpa_advect, scratch_dummy, t_params,
             external_source_settings, num_diss_params, nl_solver_params,
-            max_electron_pdf_iterations, max_electron_sim_time; io_electron=io_electron,
-            initial_time=initial_time, residual_tolerance=residual_tolerance,
-            evolve_p=evolve_p, ion_dt=ion_dt)
+            max_electron_pdf_iterations, max_electron_sim_time; initial_time=initial_time,
+            residual_tolerance=residual_tolerance, evolve_p=evolve_p, ion_dt=ion_dt)
     else
         error("!!! invalid solution method '$solution_method' specified !!!")
     end
@@ -180,9 +178,8 @@ OUTPUT:
 function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, collisions,
         composition, r, z, vperp, vpa, z_spectral, vperp_spectral, vpa_spectral, z_advect,
         vpa_advect, scratch_dummy, t_params, external_source_settings, num_diss_params,
-        max_electron_pdf_iterations, max_electron_sim_time; io_electron=nothing,
-        initial_time=nothing, residual_tolerance=nothing, evolve_p=false,
-        ion_dt=nothing)
+        max_electron_pdf_iterations, max_electron_sim_time; initial_time=nothing,
+        residual_tolerance=nothing, evolve_p=false, ion_dt=nothing)
 
     if max_electron_pdf_iterations === nothing && max_electron_sim_time === nothing
         error("Must set one of max_electron_pdf_iterations and max_electron_sim_time")
@@ -251,14 +248,13 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
     else
         initial_time = t_params.t[]
     end
-    if io_electron === nothing && t_params.debug_io !== nothing
+    if t_params.debug_io !== nothing
         # Overwrite the debug output file with the output from this call to
         # update_electron_pdf_with_time_advance!().
         io_electron = get_electron_io_info(t_params.debug_io[1], "electron_debug")
-        do_debug_io = true
         debug_io_nwrite = t_params.debug_io[3]
     else
-        do_debug_io = false
+        io_electron = nothing
     end
 
     text_output = false
@@ -507,7 +503,7 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
         end
         if ((t_params.adaptive && t_params.write_moments_output[])
             || (!t_params.adaptive && t_params.step_counter[] % t_params.nwrite_moments == 0)
-            || (do_debug_io && (t_params.step_counter[] % debug_io_nwrite == 0)))
+            || (io_electron !== nothing && (t_params.step_counter[] % debug_io_nwrite == 0)))
 
             @begin_serial_region()
             @serial_region begin
@@ -585,14 +581,12 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
             close(io_pdf)
             close(io_pdf_stages)
         end
-        if !electron_pdf_converged || do_debug_io
-            if io_electron !== nothing && io_electron !== true
-                t_params.moments_output_counter[] += 1
-                write_electron_state(scratch, moments, phi, t_params, io_electron,
-                                     t_params.moments_output_counter[], local_pseudotime,
-                                     residual_norm, r, z, vperp, vpa)
-                finish_electron_io(io_electron)
-            end
+        if io_electron !== nothing
+            t_params.moments_output_counter[] += 1
+            write_electron_state(scratch, moments, phi, t_params, io_electron,
+                                 t_params.moments_output_counter[], local_pseudotime,
+                                 residual_norm, r, z, vperp, vpa)
+            finish_electron_io(io_electron)
         end
     end
     if !electron_pdf_converged
@@ -617,9 +611,8 @@ function electron_backward_euler_pseudotimestepping!(scratch, pdf, moments, phi,
         collisions, composition, r, z, vperp, vpa, z_spectral, vperp_spectral,
         vpa_spectral, z_advect, vpa_advect, scratch_dummy, t_params,
         external_source_settings, num_diss_params, nl_solver_params,
-        max_electron_pdf_iterations, max_electron_sim_time; io_electron=nothing,
-        initial_time=nothing, residual_tolerance=nothing, evolve_p=false,
-        ion_dt=nothing)
+        max_electron_pdf_iterations, max_electron_sim_time; initial_time=nothing,
+        residual_tolerance=nothing, evolve_p=false, ion_dt=nothing)
 
     if max_electron_pdf_iterations === nothing && max_electron_sim_time === nothing
         error("Must set one of max_electron_pdf_iterations and max_electron_sim_time")
@@ -701,14 +694,13 @@ function electron_backward_euler_pseudotimestepping!(scratch, pdf, moments, phi,
     else
         initial_time = t_params.t[]
     end
-    if io_electron === nothing && t_params.debug_io !== nothing
+    if t_params.debug_io !== nothing
         # Overwrite the debug output file with the output from this call to
         # update_electron_pdf_with_time_advance!().
         io_electron = get_electron_io_info(t_params.debug_io[1], "electron_debug")
-        do_debug_io = true
         debug_io_nwrite = t_params.debug_io[3]
     else
-        do_debug_io = false
+        io_electron = nothing
     end
 
     # Store the initial number of iterations in the solution of the electron kinetic
@@ -981,7 +973,7 @@ function electron_backward_euler_pseudotimestepping!(scratch, pdf, moments, phi,
                 end
             end
             if ((t_params.step_counter[] % t_params.nwrite_moments == 0)
-                || (do_debug_io && (t_params.step_counter[] % debug_io_nwrite == 0)))
+                || (io_electron !== nothing && (t_params.step_counter[] % debug_io_nwrite == 0)))
 
                 if r.n == 1
                     # For now can only do I/O within the pseudo-timestepping loop when there
@@ -1042,14 +1034,12 @@ function electron_backward_euler_pseudotimestepping!(scratch, pdf, moments, phi,
     end
     @begin_serial_region()
     @serial_region begin
-        if !electron_pdf_converged[] || do_debug_io
-            if io_electron !== nothing && io_electron !== true
-                t_params.moments_output_counter[] += 1
-                write_electron_state(scratch, moments, phi, t_params, io_electron,
-                                     t_params.moments_output_counter[], local_pseudotime,
-                                     residual_norm, r, z, vperp, vpa)
-                finish_electron_io(io_electron)
-            end
+        if io_electron !== nothing
+            t_params.moments_output_counter[] += 1
+            write_electron_state(scratch, moments, phi, t_params, io_electron,
+                                 t_params.moments_output_counter[], local_pseudotime,
+                                 residual_norm, r, z, vperp, vpa)
+            finish_electron_io(io_electron)
         end
     end
 
