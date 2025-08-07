@@ -806,7 +806,7 @@ eval(quote
          else
              this_ranges = Dict(d=>1:n for (d,n) in dim_sizes)
              if !rank0
-                 for d ∈ (:vperp, :vpa)
+                 for d ∈ (:s, :vperp, :vpa)
                      this_ranges[d] = 1:0
                  end
              end
