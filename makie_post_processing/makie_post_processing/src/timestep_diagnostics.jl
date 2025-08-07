@@ -20,6 +20,7 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
     end
 
     input = Dict_to_NamedTuple(input_dict["timestep_diagnostics"])
+    top_level_input = Dict_to_NamedTuple(input_dict)
 
     if input.plot || input.animate_CFL || input.plot_timestep_residual ||
             input.animate_timestep_residual || input.plot_timestep_error ||
@@ -68,13 +69,15 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                     time = ri.time
                 end
                 plot_1d(time, get_variable(ri, "$(electron_prefix)steps_per_output";
-                                              it=it); label=prefix * "steps", ax=ax)
+                                           it=it, ir=top_level_input.ir0);
+                        label=prefix * "steps", ax=ax)
                 # Fudge to create an invisible line on ax_failures that cycles the line colors
                 # and adds a label for "steps_per_output" to the plot because we create the
                 # legend from ax_failures.
                 plot_1d([ri.time[1]], [0]; label=prefix * "steps", ax=ax_failures)
                 plot_1d(time,
-                        get_variable(ri, "$(electron_prefix)failures_per_output"; it=it);
+                        get_variable(ri, "$(electron_prefix)failures_per_output"; it=it,
+                                     ir=top_level_input.ir0);
                         label=prefix * "failures", ax=ax_failures)
 
                 if "$(electron_prefix)failure_caused_by" ∈ ri.variable_names
@@ -605,7 +608,9 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                 if ri.composition.electron_physics ∈ (kinetic_electrons,
                                                       kinetic_electrons_with_temperature_equation)
                     has_electron_solve = true
-                    electron_steps_per_ion_step = get_variable(ri, "electron_steps_per_ion_step")
+                    electron_steps_per_ion_step =
+                        get_variable(ri, "electron_steps_per_ion_step";
+                                     ir=top_level_input.ir0)
                     plot_1d(time, electron_steps_per_ion_step, label=prefix * " electron steps per solve", ax=ax)
                 end
             end

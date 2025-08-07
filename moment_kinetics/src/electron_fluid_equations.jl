@@ -700,9 +700,9 @@ function electron_braginskii_conduction!(p_out::AbstractVector{mk_float},
     derivative_z!(dT_dz, temp, buffer_r_1, buffer_r_2, buffer_r_3, buffer_r_4, z_spectral,
                   z)
     electron_moments.qpar_updated[] = false
-    calculate_electron_qpar!(electron_moments, nothing, p_in, dens, upar_e, upar_i,
-                             collisions.electron_fluid.nu_ei, composition.me_over_mi,
-                             composition.electron_physics, nothing, nothing)
+    calculate_electron_qpar_no_r!(electron_moments, nothing, p_in, dens, upar_e, upar_i,
+                                  collisions.electron_fluid.nu_ei, composition.me_over_mi,
+                                  composition.electron_physics, nothing, nothing, ir)
     electron_fluid_qpar_boundary_condition!(p_in, upar_e, dens, electron_moments, z)
     derivative_z!(dqpar_dz, qpar, buffer_r_1, buffer_r_2, buffer_r_3, buffer_r_4,
                   z_spectral, z)
@@ -1003,15 +1003,15 @@ function calculate_electron_qpar_from_pdf_no_r!(qpar, dens, vth, pdf, vperp, vpa
     end
 end
 
-function update_electron_vth_temperature!(moments, p, dens, composition)
-    @begin_r_z_region()
+function update_electron_vth_temperature!(moments, p, dens, composition, ir)
+    @begin_z_region()
 
-    temp = moments.electron.temp
-    vth = moments.electron.vth
-    @loop_r_z ir iz begin
-        this_p = max(p[iz,ir], 0.0)
-        temp[iz,ir] = this_p / dens[iz,ir]
-        vth[iz,ir] = sqrt(2.0 * temp[iz,ir] / composition.me_over_mi)
+    temp = @view moments.electron.temp[:,ir]
+    vth = @view moments.electron.vth[:,ir]
+    @loop_z iz begin
+        this_p = max(p[iz], 0.0)
+        temp[iz] = this_p / dens[iz]
+        vth[iz] = sqrt(2.0 * temp[iz] / composition.me_over_mi)
     end
     moments.electron.temp_updated[] = true
 

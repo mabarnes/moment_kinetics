@@ -700,8 +700,8 @@ function reload_evolving_fields!(pdf, moments, fields, restart_prefix_iblock, ti
     code_time = 0.0
     dt = Ref(-Inf)
     dt_before_last_fail = Ref(Inf)
-    electron_dt = Ref(-Inf)
-    electron_dt_before_last_fail = Ref(Inf)
+    electron_dt = fill(mk_float(-Inf), r.n)
+    electron_dt_before_last_fail = fill(mk_float(Inf), r.n)
     previous_runs_info = nothing
     restart_electron_physics = nothing
     @begin_serial_region()
@@ -1030,11 +1030,15 @@ function reload_evolving_fields!(pdf, moments, fields, restart_prefix_iblock, ti
                 # The algorithm for electron pseudo-timestepping actually starts each
                 # solve using t_params.electron.previous_dt[], so "electron_previous_dt"
                 # is the thing to load.
-                electron_dt[] = load_slice(dynamic, "electron_previous_dt", time_index)
+                electron_dt .=
+                    reload_r_array("electron_previous_dt", dynamic, time_index, coords,
+                                   reload_ranges, restart_coords, interpolation_needed)
             end
             if "electron_dt_before_last_fail" ∈ keys(dynamic)
-                electron_dt_before_last_fail[] =
-                    load_slice(dynamic, "electron_dt_before_last_fail", time_index)
+                electron_dt_before_last_fail .=
+                    reload_r_array("electron_dt_before_last_fail", dynamic, time_index,
+                                   coords, reload_ranges, restart_coords,
+                                   interpolation_needed)
             end
         finally
             close(fid)
@@ -1064,14 +1068,12 @@ function reload_evolving_fields!(pdf, moments, fields, restart_prefix_iblock, ti
     else
         dt = dt[]
     end
-    if electron_dt[] == -Inf
+    if all(electron_dt .== -Inf)
         electron_dt = nothing
-    else
-        electron_dt = electron_dt[]
     end
 
     return code_time, dt, dt_before_last_fail[], electron_dt,
-           electron_dt_before_last_fail[], previous_runs_info, time_index,
+           electron_dt_before_last_fail, previous_runs_info, time_index,
            restart_electron_physics
 end
 
@@ -1080,7 +1082,7 @@ Reload electron pdf and moments from an existing output file.
 """
 function reload_electron_data!(pdf, moments, phi, t_params, restart_prefix_iblock,
                                time_index, geometry, r, z, vpa, vperp, vzeta, vr, vz)
-    code_time = Ref(0.0)
+    code_time = fill(mk_float(0.0), r.n)
     pdf_electron_converged = Ref(false)
     previous_runs_info = nothing
     @begin_serial_region()
@@ -1115,11 +1117,13 @@ function reload_electron_data!(pdf, moments, phi, t_params, restart_prefix_ibloc
                                || !all(isapprox.(x.grid, restart_coords[key].grid))))
                 for (key, x) ∈ pairs(coords))
 
-            code_time[] = load_slice(dynamic, "time", time_index)
+            reload_ranges = get_reload_ranges(parallel_io, restart_coords)
+
+            code_time .= reload_r_array("electron_cumulative_pseudotime", dynamic,
+                                        time_index, coords, reload_ranges, restart_coords,
+                                        interpolation_needed)
 
             pdf_electron_converged[] = get_attribute(fid, "pdf_electron_converged")
-
-            reload_ranges = get_reload_ranges(parallel_io, restart_coords)
 
             moments.electron.upar_updated[] = true
             moments.electron.p .=
@@ -1167,15 +1171,24 @@ function reload_electron_data!(pdf, moments, phi, t_params, restart_prefix_ibloc
                                        coords, reload_ranges, restart_coords,
                                        interpolation_needed)
 
-            new_dt = load_slice(dynamic, "electron_dt", time_index)
-            if new_dt > 0.0
+            new_dt = reload_r_array("electron_dt", dynamic, time_index, coords,
+                                    reload_ranges, restart_coords, interpolation_needed)
+            if all(new_dt .> 0.0)
                 # if the reloaded electron_dt was 0.0, then the previous run would not
                 # have been using kinetic electrons, so we only use the value if it is
                 # positive
-                t_params.dt[] = new_dt
+                t_params.dt .= new_dt
             end
-            t_params.dt_before_last_fail[] =
-                load_slice(dynamic, "electron_dt_before_last_fail", time_index)
+            t_params.previous_dt .=
+                reload_r_array("electron_previous_dt", dynamic, time_index, coords,
+                               reload_ranges, restart_coords, interpolation_needed)
+            t_params.dt_before_last_fail .=
+                reload_r_array("electron_dt_before_last_fail", dynamic, time_index,
+                               coords, reload_ranges, restart_coords,
+                               interpolation_needed)
+            t_params.step_counter .=
+                reload_r_array("electron_step_counter", dynamic, time_index, coords,
+                               reload_ranges, restart_coords, interpolation_needed)
         finally
             close(fid)
         end
@@ -1185,14 +1198,16 @@ function reload_electron_data!(pdf, moments, phi, t_params, restart_prefix_ibloc
     # root process of each shared-memory block (on which it might have been loaded from a
     # restart file).
     MPI.Bcast!(t_params.dt, comm_block[]; root=0)
+    MPI.Bcast!(t_params.previous_dt, comm_block[]; root=0)
     MPI.Bcast!(t_params.dt_before_last_fail, comm_block[]; root=0)
+    MPI.Bcast!(t_params.step_counter, comm_block[]; root=0)
     MPI.Bcast!(code_time, comm_block[]; root=0)
     MPI.Bcast!(pdf_electron_converged, comm_block[]; root=0)
 
-    t_params.previous_dt[] = t_params.dt[]
-    t_params.dt_before_output[] = t_params.dt[]
+    t_params.dt_before_output .= t_params.dt
+    t_params.t .= code_time
 
-    return code_time[], pdf_electron_converged[], previous_runs_info, time_index
+    return code_time, pdf_electron_converged[], previous_runs_info, time_index
 end
 
 function load_restart_coordinates(fid, new_coords, parallel_io)
@@ -1377,6 +1392,26 @@ function regrid_electron_moment(moment, new_coords, old_coords, interpolation_ne
         moment = new_moment
     end
     return moment
+end
+
+function reload_r_array(var_name, dynamic, time_index, coords, reload_ranges,
+                        restart_coords, interpolation_needed)
+    r_array = load_slice(dynamic, var_name, reload_ranges.r_range, time_index)
+    return regrid_r_array(r_array, coords, restart_coords, interpolation_needed)
+end
+
+function regrid_r_array(r_array, new_coords, old_coords, interpolation_needed)
+    r = new_coords.r
+    old_r = old_coords.r
+    old_r_spectral = old_coords.r_spectral
+    orig_nr = size(r_array)
+    if interpolation_needed["r"]
+        new_r_array = allocate_float(r.n)
+        @views interpolate_to_grid_1d!(new_r_array, r.grid, r_array, old_r,
+                                       old_r_spectral)
+        r_array = new_r_array
+    end
+    return r_array
 end
 
 function reload_ion_pdf(dynamic, time_index, moments, coords, reload_ranges,
@@ -5513,7 +5548,10 @@ function _get_variable_internal(run_info, variable_name::Symbol;
     elseif variable_name == :electron_steps_per_ion_step
         electron_steps_per_output = get_variable(run_info, "electron_steps_per_output"; kwargs...)
         ion_steps_per_output = get_variable(run_info, "steps_per_output"; kwargs...)
-        variable = electron_steps_per_output ./ ion_steps_per_output
+        variable = electron_steps_per_output ./
+                   reshape(ion_steps_per_output,
+                           (1 for _ ∈ 1:(ndims(electron_steps_per_output)-ndims(ion_steps_per_output)))...,
+                           size(ion_steps_per_output)...)
     elseif variable_name == :electron_steps_per_output
         variable = get_per_step_from_cumulative_variable(run_info, "electron_step_counter"; kwargs...)
     elseif variable_name == :electron_failures_per_output
