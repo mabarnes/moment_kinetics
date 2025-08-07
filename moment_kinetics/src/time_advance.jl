@@ -312,7 +312,8 @@ end
 """
     setup_time_info(t_input, n_variables, code_time, dt_reload,
                     dt_before_last_fail_reload, composition,
-                    manufactured_solns_input, io_input, input_dict; electron=nothing)
+                    manufactured_solns_input, io_input, input_dict, r;
+                    electron=nothing, debug_io=nothing)
 
 Create a [`input_structs.time_info`](@ref) struct using the settings in `t_input`.
 
@@ -321,8 +322,8 @@ the returned `time_info`.
 """
 function setup_time_info(t_input, n_variables, code_time, dt_reload,
                          dt_before_last_fail_reload, composition,
-                         manufactured_solns_input, io_input, input_dict; electron=nothing,
-                         debug_io=nothing)
+                         manufactured_solns_input, io_input, input_dict, r;
+                         electron=nothing, debug_io=nothing)
     code_time = mk_float(code_time)
     rk_coefs, rk_coefs_implicit, implicit_coefficient_is_zero, n_rk_stages, rk_order,
     adaptive, low_storage, CFL_prefactor =
@@ -330,8 +331,10 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
                                         mk_float(t_input["CFL_prefactor"]),
                                         t_input["split_operators"])
 
+    is_electron = (electron === nothing)
+
     if !adaptive
-        if electron !== nothing
+        if !is_electron
             # No adaptive timestep, want to use the value from the input file even when we are
             # restarting.
             # Do not want to do this for electrons, because electron_backward_euler!()
@@ -353,11 +356,43 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
                 * "`write_after_fixed_step_count=true`.")
     end
 
-    t = Ref(code_time)
-    dt = Ref(dt_reload === nothing ? mk_float(t_input["dt"]) : dt_reload)
-    previous_dt = Ref(dt[])
-    dt_before_output = Ref(dt[])
-    dt_before_last_fail = Ref(dt_before_last_fail_reload === nothing ? mk_float(Inf) : dt_before_last_fail_reload)
+    if is_electron
+        t = fill(mk_float(code_time), r.n)
+        if dt_reload === nothing
+            dt = fill(mk_float(t_input["dt"]), r.n)
+        else
+            dt = dt_reload
+        end
+        previous_dt = copy(dt)
+        dt_before_output = copy(dt)
+        if dt_before_last_fail_reload === nothing
+            dt_before_last_fail = fill(mk_float(Inf), r.n)
+        else
+            dt_before_last_fail = dt_before_last_fail_reload
+        end
+        step_counter = fill(mk_int(0), r.n)
+        max_step_count_this_ion_step = fill(mk_int(0), r.n)
+        max_t_increment_this_ion_step = fill(mk_float(0), r.n)
+        moments_output_counter = fill(mk_int(0), r.n)
+        dfns_output_counter = fill(mk_int(0), r.n)
+        failure_counter = fill(mk_int(0), r.n)
+        failure_caused_by = fill(OrderedDict{String,mk_int}(), r.n)
+        limit_caused_by = fill(OrderedDict{String,mk_int}(), r.n)
+    else
+        t = Ref(code_time)
+        dt = Ref(dt_reload === nothing ? mk_float(t_input["dt"]) : dt_reload)
+        previous_dt = Ref(dt[])
+        dt_before_output = Ref(dt[])
+        dt_before_last_fail = Ref(dt_before_last_fail_reload === nothing ? mk_float(Inf) : dt_before_last_fail_reload)
+        step_counter = Ref(0)
+        max_step_count_this_ion_step = Ref(0)
+        max_t_increment_this_ion_step = Ref(0.0)
+        moments_output_counter = Ref(0)
+        dfns_output_counter = Ref(0)
+        failure_counter = Ref(0)
+        failure_caused_by = OrderedDict{String,mk_int}()
+        limit_caused_by = OrderedDict{String,mk_int}()
+    end
     step_to_moments_output = Ref(false)
     step_to_dfns_output = Ref(false)
     write_moments_output = Ref(false)
@@ -365,7 +400,14 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
 
     end_time = mk_float(code_time + t_input["dt"] * t_input["nstep"])
     epsilon = 1.e-11
-    if adaptive && !t_input["write_after_fixed_step_count"]
+    if is_electron
+        # Don't write regular output from electron solver because solves at different
+        # r-positions may take different numbers of steps, etc.
+        moments_output_times = mk_float[]
+        dfns_output_times = mk_float[]
+        nwrite_moments = 0
+        nwrite_dfns = 0
+    elseif adaptive && !t_input["write_after_fixed_step_count"]
         if t_input["nwrite"] == 0
             moments_output_times = [end_time]
         else
@@ -384,19 +426,23 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
         if dfns_output_times[end] < end_time - epsilon
             push!(dfns_output_times, end_time)
         end
+        nwrite_moments = t_input["nwrite"]
+        nwrite_dfns = t_input["nwrite_dfns"]
     else
         # Use nwrite_moments and nwrite_dfns to determine when to write output
         moments_output_times = mk_float[]
         dfns_output_times = mk_float[]
+        nwrite_moments = t_input["nwrite"]
+        nwrite_dfns = t_input["nwrite_dfns"]
     end
 
     if rk_coefs_implicit === nothing
         # Not an IMEX scheme, so cannot have any implicit terms
         t_input["implicit_braginskii_conduction"] = false
-        if electron !== nothing && t_input["kinetic_electron_solver"] ∈ (implicit_time_evolving,
-                                                                         implicit_p_implicit_pseudotimestep,
-                                                                         implicit_steady_state,
-                                                                         implicit_p_explicit_pseudotimestep)
+        if !is_electron && t_input["kinetic_electron_solver"] ∈ (implicit_time_evolving,
+                                                                 implicit_p_implicit_pseudotimestep,
+                                                                 implicit_steady_state,
+                                                                 implicit_p_explicit_pseudotimestep)
             error("kinetic_electron_solver=$(t_input["kinetic_electron_solver"]) "
                   * "not supported when using a fully explicit timestep")
         end
@@ -407,7 +453,7 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
         end
     end
 
-    if electron !== nothing && (t_input["kinetic_ion_solver"] == implicit_ion_vpa_advection)
+    if !is_electron && (t_input["kinetic_ion_solver"] == implicit_ion_vpa_advection)
         error("implicit_vpa_advection does not work at the moment. Need to figure out "
               * "what to do with constraints, as explicit and implicit parts would not "
               * "preserve constaints separately.")
@@ -419,7 +465,7 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
         error_sum_zero = 0.0
     end
 
-    if electron === nothing
+    if is_electron
         # Setting up time_info for electrons.
         # Store io_input as the debug_io variable so we can use it to open the debug
         # output file.
@@ -497,28 +543,28 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
     return time_info(n_variables, t_input["nstep"], end_time, t, dt, previous_dt,
                      dt_before_output, dt_before_last_fail, mk_float(CFL_prefactor),
                      step_to_moments_output, step_to_dfns_output, write_moments_output,
-                     write_dfns_output, Ref(0), Ref(0), Ref{mk_float}(0.0), Ref(0),
-                     Ref(0), Ref(0), OrderedDict{String,mk_int}(),
-                     OrderedDict{String,mk_int}(), t_input["nwrite"],
-                     t_input["nwrite_dfns"], moments_output_times, dfns_output_times,
-                     t_input["type"], rk_coefs, rk_coefs_implicit,
-                     implicit_coefficient_is_zero, n_rk_stages, rk_order,
-                     electron !== nothing && t_input["exact_output_times"], adaptive,
-                     low_storage, mk_float(t_input["rtol"]), mk_float(t_input["atol"]),
+                     write_dfns_output, step_counter, max_step_count_this_ion_step,
+                     max_t_increment_this_ion_step, moments_output_counter,
+                     dfns_output_counter, failure_counter, failure_caused_by,
+                     limit_caused_by, nwrite_moments, nwrite_dfns, moments_output_times,
+                     dfns_output_times, t_input["type"], rk_coefs, rk_coefs_implicit,
+                     implicit_coefficient_is_zero, n_rk_stages, rk_order, !is_electron &&
+                     t_input["exact_output_times"], adaptive, low_storage,
+                     mk_float(t_input["rtol"]), mk_float(t_input["atol"]),
                      mk_float(t_input["atol_upar"]),
                      mk_float(t_input["step_update_prefactor"]),
                      mk_float(t_input["max_increase_factor"]),
                      mk_float(t_input["max_increase_factor_near_last_fail"]),
                      mk_float(t_input["last_fail_proximity_factor"]),
                      mk_float(t_input["minimum_dt"]), mk_float(t_input["maximum_dt"]),
-                     electron !== nothing && t_input["implicit_braginskii_conduction"],
+                     !is_electron && t_input["implicit_braginskii_conduction"],
                      kinetic_electron_solver, electron_preconditioner_type,
                      # read main ion algorithm flag
                      kinetic_ion_solver,
                      # set useful derived parameters
-                     electron !== nothing && (t_input["kinetic_ion_solver"] == full_implicit_ion_advance),
-                     electron !== nothing && (t_input["kinetic_ion_solver"] == implicit_ion_vpa_advection),
-                     electron !== nothing && (t_input["kinetic_ion_solver"] == implicit_ion_fp_collisions),
+                     !is_electron && (t_input["kinetic_ion_solver"] == full_implicit_ion_advance),
+                     !is_electron && (t_input["kinetic_ion_solver"] == implicit_ion_vpa_advection),
+                     !is_electron && (t_input["kinetic_ion_solver"] == implicit_ion_fp_collisions),
                      mk_float(t_input["constraint_forcing_rate"]),
                      decrease_dt_iteration_threshold, increase_dt_iteration_threshold,
                      mk_float(cap_factor_ion_dt), mk_int(max_pseudotimesteps),
@@ -571,26 +617,28 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
                                             electron_dt_reload,
                                             electron_dt_before_last_fail_reload,
                                             composition, manufactured_solns_input,
-                                            io_input, input_dict)
+                                            io_input, input_dict, r)
         # Set up entries for counters for which variable caused timestep limits and
         # timestep failures the right length. Do this setup even when not using adaptive
         # timestepping, because it is easier than modifying the file I/O according to
         # whether we are using adaptive timestepping.
-        electron_t_params.limit_caused_by["max_increase_factor"] = 0
-        electron_t_params.limit_caused_by["max_increase_factor_near_last_fail"] = 0
-        electron_t_params.limit_caused_by["minimum_dt"] = 0
-        electron_t_params.limit_caused_by["maximum_dt"] = 0
-        electron_t_params.limit_caused_by["high_nl_iterations"] = 0
+        for ir ∈ 1:r.n
+            electron_t_params.limit_caused_by[ir]["max_increase_factor"] = 0
+            electron_t_params.limit_caused_by[ir]["max_increase_factor_near_last_fail"] = 0
+            electron_t_params.limit_caused_by[ir]["minimum_dt"] = 0
+            electron_t_params.limit_caused_by[ir]["maximum_dt"] = 0
+            electron_t_params.limit_caused_by[ir]["high_nl_iterations"] = 0
 
-        # electron pdf
-        electron_t_params.limit_caused_by["pdf_accuracy"] = 0
-        electron_t_params.limit_caused_by["CFL_z"] = 0
-        electron_t_params.limit_caused_by["CFL_vpa"] = 0
-        electron_t_params.failure_caused_by["pdf_accuracy"] = 0
+            # electron pdf
+            electron_t_params.limit_caused_by[ir]["pdf_accuracy"] = 0
+            electron_t_params.limit_caused_by[ir]["CFL_z"] = 0
+            electron_t_params.limit_caused_by[ir]["CFL_vpa"] = 0
+            electron_t_params.failure_caused_by[ir]["pdf_accuracy"] = 0
 
-        # electron p
-        electron_t_params.limit_caused_by["p_accuracy"] = 0
-        electron_t_params.failure_caused_by["p_accuracy"] = 0
+            # electron p
+            electron_t_params.limit_caused_by[ir]["p_accuracy"] = 0
+            electron_t_params.failure_caused_by[ir]["p_accuracy"] = 0
+        end
     else
         # Pass `false` rather than `nothing` to `setup_time_info()` call for ions, which
         # indicates that 'debug_io' should never be set up for ions.
@@ -680,7 +728,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
     end
     t_params = setup_time_info(t_input, n_variables, code_time, dt_reload,
                                dt_before_last_fail_reload, composition,
-                               manufactured_solns_input, io_input, input_dict;
+                               manufactured_solns_input, io_input, input_dict, r;
                                electron=electron_t_params, debug_io=debug_io)
 
     # Set up entries for counters for which variable caused timestep limits and
@@ -799,7 +847,8 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
     electron_conduction_nl_solve_parameters = setup_nonlinear_solve(t_params.implicit_braginskii_conduction,
                                                                     input_dict, (z=z,);
                                                                     default_rtol=t_params.rtol / 10.0,
-                                                                    default_atol=t_params.atol / 10.0)
+                                                                    default_atol=t_params.atol / 10.0,
+                                                                    anyzv_region=true)
     nl_solver_electron_advance_params =
         setup_nonlinear_solve(t_params.kinetic_electron_solver ∈ (implicit_time_evolving,
                                                                   implicit_p_implicit_pseudotimestep,
@@ -930,14 +979,17 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
             restart_electron_physics ∈ (kinetic_electrons,
                                         kinetic_electrons_with_temperature_equation)
         if t_params.electron.debug_io !== nothing
-            # Create *.electron_debug.h5 file so that it can be re-opened in
+            # Create *.electron_debug.ir*.h5 files so that they can be re-opened in
             # update_electron_pdf!().
-            io_electron = setup_electron_io(t_params.electron.debug_io[1], vpa, vperp, z, r,
-                                            composition, collisions, moments.evolve_density,
-                                            moments.evolve_upar, moments.evolve_p,
-                                            external_source_settings, t_params.electron,
-                                            t_params.electron.debug_io[2], -1, nothing,
-                                            "electron_debug")
+            @begin_r_anyzv_region()
+            @loop_r ir begin
+                setup_electron_io(t_params.electron.debug_io[1], vpa, vperp, z, r,
+                                  composition, collisions, moments.evolve_density,
+                                  moments.evolve_upar, moments.evolve_p,
+                                  external_source_settings, t_params.electron,
+                                  t_params.electron.debug_io[2], -1, nothing,
+                                  "electron_debug", ir)
+            end
         end
 
         # No need to do electron I/O (apart from possibly debug I/O) any more, so if
@@ -3739,7 +3791,8 @@ implementation), a call needs to be made with `dt` scaled by some coefficient.
     elseif advance.electron_conduction
         # Explicit version of the implicit part of the IMEX timestep, need to evaluate
         # only the conduction term.
-        for ir ∈ 1:r.n
+        @begin_r_anyzv_region()
+        @loop_r ir begin
             @views electron_braginskii_conduction!(
                 fvec_out.electron_p[:,ir], fvec_in.electron_p[:,ir],
                 fvec_in.electron_density[:,ir], fvec_in.electron_upar[:,ir],

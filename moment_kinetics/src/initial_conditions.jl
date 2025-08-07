@@ -609,7 +609,7 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
         if restart_filename === nothing
             # No file to restart from
             previous_runs_info = nothing
-            code_time = 0.0
+            code_time = fill(mk_float(0.0), r.n)
             restart_time_index = -1
             pdf_electron_converged = false
         else
@@ -685,21 +685,17 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
         max_electron_pdf_iterations = nothing
         max_electron_sim_time = max(2.0, t_params.electron.max_pseudotime)
         if t_params.electron.debug_io !== nothing
-            setup_electron_io(t_params.electron.debug_io[1], vpa, vperp, z, r,
-                              composition, collisions, moments.evolve_density,
-                              moments.evolve_upar, moments.evolve_p,
-                              external_source_settings, t_params.electron,
-                              t_params.electron.debug_io[2], -1, nothing,
-                              "electron_debug")
-        end
-        if code_time > 0.0
-            tind = searchsortedfirst(t_params.electron.moments_output_times, code_time)
-            n_truncated = max(length(t_params.electron.moments_output_times) - tind, 0)
-            truncated_times = t_params.electron.moments_output_times[tind+1:end]
-            resize!(t_params.electron.moments_output_times, n_truncated)
-            t_params.electron.moments_output_times .= truncated_times
-            resize!(t_params.electron.dfns_output_times, n_truncated)
-            t_params.electron.dfns_output_times .= truncated_times
+            @begin_serial_region
+            @serial_region begin
+                for ir ∈ 1:r.n
+                    setup_electron_io(t_params.electron.debug_io[1], vpa, vperp, z, r,
+                                      composition, collisions, moments.evolve_density,
+                                      moments.evolve_upar, moments.evolve_p,
+                                      external_source_settings, t_params.electron,
+                                      t_params.electron.debug_io[2], -1, nothing,
+                                      "electron_debug"; ir=ir)
+                end
+            end
         end
         if !pdf_electron_converged 
             if global_rank[] == 0
