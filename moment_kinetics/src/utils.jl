@@ -431,6 +431,23 @@ function get_minimum_CFL_z(speed::AbstractArray{T,4} where T, z)
 
     return min_CFL
 end
+function get_minimum_CFL_z(speed::AbstractArray{T,4} where T, z, ir)
+    min_CFL = Inf
+
+    dz = z.cell_width
+    nz = z.n
+    @loop_vperp_vpa ivperp ivpa begin
+        for iz ∈ 1:nz
+            min_CFL = min(min_CFL, abs(dz[iz] / speed[iz,ivpa,ivperp,ir]))
+        end
+    end
+
+    if comm_block[] !== MPI.COMM_NULL
+        min_CFL = MPI.Reduce(min_CFL, min, comm_block[]; root=0)
+    end
+
+    return min_CFL
+end
 
 """
     get_minimum_CFL_vperp(speed, vperp)
@@ -476,6 +493,23 @@ function get_minimum_CFL_vpa(speed::AbstractArray{T,4} where T, vpa)
     dvpa = vpa.cell_width
     nvpa = vpa.n
     @loop_r_z_vperp ir iz ivperp begin
+        for ivpa ∈ 1:nvpa
+            min_CFL = min(min_CFL, abs(dvpa[ivpa] / speed[ivpa,ivperp,iz,ir]))
+        end
+    end
+
+    if comm_block[] !== MPI.COMM_NULL
+        min_CFL = MPI.Reduce(min_CFL, min, comm_block[]; root=0)
+    end
+
+    return min_CFL
+end
+function get_minimum_CFL_vpa(speed::AbstractArray{T,4} where T, vpa, ir)
+    min_CFL = Inf
+
+    dvpa = vpa.cell_width
+    nvpa = vpa.n
+    @loop_z_vperp iz ivperp begin
         for ivpa ∈ 1:nvpa
             min_CFL = min(min_CFL, abs(dvpa[ivpa] / speed[ivpa,ivperp,iz,ir]))
         end
