@@ -459,20 +459,12 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
             update_derived_moments_and_derivatives()
 
             if t_params.adaptive && istage == t_params.n_rk_stages
-                if ion_dt === nothing
-                    local_max_dt = Inf
-                else
-                    # Ensure timestep is not too big, so that d(electron_p)/dt 'source
-                    # term' is numerically stable.
-                    local_max_dt = 0.5 * ion_dt
-                end
                 electron_adaptive_timestep_update!(scratch, t_params.t[], t_params,
                                                    moments, phi, z_advect, vpa_advect,
                                                    composition, r, z, vperp, vpa,
                                                    vperp_spectral, vpa_spectral,
                                                    external_source_settings,
-                                                   num_diss_params; evolve_p=evolve_p,
-                                                   local_max_dt=local_max_dt)
+                                                   num_diss_params; evolve_p=evolve_p)
                 # Re-do this in case electron_adaptive_timestep_update!() re-arranged the
                 # `scratch` vector
                 new_scratch = scratch[istage+1]
