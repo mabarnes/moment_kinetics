@@ -3407,8 +3407,9 @@ a String identifying the location this function was called from (for reference w
 debugging). `istage` should be the Runge-Kutta stage that this function was called from
 (when called from within the loop over Runge-Kutta stages).
 """
-function write_debug_data_to_binary(this_scratch, moments, fields, composition, t_params,
-                                    r, z, vperp, vpa, vzeta, vr, vz, label, istage)
+function write_debug_data_to_binary(this_scratch, this_scratch_electron, moments, fields,
+                                    composition, t_params, r, z, vperp, vpa, vzeta, vr,
+                                    vz, label, istage)
     if t_params.debug_io === nothing
         # Not using debug IO, so nothing to do. When t_params.debug_io is `nothing`, this
         # is known at compile time, so the compiler will optimise away
@@ -3421,8 +3422,13 @@ function write_debug_data_to_binary(this_scratch, moments, fields, composition, 
     # write_all_dfns_data_to_binary() expects `scratch` to be a Vector of length
     # n_rk_stages+1.
     scratch = [this_scratch for i ∈ 1:t_params.n_rk_stages+1]
+    if this_scratch_electron !== nothing
+        scratch_electron = [this_scratch_electron for i ∈ 1:t_params.electron.n_rk_stages+1]
+    else
+        scratch_electron = nothing
+    end
 
-    write_all_dfns_data_to_binary(scratch, nothing, moments, fields,
+    write_all_dfns_data_to_binary(scratch, scratch_electron, moments, fields,
                                   composition.n_ion_species,
                                   composition.n_neutral_species, t_params.debug_io,
                                   nothing, 0.0, t_params, (), r, z, vperp, vpa, vzeta, vr,
