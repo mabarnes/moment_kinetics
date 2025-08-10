@@ -3235,13 +3235,19 @@ end
                              diagnostic_checks, istep) = begin
 
     # Convenience wrapper for calls to write debug information within this function.
+    if scratch_electron === nothing
+        debug_scratch_electron = nothing
+    else
+        debug_scratch_electron = scratch_electron[end]
+    end
     function write_debug_IO(this_scratch, istage, label)
         if t_params.debug_io === nothing
             # Allow compiler to optimise away this function if debug IO is not being used.
             return nothing
         end
-        write_debug_data_to_binary(this_scratch, moments, fields, composition, t_params,
-                                   r, z, vperp, vpa, vzeta, vr, vz, label, istage)
+        write_debug_data_to_binary(this_scratch, debug_scratch_electron, moments, fields,
+                                   composition, t_params, r, z, vperp, vpa, vzeta, vr, vz,
+                                   label, istage)
         return nothing
     end
 
@@ -3327,12 +3333,12 @@ end
                 # implicitly-evolved terms so we can store their time-derivative at this
                 # stage.
                 euler_time_advance!(scratch_implicit[istage], scratch[istage],
-                                    pdf, fields, moments, advect_objects, vz, vr, vzeta,
-                                    vpa, vperp, gyrophase, z, r, t_params, t_params.dt[],
-                                    spectral_objects, composition, collisions, geometry,
-                                    scratch_dummy, manufactured_source_list,
-                                    external_source_settings, num_diss_params,
-                                    advance_implicit, fp_arrays, istage)
+                                    pdf, debug_scratch_electron, fields, moments,
+                                    advect_objects, vz, vr, vzeta, vpa, vperp, gyrophase,
+                                    z, r, t_params, t_params.dt[], spectral_objects,
+                                    composition, collisions, geometry, scratch_dummy,
+                                    manufactured_source_list, external_source_settings,
+                                    num_diss_params, advance_implicit, fp_arrays, istage)
                 write_debug_IO(scratch_implicit[istage], istage,
                                "implicit_coefficient_is_zero euler_time_advance!")
                 # The result of the forward-Euler step is just a hack to store the
@@ -3412,10 +3418,10 @@ end
         # quantities and scratch[istage] containing quantities at time level n, RK stage
         # istage
         # calculate f^{(1)} = fⁿ + Δt*G[fⁿ] = scratch[2].pdf
-        euler_time_advance!(scratch[istage+1], old_scratch, pdf, fields, moments,
-                            advect_objects, vz, vr, vzeta, vpa, vperp, gyrophase, z,
-                            r, t_params, t_params.dt[], spectral_objects, composition,
-                            collisions, geometry, scratch_dummy,
+        euler_time_advance!(scratch[istage+1], old_scratch, pdf, debug_scratch_electron,
+                            fields, moments, advect_objects, vz, vr, vzeta, vpa, vperp,
+                            gyrophase, z, r, t_params, t_params.dt[], spectral_objects,
+                            composition, collisions, geometry, scratch_dummy,
                             manufactured_source_list, external_source_settings,
                             num_diss_params, advance, fp_arrays, istage)
         write_debug_IO(scratch[istage+1], istage, "after euler_time_advance!")
@@ -3611,10 +3617,10 @@ Note `dt` is passed separately from `t_params` because sometimes (in the IMEX Ru
 implementation), a call needs to be made with `dt` scaled by some coefficient.
 """
 @timeit global_timer euler_time_advance!(
-                         fvec_out, fvec_in, pdf, fields, moments, advect_objects, vz, vr,
-                         vzeta, vpa, vperp, gyrophase, z, r, t_params, dt,
-                         spectral_objects, composition, collisions, geometry,
-                         scratch_dummy, manufactured_source_list,
+                         fvec_out, fvec_in, pdf, debug_scratch_electron, fields, moments,
+                         advect_objects, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
+                         t_params, dt, spectral_objects, composition, collisions,
+                         geometry, scratch_dummy, manufactured_source_list,
                          external_source_settings, num_diss_params, advance, fp_arrays,
                          istage) = begin
 
@@ -3624,8 +3630,9 @@ implementation), a call needs to be made with `dt` scaled by some coefficient.
             # Allow compiler to optimise away this function if debug IO is not being used.
             return nothing
         end
-        write_debug_data_to_binary(fvec_out, moments, fields, composition, t_params, r, z,
-                                   vperp, vpa, vzeta, vr, vz, label, istage)
+        write_debug_data_to_binary(fvec_out, debug_scratch_electron, moments, fields,
+                                   composition, t_params, r, z, vperp, vpa, vzeta, vr, vz,
+                                   label, istage)
         return nothing
     end
     write_debug_IO("begin euler_time_advance!")
