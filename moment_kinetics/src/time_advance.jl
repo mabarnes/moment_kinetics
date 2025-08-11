@@ -3188,7 +3188,7 @@ appropriate.
     adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms, total_points,
                                        error_norm_method, success, nl_max_its_fraction,
                                        nl_total_its_soft_limit,
-                                       nl_total_its_soft_limit_reduce_dt, composition)
+                                       nl_total_its_soft_limit_reduce_dt, composition, z)
 
     if composition.electron_physics ∈ (kinetic_electrons,
                                        kinetic_electrons_with_temperature_equation)
