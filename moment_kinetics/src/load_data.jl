@@ -3950,100 +3950,65 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
         variable = Tuple(get_group(f, group)[variable_name]
                          for f ∈ run_info.files)
         nd = ndims(variable[1])
+        variable_dims = split(get_attribute(variable[1], "dims"), ",")
+        if variable_dims == [""]
+            # Variable had no dimensions, so remove the empty string "" from
+            # variable_dims.
+            pop!(variable_dims)
+        end
 
-        if nd == 1
-            # Time-dependent scalar with dimensions (t)
-            # Might be an mk_int, so handle type carefully
-            dims = Vector{mk_int}()
-            !isa(it, mk_int) && push!(dims, nt)
-            vartype = typeof(variable[1][1])
-            if vartype == mk_int
-                result = allocate_int(dims...)
-            elseif vartype == mk_float
-                result = allocate_float(dims...)
+        # Assume all variables are time-dependent, but we do not list 't' in the
+        # dimensions in the output file, so add it here.
+        push!(variable_dims, "t")
+
+        vartype = eltype(variable[1])
+        dim_sizes = Vector{mk_int}()
+        slice_indices = Any[]
+        for (i, d) ∈ enumerate(variable_dims)
+            if d == "t"
+                !isa(it, mk_int) && push!(dim_sizes, nt)
+                # Don't add `it` to slice_indices because time-indexing is handled later.
+            elseif d ∈ ("n_ion_species", "n_neutral_species")
+                if is === (:)
+                    nspecies = size(variable[1], i)
+                    push!(dim_sizes, nspecies)
+                elseif !isa(is, mk_int)
+                    push!(dim_sizes, nspecies)
+                end
+                push!(slice_indices, is)
+            elseif d == "r"
+                !isa(ir, mk_int) && push!(dim_sizes, nr)
+                push!(slice_indices, ir)
+            elseif d == "z"
+                !isa(iz, mk_int) && push!(dim_sizes, nz)
+                push!(slice_indices, iz)
+            elseif d == "vperp"
+                !isa(ivperp, mk_int) && push!(dim_sizes, nvperp)
+                push!(slice_indices, ivperp)
+            elseif d == "vpa"
+                !isa(ivpa, mk_int) && push!(dim_sizes, nvpa)
+                push!(slice_indices, ivpa)
+            elseif d == "vzeta"
+                !isa(ivzeta, mk_int) && push!(dim_sizes, nvzeta)
+                push!(slice_indices, ivzeta)
+            elseif d == "vr"
+                !isa(ivr, mk_int) && push!(dim_sizes, nvr)
+                push!(slice_indices, ivr)
+            elseif d == "vz"
+                !isa(ivz, mk_int) && push!(dim_sizes, nvz)
+                push!(slice_indices, ivz)
             else
-                result = Array{vartype}(undef, dims...)
+                push!(dim_sizes, size(variable[1], i))
+                push!(slice_indices, :)
             end
-        elseif nd == 2
-            # Time-dependent vector with dimensions (unique_dim,t).
-            # The dimension that is not time is not a coordinate, so do not give any
-            # option to slice it - always just return the full length.
-            # Might be an mk_int, so handle type carefully
-            dims = Vector{mk_int}()
-            push!(dims, size(variable[1], 1))
-            !isa(it, mk_int) && push!(dims, nt)
-            vartype = typeof(variable[1][1,1])
-            if vartype == mk_int
-                result = allocate_int(dims...)
-            elseif vartype == mk_float
-                result = allocate_float(dims...)
-            else
-                result = Array{vartype}(undef, dims...)
-            end
-        elseif nd == 3
-            # EM variable with dimensions (z,r,t)
-            dims = Vector{mk_int}()
-            !isa(iz, mk_int) && push!(dims, nz)
-            !isa(ir, mk_int) && push!(dims, nr)
-            !isa(it, mk_int) && push!(dims, nt)
-            result = allocate_float(dims...)
-        elseif nd == 4
-            # moment variable with dimensions (z,r,s,t)
-            # Get nspecies from the variable, not from run_info, because it might be
-            # either ion or neutral
-            dims = Vector{mk_int}()
-            !isa(iz, mk_int) && push!(dims, nz)
-            !isa(ir, mk_int) && push!(dims, nr)
-            if is === (:)
-                nspecies = size(variable[1], 3)
-                push!(dims, nspecies)
-            elseif !isa(is, mk_int)
-                push!(dims, nspecies)
-            end
-            !isa(it, mk_int) && push!(dims, nt)
-            result = allocate_float(dims...)
-        elseif nd == 5
-            # electron distribution function variable with dimensions (vpa,vperp,z,r,t)
-            dims = Vector{mk_int}()
-            !isa(ivpa, mk_int) && push!(dims, nvpa)
-            !isa(ivperp, mk_int) && push!(dims, nvperp)
-            !isa(iz, mk_int) && push!(dims, nz)
-            !isa(ir, mk_int) && push!(dims, nr)
-            !isa(it, mk_int) && push!(dims, nt)
-            result = allocate_float(dims...)
-        elseif nd == 6
-            # ion distribution function variable with dimensions (vpa,vperp,z,r,s,t)
-            nspecies = size(variable[1], 5)
-            dims = Vector{mk_int}()
-            !isa(ivpa, mk_int) && push!(dims, nvpa)
-            !isa(ivperp, mk_int) && push!(dims, nvperp)
-            !isa(iz, mk_int) && push!(dims, nz)
-            !isa(ir, mk_int) && push!(dims, nr)
-            if is === (:)
-                push!(dims, nspecies)
-            elseif !isa(is, mk_int)
-                push!(dims, nspecies)
-            end
-            !isa(it, mk_int) && push!(dims, nt)
-            result = allocate_float(dims...)
-        elseif nd == 7
-            # neutral distribution function variable with dimensions (vz,vr,vzeta,z,r,s,t)
-            nspecies = size(variable[1], 6)
-            dims = Vector{mk_int}()
-            !isa(ivz, mk_int) && push!(dims, nvz)
-            !isa(ivr, mk_int) && push!(dims, nvr)
-            !isa(ivzeta, mk_int) && push!(dims, nvzeta)
-            !isa(iz, mk_int) && push!(dims, nz)
-            !isa(ir, mk_int) && push!(dims, nr)
-            if is === (:)
-                push!(dims, nspecies)
-            elseif !isa(is, mk_int)
-                push!(dims, nspecies)
-            end
-            !isa(it, mk_int) && push!(dims, nt)
-            result = allocate_float(dims...)
+        end
+
+        if vartype == mk_int
+            result = allocate_int(dim_sizes...)
+        elseif vartype == mk_float
+            result = allocate_float(dim_sizes...)
         else
-            error("Unsupported number of dimensions ($nd) for '$variable_name'.")
+            result = Array{vartype}(undef, dim_sizes...)
         end
 
         local_it_start = 1
@@ -4062,24 +4027,7 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
                           * "restart, should have finished already")
                 elseif tind <= local_nt
                     # tind is within this restart's time range, so get result
-                    if nd == 1
-                        result .= v[tind]
-                    elseif nd == 2
-                        result .= v[:,tind]
-                    elseif nd == 3
-                        result .= v[iz,ir,tind]
-                    elseif nd == 4
-                        result .= v[iz,ir,is,tind]
-                    elseif nd == 5
-                        result .= v[ivpa,ivperp,iz,ir,tind]
-                    elseif nd == 6
-                        result .= v[ivpa,ivperp,iz,ir,is,tind]
-                    elseif nd == 7
-                        result .= v[ivz,ivr,ivzeta,iz,ir,is,tind]
-                    else
-                        error("Unsupported combination nd=$nd, ir=$ir, iz=$iz, ivperp=$ivperp "
-                              * "ivpa=$ivpa, ivzeta=$ivzeta, ivr=$ivr, ivz=$ivz.")
-                    end
+                    result .= v[slice_indices..., tind]
 
                     # Already got the data for `it`, so end loop
                     break
@@ -4098,24 +4046,7 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
                     tinds = tinds[begin]:tstep:tinds[end]
                     global_it_end = global_it_start + length(tinds) - 1
 
-                    if nd == 1
-                        selectdim(result, ndims(result), global_it_start:global_it_end) .= v[tinds]
-                    elseif nd == 2
-                        selectdim(result, ndims(result), global_it_start:global_it_end) .= v[:,tinds]
-                    elseif nd == 3
-                        selectdim(result, ndims(result), global_it_start:global_it_end) .= v[iz,ir,tinds]
-                    elseif nd == 4
-                        selectdim(result, ndims(result), global_it_start:global_it_end) .= v[iz,ir,is,tinds]
-                    elseif nd == 5
-                        selectdim(result, ndims(result), global_it_start:global_it_end) .= v[ivpa,ivperp,iz,ir,tinds]
-                    elseif nd == 6
-                        selectdim(result, ndims(result), global_it_start:global_it_end) .= v[ivpa,ivperp,iz,ir,is,tinds]
-                    elseif nd == 7
-                        selectdim(result, ndims(result), global_it_start:global_it_end) .= v[ivz,ivr,ivzeta,iz,ir,is,tinds]
-                    else
-                        error("Unsupported combination nd=$nd, ir=$ir, iz=$iz, ivperp=$ivperp "
-                              * "ivpa=$ivpa, ivzeta=$ivzeta, ivr=$ivr, ivz=$ivz.")
-                    end
+                    selectdim(result, ndims(result), global_it_start:global_it_end) .= v[slice_indices..., tinds]
 
                     global_it_start = global_it_end + 1
                 end
