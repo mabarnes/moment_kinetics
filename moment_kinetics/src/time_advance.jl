@@ -3803,8 +3803,12 @@ implementation), a call needs to be made with `dt` scaled by some coefficient.
                                   composition, external_source_settings.electron,
                                   num_diss_params, r, z;
                                   conduction=advance.electron_conduction)
-        update_derived_electron_moment_time_derivatives!(fvec_in.electron_p, moments,
-                                                         composition.electron_physics)
+        @begin_r_anyzv_region()
+        @loop_r ir begin
+            update_derived_electron_moment_time_derivatives!(fvec_in.electron_p, moments,
+                                                             composition.electron_physics,
+                                                             ir)
+        end
         write_debug_IO("electron_energy_equation!")
     elseif advance.electron_conduction
         # Explicit version of the implicit part of the IMEX timestep, need to evaluate
