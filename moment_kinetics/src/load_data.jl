@@ -1050,8 +1050,8 @@ end
 """
 Reload electron pdf and moments from an existing output file.
 """
-function reload_electron_data!(pdf, moments, t_params, restart_prefix_iblock, time_index,
-                               geometry, r, z, vpa, vperp, vzeta, vr, vz)
+function reload_electron_data!(pdf, moments, phi, t_params, restart_prefix_iblock,
+                               time_index, geometry, r, z, vpa, vperp, vzeta, vr, vz)
     code_time = Ref(0.0)
     pdf_electron_converged = Ref(false)
     previous_runs_info = nothing
@@ -1118,6 +1118,26 @@ function reload_electron_data!(pdf, moments, t_params, restart_prefix_iblock, ti
                                     restart_coords, interpolation_needed,
                                     restart_evolve_density, restart_evolve_upar,
                                     restart_evolve_p)
+
+            moments.electron.constraints_A_coefficient .=
+                reload_electron_moment("electron_constraints_A_coefficient", dynamic,
+                                       time_index, coords, reload_ranges, restart_coords,
+                                       interpolation_needed)
+
+            moments.electron.constraints_B_coefficient .=
+                reload_electron_moment("electron_constraints_B_coefficient", dynamic,
+                                       time_index, coords, reload_ranges, restart_coords,
+                                       interpolation_needed)
+
+            moments.electron.constraints_C_coefficient .=
+                reload_electron_moment("electron_constraints_C_coefficient", dynamic,
+                                       time_index, coords, reload_ranges, restart_coords,
+                                       interpolation_needed)
+
+            phi .=
+                reload_electron_moment("phi", dynamic, time_index,
+                                       coords, reload_ranges, restart_coords,
+                                       interpolation_needed)
 
             new_dt = load_slice(dynamic, "electron_dt", time_index)
             if new_dt > 0.0

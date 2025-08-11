@@ -349,7 +349,7 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
     t_params.moments_output_counter[] += 1
     @serial_region begin
         if io_electron !== nothing
-            write_electron_state(scratch, moments, t_params, io_electron,
+            write_electron_state(scratch, moments, phi, t_params, io_electron,
                                  t_params.moments_output_counter[], local_pseudotime, 0.0,
                                  r, z, vperp, vpa)
         end
@@ -570,7 +570,7 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
             t_params.write_moments_output[] = false
             @serial_region begin
                 if io_electron !== nothing
-                    write_electron_state(scratch, moments, t_params, io_electron,
+                    write_electron_state(scratch, moments, phi, t_params, io_electron,
                                          t_params.moments_output_counter[],
                                          local_pseudotime, residual_norm, r, z, vperp,
                                          vpa)
@@ -621,7 +621,7 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
         if !electron_pdf_converged || do_debug_io
             if io_electron !== nothing && io_electron !== true
                 t_params.moments_output_counter[] += 1
-                write_electron_state(scratch, moments, t_params, io_electron,
+                write_electron_state(scratch, moments, phi, t_params, io_electron,
                                      t_params.moments_output_counter[], local_pseudotime,
                                      residual_norm, r, z, vperp, vpa)
                 finish_electron_io(io_electron)
@@ -757,7 +757,7 @@ function electron_backward_euler_pseudotimestepping!(scratch, pdf, moments, phi,
     t_params.moments_output_counter[] += 1
     @serial_region begin
         if io_electron !== nothing
-            write_electron_state(scratch, moments, t_params, io_electron,
+            write_electron_state(scratch, moments, phi, t_params, io_electron,
                                  t_params.moments_output_counter[], local_pseudotime, 0.0,
                                  r, z, vperp, vpa)
         end
@@ -1037,8 +1037,8 @@ function electron_backward_euler_pseudotimestepping!(scratch, pdf, moments, phi,
                     @serial_region begin
                         if io_electron !== nothing
                             t_params.write_moments_output[] = false
-                            write_electron_state(scratch, moments, t_params, io_electron,
-                                                 t_params.moments_output_counter[],
+                            write_electron_state(scratch, moments, phi, t_params,
+                                                 io_electron, t_params.moments_output_counter[],
                                                  local_pseudotime, residual_norm, r, z,
                                                  vperp, vpa)
                         end
@@ -1078,7 +1078,7 @@ function electron_backward_euler_pseudotimestepping!(scratch, pdf, moments, phi,
         if !electron_pdf_converged[] || do_debug_io
             if io_electron !== nothing && io_electron !== true
                 t_params.moments_output_counter[] += 1
-                write_electron_state(scratch, moments, t_params, io_electron,
+                write_electron_state(scratch, moments, phi, t_params, io_electron,
                                      t_params.moments_output_counter[], local_pseudotime,
                                      residual_norm, r, z, vperp, vpa)
                 finish_electron_io(io_electron)

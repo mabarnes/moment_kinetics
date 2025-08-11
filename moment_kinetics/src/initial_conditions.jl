@@ -622,7 +622,7 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
 
             # Reload pdf and moments from an existing output file
             code_time, pdf_electron_converged, previous_runs_info, restart_time_index =
-                reload_electron_data!(pdf, moments, t_params.electron,
+                reload_electron_data!(pdf, moments, fields.phi, t_params.electron,
                                       backup_prefix_iblock, -1, geometry, r, z, vpa,
                                       vperp, vzeta, vr, vz)
 
@@ -824,7 +824,7 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
             # Write the converged initial state for the electrons to a file so that it can be
             # re-used if the simulation is re-run.
             t_params.electron.moments_output_counter[] += 1
-            write_electron_state(scratch_electron, moments, t_params.electron,
+            write_electron_state(scratch_electron, moments, fields.phi, t_params.electron,
                                  io_initial_electron,
                                  t_params.electron.moments_output_counter[], -1.0, 0.0, r,
                                  z, vperp, vpa; pdf_electron_converged=true)

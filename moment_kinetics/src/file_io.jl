@@ -317,6 +317,9 @@ struct io_initial_electron_info{Tfile, Tfe, Tmom, Texte1, Texte2, Texte3, Texte4
     electron_constraints_A_coefficient::Tconstr
     electron_constraints_B_coefficient::Tconstr
     electron_constraints_C_coefficient::Tconstr
+    # Electrostatic potential stored to save the value set by the electron boundary
+    # condition.
+    phi::Tmom
     # cumulative number of electron pseudo-timesteps taken
     electron_step_counter::Telectronint
     # local electron pseudo-time
@@ -580,6 +583,11 @@ function setup_electron_io(io_input, vpa, vperp, z, r, composition, collisions,
                                                       io_input.write_electron_steady_state_diagnostics;
                                                       electron_only_io=true)
 
+        io_phi = create_dynamic_variable!(dynamic, "phi", mk_float, z, r;
+                                          parallel_io=parallel_io,
+                                          description="electrostatic potential",
+                                          units="T_ref/e")
+
         close(fid)
 
         return file_info
@@ -645,6 +653,7 @@ function reopen_initial_electron_io(file_info)
                                         getvar("electron_constraints_A_coefficient"),
                                         getvar("electron_constraints_B_coefficient"),
                                         getvar("electron_constraints_C_coefficient"),
+                                        getvar("phi"),
                                         getvar("electron_step_counter"),
                                         getvar("electron_local_pseudotime"),
                                         getvar("electron_cumulative_pseudotime"),
@@ -3176,8 +3185,17 @@ function write_electron_moments_data_to_binary(scratch, moments, t_params, elect
             append_to_dynamic_var(io_moments.electron_cumulative_pseudotime,
                                   electron_t_params.t[], t_idx,
                                   parallel_io)
+            # We don't write `electron_t_params.dt_before_output` here because either the
+            # electrons advance with the ion timestep and electron_dt does not matter, or
+            # the electrons advance inside a pseudotimestepping loop on each ion timestep
+            # stage. In the latter case, output is only ever written after the end of the
+            # pseudotimestepping loop, at an ion output step, and dt_before_output is not
+            # set by `adaptive_timestep_update_t_params!()`, so it should not be written
+            # here. Instead it is correct to write just `electron_t_params.dt`, as the
+            # electron dt is never shortened to hit an exact output time (which is why
+            # dt_before_output is needed for the ions).
             append_to_dynamic_var(io_moments.electron_dt,
-                                  electron_t_params.dt_before_output[], t_idx,
+                                  electron_t_params.dt[], t_idx,
                                   parallel_io)
             append_to_dynamic_var(io_moments.electron_previous_dt,
                                   electron_t_params.previous_dt[], t_idx, parallel_io)
@@ -3521,7 +3539,7 @@ end
 
 Write the electron state to an output file.
 """
-function write_electron_state(scratch_electron, moments, t_params,
+function write_electron_state(scratch_electron, moments, phi, t_params,
                               io_or_file_info_initial_electron, t_idx, local_pseudotime,
                               electron_residual, r, z, vperp, vpa;
                               pdf_electron_converged=false)
@@ -3548,6 +3566,11 @@ function write_electron_state(scratch_electron, moments, t_params,
                               t_params.t[], t_idx, parallel_io)
         append_to_dynamic_var(io_initial_electron.electron_residual, electron_residual,
                               t_idx, parallel_io)
+
+        # Save phi to keep the boundary values that are imposed on the sheath-entrance
+        # boundary points by the electron boundary condition.
+        append_to_dynamic_var(io_initial_electron.phi, phi, t_idx,
+                              parallel_io, z, r)
 
         write_electron_dfns_data_to_binary(nothing, scratch_electron, t_params,
                                            io_initial_electron, t_idx, r, z, vperp, vpa)
