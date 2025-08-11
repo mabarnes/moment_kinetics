@@ -1136,7 +1136,7 @@ global_rank[] == 0 && println("recalculating precon")
                 ir, evolve_p)
 
             @begin_anyzv_region()
-            @anyzv_serial_region begin
+            if anyzv_subblock_rank[] == 0
                 if size(orig_lu) == (1, 1)
                     # Have not properly created the LU decomposition before, so
                     # cannot reuse it.
@@ -1889,7 +1889,7 @@ global_rank[] == 0 && println("recalculating precon")
                     @timeit_debug global_timer "ldiv!" ldiv!(this_output_buffer, precon_lu, this_input_buffer)
                 end
 
-                @begin_anyzv_serial_region()
+                @begin_anyzv_region()
                 counter = 1
                 @loop_z_vperp_vpa iz ivperp ivpa begin
                     precon_f[ivpa,ivperp,iz] = this_output_buffer[counter]
@@ -2706,7 +2706,7 @@ end
         # Nothing more to do for z-periodic boundary conditions
         return true
     elseif z.bc == "constant"
-        @begin_anyzv_r_vperp_vpa_region()
+        @begin_anyzv_vperp_vpa_region()
         density_offset = 1.0
         vwidth = 1.0/sqrt(me_over_mi)
         dens = moments.electron.dens
