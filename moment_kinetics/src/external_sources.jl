@@ -1246,7 +1246,7 @@ Note that this function operates on a single point in `r`, given by `ir`, and `p
 @timeit global_timer external_electron_source!(
                          pdf_out, pdf_in, electron_density, electron_upar, moments,
                          composition, electron_source, index, vperp, vpa, dt, ir) = begin
-    @begin_z_vperp_region()
+    @begin_anyzv_z_vperp_region()
 
     me_over_mi = composition.me_over_mi
 
@@ -1337,7 +1337,7 @@ function add_external_electron_source_to_Jacobian!(jacobian_matrix, f, moments, 
     vpa_grid = vpa.grid
     v_size = vperp.n * vpa.n
 
-    @begin_z_vperp_vpa_region()
+    @begin_anyzv_z_vperp_vpa_region()
     if electron_source.source_type == "energy" && include === :all
         @loop_z_vperp_vpa iz ivperp ivpa begin
             if skip_f_electron_bc_points_in_Jacobian(iz, ivperp, ivpa, z, vperp, vpa,

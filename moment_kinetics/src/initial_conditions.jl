@@ -1865,7 +1865,8 @@ function init_electron_pdf_over_density_and_boundary_phi!(pdf, phi, density, upa
         end
         # Apply the sheath boundary condition to get cut-off boundary distribution
         # functions and boundary values of phi
-        for ir ∈ 1:r.n
+        @begin_r_anyzv_region()
+        @loop_r ir begin
             @views enforce_boundary_condition_on_electron_pdf!(
                        pdf[:,:,:,ir], phi[:,ir], vth[:,ir], upar[:,ir], z, vperp, vpa,
                        vperp_spectral, vpa_spectral, vpa_advect, moments,

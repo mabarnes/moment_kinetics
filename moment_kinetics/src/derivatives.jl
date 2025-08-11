@@ -180,6 +180,32 @@ function derivative_z!(dfdz::AbstractArray{mk_float,1}, f::AbstractArray{mk_floa
     end
 end
 
+# Alternative version of 1D deriv for use within an anyzv parallel region.
+function derivative_z_anyzv!(dfdz::AbstractArray{mk_float,1}, f::AbstractArray{mk_float,1},
+        dfdz_lower_endpoints::AbstractArray{mk_float,0},
+        dfdz_upper_endpoints::AbstractArray{mk_float,0},
+        z_send_buffer::AbstractArray{mk_float,0},
+        z_receive_buffer::AbstractArray{mk_float,0}, z_spectral, z)
+
+    @begin_anyzv_region()
+
+    @anyzv_serial_region begin
+        # differentiate f w.r.t z
+        derivative!(dfdz, f, z, z_spectral)
+        # get external endpoints to reconcile via MPI
+        dfdz_lower_endpoints[] = z.scratch_2d[1,1]
+        dfdz_upper_endpoints[] = z.scratch_2d[end,end]
+    end
+
+    # now reconcile element boundaries across
+    # processes with large message involving all y
+    if z.nelement_local < z.nelement_global
+        reconcile_element_boundaries_MPI!(
+            dfdz, dfdz_lower_endpoints, dfdz_upper_endpoints, z_send_buffer,
+            z_receive_buffer, z)
+    end
+end
+
 #df/dz
 #2D version for f[z,r] -> Er, Ez, phi
 function derivative_z!(dfdz::AbstractArray{mk_float,2}, f::AbstractArray{mk_float,2},

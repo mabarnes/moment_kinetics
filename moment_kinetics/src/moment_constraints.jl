@@ -366,7 +366,7 @@ timesteps that do not guarantee accurate time evolution.
 """
 @timeit global_timer electron_implicit_constraint_forcing!(
                          f_out, f_in, constraint_forcing_rate, vpa, dt, ir) = begin
-    @begin_z_region()
+    @begin_anyzv_z_region()
     vpa_grid = vpa.grid
     @loop_z iz begin
         @views zeroth_moment = integral(f_in[:,1,iz], vpa.wgts)
@@ -407,7 +407,7 @@ function add_electron_implicit_constraint_forcing_to_Jacobian!(
     vpa_wgts = vpa.wgts
     v_size = vperp.n * vpa.n
 
-    @begin_z_vperp_vpa_region()
+    @begin_anyzv_z_vperp_vpa_region()
     @loop_z_vperp_vpa iz ivperp ivpa begin
         if skip_f_electron_bc_points_in_Jacobian(iz, ivperp, ivpa, z, vperp, vpa, z_speed)
             continue

@@ -3634,9 +3634,9 @@ end
 
 Write the electron state to an output file.
 """
-function write_electron_state(scratch_electron, moments, phi, t_params,
-                              io_or_file_info_initial_electron, t_idx, local_pseudotime,
-                              electron_residual, r, z, vperp, vpa;
+function write_electron_state(scratch_electron, moments, phi::AbstractMatrix{mk_float},
+                              t_params, io_or_file_info_initial_electron, t_idx,
+                              local_pseudotime, electron_residual, r, z, vperp, vpa;
                               pdf_electron_converged=false, ir=nothing)
 
     if (ir === nothing && block_rank[] == 0) || anyzv_subblock_rank[] == 0
