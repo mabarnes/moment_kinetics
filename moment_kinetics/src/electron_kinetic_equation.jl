@@ -257,7 +257,8 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
     # initialise the electron pdf convergence flag to false
     all_electron_pdf_converged = fill(false, r.n)
 
-    for ir ∈ 1:r.n
+    @begin_r_anyzv_region()
+    @loop_r ir begin
         if r.n > 1 && !r.periodic && r.irank == 0 && ir == 1
             # No need to solve on point that will be set by boundary conditions
             continue
@@ -279,9 +280,9 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
         step_counter[] += 1
 
         if io_electron !== nothing
-            @begin_serial_region()
+            @begin_anyzv_region()
             moments_output_counter[] += 1
-            @serial_region begin
+            @anyzv_serial_region begin
                 write_electron_state(scratch, moments, phi, t_params, io_electron,
                                      moments_output_counter[], local_pseudotime, 0.0,
                                      r, z, vperp, vpa; ir=ir)
@@ -296,14 +297,14 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
 
             # Set the initial values for the next step to the final values from the previous
             # step
-            @begin_z_vperp_vpa_region()
+            @begin_anyzv_z_vperp_vpa_region()
             new_pdf = @view scratch[1].pdf_electron[:,:,:,ir]
             old_pdf = @view scratch[t_params.n_rk_stages+1].pdf_electron[:,:,:,ir]
             @loop_z_vperp_vpa iz ivperp ivpa begin
                 new_pdf[ivpa,ivperp,iz] = old_pdf[ivpa,ivperp,iz]
             end
             if evolve_p
-                @begin_z_region()
+                @begin_anyzv_z_region()
                 new_p = @view scratch[1].electron_p[:,ir]
                 old_p = @view scratch[t_params.n_rk_stages+1].electron_p[:,ir]
                 @loop_z iz begin
@@ -314,7 +315,7 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
             for istage ∈ 1:t_params.n_rk_stages
                 # Set the initial values for this stage to the final values from the previous
                 # stage
-                @begin_z_vperp_vpa_region()
+                @begin_anyzv_z_vperp_vpa_region()
                 new_pdf = @view scratch[istage+1].pdf_electron[:,:,:,ir]
                 old_pdf = @view scratch[istage].pdf_electron[:,:,:,ir]
                 @loop_z_vperp_vpa iz ivperp ivpa begin
@@ -323,7 +324,7 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
                 old_p = @view scratch[istage].electron_p[:,ir]
                 new_p = @view scratch[istage+1].electron_p[:,ir]
                 if evolve_p
-                    @begin_z_region()
+                    @begin_anyzv_z_region()
                     @loop_z iz begin
                         new_p[iz] = old_p[iz]
                     end
@@ -448,8 +449,8 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
             end
 
             if (mod(step_counter[] - initial_step_counter,100) == 0)
-                @begin_serial_region()
-                @serial_region begin
+                @begin_anyzv_region()
+                @anyzv_serial_region begin
                     if z.irank == 0 && z.irank == z.nrank - 1
                         println("ir: $ir, iteration: ", step_counter[] - initial_step_counter, " time: ", t[], " dt_electron: ", dt[], " phi_boundary: ", phi[[1,end],1], " residual: ", residual)
                     elseif z.irank == 0
@@ -459,9 +460,9 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
             end
             if (io_electron !== nothing && (step_counter[] % debug_io_nwrite == 0))
 
-                @begin_serial_region()
+                @begin_anyzv_region()
                 moments_output_counter[] += 1
-                @serial_region begin
+                @anyzv_serial_region begin
                     if io_electron !== nothing
                         write_electron_state(scratch, moments, phi, t_params, io_electron,
                                              moments_output_counter[], local_pseudotime,
@@ -477,8 +478,8 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
         end
 
         if io_electron !== nothing
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 moments_output_counter[] += 1
                 write_electron_state(scratch, moments, phi, t_params, io_electron,
                                      moments_output_counter[], local_pseudotime,
@@ -615,7 +616,8 @@ function electron_backward_euler_pseudotimestepping!(scratch, pdf, moments, phi,
 
     # No paralleism in r for now - will need to add a specially adapted shared-memory
     # parallelism scheme to allow it for 2D1V or 2D2V simulations.
-    for ir ∈ 1:r.n
+    @begin_r_anyzv_region()
+    @loop_r ir begin
         if r.n > 1 && !r.periodic && r.irank == 0 && ir == 1
             # No need to solve on point that will be set by boundary conditions
             continue
@@ -640,9 +642,9 @@ function electron_backward_euler_pseudotimestepping!(scratch, pdf, moments, phi,
         initial_step_counter = step_counter[]
         step_counter[] += 1
 
-        @begin_serial_region()
+        @begin_anyzv_region()
         moments_output_counter[] += 1
-        @serial_region begin
+        @anyzv_serial_region begin
             if io_electron !== nothing
                 write_electron_state(scratch, moments, phi, t_params, io_electron,
                                      moments_output_counter[], local_pseudotime, 0.0, r,
@@ -669,7 +671,7 @@ function electron_backward_euler_pseudotimestepping!(scratch, pdf, moments, phi,
             # Set the initial values for the next step to the final values from the previous
             # step. The initial guess for f_electron_new and electron_p_new are just the
             # values from the old timestep, so no need to change those.
-            @begin_z_vperp_vpa_region()
+            @begin_anyzv_z_vperp_vpa_region()
             f_electron_old = @view old_scratch.pdf_electron[:,:,:,ir]
             f_electron_new = @view new_scratch.pdf_electron[:,:,:,ir]
             @loop_z_vperp_vpa iz ivperp ivpa begin
@@ -678,7 +680,7 @@ function electron_backward_euler_pseudotimestepping!(scratch, pdf, moments, phi,
             electron_p_old = @view old_scratch.electron_p[:,ir]
             electron_p_new = @view new_scratch.electron_p[:,ir]
             if evolve_p
-                @begin_z_region()
+                @begin_anyzv_z_region()
                 @loop_z iz begin
                     electron_p_old[iz] = electron_p_new[iz]
                 end
@@ -802,11 +804,11 @@ function electron_backward_euler_pseudotimestepping!(scratch, pdf, moments, phi,
                 f_electron_old = @view old_scratch.pdf_electron[:,:,:,ir]
                 electron_p_new = @view new_scratch.electron_p[:,ir]
                 electron_p_old = @view old_scratch.electron_p[:,ir]
-                @begin_z_vperp_vpa_region()
+                @begin_anyzv_z_vperp_vpa_region()
                 @loop_z_vperp_vpa iz ivperp ivpa begin
                     f_electron_new[ivpa,ivperp,iz] = f_electron_old[ivpa,ivperp,iz]
                 end
-                @begin_z_region()
+                @begin_anyzv_z_region()
                 @loop_z iz begin
                     electron_p_new[iz] = electron_p_old[iz]
                 end
@@ -852,7 +854,7 @@ function electron_backward_euler_pseudotimestepping!(scratch, pdf, moments, phi,
                 # number of iterations (especially during initialization when there are
                 # likely to be a large number of iterations required) to avoid the
                 # expense, and especially the global MPI.Bcast()?
-                @begin_z_vperp_vpa_region()
+                @begin_anyzv_z_vperp_vpa_region()
                 if global_rank[] == 0
                     residual_norm = steady_state_residuals(new_scratch.pdf_electron,
                                                            old_scratch.pdf_electron,
@@ -893,8 +895,8 @@ function electron_backward_euler_pseudotimestepping!(scratch, pdf, moments, phi,
             end
 
             if (mod(step_counter[] - initial_step_counter,100) == 0)
-                @begin_serial_region()
-                @serial_region begin
+                @begin_anyzv_region()
+                @anyzv_serial_region begin
                     if z.irank == 0 && z.irank == z.nrank - 1
                         println("ir: $ir, iteration: ", step_counter[] - initial_step_counter, " time: ", t[], " dt_electron: ", dt[], " phi_boundary: ", phi[[1,end],1], " residual_norm: ", residual_norm)
                     elseif z.irank == 0
@@ -919,9 +921,9 @@ function electron_backward_euler_pseudotimestepping!(scratch, pdf, moments, phi,
                                                                   vpa,
                                                                   composition.me_over_mi,
                                                                   ir)
-                    @begin_serial_region()
+                    @begin_anyzv_region()
                     moments_output_counter[] += 1
-                    @serial_region begin
+                    @anyzv_serial_region begin
                         if io_electron !== nothing
                             write_electron_state(scratch, moments, phi, t_params,
                                                  io_electron, moments_output_counter[],
@@ -944,8 +946,8 @@ function electron_backward_euler_pseudotimestepping!(scratch, pdf, moments, phi,
             break
         end
 
-        @begin_serial_region()
-        @serial_region begin
+        @begin_anyzv_region()
+        @anyzv_serial_region begin
             if io_electron !== nothing
                 moments_output_counter[] += 1
                 write_electron_state(scratch, moments, phi, t_params, io_electron,
@@ -1067,7 +1069,7 @@ pressure \$p_{e∥}\$.
             # process that created it.
 
             # z-advection preconditioner
-            @begin_vperp_vpa_region()
+            @begin_anyzv_vperp_vpa_region()
             update_electron_speed_z!(z_advect[1], electron_upar, vth, vpa.grid, ir)
             @loop_vperp_vpa ivperp ivpa begin
                 z_matrix, p_matrix = get_electron_split_Jacobians!(
@@ -1085,7 +1087,7 @@ pressure \$p_{e∥}\$.
         function split_precon!(x)
             precon_p, precon_f = x
 
-            @begin_vperp_vpa_region()
+            @begin_anyzv_vperp_vpa_region()
             @loop_vperp_vpa ivperp ivpa begin
                 z_precon_matrix = nl_solver_params.preconditioners.z[ivpa,ivperp,ir]
                 f_slice = @view precon_f[ivpa,ivperp,:]
@@ -1094,14 +1096,14 @@ pressure \$p_{e∥}\$.
                 f_slice .= z.scratch2
             end
 
-            @begin_z_region()
+            @begin_anyzv_z_region()
             p_precon_matrix = nl_solver_params.preconditioners.p[ir]
             @loop_z iz begin
                 z.scratch[iz] = precon_p[iz]
             end
 
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 @timeit_debug global_timer "ldiv!" ldiv!(precon_p, p_precon_matrix, z.scratch)
             end
         end
@@ -1132,8 +1134,8 @@ global_rank[] == 0 && println("recalculating precon")
                 external_source_settings, num_diss_params, t_params, ion_dt,
                 ir, evolve_p)
 
-            @begin_serial_region()
-            if block_rank[] == 0
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 if size(orig_lu) == (1, 1)
                     # Have not properly created the LU decomposition before, so
                     # cannot reuse it.
@@ -1170,7 +1172,7 @@ global_rank[] == 0 && println("recalculating precon")
             precon_lu, _, this_input_buffer, this_output_buffer =
                 nl_solver_params.preconditioners[ir]
 
-            @begin_serial_region()
+            @begin_anyzv_region()
             counter = 1
             @loop_z_vperp_vpa iz ivperp ivpa begin
                 this_input_buffer[counter] = precon_f[ivpa,ivperp,iz]
@@ -1181,12 +1183,12 @@ global_rank[] == 0 && println("recalculating precon")
                 counter += 1
             end
 
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 @timeit_debug global_timer "ldiv!" ldiv!(this_output_buffer, precon_lu, this_input_buffer)
             end
 
-            @begin_serial_region()
+            @begin_anyzv_region()
             counter = 1
             @loop_z_vperp_vpa iz ivperp ivpa begin
                 precon_f[ivpa,ivperp,iz] = this_output_buffer[counter]
@@ -1204,7 +1206,7 @@ global_rank[] == 0 && println("recalculating precon")
             f_upper_endpoints = @view scratch_dummy.buffer_vpavperpr_2[:,:,ir]
             receive_buffer1 = @view scratch_dummy.buffer_vpavperpr_3[:,:,ir]
             receive_buffer2 = @view scratch_dummy.buffer_vpavperpr_4[:,:,ir]
-            @begin_vperp_vpa_region()
+            @begin_anyzv_vperp_vpa_region()
             @loop_vperp_vpa ivperp ivpa begin
                 f_lower_endpoints[ivpa,ivperp] = precon_f[ivpa,ivperp,1]
                 f_upper_endpoints[ivpa,ivperp] = precon_f[ivpa,ivperp,end]
@@ -1225,8 +1227,8 @@ global_rank[] == 0 && println("recalculating precon")
                 precon_f, f_lower_endpoints, f_upper_endpoints, receive_buffer1,
                 receive_buffer2, z)
 
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 buffer_1[] = precon_p[1]
                 buffer_2[] = precon_p[end]
             end
@@ -1260,7 +1262,7 @@ global_rank[] == 0 && println("recalculating precon")
             # Reconstruct w_∥^3 moment of g_e from already-calculated qpar
             third_moment = scratch_dummy.buffer_z_1
             dthird_moment_dz = scratch_dummy.buffer_z_2
-            @begin_z_region()
+            @begin_anyzv_z_region()
             @loop_z iz begin
                 third_moment[iz] = 0.5 * qpar[iz] / electron_p_new[iz] / vth[iz]
             end
@@ -1270,7 +1272,7 @@ global_rank[] == 0 && println("recalculating precon")
             z_speed = @view z_advect[1].speed[:,:,:,ir]
 
             dpdf_dz = @view scratch_dummy.buffer_vpavperpzr_1[:,:,:,ir]
-            @begin_vperp_vpa_region()
+            @begin_anyzv_vperp_vpa_region()
             update_electron_speed_z!(z_advect[1], electron_upar, vth, vpa.grid, ir)
             @loop_vperp_vpa ivperp ivpa begin
                 @views z_advect[1].adv_fac[:,ivpa,ivperp,ir] = -z_speed[:,ivpa,ivperp]
@@ -1287,7 +1289,7 @@ global_rank[] == 0 && println("recalculating precon")
                                                z_spectral, z)
 
             dpdf_dvpa = @view scratch_dummy.buffer_vpavperpzr_2[:,:,:,ir]
-            @begin_z_vperp_region()
+            @begin_anyzv_z_vperp_region()
             update_electron_speed_vpa!(vpa_advect[1], electron_density, electron_upar,
                                        electron_p_new, moments, composition.me_over_mi,
                                        vpa.grid, external_source_settings.electron, ir)
@@ -1303,7 +1305,7 @@ global_rank[] == 0 && println("recalculating precon")
             zeroth_moment = z.scratch_shared
             first_moment = z.scratch_shared2
             second_moment = z.scratch_shared3
-            @begin_z_region()
+            @begin_anyzv_z_region()
             vpa_grid = vpa.grid
             vpa_wgts = vpa.wgts
             @loop_z iz begin
@@ -1330,7 +1332,7 @@ global_rank[] == 0 && println("recalculating precon")
                     z_advect, vpa_advect, scratch_dummy, external_source_settings,
                     num_diss_params, t_params, ion_dt, ir, evolve_p, :explicit_z, false)
             end
-            @begin_z_region()
+            @begin_anyzv_z_region()
             @loop_z iz begin
                 v_solve_counter += 1
                 # Get LU-factorized matrix for implicit part of the solve
@@ -1381,7 +1383,7 @@ global_rank[] == 0 && println("recalculating precon")
                 composition, z, vperp, vpa, z_spectral, vperp_spectral, vpa_spectral,
                 z_advect, vpa_advect, scratch_dummy, external_source_settings,
                 num_diss_params, t_params, ion_dt, ir, evolve_p, :explicit_v, false)
-            @begin_vperp_vpa_region()
+            @begin_anyzv_vperp_vpa_region()
             @loop_vperp_vpa ivperp ivpa begin
                 z_solve_counter += 1
 
@@ -1416,8 +1418,8 @@ global_rank[] == 0 && println("recalculating precon")
 
                 adi_info.z_solve_explicit_matrices[z_solve_counter] = sparse(@view(explicit_J[adi_info.z_solve_global_inds[z_solve_counter],:]))
             end
-            @begin_serial_region(true)
-            @serial_region begin
+            @begin_anyzv_region(true)
+            @anyzv_serial_region begin
                 # Do the solve for p on the rank-0 process, which has the fewest grid
                 # points to handle if there are not an exactly equal number of points for
                 # each process.
@@ -1481,7 +1483,7 @@ global_rank[] == 0 && println("recalculating precon")
                 # Ensure values of precon_f and precon_p are consistent across
                 # distributed-MPI block boundaries. For precon_f take the upwind value,
                 # and for precon_p take the average.
-                @begin_vperp_vpa_region()
+                @begin_anyzv_vperp_vpa_region()
                 @loop_vperp_vpa ivperp ivpa begin
                     f_lower_endpoints[ivpa,ivperp] = output_buffer_pdf_view[ivpa,ivperp,1]
                     f_upper_endpoints[ivpa,ivperp] = output_buffer_pdf_view[ivpa,ivperp,end]
@@ -1502,8 +1504,8 @@ global_rank[] == 0 && println("recalculating precon")
                     output_buffer_pdf_view, f_lower_endpoints, f_upper_endpoints, receive_buffer1,
                     receive_buffer2, z)
 
-                @begin_serial_region()
-                @serial_region begin
+                @begin_anyzv_region()
+                @anyzv_serial_region begin
                     buffer_1[] = output_buffer_p_view[1]
                     buffer_2[] = output_buffer_p_view[end]
                 end
@@ -1513,27 +1515,27 @@ global_rank[] == 0 && println("recalculating precon")
                 return nothing
             end
 
-            @begin_z_vperp_vpa_region()
+            @begin_anyzv_z_vperp_vpa_region()
             @loop_z_vperp_vpa iz ivperp ivpa begin
                 row = (iz - 1)*v_size + (ivperp - 1)*vpa.n + ivpa
                 this_input_buffer[row] = precon_f[ivpa,ivperp,iz]
             end
-            @begin_z_region()
+            @begin_anyzv_z_region()
             @loop_z iz begin
                 row = pdf_size + iz
                 this_input_buffer[row] = precon_p[iz]
             end
-            @_block_synchronize()
+            @_anyzv_subblock_synchronize()
 
             # Use this to copy current guess from output_buffer to
             # intermediate_buffer, to avoid race conditions as new guess is
             # written into output_buffer.
             function fill_intermediate_buffer!()
-                @_block_synchronize()
+                @_anyzv_subblock_synchronize()
                 for i ∈ global_index_subrange
                     this_intermediate_buffer[i] = this_output_buffer[i]
                 end
-                @_block_synchronize()
+                @_anyzv_subblock_synchronize()
             end
 
             v_solve_global_inds = adi_info.v_solve_global_inds
@@ -1605,12 +1607,12 @@ global_rank[] == 0 && println("recalculating precon")
             end
 
             # Unpack preconditioner solution
-            @begin_z_vperp_vpa_region()
+            @begin_anyzv_z_vperp_vpa_region()
             @loop_z_vperp_vpa iz ivperp ivpa begin
                 row = (iz - 1)*v_size + (ivperp - 1)*vpa.n + ivpa
                 precon_f[ivpa,ivperp,iz] = this_output_buffer[row]
             end
-            @begin_z_region()
+            @begin_anyzv_z_region()
             @loop_z iz begin
                 row = pdf_size + iz
                 precon_p[iz] = this_output_buffer[row]
@@ -1637,7 +1639,7 @@ global_rank[] == 0 && println("recalculating precon")
 
         if evolve_p
             this_vth = @view moments.electron.vth[:,ir]
-            @begin_z_region()
+            @begin_anyzv_z_region()
             @loop_z iz begin
                 # update the electron thermal speed using the updated electron
                 # parallel pressure
@@ -1663,12 +1665,12 @@ global_rank[] == 0 && println("recalculating precon")
             z_spectral, num_diss_params.electron.moment_dissipation_coefficient, ir)
 
         if evolve_p
-            @begin_z_region()
+            @begin_anyzv_z_region()
             @loop_z iz begin
                 electron_p_residual[iz] = electron_p_old[iz,ir]
             end
         else
-            @begin_z_region()
+            @begin_anyzv_z_region()
             @loop_z iz begin
                 electron_p_residual[iz] = 0.0
             end
@@ -1678,7 +1680,7 @@ global_rank[] == 0 && println("recalculating precon")
         # electron_pdf member of the first argument, so if we set the electron_pdf member
         # of the first argument to zero, and pass dt=1, then it will evaluate the time
         # derivative, which is the residual for a steady-state solution.
-        @begin_z_vperp_vpa_region()
+        @begin_anyzv_z_vperp_vpa_region()
         @loop_z_vperp_vpa iz ivperp ivpa begin
             f_electron_residual[ivpa,ivperp,iz] = f_electron_old[ivpa,ivperp,iz]
         end
@@ -1692,12 +1694,12 @@ global_rank[] == 0 && println("recalculating precon")
         # Now
         #   residual = f_electron_old + dt*RHS(f_electron_newvar)
         # so update to desired residual
-        @begin_z_vperp_vpa_region()
+        @begin_anyzv_z_vperp_vpa_region()
         @loop_z_vperp_vpa iz ivperp ivpa begin
             f_electron_residual[ivpa,ivperp,iz] = f_electron_newvar[ivpa,ivperp,iz] - f_electron_residual[ivpa,ivperp,iz]
         end
         if evolve_p
-            @begin_z_region()
+            @begin_anyzv_z_region()
             @loop_z iz begin
                 electron_p_residual[iz] = electron_p_newvar[iz] - electron_p_residual[iz]
             end
@@ -1705,7 +1707,7 @@ global_rank[] == 0 && println("recalculating precon")
 
         # Set residual to zero where pdf_electron is determined by boundary conditions.
         if vpa.n > 1
-            @begin_z_vperp_region()
+            @begin_anyzv_z_vperp_region()
             @loop_z_vperp iz ivperp begin
                 @views enforce_v_boundary_condition_local!(f_electron_residual[:,ivperp,iz], vpa.bc,
                                                            vpa_advect[1].speed[:,ivperp,iz,ir],
@@ -1714,7 +1716,7 @@ global_rank[] == 0 && println("recalculating precon")
             end
         end
         if vperp.n > 1
-            @begin_z_vpa_region()
+            @begin_anyzv_z_vpa_region()
             enforce_vperp_boundary_condition!(f_electron_residual, vperp.bc,
                                               vperp, vperp_spectral, vperp_adv,
                                               vperp_diffusion, ir)
@@ -1792,7 +1794,8 @@ to allow the outer r-loop to be parallelised.
                               external_source_settings.electron, num_diss_params, r, z)
 
     newton_success = false
-    for ir ∈ 1:r.n
+    @begin_r_anyzv_region()
+    @loop_r ir begin
         if r.n > 1 && !r.periodic && r.irank == 0 && ir == 1
             # No need to solve on point that will be set by boundary conditions
             continue
@@ -1817,7 +1820,7 @@ global_rank[] == 0 && println("recalculating precon")
                     vpa_advect, scratch_dummy, external_source_settings, num_diss_params,
                     t_params, ion_dt, ir, true, :all, true, false)
 
-                @begin_serial_region()
+                @begin_anyzv_region()
                 if block_rank[] == 0
                     if size(orig_lu) == (1, 1)
                         # Have not properly created the LU decomposition before, so
@@ -1869,7 +1872,7 @@ global_rank[] == 0 && println("recalculating precon")
                 precon_lu, _, this_input_buffer, this_output_buffer =
                     nl_solver_params.preconditioners[ir]
 
-                @begin_serial_region()
+                @begin_anyzv_region()
                 counter = 1
                 @loop_z_vperp_vpa iz ivperp ivpa begin
                     this_input_buffer[counter] = precon_f[ivpa,ivperp,iz]
@@ -1880,12 +1883,12 @@ global_rank[] == 0 && println("recalculating precon")
                     counter += 1
                 end
 
-                @begin_serial_region()
-                @serial_region begin
+                @begin_anyzv_region()
+                @anyzv_serial_region begin
                     @timeit_debug global_timer "ldiv!" ldiv!(this_output_buffer, precon_lu, this_input_buffer)
                 end
 
-                @begin_serial_region()
+                @begin_anyzv_serial_region()
                 counter = 1
                 @loop_z_vperp_vpa iz ivperp ivpa begin
                     precon_f[ivpa,ivperp,iz] = this_output_buffer[counter]
@@ -1903,7 +1906,7 @@ global_rank[] == 0 && println("recalculating precon")
                 f_upper_endpoints = @view scratch_dummy.buffer_vpavperpr_2[:,:,ir]
                 receive_buffer1 = @view scratch_dummy.buffer_vpavperpr_3[:,:,ir]
                 receive_buffer2 = @view scratch_dummy.buffer_vpavperpr_4[:,:,ir]
-                @begin_vperp_vpa_region()
+                @begin_anyzv_vperp_vpa_region()
                 @loop_vperp_vpa ivperp ivpa begin
                     f_lower_endpoints[ivpa,ivperp] = precon_f[ivpa,ivperp,1]
                     f_upper_endpoints[ivpa,ivperp] = precon_f[ivpa,ivperp,end]
@@ -1924,8 +1927,8 @@ global_rank[] == 0 && println("recalculating precon")
                     precon_f, f_lower_endpoints, f_upper_endpoints, receive_buffer1,
                     receive_buffer2, z)
 
-                @begin_serial_region()
-                @serial_region begin
+                @begin_anyzv_region()
+                @anyzv_serial_region begin
                     buffer_1[] = precon_p[1]
                     buffer_2[] = precon_p[end]
                 end
@@ -1950,7 +1953,7 @@ global_rank[] == 0 && println("recalculating precon")
             electron_p_new, f_electron_new = new_variables
 
             this_vth = moments.electron.vth
-            @begin_z_region()
+            @begin_anyzv_z_region()
             @loop_z iz begin
                 # update the electron thermal speed using the updated electron
                 # parallel pressure
@@ -1977,7 +1980,7 @@ global_rank[] == 0 && println("recalculating precon")
                 z, z_spectral, num_diss_params.electron.moment_dissipation_coefficient,
                 ir)
 
-            @begin_z_region()
+            @begin_anyzv_z_region()
             @loop_z iz begin
                 electron_p_residual[iz] = 0.0
             end
@@ -1986,7 +1989,7 @@ global_rank[] == 0 && println("recalculating precon")
             # electron_pdf member of the first argument, so if we set the electron_pdf member
             # of the first argument to zero, and pass dt=1, then it will evaluate the time
             # derivative, which is the residual for a steady-state solution.
-            @begin_z_vperp_vpa_region()
+            @begin_anyzv_z_vperp_vpa_region()
             @loop_z_vperp_vpa iz ivperp ivpa begin
                 f_electron_residual[ivpa,ivperp,iz] = 0.0
             end
@@ -2000,7 +2003,7 @@ global_rank[] == 0 && println("recalculating precon")
 
             # Set residual to zero where pdf_electron is determined by boundary conditions.
             if vpa.n > 1
-                @begin_z_vperp_region()
+                @begin_anyzv_z_vperp_region()
                 @loop_z_vperp iz ivperp begin
                     @views enforce_v_boundary_condition_local!(f_electron_residual[:,ivperp,iz], vpa.bc,
                                                                vpa_advect[1].speed[:,ivperp,iz],
@@ -2009,7 +2012,7 @@ global_rank[] == 0 && println("recalculating precon")
                 end
             end
             if vperp.n > 1
-                @begin_z_vpa_region()
+                @begin_anyzv_z_vpa_region()
                 enforce_vperp_boundary_condition!(f_electron_residual, vperp.bc, vperp, vperp_spectral,
                                                   vperp_adv, vperp_diffusion)
             end
@@ -2072,7 +2075,7 @@ function apply_electron_bc_and_constraints_no_r!(f_electron, phi, moments, r, z,
                                                  vpa, vperp_spectral, vpa_spectral,
                                                  vpa_advect, num_diss_params, composition,
                                                  ir, nl_solver_params)
-    @begin_z_vperp_vpa_region()
+    @begin_anyzv_z_vperp_vpa_region()
     @loop_z_vperp_vpa iz ivperp ivpa begin
         f_electron[ivpa,ivperp,iz] = max(f_electron[ivpa,ivperp,iz], 0.0)
     end
@@ -2090,11 +2093,11 @@ function apply_electron_bc_and_constraints_no_r!(f_electron, phi, moments, r, z,
                               composition.me_over_mi, ir;
                               lowerz_vcut_ind=new_lowerz_vcut_ind,
                               upperz_vcut_ind=new_upperz_vcut_ind)
-    @serial_region begin
+    @anyzv_serial_region begin
         # Only the return value from rank-0 of each shared memory block matters
-        MPI.Allreduce!(bc_converged, &, comm_inter_block[])
+        MPI.Allreduce!(bc_converged, &, z.comm)
     end
-    MPI.Bcast!(bc_converged, comm_block[]; root=0)
+    MPI.Bcast!(bc_converged, comm_anyzv_subblock[]; root=0)
     if !bc_converged[]
         return "electron_bc"
     end
@@ -2106,7 +2109,7 @@ function apply_electron_bc_and_constraints_no_r!(f_electron, phi, moments, r, z,
         # calculated using the wrong vcut_ind.
         lower_vcut_changed = @view z.scratch_shared_int[1:1]
         upper_vcut_changed = @view z.scratch_shared_int[2:2]
-        @serial_region begin
+        @anyzv_serial_region begin
             if z.irank == 0
                 precon_lowerz_vcut_inds = nl_solver_params.precon_lowerz_vcut_inds
                 if new_lowerz_vcut_ind[] == precon_lowerz_vcut_inds[ir]
@@ -2116,7 +2119,7 @@ function apply_electron_bc_and_constraints_no_r!(f_electron, phi, moments, r, z,
                     precon_lowerz_vcut_inds[ir] = new_lowerz_vcut_ind[]
                 end
             end
-            MPI.Bcast!(lower_vcut_changed, comm_inter_block[]; root=0)
+            MPI.Bcast!(lower_vcut_changed, z.comm; root=0)
             #req1 = MPI.Ibcast!(lower_vcut_changed, comm_inter_block[]; root=0)
 
             if z.irank == z.nrank - 1
@@ -2128,7 +2131,7 @@ function apply_electron_bc_and_constraints_no_r!(f_electron, phi, moments, r, z,
                     precon_upperz_vcut_inds[ir] = new_upperz_vcut_ind[]
                 end
             end
-            MPI.Bcast!(upper_vcut_changed, comm_inter_block[]; root=n_blocks[]-1)
+            MPI.Bcast!(upper_vcut_changed, z.comm; root=z.nrank-1)
             #req2 = MPI.Ibcast!(upper_vcut_changed, comm_inter_block[]; root=n_blocks[]-1)
 
             # Eventually can use Ibcast!() to make the two broadcasts run
@@ -2136,7 +2139,7 @@ function apply_electron_bc_and_constraints_no_r!(f_electron, phi, moments, r, z,
             # https://github.com/JuliaParallel/MPI.jl/pull/882).
             #MPI.Waitall([req1, req2])
         end
-        @_block_synchronize()
+        @_anyzv_subblock_synchronize()
         if lower_vcut_changed[] == 1 || upper_vcut_changed[] == 1
             # One or both of the indices changed for some `ir`, so force the
             # preconditioner to be recalculated next time.
@@ -2144,7 +2147,7 @@ function apply_electron_bc_and_constraints_no_r!(f_electron, phi, moments, r, z,
         end
     end
 
-    @begin_z_region()
+    @begin_anyzv_z_region()
     A = moments.electron.constraints_A_coefficient
     B = moments.electron.constraints_B_coefficient
     C = moments.electron.constraints_C_coefficient
@@ -2684,7 +2687,7 @@ end
 
     # Enforce velocity-space boundary conditions
     if vpa.n > 1
-        @begin_z_vperp_region()
+        @begin_anyzv_z_vperp_region()
         @loop_z_vperp iz ivperp begin
             # enforce the vpa BC
             # use that adv.speed independent of vpa
@@ -2694,7 +2697,7 @@ end
         end
     end
     if vperp.n > 1
-        @begin_z_vpa_region()
+        @begin_anyzv_z_vpa_region()
         enforce_vperp_boundary_condition!(pdf, vperp.bc, vperp, vperp_spectral, ir)
     end
 
@@ -2702,7 +2705,7 @@ end
         # Nothing more to do for z-periodic boundary conditions
         return true
     elseif z.bc == "constant"
-        @begin_r_vperp_vpa_region()
+        @begin_anyzv_r_vperp_vpa_region()
         density_offset = 1.0
         vwidth = 1.0/sqrt(me_over_mi)
         dens = moments.electron.dens
@@ -2737,7 +2740,7 @@ end
     # the electrostatic potential at the boundary, which determines the critical speed, is unknown a priori;
     # use the constraint that the first moment of the normalised pdf be zero to choose the potential.
 
-    @begin_serial_region()
+    @begin_anyzv_region()
 
     newton_max_its = 100
     if vperp.n == 1
@@ -2746,7 +2749,7 @@ end
         this_integral_correction_sharpness = integral_correction_sharpness
     end
 
-    @serial_region begin
+    @anyzv_serial_region begin
         if z.irank == 0
             if z.bc != "wall"
                 error("Options other than wall, constant or z-periodic bc not implemented yet for electrons")
@@ -3172,7 +3175,7 @@ function zero_z_boundary_condition_points(residual, z, vpa, moments, ir)
         # so it is reasonable to zero-out `residual` to impose the boundary condition. We
         # impose this after subtracting f_old in case rounding errors, etc. mean that at
         # some point f_old had a different boundary condition cut-off index.
-        @begin_vperp_vpa_region()
+        @begin_anyzv_vperp_vpa_region()
         v_unnorm = vpa.scratch
         zero = 1.0e-14
         if z.irank == 0
@@ -3254,7 +3257,7 @@ boundary condition on those entries of δg (when the right-hand-side is set to z
     end
 
     if include_lower
-        shared_mem_parallel && @begin_vperp_region()
+        shared_mem_parallel && @begin_anyzv_vperp_region()
         @loop_vperp ivperp begin
             # Skip velocity space boundary points.
             if vperp.n > 1 && ivperp == vperp.n
@@ -3746,7 +3749,7 @@ boundary condition on those entries of δg (when the right-hand-side is set to z
     end
 
     if include_upper
-        shared_mem_parallel && @begin_vperp_region()
+        shared_mem_parallel && @begin_anyzv_vperp_region()
         @loop_vperp ivperp begin
             # Skip vperp boundary points.
             if vperp.n > 1 && ivperp == vperp.n
@@ -4282,7 +4285,7 @@ appropriate.
     #
     # z-advection
     # No need to synchronize here, as we just called @_block_synchronize()
-    @begin_vperp_vpa_region(true)
+    @begin_anyzv_vperp_vpa_region(true)
     @views update_electron_speed_z!(z_advect[1], moments.electron.upar[:,ir],
                                     moments.electron.vth[:,ir], vpa.grid, ir)
     z_CFL = get_minimum_CFL_z(z_advect[1].speed, z, ir)
@@ -4293,7 +4296,7 @@ appropriate.
     end
 
     # vpa-advection
-    @begin_z_vperp_region()
+    @begin_anyzv_z_vperp_region()
     @views update_electron_speed_vpa!(vpa_advect[1], moments.electron.dens[:,ir],
                                       moments.electron.upar[:,ir],
                                       scratch[t_params.n_rk_stages+1].electron_p[:,ir],
@@ -4316,7 +4319,7 @@ appropriate.
     # Note rk_loworder_solution!() stores the calculated error in `scratch[2]`.
     rk_loworder_solution!(scratch, nothing, :pdf_electron, t_params; ir=ir)
     if evolve_p
-        @begin_z_region()
+        @begin_anyzv_z_region()
         rk_loworder_solution!(scratch, nothing, :electron_p, t_params; ir=ir)
 
         # Make vth consistent with `scratch[2]`, as it is needed for the electron pdf
@@ -4332,7 +4335,7 @@ appropriate.
     if evolve_p
         # Reset vth in the `moments` struct to the result consistent with full-accuracy RK
         # solution.
-        @begin_z_region()
+        @begin_anyzv_z_region()
         @views update_electron_vth_temperature!(moments,
                                                 scratch[t_params.n_rk_stages+1].electron_p[:,ir],
                                                 moments.electron.dens, composition, ir)
@@ -4348,7 +4351,7 @@ appropriate.
 
     # Calculate error for moments, if necessary
     if evolve_p
-        @begin_z_region()
+        @begin_anyzv_z_region()
         p_err = local_error_norm(scratch[2].electron_p,
                                  scratch[t_params.n_rk_stages+1].electron_p,
                                  t_params.rtol, t_params.atol; method=error_norm_method,
@@ -4551,7 +4554,7 @@ in the time derivative term as it is for the non-boundary points.]
     # Reconstruct w_∥^3 moment of g_e from already-calculated qpar
     third_moment = scratch_dummy.buffer_z_1
     dthird_moment_dz = scratch_dummy.buffer_z_2
-    @begin_z_region()
+    @begin_anyzv_z_region()
     @loop_z iz begin
         third_moment[iz] = qpar[iz] / p[iz] / vth[iz]
     end
@@ -4564,7 +4567,7 @@ in the time derivative term as it is for the non-boundary points.]
     z_speed = @view z_advect[1].speed[:,:,:,ir]
 
     # Initialise jacobian_matrix to the identity
-    @begin_z_vperp_vpa_region()
+    @begin_anyzv_z_vperp_vpa_region()
     @loop_z_vperp_vpa iz ivperp ivpa begin
         # Rows corresponding to pdf_electron
         row = (iz - 1) * v_size + (ivperp - 1) * vpa.n + ivpa
@@ -4578,7 +4581,7 @@ in the time derivative term as it is for the non-boundary points.]
             jacobian_matrix[row,row] += 1.0
         end
     end
-    @begin_z_region()
+    @begin_anyzv_z_region()
     @loop_z iz begin
         # Rows corresponding to electron_p
         row = pdf_size + iz
@@ -4591,7 +4594,7 @@ in the time derivative term as it is for the non-boundary points.]
 
     if include ∈ (:all, :explicit_v)
         dpdf_dz = @view scratch_dummy.buffer_vpavperpzr_1[:,:,:,ir]
-        @begin_vperp_vpa_region()
+        @begin_anyzv_vperp_vpa_region()
         update_electron_speed_z!(z_advect[1], upar, vth, vpa.grid, ir)
         @loop_vperp_vpa ivperp ivpa begin
             @views z_advect[1].adv_fac[:,ivpa,ivperp,ir] = -z_speed[:,ivpa,ivperp]
@@ -4610,7 +4613,7 @@ in the time derivative term as it is for the non-boundary points.]
     end
 
     dpdf_dvpa = @view scratch_dummy.buffer_vpavperpzr_2[:,:,:,ir]
-    @begin_z_vperp_region()
+    @begin_anyzv_z_vperp_region()
     update_electron_speed_vpa!(vpa_advect[1], dens, upar, p, moments,
                                composition.me_over_mi, vpa.grid,
                                external_source_settings.electron, ir)
@@ -4626,7 +4629,7 @@ in the time derivative term as it is for the non-boundary points.]
     zeroth_moment = z.scratch_shared
     first_moment = z.scratch_shared2
     second_moment = z.scratch_shared3
-    @begin_z_region()
+    @begin_anyzv_z_region()
     vpa_grid = vpa.grid
     vpa_wgts = vpa.wgts
     @loop_z iz begin
@@ -5074,7 +5077,7 @@ end
         return nothing
     end
 
-    @begin_z_vperp_region()
+    @begin_anyzv_z_vperp_region()
     @loop_z_vperp iz ivperp begin
         @views second_derivative!(vpa.scratch, pdf_in[:,ivperp,iz], vpa, vpa_spectral)
         @views @. pdf_out[:,ivperp,iz] += dt * num_diss_params.electron.vpa_dissipation_coefficient * vpa.scratch
@@ -5098,7 +5101,7 @@ function add_electron_dissipation_term_to_Jacobian!(jacobian_matrix, f, num_diss
     v_size = vperp.n * vpa.n
     vpa_dense_second_deriv_matrix = vpa_spectral.dense_second_deriv_matrix
 
-    @begin_z_vperp_vpa_region()
+    @begin_anyzv_z_vperp_vpa_region()
     @loop_z_vperp_vpa iz ivperp ivpa begin
         if skip_f_electron_bc_points_in_Jacobian(iz, ivperp, ivpa, z, vperp, vpa, z_speed)
             continue
@@ -5162,7 +5165,7 @@ add contribution to the kinetic equation coming from the term proportional to th
     ddens_dz = @view moments.electron.ddens_dz[:,ir]
     dvth_dz = @view moments.electron.dvth_dz[:,ir]
     dqpar_dz = @view moments.electron.dqpar_dz[:,ir]
-    @begin_z_vperp_region()
+    @begin_anyzv_z_vperp_region()
     @loop_z iz begin
         this_dqpar_dz = dqpar_dz[iz]
         this_p = p[iz]
@@ -5218,7 +5221,7 @@ function add_contribution_from_electron_pdf_term_to_Jacobian!(
     z_deriv_matrix = z_spectral.D_matrix_csr
     v_size = vperp.n * vpa.n
 
-    @begin_z_vperp_vpa_region()
+    @begin_anyzv_z_vperp_vpa_region()
     @loop_z_vperp_vpa iz ivperp ivpa begin
         if skip_f_electron_bc_points_in_Jacobian(iz, ivperp, ivpa, z, vperp, vpa, z_speed)
             continue
@@ -5428,7 +5431,7 @@ function add_ion_dt_forcing_of_electron_p_to_Jacobian!(jacobian_matrix, z, dt, i
     @boundscheck include ∈ (:all, :explicit_z, :explicit_v) || error("Unexpected value for include=$include")
 
     if include === :all
-        @begin_z_region()
+        @begin_anyzv_z_region()
         @loop_z iz begin
             # Rows corresponding to electron_p
             row = p_offset + iz

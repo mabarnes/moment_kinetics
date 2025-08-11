@@ -48,7 +48,7 @@ function calculate_electron_density!(dens_e, updated, dens_i)
     return nothing
 end
 function calculate_electron_density_no_r!(dens_e, dens_i, ir)
-    @begin_z_region()
+    @begin_anyzv_z_region()
     # enforce quasineutrality
     @loop_z iz begin
         dens_e[iz] = 0.0
@@ -77,7 +77,8 @@ function calculate_electron_upar_from_charge_conservation!(upar_e, updated, dens
                                                            r, z)
     # only calculate the electron parallel flow if it is not already updated
     if !updated[]
-        for ir ∈ 1:r.n
+        @begin_r_anyzv_region()
+        @loop_r ir begin
             @views calculate_electron_upar_from_charge_conservation_no_r!(
                        upar_e[:,ir], updated, dens_e[:,ir], upar_i[:,ir,:], dens_i[:,ir,:],
                        electron_model, r, z, ir)
@@ -89,7 +90,7 @@ end
 function calculate_electron_upar_from_charge_conservation_no_r!(upar_e, updated, dens_e,
                                                                 upar_i, dens_i,
                                                                 electron_model, r, z, ir)
-    @begin_serial_region()
+    @begin_anyzv_serial_region()
     # initialise the electron parallel flow density to zero
     @loop_z iz begin
         upar_e[iz] = 0.0
@@ -101,7 +102,7 @@ function calculate_electron_upar_from_charge_conservation_no_r!(upar_e, updated,
                          kinetic_electrons_with_temperature_equation)
         boundary_flux = @view r.scratch_shared[ir:ir]
         boundary_ion_flux = @view r.scratch_shared2[ir:ir]
-        @serial_region begin
+        @anyzv_serial_region begin
             if z.irank == 0
                 boundary_flux[] = 0.0
                 boundary_ion_flux[] = 0.0
@@ -115,7 +116,7 @@ function calculate_electron_upar_from_charge_conservation_no_r!(upar_e, updated,
         end
         # loop over ion species, adding each species contribution to the
         # ion parallel particle flux at the boundaries in zed
-        @begin_z_region()
+        @begin_anyzv_z_region()
         @loop_z iz begin
             # initialise the electron particle flux to its value at the boundary in
             # zed and subtract the ion boundary flux - we want to calculate upar_e =
@@ -131,7 +132,7 @@ function calculate_electron_upar_from_charge_conservation_no_r!(upar_e, updated,
             upar_e[iz] /= dens_e[iz]
         end
     else
-        @begin_z_region()
+        @begin_anyzv_z_region()
         @loop_z iz begin
             upar_e[iz] = upar_i[iz,1]
         end
@@ -141,7 +142,7 @@ end
 
 function calculate_electron_moments!(scratch, pdf, moments, composition, collisions, r, z,
                                      vperp, vpa)
-    @begin_z_region()
+    @begin_r_anyzv_region()
 
     if length(scratch.pdf_electron) > 0
         pdf_electron = scratch.pdf_electron
@@ -151,7 +152,7 @@ function calculate_electron_moments!(scratch, pdf, moments, composition, collisi
         pdf_electron = nothing
     end
 
-    for ir ∈ 1:r.n
+    @loop_r ir begin
         if pdf_electron === nothing
             this_pdf = nothing
         else
@@ -177,7 +178,7 @@ function calculate_electron_moments_no_r!(pdf_electron, electron_density, electr
         ion_upar, ion_density, composition.electron_physics, r, z, ir)
     if composition.electron_physics ∉ (braginskii_fluid, kinetic_electrons,
                                        kinetic_electrons_with_temperature_equation)
-        @begin_z_region()
+        @begin_anyzv_z_region()
         @loop_z iz begin
             electron_p[iz] = 0.5 * composition.me_over_mi *
                              electron_density[iz] * moments.electron.vth[iz]^2
@@ -242,7 +243,7 @@ end
         #    old density? For initial testing, only looking at the electron initialisation
         #    where density is not updated, this does not matter).
 
-        @begin_z_region()
+        @begin_anyzv_z_region()
         # define some abbreviated variables for convenient use in rest of function
         me_over_mi = composition.me_over_mi
         nu_ei = collisions.electron_fluid.nu_ei
@@ -340,7 +341,7 @@ end
             p_out[iz] += electron_density_out[iz] * dt * dT_dt[iz]
         end
     else
-        @begin_z_region()
+        @begin_anyzv_z_region()
         # define some abbreviated variables for convenient use in rest of function
         me_over_mi = composition.me_over_mi
         nu_ei = collisions.electron_fluid.nu_ei
@@ -473,7 +474,7 @@ function add_electron_energy_equation_to_Jacobian!(jacobian_matrix, f, dens, upa
     z_deriv_matrix = z_spectral.D_matrix_csr
     v_size = vperp.n * vpa.n
 
-    @begin_z_region()
+    @begin_anyzv_z_region()
     @loop_z iz begin
         # Rows corresponding to electron_p
         row = p_offset + iz
@@ -707,7 +708,8 @@ function electron_braginskii_conduction!(p_out::AbstractVector{mk_float},
     derivative_z!(dqpar_dz, qpar, buffer_r_1, buffer_r_2, buffer_r_3, buffer_r_4,
                   z_spectral, z)
 
-    @loop_r_z ir iz begin
+    @begin_anyzv_z_region()
+    @loop_z iz begin
         p_out[iz,ir] -= dt*electron_moments.dqpar_dz[iz,ir]
     end
 
@@ -717,9 +719,9 @@ end
 @timeit global_timer implicit_braginskii_conduction!(
                          fvec_out, fvec_in, moments, z, r, dt, z_spectral, composition,
                          collisions, scratch_dummy, nl_solver_params) = begin
-    @begin_z_region()
+    @begin_r_anyzv_region()
 
-    for ir ∈ 1:r.n
+    @loop_r ir begin
         p_out = @view fvec_out.electron_p[:,ir]
         p_in = @view fvec_in.electron_p[:,ir]
         dens = @view fvec_in.electron_density[:,ir]
@@ -736,7 +738,7 @@ end
         #   (f_new - f_old) / dt = RHS(f_new)
         # ⇒ (f_new - f_old)/dt - RHS(f_new) = 0
         function residual_func!(residual, electron_p; krylov=false)
-            @begin_z_region()
+            @begin_anyzv_z_region()
             @loop_z iz begin
                 residual[iz] = p_in[iz]
             end
@@ -747,7 +749,7 @@ end
             # Now
             #   residual = f_old + dt*RHS(f_new)
             # so update to desired residual
-            @begin_z_region()
+            @begin_anyzv_z_region()
             @loop_z iz begin
                 residual[iz] = (electron_p[iz] - residual[iz])
             end
