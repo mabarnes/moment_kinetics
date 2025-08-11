@@ -218,7 +218,7 @@ Note that this function operates on a single point in `r`, so `pdf_out`, `pdf_in
 @timeit global_timer electron_krook_collisions!(
                          pdf_out, pdf_in, dens_in, upar_in, upar_ion_in, vth_in,
                          collisions, vperp, vpa, dt) = begin
-    @begin_z_region()
+    @begin_anyzv_z_region()
 
     if vperp.n == 1
         Maxwellian_prefactor = 1.0 / sqrt(π)
@@ -407,7 +407,7 @@ function add_electron_krook_collisions_to_Jacobian!(jacobian_matrix, f, dens, up
 
     using_reference_parameters = (collisions.krook.frequency_option == "reference_parameters")
 
-    @begin_z_vperp_vpa_region()
+    @begin_anyzv_z_vperp_vpa_region()
     @loop_z_vperp_vpa iz ivperp ivpa begin
         if skip_f_electron_bc_points_in_Jacobian(iz, ivperp, ivpa, z, vperp, vpa, z_speed)
             continue

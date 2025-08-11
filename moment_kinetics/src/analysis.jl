@@ -730,7 +730,7 @@ function steady_state_square_residuals(variable, variable_at_previous_time, dt,
                 variable_max = MPI.Allreduce(local_max, max, comm_world)
             end
         else
-            @begin_z_region()
+            @begin_anyzv_z_region()
             if !only_max_abs && variable_max === nothing
                 local_max = 0.0
                 @loop_z iz begin

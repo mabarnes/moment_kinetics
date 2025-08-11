@@ -146,6 +146,8 @@ struct scratch_dummy_arrays
     buffer_zrs_1::MPISharedArray{mk_float,3}
     buffer_zrs_2::MPISharedArray{mk_float,3}
     buffer_zrs_3::MPISharedArray{mk_float,3}
+    buffer_zrs_4::MPISharedArray{mk_float,3}
+    buffer_zrs_5::MPISharedArray{mk_float,3}
 
     buffer_vpavperpzs_1::MPISharedArray{mk_float,4}
     buffer_vpavperpzs_2::MPISharedArray{mk_float,4}
@@ -858,7 +860,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
                               (r,);
                               default_rtol=t_params.rtol / 10.0,
                               default_atol=t_params.atol / 10.0,
-                              electron_p_pdf_solve=true,
+                              anyzv_region=true, electron_p_pdf_solve=true,
                               preconditioner_type=t_params.electron_preconditioner_type)
     nl_solver_ion_advance_params =
         setup_nonlinear_solve(t_params.implicit_ion_advance, input_dict,
@@ -1703,6 +1705,8 @@ function setup_dummy_and_buffer_arrays(nr, nz, nvpa, nvperp, nvz, nvr, nvzeta,
     buffer_zrs_1 = allocate_shared_float(nz,nr,nspecies_ion)
     buffer_zrs_2 = allocate_shared_float(nz,nr,nspecies_ion)
     buffer_zrs_3 = allocate_shared_float(nz,nr,nspecies_ion)
+    buffer_zrs_4 = allocate_shared_float(; z=z, r=r, ion_species=nspecies_ion)
+    buffer_zrs_5 = allocate_shared_float(; z=z, r=r, ion_species=nspecies_ion)
     
     buffer_vpavperpzs_1 = allocate_shared_float(nvpa,nvperp,nz,nspecies_ion)
     buffer_vpavperpzs_2 = allocate_shared_float(nvpa,nvperp,nz,nspecies_ion)
@@ -1738,19 +1742,19 @@ function setup_dummy_and_buffer_arrays(nr, nz, nvpa, nvperp, nvz, nvr, nvzeta,
     if t_params.kinetic_electron_solver ∈ (implicit_time_evolving,
                                            implicit_p_implicit_pseudotimestep,
                                            implicit_steady_state)
-        implicit_buffer_z_1 = allocate_shared_float(nz)
-        implicit_buffer_z_2 = allocate_shared_float(nz)
-        implicit_buffer_z_3 = allocate_shared_float(nz)
-        implicit_buffer_z_4 = allocate_shared_float(nz)
-        implicit_buffer_z_5 = allocate_shared_float(nz)
-        implicit_buffer_z_6 = allocate_shared_float(nz)
+        implicit_buffer_z_1 = allocate_shared_float(nz; comm=comm_anyzv_subblock[])
+        implicit_buffer_z_2 = allocate_shared_float(nz; comm=comm_anyzv_subblock[])
+        implicit_buffer_z_3 = allocate_shared_float(nz; comm=comm_anyzv_subblock[])
+        implicit_buffer_z_4 = allocate_shared_float(nz; comm=comm_anyzv_subblock[])
+        implicit_buffer_z_5 = allocate_shared_float(nz; comm=comm_anyzv_subblock[])
+        implicit_buffer_z_6 = allocate_shared_float(nz; comm=comm_anyzv_subblock[])
 
-        implicit_buffer_vpavperpz_1 = allocate_shared_float(nvpa,nvperp,nz)
-        implicit_buffer_vpavperpz_2 = allocate_shared_float(nvpa,nvperp,nz)
-        implicit_buffer_vpavperpz_3 = allocate_shared_float(nvpa,nvperp,nz)
-        implicit_buffer_vpavperpz_4 = allocate_shared_float(nvpa,nvperp,nz)
-        implicit_buffer_vpavperpz_5 = allocate_shared_float(nvpa,nvperp,nz)
-        implicit_buffer_vpavperpz_6 = allocate_shared_float(nvpa,nvperp,nz)
+        implicit_buffer_vpavperpz_1 = allocate_shared_float(nvpa,nvperp,nz; comm=comm_anyzv_subblock[])
+        implicit_buffer_vpavperpz_2 = allocate_shared_float(nvpa,nvperp,nz; comm=comm_anyzv_subblock[])
+        implicit_buffer_vpavperpz_3 = allocate_shared_float(nvpa,nvperp,nz; comm=comm_anyzv_subblock[])
+        implicit_buffer_vpavperpz_4 = allocate_shared_float(nvpa,nvperp,nz; comm=comm_anyzv_subblock[])
+        implicit_buffer_vpavperpz_5 = allocate_shared_float(nvpa,nvperp,nz; comm=comm_anyzv_subblock[])
+        implicit_buffer_vpavperpz_6 = allocate_shared_float(nvpa,nvperp,nz; comm=comm_anyzv_subblock[])
     else
         implicit_buffer_z_1 = allocate_shared_float(0)
         implicit_buffer_z_2 = allocate_shared_float(0)
@@ -1810,7 +1814,7 @@ function setup_dummy_and_buffer_arrays(nr, nz, nvpa, nvperp, nvz, nvr, nvzeta,
         buffer_zsn_1,buffer_zsn_2,buffer_zsn_3,buffer_zsn_4,
         buffer_rs_1,buffer_rs_2,buffer_rs_3,buffer_rs_4,buffer_rs_5,buffer_rs_6,
         buffer_rsn_1,buffer_rsn_2,buffer_rsn_3,buffer_rsn_4,buffer_rsn_5,buffer_rsn_6,
-        buffer_zrs_1,buffer_zrs_2,buffer_zrs_3,
+        buffer_zrs_1,buffer_zrs_2,buffer_zrs_3,buffer_zrs_4,buffer_zrs_5,
         buffer_vpavperpzs_1,buffer_vpavperpzs_2,buffer_vpavperpzs_3,buffer_vpavperpzs_4,buffer_vpavperpzs_5,buffer_vpavperpzs_6,
         buffer_vpavperprs_1,buffer_vpavperprs_2,buffer_vpavperprs_3,buffer_vpavperprs_4,buffer_vpavperprs_5,buffer_vpavperprs_6,
         buffer_vpavperpzrs_1,buffer_vpavperpzrs_2,
@@ -2621,12 +2625,13 @@ moments and moment derivatives
                                            kinetic_electrons_with_temperature_equation)
                 && length(this_scratch.pdf_electron) > 0)
 
-            for ir ∈ 1:r.n
+            @begin_r_anyzv_region()
+            @loop_r ir begin
                 @views apply_electron_bc_and_constraints_no_r!(
                            this_scratch.pdf_electron[:,:,:,ir], fields.phi[:,ir], moments,
                            r, z, vperp, vpa, vperp_spectral, vpa_spectral,
                            electron_vpa_advect, num_diss_params, composition, ir,
-                           nl_solver_params.electron_advance)
+                           nl_solver_params.electron_advance, scratch_dummy)
             end
         end
     end
@@ -3170,7 +3175,7 @@ appropriate.
     adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms, total_points,
                                        error_norm_method, success, nl_max_its_fraction,
                                        nl_total_its_soft_limit,
-                                       nl_total_its_soft_limit_reduce_dt, composition)
+                                       nl_total_its_soft_limit_reduce_dt, composition, z)
 
     if composition.electron_physics ∈ (kinetic_electrons,
                                        kinetic_electrons_with_temperature_equation)
@@ -3755,7 +3760,8 @@ implementation), a call needs to be made with `dt` scaled by some coefficient.
     end
 
     if advance.electron_pdf
-        for ir ∈ 1:r.n
+        @begin_r_anyzv_region()
+        @loop_r ir begin
             if t_params.debug_io !== nothing && ir == 1
                 # Probably do not want to write separate debug output for every r-index
                 # even in 2D, as this would create very large output files, so pick a
@@ -3785,8 +3791,12 @@ implementation), a call needs to be made with `dt` scaled by some coefficient.
                                   composition, external_source_settings.electron,
                                   num_diss_params, r, z;
                                   conduction=advance.electron_conduction)
-        update_derived_electron_moment_time_derivatives!(fvec_in.electron_p, moments,
-                                                         composition.electron_physics)
+        @begin_r_anyzv_region()
+        @loop_r ir begin
+            update_derived_electron_moment_time_derivatives!(fvec_in.electron_p, moments,
+                                                             composition.electron_physics,
+                                                             ir)
+        end
         write_debug_IO("electron_energy_equation!")
     elseif advance.electron_conduction
         # Explicit version of the implicit part of the IMEX timestep, need to evaluate
@@ -4054,8 +4064,9 @@ end
 
         success = success && (electron_success == "")
     elseif t_params.kinetic_electron_solver == implicit_time_evolving
-        t_params.electron.dt[] = dt
-        for ir ∈ 1:r.n
+        t_params.electron.dt .= dt
+        @begin_r_anyzv_region()
+        @loop_r ir begin
             electron_success = electron_backward_euler!(
                           fvec_in, fvec_out, moments, fields.phi, collisions, composition, r,
                           z, vperp, vpa, z_spectral, vperp_spectral, vpa_spectral, z_advect,
