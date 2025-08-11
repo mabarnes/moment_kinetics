@@ -4349,7 +4349,7 @@ appropriate.
 
     # Calculate error for moments, if necessary
     if evolve_p
-        @begin_r_z_region()
+        @begin_z_region()
         p_err = local_error_norm(scratch[2].electron_p,
                                  scratch[t_params.n_rk_stages+1].electron_p,
                                  t_params.rtol, t_params.atol; method=error_norm_method,
