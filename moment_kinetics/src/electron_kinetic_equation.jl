@@ -31,8 +31,7 @@ using ..electron_fluid_equations: electron_energy_equation!,
                                   electron_energy_equation_no_r!,
                                   add_electron_energy_equation_to_Jacobian!,
                                   add_electron_energy_equation_to_v_only_Jacobian!,
-                                  add_electron_energy_equation_to_z_only_Jacobian!,
-                                  electron_energy_residual!
+                                  add_electron_energy_equation_to_z_only_Jacobian!
 using ..electron_z_advection: electron_z_advection!, update_electron_speed_z!,
                               add_electron_z_advection_to_Jacobian!,
                               add_electron_z_advection_to_v_only_Jacobian!,
