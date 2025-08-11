@@ -754,7 +754,7 @@ function rk_update_loop_low_storage!(rk_coefs, rk_coefs_implicit,
             end
         end
     else
-        @begin_z_vperp_vpa_region()
+        @begin_anyzv_z_vperp_vpa_region()
         if rk_coefs_implicit === nothing
             @loop_z_vperp_vpa iz ivperp ivpa begin
                 output[ivpa,ivperp,iz,ir] = rk_coefs[1]*first[ivpa,ivperp,iz,ir] +
@@ -795,7 +795,7 @@ function rk_update_loop!(rk_coefs, rk_coefs_implicit,
             end
         end
     else
-        @begin_z_vperp_vpa_region()
+        @begin_anyzv_z_vperp_vpa_region()
         if rk_coefs_implicit === nothing
             @loop_z_vperp_vpa iz ivperp ivpa begin
                 output[ivpa,ivperp,iz,ir] =
@@ -840,7 +840,7 @@ function rk_update_loop_low_storage!(rk_coefs, rk_coefs_implicit,
             end
         end
     else
-        @begin_z_region()
+        @begin_anyzv_z_region()
         if rk_coefs_implicit === nothing
             @loop_z iz begin
                 output[iz,ir] = rk_coefs[1]*first[iz,ir] +
@@ -880,7 +880,7 @@ function rk_update_loop!(rk_coefs, rk_coefs_implicit,
             end
         end
     else
-        @begin_z_region()
+        @begin_anyzv_z_region()
         if rk_coefs_implicit === nothing
             @loop_z iz begin
                 output[iz,ir] = sum(rk_coefs[i] * var_arrays[i][iz,ir] for i ∈ 1:N)
@@ -1288,7 +1288,7 @@ end
                                        total_points, error_norm_method, success,
                                        nl_max_its_fraction, nl_total_its_soft_limit,
                                        nl_total_its_soft_limit_reduce_dt,
-                                       composition; electron=false,
+                                       composition, z; electron=false,
                                        local_max_dt::mk_float=Inf, ir=nothing)
 
 Use the calculated `CFL_limits` and `error_norms` to update the timestep in `t_params`.
@@ -1297,67 +1297,75 @@ function adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms,
                                             total_points, error_norm_method, success,
                                             nl_max_its_fraction, nl_total_its_soft_limit,
                                             nl_total_its_soft_limit_reduce_dt,
-                                            composition; electron=false,
+                                            composition, z; electron=false,
                                             local_max_dt::mk_float=Inf, ir=nothing)
-    # Get global minimum of CFL limits
-    CFL_limit = Ref(0.0)
-    this_limit_caused_by = nothing
-    @serial_region begin
-        # Get maximum error over all blocks
-        CFL_limits_vec = [l for l ∈ values(CFL_limits)]
-        MPI.Allreduce!(CFL_limits_vec, min, comm_inter_block[])
-        CFL_limit_caused_by = argmin(CFL_limits_vec)
-        CFL_limit[] = CFL_limits_vec[CFL_limit_caused_by]
-        this_limit_caused_by = CFL_limits.keys[CFL_limit_caused_by]
-    end
-    MPI.Bcast!(CFL_limit, comm_block[])
-
-    if error_norm_method == "Linf"
-        # Get overall maximum error on the shared-memory block
-        error_norms_vec = [l for l ∈ values(error_norms)]
-        MPI.Reduce!(error_norms_vec, max, comm_block[]; root=0)
-
-        error_norm = Ref{mk_float}(0.0)
-        max_error_variable_index = -1
-        @serial_region begin
-            # Get maximum error over all blocks
-            MPI.Allreduce!(error_norms_vec, max, comm_inter_block[])
-            max_error_variable_index = argmax(error_norms)
-            error_norm[] = error_norms_vec[max_error_variable_index]
-            max_error_variable = error_norms.keys[max_error_variable_index]
-        end
-        MPI.Bcast!(error_norm, 0, comm_block[])
-    elseif error_norm_method == "L2"
-        # Get overall maximum error on the shared-memory block
-        error_norms_vec = [l for l ∈ values(error_norms)]
-        MPI.Reduce!(error_norms_vec, +, comm_block[]; root=0)
-
-        error_norm = Ref{mk_float}(0.0)
-        max_error_variable_index = -1
-        @serial_region begin
-            # Get maximum error over all blocks
-            MPI.Allreduce!(error_norms_vec, +, comm_inter_block[])
-
-            # So far `error_norms_vec` is the sum of squares of the errors. Now that summation
-            # is finished, need to divide by total number of points and take square-root.
-            error_norms_vec .= sqrt.(error_norms_vec ./ total_points)
-
-            # Weight the error from each variable equally by taking the mean, so the
-            # larger number of points in the distribution functions does not mean that
-            # error on the moments is ignored.
-            error_norm[] = mean(error_norms_vec)
-
-            # Record which variable had the maximum error
-            max_error_variable_index = argmax(error_norms_vec)
-            max_error_variable = error_norms.keys[max_error_variable_index]
-        end
-
-        MPI.Bcast!(error_norm, 0, comm_block[])
+    if ir === nothing
+        is_global_root = (global_rank[] == 0)
+        is_block_root = (block_rank[] == 0)
     else
-        error("Unrecognized error_norm_method '$method'")
+        is_global_root = (z.irank == 0 && anyzv_subblock_rank[] == 0)
+        is_block_root = (anyzv_subblock_rank[] == 0)
     end
 
     if ir === nothing
+        # Get global minimum of CFL limits
+        CFL_limit = Ref(0.0)
+        this_limit_caused_by = nothing
+        @serial_region begin
+            # Get maximum error over all blocks
+            CFL_limits_vec = [l for l ∈ values(CFL_limits)]
+            MPI.Allreduce!(CFL_limits_vec, min, comm_inter_block[])
+            CFL_limit_caused_by = argmin(CFL_limits_vec)
+            CFL_limit[] = CFL_limits_vec[CFL_limit_caused_by]
+            this_limit_caused_by = CFL_limits.keys[CFL_limit_caused_by]
+        end
+        MPI.Bcast!(CFL_limit, comm_block[])
+
+        if error_norm_method == "Linf"
+            # Get overall maximum error on the shared-memory block
+            error_norms_vec = [l for l ∈ values(error_norms)]
+            MPI.Reduce!(error_norms_vec, max, comm_block[]; root=0)
+
+            error_norm = Ref{mk_float}(0.0)
+            max_error_variable_index = -1
+            @serial_region begin
+                # Get maximum error over all blocks
+                MPI.Allreduce!(error_norms_vec, max, comm_inter_block[])
+                max_error_variable_index = argmax(error_norms)
+                error_norm[] = error_norms_vec[max_error_variable_index]
+                max_error_variable = error_norms.keys[max_error_variable_index]
+            end
+            MPI.Bcast!(error_norm, 0, comm_block[])
+        elseif error_norm_method == "L2"
+            # Get overall maximum error on the shared-memory block
+            error_norms_vec = [l for l ∈ values(error_norms)]
+            MPI.Reduce!(error_norms_vec, +, comm_block[]; root=0)
+
+            error_norm = Ref{mk_float}(0.0)
+            max_error_variable_index = -1
+            @serial_region begin
+                # Get maximum error over all blocks
+                MPI.Allreduce!(error_norms_vec, +, comm_inter_block[])
+
+                # So far `error_norms_vec` is the sum of squares of the errors. Now that summation
+                # is finished, need to divide by total number of points and take square-root.
+                error_norms_vec .= sqrt.(error_norms_vec ./ total_points)
+
+                # Weight the error from each variable equally by taking the mean, so the
+                # larger number of points in the distribution functions does not mean that
+                # error on the moments is ignored.
+                error_norm[] = mean(error_norms_vec)
+
+                # Record which variable had the maximum error
+                max_error_variable_index = argmax(error_norms_vec)
+                max_error_variable = error_norms.keys[max_error_variable_index]
+            end
+
+            MPI.Bcast!(error_norm, 0, comm_block[])
+        else
+            error("Unrecognized error_norm_method '$method'")
+        end
+
         failure_counter = t_params.failure_counter
         t = t_params.t
         dt = t_params.dt
@@ -1369,6 +1377,64 @@ function adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms,
         step_counter = t_params.step_counter
         failure_counter = t_params.failure_counter
     else
+        # Get global minimum of CFL limits
+        CFL_limit = Ref(0.0)
+        this_limit_caused_by = nothing
+        @anyzv_serial_region begin
+            # Get maximum error over all blocks
+            CFL_limits_vec = [l for l ∈ values(CFL_limits)]
+            MPI.Allreduce!(CFL_limits_vec, min, z.comm)
+            CFL_limit_caused_by = argmin(CFL_limits_vec)
+            CFL_limit[] = CFL_limits_vec[CFL_limit_caused_by]
+            this_limit_caused_by = CFL_limits.keys[CFL_limit_caused_by]
+        end
+        MPI.Bcast!(CFL_limit, comm_anyzv_subblock[])
+
+        if error_norm_method == "Linf"
+            # Get overall maximum error on the shared-memory block
+            error_norms_vec = [l for l ∈ values(error_norms)]
+            MPI.Reduce!(error_norms_vec, max, comm_anyzv_subblock[]; root=0)
+
+            error_norm = Ref{mk_float}(0.0)
+            max_error_variable_index = -1
+            @anyzv_serial_region begin
+                # Get maximum error over all blocks
+                MPI.Allreduce!(error_norms_vec, max, z.comm)
+                max_error_variable_index = argmax(error_norms)
+                error_norm[] = error_norms_vec[max_error_variable_index]
+                max_error_variable = error_norms.keys[max_error_variable_index]
+            end
+            MPI.Bcast!(error_norm, 0, comm_anyzv_subblock[])
+        elseif error_norm_method == "L2"
+            # Get overall maximum error on the shared-memory block
+            error_norms_vec = [l for l ∈ values(error_norms)]
+            MPI.Reduce!(error_norms_vec, +, comm_anyzv_subblock[]; root=0)
+
+            error_norm = Ref{mk_float}(0.0)
+            max_error_variable_index = -1
+            @anyzv_serial_region begin
+                # Get maximum error over all blocks
+                MPI.Allreduce!(error_norms_vec, +, z.comm)
+
+                # So far `error_norms_vec` is the sum of squares of the errors. Now that summation
+                # is finished, need to divide by total number of points and take square-root.
+                error_norms_vec .= sqrt.(error_norms_vec ./ total_points)
+
+                # Weight the error from each variable equally by taking the mean, so the
+                # larger number of points in the distribution functions does not mean that
+                # error on the moments is ignored.
+                error_norm[] = mean(error_norms_vec)
+
+                # Record which variable had the maximum error
+                max_error_variable_index = argmax(error_norms_vec)
+                max_error_variable = error_norms.keys[max_error_variable_index]
+            end
+
+            MPI.Bcast!(error_norm, 0, comm_anyzv_subblock[])
+        else
+            error("Unrecognized error_norm_method '$method'")
+        end
+
         failure_counter = @view t_params.failure_counter[ir:ir]
         t = @view t_params.t[ir:ir]
         dt = @view t_params.dt[ir:ir]
@@ -1467,7 +1533,7 @@ function adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms,
 
         # Call the 'cause' of the timestep failure the variable that has the biggest
         # error norm here
-        @serial_region begin
+        if is_block_root
             failure_caused_by[max_error_variable] += 1
         end
 
@@ -1531,7 +1597,7 @@ function adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms,
                 # Reserve first four entries of t_params.limit_caused_by for
                 # max_increase_factor, max_increase_factor_near_fail, minimum_dt and
                 # maximum_dt limits, high_nl_iterations.
-                @serial_region begin
+                if is_block_root
                     this_limit_caused_by = max_error_variable
                 end
             end
@@ -1560,7 +1626,7 @@ function adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms,
             end
             if dt[] > max_cap
                 dt[] = max_cap
-                @serial_region begin
+                if is_block_root
                     this_limit_caused_by = max_cap_limit_caused_by
                 end
             end
@@ -1568,7 +1634,7 @@ function adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms,
             # Prevent timestep from going below minimum_dt
             if dt[] < t_params.minimum_dt
                 dt[] = t_params.minimum_dt
-                @serial_region begin
+                if is_block_root
                     this_limit_caused_by = "minimum_dt"
                 end
             end
@@ -1577,7 +1643,7 @@ function adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms,
             max_dt = min(t_params.maximum_dt, local_max_dt)
             if dt[] > max_dt
                 dt[] = max_dt
-                @serial_region begin
+                if is_block_root
                     this_limit_caused_by = "maximum_dt"
                 end
             end
@@ -1590,7 +1656,7 @@ function adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms,
                 iteration_limited_dt = previous_dt[] / t_params.max_increase_factor
                 if dt[] > iteration_limited_dt
                     dt[] = iteration_limited_dt
-                    @serial_region begin
+                    if is_block_root
                         this_limit_caused_by = "high_nl_iterations"
                     end
                 end
@@ -1601,17 +1667,17 @@ function adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms,
                 # timestep will not be increasing, so do not need this check.
                 if dt[] > previous_dt[]
                     dt[] = previous_dt[]
-                    @serial_region begin
+                    if is_block_root
                         this_limit_caused_by = "high_nl_iterations"
                     end
                 end
             end
 
-            @serial_region begin
+            if is_block_root
                 limit_caused_by[this_limit_caused_by] += 1
             end
 
-            if (step_counter[] % 1000 == 0) && global_rank[] == 0
+            if (step_counter[] % 1000 == 0) && is_global_root
                 prefix = electron ? "electron" : "ion"
                 println("$prefix step ", step_counter[], ": t=", round(t[], sigdigits=6),
                         ", nfail=", failure_counter[], ", dt=", dt[])

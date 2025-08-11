@@ -49,6 +49,11 @@ function linear_test()
         z = collect(0:n-1) ./ (n-1)
         b = @. - z * (1.0 - z)
 
+        if serial_solve
+            coord_comm = MPI.COMM_NULL
+        else
+            coord_comm = comm_sub_z
+        end
         the_coord = coordinate("foo", n, n, n, 1, 1, 1, 0, 0, 0, 1.0, zeros(mk_float, 0),
                                zeros(mk_float, 0), zeros(mk_int, 0), zeros(mk_int, 0),
                                zeros(mk_int, 0), zeros(mk_int, 0), zeros(mk_int, 0, 0),
@@ -61,7 +66,7 @@ function linear_test()
                                zeros(mk_float, 0), zeros(mk_float, 0), zeros(mk_int, 0),
                                zeros(mk_int, 0), zeros(mk_float, 0, 0),
                                zeros(mk_float, 0, 0), zeros(mk_float, 0),
-                               zeros(mk_float, 0), MPI.COMM_NULL, 1:n, 1:n,
+                               zeros(mk_float, 0), coord_comm, 1:n, 1:n,
                                zeros(mk_float, 0), zeros(mk_float, 0), "",
                                zeros(mk_float, 0), false, zeros(mk_float, 0, 0, 0),
                                zeros(mk_float, 0, 0), zeros(mk_float, 0), zeros(mk_float, 0))
@@ -71,8 +76,8 @@ function linear_test()
             if serial_solve
                 residual .= A * x - b
             else
-                @begin_serial_region()
-                @serial_region begin
+                @begin_anyzv_region()
+                @anyzv_serial_region begin
                     residual .= A * x - b
                 end
             end
@@ -119,8 +124,11 @@ function linear_test()
                                     "atol" => atol,
                                     "linear_restart" => restart,
                                     "linear_max_restarts" => max_restarts)),
-            coords; serial_solve=serial_solve)
+            coords; serial_solve=serial_solve, anyzv_region=!serial_solve)
 
+        if !serial_solve
+            @begin_r_anyzv_region()
+        end
         newton_solve!(x, rhs_func!, residual, delta_x, rhs_delta, v, w, nl_solver_params;
                       coords)
 
@@ -163,6 +171,11 @@ function nonlinear_test()
         z = collect(0:n-1) ./ (n-1)
         b = @. - z * (1.0 - z)
 
+        if serial_solve
+            coord_comm = MPI.COMM_NULL
+        else
+            coord_comm = comm_sub_z
+        end
         the_coord = coordinate("foo", n, n, n, 1, 1, 1, 0, 0, 0, 1.0, zeros(mk_float, 0),
                                zeros(mk_float, 0), zeros(mk_int, 0), zeros(mk_int, 0),
                                zeros(mk_int, 0), zeros(mk_int, 0), zeros(mk_int, 0, 0),
@@ -175,7 +188,7 @@ function nonlinear_test()
                                zeros(mk_float, 0), zeros(mk_float, 0), zeros(mk_int, 0),
                                zeros(mk_int, 0), zeros(mk_float, 0, 0),
                                zeros(mk_float, 0, 0), zeros(mk_float, 0),
-                               zeros(mk_float, 0), MPI.COMM_NULL, 1:n, 1:n,
+                               zeros(mk_float, 0), coord_comm, 1:n, 1:n,
                                zeros(mk_float, 0), zeros(mk_float, 0), "",
                                zeros(mk_float, 0), false, zeros(mk_float, 0, 0, 0),
                                zeros(mk_float, 0, 0), zeros(mk_float, 0), zeros(mk_float, 0))
@@ -194,8 +207,8 @@ function nonlinear_test()
                 D = abs(x[i])^2.5
                 residual[i] = D * (x[i-1] - 2.0 * x[i]) - b[i]
             else
-                @begin_serial_region()
-                @serial_region begin
+                @begin_anyzv_region()
+                @anyzv_serial_region begin
                     i = 1
                     D = abs(x[i])^2.5
                     residual[i] = D * (- 2.0 * x[i] + x[i+1]) - b[i]
@@ -254,8 +267,11 @@ function nonlinear_test()
                                     "linear_restart" => restart,
                                     "linear_max_restarts" => max_restarts,
                                     "nonlinear_max_iterations" => 100)),
-            coords; serial_solve=serial_solve)
+            coords; serial_solve=serial_solve, anyzv_region=!serial_solve)
 
+        if !serial_solve
+            @begin_r_anyzv_region()
+        end
         newton_solve!(x, rhs_func!, residual, delta_x, rhs_delta, v, w, nl_solver_params;
                       coords)
 

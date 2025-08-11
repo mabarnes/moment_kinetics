@@ -5267,10 +5267,10 @@ function _get_variable_internal(run_info, variable_name::Symbol;
                            vr=(run_info.vr === nothing ? 1 : run_info.vr.n),
                            vz=(run_info.vz === nothing ? 1 : run_info.vz.n))
         for it ∈ 1:nt
-            @begin_serial_region()
+            @begin_r_anyzv_region()
             # Only need some struct with a 'speed' variable
             advect = (speed=@view(speed[:,:,:,:,it]),)
-            for ir ∈ 1:run_info.r.n
+            @loop_r ir begin
                 @views update_electron_speed_z!(advect, upar[:,ir,it], vth[:,ir,it],
                                                 run_info.vpa.grid, ir)
             end
