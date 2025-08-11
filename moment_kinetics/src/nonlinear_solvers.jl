@@ -224,7 +224,7 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=();
         v_size = nvperp * nvpa
 
         function get_adi_precon_buffers()
-            v_solve_z_range = looping.loop_ranges_store[(:z,)].z
+            v_solve_z_range = looping.loop_ranges_store[(:anyzv,:z,)].z
             v_solve_global_inds = [[((iz - 1)*v_size+1 : iz*v_size)..., total_size_coords+iz] for iz ∈ v_solve_z_range]
             v_solve_nsolve = length(v_solve_z_range)
             # Plus one for the one point of ppar that is included in the 'v solve'.
@@ -236,8 +236,8 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=();
             v_solve_buffer2 = allocate_float(v_solve_n)
             v_solve_matrix_buffer = allocate_float(v_solve_n, v_solve_n)
 
-            z_solve_vperp_range = looping.loop_ranges_store[(:vperp,:vpa)].vperp
-            z_solve_vpa_range = looping.loop_ranges_store[(:vperp,:vpa)].vpa
+            z_solve_vperp_range = looping.loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp
+            z_solve_vpa_range = looping.loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa
             z_solve_global_inds = vec([(ivperp-1)*nvpa+ivpa:v_size:(nz-1)*v_size+(ivperp-1)*nvpa+ivpa for ivperp ∈ z_solve_vperp_range, ivpa ∈ z_solve_vpa_range])
             z_solve_nsolve = length(z_solve_vperp_range) * length(z_solve_vpa_range)
             @serial_region begin
