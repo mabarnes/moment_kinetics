@@ -697,11 +697,11 @@ end
     end
 
     @_anyzv_subblock_synchronize()
-    global_norm_ppar = Ref(ppar_local_norm_square) # global_norm_ppar is the norm_square for ppar in the block
-    @timeit_debug global_timer "MPI.Reduce! comm_block" MPI.Reduce!(global_norm_ppar, +, comm_anyzv_subblock[])
+    global_norm_ppar = Ref(ppar_local_norm_square) # global_norm_ppar is now the norm_square for ppar in the subblock
+    @timeit_debug global_timer "MPI.Reduce! comm_anyzv_subblock" MPI.Reduce!(global_norm_ppar, +, comm_anyzv_subblock[])
 
     if block_rank[] == 0
-        @timeit_debug global_timer "MPI.Allreduce! comm_inter_block" MPI.Allreduce!(global_norm_ppar, +, comm_inter_block[]) # global_norm_ppar is the norm_square for ppar in the whole grid
+        @timeit_debug global_timer "MPI.Allreduce! z.comm" MPI.Allreduce!(global_norm_ppar, +, z.comm) # global_norm_ppar is now the norm_square for ppar in the whole {z,vperp,vpa} grid
         global_norm_ppar[] = global_norm_ppar[] / z.n_global
     end
 
@@ -719,17 +719,17 @@ end
 
     @_anyzv_subblock_synchronize()
     global_norm = Ref(pdf_local_norm_square)
-    @timeit_debug global_timer "MPI.Reduce! comm_block" MPI.Reduce!(global_norm, +, comm_anyzv_subblock[]) # global_norm is the norm_square for the block
+    @timeit_debug global_timer "MPI.Reduce! comm_anyzv_subblock" MPI.Reduce!(global_norm, +, comm_anyzv_subblock[]) # global_norm is now the norm_square for the subblock
 
     if block_rank[] == 0
-        @timeit_debug global_timer "MPI.Allreduce! comm_inter_block" MPI.Allreduce!(global_norm, +, z.comm) # global_norm is the norm_square for the whole grid
+        @timeit_debug global_timer "MPI.Allreduce! z.comm" MPI.Allreduce!(global_norm, +, z.comm) # global_norm is now the norm_square for the whole {z,vperp,vpa} grid
         global_norm[] = global_norm[] / (z.n_global * vperp.n_global * vpa.n_global)
 
         global_norm[] = sqrt(mean((global_norm_ppar[], global_norm[])))
     end
-    @_block_synchronize()
+    @_anyzv_subblock_synchronize()
 
-    @timeit_debug global_timer "MPI.Bcast! comm_block" MPI.Bcast!(global_norm, comm_block[]; root=0)
+    @timeit_debug global_timer "MPI.Bcast! comm_anyzv_subblock" MPI.Bcast!(global_norm, comm_anyzv_subblock[]; root=0)
 
     return global_norm[]
 end
@@ -873,7 +873,7 @@ end
         zend = z.n + 1
     end
 
-    @begin_z_region()
+    @begin_anyzv_z_region()
 
     ppar_local_dot = 0.0
     @loop_z iz begin
@@ -883,16 +883,16 @@ end
         ppar_local_dot += v_ppar[iz] * w_ppar[iz] / (rtol * abs(x_ppar[iz]) + atol)^2
     end
 
-    @_block_synchronize()
+    @_anyzv_subblock_synchronize()
     ppar_global_dot = Ref(ppar_local_dot)
-    @timeit_debug global_timer "MPI.Reduce! comm_block" MPI.Reduce!(ppar_global_dot, +, comm_block[]) # ppar_global_dot is the ppar_dot for the block
+    @timeit_debug global_timer "MPI.Reduce! comm_anyzv_subblock" MPI.Reduce!(ppar_global_dot, +, comm_anyzv_subblock) # ppar_global_dot is now the ppar_dot for the subblock
 
     if block_rank[] == 0
-        @timeit_debug global_timer "MPI.Allreduce! comm_inter_block" MPI.Allreduce!(ppar_global_dot, +, comm_inter_block[]) # ppar_global_dot is the ppar_dot for the whole grid
+        @timeit_debug global_timer "MPI.Allreduce! z.comm" MPI.Allreduce!(ppar_global_dot, +, z.comm) # ppar_global_dot is now the ppar_dot for the whole {z,vperp,vpa} grid
         ppar_global_dot[] = ppar_global_dot[] / z.n_global
     end
 
-    @begin_z_vperp_vpa_region()
+    @begin_anyzv_z_vperp_vpa_region()
 
     pdf_local_dot = 0.0
     @loop_z_vperp_vpa iz ivperp ivpa begin
@@ -902,12 +902,12 @@ end
         pdf_local_dot += v_pdf[ivpa,ivperp,iz] * w_pdf[ivpa,ivperp,iz] / (rtol * abs(x_pdf[ivpa,ivperp,iz]) + atol)^2
     end
 
-    @_block_synchronize()
+    @_anyzv_subblock_synchronize()
     global_dot = Ref(pdf_local_dot)
-    @timeit_debug global_timer "MPI.Reduce! comm_block" MPI.Reduce!(global_dot, +, comm_block[]) # global_dot is the dot for the block
+    @timeit_debug global_timer "MPI.Reduce! comm_anyzv_subblock" MPI.Reduce!(global_dot, +, comm_anyzv_subblock) # global_dot is now the dot for the subblock
 
     if block_rank[] == 0
-        @timeit_debug global_timer "MPI.Allreduce! comm_inter_block" MPI.Allreduce!(global_dot, +, comm_inter_block[]) # global_dot is the dot for the whole grid
+        @timeit_debug global_timer "MPI.Allreduce! z.comm" MPI.Allreduce!(global_dot, +, z.comm) # global_dot is now the dot for the whole {z,vperp,vpa} grid
         global_dot[] = global_dot[] / (z.n_global * vperp.n_global * vpa.n_global)
 
         global_dot[] = mean((ppar_global_dot[], global_dot[]))
@@ -948,10 +948,10 @@ end
 
     @_block_synchronize()
     global_dot = Ref(local_dot)
-    @timeit_debug global_timer "MPI.Reduce! comm_block" MPI.Reduce!(global_dot, +, comm_block[]) # global_dot is the dot for the block
+    @timeit_debug global_timer "MPI.Reduce! comm_block" MPI.Reduce!(global_dot, +, comm_block[]) # global_dot is now the dot for the subblock
 
     if block_rank[] == 0
-        @timeit_debug global_timer "MPI.Allreduce! comm_inter_block" MPI.Allreduce!(global_dot, +, comm_inter_block[]) # global_dot is the dot for the whole grid
+        @timeit_debug global_timer "MPI.Allreduce! comm_inter_block" MPI.Allreduce!(global_dot, +, comm_inter_block[]) # global_dot is now the dot for the whole {z,vperp,vpa} grid
         global_dot[] = global_dot[] / (n_ion_species * r.n_global * z.n_global * vperp.n_global * vpa.n_global)
     end
 
@@ -1147,13 +1147,13 @@ end
 
     result_ppar, result_pdf = result
 
-    @begin_z_region()
+    @begin_anyzv_z_region()
 
     @loop_z iz begin
         result_ppar[iz] = func()
     end
 
-    @begin_z_vperp_vpa_region()
+    @begin_anyzv_z_vperp_vpa_region()
 
     @loop_z_vperp_vpa iz ivperp ivpa begin
         result_pdf[ivpa,ivperp,iz] = func()
@@ -1168,13 +1168,13 @@ end
     result_ppar, result_pdf = result
     x1_ppar, x1_pdf = x1
 
-    @begin_z_region()
+    @begin_anyzv_z_region()
 
     @loop_z iz begin
         result_ppar[iz] = func(x1_ppar[iz])
     end
 
-    @begin_z_vperp_vpa_region()
+    @begin_anyzv_z_vperp_vpa_region()
 
     @loop_z_vperp_vpa iz ivperp ivpa begin
         result_pdf[ivpa,ivperp,iz] = func(x1_pdf[ivpa,ivperp,iz])
@@ -1191,25 +1191,25 @@ end
 
     if isa(x2, Tuple)
         x2_ppar, x2_pdf = x2
-        @begin_z_region()
+        @begin_anyzv_z_region()
 
         @loop_z iz begin
             result_ppar[iz] = func(x1_ppar[iz], x2_ppar[iz])
         end
 
-        @begin_z_vperp_vpa_region()
+        @begin_anyzv_z_vperp_vpa_region()
 
         @loop_z_vperp_vpa iz ivperp ivpa begin
             result_pdf[ivpa,ivperp,iz] = func(x1_pdf[ivpa,ivperp,iz], x2_pdf[ivpa,ivperp,iz])
         end
     else
-        @begin_z_region()
+        @begin_anyzv_z_region()
 
         @loop_z iz begin
             result_ppar[iz] = func(x1_ppar[iz], x2)
         end
 
-        @begin_z_vperp_vpa_region()
+        @begin_anyzv_z_vperp_vpa_region()
 
         @loop_z_vperp_vpa iz ivperp ivpa begin
             result_pdf[ivpa,ivperp,iz] = func(x1_pdf[ivpa,ivperp,iz], x2)
@@ -1228,25 +1228,25 @@ end
 
     if isa(x3, Tuple)
         x3_ppar, x3_pdf = x3
-        @begin_z_region()
+        @begin_anyzv_z_region()
 
         @loop_z iz begin
             result_ppar[iz] = func(x1_ppar[iz], x2_ppar[iz], x3_ppar[iz])
         end
 
-        @begin_z_vperp_vpa_region()
+        @begin_anyzv_z_vperp_vpa_region()
 
         @loop_z_vperp_vpa iz ivperp ivpa begin
             result_pdf[ivpa,ivperp,iz] = func(x1_pdf[ivpa,ivperp,iz], x2_pdf[ivpa,ivperp,iz], x3_pdf[ivpa,ivperp,iz])
         end
     else
-        @begin_z_region()
+        @begin_anyzv_z_region()
 
         @loop_z iz begin
             result_ppar[iz] = func(x1_ppar[iz], x2_ppar[iz], x3)
         end
 
-        @begin_z_vperp_vpa_region()
+        @begin_anyzv_z_vperp_vpa_region()
 
         @loop_z_vperp_vpa iz ivperp ivpa begin
             result_pdf[ivpa,ivperp,iz] = func(x1_pdf[ivpa,ivperp,iz], x2_pdf[ivpa,ivperp,iz], x3)
@@ -1371,7 +1371,7 @@ end
 
     ny = length(y)
 
-    @begin_z_region()
+    @begin_anyzv_z_region()
 
     @loop_z iz begin
         for iy ∈ 1:ny
@@ -1379,7 +1379,7 @@ end
         end
     end
 
-    @begin_z_vperp_vpa_region()
+    @begin_anyzv_z_vperp_vpa_region()
 
     @loop_z_vperp_vpa iz ivperp ivpa begin
         for iy ∈ 1:ny
