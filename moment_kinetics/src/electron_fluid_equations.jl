@@ -39,7 +39,8 @@ output:
 function calculate_electron_density!(dens_e, updated, dens_i)
     # only update the electron density if it has not already been updated
     if !updated[]
-        for ir ∈ 1:size(dens_e, 2)
+        @begin_r_anyzv_region()
+        @loop_r ir begin
             @views calculate_electron_density_no_r!(dens_e[:,ir], dens_i[:,ir,:], ir)
         end
     end
@@ -90,7 +91,7 @@ end
 function calculate_electron_upar_from_charge_conservation_no_r!(upar_e, updated, dens_e,
                                                                 upar_i, dens_i,
                                                                 electron_model, r, z, ir)
-    @begin_anyzv_serial_region()
+    @begin_anyzv_region()
     # initialise the electron parallel flow density to zero
     @loop_z iz begin
         upar_e[iz] = 0.0

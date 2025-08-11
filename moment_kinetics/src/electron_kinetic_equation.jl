@@ -422,7 +422,7 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
                 residual = steady_state_residuals(scratch[t_params.n_rk_stages+1].pdf_electron,
                                                   scratch[1].pdf_electron, previous_dt[];
                                                   use_mpi=true, only_max_abs=true, ir=ir,
-                                                  comm_local=comm_block[],
+                                                  comm_local=comm_anyzv_subblock[],
                                                   comm_global=z.comm)
                 if block_rank[] == 0 && z.irank == 0
                     residual = first(values(residual))[1]
@@ -432,7 +432,7 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
                         steady_state_residuals(scratch[t_params.n_rk_stages+1].electron_p,
                                                scratch[1].electron_p, previous_dt[];
                                                use_mpi=true, only_max_abs=true, ir=ir,
-                                               comm_local=comm_block[],
+                                               comm_local=comm_anyzv_subblock[],
                                                comm_global=z.comm)
                     if block_rank[] == 0 && z.irank == 0
                         p_residual = first(values(p_residual))[1]
@@ -860,13 +860,14 @@ function electron_backward_euler_pseudotimestepping!(scratch, pdf, moments, phi,
                                                            old_scratch.pdf_electron,
                                                            dt[]; use_mpi=true,
                                                            only_max_abs=true, ir=ir,
-                                                           comm_local=comm_block[],
+                                                           comm_local=comm_anyzv_subblock[],
                                                            comm_global=z.comm)[1]
                 else
                     steady_state_residuals(new_scratch.pdf_electron,
                                            old_scratch.pdf_electron, dt[]; use_mpi=true,
                                            only_max_abs=true, ir=ir,
-                                           comm_local=comm_block[], comm_global=z.comm)
+                                           comm_local=comm_anyzv_subblock[],
+                                           comm_global=z.comm)
                 end
                 if evolve_p
                     if global_rank[] == 0
@@ -874,14 +875,14 @@ function electron_backward_euler_pseudotimestepping!(scratch, pdf, moments, phi,
                             steady_state_residuals(new_scratch.electron_p,
                                                    old_scratch.electron_p,
                                                    dt[]; use_mpi=true, only_max_abs=true,
-                                                   ir=ir, comm_local=comm_block[],
+                                                   ir=ir, comm_local=comm_anyzv_subblock[],
                                                    comm_global=z.comm)[1]
                         residual_norm = max(residual_norm, p_residual)
                     else
                         steady_state_residuals(new_scratch.electron_p,
                                                old_scratch.electron_p,
                                                dt[]; use_mpi=true, only_max_abs=true,
-                                               ir=ir, comm_local=comm_block[],
+                                               ir=ir, comm_local=comm_anyzv_subblock[],
                                                comm_global=z.comm)
                     end
                 end
