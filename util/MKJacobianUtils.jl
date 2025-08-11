@@ -8,7 +8,7 @@ export get_electron_Jacobian_matrix
 using moment_kinetics
 using moment_kinetics.array_allocation: allocate_shared_float
 using moment_kinetics.calculus: integral
-using moment_kinetics.derivatives: derivative_z!, derivative_z_pdf_vpavperpz!
+using moment_kinetics.derivatives: derivative_z_anyzv!, derivative_z_pdf_vpavperpz!
 using moment_kinetics.electron_kinetic_equation: fill_electron_kinetic_equation_Jacobian!,
                                                  add_electron_z_advection_to_Jacobian!,
                                                  add_electron_vpa_advection_to_Jacobian!,
@@ -159,6 +159,8 @@ function get_electron_Jacobian_matrix(run_directory; restart_time_index=1,
     # r-index - assume this is always 1 because we only consider 1D simulations
     ir = 1
 
+    @begin_r_anyzv_region()
+
     # Ion timestep within the first Runge-Kutta stage (t_params.dt[] is the length of the
     # full Runge-Kutta timestep).
     ion_dt = t_params.dt[] * t_params.rk_coefs_implicit[1,1]
@@ -179,6 +181,7 @@ function get_electron_Jacobian_matrix(run_directory; restart_time_index=1,
     dvth_dz = @view moments.electron.dvth_dz[:,ir]
     dqpar_dz = @view moments.electron.dqpar_dz[:,ir]
     upar_ion = @view moments.ion.upar[:,ir,1]
+    phi = @view fields.phi[:,ir]
 
     z_spectral = spectral_objects.z_spectral
     vpa_spectral = spectral_objects.vpa_spectral
@@ -203,27 +206,27 @@ function get_electron_Jacobian_matrix(run_directory; restart_time_index=1,
     buffer_2 = @view scratch_dummy.buffer_rs_2[ir,1]
     buffer_3 = @view scratch_dummy.buffer_rs_3[ir,1]
     buffer_4 = @view scratch_dummy.buffer_rs_4[ir,1]
-    @begin_z_region()
+    @begin_anyzv_z_region()
     @loop_z iz begin
         third_moment[iz] = qpar[iz] / p[iz] / vth[iz]
     end
-    derivative_z!(dthird_moment_dz, third_moment, buffer_1, buffer_2,
-                  buffer_3, buffer_4, z_spectral, z)
+    derivative_z_anyzv!(dthird_moment_dz, third_moment, buffer_1, buffer_2, buffer_3,
+                        buffer_4, z_spectral, z)
 
     if all([include_z_advection, include_vpa_advection, include_electron_pdf_term,
             include_dissipation, include_krook, include_external_source,
             include_constraint_forcing, include_energy_equation, include_ion_dt_forcing])
         fill_electron_kinetic_equation_Jacobian!(
-            jacobian_matrix, f, p, moments, fields.phi, collisions, composition, z, vperp,
-            vpa, z_spectral, vperp_spectral, vpa_spectral, z_advect, vpa_advect,
-            scratch_dummy, external_source_settings, num_diss_params, t_params.electron,
-            ion_dt, ir, true)
+            jacobian_matrix, f, p, moments, phi, collisions, composition, z, vperp, vpa,
+            z_spectral, vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
+            external_source_settings, num_diss_params, t_params.electron, ion_dt, ir,
+            true)
     else
         # Allow any combination of terms, selected by the include_* flags
 
         z_speed = @view z_advect[1].speed[:,:,:,ir]
         dpdf_dz = @view scratch_dummy.buffer_vpavperpzr_1[:,:,:,ir]
-        @begin_vperp_vpa_region()
+        @begin_anyzv_vperp_vpa_region()
         update_electron_speed_z!(z_advect[1], upar, vth, vpa.grid, ir)
         @loop_vperp_vpa ivperp ivpa begin
             @views z_advect[1].adv_fac[:,ivpa,ivperp,ir] = -z_speed[:,ivpa,ivperp]

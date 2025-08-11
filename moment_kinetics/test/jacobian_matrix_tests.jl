@@ -12,7 +12,7 @@ using moment_kinetics.boundary_conditions: enforce_v_boundary_condition_local!,
                                            skip_f_electron_bc_points_in_Jacobian
 using moment_kinetics.calculus: derivative!, integral
 using moment_kinetics.communication
-using moment_kinetics.derivatives: derivative_z!, derivative_z_pdf_vpavperpz!
+using moment_kinetics.derivatives: derivative_z_anyzv!, derivative_z_pdf_vpavperpz!
 using moment_kinetics.electron_fluid_equations: calculate_electron_moments_no_r!,
                                                 electron_energy_equation_no_r!,
                                                 add_electron_energy_equation_to_Jacobian!,
@@ -261,22 +261,25 @@ function test_electron_z_advection(test_input; rtol=(2.5e2*epsilon)^2)
         delta_p = allocate_shared_float(size(p)...)
         p_amplitude = epsilon * maximum(p)
         f = @view pdf.electron.norm[:,:,:,ir]
-        @begin_serial_region()
-        @serial_region begin
+
+        @begin_r_anyzv_region()
+        @begin_anyzv_region()
+        @anyzv_serial_region begin
             @. delta_p = p_amplitude * sin(2.0*π*test_wavenumber*z.grid/z.L)
 
             # Make sure initial condition has some z-variation. As f is 'moment kinetic' this
             # means f must have a non-Maxwellian part that varies in z.
             f .*= 1.0 .+ 1.0e-4 .* reshape(vpa.grid.^3, vpa.n, 1, 1) .* reshape(sin.(2.0.*π.*z.grid./z.L), 1, 1, z.n)
-            # Ensure initial electron distribution function obeys constraints
         end
+        # Ensure initial electron distribution function obeys constraints
         hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa, vperp)
+        @begin_r_anyzv_region()
         delta_f = allocate_shared_float(size(f)...)
         f_amplitude = epsilon * maximum(f)
         # Use exp(sin()) in vpa so that perturbation does not have any symmetry that makes
         # low-order moments vanish exactly.
-        @begin_serial_region()
-        @serial_region begin
+        @begin_anyzv_region()
+        @anyzv_serial_region begin
             delta_f .= f_amplitude .*
                        reshape(sin.(2.0.*π.*test_wavenumber.*z.grid./z.L), 1, 1, z.n) .*
                        reshape(exp.(sin.(2.0.*π.*test_wavenumber.*vpa.grid./vpa.L)) .- 1.0, vpa.n, 1, 1) .*
@@ -290,7 +293,7 @@ function test_electron_z_advection(test_input; rtol=(2.5e2*epsilon)^2)
         z_speed = @view z_advect[1].speed[:,:,:,ir]
 
         dpdf_dz = @view scratch_dummy.buffer_vpavperpzr_1[:,:,:,ir]
-        @begin_vperp_vpa_region()
+        @begin_anyzv_vperp_vpa_region()
         update_electron_speed_z!(z_advect[1], upar, vth, vpa.grid, ir)
         @loop_vperp_vpa ivperp ivpa begin
             @views z_advect[1].adv_fac[:,ivpa,ivperp,ir] = -z_speed[:,ivpa,ivperp]
@@ -306,7 +309,7 @@ function test_electron_z_advection(test_input; rtol=(2.5e2*epsilon)^2)
                                            z_spectral, z)
 
         jacobian_matrix = allocate_shared_float(total_size, total_size)
-        @serial_region begin
+        @anyzv_serial_region begin
             jacobian_matrix .= 0.0
             for row ∈ 1:total_size
                 # Initialise identity matrix
@@ -325,8 +328,8 @@ function test_electron_z_advection(test_input; rtol=(2.5e2*epsilon)^2)
 
         @testset "ADI Jacobians - implicit z" begin
             # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 jacobian_matrix_ADI_check .= 0.0
                 for row ∈ 1:total_size
                     # Initialise identity matrix
@@ -337,7 +340,7 @@ function test_electron_z_advection(test_input; rtol=(2.5e2*epsilon)^2)
             v_size = vperp.n * vpa.n
 
             # Add 'implicit' contribution
-            @begin_vperp_vpa_region()
+            @begin_anyzv_vperp_vpa_region()
             @loop_vperp_vpa ivperp ivpa begin
                 this_slice = (ivperp - 1)*vpa.n + ivpa:v_size:(z.n - 1)*v_size + (ivperp - 1)*vpa.n + ivpa
                 @views add_electron_z_advection_to_z_only_Jacobian!(
@@ -352,16 +355,16 @@ function test_electron_z_advection(test_input; rtol=(2.5e2*epsilon)^2)
                 vpa, z_spectral, z_advect, z_speed, scratch_dummy, dt, ir, :explicit_v;
                 p_offset=pdf_size)
 
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 @test elementwise_isapprox(jacobian_matrix_ADI_check, jacobian_matrix; rtol=0.0, atol=1.0e-15)
             end
         end
 
         @testset "ADI Jacobians - implicit v" begin
             # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 jacobian_matrix_ADI_check .= 0.0
                 for row ∈ 1:total_size
                     # Initialise identity matrix
@@ -372,7 +375,7 @@ function test_electron_z_advection(test_input; rtol=(2.5e2*epsilon)^2)
             v_size = vperp.n * vpa.n
 
             # Add 'implicit' contribution
-            @begin_z_region()
+            @begin_anyzv_z_region()
             @loop_z iz begin
                 this_slice = collect((iz - 1)*v_size + 1:iz*v_size)
                 push!(this_slice, iz + pdf_size)
@@ -388,14 +391,14 @@ function test_electron_z_advection(test_input; rtol=(2.5e2*epsilon)^2)
                 vpa, z_spectral, z_advect, z_speed, scratch_dummy, dt, ir, :explicit_z;
                 p_offset=pdf_size)
 
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 @test elementwise_isapprox(jacobian_matrix_ADI_check, jacobian_matrix; rtol=0.0, atol=1.0e-15)
             end
         end
 
         function residual_func!(residual, this_f, this_p)
-            @begin_z_region()
+            @begin_anyzv_z_region()
             # Calculate derived moments and derivatives using new_variables
             calculate_electron_moments_no_r!(this_f, dens, upar, this_p, ion_dens,
                                              ion_upar, moments, composition, collisions,
@@ -408,7 +411,7 @@ function test_electron_z_advection(test_input; rtol=(2.5e2*epsilon)^2)
             # electron_pdf member of the first argument, so if we set the electron_pdf member
             # of the first argument to zero, and pass dt=1, then it will evaluate the time
             # derivative, which is the residual for a steady-state solution.
-            @begin_z_vperp_vpa_region()
+            @begin_anyzv_z_vperp_vpa_region()
             @loop_z_vperp_vpa iz ivperp ivpa begin
                 residual[ivpa,ivperp,iz] = f[ivpa,ivperp,iz]
             end
@@ -417,14 +420,14 @@ function test_electron_z_advection(test_input; rtol=(2.5e2*epsilon)^2)
             # Now
             #   residual = f_electron_old + dt*RHS(f_electron_newvar)
             # so update to desired residual
-            @begin_z_vperp_vpa_region()
+            @begin_anyzv_z_vperp_vpa_region()
             @loop_z_vperp_vpa iz ivperp ivpa begin
                 residual[ivpa,ivperp,iz] = this_f[ivpa,ivperp,iz] - residual[ivpa,ivperp,iz]
             end
 
             # Set residual to zero where pdf_electron is determined by boundary conditions.
             if vpa.n > 1
-                @begin_z_vperp_region()
+                @begin_anyzv_z_vperp_region()
                 @loop_z_vperp iz ivperp begin
                     @views enforce_v_boundary_condition_local!(residual[:,ivperp,iz], vpa.bc,
                                                                vpa_advect[1].speed[:,ivperp,iz,ir],
@@ -433,7 +436,7 @@ function test_electron_z_advection(test_input; rtol=(2.5e2*epsilon)^2)
                 end
             end
             if vperp.n > 1
-                @begin_z_vpa_region()
+                @begin_anyzv_z_vpa_region()
                 enforce_vperp_boundary_condition!(residual, vperp.bc,
                                                   vperp, vperp_spectral, vperp_adv,
                                                   vperp_diffusion, ir)
@@ -448,7 +451,7 @@ function test_electron_z_advection(test_input; rtol=(2.5e2*epsilon)^2)
                 # impose the boundary condition. We impose this after subtracting f_old in
                 # case rounding errors, etc. mean that at some point f_old had a different
                 # boundary condition cut-off index.
-                @begin_vperp_vpa_region()
+                @begin_anyzv_vperp_vpa_region()
                 v_unnorm = vpa.scratch
                 zero = 1.0e-14
                 if z.irank == 0
@@ -480,8 +483,8 @@ function test_electron_z_advection(test_input; rtol=(2.5e2*epsilon)^2)
             residual_func!(original_residual, f, p)
             residual_func!(perturbed_residual, f.+delta_f, p)
 
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 delta_state = zeros(mk_float, total_size)
                 delta_state[1:pdf_size] .= vec(delta_f)
                 residual_update_with_Jacobian = jacobian_matrix * delta_state
@@ -502,8 +505,8 @@ function test_electron_z_advection(test_input; rtol=(2.5e2*epsilon)^2)
             residual_func!(original_residual, f, p)
             residual_func!(perturbed_residual, f, p .+ delta_p)
 
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 delta_state = zeros(mk_float, total_size)
                 delta_state[pdf_size+1:end] .= vec(delta_p)
                 residual_update_with_Jacobian = jacobian_matrix * delta_state
@@ -524,8 +527,8 @@ function test_electron_z_advection(test_input; rtol=(2.5e2*epsilon)^2)
             residual_func!(original_residual, f, p)
             residual_func!(perturbed_residual, f.+delta_f, p.+delta_p)
 
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 delta_state = zeros(mk_float, total_size)
                 delta_state[1:pdf_size] .= vec(delta_f)
                 delta_state[pdf_size+1:end] .= vec(delta_p)
@@ -579,6 +582,8 @@ function test_electron_vpa_advection(test_input; rtol=(3.0e2*epsilon)^2)
         vpa_advect = advection_structs.vpa_advect
         me = composition.me_over_mi
 
+        @begin_r_anyzv_region()
+
         buffer_1 = @view scratch_dummy.buffer_rs_1[ir,1]
         buffer_2 = @view scratch_dummy.buffer_rs_2[ir,1]
         buffer_3 = @view scratch_dummy.buffer_rs_3[ir,1]
@@ -587,22 +592,22 @@ function test_electron_vpa_advection(test_input; rtol=(3.0e2*epsilon)^2)
         # Reconstruct w_∥^3 moment of g_e from already-calculated qpar
         third_moment = scratch_dummy.buffer_z_1
         dthird_moment_dz = scratch_dummy.buffer_z_2
-        @begin_z_region()
+        @begin_anyzv_z_region()
         @loop_z iz begin
             third_moment[iz] = qpar[iz] / p[iz] / vth[iz]
         end
-        derivative_z!(dthird_moment_dz, third_moment, buffer_1, buffer_2,
-                      buffer_3, buffer_4, z_spectral, z)
+        derivative_z_anyzv!(dthird_moment_dz, third_moment, buffer_1, buffer_2, buffer_3,
+                            buffer_4, z_spectral, z)
 
-        @begin_vperp_vpa_region()
+        @begin_anyzv_vperp_vpa_region()
         update_electron_speed_z!(z_advect[1], upar, vth, vpa.grid, ir)
         z_speed = @view z_advect[1].speed[:,:,:,ir]
 
         delta_p = allocate_shared_float(size(p)...)
         p_amplitude = epsilon * maximum(p)
         f = @view pdf.electron.norm[:,:,:,ir]
-        @begin_serial_region()
-        @serial_region begin
+        @begin_anyzv_region()
+        @anyzv_serial_region begin
             @. delta_p = p_amplitude * sin(2.0*π*test_wavenumber*z.grid/z.L)
 
             # Make sure initial condition has some z-variation. As f is 'moment kinetic' this
@@ -611,12 +616,13 @@ function test_electron_vpa_advection(test_input; rtol=(3.0e2*epsilon)^2)
         end
         # Ensure initial electron distribution function obeys constraints
         hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa, vperp)
+        @begin_r_anyzv_region()
         delta_f = allocate_shared_float(size(f)...)
         f_amplitude = epsilon * maximum(f)
         # Use exp(sin()) in vpa so that perturbation does not have any symmetry that makes
         # low-order moments vanish exactly.
-        @begin_serial_region()
-        @serial_region begin
+        @begin_anyzv_region()
+        @anyzv_serial_region begin
             delta_f .= f_amplitude .*
                        reshape(sin.(2.0.*π.*test_wavenumber.*z.grid./z.L), 1, 1, z.n) .*
                        reshape(exp.(sin.(2.0.*π.*test_wavenumber.*vpa.grid./vpa.L)) .- 1.0, vpa.n, 1, 1) .*
@@ -628,7 +634,7 @@ function test_electron_vpa_advection(test_input; rtol=(3.0e2*epsilon)^2)
         total_size = pdf_size + p_size
 
         dpdf_dvpa = @view scratch_dummy.buffer_vpavperpzr_2[:,:,:,ir]
-        @begin_z_vperp_region()
+        @begin_anyzv_z_vperp_region()
         update_electron_speed_vpa!(vpa_advect[1], dens, upar, p, moments,
                                    composition.me_over_mi, vpa.grid,
                                    external_source_settings.electron, ir)
@@ -642,8 +648,8 @@ function test_electron_vpa_advection(test_input; rtol=(3.0e2*epsilon)^2)
         end
 
         jacobian_matrix = allocate_shared_float(total_size, total_size)
-        @begin_serial_region()
-        @serial_region begin
+        @begin_anyzv_region()
+        @anyzv_serial_region begin
             jacobian_matrix .= 0.0
             for row ∈ 1:total_size
                 # Initialise identity matrix
@@ -664,8 +670,8 @@ function test_electron_vpa_advection(test_input; rtol=(3.0e2*epsilon)^2)
 
         @testset "ADI Jacobians - implicit z" begin
             # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 jacobian_matrix_ADI_check .= 0.0
                 for row ∈ 1:total_size
                     # Initialise identity matrix
@@ -682,16 +688,16 @@ function test_electron_vpa_advection(test_input; rtol=(3.0e2*epsilon)^2)
                 z_spectral, vpa_spectral, vpa_advect, z_speed, scratch_dummy,
                 external_source_settings, dt, ir, :explicit_v; p_offset=pdf_size)
 
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 @test elementwise_isapprox(jacobian_matrix_ADI_check, jacobian_matrix; rtol=0.0, atol=1.0e-15)
             end
         end
 
         @testset "ADI Jacobians - implicit v" begin
             # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 jacobian_matrix_ADI_check .= 0.0
                 for row ∈ 1:total_size
                     # Initialise identity matrix
@@ -702,7 +708,7 @@ function test_electron_vpa_advection(test_input; rtol=(3.0e2*epsilon)^2)
             v_size = vperp.n * vpa.n
 
             # Add 'implicit' contribution
-            @begin_z_region()
+            @begin_anyzv_z_region()
             @loop_z iz begin
                 this_slice = collect((iz - 1)*v_size + 1:iz*v_size)
                 push!(this_slice, iz + pdf_size)
@@ -721,14 +727,14 @@ function test_electron_vpa_advection(test_input; rtol=(3.0e2*epsilon)^2)
                 z_spectral, vpa_spectral, vpa_advect, z_speed, scratch_dummy,
                 external_source_settings, dt, ir, :explicit_z; p_offset=pdf_size)
 
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 @test elementwise_isapprox(jacobian_matrix_ADI_check, jacobian_matrix; rtol=0.0, atol=1.0e-15)
             end
         end
 
         function residual_func!(residual, this_f, this_p)
-            @begin_z_region()
+            @begin_anyzv_z_region()
             # Calculate derived moments and derivatives using new_variables
             calculate_electron_moments_no_r!(this_f, dens, upar, this_p, ion_dens,
                                              ion_upar, moments, composition, collisions,
@@ -741,7 +747,7 @@ function test_electron_vpa_advection(test_input; rtol=(3.0e2*epsilon)^2)
             # electron_pdf member of the first argument, so if we set the electron_pdf member
             # of the first argument to zero, and pass dt=1, then it will evaluate the time
             # derivative, which is the residual for a steady-state solution.
-            @begin_z_vperp_vpa_region()
+            @begin_anyzv_z_vperp_vpa_region()
             @loop_z_vperp_vpa iz ivperp ivpa begin
                 residual[ivpa,ivperp,iz] = f[ivpa,ivperp,iz]
             end
@@ -752,14 +758,14 @@ function test_electron_vpa_advection(test_input; rtol=(3.0e2*epsilon)^2)
             # Now
             #   residual = f_electron_old + dt*RHS(f_electron_newvar)
             # so update to desired residual
-            @begin_z_vperp_vpa_region()
+            @begin_anyzv_z_vperp_vpa_region()
             @loop_z_vperp_vpa iz ivperp ivpa begin
                 residual[ivpa,ivperp,iz] = this_f[ivpa,ivperp,iz] - residual[ivpa,ivperp,iz]
             end
 
             # Set residual to zero where pdf_electron is determined by boundary conditions.
             if vpa.n > 1
-                @begin_z_vperp_region()
+                @begin_anyzv_z_vperp_region()
                 @loop_z_vperp iz ivperp begin
                     @views enforce_v_boundary_condition_local!(residual[:,ivperp,iz], vpa.bc,
                                                                vpa_advect[1].speed[:,ivperp,iz,ir],
@@ -768,7 +774,7 @@ function test_electron_vpa_advection(test_input; rtol=(3.0e2*epsilon)^2)
                 end
             end
             if vperp.n > 1
-                @begin_z_vpa_region()
+                @begin_anyzv_z_vpa_region()
                 enforce_vperp_boundary_condition!(residual, vperp.bc,
                                                   vperp, vperp_spectral, vperp_adv,
                                                   vperp_diffusion, ir)
@@ -783,7 +789,7 @@ function test_electron_vpa_advection(test_input; rtol=(3.0e2*epsilon)^2)
                 # impose the boundary condition. We impose this after subtracting f_old in
                 # case rounding errors, etc. mean that at some point f_old had a different
                 # boundary condition cut-off index.
-                @begin_vperp_vpa_region()
+                @begin_anyzv_vperp_vpa_region()
                 v_unnorm = vpa.scratch
                 zero = 1.0e-14
                 if z.irank == 0
@@ -815,8 +821,8 @@ function test_electron_vpa_advection(test_input; rtol=(3.0e2*epsilon)^2)
             residual_func!(original_residual, f, p)
             residual_func!(perturbed_residual, f.+delta_f, p)
 
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 delta_state = zeros(mk_float, total_size)
                 delta_state[1:pdf_size] .= vec(delta_f)
                 residual_update_with_Jacobian = jacobian_matrix * delta_state
@@ -842,8 +848,8 @@ function test_electron_vpa_advection(test_input; rtol=(3.0e2*epsilon)^2)
             residual_func!(original_residual, f, p)
             residual_func!(perturbed_residual, f, p .+ delta_p)
 
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 delta_state = zeros(mk_float, total_size)
                 delta_state[pdf_size+1:end] .= vec(delta_p)
                 residual_update_with_Jacobian = jacobian_matrix * delta_state
@@ -869,8 +875,8 @@ function test_electron_vpa_advection(test_input; rtol=(3.0e2*epsilon)^2)
             residual_func!(original_residual, f, p)
             residual_func!(perturbed_residual, f.+delta_f, p.+delta_p)
 
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 delta_state = zeros(mk_float, total_size)
                 delta_state[1:pdf_size] .= vec(delta_f)
                 delta_state[pdf_size+1:end] .= vec(delta_p)
@@ -930,6 +936,8 @@ function test_contribution_from_electron_pdf_term(test_input; rtol=(4.0e2*epsilo
         vpa_advect = advection_structs.vpa_advect
         me = composition.me_over_mi
 
+        @begin_r_anyzv_region()
+
         buffer_1 = @view scratch_dummy.buffer_rs_1[ir,1]
         buffer_2 = @view scratch_dummy.buffer_rs_2[ir,1]
         buffer_3 = @view scratch_dummy.buffer_rs_3[ir,1]
@@ -938,22 +946,22 @@ function test_contribution_from_electron_pdf_term(test_input; rtol=(4.0e2*epsilo
         # Reconstruct w_∥^3 moment of g_e from already-calculated qpar
         third_moment = scratch_dummy.buffer_z_1
         dthird_moment_dz = scratch_dummy.buffer_z_2
-        @begin_z_region()
+        @begin_anyzv_z_region()
         @loop_z iz begin
             third_moment[iz] = qpar[iz] / p[iz] / vth[iz]
         end
-        derivative_z!(dthird_moment_dz, third_moment, buffer_1, buffer_2,
-                      buffer_3, buffer_4, z_spectral, z)
+        derivative_z_anyzv!(dthird_moment_dz, third_moment, buffer_1, buffer_2, buffer_3,
+                            buffer_4, z_spectral, z)
 
-        @begin_vperp_vpa_region()
+        @begin_anyzv_vperp_vpa_region()
         update_electron_speed_z!(z_advect[1], upar, vth, vpa.grid, ir)
         z_speed = @view z_advect[1].speed[:,:,:,ir]
 
         delta_p = allocate_shared_float(size(p)...)
         p_amplitude = epsilon * maximum(p)
         f = @view pdf.electron.norm[:,:,:,ir]
-        @begin_serial_region()
-        @serial_region begin
+        @begin_anyzv_region()
+        @anyzv_serial_region begin
             @. delta_p = p_amplitude * sin(2.0*π*test_wavenumber*z.grid/z.L)
 
             # Make sure initial condition has some z-variation. As f is 'moment kinetic' this
@@ -962,12 +970,13 @@ function test_contribution_from_electron_pdf_term(test_input; rtol=(4.0e2*epsilo
         end
         # Ensure initial electron distribution function obeys constraints
         hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa, vperp)
+        @begin_r_anyzv_region()
         delta_f = allocate_shared_float(size(f)...)
         f_amplitude = epsilon * maximum(f)
         # Use exp(sin()) in vpa so that perturbation does not have any symmetry that makes
         # low-order moments vanish exactly.
-        @begin_serial_region()
-        @serial_region begin
+        @begin_anyzv_region()
+        @anyzv_serial_region begin
             delta_f .= f_amplitude .*
                        reshape(sin.(2.0.*π.*test_wavenumber.*z.grid./z.L), 1, 1, z.n) .*
                        reshape(exp.(sin.(2.0.*π.*test_wavenumber.*vpa.grid./vpa.L)) .- 1.0, vpa.n, 1, 1) .*
@@ -979,8 +988,8 @@ function test_contribution_from_electron_pdf_term(test_input; rtol=(4.0e2*epsilo
         total_size = pdf_size + p_size
 
         jacobian_matrix = allocate_shared_float(total_size, total_size)
-        @begin_serial_region()
-        @serial_region begin
+        @begin_anyzv_region()
+        @anyzv_serial_region begin
             jacobian_matrix .= 0.0
             for row ∈ 1:total_size
                 # Initialise identity matrix
@@ -1000,8 +1009,8 @@ function test_contribution_from_electron_pdf_term(test_input; rtol=(4.0e2*epsilo
 
         @testset "ADI Jacobians - implicit z" begin
             # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 jacobian_matrix_ADI_check .= 0.0
                 for row ∈ 1:total_size
                     # Initialise identity matrix
@@ -1012,7 +1021,7 @@ function test_contribution_from_electron_pdf_term(test_input; rtol=(4.0e2*epsilo
             v_size = vperp.n * vpa.n
 
             # Add 'implicit' contribution
-            @begin_vperp_vpa_region()
+            @begin_anyzv_vperp_vpa_region()
             @loop_vperp_vpa ivperp ivpa begin
                 this_slice = (ivperp - 1)*vpa.n + ivpa:v_size:(z.n - 1)*v_size + (ivperp - 1)*vpa.n + ivpa
                 @views add_contribution_from_electron_pdf_term_to_z_only_Jacobian!(
@@ -1029,16 +1038,16 @@ function test_contribution_from_electron_pdf_term(test_input; rtol=(4.0e2*epsilo
                 external_source_settings, z, vperp, vpa, z_spectral, z_speed,
                 scratch_dummy, dt, ir, :explicit_v; p_offset=pdf_size)
 
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 @test elementwise_isapprox(jacobian_matrix_ADI_check, jacobian_matrix; rtol=0.0, atol=1.0e-13)
             end
         end
 
         @testset "ADI Jacobians - implicit v" begin
             # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 jacobian_matrix_ADI_check .= 0.0
                 for row ∈ 1:total_size
                     # Initialise identity matrix
@@ -1049,7 +1058,7 @@ function test_contribution_from_electron_pdf_term(test_input; rtol=(4.0e2*epsilo
             v_size = vperp.n * vpa.n
 
             # Add 'implicit' contribution
-            @begin_z_region()
+            @begin_anyzv_z_region()
             @loop_z iz begin
                 this_slice = collect((iz - 1)*v_size + 1:iz*v_size)
                 push!(this_slice, iz + pdf_size)
@@ -1068,14 +1077,14 @@ function test_contribution_from_electron_pdf_term(test_input; rtol=(4.0e2*epsilo
                 external_source_settings, z, vperp, vpa, z_spectral, z_speed,
                 scratch_dummy, dt, ir, :explicit_z; p_offset=pdf_size)
 
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 @test elementwise_isapprox(jacobian_matrix_ADI_check, jacobian_matrix; rtol=0.0, atol=1.0e-13)
             end
         end
 
         function residual_func!(residual, this_f, this_p)
-            @begin_z_region()
+            @begin_anyzv_z_region()
             # Calculate derived moments and derivatives using new_variables
             calculate_electron_moments_no_r!(this_f, dens, upar, this_p, ion_dens,
                                              ion_upar, moments, composition, collisions,
@@ -1088,7 +1097,7 @@ function test_contribution_from_electron_pdf_term(test_input; rtol=(4.0e2*epsilo
             # electron_pdf member of the first argument, so if we set the electron_pdf member
             # of the first argument to zero, and pass dt=1, then it will evaluate the time
             # derivative, which is the residual for a steady-state solution.
-            @begin_z_vperp_vpa_region()
+            @begin_anyzv_z_vperp_vpa_region()
             @loop_z_vperp_vpa iz ivperp ivpa begin
                 residual[ivpa,ivperp,iz] = f[ivpa,ivperp,iz]
             end
@@ -1098,14 +1107,14 @@ function test_contribution_from_electron_pdf_term(test_input; rtol=(4.0e2*epsilo
             # Now
             #   residual = f_electron_old + dt*RHS(f_electron_newvar)
             # so update to desired residual
-            @begin_z_vperp_vpa_region()
+            @begin_anyzv_z_vperp_vpa_region()
             @loop_z_vperp_vpa iz ivperp ivpa begin
                 residual[ivpa,ivperp,iz] = this_f[ivpa,ivperp,iz] - residual[ivpa,ivperp,iz]
             end
 
             # Set residual to zero where pdf_electron is determined by boundary conditions.
             if vpa.n > 1
-                @begin_z_vperp_region()
+                @begin_anyzv_z_vperp_region()
                 @loop_z_vperp iz ivperp begin
                     @views enforce_v_boundary_condition_local!(residual[:,ivperp,iz], vpa.bc,
                                                                vpa_advect[1].speed[:,ivperp,iz,ir],
@@ -1114,7 +1123,7 @@ function test_contribution_from_electron_pdf_term(test_input; rtol=(4.0e2*epsilo
                 end
             end
             if vperp.n > 1
-                @begin_z_vpa_region()
+                @begin_anyzv_z_vpa_region()
                 enforce_vperp_boundary_condition!(residual, vperp.bc,
                                                   vperp, vperp_spectral, vperp_adv,
                                                   vperp_diffusion, ir)
@@ -1129,7 +1138,7 @@ function test_contribution_from_electron_pdf_term(test_input; rtol=(4.0e2*epsilo
                 # impose the boundary condition. We impose this after subtracting f_old in
                 # case rounding errors, etc. mean that at some point f_old had a different
                 # boundary condition cut-off index.
-                @begin_vperp_vpa_region()
+                @begin_anyzv_vperp_vpa_region()
                 v_unnorm = vpa.scratch
                 zero = 1.0e-14
                 if z.irank == 0
@@ -1161,8 +1170,8 @@ function test_contribution_from_electron_pdf_term(test_input; rtol=(4.0e2*epsilo
             residual_func!(original_residual, f, p)
             residual_func!(perturbed_residual, f.+delta_f, p)
 
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 delta_state = zeros(mk_float, total_size)
                 delta_state[1:pdf_size] .= vec(delta_f)
                 residual_update_with_Jacobian = jacobian_matrix * delta_state
@@ -1183,8 +1192,8 @@ function test_contribution_from_electron_pdf_term(test_input; rtol=(4.0e2*epsilo
             residual_func!(original_residual, f, p)
             residual_func!(perturbed_residual, f, p .+ delta_p)
 
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 delta_state = zeros(mk_float, total_size)
                 delta_state[pdf_size+1:end] .= vec(delta_p)
                 residual_update_with_Jacobian = jacobian_matrix * delta_state
@@ -1205,8 +1214,8 @@ function test_contribution_from_electron_pdf_term(test_input; rtol=(4.0e2*epsilo
             residual_func!(original_residual, f, p)
             residual_func!(perturbed_residual, f.+delta_f, p.+delta_p)
 
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 delta_state = zeros(mk_float, total_size)
                 delta_state[1:pdf_size] .= vec(delta_f)
                 delta_state[pdf_size+1:end] .= vec(delta_p)
@@ -1256,15 +1265,17 @@ function test_electron_dissipation_term(test_input; rtol=(1.0e1*epsilon)^2)
         z_advect = advection_structs.z_advect
         vpa_advect = advection_structs.vpa_advect
 
-        @begin_vperp_vpa_region()
+        @begin_r_anyzv_region()
+
+        @begin_anyzv_vperp_vpa_region()
         update_electron_speed_z!(z_advect[1], upar, vth, vpa.grid, ir)
         z_speed = @view z_advect[1].speed[:,:,:,ir]
 
         delta_p = allocate_shared_float(size(p)...)
         p_amplitude = epsilon * maximum(p)
         f = @view pdf.electron.norm[:,:,:,ir]
-        @begin_serial_region()
-        @serial_region begin
+        @begin_anyzv_region()
+        @anyzv_serial_region begin
             @. delta_p = p_amplitude * sin(2.0*π*test_wavenumber*z.grid/z.L)
 
             # Make sure initial condition has some z-variation. As f is 'moment kinetic' this
@@ -1273,12 +1284,13 @@ function test_electron_dissipation_term(test_input; rtol=(1.0e1*epsilon)^2)
         end
         # Ensure initial electron distribution function obeys constraints
         hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa, vperp)
+        @begin_r_anyzv_region()
         delta_f = allocate_shared_float(size(f)...)
         f_amplitude = epsilon * maximum(f)
         # Use exp(sin()) in vpa so that perturbation does not have any symmetry that makes
         # low-order moments vanish exactly.
-        @begin_serial_region()
-        @serial_region begin
+        @begin_anyzv_region()
+        @anyzv_serial_region begin
             delta_f .= f_amplitude .*
                        reshape(sin.(2.0.*π.*test_wavenumber.*z.grid./z.L), 1, 1, z.n) .*
                        reshape(exp.(sin.(2.0.*π.*test_wavenumber.*vpa.grid./vpa.L)) .- 1.0, vpa.n, 1, 1) .*
@@ -1290,8 +1302,8 @@ function test_electron_dissipation_term(test_input; rtol=(1.0e1*epsilon)^2)
         total_size = pdf_size + p_size
 
         jacobian_matrix = allocate_shared_float(total_size, total_size)
-        @begin_serial_region()
-        @serial_region begin
+        @begin_anyzv_region()
+        @anyzv_serial_region begin
             jacobian_matrix .= 0.0
             for row ∈ 1:total_size
                 # Initialise identity matrix
@@ -1310,8 +1322,8 @@ function test_electron_dissipation_term(test_input; rtol=(1.0e1*epsilon)^2)
 
         @testset "ADI Jacobians - implicit z" begin
             # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 jacobian_matrix_ADI_check .= 0.0
                 for row ∈ 1:total_size
                     # Initialise identity matrix
@@ -1326,16 +1338,16 @@ function test_electron_dissipation_term(test_input; rtol=(1.0e1*epsilon)^2)
                 jacobian_matrix_ADI_check, f, num_diss_params, z, vperp, vpa,
                 vpa_spectral, z_speed, dt, ir, :explicit_v)
 
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 @test elementwise_isapprox(jacobian_matrix_ADI_check, jacobian_matrix; rtol=0.0, atol=1.0e-15)
             end
         end
 
         @testset "ADI Jacobians - implicit v" begin
             # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 jacobian_matrix_ADI_check .= 0.0
                 for row ∈ 1:total_size
                     # Initialise identity matrix
@@ -1346,7 +1358,7 @@ function test_electron_dissipation_term(test_input; rtol=(1.0e1*epsilon)^2)
             v_size = vperp.n * vpa.n
 
             # Add 'implicit' contribution
-            @begin_z_region()
+            @begin_anyzv_z_region()
             @loop_z iz begin
                 this_slice = collect((iz - 1)*v_size + 1:iz*v_size)
                 push!(this_slice, iz + pdf_size)
@@ -1360,14 +1372,14 @@ function test_electron_dissipation_term(test_input; rtol=(1.0e1*epsilon)^2)
                 jacobian_matrix_ADI_check, f, num_diss_params, z, vperp, vpa,
                 vpa_spectral, z_speed, dt, ir, :explicit_z)
 
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 @test elementwise_isapprox(jacobian_matrix_ADI_check, jacobian_matrix; rtol=0.0, atol=1.0e-15)
             end
         end
 
         function residual_func!(residual, this_f, this_p)
-            @begin_z_region()
+            @begin_anyzv_z_region()
             # Calculate derived moments and derivatives using new_variables
             calculate_electron_moments_no_r!(this_f, dens, upar, this_p, ion_dens,
                                              ion_upar, moments, composition, collisions,
@@ -1380,7 +1392,7 @@ function test_electron_dissipation_term(test_input; rtol=(1.0e1*epsilon)^2)
             # electron_pdf member of the first argument, so if we set the electron_pdf member
             # of the first argument to zero, and pass dt=1, then it will evaluate the time
             # derivative, which is the residual for a steady-state solution.
-            @begin_z_vperp_vpa_region()
+            @begin_anyzv_z_vperp_vpa_region()
             @loop_z_vperp_vpa iz ivperp ivpa begin
                 residual[ivpa,ivperp,iz] = f[ivpa,ivperp,iz]
             end
@@ -1389,14 +1401,14 @@ function test_electron_dissipation_term(test_input; rtol=(1.0e1*epsilon)^2)
             # Now
             #   residual = f_electron_old + dt*RHS(f_electron_newvar)
             # so update to desired residual
-            @begin_z_vperp_vpa_region()
+            @begin_anyzv_z_vperp_vpa_region()
             @loop_z_vperp_vpa iz ivperp ivpa begin
                 residual[ivpa,ivperp,iz] = this_f[ivpa,ivperp,iz] - residual[ivpa,ivperp,iz]
             end
 
             # Set residual to zero where pdf_electron is determined by boundary conditions.
             if vpa.n > 1
-                @begin_z_vperp_region()
+                @begin_anyzv_z_vperp_region()
                 @loop_z_vperp iz ivperp begin
                     @views enforce_v_boundary_condition_local!(residual[:,ivperp,iz], vpa.bc,
                                                                vpa_advect[1].speed[:,ivperp,iz,ir],
@@ -1405,7 +1417,7 @@ function test_electron_dissipation_term(test_input; rtol=(1.0e1*epsilon)^2)
                 end
             end
             if vperp.n > 1
-                @begin_z_vpa_region()
+                @begin_anyzv_z_vpa_region()
                 enforce_vperp_boundary_condition!(residual, vperp.bc,
                                                   vperp, vperp_spectral, vperp_adv,
                                                   vperp_diffusion, ir)
@@ -1420,7 +1432,7 @@ function test_electron_dissipation_term(test_input; rtol=(1.0e1*epsilon)^2)
                 # impose the boundary condition. We impose this after subtracting f_old in
                 # case rounding errors, etc. mean that at some point f_old had a different
                 # boundary condition cut-off index.
-                @begin_vperp_vpa_region()
+                @begin_anyzv_vperp_vpa_region()
                 v_unnorm = vpa.scratch
                 zero = 1.0e-14
                 if z.irank == 0
@@ -1452,8 +1464,8 @@ function test_electron_dissipation_term(test_input; rtol=(1.0e1*epsilon)^2)
             residual_func!(original_residual, f, p)
             residual_func!(perturbed_residual, f.+delta_f, p)
 
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 delta_state = zeros(mk_float, total_size)
                 delta_state[1:pdf_size] .= vec(delta_f)
                 residual_update_with_Jacobian = jacobian_matrix * delta_state
@@ -1474,8 +1486,8 @@ function test_electron_dissipation_term(test_input; rtol=(1.0e1*epsilon)^2)
             residual_func!(original_residual, f, p)
             residual_func!(perturbed_residual, f, p .+ delta_p)
 
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 delta_state = zeros(mk_float, total_size)
                 delta_state[pdf_size+1:end] .= vec(delta_p)
                 residual_update_with_Jacobian = jacobian_matrix * delta_state
@@ -1496,8 +1508,8 @@ function test_electron_dissipation_term(test_input; rtol=(1.0e1*epsilon)^2)
             residual_func!(original_residual, f, p)
             residual_func!(perturbed_residual, f.+delta_f, p.+delta_p)
 
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 delta_state = zeros(mk_float, total_size)
                 delta_state[1:pdf_size] .= vec(delta_f)
                 delta_state[pdf_size+1:end] .= vec(delta_p)
@@ -1535,14 +1547,16 @@ function test_electron_krook_collisions(test_input; rtol=(2.0e1*epsilon)^2)
             advance_implicit, fp_arrays, scratch_dummy, manufactured_source_list,
             ascii_io, io_moments, io_dfns = get_mk_state(test_input)
 
+        @begin_r_anyzv_region()
+
         dens = @view moments.electron.dens[:,ir]
         # The actual (electron) upar will be updated and set equal to the ion upar by
         # `calculate_electron_moments_no_r!()`. For this test, we want to artificially
         # keep a difference between electron and ion upar, so use upar_test (which is
         # copied here before upar_ion is modified) in place of the usual upar array.
         upar_test = allocate_shared_float(z.n)
-        @begin_serial_region()
-        @serial_region begin
+        @begin_anyzv_region()
+        @anyzv_serial_region begin
             upar_test .= @view moments.electron.upar[:,ir]
         end
         p = @view moments.electron.p[:,ir]
@@ -1560,15 +1574,15 @@ function test_electron_krook_collisions(test_input; rtol=(2.0e1*epsilon)^2)
         upar_ion = @view moments.ion.upar[:,ir,1]
         @. upar_ion += sin(4.0*π*test_wavenumber*z.grid/z.L)
 
-        @begin_vperp_vpa_region()
+        @begin_anyzv_vperp_vpa_region()
         update_electron_speed_z!(z_advect[1], upar_test, vth, vpa.grid, ir)
         z_speed = @view z_advect[1].speed[:,:,:,ir]
 
         delta_p = allocate_shared_float(size(p)...)
         p_amplitude = epsilon * maximum(p)
         f = @view pdf.electron.norm[:,:,:,ir]
-        @begin_serial_region()
-        @serial_region begin
+        @begin_anyzv_region()
+        @anyzv_serial_region begin
             @. delta_p = p_amplitude * sin(2.0*π*test_wavenumber*z.grid/z.L)
 
             # Make sure initial condition has some z-variation. As f is 'moment kinetic' this
@@ -1577,12 +1591,13 @@ function test_electron_krook_collisions(test_input; rtol=(2.0e1*epsilon)^2)
         end
         # Ensure initial electron distribution function obeys constraints
         hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa, vperp)
+        @begin_r_anyzv_region()
         delta_f = allocate_shared_float(size(f)...)
         f_amplitude = epsilon * maximum(f)
         # Use exp(sin()) in vpa so that perturbation does not have any symmetry that makes
         # low-order moments vanish exactly.
-        @begin_serial_region()
-        @serial_region begin
+        @begin_anyzv_region()
+        @anyzv_serial_region begin
             delta_f .= f_amplitude .*
                        reshape(sin.(2.0.*π.*test_wavenumber.*z.grid./z.L), 1, 1, z.n) .*
                        reshape(exp.(sin.(2.0.*π.*test_wavenumber.*vpa.grid./vpa.L)) .- 1.0, vpa.n, 1, 1) .*
@@ -1594,8 +1609,8 @@ function test_electron_krook_collisions(test_input; rtol=(2.0e1*epsilon)^2)
         total_size = pdf_size + p_size
 
         jacobian_matrix = allocate_shared_float(total_size, total_size)
-        @begin_serial_region()
-        @serial_region begin
+        @begin_anyzv_region()
+        @anyzv_serial_region begin
             jacobian_matrix .= 0.0
             for row ∈ 1:total_size
                 # Initialise identity matrix
@@ -1614,8 +1629,8 @@ function test_electron_krook_collisions(test_input; rtol=(2.0e1*epsilon)^2)
 
         @testset "ADI Jacobians - implicit z" begin
             # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 jacobian_matrix_ADI_check .= 0.0
                 for row ∈ 1:total_size
                     # Initialise identity matrix
@@ -1626,7 +1641,7 @@ function test_electron_krook_collisions(test_input; rtol=(2.0e1*epsilon)^2)
             v_size = vperp.n * vpa.n
 
             # Add 'implicit' contribution
-            @begin_vperp_vpa_region()
+            @begin_anyzv_vperp_vpa_region()
             @loop_vperp_vpa ivperp ivpa begin
                 this_slice = (ivperp - 1)*vpa.n + ivpa:v_size:(z.n - 1)*v_size + (ivperp - 1)*vpa.n + ivpa
                 @views add_electron_krook_collisions_to_z_only_Jacobian!(
@@ -1641,16 +1656,16 @@ function test_electron_krook_collisions(test_input; rtol=(2.0e1*epsilon)^2)
                 @view(moments.ion.upar[:,ir]), collisions, z, vperp, vpa, z_speed, dt, ir,
                 :explicit_v; p_offset=pdf_size)
 
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 @test elementwise_isapprox(jacobian_matrix_ADI_check, jacobian_matrix; rtol=0.0, atol=1.0e-15)
             end
         end
 
         @testset "ADI Jacobians - implicit v" begin
             # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 jacobian_matrix_ADI_check .= 0.0
                 for row ∈ 1:total_size
                     # Initialise identity matrix
@@ -1661,7 +1676,7 @@ function test_electron_krook_collisions(test_input; rtol=(2.0e1*epsilon)^2)
             v_size = vperp.n * vpa.n
 
             # Add 'implicit' contribution
-            @begin_z_region()
+            @begin_anyzv_z_region()
             @loop_z iz begin
                 this_slice = collect((iz - 1)*v_size + 1:iz*v_size)
                 push!(this_slice, iz + pdf_size)
@@ -1677,14 +1692,14 @@ function test_electron_krook_collisions(test_input; rtol=(2.0e1*epsilon)^2)
                 @view(moments.ion.upar[:,ir]), collisions, z, vperp, vpa, z_speed, dt, ir,
                 :explicit_z; p_offset=pdf_size)
 
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 @test elementwise_isapprox(jacobian_matrix_ADI_check, jacobian_matrix; rtol=0.0, atol=1.0e-15)
             end
         end
 
         function residual_func!(residual, this_f, this_p)
-            @begin_z_region()
+            @begin_anyzv_z_region()
             # Calculate derived moments and derivatives using new_variables
             # Note, do not pass in upar_test here, because we want upar_test to stay fixed
             # at its initial value, not be updated to be equal to ion_upar.
@@ -1700,7 +1715,7 @@ function test_electron_krook_collisions(test_input; rtol=(2.0e1*epsilon)^2)
             # electron_pdf member of the first argument, so if we set the electron_pdf member
             # of the first argument to zero, and pass dt=1, then it will evaluate the time
             # derivative, which is the residual for a steady-state solution.
-            @begin_z_vperp_vpa_region()
+            @begin_anyzv_z_vperp_vpa_region()
             @loop_z_vperp_vpa iz ivperp ivpa begin
                 residual[ivpa,ivperp,iz] = f[ivpa,ivperp,iz]
             end
@@ -1710,14 +1725,14 @@ function test_electron_krook_collisions(test_input; rtol=(2.0e1*epsilon)^2)
             # Now
             #   residual = f_electron_old + dt*RHS(f_electron_newvar)
             # so update to desired residual
-            @begin_z_vperp_vpa_region()
+            @begin_anyzv_z_vperp_vpa_region()
             @loop_z_vperp_vpa iz ivperp ivpa begin
                 residual[ivpa,ivperp,iz] = this_f[ivpa,ivperp,iz] - residual[ivpa,ivperp,iz]
             end
 
             # Set residual to zero where pdf_electron is determined by boundary conditions.
             if vpa.n > 1
-                @begin_z_vperp_region()
+                @begin_anyzv_z_vperp_region()
                 @loop_z_vperp iz ivperp begin
                     @views enforce_v_boundary_condition_local!(residual[:,ivperp,iz], vpa.bc,
                                                                vpa_advect[1].speed[:,ivperp,iz,ir],
@@ -1726,7 +1741,7 @@ function test_electron_krook_collisions(test_input; rtol=(2.0e1*epsilon)^2)
                 end
             end
             if vperp.n > 1
-                @begin_z_vpa_region()
+                @begin_anyzv_z_vpa_region()
                 enforce_vperp_boundary_condition!(residual, vperp.bc,
                                                   vperp, vperp_spectral, vperp_adv,
                                                   vperp_diffusion, ir)
@@ -1741,7 +1756,7 @@ function test_electron_krook_collisions(test_input; rtol=(2.0e1*epsilon)^2)
                 # impose the boundary condition. We impose this after subtracting f_old in
                 # case rounding errors, etc. mean that at some point f_old had a different
                 # boundary condition cut-off index.
-                @begin_vperp_vpa_region()
+                @begin_anyzv_vperp_vpa_region()
                 v_unnorm = vpa.scratch
                 zero = 1.0e-14
                 if z.irank == 0
@@ -1775,8 +1790,8 @@ function test_electron_krook_collisions(test_input; rtol=(2.0e1*epsilon)^2)
             residual_func!(original_residual, f, p)
             residual_func!(perturbed_residual, f.+delta_f, p)
 
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 delta_state = zeros(mk_float, total_size)
                 delta_state[1:pdf_size] .= vec(delta_f)
                 residual_update_with_Jacobian = jacobian_matrix * delta_state
@@ -1797,8 +1812,8 @@ function test_electron_krook_collisions(test_input; rtol=(2.0e1*epsilon)^2)
             residual_func!(original_residual, f, p)
             residual_func!(perturbed_residual, f, p .+ delta_p)
 
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 delta_state = zeros(mk_float, total_size)
                 delta_state[pdf_size+1:end] .= vec(delta_p)
                 residual_update_with_Jacobian = jacobian_matrix * delta_state
@@ -1819,8 +1834,8 @@ function test_electron_krook_collisions(test_input; rtol=(2.0e1*epsilon)^2)
             residual_func!(original_residual, f, p)
             residual_func!(perturbed_residual, f.+delta_f, p.+delta_p)
 
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 delta_state = zeros(mk_float, total_size)
                 delta_state[1:pdf_size] .= vec(delta_f)
                 delta_state[pdf_size+1:end] .= vec(delta_p)
@@ -1873,6 +1888,8 @@ function test_external_electron_source(test_input; rtol=(3.0e1*epsilon)^2)
         vpa_advect = advection_structs.vpa_advect
         me = composition.me_over_mi
 
+        @begin_r_anyzv_region()
+
         buffer_1 = @view scratch_dummy.buffer_rs_1[ir,1]
         buffer_2 = @view scratch_dummy.buffer_rs_2[ir,1]
         buffer_3 = @view scratch_dummy.buffer_rs_3[ir,1]
@@ -1881,22 +1898,22 @@ function test_external_electron_source(test_input; rtol=(3.0e1*epsilon)^2)
         # Reconstruct w_∥^3 moment of g_e from already-calculated qpar
         third_moment = scratch_dummy.buffer_z_1
         dthird_moment_dz = scratch_dummy.buffer_z_2
-        @begin_z_region()
+        @begin_anyzv_z_region()
         @loop_z iz begin
             third_moment[iz] = qpar[iz] / p[iz] / vth[iz]
         end
-        derivative_z!(dthird_moment_dz, third_moment, buffer_1, buffer_2,
-                      buffer_3, buffer_4, z_spectral, z)
+        derivative_z_anyzv!(dthird_moment_dz, third_moment, buffer_1, buffer_2, buffer_3,
+                            buffer_4, z_spectral, z)
 
-        @begin_vperp_vpa_region()
+        @begin_anyzv_vperp_vpa_region()
         update_electron_speed_z!(z_advect[1], upar, vth, vpa.grid, ir)
         z_speed = @view z_advect[1].speed[:,:,:,ir]
 
         delta_p = allocate_shared_float(size(p)...)
         p_amplitude = epsilon * maximum(p)
         f = @view pdf.electron.norm[:,:,:,ir]
-        @begin_serial_region()
-        @serial_region begin
+        @begin_anyzv_region()
+        @anyzv_serial_region begin
             @. delta_p = p_amplitude * sin(2.0*π*test_wavenumber*z.grid/z.L)
 
             # Make sure initial condition has some z-variation. As f is 'moment kinetic' this
@@ -1905,12 +1922,13 @@ function test_external_electron_source(test_input; rtol=(3.0e1*epsilon)^2)
         end
         # Ensure initial electron distribution function obeys constraints
         hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa, vperp)
+        @begin_r_anyzv_region()
         delta_f = allocate_shared_float(size(f)...)
         f_amplitude = epsilon * maximum(f)
         # Use exp(sin()) in vpa so that perturbation does not have any symmetry that makes
         # low-order moments vanish exactly.
-        @begin_serial_region()
-        @serial_region begin
+        @begin_anyzv_region()
+        @anyzv_serial_region begin
             delta_f .= f_amplitude .*
                        reshape(sin.(2.0.*π.*test_wavenumber.*z.grid./z.L), 1, 1, z.n) .*
                        reshape(exp.(sin.(2.0.*π.*test_wavenumber.*vpa.grid./vpa.L)) .- 1.0, vpa.n, 1, 1) .*
@@ -1922,8 +1940,8 @@ function test_external_electron_source(test_input; rtol=(3.0e1*epsilon)^2)
         total_size = pdf_size + p_size
 
         jacobian_matrix = allocate_shared_float(total_size, total_size)
-        @begin_serial_region()
-        @serial_region begin
+        @begin_anyzv_region()
+        @anyzv_serial_region begin
             jacobian_matrix .= 0.0
             for row ∈ 1:total_size
                 # Initialise identity matrix
@@ -1942,8 +1960,8 @@ function test_external_electron_source(test_input; rtol=(3.0e1*epsilon)^2)
 
         @testset "ADI Jacobians - implicit z" begin
             # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 jacobian_matrix_ADI_check .= 0.0
                 for row ∈ 1:total_size
                     # Initialise identity matrix
@@ -1954,7 +1972,7 @@ function test_external_electron_source(test_input; rtol=(3.0e1*epsilon)^2)
             v_size = vperp.n * vpa.n
 
             # Add 'implicit' contribution
-            @begin_vperp_vpa_region()
+            @begin_anyzv_vperp_vpa_region()
             @loop_vperp_vpa ivperp ivpa begin
                 this_slice = (ivperp - 1)*vpa.n + ivpa:v_size:(z.n - 1)*v_size + (ivperp - 1)*vpa.n + ivpa
                 @views add_total_external_electron_source_to_z_only_Jacobian!(
@@ -1969,16 +1987,16 @@ function test_external_electron_source(test_input; rtol=(3.0e1*epsilon)^2)
                 external_source_settings.electron, z, vperp, vpa, dt, ir, :explicit_v;
                 p_offset=pdf_size)
 
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 @test elementwise_isapprox(jacobian_matrix_ADI_check, jacobian_matrix; rtol=0.0, atol=1.0e-15)
             end
         end
 
         @testset "ADI Jacobians - implicit v" begin
             # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 jacobian_matrix_ADI_check .= 0.0
                 for row ∈ 1:total_size
                     # Initialise identity matrix
@@ -1989,7 +2007,7 @@ function test_external_electron_source(test_input; rtol=(3.0e1*epsilon)^2)
             v_size = vperp.n * vpa.n
 
             # Add 'implicit' contribution
-            @begin_z_region()
+            @begin_anyzv_z_region()
             @loop_z iz begin
                 this_slice = collect((iz - 1)*v_size + 1:iz*v_size)
                 push!(this_slice, iz + pdf_size)
@@ -2005,14 +2023,14 @@ function test_external_electron_source(test_input; rtol=(3.0e1*epsilon)^2)
                 external_source_settings.electron, z, vperp, vpa, dt, ir, :explicit_z;
                 p_offset=pdf_size)
 
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 @test elementwise_isapprox(jacobian_matrix_ADI_check, jacobian_matrix; rtol=0.0, atol=1.0e-15)
             end
         end
 
         function residual_func!(residual, this_f, this_p)
-            @begin_z_region()
+            @begin_anyzv_z_region()
             # Calculate derived moments and derivatives using new_variables
             calculate_electron_moments_no_r!(this_f, dens, upar, this_p, ion_dens,
                                              ion_upar, moments, composition, collisions,
@@ -2025,7 +2043,7 @@ function test_external_electron_source(test_input; rtol=(3.0e1*epsilon)^2)
             # electron_pdf member of the first argument, so if we set the electron_pdf member
             # of the first argument to zero, and pass dt=1, then it will evaluate the time
             # derivative, which is the residual for a steady-state solution.
-            @begin_z_vperp_vpa_region()
+            @begin_anyzv_z_vperp_vpa_region()
             @loop_z_vperp_vpa iz ivperp ivpa begin
                 residual[ivpa,ivperp,iz] = f[ivpa,ivperp,iz]
             end
@@ -2036,14 +2054,14 @@ function test_external_electron_source(test_input; rtol=(3.0e1*epsilon)^2)
             # Now
             #   residual = f_electron_old + dt*RHS(f_electron_newvar)
             # so update to desired residual
-            @begin_z_vperp_vpa_region()
+            @begin_anyzv_z_vperp_vpa_region()
             @loop_z_vperp_vpa iz ivperp ivpa begin
                 residual[ivpa,ivperp,iz] = this_f[ivpa,ivperp,iz] - residual[ivpa,ivperp,iz]
             end
 
             # Set residual to zero where pdf_electron is determined by boundary conditions.
             if vpa.n > 1
-                @begin_z_vperp_region()
+                @begin_anyzv_z_vperp_region()
                 @loop_z_vperp iz ivperp begin
                     @views enforce_v_boundary_condition_local!(residual[:,ivperp,iz], vpa.bc,
                                                                vpa_advect[1].speed[:,ivperp,iz,ir],
@@ -2052,7 +2070,7 @@ function test_external_electron_source(test_input; rtol=(3.0e1*epsilon)^2)
                 end
             end
             if vperp.n > 1
-                @begin_z_vpa_region()
+                @begin_anyzv_z_vpa_region()
                 enforce_vperp_boundary_condition!(residual, vperp.bc,
                                                   vperp, vperp_spectral, vperp_adv,
                                                   vperp_diffusion, ir)
@@ -2067,7 +2085,7 @@ function test_external_electron_source(test_input; rtol=(3.0e1*epsilon)^2)
                 # impose the boundary condition. We impose this after subtracting f_old in
                 # case rounding errors, etc. mean that at some point f_old had a different
                 # boundary condition cut-off index.
-                @begin_vperp_vpa_region()
+                @begin_anyzv_vperp_vpa_region()
                 v_unnorm = vpa.scratch
                 zero = 1.0e-14
                 if z.irank == 0
@@ -2099,8 +2117,8 @@ function test_external_electron_source(test_input; rtol=(3.0e1*epsilon)^2)
             residual_func!(original_residual, f, p)
             residual_func!(perturbed_residual, f.+delta_f, p)
 
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 delta_state = zeros(mk_float, total_size)
                 delta_state[1:pdf_size] .= vec(delta_f)
                 residual_update_with_Jacobian = jacobian_matrix * delta_state
@@ -2121,8 +2139,8 @@ function test_external_electron_source(test_input; rtol=(3.0e1*epsilon)^2)
             residual_func!(original_residual, f, p)
             residual_func!(perturbed_residual, f, p .+ delta_p)
 
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 delta_state = zeros(mk_float, total_size)
                 delta_state[pdf_size+1:end] .= vec(delta_p)
                 residual_update_with_Jacobian = jacobian_matrix * delta_state
@@ -2143,8 +2161,8 @@ function test_external_electron_source(test_input; rtol=(3.0e1*epsilon)^2)
             residual_func!(original_residual, f, p)
             residual_func!(perturbed_residual, f.+delta_f, p.+delta_p)
 
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 delta_state = zeros(mk_float, total_size)
                 delta_state[1:pdf_size] .= vec(delta_f)
                 delta_state[pdf_size+1:end] .= vec(delta_p)
@@ -2215,15 +2233,17 @@ function test_electron_implicit_constraint_forcing(test_input; rtol=(2.5e0*epsil
         z_advect = advection_structs.z_advect
         vpa_advect = advection_structs.vpa_advect
 
-        @begin_vperp_vpa_region()
+        @begin_r_anyzv_region()
+
+        @begin_anyzv_vperp_vpa_region()
         update_electron_speed_z!(z_advect[1], upar, vth, vpa.grid, ir)
         z_speed = @view z_advect[1].speed[:,:,:,ir]
 
         delta_p = allocate_shared_float(size(p)...)
         p_amplitude = epsilon * maximum(p)
         f = @view pdf.electron.norm[:,:,:,ir]
-        @begin_serial_region()
-        @serial_region begin
+        @begin_anyzv_region()
+        @anyzv_serial_region begin
             @. delta_p = p_amplitude * sin(2.0*π*test_wavenumber*z.grid/z.L)
 
             # Make sure initial condition has some z-variation. As f is 'moment kinetic' this
@@ -2232,12 +2252,13 @@ function test_electron_implicit_constraint_forcing(test_input; rtol=(2.5e0*epsil
         end
         # Ensure initial electron distribution function obeys constraints
         hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa, vperp)
+        @begin_r_anyzv_region()
         delta_f = allocate_shared_float(size(f)...)
         f_amplitude = epsilon * maximum(f)
         # Use exp(sin()) in vpa so that perturbation does not have any symmetry that makes
         # low-order moments vanish exactly.
-        @begin_serial_region()
-        @serial_region begin
+        @begin_anyzv_region()
+        @anyzv_serial_region begin
             delta_f .= f_amplitude .*
                        reshape(sin.(2.0.*π.*test_wavenumber.*z.grid./z.L), 1, 1, z.n) .*
                        reshape(exp.(sin.(2.0.*π.*test_wavenumber.*vpa.grid./vpa.L)) .- 1.0, vpa.n, 1, 1) .*
@@ -2251,7 +2272,7 @@ function test_electron_implicit_constraint_forcing(test_input; rtol=(2.5e0*epsil
         zeroth_moment = z.scratch_shared
         first_moment = z.scratch_shared2
         second_moment = z.scratch_shared3
-        @begin_z_region()
+        @begin_anyzv_z_region()
         vpa_grid = vpa.grid
         vpa_wgts = vpa.wgts
         @loop_z iz begin
@@ -2261,8 +2282,8 @@ function test_electron_implicit_constraint_forcing(test_input; rtol=(2.5e0*epsil
         end
 
         jacobian_matrix = allocate_shared_float(total_size, total_size)
-        @begin_serial_region()
-        @serial_region begin
+        @begin_anyzv_region()
+        @anyzv_serial_region begin
             jacobian_matrix .= 0.0
             for row ∈ 1:total_size
                 # Initialise identity matrix
@@ -2281,8 +2302,8 @@ function test_electron_implicit_constraint_forcing(test_input; rtol=(2.5e0*epsil
 
         @testset "ADI Jacobians - implicit z" begin
             # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 jacobian_matrix_ADI_check .= 0.0
                 for row ∈ 1:total_size
                     # Initialise identity matrix
@@ -2293,7 +2314,7 @@ function test_electron_implicit_constraint_forcing(test_input; rtol=(2.5e0*epsil
             v_size = vperp.n * vpa.n
 
             # Add 'implicit' contribution
-            @begin_vperp_vpa_region()
+            @begin_anyzv_vperp_vpa_region()
             @loop_vperp_vpa ivperp ivpa begin
                 this_slice = (ivperp - 1)*vpa.n + ivpa:v_size:(z.n - 1)*v_size + (ivperp - 1)*vpa.n + ivpa
                 @views add_electron_implicit_constraint_forcing_to_z_only_Jacobian!(
@@ -2308,16 +2329,16 @@ function test_electron_implicit_constraint_forcing(test_input; rtol=(2.5e0*epsil
                 z_speed, z, vperp, vpa, t_params.electron.constraint_forcing_rate, dt, ir,
                 :explicit_v)
 
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 @test elementwise_isapprox(jacobian_matrix_ADI_check, jacobian_matrix; rtol=0.0, atol=1.0e-15)
             end
         end
 
         @testset "ADI Jacobians - implicit v" begin
             # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 jacobian_matrix_ADI_check .= 0.0
                 for row ∈ 1:total_size
                     # Initialise identity matrix
@@ -2328,7 +2349,7 @@ function test_electron_implicit_constraint_forcing(test_input; rtol=(2.5e0*epsil
             v_size = vperp.n * vpa.n
 
             # Add 'implicit' contribution
-            @begin_z_region()
+            @begin_anyzv_z_region()
             @loop_z iz begin
                 this_slice = collect((iz - 1)*v_size + 1:iz*v_size)
                 push!(this_slice, iz + pdf_size)
@@ -2344,14 +2365,14 @@ function test_electron_implicit_constraint_forcing(test_input; rtol=(2.5e0*epsil
                 z_speed, z, vperp, vpa, t_params.electron.constraint_forcing_rate, dt, ir,
                 :explicit_z)
 
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 @test elementwise_isapprox(jacobian_matrix_ADI_check, jacobian_matrix; rtol=0.0, atol=1.0e-15)
             end
         end
 
         function residual_func!(residual, this_f, this_p)
-            @begin_z_region()
+            @begin_anyzv_z_region()
             # Calculate derived moments and derivatives using new_variables
             calculate_electron_moments_no_r!(this_f, dens, upar, this_p, ion_dens,
                                              ion_upar, moments, composition, collisions,
@@ -2364,7 +2385,7 @@ function test_electron_implicit_constraint_forcing(test_input; rtol=(2.5e0*epsil
             # electron_pdf member of the first argument, so if we set the electron_pdf member
             # of the first argument to zero, and pass dt=1, then it will evaluate the time
             # derivative, which is the residual for a steady-state solution.
-            @begin_z_vperp_vpa_region()
+            @begin_anyzv_z_vperp_vpa_region()
             @loop_z_vperp_vpa iz ivperp ivpa begin
                 residual[ivpa,ivperp,iz] = f[ivpa,ivperp,iz]
             end
@@ -2374,14 +2395,14 @@ function test_electron_implicit_constraint_forcing(test_input; rtol=(2.5e0*epsil
             # Now
             #   residual = f_electron_old + dt*RHS(f_electron_newvar)
             # so update to desired residual
-            @begin_z_vperp_vpa_region()
+            @begin_anyzv_z_vperp_vpa_region()
             @loop_z_vperp_vpa iz ivperp ivpa begin
                 residual[ivpa,ivperp,iz] = this_f[ivpa,ivperp,iz] - residual[ivpa,ivperp,iz]
             end
 
             # Set residual to zero where pdf_electron is determined by boundary conditions.
             if vpa.n > 1
-                @begin_z_vperp_region()
+                @begin_anyzv_z_vperp_region()
                 @loop_z_vperp iz ivperp begin
                     @views enforce_v_boundary_condition_local!(residual[:,ivperp,iz], vpa.bc,
                                                                vpa_advect[1].speed[:,ivperp,iz,ir],
@@ -2390,7 +2411,7 @@ function test_electron_implicit_constraint_forcing(test_input; rtol=(2.5e0*epsil
                 end
             end
             if vperp.n > 1
-                @begin_z_vpa_region()
+                @begin_anyzv_z_vpa_region()
                 enforce_vperp_boundary_condition!(residual, vperp.bc,
                                                   vperp, vperp_spectral, vperp_adv,
                                                   vperp_diffusion, ir)
@@ -2405,7 +2426,7 @@ function test_electron_implicit_constraint_forcing(test_input; rtol=(2.5e0*epsil
                 # impose the boundary condition. We impose this after subtracting f_old in
                 # case rounding errors, etc. mean that at some point f_old had a different
                 # boundary condition cut-off index.
-                @begin_vperp_vpa_region()
+                @begin_anyzv_vperp_vpa_region()
                 v_unnorm = vpa.scratch
                 zero = 1.0e-14
                 if z.irank == 0
@@ -2437,8 +2458,8 @@ function test_electron_implicit_constraint_forcing(test_input; rtol=(2.5e0*epsil
             residual_func!(original_residual, f, p)
             residual_func!(perturbed_residual, f.+delta_f, p)
 
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 delta_state = zeros(mk_float, total_size)
                 delta_state[1:pdf_size] .= vec(delta_f)
                 residual_update_with_Jacobian = jacobian_matrix * delta_state
@@ -2459,8 +2480,8 @@ function test_electron_implicit_constraint_forcing(test_input; rtol=(2.5e0*epsil
             residual_func!(original_residual, f, p)
             residual_func!(perturbed_residual, f, p .+ delta_p)
 
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 delta_state = zeros(mk_float, total_size)
                 delta_state[pdf_size+1:end] .= vec(delta_p)
                 residual_update_with_Jacobian = jacobian_matrix * delta_state
@@ -2483,8 +2504,8 @@ function test_electron_implicit_constraint_forcing(test_input; rtol=(2.5e0*epsil
             residual_func!(original_residual, f, p)
             residual_func!(perturbed_residual, f.+delta_f, p.+delta_p)
 
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 delta_state = zeros(mk_float, total_size)
                 delta_state[1:pdf_size] .= vec(delta_f)
                 delta_state[pdf_size+1:end] .= vec(delta_p)
@@ -2539,6 +2560,8 @@ function test_electron_energy_equation(test_input; rtol=(6.0e2*epsilon)^2)
         vpa_advect = advection_structs.vpa_advect
         me = composition.me_over_mi
 
+        @begin_r_anyzv_region()
+
         buffer_1 = @view scratch_dummy.buffer_rs_1[ir,1]
         buffer_2 = @view scratch_dummy.buffer_rs_2[ir,1]
         buffer_3 = @view scratch_dummy.buffer_rs_3[ir,1]
@@ -2547,22 +2570,22 @@ function test_electron_energy_equation(test_input; rtol=(6.0e2*epsilon)^2)
         # Reconstruct w_∥^3 moment of g_e from already-calculated qpar
         third_moment = scratch_dummy.buffer_z_1
         dthird_moment_dz = scratch_dummy.buffer_z_2
-        @begin_z_region()
+        @begin_anyzv_z_region()
         @loop_z iz begin
             third_moment[iz] = qpar[iz] / p[iz] / vth[iz]
         end
-        derivative_z!(dthird_moment_dz, third_moment, buffer_1, buffer_2,
-                      buffer_3, buffer_4, z_spectral, z)
+        derivative_z_anyzv!(dthird_moment_dz, third_moment, buffer_1, buffer_2, buffer_3,
+                            buffer_4, z_spectral, z)
 
-        @begin_vperp_vpa_region()
+        @begin_anyzv_vperp_vpa_region()
         update_electron_speed_z!(z_advect[1], upar, vth, vpa.grid, ir)
         z_speed = @view z_advect[1].speed[:,:,:,ir]
 
         delta_p = allocate_shared_float(size(p)...)
         p_amplitude = epsilon * maximum(p)
         f = @view pdf.electron.norm[:,:,:,ir]
-        @begin_serial_region()
-        @serial_region begin
+        @begin_anyzv_region()
+        @anyzv_serial_region begin
             @. delta_p = p_amplitude * sin(2.0*π*test_wavenumber*z.grid/z.L)
 
             # Make sure initial condition has some z-variation. As f is 'moment kinetic' this
@@ -2571,10 +2594,11 @@ function test_electron_energy_equation(test_input; rtol=(6.0e2*epsilon)^2)
         end
         # Ensure initial electron distribution function obeys constraints
         hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa, vperp)
+        @begin_r_anyzv_region()
         delta_f = allocate_shared_float(size(f)...)
         f_amplitude = epsilon * maximum(f)
-        @begin_serial_region()
-        @serial_region begin
+        @begin_anyzv_region()
+        @anyzv_serial_region begin
             # Use exp(sin()) in vpa so that perturbation does not have any symmetry that makes
             # low-order moments vanish exactly.
             delta_f .= f_amplitude .*
@@ -2588,8 +2612,8 @@ function test_electron_energy_equation(test_input; rtol=(6.0e2*epsilon)^2)
         total_size = pdf_size + p_size
 
         jacobian_matrix = allocate_shared_float(total_size, total_size)
-        @begin_serial_region()
-        @serial_region begin
+        @begin_anyzv_region()
+        @anyzv_serial_region begin
             jacobian_matrix .= 0.0
             for row ∈ 1:total_size
                 # Initialise identity matrix
@@ -2609,8 +2633,8 @@ function test_electron_energy_equation(test_input; rtol=(6.0e2*epsilon)^2)
 
         @testset "ADI Jacobians - implicit z" begin
             # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 jacobian_matrix_ADI_check .= 0.0
                 for row ∈ 1:total_size
                     # Initialise identity matrix
@@ -2637,16 +2661,16 @@ function test_electron_energy_equation(test_input; rtol=(6.0e2*epsilon)^2)
                 vperp, vpa, z_spectral, num_diss_params, dt, ir, :explicit_v;
                 p_offset=pdf_size)
 
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 @test elementwise_isapprox(jacobian_matrix_ADI_check, jacobian_matrix; rtol=0.0, atol=1.0e-15)
             end
         end
 
         @testset "ADI Jacobians - implicit v" begin
             # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 jacobian_matrix_ADI_check .= 0.0
                 for row ∈ 1:total_size
                     # Initialise identity matrix
@@ -2657,7 +2681,7 @@ function test_electron_energy_equation(test_input; rtol=(6.0e2*epsilon)^2)
             v_size = vperp.n * vpa.n
 
             # Add 'implicit' contribution
-            @begin_z_region()
+            @begin_anyzv_z_region()
             @loop_z iz begin
                 this_slice = collect((iz - 1)*v_size + 1:iz*v_size)
                 push!(this_slice, iz + pdf_size)
@@ -2675,14 +2699,14 @@ function test_electron_energy_equation(test_input; rtol=(6.0e2*epsilon)^2)
                 vperp, vpa, z_spectral, num_diss_params, dt, ir, :explicit_z;
                 p_offset=pdf_size)
 
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 @test elementwise_isapprox(jacobian_matrix_ADI_check, jacobian_matrix; rtol=0.0, atol=1.0e-15)
             end
         end
 
         function residual_func!(residual, this_f, this_p)
-            @begin_z_region()
+            @begin_anyzv_z_region()
             # Calculate derived moments and derivatives using new_variables
             calculate_electron_moments_no_r!(this_f, dens, upar, this_p, ion_dens,
                                              ion_upar, moments, composition, collisions,
@@ -2695,7 +2719,7 @@ function test_electron_energy_equation(test_input; rtol=(6.0e2*epsilon)^2)
             # electron_pdf member of the first argument, so if we set the electron_pdf member
             # of the first argument to zero, and pass dt=1, then it will evaluate the time
             # derivative, which is the residual for a steady-state solution.
-            @begin_z_region()
+            @begin_anyzv_z_region()
             @loop_z iz begin
                 residual[iz] = p[iz]
             end
@@ -2709,7 +2733,7 @@ function test_electron_energy_equation(test_input; rtol=(6.0e2*epsilon)^2)
             # Now
             #   residual = f_electron_old + dt*RHS(f_electron_newvar)
             # so update to desired residual
-            @begin_z_region()
+            @begin_anyzv_z_region()
             @loop_z iz begin
                 residual[iz] = this_p[iz] - residual[iz]
             end
@@ -2722,8 +2746,8 @@ function test_electron_energy_equation(test_input; rtol=(6.0e2*epsilon)^2)
             residual_func!(original_residual, f, p)
             residual_func!(perturbed_residual, f.+delta_f, p)
 
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 delta_state = zeros(mk_float, total_size)
                 delta_state[1:pdf_size] .= vec(delta_f)
                 residual_update_with_Jacobian = jacobian_matrix * delta_state
@@ -2744,8 +2768,8 @@ function test_electron_energy_equation(test_input; rtol=(6.0e2*epsilon)^2)
             residual_func!(original_residual, f, p)
             residual_func!(perturbed_residual, f, p .+ delta_p)
 
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 delta_state = zeros(mk_float, total_size)
                 delta_state[pdf_size+1:end] .= vec(delta_p)
                 residual_update_with_Jacobian = jacobian_matrix * delta_state
@@ -2766,8 +2790,8 @@ function test_electron_energy_equation(test_input; rtol=(6.0e2*epsilon)^2)
             residual_func!(original_residual, f, p)
             residual_func!(perturbed_residual, f.+delta_f, p.+delta_p)
 
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 delta_state = zeros(mk_float, total_size)
                 delta_state[1:pdf_size] .= vec(delta_f)
                 delta_state[pdf_size+1:end] .= vec(delta_p)
@@ -2817,15 +2841,17 @@ function test_ion_dt_forcing_of_electron_p(test_input; rtol=(1.5e1*epsilon)^2)
         z_advect = advection_structs.z_advect
         vpa_advect = advection_structs.vpa_advect
 
-        @begin_vperp_vpa_region()
+        @begin_r_anyzv_region()
+
+        @begin_anyzv_vperp_vpa_region()
         update_electron_speed_z!(z_advect[1], upar, vth, vpa.grid, ir)
         z_speed = @view z_advect[1].speed[:,:,:,ir]
 
         delta_p = allocate_shared_float(size(p)...)
         p_amplitude = epsilon * maximum(p)
         f = @view pdf.electron.norm[:,:,:,ir]
-        @begin_serial_region()
-        @serial_region begin
+        @begin_anyzv_region()
+        @anyzv_serial_region begin
             @. delta_p = p_amplitude * sin(2.0*π*test_wavenumber*z.grid/z.L)
 
             # Make sure initial condition has some z-variation. As f is 'moment kinetic' this
@@ -2834,12 +2860,13 @@ function test_ion_dt_forcing_of_electron_p(test_input; rtol=(1.5e1*epsilon)^2)
         end
         # Ensure initial electron distribution function obeys constraints
         hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa, vperp)
+        @begin_r_anyzv_region()
         delta_f = allocate_shared_float(size(f)...)
         f_amplitude = epsilon * maximum(f)
         # Use exp(sin()) in vpa so that perturbation does not have any symmetry that makes
         # low-order moments vanish exactly.
-        @begin_serial_region()
-        @serial_region begin
+        @begin_anyzv_region()
+        @anyzv_serial_region begin
             delta_f .= f_amplitude .*
                        reshape(sin.(2.0.*π.*test_wavenumber.*z.grid./z.L), 1, 1, z.n) .*
                        reshape(exp.(sin.(2.0.*π.*test_wavenumber.*vpa.grid./vpa.L)) .- 1.0, vpa.n, 1, 1) .*
@@ -2851,8 +2878,8 @@ function test_ion_dt_forcing_of_electron_p(test_input; rtol=(1.5e1*epsilon)^2)
         total_size = pdf_size + p_size
 
         jacobian_matrix = allocate_shared_float(total_size, total_size)
-        @begin_serial_region()
-        @serial_region begin
+        @begin_anyzv_region()
+        @anyzv_serial_region begin
             jacobian_matrix .= 0.0
             for row ∈ 1:total_size
                 # Initialise identity matrix
@@ -2870,8 +2897,8 @@ function test_ion_dt_forcing_of_electron_p(test_input; rtol=(1.5e1*epsilon)^2)
 
         @testset "ADI Jacobians - implicit z" begin
             # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 jacobian_matrix_ADI_check .= 0.0
                 for row ∈ 1:total_size
                     # Initialise identity matrix
@@ -2893,16 +2920,16 @@ function test_ion_dt_forcing_of_electron_p(test_input; rtol=(1.5e1*epsilon)^2)
                 jacobian_matrix_ADI_check, z, dt, ion_dt, ir, :explicit_v;
                 p_offset=pdf_size)
 
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 @test elementwise_isapprox(jacobian_matrix_ADI_check, jacobian_matrix; rtol=0.0, atol=1.0e-15)
             end
         end
 
         @testset "ADI Jacobians - implicit v" begin
             # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 jacobian_matrix_ADI_check .= 0.0
                 for row ∈ 1:total_size
                     # Initialise identity matrix
@@ -2913,7 +2940,7 @@ function test_ion_dt_forcing_of_electron_p(test_input; rtol=(1.5e1*epsilon)^2)
             v_size = vperp.n * vpa.n
 
             # Add 'implicit' contribution
-            @begin_z_region()
+            @begin_anyzv_z_region()
             @loop_z iz begin
                 this_slice = collect((iz - 1)*v_size + 1:iz*v_size)
                 push!(this_slice, iz + pdf_size)
@@ -2927,14 +2954,14 @@ function test_ion_dt_forcing_of_electron_p(test_input; rtol=(1.5e1*epsilon)^2)
                 jacobian_matrix_ADI_check, z, dt, ion_dt, ir, :explicit_z;
                 p_offset=pdf_size)
 
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 @test elementwise_isapprox(jacobian_matrix_ADI_check, jacobian_matrix; rtol=0.0, atol=1.0e-15)
             end
         end
 
         function residual_func!(residual, this_f, this_p)
-            @begin_z_region()
+            @begin_anyzv_z_region()
             # Calculate derived moments and derivatives using new_variables
             calculate_electron_moments_no_r!(this_f, dens, upar, this_p, ion_dens,
                                              ion_upar, moments, composition, collisions,
@@ -2947,12 +2974,12 @@ function test_ion_dt_forcing_of_electron_p(test_input; rtol=(1.5e1*epsilon)^2)
             # electron_pdf member of the first argument, so if we set the electron_pdf member
             # of the first argument to zero, and pass dt=1, then it will evaluate the time
             # derivative, which is the residual for a steady-state solution.
-            @begin_z_region()
+            @begin_anyzv_z_region()
             @loop_z iz begin
                 residual[iz] = p[iz]
             end
             p_previous_ion_step = moments.electron.p
-            @begin_z_region()
+            @begin_anyzv_z_region()
             @loop_z iz begin
                 # At this point, p_out = p_in + dt*RHS(p_in). Here we add a source/damping
                 # term so that in the steady state of the electron pseudo-timestepping
@@ -2965,7 +2992,7 @@ function test_ion_dt_forcing_of_electron_p(test_input; rtol=(1.5e1*epsilon)^2)
             # Now
             #   residual = f_electron_old + dt*RHS(f_electron_newvar)
             # so update to desired residual
-            @begin_z_region()
+            @begin_anyzv_z_region()
             @loop_z iz begin
                 residual[iz] = this_p[iz] - residual[iz]
             end
@@ -2978,8 +3005,8 @@ function test_ion_dt_forcing_of_electron_p(test_input; rtol=(1.5e1*epsilon)^2)
             residual_func!(original_residual, f, p)
             residual_func!(perturbed_residual, f.+delta_f, p)
 
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 delta_state = zeros(mk_float, total_size)
                 delta_state[1:pdf_size] .= vec(delta_f)
                 residual_update_with_Jacobian = jacobian_matrix * delta_state
@@ -3003,8 +3030,8 @@ function test_ion_dt_forcing_of_electron_p(test_input; rtol=(1.5e1*epsilon)^2)
             residual_func!(original_residual, f, p)
             residual_func!(perturbed_residual, f, p .+ delta_p)
 
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 delta_state = zeros(mk_float, total_size)
                 delta_state[pdf_size+1:end] .= vec(delta_p)
                 residual_update_with_Jacobian = jacobian_matrix * delta_state
@@ -3025,8 +3052,8 @@ function test_ion_dt_forcing_of_electron_p(test_input; rtol=(1.5e1*epsilon)^2)
             residual_func!(original_residual, f, p)
             residual_func!(perturbed_residual, f.+delta_f, p.+delta_p)
 
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 delta_state = zeros(mk_float, total_size)
                 delta_state[1:pdf_size] .= vec(delta_f)
                 delta_state[pdf_size+1:end] .= vec(delta_p)
@@ -3075,6 +3102,7 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
         qpar = @view moments.electron.qpar[:,ir]
         ion_dens = @view moments.ion.dens[:,ir]
         ion_upar = @view moments.ion.upar[:,ir]
+        phi = @view fields.phi[:,ir]
         z_spectral = spectral_objects.z_spectral
         vperp_spectral = spectral_objects.vperp_spectral
         vpa_spectral = spectral_objects.vpa_spectral
@@ -3084,8 +3112,10 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
         delta_p = allocate_shared_float(size(p)...)
         p_amplitude = epsilon * maximum(p)
         f = @view pdf.electron.norm[:,:,:,ir]
-        @begin_serial_region()
-        @serial_region begin
+        @begin_r_anyzv_region()
+
+        @begin_anyzv_region()
+        @anyzv_serial_region begin
             @. delta_p = p_amplitude * sin(2.0*π*test_wavenumber*z.grid/z.L)
 
             # Make sure initial condition has some z-variation. As f is 'moment kinetic' this
@@ -3094,12 +3124,13 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
         end
         # Ensure initial electron distribution function obeys constraints
         hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa, vperp)
+        @begin_r_anyzv_region()
         delta_f = allocate_shared_float(size(f)...)
         f_amplitude = epsilon * maximum(f)
         # Use exp(sin()) in vpa so that perturbation does not have any symmetry that makes
         # low-order moments vanish exactly.
-        @begin_serial_region()
-        @serial_region begin
+        @begin_anyzv_region()
+        @anyzv_serial_region begin
             delta_f .= f_amplitude .*
                        reshape(sin.(2.0.*π.*test_wavenumber.*z.grid./z.L), 1, 1, z.n) .*
                        reshape(exp.(sin.(2.0.*π.*test_wavenumber.*vpa.grid./vpa.L)) .- 1.0, vpa.n, 1, 1) .*
@@ -3131,17 +3162,17 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
         buffer_4 = @view scratch_dummy.buffer_rs_4[ir,1]
         third_moment = scratch_dummy.buffer_z_1
         dthird_moment_dz = scratch_dummy.buffer_z_2
-        @begin_z_region()
+        @begin_anyzv_z_region()
         @loop_z iz begin
             third_moment[iz] = qpar[iz] / p[iz] / vth[iz]
         end
-        derivative_z!(dthird_moment_dz, third_moment, buffer_1, buffer_2, buffer_3,
-                      buffer_4, z_spectral, z)
+        derivative_z_anyzv!(dthird_moment_dz, third_moment, buffer_1, buffer_2, buffer_3,
+                            buffer_4, z_spectral, z)
 
         z_speed = @view z_advect[1].speed[:,:,:,ir]
 
         dpdf_dz = @view scratch_dummy.buffer_vpavperpzr_1[:,:,:,ir]
-        @begin_vperp_vpa_region()
+        @begin_anyzv_vperp_vpa_region()
         update_electron_speed_z!(z_advect[1], upar, vth, vpa.grid, ir)
         @loop_vperp_vpa ivperp ivpa begin
             @views z_advect[1].adv_fac[:,ivpa,ivperp,ir] = -z_speed[:,ivpa,ivperp]
@@ -3157,7 +3188,7 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
                                            z_spectral, z)
 
         dpdf_dvpa = @view scratch_dummy.buffer_vpavperpzr_2[:,:,:,ir]
-        @begin_z_vperp_region()
+        @begin_anyzv_z_vperp_region()
         update_electron_speed_vpa!(vpa_advect[1], dens, upar, p, moments,
                                    composition.me_over_mi, vpa.grid,
                                    external_source_settings.electron, ir)
@@ -3173,7 +3204,7 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
         zeroth_moment = z.scratch_shared
         first_moment = z.scratch_shared2
         second_moment = z.scratch_shared3
-        @begin_z_region()
+        @begin_anyzv_z_region()
         vpa_grid = vpa.grid
         vpa_wgts = vpa.wgts
         @loop_z iz begin
@@ -3186,8 +3217,8 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
         # variables (vth, etc.).
 
         jacobian_matrix_ADI_check = allocate_shared_float(total_size, total_size)
-        @begin_serial_region()
-        @serial_region begin
+        @begin_anyzv_region()
+        @anyzv_serial_region begin
             # Need to explicitly initialise because
             # fill_electron_kinetic_equation_z_only_Jacobian_f!() and
             # fill_electron_kinetic_equation_z_only_Jacobian_p!()
@@ -3202,7 +3233,7 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
             v_size = vperp.n * vpa.n
 
             # Add 'implicit' contribution
-            @begin_vperp_vpa_region()
+            @begin_anyzv_vperp_vpa_region()
             @loop_vperp_vpa ivperp ivpa begin
                 this_slice = (ivperp - 1)*vpa.n + ivpa:v_size:(z.n - 1)*v_size + (ivperp - 1)*vpa.n + ivpa
                 @views fill_electron_kinetic_equation_z_only_Jacobian_f!(
@@ -3230,23 +3261,23 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
             # Add 'explicit' contribution
             # Use jacobian_matrix as a temporary buffer here.
             fill_electron_kinetic_equation_Jacobian!(
-                jacobian_matrix, f, p, moments, fields.phi, collisions, composition, z,
-                vperp, vpa, z_spectral, vperp_spectral, vpa_spectral, z_advect,
-                vpa_advect, scratch_dummy, external_source_settings, num_diss_params,
+                jacobian_matrix, f, p, moments, phi, collisions, composition, z, vperp,
+                vpa, z_spectral, vperp_spectral, vpa_spectral, z_advect, vpa_advect,
+                scratch_dummy, external_source_settings, num_diss_params,
                 t_params.electron, ion_dt, ir, true, :explicit_v)
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 jacobian_matrix_ADI_check .+= jacobian_matrix
             end
 
             fill_electron_kinetic_equation_Jacobian!(
-                jacobian_matrix, f, p, moments, fields.phi, collisions, composition, z,
-                vperp, vpa, z_spectral, vperp_spectral, vpa_spectral, z_advect,
-                vpa_advect, scratch_dummy, external_source_settings, num_diss_params,
+                jacobian_matrix, f, p, moments, phi, collisions, composition, z, vperp,
+                vpa, z_spectral, vperp_spectral, vpa_spectral, z_advect, vpa_advect,
+                scratch_dummy, external_source_settings, num_diss_params,
                 t_params.electron, ion_dt, ir, true)
 
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 # The settings for this test are a bit strange, due to trying to get the
                 # finite-difference approximation to the Jacobian to agree with the
                 # Jacobian matrix functions without being too messed up by floating-point
@@ -3256,8 +3287,8 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
             end
         end
 
-        @begin_serial_region()
-        @serial_region begin
+        @begin_anyzv_region()
+        @anyzv_serial_region begin
             # Need to explicitly initialise because
             # fill_electron_kinetic_equation_z_only_Jacobian_f!() and
             # fill_electron_kinetic_equation_z_only_Jacobian_p!()
@@ -3272,7 +3303,7 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
             v_size = vperp.n * vpa.n
 
             # Add 'implicit' contribution
-            @begin_z_region()
+            @begin_anyzv_z_region()
             @loop_z iz begin
                 this_slice = collect((iz - 1)*v_size + 1:iz*v_size)
                 push!(this_slice, iz + pdf_size)
@@ -3280,7 +3311,7 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
                     jacobian_matrix_ADI_check[this_slice,this_slice], f[:,:,iz], p[iz],
                     dpdf_dz[:,:,iz], dpdf_dvpa[:,:,iz], z_speed, moments,
                     zeroth_moment[iz], first_moment[iz], second_moment[iz],
-                    third_moment[iz], dthird_moment_dz[iz], fields.phi[iz,ir], collisions,
+                    third_moment[iz], dthird_moment_dz[iz], phi[iz], collisions,
                     composition, z, vperp, vpa, z_spectral, vperp_spectral, vpa_spectral,
                     z_advect, vpa_advect, scratch_dummy, external_source_settings,
                     num_diss_params, t_params.electron, ion_dt, ir, iz, true)
@@ -3289,24 +3320,24 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
             # Add 'explicit' contribution
             # Use jacobian_matrix as a temporary buffer here.
             fill_electron_kinetic_equation_Jacobian!(
-                jacobian_matrix, f, p, moments, fields.phi, collisions, composition, z,
+                jacobian_matrix, f, p, moments, phi, collisions, composition, z,
                 vperp, vpa, z_spectral, vperp_spectral, vpa_spectral, z_advect,
                 vpa_advect, scratch_dummy, external_source_settings, num_diss_params,
                 t_params.electron, ion_dt, ir, true, :explicit_z)
 
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 jacobian_matrix_ADI_check .+= jacobian_matrix
             end
 
             fill_electron_kinetic_equation_Jacobian!(
-                jacobian_matrix, f, p, moments, fields.phi, collisions, composition, z,
+                jacobian_matrix, f, p, moments, phi, collisions, composition, z,
                 vperp, vpa, z_spectral, vperp_spectral, vpa_spectral, z_advect,
                 vpa_advect, scratch_dummy, external_source_settings, num_diss_params,
                 t_params.electron, ion_dt, ir, true)
 
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 # The settings for this test are a bit strange, due to trying to get the
                 # finite-difference approximation to the Jacobian to agree with the
                 # Jacobian matrix functions without being too messed up by floating-point
@@ -3317,7 +3348,7 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
         end
 
         function residual_func!(residual_f, residual_p, this_f, this_p)
-            @begin_z_region()
+            @begin_anyzv_z_region()
             # Calculate derived moments and derivatives using new_variables
             calculate_electron_moments_no_r!(this_f, dens, upar, this_p, ion_dens,
                                              ion_upar, moments, composition, collisions,
@@ -3330,11 +3361,11 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
             # electron_pdf member of the first argument, so if we set the electron_pdf member
             # of the first argument to zero, and pass dt=1, then it will evaluate the time
             # derivative, which is the residual for a steady-state solution.
-            @begin_z_vperp_vpa_region()
+            @begin_anyzv_z_vperp_vpa_region()
             @loop_z_vperp_vpa iz ivperp ivpa begin
                 residual_f[ivpa,ivperp,iz] = f[ivpa,ivperp,iz]
             end
-            @begin_z_region()
+            @begin_anyzv_z_region()
             @loop_z iz begin
                 residual_p[iz] = p[iz]
             end
@@ -3346,18 +3377,18 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
             # Now
             #   residual = f_electron_old + dt*RHS(f_electron_newvar)
             # so update to desired residual
-            @begin_z_vperp_vpa_region()
+            @begin_anyzv_z_vperp_vpa_region()
             @loop_z_vperp_vpa iz ivperp ivpa begin
                 residual_f[ivpa,ivperp,iz] = this_f[ivpa,ivperp,iz] - residual_f[ivpa,ivperp,iz]
             end
-            @begin_z_region()
+            @begin_anyzv_z_region()
             @loop_z iz begin
                 residual_p[iz] = this_p[iz] - residual_p[iz]
             end
 
             # Set residual to zero where pdf_electron is determined by boundary conditions.
             if vpa.n > 1
-                @begin_z_vperp_region()
+                @begin_anyzv_z_vperp_region()
                 @loop_z_vperp iz ivperp begin
                     @views enforce_v_boundary_condition_local!(residual_f[:,ivperp,iz], vpa.bc,
                                                                vpa_advect[1].speed[:,ivperp,iz,ir],
@@ -3366,7 +3397,7 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
                 end
             end
             if vperp.n > 1
-                @begin_z_vpa_region()
+                @begin_anyzv_z_vpa_region()
                 enforce_vperp_boundary_condition!(residual_f, vperp.bc,
                                                   vperp, vperp_spectral, vperp_adv,
                                                   vperp_diffusion, ir)
@@ -3381,13 +3412,13 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
         perturbed_residual_p = allocate_shared_float(size(p)...)
         f_plus_delta_f = allocate_shared_float(size(f)...)
         f_with_delta_p = allocate_shared_float(size(f)...)
-        @begin_z_vperp_vpa_region()
+        @begin_anyzv_z_vperp_vpa_region()
         @loop_z_vperp_vpa iz ivperp ivpa begin
             f_plus_delta_f[ivpa,ivperp,iz] = f[ivpa,ivperp,iz] + delta_f[ivpa,ivperp,iz]
             f_with_delta_p[ivpa,ivperp,iz] = f[ivpa,ivperp,iz]
         end
         p_plus_delta_p = allocate_shared_float(size(p)...)
-        @begin_z_region()
+        @begin_anyzv_z_region()
         @loop_z iz begin
             p_plus_delta_p[iz] = p[iz] + delta_p[iz]
         end
@@ -3396,8 +3427,8 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
             residual_func!(original_residual_f, original_residual_p, f, p)
             residual_func!(perturbed_residual_f, perturbed_residual_p, f_plus_delta_f, p)
 
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 delta_state = zeros(mk_float, total_size)
                 # Take this difference rather than using delta_f directly because we need
                 # the effect of the boundary condition having been applied to
@@ -3422,8 +3453,8 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
             residual_func!(original_residual_f, original_residual_p, f, p)
             residual_func!(perturbed_residual_f, perturbed_residual_p, f_with_delta_p, p_plus_delta_p)
 
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 delta_state = zeros(mk_float, total_size)
                 # Take this difference rather than using delta_f directly because we need
                 # the effect of the boundary condition having been applied to
@@ -3449,8 +3480,8 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
             residual_func!(original_residual_f, original_residual_p, f, p)
             residual_func!(perturbed_residual_f, perturbed_residual_p, f_plus_delta_f, p_plus_delta_p)
 
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 delta_state = zeros(mk_float, total_size)
                 # Take this difference rather than using delta_f directly because we need
                 # the effect of the boundary condition having been applied to
@@ -3522,6 +3553,8 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2)
         vpa_advect = advection_structs.vpa_advect
         me = composition.me_over_mi
 
+        @begin_r_anyzv_region()
+
         buffer_1 = @view scratch_dummy.buffer_rs_1[ir,1]
         buffer_2 = @view scratch_dummy.buffer_rs_2[ir,1]
         buffer_3 = @view scratch_dummy.buffer_rs_3[ir,1]
@@ -3532,28 +3565,29 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2)
         # Reconstruct w_∥^3 moment of g_e from already-calculated qpar
         third_moment = scratch_dummy.buffer_z_1
         dthird_moment_dz = scratch_dummy.buffer_z_2
-        @begin_z_region()
+        @begin_anyzv_z_region()
         @loop_z iz begin
             third_moment[iz] = qpar[iz] / p[iz] / vth[iz]
         end
-        derivative_z!(dthird_moment_dz, third_moment, buffer_1, buffer_2,
-                      buffer_3, buffer_4, z_spectral, z)
+        derivative_z_anyzv!(dthird_moment_dz, third_moment, buffer_1, buffer_2, buffer_3,
+                            buffer_4, z_spectral, z)
 
-        @begin_vperp_vpa_region()
+        @begin_anyzv_vperp_vpa_region()
         update_electron_speed_z!(z_advect[1], upar, vth, vpa.grid, ir)
         z_speed = @view z_advect[1].speed[:,:,:,ir]
 
         delta_p = allocate_shared_float(size(p)...)
         p_amplitude = epsilon * maximum(p)
         f = @view pdf.electron.norm[:,:,:,ir]
-        @begin_serial_region()
-        @serial_region begin
+        @begin_anyzv_region()
+        @anyzv_serial_region begin
             # Make sure initial condition has some z-variation. As f is 'moment kinetic' this
             # means f must have a non-Maxwellian part that varies in z.
             f .*= 1.0 .+ 1.0e-4 .* reshape(vpa.grid.^3, vpa.n, 1, 1) .* reshape(sin.(2.0.*π.*z.grid./z.L), 1, 1, z.n)
         end
         # Ensure initial electron distribution function obeys constraints
         hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa, vperp)
+        @begin_r_anyzv_region()
         # enforce the boundary condition(s) on the electron pdf
         @views enforce_boundary_condition_on_electron_pdf!(
                    f, phi, vth, upar, z, vperp, vpa, vperp_spectral, vpa_spectral,
@@ -3566,8 +3600,8 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2)
         # low-order moments vanish exactly.
         # For this test have no z-dependence in delta_f so that it does not vanish
         # at the z-boundaries
-        @begin_serial_region()
-        @serial_region begin
+        @begin_anyzv_region()
+        @anyzv_serial_region begin
             @. delta_p = p_amplitude
 
             delta_f .= f_amplitude .*
@@ -3580,7 +3614,7 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2)
         total_size = pdf_size + p_size
 
         dpdf_dvpa = @view scratch_dummy.buffer_vpavperpzr_2[:,:,:,ir]
-        @begin_z_vperp_region()
+        @begin_anyzv_z_vperp_region()
         update_electron_speed_vpa!(vpa_advect[1], dens, upar, p, moments,
                                    composition.me_over_mi, vpa.grid,
                                    external_source_settings.electron, ir)
@@ -3594,11 +3628,11 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2)
         end
 
         jacobian_matrix = allocate_shared_float(total_size, total_size)
-        @begin_serial_region()
-        @serial_region begin
+        @begin_anyzv_region()
+        @anyzv_serial_region begin
             jacobian_matrix .= 0.0
         end
-        @begin_z_vperp_vpa_region()
+        @begin_anyzv_z_vperp_vpa_region()
         @loop_z_vperp_vpa iz ivperp ivpa begin
             # Rows corresponding to pdf_electron
             row = (iz - 1) * v_size + (ivperp - 1) * vpa.n + ivpa
@@ -3606,7 +3640,7 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2)
             # Initialise identity matrix.
             jacobian_matrix[row,row] = 1.0
         end
-        @begin_z_region()
+        @begin_anyzv_z_region()
         @loop_z iz begin
             # Rows corresponding to electron_p
             row = pdf_size + iz
@@ -3628,7 +3662,7 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2)
 
         @testset "ADI Jacobians - implicit z" begin
             # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
-            @begin_z_vperp_vpa_region()
+            @begin_anyzv_z_vperp_vpa_region()
             @loop_z_vperp_vpa iz ivperp ivpa begin
                 # Rows corresponding to pdf_electron
                 row = (iz - 1) * v_size + (ivperp - 1) * vpa.n + ivpa
@@ -3637,7 +3671,7 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2)
                 jacobian_matrix_ADI_check[row,:] .= 0.0
                 jacobian_matrix_ADI_check[row,row] = 1.0
             end
-            @begin_z_region()
+            @begin_anyzv_z_region()
             @loop_z iz begin
                 # Rows corresponding to electron_p
                 row = pdf_size + iz
@@ -3656,15 +3690,15 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2)
                 num_diss_params.electron.vpa_dissipation_coefficient, me, ir, :explicit_v;
                 p_offset=pdf_size)
 
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 @test elementwise_isapprox(jacobian_matrix_ADI_check, jacobian_matrix; rtol=0.0, atol=1.0e-15)
             end
         end
 
         @testset "ADI Jacobians - implicit v" begin
             # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
-            @begin_z_vperp_vpa_region()
+            @begin_anyzv_z_vperp_vpa_region()
             @loop_z_vperp_vpa iz ivperp ivpa begin
                 # Rows corresponding to pdf_electron
                 row = (iz - 1) * v_size + (ivperp - 1) * vpa.n + ivpa
@@ -3673,7 +3707,7 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2)
                 jacobian_matrix_ADI_check[row,:] .= 0.0
                 jacobian_matrix_ADI_check[row,row] = 1.0
             end
-            @begin_z_region()
+            @begin_anyzv_z_region()
             @loop_z iz begin
                 # Rows corresponding to electron_p
                 row = pdf_size + iz
@@ -3686,7 +3720,7 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2)
             v_size = vperp.n * vpa.n
 
             # Add 'implicit' contribution
-            @begin_z_region()
+            @begin_anyzv_z_region()
             @loop_z iz begin
                 this_slice = collect((iz - 1)*v_size + 1:iz*v_size)
                 push!(this_slice, iz + pdf_size)
@@ -3700,14 +3734,14 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2)
 
             # There is no 'explicit vpa' contribution for wall bc
 
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 @test elementwise_isapprox(jacobian_matrix_ADI_check, jacobian_matrix; rtol=0.0, atol=1.0e-15)
             end
         end
 
         function residual_func!(residual, this_f, this_p)
-            @begin_z_region()
+            @begin_anyzv_z_region()
             # Calculate derived moments and derivatives using new_variables
             calculate_electron_moments_no_r!(this_f, dens, upar, this_p, ion_dens,
                                              ion_upar, moments, composition, collisions,
@@ -3728,21 +3762,21 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2)
             # electron_pdf member of the first argument, so if we set the electron_pdf member
             # of the first argument to zero, and pass dt=1, then it will evaluate the time
             # derivative, which is the residual for a steady-state solution.
-            @begin_z_vperp_vpa_region()
+            @begin_anyzv_z_vperp_vpa_region()
             @loop_z_vperp_vpa iz ivperp ivpa begin
                 residual[ivpa,ivperp,iz] = f[ivpa,ivperp,iz]
             end
             # Now
             #   residual = f_electron_old + dt*RHS(f_electron_newvar)
             # so update to desired residual
-            @begin_z_vperp_vpa_region()
+            @begin_anyzv_z_vperp_vpa_region()
             @loop_z_vperp_vpa iz ivperp ivpa begin
                 residual[ivpa,ivperp,iz] = this_f[ivpa,ivperp,iz] - residual[ivpa,ivperp,iz]
             end
 
             # Set residual to zero where pdf_electron is determined by boundary conditions.
             if vpa.n > 1
-                @begin_z_vperp_region()
+                @begin_anyzv_z_vperp_region()
                 @loop_z_vperp iz ivperp begin
                     @views enforce_v_boundary_condition_local!(residual[:,ivperp,iz], vpa.bc,
                                                                vpa_advect[1].speed[:,ivperp,iz,ir],
@@ -3751,7 +3785,7 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2)
                 end
             end
             if vperp.n > 1
-                @begin_z_vpa_region()
+                @begin_anyzv_z_vpa_region()
                 enforce_vperp_boundary_condition!(residual, vperp.bc,
                                                   vperp, vperp_spectral, vperp_adv,
                                                   vperp_diffusion, ir)
@@ -3769,13 +3803,13 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2)
         perturbed_residual = allocate_shared_float(size(f)...)
         f_plus_delta_f = allocate_shared_float(size(f)...)
         f_with_delta_p = allocate_shared_float(size(f)...)
-        @begin_z_vperp_vpa_region()
+        @begin_anyzv_z_vperp_vpa_region()
         @loop_z_vperp_vpa iz ivperp ivpa begin
             f_plus_delta_f[ivpa,ivperp,iz] = f[ivpa,ivperp,iz] + delta_f[ivpa,ivperp,iz]
             f_with_delta_p[ivpa,ivperp,iz] = f[ivpa,ivperp,iz]
         end
         p_plus_delta_p = allocate_shared_float(size(p)...)
-        @begin_z_region()
+        @begin_anyzv_z_region()
         @loop_z iz begin
             p_plus_delta_p[iz] = p[iz] + delta_p[iz]
         end
@@ -3784,8 +3818,8 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2)
             residual_func!(original_residual, f, p)
             residual_func!(perturbed_residual, f_plus_delta_f, p)
 
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 delta_state = zeros(mk_float, total_size)
                 # Take this difference rather than using delta_f directly because we need
                 # the effect of the boundary condition having been applied to
@@ -3816,8 +3850,8 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2)
             residual_func!(original_residual, f, p)
             residual_func!(perturbed_residual, f_with_delta_p, p_plus_delta_p)
 
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 delta_state = zeros(mk_float, total_size)
                 # Take this difference rather than using delta_f directly because we need
                 # the effect of the boundary condition having been applied to
@@ -3849,8 +3883,8 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2)
             residual_func!(original_residual, f, p)
             residual_func!(perturbed_residual, f_plus_delta_f, p_plus_delta_p)
 
-            @begin_serial_region()
-            @serial_region begin
+            @begin_anyzv_region()
+            @anyzv_serial_region begin
                 delta_state = zeros(mk_float, total_size)
                 # Take this difference rather than using delta_f directly because we need
                 # the effect of the boundary condition having been applied to

@@ -18,7 +18,7 @@ using ..timer_utils
 using ..type_definitions: mk_float, mk_int
 using MPI
 using ..communication: block_rank
-using ..communication: @_block_synchronize
+using ..communication: @_block_synchronize, @_anyzv_subblock_synchronize
 using ..looping
 
 using LinearAlgebra
@@ -608,6 +608,75 @@ end
     @_block_synchronize()
 end
 
+@timeit_debug global_timer reconcile_element_boundaries_MPI_anyzv!(
+                  df1d::AbstractArray{mk_float,Ndims},
+                  dfdx_lower_endpoints::AbstractArray{mk_float,Mdims},
+                  dfdx_upper_endpoints::AbstractArray{mk_float,Mdims},
+                  receive_buffer1::AbstractArray{mk_float,Mdims},
+                  receive_buffer2::AbstractArray{mk_float,Mdims},
+                  coord) where {Ndims,Mdims} = begin
+
+    # synchronize buffers
+    # -- this all-to-all subblock communicate here requires that this function is only
+    # -- called within an r-parallelised loop, not within z-, vperp- or vpa-loops or from
+    # -- an @anyzv_serial_region or from an if statment isolating a single rank in a
+    # -- subblock
+    @_anyzv_subblock_synchronize()
+    #if anyzv_subblock_rank[] == 0 # lead process on this shared-memory subblock
+    @anyzv_serial_region begin
+
+        # now deal with endpoints that are stored across ranks
+        comm = coord.comm
+        nrank = coord.nrank
+        irank = coord.irank
+        #send_buffer = coord.send_buffer
+        #receive_buffer = coord.receive_buffer
+        # sending pattern is cyclic. First we send data form irank -> irank + 1
+        # to fix the lower endpoints, then we send data from irank -> irank - 1
+        # to fix upper endpoints. Special exception for the periodic points.
+        # receive_buffer[1] is for data received, send_buffer[1] is data to be sent
+
+        # pass data from irank -> irank + 1, receive data from irank - 1
+        rreq1 = MPI.Irecv!(receive_buffer1, comm; source=coord.prevrank, tag=1)
+        sreq1 = MPI.Isend(dfdx_upper_endpoints, comm; dest=coord.nextrank, tag=1)
+
+        # pass data from irank -> irank - 1, receive data from irank + 1
+        rreq2 = MPI.Irecv!(receive_buffer2, comm; source=coord.nextrank, tag=2)
+        sreq2 = MPI.Isend(dfdx_lower_endpoints, comm; dest=coord.prevrank, tag=2)
+        stats = MPI.Waitall([rreq1, sreq1, rreq2, sreq2])
+
+        # now update receive buffers, taking into account the reconciliation
+        if irank == 0
+            if coord.periodic
+                #update the extreme lower endpoint with data from irank = nrank -1	
+                receive_buffer1 .= 0.5*(receive_buffer1 .+ dfdx_lower_endpoints)
+            else #directly use value from Cheb
+                receive_buffer1 .= dfdx_lower_endpoints
+            end
+        else # enforce continuity at lower endpoint
+            receive_buffer1 .= 0.5*(receive_buffer1 .+ dfdx_lower_endpoints)
+        end
+        #now update the df1d array -- using a slice appropriate to the dimension reconciled
+        assign_endpoint!(df1d,receive_buffer1,"lower",coord)
+
+        if irank == nrank-1
+            if coord.periodic
+                #update the extreme upper endpoint with data from irank = 0
+                receive_buffer2 .= 0.5*(receive_buffer2 .+ dfdx_upper_endpoints)
+            else #directly use value from Cheb
+                receive_buffer2 .= dfdx_upper_endpoints
+            end
+        else # enforce continuity at upper endpoint
+            receive_buffer2 .= 0.5*(receive_buffer2 .+ dfdx_upper_endpoints)
+        end
+        #now update the df1d array -- using a slice appropriate to the dimension reconciled
+        assign_endpoint!(df1d,receive_buffer2,"upper",coord)
+
+    end
+    # synchronize buffers
+    @_anyzv_subblock_synchronize()
+end
+
 function apply_adv_fac!(buffer::AbstractArray{mk_float,Ndims},adv_fac::AbstractArray{mk_float,Ndims},endpoints::AbstractArray{mk_float,Ndims},sgn::mk_int) where Ndims
 		#buffer contains off-process endpoint
 		#adv_fac < 0 is positive advection speed
@@ -709,11 +778,13 @@ end
                   receive_buffer2::AbstractArray{mk_float,2}, coord) = begin
 	
     # synchronize buffers
-    # -- this all-to-all block communicate here requires that this function is NOT called from within a parallelised loop
-    # -- or from a @serial_region or from an if statment isolating a single rank on a block
-    @_block_synchronize()
-    #if block_rank[] == 0 # lead process on this shared-memory block
-    @serial_region begin
+    # -- this all-to-all subblock communicate here requires that this function is only
+    # -- called within an r-parallelised loop, not within z-, vperp- or vpa-loops or from
+    # -- an @anyzv_serial_region or from an if statment isolating a single rank in a
+    # -- subblock
+    @_anyzv_subblock_synchronize()
+    #if anyzv_subblock_rank[] == 0 # lead process on this shared-memory subblock
+    @anyzv_serial_region begin
 
         # now deal with endpoints that are stored across ranks
         comm = coord.comm
@@ -764,7 +835,7 @@ end
 
     end
     # synchronize buffers
-    @_block_synchronize()
+    @_anyzv_subblock_synchronize()
 end
 
 # Special version for pdf_electron with no r-dimension, which has the same number of
@@ -779,11 +850,11 @@ end
                   receive_buffer2::AbstractArray{mk_float,2}, coord) = begin
 	
     # synchronize buffers
-    # -- this all-to-all block communicate here requires that this function is NOT called from within a parallelised loop
-    # -- or from a @serial_region or from an if statment isolating a single rank on a block
-    @_block_synchronize()
-    #if block_rank[] == 0 # lead process on this shared-memory block
-    @serial_region begin
+    # -- this all-to-all subblock communicate here requires that this function is only
+    # -- called within an r-parallelised loop, not within z-, vperp- or vpa-loops or from
+    # -- an @anyzv_serial_region or from an if statment isolating a single rank in a
+    # -- subblock
+    @anyzv_serial_region begin
         # now deal with endpoints that are stored across ranks
         comm = coord.comm
         nrank = coord.nrank
@@ -835,7 +906,7 @@ end
 
     end
     # synchronize buffers
-    @_block_synchronize()
+    @_anyzv_subblock_synchronize()
 end
 
 """

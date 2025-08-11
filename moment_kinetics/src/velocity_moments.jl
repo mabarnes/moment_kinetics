@@ -38,7 +38,7 @@ using ..type_definitions: mk_float
 using ..array_allocation: allocate_shared_float, allocate_bool, allocate_float
 using ..calculus: integral
 using ..communication
-using ..derivatives: derivative_z!, second_derivative_z!
+using ..derivatives: derivative_z!, derivative_z_anyzv!, second_derivative_z!
 using ..derivatives: derivative_r!, second_derivative_r!
 using ..looping
 using ..gyroaverages: gyro_operators, gyroaverage_pdf!
@@ -1244,28 +1244,25 @@ the operator splitting, the time derivatives during the implicit step are done w
 explicit variables (density in particular) held fixed, and so
 `dvth_dt|_n = 0.5 * vth * dp_dt / p`.
 """
-function update_derived_electron_moment_time_derivatives!(p, moments, electron_physics)
-    @begin_r_z_region()
+function update_derived_electron_moment_time_derivatives!(p, moments, electron_physics,
+                                                          ir)
+    @begin_anyzv_z_region()
 
-    n = moments.electron.dens
-    vth = moments.electron.vth
-    dp_dt = moments.electron.dp_dt
-    dT_dt = moments.electron.dT_dt
-
-    dvth_dt = moments.electron.dvth_dt
-
-    if electron_physics == kinetic_electrons_with_temperature_equation
-        if dvth_dt !== nothing
-            T = moments.electron.temp
-            @loop_s_r_z is ir iz begin
+    if moments.electron.dvth_dt !== nothing
+        dvth_dt = @view moments.electron.dvth_dt[:,ir]
+        vth = @view moments.electron.vth[:,ir]
+        if electron_physics == kinetic_electrons_with_temperature_equation
+            dT_dt = @view moments.electron.dT_dt[:,ir]
+            T = @view moments.electron.temp[:,ir]
+            @loop_z iz begin
                 # vth = sqrt(2*T)
                 # dvth/dt = 1 / (2*T) * dT/dt
-                dvth_dt[iz,ir,is] = 0.5 * vth[iz,ir,is] * dT_dt[iz,ir,is] / T[iz,ir,is]
+                dvth_dt[iz] = 0.5 * vth[iz] * dT_dt[iz] / T[iz]
             end
-        end
-    else
-        if dvth_dt !== nothing
-            @loop_s_r_z is ir iz begin
+        else
+            dp_dt = @view moments.electron.dp_dt[:,ir]
+            p = @view moments.electron.p[:,ir]
+            @loop_z iz begin
                 # vth = sqrt(2*p/n)
                 # dvth/dt = 1 / sqrt(2*p*n) * dp/dt - sqrt(p/2/n^3) * dn/dt
                 # but no dn/dt contribution because due to the implicit/explicit splitting
@@ -1273,7 +1270,7 @@ function update_derived_electron_moment_time_derivatives!(p, moments, electron_p
                 # pressure and shape function. Therefore T_out = p_out / density_in,
                 # T_in = p_in / density_in so that effectively, for the electron update
                 # dn_dt = (density_in - density_in) / dt_implicit = 0
-                dvth_dt[iz,ir,is] = 0.5 * vth[iz,ir,is] * dp_dt[iz,ir,is] / p[iz,ir,is]
+                dvth_dt[iz] = 0.5 * vth[iz] * dp_dt[iz] / p[iz]
             end
         end
     end
@@ -1633,7 +1630,7 @@ given by `ir`.
 function calculate_electron_moment_derivatives_no_r!(moments, dens, upar, p,
                                                      scratch_dummy, z, z_spectral,
                                                      electron_mom_diss_coeff, ir)
-    @begin_serial_region()
+    @begin_anyzv_region()
 
     ppar = @view moments.electron.ppar[:,ir]
     qpar = @view moments.electron.qpar[:,ir]
@@ -1645,29 +1642,30 @@ function calculate_electron_moment_derivatives_no_r!(moments, dens, upar, p,
     buffer_3 = @view scratch_dummy.buffer_rs_3[ir,1]
     buffer_4 = @view scratch_dummy.buffer_rs_4[ir,1]
 
-    @views derivative_z!(moments.electron.dupar_dz[:,ir], upar, buffer_1, buffer_2,
-                         buffer_3, buffer_4, z_spectral, z)
+    @views derivative_z_anyzv!(moments.electron.dupar_dz[:,ir], upar, buffer_1, buffer_2,
+                               buffer_3, buffer_4, z_spectral, z)
 
-    @views derivative_z!(moments.electron.ddens_dz[:,ir], dens, buffer_1, buffer_2,
-                         buffer_3, buffer_4, z_spectral, z)
-    @views derivative_z!(moments.electron.dp_dz[:,ir], p, buffer_1, buffer_2,
-                         buffer_3, buffer_4, z_spectral, z)
-    @views derivative_z!(moments.electron.dppar_dz[:,ir], ppar, buffer_1, buffer_2,
-                         buffer_3, buffer_4, z_spectral, z)
-    @views derivative_z!(moments.electron.dqpar_dz[:,ir], qpar, buffer_1, buffer_2,
-                         buffer_3, buffer_4, z_spectral, z)
-    @views derivative_z!(moments.electron.dvth_dz[:,ir], vth, buffer_1, buffer_2,
-                         buffer_3, buffer_4, z_spectral, z)
+    @views derivative_z_anyzv!(moments.electron.ddens_dz[:,ir], dens, buffer_1, buffer_2,
+                               buffer_3, buffer_4, z_spectral, z)
+    @views derivative_z_anyzv!(moments.electron.dp_dz[:,ir], p, buffer_1, buffer_2,
+                               buffer_3, buffer_4, z_spectral, z)
+    @views derivative_z_anyzv!(moments.electron.dppar_dz[:,ir], ppar, buffer_1, buffer_2,
+                               buffer_3, buffer_4, z_spectral, z)
+    @views derivative_z_anyzv!(moments.electron.dqpar_dz[:,ir], qpar, buffer_1, buffer_2,
+                               buffer_3, buffer_4, z_spectral, z)
+    @views derivative_z_anyzv!(moments.electron.dvth_dz[:,ir], vth, buffer_1, buffer_2,
+                               buffer_3, buffer_4, z_spectral, z)
     # calculate the zed derivative of the electron temperature
-    @views derivative_z!(moments.electron.dT_dz[:,ir], temp, buffer_1, buffer_2, buffer_3,
-                         buffer_4, z_spectral, z)
-    @views derivative_z!(moments.electron.dvth_dz[:,ir], moments.electron.vth[:,ir],
-                         buffer_1, buffer_2, buffer_3, buffer_4, z_spectral, z)
+    @views derivative_z_anyzv!(moments.electron.dT_dz[:,ir], temp, buffer_1, buffer_2,
+                               buffer_3, buffer_4, z_spectral, z)
+    @views derivative_z_anyzv!(moments.electron.dvth_dz[:,ir], moments.electron.vth[:,ir],
+                               buffer_1, buffer_2, buffer_3, buffer_4, z_spectral, z)
 
     # centred second derivative for dissipation
     if electron_mom_diss_coeff > 0.0
-        @views derivative_z!(moments.electron.d2p_dz2[:,ir], moments.electron.dp_dz[:,ir], buffer_1,
-                             buffer_2, buffer_3, buffer_4, z_spectral, z)
+        @views derivative_z_anyzv!(moments.electron.d2p_dz2[:,ir],
+                                   moments.electron.dp_dz[:,ir], buffer_1, buffer_2,
+                                   buffer_3, buffer_4, z_spectral, z)
     end
 end
 
