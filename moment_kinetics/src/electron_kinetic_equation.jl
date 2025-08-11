@@ -7,7 +7,7 @@ using SparseArrays
 
 using ..looping
 using ..analysis: steady_state_residuals
-using ..derivatives: derivative_z!, derivative_z_pdf_vpavperpz!
+using ..derivatives: derivative_z_anyzv!, derivative_z_pdf_vpavperpz!
 using ..boundary_conditions: enforce_v_boundary_condition_local!,
                              enforce_vperp_boundary_condition!,
                              skip_f_electron_bc_points_in_Jacobian, vpagrid_to_vpa
@@ -377,11 +377,11 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
                             num_diss_params.electron.moment_dissipation_coefficient, ir)
                     else
                         # compute the z-derivative of the parallel electron heat flux
-                        @views derivative_z!(moments.electron.dqpar_dz[:,ir],
-                                             moments.electron.qpar[:,ir],
-                                             buffer_r_1[:,ir], buffer_r_2[:,ir],
-                                             buffer_r_3[:,ir], buffer_r_4[:,ir],
-                                             z_spectral, z)
+                        @views derivative_z_anyzv!(moments.electron.dqpar_dz[:,ir],
+                                                   moments.electron.qpar[:,ir],
+                                                   buffer_r_1[:,ir], buffer_r_2[:,ir],
+                                                   buffer_r_3[:,ir], buffer_r_4[:,ir],
+                                                   z_spectral, z)
                     end
                 end
                 update_derived_moments_and_derivatives()
@@ -718,9 +718,10 @@ function electron_backward_euler_pseudotimestepping!(scratch, pdf, moments, phi,
                                                                   ir)
 
                     # compute the z-derivative of the parallel electron heat flux
-                    @views derivative_z!(moments.electron.dqpar_dz[:,ir],
-                                         moments.electron.qpar[:,ir], buffer_1, buffer_2,
-                                         buffer_3, buffer_4, z_spectral, z)
+                    @views derivative_z_anyzv!(moments.electron.dqpar_dz[:,ir],
+                                               moments.electron.qpar[:,ir], buffer_1,
+                                               buffer_2, buffer_3, buffer_4, z_spectral,
+                                               z)
                 end
 
                 #println("Newton its ", nl_solver_params.max_nonlinear_iterations_this_step[], " ", dt[])
@@ -839,9 +840,10 @@ function electron_backward_euler_pseudotimestepping!(scratch, pdf, moments, phi,
                                                                   ir)
 
                     # compute the z-derivative of the parallel electron heat flux
-                    @views derivative_z!(moments.electron.dqpar_dz[:,ir],
-                                         moments.electron.qpar[:,ir], buffer_1, buffer_2,
-                                         buffer_3, buffer_4, z_spectral, z)
+                    @views derivative_z_anyzv!(moments.electron.dqpar_dz[:,ir],
+                                               moments.electron.qpar[:,ir], buffer_1,
+                                               buffer_2, buffer_3, buffer_4, z_spectral,
+                                               z)
                 end
             end
 
@@ -1267,8 +1269,8 @@ global_rank[] == 0 && println("recalculating precon")
             @loop_z iz begin
                 third_moment[iz] = 0.5 * qpar[iz] / electron_p_new[iz] / vth[iz]
             end
-            derivative_z!(dthird_moment_dz, third_moment, buffer_1, buffer_2,
-                          buffer_3, buffer_4, z_spectral, z)
+            derivative_z_anyzv!(dthird_moment_dz, third_moment, buffer_1, buffer_2,
+                                buffer_3, buffer_4, z_spectral, z)
 
             z_speed = @view z_advect[1].speed[:,:,:,ir]
 
@@ -4448,7 +4450,7 @@ only. This allows `result_object` to be (possibly) passed to
                    ion_dt=ion_dt)
 
         update_derived_electron_moment_time_derivatives!(p_in, moments,
-                                                         composition.electron_physics)
+                                                         composition.electron_physics, ir)
         write_debug_IO("electron_energy_equation_no_r!")
     end
 
@@ -4559,8 +4561,8 @@ in the time derivative term as it is for the non-boundary points.]
     @loop_z iz begin
         third_moment[iz] = qpar[iz] / p[iz] / vth[iz]
     end
-    derivative_z!(dthird_moment_dz, third_moment, buffer_1, buffer_2,
-                  buffer_3, buffer_4, z_spectral, z)
+    derivative_z_anyzv!(dthird_moment_dz, third_moment, buffer_1, buffer_2, buffer_3,
+                        buffer_4, z_spectral, z)
 
     pdf_size = z.n * vperp.n * vpa.n
     v_size = vperp.n * vpa.n
@@ -5002,8 +5004,8 @@ Fill a pre-allocated matrix with the Jacobian matrix for electron kinetic equati
         #       + 3/2/sqrt(2) / p^(1/2) / dens^(1/2) / me^(1/2) * third_moment * d(p)/dz
         #       + 3/sqrt(2) * p^(1/2) / dens^(1/2) / me^(1/2) * third_moment * d(.)/dz
         dthird_moment_dz = z.scratch2
-        derivative_z!(z.scratch2, third_moment, buffer_1, buffer_2,
-                      buffer_3, buffer_4, z_spectral, z)
+        derivative_z_anyzv!(z.scratch2, third_moment, buffer_1, buffer_2, buffer_3,
+                            buffer_4, z_spectral, z)
 
         # Diagonal terms
         for row ∈ 1:z.n

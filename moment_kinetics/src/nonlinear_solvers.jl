@@ -686,7 +686,7 @@ end
         zend = z.n + 1
     end
 
-    @begin_z_region()
+    @begin_anyzv_z_region()
 
     ppar_local_norm_square = 0.0
     @loop_z iz begin
@@ -696,16 +696,16 @@ end
         ppar_local_norm_square += (ppar_residual[iz] / (rtol * abs(x_ppar[iz]) + atol))^2
     end
 
-    @_block_synchronize()
+    @_anyzv_subblock_synchronize()
     global_norm_ppar = Ref(ppar_local_norm_square) # global_norm_ppar is the norm_square for ppar in the block
-    @timeit_debug global_timer "MPI.Reduce! comm_block" MPI.Reduce!(global_norm_ppar, +, comm_block[])
+    @timeit_debug global_timer "MPI.Reduce! comm_block" MPI.Reduce!(global_norm_ppar, +, comm_anyzv_subblock[])
 
     if block_rank[] == 0
         @timeit_debug global_timer "MPI.Allreduce! comm_inter_block" MPI.Allreduce!(global_norm_ppar, +, comm_inter_block[]) # global_norm_ppar is the norm_square for ppar in the whole grid
         global_norm_ppar[] = global_norm_ppar[] / z.n_global
     end
 
-    @begin_z_vperp_vpa_region()
+    @begin_anyzv_z_vperp_vpa_region()
 
     pdf_local_norm_square = 0.0
     @loop_z iz begin
@@ -717,12 +717,12 @@ end
         end
     end
 
-    @_block_synchronize()
+    @_anyzv_subblock_synchronize()
     global_norm = Ref(pdf_local_norm_square)
-    @timeit_debug global_timer "MPI.Reduce! comm_block" MPI.Reduce!(global_norm, +, comm_block[]) # global_norm is the norm_square for the block
+    @timeit_debug global_timer "MPI.Reduce! comm_block" MPI.Reduce!(global_norm, +, comm_anyzv_subblock[]) # global_norm is the norm_square for the block
 
     if block_rank[] == 0
-        @timeit_debug global_timer "MPI.Allreduce! comm_inter_block" MPI.Allreduce!(global_norm, +, comm_inter_block[]) # global_norm is the norm_square for the whole grid
+        @timeit_debug global_timer "MPI.Allreduce! comm_inter_block" MPI.Allreduce!(global_norm, +, z.comm) # global_norm is the norm_square for the whole grid
         global_norm[] = global_norm[] / (z.n_global * vperp.n_global * vpa.n_global)
 
         global_norm[] = sqrt(mean((global_norm_ppar[], global_norm[])))

@@ -14,7 +14,7 @@ export update_electron_vth_temperature!
 
 using ..calculus: integral
 using ..communication
-using ..derivatives: derivative_z!
+using ..derivatives: derivative_z_anyzv!
 using ..looping
 using ..input_structs
 using ..timer_utils
@@ -700,15 +700,15 @@ function electron_braginskii_conduction!(p_out::AbstractVector{mk_float},
     dqpar_dz = @view electron_moments.dqpar_dz[:,ir]
 
     update_electron_vth_temperature_no_r!(vth, temp, p_in, dens, composition)
-    derivative_z!(dT_dz, temp, buffer_r_1, buffer_r_2, buffer_r_3, buffer_r_4, z_spectral,
-                  z)
+    derivative_z_anyzv!(dT_dz, temp, buffer_r_1, buffer_r_2, buffer_r_3, buffer_r_4,
+                        z_spectral, z)
     electron_moments.qpar_updated[] = false
     calculate_electron_qpar!(electron_moments, nothing, p_in, dens, upar_e, upar_i,
                              collisions.electron_fluid.nu_ei, composition.me_over_mi,
                              composition.electron_physics, nothing, nothing)
     electron_fluid_qpar_boundary_condition!(p_in, upar_e, dens, electron_moments, z)
-    derivative_z!(dqpar_dz, qpar, buffer_r_1, buffer_r_2, buffer_r_3, buffer_r_4,
-                  z_spectral, z)
+    derivative_z_anyzv!(dqpar_dz, qpar, buffer_r_1, buffer_r_2, buffer_r_3, buffer_r_4,
+                        z_spectral, z)
 
     @begin_anyzv_z_region()
     @loop_z iz begin
