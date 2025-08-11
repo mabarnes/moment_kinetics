@@ -493,7 +493,7 @@ end
 function get_anyzv_ranges(block_rank, split, anyzv_dims, dim_sizes)
     effective_block_size = prod(split) # Allow for this being less than block_size, but should not be for current anyzv implementation.
 
-    anyzv_dim_sizes = Dict(k => (k == :r ? v - 1 : v) for (k,v) ∈ dim_sizes)
+    anyzv_dim_sizes = Dict(k => (k == :r ? max(v - 1, 1) : v) for (k,v) ∈ dim_sizes)
 
     if :z ∈ anyzv_dims && :vperp ∈ anyzv_dims && :vpa ∈ anyzv_dims
         z_vperp_vpa_split = get_best_split_from_sizes(split[end],
