@@ -866,16 +866,31 @@ function rk_update_loop!(rk_coefs, rk_coefs_implicit,
                          output=var_arrays[N], ir) where N
     @boundscheck length(rk_coefs) ≥ N
 
-    @begin_r_z_region()
-    if rk_coefs_implicit === nothing
-        @loop_r_z ir iz begin
-            output[iz,ir] = sum(rk_coefs[i] * var_arrays[i][iz,ir] for i ∈ 1:N)
+    if ir === nothing
+        @begin_r_z_region()
+        if rk_coefs_implicit === nothing
+            @loop_r_z this_ir iz begin
+                output[iz,this_ir] = sum(rk_coefs[i] * var_arrays[i][iz,this_ir] for i ∈ 1:N)
+            end
+        else
+            @loop_r_z this_ir iz begin
+                output[iz,this_ir] = sum(rk_coefs[i] * var_arrays[i][iz,this_ir] for i ∈ 1:N) +
+                                sum(rk_coefs_implicit[i] * var_arrays_implicit[i][iz,this_ir]
+                                    for i ∈ 1:N-1)
+            end
         end
     else
-        @loop_r_z ir iz begin
-            output[iz,ir] = sum(rk_coefs[i] * var_arrays[i][iz,ir] for i ∈ 1:N) +
-                            sum(rk_coefs_implicit[i] * var_arrays_implicit[i][iz,ir]
-                                for i ∈ 1:N-1)
+        @begin_z_region()
+        if rk_coefs_implicit === nothing
+            @loop_z iz begin
+                output[iz,ir] = sum(rk_coefs[i] * var_arrays[i][iz,ir] for i ∈ 1:N)
+            end
+        else
+            @loop_z iz begin
+                output[iz,ir] = sum(rk_coefs[i] * var_arrays[i][iz,ir] for i ∈ 1:N) +
+                                sum(rk_coefs_implicit[i] * var_arrays_implicit[i][iz,ir]
+                                    for i ∈ 1:N-1)
+            end
         end
     end
 
