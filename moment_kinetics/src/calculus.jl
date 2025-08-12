@@ -12,7 +12,8 @@ export integral
 export indefinite_integral!
 
 using ..moment_kinetics_structs: discretization_info, null_spatial_dimension_info,
-                                 null_velocity_dimension_info, weak_discretization_info
+                                 null_velocity_dimension_info, null_vperp_dimension_info,
+                                 weak_discretization_info
 using ..timer_utils
 using ..type_definitions: mk_float, mk_int
 using MPI
@@ -34,6 +35,12 @@ calculates a derivative without upwinding information.
 Result is stored in coord.scratch_2d.
 """
 function elementwise_derivative! end
+
+function elementwise_derivative!(coord, f, adv_fac,
+                                 null::Union{null_spatial_dimension_info,null_velocity_dimension_info,null_vperp_dimension_info})
+    coord.scratch_2d .= 0.0
+    return nothing
+end
 
 """
 """
