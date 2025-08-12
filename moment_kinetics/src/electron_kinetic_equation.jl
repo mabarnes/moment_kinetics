@@ -352,7 +352,7 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
                                                         vperp, vpa, vperp_spectral,
                                                         vpa_spectral, vpa_advect,
                                                         num_diss_params, composition, ir,
-                                                        nothing)
+                                                        nothing, scratch_dummy)
 
                 function update_derived_moments_and_derivatives(update_vth=false)
                     # update the electron heat flux
@@ -392,7 +392,7 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi, coll
                                                        composition, r, z, vperp, vpa,
                                                        vperp_spectral, vpa_spectral,
                                                        external_source_settings,
-                                                       num_diss_params, ir;
+                                                       num_diss_params, scratch_dummy, ir;
                                                        evolve_p=evolve_p)
                     # Re-do this in case electron_adaptive_timestep_update!() re-arranged the
                     # `scratch` vector
@@ -699,7 +699,7 @@ function electron_backward_euler_pseudotimestepping!(scratch, pdf, moments, phi,
                                                f_electron_new, phi, moments, r, z, vperp,
                                                vpa, vperp_spectral, vpa_spectral,
                                                vpa_advect, num_diss_params, composition,
-                                               ir, nl_solver_params)
+                                               ir, nl_solver_params, scratch_dummy)
                 if bc_constraints_converged != ""
                     step_success = false
                 end
@@ -814,13 +814,11 @@ function electron_backward_euler_pseudotimestepping!(scratch, pdf, moments, phi,
                     electron_p_new[iz] = electron_p_old[iz]
                 end
 
-                new_lowerz_vcut_ind = @view r.scratch_shared_int[ir:ir]
-                new_upperz_vcut_ind = @view r.scratch_shared_int2[ir:ir]
                 bc_constraints_converged = apply_electron_bc_and_constraints_no_r!(
                                                f_electron_new, phi, moments, r, z, vperp,
                                                vpa, vperp_spectral, vpa_spectral,
                                                vpa_advect, num_diss_params, composition,
-                                               ir, nl_solver_params)
+                                               ir, nl_solver_params, scratch_dummy)
                 if bc_constraints_converged != ""
                     error("apply_electron_bc_and_constraints_no_r!() failed, but this "
                           * "should not happen here, because we are re-applying the "
@@ -1305,9 +1303,9 @@ global_rank[] == 0 && println("recalculating precon")
                                    vpa_advect[1].adv_fac[:,ivperp,iz,ir], vpa_spectral)
             end
 
-            zeroth_moment = z.scratch_shared
-            first_moment = z.scratch_shared2
-            second_moment = z.scratch_shared3
+            zeroth_moment = @view scratch_dummy.buffer_zrs_1[:,ir,1]
+            first_moment = @view scratch_dummy.buffer_zrs_2[:,ir,1]
+            second_moment = @view scratch_dummy.buffer_zrs_3[:,ir,1]
             @begin_anyzv_z_region()
             vpa_grid = vpa.grid
             vpa_wgts = vpa.wgts
@@ -2077,7 +2075,7 @@ end
 function apply_electron_bc_and_constraints_no_r!(f_electron, phi, moments, r, z, vperp,
                                                  vpa, vperp_spectral, vpa_spectral,
                                                  vpa_advect, num_diss_params, composition,
-                                                 ir, nl_solver_params)
+                                                 ir, nl_solver_params, scratch_dummy)
     @begin_anyzv_z_vperp_vpa_region()
     @loop_z_vperp_vpa iz ivperp ivpa begin
         f_electron[ivpa,ivperp,iz] = max(f_electron[ivpa,ivperp,iz], 0.0)
@@ -2110,8 +2108,8 @@ function apply_electron_bc_and_constraints_no_r!(f_electron, phi, moments, r, z,
         # preconditioner because the response at the grid point before the cutoff is
         # sharp, so the preconditioner could be significantly wrong when it was
         # calculated using the wrong vcut_ind.
-        lower_vcut_changed = @view z.scratch_shared_int[1:1]
-        upper_vcut_changed = @view z.scratch_shared_int[2:2]
+        lower_vcut_changed = @view scratch_dummy.int_buffer_rs_1[ir:ir,1]
+        upper_vcut_changed = @view scratch_dummy.int_buffer_rs_2[ir:ir,1]
         @anyzv_serial_region begin
             if z.irank == 0
                 precon_lowerz_vcut_inds = nl_solver_params.precon_lowerz_vcut_inds
@@ -4266,8 +4264,8 @@ appropriate.
 @timeit global_timer electron_adaptive_timestep_update!(
                          scratch, t, t_params, moments, phi, z_advect, vpa_advect,
                          composition, r, z, vperp, vpa, vperp_spectral, vpa_spectral,
-                         external_source_settings, num_diss_params, ir; evolve_p=false,
-                         local_max_dt=Inf) = begin
+                         external_source_settings, num_diss_params, scratch_dummy, ir;
+                         evolve_p=false, local_max_dt=Inf) = begin
     #error_norm_method = "Linf"
     error_norm_method = "L2"
 
@@ -4334,7 +4332,7 @@ appropriate.
     @views apply_electron_bc_and_constraints_no_r!(
                scratch[t_params.n_rk_stages+1].pdf_electron[:,:,:,ir], phi, moments, r, z,
                vperp, vpa, vperp_spectral, vpa_spectral, vpa_advect, num_diss_params,
-               composition, ir, nothing)
+               composition, ir, nothing, scratch_dummy)
     if evolve_p
         # Reset vth in the `moments` struct to the result consistent with full-accuracy RK
         # solution.
@@ -4629,9 +4627,9 @@ in the time derivative term as it is for the non-boundary points.]
                            vpa_advect[1].adv_fac[:,ivperp,iz,ir], vpa_spectral)
     end
 
-    zeroth_moment = z.scratch_shared
-    first_moment = z.scratch_shared2
-    second_moment = z.scratch_shared3
+    zeroth_moment = @view scratch_dummy.buffer_zrs_1[:,ir,1]
+    first_moment = @view scratch_dummy.buffer_zrs_2[:,ir,1]
+    second_moment = @view scratch_dummy.buffer_zrs_3[:,ir,1]
     @begin_anyzv_z_region()
     vpa_grid = vpa.grid
     vpa_wgts = vpa.wgts
