@@ -914,7 +914,7 @@ end
 
     @_anyzv_subblock_synchronize()
     ppar_global_dot = Ref(ppar_local_dot)
-    @timeit_debug global_timer "MPI.Reduce! comm_anyzv_subblock" MPI.Reduce!(ppar_global_dot, +, comm_anyzv_subblock) # ppar_global_dot is now the ppar_dot for the subblock
+    @timeit_debug global_timer "MPI.Reduce! comm_anyzv_subblock" MPI.Reduce!(ppar_global_dot, +, comm_anyzv_subblock[]) # ppar_global_dot is now the ppar_dot for the subblock
 
     if block_rank[] == 0
         @timeit_debug global_timer "MPI.Allreduce! z.comm" MPI.Allreduce!(ppar_global_dot, +, z.comm) # ppar_global_dot is now the ppar_dot for the whole {z,vperp,vpa} grid
@@ -933,7 +933,7 @@ end
 
     @_anyzv_subblock_synchronize()
     global_dot = Ref(pdf_local_dot)
-    @timeit_debug global_timer "MPI.Reduce! comm_anyzv_subblock" MPI.Reduce!(global_dot, +, comm_anyzv_subblock) # global_dot is now the dot for the subblock
+    @timeit_debug global_timer "MPI.Reduce! comm_anyzv_subblock" MPI.Reduce!(global_dot, +, comm_anyzv_subblock[]) # global_dot is now the dot for the subblock
 
     if block_rank[] == 0
         @timeit_debug global_timer "MPI.Allreduce! z.comm" MPI.Allreduce!(global_dot, +, z.comm) # global_dot is now the dot for the whole {z,vperp,vpa} grid
