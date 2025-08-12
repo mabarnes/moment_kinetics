@@ -70,6 +70,7 @@ struct nl_solver_info{TH,TV,Tcsg,Tlig,Tprecon,Tpretype}
     precon_upperz_vcut_inds::Vector{mk_int}
     serial_solve::Bool
     anysv_region::Bool
+    anyzv_region::Bool
     max_nonlinear_iterations_this_step::Base.RefValue{mk_int}
     max_linear_iterations_this_step::Base.RefValue{mk_int}
     total_its_soft_limit::mk_int
@@ -89,7 +90,8 @@ for example a preconditioner object for each point in that outer loop.
 """
 function setup_nonlinear_solve(active, input_dict, coords, outer_coords=();
                                section_name="nonlinear_solver", default_rtol=1.0e-5,
-                               default_atol=1.0e-12, serial_solve=false, anysv_region=false,
+                               default_atol=1.0e-12, serial_solve=false,
+                               anysv_region=false, anyzv_region=false,
                                electron_p_pdf_solve=false,
                                preconditioner_type=Val(:none), warn_unexpected=false)
     nl_solver_section = set_defaults_and_check_section!(
@@ -177,6 +179,31 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=();
         # switch out of anysv region to avoid errors on
         # the next region call in initialisation, which
         # will not be an "anysv" call.
+        @begin_serial_region()
+    elseif anyzv_region
+        H = allocate_shared_float(linear_restart + 1, linear_restart; comm=comm_anyzv_subblock[])
+        c = allocate_shared_float(linear_restart + 1; comm=comm_anyzv_subblock[])
+        s = allocate_shared_float(linear_restart + 1; comm=comm_anyzv_subblock[])
+        g = allocate_shared_float(linear_restart + 1; comm=comm_anyzv_subblock[])
+        V = allocate_shared_float(reverse(coord_sizes)..., linear_restart+1; comm=comm_anyzv_subblock[])
+        # Arrays below appear to need to be initialised to zero on setup.
+        # This is inconvenient for anyzv communicators because we need to switch
+        # now into the special "anyzv" region for this assignment,
+        # to make sure that all instances of memory are initialised to zero.
+        @begin_r_anyzv_region()
+        @begin_anyzv_region()
+        if anyzv_subblock_rank[] ≥ 0
+            @anyzv_serial_region begin
+                H .= 0.0
+                c .= 0.0
+                s .= 0.0
+                g .= 0.0
+                V .= 0.0
+            end
+        end
+        # switch out of anyzv region to avoid errors on
+        # the next region call in initialisation, which
+        # will not be an "anyzv" call.
         @begin_serial_region()
     else
         H = allocate_shared_float(linear_restart + 1, linear_restart)
@@ -307,7 +334,8 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=();
                           Ref(0), Ref(0), Ref(0),
                           Ref(nl_solver_input.preconditioner_update_interval),
                           Ref(mk_float(0.0)), zeros(mk_int, n_vcut_inds),
-                          zeros(mk_int, n_vcut_inds), serial_solve, anysv_region, Ref(0), Ref(0),
+                          zeros(mk_int, n_vcut_inds), serial_solve, anysv_region,
+                          anyzv_region, Ref(0), Ref(0),
                           nl_solver_input.total_its_soft_limit, preconditioner_type,
                           nl_solver_input.preconditioner_update_interval, preconditioners)
 end
@@ -485,6 +513,7 @@ old_precon_iterations = nl_solver_params.precon_iterations[]
                                    initial_guess=nl_solver_params.linear_initial_guess,
                                    serial_solve=nl_solver_params.serial_solve,
                                    anysv_region=nl_solver_params.anysv_region,
+                                   anyzv_region=nl_solver_params.anyzv_region,
                                    initial_delta_x_is_zero=true)
         linear_counter += linear_its
 
@@ -1427,7 +1456,7 @@ MGS-GMRES' in Zou (2023) [https://doi.org/10.1016/j.amc.2023.127869].
                          norm_params; coords, rtol, atol, restart, max_restarts,
                          left_preconditioner, right_preconditioner, H, c, s, g, V,
                          rhs_delta, initial_guess, serial_solve, anysv_region,
-                         initial_delta_x_is_zero) = begin
+                         anyzv_region, initial_delta_x_is_zero) = begin
     # Solve (approximately?):
     #   J δx = residual0
 
@@ -1478,6 +1507,11 @@ MGS-GMRES' in Zou (2023) [https://doi.org/10.1016/j.amc.2023.127869].
         @anysv_serial_region begin
             g[1] = beta
         end
+    elseif anyzv_region
+        @begin_anyzv_region()
+        @anyzv_serial_region begin
+            g[1] = beta
+        end
     else
         @begin_serial_region()
         @serial_region begin
@@ -1515,6 +1549,11 @@ MGS-GMRES' in Zou (2023) [https://doi.org/10.1016/j.amc.2023.127869].
                     @anysv_serial_region begin
                         H[j,i] = w_dot_Vj
                     end
+                elseif anyzv_region
+                    @begin_anyzv_region()
+                    @anysv_serial_region begin
+                        H[j,i] = w_dot_Vj
+                    end
                 else
                      @begin_serial_region()
                      @serial_region begin
@@ -1528,6 +1567,11 @@ MGS-GMRES' in Zou (2023) [https://doi.org/10.1016/j.amc.2023.127869].
                 H[i+1,i] = norm_w
             elseif anysv_region
                 @begin_anysv_region()
+                @anysv_serial_region begin
+                    H[i+1,i] = norm_w
+                end
+            elseif anyzv_region
+                @begin_anyzv_region()
                 @anysv_serial_region begin
                     H[i+1,i] = norm_w
                 end
@@ -1569,6 +1613,23 @@ MGS-GMRES' in Zou (2023) [https://doi.org/10.1016/j.amc.2023.127869].
                     g[i] = c[i] * g[i]
                 end
                 @_anysv_subblock_synchronize()
+            elseif anyzv_region
+                @begin_anyzv_region()
+                @anyzv_serial_region begin
+                    for j ∈ 1:i-1
+                        gamma = c[j] * H[j,i] + s[j] * H[j+1,i]
+                        H[j+1,i] = -s[j] * H[j,i] + c[j] * H[j+1,i]
+                        H[j,i] = gamma
+                    end
+                    delta = sqrt(H[i,i]^2 + H[i+1,i]^2)
+                    s[i] = H[i+1,i] / delta
+                    c[i] = H[i,i] / delta
+                    H[i,i] = c[i] * H[i,i] + s[i] * H[i+1,i]
+                    H[i+1,i] = 0
+                    g[i+1] = -s[i] * g[i]
+                    g[i] = c[i] * g[i]
+                end
+                @_anyzv_subblock_synchronize()
             else
                 @begin_serial_region()
                 @serial_region begin
