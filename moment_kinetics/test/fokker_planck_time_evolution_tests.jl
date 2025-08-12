@@ -10,7 +10,7 @@ using moment_kinetics.load_data: open_readonly_output_file, load_coordinate_data
                                  load_species_data, load_fields_data,
                                  load_ion_moments_data, load_pdf_data,
                                  load_time_data, load_species_data,
-                                 load_input
+                                 load_input, load_mk_options, regrid_ion_pdf
 using moment_kinetics.type_definitions: mk_float
 using moment_kinetics.utils: merge_dict_with_kwargs!
 using moment_kinetics.input_structs: options_to_TOML
@@ -831,6 +831,7 @@ function run_test(test_input, expected, atol, final_atol; args...)
             n_ion_species, n_neutral_species = load_species_data(fid)
             ntime, time = load_time_data(fid)
             n_ion_species, n_neutral_species = load_species_data(fid)
+            evolve_density, evolve_upar, evolve_p = load_mk_options(fid)
             
             # load fields data
             phi_zrt, Er_zrt, Ez_zrt = load_fields_data(fid)
@@ -844,12 +845,34 @@ function run_test(test_input, expected, atol, final_atol; args...)
             # open the netcdf file containing pdf data
             fid = open_readonly_output_file(path, "dfns")
             # load coordinates
+            r, r_spectral = load_coordinate_data(fid, "r"; ignore_MPI=true)
+            z, z_spectral = load_coordinate_data(fid, "z"; ignore_MPI=true)
             vpa, vpa_spectral = load_coordinate_data(fid, "vpa"; ignore_MPI=true)
             vperp, vperp_spectral = load_coordinate_data(fid, "vperp"; ignore_MPI=true)
 
             # load particle distribution function (pdf) data
             f_ion_vpavperpzrst = load_pdf_data(fid)
             
+            # In case simulation is moment-kinetic, so that f_ion is a shape function
+            # rather than a distribution function, convert f_ion to an 'unnormalised'
+            # distribution function.
+            for it ∈ 1:ntime
+                @views f_ion_vpavperpzrst[:,:,:,:,:,it] .=
+                    regrid_ion_pdf(f_ion_vpavperpzrst[:,:,:,:,:,it],
+                                   (r=r, r_spectral, z=z, z_spectral, vperp=vperp,
+                                    vperp_spectral, vpa=vpa, vpa_spectral),
+                                   (r=r, r_spectral, z=z, z_spectral, vperp=vperp,
+                                    vperp_spectral, vpa=vpa, vpa_spectral),
+                                   Dict("r"=>false, "z"=>false, "vperp"=>evolve_p,
+                                        "vpa"=>(evolve_upar || evolve_p)),
+                                   (evolve_density=false, evolve_upar=false,
+                                    evolve_p=false,
+                                    ion=(dens=n_ion_zrst[:,:,:,it],
+                                         upar=upar_ion_zrst[:,:,:,it],
+                                         vth=v_t_ion_zrst[:,:,:,it])),
+                                   evolve_density, evolve_upar, evolve_p)
+            end
+
             close(fid)
             # select the single z, r, s point
             # keep the two time points in the arrays
@@ -927,40 +950,57 @@ function runtests()
     @testset "Fokker Planck dFdt = C[F,F] relaxation test" verbose=use_verbose begin
         println("Fokker Planck dFdt = C[F,F] relaxation test")
 
-        # GaussLegendre pseudospectral
-        # Benchmark data is taken from this run (GaussLegendre)
-        @testset "Gauss Legendre base" begin
-            run_name = "gausslegendre_pseudospectral"
-            vperp_bc = "zero-impose-regularity"
-            run_test(test_input_gauss_legendre,
-             expected_zero_impose_regularity, 2.0e-14, 2.0e-14;
-             vperp=OptionsDict("bc" => vperp_bc))
-        end
-        @testset "Gauss Legendre no enforced regularity condition at vperp = 0" begin
-            run_name = "gausslegendre_pseudospectral_no_regularity"
-            vperp_bc = "zero"
-            run_test(test_input_gauss_legendre,
-            expected_zero,
-             1.0e-14, 2.0e-14; vperp=OptionsDict("bc" => vperp_bc))
-        end
-        @testset "Gauss Legendre no (explicitly) enforced boundary conditions: explicit timestepping" begin
-            run_name = "gausslegendre_pseudospectral_none_bc"
-            vperp_bc = "none"
-            vpa_bc = "none"
-            run_test(test_input_gauss_legendre, expected_none_bc, 1.0e-14, 2.0e-14;
-                     vperp=OptionsDict("bc" => vperp_bc), vpa=OptionsDict("bc" => vpa_bc))
-        end
-        @testset "Gauss Legendre no (explicitly) enforced boundary conditions: IMEX timestepping" begin
-            run_name = "gausslegendre_pseudospectral_none_bc"
-            vperp_bc = "none"
-            vpa_bc = "none"
-            run_test(test_input_gauss_legendre, expected_none_bc, 1.0e-5, 5.0e-12;
-                     vperp=OptionsDict("bc" => vperp_bc), vpa=OptionsDict("bc" => vpa_bc),
-                     fokker_planck_collisions_nonlinear_solver=OptionsDict("rtol" => 0.0,
-                                                                           "atol" => 1.0e-14,
-                                                                           "nonlinear_max_iterations" => 20,),
-                     timestepping=OptionsDict("kinetic_ion_solver" => "implicit_ion_fp_collisions",
-                                              "type" => "PareschiRusso3(4,3,3)",))
+        @testset "evolve_density=$evolve_density, evolve_upar=$evolve_upar, evolve_p=$evolve_p" for
+                (evolve_density, evolve_upar, evolve_p, tol1, tol2, tol3, tol4) ∈
+                    (#(false, false, false, 2.0e-14, 1.0e-14, 1.0e-5, 5.0e-12),
+                     (true, false, false, 1.0e-7, 1.0e-7, 1.0e-6, 1.0e-9),
+                     #(true, true, false, 2.0e-14, 1.0e-14, 1.0e-5, 5.0e-12),
+                    )
+            println("  evolve_density=$evolve_density, evolve_upar=$evolve_upar, evolve_p=$evolve_p:")
+            # GaussLegendre pseudospectral
+            # Benchmark data is taken from this run (GaussLegendre)
+            if !evolve_density
+                # This set of options does not conserve density or energy in the 'full-f'
+                # version well enough for the expected results to compare to
+                # moment-kinetic runs with small errors.
+                @testset "Gauss Legendre base" begin
+                    run_name = "gausslegendre_pseudospectral"
+                    vperp_bc = "zero-impose-regularity"
+                    run_test(test_input_gauss_legendre,
+                     expected_zero_impose_regularity, tol1, tol1;
+                     vperp=OptionsDict("bc" => vperp_bc),
+                     evolve_moments=OptionsDict("density" => evolve_density, "parallel_flow" => evolve_upar, "pressure" => evolve_p))
+                end
+            end
+            @testset "Gauss Legendre no enforced regularity condition at vperp = 0" begin
+                run_name = "gausslegendre_pseudospectral_no_regularity"
+                vperp_bc = "zero"
+                run_test(test_input_gauss_legendre,
+                 expected_zero,
+                 tol2, tol1; vperp=OptionsDict("bc" => vperp_bc),
+                 evolve_moments=OptionsDict("density" => evolve_density, "parallel_flow" => evolve_upar, "pressure" => evolve_p))
+            end
+            @testset "Gauss Legendre no (explicitly) enforced boundary conditions: explicit timestepping" begin
+                run_name = "gausslegendre_pseudospectral_none_bc"
+                vperp_bc = "none"
+                vpa_bc = "none"
+                run_test(test_input_gauss_legendre, expected_none_bc, tol2, tol1;
+                         vperp=OptionsDict("bc" => vperp_bc), vpa=OptionsDict("bc" => vpa_bc),
+                         evolve_moments=OptionsDict("density" => evolve_density, "parallel_flow" => evolve_upar, "pressure" => evolve_p))
+            end
+            @testset "Gauss Legendre no (explicitly) enforced boundary conditions: IMEX timestepping" begin
+                run_name = "gausslegendre_pseudospectral_none_bc"
+                vperp_bc = "none"
+                vpa_bc = "none"
+                run_test(test_input_gauss_legendre, expected_none_bc, tol3, tol4;
+                         vperp=OptionsDict("bc" => vperp_bc), vpa=OptionsDict("bc" => vpa_bc),
+                         evolve_moments=OptionsDict("density" => evolve_density, "parallel_flow" => evolve_upar, "pressure" => evolve_p),
+                         fokker_planck_collisions_nonlinear_solver=OptionsDict("rtol" => 0.0,
+                                                                               "atol" => 1.0e-14,
+                                                                               "nonlinear_max_iterations" => 20,),
+                         timestepping=OptionsDict("kinetic_ion_solver" => "implicit_ion_fp_collisions",
+                                                  "type" => "PareschiRusso3(4,3,3)",))
+            end
         end
     end
 end
