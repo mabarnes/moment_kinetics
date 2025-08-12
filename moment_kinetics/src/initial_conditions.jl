@@ -11,7 +11,7 @@ export create_pdf
 
 # package
 using Dates
-using SpecialFunctions: erfc
+using SpecialFunctions: erfc, erf
 # modules
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float, allocate_shared_float
@@ -1407,8 +1407,42 @@ function init_ion_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
         vperp0 = spec.vpa_IC.vperp0 #0.5*abs(vperp.L) # centre of beam in vperp
         vth0 = spec.vpa_IC.vth0 #0.05*sqrt(vperp.L^2 + (0.5*vpa.L)^2) # width of beam in v 
         @loop_z iz begin
+            # Force the parallel flow moment to be consistent with the directed-beam
+            # distribution function, in case we are using moment-kinetic options.
+            upar[iz] = vpa0
+
+            # Remembering that the distribution function initialised here will be
+            # normalised to unit density at the bottom, to calculate the temperature and
+            # pressure we need the density integral and the internal energy integral.
+            # Doing the integrals with WolframAlpha,
+            #   f = exp(-((vpa-vpa0)^2 - (vperp-vperp0)^2 / vth0^2))
+            #   ∫f d^3v = (2π) * (π^0.5 vth0) * (vth0^2 0.5 (π^0.5 vperp0/vth0 (erf(vperp0/vth0) + 1) + exp(-vperp0^2/vth0^2)))
+            #           = π^1.5 vth0^3 * (π^0.5 vperp0/vth0 (erf(vperp0/vth0) + 1) + exp(-vperp0^2/vth0^2))
+            #   ∫0.5 ((vpa-upar)^2 + vperp^2) f d^3v
+            #     = π ∫vperp (0.5 π^0.5 vth0^3 + π^0.5 vth0 vperp^2) exp(-(vperp-vperp0)^2/vth0^2) dvperp
+            #     = π^1.5 ∫vperp (0.5 vth0^3 + vth0 vperp^2) exp(-(vperp-vperp0)^2/vth0^2) dvperp
+            #     = π^1.5 [0.5 vth0^3 0.5 vth0^2 (π^0.5 vperp0/vth0 (erf(vperp0/vth0) + 1) + exp(-vperp0^2/vth0^2)) + vth0 vth0^4 0.25 (π^0.5 vperp0/vth0 (2 vperp0^2/vth0^2 + 3) (erf(vperp0/vth0) + 1) + 2 exp(-vperp0^2/vth0^2) (vperp0^2/vth0^2 + 1))]
+            #     = 0.25 π^1.5 vth0^5 [(π^0.5 vperp0/vth0 (erf(vperp0/vth0) + 1) + exp(-vperp0^2/vth0^2)) + (π^0.5 vperp0/vth0 (2 vperp0^2/vth0^2 + 3) (erf(vperp0/vth0) + 1) + 2 exp(-vperp0^2/vth0^2) (vperp0^2/vth0^2 + 1))]
+            w = vperp0 / vth0
+            mom0 = π^1.5 * vth0^3 * (sqrt(π) * w * (erf(w) + 1.0) + exp(-w^2))
+            mom2 = 0.25 * π^1.5 * vth0^5 * (sqrt(π) * w * ((erf(w) + 1.0) + exp(-w^2)) + (sqrt(π) * w * (2.0 * w^2 + 3.0) * (erf(w) + 1.0) + 2.0 * exp(-w^2) * (w^2  + 1.0)))
+
+            T = 2.0 / 3.0 * mom2 / mom0
+            vth[iz] = sqrt(2.0 * T)
+            p[iz] = density[iz] * T
+
+            if evolve_p
+                vpa_unnorm = @. vpa.grid * vth[iz] + upar[iz]
+                vperp_unnorm = @. vperp.grid * vth[iz]
+            elseif evolve_upar
+                vpa_unnorm = @. vpa.grid + upar[iz]
+                vperp_unnorm = vperp.grid
+            else
+                vpa_unnorm = vpa.grid
+                vperp_unnorm = vperp.grid
+            end
             @loop_vperp_vpa ivperp ivpa begin
-                v2 = (vpa.grid[ivpa] - vpa0)^2 + (vperp.grid[ivperp] - vperp0)^2
+                v2 = (vpa_unnorm[ivpa] - vpa0)^2 + (vperp_unnorm[ivperp] - vperp0)^2
                 v2norm = vth0^2
                 pdf[ivpa,ivperp,iz] = Maxwellian_prefactor * exp(-v2/v2norm)
             end
