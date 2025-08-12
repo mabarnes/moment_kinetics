@@ -1407,8 +1407,18 @@ function init_ion_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
         vperp0 = spec.vpa_IC.vperp0 #0.5*abs(vperp.L) # centre of beam in vperp
         vth0 = spec.vpa_IC.vth0 #0.05*sqrt(vperp.L^2 + (0.5*vpa.L)^2) # width of beam in v 
         @loop_z iz begin
+            if evolve_p
+                vpa_unnorm = @. vpa.grid * vth[iz] + upar[iz]
+                vperp_unnorm = @. vperp.grid * vth[iz]
+            elseif evolve_upar
+                vpa_unnorm = @. vpa.grid + upar[iz]
+                vperp_unnorm = vperp.grid
+            else
+                vpa_unnorm = vpa.grid
+                vperp_unnorm = vperp.grid
+            end
             @loop_vperp_vpa ivperp ivpa begin
-                v2 = (vpa.grid[ivpa] - vpa0)^2 + (vperp.grid[ivperp] - vperp0)^2
+                v2 = (vpa_unnorm[ivpa] - vpa0)^2 + (vperp_unnorm[ivperp] - vperp0)^2
                 v2norm = vth0^2
                 pdf[ivpa,ivperp,iz] = Maxwellian_prefactor * exp(-v2/v2norm)
             end
