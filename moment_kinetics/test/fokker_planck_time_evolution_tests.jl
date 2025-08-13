@@ -18,7 +18,7 @@ using moment_kinetics.fokker_planck_test: F_Maxwellian, print_test_data
 using moment_kinetics.velocity_moments: get_density, get_upar, get_p
 
 # Create a temporary directory for test output
-test_output_directory = "runs" #tempname()
+test_output_directory = tempname()
 mkpath(test_output_directory)
 
 # The expected output
@@ -739,13 +739,13 @@ test_input_gauss_legendre = OptionsDict("output" => OptionsDict("run_name" => "g
                                                                               "vpa0" => sqrt(2) * 0.1,
                                                                               "vperp0" => sqrt(2) * 1.0,
                                                                               "vth0" => sqrt(2) * 0.5),
-                                        "vpa" => OptionsDict("ngrid" => 5,
+                                        "vpa" => OptionsDict("ngrid" => 3,
                                                              "L" => 8.485281374238571,
-                                                             "nelement" => 16,
+                                                             "nelement" => 6,
                                                              "bc" => "zero",
                                                              "discretization" => "gausslegendre_pseudospectral"),
-                                        "vperp" => OptionsDict("ngrid" => 5,
-                                                               "nelement" => 8,
+                                        "vperp" => OptionsDict("ngrid" => 3,
+                                                               "nelement" => 3,
                                                                "L" => 4.242640687119286,
                                                                "discretization" => "gausslegendre_pseudospectral"),
                                         "reactions" => OptionsDict("ionization_frequency" => 0.0,
@@ -766,7 +766,7 @@ test_input_gauss_legendre = OptionsDict("output" => OptionsDict("run_name" => "g
                                                            "ngrid" => 1,
                                                            "nelement" => 1,
                                                            "nelement_local" => 1),
-                                        "timestepping" => OptionsDict("dt" => 0.000070710678118654745,
+                                        "timestepping" => OptionsDict("dt" => 0.0070710678118654745,
                                                                       "nstep" => 5000,
                                                                       "nwrite" => 500,
                                                                       "nwrite_dfns" => 500))
