@@ -17,9 +17,6 @@ using moment_kinetics.input_structs: options_to_TOML
 using moment_kinetics.fokker_planck_test: F_Maxwellian, print_test_data
 using moment_kinetics.velocity_moments: get_density, get_upar, get_p
 
-const analytical_rtol = 3.e-2
-const regression_rtol = 2.e-8
-
 # Create a temporary directory for test output
 test_output_directory = "runs" #tempname()
 mkpath(test_output_directory)
