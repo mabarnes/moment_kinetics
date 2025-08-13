@@ -18,7 +18,7 @@ export read_distributed_zr_data!
 
 using ..array_allocation: allocate_float, allocate_int
 using ..boundary_conditions: create_boundary_info
-using ..calculus: derivative!
+using ..calculus: derivative!, integral
 using ..communication
 using ..continuity: continuity_equation!, neutral_continuity_equation!
 using ..coordinates: coordinate, define_coordinate
@@ -917,6 +917,22 @@ function reload_evolving_fields!(pdf, moments, fields, restart_prefix_iblock, ti
                 pdf.electron.norm .= 0.0
             end
 
+            if vperp.n > 1 && restart_coords.vperp.n == 1
+                # In the new 2V run, we set T_⟂=T_∥, so the new vth is sqrt(3) times
+                # bigger than the old vth.
+                moments.ion.p .*= 3.0
+                moments.ion.vth .*= sqrt(3.0)
+                moments.electron.p .*= 3.0
+                moments.electron.vth .*= sqrt(3.0)
+            elseif vperp.n == 1 && restart_coords.vperp.n > 1
+                # In the new 1V run, we set T_⟂=0, so the new vth is sqrt(3) times
+                # smaller than the old vth.
+                moments.ion.p ./= 3.0
+                moments.ion.vth ./= sqrt(3.0)
+                moments.electron.p ./= 3.0
+                moments.electron.vth ./= sqrt(3.0)
+            end
+
             if composition.n_neutral_species > 0
                 moments.neutral.dens .= reload_moment("density_neutral", dynamic,
                                                       time_index, coords, reload_ranges,
@@ -982,6 +998,18 @@ function reload_evolving_fields!(pdf, moments, fields, restart_prefix_iblock, ti
                                        reload_ranges, restart_coords,
                                        interpolation_needed, restart_evolve_density,
                                        restart_evolve_upar, restart_evolve_p)
+
+                if (vzeta.n > 1 || vr.n > 1) && (restart_coords.vzeta.n == 1 || restart_coords.vr.n == 1)
+                    # In the new 3V run, we set T_⟂=T_∥, so the new vth is sqrt(3) times
+                    # bigger than the old vth.
+                    moments.neutral.p .*= 3.0
+                    moments.neutral.vth .*= sqrt(3.0)
+                elseif (vzeta.n == 1 || vr.n == 1) && (restart_coords.vzeta.n > 1 || restart_coords.vr.n > 1)
+                    # In the new 1V run, we set T_⟂=0, so the new vth is sqrt(3) times
+                    # smaller than the old vth.
+                    moments.neutral.p ./= 3.0
+                    moments.neutral.vth ./= sqrt(3.0)
+                end
             end
 
             if "dt" ∈ keys(dynamic)
@@ -1399,32 +1427,103 @@ function regrid_ion_pdf(this_pdf, new_coords, old_coords, interpolation_needed, 
         this_pdf = new_pdf
     end
 
-    # Current moment-kinetic implementation is only 1V, so no need to handle a
-    # normalised vperp coordinate. This will need to change when 2V
-    # moment-kinetics is implemented.
-    if interpolation_needed["vperp"]
-        new_pdf = allocate_float(orig_nvpa, vperp.n, z.n, r.n, nspecies)
-        for is ∈ 1:nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivpa ∈ 1:orig_nvpa
-            @views interpolate_to_grid_1d!(
-                       new_pdf[ivpa,:,iz,ir,is], vperp.grid, this_pdf[ivpa,:,iz,ir,is],
-                       old_vperp, old_vperp_spectral)
+    interp_1V_to_2V = (old_vperp.n == 1 && vperp.n > 1)
+    interp_2V_to_1V = (old_vperp.n > 1 && vperp.n == 1)
+
+    # No interpolation needed if new and old are both 1V
+    if vperp.n > 1 || old_vperp.n > 1
+        if interp_2V_to_1V
+            # When converting from 2V to 1V, convert the vperp part of the distribution
+            # function to a delta function (so that it has T_⟂=0). When doing this keep
+            # the integral d^2v_⟂ the same. The 1V distribution function is marginalised
+            # over v_⟂, so is the coefficient in front of the δ^2(v_⟂), so its value is
+            # the integral over v_⟂ of the 2V distribution function.
+            new_pdf = allocate_float(orig_nvpa, vperp.n, z.n, r.n, nspecies)
+            for is ∈ 1:nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivpa ∈ 1:orig_nvpa
+                @views new_pdf[ivpa,1,iz,ir,is] = integral(this_pdf[ivpa,:,iz,ir,is], old_vperp.wgts)
+            end
+            this_pdf = new_pdf
+        elseif moments.evolve_p == old_evolve_p
+            # No chages to vperp coordinate, so just interpolate from one grid to the other
+            if interpolation_needed["vperp"]
+                new_pdf = allocate_float(orig_nvpa, vperp.n, z.n, r.n, nspecies)
+                for is ∈ 1:nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivpa ∈ 1:orig_nvpa
+                    @views interpolate_to_grid_1d!(
+                               new_pdf[ivpa,:,iz,ir,is], vperp.grid,
+                               this_pdf[ivpa,:,iz,ir,is], old_vperp, old_vperp_spectral)
+                end
+                this_pdf = new_pdf
+            end
+        elseif moments.evolve_p && !old_evolve_p
+            # vperp = new_wperp*vth = old_wperp
+            # => old_wperp = new_wperp*vth
+            new_pdf = allocate_float(orig_nvpa, vperp.n, z.n, r.n, nspecies)
+            for is ∈ 1:nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivpa ∈ 1:orig_nvpa
+                if interp_1V_to_2V
+                    # Interpolation from null coordinate constructs a Maxwellian with unit
+                    # vth on `old_vperp_vals`. We want this on the wperp grid, so don't
+                    # multiply by vth.
+                    old_vperp_vals = vperp.grid
+                else
+                    old_vperp_vals = vperp.grid .* moments.ion.vth[iz,ir,is]
+                end
+                @views interpolate_to_grid_1d!(
+                           new_pdf[ivpa,:,iz,ir,is], old_vperp_vals,
+                           this_pdf[ivpa,:,iz,ir,is], old_vperp, old_vperp_spectral)
+            end
+            this_pdf = new_pdf
+        elseif !moments.evolve_p && old_evolve_p
+            # vperp = old_wperp*vth
+            # => old_wperp = new_vperp/vth
+            new_pdf = allocate_float(orig_nvpa, vperp.n, z.n, r.n, nspecies)
+            for is ∈ 1:nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivpa ∈ 1:orig_nvpa
+                if old_vperp.n == 1
+                    # 'interpolation' from a null vperp coordinate does not account for
+                    # moment-kinetic stuff, just want to initialise the vperp part of the
+                    # distribution function with the reference temperature.
+                    old_vperp_vals = vperp.grid
+                else
+                    old_vperp_vals = vperp.grid ./ moments.ion.vth[iz,ir,is]
+                end
+                @views interpolate_to_grid_1d!(
+                           new_pdf[ivpa,:,iz,ir,is], old_vperp_vals,
+                           this_pdf[ivpa,:,iz,ir,is], old_vperp, old_vperp_spectral)
+            end
+            this_pdf = new_pdf
+        else
+            # This should never happen, as all combinations of evolve_* options
+            # should be handled above.
+            error("Unsupported combination of moment-kinetic options:"
+                  * " evolve_density=", moments.evolve_density
+                  * " evolve_upar=", moments.evolve_upar
+                  * " evolve_p=", moments.evolve_p
+                  * " old_evolve_density=", old_evolve_density
+                  * " old_evolve_upar=", old_evolve_upar
+                  * " old_evolve_p=", old_evolve_p)
         end
-        this_pdf = new_pdf
     end
 
-    if (
-        (moments.evolve_density == old_evolve_density &&
-         moments.evolve_upar == old_evolve_upar && moments.evolve_p == old_evolve_p)
-        || (!moments.evolve_upar && !old_evolve_upar && !moments.evolve_p &&
-            !old_evolve_p)
-       )
+    if (moments.evolve_upar == old_evolve_upar && moments.evolve_p == old_evolve_p)
         # No chages to velocity-space coordinates, so just interpolate from
         # one grid to the other
-        if interpolation_needed["vpa"]
+        if interpolation_needed["vpa"] || (moments.evolve_p && (interp_1V_to_2V || interp_2V_to_1V))
+            if interp_1V_to_2V && moments.evolve_p
+                # In the new 2V run, we set T_⟂=T_∥, so the new vth is sqrt(3) times
+                # bigger than the old vth.
+                # old_wpa = vpa / old_vth = new_vth * new_wpa / old_vth = sqrt(3) * new_wpa
+                old_vpa_vals = vpa.grid .* sqrt(3)
+            elseif interp_2V_to_1V && moments.evolve_p
+                # In the new 1V run, we set T_⟂=0, so the new vth is sqrt(3) times
+                # smaller than the old vth.
+                # old_wpa = vpa / old_vth = new_vth * new_wpa / old_vth = new_wpa / sqrt(3)
+                old_vpa_vals = vpa.grid ./ sqrt(3)
+            else
+                old_vpa_vals = vpa.grid
+            end
             new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n, nspecies)
             for is ∈ 1:nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
                 @views interpolate_to_grid_1d!(
-                           new_pdf[:,ivperp,iz,ir,is], vpa.grid,
+                           new_pdf[:,ivperp,iz,ir,is], old_vpa_vals,
                            this_pdf[:,ivperp,iz,ir,is], old_vpa, old_vpa_spectral)
             end
             this_pdf = new_pdf
@@ -1502,7 +1601,18 @@ function regrid_ion_pdf(this_pdf, new_coords, old_coords, interpolation_needed, 
         # => old_wpa = new_wpa*vth
         new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n, nspecies)
         for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
-            old_vpa_vals = vpa.grid .* moments.ion.vth[iz,ir,is]
+            if interp_1V_to_2V
+                # At this point vth is the vth from the old run (interpolated onto the new
+                # spatial grid), which will be multiplied by sqrt(3) to give the vth for
+                # the new run.
+                old_vpa_vals = @. vpa.grid * sqrt(3.0) * moments.ion.vth[iz,ir,is]
+            elseif interp_2V_to_1V
+                # In the new 1V run, we set T_⟂=0, so the new vth is sqrt(3) times
+                # smaller than the old vth.
+                old_vpa_vals = @. vpa.grid / sqrt(3.0) * moments.ion.vth[iz,ir,is]
+            else
+                old_vpa_vals = vpa.grid .* moments.ion.vth[iz,ir,is]
+            end
             @views interpolate_to_grid_1d!(
                        new_pdf[:,ivperp,iz,ir,is], old_vpa_vals,
                        this_pdf[:,ivperp,iz,ir,is], old_vpa, old_vpa_spectral)
@@ -1513,7 +1623,18 @@ function regrid_ion_pdf(this_pdf, new_coords, old_coords, interpolation_needed, 
         # => old_wpa = new_wpa*vth - upar/vth
         new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n, nspecies)
         for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
-            old_vpa_vals = @. vpa.grid * moments.ion.vth[iz,ir,is] - moments.ion.upar[iz,ir,is]
+            if interp_1V_to_2V
+                # At this point vth is the vth from the old run (interpolated onto the new
+                # spatial grid), which will be multiplied by sqrt(3) to give the vth for
+                # the new run.
+                old_vpa_vals = @. vpa.grid * sqrt(3.0) * moments.ion.vth[iz,ir,is] - moments.ion.upar[iz,ir,is]
+            elseif interp_2V_to_1V
+                # In the new 1V run, we set T_⟂=0, so the new vth is sqrt(3) times
+                # smaller than the old vth.
+                old_vpa_vals = @. vpa.grid / sqrt(3.0) * moments.ion.vth[iz,ir,is] - moments.ion.upar[iz,ir,is]
+            else
+                old_vpa_vals = @. vpa.grid * moments.ion.vth[iz,ir,is] - moments.ion.upar[iz,ir,is]
+            end
             @views interpolate_to_grid_1d!(
                        new_pdf[:,ivperp,iz,ir,is], old_vpa_vals,
                        this_pdf[:,ivperp,iz,ir,is], old_vpa, old_vpa_spectral)
@@ -1524,8 +1645,21 @@ function regrid_ion_pdf(this_pdf, new_coords, old_coords, interpolation_needed, 
         # => old_wpa = new_wpa - upar/vth
         new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n, nspecies)
         for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
-            old_vpa_vals =
-            @. vpa.grid - moments.ion.upar[iz,ir,is]/moments.ion.vth[iz,ir,is]
+            if interp_1V_to_2V
+                # At this point vth is the vth from the old run (interpolated onto the new
+                # spatial grid), which will be multiplied by sqrt(3) to give the vth for
+                # the new run.
+                old_vpa_vals =
+                @. vpa.grid * sqrt(3.0) - moments.ion.upar[iz,ir,is]/moments.ion.vth[iz,ir,is]
+            elseif interp_2V_to_1V
+                # In the new 1V run, we set T_⟂=0, so the new vth is sqrt(3) times
+                # smaller than the old vth.
+                old_vpa_vals =
+                @. vpa.grid / sqrt(3.0) - moments.ion.upar[iz,ir,is]/moments.ion.vth[iz,ir,is]
+            else
+                old_vpa_vals =
+                @. vpa.grid - moments.ion.upar[iz,ir,is]/moments.ion.vth[iz,ir,is]
+            end
             @views interpolate_to_grid_1d!(
                        new_pdf[:,ivperp,iz,ir,is], old_vpa_vals,
                        this_pdf[:,ivperp,iz,ir,is], old_vpa, old_vpa_spectral)
@@ -1536,7 +1670,18 @@ function regrid_ion_pdf(this_pdf, new_coords, old_coords, interpolation_needed, 
         # => old_wpa = new_wpa*vth + upar
         new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n, nspecies)
         for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
-            old_vpa_vals = @. vpa.grid * moments.ion.vth[iz,ir,is] + moments.ion.upar[iz,ir,is]
+            if interp_1V_to_2V
+                # At this point vth is the vth from the old run (interpolated onto the new
+                # spatial grid), which will be multiplied by sqrt(3) to give the vth for
+                # the new run.
+                old_vpa_vals = @. vpa.grid * sqrt(3.0) * moments.ion.vth[iz,ir,is] + moments.ion.upar[iz,ir,is]
+            elseif interp_2V_to_1V
+                # In the new 1V run, we set T_⟂=0, so the new vth is sqrt(3) times
+                # smaller than the old vth.
+                old_vpa_vals = @. vpa.grid / sqrt(3.0) * moments.ion.vth[iz,ir,is] + moments.ion.upar[iz,ir,is]
+            else
+                old_vpa_vals = @. vpa.grid * moments.ion.vth[iz,ir,is] + moments.ion.upar[iz,ir,is]
+            end
             @views interpolate_to_grid_1d!(
                        new_pdf[:,ivperp,iz,ir,is], old_vpa_vals,
                        this_pdf[:,ivperp,iz,ir,is], old_vpa, old_vpa_spectral)
@@ -1547,7 +1692,18 @@ function regrid_ion_pdf(this_pdf, new_coords, old_coords, interpolation_needed, 
         # => old_wpa = new_wpa*vth
         new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n, nspecies)
         for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
-            old_vpa_vals = vpa.grid .* moments.ion.vth[iz,ir,is]
+            if interp_1V_to_2V
+                # At this point vth is the vth from the old run (interpolated onto the new
+                # spatial grid), which will be multiplied by sqrt(3) to give the vth for
+                # the new run.
+                old_vpa_vals = @. vpa.grid * sqrt(3.0) * moments.ion.vth[iz,ir,is]
+            elseif interp_2V_to_1V
+                # In the new 1V run, we set T_⟂=0, so the new vth is sqrt(3) times
+                # smaller than the old vth.
+                old_vpa_vals = @. vpa.grid / sqrt(3.0) * moments.ion.vth[iz,ir,is]
+            else
+                old_vpa_vals = vpa.grid .* moments.ion.vth[iz,ir,is]
+            end
             @views interpolate_to_grid_1d!(
                        new_pdf[:,ivperp,iz,ir,is], old_vpa_vals,
                        this_pdf[:,ivperp,iz,ir,is], old_vpa, old_vpa_spectral)
@@ -1558,8 +1714,21 @@ function regrid_ion_pdf(this_pdf, new_coords, old_coords, interpolation_needed, 
         # => old_wpa = new_wpa + upar/vth
         new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n, nspecies)
         for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
-            old_vpa_vals =
-            @. vpa.grid + moments.ion.upar[iz,ir,is] / moments.ion.vth[iz,ir,is]
+            if interp_1V_to_2V
+                # At this point vth is the vth from the old run (interpolated onto the new
+                # spatial grid), which will be multiplied by sqrt(3) to give the vth for
+                # the new run.
+                old_vpa_vals =
+                @. vpa.grid * sqrt(3.0) + moments.ion.upar[iz,ir,is] / moments.ion.vth[iz,ir,is]
+            elseif interp_2V_to_1V
+                # In the new 1V run, we set T_⟂=0, so the new vth is sqrt(3) times
+                # smaller than the old vth.
+                old_vpa_vals =
+                @. vpa.grid / sqrt(3.0) + moments.ion.upar[iz,ir,is] / moments.ion.vth[iz,ir,is]
+            else
+                old_vpa_vals =
+                @. vpa.grid + moments.ion.upar[iz,ir,is] / moments.ion.vth[iz,ir,is]
+            end
             @views interpolate_to_grid_1d!(
                        new_pdf[:,ivperp,iz,ir,is], old_vpa_vals,
                        this_pdf[:,ivperp,iz,ir,is], old_vpa, old_vpa_spectral)
@@ -1569,12 +1738,12 @@ function regrid_ion_pdf(this_pdf, new_coords, old_coords, interpolation_needed, 
         # This should never happen, as all combinations of evolve_* options
         # should be handled above.
         error("Unsupported combination of moment-kinetic options:"
-              * " evolve_density=", moments.evolve_density
-              * " evolve_upar=", moments.evolve_upar
-              * " evolve_p=", moments.evolve_p
-              * " old_evolve_density=", old_evolve_density
-              * " old_evolve_upar=", old_evolve_upar
-              * " old_evolve_p=", old_evolve_p)
+              * " evolve_density=$(moments.evolve_density)"
+              * " evolve_upar=$(moments.evolve_upar)"
+              * " evolve_p=$(moments.evolve_p)"
+              * " old_evolve_density=$(old_evolve_density)"
+              * " old_evolve_upar=$(old_evolve_upar)"
+              * " old_evolve_p=$(old_evolve_p)")
     end
     if moments.evolve_density && !old_evolve_density
         # Need to normalise by density
@@ -1589,13 +1758,57 @@ function regrid_ion_pdf(this_pdf, new_coords, old_coords, interpolation_needed, 
     end
     if moments.evolve_p && !old_evolve_p
         # Need to normalise by vth
-        for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n
-            this_pdf[:,:,iz,ir,is] .*= moments.ion.vth[iz,ir,is]
+        if vperp.n == 1
+            if interp_2V_to_1V
+                # vth is 2V vth at this point, need to adjust to 1V
+                for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n
+                    this_pdf[:,:,iz,ir,is] .*= moments.ion.vth[iz,ir,is] / sqrt(3.0)
+                end
+            else
+                for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n
+                    this_pdf[:,:,iz,ir,is] .*= moments.ion.vth[iz,ir,is]
+                end
+            end
+        else
+            if interp_1V_to_2V
+                # vth is 1V vth at this point, need to adjust to 2V
+                for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n
+                    this_pdf[:,:,iz,ir,is] .*= (moments.ion.vth[iz,ir,is] * sqrt(3.0))
+                end
+            else
+                for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n
+                    this_pdf[:,:,iz,ir,is] .*= moments.ion.vth[iz,ir,is]^3
+                end
+            end
         end
     elseif !moments.evolve_p && old_evolve_p
         # Need to unnormalise by vth
-        for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n
-            this_pdf[:,:,iz,ir,is] ./= moments.ion.vth[iz,ir,is]
+        if old_vperp.n == 1
+            for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n
+                this_pdf[:,:,iz,ir,is] ./= moments.ion.vth[iz,ir,is]
+            end
+        else
+            if interp_2V_to_1V
+                # Have already integrated out the vperp dimensions, so only divide out one
+                # power of vth here.
+                for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n
+                    this_pdf[:,:,iz,ir,is] ./= moments.ion.vth[iz,ir,is]
+                end
+            else
+                for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n
+                    this_pdf[:,:,iz,ir,is] ./= moments.ion.vth[iz,ir,is]^3
+                end
+            end
+        end
+    elseif moments.evolve_p && old_evolve_p
+        if interp_1V_to_2V
+            for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n
+                this_pdf[:,:,iz,ir,is] .*= sqrt(3.0)
+            end
+        elseif interp_2V_to_1V
+            for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n
+                this_pdf[:,:,iz,ir,is] ./= sqrt(3.0)
+            end
         end
     end
 
@@ -1616,11 +1829,23 @@ function reload_electron_pdf(dynamic, time_index, moments, coords, reload_ranges
 end
 
 function regrid_electron_pdf(this_pdf, new_coords, old_coords, interpolation_needed,
-                             moments, old_evolve_density, old_evolve_upar, old_evolve_p)
-    # Currently, electrons are always fully moment-kinetic
-    evolve_density = true
-    evolve_upar = true
-    evolve_p = true
+                             moments, old_evolve_density, old_evolve_upar, old_evolve_p;
+                             allow_unsupported_options=false)
+    # allow_unsupported_options allows tests to check branches that are not currently
+    # supported in the main code.
+    if !allow_unsupported_options
+        # Currently, electrons are always fully moment-kinetic
+        evolve_density = true
+        evolve_upar = true
+        evolve_p = true
+        old_evolve_density = true
+        old_evolve_upar = true
+        old_evolve_p = true
+    else
+        evolve_density = moments.evolve_density
+        evolve_upar = moments.evolve_density
+        evolve_p = moments.evolve_density
+    end
 
     z = new_coords.z
     r = new_coords.r
@@ -1640,8 +1865,8 @@ function regrid_electron_pdf(this_pdf, new_coords, old_coords, interpolation_nee
         for iz ∈ 1:orig_nz, ivperp ∈ 1:orig_nvperp,
             ivpa ∈ 1:orig_nvpa
             @views interpolate_to_grid_1d!(
-                       new_pdf[ivpa,ivperp,iz,:], r.grid, this_pdf[ivpa,ivperp,iz,:],
-                       old_r, old_r_spectral)
+                       new_pdf[ivpa,ivperp,iz,:], r.grid,
+                       this_pdf[ivpa,ivperp,iz,:], old_r, old_r_spectral)
         end
         this_pdf = new_pdf
     end
@@ -1650,212 +1875,394 @@ function regrid_electron_pdf(this_pdf, new_coords, old_coords, interpolation_nee
         for ir ∈ 1:r.n, ivperp ∈ 1:orig_nvperp,
             ivpa ∈ 1:orig_nvpa
             @views interpolate_to_grid_1d!(
-                       new_pdf[ivpa,ivperp,:,ir], z.grid, this_pdf[ivpa,ivperp,:,ir],
-                       old_z, old_z_spectral)
+                       new_pdf[ivpa,ivperp,:,ir], z.grid,
+                       this_pdf[ivpa,ivperp,:,ir], old_z, old_z_spectral)
         end
         this_pdf = new_pdf
     end
 
-    # Current moment-kinetic implementation is only 1V, so no need to handle a
-    # normalised vperp coordinate. This will need to change when 2V
-    # moment-kinetics is implemented.
-    if interpolation_needed["vperp"]
-        new_pdf = allocate_float(orig_nvpa, vperp.n, z.n, r.n)
-        for ir ∈ 1:r.n, iz ∈ 1:z.n, ivpa ∈ 1:orig_nvpa
-            @views interpolate_to_grid_1d!(
-                       new_pdf[ivpa,:,iz,ir], vperp.grid, this_pdf[ivpa,:,iz,ir],
-                       old_vperp, old_vperp_spectral)
+    interp_1V_to_2V = (old_vperp.n == 1 && vperp.n > 1)
+    interp_2V_to_1V = (old_vperp.n > 1 && vperp.n == 1)
+
+    # No interpolation needed if new and old are both 1V
+    if vperp.n > 1 || old_vperp.n > 1
+        if interp_2V_to_1V
+            # When converting from 2V to 1V, convert the vperp part of the distribution
+            # function to a delta function (so that it has T_⟂=0). When doing this keep
+            # the integral d^2v_⟂ the same. The 1V distribution function is marginalised
+            # over v_⟂, so is the coefficient in front of the δ^2(v_⟂), so its value is
+            # the integral over v_⟂ of the 2V distribution function.
+            new_pdf = allocate_float(orig_nvpa, vperp.n, z.n, r.n)
+            for ir ∈ 1:r.n, iz ∈ 1:z.n, ivpa ∈ 1:orig_nvpa
+                @views new_pdf[ivpa,1,iz,ir] = integral(this_pdf[ivpa,:,iz,ir], old_vperp.wgts)
+            end
+            this_pdf = new_pdf
+        elseif moments.evolve_p == old_evolve_p
+            # No chages to vperp coordinate, so just interpolate from one grid to the other
+            if interpolation_needed["vperp"]
+                new_pdf = allocate_float(orig_nvpa, vperp.n, z.n, r.n)
+                for ir ∈ 1:r.n, iz ∈ 1:z.n, ivpa ∈ 1:orig_nvpa
+                    @views interpolate_to_grid_1d!(
+                               new_pdf[ivpa,:,iz,ir], vperp.grid,
+                               this_pdf[ivpa,:,iz,ir], old_vperp, old_vperp_spectral)
+                end
+                this_pdf = new_pdf
+            end
+        elseif moments.evolve_p && !old_evolve_p
+            # vperp = new_wperp*vth = old_wperp
+            # => old_wperp = new_wperp*vth
+            new_pdf = allocate_float(orig_nvpa, vperp.n, z.n, r.n)
+            for ir ∈ 1:r.n, iz ∈ 1:z.n, ivpa ∈ 1:orig_nvpa
+                if interp_1V_to_2V
+                    # Interpolation from null coordinate constructs a Maxwellian with unit
+                    # vth on `old_vperp_vals`. We want this on the wperp grid, so don't
+                    # multiply by vth.
+                    old_vperp_vals = vperp.grid
+                else
+                    old_vperp_vals = vperp.grid .* moments.electron.vth[iz,ir]
+                end
+                @views interpolate_to_grid_1d!(
+                           new_pdf[ivpa,:,iz,ir], old_vperp_vals,
+                           this_pdf[ivpa,:,iz,ir], old_vperp, old_vperp_spectral)
+            end
+            this_pdf = new_pdf
+        elseif !moments.evolve_p && old_evolve_p
+            # vperp = old_wperp*vth
+            # => old_wperp = new_vperp/vth
+            new_pdf = allocate_float(orig_nvpa, vperp.n, z.n, r.n)
+            for ir ∈ 1:r.n, iz ∈ 1:z.n, ivpa ∈ 1:orig_nvpa
+                if old_vperp.n == 1
+                    # 'interpolation' from a null vperp coordinate does not account for
+                    # moment-kinetic stuff, just want to initialise the vperp part of the
+                    # distribution function with the reference temperature.
+                    old_vperp_vals = vperp.grid
+                else
+                    old_vperp_vals = vperp.grid ./ moments.electron.vth[iz,ir]
+                end
+                @views interpolate_to_grid_1d!(
+                           new_pdf[ivpa,:,iz,ir], old_vperp_vals,
+                           this_pdf[ivpa,:,iz,ir], old_vperp, old_vperp_spectral)
+            end
+            this_pdf = new_pdf
+        else
+            # This should never happen, as all combinations of evolve_* options
+            # should be handled above.
+            error("Unsupported combination of moment-kinetic options:"
+                  * " evolve_density=", moments.evolve_density
+                  * " evolve_upar=", moments.evolve_upar
+                  * " evolve_p=", moments.evolve_p
+                  * " old_evolve_density=", old_evolve_density
+                  * " old_evolve_upar=", old_evolve_upar
+                  * " old_evolve_p=", old_evolve_p)
         end
-        this_pdf = new_pdf
     end
 
-    if (
-        (evolve_density == old_evolve_density &&
-         evolve_upar == old_evolve_upar && evolve_p == old_evolve_p)
-        || (!evolve_upar && !old_evolve_upar && !evolve_p && !old_evolve_p)
-       )
+    if (moments.evolve_upar == old_evolve_upar && moments.evolve_p == old_evolve_p)
         # No chages to velocity-space coordinates, so just interpolate from
         # one grid to the other
-        if interpolation_needed["vpa"]
+        if interpolation_needed["vpa"] || (moments.evolve_p && (interp_1V_to_2V || interp_2V_to_1V))
+            if interp_1V_to_2V && moments.evolve_p
+                # In the new 2V run, we set T_⟂=T_∥, so the new vth is sqrt(3) times
+                # bigger than the old vth.
+                # old_wpa = vpa / old_vth = new_vth * new_wpa / old_vth = sqrt(3) * new_wpa
+                old_vpa_vals = vpa.grid .* sqrt(3)
+            elseif interp_2V_to_1V && moments.evolve_p
+                # In the new 1V run, we set T_⟂=0, so the new vth is sqrt(3) times
+                # smaller than the old vth.
+                # old_wpa = vpa / old_vth = new_vth * new_wpa / old_vth = new_wpa / sqrt(3)
+                old_vpa_vals = vpa.grid ./ sqrt(3)
+            else
+                old_vpa_vals = vpa.grid
+            end
             new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n)
             for ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
                 @views interpolate_to_grid_1d!(
-                           new_pdf[:,ivperp,iz,ir], vpa.grid, this_pdf[:,ivperp,iz,ir],
-                           old_vpa, old_vpa_spectral)
+                           new_pdf[:,ivperp,iz,ir], old_vpa_vals,
+                           this_pdf[:,ivperp,iz,ir], old_vpa, old_vpa_spectral)
             end
             this_pdf = new_pdf
         end
-    elseif (!evolve_upar && !evolve_p && old_evolve_upar && !old_evolve_p)
+    elseif (!moments.evolve_upar && !moments.evolve_p && old_evolve_upar && !old_evolve_p)
         # vpa = new_wpa = old_wpa + upar
         # => old_wpa = new_wpa - upar
         new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n)
         for ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
             old_vpa_vals = vpa.grid .- moments.electron.upar[iz,ir]
             @views interpolate_to_grid_1d!(
-                       new_pdf[:,ivperp,iz,ir], old_vpa_vals, this_pdf[:,ivperp,iz,ir],
-                       old_vpa, old_vpa_spectral)
+                       new_pdf[:,ivperp,iz,ir], old_vpa_vals,
+                       this_pdf[:,ivperp,iz,ir], old_vpa, old_vpa_spectral)
         end
         this_pdf = new_pdf
-    elseif (!evolve_upar && !evolve_p && !old_evolve_upar && old_evolve_p)
+    elseif (!moments.evolve_upar && !moments.evolve_p && !old_evolve_upar && old_evolve_p)
         # vpa = new_wpa = old_wpa*vth
         # => old_wpa = new_wpa/vth
         new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n)
         for ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
             old_vpa_vals = vpa.grid ./ moments.electron.vth[iz,ir]
             @views interpolate_to_grid_1d!(
-                       new_pdf[:,ivperp,iz,ir], old_vpa_vals, this_pdf[:,ivperp,iz,ir],
-                       old_vpa, old_vpa_spectral)
+                       new_pdf[:,ivperp,iz,ir], old_vpa_vals,
+                       this_pdf[:,ivperp,iz,ir], old_vpa, old_vpa_spectral)
         end
         this_pdf = new_pdf
-    elseif (!evolve_upar && !evolve_p && old_evolve_upar && old_evolve_p)
+    elseif (!moments.evolve_upar && !moments.evolve_p && old_evolve_upar && old_evolve_p)
         # vpa = new_wpa = old_wpa*vth + upar
         # => old_wpa = (new_wpa - upar)/vth
         new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n)
         for ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
             old_vpa_vals =
-            @. (vpa.grid - moments.electron.upar[iz,ir]) /
-                moments.electron.vth[iz,ir]
+            @. (vpa.grid - moments.electron.upar[iz,ir]) / moments.electron.vth[iz,ir]
             @views interpolate_to_grid_1d!(
-                       new_pdf[:,ivperp,iz,ir], old_vpa_vals, this_pdf[:,ivperp,iz,ir],
-                       old_vpa, old_vpa_spectral)
+                       new_pdf[:,ivperp,iz,ir], old_vpa_vals,
+                       this_pdf[:,ivperp,iz,ir], old_vpa, old_vpa_spectral)
         end
         this_pdf = new_pdf
-    elseif (evolve_upar && !evolve_p && !old_evolve_upar && !old_evolve_p)
+    elseif (moments.evolve_upar && !moments.evolve_p && !old_evolve_upar && !old_evolve_p)
         # vpa = new_wpa + upar = old_wpa
         # => old_wpa = new_wpa + upar
         new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n)
         for ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
             old_vpa_vals = vpa.grid .+ moments.electron.upar[iz,ir]
             @views interpolate_to_grid_1d!(
-                       new_pdf[:,ivperp,iz,ir], old_vpa_vals, this_pdf[:,ivperp,iz,ir],
-                       old_vpa, old_vpa_spectral)
+                       new_pdf[:,ivperp,iz,ir], old_vpa_vals,
+                       this_pdf[:,ivperp,iz,ir], old_vpa, old_vpa_spectral)
         end
         this_pdf = new_pdf
-    elseif (evolve_upar && !evolve_p && !old_evolve_upar && old_evolve_p)
+    elseif (moments.evolve_upar && !moments.evolve_p && !old_evolve_upar && old_evolve_p)
         # vpa = new_wpa + upar = old_wpa*vth
         # => old_wpa = (new_wpa + upar)/vth
         new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n)
         for ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
             old_vpa_vals =
-            @. (vpa.grid + moments.electron.upar[iz,ir]) /
-                moments.electron.vth
+            @. (vpa.grid + moments.electron.upar[iz,ir]) / moments.electron.vth[iz,ir]
             @views interpolate_to_grid_1d!(
-                       new_pdf[:,ivperp,iz,ir], old_vpa_vals, this_pdf[:,ivperp,iz,ir],
-                       old_vpa, old_vpa_spectral)
+                       new_pdf[:,ivperp,iz,ir], old_vpa_vals,
+                       this_pdf[:,ivperp,iz,ir], old_vpa, old_vpa_spectral)
         end
         this_pdf = new_pdf
-    elseif (evolve_upar && !evolve_p && old_evolve_upar && old_evolve_p)
+    elseif (moments.evolve_upar && !moments.evolve_p && old_evolve_upar && old_evolve_p)
         # vpa = new_wpa + upar = old_wpa*vth + upar
         # => old_wpa = new_wpa/vth
         new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n)
         for ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
             old_vpa_vals = vpa.grid ./ moments.electron.vth[iz,ir]
             @views interpolate_to_grid_1d!(
-                       new_pdf[:,ivperp,iz,ir], old_vpa_vals, this_pdf[:,ivperp,iz,ir],
-                       old_vpa, old_vpa_spectral)
+                       new_pdf[:,ivperp,iz,ir], old_vpa_vals,
+                       this_pdf[:,ivperp,iz,ir], old_vpa, old_vpa_spectral)
         end
         this_pdf = new_pdf
-    elseif (!evolve_upar && evolve_p && !old_evolve_upar && !old_evolve_p)
+    elseif (!moments.evolve_upar && moments.evolve_p && !old_evolve_upar && !old_evolve_p)
         # vpa = new_wpa*vth = old_wpa
         # => old_wpa = new_wpa*vth
         new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n)
         for ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
-            old_vpa_vals = vpa.grid .* moments.electron.vth[iz,ir]
+            if interp_1V_to_2V
+                # At this point vth is the vth from the old run (interpolated onto the new
+                # spatial grid), which will be multiplied by sqrt(3) to give the vth for
+                # the new run.
+                old_vpa_vals = @. vpa.grid * sqrt(3.0) * moments.electron.vth[iz,ir]
+            elseif interp_2V_to_1V
+                # In the new 1V run, we set T_⟂=0, so the new vth is sqrt(3) times
+                # smaller than the old vth.
+                old_vpa_vals = @. vpa.grid / sqrt(3.0) * moments.electron.vth[iz,ir]
+            else
+                old_vpa_vals = vpa.grid .* moments.electron.vth[iz,ir]
+            end
             @views interpolate_to_grid_1d!(
-                       new_pdf[:,ivperp,iz,ir], old_vpa_vals, this_pdf[:,ivperp,iz,ir],
-                       old_vpa, old_vpa_spectral)
+                       new_pdf[:,ivperp,iz,ir], old_vpa_vals,
+                       this_pdf[:,ivperp,iz,ir], old_vpa, old_vpa_spectral)
         end
         this_pdf = new_pdf
-    elseif (!evolve_upar && evolve_p && old_evolve_upar && !old_evolve_p)
+    elseif (!moments.evolve_upar && moments.evolve_p && old_evolve_upar && !old_evolve_p)
         # vpa = new_wpa*vth = old_wpa + upar
         # => old_wpa = new_wpa*vth - upar/vth
         new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n)
         for ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
-            old_vpa_vals = @. vpa.grid * moments.electron.vth[iz,ir] -
-                              moments.electron.upar[iz,ir]
+            if interp_1V_to_2V
+                # At this point vth is the vth from the old run (interpolated onto the new
+                # spatial grid), which will be multiplied by sqrt(3) to give the vth for
+                # the new run.
+                old_vpa_vals = @. vpa.grid * sqrt(3.0) * moments.electron.vth[iz,ir] - moments.electron.upar[iz,ir]
+            elseif interp_2V_to_1V
+                # In the new 1V run, we set T_⟂=0, so the new vth is sqrt(3) times
+                # smaller than the old vth.
+                old_vpa_vals = @. vpa.grid / sqrt(3.0) * moments.electron.vth[iz,ir] - moments.electron.upar[iz,ir]
+            else
+                old_vpa_vals = @. vpa.grid * moments.electron.vth[iz,ir] - moments.electron.upar[iz,ir]
+            end
             @views interpolate_to_grid_1d!(
-                       new_pdf[:,ivperp,iz,ir], old_vpa_vals, this_pdf[:,ivperp,iz,ir],
-                       old_vpa, old_vpa_spectral)
+                       new_pdf[:,ivperp,iz,ir], old_vpa_vals,
+                       this_pdf[:,ivperp,iz,ir], old_vpa, old_vpa_spectral)
         end
         this_pdf = new_pdf
-    elseif (!evolve_upar && evolve_p && old_evolve_upar && old_evolve_p)
+    elseif (!moments.evolve_upar && moments.evolve_p && old_evolve_upar && old_evolve_p)
         # vpa = new_wpa*vth = old_wpa*vth + upar
         # => old_wpa = new_wpa - upar/vth
         new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n)
         for ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
-            old_vpa_vals =
-            @. vpa.grid - moments.electron.upar[iz,ir]/moments.electron.vth[iz,ir]
+            if interp_1V_to_2V
+                # At this point vth is the vth from the old run (interpolated onto the new
+                # spatial grid), which will be multiplied by sqrt(3) to give the vth for
+                # the new run.
+                old_vpa_vals =
+                @. vpa.grid * sqrt(3.0) - moments.electron.upar[iz,ir]/moments.electron.vth[iz,ir]
+            elseif interp_2V_to_1V
+                # In the new 1V run, we set T_⟂=0, so the new vth is sqrt(3) times
+                # smaller than the old vth.
+                old_vpa_vals =
+                @. vpa.grid / sqrt(3.0) - moments.electron.upar[iz,ir]/moments.electron.vth[iz,ir]
+            else
+                old_vpa_vals =
+                @. vpa.grid - moments.electron.upar[iz,ir]/moments.electron.vth[iz,ir]
+            end
             @views interpolate_to_grid_1d!(
-                       new_pdf[:,ivperp,iz,ir], old_vpa_vals, this_pdf[:,ivperp,iz,ir],
-                       old_vpa, old_vpa_spectral)
+                       new_pdf[:,ivperp,iz,ir], old_vpa_vals,
+                       this_pdf[:,ivperp,iz,ir], old_vpa, old_vpa_spectral)
         end
         this_pdf = new_pdf
-    elseif (evolve_upar && evolve_p && !old_evolve_upar && !old_evolve_p)
+    elseif (moments.evolve_upar && moments.evolve_p && !old_evolve_upar && !old_evolve_p)
         # vpa = new_wpa*vth + upar = old_wpa
         # => old_wpa = new_wpa*vth + upar
         new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n)
         for ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
-            old_vpa_vals = @. vpa.grid * moments.electron.vth[iz,ir] +
-                              moments.electron.upar[iz,ir]
+            if interp_1V_to_2V
+                # At this point vth is the vth from the old run (interpolated onto the new
+                # spatial grid), which will be multiplied by sqrt(3) to give the vth for
+                # the new run.
+                old_vpa_vals = @. vpa.grid * sqrt(3.0) * moments.electron.vth[iz,ir] + moments.electron.upar[iz,ir]
+            elseif interp_2V_to_1V
+                # In the new 1V run, we set T_⟂=0, so the new vth is sqrt(3) times
+                # smaller than the old vth.
+                old_vpa_vals = @. vpa.grid / sqrt(3.0) * moments.electron.vth[iz,ir] + moments.electron.upar[iz,ir]
+            else
+                old_vpa_vals = @. vpa.grid * moments.electron.vth[iz,ir] + moments.electron.upar[iz,ir]
+            end
             @views interpolate_to_grid_1d!(
-                       new_pdf[:,ivperp,iz,ir], old_vpa_vals, this_pdf[:,ivperp,iz,ir],
-                       old_vpa, old_vpa_spectral)
+                       new_pdf[:,ivperp,iz,ir], old_vpa_vals,
+                       this_pdf[:,ivperp,iz,ir], old_vpa, old_vpa_spectral)
         end
         this_pdf = new_pdf
-    elseif (evolve_upar && evolve_p && old_evolve_upar && !old_evolve_p)
+    elseif (moments.evolve_upar && moments.evolve_p && old_evolve_upar && !old_evolve_p)
         # vpa = new_wpa*vth + upar = old_wpa + upar
         # => old_wpa = new_wpa*vth
         new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n)
         for ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
-            old_vpa_vals = vpa.grid .* moments.electron.vth[iz,ir]
+            if interp_1V_to_2V
+                # At this point vth is the vth from the old run (interpolated onto the new
+                # spatial grid), which will be multiplied by sqrt(3) to give the vth for
+                # the new run.
+                old_vpa_vals = @. vpa.grid * sqrt(3.0) * moments.electron.vth[iz,ir]
+            elseif interp_2V_to_1V
+                # In the new 1V run, we set T_⟂=0, so the new vth is sqrt(3) times
+                # smaller than the old vth.
+                old_vpa_vals = @. vpa.grid / sqrt(3.0) * moments.electron.vth[iz,ir]
+            else
+                old_vpa_vals = vpa.grid .* moments.electron.vth[iz,ir]
+            end
             @views interpolate_to_grid_1d!(
-                       new_pdf[:,ivperp,iz,ir], old_vpa_vals, this_pdf[:,ivperp,iz,ir],
-                       old_vpa, old_vpa_spectral)
+                       new_pdf[:,ivperp,iz,ir], old_vpa_vals,
+                       this_pdf[:,ivperp,iz,ir], old_vpa, old_vpa_spectral)
         end
         this_pdf = new_pdf
-    elseif (evolve_upar && evolve_p && !old_evolve_upar && old_evolve_p)
+    elseif (moments.evolve_upar && moments.evolve_p && !old_evolve_upar && old_evolve_p)
         # vpa = new_wpa*vth + upar = old_wpa*vth
         # => old_wpa = new_wpa + upar/vth
         new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n)
         for ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
-            old_vpa_vals =
-            @. vpa.grid + moments.electron.upar[iz,ir] / moments.electron.vth[iz,ir]
+            if interp_1V_to_2V
+                # At this point vth is the vth from the old run (interpolated onto the new
+                # spatial grid), which will be multiplied by sqrt(3) to give the vth for
+                # the new run.
+                old_vpa_vals =
+                @. vpa.grid * sqrt(3.0) + moments.electron.upar[iz,ir] / moments.electron.vth[iz,ir]
+            elseif interp_2V_to_1V
+                # In the new 1V run, we set T_⟂=0, so the new vth is sqrt(3) times
+                # smaller than the old vth.
+                old_vpa_vals =
+                @. vpa.grid / sqrt(3.0) + moments.electron.upar[iz,ir] / moments.electron.vth[iz,ir]
+            else
+                old_vpa_vals =
+                @. vpa.grid + moments.electron.upar[iz,ir] / moments.electron.vth[iz,ir]
+            end
             @views interpolate_to_grid_1d!(
-                       new_pdf[:,ivperp,iz,ir], old_vpa_vals, this_pdf[:,ivperp,iz,ir],
-                       old_vpa, old_vpa_spectral)
+                       new_pdf[:,ivperp,iz,ir], old_vpa_vals,
+                       this_pdf[:,ivperp,iz,ir], old_vpa, old_vpa_spectral)
         end
         this_pdf = new_pdf
     else
         # This should never happen, as all combinations of evolve_* options
         # should be handled above.
         error("Unsupported combination of moment-kinetic options:"
-              * " evolve_density=", evolve_density
-              * " evolve_upar=", evolve_upar
-              * " evolve_p=", evolve_p
-              * " old_evolve_density=", old_evolve_density
-              * " old_evolve_upar=", old_evolve_upar
-              * " old_evolve_p=", old_evolve_p)
+              * " evolve_density=$(moments.evolve_density)"
+              * " evolve_upar=$(moments.evolve_upar)"
+              * " evolve_p=$(moments.evolve_p)"
+              * " old_evolve_density=$(old_evolve_density)"
+              * " old_evolve_upar=$(old_evolve_upar)"
+              * " old_evolve_p=$(old_evolve_p)")
     end
-    if evolve_density && !old_evolve_density
+    if moments.evolve_density && !old_evolve_density
         # Need to normalise by density
         for ir ∈ 1:r.n, iz ∈ 1:z.n
             this_pdf[:,:,iz,ir] ./= moments.electron.dens[iz,ir]
         end
-    elseif !evolve_density && old_evolve_density
+    elseif !moments.evolve_density && old_evolve_density
         # Need to unnormalise by density
         for ir ∈ 1:r.n, iz ∈ 1:z.n
             this_pdf[:,:,iz,ir] .*= moments.electron.dens[iz,ir]
         end
     end
-    if evolve_p && !old_evolve_p
+    if moments.evolve_p && !old_evolve_p
         # Need to normalise by vth
-        for ir ∈ 1:r.n, iz ∈ 1:z.n
-            this_pdf[:,:,iz,ir] .*= moments.electron.vth[iz,ir]
+        if vperp.n == 1
+            if interp_2V_to_1V
+                # vth is 2V vth at this point, need to adjust to 1V
+                for ir ∈ 1:r.n, iz ∈ 1:z.n
+                    this_pdf[:,:,iz,ir] .*= moments.electron.vth[iz,ir] / sqrt(3.0)
+                end
+            else
+                for ir ∈ 1:r.n, iz ∈ 1:z.n
+                    this_pdf[:,:,iz,ir] .*= moments.electron.vth[iz,ir]
+                end
+            end
+        else
+            if interp_1V_to_2V
+                # vth is 1V vth at this point, need to adjust to 2V
+                for ir ∈ 1:r.n, iz ∈ 1:z.n
+                    this_pdf[:,:,iz,ir] .*= (moments.electron.vth[iz,ir] * sqrt(3.0))
+                end
+            else
+                for ir ∈ 1:r.n, iz ∈ 1:z.n
+                    this_pdf[:,:,iz,ir] .*= moments.electron.vth[iz,ir]^3
+                end
+            end
         end
-    elseif !evolve_p && old_evolve_p
+    elseif !moments.evolve_p && old_evolve_p
         # Need to unnormalise by vth
-        for ir ∈ 1:r.n, iz ∈ 1:z.n
-            this_pdf[:,:,iz,ir] ./= moments.electron.vth[iz,ir]
+        if old_vperp.n == 1
+            for ir ∈ 1:r.n, iz ∈ 1:z.n
+                this_pdf[:,:,iz,ir] ./= moments.electron.vth[iz,ir]
+            end
+        else
+            if interp_2V_to_1V
+                # Have already integrated out the vperp dimensions, so only divide out one
+                # power of vth here.
+                for ir ∈ 1:r.n, iz ∈ 1:z.n
+                    this_pdf[:,:,iz,ir] ./= moments.electron.vth[iz,ir]
+                end
+            else
+                for ir ∈ 1:r.n, iz ∈ 1:z.n
+                    this_pdf[:,:,iz,ir] ./= moments.electron.vth[iz,ir]^3
+                end
+            end
+        end
+    elseif moments.evolve_p && old_evolve_p
+        if interp_1V_to_2V
+            for ir ∈ 1:r.n, iz ∈ 1:z.n
+                this_pdf[:,:,iz,ir] .*= sqrt(3.0)
+            end
+        elseif interp_2V_to_1V
+            for ir ∈ 1:r.n, iz ∈ 1:z.n
+                this_pdf[:,:,iz,ir] ./= sqrt(3.0)
+            end
         end
     end
 
@@ -1915,216 +2322,396 @@ function regrid_neutral_pdf(this_pdf, new_coords, old_coords, interpolation_need
         this_pdf = new_pdf
     end
 
-    # Current moment-kinetic implementation is only 1V, so no need
-    # to handle normalised vzeta or vr coordinates. This will need
-    # to change when/if 3V moment-kinetics is implemented.
-    if interpolation_needed["vzeta"]
-        new_pdf = allocate_float(orig_nvz, orig_nvr, vzeta.n, z.n, r.n,
-                                 nspecies)
-        for is ∈ 1:nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivr ∈ 1:orig_nvr,
-                ivz ∈ 1:orig_nvz
-            @views interpolate_to_grid_1d!(
-                new_pdf[ivz,ivr,:,iz,ir,is], vzeta.grid, this_pdf[ivz,ivr,:,iz,ir,is],
-                old_vzeta, old_vzeta_spectral)
+    interp_1V_to_3V = (old_vzeta.n == 1 && old_vr.n == 1) && (vzeta.n > 1 || vr.n > 1)
+    interp_3V_to_1V = (old_vzeta.n > 1 || old_vr.n > 1) && (vzeta.n == 1 && vr.n == 1)
+
+    # No interpolation needed if new and old are both 1V
+    if vzeta.n > 1 || old_vzeta.n > 1
+        if interp_3V_to_1V
+            # When converting from 3V to 1V, convert the vzeta part of the distribution
+            # function to a delta function (so that it has T_ζ=0). When doing this keep
+            # the integral dv_ζ the same. The 1V distribution function is marginalised
+            # over v_ζ, so is the coefficient in front of the δ(v_ζ), so its value is the
+            # integral over v_ζ of the 3V distribution function.
+            new_pdf = allocate_float(orig_nvz, orig_nvr, vzeta.n, z.n, r.n, nspecies)
+            for is ∈ 1:nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivr ∈ 1:orig_nvr, ivz ∈ 1:orig_nvz
+                @views new_pdf[ivz,ivr,1,iz,ir,is] = integral(this_pdf[ivz,ivr,:,iz,ir,is], old_vzeta.wgts)
+            end
+            this_pdf = new_pdf
+        elseif moments.evolve_p == old_evolve_p
+            # No chages to vzeta coordinate, so just interpolate from one grid to the other
+            if interpolation_needed["vzeta"]
+                new_pdf = allocate_float(orig_nvz, orig_nvr, vzeta.n, z.n, r.n, nspecies)
+                for is ∈ 1:nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivr ∈ 1:orig_nvr, ivz ∈ 1:orig_nvz
+                    @views interpolate_to_grid_1d!(
+                               new_pdf[ivz,ivr,:,iz,ir,is], vzeta.grid,
+                               this_pdf[ivz,ivr,:,iz,ir,is], old_vzeta, old_vzeta_spectral)
+                end
+                this_pdf = new_pdf
+            end
+        elseif moments.evolve_p && !old_evolve_p
+            # vzeta = new_wzeta*vth = old_wzeta
+            # => old_wzeta = new_wzeta*vth
+            new_pdf = allocate_float(orig_nvz, orig_nvr, vzeta.n, z.n, r.n, nspecies)
+            for is ∈ 1:nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivr ∈ 1:orig_nvr, ivz ∈ 1:orig_nvz
+                if interp_1V_to_3V
+                    # Interpolation from null coordinate constructs a Maxwellian with unit
+                    # vth on `old_vzeta_vals`. We want this on the wzeta grid, so don't
+                    # multiply by vth.
+                    old_vzeta_vals = vzeta.grid
+                else
+                    old_vzeta_vals = vzeta.grid .* moments.neutral.vth[iz,ir,is]
+                end
+                @views interpolate_to_grid_1d!(
+                           new_pdf[ivz,ivr,:,iz,ir,is], old_vzeta_vals,
+                           this_pdf[ivz,ivr,:,iz,ir,is], old_vzeta, old_vzeta_spectral)
+            end
+            this_pdf = new_pdf
+        elseif !moments.evolve_p && old_evolve_p
+            # vzeta = old_wzeta*vth
+            # => old_wzeta = new_vzeta/vth
+            new_pdf = allocate_float(orig_nvz, orig_nvr, vzeta.n, z.n, r.n, nspecies)
+            for is ∈ 1:nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivr ∈ 1:orig_nvr, ivz ∈ 1:orig_nvz
+                if old_vzeta.n == 1
+                    # 'interpolation' from a null vzeta coordinate does not account for
+                    # moment-kinetic stuff, just want to initialise the vzeta part of the
+                    # distribution function with the reference temperature.
+                    old_vzeta_vals = vzeta.grid
+                else
+                    old_vzeta_vals = vzeta.grid ./ moments.neutral.vth[iz,ir,is]
+                end
+                @views interpolate_to_grid_1d!(
+                           new_pdf[ivz,ivr,:,iz,ir,is], old_vzeta_vals,
+                           this_pdf[ivz,ivr,:,iz,ir,is], old_vzeta, old_vzeta_spectral)
+            end
+            this_pdf = new_pdf
+        else
+            # This should never happen, as all combinations of evolve_* options
+            # should be handled above.
+            error("Unsupported combination of moment-kinetic options:"
+                  * " evolve_density=", moments.evolve_density
+                  * " evolve_upar=", moments.evolve_upar
+                  * " evolve_p=", moments.evolve_p
+                  * " old_evolve_density=", old_evolve_density
+                  * " old_evolve_upar=", old_evolve_upar
+                  * " old_evolve_p=", old_evolve_p)
         end
-        this_pdf = new_pdf
-    end
-    if interpolation_needed["vr"]
-        new_pdf = allocate_float(orig_nvz, vr.n, vzeta.n, z.n, r.n,
-                                 nspecies)
-        for is ∈ 1:nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n,
-                ivzeta ∈ 1:vzeta.n, ivz ∈ 1:orig_nvz
-            @views interpolate_to_grid_1d!(
-                new_pdf[ivz,:,ivzeta,iz,ir,is], vr.grid, this_pdf[ivz,:,ivzeta,iz,ir,is],
-                old_vr, old_vr_spectral)
-        end
-        this_pdf = new_pdf
     end
 
-    if (
-        (moments.evolve_density == old_evolve_density &&
-         moments.evolve_upar == old_evolve_upar &&
-         moments.evolve_p == old_evolve_p)
-        || (!moments.evolve_upar && !old_evolve_upar &&
-            !moments.evolve_p && !old_evolve_p)
-       )
+    # No interpolation needed if new and old are both 1V
+    if vr.n > 1 || old_vr.n > 1
+        if interp_3V_to_1V
+            # When converting from 3V to 1V, convert the vr part of the distribution
+            # function to a delta function (so that it has T_r=0). When doing this keep
+            # the integral dv_r the same. The 1V distribution function is marginalised
+            # over v_r, so is the coefficient in front of the δ(v_r), so its value is the
+            # integral over v_r of the 3V distribution function.
+            new_pdf = allocate_float(orig_nvz, vr.n, vzeta.n, z.n, r.n, nspecies)
+            for is ∈ 1:nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivzeta ∈ 1:vzeta.n, ivz ∈ 1:orig_nvz
+                @views new_pdf[ivz,1,ivzeta,iz,ir,is] = integral(this_pdf[ivz,:,ivzeta,iz,ir,is], old_vr.wgts)
+            end
+            this_pdf = new_pdf
+        elseif moments.evolve_p == old_evolve_p
+            # No chages to vr coordinate, so just interpolate from one grid to the other
+            if interpolation_needed["vr"]
+                new_pdf = allocate_float(orig_nvz, vr.n, vzeta.n, z.n, r.n, nspecies)
+                for is ∈ 1:nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivzeta ∈ 1:vzeta.n, ivz ∈ 1:orig_nvz
+                    @views interpolate_to_grid_1d!(
+                               new_pdf[ivz,:,ivzeta,iz,ir,is], vr.grid,
+                               this_pdf[ivz,:,ivzeta,iz,ir,is], old_vr, old_vr_spectral)
+                end
+                this_pdf = new_pdf
+            end
+        elseif moments.evolve_p && !old_evolve_p
+            # vr = new_wr*vth = old_wr
+            # => old_wr = new_wr*vth
+            new_pdf = allocate_float(orig_nvz, vr.n, vzeta.n, z.n, r.n, nspecies)
+            for is ∈ 1:nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivzeta ∈ 1:vzeta.n, ivz ∈ 1:orig_nvz
+                if interp_1V_to_3V
+                    # Interpolation from null coordinate constructs a Maxwellian with unit
+                    # vth on `old_vr_vals`. We want this on the wr grid, so don't
+                    # multiply by vth.
+                    old_vr_vals = vr.grid
+                else
+                    old_vr_vals = vr.grid .* moments.neutral.vth[iz,ir,is]
+                end
+                @views interpolate_to_grid_1d!(
+                           new_pdf[ivz,:,ivzeta,iz,ir,is], old_vr_vals,
+                           this_pdf[ivz,:,ivzeta,iz,ir,is], old_vr, old_vr_spectral)
+            end
+            this_pdf = new_pdf
+        elseif !moments.evolve_p && old_evolve_p
+            # vr = old_wr*vth
+            # => old_wr = new_vr/vth
+            new_pdf = allocate_float(orig_nvz, vr.n, vzeta.n, z.n, r.n, nspecies)
+            for is ∈ 1:nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivzeta ∈ 1:vzeta.n, ivz ∈ 1:orig_nvz
+                if old_vr.n == 1
+                    # 'interpolation' from a null vr coordinate does not account for
+                    # moment-kinetic stuff, just want to initialise the vr part of the
+                    # distribution function with the reference temperature.
+                    old_vr_vals = vr.grid
+                else
+                    old_vr_vals = vr.grid ./ moments.neutral.vth[iz,ir,is]
+                end
+                @views interpolate_to_grid_1d!(
+                           new_pdf[ivz,:,ivzeta,iz,ir,is], old_vr_vals,
+                           this_pdf[ivz,:,ivzeta,iz,ir,is], old_vr, old_vr_spectral)
+            end
+            this_pdf = new_pdf
+        else
+            # This should never happen, as all combinations of evolve_* options
+            # should be handled above.
+            error("Unsupported combination of moment-kinetic options:"
+                  * " evolve_density=", moments.evolve_density
+                  * " evolve_upar=", moments.evolve_upar
+                  * " evolve_p=", moments.evolve_p
+                  * " old_evolve_density=", old_evolve_density
+                  * " old_evolve_upar=", old_evolve_upar
+                  * " old_evolve_p=", old_evolve_p)
+        end
+    end
+
+    if (moments.evolve_upar == old_evolve_upar && moments.evolve_p == old_evolve_p)
         # No chages to velocity-space coordinates, so just interpolate from
         # one grid to the other
-        if interpolation_needed["vz"]
+        if interpolation_needed["vz"] || (moments.evolve_p && (interp_1V_to_3V || interp_3V_to_1V))
+            if interp_1V_to_3V && moments.evolve_p
+                # In the new 3V run, we set T_ζ=T_r=T_z, so the new vth is sqrt(3) times
+                # bigger than the old vth.
+                # old_wz = vz / old_vth = new_vth * new_wz / old_vth = sqrt(3) * new_wz
+                old_vz_vals = vz.grid .* sqrt(3)
+            elseif interp_3V_to_1V && moments.evolve_p
+                # In the new 1V run, we set T_ζ=T_r=0, so the new vth is sqrt(3) times
+                # smaller than the old vth.
+                # old_wz = vz / old_vth = new_vth * new_wz / old_vth = new_wz / sqrt(3)
+                old_vz_vals = vz.grid ./ sqrt(3)
+            else
+                old_vz_vals = vz.grid
+            end
             new_pdf = allocate_float(vz.n, vr.n, vzeta.n, z.n, r.n, nspecies)
-            for is ∈ 1:nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivr ∈ 1:vr.n,
-                    ivzeta ∈ 1:vzeta.n
+            for is ∈ 1:nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivzeta ∈ 1:vzeta.n, ivr ∈ 1:vr.n
                 @views interpolate_to_grid_1d!(
-                    new_pdf[:,ivr,ivzeta,iz,ir,is], vz.grid,
-                    this_pdf[:,ivr,ivzeta,iz,ir,is], old_vz, old_vz_spectral)
+                           new_pdf[:,ivr,ivzeta,iz,ir,is], old_vz_vals,
+                           this_pdf[:,ivr,ivzeta,iz,ir,is], old_vz, old_vz_spectral)
             end
             this_pdf = new_pdf
         end
     elseif (!moments.evolve_upar && !moments.evolve_p && old_evolve_upar && !old_evolve_p)
-        # vpa = new_wpa = old_wpa + upar
-        # => old_wpa = new_wpa - upar
+        # vz = new_wz = old_wz + uz
+        # => old_wz = new_wz - uz
         new_pdf = allocate_float(vz.n, vr.n, vzeta.n, z.n, r.n, nspecies)
-        for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivzeta ∈ 1:vzeta.n,
-                ivr ∈ 1:vr.n
+        for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivzeta ∈ 1:vzeta.n, ivr ∈ 1:vr.n
             old_vz_vals = vz.grid .- moments.neutral.uz[iz,ir,is]
             @views interpolate_to_grid_1d!(
-                new_pdf[:,ivr,ivzeta,iz,ir,is], old_vz_vals,
-                this_pdf[:,ivr,ivzeta,iz,ir,is], old_vz, old_vz_spectral)
+                       new_pdf[:,ivr,ivzeta,iz,ir,is], old_vz_vals,
+                       this_pdf[:,ivr,ivzeta,iz,ir,is], old_vz, old_vz_spectral)
         end
         this_pdf = new_pdf
     elseif (!moments.evolve_upar && !moments.evolve_p && !old_evolve_upar && old_evolve_p)
-        # vpa = new_wpa = old_wpa*vth
-        # => old_wpa = new_wpa/vth
+        # vz = new_wz = old_wz*vth
+        # => old_wz = new_wz/vth
         new_pdf = allocate_float(vz.n, vr.n, vzeta.n, z.n, r.n, nspecies)
-        for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivr ∈ 1:vr.n,
-                ivzeta ∈ 1:vzeta.n
+        for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivzeta ∈ 1:vzeta.n, ivr ∈ 1:vr.n
             old_vz_vals = vz.grid ./ moments.neutral.vth[iz,ir,is]
             @views interpolate_to_grid_1d!(
-                new_pdf[:,ivr,ivzeta,iz,ir,is], old_vz_vals,
-                this_pdf[:,ivr,ivzeta,iz,ir,is], old_vz, old_vz_spectral)
+                       new_pdf[:,ivr,ivzeta,iz,ir,is], old_vz_vals,
+                       this_pdf[:,ivr,ivzeta,iz,ir,is], old_vz, old_vz_spectral)
         end
         this_pdf = new_pdf
     elseif (!moments.evolve_upar && !moments.evolve_p && old_evolve_upar && old_evolve_p)
-        # vpa = new_wpa = old_wpa*vth + upar
-        # => old_wpa = (new_wpa - upar)/vth
+        # vz = new_wz = old_wz*vth + uz
+        # => old_wz = (new_wz - uz)/vth
         new_pdf = allocate_float(vz.n, vr.n, vzeta.n, z.n, r.n, nspecies)
-        for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivr ∈ 1:vr.n,
-                ivzeta ∈ 1:vzeta.n
+        for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivzeta ∈ 1:vzeta.n, ivr ∈ 1:vr.n
             old_vz_vals =
-                @. (vz.grid - moments.neutral.uz[iz,ir,is]) /
-                   moments.neutral.vth[iz,ir,is]
+            @. (vz.grid - moments.neutral.uz[iz,ir,is]) / moments.neutral.vth[iz,ir,is]
             @views interpolate_to_grid_1d!(
-                new_pdf[:,ivr,ivzeta,iz,ir,is], old_vz_vals,
-                this_pdf[:,ivr,ivzeta,iz,ir,is], old_vz, old_vz_spectral)
+                       new_pdf[:,ivr,ivzeta,iz,ir,is], old_vz_vals,
+                       this_pdf[:,ivr,ivzeta,iz,ir,is], old_vz, old_vz_spectral)
         end
         this_pdf = new_pdf
     elseif (moments.evolve_upar && !moments.evolve_p && !old_evolve_upar && !old_evolve_p)
-        # vpa = new_wpa + upar = old_wpa
-        # => old_wpa = new_wpa + upar
+        # vz = new_wz + uz = old_wz
+        # => old_wz = new_wz + uz
         new_pdf = allocate_float(vz.n, vr.n, vzeta.n, z.n, r.n, nspecies)
-        for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivr ∈ 1:vr.n,
-                ivzeta ∈ 1:vzeta.n
+        for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivzeta ∈ 1:vzeta.n, ivr ∈ 1:vr.n
             old_vz_vals = vz.grid .+ moments.neutral.uz[iz,ir,is]
             @views interpolate_to_grid_1d!(
-                new_pdf[:,ivr,ivzeta,iz,ir,is], old_vz_vals,
-                this_pdf[:,ivr,ivzeta,iz,ir,is], old_vz, old_vz_spectral)
+                       new_pdf[:,ivr,ivzeta,iz,ir,is], old_vz_vals,
+                       this_pdf[:,ivr,ivzeta,iz,ir,is], old_vz, old_vz_spectral)
         end
         this_pdf = new_pdf
     elseif (moments.evolve_upar && !moments.evolve_p && !old_evolve_upar && old_evolve_p)
-        # vpa = new_wpa + upar = old_wpa*vth
-        # => old_wpa = (new_wpa + upar)/vth
+        # vz = new_wz + uz = old_wz*vth
+        # => old_wz = (new_wz + uz)/vth
         new_pdf = allocate_float(vz.n, vr.n, vzeta.n, z.n, r.n, nspecies)
-        for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivr ∈ 1:vr.n,
-                ivzeta ∈ 1:vzeta.n
+        for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivzeta ∈ 1:vzeta.n, ivr ∈ 1:vr.n
             old_vz_vals =
-                @. (vz.grid + moments.neutral.uz[iz,ir,is]) /
-                    moments.neutral.vth[iz,ir,is]
+            @. (vz.grid + moments.neutral.uz[iz,ir,is]) / moments.neutral.vth[iz,ir,is]
             @views interpolate_to_grid_1d!(
-                new_pdf[:,ivr,ivzeta,iz,ir,is], old_vz_vals,
-                this_pdf[:,ivr,ivzeta,iz,ir,is], old_vz, old_vz_spectral)
+                       new_pdf[:,ivr,ivzeta,iz,ir,is], old_vz_vals,
+                       this_pdf[:,ivr,ivzeta,iz,ir,is], old_vz, old_vz_spectral)
         end
         this_pdf = new_pdf
     elseif (moments.evolve_upar && !moments.evolve_p && old_evolve_upar && old_evolve_p)
-        # vpa = new_wpa + upar = old_wpa*vth + upar
-        # => old_wpa = new_wpa/vth
+        # vz = new_wz + uz = old_wz*vth + uz
+        # => old_wz = new_wz/vth
         new_pdf = allocate_float(vz.n, vr.n, vzeta.n, z.n, r.n, nspecies)
-        for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivr ∈ 1:vr.n,
-                ivzeta ∈ 1:vzeta.n
+        for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivzeta ∈ 1:vzeta.n, ivr ∈ 1:vr.n
             old_vz_vals = vz.grid ./ moments.neutral.vth[iz,ir,is]
             @views interpolate_to_grid_1d!(
-                new_pdf[:,ivr,ivzeta,iz,ir,is], old_vz_vals,
-                this_pdf[:,ivr,ivzeta,iz,ir,is], old_vz, old_vz_spectral)
+                       new_pdf[:,ivr,ivzeta,iz,ir,is], old_vz_vals,
+                       this_pdf[:,ivr,ivzeta,iz,ir,is], old_vz, old_vz_spectral)
         end
         this_pdf = new_pdf
     elseif (!moments.evolve_upar && moments.evolve_p && !old_evolve_upar && !old_evolve_p)
-        # vpa = new_wpa*vth = old_wpa
-        # => old_wpa = new_wpa*vth
+        # vz = new_wz*vth = old_wz
+        # => old_wz = new_wz*vth
         new_pdf = allocate_float(vz.n, vr.n, vzeta.n, z.n, r.n, nspecies)
-        for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivr ∈ 1:vr.n,
-                ivzeta ∈ 1:vzeta.n
-            old_vz_vals = vz.grid .* moments.neutral.vth[iz,ir,is]
+        for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivzeta ∈ 1:vzeta.n, ivr ∈ 1:vr.n
+            if interp_1V_to_3V
+                # At this point vth is the vth from the old run (interpolated onto the new
+                # spatial grid), which will be multiplied by sqrt(3) to give the vth for
+                # the new run.
+                old_vz_vals = @. vz.grid * sqrt(3.0) * moments.neutral.vth[iz,ir,is]
+            elseif interp_3V_to_1V
+                # In the new 1V run, we set T_ζ=T_r=0, so the new vth is sqrt(3) times
+                # smaller than the old vth.
+                old_vz_vals = @. vz.grid / sqrt(3.0) * moments.neutral.vth[iz,ir,is]
+            else
+                old_vz_vals = vz.grid .* moments.neutral.vth[iz,ir,is]
+            end
             @views interpolate_to_grid_1d!(
-                new_pdf[:,ivr,ivzeta,iz,ir,is], old_vz_vals,
-                this_pdf[:,ivr,ivzeta,iz,ir,is], old_vz,
-                old_vz_spectral)
+                       new_pdf[:,ivr,ivzeta,iz,ir,is], old_vz_vals,
+                       this_pdf[:,ivr,ivzeta,iz,ir,is], old_vz, old_vz_spectral)
         end
         this_pdf = new_pdf
     elseif (!moments.evolve_upar && moments.evolve_p && old_evolve_upar && !old_evolve_p)
-        # vpa = new_wpa*vth = old_wpa + upar
-        # => old_wpa = new_wpa*vth - upar/vth
+        # vz = new_wz*vth = old_wz + uz
+        # => old_wz = new_wz*vth - uz/vth
         new_pdf = allocate_float(vz.n, vr.n, vzeta.n, z.n, r.n, nspecies)
-        for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivr ∈ 1:vr.n,
-                ivzeta ∈ 1:vzeta.n
-            old_vz_vals =
-                @. vz.grid * moments.neutral.vth[iz,ir,is] -
-                   moments.neutral.upar[iz,ir,is]
+        for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivzeta ∈ 1:vzeta.n, ivr ∈ 1:vr.n
+            if interp_1V_to_3V
+                # At this point vth is the vth from the old run (interpolated onto the new
+                # spatial grid), which will be multiplied by sqrt(3) to give the vth for
+                # the new run.
+                old_vz_vals = @. vz.grid * sqrt(3.0) * moments.neutral.vth[iz,ir,is] - moments.neutral.uz[iz,ir,is]
+            elseif interp_3V_to_1V
+                # In the new 1V run, we set T_ζ=T_r=0, so the new vth is sqrt(3) times
+                # smaller than the old vth.
+                old_vz_vals = @. vz.grid / sqrt(3.0) * moments.neutral.vth[iz,ir,is] - moments.neutral.uz[iz,ir,is]
+            else
+                old_vz_vals = @. vz.grid * moments.neutral.vth[iz,ir,is] - moments.neutral.uz[iz,ir,is]
+            end
             @views interpolate_to_grid_1d!(
-                new_pdf[:,ivr,ivzeta,iz,ir,is], old_vz_vals,
-                this_pdf[:,ivr,ivzeta,iz,ir,is], old_vz, old_vz_spectral)
+                       new_pdf[:,ivr,ivzeta,iz,ir,is], old_vz_vals,
+                       this_pdf[:,ivr,ivzeta,iz,ir,is], old_vz, old_vz_spectral)
         end
         this_pdf = new_pdf
     elseif (!moments.evolve_upar && moments.evolve_p && old_evolve_upar && old_evolve_p)
-        # vpa = new_wpa*vth = old_wpa*vth + upar
-        # => old_wpa = new_wpa - upar/vth
+        # vz = new_wz*vth = old_wz*vth + uz
+        # => old_wz = new_wz - uz/vth
         new_pdf = allocate_float(vz.n, vr.n, vzeta.n, z.n, r.n, nspecies)
-        for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivr ∈ 1:vr.n,
-                ivzeta ∈ 1:vzeta.n
-            old_vz_vals =
+        for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivzeta ∈ 1:vzeta.n, ivr ∈ 1:vr.n
+            if interp_1V_to_3V
+                # At this point vth is the vth from the old run (interpolated onto the new
+                # spatial grid), which will be multiplied by sqrt(3) to give the vth for
+                # the new run.
+                old_vz_vals =
+                @. vz.grid * sqrt(3.0) - moments.neutral.uz[iz,ir,is]/moments.neutral.vth[iz,ir,is]
+            elseif interp_3V_to_1V
+                # In the new 1V run, we set T_ζ=T_r=0, so the new vth is sqrt(3) times
+                # smaller than the old vth.
+                old_vz_vals =
+                @. vz.grid / sqrt(3.0) - moments.neutral.uz[iz,ir,is]/moments.neutral.vth[iz,ir,is]
+            else
+                old_vz_vals =
                 @. vz.grid - moments.neutral.uz[iz,ir,is]/moments.neutral.vth[iz,ir,is]
+            end
             @views interpolate_to_grid_1d!(
-                new_pdf[:,ivr,ivzeta,iz,ir,is], old_vz_vals,
-                this_pdf[:,ivr,ivzeta,iz,ir,is], old_vz, old_vz_spectral)
+                       new_pdf[:,ivr,ivzeta,iz,ir,is], old_vz_vals,
+                       this_pdf[:,ivr,ivzeta,iz,ir,is], old_vz, old_vz_spectral)
         end
         this_pdf = new_pdf
     elseif (moments.evolve_upar && moments.evolve_p && !old_evolve_upar && !old_evolve_p)
-        # vpa = new_wpa*vth + upar = old_wpa
-        # => old_wpa = new_wpa*vth + upar
+        # vz = new_wz*vth + uz = old_wz
+        # => old_wz = new_wz*vth + uz
         new_pdf = allocate_float(vz.n, vr.n, vzeta.n, z.n, r.n, nspecies)
-        for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivr ∈ 1:vr.n,
-                ivzeta ∈ 1:vzeta.n
-            old_vz_vals =
-                @. vz.grid * moments.neutral.vth[iz,ir,is] +
-                   moments.neutral.uz[iz,ir,is]
+        for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivzeta ∈ 1:vzeta.n, ivr ∈ 1:vr.n
+            if interp_1V_to_3V
+                # At this point vth is the vth from the old run (interpolated onto the new
+                # spatial grid), which will be multiplied by sqrt(3) to give the vth for
+                # the new run.
+                old_vz_vals = @. vz.grid * sqrt(3.0) * moments.neutral.vth[iz,ir,is] + moments.neutral.uz[iz,ir,is]
+            elseif interp_3V_to_1V
+                # In the new 1V run, we set T_ζ=T_r=0, so the new vth is sqrt(3) times
+                # smaller than the old vth.
+                old_vz_vals = @. vz.grid / sqrt(3.0) * moments.neutral.vth[iz,ir,is] + moments.neutral.uz[iz,ir,is]
+            else
+                old_vz_vals = @. vz.grid * moments.neutral.vth[iz,ir,is] + moments.neutral.uz[iz,ir,is]
+            end
             @views interpolate_to_grid_1d!(
-                new_pdf[:,ivr,ivzeta,iz,ir,is], old_vz_vals,
-                this_pdf[:,ivr,ivzeta,iz,ir,is], old_vz, old_vz_spectral)
+                       new_pdf[:,ivr,ivzeta,iz,ir,is], old_vz_vals,
+                       this_pdf[:,ivr,ivzeta,iz,ir,is], old_vz, old_vz_spectral)
         end
         this_pdf = new_pdf
     elseif (moments.evolve_upar && moments.evolve_p && old_evolve_upar && !old_evolve_p)
-        # vpa = new_wpa*vth + upar = old_wpa + upar
-        # => old_wpa = new_wpa*vth
+        # vz = new_wz*vth + uz = old_wz + uz
+        # => old_wz = new_wz*vth
         new_pdf = allocate_float(vz.n, vr.n, vzeta.n, z.n, r.n, nspecies)
-        for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivr ∈ 1:vr.n,
-                ivzeta ∈ 1:vzeta.n
-            old_vz_vals = vz.grid .* moments.neutral.vth[iz,ir,is]
+        for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivzeta ∈ 1:vzeta.n, ivr ∈ 1:vr.n
+            if interp_1V_to_3V
+                # At this point vth is the vth from the old run (interpolated onto the new
+                # spatial grid), which will be multiplied by sqrt(3) to give the vth for
+                # the new run.
+                old_vz_vals = @. vz.grid * sqrt(3.0) * moments.neutral.vth[iz,ir,is]
+            elseif interp_3V_to_1V
+                # In the new 1V run, we set T_ζ=T_r=0, so the new vth is sqrt(3) times
+                # smaller than the old vth.
+                old_vz_vals = @. vz.grid / sqrt(3.0) * moments.neutral.vth[iz,ir,is]
+            else
+                old_vz_vals = vz.grid .* moments.neutral.vth[iz,ir,is]
+            end
             @views interpolate_to_grid_1d!(
-                new_pdf[:,ivr,ivzeta,iz,ir,is], old_vz_vals,
-                this_pdf[:,ivr,ivzeta,iz,ir,is], old_vz, old_vz_spectral)
+                       new_pdf[:,ivr,ivzeta,iz,ir,is], old_vz_vals,
+                       this_pdf[:,ivr,ivzeta,iz,ir,is], old_vz, old_vz_spectral)
         end
         this_pdf = new_pdf
     elseif (moments.evolve_upar && moments.evolve_p && !old_evolve_upar && old_evolve_p)
-        # vpa = new_wpa*vth + upar = old_wpa*vth
-        # => old_wpa = new_wpa + upar/vth
+        # vz = new_wz*vth + uz = old_wz*vth
+        # => old_wz = new_wz + uz/vth
         new_pdf = allocate_float(vz.n, vr.n, vzeta.n, z.n, r.n, nspecies)
-        for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivr ∈ 1:vr.n,
-                ivzeta ∈ 1:vzeta.n
-            old_vz_vals =
-                @. vz.grid + moments.neutral.uz[iz,ir,is]/moments.neutral.vth[iz,ir,is]
+        for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivzeta ∈ 1:vzeta.n, ivr ∈ 1:vr.n
+            if interp_1V_to_3V
+                # At this point vth is the vth from the old run (interpolated onto the new
+                # spatial grid), which will be multiplied by sqrt(3) to give the vth for
+                # the new run.
+                old_vz_vals =
+                @. vz.grid * sqrt(3.0) + moments.neutral.uz[iz,ir,is] / moments.neutral.vth[iz,ir,is]
+            elseif interp_3V_to_1V
+                # In the new 1V run, we set T_⟂=0, so the new vth is sqrt(3) times
+                # smaller than the old vth.
+                old_vz_vals =
+                @. vz.grid / sqrt(3.0) + moments.neutral.uz[iz,ir,is] / moments.neutral.vth[iz,ir,is]
+            else
+                old_vz_vals =
+                @. vz.grid + moments.neutral.uz[iz,ir,is] / moments.neutral.vth[iz,ir,is]
+            end
             @views interpolate_to_grid_1d!(
-                new_pdf[:,ivr,ivzeta,iz,ir,is], old_vz_vals,
-                this_pdf[:,ivr,ivzeta,iz,ir,is], old_vz, old_vz_spectral)
+                       new_pdf[:,ivr,ivzeta,iz,ir,is], old_vz_vals,
+                       this_pdf[:,ivr,ivzeta,iz,ir,is], old_vz, old_vz_spectral)
         end
         this_pdf = new_pdf
     else
         # This should never happen, as all combinations of evolve_* options
         # should be handled above.
         error("Unsupported combination of moment-kinetic options:"
-              * " evolve_density=", moments.evolve_density
-              * " evolve_upar=", moments.evolve_upar
-              * " evolve_p=", moments.evolve_p
-              * " old_evolve_density=", old_evolve_density
-              * " old_evolve_upar=", old_evolve_upar
-              * " old_evolve_p=", old_evolve_p)
+              * " evolve_density=$(moments.evolve_density)"
+              * " evolve_upar=$(moments.evolve_upar)"
+              * " evolve_p=$(moments.evolve_p)"
+              * " old_evolve_density=$(old_evolve_density)"
+              * " old_evolve_upar=$(old_evolve_upar)"
+              * " old_evolve_p=$(old_evolve_p)")
     end
     if moments.evolve_density && !old_evolve_density
         # Need to normalise by density
@@ -2139,13 +2726,57 @@ function regrid_neutral_pdf(this_pdf, new_coords, old_coords, interpolation_need
     end
     if moments.evolve_p && !old_evolve_p
         # Need to normalise by vth
-        for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n
-            this_pdf[:,:,:,iz,ir,is] .*= moments.neutral.vth[iz,ir,is]
+        if vzeta.n == 1 && vr.n == 1
+            if interp_3V_to_1V
+                # vth is 3V vth at this point, need to adjust to 1V
+                for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n
+                    this_pdf[:,:,:,iz,ir,is] .*= moments.neutral.vth[iz,ir,is] / sqrt(3.0)
+                end
+            else
+                for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n
+                    this_pdf[:,:,:,iz,ir,is] .*= moments.neutral.vth[iz,ir,is]
+                end
+            end
+        else
+            if interp_1V_to_3V
+                # vth is 1V vth at this point, need to adjust to 2V
+                for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n
+                    this_pdf[:,:,:,iz,ir,is] .*= moments.neutral.vth[iz,ir,is] * sqrt(3.0)
+                end
+            else
+                for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n
+                    this_pdf[:,:,:,iz,ir,is] .*= moments.neutral.vth[iz,ir,is]^3
+                end
+            end
         end
     elseif !moments.evolve_p && old_evolve_p
         # Need to unnormalise by vth
-        for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n
-            this_pdf[:,:,:,iz,ir,is] ./= moments.neutral.vth[iz,ir,is]
+        if old_vzeta.n == 1 && old_vr.n == 1
+            for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n
+                this_pdf[:,:,:,iz,ir,is] ./= moments.neutral.vth[iz,ir,is]
+            end
+        else
+            if interp_3V_to_1V
+                # Have already integrated out the vzeta, vr dimensions, so only divide out
+                # one power of vth here.
+                for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n
+                    this_pdf[:,:,:,iz,ir,is] ./= moments.neutral.vth[iz,ir,is]
+                end
+            else
+                for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n
+                    this_pdf[:,:,:,iz,ir,is] ./= moments.neutral.vth[iz,ir,is]^3
+                end
+            end
+        end
+    elseif moments.evolve_p && old_evolve_p
+        if interp_1V_to_3V
+            for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n
+                this_pdf[:,:,:,iz,ir,is] .*= sqrt(3.0)
+            end
+        elseif interp_3V_to_1V
+            for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n
+                this_pdf[:,:,:,iz,ir,is] ./= sqrt(3.0)
+            end
         end
     end
 
