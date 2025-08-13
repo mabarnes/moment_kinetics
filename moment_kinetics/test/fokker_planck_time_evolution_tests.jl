@@ -988,6 +988,15 @@ function runtests()
                      (true, true, true, 2.0e-3, 2.0e-3, 2.0e-3, 2.0e-3),
                     )
             println("  evolve_density=$evolve_density, evolve_upar=$evolve_upar, evolve_p=$evolve_p:")
+
+            if evolve_p
+                Lvperp = test_input_gauss_legendre["vperp"]["L"] / sqrt(2.0)
+                Lvpa = test_input_gauss_legendre["vpa"]["L"] / sqrt(2.0)
+            else
+                Lvperp = test_input_gauss_legendre["vperp"]["L"]
+                Lvpa = test_input_gauss_legendre["vpa"]["L"]
+            end
+
             # GaussLegendre pseudospectral
             # Benchmark data is taken from this run (GaussLegendre)
             if !evolve_density
@@ -999,7 +1008,8 @@ function runtests()
                     vperp_bc = "zero-impose-regularity"
                     run_test(test_input_gauss_legendre,
                      expected_zero_impose_regularity, tol1, tol1;
-                     vperp=OptionsDict("bc" => vperp_bc),
+                     vperp=OptionsDict("bc" => vperp_bc, "L" => Lvperp),
+                     vpa=OptionsDict("L" => Lvpa),
                      evolve_moments=OptionsDict("density" => evolve_density, "parallel_flow" => evolve_upar, "pressure" => evolve_p))
                 end
             end
@@ -1007,8 +1017,9 @@ function runtests()
                 run_name = "gausslegendre_pseudospectral_no_regularity"
                 vperp_bc = "zero"
                 run_test(test_input_gauss_legendre,
-                 expected_zero,
-                 tol2, tol1; vperp=OptionsDict("bc" => vperp_bc),
+                 expected_zero, tol2, tol1;
+                 vperp=OptionsDict("bc" => vperp_bc, "L" => Lvperp),
+                 vpa=OptionsDict("L" => Lvpa),
                  evolve_moments=OptionsDict("density" => evolve_density, "parallel_flow" => evolve_upar, "pressure" => evolve_p))
             end
             @testset "Gauss Legendre no (explicitly) enforced boundary conditions: explicit timestepping" begin
@@ -1016,7 +1027,8 @@ function runtests()
                 vperp_bc = "none"
                 vpa_bc = "none"
                 run_test(test_input_gauss_legendre, expected_none_bc, tol2, tol1;
-                         vperp=OptionsDict("bc" => vperp_bc), vpa=OptionsDict("bc" => vpa_bc),
+                         vperp=OptionsDict("bc" => vperp_bc, "L" => Lvperp),
+                         vpa=OptionsDict("bc" => vpa_bc, "L" => Lvpa),
                          evolve_moments=OptionsDict("density" => evolve_density, "parallel_flow" => evolve_upar, "pressure" => evolve_p))
             end
             @testset "Gauss Legendre no (explicitly) enforced boundary conditions: IMEX timestepping" begin
@@ -1024,7 +1036,8 @@ function runtests()
                 vperp_bc = "none"
                 vpa_bc = "none"
                 run_test(test_input_gauss_legendre, expected_none_bc, tol3, tol4;
-                         vperp=OptionsDict("bc" => vperp_bc), vpa=OptionsDict("bc" => vpa_bc),
+                         vperp=OptionsDict("bc" => vperp_bc, "L" => Lvperp),
+                         vpa=OptionsDict("bc" => vpa_bc, "L" => Lvpa),
                          evolve_moments=OptionsDict("density" => evolve_density, "parallel_flow" => evolve_upar, "pressure" => evolve_p),
                          fokker_planck_collisions_nonlinear_solver=OptionsDict("rtol" => 0.0,
                                                                                "atol" => 1.0e-14,
