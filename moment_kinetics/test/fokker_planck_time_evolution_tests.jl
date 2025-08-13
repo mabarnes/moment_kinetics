@@ -711,8 +711,6 @@ function diagnose_F_Maxwellian_serial(pdf,pdf_exact,pdf_dummy_1,pdf_dummy_2,vpa,
 end
 
 # default inputs for tests
-# Note that initial_temperature and upar_amplitude are given to match the numerical values
-# calculated as moments of the 'full-f' directed-beam initialisation.
 test_input_gauss_legendre = OptionsDict("output" => OptionsDict("run_name" => "gausslegendre_pseudospectral",
                                                                 "base_directory" => test_output_directory),
                                         "composition" => OptionsDict("n_ion_species" => 1,
@@ -720,12 +718,12 @@ test_input_gauss_legendre = OptionsDict("output" => OptionsDict("run_name" => "g
                                                                      "electron_physics" => "boltzmann_electron_response",
                                                                      "T_e" => 1.0),
                                         "ion_species_1" => OptionsDict("initial_density" => 1.5,
-                                                                       "initial_temperature" => 1.0615907288651634,
+                                                                       "initial_temperature" => 1.0,
                                                                        "mass" => 1.0),
                                         "z_IC_ion_species_1" => OptionsDict("initialization_option" => "sinusoid",
                                                                             "density_amplitude" => 0.0,
                                                                             "density_phase" => 0.0,
-                                                                            "upar_amplitude" => 0.179871043200947,
+                                                                            "upar_amplitude" => 0.0,
                                                                             "upar_phase" => 0.0,
                                                                             "temperature_amplitude" => 0.0,
                                                                             "temperature_phase" => 0.0),
@@ -733,12 +731,12 @@ test_input_gauss_legendre = OptionsDict("output" => OptionsDict("run_name" => "g
                                                                               "vpa0" => sqrt(2) * 0.1,
                                                                               "vperp0" => sqrt(2) * 1.0,
                                                                               "vth0" => sqrt(2) * 0.5),
-                                        "vpa" => OptionsDict("ngrid" => 9,
+                                        "vpa" => OptionsDict("ngrid" => 5,
                                                              "L" => 8.485281374238571,
                                                              "nelement" => 16,
                                                              "bc" => "zero",
                                                              "discretization" => "gausslegendre_pseudospectral"),
-                                        "vperp" => OptionsDict("ngrid" => 9,
+                                        "vperp" => OptionsDict("ngrid" => 5,
                                                                "nelement" => 8,
                                                                "L" => 4.242640687119286,
                                                                "discretization" => "gausslegendre_pseudospectral"),
@@ -954,7 +952,7 @@ function runtests()
 
         @testset "evolve_density=$evolve_density, evolve_upar=$evolve_upar, evolve_p=$evolve_p" for
                 (evolve_density, evolve_upar, evolve_p, tol1, tol2, tol3, tol4) ∈
-                    (#(false, false, false, 2.0e-14, 1.0e-14, 1.0e-5, 5.0e-12),
+                    ((false, false, false, 2.0e-14, 1.0e-14, 1.0e-5, 5.0e-12),
                      (true, false, false, 1.0e-7, 1.0e-7, 1.0e-6, 1.0e-9),
                      (true, true, false, 2.0e-2, 2.0e-2, 2.0e-2, 2.0e-2),
                      (true, true, true, 1.0e-7, 1.0e-7, 1.0e-6, 1.0e-9),
