@@ -27,7 +27,9 @@ mkpath(test_output_directory)
 # The expected output
 struct expected_data
     vpa::Array{mk_float, 1}
+    vpa_wgts::Array{mk_float, 1}
     vperp::Array{mk_float, 1}
+    vperp_wgts::Array{mk_float, 1}
     phi::Array{mk_float, 1} #time
     n_ion::Array{mk_float, 1} #time
     upar_ion::Array{mk_float, 1} # time
@@ -585,6 +587,15 @@ function print_output_data_for_test_update(path; write_grid=true, write_pdf=true
             end
         end
         print("],\n")
+        println("# Expected "*coord.name*" wgts")
+        print("[")
+        for k in 1:coord.n
+            @printf("%.15f", coord.wgts[k])
+            if k < coord.n
+                print(", ")
+            end
+        end
+        print("],\n")
         return nothing
     end
     # pdf
@@ -814,6 +825,7 @@ function run_test(test_input, expected, atol, final_atol; args...)
     f_err = nothing
     vpa, vpa_spectral = nothing, nothing
     vperp, vperp_spectral = nothing, nothing
+    evolve_density, evolve_upar, evolve_p = nothing, nothing, nothing
 
     if global_rank[] == 0
         ntime = 0
@@ -859,10 +871,12 @@ function run_test(test_input, expected, atol, final_atol; args...)
             for it ∈ 1:ntime
                 @views f_ion_vpavperpzrst[:,:,:,:,:,it] .=
                     regrid_ion_pdf(f_ion_vpavperpzrst[:,:,:,:,:,it],
-                                   (r=r, r_spectral, z=z, z_spectral, vperp=vperp,
-                                    vperp_spectral, vpa=vpa, vpa_spectral),
-                                   (r=r, r_spectral, z=z, z_spectral, vperp=vperp,
-                                    vperp_spectral, vpa=vpa, vpa_spectral),
+                                   (r=r, z=z, vperp=(grid=expected.vperp, n=length(expected.vperp)),
+                                    vpa=(grid=expected.vpa, n=length(expected.vpa))),
+                                   (r=r, r_spectral=r_spectral, z=z,
+                                    z_spectral=z_spectral, vperp=vperp,
+                                    vperp_spectral=vperp_spectral, vpa=vpa,
+                                    vpa_spectral=vpa_spectral),
                                    Dict("r"=>false, "z"=>false, "vperp"=>evolve_p,
                                         "vpa"=>(evolve_upar || evolve_p)),
                                    (evolve_density=false, evolve_upar=false,
@@ -894,8 +908,9 @@ function run_test(test_input, expected, atol, final_atol; args...)
 
             for it in 1:ntime
                 @views output = diagnose_F_Maxwellian_serial(f_ion[:,:,it],
-                                                            f_dummy_1,f_dummy_2,f_dummy_3,
-                                                            vpa,vperp,mass)
+                                                             f_dummy_1, f_dummy_2, f_dummy_3,
+                                                             (grid=expected.vpa, n=length(expected.vpa), wgts=expected.vpa_wgts),
+                                                             (grid=expected.vperp, n=length(expected.vperp), wgts=expected.vperp_wgts), mass)
                 maxnorm_ion[it] = output[1]
                 L2norm_ion[it] = output[2]
             end
@@ -912,8 +927,14 @@ function run_test(test_input, expected, atol, final_atol; args...)
                     this_atol = atol
                 end
                 
-                @test isapprox(expected.vpa[:], vpa.grid[:], atol=this_atol)
-                @test isapprox(expected.vperp[:], vperp.grid[:], atol=this_atol)
+                if !evolve_density
+                    # For moment kinetic runs these are grids in the normalised velocity
+                    # coordinates. It does not make sense to compare these to the
+                    # unnormalised velocity from the 'full-f' run that generated the
+                    # expected data.
+                    @test isapprox(expected.vpa[:], vpa.grid[:], atol=this_atol)
+                    @test isapprox(expected.vperp[:], vperp.grid[:], atol=this_atol)
+                end
             
                 # Check electrostatic potential
                 ###############################
