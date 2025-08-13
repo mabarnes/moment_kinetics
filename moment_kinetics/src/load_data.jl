@@ -1374,17 +1374,49 @@ function regrid_ion_pdf(this_pdf, new_coords, old_coords, interpolation_needed, 
         this_pdf = new_pdf
     end
 
-    # Current moment-kinetic implementation is only 1V, so no need to handle a
-    # normalised vperp coordinate. This will need to change when 2V
-    # moment-kinetics is implemented.
-    if interpolation_needed["vperp"]
+    if moments.evolve_p == old_evolve_p
+        # No chages to vperp coordinate, so just interpolate from one grid to the other
+        if interpolation_needed["vperp"]
+            new_pdf = allocate_float(orig_nvpa, vperp.n, z.n, r.n, nspecies)
+            for is ∈ 1:nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivpa ∈ 1:orig_nvpa
+                @views interpolate_to_grid_1d!(
+                           new_pdf[ivpa,:,iz,ir,is], vperp.grid,
+                           this_pdf[ivpa,:,iz,ir,is], old_vperp, old_vperp_spectral)
+            end
+            this_pdf = new_pdf
+        end
+    elseif moments.evolve_p && !old_evolve_p
+        # vperp = new_wperp*vth = old_wperp
+        # => old_wperp = new_wperp*vth
         new_pdf = allocate_float(orig_nvpa, vperp.n, z.n, r.n, nspecies)
         for is ∈ 1:nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivpa ∈ 1:orig_nvpa
+            old_vperp_vals = vperp.grid .* moments.ion.vth[iz,ir,is]
             @views interpolate_to_grid_1d!(
-                       new_pdf[ivpa,:,iz,ir,is], vperp.grid, this_pdf[ivpa,:,iz,ir,is],
-                       old_vperp, old_vperp_spectral)
+                       new_pdf[ivpa,:,iz,ir,is], old_vperp_vals,
+                       this_pdf[ivpa,:,iz,ir,is], old_vperp, old_vperp_spectral)
         end
         this_pdf = new_pdf
+    elseif !moments.evolve_p && old_evolve_p
+        # vperp = old_wperp*vth
+        # => old_wperp = new_vperp/vth
+        new_pdf = allocate_float(orig_nvpa, vperp.n, z.n, r.n, nspecies)
+        for is ∈ 1:nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivpa ∈ 1:orig_nvpa
+            old_vperp_vals = vperp.grid ./ moments.ion.vth[iz,ir,is]
+            @views interpolate_to_grid_1d!(
+                       new_pdf[ivpa,:,iz,ir,is], old_vperp_vals,
+                       this_pdf[ivpa,:,iz,ir,is], old_vperp, old_vperp_spectral)
+        end
+        this_pdf = new_pdf
+    else
+        # This should never happen, as all combinations of evolve_* options
+        # should be handled above.
+        error("Unsupported combination of moment-kinetic options:"
+              * " evolve_density=", moments.evolve_density
+              * " evolve_upar=", moments.evolve_upar
+              * " evolve_p=", moments.evolve_p
+              * " old_evolve_density=", old_evolve_density
+              * " old_evolve_upar=", old_evolve_upar
+              * " old_evolve_p=", old_evolve_p)
     end
 
     if (
@@ -1564,13 +1596,25 @@ function regrid_ion_pdf(this_pdf, new_coords, old_coords, interpolation_needed, 
     end
     if moments.evolve_p && !old_evolve_p
         # Need to normalise by vth
-        for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n
-            this_pdf[:,:,iz,ir,is] .*= moments.ion.vth[iz,ir,is]
+        if vperp.n == 1
+            for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n
+                this_pdf[:,:,iz,ir,is] .*= moments.ion.vth[iz,ir,is]
+            end
+        else
+            for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n
+                this_pdf[:,:,iz,ir,is] .*= moments.ion.vth[iz,ir,is]^3
+            end
         end
     elseif !moments.evolve_p && old_evolve_p
         # Need to unnormalise by vth
-        for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n
-            this_pdf[:,:,iz,ir,is] ./= moments.ion.vth[iz,ir,is]
+        if old_vperp.n == 1
+            for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n
+                this_pdf[:,:,iz,ir,is] ./= moments.ion.vth[iz,ir,is]
+            end
+        else
+            for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n
+                this_pdf[:,:,iz,ir,is] ./= moments.ion.vth[iz,ir,is]^3
+            end
         end
     end
 
