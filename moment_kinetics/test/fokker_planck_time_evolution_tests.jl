@@ -581,7 +581,7 @@ function print_output_data_for_test_update(path; write_grid=true, write_pdf=true
         println("# Expected "*coord.name)
         print("[")
         for k in 1:coord.n
-            @printf("%.15f", coord.grid[k])
+            @printf("%.15e", coord.grid[k])
             if k < coord.n
                 print(", ")
             end
@@ -590,7 +590,7 @@ function print_output_data_for_test_update(path; write_grid=true, write_pdf=true
         println("# Expected "*coord.name*" wgts")
         print("[")
         for k in 1:coord.n
-            @printf("%.15f", coord.wgts[k])
+            @printf("%.15e", coord.wgts[k])
             if k < coord.n
                 print(", ")
             end
@@ -605,15 +605,15 @@ function print_output_data_for_test_update(path; write_grid=true, write_pdf=true
         for k in 1:ntind
             for i in 1:nvpa-1
                 for j in 1:nvperp-1
-                    @printf("%.15f ", pdf[i,j,k])
+                    @printf("%.15e ", pdf[i,j,k])
                 end
-                @printf("%.15f ", pdf[i,nvperp,k])
+                @printf("%.15e ", pdf[i,nvperp,k])
                 print(";\n")
             end
             for j in 1:nvperp-1
-                @printf("%.15f ", pdf[nvpa,j,k])
+                @printf("%.15e ", pdf[nvpa,j,k])
             end
-            @printf("%.15f ", pdf[nvpa,nvperp,k])
+            @printf("%.15e ", pdf[nvpa,nvperp,k])
             if k < ntind
                 print(";;;\n")
             end
@@ -626,7 +626,7 @@ function print_output_data_for_test_update(path; write_grid=true, write_pdf=true
         println("# Expected "*moment_name)
         print("[")
         for k in 1:ntind
-            @printf("%.15f", moment[1,1,1,k])
+            @printf("%.15e", moment[1,1,1,k])
             if k < ntind
                 print(", ")
             end
@@ -639,7 +639,7 @@ function print_output_data_for_test_update(path; write_grid=true, write_pdf=true
         println("# Expected "*field_name)
         print("[")
         for k in 1:ntind
-            @printf("%.15f", field[1,1,k])
+            @printf("%.15e", field[1,1,k])
             if k < ntind
                 print(", ")
             end
@@ -665,7 +665,7 @@ function print_output_data_for_test_update(path; write_grid=true, write_pdf=true
         println("# Expected maxnorm_ion")
         print("[")
         for k in 1:ntind
-            @printf("%.15f", maxnorm_ion[k])
+            @printf("%.15e", maxnorm_ion[k])
             if k < ntind
                 print(", ")
             end
@@ -674,7 +674,7 @@ function print_output_data_for_test_update(path; write_grid=true, write_pdf=true
         println("# Expected L2norm_ion")
         print("[")
         for k in 1:ntind
-            @printf("%.15f", L2norm_ion[k])
+            @printf("%.15e", L2norm_ion[k])
             if k < ntind
                 print(", ")
             end
