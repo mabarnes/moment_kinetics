@@ -265,7 +265,7 @@ function run_test(test_input, base, message, rtol, atol; tol_3V, args...)
         if is_3V
             # Only looking at ivperp=1 point, but peak value of distribution function is
             # changed to keep density fixed when converting from 1V to 3V
-            @test isapprox(expected.f_ion[:, :, end] ./ 2.0 ./ π, newgrid_f_ion[:,:,1],
+            @test isapprox(expected.f_ion[:, :, end] ./ π, newgrid_f_ion[:,:,1],
                            rtol=rtol_3V)
         else
             @test isapprox(expected.f_ion[:, :, end], newgrid_f_ion[:,:,1], rtol=rtol)
@@ -307,7 +307,7 @@ function run_test(test_input, base, message, rtol, atol; tol_3V, args...)
         if is_3V
             # Only looking at ivperp=1 point, but peak value of distribution function is
             # changed to keep density fixed when converting from 1V to 3V
-            @test isapprox(expected.f_neutral[:, :, end] ./ 2.0 ./ π,
+            @test isapprox(expected.f_neutral[:, :, end] ./ π,
                            newgrid_f_neutral[:,:,1], rtol=rtol)
         else
             @test isapprox(expected.f_neutral[:, :, end], newgrid_f_neutral[:,:,1],
