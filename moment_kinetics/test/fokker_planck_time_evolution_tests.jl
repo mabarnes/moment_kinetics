@@ -285,6 +285,8 @@ function run_test(test_input, expected, atol, final_atol; interp_to_expected=tru
             return string(string(key)[1], (stringify_arg(k, v) for (k, v) in value)...)
         elseif isa(value, AbstractFloat)
             return string(string(key)[1], round(value; sigdigits=2))
+        elseif isa(value, AbstractString)
+            return string(string(key)[1], value[1:min(6,length(value))])
         else
             return string(string(key)[1], value)
         end
