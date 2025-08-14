@@ -799,6 +799,8 @@ function run_test(test_input, expected, atol, final_atol; args...)
     function stringify_arg(key, value)
         if isa(value, AbstractDict)
             return string(string(key)[1], (stringify_arg(k, v) for (k, v) in value)...)
+        elseif isa(value, AbstractFloat)
+            return string(string(key)[1], round(value; sigdigits=2))
         else
             return string(string(key)[1], value)
         end
