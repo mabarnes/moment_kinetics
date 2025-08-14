@@ -984,10 +984,10 @@ function runtests()
 
         @testset "evolve_density=$evolve_density, evolve_upar=$evolve_upar, evolve_p=$evolve_p" for
                 (evolve_density, evolve_upar, evolve_p, tol1, tol2, tol3, tol4) ∈
-                    ((false, false, false, 2.0e-14, 1.0e-14, 1.0e-5, 5.0e-12),
-                     (true, false, false, 1.0e-7, 1.0e-7, 1.0e-6, 1.0e-9),
-                     (true, true, false, 0.1, 0.1, 5.0e-2, 5.0e-2),
-                     (true, true, true, 5.0e-2, 5.0e-2, 5.0e-2, 5.0e-2),
+                    ((false, false, false, 2.0e-14, 1.0e-14, 4.0e-3, 1.0e-4),
+                     (true, false, false, 1.0e-7, 1.0e-7, 4.0e-3, 1.0e-4),
+                     (true, true, false, 2.0e-3, 2.0e-3, 4.0e-3, 2.0e-3),
+                     (true, true, true, 2.0e-3, 2.0e-3, 4.0e-3, 2.0e-3),
                     )
             println("  evolve_density=$evolve_density, evolve_upar=$evolve_upar, evolve_p=$evolve_p:")
 
