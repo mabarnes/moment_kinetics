@@ -33,7 +33,10 @@ recursive_merge(deepcopy(base_input),
                             "r" => OptionsDict("ngrid" => 3, "nelement" => 2,
                                                "discretization" => "chebyshev_pseudospectral"),
                             "z" => OptionsDict("ngrid" => 17, "nelement" => 2),
+                            "vperp" => OptionsDict("discretization" => "chebyshev_pseudospectral"),
                             "vpa" => OptionsDict("ngrid" => 9, "nelement" => 32),
+                            "vzeta" => OptionsDict("discretization" => "chebyshev_pseudospectral"),
+                            "vr" => OptionsDict("discretization" => "chebyshev_pseudospectral"),
                             "vz" => OptionsDict("ngrid" => 9, "nelement" => 32)),
                )
 if global_size[] > 1 && global_size[] % 2 == 0
@@ -318,7 +321,7 @@ end
 
 
 function runtests()
-    function do_tests(label, rtol=1.0e-3, nstep=50, include_moment_kinetic=true;
+    function do_tests(label, rtol=1.0e-3, nstep=50;
                       tol_3V=nothing, args...)
         # Only testing Chebyshev discretization because interpolation not yet implemented
         # for finite-difference
@@ -369,28 +372,26 @@ function runtests()
                 this_input["output"]["parallel_io"] = parallel_io
                 run_test(this_input, base, message, rtol, 1.e-15; tol_3V=tol_3V, args...)
             end
-            if include_moment_kinetic
-                message = "restart split 1 from $base_label$label"
-                @testset "$message" begin
-                    this_input = deepcopy(restart_test_input_chebyshev_split_1_moment)
-                    this_input["output"]["base_directory"] = test_output_directory
-                    this_input["output"]["parallel_io"] = parallel_io
-                    run_test(this_input, base, message, rtol, 1.e-15; tol_3V=tol_3V, args...)
-                end
-                message = "restart split 2 from $base_label$label"
-                @testset "$message" begin
-                    this_input = deepcopy(restart_test_input_chebyshev_split_2_moments)
-                    this_input["output"]["base_directory"] = test_output_directory
-                    this_input["output"]["parallel_io"] = parallel_io
-                    run_test(this_input, base, message, rtol, 1.e-15; tol_3V=tol_3V, args...)
-                end
-                message = "restart split 3 from $base_label$label"
-                @testset "$message" begin
-                    this_input = deepcopy(restart_test_input_chebyshev_split_3_moments)
-                    this_input["output"]["base_directory"] = test_output_directory
-                    this_input["output"]["parallel_io"] = parallel_io
-                    run_test(this_input, base, message, rtol, 1.e-15; tol_3V=tol_3V, args...)
-                end
+            message = "restart split 1 from $base_label$label"
+            @testset "$message" begin
+                this_input = deepcopy(restart_test_input_chebyshev_split_1_moment)
+                this_input["output"]["base_directory"] = test_output_directory
+                this_input["output"]["parallel_io"] = parallel_io
+                run_test(this_input, base, message, rtol, 1.e-15; tol_3V=tol_3V, args...)
+            end
+            message = "restart split 2 from $base_label$label"
+            @testset "$message" begin
+                this_input = deepcopy(restart_test_input_chebyshev_split_2_moments)
+                this_input["output"]["base_directory"] = test_output_directory
+                this_input["output"]["parallel_io"] = parallel_io
+                run_test(this_input, base, message, rtol, 1.e-15; tol_3V=tol_3V, args...)
+            end
+            message = "restart split 3 from $base_label$label"
+            @testset "$message" begin
+                this_input = deepcopy(restart_test_input_chebyshev_split_3_moments)
+                this_input["output"]["base_directory"] = test_output_directory
+                this_input["output"]["parallel_io"] = parallel_io
+                run_test(this_input, base, message, rtol, 1.e-15; tol_3V=tol_3V, args...)
             end
 
             if global_rank[] == 0
@@ -408,10 +409,10 @@ function runtests()
         # Note: only do 2 steps in 2V/3V mode because it is so slow. Also, linear
         # interpolation used for ion-neutral coupling in 2V/3V case has low accuracy, so
         # use looser tolerance for various things.
-        @long do_tests(", 2V/3V", 1.0e-1, 98, false; tol_3V=0.3,
+        @long do_tests(", 2V/3V", 1.0e-1, 98; tol_3V=0.3,
                        timestepping=OptionsDict("nstep" => 2),
                        r=OptionsDict("ngrid" => 1, "nelement" => 1),
-                       vperp=OptionsDict("ngrid" => 17, "nelement" => 4, "L" => vpa_L, "ngrid" => 17),
+                       vperp=OptionsDict("ngrid" => 17, "nelement" => 4, "L" => vpa_L),
                        vpa=OptionsDict("nelement" => 8),
                        vzeta=OptionsDict("ngrid" => 17, "nelement" => 4, "L" => vpa_L),
                        vr=OptionsDict("ngrid" => 17, "nelement" => 4, "L" => vpa_L),
@@ -429,10 +430,10 @@ function runtests()
             # Note: only do 2 steps in 2V/3V mode because it is so slow
             # interpolation used for ion-neutral coupling in 2V/3V case has low accuracy,
             # so use looser tolerance for various things.
-            @long do_tests(", 2V/3V, parallel I/O", 2.0e-1, 98, false; tol_3V=0.3,
+            @long do_tests(", 2V/3V, parallel I/O", 2.0e-1, 98; tol_3V=0.3,
                            timestepping=OptionsDict("nstep" => 2),
                            r=OptionsDict("ngrid" => 1, "nelement" => 1),
-                           vperp=OptionsDict("ngrid" => 17, "nelement" => 4, "L" => vpa_L, "ngrid" => 17),
+                           vperp=OptionsDict("ngrid" => 17, "nelement" => 4, "L" => vpa_L),
                            vpa=OptionsDict("nelement" => 8),
                            vzeta=OptionsDict("ngrid" => 17, "nelement" => 4, "L" => vpa_L),
                            vr=OptionsDict("ngrid" => 17, "nelement" => 4, "L" => vpa_L),
