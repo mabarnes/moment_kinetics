@@ -1051,8 +1051,9 @@ function implicit_ion_fokker_planck_self_collisions!(pdf_out, pdf_in,
         end
 
         if diagnose_entropy_production
-            calculate_entropy_production!(dSdt, pdf_out, fkpl_arrays, vpa, vperp,
-                                        iz, ir, is)
+            calculate_entropy_production!(dSdt, pdf_out, fkpl_arrays, density, vth,
+                                          evolve_density, evolve_p, vpa, vperp, iz, ir,
+                                          is)
         end
     end
     return success
