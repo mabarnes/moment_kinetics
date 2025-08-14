@@ -271,7 +271,7 @@ test_input_gauss_legendre_highres["timestepping"]["dt"] = 0.00007071067811865474
 Run a test for a single set of parameters
 """
 # Note 'name' should not be shared by any two tests in this file
-function run_test(test_input, expected, atol, final_atol; args...)
+function run_test(test_input, expected, atol, final_atol; interp_to_expected=true, args...)
     # by passing keyword arguments to run_test, args becomes a Dict which can be used to
     # update the default inputs
 
@@ -360,26 +360,29 @@ function run_test(test_input, expected, atol, final_atol; args...)
             # load particle distribution function (pdf) data
             f_ion_vpavperpzrst = load_pdf_data(fid)
             
-            # In case simulation is moment-kinetic, so that f_ion is a shape function
-            # rather than a distribution function, convert f_ion to an 'unnormalised'
-            # distribution function.
-            for it ∈ 1:ntime
-                @views f_ion_vpavperpzrst[:,:,:,:,:,it] .=
-                    regrid_ion_pdf(f_ion_vpavperpzrst[:,:,:,:,:,it],
-                                   (r=r, z=z, vperp=(grid=expected.vperp, n=length(expected.vperp)),
-                                    vpa=(grid=expected.vpa, n=length(expected.vpa))),
-                                   (r=r, r_spectral=r_spectral, z=z,
-                                    z_spectral=z_spectral, vperp=vperp,
-                                    vperp_spectral=vperp_spectral, vpa=vpa,
-                                    vpa_spectral=vpa_spectral),
-                                   Dict("r"=>false, "z"=>false, "vperp"=>evolve_p,
-                                        "vpa"=>(evolve_upar || evolve_p)),
-                                   (evolve_density=false, evolve_upar=false,
-                                    evolve_p=false,
-                                    ion=(dens=n_ion_zrst[:,:,:,it],
-                                         upar=upar_ion_zrst[:,:,:,it],
-                                         vth=v_t_ion_zrst[:,:,:,it])),
-                                   evolve_density, evolve_upar, evolve_p)
+            if interp_to_expected
+                # In case expected data is from a 'full-f' run, but simulation is
+                # moment-kinetic, so that f_ion is a shape function rather than a
+                # distribution function, convert f_ion to an 'unnormalised' distribution
+                # function.
+                for it ∈ 1:ntime
+                    @views f_ion_vpavperpzrst[:,:,:,:,:,it] .=
+                        regrid_ion_pdf(f_ion_vpavperpzrst[:,:,:,:,:,it],
+                                       (r=r, z=z, vperp=(grid=expected.vperp, n=length(expected.vperp)),
+                                        vpa=(grid=expected.vpa, n=length(expected.vpa))),
+                                       (r=r, r_spectral=r_spectral, z=z,
+                                        z_spectral=z_spectral, vperp=vperp,
+                                        vperp_spectral=vperp_spectral, vpa=vpa,
+                                        vpa_spectral=vpa_spectral),
+                                       Dict("r"=>false, "z"=>false, "vperp"=>evolve_p,
+                                            "vpa"=>(evolve_upar || evolve_p)),
+                                       (evolve_density=false, evolve_upar=false,
+                                        evolve_p=false,
+                                        ion=(dens=n_ion_zrst[:,:,:,it],
+                                             upar=upar_ion_zrst[:,:,:,it],
+                                             vth=v_t_ion_zrst[:,:,:,it])),
+                                       evolve_density, evolve_upar, evolve_p)
+                end
             end
 
             close(fid)
@@ -475,9 +478,9 @@ function runtests(; highres=false)
         @testset "evolve_density=$evolve_density, evolve_upar=$evolve_upar, evolve_p=$evolve_p" for
                 (evolve_density, evolve_upar, evolve_p, tol1, tol2, tol3, tol4) ∈
                     ((false, false, false, 2.0e-14, 1.0e-14, highres ? 4.0e-3 : 1.0e-5, highres ? 1.0e-4 : 5.0e-12),
-                     (true, false, false, 1.0e-7, 1.0e-7, highres ? 4.0e-3 : 1.0e-6, highres ? 1.0e-4 : 1.0e-9),
-                     (true, true, false, highres ? 2.0e-3 : 0.1, highres ? 2.0e-3 : 0.1, highres ? 4.0e-3 : 5.0e-2, highres ? 2.0e-3 : 5.0e-2),
-                     (true, true, true, highres ? 2.0e-3 : 5.0e-2, highres ? 2.0e-3 : 5.0e-2, highres ? 4.0e-3 : 5.0e-2, highres ? 2.0e-3 : 5.0e-2),
+                     (true, false, false, highres ? 1.0e-7 : 2.0e-14, highres ? 1.0e-7 : 1.0e-14, highres ? 4.0e-3 : 1.0e-5, highres ? 1.0e-4 : 5.0e-12),
+                     (true, true, false, highres ? 2.0e-3 : 2.0e-14, highres ? 2.0e-3 : 1.0e-14, highres ? 4.0e-3 : 1.0e-5, highres ? 2.0e-3 : 5.0e-12),
+                     (true, true, true, highres ? 2.0e-3 : 2.0e-14, highres ? 2.0e-3 : 1.0e-14, highres ? 4.0e-3 : 1.0e-5, highres ? 2.0e-3 : 5.0e-12),
                     )
             println("  evolve_density=$evolve_density, evolve_upar=$evolve_upar, evolve_p=$evolve_p:")
 
@@ -490,11 +493,10 @@ function runtests(; highres=false)
             end
 
             # GaussLegendre pseudospectral
-            # Benchmark data is taken from this run (GaussLegendre)
-            if !evolve_density
-                # This set of options does not conserve density or energy in the 'full-f'
-                # version well enough for the expected results to compare to
-                # moment-kinetic runs with small errors.
+            if !highres || !evolve_density
+                # This case does not conserve moments well enough to compare full-f to
+                # moment-kinetic cases, so skip unless separate expected output is saved
+                # for full-f and moment-kinetic.
                 @testset "Gauss Legendre base" begin
                     run_name = "gausslegendre_pseudospectral"
                     vperp_bc = "zero-impose-regularity"
@@ -502,13 +504,14 @@ function runtests(; highres=false)
                         this_expected = expected_zero_impose_regularity_highres
                         this_input = test_input_gauss_legendre_highres
                     else
-                        this_expected = expected_zero_impose_regularity
+                        this_expected = expected_zero_impose_regularity[(evolve_density, evolve_upar, evolve_p)]
                         this_input = test_input_gauss_legendre
                     end
                     run_test(this_input, this_expected, tol1, tol1;
-                     vperp=OptionsDict("bc" => vperp_bc, "L" => Lvperp),
-                     vpa=OptionsDict("L" => Lvpa),
-                     evolve_moments=OptionsDict("density" => evolve_density, "parallel_flow" => evolve_upar, "pressure" => evolve_p))
+                             interp_to_expected=highres,
+                             vperp=OptionsDict("bc" => vperp_bc, "L" => Lvperp),
+                             vpa=OptionsDict("L" => Lvpa),
+                             evolve_moments=OptionsDict("density" => evolve_density, "parallel_flow" => evolve_upar, "pressure" => evolve_p))
                 end
             end
             @testset "Gauss Legendre no enforced regularity condition at vperp = 0" begin
@@ -518,13 +521,14 @@ function runtests(; highres=false)
                     this_expected = expected_zero_highres
                     this_input = test_input_gauss_legendre_highres
                 else
-                    this_expected = expected_zero
+                    this_expected = expected_zero[(evolve_density, evolve_upar, evolve_p)]
                     this_input = test_input_gauss_legendre
                 end
                 run_test(this_input, this_expected, tol2, tol1;
-                 vperp=OptionsDict("bc" => vperp_bc, "L" => Lvperp),
-                 vpa=OptionsDict("L" => Lvpa),
-                 evolve_moments=OptionsDict("density" => evolve_density, "parallel_flow" => evolve_upar, "pressure" => evolve_p))
+                         interp_to_expected=highres,
+                         vperp=OptionsDict("bc" => vperp_bc, "L" => Lvperp),
+                         vpa=OptionsDict("L" => Lvpa),
+                         evolve_moments=OptionsDict("density" => evolve_density, "parallel_flow" => evolve_upar, "pressure" => evolve_p))
             end
             @testset "Gauss Legendre no (explicitly) enforced boundary conditions: explicit timestepping" begin
                 run_name = "gausslegendre_pseudospectral_none_bc"
@@ -534,10 +538,11 @@ function runtests(; highres=false)
                     this_expected = expected_none_bc_highres
                     this_input = test_input_gauss_legendre_highres
                 else
-                    this_expected = expected_none_bc
+                    this_expected = expected_none_bc[(evolve_density, evolve_upar, evolve_p)]
                     this_input = test_input_gauss_legendre
                 end
                 run_test(this_input, this_expected, tol2, tol1;
+                         interp_to_expected=highres,
                          vperp=OptionsDict("bc" => vperp_bc, "L" => Lvperp),
                          vpa=OptionsDict("bc" => vpa_bc, "L" => Lvpa),
                          evolve_moments=OptionsDict("density" => evolve_density, "parallel_flow" => evolve_upar, "pressure" => evolve_p))
@@ -550,10 +555,11 @@ function runtests(; highres=false)
                     this_expected = expected_none_bc_highres
                     this_input = test_input_gauss_legendre_highres
                 else
-                    this_expected = expected_none_bc
+                    this_expected = expected_none_bc[(evolve_density, evolve_upar, evolve_p)]
                     this_input = test_input_gauss_legendre
                 end
                 run_test(this_input, this_expected, tol3, tol4;
+                         interp_to_expected=highres,
                          vperp=OptionsDict("bc" => vperp_bc, "L" => Lvperp),
                          vpa=OptionsDict("bc" => vpa_bc, "L" => Lvpa),
                          evolve_moments=OptionsDict("density" => evolve_density, "parallel_flow" => evolve_upar, "pressure" => evolve_p),
