@@ -64,23 +64,20 @@ function setup_chebyshev_pseudospectral(coord, run_directory; ignore_MPI=false)
     # wisdom' and load it on all other processes, to ensure that we use the exact same
     # FFT algorithms on all processes for consistency.
     if run_directory === nothing
-        if global_size[] != 1 && !ignore_MPI
-            error("run_directory is required by setup_chebyshev_pseudospectral() when "
-                  * "running in parallel, in order to save FFTW wisdom.")
-        end
         wisdom_filename = nothing
+        base_flag = FFTW.ESTIMATE
     else
         wisdom_filename = joinpath(run_directory, "fftw_wisdom.save")
-    end
 
-    # When using FFTW.WISDOM_ONLY, the flag should be combined with the flag that was
-    # originally used to generate the 'wisdom' otherwise if the original flag was 'lower
-    # effort' (i.e. was FFTW.ESTIMATE) then the default (FFTW.MEASURE) will be used
-    # instead. Note that we also need an FFTW flag in chebyshev_radau_weights(), so if
-    # this flag is changed, that one should be changed too (if it is used). The flag is
-    # not automatically pased through, because there is not a convenient way to pass a
-    # flag through to chebyshev_radau_weights().
-    base_flag = FFTW.MEASURE
+        # When using FFTW.WISDOM_ONLY, the flag should be combined with the flag that was
+        # originally used to generate the 'wisdom' otherwise if the original flag was 'lower
+        # effort' (i.e. was FFTW.ESTIMATE) then the default (FFTW.MEASURE) will be used
+        # instead. Note that we also need an FFTW flag in chebyshev_radau_weights(), so if
+        # this flag is changed, that one should be changed too (if it is used). The flag is
+        # not automatically pased through, because there is not a convenient way to pass a
+        # flag through to chebyshev_radau_weights().
+        base_flag = FFTW.MEASURE
+    end
 
     function this_barrier()
         if !ignore_MPI
