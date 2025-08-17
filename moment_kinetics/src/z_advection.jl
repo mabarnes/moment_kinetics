@@ -54,57 +54,38 @@ function update_speed_z!(advect, upar, vth, evolve_upar, evolve_p, fields, vpa, 
     @boundscheck vperp.n == size(advect.speed,3) || throw(BoundsError(advect))
     @boundscheck vpa.n == size(advect.speed,2) || throw(BoundsError(advect))
     @boundscheck z.n == size(advect.speed,1) || throw(BoundsError(speed))
-    if z.advection.option == "default"
-        # bzed = B_z/B only used for z.advection.option == "default"
-        bzed = geometry.bzed
-        Bmag = geometry.Bmag
-        bzeta = geometry.bzeta
-        jacobian = geometry.jacobian
-        rhostar = geometry.rhostar
-        geofac = z.scratch
-        cvdriftz = geometry.cvdriftz
-        gbdriftz = geometry.gbdriftz
-        vEz = fields.vEz
-        if evolve_p
-            @loop_r_vperp_vpa ir ivperp ivpa begin
-                @. @views advect.speed[:,ivpa,ivperp,ir] = vEz[:,ir] + (vth[:,ir] * vpa.grid[ivpa] + upar[:,ir]) * bzed[:,ir]
-            end
-        elseif evolve_upar
-            @loop_r_vperp_vpa ir ivperp ivpa begin
-                @. @views advect.speed[:,ivpa,ivperp,ir] = vEz[:,ir] + (vpa.grid[ivpa] + upar[:,ir]) * bzed[:,ir]
-            end
-        else
-            @loop_r_vperp_vpa ir ivperp ivpa begin
-                # vpa bzed
-                @. @views advect.speed[:,ivpa,ivperp,ir] = vpa.grid[ivpa]*bzed[:,ir]
-                # ExB drift
-                @. @views advect.speed[:,ivpa,ivperp,ir] += -rhostar*bzeta[:,ir]*jacobian[:,ir]/Bmag[:,ir]*fields.gEr[ivperp,:,ir,is]
-                # magnetic curvature drift
-                @. @views advect.speed[:,ivpa,ivperp,ir] += rhostar*(vpa.grid[ivpa]^2)*cvdriftz[:,ir]
-                # magnetic grad B drift
-                @. @views advect.speed[:,ivpa,ivperp,ir] += 0.5*rhostar*(vperp.grid[ivperp]^2)*gbdriftz[:,ir]
-            end
+
+    # bzed = B_z/B only used for z.advection.option == "default"
+    bzed = geometry.bzed
+    Bmag = geometry.Bmag
+    bzeta = geometry.bzeta
+    jacobian = geometry.jacobian
+    rhostar = geometry.rhostar
+    geofac = z.scratch
+    cvdriftz = geometry.cvdriftz
+    gbdriftz = geometry.gbdriftz
+    vEz = fields.vEz
+    if evolve_p
+        @loop_r_vperp_vpa ir ivperp ivpa begin
+            @. @views advect.speed[:,ivpa,ivperp,ir] = vEz[:,ir] + (vth[:,ir] * vpa.grid[ivpa] + upar[:,ir]) * bzed[:,ir]
         end
-    elseif z.advection.option == "constant"
-        @inbounds begin
-            @loop_r_vperp_vpa ir ivperp ivpa begin
-                @views advect.speed[:,ivpa,ivperp,ir] .= z.advection.constant_speed
-            end
+    elseif evolve_upar
+        @loop_r_vperp_vpa ir ivperp ivpa begin
+            @. @views advect.speed[:,ivpa,ivperp,ir] = vEz[:,ir] + (vpa.grid[ivpa] + upar[:,ir]) * bzed[:,ir]
         end
-    elseif z.advection.option == "linear"
-        @inbounds begin
-            @loop_r_vperp_vpa ir ivperp ivpa begin
-                @. @views advect.speed[:,ivpa,ivperp,ir] = z.advection.constant_speed*(z.grid[i]+0.5*z.L)
-            end
-        end
-    elseif z.advection.option == "oscillating"
-        @inbounds begin
-            @loop_r_vperp_vpa ir ivperp ivpa begin
-                @. @views advect.speed[:,ivpa,ivperp,ir] = z.advection.constant_speed*(1.0
-                        + z.advection.oscillation_amplitude*sinpi(t*z.advection.frequency))
-            end
+    else
+        @loop_r_vperp_vpa ir ivperp ivpa begin
+            # vpa bzed
+            @. @views advect.speed[:,ivpa,ivperp,ir] = vpa.grid[ivpa]*bzed[:,ir]
+            # ExB drift
+            @. @views advect.speed[:,ivpa,ivperp,ir] += -rhostar*bzeta[:,ir]*jacobian[:,ir]/Bmag[:,ir]*fields.gEr[ivperp,:,ir,is]
+            # magnetic curvature drift
+            @. @views advect.speed[:,ivpa,ivperp,ir] += rhostar*(vpa.grid[ivpa]^2)*cvdriftz[:,ir]
+            # magnetic grad B drift
+            @. @views advect.speed[:,ivpa,ivperp,ir] += 0.5*rhostar*(vperp.grid[ivperp]^2)*gbdriftz[:,ir]
         end
     end
+
     return nothing
 end
 

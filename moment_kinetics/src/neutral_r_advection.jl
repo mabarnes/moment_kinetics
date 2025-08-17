@@ -52,13 +52,13 @@ function update_speed_neutral_r!(advect, r, z, vzeta, vr, vz)
     @boundscheck vr.n == size(advect.speed,3) || throw(BoundsError(advect))
     @boundscheck vz.n == size(advect.speed,2) || throw(BoundsError(advect))
     @boundscheck r.n == size(advect.speed,1) || throw(BoundsError(speed))
-    if r.advection.option == "default" && r.n > 1
+    if r.n > 1
         @inbounds begin
             @loop_z_vzeta_vr_vz iz ivzeta ivr ivz begin
                 @views advect.speed[:,ivz,ivr,ivzeta,iz] .= vr.grid[ivr]
             end
         end
-    elseif r.advection.option == "default" && r.n == 1 
+    else
         # no advection if no length in r 
         @loop_z_vzeta_vr_vz iz ivzeta ivr ivz begin
             advect.speed[:,ivz,ivr,ivzeta,iz] .= 0.0

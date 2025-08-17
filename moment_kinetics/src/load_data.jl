@@ -3675,7 +3675,6 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
         vz, vz_spectral, vz_chunk_size =
             load_coordinate_data(file_final_restart, "vz"; warn_unexpected=true)
     else
-        dummy_adv_input = advection_input("default", 1.0, 0.0, 0.0)
         dummy_comm = MPI.COMM_NULL
         dummy_input = OptionsDict("dummy" => OptionsDict())
         vzeta, vzeta_spectral = define_coordinate(dummy_input, "dummy"; ignore_MPI = true)
