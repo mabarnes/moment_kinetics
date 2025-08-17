@@ -184,19 +184,6 @@ end
 
 """
 """
-struct advection_input
-    # advection speed option
-    option::String
-    # constant advection speed to use with the "constant" advection option
-    constant_speed::mk_float
-    # for option = "oscillating", advection speed is of form
-    # speed = constant_speed*(1 + oscillation_amplitude*sinpi(frequency*t))
-    frequency::mk_float
-    oscillation_amplitude::mk_float
-end
-
-"""
-"""
 @enum electron_physics_type begin
     boltzmann_electron_response 
     boltzmann_electron_response_with_simple_sheath 

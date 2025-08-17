@@ -47,36 +47,8 @@ function update_speed_neutral_vz!(advect, fields, fvec, moments, vz, vr, vzeta, 
     @boundscheck vr.n == size(advect[1].speed,2) || throw(BoundsError(advect[1].speed))
     @boundscheck composition.n_neutral_species == size(advect,1) || throw(BoundsError(advect))
     @boundscheck vz.n == size(advect[1].speed,1) || throw(BoundsError(advect[1].speed))
-    if vz.advection.option == "default"
-        # dvpa/dt = Ze/m ⋅ E_parallel
-        update_speed_neutral_vz_default!(advect, fields, fvec, moments, vz, z, r,
-                                      composition, collisions, neutral_source_settings)
-    elseif vz.advection.option == "constant"
-        @begin_serial_region()
-        @serial_region begin
-            # Not usually used - just run in serial
-            # dvpa/dt = constant
-            @loop_sn isn begin
-                update_speed_neutral_vz_constant!(advect[isn], vz, 1:vr.n, 1:vzeta.n, 1:z.n, 1:r.n)
-            end
-        end
-    elseif vpa.advection.option == "linear"
-        @begin_serial_region()
-        @serial_region begin
-            # Not usually used - just run in serial
-            # dvpa/dt = constant ⋅ (vpa + L_vpa/2)
-            @loop_sn isn begin
-                update_speed_neutral_vz_linear!(advect[isn], vz, 1:vr.n, 1:vzeta.n, 1:z.n, 1:r.n)
-            end
-        end
-    end
-    return nothing
-end
 
-"""
-"""
-function update_speed_neutral_vz_default!(advect, fields, fvec, moments, vz, z, r,
-                                       composition, collisions, neutral_source_settings)
+    # dvpa/dt = Ze/m ⋅ E_parallel
     if moments.evolve_p && moments.evolve_upar
         update_speed_n_u_p_evolution_neutral!(advect, fvec, moments, vz, z, r,
                                               composition, collisions,
@@ -89,6 +61,8 @@ function update_speed_neutral_vz_default!(advect, fields, fvec, moments, vz, z, 
         update_speed_n_u_evolution_neutral!(advect, fvec, moments, vz, z, r, composition,
                                             collisions, neutral_source_settings)
     end
+
+    return nothing
 end
 
 """
@@ -177,36 +151,6 @@ function update_speed_n_u_evolution_neutral!(advect, fvec, moments, vz, z, r, co
     end
 
     return nothing
-end
-
-"""
-update the advection speed dvpa/dt = constant
-"""
-function update_speed_neutral_vz_constant!(advect, vz, vr_range, vzeta_range, z_range, r_range)
-    #@inbounds @fastmath begin
-    for ir ∈ r_range
-        for iz ∈ z_range
-            for ivzeta ∈ vzeta_range, ivr ∈ vr_range
-                @views advect.speed[:,ivr,ivzeta,iz,ir] .= vz.advection.constant_speed
-            end
-        end
-    end
-    #end
-end
-
-"""
-update the advection speed dvpa/dt = const*(vpa + L/2)
-"""
-function update_speed_neutral_vz_linear(advect, vz, vr_range, vzeta_range, z_range, r_range)
-    @inbounds @fastmath begin
-        for ir ∈ r_range
-            for iz ∈ z_range
-                for ivzeta ∈ vzeta_range, ivr ∈ vr_range
-                    @views @. advect.speed[:,ivr,ivzeta,iz,ir] = vz.advection.constant_speed*(vz.grid+0.5*vpa.L)
-                end
-            end
-        end
-    end
 end
 
 end
