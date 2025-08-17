@@ -56,7 +56,7 @@ function update_speed_r!(advect, fields, evolve_density, evolve_upar, evolve_p, 
     @boundscheck vpa.n == size(advect.speed,2) || throw(BoundsError(advect))
     @boundscheck r.n == size(advect.speed,1) || throw(BoundsError(speed))
 
-    if r.advection.option == "default" && r.n > 1
+    if r.n > 1
         if evolve_density || evolve_upar || evolve_p
             # Magnetic drifts not supported here yet
             vEr = fields.vEr
@@ -85,16 +85,10 @@ function update_speed_r!(advect, fields, evolve_density, evolve_upar, evolve_p, 
                 @. @views speed[:,ivpa,ivperp,iz] += 0.5*rhostar*(vperp.grid[ivperp]^2)*gbdriftr[iz,:]
             end
         end
-    elseif r.advection.option == "default" && r.n == 1
+    else
         # no advection if no length in r
         @loop_z_vperp_vpa iz ivperp ivpa begin
             advect.speed[:,ivpa,ivperp,iz] .= 0.
-        end
-    elseif r.advection.option == "constant"
-        @inbounds begin
-            @loop_z_vperp_vpa iz ivperp ivpa begin
-                @views advect.speed[:,ivpa,ivperp,iz] .= r.advection.constant_speed
-            end
         end
     end
     return nothing

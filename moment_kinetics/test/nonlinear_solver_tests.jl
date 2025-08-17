@@ -5,7 +5,6 @@ include("setup.jl")
 using moment_kinetics.array_allocation: allocate_float, allocate_shared_float
 using moment_kinetics.communication
 using moment_kinetics.coordinates: coordinate
-using moment_kinetics.input_structs: advection_input
 using moment_kinetics.looping
 using moment_kinetics.looping: setup_loop_ranges!
 using moment_kinetics.nonlinear_solvers
@@ -61,9 +60,9 @@ function linear_test()
                                zeros(mk_float, 0), zeros(mk_int, 0), zeros(mk_float, 0),
                                zeros(mk_float, 0), zeros(mk_float, 0), zeros(mk_int, 0),
                                zeros(mk_int, 0), zeros(mk_float, 0, 0),
-                               zeros(mk_float, 0, 0), advection_input("", 0.0, 0.0, 0.0),
-                               zeros(mk_float, 0), zeros(mk_float, 0), MPI.COMM_NULL, 1:n,
-                               1:n, zeros(mk_float, 0), zeros(mk_float, 0), "",
+                               zeros(mk_float, 0, 0), zeros(mk_float, 0),
+                               zeros(mk_float, 0), MPI.COMM_NULL, 1:n, 1:n,
+                               zeros(mk_float, 0), zeros(mk_float, 0), "",
                                zeros(mk_float, 0), false, zeros(mk_float, 0, 0, 0),
                                zeros(mk_float, 0, 0), zeros(mk_float, 0), zeros(mk_float, 0))
         coords = NamedTuple(c => the_coord for c ∈ coord_names)
@@ -175,9 +174,9 @@ function nonlinear_test()
                                zeros(mk_float, 0), zeros(mk_int, 0), zeros(mk_float, 0),
                                zeros(mk_float, 0), zeros(mk_float, 0), zeros(mk_int, 0),
                                zeros(mk_int, 0), zeros(mk_float, 0, 0),
-                               zeros(mk_float, 0, 0), advection_input("", 0.0, 0.0, 0.0),
-                               zeros(mk_float, 0), zeros(mk_float, 0), MPI.COMM_NULL, 1:n,
-                               1:n, zeros(mk_float, 0), zeros(mk_float, 0), "",
+                               zeros(mk_float, 0, 0), zeros(mk_float, 0),
+                               zeros(mk_float, 0), MPI.COMM_NULL, 1:n, 1:n,
+                               zeros(mk_float, 0), zeros(mk_float, 0), "",
                                zeros(mk_float, 0), false, zeros(mk_float, 0, 0, 0),
                                zeros(mk_float, 0, 0), zeros(mk_float, 0), zeros(mk_float, 0))
         coords = NamedTuple(c => the_coord for c ∈ coord_names)
