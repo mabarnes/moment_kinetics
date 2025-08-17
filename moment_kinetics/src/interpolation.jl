@@ -252,9 +252,10 @@ function interpolate_to_grid_1d!(result, new_grid, f, coord,
     # There is only one point in the 'old grid' represented by coord (as indicated by the
     # type of the `spectral` argument), and we are interpolating in a velocity space
     # dimension. Assume that the profile 'should be' a unit-density Maxwellian over the
-    # new grid, with a temperature equal to the reference temperature, so that
-    # vth^2=2*(Tref/Tref)/(mref/mref)=2.
-    @. result = f[1] / sqrt(2.0 * π) * exp(-0.5*new_grid^2)
+    # new grid, with a thermal speed equal to the reference speed - because this is
+    # convenient for moment-kinetic initialisation with correct moment constraints - so
+    # that T=1/2*cref^2/Tref=1/2.
+    @. result = f[1] / sqrt(π) * exp(-new_grid^2)
 
     return nothing
 end
@@ -265,12 +266,13 @@ function interpolate_to_grid_1d!(result, new_grid, f, coord,
     # There is only one point in the 'old grid' represented by coord (as indicated by the
     # type of the `spectral` argument), and we are interpolating in a velocity space
     # dimension. Assume that the profile 'should be' a unit-density, 2D Maxwellian over
-    # the new grid, with a temperature equal to the reference temperature, so that
-    # vth^2=2*(Tref/Tref)/(mref/mref)=2.
+    # the new grid, with a thermal speed equal to the reference speed - because this is
+    # convenient for moment-kinetic initialisation with correct moment constraints - so
+    # that T=1/2*cref^2/Tref=1/2.
     # Needs a 2D Maxwellian, because for the vperp coordinate, because the distribution
     # function is gyrophase independent, the vperp dimension represents two dimensions of
     # velocity space.
-    @. result = f[1] / 2.0 / π * exp(-0.5*new_grid^2)
+    @. result = f[1] / (2.0 * π) * 2.0 * exp(-new_grid^2)
 
     return nothing
 end

@@ -54,7 +54,8 @@ false for other situations (e.g. when post-processing).
 other situations (e.g. when post-processing).
 """
 function mk_input(input_dict=OptionsDict("output" => OptionsDict("run_name" => "default"));
-                  save_inputs_to_txt=false, ignore_MPI=true, warn_unexpected=false)
+                  save_inputs_to_txt=false, ignore_MPI=true, warn_unexpected=false,
+                  write_output=true)
 
     # Check for input options that used to exist, but do not any more. If these are
     # present, the user probably needs to update their input file.
@@ -117,6 +118,10 @@ function mk_input(input_dict=OptionsDict("output" => OptionsDict("run_name" => "
                 end
             end
         end
+    end
+
+    if !write_output
+        save_inputs_to_txt = false
     end
     
     # read composition and species data
@@ -367,14 +372,14 @@ function mk_input(input_dict=OptionsDict("output" => OptionsDict("run_name" => "
     end
 
     io_immutable = setup_io_input(input_dict, timestepping_section, warn_unexpected;
-                                  ignore_MPI=ignore_MPI)
+                                  ignore_MPI=ignore_MPI, write_output=write_output)
 
     # this is the directory where the simulation data will be stored
     timestepping_section["stopfile_name"] = joinpath(io_immutable.output_dir, "stop")
     electron_timestepping_section["stopfile_name"] = joinpath(io_immutable.output_dir, "stop")
 
     # initialize z grid and write grid point locations to file
-    if ignore_MPI
+    if ignore_MPI || !write_output
         run_directory = nothing
     else
         run_directory = io_immutable.output_dir
