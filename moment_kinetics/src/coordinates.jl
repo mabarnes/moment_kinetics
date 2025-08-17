@@ -17,7 +17,6 @@ using ..fourier: setup_fourier_pseudospectral
 using ..gauss_legendre: scaled_gauss_legendre_lobatto_grid, scaled_gauss_legendre_radau_grid, setup_gausslegendre_pseudospectral
 using ..input_structs
 using ..quadrature: trapezium_weights, composite_simpson_weights
-using ..input_structs
 using ..moment_kinetics_structs: null_spatial_dimension_info,
                                  null_velocity_dimension_info, null_vperp_dimension_info
 
@@ -131,8 +130,6 @@ struct coordinate{T <: AbstractVector{mk_float}, Ti <: AbstractVector{mk_int}, T
     # ngrid x nelement entries
     scratch_2d::Array{mk_float,2}
     scratch2_2d::Array{mk_float,2}
-    # struct containing advection speed options/inputs
-    advection::advection_input
     # buffer of size 1 for communicating information about cell boundaries
     send_buffer::Array{mk_float,1}
     # buffer of size 1 for communicating information about cell boundaries
@@ -203,16 +200,6 @@ function get_coordinate_input(input_dict, name; ignore_MPI=false,
         element_spacing_option="uniform",
         # which boundary condition to use
         bc=default_bc,
-        # determine the option used for the advection speed in z supported options are
-        # "constant" and "oscillating", in addition to the "default" option which uses
-        # d(coord)/dt from the moment-kinetic equations as the advection speed
-        advection_option="default",
-        # constant advection speed to use with advection_option = "constant"
-        advection_speed=0.0,
-        # for advection_option = "oscillating", advection speed is of form
-        # speed = advection_speed*(1 + advection_oscillation_amplitude*sinpi(advection_oscillation_frequency*t))
-        advection_oscillation_amplitude=1.0,
-        advection_oscillation_frequency=1.0,
        )
     if coord_input_dict["nelement_local"] == -1 || ignore_MPI
         coord_input_dict["nelement_local"] = coord_input_dict["nelement"]
@@ -372,11 +359,6 @@ function define_coordinate(coord_input::NamedTuple; parallel_io::Bool=false,
     end
     # scratch_2d is an array used for intermediate calculations requiring ngrid x nelement entries
     scratch_2d = allocate_float(coord_input.ngrid, coord_input.nelement_local)
-    # struct containing the advection speed options/inputs for this coordinate
-    advection = advection_input(coord_input.advection_option,
-                                coord_input.advection_speed,
-                                coord_input.advection_oscillation_frequency,
-                                coord_input.advection_oscillation_amplitude)
     # buffers for cyclic communication of boundary points
     # each chain of elements has only two external (off-rank)
     # endpoints, so only two pieces of information must be shared
@@ -466,7 +448,7 @@ function define_coordinate(coord_input::NamedTuple; parallel_io::Bool=false,
         copy(scratch), copy(scratch), copy(scratch), copy(scratch), copy(scratch),
         copy(scratch), copy(scratch), copy(scratch), copy(scratch),
         scratch_int_nelement_plus_1, scratch_shared, scratch_shared2, scratch_shared3,
-        scratch_shared_int, scratch_shared_int2, scratch_2d, copy(scratch_2d), advection,
+        scratch_shared_int, scratch_shared_int2, scratch_2d, copy(scratch_2d),
         send_buffer, receive_buffer, comm, local_io_range, global_io_range, element_scale,
         element_shift, coord_input.element_spacing_option, element_boundaries,
         radau_first_element, other_nodes, one_over_denominator, mask_up, mask_low)

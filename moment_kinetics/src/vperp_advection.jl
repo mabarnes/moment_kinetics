@@ -42,19 +42,6 @@ function update_speed_vperp!(vperp_advect, fvec, vpa, vperp, z, r, z_advect, r_a
     @boundscheck vpa.n == size(vperp_advect[1].speed,2) || throw(BoundsError(vperp_advect[1]))
     @boundscheck r.n == size(vperp_advect[1].speed,4) || throw(BoundsError(vperp_advect[1]))
     @begin_s_r_z_vpa_region()
-    if vperp.advection.option == "default"
-        update_speed_vperp_default!(vperp_advect, fvec, vpa, vperp, z, r, z_advect, r_advect, geometry, moments)
-    elseif vperp.advection.option == "constant"
-        update_speed_vperp_constant!(vperp_advect, vpa, vperp, z, r, z_advect, r_advect, geometry)
-    end
-
-    return nothing
-end
-
-"""
-update speed vperp default
-"""
-function update_speed_vperp_default!(vperp_advect, fvec, vpa, vperp, z, r, z_advect, r_advect, geometry, moments)
     if moments.evolve_p
         update_speed_vperp_n_u_p_evolution!(vperp_advect, fvec, vpa, vperp, z, r, z_advect, r_advect, geometry, moments)
     elseif moments.evolve_upar
@@ -64,6 +51,8 @@ function update_speed_vperp_default!(vperp_advect, fvec, vpa, vperp, z, r, z_adv
     else
         update_speed_vperp_DK!(vperp_advect, vpa, vperp, z, r, z_advect, r_advect, geometry, moments)
     end
+
+    return nothing
 end
 
 """
@@ -141,19 +130,6 @@ function update_speed_vperp_DK!(vperp_advect, vpa, vperp, z, r, z_advect, r_adve
         end
     end
 end
-
-
-"""
-update speed vperp constant
-"""
-function update_speed_vperp_constant!(vperp_advect, vpa, vperp, z, r, z_advect, r_advect, geometry)
-    @inbounds begin
-        @loop_r_z_vpa ir iz ivpa begin
-            @views vperp_advect.speed[:,ivpa,iz,ir] .= vperp.advection.constant_speed
-        end
-    end
-end
-
 
 function update_z_r_speeds!(z_advect, r_advect, fvec_in, moments, fields,
                             geometry, vpa, vperp, z, r, t)
