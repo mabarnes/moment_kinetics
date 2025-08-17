@@ -346,7 +346,7 @@ end
 Read the settings for I/O
 """
 function setup_io_input(input_dict, timestepping_section, warn_unexpected::Bool;
-                        ignore_MPI=false)
+                        ignore_MPI=false, write_output=true)
     io_settings = set_defaults_and_check_section!(
         input_dict, "output", warn_unexpected;
         run_name="",
@@ -381,7 +381,7 @@ function setup_io_input(input_dict, timestepping_section, warn_unexpected::Bool;
     io_settings["write_electron_steady_state_diagnostics"] = timestepping_section["electron_t_input"]["write_steady_state_diagnostics"]
 
     # Create output_dir if it does not exist.
-    if !ignore_MPI
+    if !(ignore_MPI || !write_output)
         if global_rank[] == 0
             mkpath(io_settings["output_dir"])
         end
