@@ -16,7 +16,7 @@ jobs:
       matrix:
         numprocs: [2, 3, 4]
         isMaster:
-          - ${{ github.ref == 'master' }}
+          - ${{ github.ref == 'refs/heads/master' }}
         include:
           # Default to no "--long" flag
           - long: ""
