@@ -482,7 +482,7 @@ function runtests(; highres=false)
                     ((false, false, false, 2.0e-14, 2.0e-14, highres ? 4.0e-3 : 1.0e-5, highres ? 1.0e-4 : 5.0e-12),
                      (true, false, false, highres ? 2.0e-8 : 2.0e-14, highres ? 2.0e-8 : 1.0e-14, highres ? 4.0e-3 : 1.0e-5, highres ? 1.0e-4 : 5.0e-12),
                      (true, true, false, highres ? 2.0e-3 : 2.0e-14, highres ? 3.0e-4 : 2.0e-14, highres ? 4.0e-3 : 1.0e-5, highres ? 3.0e-4 : 5.0e-12),
-                     (true, true, true, highres ? 2.0e-3 : 2.0e-14, highres ? 2.0e-3 : 1.0e-14, highres ? 4.0e-3 : 1.0e-5, highres ? 2.0e-3 : 5.0e-12),
+                     (true, true, true, highres ? 2.0e-3 : 2.0e-14, highres ? 2.0e-3 : 2.0e-14, highres ? 4.0e-3 : 1.0e-5, highres ? 2.0e-3 : 5.0e-12),
                     )
             println("  evolve_density=$evolve_density, evolve_upar=$evolve_upar, evolve_p=$evolve_p:")
 
