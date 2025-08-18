@@ -13,13 +13,13 @@ using StatsBase
 # be defined
 include("../../machines/shared/machine_setup.jl") # Included so Documenter.jl can find its docs
 include("check_so_newer_than_code.jl")
+include("command_line_options.jl")
+include("debugging.jl")
 include("type_definitions.jl")
 include("timer_utils.jl")
-include("command_line_options.jl")
 include("constants.jl")
-include("debugging.jl")
-include("communication.jl")
 include("moment_kinetics_structs.jl")
+include("communication.jl")
 include("looping.jl")
 include("array_allocation.jl")
 include("interpolation.jl")
@@ -265,8 +265,7 @@ parallel loop ranges, and are only used by the tests in `debug_test/`.
 
     # create the "fields" structure that contains arrays
     # for the electrostatic potential phi and the electromagnetic fields
-    fields = setup_em_fields(vperp.n, z.n, r.n, composition.n_ion_species,
-                             em_input)
+    fields = setup_em_fields(vperp, z, r, composition.n_ion_species, em_input)
 
     # Allocate arrays and create the pdf and moments structs
     pdf, moments =

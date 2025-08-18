@@ -11,7 +11,7 @@ using ..array_allocation: allocate_float
 using ..communication
 using ..input_structs
 using ..looping
-using ..type_definitions: mk_float
+using ..type_definitions: mk_float, MPISharedArray
 
 using MPI
 using StatsBase: mean

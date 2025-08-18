@@ -136,15 +136,15 @@ function setup_gausslegendre_pseudospectral(coord; collision_operator_dim=true)
     radau = setup_gausslegendre_pseudospectral_radau(coord,collision_operator_dim=collision_operator_dim)
 
     if collision_operator_dim
-        S_matrix = allocate_float(coord.n,coord.n)
+        S_matrix = allocate_float(coord, coord)
         setup_global_weak_form_matrix!(S_matrix, lobatto, radau, coord, "S")
     else
-        S_matrix = allocate_float(0, 0)
+        S_matrix = allocate_float(Symbol(coord.name)=>0, Symbol(coord.name)=>0)
     end
-    mass_matrix = allocate_float(coord.n,coord.n)
-    K_matrix = allocate_float(coord.n,coord.n)
-    L_matrix = allocate_float(coord.n,coord.n)
-    D_matrix = allocate_float(coord.n,coord.n)
+    mass_matrix = allocate_float(coord, coord)
+    K_matrix = allocate_float(coord, coord)
+    L_matrix = allocate_float(coord, coord)
+    D_matrix = allocate_float(coord, coord)
 
     dirichlet_bc = (coord.bc in ["zero", "constant"]) # and further options in future
     periodic_bc = coord.periodic
@@ -155,7 +155,7 @@ function setup_gausslegendre_pseudospectral(coord; collision_operator_dim=true)
     dense_second_deriv_matrix = inv(mass_matrix) * K_matrix
     mass_matrix_lu = lu(sparse(mass_matrix))
     if dirichlet_bc || periodic_bc
-        L_matrix_with_bc = allocate_float(coord.n,coord.n)
+        L_matrix_with_bc = allocate_float(coord, coord)
         setup_global_weak_form_matrix!(L_matrix_with_bc, lobatto, radau, coord, "L", dirichlet_bc=dirichlet_bc, periodic_bc=periodic_bc)
         L_matrix_with_bc = sparse(L_matrix_with_bc )
         L_matrix_lu = lu(sparse(L_matrix_with_bc))
@@ -164,7 +164,7 @@ function setup_gausslegendre_pseudospectral(coord; collision_operator_dim=true)
         L_matrix_lu = nothing
     end    
 
-    Qmat = allocate_float(coord.ngrid,coord.ngrid)
+    Qmat = allocate_float(coord.ngrid, coord.ngrid)
 
     return gausslegendre_info(lobatto,radau,mass_matrix,sparse(S_matrix),sparse(K_matrix),sparse(L_matrix),sparse(D_matrix),convert(SparseMatrixCSR{1,mk_float,mk_int},D_matrix),dense_second_deriv_matrix,L_matrix_with_bc,
                               mass_matrix_lu,L_matrix_lu,Qmat)
@@ -712,7 +712,7 @@ function GaussLegendre_weak_product_matrix!(QQ::Array{mk_float,2},ngrid,x,wgts,o
     # for P0: AA = < P_i P'_j >
     # for P1: AA = < P_i P'_j x >
     # for P2: AA = < P_i P'_j x^2 >
-    AA = allocate_float(ngrid,ngrid)
+    AA = allocate_float(ngrid, ngrid)
     nquad = 2*ngrid
     zz, wz = gausslegendre(nquad)
     @. AA = 0.0
@@ -847,7 +847,7 @@ function GaussLegendre_weak_product_matrix!(QQ::Array{mk_float,3},ngrid,x,wgts,o
     # for Y21: AA = < P_i P'_j P'_k x >
     # for Y31: AA = < P_i P'_j P_k x >
     # for Y30: AA = < P_i P'_j P_k >
-    AA = allocate_float(ngrid,ngrid,ngrid)
+    AA = allocate_float(ngrid, ngrid, ngrid)
     nquad = 2*ngrid
     zz, wz = gausslegendre(nquad)
     @. AA = 0.0
@@ -1097,7 +1097,7 @@ function setup_global_weak_form_matrix!(QQ_global::Array{mk_float,2},
                                lobatto::gausslegendre_base_info,
                                radau::gausslegendre_base_info, 
                                coord,option; dirichlet_bc=false, periodic_bc=false)
-    QQ_j = allocate_float(coord.ngrid,coord.ngrid)
+    QQ_j = allocate_float(coord.ngrid, coord.ngrid)
     
     ngrid = coord.ngrid
     imin = coord.imin
@@ -1175,8 +1175,8 @@ function setup_global_strong_form_matrix!(QQ_global::Array{mk_float,2},
                                           lobatto::gausslegendre_base_info,
                                           radau::gausslegendre_base_info, 
                                           coord,option; periodic_bc=false)
-    QQ_j = allocate_float(coord.ngrid,coord.ngrid)
-    QQ_jp1 = allocate_float(coord.ngrid,coord.ngrid)
+    QQ_j = allocate_float(coord.ngrid, coord.ngrid)
+    QQ_jp1 = allocate_float(coord.ngrid, coord.ngrid)
 
     ngrid = coord.ngrid
     imin = coord.imin

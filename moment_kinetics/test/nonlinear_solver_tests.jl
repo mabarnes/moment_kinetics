@@ -85,12 +85,12 @@ function linear_test()
         end
 
         if serial_solve
-            x = allocate_float(n)
-            residual = allocate_float(n)
-            delta_x = allocate_float(n)
-            rhs_delta = allocate_float(n)
-            v = allocate_float(n)
-            w = allocate_float(n)
+            x = allocate_float(; vpa=n)
+            residual = allocate_float(; vpa=n)
+            delta_x = allocate_float(; vpa=n)
+            rhs_delta = allocate_float(; vpa=n)
+            v = allocate_float(; vpa=n)
+            w = allocate_float(; vpa=n)
 
             x .= 0.0
             residual .= 0.0
@@ -99,12 +99,12 @@ function linear_test()
             v .= 0.0
             w .= 0.0
         else
-            x = allocate_shared_float(n)
-            residual = allocate_shared_float(n)
-            delta_x = allocate_shared_float(n)
-            rhs_delta = allocate_shared_float(n)
-            v = allocate_shared_float(n)
-            w = allocate_shared_float(n)
+            x = allocate_shared_float(; z=n)
+            residual = allocate_shared_float(; z=n)
+            delta_x = allocate_shared_float(; z=n)
+            rhs_delta = allocate_shared_float(; z=n)
+            v = allocate_shared_float(; z=n)
+            w = allocate_shared_float(; z=n)
 
             @begin_serial_region()
             @serial_region begin
@@ -225,19 +225,19 @@ function nonlinear_test()
         end
 
         if serial_solve
-            x = allocate_float(n)
-            residual = allocate_float(n)
-            delta_x = allocate_float(n)
-            rhs_delta = allocate_float(n)
-            v = allocate_float(n)
-            w = allocate_float(n)
+            x = allocate_float(; vpa=n)
+            residual = allocate_float(; vpa=n)
+            delta_x = allocate_float(; vpa=n)
+            rhs_delta = allocate_float(; vpa=n)
+            v = allocate_float(; vpa=n)
+            w = allocate_float(; vpa=n)
         else
-            x = allocate_shared_float(n)
-            residual = allocate_shared_float(n)
-            delta_x = allocate_shared_float(n)
-            rhs_delta = allocate_shared_float(n)
-            v = allocate_shared_float(n)
-            w = allocate_shared_float(n)
+            x = allocate_shared_float(; z=n)
+            residual = allocate_shared_float(; z=n)
+            delta_x = allocate_shared_float(; z=n)
+            rhs_delta = allocate_shared_float(; z=n)
+            v = allocate_shared_float(; z=n)
+            w = allocate_shared_float(; z=n)
         end
 
         if serial_solve

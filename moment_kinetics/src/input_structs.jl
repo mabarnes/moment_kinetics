@@ -19,8 +19,7 @@ export set_defaults_and_check_top_level!, set_defaults_and_check_section!,
        check_sections!, options_to_TOML, Dict_to_NamedTuple,
        convert_to_sorted_nested_OptionsDict
 
-using ..communication
-using ..type_definitions: mk_float, mk_int, OptionsDict
+using ..type_definitions: mk_float, mk_int, OptionsDict, MPISharedArray
 
 using DataStructures: SortedDict
 using MPI

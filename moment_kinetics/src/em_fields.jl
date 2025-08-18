@@ -24,16 +24,19 @@ using MPI
 
 """
 """
-function setup_em_fields(nvperp, nz, nr, n_ion_species, em_input)
-    phi = allocate_shared_float(nz,nr)
-    phi0 = allocate_shared_float(nz,nr)
-    Er = allocate_shared_float(nz,nr)
-    Ez = allocate_shared_float(nz,nr)
-    vEr = allocate_shared_float(nz,nr)
-    vEz = allocate_shared_float(nz,nr)
-    gphi = allocate_shared_float(nvperp,nz,nr,n_ion_species)
-    gEr = allocate_shared_float(nvperp,nz,nr,n_ion_species)
-    gEz = allocate_shared_float(nvperp,nz,nr,n_ion_species)
+function setup_em_fields(vperp, z, r, n_ion_species, em_input)
+    phi = allocate_shared_float(z, r)
+    phi0 = allocate_shared_float(z, r)
+    Er = allocate_shared_float(z, r)
+    Ez = allocate_shared_float(z, r)
+    vEr = allocate_shared_float(z, r)
+    vEz = allocate_shared_float(z, r)
+    gphi = allocate_shared_float(; vperp=vperp.n, z=z.n, r=r.n,
+                                 ion_species=n_ion_species)
+    gEr = allocate_shared_float(; vperp=vperp.n, z=z.n, r=r.n,
+                                ion_species=n_ion_species)
+    gEz = allocate_shared_float(; vperp=vperp.n, z=z.n, r=r.n,
+                                ion_species=n_ion_species)
     @begin_serial_region()
     @serial_region begin
         # Ensure these fields are never used uninitialised.
