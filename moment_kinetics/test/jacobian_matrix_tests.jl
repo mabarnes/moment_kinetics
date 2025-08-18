@@ -258,7 +258,7 @@ function test_electron_z_advection(test_input; rtol=(2.5e2*epsilon)^2)
         vpa_advect = advection_structs.vpa_advect
         me = composition.me_over_mi
 
-        delta_p = allocate_shared_float(size(p)...)
+        delta_p = allocate_shared_float(z)
         p_amplitude = epsilon * maximum(p)
         f = @view pdf.electron.norm[:,:,:,ir]
 
@@ -274,7 +274,7 @@ function test_electron_z_advection(test_input; rtol=(2.5e2*epsilon)^2)
         # Ensure initial electron distribution function obeys constraints
         hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa, vperp)
         @begin_r_anyzv_region()
-        delta_f = allocate_shared_float(size(f)...)
+        delta_f = allocate_shared_float(vpa, vperp, z)
         f_amplitude = epsilon * maximum(f)
         # Use exp(sin()) in vpa so that perturbation does not have any symmetry that makes
         # low-order moments vanish exactly.
@@ -308,7 +308,7 @@ function test_electron_z_advection(test_input; rtol=(2.5e2*epsilon)^2)
                                            scratch_dummy.buffer_vpavperpr_6[:,:,ir],
                                            z_spectral, z)
 
-        jacobian_matrix = allocate_shared_float(total_size, total_size)
+        jacobian_matrix = allocate_shared_float(:jac_full=>total_size, :jac_full=>total_size)
         @anyzv_serial_region begin
             jacobian_matrix .= 0.0
             for row ∈ 1:total_size
@@ -324,7 +324,7 @@ function test_electron_z_advection(test_input; rtol=(2.5e2*epsilon)^2)
         # Test 'ADI Jacobians' before other tests, because residual_func() may modify some
         # variables (vth, etc.).
 
-        jacobian_matrix_ADI_check = allocate_shared_float(total_size, total_size)
+        jacobian_matrix_ADI_check = allocate_shared_float(:jac_full=>total_size, :jac_full=>total_size)
 
         @testset "ADI Jacobians - implicit z" begin
             # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
@@ -476,8 +476,8 @@ function test_electron_z_advection(test_input; rtol=(2.5e2*epsilon)^2)
             return nothing
         end
 
-        original_residual = allocate_shared_float(size(f)...)
-        perturbed_residual = allocate_shared_float(size(f)...)
+        original_residual = allocate_shared_float(vpa, vperp, z)
+        perturbed_residual = allocate_shared_float(vpa, vperp, z)
 
         @testset "δf only" begin
             residual_func!(original_residual, f, p)
@@ -603,7 +603,7 @@ function test_electron_vpa_advection(test_input; rtol=(3.0e2*epsilon)^2)
         update_electron_speed_z!(z_advect[1], upar, vth, vpa.grid, ir)
         z_speed = @view z_advect[1].speed[:,:,:,ir]
 
-        delta_p = allocate_shared_float(size(p)...)
+        delta_p = allocate_shared_float(z)
         p_amplitude = epsilon * maximum(p)
         f = @view pdf.electron.norm[:,:,:,ir]
         @begin_anyzv_region()
@@ -617,7 +617,7 @@ function test_electron_vpa_advection(test_input; rtol=(3.0e2*epsilon)^2)
         # Ensure initial electron distribution function obeys constraints
         hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa, vperp)
         @begin_r_anyzv_region()
-        delta_f = allocate_shared_float(size(f)...)
+        delta_f = allocate_shared_float(vpa, vperp, z)
         f_amplitude = epsilon * maximum(f)
         # Use exp(sin()) in vpa so that perturbation does not have any symmetry that makes
         # low-order moments vanish exactly.
@@ -647,7 +647,7 @@ function test_electron_vpa_advection(test_input; rtol=(3.0e2*epsilon)^2)
                                vpa_advect[1].adv_fac[:,ivperp,iz,ir], vpa_spectral)
         end
 
-        jacobian_matrix = allocate_shared_float(total_size, total_size)
+        jacobian_matrix = allocate_shared_float(:jac_full=>total_size, :jac_full=>total_size)
         @begin_anyzv_region()
         @anyzv_serial_region begin
             jacobian_matrix .= 0.0
@@ -666,7 +666,7 @@ function test_electron_vpa_advection(test_input; rtol=(3.0e2*epsilon)^2)
         # Test 'ADI Jacobians' before other tests, because residual_func() may modify some
         # variables (vth, etc.).
 
-        jacobian_matrix_ADI_check = allocate_shared_float(total_size, total_size)
+        jacobian_matrix_ADI_check = allocate_shared_float(:jac_full=>total_size, :jac_full=>total_size)
 
         @testset "ADI Jacobians - implicit z" begin
             # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
@@ -814,8 +814,8 @@ function test_electron_vpa_advection(test_input; rtol=(3.0e2*epsilon)^2)
             return nothing
         end
 
-        original_residual = allocate_shared_float(size(f)...)
-        perturbed_residual = allocate_shared_float(size(f)...)
+        original_residual = allocate_shared_float(vpa, vperp, z)
+        perturbed_residual = allocate_shared_float(vpa, vperp, z)
 
         @testset "δf only" begin
             residual_func!(original_residual, f, p)
@@ -957,7 +957,7 @@ function test_contribution_from_electron_pdf_term(test_input; rtol=(4.0e2*epsilo
         update_electron_speed_z!(z_advect[1], upar, vth, vpa.grid, ir)
         z_speed = @view z_advect[1].speed[:,:,:,ir]
 
-        delta_p = allocate_shared_float(size(p)...)
+        delta_p = allocate_shared_float(z)
         p_amplitude = epsilon * maximum(p)
         f = @view pdf.electron.norm[:,:,:,ir]
         @begin_anyzv_region()
@@ -971,7 +971,7 @@ function test_contribution_from_electron_pdf_term(test_input; rtol=(4.0e2*epsilo
         # Ensure initial electron distribution function obeys constraints
         hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa, vperp)
         @begin_r_anyzv_region()
-        delta_f = allocate_shared_float(size(f)...)
+        delta_f = allocate_shared_float(vpa, vperp, z)
         f_amplitude = epsilon * maximum(f)
         # Use exp(sin()) in vpa so that perturbation does not have any symmetry that makes
         # low-order moments vanish exactly.
@@ -987,7 +987,7 @@ function test_contribution_from_electron_pdf_term(test_input; rtol=(4.0e2*epsilo
         p_size = length(p)
         total_size = pdf_size + p_size
 
-        jacobian_matrix = allocate_shared_float(total_size, total_size)
+        jacobian_matrix = allocate_shared_float(:jac_full=>total_size, :jac_full=>total_size)
         @begin_anyzv_region()
         @anyzv_serial_region begin
             jacobian_matrix .= 0.0
@@ -1005,7 +1005,7 @@ function test_contribution_from_electron_pdf_term(test_input; rtol=(4.0e2*epsilo
         # Test 'ADI Jacobians' before other tests, because residual_func() may modify some
         # variables (vth, etc.).
 
-        jacobian_matrix_ADI_check = allocate_shared_float(total_size, total_size)
+        jacobian_matrix_ADI_check = allocate_shared_float(:jac_full=>total_size, :jac_full=>total_size)
 
         @testset "ADI Jacobians - implicit z" begin
             # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
@@ -1163,8 +1163,8 @@ function test_contribution_from_electron_pdf_term(test_input; rtol=(4.0e2*epsilo
             return nothing
         end
 
-        original_residual = allocate_shared_float(size(f)...)
-        perturbed_residual = allocate_shared_float(size(f)...)
+        original_residual = allocate_shared_float(vpa, vperp, z)
+        perturbed_residual = allocate_shared_float(vpa, vperp, z)
 
         @testset "δf only" begin
             residual_func!(original_residual, f, p)
@@ -1271,7 +1271,7 @@ function test_electron_dissipation_term(test_input; rtol=(1.0e1*epsilon)^2)
         update_electron_speed_z!(z_advect[1], upar, vth, vpa.grid, ir)
         z_speed = @view z_advect[1].speed[:,:,:,ir]
 
-        delta_p = allocate_shared_float(size(p)...)
+        delta_p = allocate_shared_float(z)
         p_amplitude = epsilon * maximum(p)
         f = @view pdf.electron.norm[:,:,:,ir]
         @begin_anyzv_region()
@@ -1285,7 +1285,7 @@ function test_electron_dissipation_term(test_input; rtol=(1.0e1*epsilon)^2)
         # Ensure initial electron distribution function obeys constraints
         hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa, vperp)
         @begin_r_anyzv_region()
-        delta_f = allocate_shared_float(size(f)...)
+        delta_f = allocate_shared_float(vpa, vperp, z)
         f_amplitude = epsilon * maximum(f)
         # Use exp(sin()) in vpa so that perturbation does not have any symmetry that makes
         # low-order moments vanish exactly.
@@ -1301,7 +1301,7 @@ function test_electron_dissipation_term(test_input; rtol=(1.0e1*epsilon)^2)
         p_size = length(p)
         total_size = pdf_size + p_size
 
-        jacobian_matrix = allocate_shared_float(total_size, total_size)
+        jacobian_matrix = allocate_shared_float(:jac_full=>total_size, :jac_full=>total_size)
         @begin_anyzv_region()
         @anyzv_serial_region begin
             jacobian_matrix .= 0.0
@@ -1318,7 +1318,7 @@ function test_electron_dissipation_term(test_input; rtol=(1.0e1*epsilon)^2)
         # Test 'ADI Jacobians' before other tests, because residual_func() may modify some
         # variables (vth, etc.).
 
-        jacobian_matrix_ADI_check = allocate_shared_float(total_size, total_size)
+        jacobian_matrix_ADI_check = allocate_shared_float(:jac_full=>total_size, :jac_full=>total_size)
 
         @testset "ADI Jacobians - implicit z" begin
             # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
@@ -1457,8 +1457,8 @@ function test_electron_dissipation_term(test_input; rtol=(1.0e1*epsilon)^2)
             return nothing
         end
 
-        original_residual = allocate_shared_float(size(f)...)
-        perturbed_residual = allocate_shared_float(size(f)...)
+        original_residual = allocate_shared_float(vpa, vperp, z)
+        perturbed_residual = allocate_shared_float(vpa, vperp, z)
 
         @testset "δf only" begin
             residual_func!(original_residual, f, p)
@@ -1554,7 +1554,7 @@ function test_electron_krook_collisions(test_input; rtol=(2.0e1*epsilon)^2)
         # `calculate_electron_moments_no_r!()`. For this test, we want to artificially
         # keep a difference between electron and ion upar, so use upar_test (which is
         # copied here before upar_ion is modified) in place of the usual upar array.
-        upar_test = allocate_shared_float(z.n)
+        upar_test = allocate_shared_float(z)
         @begin_anyzv_region()
         @anyzv_serial_region begin
             upar_test .= @view moments.electron.upar[:,ir]
@@ -1578,7 +1578,7 @@ function test_electron_krook_collisions(test_input; rtol=(2.0e1*epsilon)^2)
         update_electron_speed_z!(z_advect[1], upar_test, vth, vpa.grid, ir)
         z_speed = @view z_advect[1].speed[:,:,:,ir]
 
-        delta_p = allocate_shared_float(size(p)...)
+        delta_p = allocate_shared_float(z)
         p_amplitude = epsilon * maximum(p)
         f = @view pdf.electron.norm[:,:,:,ir]
         @begin_anyzv_region()
@@ -1592,7 +1592,7 @@ function test_electron_krook_collisions(test_input; rtol=(2.0e1*epsilon)^2)
         # Ensure initial electron distribution function obeys constraints
         hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa, vperp)
         @begin_r_anyzv_region()
-        delta_f = allocate_shared_float(size(f)...)
+        delta_f = allocate_shared_float(vpa, vperp, z)
         f_amplitude = epsilon * maximum(f)
         # Use exp(sin()) in vpa so that perturbation does not have any symmetry that makes
         # low-order moments vanish exactly.
@@ -1608,7 +1608,7 @@ function test_electron_krook_collisions(test_input; rtol=(2.0e1*epsilon)^2)
         p_size = length(p)
         total_size = pdf_size + p_size
 
-        jacobian_matrix = allocate_shared_float(total_size, total_size)
+        jacobian_matrix = allocate_shared_float(:jac_full=>total_size, :jac_full=>total_size)
         @begin_anyzv_region()
         @anyzv_serial_region begin
             jacobian_matrix .= 0.0
@@ -1625,7 +1625,7 @@ function test_electron_krook_collisions(test_input; rtol=(2.0e1*epsilon)^2)
         # Test 'ADI Jacobians' before other tests, because residual_func() may modify some
         # variables (vth, etc.).
 
-        jacobian_matrix_ADI_check = allocate_shared_float(total_size, total_size)
+        jacobian_matrix_ADI_check = allocate_shared_float(:jac_full=>total_size, :jac_full=>total_size)
 
         @testset "ADI Jacobians - implicit z" begin
             # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
@@ -1783,8 +1783,8 @@ function test_electron_krook_collisions(test_input; rtol=(2.0e1*epsilon)^2)
             return nothing
         end
 
-        original_residual = allocate_shared_float(size(f)...)
-        perturbed_residual = allocate_shared_float(size(f)...)
+        original_residual = allocate_shared_float(vpa, vperp, z)
+        perturbed_residual = allocate_shared_float(vpa, vperp, z)
 
         @testset "δf only" begin
             residual_func!(original_residual, f, p)
@@ -1909,7 +1909,7 @@ function test_external_electron_source(test_input; rtol=(3.0e1*epsilon)^2)
         update_electron_speed_z!(z_advect[1], upar, vth, vpa.grid, ir)
         z_speed = @view z_advect[1].speed[:,:,:,ir]
 
-        delta_p = allocate_shared_float(size(p)...)
+        delta_p = allocate_shared_float(z)
         p_amplitude = epsilon * maximum(p)
         f = @view pdf.electron.norm[:,:,:,ir]
         @begin_anyzv_region()
@@ -1923,7 +1923,7 @@ function test_external_electron_source(test_input; rtol=(3.0e1*epsilon)^2)
         # Ensure initial electron distribution function obeys constraints
         hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa, vperp)
         @begin_r_anyzv_region()
-        delta_f = allocate_shared_float(size(f)...)
+        delta_f = allocate_shared_float(vpa, vperp, z)
         f_amplitude = epsilon * maximum(f)
         # Use exp(sin()) in vpa so that perturbation does not have any symmetry that makes
         # low-order moments vanish exactly.
@@ -1939,7 +1939,7 @@ function test_external_electron_source(test_input; rtol=(3.0e1*epsilon)^2)
         p_size = length(p)
         total_size = pdf_size + p_size
 
-        jacobian_matrix = allocate_shared_float(total_size, total_size)
+        jacobian_matrix = allocate_shared_float(:jac_full=>total_size, :jac_full=>total_size)
         @begin_anyzv_region()
         @anyzv_serial_region begin
             jacobian_matrix .= 0.0
@@ -1956,7 +1956,7 @@ function test_external_electron_source(test_input; rtol=(3.0e1*epsilon)^2)
         # Test 'ADI Jacobians' before other tests, because residual_func() may modify some
         # variables (vth, etc.).
 
-        jacobian_matrix_ADI_check = allocate_shared_float(total_size, total_size)
+        jacobian_matrix_ADI_check = allocate_shared_float(:jac_full=>total_size, :jac_full=>total_size)
 
         @testset "ADI Jacobians - implicit z" begin
             # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
@@ -2110,8 +2110,8 @@ function test_external_electron_source(test_input; rtol=(3.0e1*epsilon)^2)
             return nothing
         end
 
-        original_residual = allocate_shared_float(size(f)...)
-        perturbed_residual = allocate_shared_float(size(f)...)
+        original_residual = allocate_shared_float(vpa, vperp, z)
+        perturbed_residual = allocate_shared_float(vpa, vperp, z)
 
         @testset "δf only" begin
             residual_func!(original_residual, f, p)
@@ -2239,7 +2239,7 @@ function test_electron_implicit_constraint_forcing(test_input; rtol=(2.5e0*epsil
         update_electron_speed_z!(z_advect[1], upar, vth, vpa.grid, ir)
         z_speed = @view z_advect[1].speed[:,:,:,ir]
 
-        delta_p = allocate_shared_float(size(p)...)
+        delta_p = allocate_shared_float(z)
         p_amplitude = epsilon * maximum(p)
         f = @view pdf.electron.norm[:,:,:,ir]
         @begin_anyzv_region()
@@ -2253,7 +2253,7 @@ function test_electron_implicit_constraint_forcing(test_input; rtol=(2.5e0*epsil
         # Ensure initial electron distribution function obeys constraints
         hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa, vperp)
         @begin_r_anyzv_region()
-        delta_f = allocate_shared_float(size(f)...)
+        delta_f = allocate_shared_float(vpa, vperp, z)
         f_amplitude = epsilon * maximum(f)
         # Use exp(sin()) in vpa so that perturbation does not have any symmetry that makes
         # low-order moments vanish exactly.
@@ -2281,7 +2281,7 @@ function test_electron_implicit_constraint_forcing(test_input; rtol=(2.5e0*epsil
             @views second_moment[iz] = integral(f[:,1,iz], vpa_grid, 2, vpa_wgts)
         end
 
-        jacobian_matrix = allocate_shared_float(total_size, total_size)
+        jacobian_matrix = allocate_shared_float(:jac_full=>total_size, :jac_full=>total_size)
         @begin_anyzv_region()
         @anyzv_serial_region begin
             jacobian_matrix .= 0.0
@@ -2298,7 +2298,7 @@ function test_electron_implicit_constraint_forcing(test_input; rtol=(2.5e0*epsil
         # Test 'ADI Jacobians' before other tests, because residual_func() may modify some
         # variables (vth, etc.).
 
-        jacobian_matrix_ADI_check = allocate_shared_float(total_size, total_size)
+        jacobian_matrix_ADI_check = allocate_shared_float(:jac_full=>total_size, :jac_full=>total_size)
 
         @testset "ADI Jacobians - implicit z" begin
             # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
@@ -2451,8 +2451,8 @@ function test_electron_implicit_constraint_forcing(test_input; rtol=(2.5e0*epsil
             return nothing
         end
 
-        original_residual = allocate_shared_float(size(f)...)
-        perturbed_residual = allocate_shared_float(size(f)...)
+        original_residual = allocate_shared_float(vpa, vperp, z)
+        perturbed_residual = allocate_shared_float(vpa, vperp, z)
 
         @testset "δf only" begin
             residual_func!(original_residual, f, p)
@@ -2581,7 +2581,7 @@ function test_electron_energy_equation(test_input; rtol=(6.0e2*epsilon)^2)
         update_electron_speed_z!(z_advect[1], upar, vth, vpa.grid, ir)
         z_speed = @view z_advect[1].speed[:,:,:,ir]
 
-        delta_p = allocate_shared_float(size(p)...)
+        delta_p = allocate_shared_float(z)
         p_amplitude = epsilon * maximum(p)
         f = @view pdf.electron.norm[:,:,:,ir]
         @begin_anyzv_region()
@@ -2595,7 +2595,7 @@ function test_electron_energy_equation(test_input; rtol=(6.0e2*epsilon)^2)
         # Ensure initial electron distribution function obeys constraints
         hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa, vperp)
         @begin_r_anyzv_region()
-        delta_f = allocate_shared_float(size(f)...)
+        delta_f = allocate_shared_float(vpa, vperp, z)
         f_amplitude = epsilon * maximum(f)
         @begin_anyzv_region()
         @anyzv_serial_region begin
@@ -2611,7 +2611,7 @@ function test_electron_energy_equation(test_input; rtol=(6.0e2*epsilon)^2)
         p_size = length(p)
         total_size = pdf_size + p_size
 
-        jacobian_matrix = allocate_shared_float(total_size, total_size)
+        jacobian_matrix = allocate_shared_float(:jac_full=>total_size, :jac_full=>total_size)
         @begin_anyzv_region()
         @anyzv_serial_region begin
             jacobian_matrix .= 0.0
@@ -2629,7 +2629,7 @@ function test_electron_energy_equation(test_input; rtol=(6.0e2*epsilon)^2)
         # Test 'ADI Jacobians' before other tests, because residual_func() may modify some
         # variables (vth, etc.).
 
-        jacobian_matrix_ADI_check = allocate_shared_float(total_size, total_size)
+        jacobian_matrix_ADI_check = allocate_shared_float(:jac_full=>total_size, :jac_full=>total_size)
 
         @testset "ADI Jacobians - implicit z" begin
             # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
@@ -2739,8 +2739,8 @@ function test_electron_energy_equation(test_input; rtol=(6.0e2*epsilon)^2)
             end
         end
 
-        original_residual = allocate_shared_float(size(p)...)
-        perturbed_residual = allocate_shared_float(size(p)...)
+        original_residual = allocate_shared_float(z)
+        perturbed_residual = allocate_shared_float(z)
 
         @testset "δf only" begin
             residual_func!(original_residual, f, p)
@@ -2847,7 +2847,7 @@ function test_ion_dt_forcing_of_electron_p(test_input; rtol=(1.5e1*epsilon)^2)
         update_electron_speed_z!(z_advect[1], upar, vth, vpa.grid, ir)
         z_speed = @view z_advect[1].speed[:,:,:,ir]
 
-        delta_p = allocate_shared_float(size(p)...)
+        delta_p = allocate_shared_float(z)
         p_amplitude = epsilon * maximum(p)
         f = @view pdf.electron.norm[:,:,:,ir]
         @begin_anyzv_region()
@@ -2861,7 +2861,7 @@ function test_ion_dt_forcing_of_electron_p(test_input; rtol=(1.5e1*epsilon)^2)
         # Ensure initial electron distribution function obeys constraints
         hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa, vperp)
         @begin_r_anyzv_region()
-        delta_f = allocate_shared_float(size(f)...)
+        delta_f = allocate_shared_float(vpa, vperp, z)
         f_amplitude = epsilon * maximum(f)
         # Use exp(sin()) in vpa so that perturbation does not have any symmetry that makes
         # low-order moments vanish exactly.
@@ -2877,7 +2877,7 @@ function test_ion_dt_forcing_of_electron_p(test_input; rtol=(1.5e1*epsilon)^2)
         p_size = length(p)
         total_size = pdf_size + p_size
 
-        jacobian_matrix = allocate_shared_float(total_size, total_size)
+        jacobian_matrix = allocate_shared_float(:jac_full=>total_size, :jac_full=>total_size)
         @begin_anyzv_region()
         @anyzv_serial_region begin
             jacobian_matrix .= 0.0
@@ -2893,7 +2893,7 @@ function test_ion_dt_forcing_of_electron_p(test_input; rtol=(1.5e1*epsilon)^2)
         # Test 'ADI Jacobians' before other tests, because residual_func() may modify some
         # variables (vth, etc.).
 
-        jacobian_matrix_ADI_check = allocate_shared_float(total_size, total_size)
+        jacobian_matrix_ADI_check = allocate_shared_float(:jac_full=>total_size, :jac_full=>total_size)
 
         @testset "ADI Jacobians - implicit z" begin
             # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
@@ -2998,8 +2998,8 @@ function test_ion_dt_forcing_of_electron_p(test_input; rtol=(1.5e1*epsilon)^2)
             end
         end
 
-        original_residual = allocate_shared_float(size(p)...)
-        perturbed_residual = allocate_shared_float(size(p)...)
+        original_residual = allocate_shared_float(z)
+        perturbed_residual = allocate_shared_float(z)
 
         @testset "δf only" begin
             residual_func!(original_residual, f, p)
@@ -3109,7 +3109,7 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
         z_advect = advection_structs.z_advect
         vpa_advect = advection_structs.vpa_advect
 
-        delta_p = allocate_shared_float(size(p)...)
+        delta_p = allocate_shared_float(z)
         p_amplitude = epsilon * maximum(p)
         f = @view pdf.electron.norm[:,:,:,ir]
         @begin_r_anyzv_region()
@@ -3125,7 +3125,7 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
         # Ensure initial electron distribution function obeys constraints
         hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa, vperp)
         @begin_r_anyzv_region()
-        delta_f = allocate_shared_float(size(f)...)
+        delta_f = allocate_shared_float(vpa, vperp, z)
         f_amplitude = epsilon * maximum(f)
         # Use exp(sin()) in vpa so that perturbation does not have any symmetry that makes
         # low-order moments vanish exactly.
@@ -3141,7 +3141,7 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
         p_size = length(p)
         total_size = pdf_size + p_size
 
-        jacobian_matrix = allocate_shared_float(total_size, total_size)
+        jacobian_matrix = allocate_shared_float(:jac_full=>total_size, :jac_full=>total_size)
 
         # Calculate this later, so that we can use `jacobian_matrix` as a temporary
         # buffer, to avoid allocating too much shared memory for the Github Actions CI
@@ -3216,7 +3216,7 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
         # Test 'ADI Jacobians' before other tests, because residual_func() may modify some
         # variables (vth, etc.).
 
-        jacobian_matrix_ADI_check = allocate_shared_float(total_size, total_size)
+        jacobian_matrix_ADI_check = allocate_shared_float(:jac_full=>total_size, :jac_full=>total_size)
         @begin_anyzv_region()
         @anyzv_serial_region begin
             # Need to explicitly initialise because
@@ -3406,18 +3406,18 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
             return nothing
         end
 
-        original_residual_f = allocate_shared_float(size(f)...)
-        original_residual_p = allocate_shared_float(size(p)...)
-        perturbed_residual_f = allocate_shared_float(size(f)...)
-        perturbed_residual_p = allocate_shared_float(size(p)...)
-        f_plus_delta_f = allocate_shared_float(size(f)...)
-        f_with_delta_p = allocate_shared_float(size(f)...)
+        original_residual_f = allocate_shared_float(vpa, vperp, z)
+        original_residual_p = allocate_shared_float(z)
+        perturbed_residual_f = allocate_shared_float(vpa, vperp, z)
+        perturbed_residual_p = allocate_shared_float(z)
+        f_plus_delta_f = allocate_shared_float(vpa, vperp, z)
+        f_with_delta_p = allocate_shared_float(vpa, vperp, z)
         @begin_anyzv_z_vperp_vpa_region()
         @loop_z_vperp_vpa iz ivperp ivpa begin
             f_plus_delta_f[ivpa,ivperp,iz] = f[ivpa,ivperp,iz] + delta_f[ivpa,ivperp,iz]
             f_with_delta_p[ivpa,ivperp,iz] = f[ivpa,ivperp,iz]
         end
-        p_plus_delta_p = allocate_shared_float(size(p)...)
+        p_plus_delta_p = allocate_shared_float(z)
         @begin_anyzv_z_region()
         @loop_z iz begin
             p_plus_delta_p[iz] = p[iz] + delta_p[iz]
@@ -3576,7 +3576,7 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2)
         update_electron_speed_z!(z_advect[1], upar, vth, vpa.grid, ir)
         z_speed = @view z_advect[1].speed[:,:,:,ir]
 
-        delta_p = allocate_shared_float(size(p)...)
+        delta_p = allocate_shared_float(z)
         p_amplitude = epsilon * maximum(p)
         f = @view pdf.electron.norm[:,:,:,ir]
         @begin_anyzv_region()
@@ -3594,7 +3594,7 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2)
                    vpa_advect, moments,
                    num_diss_params.electron.vpa_dissipation_coefficient > 0.0,
                    composition.me_over_mi, ir; bc_constraints=false, update_vcut=false)
-        delta_f = allocate_shared_float(size(f)...)
+        delta_f = allocate_shared_float(vpa, vperp, z)
         f_amplitude = epsilon * maximum(f)
         # Use exp(sin()) in vpa so that perturbation does not have any symmetry that makes
         # low-order moments vanish exactly.
@@ -3627,7 +3627,7 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2)
                                vpa_advect[1].adv_fac[:,ivperp,iz,ir], vpa_spectral)
         end
 
-        jacobian_matrix = allocate_shared_float(total_size, total_size)
+        jacobian_matrix = allocate_shared_float(:jac_full=>total_size, :jac_full=>total_size)
         @begin_anyzv_region()
         @anyzv_serial_region begin
             jacobian_matrix .= 0.0
@@ -3658,7 +3658,7 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2)
         # Test 'ADI Jacobians' before other tests, because residual_func() may modify some
         # variables (vth, etc.).
 
-        jacobian_matrix_ADI_check = allocate_shared_float(total_size, total_size)
+        jacobian_matrix_ADI_check = allocate_shared_float(:jac_full=>total_size, :jac_full=>total_size)
 
         @testset "ADI Jacobians - implicit z" begin
             # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
@@ -3799,16 +3799,16 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2)
             return nothing
         end
 
-        original_residual = allocate_shared_float(size(f)...)
-        perturbed_residual = allocate_shared_float(size(f)...)
-        f_plus_delta_f = allocate_shared_float(size(f)...)
-        f_with_delta_p = allocate_shared_float(size(f)...)
+        original_residual = allocate_shared_float(vpa, vperp, z)
+        perturbed_residual = allocate_shared_float(vpa, vperp, z)
+        f_plus_delta_f = allocate_shared_float(vpa, vperp, z)
+        f_with_delta_p = allocate_shared_float(vpa, vperp, z)
         @begin_anyzv_z_vperp_vpa_region()
         @loop_z_vperp_vpa iz ivperp ivpa begin
             f_plus_delta_f[ivpa,ivperp,iz] = f[ivpa,ivperp,iz] + delta_f[ivpa,ivperp,iz]
             f_with_delta_p[ivpa,ivperp,iz] = f[ivpa,ivperp,iz]
         end
-        p_plus_delta_p = allocate_shared_float(size(p)...)
+        p_plus_delta_p = allocate_shared_float(z)
         @begin_anyzv_z_region()
         @loop_z iz begin
             p_plus_delta_p[iz] = p[iz] + delta_p[iz]

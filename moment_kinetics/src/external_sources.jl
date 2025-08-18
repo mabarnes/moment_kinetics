@@ -103,9 +103,9 @@ function setup_external_sources!(input_dict, r, z, electron_physics,
                     input["PI_density_target_z_width"],
                     input["PI_density_target_z_relative_minimum"], z)
             if ignore_MPI
-                PI_density_target = allocate_float(z.n,r.n)
+                PI_density_target = allocate_float(z, r)
             else
-                PI_density_target = allocate_shared_float(z.n,r.n)
+                PI_density_target = allocate_shared_float(z, r)
             end
             if ignore_MPI || block_rank[] == 0
                 for ir ∈ 1:r.n, iz ∈ 1:z.n
@@ -127,11 +127,11 @@ function setup_external_sources!(input_dict, r, z, electron_physics,
             PI_density_target = input["PI_density_target_amplitude"]
 
             if ignore_MPI
-                PI_controller_amplitude = allocate_float(1)
-                controller_source_profile = allocate_float(z.n, r.n)
+                PI_controller_amplitude = allocate_float(; pi_controller_amplitude=1)
+                controller_source_profile = allocate_float(z, r)
             else
-                PI_controller_amplitude = allocate_shared_float(1)
-                controller_source_profile = allocate_shared_float(z.n, r.n)
+                PI_controller_amplitude = allocate_shared_float(; pi_controller_amplitude=1)
+                controller_source_profile = allocate_shared_float(z, r)
             end
             for ir ∈ 1:r.n, iz ∈ 1:z.n
                 controller_source_profile[iz,ir] = r_amplitude[ir] * z_amplitude[iz]
@@ -174,11 +174,11 @@ function setup_external_sources!(input_dict, r, z, electron_physics,
             PI_density_target_rank = nothing
 
             if ignore_MPI
-                PI_controller_amplitude = allocate_float(1)
-                controller_source_profile = allocate_float(z.n, r.n)
+                PI_controller_amplitude = allocate_float(; pi_controller_amplitude=1)
+                controller_source_profile = allocate_float(z, r)
             else
-                PI_controller_amplitude = allocate_shared_float(1)
-                controller_source_profile = allocate_shared_float(z.n, r.n)
+                PI_controller_amplitude = allocate_shared_float(; pi_controller_amplitude=1)
+                controller_source_profile = allocate_shared_float(z, r)
             end
             for ir ∈ 1:r.n, iz ∈ 1:z.n
                 controller_source_profile[iz,ir] = r_amplitude[ir] * z_amplitude[iz]
@@ -236,9 +236,9 @@ function setup_external_sources!(input_dict, r, z, electron_physics,
         z_amplitude_T = get_source_profile(input["z_profile_T"], input["z_width_T"],
                                            input["z_relative_minimum_T"], z)
         if ignore_MPI
-            source_T_array = allocate_float(z.n, r.n)
+            source_T_array = allocate_float(z, r)
         else
-            source_T_array = allocate_shared_float(z.n, r.n)
+            source_T_array = allocate_shared_float(z, r)
         end
         if ignore_MPI || block_rank[] == 0
             # Transpose r_amplitude_T so that we can automatically broadcast these
@@ -305,7 +305,7 @@ function setup_external_sources!(input_dict, r, z, electron_physics,
                 get_source_profile(input["PI_density_target_z_profile"],
                     input["PI_density_target_z_width"],
                     input["PI_density_target_z_relative_minimum"], z)
-            PI_density_target = allocate_shared_float(z.n,r.n)
+            PI_density_target = allocate_shared_float(z, r)
             if ignore_MPI || block_rank[] == 0
                 for ir ∈ 1:r.n, iz ∈ 1:z.n
                     PI_density_target[iz,ir] =
@@ -322,11 +322,11 @@ function setup_external_sources!(input_dict, r, z, electron_physics,
             PI_density_target = input["PI_density_target_amplitude"]
 
             if comm_block[] != MPI.COMM_NULL
-                PI_controller_amplitude = allocate_shared_float(1)
-                controller_source_profile = allocate_shared_float(z.n, r.n)
+                PI_controller_amplitude = allocate_shared_float(; pi_controller_amplitude=1)
+                controller_source_profile = allocate_shared_float(z, r)
             else
-                PI_controller_amplitude = allocate_float(1)
-                controller_source_profile = allocate_float(z.n, r.n)
+                PI_controller_amplitude = allocate_float(; pi_controller_amplitude=1)
+                controller_source_profile = allocate_float(z, r)
             end
             for ir ∈ 1:r.n, iz ∈ 1:z.n
                 controller_source_profile[iz,ir] = r_amplitude[ir] * z_amplitude[iz]
@@ -370,9 +370,9 @@ function setup_external_sources!(input_dict, r, z, electron_physics,
             end
 
             if comm_block[] != MPI.COMM_NULL
-                controller_source_profile = allocate_shared_float(z.n, r.n)
+                controller_source_profile = allocate_shared_float(z, r)
             else
-                controller_source_profile = allocate_float(z.n, r.n)
+                controller_source_profile = allocate_float(z, r)
             end
             if block_rank[] == 0
                 for ir ∈ 1:r.n, iz ∈ 1:z.n
@@ -420,9 +420,9 @@ function setup_external_sources!(input_dict, r, z, electron_physics,
         z_amplitude_T = get_source_profile(input["z_profile_T"], input["z_width_T"],
                                            input["z_relative_minimum_T"], z)
         if ignore_MPI
-            source_T_array = allocate_float(z.n, r.n)
+            source_T_array = allocate_float(z, r)
         else
-            source_T_array = allocate_shared_float(z.n, r.n)
+            source_T_array = allocate_shared_float(z, r)
         end
         if ignore_MPI || block_rank[] == 0
             # Transpose r_amplitude_T so that we can automatically broadcast these
@@ -476,9 +476,9 @@ function setup_external_sources!(input_dict, r, z, electron_physics,
         z_amplitude_T = get_source_profile(input["z_profile_T"], input["z_width_T"],
                                            input["z_relative_minimum_T"], z)
         if ignore_MPI
-            source_T_array = allocate_float(z.n, r.n)
+            source_T_array = allocate_float(z, r)
         else
-            source_T_array = allocate_shared_float(z.n, r.n)
+            source_T_array = allocate_shared_float(z, r)
         end
         if ignore_MPI || block_rank[] == 0
             # Transpose r_amplitude_T so that we can automatically broadcast these

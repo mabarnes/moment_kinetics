@@ -4955,7 +4955,7 @@ Fill a pre-allocated matrix with the Jacobian matrix for electron kinetic equati
 
     dt = t_params.dt[]
 
-    z_matrix = allocate_float(z.n, z.n)
+    z_matrix = allocate_float(z, z)
     z_matrix .= 0.0
 
     z_speed = @view z_advect[1].speed[:,ivpa,ivperp,ir]
@@ -5023,7 +5023,7 @@ Fill a pre-allocated matrix with the Jacobian matrix for electron kinetic equati
     end
 
     if z.irank == 0 && ivperp == 1 && ivpa == 1
-        p_matrix = allocate_float(z.n, z.n)
+        p_matrix = allocate_float(z, z)
         p_matrix .= 0.0
 
         if composition.electron_physics == kinetic_electrons_with_temperature_equation

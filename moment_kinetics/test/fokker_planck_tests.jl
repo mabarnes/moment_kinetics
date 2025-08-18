@@ -105,11 +105,11 @@ function backward_Euler_linearised_collisions_test(;
                                                                 bc_vperp=bc_vperp,bc_vpa=bc_vpa)
     fkpl_arrays = init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_spectral,
         precompute_weights=false, print_to_screen=print_to_screen)
-    dummy_array = allocate_float(vpa.n,vperp.n)
-    FMaxwell = allocate_shared_float(vpa.n,vperp.n)
-    FMaxwell_err = allocate_shared_float(vpa.n,vperp.n)
+    dummy_array = allocate_float(vpa, vperp)
+    FMaxwell = allocate_shared_float(vpa, vperp)
+    FMaxwell_err = allocate_shared_float(vpa, vperp)
     # make sure to use anysv communicator for any array that is modified in fokker_planck.jl functions
-    pdf = allocate_shared_float(vpa.n,vperp.n; comm=comm_anysv_subblock[])
+    pdf = allocate_shared_float(vpa, vperp; comm=comm_anysv_subblock[])
     @begin_serial_region()
     @serial_region begin
         @loop_vperp_vpa ivperp ivpa begin
@@ -260,7 +260,7 @@ function backward_Euler_fokker_planck_self_collisions_test(;
                         print_to_screen=print_to_screen)
     
     # initial condition
-    Fold = allocate_shared_float(vpa.n,vperp.n)
+    Fold = allocate_shared_float(vpa, vperp)
     @serial_region begin
         @loop_vperp_vpa ivperp ivpa begin
             Fold[ivpa,ivperp] = F_Beam(vpa0,vperp0,vth0,vpa,vperp,ivpa,ivperp)
@@ -284,10 +284,10 @@ function backward_Euler_fokker_planck_self_collisions_test(;
     end
     @_block_synchronize()
     # dummy arrays
-    Fdummy1 = allocate_shared_float(vpa.n,vperp.n)
-    Fdummy2 = allocate_shared_float(vpa.n,vperp.n)
-    Fdummy3 = allocate_shared_float(vpa.n,vperp.n)
-    FMaxwell = allocate_shared_float(vpa.n,vperp.n)
+    Fdummy1 = allocate_shared_float(vpa, vperp)
+    Fdummy2 = allocate_shared_float(vpa, vperp)
+    Fdummy3 = allocate_shared_float(vpa, vperp)
+    FMaxwell = allocate_shared_float(vpa, vperp)
     # physics parameters
     ms = 1.0
     nuss = 1.0
@@ -373,8 +373,8 @@ function numerical_error_corrections_test(;
     fkpl_arrays = init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_spectral,
                         precompute_weights=false, print_to_screen=print_to_screen)
 
-    pdf_in = allocate_float(vpa.n,vperp.n)
-    C_num = allocate_shared_float(vpa.n,vperp.n)
+    pdf_in = allocate_float(vpa, vperp)
+    C_num = allocate_shared_float(vpa, vperp)
     denss, upars, vths = 1.0, 1.0, 1.0
     # initialise a distribution that has a qpar
     for ivperp in 1:vperp.n
@@ -455,19 +455,19 @@ function runtests()
                                                                         Lvpa=8.0,Lvperp=4.0)
 
             # electron pdf on electron grids
-            Fe = allocate_shared_float(vpa.n,vperp.n)
+            Fe = allocate_shared_float(vpa, vperp)
             # electron pdf on ion normalised grids
-            Fe_interp_ion_units = allocate_shared_float(vpa.n,vperp.n)
+            Fe_interp_ion_units = allocate_shared_float(vpa, vperp)
             # exact value for comparison
-            Fe_exact_ion_units = allocate_shared_float(vpa.n,vperp.n)
+            Fe_exact_ion_units = allocate_shared_float(vpa, vperp)
             # ion pdf on ion grids
-            Fi = allocate_shared_float(vpa.n,vperp.n)
+            Fi = allocate_shared_float(vpa, vperp)
             # ion pdf on electron normalised grids
-            Fi_interp_electron_units = allocate_shared_float(vpa.n,vperp.n)
+            Fi_interp_electron_units = allocate_shared_float(vpa, vperp)
             # exact value for comparison
-            Fi_exact_electron_units = allocate_shared_float(vpa.n,vperp.n)
+            Fi_exact_electron_units = allocate_shared_float(vpa, vperp)
             # test array
-            F_err = allocate_float(vpa.n,vperp.n)
+            F_err = allocate_float(vpa, vperp)
 
             dense = 1.0
             upare = 0.0 # upare in electron reference units
@@ -539,16 +539,16 @@ function runtests()
             KKperp2D_with_BC_terms_sparse = fkpl_arrays.KKperp2D_with_BC_terms_sparse
             lu_obj_MM = fkpl_arrays.lu_obj_MM
 
-            dummy_array = allocate_float(vpa.n,vperp.n)
-            fvpavperp = allocate_float(vpa.n,vperp.n)
-            fvpavperp_test = allocate_float(vpa.n,vperp.n)
-            fvpavperp_err = allocate_float(vpa.n,vperp.n)
-            d2fvpavperp_dvpa2_exact = allocate_float(vpa.n,vperp.n)
-            d2fvpavperp_dvpa2_err = allocate_float(vpa.n,vperp.n)
-            d2fvpavperp_dvpa2_num = allocate_float(vpa.n,vperp.n)
-            d2fvpavperp_dvperp2_exact = allocate_float(vpa.n,vperp.n)
-            d2fvpavperp_dvperp2_err = allocate_float(vpa.n,vperp.n)
-            d2fvpavperp_dvperp2_num = allocate_float(vpa.n,vperp.n)
+            dummy_array = allocate_float(vpa, vperp)
+            fvpavperp = allocate_float(vpa, vperp)
+            fvpavperp_test = allocate_float(vpa, vperp)
+            fvpavperp_err = allocate_float(vpa, vperp)
+            d2fvpavperp_dvpa2_exact = allocate_float(vpa, vperp)
+            d2fvpavperp_dvpa2_err = allocate_float(vpa, vperp)
+            d2fvpavperp_dvpa2_num = allocate_float(vpa, vperp)
+            d2fvpavperp_dvperp2_exact = allocate_float(vpa, vperp)
+            d2fvpavperp_dvperp2_err = allocate_float(vpa, vperp)
+            d2fvpavperp_dvperp2_num = allocate_float(vpa, vperp)
             dfc = allocate_float(nc_global)
             dgc = allocate_float(nc_global)
             for ivperp in 1:vperp.n
@@ -605,32 +605,32 @@ function runtests()
                 fkpl_arrays = init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_spectral,
                                                                       precompute_weights=precompute_weights,
                                                                       print_to_screen=print_to_screen)
-                dummy_array = allocate_float(vpa.n,vperp.n)
-                F_M = allocate_float(vpa.n,vperp.n)
-                H_M_exact = allocate_float(vpa.n,vperp.n)
-                H_M_num = allocate_shared_float(vpa.n,vperp.n)
-                H_M_err = allocate_float(vpa.n,vperp.n)
-                G_M_exact = allocate_float(vpa.n,vperp.n)
-                G_M_num = allocate_shared_float(vpa.n,vperp.n)
-                G_M_err = allocate_float(vpa.n,vperp.n)
-                d2Gdvpa2_M_exact = allocate_float(vpa.n,vperp.n)
-                d2Gdvpa2_M_num = allocate_shared_float(vpa.n,vperp.n)
-                d2Gdvpa2_M_err = allocate_float(vpa.n,vperp.n)
-                d2Gdvperp2_M_exact = allocate_float(vpa.n,vperp.n)
-                d2Gdvperp2_M_num = allocate_shared_float(vpa.n,vperp.n)
-                d2Gdvperp2_M_err = allocate_float(vpa.n,vperp.n)
-                dGdvperp_M_exact = allocate_float(vpa.n,vperp.n)
-                dGdvperp_M_num = allocate_shared_float(vpa.n,vperp.n)
-                dGdvperp_M_err = allocate_float(vpa.n,vperp.n)
-                d2Gdvperpdvpa_M_exact = allocate_float(vpa.n,vperp.n)
-                d2Gdvperpdvpa_M_num = allocate_shared_float(vpa.n,vperp.n)
-                d2Gdvperpdvpa_M_err = allocate_float(vpa.n,vperp.n)
-                dHdvpa_M_exact = allocate_float(vpa.n,vperp.n)
-                dHdvpa_M_num = allocate_shared_float(vpa.n,vperp.n)
-                dHdvpa_M_err = allocate_float(vpa.n,vperp.n)
-                dHdvperp_M_exact = allocate_float(vpa.n,vperp.n)
-                dHdvperp_M_num = allocate_shared_float(vpa.n,vperp.n)
-                dHdvperp_M_err = allocate_float(vpa.n,vperp.n)
+                dummy_array = allocate_float(vpa, vperp)
+                F_M = allocate_float(vpa, vperp)
+                H_M_exact = allocate_float(vpa, vperp)
+                H_M_num = allocate_shared_float(vpa, vperp)
+                H_M_err = allocate_float(vpa, vperp)
+                G_M_exact = allocate_float(vpa, vperp)
+                G_M_num = allocate_shared_float(vpa, vperp)
+                G_M_err = allocate_float(vpa, vperp)
+                d2Gdvpa2_M_exact = allocate_float(vpa, vperp)
+                d2Gdvpa2_M_num = allocate_shared_float(vpa, vperp)
+                d2Gdvpa2_M_err = allocate_float(vpa, vperp)
+                d2Gdvperp2_M_exact = allocate_float(vpa, vperp)
+                d2Gdvperp2_M_num = allocate_shared_float(vpa, vperp)
+                d2Gdvperp2_M_err = allocate_float(vpa, vperp)
+                dGdvperp_M_exact = allocate_float(vpa, vperp)
+                dGdvperp_M_num = allocate_shared_float(vpa, vperp)
+                dGdvperp_M_err = allocate_float(vpa, vperp)
+                d2Gdvperpdvpa_M_exact = allocate_float(vpa, vperp)
+                d2Gdvperpdvpa_M_num = allocate_shared_float(vpa, vperp)
+                d2Gdvperpdvpa_M_err = allocate_float(vpa, vperp)
+                dHdvpa_M_exact = allocate_float(vpa, vperp)
+                dHdvpa_M_num = allocate_shared_float(vpa, vperp)
+                dHdvpa_M_err = allocate_float(vpa, vperp)
+                dHdvperp_M_exact = allocate_float(vpa, vperp)
+                dHdvperp_M_num = allocate_shared_float(vpa, vperp)
+                dHdvperp_M_err = allocate_float(vpa, vperp)
 
                 dens, upar, vth = 1.0, 1.0, 1.0
                 @begin_serial_region()
@@ -795,12 +795,12 @@ function runtests()
                                                          (true,false,false,true,false,false,false),(true,false,false,false,true,false,false),
                                                          (true,false,false,false,false,true,false),(true,false,false,false,false,false,true))
 
-                dummy_array = allocate_float(vpa.n,vperp.n)
-                Fs_M = allocate_float(vpa.n,vperp.n)
-                F_M = allocate_float(vpa.n,vperp.n)
-                C_M_num = allocate_shared_float(vpa.n,vperp.n)
-                C_M_exact = allocate_float(vpa.n,vperp.n)
-                C_M_err = allocate_float(vpa.n,vperp.n)
+                dummy_array = allocate_float(vpa, vperp)
+                Fs_M = allocate_float(vpa, vperp)
+                F_M = allocate_float(vpa, vperp)
+                C_M_num = allocate_shared_float(vpa, vperp)
+                C_M_exact = allocate_float(vpa, vperp)
+                C_M_err = allocate_float(vpa, vperp)
                 if test_self_operator
                     dens, upar, vth = 1.0, 1.0, 1.0
                     denss, upars, vths = dens, upar, vth
@@ -946,12 +946,12 @@ function runtests()
 
             @testset "slowing_down_test=true test_numerical_conserving_terms=$test_numerical_conserving_terms" for test_numerical_conserving_terms in (true,false)
 
-                dummy_array = allocate_float(vpa.n,vperp.n)
-                Fs_M = allocate_float(vpa.n,vperp.n)
-                F_M = allocate_float(vpa.n,vperp.n)
-                C_M_num = allocate_shared_float(vpa.n,vperp.n)
-                C_M_exact = allocate_float(vpa.n,vperp.n)
-                C_M_err = allocate_float(vpa.n,vperp.n)
+                dummy_array = allocate_float(vpa, vperp)
+                Fs_M = allocate_float(vpa, vperp)
+                F_M = allocate_float(vpa, vperp)
+                C_M_num = allocate_shared_float(vpa, vperp)
+                C_M_exact = allocate_float(vpa, vperp)
+                C_M_err = allocate_float(vpa, vperp)
 
                 # pick a set of parameters that represent slowing down
                 # on slow ions and faster electrons, but which are close
@@ -1037,32 +1037,32 @@ function runtests()
                                                                         Lvpa=12.0,Lvperp=6.0)
             @begin_serial_region()
             fkpl_arrays = init_fokker_planck_collisions_direct_integration(vperp,vpa,precompute_weights=true,print_to_screen=print_to_screen)
-            dummy_array = allocate_float(vpa.n,vperp.n)
-            F_M = allocate_float(vpa.n,vperp.n)
-            H_M_exact = allocate_float(vpa.n,vperp.n)
-            H_M_num = allocate_shared_float(vpa.n,vperp.n)
-            H_M_err = allocate_float(vpa.n,vperp.n)
-            G_M_exact = allocate_float(vpa.n,vperp.n)
-            G_M_num = allocate_shared_float(vpa.n,vperp.n)
-            G_M_err = allocate_float(vpa.n,vperp.n)
-            d2Gdvpa2_M_exact = allocate_float(vpa.n,vperp.n)
-            d2Gdvpa2_M_num = allocate_shared_float(vpa.n,vperp.n)
-            d2Gdvpa2_M_err = allocate_float(vpa.n,vperp.n)
-            d2Gdvperp2_M_exact = allocate_float(vpa.n,vperp.n)
-            d2Gdvperp2_M_num = allocate_shared_float(vpa.n,vperp.n)
-            d2Gdvperp2_M_err = allocate_float(vpa.n,vperp.n)
-            dGdvperp_M_exact = allocate_float(vpa.n,vperp.n)
-            dGdvperp_M_num = allocate_shared_float(vpa.n,vperp.n)
-            dGdvperp_M_err = allocate_float(vpa.n,vperp.n)
-            d2Gdvperpdvpa_M_exact = allocate_float(vpa.n,vperp.n)
-            d2Gdvperpdvpa_M_num = allocate_shared_float(vpa.n,vperp.n)
-            d2Gdvperpdvpa_M_err = allocate_float(vpa.n,vperp.n)
-            dHdvpa_M_exact = allocate_float(vpa.n,vperp.n)
-            dHdvpa_M_num = allocate_shared_float(vpa.n,vperp.n)
-            dHdvpa_M_err = allocate_float(vpa.n,vperp.n)
-            dHdvperp_M_exact = allocate_float(vpa.n,vperp.n)
-            dHdvperp_M_num = allocate_shared_float(vpa.n,vperp.n)
-            dHdvperp_M_err = allocate_float(vpa.n,vperp.n)
+            dummy_array = allocate_float(vpa, vperp)
+            F_M = allocate_float(vpa, vperp)
+            H_M_exact = allocate_float(vpa, vperp)
+            H_M_num = allocate_shared_float(vpa, vperp)
+            H_M_err = allocate_float(vpa, vperp)
+            G_M_exact = allocate_float(vpa, vperp)
+            G_M_num = allocate_shared_float(vpa, vperp)
+            G_M_err = allocate_float(vpa, vperp)
+            d2Gdvpa2_M_exact = allocate_float(vpa, vperp)
+            d2Gdvpa2_M_num = allocate_shared_float(vpa, vperp)
+            d2Gdvpa2_M_err = allocate_float(vpa, vperp)
+            d2Gdvperp2_M_exact = allocate_float(vpa, vperp)
+            d2Gdvperp2_M_num = allocate_shared_float(vpa, vperp)
+            d2Gdvperp2_M_err = allocate_float(vpa, vperp)
+            dGdvperp_M_exact = allocate_float(vpa, vperp)
+            dGdvperp_M_num = allocate_shared_float(vpa, vperp)
+            dGdvperp_M_err = allocate_float(vpa, vperp)
+            d2Gdvperpdvpa_M_exact = allocate_float(vpa, vperp)
+            d2Gdvperpdvpa_M_num = allocate_shared_float(vpa, vperp)
+            d2Gdvperpdvpa_M_err = allocate_float(vpa, vperp)
+            dHdvpa_M_exact = allocate_float(vpa, vperp)
+            dHdvpa_M_num = allocate_shared_float(vpa, vperp)
+            dHdvpa_M_err = allocate_float(vpa, vperp)
+            dHdvperp_M_exact = allocate_float(vpa, vperp)
+            dHdvperp_M_num = allocate_shared_float(vpa, vperp)
+            dHdvperp_M_err = allocate_float(vpa, vperp)
 
             dens, upar, vth = 1.0, 1.0, 1.0
             @begin_serial_region()

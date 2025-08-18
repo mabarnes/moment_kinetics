@@ -147,7 +147,7 @@ end
             #if nl_solver_params.solves_since_precon_update[] ≥ nl_solver_params.preconditioner_update_interval
             #    nl_solver_params.solves_since_precon_update[] = 0
 
-            #    advection_matrix = allocate_float(vpa.n, vpa.n)
+            #    advection_matrix = allocate_float(vpa, vpa)
             #    advection_matrix .= 0.0
             #    for i ∈ 1:vpa.nelement_local
             #        imin = vpa.imin[i] - (i != 1)

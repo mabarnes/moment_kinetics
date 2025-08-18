@@ -8,7 +8,6 @@ export performance_test
 export read_input_file
 
 using ..type_definitions: mk_float, mk_int, OptionsDict
-using ..array_allocation: allocate_float
 using ..communication
 using ..coordinates: define_coordinate, get_coordinate_input
 using ..external_sources

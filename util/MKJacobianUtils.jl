@@ -151,7 +151,7 @@ function get_electron_Jacobian_matrix(run_directory; restart_time_index=1,
     pdf_size = length(pdf.electron.norm)
     p_size = length(moments.electron.p)
     jacobian_size = pdf_size + p_size
-    jacobian_matrix = allocate_shared_float(jacobian_size, jacobian_size)
+    jacobian_matrix = allocate_shared_float(:jac_dim=>jacobian_size, :jac_dim=>jacobian_size)
 
     # Fill the Jacobian matrix with the chosen terms
     ################################################

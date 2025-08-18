@@ -9,10 +9,9 @@ export advance_f_local!
 export advance_f_df_precomputed!
 export advection_info
 
-using ..type_definitions: mk_float, mk_int
+using ..type_definitions: mk_float, mk_int, MPISharedArray
 using ..array_allocation: allocate_shared_float, allocate_shared_int
 using ..calculus: derivative!
-using ..communication
 using ..looping
 
 """
@@ -54,16 +53,17 @@ create arrays needed to compute the advection term(s)
 function setup_advection_per_species(coords...)
     # create array for storing the explicit advection terms appearing
     # on the righthand side of the equation
-    rhs = allocate_shared_float([coord.n for coord in coords]...)
+    rhs = allocate_shared_float(coords...)
     # create array for storing ∂f/∂(coordinate)
     # NB: need to store on nelement x ngrid_per_element array, as must keep info
     # about multi-valued derivative at overlapping point at element boundaries
-    df = allocate_shared_float(coords[1].ngrid, coords[1].nelement_local,
-                               [coord.n for coord in coords[2:end]]...)
+    df = allocate_shared_float(coords[1].name * "_ngrid"=>coords[1].ngrid,
+                               coords[1].name * "_nelement"=>coords[1].nelement_local,
+                               coords[2:end]...)
     # create array for storing the advection coefficient
-    adv_fac = allocate_shared_float([coord.n for coord in coords]...)
+    adv_fac = allocate_shared_float(coords...)
     # create array for storing the speed along this coordinate
-    speed = allocate_shared_float([coord.n for coord in coords]...)
+    speed = allocate_shared_float(coords...)
     # initialise speed to zero so that it can be used safely without
     # introducing NaNs (if left uninitialised) when coordinate speeds
     # are used but the coordinate has only a single point
