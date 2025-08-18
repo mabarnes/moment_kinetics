@@ -954,8 +954,8 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
     end
     # setup dummy arrays & buffer arrays for z r MPI
     n_neutral_species_alloc = max(1,composition.n_neutral_species)
-    scratch_dummy = setup_dummy_and_buffer_arrays(r.n, z.n, vpa.n, vperp.n, vz.n, vr.n,
-                                                  vzeta.n, composition.n_ion_species,
+    scratch_dummy = setup_dummy_and_buffer_arrays(r, z, vpa, vperp, vz, vr, vzeta,
+                                                  composition.n_ion_species,
                                                   n_neutral_species_alloc, t_params)
     # create arrays for Fokker-Planck collisions 
     if advance.fp_collisions || advance_implicit.fp_collisions
@@ -1659,153 +1659,153 @@ function setup_implicit_advance_flags(moments, composition, t_params, collisions
                         vperp_diffusion, vz_diffusion)
 end
 
-function setup_dummy_and_buffer_arrays(nr, nz, nvpa, nvperp, nvz, nvr, nvzeta,
-                                       nspecies_ion, nspecies_neutral, t_params)
+function setup_dummy_and_buffer_arrays(r, z, vpa, vperp, vz, vr, vzeta, nspecies_ion,
+                                       nspecies_neutral, t_params)
 
-    dummy_s = allocate_float(nspecies_ion)
-    dummy_sr = allocate_float(nr, nspecies_ion)
-    dummy_zrs = allocate_shared_float(nz, nr, nspecies_ion)
-    dummy_zrsn = allocate_shared_float(nz, nr, nspecies_neutral)
-    dummy_vpavperp = allocate_float(nvpa, nvperp)
+    dummy_s = allocate_float(; ion_species=nspecies_ion)
+    dummy_sr = allocate_float(; r=r, ion_species=nspecies_ion)
+    dummy_zrs = allocate_shared_float(; z=z, r=r, ion_species=nspecies_ion)
+    dummy_zrsn = allocate_shared_float(; z=z, r=r, ion_species=nspecies_neutral)
+    dummy_vpavperp = allocate_float(vpa, vperp)
     
-    buffer_z_1 = allocate_shared_float(nz)
-    buffer_z_2 = allocate_shared_float(nz)
-    buffer_z_3 = allocate_shared_float(nz)
-    buffer_z_4 = allocate_shared_float(nz)
+    buffer_z_1 = allocate_shared_float(z)
+    buffer_z_2 = allocate_shared_float(z)
+    buffer_z_3 = allocate_shared_float(z)
+    buffer_z_4 = allocate_shared_float(z)
     
-    buffer_r_1 = allocate_shared_float(nr)
-    buffer_r_2 = allocate_shared_float(nr)
-    buffer_r_3 = allocate_shared_float(nr)
-    buffer_r_4 = allocate_shared_float(nr)
+    buffer_r_1 = allocate_shared_float(r)
+    buffer_r_2 = allocate_shared_float(r)
+    buffer_r_3 = allocate_shared_float(r)
+    buffer_r_4 = allocate_shared_float(r)
 
-    buffer_zs_1 = allocate_shared_float(nz,nspecies_ion)
-    buffer_zs_2 = allocate_shared_float(nz,nspecies_ion)
-    buffer_zs_3 = allocate_shared_float(nz,nspecies_ion)
-    buffer_zs_4 = allocate_shared_float(nz,nspecies_ion)
-    buffer_zs_5 = allocate_shared_float(nz,nspecies_ion)
-    buffer_zs_6 = allocate_shared_float(nz,nspecies_ion)
-    buffer_zsn_1 = allocate_shared_float(nz,nspecies_neutral)
-    buffer_zsn_2 = allocate_shared_float(nz,nspecies_neutral)
-    buffer_zsn_3 = allocate_shared_float(nz,nspecies_neutral)
-    buffer_zsn_4 = allocate_shared_float(nz,nspecies_neutral)
+    buffer_zs_1 = allocate_shared_float(; z=z, ion_species=nspecies_ion)
+    buffer_zs_2 = allocate_shared_float(; z=z, ion_species=nspecies_ion)
+    buffer_zs_3 = allocate_shared_float(; z=z, ion_species=nspecies_ion)
+    buffer_zs_4 = allocate_shared_float(; z=z, ion_species=nspecies_ion)
+    buffer_zs_5 = allocate_shared_float(; z=z, ion_species=nspecies_ion)
+    buffer_zs_6 = allocate_shared_float(; z=z, ion_species=nspecies_ion)
+    buffer_zsn_1 = allocate_shared_float(; z=z, neutral_species=nspecies_neutral)
+    buffer_zsn_2 = allocate_shared_float(; z=z, neutral_species=nspecies_neutral)
+    buffer_zsn_3 = allocate_shared_float(; z=z, neutral_species=nspecies_neutral)
+    buffer_zsn_4 = allocate_shared_float(; z=z, n_neutral_species=nspecies_neutral)
 
-    buffer_rs_1 = allocate_shared_float(nr,nspecies_ion)
-    buffer_rs_2 = allocate_shared_float(nr,nspecies_ion)
-    buffer_rs_3 = allocate_shared_float(nr,nspecies_ion)
-    buffer_rs_4 = allocate_shared_float(nr,nspecies_ion)
-    buffer_rs_5 = allocate_shared_float(nr,nspecies_ion)
-    buffer_rs_6 = allocate_shared_float(nr,nspecies_ion)
-    buffer_rsn_1 = allocate_shared_float(nr,nspecies_neutral)
-    buffer_rsn_2 = allocate_shared_float(nr,nspecies_neutral)
-    buffer_rsn_3 = allocate_shared_float(nr,nspecies_neutral)
-    buffer_rsn_4 = allocate_shared_float(nr,nspecies_neutral)
-    buffer_rsn_5 = allocate_shared_float(nr,nspecies_neutral)
-    buffer_rsn_6 = allocate_shared_float(nr,nspecies_neutral)
+    buffer_rs_1 = allocate_shared_float(; r=r, ion_species=nspecies_ion)
+    buffer_rs_2 = allocate_shared_float(; r=r, ion_species=nspecies_ion)
+    buffer_rs_3 = allocate_shared_float(; r=r, ion_species=nspecies_ion)
+    buffer_rs_4 = allocate_shared_float(; r=r, ion_species=nspecies_ion)
+    buffer_rs_5 = allocate_shared_float(; r=r, ion_species=nspecies_ion)
+    buffer_rs_6 = allocate_shared_float(; r=r, ion_species=nspecies_ion)
+    buffer_rsn_1 = allocate_shared_float(; r=r, neutral_species=nspecies_neutral)
+    buffer_rsn_2 = allocate_shared_float(; r=r, neutral_species=nspecies_neutral)
+    buffer_rsn_3 = allocate_shared_float(; r=r, neutral_species=nspecies_neutral)
+    buffer_rsn_4 = allocate_shared_float(; r=r, neutral_species=nspecies_neutral)
+    buffer_rsn_5 = allocate_shared_float(; r=r, neutral_species=nspecies_neutral)
+    buffer_rsn_6 = allocate_shared_float(; r=r, neutral_species=nspecies_neutral)
 
-    buffer_zrs_1 = allocate_shared_float(nz,nr,nspecies_ion)
-    buffer_zrs_2 = allocate_shared_float(nz,nr,nspecies_ion)
-    buffer_zrs_3 = allocate_shared_float(nz,nr,nspecies_ion)
+    buffer_zrs_1 = allocate_shared_float(; z=z, r=r, ion_species=nspecies_ion)
+    buffer_zrs_2 = allocate_shared_float(; z=z, r=r, ion_species=nspecies_ion)
+    buffer_zrs_3 = allocate_shared_float(; z=z, r=r, ion_species=nspecies_ion)
     buffer_zrs_4 = allocate_shared_float(; z=z, r=r, ion_species=nspecies_ion)
     buffer_zrs_5 = allocate_shared_float(; z=z, r=r, ion_species=nspecies_ion)
     
-    buffer_vpavperpzs_1 = allocate_shared_float(nvpa,nvperp,nz,nspecies_ion)
-    buffer_vpavperpzs_2 = allocate_shared_float(nvpa,nvperp,nz,nspecies_ion)
-    buffer_vpavperpzs_3 = allocate_shared_float(nvpa,nvperp,nz,nspecies_ion)
-    buffer_vpavperpzs_4 = allocate_shared_float(nvpa,nvperp,nz,nspecies_ion)
-    buffer_vpavperpzs_5 = allocate_shared_float(nvpa,nvperp,nz,nspecies_ion)
-    buffer_vpavperpzs_6 = allocate_shared_float(nvpa,nvperp,nz,nspecies_ion)
+    buffer_vpavperpzs_1 = allocate_shared_float(; vpa=vpa, vperp=vperp, z=z, ion_species=nspecies_ion)
+    buffer_vpavperpzs_2 = allocate_shared_float(; vpa=vpa, vperp=vperp, z=z, ion_species=nspecies_ion)
+    buffer_vpavperpzs_3 = allocate_shared_float(; vpa=vpa, vperp=vperp, z=z, ion_species=nspecies_ion)
+    buffer_vpavperpzs_4 = allocate_shared_float(; vpa=vpa, vperp=vperp, z=z, ion_species=nspecies_ion)
+    buffer_vpavperpzs_5 = allocate_shared_float(; vpa=vpa, vperp=vperp, z=z, ion_species=nspecies_ion)
+    buffer_vpavperpzs_6 = allocate_shared_float(; vpa=vpa, vperp=vperp, z=z, ion_species=nspecies_ion)
 
-    buffer_vpavperprs_1 = allocate_shared_float(nvpa,nvperp,nr,nspecies_ion)
-    buffer_vpavperprs_2 = allocate_shared_float(nvpa,nvperp,nr,nspecies_ion)
-    buffer_vpavperprs_3 = allocate_shared_float(nvpa,nvperp,nr,nspecies_ion)
-    buffer_vpavperprs_4 = allocate_shared_float(nvpa,nvperp,nr,nspecies_ion)
-    buffer_vpavperprs_5 = allocate_shared_float(nvpa,nvperp,nr,nspecies_ion)
-    buffer_vpavperprs_6 = allocate_shared_float(nvpa,nvperp,nr,nspecies_ion)
+    buffer_vpavperprs_1 = allocate_shared_float(; vpa=vpa, vperp=vperp, r=r, ion_species=nspecies_ion)
+    buffer_vpavperprs_2 = allocate_shared_float(; vpa=vpa, vperp=vperp, r=r, ion_species=nspecies_ion)
+    buffer_vpavperprs_3 = allocate_shared_float(; vpa=vpa, vperp=vperp, r=r, ion_species=nspecies_ion)
+    buffer_vpavperprs_4 = allocate_shared_float(; vpa=vpa, vperp=vperp, r=r, ion_species=nspecies_ion)
+    buffer_vpavperprs_5 = allocate_shared_float(; vpa=vpa, vperp=vperp, r=r, ion_species=nspecies_ion)
+    buffer_vpavperprs_6 = allocate_shared_float(; vpa=vpa, vperp=vperp, r=r, ion_species=nspecies_ion)
 
-    buffer_vpavperpzrs_1 = allocate_shared_float(nvpa,nvperp,nz,nr,nspecies_ion)
-    buffer_vpavperpzrs_2 = allocate_shared_float(nvpa,nvperp,nz,nr,nspecies_ion)
+    buffer_vpavperpzrs_1 = allocate_shared_float(; vpa=vpa, vperp=vperp, z=z, r=r, ion_species=nspecies_ion)
+    buffer_vpavperpzrs_2 = allocate_shared_float(; vpa=vpa, vperp=vperp, z=z, r=r, ion_species=nspecies_ion)
 
-    buffer_vpavperpzr_1 = allocate_shared_float(nvpa,nvperp,nz,nr)
-    buffer_vpavperpzr_2 = allocate_shared_float(nvpa,nvperp,nz,nr)
-    buffer_vpavperpzr_3 = allocate_shared_float(nvpa,nvperp,nz,nr)
-    buffer_vpavperpzr_4 = allocate_shared_float(nvpa,nvperp,nz,nr)
-    buffer_vpavperpzr_5 = allocate_shared_float(nvpa,nvperp,nz,nr)
-    buffer_vpavperpzr_6 = allocate_shared_float(nvpa,nvperp,nz,nr)
+    buffer_vpavperpzr_1 = allocate_shared_float(vpa, vperp, z, r)
+    buffer_vpavperpzr_2 = allocate_shared_float(vpa, vperp, z, r)
+    buffer_vpavperpzr_3 = allocate_shared_float(vpa, vperp, z, r)
+    buffer_vpavperpzr_4 = allocate_shared_float(vpa, vperp, z, r)
+    buffer_vpavperpzr_5 = allocate_shared_float(vpa, vperp, z, r)
+    buffer_vpavperpzr_6 = allocate_shared_float(vpa, vperp, z, r)
     
-    buffer_vpavperpr_1 = allocate_shared_float(nvpa,nvperp,nr)
-    buffer_vpavperpr_2 = allocate_shared_float(nvpa,nvperp,nr)
-    buffer_vpavperpr_3 = allocate_shared_float(nvpa,nvperp,nr)
-    buffer_vpavperpr_4 = allocate_shared_float(nvpa,nvperp,nr)
-    buffer_vpavperpr_5 = allocate_shared_float(nvpa,nvperp,nr)
-    buffer_vpavperpr_6 = allocate_shared_float(nvpa,nvperp,nr)
+    buffer_vpavperpr_1 = allocate_shared_float(vpa, vperp, r)
+    buffer_vpavperpr_2 = allocate_shared_float(vpa, vperp, r)
+    buffer_vpavperpr_3 = allocate_shared_float(vpa, vperp, r)
+    buffer_vpavperpr_4 = allocate_shared_float(vpa, vperp, r)
+    buffer_vpavperpr_5 = allocate_shared_float(vpa, vperp, r)
+    buffer_vpavperpr_6 = allocate_shared_float(vpa, vperp, r)
 
     if t_params.kinetic_electron_solver ∈ (implicit_time_evolving,
                                            implicit_p_implicit_pseudotimestep,
                                            implicit_steady_state)
-        implicit_buffer_z_1 = allocate_shared_float(nz; comm=comm_anyzv_subblock[])
-        implicit_buffer_z_2 = allocate_shared_float(nz; comm=comm_anyzv_subblock[])
-        implicit_buffer_z_3 = allocate_shared_float(nz; comm=comm_anyzv_subblock[])
-        implicit_buffer_z_4 = allocate_shared_float(nz; comm=comm_anyzv_subblock[])
-        implicit_buffer_z_5 = allocate_shared_float(nz; comm=comm_anyzv_subblock[])
-        implicit_buffer_z_6 = allocate_shared_float(nz; comm=comm_anyzv_subblock[])
+        implicit_buffer_z_1 = allocate_shared_float(z; comm=comm_anyzv_subblock[])
+        implicit_buffer_z_2 = allocate_shared_float(z; comm=comm_anyzv_subblock[])
+        implicit_buffer_z_3 = allocate_shared_float(z; comm=comm_anyzv_subblock[])
+        implicit_buffer_z_4 = allocate_shared_float(z; comm=comm_anyzv_subblock[])
+        implicit_buffer_z_5 = allocate_shared_float(z; comm=comm_anyzv_subblock[])
+        implicit_buffer_z_6 = allocate_shared_float(z; comm=comm_anyzv_subblock[])
 
-        implicit_buffer_vpavperpz_1 = allocate_shared_float(nvpa,nvperp,nz; comm=comm_anyzv_subblock[])
-        implicit_buffer_vpavperpz_2 = allocate_shared_float(nvpa,nvperp,nz; comm=comm_anyzv_subblock[])
-        implicit_buffer_vpavperpz_3 = allocate_shared_float(nvpa,nvperp,nz; comm=comm_anyzv_subblock[])
-        implicit_buffer_vpavperpz_4 = allocate_shared_float(nvpa,nvperp,nz; comm=comm_anyzv_subblock[])
-        implicit_buffer_vpavperpz_5 = allocate_shared_float(nvpa,nvperp,nz; comm=comm_anyzv_subblock[])
-        implicit_buffer_vpavperpz_6 = allocate_shared_float(nvpa,nvperp,nz; comm=comm_anyzv_subblock[])
+        implicit_buffer_vpavperpz_1 = allocate_shared_float(vpa, vperp, z; comm=comm_anyzv_subblock[])
+        implicit_buffer_vpavperpz_2 = allocate_shared_float(vpa, vperp, z; comm=comm_anyzv_subblock[])
+        implicit_buffer_vpavperpz_3 = allocate_shared_float(vpa, vperp, z; comm=comm_anyzv_subblock[])
+        implicit_buffer_vpavperpz_4 = allocate_shared_float(vpa, vperp, z; comm=comm_anyzv_subblock[])
+        implicit_buffer_vpavperpz_5 = allocate_shared_float(vpa, vperp, z; comm=comm_anyzv_subblock[])
+        implicit_buffer_vpavperpz_6 = allocate_shared_float(vpa, vperp, z; comm=comm_anyzv_subblock[])
     else
-        implicit_buffer_z_1 = allocate_shared_float(0)
-        implicit_buffer_z_2 = allocate_shared_float(0)
-        implicit_buffer_z_3 = allocate_shared_float(0)
-        implicit_buffer_z_4 = allocate_shared_float(0)
-        implicit_buffer_z_5 = allocate_shared_float(0)
-        implicit_buffer_z_6 = allocate_shared_float(0)
+        implicit_buffer_z_1 = allocate_shared_float(; implicit_buffer=0)
+        implicit_buffer_z_2 = allocate_shared_float(; implicit_buffer=0)
+        implicit_buffer_z_3 = allocate_shared_float(; implicit_buffer=0)
+        implicit_buffer_z_4 = allocate_shared_float(; implicit_buffer=0)
+        implicit_buffer_z_5 = allocate_shared_float(; implicit_buffer=0)
+        implicit_buffer_z_6 = allocate_shared_float(; implicit_buffer=0)
 
-        implicit_buffer_vpavperpz_1 = allocate_shared_float(0,0,0)
-        implicit_buffer_vpavperpz_2 = allocate_shared_float(0,0,0)
-        implicit_buffer_vpavperpz_3 = allocate_shared_float(0,0,0)
-        implicit_buffer_vpavperpz_4 = allocate_shared_float(0,0,0)
-        implicit_buffer_vpavperpz_5 = allocate_shared_float(0,0,0)
-        implicit_buffer_vpavperpz_6 = allocate_shared_float(0,0,0)
+        implicit_buffer_vpavperpz_1 = allocate_shared_float(:implicit_buffer=>0, :implicit_buffer=>0, :implicit_buffer=>0)
+        implicit_buffer_vpavperpz_2 = allocate_shared_float(:implicit_buffer=>0, :implicit_buffer=>0, :implicit_buffer=>0)
+        implicit_buffer_vpavperpz_3 = allocate_shared_float(:implicit_buffer=>0, :implicit_buffer=>0, :implicit_buffer=>0)
+        implicit_buffer_vpavperpz_4 = allocate_shared_float(:implicit_buffer=>0, :implicit_buffer=>0, :implicit_buffer=>0)
+        implicit_buffer_vpavperpz_5 = allocate_shared_float(:implicit_buffer=>0, :implicit_buffer=>0, :implicit_buffer=>0)
+        implicit_buffer_vpavperpz_6 = allocate_shared_float(:implicit_buffer=>0, :implicit_buffer=>0, :implicit_buffer=>0)
     end
 
     if t_params.implicit_ion_advance
-        implicit_buffer_vpavperpzrs_1 = allocate_shared_float(nvpa,nvperp,nz,nr,nspecies_ion)
-        implicit_buffer_vpavperpzrs_2 = allocate_shared_float(nvpa,nvperp,nz,nr,nspecies_ion)
-        implicit_buffer_vpavperpzrs_3 = allocate_shared_float(nvpa,nvperp,nz,nr,nspecies_ion)
-        implicit_buffer_vpavperpzrs_4 = allocate_shared_float(nvpa,nvperp,nz,nr,nspecies_ion)
-        implicit_buffer_vpavperpzrs_5 = allocate_shared_float(nvpa,nvperp,nz,nr,nspecies_ion)
-        implicit_buffer_vpavperpzrs_6 = allocate_shared_float(nvpa,nvperp,nz,nr,nspecies_ion)
+        implicit_buffer_vpavperpzrs_1 = allocate_shared_float(; vpa=vpa, vperp=vperp, z=z, r=r, ion_species=nspecies_ion)
+        implicit_buffer_vpavperpzrs_2 = allocate_shared_float(; vpa=vpa, vperp=vperp, z=z, r=r, ion_species=nspecies_ion)
+        implicit_buffer_vpavperpzrs_3 = allocate_shared_float(; vpa=vpa, vperp=vperp, z=z, r=r, ion_species=nspecies_ion)
+        implicit_buffer_vpavperpzrs_4 = allocate_shared_float(; vpa=vpa, vperp=vperp, z=z, r=r, ion_species=nspecies_ion)
+        implicit_buffer_vpavperpzrs_5 = allocate_shared_float(; vpa=vpa, vperp=vperp, z=z, r=r, ion_species=nspecies_ion)
+        implicit_buffer_vpavperpzrs_6 = allocate_shared_float(; vpa=vpa, vperp=vperp, z=z, r=r, ion_species=nspecies_ion)
     else
-        implicit_buffer_vpavperpzrs_1 = allocate_shared_float(0,0,0,0,0)
-        implicit_buffer_vpavperpzrs_2 = allocate_shared_float(0,0,0,0,0)
-        implicit_buffer_vpavperpzrs_3 = allocate_shared_float(0,0,0,0,0)
-        implicit_buffer_vpavperpzrs_4 = allocate_shared_float(0,0,0,0,0)
-        implicit_buffer_vpavperpzrs_5 = allocate_shared_float(0,0,0,0,0)
-        implicit_buffer_vpavperpzrs_6 = allocate_shared_float(0,0,0,0,0)
+        implicit_buffer_vpavperpzrs_1 = allocate_shared_float(:implicit_buffer=>0, :implicit_buffer=>0, :implicit_buffer=>0, :implicit_buffer=>0, :implicit_buffer=>0)
+        implicit_buffer_vpavperpzrs_2 = allocate_shared_float(:implicit_buffer=>0, :implicit_buffer=>0, :implicit_buffer=>0, :implicit_buffer=>0, :implicit_buffer=>0)
+        implicit_buffer_vpavperpzrs_3 = allocate_shared_float(:implicit_buffer=>0, :implicit_buffer=>0, :implicit_buffer=>0, :implicit_buffer=>0, :implicit_buffer=>0)
+        implicit_buffer_vpavperpzrs_4 = allocate_shared_float(:implicit_buffer=>0, :implicit_buffer=>0, :implicit_buffer=>0, :implicit_buffer=>0, :implicit_buffer=>0)
+        implicit_buffer_vpavperpzrs_5 = allocate_shared_float(:implicit_buffer=>0, :implicit_buffer=>0, :implicit_buffer=>0, :implicit_buffer=>0, :implicit_buffer=>0)
+        implicit_buffer_vpavperpzrs_6 = allocate_shared_float(:implicit_buffer=>0, :implicit_buffer=>0, :implicit_buffer=>0, :implicit_buffer=>0, :implicit_buffer=>0)
     end
 
-    buffer_vzvrvzetazsn_1 = allocate_shared_float(nvz,nvr,nvzeta,nz,nspecies_neutral)
-    buffer_vzvrvzetazsn_2 = allocate_shared_float(nvz,nvr,nvzeta,nz,nspecies_neutral)
-    buffer_vzvrvzetazsn_3 = allocate_shared_float(nvz,nvr,nvzeta,nz,nspecies_neutral)
-    buffer_vzvrvzetazsn_4 = allocate_shared_float(nvz,nvr,nvzeta,nz,nspecies_neutral)
-    buffer_vzvrvzetazsn_5 = allocate_shared_float(nvz,nvr,nvzeta,nz,nspecies_neutral)
-    buffer_vzvrvzetazsn_6 = allocate_shared_float(nvz,nvr,nvzeta,nz,nspecies_neutral)
+    buffer_vzvrvzetazsn_1 = allocate_shared_float(; vz=vz, vr=vr, vzeta=vzeta, z=z, neutral_species=nspecies_neutral)
+    buffer_vzvrvzetazsn_2 = allocate_shared_float(; vz=vz, vr=vr, vzeta=vzeta, z=z, neutral_species=nspecies_neutral)
+    buffer_vzvrvzetazsn_3 = allocate_shared_float(; vz=vz, vr=vr, vzeta=vzeta, z=z, neutral_species=nspecies_neutral)
+    buffer_vzvrvzetazsn_4 = allocate_shared_float(; vz=vz, vr=vr, vzeta=vzeta, z=z, neutral_species=nspecies_neutral)
+    buffer_vzvrvzetazsn_5 = allocate_shared_float(; vz=vz, vr=vr, vzeta=vzeta, z=z, neutral_species=nspecies_neutral)
+    buffer_vzvrvzetazsn_6 = allocate_shared_float(; vz=vz, vr=vr, vzeta=vzeta, z=z, neutral_species=nspecies_neutral)
 
-    buffer_vzvrvzetarsn_1 = allocate_shared_float(nvz,nvr,nvzeta,nr,nspecies_neutral)
-    buffer_vzvrvzetarsn_2 = allocate_shared_float(nvz,nvr,nvzeta,nr,nspecies_neutral)
-    buffer_vzvrvzetarsn_3 = allocate_shared_float(nvz,nvr,nvzeta,nr,nspecies_neutral)
-    buffer_vzvrvzetarsn_4 = allocate_shared_float(nvz,nvr,nvzeta,nr,nspecies_neutral)
-    buffer_vzvrvzetarsn_5 = allocate_shared_float(nvz,nvr,nvzeta,nr,nspecies_neutral)
-    buffer_vzvrvzetarsn_6 = allocate_shared_float(nvz,nvr,nvzeta,nr,nspecies_neutral)
+    buffer_vzvrvzetarsn_1 = allocate_shared_float(; vz=vz, vr=vr, vzeta=vzeta, r=r, neutral_species=nspecies_neutral)
+    buffer_vzvrvzetarsn_2 = allocate_shared_float(; vz=vz, vr=vr, vzeta=vzeta, r=r, neutral_species=nspecies_neutral)
+    buffer_vzvrvzetarsn_3 = allocate_shared_float(; vz=vz, vr=vr, vzeta=vzeta, r=r, neutral_species=nspecies_neutral)
+    buffer_vzvrvzetarsn_4 = allocate_shared_float(; vz=vz, vr=vr, vzeta=vzeta, r=r, neutral_species=nspecies_neutral)
+    buffer_vzvrvzetarsn_5 = allocate_shared_float(; vz=vz, vr=vr, vzeta=vzeta, r=r, neutral_species=nspecies_neutral)
+    buffer_vzvrvzetarsn_6 = allocate_shared_float(; vz=vz, vr=vr, vzeta=vzeta, r=r, neutral_species=nspecies_neutral)
 
-    buffer_vzvrvzetazrsn_1 = allocate_shared_float(nvz,nvr,nvzeta,nz,nr,nspecies_neutral)
-    buffer_vzvrvzetazrsn_2 = allocate_shared_float(nvz,nvr,nvzeta,nz,nr,nspecies_neutral)
+    buffer_vzvrvzetazrsn_1 = allocate_shared_float(; vz=vz, vr=vr, vzeta=vzeta, z=z, r=r, neutral_species=nspecies_neutral)
+    buffer_vzvrvzetazrsn_2 = allocate_shared_float(; vz=vz, vr=vr, vzeta=vzeta, z=z, r=r, neutral_species=nspecies_neutral)
     
-    int_buffer_rs_1 = allocate_shared_int(nr,nspecies_ion)
-    int_buffer_rs_2 = allocate_shared_int(nr,nspecies_ion)
+    int_buffer_rs_1 = allocate_shared_int(; r=r, ion_species=nspecies_ion)
+    int_buffer_rs_2 = allocate_shared_int(; r=r, ion_species=nspecies_ion)
 
     return scratch_dummy_arrays(dummy_s,dummy_sr,dummy_vpavperp,dummy_zrs,dummy_zrsn,
         buffer_z_1,buffer_z_2,buffer_z_3,buffer_z_4,
@@ -1865,45 +1865,43 @@ function setup_scratch_arrays(moments, pdf, n, time_evolve_electrons)
     # be created at the end of the first step of the loop below, once we have a
     # `scratch_pdf` object of the correct type.
     scratch = Vector{scratch_pdf}(undef, n)
-    pdf_dims = size(pdf.ion.norm)
-    moment_dims = size(moments.ion.dens)
+    nvpa, nvperp, nz, nr, n_ion_species = size(pdf.ion.norm)
+    ion_source_nz, ion_source_nr, n_ion_sources = size(moments.ion.external_source_controller_integral)
 
-    if time_evolve_electrons
-        pdf_electron_dims = size(pdf.electron.norm)
-    else
-        pdf_electron_dims = (0,0,0,0)
-    end
-    moment_electron_dims = size(moments.electron.dens)
+    nvz, nvr, nvzeta, _, _, n_neutral_species = size(pdf.neutral.norm)
+    neutral_source_nz, neutral_source_nr, n_neutral_sources = size(moments.neutral.external_source_controller_integral)
 
-    pdf_neutral_dims = size(pdf.neutral.norm)
-    moment_neutral_dims = size(moments.neutral.dens)
     # populate each of the structs
     for istage ∈ 1:n
         # Allocate arrays in temporary variables so that we can identify them
         # by source line when using @debug_shared_array
-        pdf_array = allocate_shared_float(pdf_dims...)
-        density_array = allocate_shared_float(moment_dims...)
-        upar_array = allocate_shared_float(moment_dims...)
-        p_array = allocate_shared_float(moment_dims...)
-        temp_array = allocate_shared_float(moment_dims...)
+        pdf_array = allocate_shared_float(; vpa=nvpa, vperp=nvperp, z=nz, r=nr, ion_species=n_ion_species)
+        density_array = allocate_shared_float(; z=nz, r=nr, ion_species=n_ion_species)
+        upar_array = allocate_shared_float(; z=nz, r=nr, ion_species=n_ion_species)
+        p_array = allocate_shared_float(; z=nz, r=nr, ion_species=n_ion_species)
+        temp_array = allocate_shared_float(; z=nz, r=nr, ion_species=n_ion_species)
 
-        pdf_electron_array = allocate_shared_float(pdf_electron_dims...)
-        density_electron_array = allocate_shared_float(moment_electron_dims...)
-        upar_electron_array = allocate_shared_float(moment_electron_dims...)
-        p_electron_array = allocate_shared_float(moment_electron_dims...)
-        temp_electron_array = allocate_shared_float(moment_electron_dims...)
+        if time_evolve_electrons
+            pdf_electron_array = allocate_shared_float(; vpa=nvpa, vperp=nvperp, z=nz, r=nr)
+        else
+            pdf_electron_array = allocate_shared_float(; electron_vpa=0, electron_vperp=0, electron_z=0, electron_r=0)
+        end
+        density_electron_array = allocate_shared_float(; z=nz, r=nr)
+        upar_electron_array = allocate_shared_float(; z=nz, r=nr)
+        p_electron_array = allocate_shared_float(; z=nz, r=nr)
+        temp_electron_array = allocate_shared_float(; z=nz, r=nr)
 
-        pdf_neutral_array = allocate_shared_float(pdf_neutral_dims...)
-        density_neutral_array = allocate_shared_float(moment_neutral_dims...)
-        uz_neutral_array = allocate_shared_float(moment_neutral_dims...)
-        p_neutral_array = allocate_shared_float(moment_neutral_dims...)
+        pdf_neutral_array = allocate_shared_float(; vz=nvz, vr=nvr, vzeta=nvzeta, z=nz, r=nr, neutral_species=n_neutral_species)
+        density_neutral_array = allocate_shared_float(z=nz, r=nr, neutral_species=n_neutral_species)
+        uz_neutral_array = allocate_shared_float(z=nz, r=nr, neutral_species=n_neutral_species)
+        p_neutral_array = allocate_shared_float(z=nz, r=nr, neutral_species=n_neutral_species)
 
         ion_external_source_controller_integral =
-            allocate_shared_float(size(moments.ion.external_source_controller_integral)...)
+            allocate_shared_float(; ion_source_z=ion_source_nz, ion_source_r=ion_source_nr, n_ion_sources=n_ion_sources)
         #electron_external_source_controller_integral =
-        #    allocate_shared_float(size(moments.electron.external_source_controller_integral)...)
+        #    allocate_shared_float(; electron_source_z=electron_source_nz, electron_source_r=electron_source_nr, n_electron_sources=n_electron_sources)
         neutral_external_source_controller_integral =
-            allocate_shared_float(size(moments.neutral.external_source_controller_integral)...)
+            allocate_shared_float(; neutral_source_z=neutral_source_nz, neutral_source_r=neutral_source_nr, n_neutral_sources=n_neutral_sources)
 
         scratch[istage] = scratch_pdf(pdf_array, density_array, upar_array, p_array,
                                       ion_external_source_controller_integral,
@@ -1948,15 +1946,14 @@ function setup_electron_scratch_arrays(moments, pdf, n)
     # The actual array will be created at the end of the first step of the loop below,
     # once we have a `scratch_electron_pdf` object of the correct type.
     scratch = Vector{scratch_electron_pdf}(undef, n)
-    pdf_dims = size(pdf.electron.norm)
-    moment_dims = size(moments.electron.dens)
+    nvpa, nvperp, nz, nr = size(pdf.electron.norm)
 
     # populate each of the structs
     for istage ∈ 1:n
         # Allocate arrays in temporary variables so that we can identify them
         # by source line when using @debug_shared_array
-        pdf_array = allocate_shared_float(pdf_dims...)
-        p_array = allocate_shared_float(moment_dims...)
+        pdf_array = allocate_shared_float(; vpa=nvpa, vperp=nvperp, z=nz, r=nr)
+        p_array = allocate_shared_float(; z=nz, r=nr)
 
         scratch[istage] = scratch_electron_pdf(pdf_array, p_array)
         @serial_region begin

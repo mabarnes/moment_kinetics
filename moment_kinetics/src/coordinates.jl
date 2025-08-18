@@ -183,8 +183,8 @@ function define_coordinate(coord_input::NamedTuple; parallel_io::Bool=false,
     # initialize the grid and the integration weights associated with the grid
     # also obtain the Chebyshev theta grid and spacing if chosen as discretization option
     grid, wgts, uniform_grid, radau_first_element =
-        init_grid(coord_input.ngrid, coord_input.nelement_local, n_global, n_local,
-                  irank, coord_input.L, element_scale, element_shift, imin, imax, igrid,
+        init_grid(coord_input.ngrid, coord_input.nelement_local, n_global, n_local, irank,
+                  coord_input.L, element_scale, element_shift, imin, imax, igrid,
                   coord_input.discretization, coord_input.name)
     # calculate the widths of the cells between neighboring grid points
     cell_width = grid_spacing(grid, n_local)
@@ -192,22 +192,22 @@ function define_coordinate(coord_input::NamedTuple; parallel_io::Bool=false,
     # the coordinate grid
     duniform_dgrid = allocate_float(coord_input.ngrid, coord_input.nelement_local)
     # scratch is an array used for intermediate calculations requiring n entries
-    scratch = allocate_float(n_local)
+    scratch = allocate_float(; Symbol(coord_input.name)=>n_local)
     # scratch_int_nelement_plus_1 is an array used for intermediate calculations requiring
     # nelement+1 entries
     scratch_int_nelement_plus_1 = allocate_int(coord_input.nelement_local + 1)
     if ignore_MPI
-        scratch_shared = allocate_float(n_local)
-        scratch_shared2 = allocate_float(n_local)
-        scratch_shared3 = allocate_float(n_local)
-        scratch_shared_int = allocate_int(n_local)
-        scratch_shared_int2 = allocate_int(n_local)
+        scratch_shared = allocate_float(; Symbol(coord_input.name)=>n_local)
+        scratch_shared2 = allocate_float(; Symbol(coord_input.name)=>n_local)
+        scratch_shared3 = allocate_float(; Symbol(coord_input.name)=>n_local)
+        scratch_shared_int = allocate_int(; Symbol(coord_input.name)=>n_local)
+        scratch_shared_int2 = allocate_int(; Symbol(coord_input.name)=>n_local)
     else
-        scratch_shared = allocate_shared_float(n_local)
-        scratch_shared2 = allocate_shared_float(n_local)
-        scratch_shared3 = allocate_shared_float(n_local)
-        scratch_shared_int = allocate_shared_int(n_local)
-        scratch_shared_int2 = allocate_shared_int(n_local)
+        scratch_shared = allocate_shared_float(; Symbol(coord_input.name)=>n_local)
+        scratch_shared2 = allocate_shared_float(; Symbol(coord_input.name)=>n_local)
+        scratch_shared3 = allocate_shared_float(; Symbol(coord_input.name)=>n_local)
+        scratch_shared_int = allocate_shared_int(; Symbol(coord_input.name)=>n_local)
+        scratch_shared_int2 = allocate_shared_int(; Symbol(coord_input.name)=>n_local)
     end
     # Initialise scratch_shared* so that the debug checks do not complain when they get
     # printed by `println(io, all_inputs)` in mk_input().
@@ -290,9 +290,9 @@ function define_coordinate(coord_input::NamedTuple; parallel_io::Bool=false,
         prevrank = irank - 1
     end
 
-    mask_low = allocate_float(n_local)
+    mask_low = allocate_float(; Symbol(coord_input.name)=>n_local)
     mask_low .= 1.0
-    mask_up = allocate_float(n_local)
+    mask_up = allocate_float(; Symbol(coord_input.name)=>n_local)
     mask_up .= 1.0
     zeroval = 1.0e-8
     for i in 1:n_local
@@ -558,23 +558,26 @@ function set_element_scale_and_shift(nelement_global, nelement_local, irank, ele
     end
     return element_scale, element_shift
 end
+
 """
 setup a grid with n_global grid points on the interval [-L/2,L/2]
 """
-function init_grid(ngrid, nelement_local, n_global, n_local, irank, L, element_scale, element_shift,
-                   imin, imax, igrid, discretization, name)
+function init_grid(ngrid, nelement_local, n_global, n_local, irank, L, element_scale,
+                   element_shift, imin, imax, igrid, discretization, name)
     uniform_grid = equally_spaced_grid(n_global, n_local, irank, L)
     uniform_grid_shifted = equally_spaced_grid_shifted(n_global, n_local, irank, L)
     radau_first_element = false
     if n_global == 1
-        grid = allocate_float(n_local)
+        grid = allocate_float(; Symbol(name)=>n_local)
         grid[1] = 0.0
-        wgts = allocate_float(n_local)
+        wgts = allocate_float(; Symbol(name)=>n_local)
         wgts[1] = 1.0
     elseif discretization == "chebyshev_pseudospectral"
         if name == "vperp"
             # initialize chebyshev grid defined on [-L/2,L/2]
-            grid, wgts = scaled_chebyshev_radau_grid(ngrid, nelement_local, n_local, element_scale, element_shift, imin, imax, irank)
+            grid, wgts = scaled_chebyshev_radau_grid(name, ngrid, nelement_local, n_local,
+                                                     element_scale, element_shift, imin,
+                                                     imax, irank)
             # Integrals over vperp are actually 2d integrals
             #   ∫d^2(v_⟂)=∫dv_⟂ v_⟂∫dϕ=2π∫dv_⟂ v_⟂
             # so need to multiply the weight by 2*π*v_⟂
@@ -587,7 +590,8 @@ function init_grid(ngrid, nelement_local, n_global, n_local, irank, L, element_s
             # needed to obtain Chebyshev spectral coefficients
             # 'wgts' are the integration weights attached to each grid points
             # that are those associated with Clenshaw-Curtis quadrature
-            grid, wgts = scaled_chebyshev_grid(ngrid, nelement_local, n_local, element_scale, element_shift, imin, imax)
+            grid, wgts = scaled_chebyshev_grid(name, ngrid, nelement_local, n_local,
+                                               element_scale, element_shift, imin, imax)
         end
     elseif discretization == "gausslegendre_pseudospectral"
         if name == "vperp"

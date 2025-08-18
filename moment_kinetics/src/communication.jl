@@ -14,7 +14,7 @@ module communication
 
 export allocate_shared, block_rank, block_size, n_blocks, comm_block, comm_inter_block,
        iblock_index, comm_world, finalize_comms!, halo_swap!, initialize_comms!,
-       global_rank, MPISharedArray, global_size, comm_anysv_subblock, anysv_subblock_rank,
+       global_rank, global_size, comm_anysv_subblock, anysv_subblock_rank,
        anysv_subblock_size, anysv_isubblock_index, anysv_nsubblocks_per_block,
        comm_anyzv_subblock, anyzv_subblock_rank, anyzv_subblock_size,
        anyzv_isubblock_index, anyzv_nsubblocks_per_block
@@ -30,8 +30,12 @@ using SHA
 # Import moment_kinetics so that we can refer to it in docstrings
 import moment_kinetics
 using ..debugging
+using ..moment_kinetics_structs: coordinate
 using ..timer_utils
 using ..type_definitions: mk_float, mk_int
+@debug_shared_array begin
+    using ..type_definitions: DebugMPISharedArray
+end
 
 """
 Can use a const `MPI.Comm` for `comm_world` and just copy the pointer from
@@ -450,29 +454,13 @@ function setup_distributed_memory_MPI_for_weights_precomputation(vpa_nelement_gl
 end
 
 @debug_shared_array begin
-    """
-    Special type for debugging race conditions in accesses to shared-memory arrays.
-    Only used if debugging._debug_level is high enough.
-    """
-    struct DebugMPISharedArray{T, N, TArray <: AbstractArray{T,N}, TIntArray <: AbstractArray{mk_int,N}, TBoolArray <: AbstractArray{Bool,N}} <: AbstractArray{T, N}
-        data::TArray
-        accessed::Base.RefValue{Bool}
-        is_initialized::TIntArray
-        is_read::TBoolArray
-        is_written::TBoolArray
-        creation_stack_trace::String
-        @debug_detect_redundant_block_synchronize begin
-            previous_is_read::TBoolArray
-            previous_is_written::TBoolArray
-        end
-    end
-
-    export DebugMPISharedArray
-
     # Constructors
-    function DebugMPISharedArray(array::AbstractArray, comm)
+    function DebugMPISharedArray(array::AbstractArray{T,N}, comm,
+                                 dim_names::NTuple{N, Symbol}) where {T,N}
         dims = size(array)
-        is_initialized = allocate_shared(mk_int, dims; comm=comm, maybe_debug=false)
+        is_initialized = allocate_shared(mk_int, (Symbol("d$i")=>d for (i,d) ∈
+                                                  enumerate(dims))...;
+                                         comm=comm, maybe_debug=false)
         if block_rank[] == 0
             is_initialized .= 0
         end
@@ -492,12 +480,12 @@ end
             previous_is_read .= true
             previous_is_written = Array{Bool}(undef, dims)
             previous_is_written .= true
-            return DebugMPISharedArray(array, accessed, is_initialized, is_read, is_written,
-                                       creation_stack_trace, previous_is_read,
-                                       previous_is_written)
+            return DebugMPISharedArray(array, dim_names, accessed, is_initialized,
+                                       is_read, is_written, creation_stack_trace,
+                                       previous_is_read, previous_is_written)
         end
-        return DebugMPISharedArray(array, accessed, is_initialized, is_read, is_written,
-                                   creation_stack_trace)
+        return DebugMPISharedArray(array, dim_names, accessed, is_initialized, is_read,
+                                   is_written, creation_stack_trace)
     end
 
     # Define functions needed for AbstractArray interface
@@ -608,14 +596,10 @@ end
 end
 
 """
-Type used to declare a shared-memory array. When debugging is not active `MPISharedArray`
-is just an alias for `Array`, but when `@debug_shared_array` is activated, it is instead
-defined as an alias for `DebugMPISharedArray`.
-"""
-const MPISharedArray = @debug_shared_array_ifelse(DebugMPISharedArray, Array)
+    allocate_shared(T; comm=nothing, maybe_debug=true, kwargs...)
+    allocate_shared(T, dims...; comm=nothing, maybe_debug=true)
 
-"""
-Get a shared-memory array of `mk_float` (shared by all processes in a 'block')
+Get a shared-memory array of `mk_float` (shared by all processes in a 'block').
 
 Create a shared-memory array using `MPI.Win_allocate_shared()`. Pointer to the memory
 allocated is wrapped in a Julia array. Memory is not managed by the Julia array though.
@@ -626,10 +610,20 @@ running a simulation/test.
 
 Arguments
 ---------
-dims - mk_int or Tuple{mk_int}
+kwargs - mk_int
+    Dimensions must be named to support shared-memory debugging tools. They can be either
+    passed as `name=dim_size` keyword arguments (`coordinate` objects can also be passed
+    as the kwarg values, for convenienc), or using `dims`.
     Dimensions of the array to be created. Dimensions passed define the size of the
     array which is being handled by the 'block' (rather than the global array, or a
     subset for a single process).
+dims - coordinate, NamedTuple, Pair{Symbol,Integer}, or Pair{String,Integer}
+    Alternative to `kwargs`. May be passed `coordinate`, `NamedTuple`,
+    `Pair{Symbol,Integer}` (enter as e.g. `:z => n` where `n` is an `mk_int`),
+    `Pair{String,Integer}` (enter as e.g. `"z" => n` where `n` is an `mk_int`),
+    `Pair{Symbol,coordinate}`, `Pair{String,coordinate}`, `Pair{Symbol,NamedTuple}`, or
+    `Pair{String,NamedTuple}` arguments from which the name and size of the name and size
+    of the dimension will be extracted.
 comm - `MPI.Comm`, default `comm_block[]`
     MPI communicator containing the processes that share the array.
 maybe_debug - Bool
@@ -641,7 +635,61 @@ Returns
 -------
 Array{mk_float}
 """
-function allocate_shared(T, dims; comm=nothing, maybe_debug=true)
+function allocate_shared end
+
+function allocate_shared(T::Type, dim1, dims...; comm=nothing, maybe_debug=true)
+    function standardise_argument(a)
+        if isa(a, coordinate)
+            return Symbol(a.name) => a.n
+        elseif isa(a, NamedTuple)
+            return Symbol(a.name) => a.n
+        elseif isa(a, Pair)
+            if isa(a[2], coordinate)
+                return Symbol(a[1]) => a[2].n
+            elseif isa(a[2], NamedTuple)
+                return Symbol(a[1]) => a[2].n
+            elseif isa(a[2], Integer)
+                return Symbol(a[1]) => mk_int(a[2])
+            else
+                error("Incorrect argument $a to `allocate_shared`. Arguments should be "
+                      * "coordinate, coordinate-like NamedTuple, or `:name=>n` "
+                      * "(`Pair{Symbol,mk_int}`).")
+            end
+        else
+            error("Incorrect argument $a to `allocate_shared`. Arguments should be "
+                  * "coordinate, coordinate-like NamedTuple, or `:name=>n` "
+                  * "(`Pair{Symbol,mk_int}`).")
+        end
+    end
+    return _allocate_shared_internal(T, (standardise_argument(d)
+                                         for d ∈ (dim1, dims...))...;
+                                     comm=comm, maybe_debug=maybe_debug)
+end
+
+function allocate_shared(T::Type; comm=nothing, maybe_debug=true, kwargs...)
+    function get_int(a)
+        if isa(a, coordinate)
+            return a.n
+        elseif isa(a, NamedTuple)
+            return mk_int(a.n)
+        elseif isa(a, Integer)
+            return mk_int(a)
+        else
+            error("Unrecognised type of argument $a")
+        end
+    end
+    return _allocate_shared_internal(T, (k => get_int(v) for (k,v) ∈ kwargs)...;
+                                     comm=comm, maybe_debug=maybe_debug)
+end
+
+# Note cannot just use `kwargs...` for the inner version, because we might want repeated
+# dimension names in some cases, but repeated `kwargs` are not allowed.
+function _allocate_shared_internal(T::Type, dims_info::Pair{Symbol,mk_int}...;
+                                   comm=nothing, maybe_debug=true)
+    if maybe_debug
+        dim_names = Tuple(d[1] for d ∈ dims_info)
+    end
+    dims = Tuple(d[2] for d ∈ dims_info)
     if comm === nothing
         comm = comm_block[]
     elseif comm == MPI.COMM_NULL
