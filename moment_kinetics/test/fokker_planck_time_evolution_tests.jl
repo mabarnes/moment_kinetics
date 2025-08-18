@@ -481,7 +481,7 @@ function runtests(; highres=false)
                 (evolve_density, evolve_upar, evolve_p, tol1, tol2, tol3, tol4) ∈
                     ((false, false, false, 2.0e-14, 1.0e-14, highres ? 4.0e-3 : 1.0e-5, highres ? 1.0e-4 : 5.0e-12),
                      (true, false, false, highres ? 2.0e-8 : 2.0e-14, highres ? 2.0e-8 : 1.0e-14, highres ? 4.0e-3 : 1.0e-5, highres ? 1.0e-4 : 5.0e-12),
-                     (true, true, false, highres ? 3.0e-4 : 2.0e-14, highres ? 2.0e-3 : 1.0e-14, highres ? 4.0e-3 : 1.0e-5, highres ? 3.0e-4 : 5.0e-12),
+                     (true, true, false, highres ? 2.0e-3 : 2.0e-14, highres ? 3.0e-4 : 1.0e-14, highres ? 4.0e-3 : 1.0e-5, highres ? 3.0e-4 : 5.0e-12),
                      (true, true, true, highres ? 2.0e-3 : 2.0e-14, highres ? 2.0e-3 : 1.0e-14, highres ? 4.0e-3 : 1.0e-5, highres ? 2.0e-3 : 5.0e-12),
                     )
             println("  evolve_density=$evolve_density, evolve_upar=$evolve_upar, evolve_p=$evolve_p:")
@@ -526,7 +526,7 @@ function runtests(; highres=false)
                     this_expected = expected_zero[(evolve_density, evolve_upar, evolve_p)]
                     this_input = test_input_gauss_legendre
                 end
-                run_test(this_input, this_expected, tol2, tol1;
+                run_test(this_input, this_expected, tol1, tol2;
                          interp_to_expected=highres,
                          vperp=OptionsDict("bc" => vperp_bc, "L" => Lvperp),
                          vpa=OptionsDict("L" => Lvpa),
@@ -543,7 +543,7 @@ function runtests(; highres=false)
                     this_expected = expected_none_bc[(evolve_density, evolve_upar, evolve_p)]
                     this_input = test_input_gauss_legendre
                 end
-                run_test(this_input, this_expected, tol2, tol1;
+                run_test(this_input, this_expected, tol1, tol2;
                          interp_to_expected=highres,
                          vperp=OptionsDict("bc" => vperp_bc, "L" => Lvperp),
                          vpa=OptionsDict("bc" => vpa_bc, "L" => Lvpa),
