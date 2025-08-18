@@ -352,7 +352,9 @@ end
 Function for advancing with the explicit, weak-form, self-collision operator.
 """
 @timeit global_timer explicit_fokker_planck_collisions_weak_form!(
-                         pdf_out, pdf_in, dSdt, composition, collisions, dt,
+                         pdf_out, pdf_in,
+                         dSdt, density, vth, evolve_p, evolve_density,
+                         composition, collisions, dt,
                          fkpl_arrays::fokkerplanck_weakform_arrays_struct, r, z, vperp,
                          vpa, vperp_spectral, vpa_spectral, scratch_dummy;
                          diagnose_entropy_production=false) = begin
@@ -384,9 +386,11 @@ Function for advancing with the explicit, weak-form, self-collision operator.
     @begin_r_z_anysv_region()
     @loop_r_z ir iz begin
         is = 1
+        prefactor = moment_kinetic_collision_frequency_prefactor(density[iz,ir,is],
+                                            vth[iz,ir,is], evolve_p, evolve_density)
         # first argument is Fs, and second argument is Fs' in C[Fs,Fs'] 
         @views fokker_planck_self_collision_operator_weak_form!(
-            pdf_in[:,:,iz,ir,is], ms, nuss, fkpl_arrays,
+            pdf_in[:,:,iz,ir,is], ms, nuss*prefactor, fkpl_arrays,
             vperp, vpa, vperp_spectral, vpa_spectral, 
             boundary_data_option = boundary_data_option,
             use_conserving_corrections = use_conserving_corrections)
@@ -397,8 +401,9 @@ Function for advancing with the explicit, weak-form, self-collision operator.
             pdf_out[ivpa,ivperp,iz,ir,is] += dt*CC[ivpa,ivperp]
         end
         if diagnose_entropy_production
-            calculate_entropy_production!(dSdt, pdf_in, fkpl_arrays, vpa, vperp,
-                                        iz, ir, is)
+            calculate_entropy_production!(dSdt, pdf_in, fkpl_arrays, density, vth,
+                                          evolve_density, evolve_p, vpa, vperp, iz, ir,
+                                          is)
         end
     end
     return nothing
@@ -791,8 +796,9 @@ end
 """
 Function to calculate entropy production, in place.
 """
-function calculate_entropy_production!(dSdt,pdf,fkpl_arrays,vpa,vperp,
-                                iz::mk_int,ir::mk_int,is::mk_int)
+function calculate_entropy_production!(dSdt, pdf, fkpl_arrays, density, vth,
+                                       evolve_density, evolve_p, vpa, vperp, iz::mk_int,
+                                       ir::mk_int, is::mk_int)
     # Note that we pass spatial indices here to permit
     # use of the shared-memory parallelism to calculate
     # and return a float value in an array
@@ -801,16 +807,49 @@ function calculate_entropy_production!(dSdt,pdf,fkpl_arrays,vpa,vperp,
     CC = fkpl_arrays.CC
     # assign dummy array
     lnfC = fkpl_arrays.rhsvpavperp
-    @loop_vperp_vpa ivperp ivpa begin
-        lnfC[ivpa,ivperp] = log(abs(pdf[ivpa,ivperp,iz,ir,is]) + 1.0e-15)*CC[ivpa,ivperp]
+    if evolve_density && evolve_p
+        n_vt3 = density[iz,ir,is] / vth[iz,ir,is]^3
+        @loop_vperp_vpa ivperp ivpa begin
+            lnfC[ivpa,ivperp] = log(abs(pdf[ivpa,ivperp,iz,ir,is] * n_vt3) + 1.0e-15)*CC[ivpa,ivperp]
+        end
+    elseif evolve_density
+        @loop_vperp_vpa ivperp ivpa begin
+            lnfC[ivpa,ivperp] = log(abs(pdf[ivpa,ivperp,iz,ir,is] * density[iz,ir,is]) + 1.0e-15)*CC[ivpa,ivperp]
+        end
+    else
+        @loop_vperp_vpa ivperp ivpa begin
+            lnfC[ivpa,ivperp] = log(abs(pdf[ivpa,ivperp,iz,ir,is]) + 1.0e-15)*CC[ivpa,ivperp]
+        end
     end
     @begin_anysv_region()
     @anysv_serial_region begin
         dSdt[iz,ir,is] = -get_density(lnfC,vpa,vperp)
+        if evolve_density
+            dSdt[iz,ir,is] *= density[iz,ir,is]
+        end
     end
     return nothing
 end
 
+"""
+Function to account for the normalisation of the
+moment kinetic normalised distribution function
+by multiplying the input collision frequency by
+the normalisation factors.
+
+Only applicable for self collisions.
+"""
+function moment_kinetic_collision_frequency_prefactor(density::mk_float, vth::mk_float,
+                                                    evolve_p::Bool, evolve_density::Bool)
+    if evolve_p && evolve_density
+        collision_prefactor = density/(vth^3)
+    elseif evolve_density
+        collision_prefactor = density
+    else
+        collision_prefactor = 1.0
+    end
+    return collision_prefactor
+end
 
 ######################################################
 # end functions associated with the weak-form operator
@@ -932,7 +971,8 @@ function setup_fp_nl_solve(implicit_ion_fp_collisions::Bool,
         default_atol=default_atol, default_rtol=default_rtol)
 end
 
-function implicit_ion_fokker_planck_self_collisions!(pdf_out, pdf_in, dSdt, 
+function implicit_ion_fokker_planck_self_collisions!(pdf_out, pdf_in,
+                    dSdt, density, vth, evolve_p, evolve_density,
                     composition, collisions, fkpl_arrays, 
                     vpa, vperp, z, r, delta_t, spectral_objects,
                     nl_solver_params; diagnose_entropy_production=false,
@@ -972,8 +1012,10 @@ function implicit_ion_fokker_planck_self_collisions!(pdf_out, pdf_in, dSdt,
     @begin_r_z_anysv_region()
     @loop_r_z ir iz begin
         is = 1
+        prefactor = moment_kinetic_collision_frequency_prefactor(density[iz,ir,is],
+                                            vth[iz,ir,is], evolve_p, evolve_density)
         @views Fold = pdf_in[:,:,iz,ir,is]
-        local_success = fokker_planck_self_collisions_backward_euler_step!(Fold, delta_t, ms, nuss, fkpl_arrays,
+        local_success = fokker_planck_self_collisions_backward_euler_step!(Fold, delta_t, ms, nuss*prefactor, fkpl_arrays,
                             coords, spectral_objects,
                             nl_solver_params;
                             test_numerical_conserving_terms=use_conserving_corrections,
@@ -1009,8 +1051,9 @@ function implicit_ion_fokker_planck_self_collisions!(pdf_out, pdf_in, dSdt,
         end
 
         if diagnose_entropy_production
-            calculate_entropy_production!(dSdt, pdf_out, fkpl_arrays, vpa, vperp,
-                                        iz, ir, is)
+            calculate_entropy_production!(dSdt, pdf_out, fkpl_arrays, density, vth,
+                                          evolve_density, evolve_p, vpa, vperp, iz, ir,
+                                          is)
         end
     end
     return success
