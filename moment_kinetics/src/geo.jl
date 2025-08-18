@@ -126,18 +126,18 @@ r -- coordinate type
 function init_magnetic_geometry(geometry_input_data::geometry_input,z,r)
     nz = z.n
     nr = r.n
-    Bzed = allocate_float(nz,nr)
-    Bzeta = allocate_float(nz,nr)
-    Bmag = allocate_float(nz,nr)
-    bzed = allocate_float(nz,nr)
-    bzeta = allocate_float(nz,nr)
-    dBdr = allocate_float(nz,nr)
-    dBdz = allocate_float(nz,nr)
-    jacobian = allocate_float(nz,nr)
-    cvdriftr = allocate_float(nz,nr)
-    cvdriftz = allocate_float(nz,nr)
-    gbdriftr = allocate_float(nz,nr)
-    gbdriftz = allocate_float(nz,nr)
+    Bzed = allocate_float(z, r)
+    Bzeta = allocate_float(z, r)
+    Bmag = allocate_float(z, r)
+    bzed = allocate_float(z, r)
+    bzeta = allocate_float(z, r)
+    dBdr = allocate_float(z, r)
+    dBdz = allocate_float(z, r)
+    jacobian = allocate_float(z, r)
+    cvdriftr = allocate_float(z, r)
+    cvdriftz = allocate_float(z, r)
+    gbdriftr = allocate_float(z, r)
+    gbdriftz = allocate_float(z, r)
     
     option = geometry_input_data.option
     rhostar = geometry_input_data.rhostar

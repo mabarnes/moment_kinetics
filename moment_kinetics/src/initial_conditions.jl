@@ -66,13 +66,13 @@ function allocate_pdf_and_moments(composition, r, z, vperp, vpa, vzeta, vr, vz,
     # the time-dependent entries are not initialised.
     # moments arrays have same r and z grids for both ion and neutral species
     # and so are included in the same struct
-    ion = create_moments_ion(z.n, r.n, composition.n_ion_species, evolve_moments.density,
+    ion = create_moments_ion(z, r, composition.n_ion_species, evolve_moments.density,
                              evolve_moments.parallel_flow, evolve_moments.pressure,
                              external_source_settings.ion, num_diss_params)
-    electron = create_moments_electron(z.n, r.n, composition.electron_physics,
+    electron = create_moments_electron(z, r, composition.electron_physics,
                                        num_diss_params,
                                        length(external_source_settings.electron))
-    neutral = create_moments_neutral(z.n, r.n, composition.n_neutral_species,
+    neutral = create_moments_neutral(z, r, composition.n_neutral_species,
                                      evolve_moments.density, evolve_moments.parallel_flow,
                                      evolve_moments.pressure,
                                      external_source_settings.neutral, num_diss_params)
@@ -100,19 +100,19 @@ Allocate arrays for pdfs
 """
 function create_pdf(composition, r, z, vperp, vpa, vzeta, vr, vz)
     # allocate pdf arrays
-    pdf_ion_norm = allocate_shared_float(vpa.n, vperp.n, z.n, r.n, composition.n_ion_species)
+    pdf_ion_norm = allocate_shared_float(vpa=vpa, vperp=vperp, z=z, r=r, ion_species=composition.n_ion_species)
     # buffer array is for ion-neutral collisions, not for storing ion pdf
-    pdf_ion_buffer = allocate_shared_float(vpa.n, vperp.n, z.n, r.n, composition.n_neutral_species) # n.b. n_species is n_neutral_species here
-    pdf_neutral_norm = allocate_shared_float(vz.n, vr.n, vzeta.n, z.n, r.n, composition.n_neutral_species)
+    pdf_ion_buffer = allocate_shared_float(vpa=vpa, vperp=vperp, z=z, r=r, neutral_species=composition.n_neutral_species) # n.b. n_species is n_neutral_species here
+    pdf_neutral_norm = allocate_shared_float(; vz=vz, vr=vr, vzeta=vzeta, z=z, r=r, neutral_species=composition.n_neutral_species)
     # buffer array is for neutral-ion collisions, not for storing neutral pdf
-    pdf_neutral_buffer = allocate_shared_float(vz.n, vr.n, vzeta.n, z.n, r.n, composition.n_ion_species)
+    pdf_neutral_buffer = allocate_shared_float(; vz=vz, vr=vr, vzeta=vzeta, z=z, r=r, neutral_species=composition.n_ion_species)
     if composition.electron_physics ∈ (kinetic_electrons,
                                        kinetic_electrons_with_temperature_equation)
-        pdf_electron_norm = allocate_shared_float(vpa.n, vperp.n, z.n, r.n)
+        pdf_electron_norm = allocate_shared_float(vpa, vperp, z, r)
         # MB: not sure if pdf_electron_buffer will ever be needed, but create for now
         # to emulate ion and neutral behaviour
-        pdf_electron_buffer = allocate_shared_float(vpa.n, vperp.n, z.n, r.n)
-        pdf_before_ion_timestep = allocate_shared_float(vpa.n, vperp.n, z.n, r.n)
+        pdf_electron_buffer = allocate_shared_float(vpa, vperp, z, r)
+        pdf_before_ion_timestep = allocate_shared_float(vpa, vperp, z, r)
         electron_substruct = electron_pdf_substruct(pdf_electron_norm,
                                                     pdf_electron_buffer,
                                                     pdf_before_ion_timestep)
@@ -522,8 +522,8 @@ end
 function initialize_pdf!(pdf, moments, composition, r, z, vperp, vpa, vzeta, vr, vz,
                          vperp_spectral, vpa_spectral, vzeta_spectral, vr_spectral,
                          vz_spectral, species)
-    wall_flux_0 = allocate_float(r.n, composition.n_ion_species)
-    wall_flux_L = allocate_float(r.n, composition.n_ion_species)
+    wall_flux_0 = allocate_float(; r=r, ion_species=composition.n_ion_species)
+    wall_flux_L = allocate_float(; r=r, ion_species=composition.n_ion_species)
 
     @serial_region begin
         for is ∈ 1:composition.n_ion_species, ir ∈ 1:r.n
@@ -1293,8 +1293,8 @@ function init_ion_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
 
             # Can use non-shared memory here because `init_ion_pdf_over_density!()` is
             # called inside a `@serial_region`
-            lower_z_pdf_buffer = allocate_float(vpa.n, vperp.n)
-            upper_z_pdf_buffer = allocate_float(vpa.n, vperp.n)
+            lower_z_pdf_buffer = allocate_float(vpa, vperp)
+            upper_z_pdf_buffer = allocate_float(vpa, vperp)
             if z.irank == 0
                 lower_z_pdf_buffer .= pdf[:,:,1]
             end
@@ -1628,8 +1628,8 @@ function init_neutral_pdf_over_density!(pdf, spec, composition, vz, vr, vzeta, z
             end
             # Can use non-shared memory here because `init_ion_pdf_over_density!()` is
             # called inside a `@serial_region`
-            lower_z_pdf_buffer = allocate_float(vz.n, vr.n, vzeta.n)
-            upper_z_pdf_buffer = allocate_float(vz.n, vr.n, vzeta.n)
+            lower_z_pdf_buffer = allocate_float(vz, vr, vzeta)
+            upper_z_pdf_buffer = allocate_float(vz, vr, vzeta)
             if z.irank == 0
                 lower_z_pdf_buffer .= pdf[:,:,:,1]
             end
@@ -1661,8 +1661,8 @@ function init_neutral_pdf_over_density!(pdf, spec, composition, vz, vr, vzeta, z
             # Re-calculate Knudsen distribution instead of using
             # `boundary_distributions.knudsen`, so that we can include vgrid_scale_factor
             # here.
-            knudsen_pdf_lower = allocate_float(vz.n, vr.n, vzeta.n)
-            knudsen_pdf_upper = allocate_float(vz.n, vr.n, vzeta.n)
+            knudsen_pdf_lower = allocate_float(vz, vr, vzeta)
+            knudsen_pdf_upper = allocate_float(vz, vr, vzeta)
             T_wall_over_m = composition.T_wall / composition.mn_over_mi
             if vzeta.n > 1 && vr.n > 1
                 # 3V specification of neutral wall emission distribution for boundary condition

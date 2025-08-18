@@ -186,6 +186,7 @@ initialize chebyshev grid scaled to interval [-box_length/2, box_length/2]
 we no longer pass the box_length to this function, but instead pass precomputed
 arrays element_scale and element_shift that are needed to compute the grid.
 
+name -- the name of the coordinate that this is the grid for
 ngrid -- number of points per element (including boundary points)
 nelement_local -- number of elements in the local (distributed memory MPI) grid
 n -- total number of points in the local grid (excluding duplicate points)
@@ -200,15 +201,15 @@ imin -- the array of minimum indices of each element on the extended grid.
         the lower boundary point is actually imin[j] - 1
 imax -- the array of maximum indices of each element on the extended grid.
 """
-function scaled_chebyshev_grid(ngrid, nelement_local, n,
-			element_scale, element_shift, imin, imax)
+function scaled_chebyshev_grid(name, ngrid, nelement_local, n, element_scale,
+                               element_shift, imin, imax)
     # initialize chebyshev grid defined on [-1,1]
     # with n grid points chosen to facilitate
     # the fast Chebyshev transform (aka the discrete cosine transform)
     # needed to obtain Chebyshev spectral coefficients
     chebyshev_grid = chebyshevpoints(ngrid)
     # create array for the full grid
-    grid = allocate_float(n)
+    grid = allocate_float(; Symbol(name)=>n)
     
     # account for the fact that the minimum index needed for the chebyshev_grid
     # within each element changes from 1 to 2 in going from the first element
@@ -228,8 +229,8 @@ function scaled_chebyshev_grid(ngrid, nelement_local, n,
     return grid, wgts
 end
 
-function scaled_chebyshev_radau_grid(ngrid, nelement_local, n,
-			element_scale, element_shift, imin, imax, irank)
+function scaled_chebyshev_radau_grid(name, ngrid, nelement_local, n, element_scale,
+                                     element_shift, imin, imax, irank)
     # initialize chebyshev grid defined on [-1,1]
     # with n grid points chosen to facilitate
     # the fast Chebyshev transform (aka the discrete cosine transform)
@@ -237,7 +238,7 @@ function scaled_chebyshev_radau_grid(ngrid, nelement_local, n,
     chebyshev_grid = chebyshevpoints(ngrid)
     chebyshev_radau_grid = chebyshev_radau_points(ngrid)
     # create array for the full grid
-    grid = allocate_float(n)
+    grid = allocate_float(; Symbol(name)=>n)
     # setup the scale factor by which the Chebyshev grid on [-1,1]
     # is to be multiplied to account for the full domain [-L/2,L/2]
     # and the splitting into nelement elements with ngrid grid points

@@ -4,8 +4,7 @@ cycles when they are used by several other modules.
 """
 module moment_kinetics_structs
 
-using ..communication
-using ..type_definitions: mk_float, mk_int
+using ..type_definitions: mk_float, mk_int, MPISharedArray
 
 using MPI
 

@@ -40,11 +40,10 @@ export interpolate_2D_vspace!
 # Import moment_kinetics so that we can refer to it in docstrings
 import moment_kinetics
 
-using ..type_definitions: mk_float, mk_int
+using ..type_definitions: mk_float, mk_int, MPISharedArray
 using ..array_allocation: allocate_float, allocate_shared_float, allocate_shared_int
 using ..calculus: derivative!, integral
 using ..communication
-using ..communication: MPISharedArray, global_rank
 using ..lagrange_polynomials: lagrange_poly, lagrange_poly_optimised
 using ..looping
 using ..velocity_moments: get_density, get_upar, get_p, get_ppar, get_pperp
@@ -98,9 +97,9 @@ Function to allocate an instance of `sparse_matrix_constructor`.
 """
 function allocate_sparse_matrix_constructor(nsparse::mk_int; sharedmem=false)
     if sharedmem
-        II = allocate_shared_int(nsparse; comm=comm_anysv_subblock[])
-        JJ = allocate_shared_int(nsparse; comm=comm_anysv_subblock[])
-        SS = allocate_shared_float(nsparse; comm=comm_anysv_subblock[])
+        II = allocate_shared_int(; comm=comm_anysv_subblock[], vpa_and_vperp=nsparse)
+        JJ = allocate_shared_int(; comm=comm_anysv_subblock[], vpa_and_vperp=nsparse)
+        SS = allocate_shared_float(; comm=comm_anysv_subblock[], vpa_and_vperp=nsparse)
         @begin_r_z_anysv_region()
         if anysv_subblock_rank[] ≥ 0
             @begin_anysv_region()
@@ -357,12 +356,10 @@ end
 """
 Function to allocate a `boundary_integration_weights_struct`.
 """
-function allocate_boundary_integration_weight(vpa,vperp)
-    nvpa = vpa.n
-    nvperp = vperp.n
-    lower_vpa_boundary = allocate_shared_float(nvpa,nvperp,nvperp)
-    upper_vpa_boundary = allocate_shared_float(nvpa,nvperp,nvperp)
-    upper_vperp_boundary = allocate_shared_float(nvpa,nvperp,nvpa)
+function allocate_boundary_integration_weight(vpa, vperp)
+    lower_vpa_boundary = allocate_shared_float(vpa, vperp, vperp)
+    upper_vpa_boundary = allocate_shared_float(vpa, vperp, vperp)
+    upper_vperp_boundary = allocate_shared_float(vpa, vperp, vpa)
     return boundary_integration_weights_struct(lower_vpa_boundary,
             upper_vpa_boundary, upper_vperp_boundary)
 end
@@ -370,13 +367,13 @@ end
 """
 Function to allocate at `fokkerplanck_boundary_data_arrays_struct`.
 """
-function allocate_boundary_integration_weights(vpa,vperp)
-    G0_weights = allocate_boundary_integration_weight(vpa,vperp)
-    G1_weights = allocate_boundary_integration_weight(vpa,vperp)
-    H0_weights = allocate_boundary_integration_weight(vpa,vperp)
-    H1_weights = allocate_boundary_integration_weight(vpa,vperp)
-    H2_weights = allocate_boundary_integration_weight(vpa,vperp)
-    H3_weights = allocate_boundary_integration_weight(vpa,vperp)
+function allocate_boundary_integration_weights(vpa, vperp)
+    G0_weights = allocate_boundary_integration_weight(vpa, vperp)
+    G1_weights = allocate_boundary_integration_weight(vpa, vperp)
+    H0_weights = allocate_boundary_integration_weight(vpa, vperp)
+    H1_weights = allocate_boundary_integration_weight(vpa, vperp)
+    H2_weights = allocate_boundary_integration_weight(vpa, vperp)
+    H3_weights = allocate_boundary_integration_weight(vpa, vperp)
 
     # The following velocity-space-sized buffer arrays are used to evaluate the
     # collision operator for a single species at a single spatial point. They are
@@ -390,9 +387,9 @@ function allocate_boundary_integration_weights(vpa,vperp)
     # `comm_block[]` in order to save memory and setup time.
     nvpa = vpa.n
     nvperp = vperp.n
-    dfdvpa = allocate_shared_float(nvpa,nvperp; comm=comm_anysv_subblock[])
-    d2fdvperpdvpa = allocate_shared_float(nvpa,nvperp; comm=comm_anysv_subblock[])
-    dfdvperp = allocate_shared_float(nvpa,nvperp; comm=comm_anysv_subblock[])
+    dfdvpa = allocate_shared_float(vpa, vperp; comm=comm_anysv_subblock[])
+    d2fdvperpdvpa = allocate_shared_float(vpa, vperp; comm=comm_anysv_subblock[])
+    dfdvperp = allocate_shared_float(vpa, vperp; comm=comm_anysv_subblock[])
     return fokkerplanck_boundary_data_arrays_struct(G0_weights,
             G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
             dfdvpa,d2fdvperpdvpa,dfdvperp)
@@ -1147,7 +1144,7 @@ end
 """
 Function to allocate an instance of `vpa_vperp_boundary_data`.
 """
-function allocate_boundary_data(vpa,vperp)
+function allocate_boundary_data(vpa, vperp)
     # The following velocity-space-sized buffer arrays are used to evaluate the
     # collision operator for a single species at a single spatial point. They are
     # shared-memory arrays. The `comm` argument to `allocate_shared_float()` is used to
@@ -1155,9 +1152,9 @@ function allocate_boundary_data(vpa,vperp)
     # `comm_anysv_subblock[]` rather than on the full `comm_block[]`. This means that
     # different subblocks that are calculating the collision operator at different
     # spatial points do not interfere with each others' buffer arrays.
-    lower_boundary_vpa = allocate_shared_float(vperp.n; comm=comm_anysv_subblock[])
-    upper_boundary_vpa = allocate_shared_float(vperp.n; comm=comm_anysv_subblock[])
-    upper_boundary_vperp = allocate_shared_float(vpa.n; comm=comm_anysv_subblock[])
+    lower_boundary_vpa = allocate_shared_float(vperp; comm=comm_anysv_subblock[])
+    upper_boundary_vpa = allocate_shared_float(vperp; comm=comm_anysv_subblock[])
+    upper_boundary_vperp = allocate_shared_float(vpa; comm=comm_anysv_subblock[])
     return vpa_vperp_boundary_data(lower_boundary_vpa,
             upper_boundary_vpa,upper_boundary_vperp)
 end
@@ -1186,16 +1183,16 @@ end
 """
 Function to allocate an instance of `rosenbluth_potential_boundary_data`.
 """
-function allocate_rosenbluth_potential_boundary_data(vpa,vperp)
-    H_data = allocate_boundary_data(vpa,vperp)
-    dHdvpa_data = allocate_boundary_data(vpa,vperp)
-    dHdvperp_data = allocate_boundary_data(vpa,vperp)
-    G_data = allocate_boundary_data(vpa,vperp)
-    dGdvperp_data = allocate_boundary_data(vpa,vperp)
-    d2Gdvperp2_data = allocate_boundary_data(vpa,vperp)
-    d2Gdvperpdvpa_data = allocate_boundary_data(vpa,vperp)
-    d2Gdvpa2_data = allocate_boundary_data(vpa,vperp)
-    integrals_buffer = allocate_shared_float(25; comm=comm_anysv_subblock[])
+function allocate_rosenbluth_potential_boundary_data(vpa, vperp)
+    H_data = allocate_boundary_data(vpa, vperp)
+    dHdvpa_data = allocate_boundary_data(vpa, vperp)
+    dHdvperp_data = allocate_boundary_data(vpa, vperp)
+    G_data = allocate_boundary_data(vpa, vperp)
+    dGdvperp_data = allocate_boundary_data(vpa, vperp)
+    d2Gdvperp2_data = allocate_boundary_data(vpa, vperp)
+    d2Gdvperpdvpa_data = allocate_boundary_data(vpa, vperp)
+    d2Gdvpa2_data = allocate_boundary_data(vpa, vperp)
+    integrals_buffer = allocate_shared_float(; comm=comm_anysv_subblock[], fp_integrals=25)
     return rosenbluth_potential_boundary_data(H_data,dHdvpa_data,
         dHdvperp_data,G_data,dGdvperp_data,d2Gdvperp2_data,
         d2Gdvperpdvpa_data,d2Gdvpa2_data, integrals_buffer)

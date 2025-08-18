@@ -15,7 +15,6 @@ using moment_kinetics.fokker_planck: setup_fp_nl_solve, setup_fkpl_collisions_in
 using moment_kinetics.fokker_planck_test: F_Maxwellian, F_Beam, print_test_data
 using moment_kinetics.velocity_moments: get_density, get_upar, get_p, get_ppar, get_qpar, get_rmom
 using moment_kinetics.communication
-using moment_kinetics.communication: MPISharedArray
 using moment_kinetics.looping
 using moment_kinetics.input_structs: direct_integration, multipole_expansion
 using moment_kinetics.nonlinear_solvers
@@ -133,7 +132,7 @@ function test_implicit_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=3,neleme
     finish_init_time = now()
     
     # initial condition
-    fvpavperp = allocate_shared_float(vpa.n,vperp.n,ntime+1)
+    fvpavperp = allocate_shared_float(; vpa=vpa, vperp=vperp, t=ntime+1)
     @serial_region begin
         @loop_vperp_vpa ivperp ivpa begin
             fvpavperp[ivpa,ivperp,1] = F_Beam(vpa0,vperp0,vth0,vpa,vperp,ivpa,ivperp) +
@@ -157,11 +156,11 @@ function test_implicit_collisions(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=3,neleme
         end
     end
     # arrays needed for advance
-    Fold = allocate_shared_float(vpa.n,vperp.n)
+    Fold = allocate_shared_float(vpa, vperp)
     # dummy arrays
-    Fdummy1 = allocate_shared_float(vpa.n,vperp.n)
-    Fdummy2 = allocate_shared_float(vpa.n,vperp.n)
-    Fdummy3 = allocate_shared_float(vpa.n,vperp.n)
+    Fdummy1 = allocate_shared_float(vpa, vperp)
+    Fdummy2 = allocate_shared_float(vpa, vperp)
+    Fdummy3 = allocate_shared_float(vpa, vperp)
     # physics parameters
     ms = 1.0
     nuss = 1.0
@@ -315,10 +314,10 @@ function test_implicit_collisions_wrapper(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=
     nr = r.n
     nz = z.n
     ns = composition.n_ion_species
-    fvpavperpzrst = allocate_shared_float(vpa.n,vperp.n,nz,nr,ns,ntime+1)
-    fvpavperpzrs_old = allocate_shared_float(vpa.n,vperp.n,nz,nr,ns)
-    fvpavperpzrs_new = allocate_shared_float(vpa.n,vperp.n,nz,nr,ns)
-    dSdt = allocate_shared_float(nz,nr,ns)
+    fvpavperpzrst = allocate_shared_float(; vpa=vpa, vperp=vperp, z=z, r=r, ion_species=ns, t=ntime+1)
+    fvpavperpzrs_old = allocate_shared_float(; vpa=vpa, vperp=vperp, z=z, r=r, ion_species=ns)
+    fvpavperpzrs_new = allocate_shared_float(; vpa=vpa, vperp=vperp, z=z, r=r, ion_species=ns)
+    dSdt = allocate_shared_float(; z=z, r=r, ion_species=ns)
     # variables needed to control moment kinetic normalisation factors
     # not the density or vth assocated with the pdf solved for in
     # the fokker_planck.jl functions.
@@ -352,11 +351,11 @@ function test_implicit_collisions_wrapper(; vth0=0.5,vperp0=1.0,vpa0=0.0, ngrid=
         end
     end
     # arrays needed for advance
-    Fold = allocate_shared_float(vpa.n,vperp.n)
+    Fold = allocate_shared_float(vpa, vperp)
     # dummy arrays
-    Fdummy1 = allocate_shared_float(vpa.n,vperp.n)
-    Fdummy2 = allocate_shared_float(vpa.n,vperp.n)
-    Fdummy3 = allocate_shared_float(vpa.n,vperp.n)
+    Fdummy1 = allocate_shared_float(vpa, vperp)
+    Fdummy2 = allocate_shared_float(vpa, vperp)
+    Fdummy3 = allocate_shared_float(vpa, vperp)
     # physics parameters
     ms = 1.0
     nuss = 1.0

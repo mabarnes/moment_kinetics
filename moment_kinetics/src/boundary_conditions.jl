@@ -487,11 +487,15 @@ function create_r_section(this_input, ion_pdf, ion_density, ion_upar, ion_p, ele
             end
 
             if species == "ion"
-                bc_ion_pdf = allocate_shared_float(vpa.n, vperp.n, length(z_range),
-                                                   composition.n_ion_species)
-                bc_ion_density = allocate_shared_float(length(z_range), composition.n_ion_species)
-                bc_ion_upar = allocate_shared_float(length(z_range), composition.n_ion_species)
-                bc_ion_p = allocate_shared_float(length(z_range), composition.n_ion_species)
+                bc_ion_pdf = allocate_shared_float(; vpa=vpa, vperp=vperp,
+                                                   z_segment=length(z_range),
+                                                   ion_species=composition.n_ion_species)
+                bc_ion_density = allocate_shared_float(; z_segment=length(z_range),
+                                                       ion_species=composition.n_ion_species)
+                bc_ion_upar = allocate_shared_float(; z_segment=length(z_range),
+                                                    ion_species=composition.n_ion_species)
+                bc_ion_p = allocate_shared_float(; z_segment=length(z_range),
+                                                 ion_species=composition.n_ion_species)
 
                 @begin_s_region()
                 @loop_s is begin
@@ -531,10 +535,10 @@ function create_r_section(this_input, ion_pdf, ion_density, ion_upar, ion_p, ele
             elseif species == "electron"
                 vth /= sqrt(composition.me_over_mi)
 
-                bc_electron_pdf = allocate_shared_float(vpa.n, vperp.n, length(z_range))
-                bc_electron_density = allocate_shared_float(length(z_range))
-                bc_electron_upar = allocate_shared_float(length(z_range))
-                bc_electron_p = allocate_shared_float(length(z_range))
+                bc_electron_pdf = allocate_shared_float(; vpa=vpa, vperp=vperp, z_segment=length(z_range))
+                bc_electron_density = allocate_shared_float(; z_segment=length(z_range))
+                bc_electron_upar = allocate_shared_float(; z_segment=length(z_range))
+                bc_electron_p = allocate_shared_float(; z_segment=length(z_range))
 
                 @begin_serial_region()
                 @serial_region begin
@@ -573,15 +577,15 @@ function create_r_section(this_input, ion_pdf, ion_density, ion_upar, ion_p, ele
                                                                      bc_electron_upar,
                                                                      bc_electron_p)
             elseif species == "neutral"
-                bc_neutral_pdf = allocate_shared_float(vz.n, vr.n, vzeta.n,
-                                                       length(z_range),
-                                                       composition.n_neutral_species)
-                bc_neutral_density = allocate_shared_float(length(z_range),
-                                                           composition.n_neutral_species)
-                bc_neutral_upar = allocate_shared_float(length(z_range),
-                                                        composition.n_neutral_species)
-                bc_neutral_p = allocate_shared_float(length(z_range),
-                                                     composition.n_neutral_species)
+                bc_neutral_pdf = allocate_shared_float(; vz=vz, vr=vr, vzeta=vzeta,
+                                                       z_segment=length(z_range),
+                                                       neutral_species=composition.n_neutral_species)
+                bc_neutral_density = allocate_shared_float(; z_segment=length(z_range),
+                                                           neutral_species=composition.n_neutral_species)
+                bc_neutral_upar = allocate_shared_float(; z_segment=length(z_range),
+                                                        neutral_species=composition.n_neutral_species)
+                bc_neutral_p = allocate_shared_float(; z_segment=length(z_range),
+                                                     neutral_species=composition.n_neutral_species)
 
                 @begin_sn_region()
                 @loop_sn isn begin
@@ -623,11 +627,15 @@ function create_r_section(this_input, ion_pdf, ion_density, ion_upar, ion_p, ele
         elseif this_input["$(species)_bc"] == "pin_initial"
             if species == "ion"
                 if ion_pdf === nothing
-                    bc_ion_pdf = allocate_shared_float(vpa.n, vperp.n, length(z_range),
-                                                       composition.n_ion_species)
-                    bc_ion_density = allocate_shared_float(length(z_range), composition.n_ion_species)
-                    bc_ion_upar = allocate_shared_float(length(z_range), composition.n_ion_species)
-                    bc_ion_p = allocate_shared_float(length(z_range), composition.n_ion_species)
+                    bc_ion_pdf = allocate_shared_float(; vpa=vpa, vperp=vperp,
+                                                       z_segment=length(z_range),
+                                                       ion_species=composition.n_ion_species)
+                    bc_ion_density = allocate_shared_float(; z_segment=length(z_range),
+                                                           ion_species=composition.n_ion_species)
+                    bc_ion_upar = allocate_shared_float(; z_segment=length(z_range),
+                                                        ion_species=composition.n_ion_species)
+                    bc_ion_p = allocate_shared_float(; z_segment=length(z_range),
+                                                     ion_species=composition.n_ion_species)
 
                     @begin_s_region()
                     @loop_s is begin
@@ -648,12 +656,12 @@ function create_r_section(this_input, ion_pdf, ion_density, ion_upar, ion_p, ele
                 if electron_pdf === nothing
                     bc_electron_pdf = zeros(0, 0, 0)
                 else
-                    bc_electron_pdf = allocate_shared_float(vpa.n, vperp.n, length(z_range))
+                    bc_electron_pdf = allocate_shared_float(; vpa=vpa, vperp=vperp, z_segment=length(z_range))
                 end
                 if electron_pdf === nothing && electron_density === nothing
-                    bc_electron_density = allocate_shared_float(length(z_range))
-                    bc_electron_upar = allocate_shared_float(length(z_range))
-                    bc_electron_p = allocate_shared_float(length(z_range))
+                    bc_electron_density = allocate_shared_float(; z_segment=length(z_range))
+                    bc_electron_upar = allocate_shared_float(; z_segment=length(z_range))
+                    bc_electron_p = allocate_shared_float(; z_segment=length(z_range))
 
                     @begin_serial_region()
                     @serial_region begin
@@ -676,15 +684,15 @@ function create_r_section(this_input, ion_pdf, ion_density, ion_upar, ion_p, ele
                                                                        bc_electron_p)
             elseif species == "neutral"
                 if neutral_pdf === nothing
-                    bc_neutral_pdf = allocate_shared_float(vz.n, vr.n, vzeta.n,
-                                                           length(z_range),
-                                                           composition.n_neutral_species)
-                    bc_neutral_density = allocate_shared_float(length(z_range),
-                                                               composition.n_neutral_species)
-                    bc_neutral_upar = allocate_shared_float(length(z_range),
-                                                            composition.n_neutral_species)
-                    bc_neutral_p = allocate_shared_float(length(z_range),
-                                                         composition.n_neutral_species)
+                    bc_neutral_pdf = allocate_shared_float(; vz=vz, vr=vr, vzeta=vzeta,
+                                                           z_segment=length(z_range),
+                                                           neutral_species=composition.n_neutral_species)
+                    bc_neutral_density = allocate_shared_float(; z_segment=length(z_range),
+                                                               neutral_species=composition.n_neutral_species)
+                    bc_neutral_upar = allocate_shared_float(; z_segment=length(z_range),
+                                                            neutral_species=composition.n_neutral_species)
+                    bc_neutral_p = allocate_shared_float(; z_segment=length(z_range),
+                                                         neutral_species=composition.n_neutral_species)
 
                     @begin_sn_region()
                     @loop_sn isn begin
@@ -725,7 +733,7 @@ end
 
 function init_knudsen_cosine(vzeta, vr, vz, composition, zero)
 
-    knudsen_cosine = allocate_shared_float(vz.n, vr.n, vzeta.n)
+    knudsen_cosine = allocate_shared_float(vz, vr, vzeta)
 
     @begin_serial_region()
     @serial_region begin
