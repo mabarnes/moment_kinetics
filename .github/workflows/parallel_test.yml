@@ -14,25 +14,18 @@ jobs:
 
     strategy:
       matrix:
-        isMaster:
-          - ${{ github.ref == 'refs/heads/master' }}
-        include:
-          - isMaster: false
-            numprocs: 2
-            long: "--long"
-            soimage: ""
-          - isMaster: true
-            numprocs: 2
-            long: "--long"
-            soimage: ""
-          - isMaster: false
-            numprocs: 3
-            long: ""
-            soimage: ""
-          - isMaster: false
-            numprocs: 4
-            long: ""
-            soimage: "-J moment_kinetics.so"
+        numprocs: [2]
+        if: ${{ github.ref != 'refs/heads/master' }}
+          - include:
+            - numprocs: 2
+              long: "--long"
+              soimage: ""
+            - numprocs: 3
+              long: ""
+              soimage: ""
+            - numprocs: 4
+              long: ""
+              soimage: "-J moment_kinetics.so"
 
     # Only run 3 and 4 proc tests when merging to master.
     steps:
