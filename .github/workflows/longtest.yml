@@ -36,3 +36,41 @@ jobs:
       - run: |
           julia --color=yes --depwarn=yes --project=moment_kinetics/ -e 'import Pkg; Pkg.test(; test_args=["--ci", "--long", "--force-optional-dependencies"], julia_args=["--check-bounds=auto"])'
         shell: bash
+
+  parallel-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 210
+
+    strategy:
+      matrix:
+        numprocs: [3, 4]
+        include:
+          - numprocs: 3
+            soimage: ""
+          - numprocs: 4
+            soimage: "-J moment_kinetics.so"
+
+    # Only run 3 and 4 proc tests when merging to master.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@latest
+        with:
+          version: '1.11'
+          arch: x64
+      - uses: julia-actions/cache@v2
+      - run: |
+          touch Project.toml
+          julia --project -O3 -e 'import Pkg; Pkg.add(["MPI", "MPIPreferences"]); using MPIPreferences; MPIPreferences.use_jll_binary("OpenMPI_jll")'
+          julia --project -O3 -e 'using MPI; MPI.install_mpiexecjl(; destdir=".")'
+          julia --project -O3 -e 'import Pkg; Pkg.add(["NCDatasets", "Random", "SpecialFunctions", "StatsBase", "Test"]); Pkg.develop(path="moment_kinetics/")'
+          julia --project -O3 -e 'import Pkg; Pkg.precompile()'
+      - if: ${{ matrix.numprocs == 4 }}
+        run: |
+          julia --project -O3 -e 'import Pkg; Pkg.add(["PackageCompiler")'
+          julia --project -O3 precompile.jl
+      - run: |
+          # Need to use openmpi so that we can use `--oversubscribe` to allow using more MPI ranks than physical cores
+          ./mpiexecjl -np ${{ matrix.numprocs }} --oversubscribe julia --project ${{ matrix.soimage }} -O3 moment_kinetics/test/runtests.jl --ci --debug 1
+          # Note: MPI.jl's default implementation is mpich, which has a similar option
+          # `--with-device=ch3:sock`, but that needs to be set when compiling mpich.
+        shell: bash
