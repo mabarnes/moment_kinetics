@@ -7,10 +7,6 @@ permissions:
   actions: write
   contents: read
 
-env:
-  long: ""
-  soimage: ""
-
 jobs:
   test-ubuntu:
     runs-on: ubuntu-latest
@@ -18,7 +14,25 @@ jobs:
 
     strategy:
       matrix:
-        numprocs: [4]
+        isMaster:
+          - ${{ github.ref == 'refs/heads/master' }}
+        include:
+          - isMaster: false
+            numprocs: 2
+            long: "--long"
+            soimage: ""
+          - isMaster: true
+            numprocs: 2
+            long: "--long"
+            soimage: ""
+          - isMaster: false
+            numprocs: 3
+            long: ""
+            soimage: ""
+          - isMaster: false
+            numprocs: 4
+            long: ""
+            soimage: "-J moment_kinetics.so"
 
     # Only run 3 and 4 proc tests when merging to master.
     steps:
@@ -34,20 +48,13 @@ jobs:
           julia --project -O3 -e 'using MPI; MPI.install_mpiexecjl(; destdir=".")'
           julia --project -O3 -e 'import Pkg; Pkg.add(["NCDatasets", "Random", "SpecialFunctions", "StatsBase", "Test"]); Pkg.develop(path="moment_kinetics/")'
           julia --project -O3 -e 'import Pkg; Pkg.precompile()'
-      - if: ${{ matrix.numprocs == 2 }}
-        env:
-          long: "--long"
-        run: |
-          echo "Doing long tests"
       - if: ${{ matrix.numprocs == 4 }}
-        env:
-          soimage: "-J moment_kinetics.so"
         run: |
           julia --project -O3 -e 'import Pkg; Pkg.add(["PackageCompiler"])'
           julia --project -O3 precompile.jl
       - run: |
           # Need to use openmpi so that we can use `--oversubscribe` to allow using more MPI ranks than physical cores
-          ./mpiexecjl -np ${{ matrix.numprocs }} --oversubscribe julia --project ${{ env.soimage }} -O3 moment_kinetics/test/runtests.jl --ci --debug 1 ${{ env.long }}
+          ./mpiexecjl -np ${{ matrix.numprocs }} --oversubscribe julia --project ${{ matrix.soimage }} -O3 moment_kinetics/test/runtests.jl --ci --debug 1 ${{ matrix.long }}
           # Note: MPI.jl's default implementation is mpich, which has a similar option
           # `--with-device=ch3:sock`, but that needs to be set when compiling mpich.
         shell: bash
