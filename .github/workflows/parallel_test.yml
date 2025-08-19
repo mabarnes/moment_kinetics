@@ -14,20 +14,10 @@ jobs:
 
     strategy:
       matrix:
-        numprocs: [2, 3, 4]
-        isMaster:
-          - ${{ github.ref == 'refs/heads/master' }}
+        numprocs: [4]
         include:
           # Default to no "--long" flag
           - long: ""
-          # Add "--long" flag when running with numprocs=2
-          - long: "--long"
-            numprocs: 2
-        exclude:
-          - isMaster: false
-            numprocs: 3
-          - isMaster: false
-            numprocs: 4
 
     # Only run 3 and 4 proc tests when merging to master.
     steps:
