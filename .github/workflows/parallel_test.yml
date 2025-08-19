@@ -19,8 +19,8 @@ jobs:
           # Default to no "--long" flag
           - long: ""
           - soimage: ""
-          - numprocs: 4
-            soimage: "-J moment_kinetics.so"
+          - soimage: "-J moment_kinetics.so"
+            numprocs: 4
 
     # Only run 3 and 4 proc tests when merging to master.
     steps:
