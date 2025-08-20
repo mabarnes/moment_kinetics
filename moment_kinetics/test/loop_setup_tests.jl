@@ -7677,8 +7677,8 @@ function test_debug_setup_loop_ranges_split_one_combination!()
         @testset "$(e.block_rank) $(e.block_size) $(e.combination_to_split) $(e.dims_to_split)" for
                 e ∈ expected_debug_ranges_list
             debug_setup_loop_ranges_split_one_combination!(
-                e.block_rank, e.block_size, e.combination_to_split, e.dims_to_split...;
-                e.dim_sizes...)
+                e.combination_to_split, e.dims_to_split...; this_block_rank=e.block_rank,
+                this_block_size=e.block_size, e.dim_sizes...)
             for (region, region_results) ∈ e.results
                 for (dim, range) ∈ region_results
                     @test getfield(loop_ranges_store[region], dim) == range

@@ -19,6 +19,7 @@ include("type_definitions.jl")
 include("timer_utils.jl")
 include("constants.jl")
 include("moment_kinetics_structs.jl")
+include("loop_ranges_struct.jl")
 include("communication.jl")
 include("looping.jl")
 include("array_allocation.jl")
@@ -253,9 +254,9 @@ parallel loop ranges, and are only used by the tests in `debug_test/`.
         end
         # Debug initialisation only used by tests in `debug_test/`
         debug_setup_loop_ranges_split_one_combination!(
-            block_rank[], block_size[], debug_loop_type, debug_loop_parallel_dims...;
-            s=composition.n_ion_species, sn=composition.n_neutral_species, r=r.n, z=z.n,
-            vperp=vperp.n, vpa=vpa.n, vzeta=vzeta.n, vr=vr.n, vz=vz.n)
+            debug_loop_type, debug_loop_parallel_dims...; s=composition.n_ion_species,
+            sn=composition.n_neutral_species, r=r.n, z=z.n, vperp=vperp.n, vpa=vpa.n,
+            vzeta=vzeta.n, vr=vr.n, vz=vz.n)
     end
 
     external_source_settings = setup_external_sources!(input_dict, r, z,
