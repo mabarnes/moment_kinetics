@@ -90,6 +90,7 @@ kinetic_input["output"]["run_name"] = "kinetic_electron_test"
 kinetic_input["composition"]["electron_physics"] = "kinetic_electrons"
 kinetic_input["timestepping"] = OptionsDict("type" => "PareschiRusso2(2,2,2)",
                                             "kinetic_electron_solver" => "implicit_p_implicit_pseudotimestep",
+                                            "kinetic_electron_preconditioner" => "lu",
                                             "kinetic_ion_solver" => "full_explicit_ion_advance",
                                             "nstep" => 100,
                                             "dt" => 7.0710678118654756e-6,
@@ -164,8 +165,8 @@ function run_test()
     if ("nelement_local" ∈ keys(kinetic_input["z"])
         && kinetic_input["z"]["nelement"] ÷ kinetic_input["z"]["nelement_local"] < global_size[]
        )
-        # Using shared-memory parallelism, so should be using ADI preconditioner
-        adi_precon_iterations_values = (1,2)
+        # Using shared-memory parallelism, test both LU and ADI preconditioners
+        adi_precon_iterations_values = (-1,1,2)
     else
         adi_precon_iterations_values = -1
     end
@@ -180,7 +181,11 @@ function run_test()
             if adi_precon_iterations < 0
                 # Provide some progress info
                 println("    - testing kinetic electrons$label")
+                # Don't use distributed memory parallelism with LU preconditioner
+                pop!(this_kinetic_input["z"], "nelement_local")
             else
+                this_kinetic_input["output"]["run_name"] *= "_adi$adi_precon_iterations"
+                this_kinetic_input["timestepping"]["kinetic_electron_preconditioner"] = "adi"
                 this_kinetic_input["nonlinear_solver"]["adi_precon_iterations"] = adi_precon_iterations
 
                 # Provide some progress info
