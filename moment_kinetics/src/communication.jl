@@ -30,6 +30,7 @@ using SHA
 # Import moment_kinetics so that we can refer to it in docstrings
 import moment_kinetics
 using ..debugging
+using ..loop_ranges_struct: loop_ranges_store
 using ..moment_kinetics_structs: coordinate
 using ..timer_utils
 using ..type_definitions: mk_float, mk_int, DebugMPISharedArray
@@ -539,6 +540,8 @@ end
         return DebugMPISharedArray(
             (isa(getfield(A, name), AbstractArray) ?
              view(getfield(A, name), inds...) :
+             name === :dim_names ?
+             Tuple(getfield(A, name)[i] for (i, ind) ∈ enumerate(inds) if !isa(ind, Integer)) :
              getfield(A, name)
              for name ∈ fieldnames(typeof(A)))...)
     end
@@ -549,6 +552,8 @@ end
         return DebugMPISharedArray(
             (isa(getfield(A, name), AbstractArray) ?
              vec(getfield(A, name)) :
+             name === :dim_names ?
+             (:flattened_dim,) :
              getfield(A, name)
              for name ∈ fieldnames(typeof(A)))...)
     end
@@ -697,7 +702,7 @@ function _allocate_shared_internal(T::Type, dims_info::Pair{Symbol,mk_int}...;
         @debug_shared_array begin
             # If @debug_shared_array is active, create DebugMPISharedArray instead of Array
             if maybe_debug
-                array = DebugMPISharedArray(array, comm)
+                array = DebugMPISharedArray(array, comm, dim_names)
             end
         end
 
@@ -715,7 +720,7 @@ function _allocate_shared_internal(T::Type, dims_info::Pair{Symbol,mk_int}...;
         @debug_shared_array begin
             # If @debug_shared_array is active, create DebugMPISharedArray instead of Array
             if maybe_debug
-                array = DebugMPISharedArray(array, comm)
+                array = DebugMPISharedArray(array, comm, dim_names)
             end
         end
 
@@ -767,7 +772,7 @@ function _allocate_shared_internal(T::Type, dims_info::Pair{Symbol,mk_int}...;
     @debug_shared_array begin
         # If @debug_shared_array is active, create DebugMPISharedArray instead of Array
         if maybe_debug
-            debug_array = DebugMPISharedArray(array, comm)
+            debug_array = DebugMPISharedArray(array, comm, dim_names)
             if comm == comm_anysv_subblock[]
                 push!(global_anysv_debugmpisharedarray_store, debug_array)
             elseif comm == comm_anyzv_subblock[]
@@ -1148,13 +1153,59 @@ function _anysv_subblock_synchronize(call_site::Union{Nothing,Missing,UInt64})
 
     @debug_shared_array begin
         # Check for potential race conditions:
-        # * Between _block_synchronize() any element of an array should be written to by
-        #   at most one rank.
+        # * Between _anysv_subblock_synchronize() any element of an array should be
+        #   written to by at most one rank.
         # * If an element is not written to, any rank can read it.
         # * If an element is written to, only the rank that writes to it should read it.
         #
+        # Check each array that was shared across comm_anysv_subblock[] as its
+        # communicator (global_anysv_debugmpisharedarray_store). Also check the slice of
+        # each array shared across comm_block[] that may be accessed inside an anysv
+        # region (i.e. the slice including only the r- and z-indices that are accessed
+        # inside the local anysv region). Assume that arrays allocated with other subblock
+        # communicators (e.g. comm_anyzv_subblock[]) are incompatible with an anysv
+        # subblock, so will never be accessed and do not need to be checked.
+        #
+        # Note that slicing of arrays from `global_debugmpisharedarray_store` is likely to
+        # cause errors if it is done before 'looping' is set up, because
+        # `loop_ranges_store` will be uninitialised or contain values from a previous run.
+        # Therefore `@_anysv_subblock_synchronize()` should not be called before
+        # `setup_loop_ranges!()` has been.
+        local_r_inds = loop_ranges_store[(:anysv,)].r
+        local_z_inds = loop_ranges_store[(:anysv,)].z
+        function get_local_slice(array)
+            if !(:r ∈ array.dim_names && :z ∈ array.dim_names)
+                # Array does not have both r- and z-dimensions, so there is no slice that
+                # is allowed to be accessed inside an anysv region.
+                return nothing
+            end
+
+            r_dims = findall(array.dim_names .== :r)
+            for dim_ind ∈ reverse(r_dims)
+                array = selectdim(array, dim_ind, local_r_inds)
+            end
+
+            z_dims = findall(array.dim_names .== :z)
+            for dim_ind ∈ reverse(z_dims)
+                array = selectdim(array, dim_ind, local_z_inds)
+            end
+            return array
+        end
         @debug_detect_redundant_block_synchronize previous_was_unnecessary = true
-        for array ∈ global_anysv_debugmpisharedarray_store
+        arrays_to_check = global_anysv_debugmpisharedarray_store
+        if call_site !== missing
+            # This is an actual anysv subblock synchronization, not just a call within
+            # _block_synchronize() to check anysv arrays.
+            arrays_to_check = (arrays_to_check..., (get_local_slice(a) for a ∈
+                                                    global_debugmpisharedarray_store)...)
+        end
+        for array ∈ arrays_to_check
+            if array === nothing
+                # `nothing` is returned by get_local_slice() if the array did not have
+                # both r- and z-dimensions, so is not allowed to be accessed inside an
+                # anysv region.
+                continue
+            end
 
             debug_check_shared_array(array; comm=comm_anysv_subblock[])
 
@@ -1304,13 +1355,52 @@ function _anyzv_subblock_synchronize(call_site::Union{Nothing,Missing,UInt64})
 
     @debug_shared_array begin
         # Check for potential race conditions:
-        # * Between _block_synchronize() any element of an array should be written to by
-        #   at most one rank.
+        # * Between _anyzv_subblock_synchronize() any element of an array should be
+        #   written to by at most one rank.
         # * If an element is not written to, any rank can read it.
         # * If an element is written to, only the rank that writes to it should read it.
         #
+        # Check each array that was shared across comm_anyzv_subblock[] as its
+        # communicator (global_anyzv_debugmpisharedarray_store). Also check the slice of
+        # each array shared across comm_block[] that may be accessed inside an anyzv
+        # region (i.e. the slice including only the r-indices that are accessed inside the
+        # local anyzv region). Assume that arrays allocated with other subblock
+        # communicators (e.g. comm_anysv_subblock[]) are incompatible with an anyzv
+        # subblock, so will never be accessed and do not need to be checked.
+        #
+        # Note that slicing of arrays from `global_debugmpisharedarray_store` is likely to
+        # cause errors if it is done before 'looping' is set up, because
+        # `loop_ranges_store` will be uninitialised or contain values from a previous run.
+        # Therefore `@_anyzv_subblock_synchronize()` should not be called before
+        # `setup_loop_ranges!()` has been.
+        local_r_inds = loop_ranges_store[(:anyzv,)].r
+        function get_local_slice(array)
+            if :r ∉ array.dim_names
+                # Array does not have an r-dimension, so there is no slice that is allowed
+                # to be accessed inside an anyzv region.
+                return nothing
+            end
+
+            r_dims = findall(array.dim_names .== :r)
+            for dim_ind ∈ reverse(r_dims)
+                array = selectdim(array, dim_ind, local_r_inds)
+            end
+            return array
+        end
         @debug_detect_redundant_block_synchronize previous_was_unnecessary = true
-        for array ∈ global_anyzv_debugmpisharedarray_store
+        arrays_to_check = global_anyzv_debugmpisharedarray_store
+        if call_site !== missing
+            # This is an actual anyzv subblock synchronization, not just a call within
+            # _block_synchronize() to check anyzv arrays.
+            arrays_to_check = (arrays_to_check..., (get_local_slice(a) for a ∈
+                                                    global_debugmpisharedarray_store)...)
+        end
+        for array ∈ arrays_to_check
+            if array === nothing
+                # `nothing` is returned by get_local_slice() if the array did not have an
+                # r-dimension, so is not allowed to be accessed inside an anyzv region.
+                continue
+            end
 
             debug_check_shared_array(array; comm=comm_anyzv_subblock[])
 

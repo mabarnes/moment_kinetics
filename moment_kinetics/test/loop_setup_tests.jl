@@ -3116,8 +3116,8 @@ function test_debug_setup_loop_ranges_split_one_combination!()
         comm_block[] = comm_world
 
         debug_setup_loop_ranges_split_one_combination!(
-            0, 2, (:s, :z), :s; s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13,
-            vr=17, vz=19)
+            (:s, :z), :s; this_block_rank=0, this_block_size=2, s=2, r=3, z=4, sn=5,
+            vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[()].s == 1:2
         @test loop_ranges_store[()].r == 1:3
@@ -3152,8 +3152,8 @@ function test_debug_setup_loop_ranges_split_one_combination!()
         @test loop_ranges_store[(:s,:r,:z)].z == 1:4
 
         debug_setup_loop_ranges_split_one_combination!(
-            1, 2, (:s, :z), :s; s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13,
-            vr=17, vz=19)
+            (:s, :z), :s; this_block_rank=1, this_block_size=2, s=2, r=3, z=4, sn=5,
+            vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[()].s == 1:0
         @test loop_ranges_store[()].r == 1:0
@@ -3188,8 +3188,8 @@ function test_debug_setup_loop_ranges_split_one_combination!()
         @test loop_ranges_store[(:s,:r,:z)].z == 1:0
 
         debug_setup_loop_ranges_split_one_combination!(
-            0, 4, (:r, :z), :r, :z; s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13,
-            vr=17, vz=19)
+            (:r, :z), :r, :z; this_block_rank=0, this_block_size=4, s=2, r=3, z=4, sn=5,
+            vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[()].s == 1:2
         @test loop_ranges_store[()].r == 1:3
@@ -3224,8 +3224,8 @@ function test_debug_setup_loop_ranges_split_one_combination!()
         @test loop_ranges_store[(:s,:r,:z)].z == 1:4
 
         debug_setup_loop_ranges_split_one_combination!(
-            1, 4, (:r, :z), :r, :z; s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13,
-            vr=17, vz=19)
+            (:r, :z), :r, :z; this_block_rank=1, this_block_size=4, s=2, r=3, z=4, sn=5,
+            vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[()].s == 1:0
         @test loop_ranges_store[()].r == 1:0
@@ -3260,8 +3260,8 @@ function test_debug_setup_loop_ranges_split_one_combination!()
         @test loop_ranges_store[(:s,:r,:z)].z == 1:0
 
         debug_setup_loop_ranges_split_one_combination!(
-            2, 4, (:r, :z), :r, :z; s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13,
-            vr=17, vz=19)
+            (:r, :z), :r, :z; this_block_rank=2, this_block_size=4, s=2, r=3, z=4, sn=5,
+            vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[()].s == 1:0
         @test loop_ranges_store[()].r == 1:0
@@ -3296,8 +3296,8 @@ function test_debug_setup_loop_ranges_split_one_combination!()
         @test loop_ranges_store[(:s,:r,:z)].z == 1:0
 
         debug_setup_loop_ranges_split_one_combination!(
-            3, 4, (:r, :z), :r, :z; s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13,
-            vr=17, vz=19)
+            (:r, :z), :r, :z; this_block_rank=3, this_block_size=4, s=2, r=3, z=4, sn=5,
+            vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[()].s == 1:0
         @test loop_ranges_store[()].r == 1:0
@@ -3332,8 +3332,8 @@ function test_debug_setup_loop_ranges_split_one_combination!()
         @test loop_ranges_store[(:s,:r,:z)].z == 1:0
 
         debug_setup_loop_ranges_split_one_combination!(
-            3, 8, (:s, :r, :z), :s, :r, :z; s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13,
-            vr=17, vz=19)
+            (:s, :r, :z), :s, :r, :z; this_block_rank=3, this_block_size=8, s=2, r=3, z=4,
+            sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[()].s == 1:0
         @test loop_ranges_store[()].r == 1:0
@@ -3378,8 +3378,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anysv()
         comm_block[] = comm_world
 
         debug_setup_loop_ranges_split_one_combination!(
-            0, 2, (:anysv, :s), :s, s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13,
-            vr=17, vz=19)
+            (:anysv, :s), :s; this_block_rank=0, this_block_size=2, s=2, r=3, z=4, sn=5,
+            vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anysv,)].s == 1:2
         @test loop_ranges_store[(:anysv,)].r == 1:3
@@ -3430,8 +3430,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anysv()
         @test loop_ranges_store[(:anysv,:s,:vperp,:vpa)].vpa == 1:11
 
         debug_setup_loop_ranges_split_one_combination!(
-            1, 2, (:anysv, :s), :s, s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13,
-            vr=17, vz=19)
+            (:anysv, :s), :s; this_block_rank=1, this_block_size=2, s=2, r=3, z=4, sn=5,
+            vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anysv,)].s == 1:0
         @test loop_ranges_store[(:anysv,)].r == 1:3
@@ -3482,8 +3482,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anysv()
         @test loop_ranges_store[(:anysv,:s,:vperp,:vpa)].vpa == 1:0
 
         debug_setup_loop_ranges_split_one_combination!(
-            0, 2, (:anysv, :vpa), :vpa, s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13,
-            vr=17, vz=19)
+            (:anysv, :vpa), :vpa; this_block_rank=0, this_block_size=2, s=2, r=3, z=4,
+            sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anysv,)].s == 1:2
         @test loop_ranges_store[(:anysv,)].r == 1:3
@@ -3534,8 +3534,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anysv()
         @test loop_ranges_store[(:anysv,:s,:vperp,:vpa)].vpa == 1:11
 
         debug_setup_loop_ranges_split_one_combination!(
-            1, 2, (:anysv, :vpa), :vpa, s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13,
-            vr=17, vz=19)
+            (:anysv, :vpa), :vpa; this_block_rank=1, this_block_size=2, s=2, r=3, z=4,
+            sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anysv,)].s == 1:0
         @test loop_ranges_store[(:anysv,)].r == 1:3
@@ -3586,8 +3586,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anysv()
         @test loop_ranges_store[(:anysv,:s,:vperp,:vpa)].vpa == 1:0
 
         debug_setup_loop_ranges_split_one_combination!(
-            0, 2, (:anysv, :vperp), :vperp, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
+            (:anysv, :vperp), :vperp; this_block_rank=0, this_block_size=2, s=2, r=3, z=4,
+            sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anysv,)].s == 1:2
         @test loop_ranges_store[(:anysv,)].r == 1:3
@@ -3638,8 +3638,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anysv()
         @test loop_ranges_store[(:anysv,:s,:vperp,:vpa)].vpa == 1:11
 
         debug_setup_loop_ranges_split_one_combination!(
-            1, 2, (:anysv, :vperp), :vperp, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
+            (:anysv, :vperp), :vperp; this_block_rank=1, this_block_size=2, s=2, r=3, z=4,
+            sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anysv,)].s == 1:0
         @test loop_ranges_store[(:anysv,)].r == 1:3
@@ -3690,8 +3690,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anysv()
         @test loop_ranges_store[(:anysv,:s,:vperp,:vpa)].vpa == 1:0
 
         debug_setup_loop_ranges_split_one_combination!(
-            0, 2, (:anysv, :vperp, :vpa), :vpa, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
+            (:anysv, :vperp, :vpa), :vpa; this_block_rank=0, this_block_size=2, s=2, r=3,
+            z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anysv,)].s == 1:2
         @test loop_ranges_store[(:anysv,)].r == 1:3
@@ -3742,8 +3742,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anysv()
         @test loop_ranges_store[(:anysv,:s,:vperp,:vpa)].vpa == 1:11
 
         debug_setup_loop_ranges_split_one_combination!(
-            1, 2, (:anysv, :vperp, :vpa), :vpa, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
+            (:anysv, :vperp, :vpa), :vpa; this_block_rank=1, this_block_size=2, s=2, r=3,
+            z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anysv,)].s == 1:0
         @test loop_ranges_store[(:anysv,)].r == 1:3
@@ -3794,8 +3794,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anysv()
         @test loop_ranges_store[(:anysv,:s,:vperp,:vpa)].vpa == 1:0
 
         debug_setup_loop_ranges_split_one_combination!(
-            0, 2, (:anysv, :vperp, :vpa), :vperp, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
+            (:anysv, :vperp, :vpa), :vperp; this_block_rank=0, this_block_size=2, s=2,
+            r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anysv,)].s == 1:2
         @test loop_ranges_store[(:anysv,)].r == 1:3
@@ -3846,8 +3846,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anysv()
         @test loop_ranges_store[(:anysv,:s,:vperp,:vpa)].vpa == 1:11
 
         debug_setup_loop_ranges_split_one_combination!(
-            1, 2, (:anysv, :vperp, :vpa), :vperp, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
+            (:anysv, :vperp, :vpa), :vperp; this_block_rank=1, this_block_size=2, s=2,
+            r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anysv,)].s == 1:0
         @test loop_ranges_store[(:anysv,)].r == 1:3
@@ -3898,8 +3898,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anysv()
         @test loop_ranges_store[(:anysv,:s,:vperp,:vpa)].vpa == 1:0
 
         debug_setup_loop_ranges_split_one_combination!(
-            0, 4, (:anysv, :vperp, :vpa), :vperp, :vpa, s=2, r=3, z=4, sn=5, vperp=7,
-            vpa=11, vzeta=13, vr=17, vz=19)
+            (:anysv, :vperp, :vpa), :vperp, :vpa; this_block_rank=0, this_block_size=4,
+            s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anysv,)].s == 1:2
         @test loop_ranges_store[(:anysv,)].r == 1:3
@@ -3950,8 +3950,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anysv()
         @test loop_ranges_store[(:anysv,:s,:vperp,:vpa)].vpa == 1:11
 
         debug_setup_loop_ranges_split_one_combination!(
-            1, 4, (:anysv, :vperp, :vpa), :vperp, :vpa, s=2, r=3, z=4, sn=5, vperp=7,
-            vpa=11, vzeta=13, vr=17, vz=19)
+            (:anysv, :vperp, :vpa), :vperp, :vpa; this_block_rank=1, this_block_size=4,
+            s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anysv,)].s == 1:0
         @test loop_ranges_store[(:anysv,)].r == 1:3
@@ -4002,8 +4002,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anysv()
         @test loop_ranges_store[(:anysv,:s,:vperp,:vpa)].vpa == 1:0
 
         debug_setup_loop_ranges_split_one_combination!(
-            2, 4, (:anysv, :vperp, :vpa), :vperp, :vpa, s=2, r=3, z=4, sn=5, vperp=7,
-            vpa=11, vzeta=13, vr=17, vz=19)
+            (:anysv, :vperp, :vpa), :vperp, :vpa; this_block_rank=2, this_block_size=4,
+            s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anysv,)].s == 1:0
         @test loop_ranges_store[(:anysv,)].r == 1:3
@@ -4054,8 +4054,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anysv()
         @test loop_ranges_store[(:anysv,:s,:vperp,:vpa)].vpa == 1:0
 
         debug_setup_loop_ranges_split_one_combination!(
-            3, 4, (:anysv, :vperp, :vpa), :vperp, :vpa, s=2, r=3, z=4, sn=5, vperp=7,
-            vpa=11, vzeta=13, vr=17, vz=19)
+            (:anysv, :vperp, :vpa), :vperp, :vpa; this_block_rank=3, this_block_size=4,
+            s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anysv,)].s == 1:0
         @test loop_ranges_store[(:anysv,)].r == 1:3
@@ -4106,8 +4106,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anysv()
         @test loop_ranges_store[(:anysv,:s,:vperp,:vpa)].vpa == 1:0
 
         debug_setup_loop_ranges_split_one_combination!(
-            0, 2, (:anysv, :s, :vpa), :s, s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13,
-            vr=17, vz=19)
+            (:anysv, :s, :vpa), :s; this_block_rank=0, this_block_size=2, s=2, r=3, z=4,
+            sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anysv,)].s == 1:2
         @test loop_ranges_store[(:anysv,)].r == 1:3
@@ -4158,8 +4158,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anysv()
         @test loop_ranges_store[(:anysv,:s,:vperp,:vpa)].vpa == 1:11
 
         debug_setup_loop_ranges_split_one_combination!(
-            1, 2, (:anysv, :s, :vpa), :s, s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13,
-            vr=17, vz=19)
+            (:anysv, :s, :vpa), :s; this_block_rank=1, this_block_size=2, s=2, r=3, z=4,
+            sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anysv,)].s == 1:0
         @test loop_ranges_store[(:anysv,)].r == 1:3
@@ -4210,8 +4210,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anysv()
         @test loop_ranges_store[(:anysv,:s,:vperp,:vpa)].vpa == 1:0
 
         debug_setup_loop_ranges_split_one_combination!(
-            0, 2, (:anysv, :s, :vpa), :vpa, s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13,
-            vr=17, vz=19)
+            (:anysv, :s, :vpa), :vpa; this_block_rank=0, this_block_size=2, s=2, r=3, z=4,
+            sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anysv,)].s == 1:2
         @test loop_ranges_store[(:anysv,)].r == 1:3
@@ -4262,8 +4262,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anysv()
         @test loop_ranges_store[(:anysv,:s,:vperp,:vpa)].vpa == 1:11
 
         debug_setup_loop_ranges_split_one_combination!(
-            1, 2, (:anysv, :s, :vpa), :vpa, s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13,
-            vr=17, vz=19)
+            (:anysv, :s, :vpa), :vpa; this_block_rank=1, this_block_size=2, s=2, r=3, z=4,
+            sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anysv,)].s == 1:0
         @test loop_ranges_store[(:anysv,)].r == 1:3
@@ -4314,8 +4314,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anysv()
         @test loop_ranges_store[(:anysv,:s,:vperp,:vpa)].vpa == 1:0
 
         debug_setup_loop_ranges_split_one_combination!(
-            0, 4, (:anysv, :s, :vpa), :s, :vpa, s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13,
-            vr=17, vz=19)
+            (:anysv, :s, :vpa), :s, :vpa; this_block_rank=0, this_block_size=4, s=2, r=3,
+            z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anysv,)].s == 1:2
         @test loop_ranges_store[(:anysv,)].r == 1:3
@@ -4366,8 +4366,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anysv()
         @test loop_ranges_store[(:anysv,:s,:vperp,:vpa)].vpa == 1:11
 
         debug_setup_loop_ranges_split_one_combination!(
-            1, 4, (:anysv, :s, :vpa), :s, :vpa, s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13,
-            vr=17, vz=19)
+            (:anysv, :s, :vpa), :s, :vpa; this_block_rank=1, this_block_size=4, s=2, r=3,
+            z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anysv,)].s == 1:0
         @test loop_ranges_store[(:anysv,)].r == 1:3
@@ -4418,8 +4418,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anysv()
         @test loop_ranges_store[(:anysv,:s,:vperp,:vpa)].vpa == 1:0
 
         debug_setup_loop_ranges_split_one_combination!(
-            2, 4, (:anysv, :s, :vpa), :s, :vpa, s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13,
-            vr=17, vz=19)
+            (:anysv, :s, :vpa), :s, :vpa; this_block_rank=2, this_block_size=4, s=2, r=3,
+            z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anysv,)].s == 1:0
         @test loop_ranges_store[(:anysv,)].r == 1:3
@@ -4470,8 +4470,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anysv()
         @test loop_ranges_store[(:anysv,:s,:vperp,:vpa)].vpa == 1:0
 
         debug_setup_loop_ranges_split_one_combination!(
-            3, 4, (:anysv, :s, :vpa), :s, :vpa, s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13,
-            vr=17, vz=19)
+            (:anysv, :s, :vpa), :s, :vpa; this_block_rank=3, this_block_size=4, s=2, r=3,
+            z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anysv,)].s == 1:0
         @test loop_ranges_store[(:anysv,)].r == 1:3
@@ -4522,8 +4522,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anysv()
         @test loop_ranges_store[(:anysv,:s,:vperp,:vpa)].vpa == 1:0
 
         debug_setup_loop_ranges_split_one_combination!(
-            0, 2, (:anysv, :s, :vperp), :vperp, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
+            (:anysv, :s, :vperp), :vperp; this_block_rank=0, this_block_size=2, s=2, r=3,
+            z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anysv,)].s == 1:2
         @test loop_ranges_store[(:anysv,)].r == 1:3
@@ -4574,8 +4574,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anysv()
         @test loop_ranges_store[(:anysv,:s,:vperp,:vpa)].vpa == 1:11
 
         debug_setup_loop_ranges_split_one_combination!(
-            1, 2, (:anysv, :s, :vperp), :vperp, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
+            (:anysv, :s, :vperp), :vperp; this_block_rank=1, this_block_size=2, s=2, r=3,
+            z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anysv,)].s == 1:0
         @test loop_ranges_store[(:anysv,)].r == 1:3
@@ -4626,8 +4626,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anysv()
         @test loop_ranges_store[(:anysv,:s,:vperp,:vpa)].vpa == 1:0
 
         debug_setup_loop_ranges_split_one_combination!(
-            0, 2, (:anysv, :s, :vperp), :s, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
+            (:anysv, :s, :vperp), :s; this_block_rank=0, this_block_size=2, s=2, r=3, z=4,
+            sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anysv,)].s == 1:2
         @test loop_ranges_store[(:anysv,)].r == 1:3
@@ -4678,8 +4678,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anysv()
         @test loop_ranges_store[(:anysv,:s,:vperp,:vpa)].vpa == 1:11
 
         debug_setup_loop_ranges_split_one_combination!(
-            1, 2, (:anysv, :s, :vperp), :s, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
+            (:anysv, :s, :vperp), :s; this_block_rank=1, this_block_size=2, s=2, r=3, z=4,
+            sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anysv,)].s == 1:0
         @test loop_ranges_store[(:anysv,)].r == 1:3
@@ -4730,8 +4730,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anysv()
         @test loop_ranges_store[(:anysv,:s,:vperp,:vpa)].vpa == 1:0
 
         debug_setup_loop_ranges_split_one_combination!(
-            0, 4, (:anysv, :s, :vperp), :s, :vperp, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
+            (:anysv, :s, :vperp), :s, :vperp; this_block_rank=0, this_block_size=4, s=2,
+            r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anysv,)].s == 1:2
         @test loop_ranges_store[(:anysv,)].r == 1:3
@@ -4782,8 +4782,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anysv()
         @test loop_ranges_store[(:anysv,:s,:vperp,:vpa)].vpa == 1:11
 
         debug_setup_loop_ranges_split_one_combination!(
-            1, 4, (:anysv, :s, :vperp), :s, :vperp, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
+            (:anysv, :s, :vperp), :s, :vperp; this_block_rank=1, this_block_size=4, s=2,
+            r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anysv,)].s == 1:0
         @test loop_ranges_store[(:anysv,)].r == 1:3
@@ -4834,8 +4834,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anysv()
         @test loop_ranges_store[(:anysv,:s,:vperp,:vpa)].vpa == 1:0
 
         debug_setup_loop_ranges_split_one_combination!(
-            2, 4, (:anysv, :s, :vperp), :s, :vperp, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
+            (:anysv, :s, :vperp), :s, :vperp; this_block_rank=2, this_block_size=4, s=2,
+            r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anysv,)].s == 1:0
         @test loop_ranges_store[(:anysv,)].r == 1:3
@@ -4886,8 +4886,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anysv()
         @test loop_ranges_store[(:anysv,:s,:vperp,:vpa)].vpa == 1:0
 
         debug_setup_loop_ranges_split_one_combination!(
-            3, 4, (:anysv, :s, :vperp), :s, :vperp, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
+            (:anysv, :s, :vperp), :s, :vperp; this_block_rank=3, this_block_size=4, s=2,
+            r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anysv,)].s == 1:0
         @test loop_ranges_store[(:anysv,)].r == 1:3
@@ -4938,8 +4938,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anysv()
         @test loop_ranges_store[(:anysv,:s,:vperp,:vpa)].vpa == 1:0
 
         debug_setup_loop_ranges_split_one_combination!(
-            0, 2, (:anysv, :s, :vperp, :vpa), :s, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
+            (:anysv, :s, :vperp, :vpa), :s; this_block_rank=0, this_block_size=2, s=2,
+            r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anysv,)].s == 1:2
         @test loop_ranges_store[(:anysv,)].r == 1:3
@@ -4990,8 +4990,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anysv()
         @test loop_ranges_store[(:anysv,:s,:vperp,:vpa)].vpa == 1:11
 
         debug_setup_loop_ranges_split_one_combination!(
-            1, 2, (:anysv, :s, :vperp, :vpa), :s, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
+            (:anysv, :s, :vperp, :vpa), :s; this_block_rank=1, this_block_size=2, s=2,
+            r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anysv,)].s == 1:0
         @test loop_ranges_store[(:anysv,)].r == 1:3
@@ -5042,8 +5042,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anysv()
         @test loop_ranges_store[(:anysv,:s,:vperp,:vpa)].vpa == 1:11
 
         debug_setup_loop_ranges_split_one_combination!(
-            0, 2, (:anysv, :s, :vperp, :vpa), :vpa, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
+            (:anysv, :s, :vperp, :vpa), :vpa; this_block_rank=0, this_block_size=2, s=2,
+            r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anysv,)].s == 1:2
         @test loop_ranges_store[(:anysv,)].r == 1:3
@@ -5094,8 +5094,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anysv()
         @test loop_ranges_store[(:anysv,:s,:vperp,:vpa)].vpa == 1:5
 
         debug_setup_loop_ranges_split_one_combination!(
-            1, 2, (:anysv, :s, :vperp, :vpa), :vpa, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
+            (:anysv, :s, :vperp, :vpa), :vpa; this_block_rank=1, this_block_size=2, s=2,
+            r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anysv,)].s == 1:0
         @test loop_ranges_store[(:anysv,)].r == 1:3
@@ -5146,8 +5146,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anysv()
         @test loop_ranges_store[(:anysv,:s,:vperp,:vpa)].vpa == 6:11
 
         debug_setup_loop_ranges_split_one_combination!(
-            0, 2, (:anysv, :s, :vperp, :vpa), :vperp, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
+            (:anysv, :s, :vperp, :vpa), :vperp; this_block_rank=0, this_block_size=2, s=2,
+            r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anysv,)].s == 1:2
         @test loop_ranges_store[(:anysv,)].r == 1:3
@@ -5198,8 +5198,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anysv()
         @test loop_ranges_store[(:anysv,:s,:vperp,:vpa)].vpa == 1:11
 
         debug_setup_loop_ranges_split_one_combination!(
-            1, 2, (:anysv, :s, :vperp, :vpa), :vperp, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
+            (:anysv, :s, :vperp, :vpa), :vperp; this_block_rank=1, this_block_size=2, s=2,
+            r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anysv,)].s == 1:0
         @test loop_ranges_store[(:anysv,)].r == 1:3
@@ -5250,8 +5250,9 @@ function test_debug_setup_loop_ranges_split_one_combination_anysv()
         @test loop_ranges_store[(:anysv,:s,:vperp,:vpa)].vpa == 1:11
 
         debug_setup_loop_ranges_split_one_combination!(
-            0, 4, (:anysv, :s, :vperp, :vpa), :vperp, :vpa, s=2, r=3, z=4, sn=5, vperp=7,
-            vpa=11, vzeta=13, vr=17, vz=19)
+            (:anysv, :s, :vperp, :vpa), :vperp, :vpa; this_block_rank=0,
+            this_block_size=4, s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17,
+            vz=19)
 
         @test loop_ranges_store[(:anysv,)].s == 1:2
         @test loop_ranges_store[(:anysv,)].r == 1:3
@@ -5302,8 +5303,9 @@ function test_debug_setup_loop_ranges_split_one_combination_anysv()
         @test loop_ranges_store[(:anysv,:s,:vperp,:vpa)].vpa == 1:5
 
         debug_setup_loop_ranges_split_one_combination!(
-            1, 4, (:anysv, :s, :vperp, :vpa), :vperp, :vpa, s=2, r=3, z=4, sn=5, vperp=7,
-            vpa=11, vzeta=13, vr=17, vz=19)
+            (:anysv, :s, :vperp, :vpa), :vperp, :vpa; this_block_rank=1,
+            this_block_size=4, s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17,
+            vz=19)
 
         @test loop_ranges_store[(:anysv,)].s == 1:0
         @test loop_ranges_store[(:anysv,)].r == 1:3
@@ -5354,8 +5356,9 @@ function test_debug_setup_loop_ranges_split_one_combination_anysv()
         @test loop_ranges_store[(:anysv,:s,:vperp,:vpa)].vpa == 6:11
 
         debug_setup_loop_ranges_split_one_combination!(
-            2, 4, (:anysv, :s, :vperp, :vpa), :vperp, :vpa, s=2, r=3, z=4, sn=5, vperp=7,
-            vpa=11, vzeta=13, vr=17, vz=19)
+            (:anysv, :s, :vperp, :vpa), :vperp, :vpa; this_block_rank=2,
+            this_block_size=4, s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17,
+            vz=19)
 
         @test loop_ranges_store[(:anysv,)].s == 1:0
         @test loop_ranges_store[(:anysv,)].r == 1:3
@@ -5406,8 +5409,9 @@ function test_debug_setup_loop_ranges_split_one_combination_anysv()
         @test loop_ranges_store[(:anysv,:s,:vperp,:vpa)].vpa == 1:5
 
         debug_setup_loop_ranges_split_one_combination!(
-            3, 4, (:anysv, :s, :vperp, :vpa), :vperp, :vpa, s=2, r=3, z=4, sn=5, vperp=7,
-            vpa=11, vzeta=13, vr=17, vz=19)
+            (:anysv, :s, :vperp, :vpa), :vperp, :vpa; this_block_rank=3,
+            this_block_size=4, s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17,
+            vz=19)
 
         @test loop_ranges_store[(:anysv,)].s == 1:0
         @test loop_ranges_store[(:anysv,)].r == 1:3
@@ -5458,8 +5462,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anysv()
         @test loop_ranges_store[(:anysv,:s,:vperp,:vpa)].vpa == 6:11
 
         debug_setup_loop_ranges_split_one_combination!(
-            0, 4, (:anysv, :s, :vperp, :vpa), :s, :vpa, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
+            (:anysv, :s, :vperp, :vpa), :s, :vpa; this_block_rank=0, this_block_size=4,
+            s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anysv,)].s == 1:2
         @test loop_ranges_store[(:anysv,)].r == 1:3
@@ -5510,8 +5514,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anysv()
         @test loop_ranges_store[(:anysv,:s,:vperp,:vpa)].vpa == 1:5
 
         debug_setup_loop_ranges_split_one_combination!(
-            1, 4, (:anysv, :s, :vperp, :vpa), :s, :vpa, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
+            (:anysv, :s, :vperp, :vpa), :s, :vpa; this_block_rank=1, this_block_size=4,
+            s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anysv,)].s == 1:0
         @test loop_ranges_store[(:anysv,)].r == 1:3
@@ -5562,8 +5566,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anysv()
         @test loop_ranges_store[(:anysv,:s,:vperp,:vpa)].vpa == 6:11
 
         debug_setup_loop_ranges_split_one_combination!(
-            2, 4, (:anysv, :s, :vperp, :vpa), :s, :vpa, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
+            (:anysv, :s, :vperp, :vpa), :s, :vpa; this_block_rank=2, this_block_size=4,
+            s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anysv,)].s == 1:0
         @test loop_ranges_store[(:anysv,)].r == 1:3
@@ -5614,8 +5618,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anysv()
         @test loop_ranges_store[(:anysv,:s,:vperp,:vpa)].vpa == 1:5
 
         debug_setup_loop_ranges_split_one_combination!(
-            3, 4, (:anysv, :s, :vperp, :vpa), :s, :vpa, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
+            (:anysv, :s, :vperp, :vpa), :s, :vpa; this_block_rank=3, this_block_size=4,
+            s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anysv,)].s == 1:0
         @test loop_ranges_store[(:anysv,)].r == 1:3
@@ -5666,8 +5670,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anysv()
         @test loop_ranges_store[(:anysv,:s,:vperp,:vpa)].vpa == 6:11
 
         debug_setup_loop_ranges_split_one_combination!(
-            0, 4, (:anysv, :s, :vperp, :vpa), :s, :vperp, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
+            (:anysv, :s, :vperp, :vpa), :s, :vperp; this_block_rank=0, this_block_size=4,
+            s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anysv,)].s == 1:2
         @test loop_ranges_store[(:anysv,)].r == 1:3
@@ -5718,8 +5722,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anysv()
         @test loop_ranges_store[(:anysv,:s,:vperp,:vpa)].vpa == 1:11
 
         debug_setup_loop_ranges_split_one_combination!(
-            1, 4, (:anysv, :s, :vperp, :vpa), :s, :vperp, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
+            (:anysv, :s, :vperp, :vpa), :s, :vperp; this_block_rank=1, this_block_size=4,
+            s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anysv,)].s == 1:0
         @test loop_ranges_store[(:anysv,)].r == 1:3
@@ -5770,8 +5774,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anysv()
         @test loop_ranges_store[(:anysv,:s,:vperp,:vpa)].vpa == 1:11
 
         debug_setup_loop_ranges_split_one_combination!(
-            2, 4, (:anysv, :s, :vperp, :vpa), :s, :vperp, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
+            (:anysv, :s, :vperp, :vpa), :s, :vperp; this_block_rank=2, this_block_size=4,
+            s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anysv,)].s == 1:0
         @test loop_ranges_store[(:anysv,)].r == 1:3
@@ -5822,8 +5826,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anysv()
         @test loop_ranges_store[(:anysv,:s,:vperp,:vpa)].vpa == 1:11
 
         debug_setup_loop_ranges_split_one_combination!(
-            3, 4, (:anysv, :s, :vperp, :vpa), :s, :vperp, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
+            (:anysv, :s, :vperp, :vpa), :s, :vperp; this_block_rank=3, this_block_size=4,
+            s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anysv,)].s == 1:0
         @test loop_ranges_store[(:anysv,)].r == 1:3
@@ -5874,8 +5878,9 @@ function test_debug_setup_loop_ranges_split_one_combination_anysv()
         @test loop_ranges_store[(:anysv,:s,:vperp,:vpa)].vpa == 1:11
 
         debug_setup_loop_ranges_split_one_combination!(
-            0, 8, (:anysv, :s, :vperp, :vpa), :s, :vperp, :vpa, s=2, r=3, z=4, sn=5, vperp=7,
-            vpa=11, vzeta=13, vr=17, vz=19)
+            (:anysv, :s, :vperp, :vpa), :s, :vperp, :vpa; this_block_rank=0,
+            this_block_size=8, s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17,
+            vz=19)
 
         @test loop_ranges_store[(:anysv,)].s == 1:2
         @test loop_ranges_store[(:anysv,)].r == 1:3
@@ -5926,8 +5931,9 @@ function test_debug_setup_loop_ranges_split_one_combination_anysv()
         @test loop_ranges_store[(:anysv,:s,:vperp,:vpa)].vpa == 1:5
 
         debug_setup_loop_ranges_split_one_combination!(
-            1, 8, (:anysv, :s, :vperp, :vpa), :s, :vperp, :vpa, s=2, r=3, z=4, sn=5, vperp=7,
-            vpa=11, vzeta=13, vr=17, vz=19)
+            (:anysv, :s, :vperp, :vpa), :s, :vperp, :vpa; this_block_rank=1,
+            this_block_size=8, s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17,
+            vz=19)
 
         @test loop_ranges_store[(:anysv,)].s == 1:0
         @test loop_ranges_store[(:anysv,)].r == 1:3
@@ -5978,8 +5984,9 @@ function test_debug_setup_loop_ranges_split_one_combination_anysv()
         @test loop_ranges_store[(:anysv,:s,:vperp,:vpa)].vpa == 6:11
 
         debug_setup_loop_ranges_split_one_combination!(
-            2, 8, (:anysv, :s, :vperp, :vpa), :s, :vperp, :vpa, s=2, r=3, z=4, sn=5, vperp=7,
-            vpa=11, vzeta=13, vr=17, vz=19)
+            (:anysv, :s, :vperp, :vpa), :s, :vperp, :vpa; this_block_rank=2,
+            this_block_size=8, s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17,
+            vz=19)
 
         @test loop_ranges_store[(:anysv,)].s == 1:0
         @test loop_ranges_store[(:anysv,)].r == 1:3
@@ -6030,8 +6037,9 @@ function test_debug_setup_loop_ranges_split_one_combination_anysv()
         @test loop_ranges_store[(:anysv,:s,:vperp,:vpa)].vpa == 1:5
 
         debug_setup_loop_ranges_split_one_combination!(
-            3, 8, (:anysv, :s, :vperp, :vpa), :s, :vperp, :vpa, s=2, r=3, z=4, sn=5, vperp=7,
-            vpa=11, vzeta=13, vr=17, vz=19)
+            (:anysv, :s, :vperp, :vpa), :s, :vperp, :vpa; this_block_rank=3,
+            this_block_size=8, s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17,
+            vz=19)
 
         @test loop_ranges_store[(:anysv,)].s == 1:0
         @test loop_ranges_store[(:anysv,)].r == 1:3
@@ -6082,8 +6090,9 @@ function test_debug_setup_loop_ranges_split_one_combination_anysv()
         @test loop_ranges_store[(:anysv,:s,:vperp,:vpa)].vpa == 6:11
 
         debug_setup_loop_ranges_split_one_combination!(
-            4, 8, (:anysv, :s, :vperp, :vpa), :s, :vperp, :vpa, s=2, r=3, z=4, sn=5, vperp=7,
-            vpa=11, vzeta=13, vr=17, vz=19)
+            (:anysv, :s, :vperp, :vpa), :s, :vperp, :vpa; this_block_rank=4,
+            this_block_size=8, s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17,
+            vz=19)
 
         @test loop_ranges_store[(:anysv,)].s == 1:0
         @test loop_ranges_store[(:anysv,)].r == 1:3
@@ -6134,8 +6143,9 @@ function test_debug_setup_loop_ranges_split_one_combination_anysv()
         @test loop_ranges_store[(:anysv,:s,:vperp,:vpa)].vpa == 1:5
 
         debug_setup_loop_ranges_split_one_combination!(
-            5, 8, (:anysv, :s, :vperp, :vpa), :s, :vperp, :vpa, s=2, r=3, z=4, sn=5, vperp=7,
-            vpa=11, vzeta=13, vr=17, vz=19)
+            (:anysv, :s, :vperp, :vpa), :s, :vperp, :vpa; this_block_rank=5,
+            this_block_size=8, s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17,
+            vz=19)
 
         @test loop_ranges_store[(:anysv,)].s == 1:0
         @test loop_ranges_store[(:anysv,)].r == 1:3
@@ -6186,8 +6196,9 @@ function test_debug_setup_loop_ranges_split_one_combination_anysv()
         @test loop_ranges_store[(:anysv,:s,:vperp,:vpa)].vpa == 6:11
 
         debug_setup_loop_ranges_split_one_combination!(
-            6, 8, (:anysv, :s, :vperp, :vpa), :s, :vperp, :vpa, s=2, r=3, z=4, sn=5, vperp=7,
-            vpa=11, vzeta=13, vr=17, vz=19)
+            (:anysv, :s, :vperp, :vpa), :s, :vperp, :vpa; this_block_rank=6,
+            this_block_size=8, s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17,
+            vz=19)
 
         @test loop_ranges_store[(:anysv,)].s == 1:0
         @test loop_ranges_store[(:anysv,)].r == 1:3
@@ -6238,8 +6249,9 @@ function test_debug_setup_loop_ranges_split_one_combination_anysv()
         @test loop_ranges_store[(:anysv,:s,:vperp,:vpa)].vpa == 1:5
 
         debug_setup_loop_ranges_split_one_combination!(
-            7, 8, (:anysv, :s, :vperp, :vpa), :s, :vperp, :vpa, s=2, r=3, z=4, sn=5, vperp=7,
-            vpa=11, vzeta=13, vr=17, vz=19)
+            (:anysv, :s, :vperp, :vpa), :s, :vperp, :vpa; this_block_rank=7,
+            this_block_size=8, s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17,
+            vz=19)
 
         @test loop_ranges_store[(:anysv,)].s == 1:0
         @test loop_ranges_store[(:anysv,)].r == 1:3
@@ -6300,8 +6312,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anyzv()
         comm_block[] = comm_world
 
         debug_setup_loop_ranges_split_one_combination!(
-            0, 2, (:anyzv, :vpa), :vpa, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
+            (:anyzv, :vpa), :vpa; this_block_rank=0, this_block_size=2, s=2, r=3, z=4,
+            sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anyzv,)].s == 1:2
         @test loop_ranges_store[(:anyzv,)].r == 1:3
@@ -6352,8 +6364,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anyzv()
         @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:11
 
         debug_setup_loop_ranges_split_one_combination!(
-            1, 2, (:anyzv, :vpa), :vpa, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
+            (:anyzv, :vpa), :vpa; this_block_rank=1, this_block_size=2, s=2, r=3, z=4,
+            sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anyzv,)].s == 1:2
         @test loop_ranges_store[(:anyzv,)].r == 1:3
@@ -6404,8 +6416,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anyzv()
         @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:0
 
         debug_setup_loop_ranges_split_one_combination!(
-            0, 2, (:anyzv, :vperp), :vperp, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
+            (:anyzv, :vperp), :vperp; this_block_rank=0, this_block_size=2, s=2, r=3, z=4,
+            sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anyzv,)].s == 1:2
         @test loop_ranges_store[(:anyzv,)].r == 1:3
@@ -6480,8 +6492,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anyzv()
         @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:11
 
         debug_setup_loop_ranges_split_one_combination!(
-            1, 2, (:anyzv, :vperp), :vperp, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
+            (:anyzv, :vperp), :vperp; this_block_rank=1, this_block_size=2, s=2, r=3, z=4,
+            sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anyzv,)].s == 1:2
         @test loop_ranges_store[(:anyzv,)].r == 1:3
@@ -6532,8 +6544,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anyzv()
         @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:0
 
         debug_setup_loop_ranges_split_one_combination!(
-            0, 2, (:anyzv, :z), :z, s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13,
-            vr=17, vz=19)
+            (:anyzv, :z), :z; this_block_rank=0, this_block_size=2, s=2, r=3, z=4, sn=5,
+            vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anyzv,)].s == 1:2
         @test loop_ranges_store[(:anyzv,)].r == 1:3
@@ -6584,8 +6596,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anyzv()
         @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:11
 
         debug_setup_loop_ranges_split_one_combination!(
-            1, 2, (:anyzv, :z), :z, s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13,
-            vr=17, vz=19)
+            (:anyzv, :z), :z; this_block_rank=1, this_block_size=2, s=2, r=3, z=4, sn=5,
+            vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anyzv,)].s == 1:2
         @test loop_ranges_store[(:anyzv,)].r == 1:3
@@ -6636,8 +6648,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anyzv()
         @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:0
 
         debug_setup_loop_ranges_split_one_combination!(
-            0, 2, (:anyzv, :vperp, :vpa), :vpa, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
+            (:anyzv, :vperp, :vpa), :vpa; this_block_rank=0, this_block_size=2, s=2, r=3,
+            z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anyzv,)].s == 1:2
         @test loop_ranges_store[(:anyzv,)].r == 1:3
@@ -6688,8 +6700,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anyzv()
         @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:11
 
         debug_setup_loop_ranges_split_one_combination!(
-            1, 2, (:anyzv, :vperp, :vpa), :vpa, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
+            (:anyzv, :vperp, :vpa), :vpa; this_block_rank=1, this_block_size=2, s=2, r=3,
+            z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anyzv,)].s == 1:2
         @test loop_ranges_store[(:anyzv,)].r == 1:3
@@ -6740,8 +6752,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anyzv()
         @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:0
 
         debug_setup_loop_ranges_split_one_combination!(
-            0, 2, (:anyzv, :vperp, :vpa), :vperp, s=2, r=3, z=4, sn=5, vperp=7,
-            vpa=11, vzeta=13, vr=17, vz=19)
+            (:anyzv, :vperp, :vpa), :vperp; this_block_rank=0, this_block_size=2, s=2,
+            r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anyzv,)].s == 1:2
         @test loop_ranges_store[(:anyzv,)].r == 1:3
@@ -6792,8 +6804,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anyzv()
         @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:11
 
         debug_setup_loop_ranges_split_one_combination!(
-            1, 2, (:anyzv, :vperp, :vpa), :vperp, s=2, r=3, z=4, sn=5, vperp=7,
-            vpa=11, vzeta=13, vr=17, vz=19)
+            (:anyzv, :vperp, :vpa), :vperp; this_block_rank=1, this_block_size=2, s=2,
+            r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anyzv,)].s == 1:2
         @test loop_ranges_store[(:anyzv,)].r == 1:3
@@ -6844,8 +6856,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anyzv()
         @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:0
 
         debug_setup_loop_ranges_split_one_combination!(
-            0, 4, (:anyzv, :vperp, :vpa), :vperp, :vpa, s=2, r=3, z=4, sn=5, vperp=7,
-            vpa=11, vzeta=13, vr=17, vz=19)
+            (:anyzv, :vperp, :vpa), :vperp, :vpa; this_block_rank=0, this_block_size=4,
+            s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anyzv,)].s == 1:2
         @test loop_ranges_store[(:anyzv,)].r == 1:3
@@ -6896,8 +6908,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anyzv()
         @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:11
 
         debug_setup_loop_ranges_split_one_combination!(
-            1, 4, (:anyzv, :vperp, :vpa), :vperp, :vpa, s=2, r=3, z=4, sn=5, vperp=7,
-            vpa=11, vzeta=13, vr=17, vz=19)
+            (:anyzv, :vperp, :vpa), :vperp, :vpa; this_block_rank=1, this_block_size=4,
+            s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anyzv,)].s == 1:2
         @test loop_ranges_store[(:anyzv,)].r == 1:3
@@ -6948,8 +6960,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anyzv()
         @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:0
 
         debug_setup_loop_ranges_split_one_combination!(
-            2, 4, (:anyzv, :vperp, :vpa), :vperp, :vpa, s=2, r=3, z=4, sn=5, vperp=7,
-            vpa=11, vzeta=13, vr=17, vz=19)
+            (:anyzv, :vperp, :vpa), :vperp, :vpa; this_block_rank=2, this_block_size=4,
+            s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anyzv,)].s == 1:2
         @test loop_ranges_store[(:anyzv,)].r == 1:3
@@ -7000,8 +7012,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anyzv()
         @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:0
 
         debug_setup_loop_ranges_split_one_combination!(
-            3, 4, (:anyzv, :vperp, :vpa), :vperp, :vpa, s=2, r=3, z=4, sn=5, vperp=7,
-            vpa=11, vzeta=13, vr=17, vz=19)
+            (:anyzv, :vperp, :vpa), :vperp, :vpa; this_block_rank=3, this_block_size=4,
+            s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anyzv,)].s == 1:2
         @test loop_ranges_store[(:anyzv,)].r == 1:3
@@ -7052,8 +7064,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anyzv()
         @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:0
 
         debug_setup_loop_ranges_split_one_combination!(
-            0, 2, (:anyzv, :z, :vperp), :vperp, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
+            (:anyzv, :z, :vperp), :vperp; this_block_rank=0, this_block_size=2, s=2, r=3,
+            z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anyzv,)].s == 1:2
         @test loop_ranges_store[(:anyzv,)].r == 1:3
@@ -7104,8 +7116,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anyzv()
         @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:11
 
         debug_setup_loop_ranges_split_one_combination!(
-            1, 2, (:anyzv, :z, :vperp), :vperp, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
+            (:anyzv, :z, :vperp), :vperp; this_block_rank=1, this_block_size=2, s=2, r=3,
+            z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anyzv,)].s == 1:2
         @test loop_ranges_store[(:anyzv,)].r == 1:3
@@ -7156,8 +7168,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anyzv()
         @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:0
 
         debug_setup_loop_ranges_split_one_combination!(
-            0, 2, (:anyzv, :z, :vperp), :z, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
+            (:anyzv, :z, :vperp), :z; this_block_rank=0, this_block_size=2, s=2, r=3, z=4,
+            sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anyzv,)].s == 1:2
         @test loop_ranges_store[(:anyzv,)].r == 1:3
@@ -7208,8 +7220,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anyzv()
         @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:11
 
         debug_setup_loop_ranges_split_one_combination!(
-            1, 2, (:anyzv, :z, :vperp), :z, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
+            (:anyzv, :z, :vperp), :z; this_block_rank=1, this_block_size=2, s=2, r=3, z=4,
+            sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anyzv,)].s == 1:2
         @test loop_ranges_store[(:anyzv,)].r == 1:3
@@ -7260,8 +7272,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anyzv()
         @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:0
 
         debug_setup_loop_ranges_split_one_combination!(
-            0, 4, (:anyzv, :z, :vperp), :z, :vperp, s=2, r=3, z=4, sn=5, vperp=7,
-            vpa=11, vzeta=13, vr=17, vz=19)
+            (:anyzv, :z, :vperp), :z, :vperp; this_block_rank=0, this_block_size=4, s=2,
+            r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anyzv,)].s == 1:2
         @test loop_ranges_store[(:anyzv,)].r == 1:3
@@ -7312,8 +7324,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anyzv()
         @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:11
 
         debug_setup_loop_ranges_split_one_combination!(
-            1, 4, (:anyzv, :z, :vperp), :z, :vperp, s=2, r=3, z=4, sn=5, vperp=7,
-            vpa=11, vzeta=13, vr=17, vz=19)
+            (:anyzv, :z, :vperp), :z, :vperp; this_block_rank=1, this_block_size=4, s=2,
+            r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anyzv,)].s == 1:2
         @test loop_ranges_store[(:anyzv,)].r == 1:3
@@ -7364,8 +7376,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anyzv()
         @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:0
 
         debug_setup_loop_ranges_split_one_combination!(
-            2, 4, (:anyzv, :z, :vperp), :z, :vperp, s=2, r=3, z=4, sn=5, vperp=7,
-            vpa=11, vzeta=13, vr=17, vz=19)
+            (:anyzv, :z, :vperp), :z, :vperp; this_block_rank=2, this_block_size=4, s=2,
+            r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anyzv,)].s == 1:2
         @test loop_ranges_store[(:anyzv,)].r == 1:3
@@ -7416,8 +7428,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anyzv()
         @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:0
 
         debug_setup_loop_ranges_split_one_combination!(
-            3, 4, (:anyzv, :z, :vperp), :z, :vperp, s=2, r=3, z=4, sn=5, vperp=7,
-            vpa=11, vzeta=13, vr=17, vz=19)
+            (:anyzv, :z, :vperp), :z, :vperp; this_block_rank=3, this_block_size=4, s=2,
+            r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anyzv,)].s == 1:2
         @test loop_ranges_store[(:anyzv,)].r == 1:3
@@ -7468,8 +7480,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anyzv()
         @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:0
 
         debug_setup_loop_ranges_split_one_combination!(
-            0, 2, (:anyzv, :z, :vpa), :vpa, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
+            (:anyzv, :z, :vpa), :vpa; this_block_rank=0, this_block_size=2, s=2, r=3, z=4,
+            sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anyzv,)].s == 1:2
         @test loop_ranges_store[(:anyzv,)].r == 1:3
@@ -7520,8 +7532,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anyzv()
         @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:11
 
         debug_setup_loop_ranges_split_one_combination!(
-            1, 2, (:anyzv, :z, :vpa), :vpa, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
+            (:anyzv, :z, :vpa), :vpa; this_block_rank=1, this_block_size=2, s=2, r=3, z=4,
+            sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anyzv,)].s == 1:2
         @test loop_ranges_store[(:anyzv,)].r == 1:3
@@ -7572,8 +7584,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anyzv()
         @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:0
 
         debug_setup_loop_ranges_split_one_combination!(
-            0, 2, (:anyzv, :z, :vpa), :z, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
+            (:anyzv, :z, :vpa), :z; this_block_rank=0, this_block_size=2, s=2, r=3, z=4,
+            sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anyzv,)].s == 1:2
         @test loop_ranges_store[(:anyzv,)].r == 1:3
@@ -7624,8 +7636,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anyzv()
         @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:11
 
         debug_setup_loop_ranges_split_one_combination!(
-            1, 2, (:anyzv, :z, :vpa), :z, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
+            (:anyzv, :z, :vpa), :z; this_block_rank=1, this_block_size=2, s=2, r=3, z=4,
+            sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anyzv,)].s == 1:2
         @test loop_ranges_store[(:anyzv,)].r == 1:3
@@ -7676,8 +7688,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anyzv()
         @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:0
 
         debug_setup_loop_ranges_split_one_combination!(
-            0, 4, (:anyzv, :z, :vpa), :z, :vpa, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
+            (:anyzv, :z, :vpa), :z, :vpa; this_block_rank=0, this_block_size=4, s=2, r=3,
+            z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anyzv,)].s == 1:2
         @test loop_ranges_store[(:anyzv,)].r == 1:3
@@ -7728,8 +7740,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anyzv()
         @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:11
 
         debug_setup_loop_ranges_split_one_combination!(
-            1, 4, (:anyzv, :z, :vpa), :z, :vpa, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
+            (:anyzv, :z, :vpa), :z, :vpa; this_block_rank=1, this_block_size=4, s=2, r=3,
+            z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anyzv,)].s == 1:2
         @test loop_ranges_store[(:anyzv,)].r == 1:3
@@ -7780,8 +7792,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anyzv()
         @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:0
 
         debug_setup_loop_ranges_split_one_combination!(
-            2, 4, (:anyzv, :z, :vpa), :z, :vpa, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
+            (:anyzv, :z, :vpa), :z, :vpa; this_block_rank=2, this_block_size=4, s=2, r=3,
+            z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anyzv,)].s == 1:2
         @test loop_ranges_store[(:anyzv,)].r == 1:3
@@ -7833,8 +7845,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anyzv()
 
 
         debug_setup_loop_ranges_split_one_combination!(
-            3, 4, (:anyzv, :z, :vpa), :z, :vpa, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
+            (:anyzv, :z, :vpa), :z, :vpa; this_block_rank=3, this_block_size=4, s=2, r=3,
+            z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anyzv,)].s == 1:2
         @test loop_ranges_store[(:anyzv,)].r == 1:3
@@ -7885,8 +7897,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anyzv()
         @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:0
 
         debug_setup_loop_ranges_split_one_combination!(
-            0, 2, (:anyzv, :z, :vperp, :vpa), :vpa, s=2, r=3, z=4, sn=5, vperp=7,
-            vpa=11, vzeta=13, vr=17, vz=19)
+            (:anyzv, :z, :vperp, :vpa), :vpa; this_block_rank=0, this_block_size=2, s=2,
+            r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anyzv,)].s == 1:2
         @test loop_ranges_store[(:anyzv,)].r == 1:3
@@ -7937,8 +7949,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anyzv()
         @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:5
 
         debug_setup_loop_ranges_split_one_combination!(
-            1, 2, (:anyzv, :z, :vperp, :vpa), :vpa, s=2, r=3, z=4, sn=5, vperp=7,
-            vpa=11, vzeta=13, vr=17, vz=19)
+            (:anyzv, :z, :vperp, :vpa), :vpa; this_block_rank=1, this_block_size=2, s=2,
+            r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anyzv,)].s == 1:2
         @test loop_ranges_store[(:anyzv,)].r == 1:3
@@ -7989,8 +8001,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anyzv()
         @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 6:11
 
         debug_setup_loop_ranges_split_one_combination!(
-            0, 2, (:anyzv, :z, :vperp, :vpa), :vperp, s=2, r=3, z=4, sn=5, vperp=7,
-            vpa=11, vzeta=13, vr=17, vz=19)
+            (:anyzv, :z, :vperp, :vpa), :vperp; this_block_rank=0, this_block_size=2, s=2,
+            r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anyzv,)].s == 1:2
         @test loop_ranges_store[(:anyzv,)].r == 1:3
@@ -8041,8 +8053,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anyzv()
         @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:11
 
         debug_setup_loop_ranges_split_one_combination!(
-            1, 2, (:anyzv, :z, :vperp, :vpa), :vperp, s=2, r=3, z=4, sn=5, vperp=7,
-            vpa=11, vzeta=13, vr=17, vz=19)
+            (:anyzv, :z, :vperp, :vpa), :vperp; this_block_rank=1, this_block_size=2, s=2,
+            r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anyzv,)].s == 1:2
         @test loop_ranges_store[(:anyzv,)].r == 1:3
@@ -8093,8 +8105,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anyzv()
         @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:11
 
         debug_setup_loop_ranges_split_one_combination!(
-            0, 2, (:anyzv, :z, :vperp, :vpa), :z, s=2, r=3, z=4, sn=5, vperp=7,
-            vpa=11, vzeta=13, vr=17, vz=19)
+            (:anyzv, :z, :vperp, :vpa), :z; this_block_rank=0, this_block_size=2, s=2,
+            r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anyzv,)].s == 1:2
         @test loop_ranges_store[(:anyzv,)].r == 1:3
@@ -8145,8 +8157,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anyzv()
         @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:11
 
         debug_setup_loop_ranges_split_one_combination!(
-            1, 2, (:anyzv, :z, :vperp, :vpa), :z, s=2, r=3, z=4, sn=5, vperp=7,
-            vpa=11, vzeta=13, vr=17, vz=19)
+            (:anyzv, :z, :vperp, :vpa), :z; this_block_rank=1, this_block_size=2, s=2,
+            r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anyzv,)].s == 1:2
         @test loop_ranges_store[(:anyzv,)].r == 1:3
@@ -8197,8 +8209,9 @@ function test_debug_setup_loop_ranges_split_one_combination_anyzv()
         @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:11
 
         debug_setup_loop_ranges_split_one_combination!(
-            0, 4, (:anyzv, :z, :vperp, :vpa), :vperp, :vpa, s=2, r=3, z=4, sn=5,
-            vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
+            (:anyzv, :z, :vperp, :vpa), :vperp, :vpa; this_block_rank=0,
+            this_block_size=4, s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17,
+            vz=19)
 
         @test loop_ranges_store[(:anyzv,)].s == 1:2
         @test loop_ranges_store[(:anyzv,)].r == 1:3
@@ -8249,8 +8262,9 @@ function test_debug_setup_loop_ranges_split_one_combination_anyzv()
         @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:5
 
         debug_setup_loop_ranges_split_one_combination!(
-            1, 4, (:anyzv, :z, :vperp, :vpa), :vperp, :vpa, s=2, r=3, z=4, sn=5,
-            vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
+            (:anyzv, :z, :vperp, :vpa), :vperp, :vpa; this_block_rank=1,
+            this_block_size=4, s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17,
+            vz=19)
 
         @test loop_ranges_store[(:anyzv,)].s == 1:2
         @test loop_ranges_store[(:anyzv,)].r == 1:3
@@ -8301,8 +8315,9 @@ function test_debug_setup_loop_ranges_split_one_combination_anyzv()
         @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 6:11
 
         debug_setup_loop_ranges_split_one_combination!(
-            2, 4, (:anyzv, :z, :vperp, :vpa), :vperp, :vpa, s=2, r=3, z=4, sn=5,
-            vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
+            (:anyzv, :z, :vperp, :vpa), :vperp, :vpa; this_block_rank=2,
+            this_block_size=4, s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17,
+            vz=19)
 
         @test loop_ranges_store[(:anyzv,)].s == 1:2
         @test loop_ranges_store[(:anyzv,)].r == 1:3
@@ -8353,8 +8368,9 @@ function test_debug_setup_loop_ranges_split_one_combination_anyzv()
         @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:5
 
         debug_setup_loop_ranges_split_one_combination!(
-            3, 4, (:anyzv, :z, :vperp, :vpa), :vperp, :vpa, s=2, r=3, z=4, sn=5,
-            vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
+            (:anyzv, :z, :vperp, :vpa), :vperp, :vpa; this_block_rank=3,
+            this_block_size=4, s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17,
+            vz=19)
 
         @test loop_ranges_store[(:anyzv,)].s == 1:2
         @test loop_ranges_store[(:anyzv,)].r == 1:3
@@ -8405,8 +8421,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anyzv()
         @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 6:11
 
         debug_setup_loop_ranges_split_one_combination!(
-            0, 4, (:anyzv, :z, :vperp, :vpa), :z, :vpa, s=2, r=3, z=4, sn=5, vperp=7,
-            vpa=11, vzeta=13, vr=17, vz=19)
+            (:anyzv, :z, :vperp, :vpa), :z, :vpa; this_block_rank=0, this_block_size=4,
+            s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anyzv,)].s == 1:2
         @test loop_ranges_store[(:anyzv,)].r == 1:3
@@ -8457,8 +8473,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anyzv()
         @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:5
 
         debug_setup_loop_ranges_split_one_combination!(
-            1, 4, (:anyzv, :z, :vperp, :vpa), :z, :vpa, s=2, r=3, z=4, sn=5, vperp=7,
-            vpa=11, vzeta=13, vr=17, vz=19)
+            (:anyzv, :z, :vperp, :vpa), :z, :vpa; this_block_rank=1, this_block_size=4,
+            s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anyzv,)].s == 1:2
         @test loop_ranges_store[(:anyzv,)].r == 1:3
@@ -8509,8 +8525,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anyzv()
         @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 6:11
 
         debug_setup_loop_ranges_split_one_combination!(
-            2, 4, (:anyzv, :z, :vperp, :vpa), :z, :vpa, s=2, r=3, z=4, sn=5, vperp=7,
-            vpa=11, vzeta=13, vr=17, vz=19)
+            (:anyzv, :z, :vperp, :vpa), :z, :vpa; this_block_rank=2, this_block_size=4,
+            s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anyzv,)].s == 1:2
         @test loop_ranges_store[(:anyzv,)].r == 1:3
@@ -8561,8 +8577,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anyzv()
         @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:5
 
         debug_setup_loop_ranges_split_one_combination!(
-            3, 4, (:anyzv, :z, :vperp, :vpa), :z, :vpa, s=2, r=3, z=4, sn=5, vperp=7,
-            vpa=11, vzeta=13, vr=17, vz=19)
+            (:anyzv, :z, :vperp, :vpa), :z, :vpa; this_block_rank=3, this_block_size=4,
+            s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anyzv,)].s == 1:2
         @test loop_ranges_store[(:anyzv,)].r == 1:3
@@ -8613,8 +8629,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anyzv()
         @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 6:11
 
         debug_setup_loop_ranges_split_one_combination!(
-            0, 4, (:anyzv, :z, :vperp, :vpa), :z, :vperp, s=2, r=3, z=4, sn=5,
-            vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
+            (:anyzv, :z, :vperp, :vpa), :z, :vperp; this_block_rank=0, this_block_size=4,
+            s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anyzv,)].s == 1:2
         @test loop_ranges_store[(:anyzv,)].r == 1:3
@@ -8665,8 +8681,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anyzv()
         @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:11
 
         debug_setup_loop_ranges_split_one_combination!(
-            1, 4, (:anyzv, :z, :vperp, :vpa), :z, :vperp, s=2, r=3, z=4, sn=5,
-            vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
+            (:anyzv, :z, :vperp, :vpa), :z, :vperp; this_block_rank=1, this_block_size=4,
+            s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anyzv,)].s == 1:2
         @test loop_ranges_store[(:anyzv,)].r == 1:3
@@ -8717,8 +8733,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anyzv()
         @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:11
 
         debug_setup_loop_ranges_split_one_combination!(
-            2, 4, (:anyzv, :z, :vperp, :vpa), :z, :vperp, s=2, r=3, z=4, sn=5,
-            vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
+            (:anyzv, :z, :vperp, :vpa), :z, :vperp; this_block_rank=2, this_block_size=4,
+            s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anyzv,)].s == 1:2
         @test loop_ranges_store[(:anyzv,)].r == 1:3
@@ -8769,8 +8785,8 @@ function test_debug_setup_loop_ranges_split_one_combination_anyzv()
         @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:11
 
         debug_setup_loop_ranges_split_one_combination!(
-            3, 4, (:anyzv, :z, :vperp, :vpa), :z, :vperp, s=2, r=3, z=4, sn=5,
-            vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
+            (:anyzv, :z, :vperp, :vpa), :z, :vperp; this_block_rank=3, this_block_size=4,
+            s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
 
         @test loop_ranges_store[(:anyzv,)].s == 1:2
         @test loop_ranges_store[(:anyzv,)].r == 1:3
@@ -8821,8 +8837,9 @@ function test_debug_setup_loop_ranges_split_one_combination_anyzv()
         @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:11
 
         debug_setup_loop_ranges_split_one_combination!(
-            0, 8, (:anyzv, :z, :vperp, :vpa), :z, :vperp, :vpa, s=2, r=3, z=4, sn=5,
-            vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
+            (:anyzv, :z, :vperp, :vpa), :z, :vperp, :vpa; this_block_rank=0,
+            this_block_size=8, s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17,
+            vz=19)
 
         @test loop_ranges_store[(:anyzv,)].s == 1:2
         @test loop_ranges_store[(:anyzv,)].r == 1:3
@@ -8873,8 +8890,9 @@ function test_debug_setup_loop_ranges_split_one_combination_anyzv()
         @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:5
 
         debug_setup_loop_ranges_split_one_combination!(
-            1, 8, (:anyzv, :z, :vperp, :vpa), :z, :vperp, :vpa, s=2, r=3, z=4, sn=5,
-            vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
+            (:anyzv, :z, :vperp, :vpa), :z, :vperp, :vpa; this_block_rank=1,
+            this_block_size=8, s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17,
+            vz=19)
 
         @test loop_ranges_store[(:anyzv,)].s == 1:2
         @test loop_ranges_store[(:anyzv,)].r == 1:3
@@ -8925,8 +8943,9 @@ function test_debug_setup_loop_ranges_split_one_combination_anyzv()
         @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 6:11
 
         debug_setup_loop_ranges_split_one_combination!(
-            2, 8, (:anyzv, :z, :vperp, :vpa), :z, :vperp, :vpa, s=2, r=3, z=4, sn=5,
-            vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
+            (:anyzv, :z, :vperp, :vpa), :z, :vperp, :vpa; this_block_rank=2,
+            this_block_size=8, s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17,
+            vz=19)
 
         @test loop_ranges_store[(:anyzv,)].s == 1:2
         @test loop_ranges_store[(:anyzv,)].r == 1:3
@@ -8977,8 +8996,9 @@ function test_debug_setup_loop_ranges_split_one_combination_anyzv()
         @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:5
 
         debug_setup_loop_ranges_split_one_combination!(
-            3, 8, (:anyzv, :z, :vperp, :vpa), :z, :vperp, :vpa, s=2, r=3, z=4, sn=5,
-            vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
+            (:anyzv, :z, :vperp, :vpa), :z, :vperp, :vpa; this_block_rank=3,
+            this_block_size=8, s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17,
+            vz=19)
 
         @test loop_ranges_store[(:anyzv,)].s == 1:2
         @test loop_ranges_store[(:anyzv,)].r == 1:3
@@ -9029,8 +9049,9 @@ function test_debug_setup_loop_ranges_split_one_combination_anyzv()
         @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 6:11
 
         debug_setup_loop_ranges_split_one_combination!(
-            4, 8, (:anyzv, :z, :vperp, :vpa), :z, :vperp, :vpa, s=2, r=3, z=4, sn=5,
-            vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
+            (:anyzv, :z, :vperp, :vpa), :z, :vperp, :vpa; this_block_rank=4,
+            this_block_size=8, s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17,
+            vz=19)
 
         @test loop_ranges_store[(:anyzv,)].s == 1:2
         @test loop_ranges_store[(:anyzv,)].r == 1:3
@@ -9081,8 +9102,9 @@ function test_debug_setup_loop_ranges_split_one_combination_anyzv()
         @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:5
 
         debug_setup_loop_ranges_split_one_combination!(
-            5, 8, (:anyzv, :z, :vperp, :vpa), :z, :vperp, :vpa, s=2, r=3, z=4, sn=5,
-            vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
+            (:anyzv, :z, :vperp, :vpa), :z, :vperp, :vpa; this_block_rank=5,
+            this_block_size=8, s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17,
+            vz=19)
 
         @test loop_ranges_store[(:anyzv,)].s == 1:2
         @test loop_ranges_store[(:anyzv,)].r == 1:3
@@ -9133,8 +9155,9 @@ function test_debug_setup_loop_ranges_split_one_combination_anyzv()
         @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 6:11
 
         debug_setup_loop_ranges_split_one_combination!(
-            6, 8, (:anyzv, :z, :vperp, :vpa), :z, :vperp, :vpa, s=2, r=3, z=4, sn=5,
-            vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
+            (:anyzv, :z, :vperp, :vpa), :z, :vperp, :vpa; this_block_rank=6,
+            this_block_size=8, s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17,
+            vz=19)
 
         @test loop_ranges_store[(:anyzv,)].s == 1:2
         @test loop_ranges_store[(:anyzv,)].r == 1:3
@@ -9185,8 +9208,9 @@ function test_debug_setup_loop_ranges_split_one_combination_anyzv()
         @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:5
 
         debug_setup_loop_ranges_split_one_combination!(
-            7, 8, (:anyzv, :z, :vperp, :vpa), :z, :vperp, :vpa, s=2, r=3, z=4, sn=5,
-            vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
+            (:anyzv, :z, :vperp, :vpa), :z, :vperp, :vpa; this_block_rank=7,
+            this_block_size=8, s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13, vr=17,
+            vz=19)
 
         @test loop_ranges_store[(:anyzv,)].s == 1:2
         @test loop_ranges_store[(:anyzv,)].r == 1:3

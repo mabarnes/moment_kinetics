@@ -3,15 +3,16 @@ Provides convenience macros for shared-memory-parallel loops
 """
 module looping
 
+export loop_ranges
+
 using ..debugging
-using ..communication: _block_synchronize, comm_block,
-                       _anysv_subblock_synchronize, comm_anysv_subblock,
-                       anysv_subblock_rank, anysv_subblock_size, anysv_isubblock_index,
-                       anysv_nsubblocks_per_block,
-                       _anyzv_subblock_synchronize, comm_anyzv_subblock,
-                       anyzv_subblock_rank, anyzv_subblock_size, anyzv_isubblock_index,
-                       anyzv_nsubblocks_per_block
+using ..communication
+using ..communication: _block_synchronize, _anysv_subblock_synchronize,
+                       _anyzv_subblock_synchronize
 using ..type_definitions: mk_int
+
+using ..loop_ranges_struct: ion_dimensions, neutral_dimensions, all_dimensions,
+                            LoopRanges, loop_ranges, loop_ranges_store
 
 using Combinatorics
 using MPI
@@ -20,9 +21,6 @@ using Primes
 # The ion dimensions and neutral dimensions are separated in order to restrict the
 # supported parallel loop types to correct combinations. This also reduces the number
 # of combinations - for some of the debugging features this helps.
-const ion_dimensions = (:s, :r, :z, :vperp, :vpa)
-const neutral_dimensions = (:sn, :r, :z, :vzeta, :vr, :vz)
-const all_dimensions = unique((ion_dimensions..., neutral_dimensions...))
 const dimension_combinations = Tuple(Tuple(c) for c in
                                      unique((combinations(ion_dimensions)...,
                                              combinations(neutral_dimensions)...)))
@@ -42,46 +40,6 @@ function dims_string(dims::Tuple)
     result *= string(dims[end])
     return result
 end
-
-# Create struct to store ranges for loops over all combinations of dimensions
-LoopRanges_body = quote
-    parallel_dims::Tuple{Vararg{Symbol}}
-    rank0::Bool
-    is_anysv::Bool
-    anysv_rank0::Bool
-    is_anyzv::Bool
-    anyzv_rank0::Bool
-end
-for dim ∈ all_dimensions
-    global LoopRanges_body
-    LoopRanges_body = quote
-        $LoopRanges_body;
-        $dim::UnitRange{mk_int}
-    end
-end
-eval(quote
-         """
-         LoopRanges structs contain information on which points should be included on
-         this process in loops over shared-memory arrays.
-
-         Members
-         -------
-         parallel_dims::Tuple{Vararg{Symbol}}
-                Indicates which dimensions are (or might be) parallelized when using
-                this LoopRanges. Provided for information for developers, to make it
-                easier to tell (when using a Debugger, or printing debug informatino)
-                which LoopRanges instance is active in looping.loop_ranges at any point
-                in the code.
-         rank0::Bool
-                Is this process the one with rank 0 in the 'block' which work in
-                parallel on shared memory arrays.
-         <d>::UnitRange{mk_int}
-                Loop ranges for each dimension <d> in looping.all_dimensions.
-         """
-         Base.@kwdef struct LoopRanges
-             $LoopRanges_body
-         end
-     end)
 
 """
 Find possible divisions of sub_block_size into n factors
@@ -552,19 +510,6 @@ function get_anyzv_ranges(block_rank, split, anyzv_dims, dim_sizes)
     return result
 end
 
-"""
-module variable that we can access by giving fully-qualified name in loop
-macros
-"""
-const loop_ranges = Ref{LoopRanges}()
-export loop_ranges
-
-"""
-module variable used to store LoopRanges that are swapped into the loop_ranges
-variable in @begin_*_region() functions
-"""
-const loop_ranges_store = Dict{Tuple{Vararg{Symbol}}, LoopRanges}()
-
 eval(quote
          """
          Create ranges for loops with different combinations of variables
@@ -678,213 +623,278 @@ eval(quote
          end
      end)
 
- """
- For debugging the shared-memory parallelism, create ranges where only the loops for a
- single combinations of variables (given by `combination_to_split`) are parallelised,
- and which dimensions are parallelised can be set with the `dims_to_split...` arguments.
+"""
+For debugging the shared-memory parallelism, create ranges where only the loops for a
+single combinations of variables (given by `combination_to_split`) are parallelised,
+and which dimensions are parallelised can be set with the `dims_to_split...` arguments.
 
- Arguments
- ---------
- Keyword arguments `dim=n` are required for each dim in `all_dimensions` where `n` is
- an integer giving the size of the dimension.
- """
- function debug_setup_loop_ranges_split_one_combination!(
-         block_rank, block_size, combination_to_split::NTuple{N,Symbol} where N,
-         dims_to_split::Symbol...;
-         dim_sizes...)
+Arguments
+---------
+Keyword arguments `dim=n` are required for each dim in `all_dimensions` where `n` is
+an integer giving the size of the dimension.
 
-     block_rank >= block_size && error("block_rank ($block_rank) is >= block_size "
-                                       * "($block_size).")
+`this_block_rank` and `this_block_size` are overridable so that this function can be
+tested when running in serial.
+"""
+function debug_setup_loop_ranges_split_one_combination!(
+        combination_to_split::NTuple{N,Symbol} where N, dims_to_split::Symbol...;
+        this_block_rank=block_rank[], this_block_size=block_size[], dim_sizes...)
 
-     rank0 = (block_rank == 0)
+    this_block_rank >= this_block_size && error("block_rank $this_block_rank is >= "
+                                                * "block_size $this_block_size.")
 
-     # Use empty tuple for serial region
-     if rank0
-         serial_ranges = Dict(d=>1:n for (d,n) in dim_sizes)
-         loop_ranges_store[()] = LoopRanges(;
-             parallel_dims=(), rank0=rank0, is_anysv=false, anysv_rank0=rank0,
-             is_anyzv=false, anyzv_rank0=rank0, serial_ranges...)
-     else
-         serial_ranges = Dict(d=>1:0 for (d,_) in dim_sizes)
-         loop_ranges_store[()] = LoopRanges(;
-             parallel_dims=(), rank0=rank0, is_anysv=false, anysv_rank0=rank0,
-             is_anyzv=false, anyzv_rank0=rank0, serial_ranges...)
-     end
+    rank0 = (this_block_rank == 0)
 
-     for dims ∈ dimension_combinations
-         if dims == combination_to_split
-             factors = factor(Vector, block_size)
-             if length(factors) < length(dims_to_split)
-                 error("Not enough factors ($factors) to split all of $dims_to_split")
-             end
-             ranges = Dict(d=>1:n for (d,n) in dim_sizes)
-             remaining_block_size = block_size
-             sub_rank = block_rank
-             for (i,dim) ∈ enumerate(dims_to_split[1:end-1])
-                 sub_block_size = factors[i]
-                 remaining_block_size = remaining_block_size ÷ sub_block_size
-                 sub_block_rank = sub_rank ÷ remaining_block_size
-                 sub_rank = sub_rank % remaining_block_size
-                 ranges[dim] = get_local_range(sub_block_rank, sub_block_size, dim_sizes[dim])
-             end
-             # For the 'last' dim, use the product of any remaining factors, in case
-             # there were more factors than dims in dims_to_split
-             dim = dims_to_split[end]
-             sub_block_size = prod(factors[length(dims_to_split):end])
-             remaining_block_size = remaining_block_size ÷ sub_block_size
-             sub_block_rank = sub_rank ÷ remaining_block_size
-             ranges[dim] = get_local_range(sub_block_rank,
-                                           sub_block_size,
-                                           dim_sizes[dim])
-             loop_ranges_store[dims] = LoopRanges(;
-                 parallel_dims=dims, rank0=rank0, is_anysv=false, anysv_rank0=rank0,
-                 is_anyzv=false, anyzv_rank0=rank0, ranges...)
-         else
-             # Loop over all indices for non-parallelised dimensions (dimensions not in
-             # `dims`), but only loop over parallel dimensions (dimensions in `dims`) on
-             # rank0.
-             this_ranges = Dict(d=>1:n for (d,n) in dim_sizes)
-             if !rank0
-                 for d ∈ dims
-                     this_ranges[d] = 1:0
-                 end
-             end
-             loop_ranges_store[dims] = LoopRanges(;
-                 parallel_dims=dims, rank0=rank0, is_anysv=false, anysv_rank0=rank0,
-                 is_anyzv=false, anyzv_rank0=rank0, this_ranges...)
-         end
-     end
+    # Use empty tuple for serial region
+    if rank0
+        serial_ranges = Dict(d=>1:n for (d,n) in dim_sizes)
+        loop_ranges_store[()] = LoopRanges(;
+            parallel_dims=(), rank0=rank0, is_anysv=false, anysv_rank0=rank0,
+            is_anyzv=false, anyzv_rank0=rank0, serial_ranges...)
+    else
+        serial_ranges = Dict(d=>1:0 for (d,_) in dim_sizes)
+        loop_ranges_store[()] = LoopRanges(;
+            parallel_dims=(), rank0=rank0, is_anysv=false, anysv_rank0=rank0,
+            is_anyzv=false, anyzv_rank0=rank0, serial_ranges...)
+    end
 
-     # Set up looping for 'anysv' regions - used for the collision operator
-     ######################################################################
+    for dims ∈ dimension_combinations
+        if dims == combination_to_split
+            factors = factor(Vector, this_block_size)
+            if length(factors) < length(dims_to_split)
+                error("Not enough factors ($factors) to split all of $dims_to_split")
+            end
+            ranges = Dict(d=>1:n for (d,n) in dim_sizes)
+            remaining_block_size = this_block_size
+            sub_rank = this_block_rank
+            for (i,dim) ∈ enumerate(dims_to_split[1:end-1])
+                sub_block_size = factors[i]
+                remaining_block_size = remaining_block_size ÷ sub_block_size
+                sub_block_rank = sub_rank ÷ remaining_block_size
+                sub_rank = sub_rank % remaining_block_size
+                ranges[dim] = get_local_range(sub_block_rank, sub_block_size, dim_sizes[dim])
+            end
+            # For the 'last' dim, use the product of any remaining factors, in case
+            # there were more factors than dims in dims_to_split
+            dim = dims_to_split[end]
+            sub_block_size = prod(factors[length(dims_to_split):end])
+            remaining_block_size = remaining_block_size ÷ sub_block_size
+            sub_block_rank = sub_rank ÷ remaining_block_size
+            ranges[dim] = get_local_range(sub_block_rank,
+                                          sub_block_size,
+                                          dim_sizes[dim])
+            loop_ranges_store[dims] = LoopRanges(;
+                parallel_dims=dims, rank0=rank0, is_anysv=false, anysv_rank0=rank0,
+                is_anyzv=false, anyzv_rank0=rank0, ranges...)
+        else
+            # Loop over all indices for non-parallelised dimensions (dimensions not in
+            # `dims`), but only loop over parallel dimensions (dimensions in `dims`) on
+            # rank0.
+            this_ranges = Dict(d=>1:n for (d,n) in dim_sizes)
+            if !rank0
+                for d ∈ dims
+                    this_ranges[d] = 1:0
+                end
+            end
+            loop_ranges_store[dims] = LoopRanges(;
+                parallel_dims=dims, rank0=rank0, is_anysv=false, anysv_rank0=rank0,
+                is_anyzv=false, anyzv_rank0=rank0, this_ranges...)
+        end
+    end
 
-     anysv_split = [1, 1, block_size]
+    # Set up looping for 'anysv' regions - used for the collision operator
+    ######################################################################
 
-     anysv_subblock_size[] = anysv_split[end]
-     number_of_anysv_blocks = prod(anysv_split[1:end-1])
-     anysv_subblock_index = block_rank[] ÷ anysv_subblock_size[]
-     anysv_rank_within_subblock = block_rank[] % anysv_subblock_size[]
+    if :anysv ∈ combination_to_split
+        # Splitting an anysv dimension combination, and every anysv region has to have
+        # the same split of z and r.
 
-     # Create communicator for the anysv subblock. OK to do this here as
-     # communication.setup_distributed_memory_MPI() must have already been called
-     # to set block_size[] and block_rank[]
-     comm_anysv_subblock[] = MPI.Comm_split(comm_block[], anysv_subblock_index,
-                                            anysv_rank_within_subblock)
-     anysv_subblock_rank[] = MPI.Comm_rank(comm_anysv_subblock[])
-     anysv_isubblock_index[] = anysv_subblock_index
-     anysv_nsubblocks_per_block[] = number_of_anysv_blocks
-     anysv_rank0 = (anysv_subblock_rank[] == 0)
+        # Setup up the combination being split first
+        factors = factor(Vector, this_block_size)
+        if length(factors) < length(dims_to_split)
+            error("Not enough factors ($factors) to split all of $dims_to_split")
+        end
 
-     for dims ∈ anysv_dimension_combinations
-         if dims == combination_to_split
-             factors = factor(Vector, block_size)
-             if length(factors) < length(dims_to_split)
-                 error("Not enough factors ($factors) to split all of $dims_to_split")
-             end
-             ranges = Dict(d=>1:n for (d,n) in dim_sizes)
-             remaining_block_size = block_size
-             sub_rank = block_rank
-             for (i,dim) ∈ enumerate(dims_to_split[1:end-1])
-                 sub_block_size = factors[i]
-                 remaining_block_size = remaining_block_size ÷ sub_block_size
-                 sub_block_rank = sub_rank ÷ remaining_block_size
-                 sub_rank = sub_rank % remaining_block_size
-                 ranges[dim] = get_local_range(sub_block_rank, sub_block_size, dim_sizes[dim])
-             end
-             # For the 'last' dim, use the product of any remaining factors, in case
-             # there were more factors than dims in dims_to_split
-             dim = dims_to_split[end]
-             sub_block_size = prod(factors[length(dims_to_split):end])
-             remaining_block_size = remaining_block_size ÷ sub_block_size
-             sub_block_rank = sub_rank ÷ remaining_block_size
-             ranges[dim] = get_local_range(sub_block_rank,
-                                           sub_block_size,
-                                           dim_sizes[dim])
-             loop_ranges_store[dims] = LoopRanges(;
-                 parallel_dims=dims, rank0=rank0, is_anysv=true, anysv_rank0=anysv_rank0,
-                 is_anyzv=false, anyzv_rank0=rank0, ranges...)
-         else
-             this_ranges = Dict(d=>1:n for (d,n) in dim_sizes)
-             if !rank0
-                 for d ∈ (:s, :vperp, :vpa)
-                     this_ranges[d] = 1:0
-                 end
-             end
-             loop_ranges_store[dims] = LoopRanges(;
-                 parallel_dims=dims, rank0=rank0, is_anysv=true, anysv_rank0=anysv_rank0,
-                 is_anyzv=false, anyzv_rank0=rank0, this_ranges...)
-         end
-     end
+        # For the 'last' dim, use the product of any remaining factors, in case
+        # there were more factors than dims in dims_to_split
+        last_dim_factor = prod(factors[length(dims_to_split):end])
+        factors = [factors[1:length(dims_to_split)-1]..., last_dim_factor]
 
-     ######################################################################
+        ranges = Dict(d=>1:n for (d,n) in dim_sizes)
+        remaining_block_size = this_block_size
+        sub_rank = this_block_rank
+        for (i,dim) ∈ enumerate(dims_to_split)
+            sub_block_size = factors[i]
+            remaining_block_size = remaining_block_size ÷ sub_block_size
+            rank_within_subblock = sub_rank ÷ remaining_block_size
+            sub_rank = sub_rank % remaining_block_size
+            ranges[dim] = get_local_range(rank_within_subblock, sub_block_size, dim_sizes[dim])
+        end
 
-     # Set up looping for 'anyzv' regions - used for the kinetic electron implicit solve
-     ###################################################################################
+        if any(d ∈ dims_to_split for d ∈ (:r,:z))
+            number_of_anysv_blocks = prod(factors[i] for (i, d) ∈ enumerate(dims_to_split)
+                                          if d ∈ (:r, :z))
+        else
+            number_of_anysv_blocks = 1
+        end
+        anysv_subblock_size[] = this_block_size ÷ number_of_anysv_blocks
+        anysv_rank_within_subblock = this_block_rank % anysv_subblock_size[]
+        anysv_subblock_index = this_block_rank ÷ anysv_subblock_size[]
+        anysv_rank0 = (anysv_rank_within_subblock == 0)
 
-     anyzv_split = [1, 1, block_size]
+        ranges_for_split = LoopRanges(;
+            parallel_dims=combination_to_split, rank0=rank0, is_anysv=true,
+            anysv_rank0=anysv_rank0, is_anyzv=false, anyzv_rank0=rank0, ranges...)
+        loop_ranges_store[combination_to_split] = ranges_for_split
+        for dims ∈ anysv_dimension_combinations
+            if dims == combination_to_split
+                continue
+            end
 
-     anyzv_subblock_size[] = anyzv_split[end]
-     number_of_anyzv_blocks = prod(anyzv_split[1:end-1])
-     anyzv_subblock_index = block_rank[] ÷ anyzv_subblock_size[]
-     anyzv_rank_within_subblock = block_rank[] % anyzv_subblock_size[]
+            this_ranges = Dict(d=>1:n for (d,n) in dim_sizes)
+            if !rank0
+                for d ∈ (:s, :vperp, :vpa)
+                    this_ranges[d] = 1:0
+                end
+            end
 
-     # Create communicator for the anyzv subblock. OK to do this here as
-     # communication.setup_distributed_memory_MPI() must have already been called
-     # to set block_size[] and block_rank[]
-     comm_anyzv_subblock[] = MPI.Comm_split(comm_block[], anyzv_subblock_index,
-                                            anyzv_rank_within_subblock)
-     anyzv_subblock_rank[] = MPI.Comm_rank(comm_anyzv_subblock[])
-     anyzv_isubblock_index[] = anyzv_subblock_index
-     anyzv_nsubblocks_per_block[] = number_of_anyzv_blocks
-     anyzv_rank0 = (anyzv_subblock_rank[] == 0)
+            # Set r and z splits to be the same as for the dimension combination being
+            # tested.
+            this_ranges[:r] = ranges_for_split.r
+            this_ranges[:z] = ranges_for_split.z
 
-     for dims ∈ anyzv_dimension_combinations
-         if dims == combination_to_split
-             factors = factor(Vector, block_size)
-             if length(factors) < length(dims_to_split)
-                 error("Not enough factors ($factors) to split all of $dims_to_split")
-             end
-             ranges = Dict(d=>1:n for (d,n) in dim_sizes)
-             remaining_block_size = block_size
-             sub_rank = block_rank
-             for (i,dim) ∈ enumerate(dims_to_split[1:end-1])
-                 sub_block_size = factors[i]
-                 remaining_block_size = remaining_block_size ÷ sub_block_size
-                 sub_block_rank = sub_rank ÷ remaining_block_size
-                 sub_rank = sub_rank % remaining_block_size
-                 ranges[dim] = get_local_range(sub_block_rank, sub_block_size, dim_sizes[dim])
-             end
-             # For the 'last' dim, use the product of any remaining factors, in case
-             # there were more factors than dims in dims_to_split
-             dim = dims_to_split[end]
-             sub_block_size = prod(factors[length(dims_to_split):end])
-             remaining_block_size = remaining_block_size ÷ sub_block_size
-             sub_block_rank = sub_rank ÷ remaining_block_size
-             ranges[dim] = get_local_range(sub_block_rank,
-                                           sub_block_size,
-                                           dim_sizes[dim])
-             loop_ranges_store[dims] = LoopRanges(;
-                 parallel_dims=dims, rank0=rank0, is_anysv=false, anysv_rank0=rank0,
-                 is_anyzv=true, anyzv_rank0=anyzv_rank0, ranges...)
-         else
-             this_ranges = Dict(d=>1:n for (d,n) in dim_sizes)
-             if !rank0
-                 for d ∈ (:z, :vperp, :vpa)
-                     this_ranges[d] = 1:0
-                 end
-             end
-             loop_ranges_store[dims] = LoopRanges(;
-                 parallel_dims=dims, rank0=rank0, is_anysv=false, anysv_rank0=rank0,
-                 is_anyzv=true, anyzv_rank0=anyzv_rank0, this_ranges...)
-         end
-     end
+            loop_ranges_store[dims] = LoopRanges(;
+                parallel_dims=dims, rank0=rank0, is_anysv=true, anysv_rank0=anysv_rank0,
+                is_anyzv=false, anyzv_rank0=rank0, this_ranges...)
+        end
+    else
+        anysv_rank_within_subblock = this_block_rank
+        anysv_subblock_index = 0
+        number_of_anysv_blocks = 1
+        anysv_rank0 = (anysv_rank_within_subblock == 0)
+        for dims ∈ anysv_dimension_combinations
+            this_ranges = Dict(d=>1:n for (d,n) in dim_sizes)
+            if !rank0
+                for d ∈ (:s, :vperp, :vpa)
+                    this_ranges[d] = 1:0
+                end
+            end
+            loop_ranges_store[dims] = LoopRanges(;
+                parallel_dims=dims, rank0=rank0, is_anysv=true, anysv_rank0=anysv_rank0,
+                is_anyzv=false, anyzv_rank0=rank0, this_ranges...)
+        end
+    end
 
-     ###################################################################################
+    # Create communicator for the anysv subblock. OK to do this here as
+    # communication.setup_distributed_memory_MPI() must have already been called
+    # to set comm_block[].
+    comm_anysv_subblock[] = MPI.Comm_split(comm_block[], anysv_subblock_index,
+                                           anysv_rank_within_subblock)
+    anysv_subblock_rank[] = MPI.Comm_rank(comm_anysv_subblock[])
+    anysv_subblock_size[] = MPI.Comm_size(comm_anysv_subblock[])
+    anysv_isubblock_index[] = anysv_subblock_index
+    anysv_nsubblocks_per_block[] = number_of_anysv_blocks
 
-     loop_ranges[] = loop_ranges_store[()]
+    ######################################################################
 
-     return nothing
- end
+    # Set up looping for 'anyzv' regions - used for the kinetic electron implicit solve
+    ###################################################################################
+
+    if :anyzv ∈ combination_to_split
+        # Splitting an anyzv dimension combination, and every anyzv region has to have
+        # the same split of r.
+
+        # Setup up the combination being split first
+        factors = factor(Vector, this_block_size)
+        if length(factors) < length(dims_to_split)
+            error("Not enough factors ($factors) to split all of $dims_to_split")
+        end
+
+        # For the 'last' dim, use the product of any remaining factors, in case
+        # there were more factors than dims in dims_to_split
+        last_dim_factor = prod(factors[length(dims_to_split):end])
+        factors = [factors[1:length(dims_to_split)-1]..., last_dim_factor]
+
+        ranges = Dict(d=>1:n for (d,n) in dim_sizes)
+        remaining_block_size = this_block_size
+        sub_rank = this_block_rank
+        for (i,dim) ∈ enumerate(dims_to_split)
+            sub_block_size = factors[i]
+            remaining_block_size = remaining_block_size ÷ sub_block_size
+            rank_within_subblock = sub_rank ÷ remaining_block_size
+            sub_rank = sub_rank % remaining_block_size
+            ranges[dim] = get_local_range(rank_within_subblock, sub_block_size, dim_sizes[dim])
+        end
+
+        if :r ∈ dims_to_split
+            number_of_anyzv_blocks = prod(factors[i] for (i, d) ∈ enumerate(dims_to_split)
+                                          if d ∈ (:r,))
+        else
+            number_of_anyzv_blocks = 1
+        end
+        anyzv_subblock_size[] = this_block_size ÷ number_of_anyzv_blocks
+        anyzv_rank_within_subblock = this_block_rank % anyzv_subblock_size[]
+        anyzv_subblock_index = this_block_rank ÷ anyzv_subblock_size[]
+        anyzv_rank0 = (anyzv_rank_within_subblock == 0)
+
+        ranges_for_split = LoopRanges(;
+            parallel_dims=combination_to_split, rank0=rank0, is_anysv=false,
+            anysv_rank0=rank0, is_anyzv=true, anyzv_rank0=anyzv_rank0, ranges...)
+        loop_ranges_store[combination_to_split] = ranges_for_split
+
+        for dims ∈ anyzv_dimension_combinations
+            if dims == combination_to_split
+                continue
+            end
+
+            this_ranges = Dict(d=>1:n for (d,n) in dim_sizes)
+            if !rank0
+                for d ∈ (:z, :vperp, :vpa)
+                    this_ranges[d] = 1:0
+                end
+            end
+
+            # Set r splits to be the same as for the dimension combination being tested.
+            this_ranges[:r] = ranges_for_split.r
+
+            loop_ranges_store[dims] = LoopRanges(;
+                parallel_dims=dims, rank0=rank0, is_anysv=false, anysv_rank0=rank0,
+                is_anyzv=true, anyzv_rank0=anyzv_rank0, this_ranges...)
+        end
+    else
+        anyzv_rank_within_subblock = this_block_rank
+        anyzv_subblock_index = 0
+        number_of_anyzv_blocks = 1
+        anyzv_rank0 = (anyzv_rank_within_subblock == 0)
+        for dims ∈ anyzv_dimension_combinations
+            this_ranges = Dict(d=>1:n for (d,n) in dim_sizes)
+            if !rank0
+                for d ∈ (:z, :vperp, :vpa)
+                    this_ranges[d] = 1:0
+                end
+            end
+            loop_ranges_store[dims] = LoopRanges(;
+                parallel_dims=dims, rank0=rank0, is_anysv=false, anysv_rank0=rank0,
+                is_anyzv=true, anyzv_rank0=anyzv_rank0, this_ranges...)
+        end
+    end
+
+    # Create communicator for the anyzv subblock. OK to do this here as
+    # communication.setup_distributed_memory_MPI() must have already been called
+    # to set comm_block[].
+    comm_anyzv_subblock[] = MPI.Comm_split(comm_block[], anyzv_subblock_index,
+                                           anyzv_rank_within_subblock)
+    anyzv_subblock_rank[] = MPI.Comm_rank(comm_anyzv_subblock[])
+    anyzv_subblock_size[] = MPI.Comm_size(comm_anyzv_subblock[])
+    anyzv_isubblock_index[] = anyzv_subblock_index
+    anyzv_nsubblocks_per_block[] = number_of_anyzv_blocks
+
+    ###################################################################################
+
+    loop_ranges[] = loop_ranges_store[()]
+
+    return nothing
+end
 
 export setup_loop_ranges!
 
