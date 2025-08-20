@@ -70,7 +70,9 @@ function runtests(; restart=false)
             end
 
             if :anysv ∈ debug_loop_type
-                dims_to_test = debug_loop_type[2:end]
+                # Need to add r- and z-dimensions as these are parallelised for every
+                # anysv region type.
+                dims_to_test = [:r, :z, debug_loop_type[2:end]...]
             else
                 dims_to_test = debug_loop_type
             end
