@@ -4002,7 +4002,7 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
             if d == "t"
                 !isa(it, mk_int) && push!(dim_sizes, nt)
                 # Don't add `it` to slice_indices because time-indexing is handled later.
-            elseif d ∈ ("n_ion_species", "n_neutral_species")
+            elseif d ∈ ("ion_species", "neutral_species")
                 if is === (:)
                     nspecies = size(variable[1], i)
                     push!(dim_sizes, nspecies)
