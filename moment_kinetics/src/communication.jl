@@ -239,17 +239,19 @@ function setup_distributed_memory_MPI(z_nelement_global,z_nelement_local,r_nelem
         println("")
     end
 
-	# construct communicators for inter-block communication
-	# only communicate between lead processes on a block
+    # construct communicators for inter-block communication only communicate between lead
+    # processes on a block
     if block_rank[] == 0
         comm_inter_block[] = MPI.Comm_split(comm_world, 0, iblock)
-        r_comm = MPI.Comm_split(comm_world,r_igroup,r_irank)
-        z_comm = MPI.Comm_split(comm_world,z_igroup,z_irank)
     else # assign a dummy value 
         comm_inter_block[] = MPI.Comm_split(comm_world, nothing, iblock)
-        r_comm = MPI.Comm_split(comm_world,nothing,r_irank)
-        z_comm = MPI.Comm_split(comm_world,nothing,z_irank)
     end
+
+    # construct communicators for inter-block communication between corresponding
+    # processes in each block.
+    r_comm = MPI.Comm_split(comm_world, r_igroup * block_size[] + block_rank[], r_irank)
+    z_comm = MPI.Comm_split(comm_world, z_igroup * block_size[] + block_rank[], z_irank)
+
     # MPI.Comm_split(comm,color,key)
 	# comm -> communicator to be split
 	# color -> label of group of processes
