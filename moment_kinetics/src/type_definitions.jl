@@ -28,9 +28,10 @@ const OptionsDict = OrderedDict{String,Any}
     Special type for debugging race conditions in accesses to shared-memory arrays.
     Only used if debugging._debug_level is high enough.
     """
-    struct DebugMPISharedArray{T, N, TArray <: AbstractArray{T,N}, TIntArray <: AbstractArray{mk_int,N}, TBoolArray <: AbstractArray{Bool,N}} <: AbstractArray{T, N}
+    struct DebugMPISharedArray{T, N, TArray <: AbstractArray{T,N}, TIntArray <: AbstractArray{mk_int,N}, TBoolArray <: AbstractArray{Bool,N}, TRanges} <: AbstractArray{T, N}
         data::TArray
         dim_names::NTuple{N, Symbol}
+        dim_ranges::TRanges
         accessed::Base.RefValue{Bool}
         is_initialized::TIntArray
         is_read::TBoolArray
