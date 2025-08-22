@@ -997,7 +997,6 @@ loop over `r`. `pdf` should have no r-dimension, while the moment variables are 
 """
 function calculate_electron_qpar_from_pdf_no_r!(qpar, dens, vth, pdf, vperp, vpa, me, ir)
     @begin_z_region()
-    ivperp = 1
     @loop_z iz begin
         @views qpar[iz] = 0.5*me*dens[iz]*vth[iz]^3*integral((vperp,vpa)->(vpa*(vpa^2+vperp^2)), pdf[:, :, iz], vperp, vpa)
     end
