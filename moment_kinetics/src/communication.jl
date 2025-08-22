@@ -30,7 +30,7 @@ using SHA
 # Import moment_kinetics so that we can refer to it in docstrings
 import moment_kinetics
 using ..debugging
-using ..loop_ranges_struct: loop_ranges_store
+using ..loop_ranges_struct: loop_ranges, loop_ranges_store
 using ..moment_kinetics_structs: coordinate
 using ..timer_utils
 using ..type_definitions: mk_float, mk_int
@@ -459,6 +459,7 @@ end
     function DebugMPISharedArray(array::AbstractArray{T,N}, comm,
                                  dim_names::NTuple{N, Symbol}) where {T,N}
         dims = size(array)
+        dim_ranges = Tuple(1:n for n ∈ dims)
         is_initialized = allocate_shared(mk_int, (Symbol("d$i")=>d for (i,d) ∈
                                                   enumerate(dims))...;
                                          comm=comm, maybe_debug=false)
@@ -481,12 +482,13 @@ end
             previous_is_read .= true
             previous_is_written = Array{Bool}(undef, dims)
             previous_is_written .= true
-            return DebugMPISharedArray(array, dim_names, accessed, is_initialized,
-                                       is_read, is_written, creation_stack_trace,
-                                       previous_is_read, previous_is_written)
+            return DebugMPISharedArray(array, dim_names, dim_ranges, accessed,
+                                       is_initialized, is_read, is_written,
+                                       creation_stack_trace, previous_is_read,
+                                       previous_is_written)
         end
-        return DebugMPISharedArray(array, dim_names, accessed, is_initialized, is_read,
-                                   is_written, creation_stack_trace)
+        return DebugMPISharedArray(array, dim_names, dim_ranges, accessed, is_initialized,
+                                   is_read, is_written, creation_stack_trace)
     end
 
     # Define functions needed for AbstractArray interface
@@ -506,6 +508,94 @@ end
                 end
             end
         end
+
+        @debug_shared_array begin
+            # If we are in an anysv or anyzv region, check that array is accessed within
+            # the {r,z} or {r} index ranges that are handled by the subblock that this
+            # process belongs to.
+            #
+            # Note, don't have to worry about 'flattened' aka 'single-index' array
+            # accesses, like a 2d array accessed as `a[5]`, because the
+            # DebugMPISharedArray goes through the AbstractArray interface, which converts
+            # a 'single-index' access into a multi-index access, which then calls this
+            # function with the same number of indices as `A` has dimensions.
+            if loop_ranges[].is_anysv
+                if :r ∈ A.dim_names
+                    r_dims = findall(A.dim_names .== :r)
+                    subblock_r_range = loop_ranges[].r
+                    for d ∈ r_dims
+                        subblock_r_inds = A.dim_ranges[d][I[d]]
+                        if !all(i ∈ subblock_r_range for i ∈ subblock_r_inds)
+                            if A.creation_stack_trace != ""
+                                error("Attempted to read array at r-indices "
+                                      * "$subblock_r_inds in anysv region, but this "
+                                      * "subblock only handles r-indices "
+                                      * "$subblock_r_range.\n"
+                                      * "Array was created at:\n"
+                                      * A.creation_stack_trace)
+                            else
+                                error("Attempted to read array at r-indices "
+                                      * "$subblock_r_inds in anysv region, but this "
+                                      * "subblock only handles r-indices "
+                                      * "$subblock_r_range.\n"
+                                      * "Enable `debug_track_array_allocate_location` to "
+                                      * "track where array was created.")
+                            end
+                        end
+                    end
+                end
+                if :z ∈ A.dim_names
+                    z_dims = findall(A.dim_names .== :z)
+                    subblock_z_range = loop_ranges[].z
+                    for d ∈ z_dims
+                        subblock_z_inds = A.dim_ranges[d][I[d]]
+                        if !all(i ∈ subblock_z_range for i ∈ subblock_z_inds)
+                            if A.creation_stack_trace != ""
+                                error("Attempted to read array at z-indices "
+                                      * "$subblock_z_inds in anysv region, but this "
+                                      * "subblock only handles z-indices "
+                                      * "$subblock_z_range.\n"
+                                      * "Array was created at:\n"
+                                      * A.creation_stack_trace)
+                            else
+                                error("Attempted to read array at z-indices "
+                                      * "$subblock_z_inds in anysv region, but this "
+                                      * "subblock only handles z-indices "
+                                      * "$subblock_z_range.\n"
+                                      * "Enable `debug_track_array_allocate_location` to "
+                                      * "track where array was created.")
+                            end
+                        end
+                    end
+                end
+            elseif loop_ranges[].is_anyzv
+                if :r ∈ A.dim_names
+                    r_dims = findall(A.dim_names .== :r)
+                    subblock_r_range = loop_ranges[].r
+                    for d ∈ r_dims
+                        subblock_r_inds = A.dim_ranges[d][I[d]]
+                        if !all(i ∈ subblock_r_range for i ∈ subblock_r_inds)
+                            if A.creation_stack_trace != ""
+                                error("Attempted to read array at r-indices "
+                                      * "$subblock_r_inds in anyzv region, but this "
+                                      * "subblock only handles r-indices "
+                                      * "$subblock_r_range.\n"
+                                      * "Array was created at:\n"
+                                      * A.creation_stack_trace)
+                            else
+                                error("Attempted to read array at r-indices "
+                                      * "$subblock_r_inds in anyzv region, but this "
+                                      * "subblock only handles r-indices "
+                                      * "$subblock_r_range.\n"
+                                      * "Enable `debug_track_array_allocate_location` to "
+                                      * "track where array was created.")
+                            end
+                        end
+                    end
+                end
+            end
+        end
+
         A.is_read[I...] = true
         A.accessed[] = true
         return getindex(A.data, I...)
@@ -514,6 +604,94 @@ end
         @debug_track_initialized begin
             A.is_initialized[I...] = 1
         end
+
+        @debug_shared_array begin
+            # If we are in an anysv or anyzv region, check that array is accessed within
+            # the {r,z} or {r} index ranges that are handled by the subblock that this
+            # process belongs to.
+            #
+            # Note, don't have to worry about 'flattened' aka 'single-index' array
+            # accesses, like a 2d array accessed as `a[5]`, because the
+            # DebugMPISharedArray goes through the AbstractArray interface, which converts
+            # a 'single-index' access into a multi-index access, which then calls this
+            # function with the same number of indices as `A` has dimensions.
+            if isdefined(loop_ranges, 1) && loop_ranges[].is_anysv
+                if :r ∈ A.dim_names
+                    r_dims = findall(A.dim_names .== :r)
+                    subblock_r_range = loop_ranges[].r
+                    for d ∈ r_dims
+                        subblock_r_inds = A.dim_ranges[d][I[d]]
+                        if !all(i ∈ subblock_r_range for i ∈ subblock_r_inds)
+                            if A.creation_stack_trace != ""
+                                error("Attempted to write array at r-indices "
+                                      * "$subblock_r_inds in anysv region, but this "
+                                      * "subblock only handles r-indices "
+                                      * "$subblock_r_range.\n"
+                                      * "Array was created at:\n"
+                                      * A.creation_stack_trace)
+                            else
+                                error("Attempted to write array at r-indices "
+                                      * "$subblock_r_inds in anysv region, but this "
+                                      * "subblock only handles r-indices "
+                                      * "$subblock_r_range.\n"
+                                      * "Enable `debug_track_array_allocate_location` to "
+                                      * "track where array was created.")
+                            end
+                        end
+                    end
+                end
+                if :z ∈ A.dim_names
+                    z_dims = findall(A.dim_names .== :z)
+                    subblock_z_range = loop_ranges[].z
+                    for d ∈ z_dims
+                        subblock_z_inds = A.dim_ranges[d][I[d]]
+                        if !all(i ∈ subblock_z_range for i ∈ subblock_z_inds)
+                            if A.creation_stack_trace != ""
+                                error("Attempted to write array at z-indices "
+                                      * "$subblock_z_inds in anysv region, but this "
+                                      * "subblock only handles z-indices "
+                                      * "$subblock_z_range.\n"
+                                      * "Array was created at:\n"
+                                      * A.creation_stack_trace)
+                            else
+                                error("Attempted to write array at z-indices "
+                                      * "$subblock_z_inds in anysv region, but this "
+                                      * "subblock only handles z-indices "
+                                      * "$subblock_z_range.\n"
+                                      * "Enable `debug_track_array_allocate_location` to "
+                                      * "track where array was created.")
+                            end
+                        end
+                    end
+                end
+            elseif isdefined(loop_ranges, 1) && loop_ranges[].is_anyzv
+                if :r ∈ A.dim_names
+                    r_dims = findall(A.dim_names .== :r)
+                    subblock_r_range = loop_ranges[].r
+                    for d ∈ r_dims
+                        subblock_r_inds = A.dim_ranges[d][I[d]]
+                        if !all(i ∈ subblock_r_range for i ∈ subblock_r_inds)
+                            if A.creation_stack_trace != ""
+                                error("Attempted to write array at r-indices "
+                                      * "$subblock_r_inds in anyzv region, but this "
+                                      * "subblock only handles r-indices "
+                                      * "$subblock_r_range.\n"
+                                      * "Array was created at:\n"
+                                      * A.creation_stack_trace)
+                            else
+                                error("Attempted to write array at r-indices "
+                                      * "$subblock_r_inds in anyzv region, but this "
+                                      * "subblock only handles r-indices "
+                                      * "$subblock_r_range.\n"
+                                      * "Enable `debug_track_array_allocate_location` to "
+                                      * "track where array was created.")
+                            end
+                        end
+                    end
+                end
+            end
+        end
+
         A.is_written[I...] = true
         A.accessed[] = true
         return setindex!(A.data, v, I...)
@@ -545,6 +723,8 @@ end
              view(getfield(A, name), inds...) :
              name === :dim_names ?
              Tuple(getfield(A, name)[i] for (i, ind) ∈ enumerate(inds) if !isa(ind, Integer)) :
+             name === :dim_ranges ?
+             Tuple(A.dim_ranges[i][ind] for (i, ind) ∈ enumerate(inds) if !isa(ind, Integer)) :
              getfield(A, name)
              for name ∈ fieldnames(typeof(A)))...)
     end
@@ -557,6 +737,8 @@ end
              vec(getfield(A, name)) :
              name === :dim_names ?
              (:flattened_dim,) :
+             name === :dim_ranges ?
+             (:,) :
              getfield(A, name)
              for name ∈ fieldnames(typeof(A)))...)
     end
