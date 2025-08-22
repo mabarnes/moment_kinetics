@@ -16,15 +16,32 @@ function run_test(test_input, debug_loop_type, debug_loop_parallel_dims; restart
     name = test_input["output"]["run_name"]
 
     @testset "$name" begin
-        # Provide some progress info
-        global_rank[] == 0 && println("    - bug-checking $name, $debug_loop_type, $debug_loop_parallel_dims")
+        try
+            # Provide some progress info
+            global_rank[] == 0 && println("    - bug-checking $name, $debug_loop_type, $debug_loop_parallel_dims")
 
-        # run simulation
-        mk_state = setup_moment_kinetics(test_input; debug_loop_type=debug_loop_type,
-                                         debug_loop_parallel_dims=debug_loop_parallel_dims,
-                                         restart=restart)
-        time_advance!(mk_state...)
-        cleanup_moment_kinetics!(mk_state[end-2:end]...)
+            # run simulation
+            mk_state = setup_moment_kinetics(test_input; debug_loop_type=debug_loop_type,
+                                             debug_loop_parallel_dims=debug_loop_parallel_dims,
+                                             restart=restart)
+            time_advance!(mk_state...)
+            cleanup_moment_kinetics!(mk_state[end-2:end]...)
+        catch e
+            # Stop code from hanging when running on multiple processes if only one of them
+            # throws an error
+            if global_size[] > 1
+                println(stderr, "$(typeof(e)) on process $(global_rank[]):")
+                showerror(stderr, e, catch_backtrace())
+                flush(stdout)
+                flush(stderr)
+
+                # Wait a little bit to let all processes print their errors if they can.
+                sleep(5)
+                MPI.Abort(comm_world, 1)
+            end
+
+            rethrow(e)
+        end
     end
 end
 
