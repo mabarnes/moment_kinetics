@@ -1124,7 +1124,7 @@ function _anysv_subblock_synchronize(call_site::Union{Nothing,Missing,UInt64})
         hash = sha256(signaturestring)
         all_hashes = reshape(MPI.Allgather(hash, comm_anysv_subblock[]), length(hash),
                              MPI.Comm_size(comm_anysv_subblock[]))
-        for i ∈ 1:block_size[]
+        for i ∈ 1:anysv_subblock_size[]
             h = all_hashes[:, i]
             if h != hash
                 error("_anysv_subblock_synchronize() called inconsistently\n",
@@ -1280,7 +1280,7 @@ function _anyzv_subblock_synchronize(call_site::Union{Nothing,Missing,UInt64})
         hash = sha256(signaturestring)
         all_hashes = reshape(MPI.Allgather(hash, comm_anyzv_subblock[]), length(hash),
                              MPI.Comm_size(comm_anyzv_subblock[]))
-        for i ∈ 1:block_size[]
+        for i ∈ 1:anyzv_subblock_size[]
             h = all_hashes[:, i]
             if h != hash
                 error("_anyzv_subblock_synchronize() called inconsistently\n",
