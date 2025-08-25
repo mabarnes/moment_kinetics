@@ -6124,11 +6124,11 @@ function get_upwind_z_derivative(run_info, variable_name; neutral=false, kwargs.
     if neutral
         if :iz ∈ keys(kwargs)
             variable = get_variable(run_info, variable_name)
-            uz = get_variable(run_info, "neutral_uz")
+            uz = get_variable(run_info, "uz_neutral")
             nz, nr, ns, nt = size(uz)
         else
             variable = get_variable(run_info, variable_name; kwargs...)
-            uz = get_variable(run_info, "neutral_uz"; kwargs...)
+            uz = get_variable(run_info, "uz_neutral"; kwargs...)
             nz, nr, ns, nt = size(uz)
         end
     else
