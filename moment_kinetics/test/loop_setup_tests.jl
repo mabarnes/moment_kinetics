@@ -9,6 +9,7 @@ using moment_kinetics.looping: dims_string, get_splits, get_max_work,
                                debug_setup_loop_ranges_split_one_combination!,
                                loop_ranges_store
 using moment_kinetics.communication
+using moment_kinetics.type_definitions
 
 function test_low_level_utils()
     @testset "dims_string" begin
@@ -215,6 +216,1445 @@ function test_get_best_ranges()
     return nothing
 end
 
+@kwdef struct expected_get_anyxx_ranges{N}
+    block_rank::mk_int
+    split::Vector{mk_int}
+    anyxx_dims::NTuple{N,Symbol}
+    dim_sizes::Dict{Symbol,mk_int}
+    results::Dict{Symbol,UnitRange{mk_int}}
+end
+
+const get_anysv_ranges_dim_sizes_122 = Dict(:s=>1, :sn=>1, :r=>1, :z=>7, :vperp=>2,
+                                            :vpa=>2, :vzeta=>11, :vr=>13, :vz=>17)
+const get_anysv_ranges_dim_sizes_228 = Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2,
+                                            :vpa=>2, :vzeta=>11, :vr=>13, :vz=>17)
+const expected_get_anysv_list = [
+    expected_get_anyxx_ranges(block_rank=0, split=[1, 1, 1], anyxx_dims=(:anysv,),
+                              dim_sizes=get_anysv_ranges_dim_sizes_122,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:7,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=0, split=[1, 1, 1], anyxx_dims=(:anysv,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_122,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:7,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=0, split=[1, 1, 1], anyxx_dims=(:anysv,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_122,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:7,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=0, split=[1, 1, 1],
+                              anyxx_dims=(:anysv,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_122,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:7,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+
+    expected_get_anyxx_ranges(block_rank=0, split=[1, 2, 1], anyxx_dims=(:anysv,),
+                              dim_sizes=get_anysv_ranges_dim_sizes_122,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=0, split=[1, 2, 1], anyxx_dims=(:anysv,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_122,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=0, split=[1, 2, 1], anyxx_dims=(:anysv,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_122,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=0, split=[1, 2, 1], anyxx_dims=(:anysv,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_122,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=1, split=[1, 2, 1], anyxx_dims=(:anysv,),
+                              dim_sizes=get_anysv_ranges_dim_sizes_122,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>4:7,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=1, split=[1, 2, 1], anyxx_dims=(:anysv,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_122,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>4:7,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=1, split=[1, 2, 1], anyxx_dims=(:anysv,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_122,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>4:7,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=1, split=[1, 2, 1], anyxx_dims=(:anysv,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_122,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>4:7,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+
+    expected_get_anyxx_ranges(block_rank=0, split=[1, 2, 2], anyxx_dims=(:anysv,),
+                              dim_sizes=get_anysv_ranges_dim_sizes_122,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=0, split=[1, 2, 2], anyxx_dims=(:anysv,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_122,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:3,
+                                           :vperp=>1:1, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=0, split=[1, 2, 2], anyxx_dims=(:anysv,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_122,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=0, split=[1, 2, 2], anyxx_dims=(:anysv,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_122,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:3,
+                                           :vperp=>1:1, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=1, split=[1, 2, 2], anyxx_dims=(:anysv,),
+                              dim_sizes=get_anysv_ranges_dim_sizes_122,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>1:1, :z=>1:3,
+                                           :vperp=>1:0, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=1, split=[1, 2, 2], anyxx_dims=(:anysv,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_122,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:3,
+                                           :vperp=>2:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=1, split=[1, 2, 2], anyxx_dims=(:anysv,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_122,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=1, split=[1, 2, 2], anyxx_dims=(:anysv,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_122,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:3,
+                                           :vperp=>2:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=2, split=[1, 2, 2], anyxx_dims=(:anysv,),
+                              dim_sizes=get_anysv_ranges_dim_sizes_122,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>4:7,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=2, split=[1, 2, 2], anyxx_dims=(:anysv,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_122,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>4:7,
+                                           :vperp=>1:1, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=2, split=[1, 2, 2], anyxx_dims=(:anysv,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_122,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>4:7,
+                                           :vperp=>1:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=2, split=[1, 2, 2], anyxx_dims=(:anysv,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_122,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>4:7,
+                                           :vperp=>1:1, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=3, split=[1, 2, 2], anyxx_dims=(:anysv,),
+                              dim_sizes=get_anysv_ranges_dim_sizes_122,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>1:1, :z=>4:7,
+                                           :vperp=>1:0, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=3, split=[1, 2, 2], anyxx_dims=(:anysv,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_122,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>4:7,
+                                           :vperp=>2:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=3, split=[1, 2, 2], anyxx_dims=(:anysv,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_122,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>4:7,
+                                           :vperp=>1:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=3, split=[1, 2, 2], anyxx_dims=(:anysv,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_122,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>4:7,
+                                           :vperp=>2:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+
+    expected_get_anyxx_ranges(block_rank=0, split=[2, 2, 8], anyxx_dims=(:anysv,),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=0, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>1:0, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=0, split=[2, 2, 8], anyxx_dims=(:anysv,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=0, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>1:0, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=1, split=[2, 2, 8], anyxx_dims=(:anysv,),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>1:0, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=1, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>1:0, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=1, split=[2, 2, 8], anyxx_dims=(:anysv,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=1, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>1:0, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=2, split=[2, 2, 8], anyxx_dims=(:anysv,),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>1:0, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=2, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>1:0, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=2, split=[2, 2, 8], anyxx_dims=(:anysv,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=2, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>1:0, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=3, split=[2, 2, 8], anyxx_dims=(:anysv,),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>1:0, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=3, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>1:0, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=3, split=[2, 2, 8], anyxx_dims=(:anysv,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=3, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>1:0, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=4, split=[2, 2, 8], anyxx_dims=(:anysv,),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>1:0, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=4, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>1:0, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=4, split=[2, 2, 8], anyxx_dims=(:anysv,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=4, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>1:1, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=5, split=[2, 2, 8], anyxx_dims=(:anysv,),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>1:0, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=5, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>1:0, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=5, split=[2, 2, 8], anyxx_dims=(:anysv,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=5, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>1:1, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=6, split=[2, 2, 8], anyxx_dims=(:anysv,),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>1:0, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=6, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>1:1, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=6, split=[2, 2, 8], anyxx_dims=(:anysv,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=6, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>2:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=7, split=[2, 2, 8], anyxx_dims=(:anysv,),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>1:0, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=7, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>2:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=7, split=[2, 2, 8], anyxx_dims=(:anysv,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=7, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>2:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=8, split=[2, 2, 8], anyxx_dims=(:anysv,),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=8, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>1:0, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=8, split=[2, 2, 8], anyxx_dims=(:anysv,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>1:2, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=8, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>1:0, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=9, split=[2, 2, 8], anyxx_dims=(:anysv,),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>1:0, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=9, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>1:0, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=9, split=[2, 2, 8], anyxx_dims=(:anysv,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>1:2, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=9, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>1:0, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=10, split=[2, 2, 8], anyxx_dims=(:anysv,),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>1:0, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=10, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>1:0, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=10, split=[2, 2, 8], anyxx_dims=(:anysv,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>1:2, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=10, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>1:0, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=11, split=[2, 2, 8], anyxx_dims=(:anysv,),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>1:0, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=11, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>1:0, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=11, split=[2, 2, 8], anyxx_dims=(:anysv,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>1:2, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=11, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>1:0, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=12, split=[2, 2, 8], anyxx_dims=(:anysv,),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>1:0, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=12, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>1:0, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=12, split=[2, 2, 8], anyxx_dims=(:anysv,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>1:2, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=12, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>1:1, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=13, split=[2, 2, 8], anyxx_dims=(:anysv,),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>1:0, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=13, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>1:0, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=13, split=[2, 2, 8], anyxx_dims=(:anysv,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>1:2, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=13, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>1:1, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=14, split=[2, 2, 8], anyxx_dims=(:anysv,),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>1:0, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=14, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>1:1, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=14, split=[2, 2, 8], anyxx_dims=(:anysv,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>1:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=14, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>2:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=15, split=[2, 2, 8], anyxx_dims=(:anysv,),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>1:0, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=15, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>2:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=15, split=[2, 2, 8], anyxx_dims=(:anysv,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>1:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=15, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>2:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=16, split=[2, 2, 8], anyxx_dims=(:anysv,),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=16, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>1:0, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=16, split=[2, 2, 8], anyxx_dims=(:anysv,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=16, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>1:0, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=17, split=[2, 2, 8], anyxx_dims=(:anysv,),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>1:0, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=17, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>1:0, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=17, split=[2, 2, 8], anyxx_dims=(:anysv,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=17, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>1:0, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=18, split=[2, 2, 8], anyxx_dims=(:anysv,),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>1:0, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=18, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>1:0, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=18, split=[2, 2, 8], anyxx_dims=(:anysv,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=18, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>1:0, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=19, split=[2, 2, 8], anyxx_dims=(:anysv,),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>1:0, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=19, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>1:0, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=19, split=[2, 2, 8], anyxx_dims=(:anysv,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=19, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>1:0, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=20, split=[2, 2, 8], anyxx_dims=(:anysv,),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>1:0, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=20, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>1:0, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=20, split=[2, 2, 8], anyxx_dims=(:anysv,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=20, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>1:1, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=21, split=[2, 2, 8], anyxx_dims=(:anysv,),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>1:0, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=21, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>1:0, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=21, split=[2, 2, 8], anyxx_dims=(:anysv,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=21, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>1:1, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=22, split=[2, 2, 8], anyxx_dims=(:anysv,),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>1:0, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=22, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>1:1, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=22, split=[2, 2, 8], anyxx_dims=(:anysv,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=22, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>2:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=23, split=[2, 2, 8], anyxx_dims=(:anysv,),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>1:0, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=23, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>2:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=23, split=[2, 2, 8], anyxx_dims=(:anysv,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=23, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>2:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=24, split=[2, 2, 8], anyxx_dims=(:anysv,),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=24, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>1:0, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=24, split=[2, 2, 8], anyxx_dims=(:anysv,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>1:2, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=24, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>1:0, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=25, split=[2, 2, 8], anyxx_dims=(:anysv,),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>1:0, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=25, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>1:0, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=25, split=[2, 2, 8], anyxx_dims=(:anysv,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>1:2, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=25, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>1:0, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=26, split=[2, 2, 8], anyxx_dims=(:anysv,),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>1:0, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=26, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>1:0, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=26, split=[2, 2, 8], anyxx_dims=(:anysv,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>1:2, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=26, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>1:0, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=27, split=[2, 2, 8], anyxx_dims=(:anysv,),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>1:0, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=27, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>1:0, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=27, split=[2, 2, 8], anyxx_dims=(:anysv,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>1:2, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=27, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>1:0, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=28, split=[2, 2, 8], anyxx_dims=(:anysv,),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>1:0, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=28, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>1:0, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=28, split=[2, 2, 8], anyxx_dims=(:anysv,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>1:2, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=28, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>1:1, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=29, split=[2, 2, 8], anyxx_dims=(:anysv,),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>1:0, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=29, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>1:0, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=29, split=[2, 2, 8], anyxx_dims=(:anysv,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>1:2, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=29, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>1:1, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=30, split=[2, 2, 8], anyxx_dims=(:anysv,),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>1:0, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=30, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>1:1, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=30, split=[2, 2, 8], anyxx_dims=(:anysv,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>1:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=30, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>2:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=31, split=[2, 2, 8], anyxx_dims=(:anysv,),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>1:0, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=31, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>2:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=31, split=[2, 2, 8], anyxx_dims=(:anysv,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>1:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=31, split=[2, 2, 8], anyxx_dims=(:anysv,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>2:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=0, split=[2, 2, 8], anyxx_dims=(:anysv,:s),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=0, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>1:1, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=0, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=0, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>1:1, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=1, split=[2, 2, 8], anyxx_dims=(:anysv,:s),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=1, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>2:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=1, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=1, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>1:1, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=2, split=[2, 2, 8], anyxx_dims=(:anysv,:s),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=2, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>1:1, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=2, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=2, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>2:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=3, split=[2, 2, 8], anyxx_dims=(:anysv,:s),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=3, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>2:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=3, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=3, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>2:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=4, split=[2, 2, 8], anyxx_dims=(:anysv,:s),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=4, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>1:1, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=4, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=4, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>1:1, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=5, split=[2, 2, 8], anyxx_dims=(:anysv,:s),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=5, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>2:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=5, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=5, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>1:1, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=6, split=[2, 2, 8], anyxx_dims=(:anysv,:s),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=6, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>1:1, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=6, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=6, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>2:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=7, split=[2, 2, 8], anyxx_dims=(:anysv,:s),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=7, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>2:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=7, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=7, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>1:3,
+                                           :vperp=>2:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=8, split=[2, 2, 8], anyxx_dims=(:anysv,:s),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=8, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>1:1, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=8, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>1:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=8, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>1:1, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=9, split=[2, 2, 8], anyxx_dims=(:anysv,:s),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=9, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>2:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=9, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>1:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=9, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>1:1, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=10, split=[2, 2, 8], anyxx_dims=(:anysv,:s),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=10, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>1:1, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=10, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>1:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=10, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>2:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=11, split=[2, 2, 8], anyxx_dims=(:anysv,:s),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=11, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>2:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=11, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>1:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=11, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>2:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=12, split=[2, 2, 8], anyxx_dims=(:anysv,:s),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=12, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>1:1, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=12, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>1:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=12, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>1:1, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=13, split=[2, 2, 8], anyxx_dims=(:anysv,:s),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=13, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>2:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=13, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>1:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=13, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>1:1, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=14, split=[2, 2, 8], anyxx_dims=(:anysv,:s),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=14, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>1:1, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=14, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>1:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=14, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>2:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=15, split=[2, 2, 8], anyxx_dims=(:anysv,:s),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=15, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>2:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=15, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>1:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=15, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>4:7,
+                                           :vperp=>2:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=16, split=[2, 2, 8], anyxx_dims=(:anysv,:s),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=16, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>1:1, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=16, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=16, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>1:1, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=17, split=[2, 2, 8], anyxx_dims=(:anysv,:s),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=17, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>2:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=17, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=17, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>1:1, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=18, split=[2, 2, 8], anyxx_dims=(:anysv,:s),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=18, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>1:1, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=18, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=18, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>2:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=19, split=[2, 2, 8], anyxx_dims=(:anysv,:s),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=19, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>2:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=19, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=19, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>2:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=20, split=[2, 2, 8], anyxx_dims=(:anysv,:s),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=20, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>1:1, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=20, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=20, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>1:1, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=21, split=[2, 2, 8], anyxx_dims=(:anysv,:s),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=21, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>2:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=21, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=21, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>1:1, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=22, split=[2, 2, 8], anyxx_dims=(:anysv,:s),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=22, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>1:1, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=22, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=22, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>2:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=23, split=[2, 2, 8], anyxx_dims=(:anysv,:s),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=23, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>2:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=23, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=23, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>1:3,
+                                           :vperp=>2:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=24, split=[2, 2, 8], anyxx_dims=(:anysv,:s),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=24, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>1:1, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=24, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>1:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=24, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>1:1, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=25, split=[2, 2, 8], anyxx_dims=(:anysv,:s),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=25, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>2:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=25, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>1:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=25, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>1:1, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=26, split=[2, 2, 8], anyxx_dims=(:anysv,:s),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=26, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>1:1, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=26, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>1:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=26, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>2:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=27, split=[2, 2, 8], anyxx_dims=(:anysv,:s),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=27, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>2:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=27, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>1:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=27, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>2:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=28, split=[2, 2, 8], anyxx_dims=(:anysv,:s),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=28, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>1:1, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=28, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>1:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=28, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>1:1, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=29, split=[2, 2, 8], anyxx_dims=(:anysv,:s),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=29, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>2:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=29, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>1:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=29, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>1:1, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=30, split=[2, 2, 8], anyxx_dims=(:anysv,:s),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=30, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>1:1, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=30, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>1:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=30, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>2:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=31, split=[2, 2, 8], anyxx_dims=(:anysv,:s),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=31, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>2:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=31, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>1:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=31, split=[2, 2, 8], anyxx_dims=(:anysv,:s,:vperp,:vpa),
+                              dim_sizes=get_anysv_ranges_dim_sizes_228,
+                              results=Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>4:7,
+                                           :vperp=>2:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+   ]
+
 function test_anysv()
     @testset "get_best_anysv_split" begin
         @test get_best_anysv_split(1, Dict(:s=>1, :r=>1, :z=>2, :vperp=>2, :vpa=>2)) == [1,1,1]
@@ -236,1433 +1676,1449 @@ function test_anysv()
         @test get_best_anysv_split(2, Dict(:s=>1, :r=>1, :z=>7, :vperp=>2, :vpa=>2)) == [1,2,1]
     end
     @testset "get_anysv_ranges" begin
-        @test get_anysv_ranges(0, [1, 1, 1], (:anysv,),
-                              Dict(:s=>1, :sn=>1, :r=>1, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:7, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(0, [1, 1, 1], (:anysv,:vperp),
-                              Dict(:s=>1, :sn=>1, :r=>1, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:7, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(0, [1, 1, 1], (:anysv,:vpa),
-                              Dict(:s=>1, :sn=>1, :r=>1, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:7, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(0, [1, 1, 1], (:anysv,:vperp,:vpa),
-                              Dict(:s=>1, :sn=>1, :r=>1, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:7, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-
-        @test get_anysv_ranges(0, [1, 2, 1], (:anysv,),
-                              Dict(:s=>1, :sn=>1, :r=>1, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:3, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(0, [1, 2, 1], (:anysv,:vperp),
-                              Dict(:s=>1, :sn=>1, :r=>1, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:3, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(0, [1, 2, 1], (:anysv,:vpa),
-                              Dict(:s=>1, :sn=>1, :r=>1, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:3, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(0, [1, 2, 1], (:anysv,:vperp,:vpa),
-                              Dict(:s=>1, :sn=>1, :r=>1, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:3, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(1, [1, 2, 1], (:anysv,),
-                              Dict(:s=>1, :sn=>1, :r=>1, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>4:7, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(1, [1, 2, 1], (:anysv,:vperp),
-                              Dict(:s=>1, :sn=>1, :r=>1, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>4:7, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(1, [1, 2, 1], (:anysv,:vpa),
-                              Dict(:s=>1, :sn=>1, :r=>1, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>4:7, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(1, [1, 2, 1], (:anysv,:vperp,:vpa),
-                              Dict(:s=>1, :sn=>1, :r=>1, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>4:7, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-
-        @test get_anysv_ranges(0, [1, 2, 2], (:anysv,),
-                              Dict(:s=>1, :sn=>1, :r=>1, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:3, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(0, [1, 2, 2], (:anysv,:vperp),
-                              Dict(:s=>1, :sn=>1, :r=>1, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:3, :vperp=>1:1, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(0, [1, 2, 2], (:anysv,:vpa),
-                              Dict(:s=>1, :sn=>1, :r=>1, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:3, :vperp=>1:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(0, [1, 2, 2], (:anysv,:vperp,:vpa),
-                              Dict(:s=>1, :sn=>1, :r=>1, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:3, :vperp=>1:1, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(1, [1, 2, 2], (:anysv,),
-                              Dict(:s=>1, :sn=>1, :r=>1, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>1:1, :z=>1:3, :vperp=>1:0, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(1, [1, 2, 2], (:anysv,:vperp),
-                              Dict(:s=>1, :sn=>1, :r=>1, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:3, :vperp=>2:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(1, [1, 2, 2], (:anysv,:vpa),
-                              Dict(:s=>1, :sn=>1, :r=>1, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:3, :vperp=>1:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(1, [1, 2, 2], (:anysv,:vperp,:vpa),
-                              Dict(:s=>1, :sn=>1, :r=>1, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:3, :vperp=>2:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(2, [1, 2, 2], (:anysv,),
-                              Dict(:s=>1, :sn=>1, :r=>1, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>4:7, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(2, [1, 2, 2], (:anysv,:vperp),
-                              Dict(:s=>1, :sn=>1, :r=>1, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>4:7, :vperp=>1:1, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(2, [1, 2, 2], (:anysv,:vpa),
-                              Dict(:s=>1, :sn=>1, :r=>1, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>4:7, :vperp=>1:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(2, [1, 2, 2], (:anysv,:vperp,:vpa),
-                              Dict(:s=>1, :sn=>1, :r=>1, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>4:7, :vperp=>1:1, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(3, [1, 2, 2], (:anysv,),
-                              Dict(:s=>1, :sn=>1, :r=>1, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>1:1, :z=>4:7, :vperp=>1:0, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(3, [1, 2, 2], (:anysv,:vperp),
-                              Dict(:s=>1, :sn=>1, :r=>1, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>4:7, :vperp=>2:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(3, [1, 2, 2], (:anysv,:vpa),
-                              Dict(:s=>1, :sn=>1, :r=>1, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>4:7, :vperp=>1:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(3, [1, 2, 2], (:anysv,:vperp,:vpa),
-                              Dict(:s=>1, :sn=>1, :r=>1, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>4:7, :vperp=>2:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-
-        @test get_anysv_ranges(0, [2, 2, 8], (:anysv,),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(0, [2, 2, 8], (:anysv,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:0, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(0, [2, 2, 8], (:anysv,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:2, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(0, [2, 2, 8], (:anysv,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:0, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(1, [2, 2, 8], (:anysv,),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:0, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(1, [2, 2, 8], (:anysv,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:0, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(1, [2, 2, 8], (:anysv,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:2, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(1, [2, 2, 8], (:anysv,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:0, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(2, [2, 2, 8], (:anysv,),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:0, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(2, [2, 2, 8], (:anysv,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:0, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(2, [2, 2, 8], (:anysv,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:2, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(2, [2, 2, 8], (:anysv,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:0, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(3, [2, 2, 8], (:anysv,),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:0, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(3, [2, 2, 8], (:anysv,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:0, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(3, [2, 2, 8], (:anysv,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:2, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(3, [2, 2, 8], (:anysv,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:0, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(4, [2, 2, 8], (:anysv,),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:0, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(4, [2, 2, 8], (:anysv,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:0, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(4, [2, 2, 8], (:anysv,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:2, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(4, [2, 2, 8], (:anysv,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:1, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(5, [2, 2, 8], (:anysv,),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:0, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(5, [2, 2, 8], (:anysv,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:0, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(5, [2, 2, 8], (:anysv,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:2, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(5, [2, 2, 8], (:anysv,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:1, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(6, [2, 2, 8], (:anysv,),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:0, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(6, [2, 2, 8], (:anysv,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:1, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(6, [2, 2, 8], (:anysv,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(6, [2, 2, 8], (:anysv,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>2:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(7, [2, 2, 8], (:anysv,),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:0, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(7, [2, 2, 8], (:anysv,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>2:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(7, [2, 2, 8], (:anysv,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(7, [2, 2, 8], (:anysv,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>2:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(8, [2, 2, 8], (:anysv,),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(8, [2, 2, 8], (:anysv,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:0, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(8, [2, 2, 8], (:anysv,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:2, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(8, [2, 2, 8], (:anysv,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:0, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(9, [2, 2, 8], (:anysv,),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:0, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(9, [2, 2, 8], (:anysv,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:0, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(9, [2, 2, 8], (:anysv,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:2, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(9, [2, 2, 8], (:anysv,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:0, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(10, [2, 2, 8], (:anysv,),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:0, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(10, [2, 2, 8], (:anysv,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:0, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(10, [2, 2, 8], (:anysv,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:2, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(10, [2, 2, 8], (:anysv,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:0, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(11, [2, 2, 8], (:anysv,),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:0, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(11, [2, 2, 8], (:anysv,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:0, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(11, [2, 2, 8], (:anysv,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:2, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(11, [2, 2, 8], (:anysv,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:0, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(12, [2, 2, 8], (:anysv,),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:0, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(12, [2, 2, 8], (:anysv,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:0, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(12, [2, 2, 8], (:anysv,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:2, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(12, [2, 2, 8], (:anysv,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:1, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(13, [2, 2, 8], (:anysv,),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:0, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(13, [2, 2, 8], (:anysv,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:0, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(13, [2, 2, 8], (:anysv,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:2, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(13, [2, 2, 8], (:anysv,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:1, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(14, [2, 2, 8], (:anysv,),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:0, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(14, [2, 2, 8], (:anysv,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:1, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(14, [2, 2, 8], (:anysv,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(14, [2, 2, 8], (:anysv,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>2:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(15, [2, 2, 8], (:anysv,),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:0, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(15, [2, 2, 8], (:anysv,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>2:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(15, [2, 2, 8], (:anysv,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(15, [2, 2, 8], (:anysv,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>2:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(16, [2, 2, 8], (:anysv,),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(16, [2, 2, 8], (:anysv,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:0, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(16, [2, 2, 8], (:anysv,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:2, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(16, [2, 2, 8], (:anysv,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:0, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(17, [2, 2, 8], (:anysv,),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:0, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(17, [2, 2, 8], (:anysv,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:0, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(17, [2, 2, 8], (:anysv,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:2, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(17, [2, 2, 8], (:anysv,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:0, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(18, [2, 2, 8], (:anysv,),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:0, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(18, [2, 2, 8], (:anysv,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:0, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(18, [2, 2, 8], (:anysv,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:2, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(18, [2, 2, 8], (:anysv,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:0, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(19, [2, 2, 8], (:anysv,),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:0, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(19, [2, 2, 8], (:anysv,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:0, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(19, [2, 2, 8], (:anysv,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:2, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(19, [2, 2, 8], (:anysv,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:0, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(20, [2, 2, 8], (:anysv,),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:0, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(20, [2, 2, 8], (:anysv,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:0, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(20, [2, 2, 8], (:anysv,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:2, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(20, [2, 2, 8], (:anysv,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:1, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(21, [2, 2, 8], (:anysv,),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:0, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(21, [2, 2, 8], (:anysv,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:0, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(21, [2, 2, 8], (:anysv,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:2, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(21, [2, 2, 8], (:anysv,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:1, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(22, [2, 2, 8], (:anysv,),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:0, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(22, [2, 2, 8], (:anysv,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:1, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(22, [2, 2, 8], (:anysv,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(22, [2, 2, 8], (:anysv,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>2:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(23, [2, 2, 8], (:anysv,),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:0, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(23, [2, 2, 8], (:anysv,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>2:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(23, [2, 2, 8], (:anysv,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(23, [2, 2, 8], (:anysv,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>2:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(24, [2, 2, 8], (:anysv,),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(24, [2, 2, 8], (:anysv,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:0, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(24, [2, 2, 8], (:anysv,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:2, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(24, [2, 2, 8], (:anysv,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:0, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(25, [2, 2, 8], (:anysv,),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:0, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(25, [2, 2, 8], (:anysv,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:0, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(25, [2, 2, 8], (:anysv,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:2, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(25, [2, 2, 8], (:anysv,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:0, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(26, [2, 2, 8], (:anysv,),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:0, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(26, [2, 2, 8], (:anysv,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:0, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(26, [2, 2, 8], (:anysv,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:2, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(26, [2, 2, 8], (:anysv,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:0, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(27, [2, 2, 8], (:anysv,),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:0, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(27, [2, 2, 8], (:anysv,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:0, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(27, [2, 2, 8], (:anysv,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:2, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(27, [2, 2, 8], (:anysv,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:0, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(28, [2, 2, 8], (:anysv,),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:0, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(28, [2, 2, 8], (:anysv,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:0, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(28, [2, 2, 8], (:anysv,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:2, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(28, [2, 2, 8], (:anysv,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:1, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(29, [2, 2, 8], (:anysv,),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:0, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(29, [2, 2, 8], (:anysv,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:0, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(29, [2, 2, 8], (:anysv,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:2, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(29, [2, 2, 8], (:anysv,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:1, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(30, [2, 2, 8], (:anysv,),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:0, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(30, [2, 2, 8], (:anysv,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:1, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(30, [2, 2, 8], (:anysv,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(30, [2, 2, 8], (:anysv,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>2:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(31, [2, 2, 8], (:anysv,),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:0, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(31, [2, 2, 8], (:anysv,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>2:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(31, [2, 2, 8], (:anysv,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(31, [2, 2, 8], (:anysv,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>2:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(0, [2, 2, 8], (:anysv,:s),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(0, [2, 2, 8], (:anysv,:s,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:1, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(0, [2, 2, 8], (:anysv,:s,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(0, [2, 2, 8], (:anysv,:s,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:1, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(1, [2, 2, 8], (:anysv,:s),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(1, [2, 2, 8], (:anysv,:s,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>2:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(1, [2, 2, 8], (:anysv,:s,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(1, [2, 2, 8], (:anysv,:s,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:1, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(2, [2, 2, 8], (:anysv,:s),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(2, [2, 2, 8], (:anysv,:s,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:1, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(2, [2, 2, 8], (:anysv,:s,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(2, [2, 2, 8], (:anysv,:s,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>2:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(3, [2, 2, 8], (:anysv,:s),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(3, [2, 2, 8], (:anysv,:s,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>2:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(3, [2, 2, 8], (:anysv,:s,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(3, [2, 2, 8], (:anysv,:s,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>2:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(4, [2, 2, 8], (:anysv,:s),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(4, [2, 2, 8], (:anysv,:s,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:1, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(4, [2, 2, 8], (:anysv,:s,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(4, [2, 2, 8], (:anysv,:s,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:1, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(5, [2, 2, 8], (:anysv,:s),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(5, [2, 2, 8], (:anysv,:s,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>2:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(5, [2, 2, 8], (:anysv,:s,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(5, [2, 2, 8], (:anysv,:s,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:1, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(6, [2, 2, 8], (:anysv,:s),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(6, [2, 2, 8], (:anysv,:s,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:1, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(6, [2, 2, 8], (:anysv,:s,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(6, [2, 2, 8], (:anysv,:s,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>2:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(7, [2, 2, 8], (:anysv,:s),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(7, [2, 2, 8], (:anysv,:s,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>2:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(7, [2, 2, 8], (:anysv,:s,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>1:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(7, [2, 2, 8], (:anysv,:s,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>1:3, :vperp=>2:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(8, [2, 2, 8], (:anysv,:s),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(8, [2, 2, 8], (:anysv,:s,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:1, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(8, [2, 2, 8], (:anysv,:s,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(8, [2, 2, 8], (:anysv,:s,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:1, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(9, [2, 2, 8], (:anysv,:s),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(9, [2, 2, 8], (:anysv,:s,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>2:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(9, [2, 2, 8], (:anysv,:s,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(9, [2, 2, 8], (:anysv,:s,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:1, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(10, [2, 2, 8], (:anysv,:s),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(10, [2, 2, 8], (:anysv,:s,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:1, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(10, [2, 2, 8], (:anysv,:s,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(10, [2, 2, 8], (:anysv,:s,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>2:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(11, [2, 2, 8], (:anysv,:s),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(11, [2, 2, 8], (:anysv,:s,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>2:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(11, [2, 2, 8], (:anysv,:s,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(11, [2, 2, 8], (:anysv,:s,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>2:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(12, [2, 2, 8], (:anysv,:s),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(12, [2, 2, 8], (:anysv,:s,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:1, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(12, [2, 2, 8], (:anysv,:s,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(12, [2, 2, 8], (:anysv,:s,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:1, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(13, [2, 2, 8], (:anysv,:s),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(13, [2, 2, 8], (:anysv,:s,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>2:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(13, [2, 2, 8], (:anysv,:s,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(13, [2, 2, 8], (:anysv,:s,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:1, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(14, [2, 2, 8], (:anysv,:s),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(14, [2, 2, 8], (:anysv,:s,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:1, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(14, [2, 2, 8], (:anysv,:s,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(14, [2, 2, 8], (:anysv,:s,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>2:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(15, [2, 2, 8], (:anysv,:s),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(15, [2, 2, 8], (:anysv,:s,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>2:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(15, [2, 2, 8], (:anysv,:s,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>1:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(15, [2, 2, 8], (:anysv,:s,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>2:2, :sn=>1:1, :r=>1:2, :z=>4:7, :vperp=>2:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(16, [2, 2, 8], (:anysv,:s),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(16, [2, 2, 8], (:anysv,:s,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:1, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(16, [2, 2, 8], (:anysv,:s,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(16, [2, 2, 8], (:anysv,:s,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:1, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(17, [2, 2, 8], (:anysv,:s),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(17, [2, 2, 8], (:anysv,:s,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>2:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(17, [2, 2, 8], (:anysv,:s,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(17, [2, 2, 8], (:anysv,:s,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:1, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(18, [2, 2, 8], (:anysv,:s),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(18, [2, 2, 8], (:anysv,:s,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:1, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(18, [2, 2, 8], (:anysv,:s,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(18, [2, 2, 8], (:anysv,:s,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>2:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(19, [2, 2, 8], (:anysv,:s),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(19, [2, 2, 8], (:anysv,:s,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>2:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(19, [2, 2, 8], (:anysv,:s,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(19, [2, 2, 8], (:anysv,:s,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>2:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(20, [2, 2, 8], (:anysv,:s),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(20, [2, 2, 8], (:anysv,:s,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:1, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(20, [2, 2, 8], (:anysv,:s,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(20, [2, 2, 8], (:anysv,:s,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:1, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(21, [2, 2, 8], (:anysv,:s),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(21, [2, 2, 8], (:anysv,:s,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>2:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(21, [2, 2, 8], (:anysv,:s,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(21, [2, 2, 8], (:anysv,:s,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:1, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(22, [2, 2, 8], (:anysv,:s),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(22, [2, 2, 8], (:anysv,:s,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:1, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(22, [2, 2, 8], (:anysv,:s,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(22, [2, 2, 8], (:anysv,:s,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>2:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(23, [2, 2, 8], (:anysv,:s),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(23, [2, 2, 8], (:anysv,:s,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>2:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(23, [2, 2, 8], (:anysv,:s,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>1:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(23, [2, 2, 8], (:anysv,:s,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>1:3, :vperp=>2:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(24, [2, 2, 8], (:anysv,:s),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(24, [2, 2, 8], (:anysv,:s,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:1, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(24, [2, 2, 8], (:anysv,:s,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(24, [2, 2, 8], (:anysv,:s,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:1, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(25, [2, 2, 8], (:anysv,:s),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(25, [2, 2, 8], (:anysv,:s,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>2:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(25, [2, 2, 8], (:anysv,:s,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(25, [2, 2, 8], (:anysv,:s,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:1, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(26, [2, 2, 8], (:anysv,:s),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(26, [2, 2, 8], (:anysv,:s,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:1, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(26, [2, 2, 8], (:anysv,:s,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(26, [2, 2, 8], (:anysv,:s,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>2:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(27, [2, 2, 8], (:anysv,:s),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(27, [2, 2, 8], (:anysv,:s,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>2:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(27, [2, 2, 8], (:anysv,:s,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(27, [2, 2, 8], (:anysv,:s,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>2:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(28, [2, 2, 8], (:anysv,:s),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(28, [2, 2, 8], (:anysv,:s,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:1, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(28, [2, 2, 8], (:anysv,:s,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(28, [2, 2, 8], (:anysv,:s,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:1, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(29, [2, 2, 8], (:anysv,:s),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:0, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(29, [2, 2, 8], (:anysv,:s,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>2:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(29, [2, 2, 8], (:anysv,:s,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(29, [2, 2, 8], (:anysv,:s,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:1, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(30, [2, 2, 8], (:anysv,:s),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(30, [2, 2, 8], (:anysv,:s,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:1, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(30, [2, 2, 8], (:anysv,:s,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(30, [2, 2, 8], (:anysv,:s,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>2:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(31, [2, 2, 8], (:anysv,:s),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(31, [2, 2, 8], (:anysv,:s,:vperp),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>2:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(31, [2, 2, 8], (:anysv,:s,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>1:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anysv_ranges(31, [2, 2, 8], (:anysv,:s,:vperp,:vpa),
-                              Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                   :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>2:2, :sn=>1:1, :r=>3:5, :z=>4:7, :vperp=>2:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+        @testset "$(e.block_rank) $(e.split) $(e.anyxx_dims)" for e ∈ expected_get_anysv_list
+            @test get_anysv_ranges(e.block_rank, e.split, e.anyxx_dims, e.dim_sizes) == e.results
+        end
     end
 
     return nothing
 end
+
+const get_anyzv_ranges_dim_sizes_22 = Dict(:s=>1, :sn=>1, :r=>3, :z=>7, :vperp=>2,
+                                           :vpa=>2, :vzeta=>11, :vr=>13, :vz=>17)
+const get_anyzv_ranges_dim_sizes_48_A = Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2,
+                                             :vpa=>2, :vzeta=>11, :vr=>13, :vz=>17)
+const get_anyzv_ranges_dim_sizes_48_B = Dict(:s=>1, :sn=>1, :r=>5, :z=>7, :vperp=>2,
+                                             :vpa=>2, :vzeta=>11, :vr=>13, :vz=>17)
+const get_anyzv_ranges_dim_sizes_48_C = Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2,
+                                             :vpa=>2, :vzeta=>11, :vr=>13, :vz=>17)
+const get_anyzv_ranges_dim_sizes_48_D = Dict(:s=>1, :sn=>1, :r=>5, :z=>6, :vperp=>2,
+                                             :vpa=>2, :vzeta=>11, :vr=>13, :vz=>17)
+const expected_get_anyzv_list = [
+    expected_get_anyxx_ranges(block_rank=0, split=[1, 1], anyxx_dims=(:anyzv,),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_22,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>1:7,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=0, split=[1, 1], anyxx_dims=(:anyzv,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_22,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>1:7,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=0, split=[1, 1], anyxx_dims=(:anyzv,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_22,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>1:7,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=0, split=[1, 1], anyxx_dims=(:anyzv,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_22,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>1:7,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+
+    expected_get_anyxx_ranges(block_rank=0, split=[2, 1], anyxx_dims=(:anyzv,),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_22,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:7,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=0, split=[2, 1], anyxx_dims=(:anyzv,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_22,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:7,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=0, split=[2, 1], anyxx_dims=(:anyzv,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_22,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:7,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=0, split=[2, 1], anyxx_dims=(:anyzv,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_22,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:7,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=1, split=[2, 1], anyxx_dims=(:anyzv,),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_22,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>1:7,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=1, split=[2, 1], anyxx_dims=(:anyzv,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_22,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>1:7,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=1, split=[2, 1], anyxx_dims=(:anyzv,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_22,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>1:7,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=1, split=[2, 1], anyxx_dims=(:anyzv,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_22,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>1:7,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+
+    expected_get_anyxx_ranges(block_rank=0, split=[2, 2], anyxx_dims=(:anyzv,),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_22,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:7,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=0, split=[2, 2], anyxx_dims=(:anyzv,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_22,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:7,
+                                           :vperp=>1:1, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=0, split=[2, 2], anyxx_dims=(:anyzv,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_22,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:7,
+                                           :vperp=>1:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=0, split=[2, 2], anyxx_dims=(:anyzv,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_22,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:7,
+                                           :vperp=>1:1, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=1, split=[2, 2], anyxx_dims=(:anyzv,),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_22,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:0,
+                                           :vperp=>1:0, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=1, split=[2, 2], anyxx_dims=(:anyzv,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_22,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:7,
+                                           :vperp=>2:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=1, split=[2, 2], anyxx_dims=(:anyzv,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_22,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:7,
+                                           :vperp=>1:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=1, split=[2, 2], anyxx_dims=(:anyzv,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_22,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:7,
+                                           :vperp=>2:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=2, split=[2, 2], anyxx_dims=(:anyzv,),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_22,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>1:7,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=2, split=[2, 2], anyxx_dims=(:anyzv,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_22,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>1:7,
+                                           :vperp=>1:1, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=2, split=[2, 2], anyxx_dims=(:anyzv,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_22,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>1:7,
+                                           :vperp=>1:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=2, split=[2, 2], anyxx_dims=(:anyzv,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_22,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>1:7,
+                                           :vperp=>1:1, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=3, split=[2, 2], anyxx_dims=(:anyzv,),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_22,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>1:0,
+                                           :vperp=>1:0, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=3, split=[2, 2], anyxx_dims=(:anyzv,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_22,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>1:7,
+                                           :vperp=>2:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=3, split=[2, 2], anyxx_dims=(:anyzv,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_22,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>1:7,
+                                           :vperp=>1:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=3, split=[2, 2], anyxx_dims=(:anyzv,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_22,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>1:7,
+                                           :vperp=>2:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+
+    expected_get_anyxx_ranges(block_rank=0, split=[4, 8], anyxx_dims=(:anyzv,),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:7,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=0, split=[4, 8], anyxx_dims=(:anyzv,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:7,
+                                           :vperp=>1:0, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=0, split=[4, 8], anyxx_dims=(:anyzv,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:7,
+                                           :vperp=>1:2, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=0, split=[4, 8], anyxx_dims=(:anyzv,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:7,
+                                           :vperp=>1:0, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=0, split=[4, 8], anyxx_dims=(:anyzv,:z),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_B,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:0,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=0, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:3,
+                                           :vperp=>1:1, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=0, split=[4, 8], anyxx_dims=(:anyzv,:z,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=0, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_D,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:3,
+                                           :vperp=>1:1, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=1, split=[4, 8], anyxx_dims=(:anyzv,),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:0,
+                                           :vperp=>1:0, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=1, split=[4, 8], anyxx_dims=(:anyzv,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:7,
+                                           :vperp=>1:0, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=1, split=[4, 8], anyxx_dims=(:anyzv,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:7,
+                                           :vperp=>1:2, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=1, split=[4, 8], anyxx_dims=(:anyzv,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:7,
+                                           :vperp=>1:0, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=1, split=[4, 8], anyxx_dims=(:anyzv,:z),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_B,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:1,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=1, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:3,
+                                           :vperp=>2:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=1, split=[4, 8], anyxx_dims=(:anyzv,:z,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=1, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_D,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:3,
+                                           :vperp=>1:1, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=2, split=[4, 8], anyxx_dims=(:anyzv,),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:0,
+                                           :vperp=>1:0, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=2, split=[4, 8], anyxx_dims=(:anyzv,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:7,
+                                           :vperp=>1:0, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=2, split=[4, 8], anyxx_dims=(:anyzv,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:7,
+                                           :vperp=>1:2, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=2, split=[4, 8], anyxx_dims=(:anyzv,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:7,
+                                           :vperp=>1:0, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=2, split=[4, 8], anyxx_dims=(:anyzv,:z),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_B,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>2:2,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=2, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>4:6,
+                                           :vperp=>1:1, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=2, split=[4, 8], anyxx_dims=(:anyzv,:z,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>4:6,
+                                           :vperp=>1:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=2, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_D,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:3,
+                                           :vperp=>2:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=3, split=[4, 8], anyxx_dims=(:anyzv,),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:0,
+                                           :vperp=>1:0, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=3, split=[4, 8], anyxx_dims=(:anyzv,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:7,
+                                           :vperp=>1:0, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=3, split=[4, 8], anyxx_dims=(:anyzv,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:7,
+                                           :vperp=>1:2, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=3, split=[4, 8], anyxx_dims=(:anyzv,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:7,
+                                           :vperp=>1:0, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=3, split=[4, 8], anyxx_dims=(:anyzv,:z),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_B,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>3:3,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=3, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>4:6,
+                                           :vperp=>2:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=3, split=[4, 8], anyxx_dims=(:anyzv,:z,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>4:6,
+                                           :vperp=>1:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=3, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_D,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:3,
+                                           :vperp=>2:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=4, split=[4, 8], anyxx_dims=(:anyzv,),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:0,
+                                           :vperp=>1:0, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=4, split=[4, 8], anyxx_dims=(:anyzv,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:7,
+                                           :vperp=>1:0, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=4, split=[4, 8], anyxx_dims=(:anyzv,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:7,
+                                           :vperp=>1:2, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=4, split=[4, 8], anyxx_dims=(:anyzv,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:7,
+                                           :vperp=>1:1, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=4, split=[4, 8], anyxx_dims=(:anyzv,:z),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_B,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>4:4,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=4, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>7:9,
+                                           :vperp=>1:1, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=4, split=[4, 8], anyxx_dims=(:anyzv,:z,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>7:9,
+                                           :vperp=>1:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=4, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_D,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>4:6,
+                                           :vperp=>1:1, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=5, split=[4, 8], anyxx_dims=(:anyzv,),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:0,
+                                           :vperp=>1:0, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=5, split=[4, 8], anyxx_dims=(:anyzv,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:7,
+                                           :vperp=>1:0, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=5, split=[4, 8], anyxx_dims=(:anyzv,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:7,
+                                           :vperp=>1:2, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=5, split=[4, 8], anyxx_dims=(:anyzv,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:7,
+                                           :vperp=>1:1, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=5, split=[4, 8], anyxx_dims=(:anyzv,:z),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_B,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>5:5,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=5, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>7:9,
+                                           :vperp=>2:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=5, split=[4, 8], anyxx_dims=(:anyzv,:z,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>7:9,
+                                           :vperp=>1:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=5, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_D,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>4:6,
+                                           :vperp=>1:1, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=6, split=[4, 8], anyxx_dims=(:anyzv,),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:0,
+                                           :vperp=>1:0, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=6, split=[4, 8], anyxx_dims=(:anyzv,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:7,
+                                           :vperp=>1:1, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=6, split=[4, 8], anyxx_dims=(:anyzv,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:7,
+                                           :vperp=>1:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=6, split=[4, 8], anyxx_dims=(:anyzv,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:7,
+                                           :vperp=>2:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=6, split=[4, 8], anyxx_dims=(:anyzv,:z),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_B,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>6:6,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=6, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>10:12,
+                                           :vperp=>1:1, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=6, split=[4, 8], anyxx_dims=(:anyzv,:z,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>10:12,
+                                           :vperp=>1:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=6, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_D,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>4:6,
+                                           :vperp=>2:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=7, split=[4, 8], anyxx_dims=(:anyzv,),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:0,
+                                           :vperp=>1:0, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=7, split=[4, 8], anyxx_dims=(:anyzv,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:7,
+                                           :vperp=>2:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=7, split=[4, 8], anyxx_dims=(:anyzv,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:7,
+                                           :vperp=>1:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=7, split=[4, 8], anyxx_dims=(:anyzv,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:7,
+                                           :vperp=>2:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=7, split=[4, 8], anyxx_dims=(:anyzv,:z),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_B,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>7:7,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=7, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>10:12,
+                                           :vperp=>2:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=7, split=[4, 8], anyxx_dims=(:anyzv,:z,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>10:12,
+                                           :vperp=>1:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=7, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_D,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>4:6,
+                                           :vperp=>2:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=8, split=[4, 8], anyxx_dims=(:anyzv,),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:7,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=8, split=[4, 8], anyxx_dims=(:anyzv,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:7,
+                                           :vperp=>1:0, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=8, split=[4, 8], anyxx_dims=(:anyzv,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:7,
+                                           :vperp=>1:2, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=8, split=[4, 8], anyxx_dims=(:anyzv,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:7,
+                                           :vperp=>1:0, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=8, split=[4, 8], anyxx_dims=(:anyzv,:z),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_B,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>1:0,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=8, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>1:3,
+                                           :vperp=>1:1, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=8, split=[4, 8], anyxx_dims=(:anyzv,:z,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=8, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_D,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>1:3,
+                                           :vperp=>1:1, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=9, split=[4, 8], anyxx_dims=(:anyzv,),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:0,
+                                           :vperp=>1:0, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=9, split=[4, 8], anyxx_dims=(:anyzv,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:7,
+                                           :vperp=>1:0, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=9, split=[4, 8], anyxx_dims=(:anyzv,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:7,
+                                           :vperp=>1:2, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=9, split=[4, 8], anyxx_dims=(:anyzv,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:7,
+                                           :vperp=>1:0, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=9, split=[4, 8], anyxx_dims=(:anyzv,:z),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_B,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>1:1,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=9, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>1:3,
+                                           :vperp=>2:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=9, split=[4, 8], anyxx_dims=(:anyzv,:z,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=9, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_D,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>1:3,
+                                           :vperp=>1:1, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=10, split=[4, 8], anyxx_dims=(:anyzv,),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:0,
+                                           :vperp=>1:0, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=10, split=[4, 8], anyxx_dims=(:anyzv,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:7,
+                                           :vperp=>1:0, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=10, split=[4, 8], anyxx_dims=(:anyzv,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:7,
+                                           :vperp=>1:2, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=10, split=[4, 8], anyxx_dims=(:anyzv,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:7,
+                                           :vperp=>1:0, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=10, split=[4, 8], anyxx_dims=(:anyzv,:z),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_B,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>2:2,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=10, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>4:6,
+                                           :vperp=>1:1, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=10, split=[4, 8], anyxx_dims=(:anyzv,:z,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>4:6,
+                                           :vperp=>1:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=10, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_D,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>1:3,
+                                           :vperp=>2:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=11, split=[4, 8], anyxx_dims=(:anyzv,),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:0,
+                                           :vperp=>1:0, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=11, split=[4, 8], anyxx_dims=(:anyzv,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:7,
+                                           :vperp=>1:0, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=11, split=[4, 8], anyxx_dims=(:anyzv,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:7,
+                                           :vperp=>1:2, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=11, split=[4, 8], anyxx_dims=(:anyzv,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:7,
+                                           :vperp=>1:0, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=11, split=[4, 8], anyxx_dims=(:anyzv,:z),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_B,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>3:3,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=11, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>4:6,
+                                           :vperp=>2:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=11, split=[4, 8], anyxx_dims=(:anyzv,:z,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>4:6,
+                                           :vperp=>1:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=11, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_D,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>1:3,
+                                           :vperp=>2:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=12, split=[4, 8], anyxx_dims=(:anyzv,),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:0,
+                                           :vperp=>1:0, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=12, split=[4, 8], anyxx_dims=(:anyzv,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:7,
+                                           :vperp=>1:0, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=12, split=[4, 8], anyxx_dims=(:anyzv,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:7,
+                                           :vperp=>1:2, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=12, split=[4, 8], anyxx_dims=(:anyzv,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:7,
+                                           :vperp=>1:1, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=12, split=[4, 8], anyxx_dims=(:anyzv,:z),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_B,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>4:4,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=12, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>7:9,
+                                           :vperp=>1:1, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=12, split=[4, 8], anyxx_dims=(:anyzv,:z,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>7:9,
+                                           :vperp=>1:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=12, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_D,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>4:6,
+                                           :vperp=>1:1, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=13, split=[4, 8], anyxx_dims=(:anyzv,),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:0,
+                                           :vperp=>1:0, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=13, split=[4, 8], anyxx_dims=(:anyzv,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:7,
+                                           :vperp=>1:0, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=13, split=[4, 8], anyxx_dims=(:anyzv,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:7,
+                                           :vperp=>1:2, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=13, split=[4, 8], anyxx_dims=(:anyzv,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:7,
+                                           :vperp=>1:1, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=13, split=[4, 8], anyxx_dims=(:anyzv,:z),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_B,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>5:5,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=13, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>7:9,
+                                           :vperp=>2:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=13, split=[4, 8], anyxx_dims=(:anyzv,:z,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>7:9,
+                                           :vperp=>1:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=13, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_D,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>4:6,
+                                           :vperp=>1:1, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=14, split=[4, 8], anyxx_dims=(:anyzv,),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:0,
+                                           :vperp=>1:0, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=14, split=[4, 8], anyxx_dims=(:anyzv,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:7,
+                                           :vperp=>1:1, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=14, split=[4, 8], anyxx_dims=(:anyzv,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:7,
+                                           :vperp=>1:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=14, split=[4, 8], anyxx_dims=(:anyzv,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:7,
+                                           :vperp=>2:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=14, split=[4, 8], anyxx_dims=(:anyzv,:z),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_B,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>6:6,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=14, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>10:12,
+                                           :vperp=>1:1, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=14, split=[4, 8], anyxx_dims=(:anyzv,:z,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>10:12,
+                                           :vperp=>1:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=14, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_D,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>4:6,
+                                           :vperp=>2:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=15, split=[4, 8], anyxx_dims=(:anyzv,),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:0,
+                                           :vperp=>1:0, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=15, split=[4, 8], anyxx_dims=(:anyzv,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:7,
+                                           :vperp=>2:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=15, split=[4, 8], anyxx_dims=(:anyzv,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:7,
+                                           :vperp=>1:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=15, split=[4, 8], anyxx_dims=(:anyzv,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:7,
+                                           :vperp=>2:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=15, split=[4, 8], anyxx_dims=(:anyzv,:z),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_B,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>7:7,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=15, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>10:12,
+                                           :vperp=>2:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=15, split=[4, 8], anyxx_dims=(:anyzv,:z,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>10:12,
+                                           :vperp=>1:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=15, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_D,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>4:6,
+                                           :vperp=>2:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=16, split=[4, 8], anyxx_dims=(:anyzv,),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:7,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=16, split=[4, 8], anyxx_dims=(:anyzv,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:7,
+                                           :vperp=>1:0, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=16, split=[4, 8], anyxx_dims=(:anyzv,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:7,
+                                           :vperp=>1:2, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=16, split=[4, 8], anyxx_dims=(:anyzv,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:7,
+                                           :vperp=>1:0, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=16, split=[4, 8], anyxx_dims=(:anyzv,:z),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_B,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>1:0,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=16, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>1:3,
+                                           :vperp=>1:1, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=16, split=[4, 8], anyxx_dims=(:anyzv,:z,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=16, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_D,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>1:3,
+                                           :vperp=>1:1, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=17, split=[4, 8], anyxx_dims=(:anyzv,),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:0,
+                                           :vperp=>1:0, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=17, split=[4, 8], anyxx_dims=(:anyzv,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:7,
+                                           :vperp=>1:0, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=17, split=[4, 8], anyxx_dims=(:anyzv,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:7,
+                                           :vperp=>1:2, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=17, split=[4, 8], anyxx_dims=(:anyzv,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:7,
+                                           :vperp=>1:0, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=17, split=[4, 8], anyxx_dims=(:anyzv,:z),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_B,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>1:1,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=17, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>1:3,
+                                           :vperp=>2:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=17, split=[4, 8], anyxx_dims=(:anyzv,:z,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=17, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_D,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>1:3,
+                                           :vperp=>1:1, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=18, split=[4, 8], anyxx_dims=(:anyzv,),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:0,
+                                           :vperp=>1:0, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=18, split=[4, 8], anyxx_dims=(:anyzv,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:7,
+                                           :vperp=>1:0, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=18, split=[4, 8], anyxx_dims=(:anyzv,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:7,
+                                           :vperp=>1:2, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=18, split=[4, 8], anyxx_dims=(:anyzv,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:7,
+                                           :vperp=>1:0, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=18, split=[4, 8], anyxx_dims=(:anyzv,:z),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_B,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>2:2,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=18, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>4:6,
+                                           :vperp=>1:1, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=18, split=[4, 8], anyxx_dims=(:anyzv,:z,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>4:6,
+                                           :vperp=>1:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=18, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_D,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>1:3,
+                                           :vperp=>2:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=19, split=[4, 8], anyxx_dims=(:anyzv,),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:0,
+                                           :vperp=>1:0, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=19, split=[4, 8], anyxx_dims=(:anyzv,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:7,
+                                           :vperp=>1:0, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=19, split=[4, 8], anyxx_dims=(:anyzv,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:7,
+                                           :vperp=>1:2, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=19, split=[4, 8], anyxx_dims=(:anyzv,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:7,
+                                           :vperp=>1:0, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=19, split=[4, 8], anyxx_dims=(:anyzv,:z),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_B,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>3:3,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=19, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>4:6,
+                                           :vperp=>2:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=19, split=[4, 8], anyxx_dims=(:anyzv,:z,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>4:6,
+                                           :vperp=>1:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=19, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_D,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>1:3,
+                                           :vperp=>2:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=20, split=[4, 8], anyxx_dims=(:anyzv,),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:0,
+                                           :vperp=>1:0, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=20, split=[4, 8], anyxx_dims=(:anyzv,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:7,
+                                           :vperp=>1:0, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=20, split=[4, 8], anyxx_dims=(:anyzv,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:7,
+                                           :vperp=>1:2, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=20, split=[4, 8], anyxx_dims=(:anyzv,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:7,
+                                           :vperp=>1:1, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=20, split=[4, 8], anyxx_dims=(:anyzv,:z),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_B,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>4:4,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=20, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>7:9,
+                                           :vperp=>1:1, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=20, split=[4, 8], anyxx_dims=(:anyzv,:z,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>7:9,
+                                           :vperp=>1:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=20, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_D,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>4:6,
+                                           :vperp=>1:1, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=21, split=[4, 8], anyxx_dims=(:anyzv,),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:0,
+                                           :vperp=>1:0, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=21, split=[4, 8], anyxx_dims=(:anyzv,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:7,
+                                           :vperp=>1:0, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=21, split=[4, 8], anyxx_dims=(:anyzv,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:7,
+                                           :vperp=>1:2, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=21, split=[4, 8], anyxx_dims=(:anyzv,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:7,
+                                           :vperp=>1:1, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=21, split=[4, 8], anyxx_dims=(:anyzv,:z),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_B,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>5:5,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=21, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>7:9,
+                                           :vperp=>2:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=21, split=[4, 8], anyxx_dims=(:anyzv,:z,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>7:9,
+                                           :vperp=>1:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=21, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_D,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>4:6,
+                                           :vperp=>1:1, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=22, split=[4, 8], anyxx_dims=(:anyzv,),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:0,
+                                           :vperp=>1:0, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=22, split=[4, 8], anyxx_dims=(:anyzv,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:7,
+                                           :vperp=>1:1, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=22, split=[4, 8], anyxx_dims=(:anyzv,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:7,
+                                           :vperp=>1:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=22, split=[4, 8], anyxx_dims=(:anyzv,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:7,
+                                           :vperp=>2:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=22, split=[4, 8], anyxx_dims=(:anyzv,:z),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_B,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>6:6,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=22, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>10:12,
+                                           :vperp=>1:1, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=22, split=[4, 8], anyxx_dims=(:anyzv,:z,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>10:12,
+                                           :vperp=>1:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=22, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_D,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>4:6,
+                                           :vperp=>2:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=23, split=[4, 8], anyxx_dims=(:anyzv,),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:0,
+                                           :vperp=>1:0, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=23, split=[4, 8], anyxx_dims=(:anyzv,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:7,
+                                           :vperp=>2:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=23, split=[4, 8], anyxx_dims=(:anyzv,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:7,
+                                           :vperp=>1:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=23, split=[4, 8], anyxx_dims=(:anyzv,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:7,
+                                           :vperp=>2:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=23, split=[4, 8], anyxx_dims=(:anyzv,:z),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_B,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>7:7,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=23, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>10:12,
+                                           :vperp=>2:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=23, split=[4, 8], anyxx_dims=(:anyzv,:z,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>10:12,
+                                           :vperp=>1:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=23, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_D,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>4:6,
+                                           :vperp=>2:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=24, split=[4, 8], anyxx_dims=(:anyzv,),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:7,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=24, split=[4, 8], anyxx_dims=(:anyzv,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:7,
+                                           :vperp=>1:0, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=24, split=[4, 8], anyxx_dims=(:anyzv,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:7,
+                                           :vperp=>1:2, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=24, split=[4, 8], anyxx_dims=(:anyzv,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:7,
+                                           :vperp=>1:0, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=24, split=[4, 8], anyxx_dims=(:anyzv,:z),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_B,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>1:0,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=24, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>1:3,
+                                           :vperp=>1:1, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=24, split=[4, 8], anyxx_dims=(:anyzv,:z,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=24, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_D,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>1:3,
+                                           :vperp=>1:1, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=25, split=[4, 8], anyxx_dims=(:anyzv,),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:0,
+                                           :vperp=>1:0, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=25, split=[4, 8], anyxx_dims=(:anyzv,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:7,
+                                           :vperp=>1:0, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=25, split=[4, 8], anyxx_dims=(:anyzv,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:7,
+                                           :vperp=>1:2, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=25, split=[4, 8], anyxx_dims=(:anyzv,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:7,
+                                           :vperp=>1:0, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=25, split=[4, 8], anyxx_dims=(:anyzv,:z),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_B,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>1:1,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=25, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>1:3,
+                                           :vperp=>2:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=25, split=[4, 8], anyxx_dims=(:anyzv,:z,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>1:3,
+                                           :vperp=>1:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=25, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_D,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>1:3,
+                                           :vperp=>1:1, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=26, split=[4, 8], anyxx_dims=(:anyzv,),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:0,
+                                           :vperp=>1:0, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=26, split=[4, 8], anyxx_dims=(:anyzv,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:7,
+                                           :vperp=>1:0, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=26, split=[4, 8], anyxx_dims=(:anyzv,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:7,
+                                           :vperp=>1:2, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=26, split=[4, 8], anyxx_dims=(:anyzv,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:7,
+                                           :vperp=>1:0, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=26, split=[4, 8], anyxx_dims=(:anyzv,:z),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_B,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>2:2,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=26, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>4:6,
+                                           :vperp=>1:1, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=26, split=[4, 8], anyxx_dims=(:anyzv,:z,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>4:6,
+                                           :vperp=>1:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=26, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_D,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>1:3,
+                                           :vperp=>2:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=27, split=[4, 8], anyxx_dims=(:anyzv,),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:0,
+                                           :vperp=>1:0, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=27, split=[4, 8], anyxx_dims=(:anyzv,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:7,
+                                           :vperp=>1:0, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=27, split=[4, 8], anyxx_dims=(:anyzv,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:7,
+                                           :vperp=>1:2, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=27, split=[4, 8], anyxx_dims=(:anyzv,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:7,
+                                           :vperp=>1:0, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=27, split=[4, 8], anyxx_dims=(:anyzv,:z),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_B,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>3:3,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=27, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>4:6,
+                                           :vperp=>2:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=27, split=[4, 8], anyxx_dims=(:anyzv,:z,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>4:6,
+                                           :vperp=>1:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=27, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_D,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>1:3,
+                                           :vperp=>2:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=28, split=[4, 8], anyxx_dims=(:anyzv,),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:0,
+                                           :vperp=>1:0, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=28, split=[4, 8], anyxx_dims=(:anyzv,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:7,
+                                           :vperp=>1:0, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=28, split=[4, 8], anyxx_dims=(:anyzv,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:7,
+                                           :vperp=>1:2, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=28, split=[4, 8], anyxx_dims=(:anyzv,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:7,
+                                           :vperp=>1:1, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=28, split=[4, 8], anyxx_dims=(:anyzv,:z),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_B,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>4:4,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=28, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>7:9,
+                                           :vperp=>1:1, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=28, split=[4, 8], anyxx_dims=(:anyzv,:z,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>7:9,
+                                           :vperp=>1:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=28, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_D,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>4:6,
+                                           :vperp=>1:1, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=29, split=[4, 8], anyxx_dims=(:anyzv,),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:0,
+                                           :vperp=>1:0, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=29, split=[4, 8], anyxx_dims=(:anyzv,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:7,
+                                           :vperp=>1:0, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=29, split=[4, 8], anyxx_dims=(:anyzv,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:7,
+                                           :vperp=>1:2, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=29, split=[4, 8], anyxx_dims=(:anyzv,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:7,
+                                           :vperp=>1:1, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=29, split=[4, 8], anyxx_dims=(:anyzv,:z),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_B,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>5:5,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=29, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>7:9,
+                                           :vperp=>2:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=29, split=[4, 8], anyxx_dims=(:anyzv,:z,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>7:9,
+                                           :vperp=>1:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=29, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_D,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>4:6,
+                                           :vperp=>1:1, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=30, split=[4, 8], anyxx_dims=(:anyzv,),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:0,
+                                           :vperp=>1:0, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=30, split=[4, 8], anyxx_dims=(:anyzv,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:7,
+                                           :vperp=>1:1, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=30, split=[4, 8], anyxx_dims=(:anyzv,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:7,
+                                           :vperp=>1:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=30, split=[4, 8], anyxx_dims=(:anyzv,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:7,
+                                           :vperp=>2:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=30, split=[4, 8], anyxx_dims=(:anyzv,:z),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_B,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>6:6,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=30, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>10:12,
+                                           :vperp=>1:1, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=30, split=[4, 8], anyxx_dims=(:anyzv,:z,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>10:12,
+                                           :vperp=>1:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=30, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_D,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>4:6,
+                                           :vperp=>2:2, :vpa=>1:1, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=31, split=[4, 8], anyxx_dims=(:anyzv,),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:0,
+                                           :vperp=>1:0, :vpa=>1:0, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=31, split=[4, 8], anyxx_dims=(:anyzv,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:7,
+                                           :vperp=>2:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=31, split=[4, 8], anyxx_dims=(:anyzv,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:7,
+                                           :vperp=>1:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=31, split=[4, 8], anyxx_dims=(:anyzv,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_A,
+                              results=Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:7,
+                                           :vperp=>2:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=31, split=[4, 8], anyxx_dims=(:anyzv,:z),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_B,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>7:7,
+                                           :vperp=>1:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=31, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>10:12,
+                                           :vperp=>2:2, :vpa=>1:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=31, split=[4, 8], anyxx_dims=(:anyzv,:z,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_C,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>10:12,
+                                           :vperp=>1:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+    expected_get_anyxx_ranges(block_rank=31, split=[4, 8], anyxx_dims=(:anyzv,:z,:vperp,:vpa),
+                              dim_sizes = get_anyzv_ranges_dim_sizes_48_D,
+                              results=Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>4:6,
+                                           :vperp=>2:2, :vpa=>2:2, :vzeta=>1:11,
+                                           :vr=>1:13, :vz=>1:17)),
+   ]
 
 function test_anyzv()
     @testset "get_best_anyzv_split" begin
@@ -1681,1433 +3137,3046 @@ function test_anyzv()
         @test get_best_anyzv_split(6, Dict(:r=>4, :z=>3, :vperp=>2, :vpa=>2)) == [3,2]
     end
     @testset "get_anyzv_ranges" begin
-        @test get_anyzv_ranges(0, [1, 1], (:anyzv,),
-                               Dict(:s=>1, :sn=>1, :r=>3, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>1:7, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(0, [1, 1], (:anyzv,:vperp),
-                               Dict(:s=>1, :sn=>1, :r=>3, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>1:7, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(0, [1, 1], (:anyzv,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>3, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>1:7, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(0, [1, 1], (:anyzv,:vperp,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>3, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:2, :z=>1:7, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-
-        @test get_anyzv_ranges(0, [2, 1], (:anyzv,),
-                               Dict(:s=>1, :sn=>1, :r=>3, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:7, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(0, [2, 1], (:anyzv,:vperp),
-                               Dict(:s=>1, :sn=>1, :r=>3, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:7, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(0, [2, 1], (:anyzv,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>3, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:7, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(0, [2, 1], (:anyzv,:vperp,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>3, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:7, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(1, [2, 1], (:anyzv,),
-                               Dict(:s=>1, :sn=>1, :r=>3, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>1:7, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(1, [2, 1], (:anyzv,:vperp),
-                               Dict(:s=>1, :sn=>1, :r=>3, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>1:7, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(1, [2, 1], (:anyzv,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>3, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>1:7, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(1, [2, 1], (:anyzv,:vperp,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>3, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>1:7, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-
-        @test get_anyzv_ranges(0, [2, 2], (:anyzv,),
-                               Dict(:s=>1, :sn=>1, :r=>3, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:7, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(0, [2, 2], (:anyzv,:vperp),
-                               Dict(:s=>1, :sn=>1, :r=>3, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:7, :vperp=>1:1, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(0, [2, 2], (:anyzv,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>3, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:7, :vperp=>1:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(0, [2, 2], (:anyzv,:vperp,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>3, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:7, :vperp=>1:1, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(1, [2, 2], (:anyzv,),
-                               Dict(:s=>1, :sn=>1, :r=>3, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:0, :vperp=>1:0, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(1, [2, 2], (:anyzv,:vperp),
-                               Dict(:s=>1, :sn=>1, :r=>3, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:7, :vperp=>2:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(1, [2, 2], (:anyzv,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>3, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:7, :vperp=>1:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(1, [2, 2], (:anyzv,:vperp,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>3, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:7, :vperp=>2:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(2, [2, 2], (:anyzv,),
-                               Dict(:s=>1, :sn=>1, :r=>3, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>1:7, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(2, [2, 2], (:anyzv,:vperp),
-                               Dict(:s=>1, :sn=>1, :r=>3, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>1:7, :vperp=>1:1, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(2, [2, 2], (:anyzv,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>3, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>1:7, :vperp=>1:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(2, [2, 2], (:anyzv,:vperp,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>3, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>1:7, :vperp=>1:1, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(3, [2, 2], (:anyzv,),
-                               Dict(:s=>1, :sn=>1, :r=>3, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>1:0, :vperp=>1:0, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(3, [2, 2], (:anyzv,:vperp),
-                               Dict(:s=>1, :sn=>1, :r=>3, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>1:7, :vperp=>2:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(3, [2, 2], (:anyzv,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>3, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>1:7, :vperp=>1:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(3, [2, 2], (:anyzv,:vperp,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>3, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>1:7, :vperp=>2:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-
-        @test get_anyzv_ranges(0, [4, 8], (:anyzv,),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:7, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(0, [4, 8], (:anyzv,:vperp),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:7, :vperp=>1:0, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(0, [4, 8], (:anyzv,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:7, :vperp=>1:2, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(0, [4, 8], (:anyzv,:vperp,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:7, :vperp=>1:0, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(0, [4, 8], (:anyzv,:z),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:0, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(0, [4, 8], (:anyzv,:z,:vperp),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:3, :vperp=>1:1, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(0, [4, 8], (:anyzv,:z,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:3, :vperp=>1:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(0, [4, 8], (:anyzv,:z,:vperp,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>6, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:3, :vperp=>1:1, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(1, [4, 8], (:anyzv,),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:0, :vperp=>1:0, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(1, [4, 8], (:anyzv,:vperp),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:7, :vperp=>1:0, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(1, [4, 8], (:anyzv,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:7, :vperp=>1:2, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(1, [4, 8], (:anyzv,:vperp,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:7, :vperp=>1:0, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(1, [4, 8], (:anyzv,:z),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:1, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(1, [4, 8], (:anyzv,:z,:vperp),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:3, :vperp=>2:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(1, [4, 8], (:anyzv,:z,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:3, :vperp=>1:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(1, [4, 8], (:anyzv,:z,:vperp,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>6, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:3, :vperp=>1:1, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(2, [4, 8], (:anyzv,),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:0, :vperp=>1:0, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(2, [4, 8], (:anyzv,:vperp),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:7, :vperp=>1:0, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(2, [4, 8], (:anyzv,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:7, :vperp=>1:2, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(2, [4, 8], (:anyzv,:vperp,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:7, :vperp=>1:0, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(2, [4, 8], (:anyzv,:z),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>2:2, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(2, [4, 8], (:anyzv,:z,:vperp),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>4:6, :vperp=>1:1, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(2, [4, 8], (:anyzv,:z,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>4:6, :vperp=>1:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(2, [4, 8], (:anyzv,:z,:vperp,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>6, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:3, :vperp=>2:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(3, [4, 8], (:anyzv,),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:0, :vperp=>1:0, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(3, [4, 8], (:anyzv,:vperp),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:7, :vperp=>1:0, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(3, [4, 8], (:anyzv,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:7, :vperp=>1:2, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(3, [4, 8], (:anyzv,:vperp,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:7, :vperp=>1:0, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(3, [4, 8], (:anyzv,:z),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>3:3, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(3, [4, 8], (:anyzv,:z,:vperp),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>4:6, :vperp=>2:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(3, [4, 8], (:anyzv,:z,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>4:6, :vperp=>1:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(3, [4, 8], (:anyzv,:z,:vperp,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>6, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>1:3, :vperp=>2:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(4, [4, 8], (:anyzv,),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:0, :vperp=>1:0, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(4, [4, 8], (:anyzv,:vperp),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:7, :vperp=>1:0, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(4, [4, 8], (:anyzv,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:7, :vperp=>1:2, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(4, [4, 8], (:anyzv,:vperp,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:7, :vperp=>1:1, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(4, [4, 8], (:anyzv,:z),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>4:4, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(4, [4, 8], (:anyzv,:z,:vperp),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>7:9, :vperp=>1:1, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(4, [4, 8], (:anyzv,:z,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>7:9, :vperp=>1:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(4, [4, 8], (:anyzv,:z,:vperp,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>6, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>4:6, :vperp=>1:1, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(5, [4, 8], (:anyzv,),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:0, :vperp=>1:0, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(5, [4, 8], (:anyzv,:vperp),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:7, :vperp=>1:0, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(5, [4, 8], (:anyzv,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:7, :vperp=>1:2, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(5, [4, 8], (:anyzv,:vperp,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:7, :vperp=>1:1, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(5, [4, 8], (:anyzv,:z),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>5:5, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(5, [4, 8], (:anyzv,:z,:vperp),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>7:9, :vperp=>2:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(5, [4, 8], (:anyzv,:z,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>7:9, :vperp=>1:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(5, [4, 8], (:anyzv,:z,:vperp,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>6, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>4:6, :vperp=>1:1, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(6, [4, 8], (:anyzv,),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:0, :vperp=>1:0, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(6, [4, 8], (:anyzv,:vperp),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:7, :vperp=>1:1, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(6, [4, 8], (:anyzv,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:7, :vperp=>1:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(6, [4, 8], (:anyzv,:vperp,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:7, :vperp=>2:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(6, [4, 8], (:anyzv,:z),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>6:6, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(6, [4, 8], (:anyzv,:z,:vperp),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>10:12, :vperp=>1:1, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(6, [4, 8], (:anyzv,:z,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>10:12, :vperp=>1:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(6, [4, 8], (:anyzv,:z,:vperp,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>6, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>4:6, :vperp=>2:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(7, [4, 8], (:anyzv,),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:0, :vperp=>1:0, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(7, [4, 8], (:anyzv,:vperp),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:7, :vperp=>2:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(7, [4, 8], (:anyzv,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:7, :vperp=>1:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(7, [4, 8], (:anyzv,:vperp,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>1:1, :z=>1:7, :vperp=>2:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(7, [4, 8], (:anyzv,:z),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>7:7, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(7, [4, 8], (:anyzv,:z,:vperp),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>10:12, :vperp=>2:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(7, [4, 8], (:anyzv,:z,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>10:12, :vperp=>1:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(7, [4, 8], (:anyzv,:z,:vperp,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>6, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>1:1, :z=>4:6, :vperp=>2:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(8, [4, 8], (:anyzv,),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:7, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(8, [4, 8], (:anyzv,:vperp),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:7, :vperp=>1:0, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(8, [4, 8], (:anyzv,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:7, :vperp=>1:2, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(8, [4, 8], (:anyzv,:vperp,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:7, :vperp=>1:0, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(8, [4, 8], (:anyzv,:z),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>1:0, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(8, [4, 8], (:anyzv,:z,:vperp),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>1:3, :vperp=>1:1, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(8, [4, 8], (:anyzv,:z,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>1:3, :vperp=>1:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(8, [4, 8], (:anyzv,:z,:vperp,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>6, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>1:3, :vperp=>1:1, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(9, [4, 8], (:anyzv,),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:0, :vperp=>1:0, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(9, [4, 8], (:anyzv,:vperp),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:7, :vperp=>1:0, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(9, [4, 8], (:anyzv,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:7, :vperp=>1:2, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(9, [4, 8], (:anyzv,:vperp,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:7, :vperp=>1:0, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(9, [4, 8], (:anyzv,:z),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>1:1, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(9, [4, 8], (:anyzv,:z,:vperp),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>1:3, :vperp=>2:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(9, [4, 8], (:anyzv,:z,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>1:3, :vperp=>1:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(9, [4, 8], (:anyzv,:z,:vperp,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>6, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>1:3, :vperp=>1:1, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(10, [4, 8], (:anyzv,),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:0, :vperp=>1:0, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(10, [4, 8], (:anyzv,:vperp),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:7, :vperp=>1:0, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(10, [4, 8], (:anyzv,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:7, :vperp=>1:2, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(10, [4, 8], (:anyzv,:vperp,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:7, :vperp=>1:0, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(10, [4, 8], (:anyzv,:z),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>2:2, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(10, [4, 8], (:anyzv,:z,:vperp),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>4:6, :vperp=>1:1, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(10, [4, 8], (:anyzv,:z,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>4:6, :vperp=>1:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(10, [4, 8], (:anyzv,:z,:vperp,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>6, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>1:3, :vperp=>2:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(11, [4, 8], (:anyzv,),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:0, :vperp=>1:0, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(11, [4, 8], (:anyzv,:vperp),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:7, :vperp=>1:0, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(11, [4, 8], (:anyzv,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:7, :vperp=>1:2, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(11, [4, 8], (:anyzv,:vperp,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:7, :vperp=>1:0, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(11, [4, 8], (:anyzv,:z),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>3:3, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(11, [4, 8], (:anyzv,:z,:vperp),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>4:6, :vperp=>2:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(11, [4, 8], (:anyzv,:z,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>4:6, :vperp=>1:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(11, [4, 8], (:anyzv,:z,:vperp,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>6, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>1:3, :vperp=>2:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(12, [4, 8], (:anyzv,),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:0, :vperp=>1:0, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(12, [4, 8], (:anyzv,:vperp),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:7, :vperp=>1:0, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(12, [4, 8], (:anyzv,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:7, :vperp=>1:2, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(12, [4, 8], (:anyzv,:vperp,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:7, :vperp=>1:1, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(12, [4, 8], (:anyzv,:z),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>4:4, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(12, [4, 8], (:anyzv,:z,:vperp),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>7:9, :vperp=>1:1, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(12, [4, 8], (:anyzv,:z,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>7:9, :vperp=>1:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(12, [4, 8], (:anyzv,:z,:vperp,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>6, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>4:6, :vperp=>1:1, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(13, [4, 8], (:anyzv,),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:0, :vperp=>1:0, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(13, [4, 8], (:anyzv,:vperp),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:7, :vperp=>1:0, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(13, [4, 8], (:anyzv,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:7, :vperp=>1:2, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(13, [4, 8], (:anyzv,:vperp,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:7, :vperp=>1:1, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(13, [4, 8], (:anyzv,:z),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>5:5, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(13, [4, 8], (:anyzv,:z,:vperp),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>7:9, :vperp=>2:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(13, [4, 8], (:anyzv,:z,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>7:9, :vperp=>1:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(13, [4, 8], (:anyzv,:z,:vperp,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>6, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>4:6, :vperp=>1:1, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(14, [4, 8], (:anyzv,),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:0, :vperp=>1:0, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(14, [4, 8], (:anyzv,:vperp),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:7, :vperp=>1:1, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(14, [4, 8], (:anyzv,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:7, :vperp=>1:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(14, [4, 8], (:anyzv,:vperp,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:7, :vperp=>2:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(14, [4, 8], (:anyzv,:z),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>6:6, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(14, [4, 8], (:anyzv,:z,:vperp),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>10:12, :vperp=>1:1, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(14, [4, 8], (:anyzv,:z,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>10:12, :vperp=>1:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(14, [4, 8], (:anyzv,:z,:vperp,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>6, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>4:6, :vperp=>2:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(15, [4, 8], (:anyzv,),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:0, :vperp=>1:0, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(15, [4, 8], (:anyzv,:vperp),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:7, :vperp=>2:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(15, [4, 8], (:anyzv,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:7, :vperp=>1:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(15, [4, 8], (:anyzv,:vperp,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>2:2, :z=>1:7, :vperp=>2:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(15, [4, 8], (:anyzv,:z),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>7:7, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(15, [4, 8], (:anyzv,:z,:vperp),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>10:12, :vperp=>2:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(15, [4, 8], (:anyzv,:z,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>10:12, :vperp=>1:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(15, [4, 8], (:anyzv,:z,:vperp,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>6, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>2:2, :z=>4:6, :vperp=>2:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(16, [4, 8], (:anyzv,),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:7, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(16, [4, 8], (:anyzv,:vperp),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:7, :vperp=>1:0, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(16, [4, 8], (:anyzv,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:7, :vperp=>1:2, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(16, [4, 8], (:anyzv,:vperp,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:7, :vperp=>1:0, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(16, [4, 8], (:anyzv,:z),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>1:0, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(16, [4, 8], (:anyzv,:z,:vperp),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>1:3, :vperp=>1:1, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(16, [4, 8], (:anyzv,:z,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>1:3, :vperp=>1:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(16, [4, 8], (:anyzv,:z,:vperp,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>6, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>1:3, :vperp=>1:1, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(17, [4, 8], (:anyzv,),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:0, :vperp=>1:0, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(17, [4, 8], (:anyzv,:vperp),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:7, :vperp=>1:0, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(17, [4, 8], (:anyzv,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:7, :vperp=>1:2, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(17, [4, 8], (:anyzv,:vperp,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:7, :vperp=>1:0, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(17, [4, 8], (:anyzv,:z),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>1:1, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(17, [4, 8], (:anyzv,:z,:vperp),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>1:3, :vperp=>2:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(17, [4, 8], (:anyzv,:z,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>1:3, :vperp=>1:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(17, [4, 8], (:anyzv,:z,:vperp,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>6, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>1:3, :vperp=>1:1, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(18, [4, 8], (:anyzv,),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:0, :vperp=>1:0, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(18, [4, 8], (:anyzv,:vperp),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:7, :vperp=>1:0, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(18, [4, 8], (:anyzv,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:7, :vperp=>1:2, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(18, [4, 8], (:anyzv,:vperp,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:7, :vperp=>1:0, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(18, [4, 8], (:anyzv,:z),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>2:2, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(18, [4, 8], (:anyzv,:z,:vperp),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>4:6, :vperp=>1:1, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(18, [4, 8], (:anyzv,:z,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>4:6, :vperp=>1:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(18, [4, 8], (:anyzv,:z,:vperp,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>6, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>1:3, :vperp=>2:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(19, [4, 8], (:anyzv,),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:0, :vperp=>1:0, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(19, [4, 8], (:anyzv,:vperp),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:7, :vperp=>1:0, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(19, [4, 8], (:anyzv,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:7, :vperp=>1:2, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(19, [4, 8], (:anyzv,:vperp,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:7, :vperp=>1:0, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(19, [4, 8], (:anyzv,:z),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>3:3, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(19, [4, 8], (:anyzv,:z,:vperp),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>4:6, :vperp=>2:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(19, [4, 8], (:anyzv,:z,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>4:6, :vperp=>1:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(19, [4, 8], (:anyzv,:z,:vperp,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>6, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>1:3, :vperp=>2:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(20, [4, 8], (:anyzv,),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:0, :vperp=>1:0, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(20, [4, 8], (:anyzv,:vperp),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:7, :vperp=>1:0, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(20, [4, 8], (:anyzv,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:7, :vperp=>1:2, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(20, [4, 8], (:anyzv,:vperp,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:7, :vperp=>1:1, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(20, [4, 8], (:anyzv,:z),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>4:4, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(20, [4, 8], (:anyzv,:z,:vperp),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>7:9, :vperp=>1:1, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(20, [4, 8], (:anyzv,:z,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>7:9, :vperp=>1:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(20, [4, 8], (:anyzv,:z,:vperp,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>6, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>4:6, :vperp=>1:1, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(21, [4, 8], (:anyzv,),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:0, :vperp=>1:0, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(21, [4, 8], (:anyzv,:vperp),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:7, :vperp=>1:0, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(21, [4, 8], (:anyzv,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:7, :vperp=>1:2, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(21, [4, 8], (:anyzv,:vperp,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:7, :vperp=>1:1, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(21, [4, 8], (:anyzv,:z),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>5:5, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(21, [4, 8], (:anyzv,:z,:vperp),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>7:9, :vperp=>2:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(21, [4, 8], (:anyzv,:z,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>7:9, :vperp=>1:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(21, [4, 8], (:anyzv,:z,:vperp,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>6, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>4:6, :vperp=>1:1, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(22, [4, 8], (:anyzv,),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:0, :vperp=>1:0, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(22, [4, 8], (:anyzv,:vperp),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:7, :vperp=>1:1, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(22, [4, 8], (:anyzv,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:7, :vperp=>1:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(22, [4, 8], (:anyzv,:vperp,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:7, :vperp=>2:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(22, [4, 8], (:anyzv,:z),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>6:6, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(22, [4, 8], (:anyzv,:z,:vperp),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>10:12, :vperp=>1:1, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(22, [4, 8], (:anyzv,:z,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>10:12, :vperp=>1:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(22, [4, 8], (:anyzv,:z,:vperp,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>6, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>4:6, :vperp=>2:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(23, [4, 8], (:anyzv,),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:0, :vperp=>1:0, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(23, [4, 8], (:anyzv,:vperp),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:7, :vperp=>2:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(23, [4, 8], (:anyzv,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:7, :vperp=>1:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(23, [4, 8], (:anyzv,:vperp,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>3:3, :z=>1:7, :vperp=>2:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(23, [4, 8], (:anyzv,:z),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>7:7, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(23, [4, 8], (:anyzv,:z,:vperp),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>10:12, :vperp=>2:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(23, [4, 8], (:anyzv,:z,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>10:12, :vperp=>1:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(23, [4, 8], (:anyzv,:z,:vperp,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>6, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>3:3, :z=>4:6, :vperp=>2:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(24, [4, 8], (:anyzv,),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:7, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(24, [4, 8], (:anyzv,:vperp),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:7, :vperp=>1:0, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(24, [4, 8], (:anyzv,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:7, :vperp=>1:2, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(24, [4, 8], (:anyzv,:vperp,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:7, :vperp=>1:0, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(24, [4, 8], (:anyzv,:z),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>1:0, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(24, [4, 8], (:anyzv,:z,:vperp),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>1:3, :vperp=>1:1, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(24, [4, 8], (:anyzv,:z,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>1:3, :vperp=>1:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(24, [4, 8], (:anyzv,:z,:vperp,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>6, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>1:3, :vperp=>1:1, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(25, [4, 8], (:anyzv,),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:0, :vperp=>1:0, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(25, [4, 8], (:anyzv,:vperp),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:7, :vperp=>1:0, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(25, [4, 8], (:anyzv,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:7, :vperp=>1:2, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(25, [4, 8], (:anyzv,:vperp,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:7, :vperp=>1:0, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(25, [4, 8], (:anyzv,:z),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>1:1, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(25, [4, 8], (:anyzv,:z,:vperp),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>1:3, :vperp=>2:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(25, [4, 8], (:anyzv,:z,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>1:3, :vperp=>1:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(25, [4, 8], (:anyzv,:z,:vperp,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>6, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>1:3, :vperp=>1:1, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(26, [4, 8], (:anyzv,),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:0, :vperp=>1:0, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(26, [4, 8], (:anyzv,:vperp),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:7, :vperp=>1:0, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(26, [4, 8], (:anyzv,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:7, :vperp=>1:2, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(26, [4, 8], (:anyzv,:vperp,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:7, :vperp=>1:0, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(26, [4, 8], (:anyzv,:z),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>2:2, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(26, [4, 8], (:anyzv,:z,:vperp),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>4:6, :vperp=>1:1, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(26, [4, 8], (:anyzv,:z,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>4:6, :vperp=>1:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(26, [4, 8], (:anyzv,:z,:vperp,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>6, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>1:3, :vperp=>2:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(27, [4, 8], (:anyzv,),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:0, :vperp=>1:0, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(27, [4, 8], (:anyzv,:vperp),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:7, :vperp=>1:0, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(27, [4, 8], (:anyzv,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:7, :vperp=>1:2, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(27, [4, 8], (:anyzv,:vperp,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:7, :vperp=>1:0, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(27, [4, 8], (:anyzv,:z),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>3:3, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(27, [4, 8], (:anyzv,:z,:vperp),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>4:6, :vperp=>2:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(27, [4, 8], (:anyzv,:z,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>4:6, :vperp=>1:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(27, [4, 8], (:anyzv,:z,:vperp,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>6, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>1:3, :vperp=>2:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(28, [4, 8], (:anyzv,),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:0, :vperp=>1:0, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(28, [4, 8], (:anyzv,:vperp),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:7, :vperp=>1:0, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(28, [4, 8], (:anyzv,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:7, :vperp=>1:2, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(28, [4, 8], (:anyzv,:vperp,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:7, :vperp=>1:1, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(28, [4, 8], (:anyzv,:z),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>4:4, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(28, [4, 8], (:anyzv,:z,:vperp),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>7:9, :vperp=>1:1, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(28, [4, 8], (:anyzv,:z,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>7:9, :vperp=>1:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(28, [4, 8], (:anyzv,:z,:vperp,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>6, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>4:6, :vperp=>1:1, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(29, [4, 8], (:anyzv,),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:0, :vperp=>1:0, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(29, [4, 8], (:anyzv,:vperp),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:7, :vperp=>1:0, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(29, [4, 8], (:anyzv,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:7, :vperp=>1:2, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(29, [4, 8], (:anyzv,:vperp,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:7, :vperp=>1:1, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(29, [4, 8], (:anyzv,:z),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>5:5, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(29, [4, 8], (:anyzv,:z,:vperp),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>7:9, :vperp=>2:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(29, [4, 8], (:anyzv,:z,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>7:9, :vperp=>1:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(29, [4, 8], (:anyzv,:z,:vperp,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>6, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>4:6, :vperp=>1:1, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(30, [4, 8], (:anyzv,),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:0, :vperp=>1:0, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(30, [4, 8], (:anyzv,:vperp),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:7, :vperp=>1:1, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(30, [4, 8], (:anyzv,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:7, :vperp=>1:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(30, [4, 8], (:anyzv,:vperp,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:7, :vperp=>2:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(30, [4, 8], (:anyzv,:z),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>6:6, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(30, [4, 8], (:anyzv,:z,:vperp),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>10:12, :vperp=>1:1, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(30, [4, 8], (:anyzv,:z,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>10:12, :vperp=>1:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(30, [4, 8], (:anyzv,:z,:vperp,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>6, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>4:6, :vperp=>2:2, :vpa=>1:1,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(31, [4, 8], (:anyzv,),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:0, :vperp=>1:0, :vpa=>1:0,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(31, [4, 8], (:anyzv,:vperp),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:7, :vperp=>2:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(31, [4, 8], (:anyzv,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:7, :vperp=>1:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(31, [4, 8], (:anyzv,:vperp,:vpa),
-                               Dict(:s=>2, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:2, :sn=>1:1, :r=>4:4, :z=>1:7, :vperp=>2:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(31, [4, 8], (:anyzv,:z),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>7, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>7:7, :vperp=>1:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(31, [4, 8], (:anyzv,:z,:vperp),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>10:12, :vperp=>2:2, :vpa=>1:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(31, [4, 8], (:anyzv,:z,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>12, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>10:12, :vperp=>1:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
-        @test get_anyzv_ranges(31, [4, 8], (:anyzv,:z,:vperp,:vpa),
-                               Dict(:s=>1, :sn=>1, :r=>5, :z=>6, :vperp=>2, :vpa=>2,
-                                    :vzeta=>11, :vr=>13, :vz=>17)) ==
-              Dict(:s=>1:1, :sn=>1:1, :r=>4:4, :z=>4:6, :vperp=>2:2, :vpa=>2:2,
-                   :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+        @testset "$(e.block_rank) $(e.split) $(e.anyxx_dims)" for e ∈ expected_get_anyzv_list
+            @test get_anyzv_ranges(e.block_rank, e.split, e.anyxx_dims, e.dim_sizes) == e.results
+        end
     end
 
     return nothing
 end
+
+@kwdef struct expected_debug_ranges{N1, N2, Tresults <: Dict}
+    block_rank::mk_int
+    block_size::mk_int
+    combination_to_split::NTuple{N1,Symbol}
+    dims_to_split::NTuple{N2,Symbol}
+    dim_sizes::Dict{Symbol,mk_int}
+    results::Tresults
+end
+
+const debug_dim_sizes = Dict(:s=>2, :r=>3, :z=>4, :sn=>5, :vperp=>7, :vpa=>11, :vzeta=>13,
+                             :vr=>17, :vz=>19)
+const expected_debug_ranges_list = [
+    expected_debug_ranges(block_rank=0, block_size=2, combination_to_split=(:s, :z),
+                          dims_to_split=(:s,),
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict(()=>Dict(:s => 1:2,
+                                                :r => 1:3,
+                                                :z => 1:4,),
+                                       (:s,)=>Dict(:s => 1:2,
+                                                   :r => 1:3,
+                                                   :z => 1:4,),
+                                       (:r,)=>Dict(:s => 1:2,
+                                                   :r => 1:3,
+                                                   :z => 1:4,),
+                                       (:z,)=>Dict(:s => 1:2,
+                                                   :r => 1:3,
+                                                   :z => 1:4,),
+                                       (:s,:r)=>Dict(:s => 1:2,
+                                                     :r => 1:3,
+                                                     :z => 1:4,),
+                                       (:s,:z)=>Dict(:s => 1:1,
+                                                     :r => 1:3,
+                                                     :z => 1:4,),
+                                       (:r,:z)=>Dict(:s => 1:2,
+                                                     :r => 1:3,
+                                                     :z => 1:4,),
+                                       (:s,:r,:z)=>Dict(:s => 1:2,
+                                                        :r => 1:3,
+                                                        :z => 1:4,))),
+
+    expected_debug_ranges(block_rank=1, block_size=2, combination_to_split=(:s, :z),
+                          dims_to_split=(:s,),
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict(()=>Dict(:s => 1:0,
+                                                :r => 1:0,
+                                                :z => 1:0,),
+                                       (:s,)=>Dict(:s => 1:0,
+                                                   :r => 1:3,
+                                                   :z => 1:4,),
+                                       (:r,)=>Dict(:s => 1:2,
+                                                   :r => 1:0,
+                                                   :z => 1:4,),
+                                       (:z,)=>Dict(:s => 1:2,
+                                                   :r => 1:3,
+                                                   :z => 1:0,),
+                                       (:s,:r)=>Dict(:s => 1:0,
+                                                     :r => 1:0,
+                                                     :z => 1:4,),
+                                       (:s,:z)=>Dict(:s => 2:2,
+                                                     :r => 1:3,
+                                                     :z => 1:4,),
+                                       (:r,:z)=>Dict(:s => 1:2,
+                                                     :r => 1:0,
+                                                     :z => 1:0,),
+                                       (:s,:r,:z)=>Dict(:s => 1:0,
+                                                        :r => 1:0,
+                                                        :z => 1:0,))),
+
+    expected_debug_ranges(block_rank=0, block_size=4, combination_to_split=(:r, :z),
+                          dims_to_split=(:r, :z,),
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict(()=>Dict(:s => 1:2,
+                                                :r => 1:3,
+                                                :z => 1:4,),
+                                       (:s,)=>Dict(:s => 1:2,
+                                                   :r => 1:3,
+                                                   :z => 1:4,),
+                                       (:r,)=>Dict(:s => 1:2,
+                                                   :r => 1:3,
+                                                   :z => 1:4,),
+                                       (:z,)=>Dict(:s => 1:2,
+                                                   :r => 1:3,
+                                                   :z => 1:4,),
+                                       (:s,:r)=>Dict(:s => 1:2,
+                                                     :r => 1:3,
+                                                     :z => 1:4,),
+                                       (:s,:z)=>Dict(:s => 1:2,
+                                                     :r => 1:3,
+                                                     :z => 1:4,),
+                                       (:r,:z)=>Dict(:s => 1:2,
+                                                     :r => 1:1,
+                                                     :z => 1:2,),
+                                       (:s,:r,:z)=>Dict(:s => 1:2,
+                                                        :r => 1:3,
+                                                        :z => 1:4,))),
+
+    expected_debug_ranges(block_rank=1, block_size=4, combination_to_split=(:r, :z),
+                          dims_to_split=(:r, :z,),
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict(()=>Dict(:s => 1:0,
+                                                :r => 1:0,
+                                                :z => 1:0,),
+                                       (:s,)=>Dict(:s => 1:0,
+                                                   :r => 1:3,
+                                                   :z => 1:4,),
+                                       (:r,)=>Dict(:s => 1:2,
+                                                   :r => 1:0,
+                                                   :z => 1:4,),
+                                       (:z,)=>Dict(:s => 1:2,
+                                                   :r => 1:3,
+                                                   :z => 1:0,),
+                                       (:s,:r)=>Dict(:s => 1:0,
+                                                     :r => 1:0,
+                                                     :z => 1:4,),
+                                       (:s,:z)=>Dict(:s => 1:0,
+                                                     :r => 1:3,
+                                                     :z => 1:0,),
+                                       (:r,:z)=>Dict(:s => 1:2,
+                                                     :r => 1:1,
+                                                     :z => 3:4,),
+                                       (:s,:r,:z)=>Dict(:s => 1:0,
+                                                        :r => 1:0,
+                                                        :z => 1:0,))),
+
+    expected_debug_ranges(block_rank=2, block_size=4, combination_to_split=(:r, :z),
+                          dims_to_split=(:r, :z,),
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict(()=>Dict(:s => 1:0,
+                                                :r => 1:0,
+                                                :z => 1:0,),
+                                       (:s,)=>Dict(:s => 1:0,
+                                                   :r => 1:3,
+                                                   :z => 1:4,),
+                                       (:r,)=>Dict(:s => 1:2,
+                                                   :r => 1:0,
+                                                   :z => 1:4,),
+                                       (:z,)=>Dict(:s => 1:2,
+                                                   :r => 1:3,
+                                                   :z => 1:0,),
+                                       (:s,:r)=>Dict(:s => 1:0,
+                                                     :r => 1:0,
+                                                     :z => 1:4,),
+                                       (:s,:z)=>Dict(:s => 1:0,
+                                                     :r => 1:3,
+                                                     :z => 1:0,),
+                                       (:r,:z)=>Dict(:s => 1:2,
+                                                     :r => 2:3,
+                                                     :z => 1:2,),
+                                       (:s,:r,:z)=>Dict(:s => 1:0,
+                                                        :r => 1:0,
+                                                        :z => 1:0,))),
+
+    expected_debug_ranges(block_rank=3, block_size=4, combination_to_split=(:r, :z),
+                          dims_to_split=(:r, :z,),
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict(()=>Dict(:s => 1:0,
+                                                :r => 1:0,
+                                                :z => 1:0,),
+                                       (:s,)=>Dict(:s => 1:0,
+                                                   :r => 1:3,
+                                                   :z => 1:4,),
+                                       (:r,)=>Dict(:s => 1:2,
+                                                   :r => 1:0,
+                                                   :z => 1:4,),
+                                       (:z,)=>Dict(:s => 1:2,
+                                                   :r => 1:3,
+                                                   :z => 1:0,),
+                                       (:s,:r)=>Dict(:s => 1:0,
+                                                     :r => 1:0,
+                                                     :z => 1:4,),
+                                       (:s,:z)=>Dict(:s => 1:0,
+                                                     :r => 1:3,
+                                                     :z => 1:0,),
+                                       (:r,:z)=>Dict(:s => 1:2,
+                                                     :r => 2:3,
+                                                     :z => 3:4,),
+                                       (:s,:r,:z)=>Dict(:s => 1:0,
+                                                        :r => 1:0,
+                                                        :z => 1:0,))),
+
+    expected_debug_ranges(block_rank=3, block_size=8, combination_to_split=(:s, :r, :z),
+                          dims_to_split=(:s, :r, :z,),
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict(()=>Dict(:s => 1:0,
+                                                :r => 1:0,
+                                                :z => 1:0,),
+                                       (:s,)=>Dict(:s => 1:0,
+                                                   :r => 1:3,
+                                                   :z => 1:4,),
+                                       (:r,)=>Dict(:s => 1:2,
+                                                   :r => 1:0,
+                                                   :z => 1:4,),
+                                       (:z,)=>Dict(:s => 1:2,
+                                                   :r => 1:3,
+                                                   :z => 1:0,),
+                                       (:s,:r)=>Dict(:s => 1:0,
+                                                     :r => 1:0,
+                                                     :z => 1:4,),
+                                       (:s,:z)=>Dict(:s => 1:0,
+                                                     :r => 1:3,
+                                                     :z => 1:0,),
+                                       (:r,:z)=>Dict(:s => 1:2,
+                                                     :r => 1:0,
+                                                     :z => 1:0,),
+                                       (:s,:r,:z)=>Dict(:s => 1:1,
+                                                        :r => 2:3,
+                                                        :z => 3:4,))),
+
+    expected_debug_ranges(block_rank=0, block_size=2, combination_to_split=(:anysv, :vpa),
+                          dims_to_split=(:vpa,),
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anysv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:4,
+                                                       :vperp => 1:7,
+                                                       :vpa => 1:11,),
+                                       (:anysv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:4,
+                                                              :vperp => 1:7,
+                                                              :vpa => 1:11,),
+                                       (:anysv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:4,
+                                                            :vperp => 1:7,
+                                                            :vpa => 1:5,),
+                                       (:anysv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:4,
+                                                                   :vperp => 1:7,
+                                                                   :vpa => 1:11,))),
+
+    expected_debug_ranges(block_rank=1, block_size=2, combination_to_split=(:anysv, :vpa),
+                          dims_to_split=(:vpa,),
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anysv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:4,
+                                                       :vperp => 1:0,
+                                                       :vpa => 1:0,),
+                                       (:anysv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:4,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anysv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:4,
+                                                            :vperp => 1:7,
+                                                            :vpa => 6:11,),
+                                       (:anysv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:4,
+                                                                   :vperp => 1:0,
+                                                                   :vpa => 1:0,))),
+
+    expected_debug_ranges(block_rank=0, block_size=2,
+                          combination_to_split=(:anysv, :vperp), dims_to_split=(:vperp,),
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anysv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:4,
+                                                       :vperp => 1:7,
+                                                       :vpa => 1:11,),
+                                       (:anysv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:4,
+                                                              :vperp => 1:3,
+                                                              :vpa => 1:11,),
+                                       (:anysv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:4,
+                                                            :vperp => 1:7,
+                                                            :vpa => 1:11,),
+                                       (:anysv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:4,
+                                                                   :vperp => 1:7,
+                                                                   :vpa => 1:11,))),
+
+    expected_debug_ranges(block_rank=1, block_size=2,
+                          combination_to_split=(:anysv, :vperp), dims_to_split=(:vperp,),
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anysv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:4,
+                                                       :vperp => 1:0,
+                                                       :vpa => 1:0,),
+                                       (:anysv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:4,
+                                                              :vperp => 4:7,
+                                                              :vpa => 1:11,),
+                                       (:anysv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:4,
+                                                            :vperp => 1:0,
+                                                            :vpa => 1:0,),
+                                       (:anysv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:4,
+                                                                   :vperp => 1:0,
+                                                                   :vpa => 1:0,))),
+
+    expected_debug_ranges(block_rank=0, block_size=2,
+                          combination_to_split=(:anysv, :vperp, :vpa),
+                          dims_to_split=(:vpa,),
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anysv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:4,
+                                                       :vperp => 1:7,
+                                                       :vpa => 1:11,),
+                                       (:anysv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:4,
+                                                              :vperp => 1:7,
+                                                              :vpa => 1:11,),
+                                       (:anysv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:4,
+                                                            :vperp => 1:7,
+                                                            :vpa => 1:11,),
+                                       (:anysv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:4,
+                                                                   :vperp => 1:7,
+                                                                   :vpa => 1:5,))),
+
+    expected_debug_ranges(block_rank=1, block_size=2,
+                          combination_to_split=(:anysv, :vperp, :vpa),
+                          dims_to_split=(:vpa,),
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anysv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:4,
+                                                       :vperp => 1:0,
+                                                       :vpa => 1:0,),
+                                       (:anysv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:4,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anysv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:4,
+                                                            :vperp => 1:0,
+                                                            :vpa => 1:0,),
+                                       (:anysv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:4,
+                                                                   :vperp => 1:7,
+                                                                   :vpa => 6:11,))),
+
+    expected_debug_ranges(block_rank=0, block_size=2,
+                          combination_to_split=(:anysv, :vperp, :vpa),
+                          dims_to_split=(:vperp,),
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anysv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:4,
+                                                       :vperp => 1:7,
+                                                       :vpa => 1:11,),
+                                       (:anysv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:4,
+                                                              :vperp => 1:7,
+                                                              :vpa => 1:11,),
+                                       (:anysv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:4,
+                                                            :vperp => 1:7,
+                                                            :vpa => 1:11,),
+                                       (:anysv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:4,
+                                                                   :vperp => 1:3,
+                                                                   :vpa => 1:11,))),
+
+    expected_debug_ranges(block_rank=1, block_size=2,
+                          combination_to_split=(:anysv, :vperp, :vpa),
+                          dims_to_split=(:vperp,),
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anysv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:4,
+                                                       :vperp => 1:0,
+                                                       :vpa => 1:0,),
+                                       (:anysv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:4,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anysv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:4,
+                                                            :vperp => 1:0,
+                                                            :vpa => 1:0,),
+                                       (:anysv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:4,
+                                                                   :vperp => 4:7,
+                                                                   :vpa => 1:11,))),
+
+    expected_debug_ranges(block_rank=0, block_size=4,
+                          combination_to_split=(:anysv, :vperp, :vpa),
+                          dims_to_split=(:vperp, :vpa,),
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anysv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:4,
+                                                       :vperp => 1:7,
+                                                       :vpa => 1:11,),
+                                       (:anysv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:4,
+                                                              :vperp => 1:7,
+                                                              :vpa => 1:11,),
+                                       (:anysv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:4,
+                                                            :vperp => 1:7,
+                                                            :vpa => 1:11,),
+                                       (:anysv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:4,
+                                                                   :vperp => 1:3,
+                                                                   :vpa => 1:5,))),
+
+    expected_debug_ranges(block_rank=1, block_size=4,
+                          combination_to_split=(:anysv, :vperp, :vpa),
+                          dims_to_split=(:vperp, :vpa,),
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anysv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:4,
+                                                       :vperp => 1:0,
+                                                       :vpa => 1:0,),
+                                       (:anysv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:4,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anysv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:4,
+                                                            :vperp => 1:0,
+                                                            :vpa => 1:0,),
+                                       (:anysv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:4,
+                                                                   :vperp => 1:3,
+                                                                   :vpa => 6:11,))),
+
+    expected_debug_ranges(block_rank=2, block_size=4,
+                          combination_to_split=(:anysv, :vperp, :vpa),
+                          dims_to_split=(:vperp, :vpa,),
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anysv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:4,
+                                                       :vperp => 1:0,
+                                                       :vpa => 1:0,),
+                                       (:anysv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:4,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anysv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:4,
+                                                            :vperp => 1:0,
+                                                            :vpa => 1:0,),
+                                       (:anysv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:4,
+                                                                   :vperp => 4:7,
+                                                                   :vpa => 1:5,))),
+
+    expected_debug_ranges(block_rank=3, block_size=4,
+                          combination_to_split=(:anysv, :vperp, :vpa),
+                          dims_to_split=(:vperp, :vpa,),
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anysv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:4,
+                                                       :vperp => 1:0,
+                                                       :vpa => 1:0,),
+                                       (:anysv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:4,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anysv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:4,
+                                                            :vperp => 1:0,
+                                                            :vpa => 1:0,),
+                                       (:anysv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:4,
+                                                                   :vperp => 4:7,
+                                                                   :vpa => 6:11,))),
+
+    expected_debug_ranges(block_rank=0, block_size=2,
+                          combination_to_split=(:anyzv, :vpa), dims_to_split=(:vpa,),
+                          dim_sizes=debug_dim_sizes,
+                          results= Dict((:anyzv,)=>Dict(:s => 1:2,
+                                                        :r => 1:3,
+                                                        :z => 1:4,
+                                                        :vperp => 1:7,
+                                                        :vpa => 1:11,),
+                                        (:anyzv,:vperp,)=>Dict(:s => 1:2,
+                                                               :r => 1:3,
+                                                               :z => 1:4,
+                                                               :vperp => 1:7,
+                                                               :vpa => 1:11,),
+                                        (:anyzv,:vpa,)=>Dict(:s => 1:2,
+                                                             :r => 1:3,
+                                                             :z => 1:4,
+                                                             :vperp => 1:7,
+                                                             :vpa => 1:5,),
+                                        (:anyzv,:z)=>Dict(:s => 1:2,
+                                                          :r => 1:3,
+                                                          :z => 1:4,
+                                                          :vperp => 1:7,
+                                                          :vpa => 1:11,),
+                                        (:anyzv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                    :r => 1:3,
+                                                                    :z => 1:4,
+                                                                    :vperp => 1:7,
+                                                                    :vpa => 1:11,),
+                                        (:anyzv,:z,:vperp)=>Dict(:s => 1:2,
+                                                                 :r => 1:3,
+                                                                 :z => 1:4,
+                                                                 :vperp => 1:7,
+                                                                 :vpa => 1:11,),
+                                        (:anyzv,:z,:vpa)=>Dict(:s => 1:2,
+                                                               :r => 1:3,
+                                                               :z => 1:4,
+                                                               :vperp => 1:7,
+                                                               :vpa => 1:11,),
+                                        (:anyzv,:z,:vperp,:vpa)=>Dict(:s => 1:2,
+                                                                      :r => 1:3,
+                                                                      :z => 1:4,
+                                                                      :vperp => 1:7,
+                                                                      :vpa => 1:11,))),
+
+    expected_debug_ranges(block_rank=1, block_size=2,
+                          combination_to_split=(:anyzv, :vpa), dims_to_split=(:vpa,),
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anyzv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:0,
+                                                       :vperp => 1:0,
+                                                       :vpa => 1:0,),
+                                       (:anyzv,:z)=>Dict(:s => 1:2,
+                                                         :r => 1:3,
+                                                         :z => 1:0,
+                                                         :vperp => 1:0,
+                                                         :vpa => 1:0,),
+                                       (:anyzv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:4,
+                                                            :vperp => 1:7,
+                                                            :vpa => 6:11,),
+                                       (:anyzv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:0,
+                                                                   :vperp => 1:0,
+                                                                   :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp)=>Dict(:s => 1:2,
+                                                                :r => 1:3,
+                                                                :z => 1:0,
+                                                                :vperp => 1:0,
+                                                                :vpa => 1:0,),
+                                       (:anyzv,:z,:vpa)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp,:vpa)=>Dict(:s => 1:2,
+                                                                     :r => 1:3,
+                                                                     :z => 1:0,
+                                                                     :vperp => 1:0,
+                                                                     :vpa => 1:0,))),
+
+    expected_debug_ranges(block_rank=0, block_size=2,
+                          combination_to_split=(:anyzv, :vperp), dims_to_split=(:vperp,),
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anyzv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:4,
+                                                       :vperp => 1:7,
+                                                       :vpa => 1:11,),
+                                       (:anyzv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:4,
+                                                              :vperp => 1:3,
+                                                              :vpa => 1:11,),
+                                       (:anyzv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:4,
+                                                            :vperp => 1:7,
+                                                            :vpa => 1:11,),
+                                       (:anyzv,:z)=>Dict(:s => 1:2,
+                                                         :r => 1:3,
+                                                         :z => 1:4,
+                                                         :vperp => 1:7,
+                                                         :vpa => 1:11,),
+                                       (:anyzv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:4,
+                                                                   :vperp => 1:7,
+                                                                   :vpa => 1:11,),
+                                       (:anyzv,:z,:vperp)=>Dict(:s => 1:2,
+                                                                :r => 1:3,
+                                                                :z => 1:4,
+                                                                :vperp => 1:7,
+                                                                :vpa => 1:11,),
+                                       (:anyzv,:z,:vpa)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:4,
+                                                              :vperp => 1:7,
+                                                              :vpa => 1:11,),
+                                       (:anyzv,:z)=>Dict(:s => 1:2,
+                                                         :r => 1:3,
+                                                         :z => 1:4,
+                                                         :vperp => 1:7,
+                                                         :vpa => 1:11,),
+                                       (:anyzv,:z,:vperp,:vpa)=>Dict(:s => 1:2,
+                                                                     :r => 1:3,
+                                                                     :z => 1:4,
+                                                                     :vperp => 1:7,
+                                                                     :vpa => 1:11,),
+                                       (:anyzv,:z,:vperp)=>Dict(:s => 1:2,
+                                                                :r => 1:3,
+                                                                :z => 1:4,
+                                                                :vperp => 1:7,
+                                                                :vpa => 1:11,),
+                                       (:anyzv,:z,:vpa)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:4,
+                                                              :vperp => 1:7,
+                                                              :vpa => 1:11,),
+                                       (:anyzv,:z,:vperp,:vpa)=>Dict(:s => 1:2,
+                                                                     :r => 1:3,
+                                                                     :z => 1:4,
+                                                                     :vperp => 1:7,
+                                                                     :vpa => 1:11,))),
+
+    expected_debug_ranges(block_rank=1, block_size=2,
+                          combination_to_split=(:anyzv, :vperp), dims_to_split=(:vperp,),
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anyzv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:0,
+                                                       :vperp => 1:0,
+                                                       :vpa => 1:0,),
+                                       (:anyzv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:4,
+                                                              :vperp => 4:7,
+                                                              :vpa => 1:11,),
+                                       (:anyzv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:0,
+                                                            :vperp => 1:0,
+                                                            :vpa => 1:0,),
+                                       (:anyzv,:z)=>Dict(:s => 1:2,
+                                                         :r => 1:3,
+                                                         :z => 1:0,
+                                                         :vperp => 1:0,
+                                                         :vpa => 1:0,),
+                                       (:anyzv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:0,
+                                                                   :vperp => 1:0,
+                                                                   :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp)=>Dict(:s => 1:2,
+                                                                :r => 1:3,
+                                                                :z => 1:0,
+                                                                :vperp => 1:0,
+                                                                :vpa => 1:0,),
+                                       (:anyzv,:z,:vpa)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp,:vpa)=>Dict(:s => 1:2,
+                                                                     :r => 1:3,
+                                                                     :z => 1:0,
+                                                                     :vperp => 1:0,
+                                                                     :vpa => 1:0,))),
+
+    expected_debug_ranges(block_rank=0, block_size=2,
+                          combination_to_split=(:anyzv, :z), dims_to_split=(:z,),
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anyzv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:4,
+                                                       :vperp => 1:7,
+                                                       :vpa => 1:11,),
+                                       (:anyzv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:4,
+                                                              :vperp => 1:7,
+                                                              :vpa => 1:11,),
+                                       (:anyzv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:4,
+                                                            :vperp => 1:7,
+                                                            :vpa => 1:11,),
+                                       (:anyzv,:z)=>Dict(:s => 1:2,
+                                                         :r => 1:3,
+                                                         :z => 1:2,
+                                                         :vperp => 1:7,
+                                                         :vpa => 1:11,),
+                                       (:anyzv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:4,
+                                                                   :vperp => 1:7,
+                                                                   :vpa => 1:11,),
+                                       (:anyzv,:z,:vperp)=>Dict(:s => 1:2,
+                                                                :r => 1:3,
+                                                                :z => 1:4,
+                                                                :vperp => 1:7,
+                                                                :vpa => 1:11,),
+                                       (:anyzv,:z,:vpa)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:4,
+                                                              :vperp => 1:7,
+                                                              :vpa => 1:11,),
+                                       (:anyzv,:z,:vperp,:vpa)=>Dict(:s => 1:2,
+                                                                     :r => 1:3,
+                                                                     :z => 1:4,
+                                                                     :vperp => 1:7,
+                                                                     :vpa => 1:11,))),
+
+    expected_debug_ranges(block_rank=1, block_size=2,
+                          combination_to_split=(:anyzv, :z), dims_to_split=(:z,),
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anyzv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:0,
+                                                       :vperp => 1:0,
+                                                       :vpa => 1:0,),
+                                       (:anyzv,:z)=>Dict(:s => 1:2,
+                                                         :r => 1:3,
+                                                         :z => 3:4,
+                                                         :vperp => 1:7,
+                                                         :vpa => 1:11,),
+                                       (:anyzv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:0,
+                                                            :vperp => 1:0,
+                                                            :vpa => 1:0,),
+                                       (:anyzv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:0,
+                                                                   :vperp => 1:0,
+                                                                   :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp)=>Dict(:s => 1:2,
+                                                                :r => 1:3,
+                                                                :z => 1:0,
+                                                                :vperp => 1:0,
+                                                                :vpa => 1:0,),
+                                       (:anyzv,:z,:vpa)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp,:vpa)=>Dict(:s => 1:2,
+                                                                     :r => 1:3,
+                                                                     :z => 1:0,
+                                                                     :vperp => 1:0,
+                                                                     :vpa => 1:0,))),
+
+    expected_debug_ranges(block_rank=0, block_size=2,
+                          combination_to_split=(:anyzv, :vperp, :vpa),
+                          dims_to_split=(:vpa,),
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anyzv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:4,
+                                                       :vperp => 1:7,
+                                                       :vpa => 1:11,),
+                                       (:anyzv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:4,
+                                                              :vperp => 1:7,
+                                                              :vpa => 1:11,),
+                                       (:anyzv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:4,
+                                                            :vperp => 1:7,
+                                                            :vpa => 1:11,),
+                                       (:anyzv,:z)=>Dict(:s => 1:2,
+                                                         :r => 1:3,
+                                                         :z => 1:4,
+                                                         :vperp => 1:7,
+                                                         :vpa => 1:11,),
+                                       (:anyzv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:4,
+                                                                   :vperp => 1:7,
+                                                                   :vpa => 1:5,),
+                                       (:anyzv,:z,:vperp)=>Dict(:s => 1:2,
+                                                                :r => 1:3,
+                                                                :z => 1:4,
+                                                                :vperp => 1:7,
+                                                                :vpa => 1:11,),
+                                       (:anyzv,:z,:vpa)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:4,
+                                                              :vperp => 1:7,
+                                                              :vpa => 1:11,),
+                                       (:anyzv,:z,:vperp,:vpa)=>Dict(:s => 1:2,
+                                                                     :r => 1:3,
+                                                                     :z => 1:4,
+                                                                     :vperp => 1:7,
+                                                                     :vpa => 1:11,))),
+
+    expected_debug_ranges(block_rank=1, block_size=2,
+                          combination_to_split=(:anyzv, :vperp, :vpa),
+                          dims_to_split=(:vpa,),
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anyzv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:0,
+                                                       :vperp => 1:0,
+                                                       :vpa => 1:0,),
+                                       (:anyzv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:0,
+                                                            :vperp => 1:0,
+                                                            :vpa => 1:0,),
+                                       (:anyzv,:z)=>Dict(:s => 1:2,
+                                                         :r => 1:3,
+                                                         :z => 1:0,
+                                                         :vperp => 1:0,
+                                                         :vpa => 1:0,),
+                                       (:anyzv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:4,
+                                                                   :vperp => 1:7,
+                                                                   :vpa => 6:11,),
+                                       (:anyzv,:z,:vperp)=>Dict(:s => 1:2,
+                                                                :r => 1:3,
+                                                                :z => 1:0,
+                                                                :vperp => 1:0,
+                                                                :vpa => 1:0,),
+                                       (:anyzv,:z,:vpa)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp,:vpa)=>Dict(:s => 1:2,
+                                                                     :r => 1:3,
+                                                                     :z => 1:0,
+                                                                     :vperp => 1:0,
+                                                                     :vpa => 1:0,))),
+
+    expected_debug_ranges(block_rank=0, block_size=2,
+                          combination_to_split=(:anyzv, :vperp, :vpa),
+                          dims_to_split=(:vperp,),
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anyzv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:4,
+                                                       :vperp => 1:7,
+                                                       :vpa => 1:11,),
+                                       (:anyzv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:4,
+                                                              :vperp => 1:7,
+                                                              :vpa => 1:11,),
+                                       (:anyzv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:4,
+                                                            :vperp => 1:7,
+                                                            :vpa => 1:11,),
+                                       (:anyzv,:z)=>Dict(:s => 1:2,
+                                                         :r => 1:3,
+                                                         :z => 1:4,
+                                                         :vperp => 1:7,
+                                                         :vpa => 1:11,),
+                                       (:anyzv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:4,
+                                                                   :vperp => 1:3,
+                                                                   :vpa => 1:11,),
+                                       (:anyzv,:z,:vperp)=>Dict(:s => 1:2,
+                                                                :r => 1:3,
+                                                                :z => 1:4,
+                                                                :vperp => 1:7,
+                                                                :vpa => 1:11,),
+                                       (:anyzv,:z,:vpa)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:4,
+                                                              :vperp => 1:7,
+                                                              :vpa => 1:11,),
+                                       (:anyzv,:z,:vperp,:vpa)=>Dict(:s => 1:2,
+                                                                     :r => 1:3,
+                                                                     :z => 1:4,
+                                                                     :vperp => 1:7,
+                                                                     :vpa => 1:11,))),
+
+    expected_debug_ranges(block_rank=1, block_size=2,
+                          combination_to_split=(:anyzv, :vperp, :vpa),
+                          dims_to_split=(:vperp,),
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anyzv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:0,
+                                                       :vperp => 1:0,
+                                                       :vpa => 1:0,),
+                                       (:anyzv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:0,
+                                                            :vperp => 1:0,
+                                                            :vpa => 1:0,),
+                                       (:anyzv,:z)=>Dict(:s => 1:2,
+                                                         :r => 1:3,
+                                                         :z => 1:0,
+                                                         :vperp => 1:0,
+                                                         :vpa => 1:0,),
+                                       (:anyzv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:4,
+                                                                   :vperp => 4:7,
+                                                                   :vpa => 1:11,),
+                                       (:anyzv,:z,:vperp)=>Dict(:s => 1:2,
+                                                                :r => 1:3,
+                                                                :z => 1:0,
+                                                                :vperp => 1:0,
+                                                                :vpa => 1:0,),
+                                       (:anyzv,:z,:vpa)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp,:vpa)=>Dict(:s => 1:2,
+                                                                     :r => 1:3,
+                                                                     :z => 1:0,
+                                                                     :vperp => 1:0,
+                                                                     :vpa => 1:0,))),
+
+    expected_debug_ranges(block_rank=0, block_size=4,
+                          combination_to_split=(:anyzv, :vperp, :vpa),
+                          dims_to_split=(:vperp, :vpa,),
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anyzv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:4,
+                                                       :vperp => 1:7,
+                                                       :vpa => 1:11,),
+                                       (:anyzv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:4,
+                                                              :vperp => 1:7,
+                                                              :vpa => 1:11,),
+                                       (:anyzv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:4,
+                                                            :vperp => 1:7,
+                                                            :vpa => 1:11,),
+                                       (:anyzv,:z)=>Dict(:s => 1:2,
+                                                         :r => 1:3,
+                                                         :z => 1:4,
+                                                         :vperp => 1:7,
+                                                         :vpa => 1:11,),
+                                       (:anyzv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:4,
+                                                                   :vperp => 1:3,
+                                                                   :vpa => 1:5,),
+                                       (:anyzv,:z,:vperp)=>Dict(:s => 1:2,
+                                                                :r => 1:3,
+                                                                :z => 1:4,
+                                                                :vperp => 1:7,
+                                                                :vpa => 1:11,),
+                                       (:anyzv,:z,:vpa)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:4,
+                                                              :vperp => 1:7,
+                                                              :vpa => 1:11,),
+                                       (:anyzv,:z,:vperp,:vpa)=>Dict(:s => 1:2,
+                                                                     :r => 1:3,
+                                                                     :z => 1:4,
+                                                                     :vperp => 1:7,
+                                                                     :vpa => 1:11,))),
+
+    expected_debug_ranges(block_rank=1, block_size=4,
+                          combination_to_split=(:anyzv, :vperp, :vpa),
+                          dims_to_split=(:vperp, :vpa,),
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anyzv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:0,
+                                                       :vperp => 1:0,
+                                                       :vpa => 1:0,),
+                                       (:anyzv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:0,
+                                                            :vperp => 1:0,
+                                                            :vpa => 1:0,),
+                                       (:anyzv,:z)=>Dict(:s => 1:2,
+                                                         :r => 1:3,
+                                                         :z => 1:0,
+                                                         :vperp => 1:0,
+                                                         :vpa => 1:0,),
+                                       (:anyzv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:4,
+                                                                   :vperp => 1:3,
+                                                                   :vpa => 6:11,),
+                                       (:anyzv,:z,:vperp)=>Dict(:s => 1:2,
+                                                                :r => 1:3,
+                                                                :z => 1:0,
+                                                                :vperp => 1:0,
+                                                                :vpa => 1:0,),
+                                       (:anyzv,:z,:vpa)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp,:vpa)=>Dict(:s => 1:2,
+                                                                     :r => 1:3,
+                                                                     :z => 1:0,
+                                                                     :vperp => 1:0,
+                                                                     :vpa => 1:0,))),
+
+    expected_debug_ranges(block_rank=2, block_size=4,
+                          combination_to_split=(:anyzv, :vperp, :vpa),
+                          dims_to_split=(:vperp, :vpa,),
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anyzv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:0,
+                                                       :vperp => 1:0,
+                                                       :vpa => 1:0,),
+                                       (:anyzv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:0,
+                                                            :vperp => 1:0,
+                                                            :vpa => 1:0,),
+                                       (:anyzv,:z)=>Dict(:s => 1:2,
+                                                         :r => 1:3,
+                                                         :z => 1:0,
+                                                         :vperp => 1:0,
+                                                         :vpa => 1:0,),
+                                       (:anyzv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:4,
+                                                                   :vperp => 4:7,
+                                                                   :vpa => 1:5,),
+                                       (:anyzv,:z,:vperp)=>Dict(:s => 1:2,
+                                                                :r => 1:3,
+                                                                :z => 1:0,
+                                                                :vperp => 1:0,
+                                                                :vpa => 1:0,),
+                                       (:anyzv,:z,:vpa)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp,:vpa)=>Dict(:s => 1:2,
+                                                                     :r => 1:3,
+                                                                     :z => 1:0,
+                                                                     :vperp => 1:0,
+                                                                     :vpa => 1:0,))),
+
+    expected_debug_ranges(block_rank=3, block_size=4,
+                          combination_to_split=(:anyzv, :vperp, :vpa),
+                          dims_to_split=(:vperp, :vpa,),
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anyzv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:0,
+                                                       :vperp => 1:0,
+                                                       :vpa => 1:0,),
+                                       (:anyzv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:0,
+                                                            :vperp => 1:0,
+                                                            :vpa => 1:0,),
+                                       (:anyzv,:z)=>Dict(:s => 1:2,
+                                                         :r => 1:3,
+                                                         :z => 1:0,
+                                                         :vperp => 1:0,
+                                                         :vpa => 1:0,),
+                                       (:anyzv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:4,
+                                                                   :vperp => 4:7,
+                                                                   :vpa => 6:11,),
+                                       (:anyzv,:z,:vperp)=>Dict(:s => 1:2,
+                                                                :r => 1:3,
+                                                                :z => 1:0,
+                                                                :vperp => 1:0,
+                                                                :vpa => 1:0,),
+                                       (:anyzv,:z,:vpa)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp,:vpa)=>Dict(:s => 1:2,
+                                                                     :r => 1:3,
+                                                                     :z => 1:0,
+                                                                     :vperp => 1:0,
+                                                                     :vpa => 1:0,))),
+
+    expected_debug_ranges(block_rank=0, block_size=2,
+                          combination_to_split=(:anyzv, :z, :vperp),
+                          dims_to_split=(:vperp,);
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anyzv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:4,
+                                                       :vperp => 1:7,
+                                                       :vpa => 1:11,),
+                                       (:anyzv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:4,
+                                                              :vperp => 1:7,
+                                                              :vpa => 1:11,),
+                                       (:anyzv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:4,
+                                                            :vperp => 1:7,
+                                                            :vpa => 1:11,),
+                                       (:anyzv,:z)=>Dict(:s => 1:2,
+                                                         :r => 1:3,
+                                                         :z => 1:4,
+                                                         :vperp => 1:7,
+                                                         :vpa => 1:11,),
+                                       (:anyzv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:4,
+                                                                   :vperp => 1:7,
+                                                                   :vpa => 1:11,),
+                                       (:anyzv,:z,:vperp)=>Dict(:s => 1:2,
+                                                                :r => 1:3,
+                                                                :z => 1:4,
+                                                                :vperp => 1:3,
+                                                                :vpa => 1:11,),
+                                       (:anyzv,:z,:vpa)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:4,
+                                                              :vperp => 1:7,
+                                                              :vpa => 1:11,),
+                                       (:anyzv,:z,:vperp,:vpa)=>Dict(:s => 1:2,
+                                                                     :r => 1:3,
+                                                                     :z => 1:4,
+                                                                     :vperp => 1:7,
+                                                                     :vpa => 1:11,))),
+
+    expected_debug_ranges(block_rank=1, block_size=2,
+                          combination_to_split=(:anyzv, :z, :vperp),
+                          dims_to_split=(:vperp,);
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anyzv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:0,
+                                                       :vperp => 1:0,
+                                                       :vpa => 1:0,),
+                                       (:anyzv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:0,
+                                                            :vperp => 1:0,
+                                                            :vpa => 1:0,),
+                                       (:anyzv,:z)=>Dict(:s => 1:2,
+                                                         :r => 1:3,
+                                                         :z => 1:0,
+                                                         :vperp => 1:0,
+                                                         :vpa => 1:0,),
+                                       (:anyzv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:0,
+                                                                   :vperp => 1:0,
+                                                                   :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp)=>Dict(:s => 1:2,
+                                                                :r => 1:3,
+                                                                :z => 1:4,
+                                                                :vperp => 4:7,
+                                                                :vpa => 1:11,),
+                                       (:anyzv,:z,:vpa)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp,:vpa)=>Dict(:s => 1:2,
+                                                                     :r => 1:3,
+                                                                     :z => 1:0,
+                                                                     :vperp => 1:0,
+                                                                     :vpa => 1:0,))),
+
+    expected_debug_ranges(block_rank=0, block_size=2,
+                          combination_to_split=(:anyzv, :z, :vperp), dims_to_split=(:z,);
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anyzv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:4,
+                                                       :vperp => 1:7,
+                                                       :vpa => 1:11,),
+                                       (:anyzv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:4,
+                                                              :vperp => 1:7,
+                                                              :vpa => 1:11,),
+                                       (:anyzv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:4,
+                                                            :vperp => 1:7,
+                                                            :vpa => 1:11,),
+                                       (:anyzv,:z)=>Dict(:s => 1:2,
+                                                         :r => 1:3,
+                                                         :z => 1:4,
+                                                         :vperp => 1:7,
+                                                         :vpa => 1:11,),
+                                       (:anyzv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:4,
+                                                                   :vperp => 1:7,
+                                                                   :vpa => 1:11,),
+                                       (:anyzv,:z,:vperp)=>Dict(:s => 1:2,
+                                                                :r => 1:3,
+                                                                :z => 1:2,
+                                                                :vperp => 1:7,
+                                                                :vpa => 1:11,),
+                                       (:anyzv,:z,:vpa)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:4,
+                                                              :vperp => 1:7,
+                                                              :vpa => 1:11,),
+                                       (:anyzv,:z,:vperp,:vpa)=>Dict(:s => 1:2,
+                                                                     :r => 1:3,
+                                                                     :z => 1:4,
+                                                                     :vperp => 1:7,
+                                                                     :vpa => 1:11,))),
+
+    expected_debug_ranges(block_rank=1, block_size=2,
+                          combination_to_split=(:anyzv, :z, :vperp), dims_to_split=(:z,);
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anyzv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:0,
+                                                       :vperp => 1:0,
+                                                       :vpa => 1:0,),
+                                       (:anyzv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:0,
+                                                            :vperp => 1:0,
+                                                            :vpa => 1:0,),
+                                       (:anyzv,:z)=>Dict(:s => 1:2,
+                                                         :r => 1:3,
+                                                         :z => 1:0,
+                                                         :vperp => 1:0,
+                                                         :vpa => 1:0,),
+                                       (:anyzv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:0,
+                                                                   :vperp => 1:0,
+                                                                   :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp)=>Dict(:s => 1:2,
+                                                                :r => 1:3,
+                                                                :z => 3:4,
+                                                                :vperp => 1:7,
+                                                                :vpa => 1:11,),
+                                       (:anyzv,:z,:vpa)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp,:vpa)=>Dict(:s => 1:2,
+                                                                     :r => 1:3,
+                                                                     :z => 1:0,
+                                                                     :vperp => 1:0,
+                                                                     :vpa => 1:0,))),
+
+    expected_debug_ranges(block_rank=0, block_size=4,
+                          combination_to_split=(:anyzv, :z, :vperp),
+                          dims_to_split=(:z, :vperp,);
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anyzv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:4,
+                                                       :vperp => 1:7,
+                                                       :vpa => 1:11,),
+                                       (:anyzv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:4,
+                                                              :vperp => 1:7,
+                                                              :vpa => 1:11,),
+                                       (:anyzv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:4,
+                                                            :vperp => 1:7,
+                                                            :vpa => 1:11,),
+                                       (:anyzv,:z)=>Dict(:s => 1:2,
+                                                         :r => 1:3,
+                                                         :z => 1:4,
+                                                         :vperp => 1:7,
+                                                         :vpa => 1:11,),
+                                       (:anyzv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:4,
+                                                                   :vperp => 1:7,
+                                                                   :vpa => 1:11,),
+                                       (:anyzv,:z,:vperp)=>Dict(:s => 1:2,
+                                                                :r => 1:3,
+                                                                :z => 1:2,
+                                                                :vperp => 1:3,
+                                                                :vpa => 1:11,),
+                                       (:anyzv,:z,:vpa)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:4,
+                                                              :vperp => 1:7,
+                                                              :vpa => 1:11,),
+                                       (:anyzv,:z,:vperp,:vpa)=>Dict(:s => 1:2,
+                                                                     :r => 1:3,
+                                                                     :z => 1:4,
+                                                                     :vperp => 1:7,
+                                                                     :vpa => 1:11,))),
+
+    expected_debug_ranges(block_rank=1, block_size=4,
+                          combination_to_split=(:anyzv, :z, :vperp),
+                          dims_to_split=(:z, :vperp,);
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anyzv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:0,
+                                                       :vperp => 1:0,
+                                                       :vpa => 1:0,),
+                                       (:anyzv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:0,
+                                                            :vperp => 1:0,
+                                                            :vpa => 1:0,),
+                                       (:anyzv,:z)=>Dict(:s => 1:2,
+                                                         :r => 1:3,
+                                                         :z => 1:0,
+                                                         :vperp => 1:0,
+                                                         :vpa => 1:0,),
+                                       (:anyzv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:0,
+                                                                   :vperp => 1:0,
+                                                                   :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp)=>Dict(:s => 1:2,
+                                                                :r => 1:3,
+                                                                :z => 1:2,
+                                                                :vperp => 4:7,
+                                                                :vpa => 1:11,),
+                                       (:anyzv,:z,:vpa)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp,:vpa)=>Dict(:s => 1:2,
+                                                                     :r => 1:3,
+                                                                     :z => 1:0,
+                                                                     :vperp => 1:0,
+                                                                     :vpa => 1:0,))),
+
+    expected_debug_ranges(block_rank=2, block_size=4,
+                          combination_to_split=(:anyzv, :z, :vperp),
+                          dims_to_split=(:z, :vperp,);
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anyzv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:0,
+                                                       :vperp => 1:0,
+                                                       :vpa => 1:0,),
+                                       (:anyzv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:0,
+                                                            :vperp => 1:0,
+                                                            :vpa => 1:0,),
+                                       (:anyzv,:z)=>Dict(:s => 1:2,
+                                                         :r => 1:3,
+                                                         :z => 1:0,
+                                                         :vperp => 1:0,
+                                                         :vpa => 1:0,),
+                                       (:anyzv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:0,
+                                                                   :vperp => 1:0,
+                                                                   :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp)=>Dict(:s => 1:2,
+                                                                :r => 1:3,
+                                                                :z => 3:4,
+                                                                :vperp => 1:3,
+                                                                :vpa => 1:11,),
+                                       (:anyzv,:z,:vpa)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp,:vpa)=>Dict(:s => 1:2,
+                                                                     :r => 1:3,
+                                                                     :z => 1:0,
+                                                                     :vperp => 1:0,
+                                                                     :vpa => 1:0,))),
+
+    expected_debug_ranges(block_rank=3, block_size=4,
+                          combination_to_split=(:anyzv, :z, :vperp),
+                          dims_to_split=(:z, :vperp,);
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anyzv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:0,
+                                                       :vperp => 1:0,
+                                                       :vpa => 1:0,),
+                                       (:anyzv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:0,
+                                                            :vperp => 1:0,
+                                                            :vpa => 1:0,),
+                                       (:anyzv,:z)=>Dict(:s => 1:2,
+                                                         :r => 1:3,
+                                                         :z => 1:0,
+                                                         :vperp => 1:0,
+                                                         :vpa => 1:0,),
+                                       (:anyzv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:0,
+                                                                   :vperp => 1:0,
+                                                                   :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp)=>Dict(:s => 1:2,
+                                                                :r => 1:3,
+                                                                :z => 3:4,
+                                                                :vperp => 4:7,
+                                                                :vpa => 1:11,),
+                                       (:anyzv,:z,:vpa)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp,:vpa)=>Dict(:s => 1:2,
+                                                                     :r => 1:3,
+                                                                     :z => 1:0,
+                                                                     :vperp => 1:0,
+                                                                     :vpa => 1:0,))),
+
+    expected_debug_ranges(block_rank=0, block_size=2,
+                          combination_to_split=(:anyzv, :z, :vpa), dims_to_split=(:vpa,);
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anyzv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:4,
+                                                       :vperp => 1:7,
+                                                       :vpa => 1:11,),
+                                       (:anyzv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:4,
+                                                              :vperp => 1:7,
+                                                              :vpa => 1:11,),
+                                       (:anyzv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:4,
+                                                            :vperp => 1:7,
+                                                            :vpa => 1:11,),
+                                       (:anyzv,:z)=>Dict(:s => 1:2,
+                                                         :r => 1:3,
+                                                         :z => 1:4,
+                                                         :vperp => 1:7,
+                                                         :vpa => 1:11,),
+                                       (:anyzv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:4,
+                                                                   :vperp => 1:7,
+                                                                   :vpa => 1:11,),
+                                       (:anyzv,:z,:vperp)=>Dict(:s => 1:2,
+                                                                :r => 1:3,
+                                                                :z => 1:4,
+                                                                :vperp => 1:7,
+                                                                :vpa => 1:11,),
+                                       (:anyzv,:z,:vpa)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:4,
+                                                              :vperp => 1:7,
+                                                              :vpa => 1:5,),
+                                       (:anyzv,:z,:vperp,:vpa)=>Dict(:s => 1:2,
+                                                                     :r => 1:3,
+                                                                     :z => 1:4,
+                                                                     :vperp => 1:7,
+                                                                     :vpa => 1:11,))),
+
+    expected_debug_ranges(block_rank=1, block_size=2,
+                          combination_to_split=(:anyzv, :z, :vpa), dims_to_split=(:vpa,);
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anyzv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:0,
+                                                       :vperp => 1:0,
+                                                       :vpa => 1:0,),
+                                       (:anyzv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:0,
+                                                            :vperp => 1:0,
+                                                            :vpa => 1:0,),
+                                       (:anyzv,:z)=>Dict(:s => 1:2,
+                                                         :r => 1:3,
+                                                         :z => 1:0,
+                                                         :vperp => 1:0,
+                                                         :vpa => 1:0,),
+                                       (:anyzv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:0,
+                                                                   :vperp => 1:0,
+                                                                   :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp)=>Dict(:s => 1:2,
+                                                                :r => 1:3,
+                                                                :z => 1:0,
+                                                                :vperp => 1:0,
+                                                                :vpa => 1:0,),
+                                       (:anyzv,:z,:vpa)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:4,
+                                                              :vperp => 1:7,
+                                                              :vpa => 6:11,),
+                                       (:anyzv,:z,:vperp,:vpa)=>Dict(:s => 1:2,
+                                                                     :r => 1:3,
+                                                                     :z => 1:0,
+                                                                     :vperp => 1:0,
+                                                                     :vpa => 1:0,))),
+
+    expected_debug_ranges(block_rank=0, block_size=2,
+                          combination_to_split=(:anyzv, :z, :vpa), dims_to_split=(:z,);
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anyzv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:4,
+                                                       :vperp => 1:7,
+                                                       :vpa => 1:11,),
+                                       (:anyzv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:4,
+                                                              :vperp => 1:7,
+                                                              :vpa => 1:11,),
+                                       (:anyzv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:4,
+                                                            :vperp => 1:7,
+                                                            :vpa => 1:11,),
+                                       (:anyzv,:z)=>Dict(:s => 1:2,
+                                                         :r => 1:3,
+                                                         :z => 1:4,
+                                                         :vperp => 1:7,
+                                                         :vpa => 1:11,),
+                                       (:anyzv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:4,
+                                                                   :vperp => 1:7,
+                                                                   :vpa => 1:11,),
+                                       (:anyzv,:z,:vperp)=>Dict(:s => 1:2,
+                                                                :r => 1:3,
+                                                                :z => 1:4,
+                                                                :vperp => 1:7,
+                                                                :vpa => 1:11,),
+                                       (:anyzv,:z,:vpa)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:2,
+                                                              :vperp => 1:7,
+                                                              :vpa => 1:11,),
+                                       (:anyzv,:z,:vperp,:vpa)=>Dict(:s => 1:2,
+                                                                     :r => 1:3,
+                                                                     :z => 1:4,
+                                                                     :vperp => 1:7,
+                                                                     :vpa => 1:11,))),
+
+    expected_debug_ranges(block_rank=1, block_size=2,
+                          combination_to_split=(:anyzv, :z, :vpa), dims_to_split=(:z,);
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anyzv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:0,
+                                                       :vperp => 1:0,
+                                                       :vpa => 1:0,),
+                                       (:anyzv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:0,
+                                                            :vperp => 1:0,
+                                                            :vpa => 1:0,),
+                                       (:anyzv,:z)=>Dict(:s => 1:2,
+                                                         :r => 1:3,
+                                                         :z => 1:0,
+                                                         :vperp => 1:0,
+                                                         :vpa => 1:0,),
+                                       (:anyzv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:0,
+                                                                   :vperp => 1:0,
+                                                                   :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp)=>Dict(:s => 1:2,
+                                                                :r => 1:3,
+                                                                :z => 1:0,
+                                                                :vperp => 1:0,
+                                                                :vpa => 1:0,),
+                                       (:anyzv,:z,:vpa)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 3:4,
+                                                              :vperp => 1:7,
+                                                              :vpa => 1:11,),
+                                       (:anyzv,:z,:vperp,:vpa)=>Dict(:s => 1:2,
+                                                                     :r => 1:3,
+                                                                     :z => 1:0,
+                                                                     :vperp => 1:0,
+                                                                     :vpa => 1:0,))),
+
+    expected_debug_ranges(block_rank=0, block_size=4,
+                          combination_to_split=(:anyzv, :z, :vpa),
+                          dims_to_split=(:z, :vpa,);
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anyzv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:4,
+                                                       :vperp => 1:7,
+                                                       :vpa => 1:11,),
+                                       (:anyzv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:4,
+                                                              :vperp => 1:7,
+                                                              :vpa => 1:11,),
+                                       (:anyzv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:4,
+                                                            :vperp => 1:7,
+                                                            :vpa => 1:11,),
+                                       (:anyzv,:z)=>Dict(:s => 1:2,
+                                                         :r => 1:3,
+                                                         :z => 1:4,
+                                                         :vperp => 1:7,
+                                                         :vpa => 1:11,),
+                                       (:anyzv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:4,
+                                                                   :vperp => 1:7,
+                                                                   :vpa => 1:11,),
+                                       (:anyzv,:z,:vperp)=>Dict(:s => 1:2,
+                                                                :r => 1:3,
+                                                                :z => 1:4,
+                                                                :vperp => 1:7,
+                                                                :vpa => 1:11,),
+                                       (:anyzv,:z,:vpa)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:2,
+                                                              :vperp => 1:7,
+                                                              :vpa => 1:5,),
+                                       (:anyzv,:z,:vperp,:vpa)=>Dict(:s => 1:2,
+                                                                     :r => 1:3,
+                                                                     :z => 1:4,
+                                                                     :vperp => 1:7,
+                                                                     :vpa => 1:11,))),
+
+    expected_debug_ranges(block_rank=1, block_size=4,
+                          combination_to_split=(:anyzv, :z, :vpa),
+                          dims_to_split=(:z, :vpa,);
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anyzv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:0,
+                                                       :vperp => 1:0,
+                                                       :vpa => 1:0,),
+                                       (:anyzv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:0,
+                                                            :vperp => 1:0,
+                                                            :vpa => 1:0,),
+                                       (:anyzv,:z)=>Dict(:s => 1:2,
+                                                         :r => 1:3,
+                                                         :z => 1:0,
+                                                         :vperp => 1:0,
+                                                         :vpa => 1:0,),
+                                       (:anyzv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:0,
+                                                                   :vperp => 1:0,
+                                                                   :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp)=>Dict(:s => 1:2,
+                                                                :r => 1:3,
+                                                                :z => 1:0,
+                                                                :vperp => 1:0,
+                                                                :vpa => 1:0,),
+                                       (:anyzv,:z,:vpa)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:2,
+                                                              :vperp => 1:7,
+                                                              :vpa => 6:11,),
+                                       (:anyzv,:z,:vperp,:vpa)=>Dict(:s => 1:2,
+                                                                     :r => 1:3,
+                                                                     :z => 1:0,
+                                                                     :vperp => 1:0,
+                                                                     :vpa => 1:0,))),
+
+    expected_debug_ranges(block_rank=2, block_size=4,
+                          combination_to_split=(:anyzv, :z, :vpa),
+                          dims_to_split=(:z, :vpa,);
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anyzv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:0,
+                                                       :vperp => 1:0,
+                                                       :vpa => 1:0,),
+                                       (:anyzv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:0,
+                                                            :vperp => 1:0,
+                                                            :vpa => 1:0,),
+                                       (:anyzv,:z)=>Dict(:s => 1:2,
+                                                         :r => 1:3,
+                                                         :z => 1:0,
+                                                         :vperp => 1:0,
+                                                         :vpa => 1:0,),
+                                       (:anyzv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:0,
+                                                                   :vperp => 1:0,
+                                                                   :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp)=>Dict(:s => 1:2,
+                                                                :r => 1:3,
+                                                                :z => 1:0,
+                                                                :vperp => 1:0,
+                                                                :vpa => 1:0,),
+                                       (:anyzv,:z,:vpa)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 3:4,
+                                                              :vperp => 1:7,
+                                                              :vpa => 1:5,),
+                                       (:anyzv,:z,:vperp,:vpa)=>Dict(:s => 1:2,
+                                                                     :r => 1:3,
+                                                                     :z => 1:0,
+                                                                     :vperp => 1:0,
+                                                                     :vpa => 1:0,))),
+
+    expected_debug_ranges(block_rank=3, block_size=4,
+                          combination_to_split=(:anyzv, :z, :vpa),
+                          dims_to_split=(:z, :vpa,);
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anyzv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:0,
+                                                       :vperp => 1:0,
+                                                       :vpa => 1:0,),
+                                       (:anyzv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:0,
+                                                            :vperp => 1:0,
+                                                            :vpa => 1:0,),
+                                       (:anyzv,:z)=>Dict(:s => 1:2,
+                                                         :r => 1:3,
+                                                         :z => 1:0,
+                                                         :vperp => 1:0,
+                                                         :vpa => 1:0,),
+                                       (:anyzv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:0,
+                                                                   :vperp => 1:0,
+                                                                   :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp)=>Dict(:s => 1:2,
+                                                                :r => 1:3,
+                                                                :z => 1:0,
+                                                                :vperp => 1:0,
+                                                                :vpa => 1:0,),
+                                       (:anyzv,:z,:vpa)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 3:4,
+                                                              :vperp => 1:7,
+                                                              :vpa => 6:11,),
+                                       (:anyzv,:z,:vperp,:vpa)=>Dict(:s => 1:2,
+                                                                     :r => 1:3,
+                                                                     :z => 1:0,
+                                                                     :vperp => 1:0,
+                                                                     :vpa => 1:0,))),
+
+    expected_debug_ranges(block_rank=0, block_size=2,
+                          combination_to_split=(:anyzv, :z, :vperp, :vpa),
+                          dims_to_split=(:vpa,);
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anyzv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:4,
+                                                       :vperp => 1:7,
+                                                       :vpa => 1:11,),
+                                       (:anyzv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:4,
+                                                              :vperp => 1:7,
+                                                              :vpa => 1:11,),
+                                       (:anyzv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:4,
+                                                            :vperp => 1:7,
+                                                            :vpa => 1:11,),
+                                       (:anyzv,:z)=>Dict(:s => 1:2,
+                                                         :r => 1:3,
+                                                         :z => 1:4,
+                                                         :vperp => 1:7,
+                                                         :vpa => 1:11,),
+                                       (:anyzv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:4,
+                                                                   :vperp => 1:7,
+                                                                   :vpa => 1:11,),
+                                       (:anyzv,:z,:vperp)=>Dict(:s => 1:2,
+                                                                :r => 1:3,
+                                                                :z => 1:4,
+                                                                :vperp => 1:7,
+                                                                :vpa => 1:11,),
+                                       (:anyzv,:z,:vpa)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:4,
+                                                              :vperp => 1:7,
+                                                              :vpa => 1:11,),
+                                       (:anyzv,:z,:vperp,:vpa)=>Dict(:s => 1:2,
+                                                                     :r => 1:3,
+                                                                     :z => 1:4,
+                                                                     :vperp => 1:7,
+                                                                     :vpa => 1:5,))),
+
+    expected_debug_ranges(block_rank=1, block_size=2,
+                          combination_to_split=(:anyzv, :z, :vperp, :vpa),
+                          dims_to_split=(:vpa,);
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anyzv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:0,
+                                                       :vperp => 1:0,
+                                                       :vpa => 1:0,),
+                                       (:anyzv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:0,
+                                                            :vperp => 1:0,
+                                                            :vpa => 1:0,),
+                                       (:anyzv,:z)=>Dict(:s => 1:2,
+                                                         :r => 1:3,
+                                                         :z => 1:0,
+                                                         :vperp => 1:0,
+                                                         :vpa => 1:0,),
+                                       (:anyzv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:0,
+                                                                   :vperp => 1:0,
+                                                                   :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp)=>Dict(:s => 1:2,
+                                                                :r => 1:3,
+                                                                :z => 1:0,
+                                                                :vperp => 1:0,
+                                                                :vpa => 1:0,),
+                                       (:anyzv,:z,:vpa)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp,:vpa)=>Dict(:s => 1:2,
+                                                                     :r => 1:3,
+                                                                     :z => 1:4,
+                                                                     :vperp => 1:7,
+                                                                     :vpa => 6:11,))),
+
+    expected_debug_ranges(block_rank=0, block_size=2,
+                          combination_to_split=(:anyzv, :z, :vperp, :vpa),
+                          dims_to_split=(:vperp,);
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anyzv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:4,
+                                                       :vperp => 1:7,
+                                                       :vpa => 1:11,),
+                                       (:anyzv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:4,
+                                                              :vperp => 1:7,
+                                                              :vpa => 1:11,),
+                                       (:anyzv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:4,
+                                                            :vperp => 1:7,
+                                                            :vpa => 1:11,),
+                                       (:anyzv,:z)=>Dict(:s => 1:2,
+                                                         :r => 1:3,
+                                                         :z => 1:4,
+                                                         :vperp => 1:7,
+                                                         :vpa => 1:11,),
+                                       (:anyzv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:4,
+                                                                   :vperp => 1:7,
+                                                                   :vpa => 1:11,),
+                                       (:anyzv,:z,:vperp)=>Dict(:s => 1:2,
+                                                                :r => 1:3,
+                                                                :z => 1:4,
+                                                                :vperp => 1:7,
+                                                                :vpa => 1:11,),
+                                       (:anyzv,:z,:vpa)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:4,
+                                                              :vperp => 1:7,
+                                                              :vpa => 1:11,),
+                                       (:anyzv,:z,:vperp,:vpa)=>Dict(:s => 1:2,
+                                                                     :r => 1:3,
+                                                                     :z => 1:4,
+                                                                     :vperp => 1:3,
+                                                                     :vpa => 1:11,))),
+
+    expected_debug_ranges(block_rank=1, block_size=2,
+                          combination_to_split=(:anyzv, :z, :vperp, :vpa),
+                          dims_to_split=(:vperp,);
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anyzv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:0,
+                                                       :vperp => 1:0,
+                                                       :vpa => 1:0,),
+                                       (:anyzv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:0,
+                                                            :vperp => 1:0,
+                                                            :vpa => 1:0,),
+                                       (:anyzv,:z)=>Dict(:s => 1:2,
+                                                         :r => 1:3,
+                                                         :z => 1:0,
+                                                         :vperp => 1:0,
+                                                         :vpa => 1:0,),
+                                       (:anyzv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:0,
+                                                                   :vperp => 1:0,
+                                                                   :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp)=>Dict(:s => 1:2,
+                                                                :r => 1:3,
+                                                                :z => 1:0,
+                                                                :vperp => 1:0,
+                                                                :vpa => 1:0,),
+                                       (:anyzv,:z,:vpa)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp,:vpa)=>Dict(:s => 1:2,
+                                                                     :r => 1:3,
+                                                                     :z => 1:4,
+                                                                     :vperp => 4:7,
+                                                                     :vpa => 1:11,))),
+
+    expected_debug_ranges(block_rank=0, block_size=2,
+                          combination_to_split=(:anyzv, :z, :vperp, :vpa),
+                          dims_to_split=(:z,);
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anyzv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:4,
+                                                       :vperp => 1:7,
+                                                       :vpa => 1:11,),
+                                       (:anyzv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:4,
+                                                              :vperp => 1:7,
+                                                              :vpa => 1:11,),
+                                       (:anyzv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:4,
+                                                            :vperp => 1:7,
+                                                            :vpa => 1:11,),
+                                       (:anyzv,:z)=>Dict(:s => 1:2,
+                                                         :r => 1:3,
+                                                         :z => 1:4,
+                                                         :vperp => 1:7,
+                                                         :vpa => 1:11,),
+                                       (:anyzv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:4,
+                                                                   :vperp => 1:7,
+                                                                   :vpa => 1:11,),
+                                       (:anyzv,:z,:vperp)=>Dict(:s => 1:2,
+                                                                :r => 1:3,
+                                                                :z => 1:4,
+                                                                :vperp => 1:7,
+                                                                :vpa => 1:11,),
+                                       (:anyzv,:z,:vpa)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:4,
+                                                              :vperp => 1:7,
+                                                              :vpa => 1:11,),
+                                       (:anyzv,:z,:vperp,:vpa)=>Dict(:s => 1:2,
+                                                                     :r => 1:3,
+                                                                     :z => 1:2,
+                                                                     :vperp => 1:7,
+                                                                     :vpa => 1:11,))),
+
+    expected_debug_ranges(block_rank=1, block_size=2,
+                          combination_to_split=(:anyzv, :z, :vperp, :vpa),
+                          dims_to_split=(:z,);
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anyzv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:0,
+                                                       :vperp => 1:0,
+                                                       :vpa => 1:0,),
+                                       (:anyzv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:0,
+                                                            :vperp => 1:0,
+                                                            :vpa => 1:0,),
+                                       (:anyzv,:z)=>Dict(:s => 1:2,
+                                                         :r => 1:3,
+                                                         :z => 1:0,
+                                                         :vperp => 1:0,
+                                                         :vpa => 1:0,),
+                                       (:anyzv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:0,
+                                                                   :vperp => 1:0,
+                                                                   :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp)=>Dict(:s => 1:2,
+                                                                :r => 1:3,
+                                                                :z => 1:0,
+                                                                :vperp => 1:0,
+                                                                :vpa => 1:0,),
+                                       (:anyzv,:z,:vpa)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp,:vpa)=>Dict(:s => 1:2,
+                                                                     :r => 1:3,
+                                                                     :z => 3:4,
+                                                                     :vperp => 1:7,
+                                                                     :vpa => 1:11,))),
+
+    expected_debug_ranges(block_rank=0, block_size=4,
+                          combination_to_split=(:anyzv, :z, :vperp, :vpa),
+                          dims_to_split=(:vperp, :vpa,);
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anyzv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:4,
+                                                       :vperp => 1:7,
+                                                       :vpa => 1:11,),
+                                       (:anyzv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:4,
+                                                              :vperp => 1:7,
+                                                              :vpa => 1:11,),
+                                       (:anyzv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:4,
+                                                            :vperp => 1:7,
+                                                            :vpa => 1:11,),
+                                       (:anyzv,:z)=>Dict(:s => 1:2,
+                                                         :r => 1:3,
+                                                         :z => 1:4,
+                                                         :vperp => 1:7,
+                                                         :vpa => 1:11,),
+                                       (:anyzv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:4,
+                                                                   :vperp => 1:7,
+                                                                   :vpa => 1:11,),
+                                       (:anyzv,:z,:vperp)=>Dict(:s => 1:2,
+                                                                :r => 1:3,
+                                                                :z => 1:4,
+                                                                :vperp => 1:7,
+                                                                :vpa => 1:11,),
+                                       (:anyzv,:z,:vpa)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:4,
+                                                              :vperp => 1:7,
+                                                              :vpa => 1:11,),
+                                       (:anyzv,:z,:vperp,:vpa)=>Dict(:s => 1:2,
+                                                                     :r => 1:3,
+                                                                     :z => 1:4,
+                                                                     :vperp => 1:3,
+                                                                     :vpa => 1:5,))),
+
+    expected_debug_ranges(block_rank=1, block_size=4,
+                          combination_to_split=(:anyzv, :z, :vperp, :vpa),
+                          dims_to_split=(:vperp, :vpa,);
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anyzv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:0,
+                                                       :vperp => 1:0,
+                                                       :vpa => 1:0,),
+                                       (:anyzv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:0,
+                                                            :vperp => 1:0,
+                                                            :vpa => 1:0,),
+                                       (:anyzv,:z)=>Dict(:s => 1:2,
+                                                         :r => 1:3,
+                                                         :z => 1:0,
+                                                         :vperp => 1:0,
+                                                         :vpa => 1:0,),
+                                       (:anyzv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:0,
+                                                                   :vperp => 1:0,
+                                                                   :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp)=>Dict(:s => 1:2,
+                                                                :r => 1:3,
+                                                                :z => 1:0,
+                                                                :vperp => 1:0,
+                                                                :vpa => 1:0,),
+                                       (:anyzv,:z,:vpa)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp,:vpa)=>Dict(:s => 1:2,
+                                                                     :r => 1:3,
+                                                                     :z => 1:4,
+                                                                     :vperp => 1:3,
+                                                                     :vpa => 6:11,))),
+
+    expected_debug_ranges(block_rank=2, block_size=4,
+                          combination_to_split=(:anyzv, :z, :vperp, :vpa),
+                          dims_to_split=(:vperp, :vpa,);
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anyzv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:0,
+                                                       :vperp => 1:0,
+                                                       :vpa => 1:0,),
+                                       (:anyzv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:0,
+                                                            :vperp => 1:0,
+                                                            :vpa => 1:0,),
+                                       (:anyzv,:z)=>Dict(:s => 1:2,
+                                                         :r => 1:3,
+                                                         :z => 1:0,
+                                                         :vperp => 1:0,
+                                                         :vpa => 1:0,),
+                                       (:anyzv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:0,
+                                                                   :vperp => 1:0,
+                                                                   :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp)=>Dict(:s => 1:2,
+                                                                :r => 1:3,
+                                                                :z => 1:0,
+                                                                :vperp => 1:0,
+                                                                :vpa => 1:0,),
+                                       (:anyzv,:z,:vpa)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp,:vpa)=>Dict(:s => 1:2,
+                                                                     :r => 1:3,
+                                                                     :z => 1:4,
+                                                                     :vperp => 4:7,
+                                                                     :vpa => 1:5,))),
+
+    expected_debug_ranges(block_rank=3, block_size=4,
+                          combination_to_split=(:anyzv, :z, :vperp, :vpa),
+                          dims_to_split=(:vperp, :vpa,);
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anyzv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:0,
+                                                       :vperp => 1:0,
+                                                       :vpa => 1:0,),
+                                       (:anyzv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:0,
+                                                            :vperp => 1:0,
+                                                            :vpa => 1:0,),
+                                       (:anyzv,:z)=>Dict(:s => 1:2,
+                                                         :r => 1:3,
+                                                         :z => 1:0,
+                                                         :vperp => 1:0,
+                                                         :vpa => 1:0,),
+                                       (:anyzv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:0,
+                                                                   :vperp => 1:0,
+                                                                   :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp)=>Dict(:s => 1:2,
+                                                                :r => 1:3,
+                                                                :z => 1:0,
+                                                                :vperp => 1:0,
+                                                                :vpa => 1:0,),
+                                       (:anyzv,:z,:vpa)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp,:vpa)=>Dict(:s => 1:2,
+                                                                     :r => 1:3,
+                                                                     :z => 1:4,
+                                                                     :vperp => 4:7,
+                                                                     :vpa => 6:11,))),
+
+    expected_debug_ranges(block_rank=0, block_size=4,
+                          combination_to_split=(:anyzv, :z, :vperp, :vpa),
+                          dims_to_split=(:z, :vpa,);
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anyzv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:4,
+                                                       :vperp => 1:7,
+                                                       :vpa => 1:11,),
+                                       (:anyzv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:4,
+                                                              :vperp => 1:7,
+                                                              :vpa => 1:11,),
+                                       (:anyzv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:4,
+                                                            :vperp => 1:7,
+                                                            :vpa => 1:11,),
+                                       (:anyzv,:z)=>Dict(:s => 1:2,
+                                                         :r => 1:3,
+                                                         :z => 1:4,
+                                                         :vperp => 1:7,
+                                                         :vpa => 1:11,),
+                                       (:anyzv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:4,
+                                                                   :vperp => 1:7,
+                                                                   :vpa => 1:11,),
+                                       (:anyzv,:z,:vperp)=>Dict(:s => 1:2,
+                                                                :r => 1:3,
+                                                                :z => 1:4,
+                                                                :vperp => 1:7,
+                                                                :vpa => 1:11,),
+                                       (:anyzv,:z,:vpa)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:4,
+                                                              :vperp => 1:7,
+                                                              :vpa => 1:11,),
+                                       (:anyzv,:z,:vperp,:vpa)=>Dict(:s => 1:2,
+                                                                     :r => 1:3,
+                                                                     :z => 1:2,
+                                                                     :vperp => 1:7,
+                                                                     :vpa => 1:5,))),
+
+    expected_debug_ranges(block_rank=1, block_size=4,
+                          combination_to_split=(:anyzv, :z, :vperp, :vpa),
+                          dims_to_split=(:z, :vpa,);
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anyzv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:0,
+                                                       :vperp => 1:0,
+                                                       :vpa => 1:0,),
+                                       (:anyzv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:0,
+                                                            :vperp => 1:0,
+                                                            :vpa => 1:0,),
+                                       (:anyzv,:z)=>Dict(:s => 1:2,
+                                                         :r => 1:3,
+                                                         :z => 1:0,
+                                                         :vperp => 1:0,
+                                                         :vpa => 1:0,),
+                                       (:anyzv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:0,
+                                                                   :vperp => 1:0,
+                                                                   :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp)=>Dict(:s => 1:2,
+                                                                :r => 1:3,
+                                                                :z => 1:0,
+                                                                :vperp => 1:0,
+                                                                :vpa => 1:0,),
+                                       (:anyzv,:z,:vpa)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp,:vpa)=>Dict(:s => 1:2,
+                                                                     :r => 1:3,
+                                                                     :z => 1:2,
+                                                                     :vperp => 1:7,
+                                                                     :vpa => 6:11,))),
+
+    expected_debug_ranges(block_rank=2, block_size=4,
+                          combination_to_split=(:anyzv, :z, :vperp, :vpa),
+                          dims_to_split=(:z, :vpa,);
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anyzv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:0,
+                                                       :vperp => 1:0,
+                                                       :vpa => 1:0,),
+                                       (:anyzv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:0,
+                                                            :vperp => 1:0,
+                                                            :vpa => 1:0,),
+                                       (:anyzv,:z)=>Dict(:s => 1:2,
+                                                         :r => 1:3,
+                                                         :z => 1:0,
+                                                         :vperp => 1:0,
+                                                         :vpa => 1:0,),
+                                       (:anyzv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:0,
+                                                                   :vperp => 1:0,
+                                                                   :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp)=>Dict(:s => 1:2,
+                                                                :r => 1:3,
+                                                                :z => 1:0,
+                                                                :vperp => 1:0,
+                                                                :vpa => 1:0,),
+                                       (:anyzv,:z,:vpa)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp,:vpa)=>Dict(:s => 1:2,
+                                                                     :r => 1:3,
+                                                                     :z => 3:4,
+                                                                     :vperp => 1:7,
+                                                                     :vpa => 1:5,))),
+
+    expected_debug_ranges(block_rank=3, block_size=4,
+                          combination_to_split=(:anyzv, :z, :vperp, :vpa),
+                          dims_to_split=(:z, :vpa,);
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anyzv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:0,
+                                                       :vperp => 1:0,
+                                                       :vpa => 1:0,),
+                                       (:anyzv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:0,
+                                                            :vperp => 1:0,
+                                                            :vpa => 1:0,),
+                                       (:anyzv,:z)=>Dict(:s => 1:2,
+                                                         :r => 1:3,
+                                                         :z => 1:0,
+                                                         :vperp => 1:0,
+                                                         :vpa => 1:0,),
+                                       (:anyzv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:0,
+                                                                   :vperp => 1:0,
+                                                                   :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp)=>Dict(:s => 1:2,
+                                                                :r => 1:3,
+                                                                :z => 1:0,
+                                                                :vperp => 1:0,
+                                                                :vpa => 1:0,),
+                                       (:anyzv,:z,:vpa)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp,:vpa)=>Dict(:s => 1:2,
+                                                                     :r => 1:3,
+                                                                     :z => 3:4,
+                                                                     :vperp => 1:7,
+                                                                     :vpa => 6:11,))),
+
+    expected_debug_ranges(block_rank=0, block_size=4,
+                          combination_to_split=(:anyzv, :z, :vperp, :vpa),
+                          dims_to_split=(:z, :vperp,);
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anyzv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:4,
+                                                       :vperp => 1:7,
+                                                       :vpa => 1:11,),
+                                       (:anyzv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:4,
+                                                              :vperp => 1:7,
+                                                              :vpa => 1:11,),
+                                       (:anyzv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:4,
+                                                            :vperp => 1:7,
+                                                            :vpa => 1:11,),
+                                       (:anyzv,:z)=>Dict(:s => 1:2,
+                                                         :r => 1:3,
+                                                         :z => 1:4,
+                                                         :vperp => 1:7,
+                                                         :vpa => 1:11,),
+                                       (:anyzv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:4,
+                                                                   :vperp => 1:7,
+                                                                   :vpa => 1:11,),
+                                       (:anyzv,:z,:vperp)=>Dict(:s => 1:2,
+                                                                :r => 1:3,
+                                                                :z => 1:4,
+                                                                :vperp => 1:7,
+                                                                :vpa => 1:11,),
+                                       (:anyzv,:z,:vpa)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:4,
+                                                              :vperp => 1:7,
+                                                              :vpa => 1:11,),
+                                       (:anyzv,:z,:vperp,:vpa)=>Dict(:s => 1:2,
+                                                                     :r => 1:3,
+                                                                     :z => 1:2,
+                                                                     :vperp => 1:3,
+                                                                     :vpa => 1:11,))),
+
+    expected_debug_ranges(block_rank=1, block_size=4,
+                          combination_to_split=(:anyzv, :z, :vperp, :vpa),
+                          dims_to_split=(:z, :vperp,);
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anyzv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:0,
+                                                       :vperp => 1:0,
+                                                       :vpa => 1:0,),
+                                       (:anyzv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:0,
+                                                            :vperp => 1:0,
+                                                            :vpa => 1:0,),
+                                       (:anyzv,:z)=>Dict(:s => 1:2,
+                                                         :r => 1:3,
+                                                         :z => 1:0,
+                                                         :vperp => 1:0,
+                                                         :vpa => 1:0,),
+                                       (:anyzv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:0,
+                                                                   :vperp => 1:0,
+                                                                   :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp)=>Dict(:s => 1:2,
+                                                                :r => 1:3,
+                                                                :z => 1:0,
+                                                                :vperp => 1:0,
+                                                                :vpa => 1:0,),
+                                       (:anyzv,:z,:vpa)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp,:vpa)=>Dict(:s => 1:2,
+                                                                     :r => 1:3,
+                                                                     :z => 1:2,
+                                                                     :vperp => 4:7,
+                                                                     :vpa => 1:11,))),
+
+    expected_debug_ranges(block_rank=2, block_size=4,
+                          combination_to_split=(:anyzv, :z, :vperp, :vpa),
+                          dims_to_split=(:z, :vperp,);
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anyzv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:0,
+                                                       :vperp => 1:0,
+                                                       :vpa => 1:0,),
+                                       (:anyzv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:0,
+                                                            :vperp => 1:0,
+                                                            :vpa => 1:0,),
+                                       (:anyzv,:z)=>Dict(:s => 1:2,
+                                                         :r => 1:3,
+                                                         :z => 1:0,
+                                                         :vperp => 1:0,
+                                                         :vpa => 1:0,),
+                                       (:anyzv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:0,
+                                                                   :vperp => 1:0,
+                                                                   :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp)=>Dict(:s => 1:2,
+                                                                :r => 1:3,
+                                                                :z => 1:0,
+                                                                :vperp => 1:0,
+                                                                :vpa => 1:0,),
+                                       (:anyzv,:z,:vpa)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp,:vpa)=>Dict(:s => 1:2,
+                                                                     :r => 1:3,
+                                                                     :z => 3:4,
+                                                                     :vperp => 1:3,
+                                                                     :vpa => 1:11,))),
+
+    expected_debug_ranges(block_rank=3, block_size=4,
+                          combination_to_split=(:anyzv, :z, :vperp, :vpa),
+                          dims_to_split=(:z, :vperp,);
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anyzv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:0,
+                                                       :vperp => 1:0,
+                                                       :vpa => 1:0,),
+                                       (:anyzv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:0,
+                                                            :vperp => 1:0,
+                                                            :vpa => 1:0,),
+                                       (:anyzv,:z)=>Dict(:s => 1:2,
+                                                         :r => 1:3,
+                                                         :z => 1:0,
+                                                         :vperp => 1:0,
+                                                         :vpa => 1:0,),
+                                       (:anyzv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:0,
+                                                                   :vperp => 1:0,
+                                                                   :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp)=>Dict(:s => 1:2,
+                                                                :r => 1:3,
+                                                                :z => 1:0,
+                                                                :vperp => 1:0,
+                                                                :vpa => 1:0,),
+                                       (:anyzv,:z,:vpa)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp,:vpa)=>Dict(:s => 1:2,
+                                                                     :r => 1:3,
+                                                                     :z => 3:4,
+                                                                     :vperp => 4:7,
+                                                                     :vpa => 1:11,))),
+
+    expected_debug_ranges(block_rank=0, block_size=8,
+                          combination_to_split=(:anyzv, :z, :vperp, :vpa),
+                          dims_to_split=(:z, :vperp, :vpa,);
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anyzv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:4,
+                                                       :vperp => 1:7,
+                                                       :vpa => 1:11,),
+                                       (:anyzv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:4,
+                                                              :vperp => 1:7,
+                                                              :vpa => 1:11,),
+                                       (:anyzv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:4,
+                                                            :vperp => 1:7,
+                                                            :vpa => 1:11,),
+                                       (:anyzv,:z)=>Dict(:s => 1:2,
+                                                         :r => 1:3,
+                                                         :z => 1:4,
+                                                         :vperp => 1:7,
+                                                         :vpa => 1:11,),
+                                       (:anyzv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:4,
+                                                                   :vperp => 1:7,
+                                                                   :vpa => 1:11,),
+                                       (:anyzv,:z,:vperp)=>Dict(:s => 1:2,
+                                                                :r => 1:3,
+                                                                :z => 1:4,
+                                                                :vperp => 1:7,
+                                                                :vpa => 1:11,),
+                                       (:anyzv,:z,:vpa)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:4,
+                                                              :vperp => 1:7,
+                                                              :vpa => 1:11,),
+                                       (:anyzv,:z,:vperp,:vpa)=>Dict(:s => 1:2,
+                                                                     :r => 1:3,
+                                                                     :z => 1:2,
+                                                                     :vperp => 1:3,
+                                                                     :vpa => 1:5,))),
+
+    expected_debug_ranges(block_rank=1, block_size=8,
+                          combination_to_split=(:anyzv, :z, :vperp, :vpa),
+                          dims_to_split=(:z, :vperp, :vpa,);
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anyzv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:0,
+                                                       :vperp => 1:0,
+                                                       :vpa => 1:0,),
+                                       (:anyzv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:0,
+                                                            :vperp => 1:0,
+                                                            :vpa => 1:0,),
+                                       (:anyzv,:z)=>Dict(:s => 1:2,
+                                                         :r => 1:3,
+                                                         :z => 1:0,
+                                                         :vperp => 1:0,
+                                                         :vpa => 1:0,),
+                                       (:anyzv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:0,
+                                                                   :vperp => 1:0,
+                                                                   :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp)=>Dict(:s => 1:2,
+                                                                :r => 1:3,
+                                                                :z => 1:0,
+                                                                :vperp => 1:0,
+                                                                :vpa => 1:0,),
+                                       (:anyzv,:z,:vpa)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp,:vpa)=>Dict(:s => 1:2,
+                                                                     :r => 1:3,
+                                                                     :z => 1:2,
+                                                                     :vperp => 1:3,
+                                                                     :vpa => 6:11,))),
+
+    expected_debug_ranges(block_rank=2, block_size=8,
+                          combination_to_split=(:anyzv, :z, :vperp, :vpa),
+                          dims_to_split=(:z, :vperp, :vpa,);
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anyzv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:0,
+                                                       :vperp => 1:0,
+                                                       :vpa => 1:0,),
+                                       (:anyzv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:0,
+                                                            :vperp => 1:0,
+                                                            :vpa => 1:0,),
+                                       (:anyzv,:z)=>Dict(:s => 1:2,
+                                                         :r => 1:3,
+                                                         :z => 1:0,
+                                                         :vperp => 1:0,
+                                                         :vpa => 1:0,),
+                                       (:anyzv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:0,
+                                                                   :vperp => 1:0,
+                                                                   :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp)=>Dict(:s => 1:2,
+                                                                :r => 1:3,
+                                                                :z => 1:0,
+                                                                :vperp => 1:0,
+                                                                :vpa => 1:0,),
+                                       (:anyzv,:z,:vpa)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp,:vpa)=>Dict(:s => 1:2,
+                                                                     :r => 1:3,
+                                                                     :z => 1:2,
+                                                                     :vperp => 4:7,
+                                                                     :vpa => 1:5,))),
+
+    expected_debug_ranges(block_rank=3, block_size=8,
+                          combination_to_split=(:anyzv, :z, :vperp, :vpa),
+                          dims_to_split=(:z, :vperp, :vpa,);
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anyzv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:0,
+                                                       :vperp => 1:0,
+                                                       :vpa => 1:0,),
+                                       (:anyzv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:0,
+                                                            :vperp => 1:0,
+                                                            :vpa => 1:0,),
+                                       (:anyzv,:z)=>Dict(:s => 1:2,
+                                                         :r => 1:3,
+                                                         :z => 1:0,
+                                                         :vperp => 1:0,
+                                                         :vpa => 1:0,),
+                                       (:anyzv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:0,
+                                                                   :vperp => 1:0,
+                                                                   :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp)=>Dict(:s => 1:2,
+                                                                :r => 1:3,
+                                                                :z => 1:0,
+                                                                :vperp => 1:0,
+                                                                :vpa => 1:0,),
+                                       (:anyzv,:z,:vpa)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp,:vpa)=>Dict(:s => 1:2,
+                                                                     :r => 1:3,
+                                                                     :z => 1:2,
+                                                                     :vperp => 4:7,
+                                                                     :vpa => 6:11,))),
+
+    expected_debug_ranges(block_rank=4, block_size=8,
+                          combination_to_split=(:anyzv, :z, :vperp, :vpa),
+                          dims_to_split=(:z, :vperp, :vpa,);
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anyzv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:0,
+                                                       :vperp => 1:0,
+                                                       :vpa => 1:0,),
+                                       (:anyzv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:0,
+                                                            :vperp => 1:0,
+                                                            :vpa => 1:0,),
+                                       (:anyzv,:z)=>Dict(:s => 1:2,
+                                                         :r => 1:3,
+                                                         :z => 1:0,
+                                                         :vperp => 1:0,
+                                                         :vpa => 1:0,),
+                                       (:anyzv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:0,
+                                                                   :vperp => 1:0,
+                                                                   :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp)=>Dict(:s => 1:2,
+                                                                :r => 1:3,
+                                                                :z => 1:0,
+                                                                :vperp => 1:0,
+                                                                :vpa => 1:0,),
+                                       (:anyzv,:z,:vpa)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp,:vpa)=>Dict(:s => 1:2,
+                                                                     :r => 1:3,
+                                                                     :z => 3:4,
+                                                                     :vperp => 1:3,
+                                                                     :vpa => 1:5,))),
+
+    expected_debug_ranges(block_rank=5, block_size=8,
+                          combination_to_split=(:anyzv, :z, :vperp, :vpa),
+                          dims_to_split=(:z, :vperp, :vpa,);
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anyzv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:0,
+                                                       :vperp => 1:0,
+                                                       :vpa => 1:0,),
+                                       (:anyzv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:0,
+                                                            :vperp => 1:0,
+                                                            :vpa => 1:0,),
+                                       (:anyzv,:z)=>Dict(:s => 1:2,
+                                                         :r => 1:3,
+                                                         :z => 1:0,
+                                                         :vperp => 1:0,
+                                                         :vpa => 1:0,),
+                                       (:anyzv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:0,
+                                                                   :vperp => 1:0,
+                                                                   :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp)=>Dict(:s => 1:2,
+                                                                :r => 1:3,
+                                                                :z => 1:0,
+                                                                :vperp => 1:0,
+                                                                :vpa => 1:0,),
+                                       (:anyzv,:z,:vpa)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp,:vpa)=>Dict(:s => 1:2,
+                                                                     :r => 1:3,
+                                                                     :z => 3:4,
+                                                                     :vperp => 1:3,
+                                                                     :vpa => 6:11,))),
+
+    expected_debug_ranges(block_rank=6, block_size=8,
+                          combination_to_split=(:anyzv, :z, :vperp, :vpa),
+                          dims_to_split=(:z, :vperp, :vpa,);
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anyzv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:0,
+                                                       :vperp => 1:0,
+                                                       :vpa => 1:0,),
+                                       (:anyzv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:0,
+                                                            :vperp => 1:0,
+                                                            :vpa => 1:0,),
+                                       (:anyzv,:z)=>Dict(:s => 1:2,
+                                                         :r => 1:3,
+                                                         :z => 1:0,
+                                                         :vperp => 1:0,
+                                                         :vpa => 1:0,),
+                                       (:anyzv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:0,
+                                                                   :vperp => 1:0,
+                                                                   :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp)=>Dict(:s => 1:2,
+                                                                :r => 1:3,
+                                                                :z => 1:0,
+                                                                :vperp => 1:0,
+                                                                :vpa => 1:0,),
+                                       (:anyzv,:z,:vpa)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp,:vpa)=>Dict(:s => 1:2,
+                                                                     :r => 1:3,
+                                                                     :z => 3:4,
+                                                                     :vperp => 4:7,
+                                                                     :vpa => 1:5,))),
+
+    expected_debug_ranges(block_rank=7, block_size=8,
+                          combination_to_split=(:anyzv, :z, :vperp, :vpa),
+                          dims_to_split=(:z, :vperp, :vpa,);
+                          dim_sizes=debug_dim_sizes,
+                          results=Dict((:anyzv,)=>Dict(:s => 1:2,
+                                                       :r => 1:3,
+                                                       :z => 1:0,
+                                                       :vperp => 1:0,
+                                                       :vpa => 1:0,),
+                                       (:anyzv,:vperp,)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:vpa,)=>Dict(:s => 1:2,
+                                                            :r => 1:3,
+                                                            :z => 1:0,
+                                                            :vperp => 1:0,
+                                                            :vpa => 1:0,),
+                                       (:anyzv,:z)=>Dict(:s => 1:2,
+                                                         :r => 1:3,
+                                                         :z => 1:0,
+                                                         :vperp => 1:0,
+                                                         :vpa => 1:0,),
+                                       (:anyzv,:vperp,:vpa,)=>Dict(:s => 1:2,
+                                                                   :r => 1:3,
+                                                                   :z => 1:0,
+                                                                   :vperp => 1:0,
+                                                                   :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp)=>Dict(:s => 1:2,
+                                                                :r => 1:3,
+                                                                :z => 1:0,
+                                                                :vperp => 1:0,
+                                                                :vpa => 1:0,),
+                                       (:anyzv,:z,:vpa)=>Dict(:s => 1:2,
+                                                              :r => 1:3,
+                                                              :z => 1:0,
+                                                              :vperp => 1:0,
+                                                              :vpa => 1:0,),
+                                       (:anyzv,:z,:vperp,:vpa)=>Dict(:s => 1:2,
+                                                                     :r => 1:3,
+                                                                     :z => 3:4,
+                                                                     :vperp => 4:7,
+                                                                     :vpa => 6:11,))),
+   ]
 
 function test_debug_setup_loop_ranges_split_one_combination!()
     @testset "debug_setup_loop_ranges_split_one_combination" begin
@@ -3115,3550 +6184,17 @@ function test_debug_setup_loop_ranges_split_one_combination!()
         # 'anyzv' communicators in debug_setup_loop_ranges_split_one_combination!()
         comm_block[] = comm_world
 
-        debug_setup_loop_ranges_split_one_combination!(
-            0, 2, (:s, :z), :s; s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13,
-            vr=17, vz=19)
-
-        @test loop_ranges_store[()].s == 1:2
-        @test loop_ranges_store[()].r == 1:3
-        @test loop_ranges_store[()].z == 1:4
-
-        @test loop_ranges_store[(:s,)].s == 1:2
-        @test loop_ranges_store[(:s,)].r == 1:3
-        @test loop_ranges_store[(:s,)].z == 1:4
-
-        @test loop_ranges_store[(:r,)].s == 1:2
-        @test loop_ranges_store[(:r,)].r == 1:3
-        @test loop_ranges_store[(:r,)].z == 1:4
-
-        @test loop_ranges_store[(:z,)].s == 1:2
-        @test loop_ranges_store[(:z,)].r == 1:3
-        @test loop_ranges_store[(:z,)].z == 1:4
-
-        @test loop_ranges_store[(:s,:r)].s == 1:2
-        @test loop_ranges_store[(:s,:r)].r == 1:3
-        @test loop_ranges_store[(:s,:r)].z == 1:4
-
-        @test loop_ranges_store[(:s,:z)].s == 1:1
-        @test loop_ranges_store[(:s,:z)].r == 1:3
-        @test loop_ranges_store[(:s,:z)].z == 1:4
-
-        @test loop_ranges_store[(:r,:z)].s == 1:2
-        @test loop_ranges_store[(:r,:z)].r == 1:3
-        @test loop_ranges_store[(:r,:z)].z == 1:4
-
-        @test loop_ranges_store[(:s,:r,:z)].s == 1:2
-        @test loop_ranges_store[(:s,:r,:z)].r == 1:3
-        @test loop_ranges_store[(:s,:r,:z)].z == 1:4
-
-        debug_setup_loop_ranges_split_one_combination!(
-            1, 2, (:s, :z), :s; s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13,
-            vr=17, vz=19)
-
-        @test loop_ranges_store[()].s == 1:0
-        @test loop_ranges_store[()].r == 1:0
-        @test loop_ranges_store[()].z == 1:0
-
-        @test loop_ranges_store[(:s,)].s == 1:0
-        @test loop_ranges_store[(:s,)].r == 1:3
-        @test loop_ranges_store[(:s,)].z == 1:4
-
-        @test loop_ranges_store[(:r,)].s == 1:2
-        @test loop_ranges_store[(:r,)].r == 1:0
-        @test loop_ranges_store[(:r,)].z == 1:4
-
-        @test loop_ranges_store[(:z,)].s == 1:2
-        @test loop_ranges_store[(:z,)].r == 1:3
-        @test loop_ranges_store[(:z,)].z == 1:0
-
-        @test loop_ranges_store[(:s,:r)].s == 1:0
-        @test loop_ranges_store[(:s,:r)].r == 1:0
-        @test loop_ranges_store[(:s,:r)].z == 1:4
-
-        @test loop_ranges_store[(:s,:z)].s == 2:2
-        @test loop_ranges_store[(:s,:z)].r == 1:3
-        @test loop_ranges_store[(:s,:z)].z == 1:4
-
-        @test loop_ranges_store[(:r,:z)].s == 1:2
-        @test loop_ranges_store[(:r,:z)].r == 1:0
-        @test loop_ranges_store[(:r,:z)].z == 1:0
-
-        @test loop_ranges_store[(:s,:r,:z)].s == 1:0
-        @test loop_ranges_store[(:s,:r,:z)].r == 1:0
-        @test loop_ranges_store[(:s,:r,:z)].z == 1:0
-
-        debug_setup_loop_ranges_split_one_combination!(
-            0, 4, (:r, :z), :r, :z; s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13,
-            vr=17, vz=19)
-
-        @test loop_ranges_store[()].s == 1:2
-        @test loop_ranges_store[()].r == 1:3
-        @test loop_ranges_store[()].z == 1:4
-
-        @test loop_ranges_store[(:s,)].s == 1:2
-        @test loop_ranges_store[(:s,)].r == 1:3
-        @test loop_ranges_store[(:s,)].z == 1:4
-
-        @test loop_ranges_store[(:r,)].s == 1:2
-        @test loop_ranges_store[(:r,)].r == 1:3
-        @test loop_ranges_store[(:r,)].z == 1:4
-
-        @test loop_ranges_store[(:z,)].s == 1:2
-        @test loop_ranges_store[(:z,)].r == 1:3
-        @test loop_ranges_store[(:z,)].z == 1:4
-
-        @test loop_ranges_store[(:s,:r)].s == 1:2
-        @test loop_ranges_store[(:s,:r)].r == 1:3
-        @test loop_ranges_store[(:s,:r)].z == 1:4
-
-        @test loop_ranges_store[(:s,:z)].s == 1:2
-        @test loop_ranges_store[(:s,:z)].r == 1:3
-        @test loop_ranges_store[(:s,:z)].z == 1:4
-
-        @test loop_ranges_store[(:r,:z)].s == 1:2
-        @test loop_ranges_store[(:r,:z)].r == 1:1
-        @test loop_ranges_store[(:r,:z)].z == 1:2
-
-        @test loop_ranges_store[(:s,:r,:z)].s == 1:2
-        @test loop_ranges_store[(:s,:r,:z)].r == 1:3
-        @test loop_ranges_store[(:s,:r,:z)].z == 1:4
-
-        debug_setup_loop_ranges_split_one_combination!(
-            1, 4, (:r, :z), :r, :z; s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13,
-            vr=17, vz=19)
-
-        @test loop_ranges_store[()].s == 1:0
-        @test loop_ranges_store[()].r == 1:0
-        @test loop_ranges_store[()].z == 1:0
-
-        @test loop_ranges_store[(:s,)].s == 1:0
-        @test loop_ranges_store[(:s,)].r == 1:3
-        @test loop_ranges_store[(:s,)].z == 1:4
-
-        @test loop_ranges_store[(:r,)].s == 1:2
-        @test loop_ranges_store[(:r,)].r == 1:0
-        @test loop_ranges_store[(:r,)].z == 1:4
-
-        @test loop_ranges_store[(:z,)].s == 1:2
-        @test loop_ranges_store[(:z,)].r == 1:3
-        @test loop_ranges_store[(:z,)].z == 1:0
-
-        @test loop_ranges_store[(:s,:r)].s == 1:0
-        @test loop_ranges_store[(:s,:r)].r == 1:0
-        @test loop_ranges_store[(:s,:r)].z == 1:4
-
-        @test loop_ranges_store[(:s,:z)].s == 1:0
-        @test loop_ranges_store[(:s,:z)].r == 1:3
-        @test loop_ranges_store[(:s,:z)].z == 1:0
-
-        @test loop_ranges_store[(:r,:z)].s == 1:2
-        @test loop_ranges_store[(:r,:z)].r == 1:1
-        @test loop_ranges_store[(:r,:z)].z == 3:4
-
-        @test loop_ranges_store[(:s,:r,:z)].s == 1:0
-        @test loop_ranges_store[(:s,:r,:z)].r == 1:0
-        @test loop_ranges_store[(:s,:r,:z)].z == 1:0
-
-        debug_setup_loop_ranges_split_one_combination!(
-            2, 4, (:r, :z), :r, :z; s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13,
-            vr=17, vz=19)
-
-        @test loop_ranges_store[()].s == 1:0
-        @test loop_ranges_store[()].r == 1:0
-        @test loop_ranges_store[()].z == 1:0
-
-        @test loop_ranges_store[(:s,)].s == 1:0
-        @test loop_ranges_store[(:s,)].r == 1:3
-        @test loop_ranges_store[(:s,)].z == 1:4
-
-        @test loop_ranges_store[(:r,)].s == 1:2
-        @test loop_ranges_store[(:r,)].r == 1:0
-        @test loop_ranges_store[(:r,)].z == 1:4
-
-        @test loop_ranges_store[(:z,)].s == 1:2
-        @test loop_ranges_store[(:z,)].r == 1:3
-        @test loop_ranges_store[(:z,)].z == 1:0
-
-        @test loop_ranges_store[(:s,:r)].s == 1:0
-        @test loop_ranges_store[(:s,:r)].r == 1:0
-        @test loop_ranges_store[(:s,:r)].z == 1:4
-
-        @test loop_ranges_store[(:s,:z)].s == 1:0
-        @test loop_ranges_store[(:s,:z)].r == 1:3
-        @test loop_ranges_store[(:s,:z)].z == 1:0
-
-        @test loop_ranges_store[(:r,:z)].s == 1:2
-        @test loop_ranges_store[(:r,:z)].r == 2:3
-        @test loop_ranges_store[(:r,:z)].z == 1:2
-
-        @test loop_ranges_store[(:s,:r,:z)].s == 1:0
-        @test loop_ranges_store[(:s,:r,:z)].r == 1:0
-        @test loop_ranges_store[(:s,:r,:z)].z == 1:0
-
-        debug_setup_loop_ranges_split_one_combination!(
-            3, 4, (:r, :z), :r, :z; s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13,
-            vr=17, vz=19)
-
-        @test loop_ranges_store[()].s == 1:0
-        @test loop_ranges_store[()].r == 1:0
-        @test loop_ranges_store[()].z == 1:0
-
-        @test loop_ranges_store[(:s,)].s == 1:0
-        @test loop_ranges_store[(:s,)].r == 1:3
-        @test loop_ranges_store[(:s,)].z == 1:4
-
-        @test loop_ranges_store[(:r,)].s == 1:2
-        @test loop_ranges_store[(:r,)].r == 1:0
-        @test loop_ranges_store[(:r,)].z == 1:4
-
-        @test loop_ranges_store[(:z,)].s == 1:2
-        @test loop_ranges_store[(:z,)].r == 1:3
-        @test loop_ranges_store[(:z,)].z == 1:0
-
-        @test loop_ranges_store[(:s,:r)].s == 1:0
-        @test loop_ranges_store[(:s,:r)].r == 1:0
-        @test loop_ranges_store[(:s,:r)].z == 1:4
-
-        @test loop_ranges_store[(:s,:z)].s == 1:0
-        @test loop_ranges_store[(:s,:z)].r == 1:3
-        @test loop_ranges_store[(:s,:z)].z == 1:0
-
-        @test loop_ranges_store[(:r,:z)].s == 1:2
-        @test loop_ranges_store[(:r,:z)].r == 2:3
-        @test loop_ranges_store[(:r,:z)].z == 3:4
-
-        @test loop_ranges_store[(:s,:r,:z)].s == 1:0
-        @test loop_ranges_store[(:s,:r,:z)].r == 1:0
-        @test loop_ranges_store[(:s,:r,:z)].z == 1:0
-
-        debug_setup_loop_ranges_split_one_combination!(
-            3, 8, (:s, :r, :z), :s, :r, :z; s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13,
-            vr=17, vz=19)
-
-        @test loop_ranges_store[()].s == 1:0
-        @test loop_ranges_store[()].r == 1:0
-        @test loop_ranges_store[()].z == 1:0
-
-        @test loop_ranges_store[(:s,)].s == 1:0
-        @test loop_ranges_store[(:s,)].r == 1:3
-        @test loop_ranges_store[(:s,)].z == 1:4
-
-        @test loop_ranges_store[(:r,)].s == 1:2
-        @test loop_ranges_store[(:r,)].r == 1:0
-        @test loop_ranges_store[(:r,)].z == 1:4
-
-        @test loop_ranges_store[(:z,)].s == 1:2
-        @test loop_ranges_store[(:z,)].r == 1:3
-        @test loop_ranges_store[(:z,)].z == 1:0
-
-        @test loop_ranges_store[(:s,:r)].s == 1:0
-        @test loop_ranges_store[(:s,:r)].r == 1:0
-        @test loop_ranges_store[(:s,:r)].z == 1:4
-
-        @test loop_ranges_store[(:s,:z)].s == 1:0
-        @test loop_ranges_store[(:s,:z)].r == 1:3
-        @test loop_ranges_store[(:s,:z)].z == 1:0
-
-        @test loop_ranges_store[(:r,:z)].s == 1:2
-        @test loop_ranges_store[(:r,:z)].r == 1:0
-        @test loop_ranges_store[(:r,:z)].z == 1:0
-
-        @test loop_ranges_store[(:s,:r,:z)].s == 1:1
-        @test loop_ranges_store[(:s,:r,:z)].r == 2:3
-        @test loop_ranges_store[(:s,:r,:z)].z == 3:4
-    end
-
-    return nothing
-end
-
-function test_debug_setup_loop_ranges_split_one_combination_anysv()
-    @testset "debug_setup_loop_ranges_split_one_combination_anysv" begin
-        # Need to set comm_block[] to avoid MPI errors when creating 'anysv' or
-        # 'anyzv' communicators in debug_setup_loop_ranges_split_one_combination!()
-        comm_block[] = comm_world
-
-        debug_setup_loop_ranges_split_one_combination!(
-            0, 2, (:anysv, :vpa), :vpa, s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13,
-            vr=17, vz=19)
-
-        @test loop_ranges_store[(:anysv,)].s == 1:2
-        @test loop_ranges_store[(:anysv,)].r == 1:3
-        @test loop_ranges_store[(:anysv,)].z == 1:4
-        @test loop_ranges_store[(:anysv,)].vperp == 1:7
-        @test loop_ranges_store[(:anysv,)].vpa == 1:11
-
-        @test loop_ranges_store[(:anysv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anysv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anysv,:vperp)].z == 1:4
-        @test loop_ranges_store[(:anysv,:vperp)].vperp == 1:7
-        @test loop_ranges_store[(:anysv,:vperp)].vpa == 1:11
-
-        @test loop_ranges_store[(:anysv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anysv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anysv,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anysv,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anysv,:vpa)].vpa == 1:5
-
-        @test loop_ranges_store[(:anysv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anysv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anysv,:vperp,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anysv,:vperp,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anysv,:vperp,:vpa)].vpa == 1:11
-
-        debug_setup_loop_ranges_split_one_combination!(
-            1, 2, (:anysv, :vpa), :vpa, s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13,
-            vr=17, vz=19)
-
-        @test loop_ranges_store[(:anysv,)].s == 1:2
-        @test loop_ranges_store[(:anysv,)].r == 1:3
-        @test loop_ranges_store[(:anysv,)].z == 1:4
-        @test loop_ranges_store[(:anysv,)].vperp == 1:0
-        @test loop_ranges_store[(:anysv,)].vpa == 1:0
-
-        @test loop_ranges_store[(:anysv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anysv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anysv,:vperp)].z == 1:4
-        @test loop_ranges_store[(:anysv,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anysv,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anysv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anysv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anysv,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anysv,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anysv,:vpa)].vpa == 6:11
-
-        @test loop_ranges_store[(:anysv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anysv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anysv,:vperp,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anysv,:vperp,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anysv,:vperp,:vpa)].vpa == 1:0
-
-        debug_setup_loop_ranges_split_one_combination!(
-            0, 2, (:anysv, :vperp), :vperp, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anysv,)].s == 1:2
-        @test loop_ranges_store[(:anysv,)].r == 1:3
-        @test loop_ranges_store[(:anysv,)].z == 1:4
-        @test loop_ranges_store[(:anysv,)].vperp == 1:7
-        @test loop_ranges_store[(:anysv,)].vpa == 1:11
-
-        @test loop_ranges_store[(:anysv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anysv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anysv,:vperp)].z == 1:4
-        @test loop_ranges_store[(:anysv,:vperp)].vperp == 1:3
-        @test loop_ranges_store[(:anysv,:vperp)].vpa == 1:11
-
-        @test loop_ranges_store[(:anysv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anysv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anysv,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anysv,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anysv,:vpa)].vpa == 1:11
-
-        @test loop_ranges_store[(:anysv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anysv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anysv,:vperp,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anysv,:vperp,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anysv,:vperp,:vpa)].vpa == 1:11
-
-        debug_setup_loop_ranges_split_one_combination!(
-            1, 2, (:anysv, :vperp), :vperp, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anysv,)].s == 1:2
-        @test loop_ranges_store[(:anysv,)].r == 1:3
-        @test loop_ranges_store[(:anysv,)].z == 1:4
-        @test loop_ranges_store[(:anysv,)].vperp == 1:0
-        @test loop_ranges_store[(:anysv,)].vpa == 1:0
-
-        @test loop_ranges_store[(:anysv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anysv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anysv,:vperp)].z == 1:4
-        @test loop_ranges_store[(:anysv,:vperp)].vperp == 4:7
-        @test loop_ranges_store[(:anysv,:vperp)].vpa == 1:11
-
-        @test loop_ranges_store[(:anysv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anysv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anysv,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anysv,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anysv,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anysv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anysv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anysv,:vperp,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anysv,:vperp,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anysv,:vperp,:vpa)].vpa == 1:0
-
-        debug_setup_loop_ranges_split_one_combination!(
-            0, 2, (:anysv, :vperp, :vpa), :vpa, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anysv,)].s == 1:2
-        @test loop_ranges_store[(:anysv,)].r == 1:3
-        @test loop_ranges_store[(:anysv,)].z == 1:4
-        @test loop_ranges_store[(:anysv,)].vperp == 1:7
-        @test loop_ranges_store[(:anysv,)].vpa == 1:11
-
-        @test loop_ranges_store[(:anysv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anysv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anysv,:vperp)].z == 1:4
-        @test loop_ranges_store[(:anysv,:vperp)].vperp == 1:7
-        @test loop_ranges_store[(:anysv,:vperp)].vpa == 1:11
-
-        @test loop_ranges_store[(:anysv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anysv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anysv,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anysv,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anysv,:vpa)].vpa == 1:11
-
-        @test loop_ranges_store[(:anysv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anysv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anysv,:vperp,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anysv,:vperp,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anysv,:vperp,:vpa)].vpa == 1:5
-
-        debug_setup_loop_ranges_split_one_combination!(
-            1, 2, (:anysv, :vperp, :vpa), :vpa, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anysv,)].s == 1:2
-        @test loop_ranges_store[(:anysv,)].r == 1:3
-        @test loop_ranges_store[(:anysv,)].z == 1:4
-        @test loop_ranges_store[(:anysv,)].vperp == 1:0
-        @test loop_ranges_store[(:anysv,)].vpa == 1:0
-
-        @test loop_ranges_store[(:anysv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anysv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anysv,:vperp)].z == 1:4
-        @test loop_ranges_store[(:anysv,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anysv,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anysv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anysv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anysv,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anysv,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anysv,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anysv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anysv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anysv,:vperp,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anysv,:vperp,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anysv,:vperp,:vpa)].vpa == 6:11
-
-        debug_setup_loop_ranges_split_one_combination!(
-            0, 2, (:anysv, :vperp, :vpa), :vperp, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anysv,)].s == 1:2
-        @test loop_ranges_store[(:anysv,)].r == 1:3
-        @test loop_ranges_store[(:anysv,)].z == 1:4
-        @test loop_ranges_store[(:anysv,)].vperp == 1:7
-        @test loop_ranges_store[(:anysv,)].vpa == 1:11
-
-        @test loop_ranges_store[(:anysv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anysv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anysv,:vperp)].z == 1:4
-        @test loop_ranges_store[(:anysv,:vperp)].vperp == 1:7
-        @test loop_ranges_store[(:anysv,:vperp)].vpa == 1:11
-
-        @test loop_ranges_store[(:anysv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anysv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anysv,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anysv,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anysv,:vpa)].vpa == 1:11
-
-        @test loop_ranges_store[(:anysv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anysv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anysv,:vperp,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anysv,:vperp,:vpa)].vperp == 1:3
-        @test loop_ranges_store[(:anysv,:vperp,:vpa)].vpa == 1:11
-
-        debug_setup_loop_ranges_split_one_combination!(
-            1, 2, (:anysv, :vperp, :vpa), :vperp, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anysv,)].s == 1:2
-        @test loop_ranges_store[(:anysv,)].r == 1:3
-        @test loop_ranges_store[(:anysv,)].z == 1:4
-        @test loop_ranges_store[(:anysv,)].vperp == 1:0
-        @test loop_ranges_store[(:anysv,)].vpa == 1:0
-
-        @test loop_ranges_store[(:anysv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anysv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anysv,:vperp)].z == 1:4
-        @test loop_ranges_store[(:anysv,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anysv,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anysv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anysv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anysv,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anysv,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anysv,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anysv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anysv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anysv,:vperp,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anysv,:vperp,:vpa)].vperp == 4:7
-        @test loop_ranges_store[(:anysv,:vperp,:vpa)].vpa == 1:11
-
-        debug_setup_loop_ranges_split_one_combination!(
-            0, 4, (:anysv, :vperp, :vpa), :vperp, :vpa, s=2, r=3, z=4, sn=5, vperp=7,
-            vpa=11, vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anysv,)].s == 1:2
-        @test loop_ranges_store[(:anysv,)].r == 1:3
-        @test loop_ranges_store[(:anysv,)].z == 1:4
-        @test loop_ranges_store[(:anysv,)].vperp == 1:7
-        @test loop_ranges_store[(:anysv,)].vpa == 1:11
-
-        @test loop_ranges_store[(:anysv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anysv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anysv,:vperp)].z == 1:4
-        @test loop_ranges_store[(:anysv,:vperp)].vperp == 1:7
-        @test loop_ranges_store[(:anysv,:vperp)].vpa == 1:11
-
-        @test loop_ranges_store[(:anysv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anysv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anysv,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anysv,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anysv,:vpa)].vpa == 1:11
-
-        @test loop_ranges_store[(:anysv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anysv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anysv,:vperp,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anysv,:vperp,:vpa)].vperp == 1:3
-        @test loop_ranges_store[(:anysv,:vperp,:vpa)].vpa == 1:5
-
-        debug_setup_loop_ranges_split_one_combination!(
-            1, 4, (:anysv, :vperp, :vpa), :vperp, :vpa, s=2, r=3, z=4, sn=5, vperp=7,
-            vpa=11, vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anysv,)].s == 1:2
-        @test loop_ranges_store[(:anysv,)].r == 1:3
-        @test loop_ranges_store[(:anysv,)].z == 1:4
-        @test loop_ranges_store[(:anysv,)].vperp == 1:0
-        @test loop_ranges_store[(:anysv,)].vpa == 1:0
-
-        @test loop_ranges_store[(:anysv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anysv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anysv,:vperp)].z == 1:4
-        @test loop_ranges_store[(:anysv,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anysv,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anysv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anysv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anysv,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anysv,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anysv,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anysv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anysv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anysv,:vperp,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anysv,:vperp,:vpa)].vperp == 1:3
-        @test loop_ranges_store[(:anysv,:vperp,:vpa)].vpa == 6:11
-
-        debug_setup_loop_ranges_split_one_combination!(
-            2, 4, (:anysv, :vperp, :vpa), :vperp, :vpa, s=2, r=3, z=4, sn=5, vperp=7,
-            vpa=11, vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anysv,)].s == 1:2
-        @test loop_ranges_store[(:anysv,)].r == 1:3
-        @test loop_ranges_store[(:anysv,)].z == 1:4
-        @test loop_ranges_store[(:anysv,)].vperp == 1:0
-        @test loop_ranges_store[(:anysv,)].vpa == 1:0
-
-        @test loop_ranges_store[(:anysv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anysv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anysv,:vperp)].z == 1:4
-        @test loop_ranges_store[(:anysv,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anysv,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anysv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anysv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anysv,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anysv,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anysv,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anysv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anysv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anysv,:vperp,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anysv,:vperp,:vpa)].vperp == 4:7
-        @test loop_ranges_store[(:anysv,:vperp,:vpa)].vpa == 1:5
-
-        debug_setup_loop_ranges_split_one_combination!(
-            3, 4, (:anysv, :vperp, :vpa), :vperp, :vpa, s=2, r=3, z=4, sn=5, vperp=7,
-            vpa=11, vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anysv,)].s == 1:2
-        @test loop_ranges_store[(:anysv,)].r == 1:3
-        @test loop_ranges_store[(:anysv,)].z == 1:4
-        @test loop_ranges_store[(:anysv,)].vperp == 1:0
-        @test loop_ranges_store[(:anysv,)].vpa == 1:0
-
-        @test loop_ranges_store[(:anysv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anysv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anysv,:vperp)].z == 1:4
-        @test loop_ranges_store[(:anysv,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anysv,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anysv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anysv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anysv,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anysv,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anysv,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anysv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anysv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anysv,:vperp,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anysv,:vperp,:vpa)].vperp == 4:7
-        @test loop_ranges_store[(:anysv,:vperp,:vpa)].vpa == 6:11
-    end
-
-    return nothing
-end
-
-function test_debug_setup_loop_ranges_split_one_combination_anyzv()
-    @testset "debug_setup_loop_ranges_split_one_combination_anyzv" begin
-        # Need to set comm_block[] to avoid MPI errors when creating 'anysv' or
-        # 'anyzv' communicators in debug_setup_loop_ranges_split_one_combination!()
-        comm_block[] = comm_world
-
-        debug_setup_loop_ranges_split_one_combination!(
-            0, 2, (:anyzv, :vpa), :vpa, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anyzv,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,)].r == 1:3
-        @test loop_ranges_store[(:anyzv,)].z == 1:4
-        @test loop_ranges_store[(:anyzv,)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vperp)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:vperp)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:vpa)].vpa == 1:5
-
-        @test loop_ranges_store[(:anyzv,:z)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:11
-
-        debug_setup_loop_ranges_split_one_combination!(
-            1, 2, (:anyzv, :vpa), :vpa, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anyzv,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,)].r == 1:3
-        @test loop_ranges_store[(:anyzv,)].z == 1:0
-        @test loop_ranges_store[(:anyzv,)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:vpa)].vpa == 6:11
-
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:0
-
-        debug_setup_loop_ranges_split_one_combination!(
-            0, 2, (:anyzv, :vperp), :vperp, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anyzv,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,)].r == 1:3
-        @test loop_ranges_store[(:anyzv,)].z == 1:4
-        @test loop_ranges_store[(:anyzv,)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vperp)].vperp == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:vpa)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:11
-
-        debug_setup_loop_ranges_split_one_combination!(
-            1, 2, (:anyzv, :vperp), :vperp, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anyzv,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,)].r == 1:3
-        @test loop_ranges_store[(:anyzv,)].z == 1:0
-        @test loop_ranges_store[(:anyzv,)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vperp)].vperp == 4:7
-        @test loop_ranges_store[(:anyzv,:vperp)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:0
-
-        debug_setup_loop_ranges_split_one_combination!(
-            0, 2, (:anyzv, :z), :z, s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13,
-            vr=17, vz=19)
-
-        @test loop_ranges_store[(:anyzv,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,)].r == 1:3
-        @test loop_ranges_store[(:anyzv,)].z == 1:4
-        @test loop_ranges_store[(:anyzv,)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vperp)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:vperp)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:vpa)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z)].z == 1:2
-        @test loop_ranges_store[(:anyzv,:z)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:11
-
-        debug_setup_loop_ranges_split_one_combination!(
-            1, 2, (:anyzv, :z), :z, s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13,
-            vr=17, vz=19)
-
-        @test loop_ranges_store[(:anyzv,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,)].r == 1:3
-        @test loop_ranges_store[(:anyzv,)].z == 1:0
-        @test loop_ranges_store[(:anyzv,)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z)].z == 3:4
-        @test loop_ranges_store[(:anyzv,:z)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:0
-
-        debug_setup_loop_ranges_split_one_combination!(
-            0, 2, (:anyzv, :vperp, :vpa), :vpa, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anyzv,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,)].r == 1:3
-        @test loop_ranges_store[(:anyzv,)].z == 1:4
-        @test loop_ranges_store[(:anyzv,)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vperp)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:vperp)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:vpa)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa == 1:5
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:11
-
-        debug_setup_loop_ranges_split_one_combination!(
-            1, 2, (:anyzv, :vperp, :vpa), :vpa, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anyzv,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,)].r == 1:3
-        @test loop_ranges_store[(:anyzv,)].z == 1:0
-        @test loop_ranges_store[(:anyzv,)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa == 6:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:0
-
-        debug_setup_loop_ranges_split_one_combination!(
-            0, 2, (:anyzv, :vperp, :vpa), :vperp, s=2, r=3, z=4, sn=5, vperp=7,
-            vpa=11, vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anyzv,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,)].r == 1:3
-        @test loop_ranges_store[(:anyzv,)].z == 1:4
-        @test loop_ranges_store[(:anyzv,)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vperp)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:vperp)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:vpa)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:11
-
-        debug_setup_loop_ranges_split_one_combination!(
-            1, 2, (:anyzv, :vperp, :vpa), :vperp, s=2, r=3, z=4, sn=5, vperp=7,
-            vpa=11, vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anyzv,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,)].r == 1:3
-        @test loop_ranges_store[(:anyzv,)].z == 1:0
-        @test loop_ranges_store[(:anyzv,)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp == 4:7
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:0
-
-        debug_setup_loop_ranges_split_one_combination!(
-            0, 4, (:anyzv, :vperp, :vpa), :vperp, :vpa, s=2, r=3, z=4, sn=5, vperp=7,
-            vpa=11, vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anyzv,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,)].r == 1:3
-        @test loop_ranges_store[(:anyzv,)].z == 1:4
-        @test loop_ranges_store[(:anyzv,)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vperp)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:vperp)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:vpa)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa == 1:5
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:11
-
-        debug_setup_loop_ranges_split_one_combination!(
-            1, 4, (:anyzv, :vperp, :vpa), :vperp, :vpa, s=2, r=3, z=4, sn=5, vperp=7,
-            vpa=11, vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anyzv,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,)].r == 1:3
-        @test loop_ranges_store[(:anyzv,)].z == 1:0
-        @test loop_ranges_store[(:anyzv,)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa == 6:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:0
-
-        debug_setup_loop_ranges_split_one_combination!(
-            2, 4, (:anyzv, :vperp, :vpa), :vperp, :vpa, s=2, r=3, z=4, sn=5, vperp=7,
-            vpa=11, vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anyzv,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,)].r == 1:3
-        @test loop_ranges_store[(:anyzv,)].z == 1:0
-        @test loop_ranges_store[(:anyzv,)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp == 4:7
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa == 1:5
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:0
-
-        debug_setup_loop_ranges_split_one_combination!(
-            3, 4, (:anyzv, :vperp, :vpa), :vperp, :vpa, s=2, r=3, z=4, sn=5, vperp=7,
-            vpa=11, vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anyzv,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,)].r == 1:3
-        @test loop_ranges_store[(:anyzv,)].z == 1:0
-        @test loop_ranges_store[(:anyzv,)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp == 4:7
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa == 6:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:0
-
-        debug_setup_loop_ranges_split_one_combination!(
-            0, 2, (:anyzv, :z, :vperp), :vperp, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anyzv,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,)].r == 1:3
-        @test loop_ranges_store[(:anyzv,)].z == 1:4
-        @test loop_ranges_store[(:anyzv,)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vperp)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:vperp)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:vpa)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vperp == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:11
-
-        debug_setup_loop_ranges_split_one_combination!(
-            1, 2, (:anyzv, :z, :vperp), :vperp, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anyzv,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,)].r == 1:3
-        @test loop_ranges_store[(:anyzv,)].z == 1:0
-        @test loop_ranges_store[(:anyzv,)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vperp == 4:7
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:0
-
-        debug_setup_loop_ranges_split_one_combination!(
-            0, 2, (:anyzv, :z, :vperp), :z, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anyzv,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,)].r == 1:3
-        @test loop_ranges_store[(:anyzv,)].z == 1:4
-        @test loop_ranges_store[(:anyzv,)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vperp)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:vperp)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:vpa)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].z == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:11
-
-        debug_setup_loop_ranges_split_one_combination!(
-            1, 2, (:anyzv, :z, :vperp), :z, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anyzv,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,)].r == 1:3
-        @test loop_ranges_store[(:anyzv,)].z == 1:0
-        @test loop_ranges_store[(:anyzv,)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].z == 3:4
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:0
-
-        debug_setup_loop_ranges_split_one_combination!(
-            0, 4, (:anyzv, :z, :vperp), :z, :vperp, s=2, r=3, z=4, sn=5, vperp=7,
-            vpa=11, vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anyzv,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,)].r == 1:3
-        @test loop_ranges_store[(:anyzv,)].z == 1:4
-        @test loop_ranges_store[(:anyzv,)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vperp)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:vperp)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:vpa)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].z == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vperp == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:11
-
-        debug_setup_loop_ranges_split_one_combination!(
-            1, 4, (:anyzv, :z, :vperp), :z, :vperp, s=2, r=3, z=4, sn=5, vperp=7,
-            vpa=11, vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anyzv,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,)].r == 1:3
-        @test loop_ranges_store[(:anyzv,)].z == 1:0
-        @test loop_ranges_store[(:anyzv,)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].z == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vperp == 4:7
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:0
-
-        debug_setup_loop_ranges_split_one_combination!(
-            2, 4, (:anyzv, :z, :vperp), :z, :vperp, s=2, r=3, z=4, sn=5, vperp=7,
-            vpa=11, vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anyzv,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,)].r == 1:3
-        @test loop_ranges_store[(:anyzv,)].z == 1:0
-        @test loop_ranges_store[(:anyzv,)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].z == 3:4
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vperp == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:0
-
-        debug_setup_loop_ranges_split_one_combination!(
-            3, 4, (:anyzv, :z, :vperp), :z, :vperp, s=2, r=3, z=4, sn=5, vperp=7,
-            vpa=11, vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anyzv,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,)].r == 1:3
-        @test loop_ranges_store[(:anyzv,)].z == 1:0
-        @test loop_ranges_store[(:anyzv,)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].z == 3:4
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vperp == 4:7
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:0
-
-        debug_setup_loop_ranges_split_one_combination!(
-            0, 2, (:anyzv, :z, :vpa), :vpa, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anyzv,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,)].r == 1:3
-        @test loop_ranges_store[(:anyzv,)].z == 1:4
-        @test loop_ranges_store[(:anyzv,)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vperp)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:vperp)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:vpa)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vpa == 1:5
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:11
-
-        debug_setup_loop_ranges_split_one_combination!(
-            1, 2, (:anyzv, :z, :vpa), :vpa, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anyzv,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,)].r == 1:3
-        @test loop_ranges_store[(:anyzv,)].z == 1:0
-        @test loop_ranges_store[(:anyzv,)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vpa == 6:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:0
-
-        debug_setup_loop_ranges_split_one_combination!(
-            0, 2, (:anyzv, :z, :vpa), :z, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anyzv,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,)].r == 1:3
-        @test loop_ranges_store[(:anyzv,)].z == 1:4
-        @test loop_ranges_store[(:anyzv,)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vperp)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:vperp)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:vpa)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].z == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:11
-
-        debug_setup_loop_ranges_split_one_combination!(
-            1, 2, (:anyzv, :z, :vpa), :z, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anyzv,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,)].r == 1:3
-        @test loop_ranges_store[(:anyzv,)].z == 1:0
-        @test loop_ranges_store[(:anyzv,)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].z == 3:4
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:0
-
-        debug_setup_loop_ranges_split_one_combination!(
-            0, 4, (:anyzv, :z, :vpa), :z, :vpa, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anyzv,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,)].r == 1:3
-        @test loop_ranges_store[(:anyzv,)].z == 1:4
-        @test loop_ranges_store[(:anyzv,)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vperp)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:vperp)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:vpa)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].z == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vpa == 1:5
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:11
-
-        debug_setup_loop_ranges_split_one_combination!(
-            1, 4, (:anyzv, :z, :vpa), :z, :vpa, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anyzv,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,)].r == 1:3
-        @test loop_ranges_store[(:anyzv,)].z == 1:0
-        @test loop_ranges_store[(:anyzv,)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].z == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vpa == 6:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:0
-
-        debug_setup_loop_ranges_split_one_combination!(
-            2, 4, (:anyzv, :z, :vpa), :z, :vpa, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anyzv,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,)].r == 1:3
-        @test loop_ranges_store[(:anyzv,)].z == 1:0
-        @test loop_ranges_store[(:anyzv,)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].z == 3:4
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vpa == 1:5
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:0
-
-
-        debug_setup_loop_ranges_split_one_combination!(
-            3, 4, (:anyzv, :z, :vpa), :z, :vpa, s=2, r=3, z=4, sn=5, vperp=7, vpa=11,
-            vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anyzv,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,)].r == 1:3
-        @test loop_ranges_store[(:anyzv,)].z == 1:0
-        @test loop_ranges_store[(:anyzv,)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].z == 3:4
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vpa == 6:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:0
-
-        debug_setup_loop_ranges_split_one_combination!(
-            0, 2, (:anyzv, :z, :vperp, :vpa), :vpa, s=2, r=3, z=4, sn=5, vperp=7,
-            vpa=11, vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anyzv,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,)].r == 1:3
-        @test loop_ranges_store[(:anyzv,)].z == 1:4
-        @test loop_ranges_store[(:anyzv,)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vperp)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:vperp)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:vpa)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:5
-
-        debug_setup_loop_ranges_split_one_combination!(
-            1, 2, (:anyzv, :z, :vperp, :vpa), :vpa, s=2, r=3, z=4, sn=5, vperp=7,
-            vpa=11, vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anyzv,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,)].r == 1:3
-        @test loop_ranges_store[(:anyzv,)].z == 1:0
-        @test loop_ranges_store[(:anyzv,)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 6:11
-
-        debug_setup_loop_ranges_split_one_combination!(
-            0, 2, (:anyzv, :z, :vperp, :vpa), :vperp, s=2, r=3, z=4, sn=5, vperp=7,
-            vpa=11, vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anyzv,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,)].r == 1:3
-        @test loop_ranges_store[(:anyzv,)].z == 1:4
-        @test loop_ranges_store[(:anyzv,)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vperp)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:vperp)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:vpa)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vperp == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:11
-
-        debug_setup_loop_ranges_split_one_combination!(
-            1, 2, (:anyzv, :z, :vperp, :vpa), :vperp, s=2, r=3, z=4, sn=5, vperp=7,
-            vpa=11, vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anyzv,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,)].r == 1:3
-        @test loop_ranges_store[(:anyzv,)].z == 1:0
-        @test loop_ranges_store[(:anyzv,)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vperp == 4:7
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:11
-
-        debug_setup_loop_ranges_split_one_combination!(
-            0, 2, (:anyzv, :z, :vperp, :vpa), :z, s=2, r=3, z=4, sn=5, vperp=7,
-            vpa=11, vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anyzv,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,)].r == 1:3
-        @test loop_ranges_store[(:anyzv,)].z == 1:4
-        @test loop_ranges_store[(:anyzv,)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vperp)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:vperp)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:vpa)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].z == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:11
-
-        debug_setup_loop_ranges_split_one_combination!(
-            1, 2, (:anyzv, :z, :vperp, :vpa), :z, s=2, r=3, z=4, sn=5, vperp=7,
-            vpa=11, vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anyzv,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,)].r == 1:3
-        @test loop_ranges_store[(:anyzv,)].z == 1:0
-        @test loop_ranges_store[(:anyzv,)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].z == 3:4
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:11
-
-        debug_setup_loop_ranges_split_one_combination!(
-            0, 4, (:anyzv, :z, :vperp, :vpa), :vperp, :vpa, s=2, r=3, z=4, sn=5,
-            vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anyzv,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,)].r == 1:3
-        @test loop_ranges_store[(:anyzv,)].z == 1:4
-        @test loop_ranges_store[(:anyzv,)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vperp)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:vperp)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:vpa)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vperp == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:5
-
-        debug_setup_loop_ranges_split_one_combination!(
-            1, 4, (:anyzv, :z, :vperp, :vpa), :vperp, :vpa, s=2, r=3, z=4, sn=5,
-            vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anyzv,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,)].r == 1:3
-        @test loop_ranges_store[(:anyzv,)].z == 1:0
-        @test loop_ranges_store[(:anyzv,)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vperp == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 6:11
-
-        debug_setup_loop_ranges_split_one_combination!(
-            2, 4, (:anyzv, :z, :vperp, :vpa), :vperp, :vpa, s=2, r=3, z=4, sn=5,
-            vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anyzv,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,)].r == 1:3
-        @test loop_ranges_store[(:anyzv,)].z == 1:0
-        @test loop_ranges_store[(:anyzv,)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vperp == 4:7
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:5
-
-        debug_setup_loop_ranges_split_one_combination!(
-            3, 4, (:anyzv, :z, :vperp, :vpa), :vperp, :vpa, s=2, r=3, z=4, sn=5,
-            vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anyzv,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,)].r == 1:3
-        @test loop_ranges_store[(:anyzv,)].z == 1:0
-        @test loop_ranges_store[(:anyzv,)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vperp == 4:7
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 6:11
-
-        debug_setup_loop_ranges_split_one_combination!(
-            0, 4, (:anyzv, :z, :vperp, :vpa), :z, :vpa, s=2, r=3, z=4, sn=5, vperp=7,
-            vpa=11, vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anyzv,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,)].r == 1:3
-        @test loop_ranges_store[(:anyzv,)].z == 1:4
-        @test loop_ranges_store[(:anyzv,)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vperp)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:vperp)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:vpa)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].z == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:5
-
-        debug_setup_loop_ranges_split_one_combination!(
-            1, 4, (:anyzv, :z, :vperp, :vpa), :z, :vpa, s=2, r=3, z=4, sn=5, vperp=7,
-            vpa=11, vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anyzv,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,)].r == 1:3
-        @test loop_ranges_store[(:anyzv,)].z == 1:0
-        @test loop_ranges_store[(:anyzv,)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].z == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 6:11
-
-        debug_setup_loop_ranges_split_one_combination!(
-            2, 4, (:anyzv, :z, :vperp, :vpa), :z, :vpa, s=2, r=3, z=4, sn=5, vperp=7,
-            vpa=11, vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anyzv,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,)].r == 1:3
-        @test loop_ranges_store[(:anyzv,)].z == 1:0
-        @test loop_ranges_store[(:anyzv,)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].z == 3:4
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:5
-
-        debug_setup_loop_ranges_split_one_combination!(
-            3, 4, (:anyzv, :z, :vperp, :vpa), :z, :vpa, s=2, r=3, z=4, sn=5, vperp=7,
-            vpa=11, vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anyzv,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,)].r == 1:3
-        @test loop_ranges_store[(:anyzv,)].z == 1:0
-        @test loop_ranges_store[(:anyzv,)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].z == 3:4
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 6:11
-
-        debug_setup_loop_ranges_split_one_combination!(
-            0, 4, (:anyzv, :z, :vperp, :vpa), :z, :vperp, s=2, r=3, z=4, sn=5,
-            vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anyzv,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,)].r == 1:3
-        @test loop_ranges_store[(:anyzv,)].z == 1:4
-        @test loop_ranges_store[(:anyzv,)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vperp)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:vperp)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:vpa)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].z == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vperp == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:11
-
-        debug_setup_loop_ranges_split_one_combination!(
-            1, 4, (:anyzv, :z, :vperp, :vpa), :z, :vperp, s=2, r=3, z=4, sn=5,
-            vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anyzv,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,)].r == 1:3
-        @test loop_ranges_store[(:anyzv,)].z == 1:0
-        @test loop_ranges_store[(:anyzv,)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].z == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vperp == 4:7
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:11
-
-        debug_setup_loop_ranges_split_one_combination!(
-            2, 4, (:anyzv, :z, :vperp, :vpa), :z, :vperp, s=2, r=3, z=4, sn=5,
-            vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anyzv,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,)].r == 1:3
-        @test loop_ranges_store[(:anyzv,)].z == 1:0
-        @test loop_ranges_store[(:anyzv,)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].z == 3:4
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vperp == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:11
-
-        debug_setup_loop_ranges_split_one_combination!(
-            3, 4, (:anyzv, :z, :vperp, :vpa), :z, :vperp, s=2, r=3, z=4, sn=5,
-            vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anyzv,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,)].r == 1:3
-        @test loop_ranges_store[(:anyzv,)].z == 1:0
-        @test loop_ranges_store[(:anyzv,)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].z == 3:4
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vperp == 4:7
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:11
-
-        debug_setup_loop_ranges_split_one_combination!(
-            0, 8, (:anyzv, :z, :vperp, :vpa), :z, :vperp, :vpa, s=2, r=3, z=4, sn=5,
-            vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anyzv,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,)].r == 1:3
-        @test loop_ranges_store[(:anyzv,)].z == 1:4
-        @test loop_ranges_store[(:anyzv,)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vperp)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:vperp)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:vpa)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].z == 1:4
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vperp == 1:7
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vpa == 1:11
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].z == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vperp == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:5
-
-        debug_setup_loop_ranges_split_one_combination!(
-            1, 8, (:anyzv, :z, :vperp, :vpa), :z, :vperp, :vpa, s=2, r=3, z=4, sn=5,
-            vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anyzv,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,)].r == 1:3
-        @test loop_ranges_store[(:anyzv,)].z == 1:0
-        @test loop_ranges_store[(:anyzv,)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].z == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vperp == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 6:11
-
-        debug_setup_loop_ranges_split_one_combination!(
-            2, 8, (:anyzv, :z, :vperp, :vpa), :z, :vperp, :vpa, s=2, r=3, z=4, sn=5,
-            vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anyzv,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,)].r == 1:3
-        @test loop_ranges_store[(:anyzv,)].z == 1:0
-        @test loop_ranges_store[(:anyzv,)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].z == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vperp == 4:7
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:5
-
-        debug_setup_loop_ranges_split_one_combination!(
-            3, 8, (:anyzv, :z, :vperp, :vpa), :z, :vperp, :vpa, s=2, r=3, z=4, sn=5,
-            vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anyzv,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,)].r == 1:3
-        @test loop_ranges_store[(:anyzv,)].z == 1:0
-        @test loop_ranges_store[(:anyzv,)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].z == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vperp == 4:7
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 6:11
-
-        debug_setup_loop_ranges_split_one_combination!(
-            4, 8, (:anyzv, :z, :vperp, :vpa), :z, :vperp, :vpa, s=2, r=3, z=4, sn=5,
-            vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anyzv,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,)].r == 1:3
-        @test loop_ranges_store[(:anyzv,)].z == 1:0
-        @test loop_ranges_store[(:anyzv,)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].z == 3:4
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vperp == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:5
-
-        debug_setup_loop_ranges_split_one_combination!(
-            5, 8, (:anyzv, :z, :vperp, :vpa), :z, :vperp, :vpa, s=2, r=3, z=4, sn=5,
-            vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anyzv,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,)].r == 1:3
-        @test loop_ranges_store[(:anyzv,)].z == 1:0
-        @test loop_ranges_store[(:anyzv,)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].z == 3:4
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vperp == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 6:11
-
-        debug_setup_loop_ranges_split_one_combination!(
-            6, 8, (:anyzv, :z, :vperp, :vpa), :z, :vperp, :vpa, s=2, r=3, z=4, sn=5,
-            vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anyzv,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,)].r == 1:3
-        @test loop_ranges_store[(:anyzv,)].z == 1:0
-        @test loop_ranges_store[(:anyzv,)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].z == 3:4
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vperp == 4:7
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 1:5
-
-        debug_setup_loop_ranges_split_one_combination!(
-            7, 8, (:anyzv, :z, :vperp, :vpa), :z, :vperp, :vpa, s=2, r=3, z=4, sn=5,
-            vperp=7, vpa=11, vzeta=13, vr=17, vz=19)
-
-        @test loop_ranges_store[(:anyzv,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,)].r == 1:3
-        @test loop_ranges_store[(:anyzv,)].z == 1:0
-        @test loop_ranges_store[(:anyzv,)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa,)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vperp)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].z == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vperp == 1:0
-        @test loop_ranges_store[(:anyzv,:z,:vpa)].vpa == 1:0
-
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].s == 1:2
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].r == 1:3
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].z == 3:4
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vperp == 4:7
-        @test loop_ranges_store[(:anyzv,:z,:vperp,:vpa)].vpa == 6:11
+        @testset "$(e.block_rank) $(e.block_size) $(e.combination_to_split) $(e.dims_to_split)" for
+                e ∈ expected_debug_ranges_list
+            debug_setup_loop_ranges_split_one_combination!(
+                e.block_rank, e.block_size, e.combination_to_split, e.dims_to_split...;
+                e.dim_sizes...)
+            for (region, region_results) ∈ e.results
+                for (dim, range) ∈ region_results
+                    @test getfield(loop_ranges_store[region], dim) == range
+                end
+            end
+        end
     end
 
     return nothing
@@ -6672,8 +6208,6 @@ function runtests()
         test_anysv()
         test_anyzv()
         test_debug_setup_loop_ranges_split_one_combination!()
-        test_debug_setup_loop_ranges_split_one_combination_anysv()
-        test_debug_setup_loop_ranges_split_one_combination_anyzv()
     end
 
     return nothing
