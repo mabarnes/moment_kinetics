@@ -1135,6 +1135,17 @@ function calculate_all_coeffs()
                      ],
         typeof(alpha)[0 1//6 1//6 2//3],
         ; low_storage=false)
+
+    # 1st-order, 1-stage IMEX method, combination of forward and backward Euler steps.
+    convert_and_check_butcher_tableau(
+        "EulerIMEX",
+        Rational{Int64}[0;
+                       ],
+        Rational{Int64}[1],
+        Rational{Int64}[1;
+                       ],
+        Rational{Int64}[1],
+        ; low_storage=false)
 end
 
 end # CalculateRKCoeffs

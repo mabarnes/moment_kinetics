@@ -264,6 +264,17 @@ function setup_runge_kutta_coefficients!(type, input_CFL_prefactor, split_operat
         adaptive = false
         low_storage = false
         CFL_prefactor = NaN
+    elseif type == "EulerIMEX"
+        # 1st-order, 1-stage IMEX method, combination of forward and backward Euler steps.
+        rk_coefs = mk_float[0;
+                            1;;]
+        rk_coefs_implicit = mk_float[1 0]
+        implicit_coefficient_is_zero = Bool[false]
+        n_rk_stages = 1
+        rk_order = 1
+        adaptive = false
+        low_storage = false
+        CFL_prefactor = NaN
     elseif type == "SSPRK4"
         n_rk_stages = 4
         rk_coefs = allocate_float(3, n_rk_stages)
@@ -331,25 +342,25 @@ function setup_runge_kutta_coefficients!(type, input_CFL_prefactor, split_operat
         correct_size = (3, n_rk_stages + adaptive)
         if size(rk_coefs) != correct_size
             error("Size of rk_coefs, $(size(rk_coefs)) is not "
-                  * "(n_rk_stages+1, n_rk_stages+1)=$correct_size")
+                  * "(n_rk_stages+1, n_rk_stages+adaptive)=$correct_size")
         end
 
         correct_size_implicit = (3, n_rk_stages + 1 + adaptive)
         if rk_coefs_implicit !== nothing && size(rk_coefs_implicit) != correct_size_implicit
             error("Size of rk_coefs_implicit, $(size(rk_coefs_implicit)) is not "
-                  * "(3, n_rk_stages+2)=$correct_size_implicit")
+                  * "(3, n_rk_stages+1+adaptive)=$correct_size_implicit")
         end
     else
         correct_size = (n_rk_stages + 1, n_rk_stages + adaptive)
         if size(rk_coefs) != correct_size
             error("Size of rk_coefs, $(size(rk_coefs)) is not "
-                  * "(n_rk_stages+1, n_rk_stages+1)=$correct_size")
+                  * "(n_rk_stages+1, n_rk_stages+adaptive)=$correct_size")
         end
 
         correct_size_implicit = (n_rk_stages, n_rk_stages + 1 + adaptive)
         if rk_coefs_implicit !== nothing && size(rk_coefs_implicit) != correct_size_implicit
             error("Size of rk_coefs_implicit, $(size(rk_coefs_implicit)) is not "
-                  * "(n_rk_stages, n_rk_stages+2)=$correct_size_implicit")
+                  * "(n_rk_stages, n_rk_stages+1+adaptive)=$correct_size_implicit")
         end
     end
 

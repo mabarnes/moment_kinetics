@@ -41,7 +41,7 @@ function rk_advance_explicit(rk_coefs, y0, dt, nsteps)
     result = zeros(nsteps+1)
     result[1] = y0
 
-    error = zeros(nsteps+1)
+    error = fill(NaN, nsteps+1)
 
     for it ∈ 1:nsteps
         for istage ∈ 1:n_rk_stages
@@ -83,7 +83,7 @@ function rk_advance(rk_coefs, y0, dt, nsteps, rk_coefs_implicit=nothing, implici
     result = zeros(nsteps+1)
     result[1] = y0
 
-    error = zeros(nsteps+1)
+    error = fill(NaN, nsteps+1)
 
     for it ∈ 1:nsteps
         for istage ∈ 1:n_rk_stages
@@ -155,7 +155,7 @@ function rk_advance_butcher_explicit(a, b, y0, dt, nsteps)
     result = zeros(nsteps+1)
     result[1] = y0
 
-    error = zeros(nsteps+1)
+    error = fill(NaN, nsteps+1)
 
     for it ∈ 1:nsteps
         kscratch[1] = dt*f(y)
@@ -194,7 +194,7 @@ function rk_advance_butcher(a, b, y0, dt, nsteps, a_implicit=nothing, b_implicit
     result = zeros(nsteps+1)
     result[1] = y0
 
-    error = zeros(nsteps+1)
+    error = fill(NaN, nsteps+1)
 
     for it ∈ 1:nsteps
         kscratch_implicit[1] = dt*f_implicit(y, a_implicit[1,1] * dt)
@@ -364,6 +364,15 @@ methods = OrderedDict(
                                 rk_coefs_implicit=Float64[0.24169426078821 -1.0 3.13745860881766 1.0436096431476471e-14 0.16666666666665975; -0.0 0.24169426078821 2.13745860881766 -0.24999999999997924 0.3333333333333193; -0.0 -0.0 0.24169426078821 0.034364652204404655 0.500000000000007; -0.0 -0.0 -0.0 0.24169426078821 2.0916390725451066],
                                 implicit_coefficient_is_zero=Bool[0, 0, 0, 0],
                                ),
+
+    "EulerIMEX" => (a=Rational{Int64}[0],
+                    b=Rational{Int64}[1],
+                    a_implicit=Rational{Int64}[1],
+                    b_implicit=Rational{Int64}[1],
+                    rk_coefs=Rational{BigInt}[0; 1;;],
+                    rk_coefs_implicit=Rational{BigInt}[1 0],
+                    implicit_coefficient_is_zero=Bool[0],
+                   ),
   )
 
 a, b = convert_rk_coefs_to_butcher_tableau(methods["RKF45"].rk_coefs, true, false)
