@@ -1,4 +1,7 @@
 include("calculate_rk_coeffs.jl")
+using .CalculateRKCoeffs: convert_rk_coefs_to_butcher_tableau
+
+using OrderedCollections: OrderedDict
 
 multiplier = 1
 dt = 1.0e-2 / multiplier
@@ -238,7 +241,7 @@ function rk4_by_hand(y0, dt, nsteps)
     return result
 end
 
-methods = Dict(
+methods = OrderedDict(
     "SSPRK3" => (rk_coefs=Float64[0 3//4 1//3; 1 0 0; 0 1//4 0; 0 0 2//3],
                  a=Float64[0 0 0; 1 0 0; 1//4 1//4 0],
                  b=Float64[1//6 1//6 2//3]),

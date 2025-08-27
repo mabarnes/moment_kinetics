@@ -3,6 +3,7 @@ We implement the Runge-Kutta timestepper in `moment_kinetics` in a different for
 most conventional one, so in some cases we need to convert the 'conventional' coefficients
 into ones that we can use.
 """
+module CalculateRKCoeffs
 
 using Symbolics
 
@@ -344,7 +345,7 @@ function convert_butcher_tableau_for_moment_kinetics(a, b,
     if using_rationals
         rk_coefs_values = my_solve_for(rk_coefs_equations, [rk_coefs..., rk_coefs_implicit...])
     else
-        rk_coefs_values = Symbolics.solve_for(rk_coefs_equations, [rk_coefs..., rk_coefs_implicit...])
+        rk_coefs_values = Symbolics.symbolic_linear_solve(rk_coefs_equations, [rk_coefs..., rk_coefs_implicit...])
     end
     rk_coefs_implicit_values = reshape(rk_coefs_values[(n_rk_stages+1)*output_size+1:end], n_rk_stages, output_size+1)
     rk_coefs_values = reshape(rk_coefs_values[1:(n_rk_stages+1)*output_size], n_rk_stages+1, output_size)
@@ -527,7 +528,7 @@ function convert_rk_coefs_to_butcher_tableau(rk_coefs::AbstractArray{T,N},
     if using_rationals
         expressions = my_solve_for2(equations, vcat(y_tilde, y))
     else
-        expressions = Symbolics.solve_for(equations, vcat(y_tilde, y))
+        expressions = Symbolics.symbolic_linear_solve(equations, vcat(y_tilde, y))
     end
     y_tilde_k_expressions = expressions[1:n_rk_stages+1]
     y_k_expressions = expressions[n_rk_stages+2:end]
@@ -732,132 +733,6 @@ function convert_and_check_rk_coefs(name, rk_coefs, adaptive=false, low_storage=
     println()
 end
 
-# 'Standard form' of coefficients from
-# https://en.wikipedia.org/wiki/Runge%E2%80%93Kutta%E2%80%93Fehlberg_method,
-# 'COEFFICIENTS FOR RK4(5), FORMULA 2 Table III in Fehlberg'
-
-# Neglect the 'A' coefficients as we do not have an explicit time dependence in the RHS,
-# so do not use them.
-
-# Use `//` to get rational numbers to avoid round-off errors
-B = [ 0 0 0 0 0 0;
-      1//4 0 0 0 0 0;
-      3//32 9//32 0 0 0 0;
-      1932//2197 -7200//2197 7296//2197 0 0 0;
-      439//216 -8 3680//513 -845//4104 0 0;
-      -8//27 2 -3544//2565 1859//4104 -11//40 0]
-
-C = [ 25//216 0 1408//2565 2197//4104 -1//5 0 ]
-CH = [ 16//135 0 6656//12825 28561//56430 -9//50 2//55 ]
-# The following is the version from Wikipedia, it appears to have a typo in the 4th
-# element, as we should have CT=C-CH -- CT = [ -1//360 0 128//4275 2187//75240 -1//50 -2//55 ]
-CT = [ -1//360 0 128//4275 2197//75240 -1//50 -2//55 ]
-
-# 'COEFFICIENTS FOR Sarafyan's RK4(5), Table IV in Fehlberg'
-
-# Neglect the 'A' coefficients as we do not have an explicit time dependence in the RHS,
-# so do not use them.
-
-# Use `//` to get rational numbers to avoid round-off errors
-#B = [ 0 0 0 0 0 0;
-#      1//2 0 0 0 0 0;
-#      1//4 1//4 0 0 0 0;
-#      0 -1 2 0 0 0;
-#      7//27 10//27 0 1//27 0 0;
-#      28//625 -1//5 546//625 54//625 -378//625 0]
-#
-#C = [ 1//6 0 2//3 1//6 0 0 ]
-#CH = [ 1//24 0 0 5//48 27//56 125//336 ]
-#CT = [ 1//8 0 2//3 1//16 -27//56 -125//336 ]
-a = B
-b = vcat(CH,C)
-convert_and_check_butcher_tableau("RKF5(4)", a, b; low_storage=false)
-
-convert_and_check_butcher_tableau(
-    "SSPRK3",
-    # From https://en.wikipedia.org/wiki/List_of_Runge%E2%80%93Kutta_methods
-    [0 0 0;
-     1 0 0;
-     1//4 1//4 0],
-    [1//6 1//6 2//3],
-   )
-
-convert_and_check_butcher_tableau(
-    "Heun's method SSPRK2",
-    # From https://en.wikipedia.org/wiki/List_of_Runge%E2%80%93Kutta_methods
-    [0    0;
-     1//1 0],
-    [1//2 1//2],
-   )
-
-convert_and_check_butcher_tableau(
-    "Gottlieb et al 4-stage 3rd order",
-    # From https://en.wikipedia.org/wiki/List_of_Runge%E2%80%93Kutta_methods
-    [0 0 0;
-     1 0 0;
-     1//2 1//2 0],
-    [1//6 1//6 2//3],
-   )
-
-convert_and_check_butcher_tableau(
-    "RK4",
-    # From https://en.wikipedia.org/wiki/List_of_Runge%E2%80%93Kutta_methods
-    [0 0 0 0;
-     1//2 0 0 0;
-     0 1//2 0 0;
-     0 0 1 0],
-    [1//6 1//3 1//3 1//6];
-    low_storage=false,
-   )
-
-#Optimal 4th order strong-stability preserving embedded Runge-Kutta method with 10 stages,
-#from [Fekete, Conde and Shadid, "Embedded pairs for optimal explicit strong stability
-#preserving Runge-Kutta methods", Journal of Computational and Applied Mathematics 421
-#(2022) 114325, https://doi.org/10.1016/j.cam.2022.114325]. This methods is from section
-#2.3, with the '\$\\tilde{b}^T_4\$' embedded pair, which is recommended in the conclusions.
-convert_and_check_butcher_tableau(
-    "Fekete 10(4)",
-    [0     0     0     0     0     0    0    0    0    0;
-     1//6  0     0     0     0     0    0    0    0    0;
-     1//6  1//6  0     0     0     0    0    0    0    0;
-     1//6  1//6  1//6  0     0     0    0    0    0    0;
-     1//6  1//6  1//6  1//6  0     0    0    0    0    0;
-     1//15 1//15 1//15 1//15 1//15 0    0    0    0    0;
-     1//15 1//15 1//15 1//15 1//15 1//6 0    0    0    0;
-     1//15 1//15 1//15 1//15 1//15 1//6 1//6 0    0    0;
-     1//15 1//15 1//15 1//15 1//15 1//6 1//6 1//6 0    0;
-     1//15 1//15 1//15 1//15 1//15 1//6 1//6 1//6 1//6 0;
-    ],
-    [1//10 1//10 1//10 1//10 1//10 1//10 1//10 1//10 1//10 1//10;
-     #0     3//8  0     1//8  0     0     0     3//8  0     1//8 ]
-     #3//14 0     0     2//7  0     0     0     3//7  0     1//14]
-     #0     2//9  0     0     5//18 1//3  0     0     0     1//6 ]
-     1//5  0     0     3//10 0     0     1//5  0     3//10 0    ]
-     #1//10 0     0     2//5  0     3//10 0     0     0     1//5 ]
-     #1//6  0     0     0     1//3  5//18 0     0     2//9  0    ]
-     #0     2//5  0     1//10 0     0     0     1//5  3//10 0    ]
-     #1//7  0     5//14 0     0     0     0     3//14 2//7 0    ]
-    ; low_storage=false)
-
-#6-stage, 4th order strong-stability preserving embedded Runge-Kutta method from [Fekete,
-#Conde and Shadid, "Embedded pairs for optimal explicit strong stability preserving
-#Runge-Kutta methods", Journal of Computational and Applied Mathematics 421 (2022) 114325,
-#https://doi.org/10.1016/j.cam.2022.114325]. This method is from section 2.3. Provided
-#because it has fewer stages than the 10-stage 4th-order method, but not recommended by
-#Fekete et al.
-convert_and_check_butcher_tableau(
-    "Fekete 6(4)",
-    [0               0               0               0               0               0;
-     0.3552975516919 0               0               0               0               0;
-     0.2704882223931 0.3317866983600 0               0               0               0;
-     0.1223997401356 0.1501381660925 0.1972127376054 0               0               0;
-     0.0763425067155 0.0936433683640 0.1230044665810 0.2718245927242 0               0;
-     0.0763425067155 0.0936433683640 0.1230044665810 0.2718245927242 0.4358156542577 0;
-    ],
-    [0.1522491819555 0.1867521364225 0.1555370561501 0.1348455085546 0.2161974490441 0.1544186678729;
-     0.1210663237182 0.2308844004550 0.0853424972752 0.3450614904457 0.0305351538213 0.1871101342844];
-    low_storage=false)
-
 """
     construct_fekete_3rd_order(nstage)
 
@@ -903,17 +778,6 @@ function construct_fekete_3rd_order(nstage)
     return a, b
 end
 
-convert_and_check_butcher_tableau(
-    "Fekete 4(3)",
-    construct_fekete_3rd_order(4)...
-   )
-
-convert_and_check_butcher_tableau(
-    "Fekete 4(3) not low-storage",
-    construct_fekete_3rd_order(4)...;
-    low_storage=false
-   )
-
 """
     construct_fekete_2nd_order(nstage)
 
@@ -944,192 +808,338 @@ function construct_fekete_2nd_order(nstage)
     return a, b
 end
 
-convert_and_check_butcher_tableau(
-    "Fekete 4(2)",
-    construct_fekete_2nd_order(4)...;
-    low_storage=false,
-   )
+function calculate_all_coeffs()
+    # 'Standard form' of coefficients from
+    # https://en.wikipedia.org/wiki/Runge%E2%80%93Kutta%E2%80%93Fehlberg_method,
+    # 'COEFFICIENTS FOR RK4(5), FORMULA 2 Table III in Fehlberg'
 
-convert_and_check_butcher_tableau(
-    "Fekete 3(2)",
-    construct_fekete_2nd_order(3)...;
-    low_storage=false,
-   )
+    # Neglect the 'A' coefficients as we do not have an explicit time dependence in the RHS,
+    # so do not use them.
 
-convert_and_check_butcher_tableau(
-    "Fekete 2(2)",
-    construct_fekete_2nd_order(2)...
-   )
+    # Use `//` to get rational numbers to avoid round-off errors
+    B = [ 0 0 0 0 0 0;
+          1//4 0 0 0 0 0;
+          3//32 9//32 0 0 0 0;
+          1932//2197 -7200//2197 7296//2197 0 0 0;
+          439//216 -8 3680//513 -845//4104 0 0;
+          -8//27 2 -3544//2565 1859//4104 -11//40 0]
 
-convert_and_check_rk_coefs(
-    "mk's ssprk4",
-    [1//2 0    2//3 0   ;
-     1//2 1//2 0    0   ;
-     0    1//2 1//6 0   ;
-     0    0    1//6 1//2;
-     0    0    0    1//2],
-   )
+    C = [ 25//216 0 1408//2565 2197//4104 -1//5 0 ]
+    CH = [ 16//135 0 6656//12825 28561//56430 -9//50 2//55 ]
+    # The following is the version from Wikipedia, it appears to have a typo in the 4th
+    # element, as we should have CT=C-CH -- CT = [ -1//360 0 128//4275 2187//75240 -1//50 -2//55 ]
+    CT = [ -1//360 0 128//4275 2197//75240 -1//50 -2//55 ]
 
-convert_and_check_rk_coefs(
-    "mk's ssprk3",
-    [0  3//4 1//3;
-     1  0    0   ;
-     0  1//4 0   ;
-     0  0    2//3],
-   )
+    # 'COEFFICIENTS FOR Sarafyan's RK4(5), Table IV in Fehlberg'
 
-convert_and_check_rk_coefs(
-    "mk's ssprk2",
-    [0 1//2;
-     0 0   ;
-     1 1//2],
-   )
+    # Neglect the 'A' coefficients as we do not have an explicit time dependence in the RHS,
+    # so do not use them.
 
-println("\n\nIMEX methods\n============\n")
+    # Use `//` to get rational numbers to avoid round-off errors
+    #B = [ 0 0 0 0 0 0;
+    #      1//2 0 0 0 0 0;
+    #      1//4 1//4 0 0 0 0;
+    #      0 -1 2 0 0 0;
+    #      7//27 10//27 0 1//27 0 0;
+    #      28//625 -1//5 546//625 54//625 -378//625 0]
+    #
+    #C = [ 1//6 0 2//3 1//6 0 0 ]
+    #CH = [ 1//24 0 0 5//48 27//56 125//336 ]
+    #CT = [ 1//8 0 2//3 1//16 -27//56 -125//336 ]
+    a = B
+    b = vcat(CH,C)
+    convert_and_check_butcher_tableau("RKF5(4)", a, b; low_storage=false)
 
-# 4th-order, 7-stage IMEX method 'ARK4(3)7L[2]SA₁' from Kennedy & Carpenter 2019
-# (https://doi.org/10.1016/j.apnum.2018.10.007)
-convert_and_check_butcher_tableau(
-    "KennedyCarpenterARK437",
-    Rational{BigInt}[0                              0                              0                              0                              0                             0                             0;
-                     247//1000                      0                              0                              0                              0                             0                             0;
-                     247//4000                      2694949928731//7487940209513   0                              0                              0                             0                             0;
-                     464650059369//8764239774964    878889893998//2444806327765   -952945855348//12294611323341   0                              0                             0                             0;
-                     476636172619//8159180917465   -1271469283451//7793814740893  -859560642026//4356155882851    1723805262919//4571918432560   0                             0                             0;
-                     6338158500785//11769362343261 -4970555480458//10924838743837  3326578051521//2647936831840  -880713585975//1841400956686   -1428733748635//8843423958496  0                             0;
-                     760814592956//3276306540349    760814592956//3276306540349   -47223648122716//6934462133451  71187472546993//9669769126921 -13330509492149//9695768672337 11565764226357//8513123442827 0;
-    ],
-    Rational{BigInt}[0 0 9164257142617//17756377923965 -10812980402763//74029279521829 1335994250573//5691609445217 2273837961795//8368240463276 247//2000  ;
-                     0 0 4469248916618//8635866897933  -621260224600//4094290005349    696572312987//2942599194819  1532940081127//5565293938103 2441//20000],
-    Rational{BigInt}[0                               0                              0                              0                              0                             0                            0          ;
-                     1235//10000                     1235//10000                    0                              0                              0                             0                            0          ;
-                     624185399699//4186980696204     624185399699//4186980696204    1235//10000                    0                              0                             0                            0          ;
-                     1258591069120//10082082980243   1258591069120//10082082980243 -322722984531//8455138723562    1235//10000                    0                             0                            0          ;
-                     -436103496990//5971407786587   -436103496990//5971407786587   -2689175662187//11046760208243  4431412449334//12995360898505  1235//10000                   0                            0          ;
-                     -2207373168298//14430576638973 -2207373168298//14430576638973  242511121179//3358618340039    3145666661981//7780404714551   5882073923981//14490790706663 1235//10000                  0          ;
-                     0                               0                              9164257142617//17756377923965 -10812980402763//74029279521829 1335994250573//5691609445217  2273837961795//8368240463276 1235//10000;
-                    ],
-    Rational{BigInt}[0 0 9164257142617//17756377923965 -10812980402763//74029279521829 1335994250573//5691609445217 2273837961795//8368240463276 247//2000  ;
-                     0 0 4469248916618//8635866897933  -621260224600//4094290005349    696572312987//2942599194819  1532940081127//5565293938103 2441//20000],
-    ; low_storage=false)
+    convert_and_check_butcher_tableau(
+        "SSPRK3",
+        # From https://en.wikipedia.org/wiki/List_of_Runge%E2%80%93Kutta_methods
+        [0 0 0;
+         1 0 0;
+         1//4 1//4 0],
+        [1//6 1//6 2//3],
+       )
 
-# The 5th order KennedyCarpenter548 method seems to be missing the 8'th row of a_implicit
-# coefficients in the Kennedy&Carpenter2019 paper, so this is not correct.
-## 5th-order, 8-stage IMEX method 'ARK5(4)8L[2]SA₂' from Kennedy & Carpenter 2019
-## (https://doi.org/10.1016/j.apnum.2018.10.007)
-#convert_and_check_butcher_tableau(
-#    "KennedyCarpenterARK548",
-#    Rational{BigInt}[ 0                               0                             0                              0                              0                              0                              0                            0;
-#                      4//9                            0                             0                              0                              0                              0                              0                            0;
-#                      1//9                            1183333538310//1827251437969  0                              0                              0                              0                              0                            0;
-#                      895379019517//9750411845327     477606656805//13473228687314 -112564739183//9373365219272    0                              0                              0                              0                            0;
-#                      -4458043123994//13015289567637 -2500665203865//9342069639922  983347055801//8893519644487    2185051477207//2551468980502   0                              0                              0                            0;
-#                      -167316361917//17121522574472   1605541814917//7619724128744  991021770328//13052792161721   2342280609577//11279663441611  3012424348531//12792462456678  0                              0                            0;
-#                      6680998715867//14310383562358   5029118570809//3897454228471  2415062538259//6382199904604  -3924368632305//6964820224454  -4331110370267//15021686902756 -3944303808049//11994238218192  0                            0;
-#                      2193717860234//3570523412979    2193717860234//3570523412979  5952760925747//18750164281544 -4412967128996//6196664114337   4151782504231//36106512998704  572599549169//6265429158920   -457874356192//11306498036315 0;
-#                    ],
-#    Rational{BigInt}[ 0 0 3517720773327//20256071687669 4569610470461//17934693873752 2819471173109//11655438449929 3296210113763//10722700128969 -1142099968913//5710983926999  2//9                        ;
-#                      0 0 520639020421//8300446712847   4550235134915//17827758688493 1482366381361//6201654941325  5551607622171//13911031047899 -5266607656330//36788968843917 1074053359553//5740751784926;
-#                    ],
-#    Rational{BigInt}[ 0                             0                             0                             0                              0                           0                            0    0   ;
-#                      2//9                          2//9                          0                             0                              0                           0                            0    0   ;
-#                      2366667076620//8822750406821  2366667076620//8822750406821  2//9                          0                              0                           0                            0    0   ;
-#                     -257962897183//4451812247028  -257962897183//4451812247028   128530224461//14379561246022  2//9                           0                           0                            0    0   ;
-#                     -486229321650//11227943450093 -486229321650//11227943450093 -225633144460//6633558740617   1741320951451//6824444397158   2//9                        0                            0    0   ;
-#                      621307788657//4714163060173   621307788657//4714163060173  -125196015625//3866852212004   940440206406//7593089888465    961109811699//6734810228204 2//9                         0    0   ;
-#                      2036305566805//6583108094622  2036305566805//6583108094622 -3039402635899//4450598839912 -1829510709469//31102090912115 -286320471013//6931253422520 8651533662697//9642993110008 2//9 0   ;
-#                      0                             0                             0                             0                              0                           0                            0    2//9;
-#                    ],
-#    Rational{BigInt}[ 0 0 3517720773327//20256071687669 4569610470461//17934693873752 2819471173109//11655438449929 3296210113763//10722700128969 -1142099968913//5710983926999  2//9                        ;
-#                      0 0 520639020421//8300446712847   4550235134915//17827758688493 1482366381361//6201654941325  5551607622171//13911031047899 -5266607656330//36788968843917 1074053359553//5740751784926;
-#                    ],
-#   ; low_storage=false)
+    convert_and_check_butcher_tableau(
+        "Heun's method SSPRK2",
+        # From https://en.wikipedia.org/wiki/List_of_Runge%E2%80%93Kutta_methods
+        [0    0;
+         1//1 0],
+        [1//2 1//2],
+       )
 
-# 3rd-order, 4-stage IMEX method from Kennedy & Carpenter 2003
-# (https://doi.org/10.1016/S0168-9274(02)00138-1,
-# https://ntrs.nasa.gov/api/citations/20010075154/downloads/20010075154.pdf)
-convert_and_check_butcher_tableau(
-    "KennedyCarpenterARK324",
-    Rational{BigInt}[0                              0                            0                               0;
-                     1767732205903//2027836641118   0                            0                               0;
-                     5535828885825//10492691773637  788022342437//10882634858940 0                               0;
-                     6485989280629//16251701735622 -4246266847089//9704473918619 10755448449292//10357097424841  0;
-    ],
-    Rational{BigInt}[1471266399579//7840856788654  -4482444167858//7529755066697   11266239266428//11593286722821 1767732205903//4055673282236;
-                     2756255671327//12835298489170 -10771552573575//22201958757719 9247589265047//10645013368117  2193209047091//5459859503100],
-    Rational{BigInt}[0                              0                            0                               0                           ;
-                     1767732205903//4055673282236   1767732205903//4055673282236 0                               0                           ;
-                     2746238789719//10658868560708 -640167445237//6845629431997  1767732205903//4055673282236    0                           ;
-                     1471266399579//7840856788654  -4482444167858//7529755066697 11266239266428//11593286722821  1767732205903//4055673282236;
-                    ],
-    Rational{BigInt}[1471266399579//7840856788654  -4482444167858//7529755066697   11266239266428//11593286722821 1767732205903//4055673282236;
-                     2756255671327//12835298489170 -10771552573575//22201958757719 9247589265047//10645013368117  2193209047091//5459859503100],
-    ; low_storage=false)
+    convert_and_check_butcher_tableau(
+        "Gottlieb et al 4-stage 3rd order",
+        # From https://en.wikipedia.org/wiki/List_of_Runge%E2%80%93Kutta_methods
+        [0 0 0;
+         1 0 0;
+         1//2 1//2 0],
+        [1//6 1//6 2//3],
+       )
 
-# 2nd-order, 2-stage IMEX method 'IMEX-SSP2(2,2,2)' from Pareschi & Russo 2005, Table II
-# (https://doi.org/10.1007/s10915-004-4636-4)
-gamma = 1 - 1 / sqrt(BigFloat(2))
-convert_and_check_butcher_tableau(
-    "PareschiRusso2(2,2,2)",
-    BigFloat[0 0;
-             1 0;
-            ],
-    BigFloat[1//2 1//2],
-    BigFloat[gamma     0    ;
-             1-2*gamma gamma;
-            ],
-    BigFloat[1//2 1//2],
-    ; low_storage=false)
+    convert_and_check_butcher_tableau(
+        "RK4",
+        # From https://en.wikipedia.org/wiki/List_of_Runge%E2%80%93Kutta_methods
+        [0 0 0 0;
+         1//2 0 0 0;
+         0 1//2 0 0;
+         0 0 1 0],
+        [1//6 1//3 1//3 1//6];
+        low_storage=false,
+       )
 
-# 2nd-order, 3-stage IMEX method 'IMEX-SSP2(3,2,2)' from Pareschi & Russo 2005, Table III
-# (https://doi.org/10.1007/s10915-004-4636-4)
-convert_and_check_butcher_tableau(
-    "PareschiRusso2(3,2,2)",
-    Rational{Int64}[0 0 0;
-                    0 0 0;
-                    0 1 0;
-            ],
-    Rational{Int64}[0 1//2 1//2],
-    Rational{Int64}[ 1//2 0    0   ;
-                    -1//2 1//2 0   ;
-                     0    1//2 1//2;
-            ],
-    Rational{Int64}[0 1//2 1//2],
-    ; low_storage=false)
+    #Optimal 4th order strong-stability preserving embedded Runge-Kutta method with 10 stages,
+    #from [Fekete, Conde and Shadid, "Embedded pairs for optimal explicit strong stability
+    #preserving Runge-Kutta methods", Journal of Computational and Applied Mathematics 421
+    #(2022) 114325, https://doi.org/10.1016/j.cam.2022.114325]. This methods is from section
+    #2.3, with the '\$\\tilde{b}^T_4\$' embedded pair, which is recommended in the conclusions.
+    convert_and_check_butcher_tableau(
+        "Fekete 10(4)",
+        [0     0     0     0     0     0    0    0    0    0;
+         1//6  0     0     0     0     0    0    0    0    0;
+         1//6  1//6  0     0     0     0    0    0    0    0;
+         1//6  1//6  1//6  0     0     0    0    0    0    0;
+         1//6  1//6  1//6  1//6  0     0    0    0    0    0;
+         1//15 1//15 1//15 1//15 1//15 0    0    0    0    0;
+         1//15 1//15 1//15 1//15 1//15 1//6 0    0    0    0;
+         1//15 1//15 1//15 1//15 1//15 1//6 1//6 0    0    0;
+         1//15 1//15 1//15 1//15 1//15 1//6 1//6 1//6 0    0;
+         1//15 1//15 1//15 1//15 1//15 1//6 1//6 1//6 1//6 0;
+        ],
+        [1//10 1//10 1//10 1//10 1//10 1//10 1//10 1//10 1//10 1//10;
+         #0     3//8  0     1//8  0     0     0     3//8  0     1//8 ]
+         #3//14 0     0     2//7  0     0     0     3//7  0     1//14]
+         #0     2//9  0     0     5//18 1//3  0     0     0     1//6 ]
+         1//5  0     0     3//10 0     0     1//5  0     3//10 0    ]
+         #1//10 0     0     2//5  0     3//10 0     0     0     1//5 ]
+         #1//6  0     0     0     1//3  5//18 0     0     2//9  0    ]
+         #0     2//5  0     1//10 0     0     0     1//5  3//10 0    ]
+         #1//7  0     5//14 0     0     0     0     3//14 2//7 0    ]
+        ; low_storage=false)
 
-# 2nd-order, 3-stage IMEX method 'IMEX-SSP2(3,3,2)' from Pareschi & Russo 2005, Table IV
-# (https://doi.org/10.1007/s10915-004-4636-4)
-convert_and_check_butcher_tableau(
-    "PareschiRusso2(3,3,2)",
-    Rational{Int64}[0    0    0;
-                    1//2 0    0;
-                    1//2 1//2 0;
-            ],
-    Rational{Int64}[1//3 1//3 1//3],
-    Rational{Int64}[1//4 0    0   ;
-                    0    1//4 0   ;
-                    1//3 1//3 1//3;
-            ],
-    Rational{Int64}[1//3 1//3 1//3],
-    ; low_storage=false)
+    #6-stage, 4th order strong-stability preserving embedded Runge-Kutta method from [Fekete,
+    #Conde and Shadid, "Embedded pairs for optimal explicit strong stability preserving
+    #Runge-Kutta methods", Journal of Computational and Applied Mathematics 421 (2022) 114325,
+    #https://doi.org/10.1016/j.cam.2022.114325]. This method is from section 2.3. Provided
+    #because it has fewer stages than the 10-stage 4th-order method, but not recommended by
+    #Fekete et al.
+    convert_and_check_butcher_tableau(
+        "Fekete 6(4)",
+        [0               0               0               0               0               0;
+         0.3552975516919 0               0               0               0               0;
+         0.2704882223931 0.3317866983600 0               0               0               0;
+         0.1223997401356 0.1501381660925 0.1972127376054 0               0               0;
+         0.0763425067155 0.0936433683640 0.1230044665810 0.2718245927242 0               0;
+         0.0763425067155 0.0936433683640 0.1230044665810 0.2718245927242 0.4358156542577 0;
+        ],
+        [0.1522491819555 0.1867521364225 0.1555370561501 0.1348455085546 0.2161974490441 0.1544186678729;
+         0.1210663237182 0.2308844004550 0.0853424972752 0.3450614904457 0.0305351538213 0.1871101342844];
+        low_storage=false)
 
-# 3rd-order, 4-stage IMEX method 'IMEX-SSP3(4,3,3)' from Pareschi & Russo 2005, Table VI
-# (https://doi.org/10.1007/s10915-004-4636-4)
-alpha = 0.24169426078821
-beta = 0.06042356519705
-eta = 0.12915286960590
-convert_and_check_butcher_tableau(
-    "PareschiRusso3(4,3,3)",
-    typeof(alpha)[0 0    0    0;
-                  0 0    0    0;
-                  0 1    0    0;
-                  0 1//4 1//4 0;
-                 ],
-    typeof(alpha)[0 1//6 1//6 2//3],
-    typeof(alpha)[alpha  0       0                   0    ;
-                  -alpha alpha   0                   0    ;
-                  0      1-alpha alpha               0    ;
-                  beta   eta     1//2-beta-eta-alpha alpha;
-                 ],
-    typeof(alpha)[0 1//6 1//6 2//3],
-    ; low_storage=false)
+    convert_and_check_butcher_tableau(
+        "Fekete 4(3)",
+        construct_fekete_3rd_order(4)...
+       )
+
+    convert_and_check_butcher_tableau(
+        "Fekete 4(3) not low-storage",
+        construct_fekete_3rd_order(4)...;
+        low_storage=false
+       )
+
+    convert_and_check_butcher_tableau(
+        "Fekete 4(2)",
+        construct_fekete_2nd_order(4)...;
+        low_storage=false,
+       )
+
+    convert_and_check_butcher_tableau(
+        "Fekete 3(2)",
+        construct_fekete_2nd_order(3)...;
+        low_storage=false,
+       )
+
+    convert_and_check_butcher_tableau(
+        "Fekete 2(2)",
+        construct_fekete_2nd_order(2)...
+       )
+
+    convert_and_check_rk_coefs(
+        "mk's ssprk4",
+        [1//2 0    2//3 0   ;
+         1//2 1//2 0    0   ;
+         0    1//2 1//6 0   ;
+         0    0    1//6 1//2;
+         0    0    0    1//2],
+       )
+
+    convert_and_check_rk_coefs(
+        "mk's ssprk3",
+        [0  3//4 1//3;
+         1  0    0   ;
+         0  1//4 0   ;
+         0  0    2//3],
+       )
+
+    convert_and_check_rk_coefs(
+        "mk's ssprk2",
+        [0 1//2;
+         0 0   ;
+         1 1//2],
+       )
+
+    println("\n\nIMEX methods\n============\n")
+
+    # 4th-order, 7-stage IMEX method 'ARK4(3)7L[2]SA₁' from Kennedy & Carpenter 2019
+    # (https://doi.org/10.1016/j.apnum.2018.10.007)
+    convert_and_check_butcher_tableau(
+        "KennedyCarpenterARK437",
+        Rational{BigInt}[0                              0                              0                              0                              0                             0                             0;
+                         247//1000                      0                              0                              0                              0                             0                             0;
+                         247//4000                      2694949928731//7487940209513   0                              0                              0                             0                             0;
+                         464650059369//8764239774964    878889893998//2444806327765   -952945855348//12294611323341   0                              0                             0                             0;
+                         476636172619//8159180917465   -1271469283451//7793814740893  -859560642026//4356155882851    1723805262919//4571918432560   0                             0                             0;
+                         6338158500785//11769362343261 -4970555480458//10924838743837  3326578051521//2647936831840  -880713585975//1841400956686   -1428733748635//8843423958496  0                             0;
+                         760814592956//3276306540349    760814592956//3276306540349   -47223648122716//6934462133451  71187472546993//9669769126921 -13330509492149//9695768672337 11565764226357//8513123442827 0;
+        ],
+        Rational{BigInt}[0 0 9164257142617//17756377923965 -10812980402763//74029279521829 1335994250573//5691609445217 2273837961795//8368240463276 247//2000  ;
+                         0 0 4469248916618//8635866897933  -621260224600//4094290005349    696572312987//2942599194819  1532940081127//5565293938103 2441//20000],
+        Rational{BigInt}[0                               0                              0                              0                              0                             0                            0          ;
+                         1235//10000                     1235//10000                    0                              0                              0                             0                            0          ;
+                         624185399699//4186980696204     624185399699//4186980696204    1235//10000                    0                              0                             0                            0          ;
+                         1258591069120//10082082980243   1258591069120//10082082980243 -322722984531//8455138723562    1235//10000                    0                             0                            0          ;
+                         -436103496990//5971407786587   -436103496990//5971407786587   -2689175662187//11046760208243  4431412449334//12995360898505  1235//10000                   0                            0          ;
+                         -2207373168298//14430576638973 -2207373168298//14430576638973  242511121179//3358618340039    3145666661981//7780404714551   5882073923981//14490790706663 1235//10000                  0          ;
+                         0                               0                              9164257142617//17756377923965 -10812980402763//74029279521829 1335994250573//5691609445217  2273837961795//8368240463276 1235//10000;
+                        ],
+        Rational{BigInt}[0 0 9164257142617//17756377923965 -10812980402763//74029279521829 1335994250573//5691609445217 2273837961795//8368240463276 247//2000  ;
+                         0 0 4469248916618//8635866897933  -621260224600//4094290005349    696572312987//2942599194819  1532940081127//5565293938103 2441//20000],
+        ; low_storage=false)
+
+    # The 5th order KennedyCarpenter548 method seems to be missing the 8'th row of a_implicit
+    # coefficients in the Kennedy&Carpenter2019 paper, so this is not correct.
+    ## 5th-order, 8-stage IMEX method 'ARK5(4)8L[2]SA₂' from Kennedy & Carpenter 2019
+    ## (https://doi.org/10.1016/j.apnum.2018.10.007)
+    #convert_and_check_butcher_tableau(
+    #    "KennedyCarpenterARK548",
+    #    Rational{BigInt}[ 0                               0                             0                              0                              0                              0                              0                            0;
+    #                      4//9                            0                             0                              0                              0                              0                              0                            0;
+    #                      1//9                            1183333538310//1827251437969  0                              0                              0                              0                              0                            0;
+    #                      895379019517//9750411845327     477606656805//13473228687314 -112564739183//9373365219272    0                              0                              0                              0                            0;
+    #                      -4458043123994//13015289567637 -2500665203865//9342069639922  983347055801//8893519644487    2185051477207//2551468980502   0                              0                              0                            0;
+    #                      -167316361917//17121522574472   1605541814917//7619724128744  991021770328//13052792161721   2342280609577//11279663441611  3012424348531//12792462456678  0                              0                            0;
+    #                      6680998715867//14310383562358   5029118570809//3897454228471  2415062538259//6382199904604  -3924368632305//6964820224454  -4331110370267//15021686902756 -3944303808049//11994238218192  0                            0;
+    #                      2193717860234//3570523412979    2193717860234//3570523412979  5952760925747//18750164281544 -4412967128996//6196664114337   4151782504231//36106512998704  572599549169//6265429158920   -457874356192//11306498036315 0;
+    #                    ],
+    #    Rational{BigInt}[ 0 0 3517720773327//20256071687669 4569610470461//17934693873752 2819471173109//11655438449929 3296210113763//10722700128969 -1142099968913//5710983926999  2//9                        ;
+    #                      0 0 520639020421//8300446712847   4550235134915//17827758688493 1482366381361//6201654941325  5551607622171//13911031047899 -5266607656330//36788968843917 1074053359553//5740751784926;
+    #                    ],
+    #    Rational{BigInt}[ 0                             0                             0                             0                              0                           0                            0    0   ;
+    #                      2//9                          2//9                          0                             0                              0                           0                            0    0   ;
+    #                      2366667076620//8822750406821  2366667076620//8822750406821  2//9                          0                              0                           0                            0    0   ;
+    #                     -257962897183//4451812247028  -257962897183//4451812247028   128530224461//14379561246022  2//9                           0                           0                            0    0   ;
+    #                     -486229321650//11227943450093 -486229321650//11227943450093 -225633144460//6633558740617   1741320951451//6824444397158   2//9                        0                            0    0   ;
+    #                      621307788657//4714163060173   621307788657//4714163060173  -125196015625//3866852212004   940440206406//7593089888465    961109811699//6734810228204 2//9                         0    0   ;
+    #                      2036305566805//6583108094622  2036305566805//6583108094622 -3039402635899//4450598839912 -1829510709469//31102090912115 -286320471013//6931253422520 8651533662697//9642993110008 2//9 0   ;
+    #                      0                             0                             0                             0                              0                           0                            0    2//9;
+    #                    ],
+    #    Rational{BigInt}[ 0 0 3517720773327//20256071687669 4569610470461//17934693873752 2819471173109//11655438449929 3296210113763//10722700128969 -1142099968913//5710983926999  2//9                        ;
+    #                      0 0 520639020421//8300446712847   4550235134915//17827758688493 1482366381361//6201654941325  5551607622171//13911031047899 -5266607656330//36788968843917 1074053359553//5740751784926;
+    #                    ],
+    #   ; low_storage=false)
+
+    # 3rd-order, 4-stage IMEX method from Kennedy & Carpenter 2003
+    # (https://doi.org/10.1016/S0168-9274(02)00138-1,
+    # https://ntrs.nasa.gov/api/citations/20010075154/downloads/20010075154.pdf)
+    convert_and_check_butcher_tableau(
+        "KennedyCarpenterARK324",
+        Rational{BigInt}[0                              0                            0                               0;
+                         1767732205903//2027836641118   0                            0                               0;
+                         5535828885825//10492691773637  788022342437//10882634858940 0                               0;
+                         6485989280629//16251701735622 -4246266847089//9704473918619 10755448449292//10357097424841  0;
+        ],
+        Rational{BigInt}[1471266399579//7840856788654  -4482444167858//7529755066697   11266239266428//11593286722821 1767732205903//4055673282236;
+                         2756255671327//12835298489170 -10771552573575//22201958757719 9247589265047//10645013368117  2193209047091//5459859503100],
+        Rational{BigInt}[0                              0                            0                               0                           ;
+                         1767732205903//4055673282236   1767732205903//4055673282236 0                               0                           ;
+                         2746238789719//10658868560708 -640167445237//6845629431997  1767732205903//4055673282236    0                           ;
+                         1471266399579//7840856788654  -4482444167858//7529755066697 11266239266428//11593286722821  1767732205903//4055673282236;
+                        ],
+        Rational{BigInt}[1471266399579//7840856788654  -4482444167858//7529755066697   11266239266428//11593286722821 1767732205903//4055673282236;
+                         2756255671327//12835298489170 -10771552573575//22201958757719 9247589265047//10645013368117  2193209047091//5459859503100],
+        ; low_storage=false)
+
+    # 2nd-order, 2-stage IMEX method 'IMEX-SSP2(2,2,2)' from Pareschi & Russo 2005, Table II
+    # (https://doi.org/10.1007/s10915-004-4636-4)
+    gamma = 1 - 1 / sqrt(BigFloat(2))
+    convert_and_check_butcher_tableau(
+        "PareschiRusso2(2,2,2)",
+        BigFloat[0 0;
+                 1 0;
+                ],
+        BigFloat[1//2 1//2],
+        BigFloat[gamma     0    ;
+                 1-2*gamma gamma;
+                ],
+        BigFloat[1//2 1//2],
+        ; low_storage=false)
+
+    # 2nd-order, 3-stage IMEX method 'IMEX-SSP2(3,2,2)' from Pareschi & Russo 2005, Table III
+    # (https://doi.org/10.1007/s10915-004-4636-4)
+    convert_and_check_butcher_tableau(
+        "PareschiRusso2(3,2,2)",
+        Rational{Int64}[0 0 0;
+                        0 0 0;
+                        0 1 0;
+                ],
+        Rational{Int64}[0 1//2 1//2],
+        Rational{Int64}[ 1//2 0    0   ;
+                        -1//2 1//2 0   ;
+                         0    1//2 1//2;
+                ],
+        Rational{Int64}[0 1//2 1//2],
+        ; low_storage=false)
+
+    # 2nd-order, 3-stage IMEX method 'IMEX-SSP2(3,3,2)' from Pareschi & Russo 2005, Table IV
+    # (https://doi.org/10.1007/s10915-004-4636-4)
+    convert_and_check_butcher_tableau(
+        "PareschiRusso2(3,3,2)",
+        Rational{Int64}[0    0    0;
+                        1//2 0    0;
+                        1//2 1//2 0;
+                ],
+        Rational{Int64}[1//3 1//3 1//3],
+        Rational{Int64}[1//4 0    0   ;
+                        0    1//4 0   ;
+                        1//3 1//3 1//3;
+                ],
+        Rational{Int64}[1//3 1//3 1//3],
+        ; low_storage=false)
+
+    # 3rd-order, 4-stage IMEX method 'IMEX-SSP3(4,3,3)' from Pareschi & Russo 2005, Table VI
+    # (https://doi.org/10.1007/s10915-004-4636-4)
+    alpha = 0.24169426078821
+    beta = 0.06042356519705
+    eta = 0.12915286960590
+    convert_and_check_butcher_tableau(
+        "PareschiRusso3(4,3,3)",
+        typeof(alpha)[0 0    0    0;
+                      0 0    0    0;
+                      0 1    0    0;
+                      0 1//4 1//4 0;
+                     ],
+        typeof(alpha)[0 1//6 1//6 2//3],
+        typeof(alpha)[alpha  0       0                   0    ;
+                      -alpha alpha   0                   0    ;
+                      0      1-alpha alpha               0    ;
+                      beta   eta     1//2-beta-eta-alpha alpha;
+                     ],
+        typeof(alpha)[0 1//6 1//6 2//3],
+        ; low_storage=false)
+end
+
+end # CalculateRKCoeffs
+
+if abspath(PROGRAM_FILE) == @__FILE__
+    using .CalculateRKCoeffs
+    CalculateRKCoeffs.calculate_all_coeffs()
+end
