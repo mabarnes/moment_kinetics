@@ -174,6 +174,23 @@ function __init__()
 end
 
 """
+    free_MPI_comm!(comm)
+
+If `comm` is not null or one of the default communicators (COMM_WORLD or COMM_SELF), free
+it to avoid leaking MPI communicators. To be called before, e.g. `comm_block[]` is
+assigned (in case it is being reassigned). This is necessary because some MPI
+installations have a very limited number of communicators, and will error if this limit is
+exceeded.
+"""
+function free_MPI_comm!(comm)
+    if !(comm == MPI.COMM_NULL || comm == MPI.COMM_WORLD || comm == MPI.COMM_SELF ||
+             comm == MPI.COMM_TYPE_SHARED)
+        MPI.free(comm)
+    end
+    return nothing
+end
+
+"""
 Function to take information from user about r z grids and 
 number of processes allocated to set up communicators
 notation definitions:
@@ -237,6 +254,7 @@ function setup_distributed_memory_MPI(z_nelement_global,z_nelement_local,r_nelem
     block_size[] = nrank_per_zr_block
     n_blocks[] = nblocks
     # construct a communicator for intra-block communication
+    free_MPI_comm!(comm_block[])
     comm_block[] = MPI.Comm_split(comm_world,iblock,irank_block)
     # MPI.Comm_split(comm,color,key)
 	# comm -> communicator to be split
@@ -278,6 +296,7 @@ function setup_distributed_memory_MPI(z_nelement_global,z_nelement_local,r_nelem
 
     # construct communicators for inter-block communication only communicate between lead
     # processes on a block
+    free_MPI_comm!(comm_inter_block[])
     if block_rank[] == 0
         comm_inter_block[] = MPI.Comm_split(comm_world, 0, iblock)
     else # assign a dummy value 
@@ -312,8 +331,10 @@ function setup_serial_MPI()
     block_rank[] = 0
     block_size[] = 1
     n_blocks[] = 1
+    free_MPI_comm!(comm_block[])
     comm_block[] = MPI.COMM_SELF
 
+    free_MPI_comm!(comm_inter_block[])
     comm_inter_block[] = MPI.COMM_SELF
     r_comm = MPI.COMM_SELF
     z_comm = MPI.COMM_SELF
@@ -400,6 +421,7 @@ function setup_distributed_memory_MPI_for_weights_precomputation(vpa_nelement_gl
     block_rank[] = irank_block
     block_size[] = nrank_per_vpavperp_block
     # construct a communicator for intra-block communication
+    free_MPI_comm!(comm_block[])
     comm_block[] = MPI.Comm_split(comm_vpavperp,iblock,irank_block)
     
     vpa_ngroup = vperp_nchunks
@@ -436,6 +458,7 @@ function setup_distributed_memory_MPI_for_weights_precomputation(vpa_nelement_gl
 
 	# construct communicators for inter-block communication
 	# only communicate between lead processes on a block
+    free_MPI_comm!(comm_inter_block[])
     if block_rank[] == 0 #&& utilised_core
         comm_inter_block[] = MPI.Comm_split(comm_vpavperp, 0, iblock)
         vperp_comm = MPI.Comm_split(comm_vpavperp,vperp_igroup,vperp_irank)

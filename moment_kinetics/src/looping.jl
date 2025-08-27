@@ -8,7 +8,7 @@ export loop_ranges
 using ..debugging
 using ..communication
 using ..communication: _block_synchronize, _anysv_subblock_synchronize,
-                       _anyzv_subblock_synchronize
+                       _anyzv_subblock_synchronize, free_MPI_comm!
 using ..type_definitions: mk_int
 
 using ..loop_ranges_struct: ion_dimensions, neutral_dimensions, all_dimensions,
@@ -565,6 +565,7 @@ eval(quote
              # Create communicator for the anysv subblock. OK to do this here as
              # communication.setup_distributed_memory_MPI() must have already been called
              # to set block_size[] and block_rank[]
+             free_MPI_comm!(comm_anysv_subblock[])
              comm_anysv_subblock[] = MPI.Comm_split(comm_block[], anysv_subblock_index,
                                                    anysv_rank_within_subblock)
              anysv_subblock_rank[] = anysv_rank_within_subblock
@@ -601,6 +602,7 @@ eval(quote
              # Create communicator for the anyzv subblock. OK to do this here as
              # communication.setup_distributed_memory_MPI() must have already been called
              # to set block_size[] and block_rank[]
+             free_MPI_comm!(comm_anyzv_subblock[])
              comm_anyzv_subblock[] = MPI.Comm_split(comm_block[], anyzv_subblock_index,
                                                     anyzv_rank_within_subblock)
              anyzv_subblock_rank[] = anyzv_rank_within_subblock
@@ -788,6 +790,7 @@ function debug_setup_loop_ranges_split_one_combination!(
     # Create communicator for the anysv subblock. OK to do this here as
     # communication.setup_distributed_memory_MPI() must have already been called
     # to set comm_block[].
+    free_MPI_comm!(comm_anysv_subblock[])
     comm_anysv_subblock[] = MPI.Comm_split(comm_block[], anysv_subblock_index,
                                            anysv_rank_within_subblock)
     anysv_subblock_rank[] = MPI.Comm_rank(comm_anysv_subblock[])
@@ -882,6 +885,7 @@ function debug_setup_loop_ranges_split_one_combination!(
     # Create communicator for the anyzv subblock. OK to do this here as
     # communication.setup_distributed_memory_MPI() must have already been called
     # to set comm_block[].
+    free_MPI_comm!(comm_anyzv_subblock[])
     comm_anyzv_subblock[] = MPI.Comm_split(comm_block[], anyzv_subblock_index,
                                            anyzv_rank_within_subblock)
     anyzv_subblock_rank[] = MPI.Comm_rank(comm_anyzv_subblock[])
