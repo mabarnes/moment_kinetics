@@ -4,12 +4,13 @@ cycles when they are used by several other modules.
 """
 module moment_kinetics_structs
 
-using ..communication
-using ..type_definitions: mk_float
+using ..type_definitions: mk_float, mk_int, MPISharedArray
+
+using MPI
 
 export scratch_pdf, scratch_electron_pdf, em_fields_struct, moments_ion_substruct,
        moments_electron_substruct, moments_neutral_substruct, pdf_substruct,
-       electron_pdf_substruct, pdf_struct, moments_struct
+       electron_pdf_substruct, pdf_struct, moments_struct, coordinate
 export ndim_pdf_ion, ndim_pdf_neutral, ndim_pdf_electron, ndim_field, ndim_moment,
        ndim_moment_electron, ndim_v, ndim_v_neutral, ndim_pdf_ion_boundary,
        ndim_moment_boundary, ndim_pdf_electron_boundary, ndim_electron_moment_boundary,
@@ -452,6 +453,143 @@ struct moments_struct{ndim_moment_wall, ndim_moment_electron_source}
     evolve_upar::Bool
     # flag that indicates if the parallel pressure should be evolved via the energy equation
     evolve_p::Bool
+end
+
+"""
+structure containing basic information related to coordinates
+"""
+struct coordinate{T <: AbstractVector{mk_float}, Ti <: AbstractVector{mk_int}, Tbparams,
+                  Tnext <: Union{mk_int,Cint}, Tprev <: Union{mk_int,Cint}}
+    # name is the name of the variable associated with this coordiante
+    name::String
+    # n_global is the total number of grid points associated with this coordinate
+    n_global::mk_int
+    # n is the total number of local grid points associated with this coordinate
+    n::mk_int
+    # ngrid is the number of grid points per element in this coordinate
+    ngrid::mk_int
+    # nelement is the number of elements associated with this coordinate globally
+    nelement_global::mk_int
+    # nelement_local is the number of elements associated with this coordinate on this rank
+    nelement_local::mk_int
+    # nrank is total number of ranks in the calculation of this coord
+    nrank::mk_int
+    # irank is the rank of this process
+    irank::mk_int
+    # nextrank is the rank of the next process on the communicator for this coordinate
+    # (may be MPI.PROC_NULL if this is the last process and the dimension is not periodic)
+    nextrank::Tnext
+    # prevrank is the rank of the previous process on the communicator for this coordinate
+    # (may be MPI.PROC_NULL if this is the first process and the dimension is not periodic)
+    prevrank::Tprev
+    # L is the box length in this coordinate
+    L::mk_float
+    # grid is the location of the grid points
+    grid::Array{mk_float,1}
+    # cell_width is the width associated with the cells between grid points
+    cell_width::Array{mk_float,1}
+    # igrid contains the grid point index within the element
+    igrid::Array{mk_int,1}
+    # ielement contains the element index
+    ielement::Array{mk_int,1}
+    # imin[j] contains the minimum index on the full grid for element j
+    imin::Array{mk_int,1}
+    # imax[j] contains the maximum index on the full grid for element j
+    imax::Array{mk_int,1}
+    # igrid_full[i,j] contains the index of the full grid for the elemental grid point i, on element j
+    igrid_full::Array{mk_int,2}
+    # discretization option for the grid
+    discretization::String
+    # if the discretization is finite differences, finite_difference_option provides the precise scheme
+    finite_difference_option::String
+    # if the discretization is chebyshev_pseudospectral, cheb_option chooses whether to use FFT or differentiation matrices for d / d coord
+    cheb_option::String
+    # bc is the boundary condition option for this coordinate
+    bc::String
+    # Flag indicating whether dimension is periodic. Useful because periodic dimensions
+    # require some extra special handling.
+    periodic::Bool
+    # struct containing some parameters that may be used for applying the boundary
+    # condition.
+    boundary_parameters::Tbparams
+    # wgts contains the integration weights associated with each grid point
+    wgts::Array{mk_float,1}
+    # uniform_grid contains location of grid points mapped to a uniform grid
+    # if finite differences used for discretization, no mapping required, and uniform_grid = grid
+    uniform_grid::Array{mk_float,1}
+    # duniform_dgrid is the local derivative of the uniform grid with respect to
+    # the coordinate grid
+    duniform_dgrid::Array{mk_float,2}
+    # scratch is an array used for intermediate calculations requiring n entries
+    scratch::Array{mk_float,1}
+    # scratch2 is an array used for intermediate calculations requiring n entries
+    scratch2::Array{mk_float,1}
+    # scratch3 is an array used for intermediate calculations requiring n entries
+    scratch3::Array{mk_float,1}
+    # scratch4 is an array used for intermediate calculations requiring n entries
+    scratch4::Array{mk_float,1}
+    # scratch5 is an array used for intermediate calculations requiring n entries
+    scratch5::Array{mk_float,1}
+    # scratch6 is an array used for intermediate calculations requiring n entries
+    scratch6::Array{mk_float,1}
+    # scratch7 is an array used for intermediate calculations requiring n entries
+    scratch7::Array{mk_float,1}
+    # scratch8 is an array used for intermediate calculations requiring n entries
+    scratch8::Array{mk_float,1}
+    # scratch9 is an array used for intermediate calculations requiring n entries
+    scratch9::Array{mk_float,1}
+    # scratch10 is an array used for intermediate calculations requiring n entries
+    scratch10::Array{mk_float,1}
+    # scratch_int_nelement_plus_1 is an integer array used for intermediate calculations
+    # requiring nelement+1 entries
+    scratch_int_nelement_plus_1::Array{mk_int,1}
+    # scratch_shared is a shared-memory array used for intermediate calculations requiring
+    # n entries
+    scratch_shared::T
+    # scratch_shared2 is a shared-memory array used for intermediate calculations requiring
+    # n entries
+    scratch_shared2::T
+    # scratch_shared3 is a shared-memory array used for intermediate calculations requiring
+    # n entries
+    scratch_shared3::T
+    # scratch_shared_int is a shared-memory array used for intermediate calculations
+    # requiring n integer entries
+    scratch_shared_int::Ti
+    # scratch_shared_int is a shared-memory array used for intermediate calculations
+    # requiring n integer entries
+    scratch_shared_int2::Ti
+    # scratch_2d and scratch2_2d are arrays used for intermediate calculations requiring
+    # ngrid x nelement entries
+    scratch_2d::Array{mk_float,2}
+    scratch2_2d::Array{mk_float,2}
+    # buffer of size 1 for communicating information about cell boundaries
+    send_buffer::Array{mk_float,1}
+    # buffer of size 1 for communicating information about cell boundaries
+    receive_buffer::Array{mk_float,1}
+    # the MPI communicator appropriate for this calculation
+    comm::MPI.Comm
+    # local range to slice from variables to write to output file
+    local_io_range::UnitRange{Int64}
+    # global range to write into in output file
+    global_io_range::UnitRange{Int64}
+    # scale for each element
+    element_scale::Array{mk_float,1}
+    # shift for each element
+    element_shift::Array{mk_float,1}
+    # option used to set up element spacing
+    element_spacing_option::String
+    # list of element boundaries
+    element_boundaries::Array{mk_float,1}
+    # Does the coordinate use a 'Radau' discretization for the first element?
+    radau_first_element::Bool
+    # 'Other' nodes where the j'th Lagrange polynomial (which is 1 at x[j]) is equal to 0
+    other_nodes::Array{mk_float,3}
+    # One over the denominators of the Lagrange polynomials
+    one_over_denominator::Array{mk_float,2}
+    # mask_up -- mask function for use imposing bc at upper wall
+    mask_up::Array{mk_float,1}
+    # mask_low -- mask function for use imposing bc at lower wall
+    mask_low::Array{mk_float,1}
 end
 
 """

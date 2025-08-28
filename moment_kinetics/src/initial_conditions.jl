@@ -66,13 +66,13 @@ function allocate_pdf_and_moments(composition, r, z, vperp, vpa, vzeta, vr, vz,
     # the time-dependent entries are not initialised.
     # moments arrays have same r and z grids for both ion and neutral species
     # and so are included in the same struct
-    ion = create_moments_ion(z.n, r.n, composition.n_ion_species, evolve_moments.density,
+    ion = create_moments_ion(z, r, composition.n_ion_species, evolve_moments.density,
                              evolve_moments.parallel_flow, evolve_moments.pressure,
                              external_source_settings.ion, num_diss_params)
-    electron = create_moments_electron(z.n, r.n, composition.electron_physics,
+    electron = create_moments_electron(z, r, composition.electron_physics,
                                        num_diss_params,
                                        length(external_source_settings.electron))
-    neutral = create_moments_neutral(z.n, r.n, composition.n_neutral_species,
+    neutral = create_moments_neutral(z, r, composition.n_neutral_species,
                                      evolve_moments.density, evolve_moments.parallel_flow,
                                      evolve_moments.pressure,
                                      external_source_settings.neutral, num_diss_params)
@@ -100,19 +100,19 @@ Allocate arrays for pdfs
 """
 function create_pdf(composition, r, z, vperp, vpa, vzeta, vr, vz)
     # allocate pdf arrays
-    pdf_ion_norm = allocate_shared_float(vpa.n, vperp.n, z.n, r.n, composition.n_ion_species)
+    pdf_ion_norm = allocate_shared_float(vpa=vpa, vperp=vperp, z=z, r=r, ion_species=composition.n_ion_species)
     # buffer array is for ion-neutral collisions, not for storing ion pdf
-    pdf_ion_buffer = allocate_shared_float(vpa.n, vperp.n, z.n, r.n, composition.n_neutral_species) # n.b. n_species is n_neutral_species here
-    pdf_neutral_norm = allocate_shared_float(vz.n, vr.n, vzeta.n, z.n, r.n, composition.n_neutral_species)
+    pdf_ion_buffer = allocate_shared_float(vpa=vpa, vperp=vperp, z=z, r=r, neutral_species=composition.n_neutral_species) # n.b. n_species is n_neutral_species here
+    pdf_neutral_norm = allocate_shared_float(; vz=vz, vr=vr, vzeta=vzeta, z=z, r=r, neutral_species=composition.n_neutral_species)
     # buffer array is for neutral-ion collisions, not for storing neutral pdf
-    pdf_neutral_buffer = allocate_shared_float(vz.n, vr.n, vzeta.n, z.n, r.n, composition.n_ion_species)
+    pdf_neutral_buffer = allocate_shared_float(; vz=vz, vr=vr, vzeta=vzeta, z=z, r=r, neutral_species=composition.n_ion_species)
     if composition.electron_physics ∈ (kinetic_electrons,
                                        kinetic_electrons_with_temperature_equation)
-        pdf_electron_norm = allocate_shared_float(vpa.n, vperp.n, z.n, r.n)
+        pdf_electron_norm = allocate_shared_float(vpa, vperp, z, r)
         # MB: not sure if pdf_electron_buffer will ever be needed, but create for now
         # to emulate ion and neutral behaviour
-        pdf_electron_buffer = allocate_shared_float(vpa.n, vperp.n, z.n, r.n)
-        pdf_before_ion_timestep = allocate_shared_float(vpa.n, vperp.n, z.n, r.n)
+        pdf_electron_buffer = allocate_shared_float(vpa, vperp, z, r)
+        pdf_before_ion_timestep = allocate_shared_float(vpa, vperp, z, r)
         electron_substruct = electron_pdf_substruct(pdf_electron_norm,
                                                     pdf_electron_buffer,
                                                     pdf_before_ion_timestep)
@@ -522,8 +522,8 @@ end
 function initialize_pdf!(pdf, moments, composition, r, z, vperp, vpa, vzeta, vr, vz,
                          vperp_spectral, vpa_spectral, vzeta_spectral, vr_spectral,
                          vz_spectral, species)
-    wall_flux_0 = allocate_float(r.n, composition.n_ion_species)
-    wall_flux_L = allocate_float(r.n, composition.n_ion_species)
+    wall_flux_0 = allocate_float(; r=r, ion_species=composition.n_ion_species)
+    wall_flux_L = allocate_float(; r=r, ion_species=composition.n_ion_species)
 
     @serial_region begin
         for is ∈ 1:composition.n_ion_species, ir ∈ 1:r.n
@@ -609,7 +609,7 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
         if restart_filename === nothing
             # No file to restart from
             previous_runs_info = nothing
-            code_time = 0.0
+            code_time = fill(mk_float(0.0), r.n)
             restart_time_index = -1
             pdf_electron_converged = false
         else
@@ -685,22 +685,17 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
         max_electron_pdf_iterations = nothing
         max_electron_sim_time = max(2.0, t_params.electron.max_pseudotime)
         if t_params.electron.debug_io !== nothing
-            io_electron = setup_electron_io(t_params.electron.debug_io[1], vpa, vperp, z,
-                                            r, composition, collisions,
-                                            moments.evolve_density, moments.evolve_upar,
-                                            moments.evolve_p, external_source_settings,
-                                            t_params.electron,
-                                            t_params.electron.debug_io[2], -1, nothing,
-                                            "electron_debug")
-        end
-        if code_time > 0.0
-            tind = searchsortedfirst(t_params.electron.moments_output_times, code_time)
-            n_truncated = max(length(t_params.electron.moments_output_times) - tind, 0)
-            truncated_times = t_params.electron.moments_output_times[tind+1:end]
-            resize!(t_params.electron.moments_output_times, n_truncated)
-            t_params.electron.moments_output_times .= truncated_times
-            resize!(t_params.electron.dfns_output_times, n_truncated)
-            t_params.electron.dfns_output_times .= truncated_times
+            @begin_serial_region
+            @serial_region begin
+                for ir ∈ 1:r.n
+                    setup_electron_io(t_params.electron.debug_io[1], vpa, vperp, z, r,
+                                      composition, collisions, moments.evolve_density,
+                                      moments.evolve_upar, moments.evolve_p,
+                                      external_source_settings, t_params.electron,
+                                      t_params.electron.debug_io[2], -1, nothing,
+                                      "electron_debug"; ir=ir)
+                end
+            end
         end
         if !pdf_electron_converged 
             if global_rank[] == 0
@@ -734,7 +729,6 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
                                                 nl_solver_params.electron_advance,
                                                 max_electron_pdf_iterations,
                                                 max_electron_sim_time;
-                                                io_electron=io_initial_electron,
                                                 initial_time=code_time,
                                                 residual_tolerance=t_input["initialization_residual_value"],
                                                 evolve_p=true,
@@ -812,7 +806,6 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
                                          nl_solver_params.electron_advance,
                                          max_electron_pdf_iterations,
                                          max_electron_sim_time;
-                                         io_electron=io_initial_electron,
                                          evolve_p=true, ion_dt=t_params.dt[],
                                          solution_method=electron_solution_method)
             end
@@ -823,11 +816,9 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
 
             # Write the converged initial state for the electrons to a file so that it can be
             # re-used if the simulation is re-run.
-            t_params.electron.moments_output_counter[] += 1
             write_electron_state(scratch_electron, moments, fields.phi, t_params.electron,
-                                 io_initial_electron,
-                                 t_params.electron.moments_output_counter[], -1.0, 0.0, r,
-                                 z, vperp, vpa; pdf_electron_converged=true)
+                                 io_initial_electron, 2, -1.0, 0.0, r, z, vperp, vpa;
+                                 pdf_electron_converged=true)
             finish_electron_io(io_initial_electron)
         end
 
@@ -1302,8 +1293,8 @@ function init_ion_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
 
             # Can use non-shared memory here because `init_ion_pdf_over_density!()` is
             # called inside a `@serial_region`
-            lower_z_pdf_buffer = allocate_float(vpa.n, vperp.n)
-            upper_z_pdf_buffer = allocate_float(vpa.n, vperp.n)
+            lower_z_pdf_buffer = allocate_float(vpa, vperp)
+            upper_z_pdf_buffer = allocate_float(vpa, vperp)
             if z.irank == 0
                 lower_z_pdf_buffer .= pdf[:,:,1]
             end
@@ -1637,8 +1628,8 @@ function init_neutral_pdf_over_density!(pdf, spec, composition, vz, vr, vzeta, z
             end
             # Can use non-shared memory here because `init_ion_pdf_over_density!()` is
             # called inside a `@serial_region`
-            lower_z_pdf_buffer = allocate_float(vz.n, vr.n, vzeta.n)
-            upper_z_pdf_buffer = allocate_float(vz.n, vr.n, vzeta.n)
+            lower_z_pdf_buffer = allocate_float(vz, vr, vzeta)
+            upper_z_pdf_buffer = allocate_float(vz, vr, vzeta)
             if z.irank == 0
                 lower_z_pdf_buffer .= pdf[:,:,:,1]
             end
@@ -1670,8 +1661,8 @@ function init_neutral_pdf_over_density!(pdf, spec, composition, vz, vr, vzeta, z
             # Re-calculate Knudsen distribution instead of using
             # `boundary_distributions.knudsen`, so that we can include vgrid_scale_factor
             # here.
-            knudsen_pdf_lower = allocate_float(vz.n, vr.n, vzeta.n)
-            knudsen_pdf_upper = allocate_float(vz.n, vr.n, vzeta.n)
+            knudsen_pdf_lower = allocate_float(vz, vr, vzeta)
+            knudsen_pdf_upper = allocate_float(vz, vr, vzeta)
             T_wall_over_m = composition.T_wall / composition.mn_over_mi
             if vzeta.n > 1 && vr.n > 1
                 # 3V specification of neutral wall emission distribution for boundary condition
@@ -1874,7 +1865,8 @@ function init_electron_pdf_over_density_and_boundary_phi!(pdf, phi, density, upa
         end
         # Apply the sheath boundary condition to get cut-off boundary distribution
         # functions and boundary values of phi
-        for ir ∈ 1:r.n
+        @begin_r_anyzv_region()
+        @loop_r ir begin
             @views enforce_boundary_condition_on_electron_pdf!(
                        pdf[:,:,:,ir], phi[:,ir], vth[:,ir], upar[:,ir], z, vperp, vpa,
                        vperp_spectral, vpa_spectral, vpa_advect, moments,

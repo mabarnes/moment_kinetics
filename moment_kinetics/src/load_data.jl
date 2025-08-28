@@ -700,8 +700,8 @@ function reload_evolving_fields!(pdf, moments, fields, restart_prefix_iblock, ti
     code_time = 0.0
     dt = Ref(-Inf)
     dt_before_last_fail = Ref(Inf)
-    electron_dt = Ref(-Inf)
-    electron_dt_before_last_fail = Ref(Inf)
+    electron_dt = fill(mk_float(-Inf), r.n)
+    electron_dt_before_last_fail = fill(mk_float(Inf), r.n)
     previous_runs_info = nothing
     restart_electron_physics = nothing
     @begin_serial_region()
@@ -1030,11 +1030,15 @@ function reload_evolving_fields!(pdf, moments, fields, restart_prefix_iblock, ti
                 # The algorithm for electron pseudo-timestepping actually starts each
                 # solve using t_params.electron.previous_dt[], so "electron_previous_dt"
                 # is the thing to load.
-                electron_dt[] = load_slice(dynamic, "electron_previous_dt", time_index)
+                electron_dt .=
+                    reload_r_array("electron_previous_dt", dynamic, time_index, coords,
+                                   reload_ranges, restart_coords, interpolation_needed)
             end
             if "electron_dt_before_last_fail" ∈ keys(dynamic)
-                electron_dt_before_last_fail[] =
-                    load_slice(dynamic, "electron_dt_before_last_fail", time_index)
+                electron_dt_before_last_fail .=
+                    reload_r_array("electron_dt_before_last_fail", dynamic, time_index,
+                                   coords, reload_ranges, restart_coords,
+                                   interpolation_needed)
             end
         finally
             close(fid)
@@ -1064,14 +1068,12 @@ function reload_evolving_fields!(pdf, moments, fields, restart_prefix_iblock, ti
     else
         dt = dt[]
     end
-    if electron_dt[] == -Inf
+    if all(electron_dt .== -Inf)
         electron_dt = nothing
-    else
-        electron_dt = electron_dt[]
     end
 
     return code_time, dt, dt_before_last_fail[], electron_dt,
-           electron_dt_before_last_fail[], previous_runs_info, time_index,
+           electron_dt_before_last_fail, previous_runs_info, time_index,
            restart_electron_physics
 end
 
@@ -1080,7 +1082,7 @@ Reload electron pdf and moments from an existing output file.
 """
 function reload_electron_data!(pdf, moments, phi, t_params, restart_prefix_iblock,
                                time_index, geometry, r, z, vpa, vperp, vzeta, vr, vz)
-    code_time = Ref(0.0)
+    code_time = fill(mk_float(0.0), r.n)
     pdf_electron_converged = Ref(false)
     previous_runs_info = nothing
     @begin_serial_region()
@@ -1115,11 +1117,13 @@ function reload_electron_data!(pdf, moments, phi, t_params, restart_prefix_ibloc
                                || !all(isapprox.(x.grid, restart_coords[key].grid))))
                 for (key, x) ∈ pairs(coords))
 
-            code_time[] = load_slice(dynamic, "time", time_index)
+            reload_ranges = get_reload_ranges(parallel_io, restart_coords)
+
+            code_time .= reload_r_array("electron_cumulative_pseudotime", dynamic,
+                                        time_index, coords, reload_ranges, restart_coords,
+                                        interpolation_needed)
 
             pdf_electron_converged[] = get_attribute(fid, "pdf_electron_converged")
-
-            reload_ranges = get_reload_ranges(parallel_io, restart_coords)
 
             moments.electron.upar_updated[] = true
             moments.electron.p .=
@@ -1167,15 +1171,24 @@ function reload_electron_data!(pdf, moments, phi, t_params, restart_prefix_ibloc
                                        coords, reload_ranges, restart_coords,
                                        interpolation_needed)
 
-            new_dt = load_slice(dynamic, "electron_dt", time_index)
-            if new_dt > 0.0
+            new_dt = reload_r_array("electron_dt", dynamic, time_index, coords,
+                                    reload_ranges, restart_coords, interpolation_needed)
+            if all(new_dt .> 0.0)
                 # if the reloaded electron_dt was 0.0, then the previous run would not
                 # have been using kinetic electrons, so we only use the value if it is
                 # positive
-                t_params.dt[] = new_dt
+                t_params.dt .= new_dt
             end
-            t_params.dt_before_last_fail[] =
-                load_slice(dynamic, "electron_dt_before_last_fail", time_index)
+            t_params.previous_dt .=
+                reload_r_array("electron_previous_dt", dynamic, time_index, coords,
+                               reload_ranges, restart_coords, interpolation_needed)
+            t_params.dt_before_last_fail .=
+                reload_r_array("electron_dt_before_last_fail", dynamic, time_index,
+                               coords, reload_ranges, restart_coords,
+                               interpolation_needed)
+            t_params.step_counter .=
+                reload_r_array("electron_step_counter", dynamic, time_index, coords,
+                               reload_ranges, restart_coords, interpolation_needed)
         finally
             close(fid)
         end
@@ -1185,14 +1198,16 @@ function reload_electron_data!(pdf, moments, phi, t_params, restart_prefix_ibloc
     # root process of each shared-memory block (on which it might have been loaded from a
     # restart file).
     MPI.Bcast!(t_params.dt, comm_block[]; root=0)
+    MPI.Bcast!(t_params.previous_dt, comm_block[]; root=0)
     MPI.Bcast!(t_params.dt_before_last_fail, comm_block[]; root=0)
+    MPI.Bcast!(t_params.step_counter, comm_block[]; root=0)
     MPI.Bcast!(code_time, comm_block[]; root=0)
     MPI.Bcast!(pdf_electron_converged, comm_block[]; root=0)
 
-    t_params.previous_dt[] = t_params.dt[]
-    t_params.dt_before_output[] = t_params.dt[]
+    t_params.dt_before_output .= t_params.dt
+    t_params.t .= code_time
 
-    return code_time[], pdf_electron_converged[], previous_runs_info, time_index
+    return code_time, pdf_electron_converged[], previous_runs_info, time_index
 end
 
 function load_restart_coordinates(fid, new_coords, parallel_io)
@@ -1377,6 +1392,26 @@ function regrid_electron_moment(moment, new_coords, old_coords, interpolation_ne
         moment = new_moment
     end
     return moment
+end
+
+function reload_r_array(var_name, dynamic, time_index, coords, reload_ranges,
+                        restart_coords, interpolation_needed)
+    r_array = load_slice(dynamic, var_name, reload_ranges.r_range, time_index)
+    return regrid_r_array(r_array, coords, restart_coords, interpolation_needed)
+end
+
+function regrid_r_array(r_array, new_coords, old_coords, interpolation_needed)
+    r = new_coords.r
+    old_r = old_coords.r
+    old_r_spectral = old_coords.r_spectral
+    orig_nr = size(r_array)
+    if interpolation_needed["r"]
+        new_r_array = allocate_float(r.n)
+        @views interpolate_to_grid_1d!(new_r_array, r.grid, r_array, old_r,
+                                       old_r_spectral)
+        r_array = new_r_array
+    end
+    return r_array
 end
 
 function reload_ion_pdf(dynamic, time_index, moments, coords, reload_ranges,
@@ -3675,7 +3710,6 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
         vz, vz_spectral, vz_chunk_size =
             load_coordinate_data(file_final_restart, "vz"; warn_unexpected=true)
     else
-        dummy_adv_input = advection_input("default", 1.0, 0.0, 0.0)
         dummy_comm = MPI.COMM_NULL
         dummy_input = OptionsDict("dummy" => OptionsDict())
         vzeta, vzeta_spectral = define_coordinate(dummy_input, "dummy"; ignore_MPI = true)
@@ -3950,100 +3984,65 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
         variable = Tuple(get_group(f, group)[variable_name]
                          for f ∈ run_info.files)
         nd = ndims(variable[1])
+        variable_dims = split(get_attribute(variable[1], "dims"), ",")
+        if variable_dims == [""]
+            # Variable had no dimensions, so remove the empty string "" from
+            # variable_dims.
+            pop!(variable_dims)
+        end
 
-        if nd == 1
-            # Time-dependent scalar with dimensions (t)
-            # Might be an mk_int, so handle type carefully
-            dims = Vector{mk_int}()
-            !isa(it, mk_int) && push!(dims, nt)
-            vartype = typeof(variable[1][1])
-            if vartype == mk_int
-                result = allocate_int(dims...)
-            elseif vartype == mk_float
-                result = allocate_float(dims...)
+        # Assume all variables are time-dependent, but we do not list 't' in the
+        # dimensions in the output file, so add it here.
+        push!(variable_dims, "t")
+
+        vartype = eltype(variable[1])
+        dim_sizes = Vector{mk_int}()
+        slice_indices = Any[]
+        for (i, d) ∈ enumerate(variable_dims)
+            if d == "t"
+                !isa(it, mk_int) && push!(dim_sizes, nt)
+                # Don't add `it` to slice_indices because time-indexing is handled later.
+            elseif d ∈ ("ion_species", "neutral_species")
+                if is === (:)
+                    nspecies = size(variable[1], i)
+                    push!(dim_sizes, nspecies)
+                elseif !isa(is, mk_int)
+                    push!(dim_sizes, nspecies)
+                end
+                push!(slice_indices, is)
+            elseif d == "r"
+                !isa(ir, mk_int) && push!(dim_sizes, nr)
+                push!(slice_indices, ir)
+            elseif d == "z"
+                !isa(iz, mk_int) && push!(dim_sizes, nz)
+                push!(slice_indices, iz)
+            elseif d == "vperp"
+                !isa(ivperp, mk_int) && push!(dim_sizes, nvperp)
+                push!(slice_indices, ivperp)
+            elseif d == "vpa"
+                !isa(ivpa, mk_int) && push!(dim_sizes, nvpa)
+                push!(slice_indices, ivpa)
+            elseif d == "vzeta"
+                !isa(ivzeta, mk_int) && push!(dim_sizes, nvzeta)
+                push!(slice_indices, ivzeta)
+            elseif d == "vr"
+                !isa(ivr, mk_int) && push!(dim_sizes, nvr)
+                push!(slice_indices, ivr)
+            elseif d == "vz"
+                !isa(ivz, mk_int) && push!(dim_sizes, nvz)
+                push!(slice_indices, ivz)
             else
-                result = Array{vartype}(undef, dims...)
+                push!(dim_sizes, size(variable[1], i))
+                push!(slice_indices, :)
             end
-        elseif nd == 2
-            # Time-dependent vector with dimensions (unique_dim,t).
-            # The dimension that is not time is not a coordinate, so do not give any
-            # option to slice it - always just return the full length.
-            # Might be an mk_int, so handle type carefully
-            dims = Vector{mk_int}()
-            push!(dims, size(variable[1], 1))
-            !isa(it, mk_int) && push!(dims, nt)
-            vartype = typeof(variable[1][1,1])
-            if vartype == mk_int
-                result = allocate_int(dims...)
-            elseif vartype == mk_float
-                result = allocate_float(dims...)
-            else
-                result = Array{vartype}(undef, dims...)
-            end
-        elseif nd == 3
-            # EM variable with dimensions (z,r,t)
-            dims = Vector{mk_int}()
-            !isa(iz, mk_int) && push!(dims, nz)
-            !isa(ir, mk_int) && push!(dims, nr)
-            !isa(it, mk_int) && push!(dims, nt)
-            result = allocate_float(dims...)
-        elseif nd == 4
-            # moment variable with dimensions (z,r,s,t)
-            # Get nspecies from the variable, not from run_info, because it might be
-            # either ion or neutral
-            dims = Vector{mk_int}()
-            !isa(iz, mk_int) && push!(dims, nz)
-            !isa(ir, mk_int) && push!(dims, nr)
-            if is === (:)
-                nspecies = size(variable[1], 3)
-                push!(dims, nspecies)
-            elseif !isa(is, mk_int)
-                push!(dims, nspecies)
-            end
-            !isa(it, mk_int) && push!(dims, nt)
-            result = allocate_float(dims...)
-        elseif nd == 5
-            # electron distribution function variable with dimensions (vpa,vperp,z,r,t)
-            dims = Vector{mk_int}()
-            !isa(ivpa, mk_int) && push!(dims, nvpa)
-            !isa(ivperp, mk_int) && push!(dims, nvperp)
-            !isa(iz, mk_int) && push!(dims, nz)
-            !isa(ir, mk_int) && push!(dims, nr)
-            !isa(it, mk_int) && push!(dims, nt)
-            result = allocate_float(dims...)
-        elseif nd == 6
-            # ion distribution function variable with dimensions (vpa,vperp,z,r,s,t)
-            nspecies = size(variable[1], 5)
-            dims = Vector{mk_int}()
-            !isa(ivpa, mk_int) && push!(dims, nvpa)
-            !isa(ivperp, mk_int) && push!(dims, nvperp)
-            !isa(iz, mk_int) && push!(dims, nz)
-            !isa(ir, mk_int) && push!(dims, nr)
-            if is === (:)
-                push!(dims, nspecies)
-            elseif !isa(is, mk_int)
-                push!(dims, nspecies)
-            end
-            !isa(it, mk_int) && push!(dims, nt)
-            result = allocate_float(dims...)
-        elseif nd == 7
-            # neutral distribution function variable with dimensions (vz,vr,vzeta,z,r,s,t)
-            nspecies = size(variable[1], 6)
-            dims = Vector{mk_int}()
-            !isa(ivz, mk_int) && push!(dims, nvz)
-            !isa(ivr, mk_int) && push!(dims, nvr)
-            !isa(ivzeta, mk_int) && push!(dims, nvzeta)
-            !isa(iz, mk_int) && push!(dims, nz)
-            !isa(ir, mk_int) && push!(dims, nr)
-            if is === (:)
-                push!(dims, nspecies)
-            elseif !isa(is, mk_int)
-                push!(dims, nspecies)
-            end
-            !isa(it, mk_int) && push!(dims, nt)
-            result = allocate_float(dims...)
+        end
+
+        if vartype == mk_int
+            result = allocate_int(dim_sizes...)
+        elseif vartype == mk_float
+            result = allocate_float(dim_sizes...)
         else
-            error("Unsupported number of dimensions ($nd) for '$variable_name'.")
+            result = Array{vartype}(undef, dim_sizes...)
         end
 
         local_it_start = 1
@@ -4062,24 +4061,7 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
                           * "restart, should have finished already")
                 elseif tind <= local_nt
                     # tind is within this restart's time range, so get result
-                    if nd == 1
-                        result .= v[tind]
-                    elseif nd == 2
-                        result .= v[:,tind]
-                    elseif nd == 3
-                        result .= v[iz,ir,tind]
-                    elseif nd == 4
-                        result .= v[iz,ir,is,tind]
-                    elseif nd == 5
-                        result .= v[ivpa,ivperp,iz,ir,tind]
-                    elseif nd == 6
-                        result .= v[ivpa,ivperp,iz,ir,is,tind]
-                    elseif nd == 7
-                        result .= v[ivz,ivr,ivzeta,iz,ir,is,tind]
-                    else
-                        error("Unsupported combination nd=$nd, ir=$ir, iz=$iz, ivperp=$ivperp "
-                              * "ivpa=$ivpa, ivzeta=$ivzeta, ivr=$ivr, ivz=$ivz.")
-                    end
+                    result .= v[slice_indices..., tind]
 
                     # Already got the data for `it`, so end loop
                     break
@@ -4098,24 +4080,7 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
                     tinds = tinds[begin]:tstep:tinds[end]
                     global_it_end = global_it_start + length(tinds) - 1
 
-                    if nd == 1
-                        selectdim(result, ndims(result), global_it_start:global_it_end) .= v[tinds]
-                    elseif nd == 2
-                        selectdim(result, ndims(result), global_it_start:global_it_end) .= v[:,tinds]
-                    elseif nd == 3
-                        selectdim(result, ndims(result), global_it_start:global_it_end) .= v[iz,ir,tinds]
-                    elseif nd == 4
-                        selectdim(result, ndims(result), global_it_start:global_it_end) .= v[iz,ir,is,tinds]
-                    elseif nd == 5
-                        selectdim(result, ndims(result), global_it_start:global_it_end) .= v[ivpa,ivperp,iz,ir,tinds]
-                    elseif nd == 6
-                        selectdim(result, ndims(result), global_it_start:global_it_end) .= v[ivpa,ivperp,iz,ir,is,tinds]
-                    elseif nd == 7
-                        selectdim(result, ndims(result), global_it_start:global_it_end) .= v[ivz,ivr,ivzeta,iz,ir,is,tinds]
-                    else
-                        error("Unsupported combination nd=$nd, ir=$ir, iz=$iz, ivperp=$ivperp "
-                              * "ivpa=$ivpa, ivzeta=$ivzeta, ivr=$ivr, ivz=$ivz.")
-                    end
+                    selectdim(result, ndims(result), global_it_start:global_it_end) .= v[slice_indices..., tinds]
 
                     global_it_start = global_it_end + 1
                 end
@@ -5302,10 +5267,10 @@ function _get_variable_internal(run_info, variable_name::Symbol;
                            vr=(run_info.vr === nothing ? 1 : run_info.vr.n),
                            vz=(run_info.vz === nothing ? 1 : run_info.vz.n))
         for it ∈ 1:nt
-            @begin_serial_region()
+            @begin_r_anyzv_region()
             # Only need some struct with a 'speed' variable
             advect = (speed=@view(speed[:,:,:,:,it]),)
-            for ir ∈ 1:run_info.r.n
+            @loop_r ir begin
                 @views update_electron_speed_z!(advect, upar[:,ir,it], vth[:,ir,it],
                                                 run_info.vpa.grid, ir)
             end
@@ -5583,7 +5548,10 @@ function _get_variable_internal(run_info, variable_name::Symbol;
     elseif variable_name == :electron_steps_per_ion_step
         electron_steps_per_output = get_variable(run_info, "electron_steps_per_output"; kwargs...)
         ion_steps_per_output = get_variable(run_info, "steps_per_output"; kwargs...)
-        variable = electron_steps_per_output ./ ion_steps_per_output
+        variable = electron_steps_per_output ./
+                   reshape(ion_steps_per_output,
+                           (1 for _ ∈ 1:(ndims(electron_steps_per_output)-ndims(ion_steps_per_output)))...,
+                           size(ion_steps_per_output)...)
     elseif variable_name == :electron_steps_per_output
         variable = get_per_step_from_cumulative_variable(run_info, "electron_step_counter"; kwargs...)
     elseif variable_name == :electron_failures_per_output
@@ -6124,11 +6092,11 @@ function get_upwind_z_derivative(run_info, variable_name; neutral=false, kwargs.
     if neutral
         if :iz ∈ keys(kwargs)
             variable = get_variable(run_info, variable_name)
-            uz = get_variable(run_info, "neutral_uz")
+            uz = get_variable(run_info, "uz_neutral")
             nz, nr, ns, nt = size(uz)
         else
             variable = get_variable(run_info, variable_name; kwargs...)
-            uz = get_variable(run_info, "neutral_uz"; kwargs...)
+            uz = get_variable(run_info, "uz_neutral"; kwargs...)
             nz, nr, ns, nt = size(uz)
         end
     else

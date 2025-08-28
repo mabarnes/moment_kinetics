@@ -38,7 +38,7 @@ using ..type_definitions: mk_float
 using ..array_allocation: allocate_shared_float, allocate_bool, allocate_float
 using ..calculus: integral
 using ..communication
-using ..derivatives: derivative_z!, second_derivative_z!
+using ..derivatives: derivative_z!, derivative_z_anyzv!, second_derivative_z!
 using ..derivatives: derivative_r!, second_derivative_r!
 using ..looping
 using ..gyroaverages: gyro_operators, gyroaverage_pdf!
@@ -55,60 +55,60 @@ using ..moment_kinetics_structs: moments_ion_substruct, moments_electron_substru
 
 """
 """
-function create_moments_ion(nz, nr, n_species, evolve_density, evolve_upar,
+function create_moments_ion(z, r, n_species, evolve_density, evolve_upar,
                             evolve_p, ion_source_settings, num_diss_params)
     # allocate array used for the particle density
-    density = allocate_shared_float(nz, nr, n_species)
+    density = allocate_shared_float(; z=z, r=r, ion_species=n_species)
     # allocate array of Bools that indicate if the density is updated for each species
-    density_updated = allocate_bool(n_species)
+    density_updated = allocate_bool(; ion_species=n_species)
     density_updated .= false
     # allocate array used for the parallel flow
-    parallel_flow = allocate_shared_float(nz, nr, n_species)
+    parallel_flow = allocate_shared_float(; z=z, r=r, ion_species=n_species)
     # allocate array of Bools that indicate if the parallel flow is updated for each species
-    parallel_flow_updated = allocate_bool(n_species)
+    parallel_flow_updated = allocate_bool(; ion_species=n_species)
     parallel_flow_updated .= false
     # allocate array used for the pressure
-    pressure = allocate_shared_float(nz, nr, n_species)
+    pressure = allocate_shared_float(; z=z, r=r, ion_species=n_species)
     # allocate array of Bools that indicate if the pressure is updated for each species
-    pressure_updated = allocate_bool(n_species)
+    pressure_updated = allocate_bool(; ion_species=n_species)
     pressure_updated .= false
     # allocate array used for the parallel pressure
-    parallel_pressure = allocate_shared_float(nz, nr, n_species)
+    parallel_pressure = allocate_shared_float(; z=z, r=r, ion_species=n_species)
     # allocate array used for the perpendicular pressure
-    perpendicular_pressure = allocate_shared_float(nz, nr, n_species)
+    perpendicular_pressure = allocate_shared_float(; z=z, r=r, ion_species=n_species)
     # allocate array used for the temperature
-    temperature = allocate_shared_float(nz, nr, n_species)
+    temperature = allocate_shared_float(; z=z, r=r, ion_species=n_species)
     # allocate array used for the parallel flow
-    parallel_heat_flux = allocate_shared_float(nz, nr, n_species)
+    parallel_heat_flux = allocate_shared_float(; z=z, r=r, ion_species=n_species)
     # allocate array of Bools that indicate if the parallel flow is updated for each species
-    parallel_heat_flux_updated = allocate_bool(n_species)
+    parallel_heat_flux_updated = allocate_bool(; ion_species=n_species)
     parallel_heat_flux_updated .= false
     # allocate array of Bools that indicate if the parallel flow is updated for each species
     # allocate array used for the thermal speed
-    thermal_speed = allocate_shared_float(nz, nr, n_species)
-    chodura_integral_lower = allocate_shared_float(nr, n_species)
-    chodura_integral_upper = allocate_shared_float(nr, n_species)
+    thermal_speed = allocate_shared_float(; z=z, r=r, ion_species=n_species)
+    chodura_integral_lower = allocate_shared_float(; r=r, ion_species=n_species)
+    chodura_integral_upper = allocate_shared_float(; r=r, ion_species=n_species)
     if evolve_p
         v_norm_fac = thermal_speed
     else
-        v_norm_fac = allocate_shared_float(nz, nr, n_species)
+        v_norm_fac = allocate_shared_float(; z=z, r=r, ion_species=n_species)
         @serial_region begin
             v_norm_fac .= 1.0
         end
     end
 
     if evolve_density
-        ddens_dz_upwind = allocate_shared_float(nz, nr, n_species)
-        ddens_dz = allocate_shared_float(nz, nr, n_species)
-        ddens_dr_upwind = allocate_shared_float(nz, nr, n_species)
-        ddens_dr = allocate_shared_float(nz, nr, n_species)
-        ddens_dt = allocate_shared_float(nz, nr, n_species)
+        ddens_dz_upwind = allocate_shared_float(; z=z, r=r, ion_species=n_species)
+        ddens_dz = allocate_shared_float(; z=z, r=r, ion_species=n_species)
+        ddens_dr_upwind = allocate_shared_float(; z=z, r=r, ion_species=n_species)
+        ddens_dr = allocate_shared_float(; z=z, r=r, ion_species=n_species)
+        ddens_dt = allocate_shared_float(; z=z, r=r, ion_species=n_species)
         @serial_region begin
             # Initialise time derivatives so that we can use them without errors when
             # initialising advection speeds. Note the initial values of the speeds are
             # never actually used, as they are updated again in the first timestep.
             ddens_dt .= 0.0
-            if nr == 1
+            if r.n == 1
                 ddens_dr_upwind .= 0.0
                 ddens_dr .= 0.0
             end
@@ -122,28 +122,28 @@ function create_moments_ion(nz, nr, n_species, evolve_density, evolve_upar,
     end
     if evolve_density && num_diss_params.ion.moment_dissipation_coefficient > 0.0
 
-        d2dens_dz2 = allocate_shared_float(nz, nr, n_species)
+        d2dens_dz2 = allocate_shared_float(; z=z, r=r, ion_species=n_species)
     else
         d2dens_dz2 = nothing
     end
     if evolve_density || evolve_upar || evolve_p
-        dupar_dz = allocate_shared_float(nz, nr, n_species)
+        dupar_dz = allocate_shared_float(; z=z, r=r, ion_species=n_species)
     else
         dupar_dz = nothing
     end
     if evolve_upar
-        dupar_dr = allocate_shared_float(nz, nr, n_species)
-        dupar_dr_upwind = allocate_shared_float(nz, nr, n_species)
-        dupar_dz_upwind = allocate_shared_float(nz, nr, n_species)
-        dupar_dt = allocate_shared_float(nz, nr, n_species)
-        dnupar_dt = allocate_shared_float(nz, nr, n_species)
+        dupar_dr = allocate_shared_float(; z=z, r=r, ion_species=n_species)
+        dupar_dr_upwind = allocate_shared_float(; z=z, r=r, ion_species=n_species)
+        dupar_dz_upwind = allocate_shared_float(; z=z, r=r, ion_species=n_species)
+        dupar_dt = allocate_shared_float(; z=z, r=r, ion_species=n_species)
+        dnupar_dt = allocate_shared_float(; z=z, r=r, ion_species=n_species)
         @serial_region begin
             # Initialise time derivatives so that we can use them without errors when
             # initialising advection speeds. Note the initial values of the speeds are
             # never actually used, as they are updated again in the first timestep.
             dupar_dt .= 0.0
             dnupar_dt .= 0.0
-            if nr == 1
+            if r.n == 1
                 dupar_dr .= 0.0
                 dupar_dr_upwind .= 0.0
             end
@@ -157,33 +157,33 @@ function create_moments_ion(nz, nr, n_species, evolve_density, evolve_upar,
     end
     if evolve_upar && num_diss_params.ion.moment_dissipation_coefficient > 0.0
 
-        d2upar_dz2 = allocate_shared_float(nz, nr, n_species)
+        d2upar_dz2 = allocate_shared_float(; z=z, r=r, ion_species=n_species)
     else
         d2upar_dz2 = nothing
     end
     if evolve_upar
-        dppar_dz = allocate_shared_float(nz, nr, n_species)
+        dppar_dz = allocate_shared_float(; z=z, r=r, ion_species=n_species)
     else
         dppar_dz = nothing
     end
     if evolve_p
-        dp_dr_upwind = allocate_shared_float(nz, nr, n_species)
-        dp_dz = allocate_shared_float(nz, nr, n_species)
-        dp_dz_upwind = allocate_shared_float(nz, nr, n_species)
-        d2p_dz2 = allocate_shared_float(nz, nr, n_species)
-        dqpar_dz = allocate_shared_float(nz, nr, n_species)
-        dvth_dr = allocate_shared_float(nz, nr, n_species)
-        dvth_dz = allocate_shared_float(nz, nr, n_species)
-        dT_dz = allocate_shared_float(nz, nr, n_species)
-        dp_dt = allocate_shared_float(nz, nr, n_species)
-        dvth_dt = allocate_shared_float(nz, nr, n_species)
+        dp_dr_upwind = allocate_shared_float(; z=z, r=r, ion_species=n_species)
+        dp_dz = allocate_shared_float(; z=z, r=r, ion_species=n_species)
+        dp_dz_upwind = allocate_shared_float(; z=z, r=r, ion_species=n_species)
+        d2p_dz2 = allocate_shared_float(; z=z, r=r, ion_species=n_species)
+        dqpar_dz = allocate_shared_float(; z=z, r=r, ion_species=n_species)
+        dvth_dr = allocate_shared_float(; z=z, r=r, ion_species=n_species)
+        dvth_dz = allocate_shared_float(; z=z, r=r, ion_species=n_species)
+        dT_dz = allocate_shared_float(; z=z, r=r, ion_species=n_species)
+        dp_dt = allocate_shared_float(; z=z, r=r, ion_species=n_species)
+        dvth_dt = allocate_shared_float(; z=z, r=r, ion_species=n_species)
         @serial_region begin
             # Initialise time derivatives so that we can use them without errors when
             # initialising advection speeds. Note the initial values of the speeds are
             # never actually used, as they are updated again in the first timestep.
             dp_dt .= 0.0
             dvth_dt .= 0.0
-            if nr == 1
+            if r.n == 1
                 dvth_dr .= 0.0
                 dp_dr_upwind .= 0.0
             end
@@ -201,44 +201,44 @@ function create_moments_ion(nz, nr, n_species, evolve_density, evolve_upar,
         dvth_dt = nothing
     end
 
-    entropy_production = allocate_shared_float(nz, nr, n_species)
+    entropy_production = allocate_shared_float(; z=z, r=r, ion_species=n_species)
 
     n_sources = length(ion_source_settings)
     if any(x -> x.active, ion_source_settings)
-        external_source_amplitude = allocate_shared_float(nz, nr, n_sources)
-        external_source_T_array = allocate_shared_float(nz, nr, n_sources)
+        external_source_amplitude = allocate_shared_float(; z=z, r=r, ion_sources=n_sources)
+        external_source_T_array = allocate_shared_float(; z=z, r=r, ion_sources=n_sources)
         if evolve_density
-            external_source_density_amplitude = allocate_shared_float(nz, nr, n_sources)
+            external_source_density_amplitude = allocate_shared_float(; z=z, r=r, ion_sources=n_sources)
         else
-            external_source_density_amplitude = allocate_shared_float(1, 1, n_sources)
+            external_source_density_amplitude = allocate_shared_float(; ion_source_z=1, ion_source_r=1, ion_sources=n_sources)
         end
         if evolve_upar
-            external_source_momentum_amplitude = allocate_shared_float(nz, nr, n_sources)
+            external_source_momentum_amplitude = allocate_shared_float(; z=z, r=r, ion_sources=n_sources)
         else
-            external_source_momentum_amplitude = allocate_shared_float(1, 1, n_sources)
+            external_source_momentum_amplitude = allocate_shared_float(; ion_source_z=1, ion_source_r=1, ion_sources=n_sources)
         end
         if evolve_p
-            external_source_pressure_amplitude = allocate_shared_float(nz, nr, n_sources)
+            external_source_pressure_amplitude = allocate_shared_float(; z=z, r=r, ion_sources=n_sources)
         else
-            external_source_pressure_amplitude = allocate_shared_float(1, 1, n_sources)
+            external_source_pressure_amplitude = allocate_shared_float(; ion_source_z=1, ion_source_r=1, ion_sources=n_sources)
         end
         if any(x -> x.PI_density_controller_I != 0.0 && x.source_type ∈ 
                     ("density_profile_control", "density_midpoint_control"), ion_source_settings)
             if any(x -> x.source_type == "density_profile_control", ion_source_settings)
-                external_source_controller_integral = allocate_shared_float(nz, nr, n_sources)
+                external_source_controller_integral = allocate_shared_float(; z=z, r=r, ion_sources=n_sources)
             else
-                external_source_controller_integral = allocate_shared_float(1, 1, n_sources)
+                external_source_controller_integral = allocate_shared_float(; ion_source_z=1, ion_source_r=1, ion_sources=n_sources)
             end
         else
-            external_source_controller_integral = allocate_shared_float(1, 1, n_sources)
+            external_source_controller_integral = allocate_shared_float(; ion_source_z=1, ion_source_r=1, ion_sources=n_sources)
         end
     else
-        external_source_amplitude = allocate_shared_float(1, 1, n_sources)
-        external_source_T_array = allocate_shared_float(1, 1, n_sources)
-        external_source_density_amplitude = allocate_shared_float(1, 1, n_sources)
-        external_source_momentum_amplitude = allocate_shared_float(1, 1, n_sources)
-        external_source_pressure_amplitude = allocate_shared_float(1, 1, n_sources)
-        external_source_controller_integral = allocate_shared_float(1, 1, n_sources)
+        external_source_amplitude = allocate_shared_float(; ion_source_z=1, ion_source_r=1, ion_sources=n_sources)
+        external_source_T_array = allocate_shared_float(; ion_source_z=1, ion_source_r=1, ion_sources=n_sources)
+        external_source_density_amplitude = allocate_shared_float(; ion_source_z=1, ion_source_r=1, ion_sources=n_sources)
+        external_source_momentum_amplitude = allocate_shared_float(; ion_source_z=1, ion_source_r=1, ion_sources=n_sources)
+        external_source_pressure_amplitude = allocate_shared_float(; ion_source_z=1, ion_source_r=1, ion_sources=n_sources)
+        external_source_controller_integral = allocate_shared_float(; ion_source_z=1, ion_source_r=1, ion_sources=n_sources)
     end
     # If not using PI controllers, the integrals might not otherwise be initialised, so
     # zero-initialise here.
@@ -248,9 +248,9 @@ function create_moments_ion(nz, nr, n_species, evolve_density, evolve_upar,
     end
 
     if evolve_density || evolve_upar || evolve_p
-        constraints_A_coefficient = allocate_shared_float(nz, nr, n_species)
-        constraints_B_coefficient = allocate_shared_float(nz, nr, n_species)
-        constraints_C_coefficient = allocate_shared_float(nz, nr, n_species)
+        constraints_A_coefficient = allocate_shared_float(; z=z, r=r, ion_species=n_species)
+        constraints_B_coefficient = allocate_shared_float(; z=z, r=r, ion_species=n_species)
+        constraints_C_coefficient = allocate_shared_float(; z=z, r=r, ion_species=n_species)
     else
         constraints_A_coefficient = nothing
         constraints_B_coefficient = nothing
@@ -275,55 +275,55 @@ end
 """
 create a moment struct containing information about the electron moments
 """
-function create_moments_electron(nz, nr, electron_model, num_diss_params, n_sources)
+function create_moments_electron(z, r, electron_model, num_diss_params, n_sources)
     # allocate array used for the particle density
-    density = allocate_shared_float(nz, nr)
+    density = allocate_shared_float(z, r)
     # initialise Bool variable that indicates if the density is updated for each species
     density_updated = Ref(false)
     # allocate array used for the parallel flow
-    parallel_flow = allocate_shared_float(nz, nr)
+    parallel_flow = allocate_shared_float(z, r)
     # allocate Bool variable that indicates if the parallel flow is updated for each species
     parallel_flow_updated = Ref(false)
     # allocate array used for the pressure
-    pressure = allocate_shared_float(nz, nr)
+    pressure = allocate_shared_float(z, r)
     # allocate array of Bools that indicate if the pressure is updated for each species
     pressure_updated = Ref(false)
     # allocate array used for the parallel pressure
-    parallel_pressure = allocate_shared_float(nz, nr)
+    parallel_pressure = allocate_shared_float(z, r)
     # allocate array used for the perpendicular pressure
-    perpendicular_pressure = allocate_shared_float(nz, nr)
+    perpendicular_pressure = allocate_shared_float(z, r)
     # allocate array used for the temperature
-    temperature = allocate_shared_float(nz, nr)
+    temperature = allocate_shared_float(z, r)
     # allocate Bool variable that indicates if the temperature is updated for each species
     temperature_updated = Ref(false)
     # allocate array used for the parallel flow
-    parallel_heat_flux = allocate_shared_float(nz, nr)
+    parallel_heat_flux = allocate_shared_float(z, r)
     # allocate Bool variables that indicates if the parallel flow is updated for each species
     parallel_heat_flux_updated = Ref(false)
     # allocate array used for the election-ion parallel friction force
-    parallel_friction_force = allocate_shared_float(nz, nr)
+    parallel_friction_force = allocate_shared_float(z, r)
     # allocate arrays used for external sources (third index is for the different sources)
-    external_source_amplitude = allocate_shared_float(nz, nr, n_sources)
-    external_source_T_array = allocate_shared_float(nz, nr, n_sources)
-    external_source_density_amplitude = allocate_shared_float(nz, nr, n_sources)
-    external_source_momentum_amplitude = allocate_shared_float(nz, nr, n_sources)
-    external_source_pressure_amplitude = allocate_shared_float(nz, nr, n_sources)
+    external_source_amplitude = allocate_shared_float(; z=z, r=r, electron_sources=n_sources)
+    external_source_T_array = allocate_shared_float(; z=z, r=r, electron_sources=n_sources)
+    external_source_density_amplitude = allocate_shared_float(; z=z, r=r, electron_sources=n_sources)
+    external_source_momentum_amplitude = allocate_shared_float(; z=z, r=r, electron_sources=n_sources)
+    external_source_pressure_amplitude = allocate_shared_float(; z=z, r=r, electron_sources=n_sources)
     # allocate array used for the thermal speed
-    thermal_speed = allocate_shared_float(nz, nr)
+    thermal_speed = allocate_shared_float(z, r)
     # if evolving the electron pdf, it will be a function of the vth-normalised peculiar velocity
     v_norm_fac = thermal_speed
     # dn/dz is needed to obtain dT/dz (appearing in, e.g., Braginskii qpar) from dppar/dz
-    ddens_dz = allocate_shared_float(nz, nr)
+    ddens_dz = allocate_shared_float(z, r)
     # need dupar/dz to obtain, e.g., the updated electron temperature
-    dupar_dz = allocate_shared_float(nz, nr)
-    dppar_dz = allocate_shared_float(nz, nr)
-    dp_dz = allocate_shared_float(nz, nr)
+    dupar_dz = allocate_shared_float(z, r)
+    dppar_dz = allocate_shared_float(z, r)
+    dp_dz = allocate_shared_float(z, r)
     if electron_model ∈ (braginskii_fluid, kinetic_electrons,
                          kinetic_electrons_with_temperature_equation)
-        dT_dz_upwind = allocate_shared_float(nz, nr)
+        dT_dz_upwind = allocate_shared_float(z, r)
         if electron_model == kinetic_electrons_with_temperature_equation
             dp_dt = nothing
-            dT_dt = allocate_shared_float(nz, nr)
+            dT_dt = allocate_shared_float(z, r)
             @serial_region begin
                 # Initialise time derivatives so that we can use them without errors when
                 # initialising advection speeds. Note the initial values of the speeds are
@@ -331,7 +331,7 @@ function create_moments_electron(nz, nr, electron_model, num_diss_params, n_sour
                 dT_dt .= 0.0
             end
         else
-            dp_dt = allocate_shared_float(nz, nr)
+            dp_dt = allocate_shared_float(z, r)
             dT_dt = nothing
             @serial_region begin
                 # Initialise time derivatives so that we can use them without errors when
@@ -340,7 +340,7 @@ function create_moments_electron(nz, nr, electron_model, num_diss_params, n_sour
                 dp_dt .= 0.0
             end
         end
-        dvth_dt = allocate_shared_float(nz, nr)
+        dvth_dt = allocate_shared_float(z, r)
         @serial_region begin
             # Initialise time derivatives so that we can use them without errors when
             # initialising advection speeds. Note the initial values of the speeds are
@@ -354,17 +354,17 @@ function create_moments_electron(nz, nr, electron_model, num_diss_params, n_sour
         dvth_dt = nothing
     end
     if num_diss_params.electron.moment_dissipation_coefficient > 0.0
-        d2p_dz2 = allocate_shared_float(nz, nr)
+        d2p_dz2 = allocate_shared_float(z, r)
     else
         d2p_dz2 = nothing
     end
-    dqpar_dz = allocate_shared_float(nz, nr)
-    dT_dz = allocate_shared_float(nz, nr)
-    dvth_dz = allocate_shared_float(nz, nr)
+    dqpar_dz = allocate_shared_float(z, r)
+    dT_dz = allocate_shared_float(z, r)
+    dvth_dz = allocate_shared_float(z, r)
     
-    constraints_A_coefficient = allocate_shared_float(nz, nr)
-    constraints_B_coefficient = allocate_shared_float(nz, nr)
-    constraints_C_coefficient = allocate_shared_float(nz, nr)
+    constraints_A_coefficient = allocate_shared_float(z, r)
+    constraints_B_coefficient = allocate_shared_float(z, r)
+    constraints_C_coefficient = allocate_shared_float(z, r)
     @serial_region begin
         constraints_A_coefficient .= 1.0
         constraints_B_coefficient .= 0.0
@@ -388,49 +388,49 @@ end
 # and similarly for heat fluxes
 # therefore separate moments object for neutrals 
     
-function create_moments_neutral(nz, nr, n_species, evolve_density, evolve_upar,
+function create_moments_neutral(z, r, n_species, evolve_density, evolve_upar,
                                 evolve_p, neutral_source_settings, num_diss_params)
-    density = allocate_shared_float(nz, nr, n_species)
-    density_updated = allocate_bool(n_species)
+    density = allocate_shared_float(; z=z, r=r, neutral_species=n_species)
+    density_updated = allocate_bool(; neutral_species=n_species)
     density_updated .= false
-    uz = allocate_shared_float(nz, nr, n_species)
-    uz_updated = allocate_bool(n_species)
+    uz = allocate_shared_float(; z=z, r=r, neutral_species=n_species)
+    uz_updated = allocate_bool(; neutral_species=n_species)
     uz_updated .= false
-    ur = allocate_shared_float(nz, nr, n_species)
-    ur_updated = allocate_bool(n_species)
+    ur = allocate_shared_float(; z=z, r=r, neutral_species=n_species)
+    ur_updated = allocate_bool(; neutral_species=n_species)
     ur_updated .= false
-    uzeta = allocate_shared_float(nz, nr, n_species)
-    uzeta_updated = allocate_bool(n_species)
+    uzeta = allocate_shared_float(; z=z, r=r, neutral_species=n_species)
+    uzeta_updated = allocate_bool(; neutral_species=n_species)
     uzeta_updated .= false
-    p = allocate_shared_float(nz, nr, n_species)
-    p_updated = allocate_bool(n_species)
+    p = allocate_shared_float(; z=z, r=r, neutral_species=n_species)
+    p_updated = allocate_bool(; neutral_species=n_species)
     p_updated .= false
-    pz = allocate_shared_float(nz, nr, n_species)
-    pz_updated = allocate_bool(n_species)
+    pz = allocate_shared_float(; z=z, r=r, neutral_species=n_species)
+    pz_updated = allocate_bool(; neutral_species=n_species)
     pz_updated .= false
-    pr = allocate_shared_float(nz, nr, n_species)
-    pr_updated = allocate_bool(n_species)
+    pr = allocate_shared_float(; z=z, r=r, neutral_species=n_species)
+    pr_updated = allocate_bool(; neutral_species=n_species)
     pr_updated .= false
-    pzeta = allocate_shared_float(nz, nr, n_species)
-    pzeta_updated = allocate_bool(n_species)
+    pzeta = allocate_shared_float(; z=z, r=r, neutral_species=n_species)
+    pzeta_updated = allocate_bool(; neutral_species=n_species)
     pzeta_updated .= false
-    vth = allocate_shared_float(nz, nr, n_species)
+    vth = allocate_shared_float(; z=z, r=r, neutral_species=n_species)
     if evolve_p
         v_norm_fac = vth
     else
-        v_norm_fac = allocate_shared_float(nz, nr, n_species)
+        v_norm_fac = allocate_shared_float(; z=z, r=r, neutral_species=n_species)
         @serial_region begin
             v_norm_fac .= 1.0
         end
     end
-    qz = allocate_shared_float(nz, nr, n_species)
-    qz_updated = allocate_bool(n_species)
+    qz = allocate_shared_float(; z=z, r=r, neutral_species=n_species)
+    qz_updated = allocate_bool(; neutral_species=n_species)
     qz_updated .= false
 
     if evolve_density
-        ddens_dz = allocate_shared_float(nz, nr, n_species)
-        ddens_dz_upwind = allocate_shared_float(nz, nr, n_species)
-        ddens_dt = allocate_shared_float(nz, nr, n_species)
+        ddens_dz = allocate_shared_float(; z=z, r=r, neutral_species=n_species)
+        ddens_dz_upwind = allocate_shared_float(; z=z, r=r, neutral_species=n_species)
+        ddens_dt = allocate_shared_float(; z=z, r=r, neutral_species=n_species)
         @serial_region begin
             # Initialise time derivatives so that we can use them without errors when
             # initialising advection speeds. Note the initial values of the speeds are
@@ -444,19 +444,19 @@ function create_moments_neutral(nz, nr, n_species, evolve_density, evolve_upar,
     end
     if evolve_density && num_diss_params.neutral.moment_dissipation_coefficient > 0.0
 
-        d2dens_dz2 = allocate_shared_float(nz, nr, n_species)
+        d2dens_dz2 = allocate_shared_float(; z=z, r=r, neutral_species=n_species)
     else
         d2dens_dz2 = nothing
     end
     if evolve_density || evolve_upar || evolve_p
-        duz_dz = allocate_shared_float(nz, nr, n_species)
+        duz_dz = allocate_shared_float(; z=z, r=r, neutral_species=n_species)
     else
         duz_dz = nothing
     end
     if evolve_upar
-        duz_dz_upwind = allocate_shared_float(nz, nr, n_species)
-        duz_dt = allocate_shared_float(nz, nr, n_species)
-        dnuz_dt = allocate_shared_float(nz, nr, n_species)
+        duz_dz_upwind = allocate_shared_float(; z=z, r=r, neutral_species=n_species)
+        duz_dt = allocate_shared_float(; z=z, r=r, neutral_species=n_species)
+        dnuz_dt = allocate_shared_float(; z=z, r=r, neutral_species=n_species)
         @serial_region begin
             # Initialise time derivatives so that we can use them without errors when
             # initialising advection speeds. Note the initial values of the speeds are
@@ -471,23 +471,23 @@ function create_moments_neutral(nz, nr, n_species, evolve_density, evolve_upar,
     end
     if evolve_upar && num_diss_params.neutral.moment_dissipation_coefficient > 0.0
 
-        d2uz_dz2 = allocate_shared_float(nz, nr, n_species)
+        d2uz_dz2 = allocate_shared_float(; z=z, r=r, neutral_species=n_species)
     else
         d2uz_dz2 = nothing
     end
     if evolve_upar
-        dpz_dz = allocate_shared_float(nz, nr, n_species)
+        dpz_dz = allocate_shared_float(; z=z, r=r, neutral_species=n_species)
     else
         dpz_dz = nothing
     end
     if evolve_p
-        dp_dz = allocate_shared_float(nz, nr, n_species)
-        dp_dz_upwind = allocate_shared_float(nz, nr, n_species)
-        d2p_dz2 = allocate_shared_float(nz, nr, n_species)
-        dqz_dz = allocate_shared_float(nz, nr, n_species)
-        dvth_dz = allocate_shared_float(nz, nr, n_species)
-        dp_dt = allocate_shared_float(nz, nr, n_species)
-        dvth_dt = allocate_shared_float(nz, nr, n_species)
+        dp_dz = allocate_shared_float(; z=z, r=r, neutral_species=n_species)
+        dp_dz_upwind = allocate_shared_float(; z=z, r=r, neutral_species=n_species)
+        d2p_dz2 = allocate_shared_float(; z=z, r=r, neutral_species=n_species)
+        dqz_dz = allocate_shared_float(; z=z, r=r, neutral_species=n_species)
+        dvth_dz = allocate_shared_float(; z=z, r=r, neutral_species=n_species)
+        dp_dt = allocate_shared_float(; z=z, r=r, neutral_species=n_species)
+        dvth_dt = allocate_shared_float(; z=z, r=r, neutral_species=n_species)
         @serial_region begin
             # Initialise time derivatives so that we can use them without errors when
             # initialising advection speeds. Note the initial values of the speeds are
@@ -507,40 +507,40 @@ function create_moments_neutral(nz, nr, n_species, evolve_density, evolve_upar,
 
     n_sources = length(neutral_source_settings)
     if any(x -> x.active, neutral_source_settings)
-        external_source_amplitude = allocate_shared_float(nz, nr, n_sources)
-        external_source_T_array = allocate_shared_float(nz, nr, n_sources)
+        external_source_amplitude = allocate_shared_float(; z=z, r=r, neutral_sources=n_sources)
+        external_source_T_array = allocate_shared_float(; z=z, r=r, neutral_sources=n_sources)
         if evolve_density
-            external_source_density_amplitude = allocate_shared_float(nz, nr, n_sources)
+            external_source_density_amplitude = allocate_shared_float(; z=z, r=r, neutral_sources=n_sources)
         else
-            external_source_density_amplitude = allocate_shared_float(1, 1, n_sources)
+            external_source_density_amplitude = allocate_shared_float(; neutral_source_z=1, neutral_source_r=1, neutral_sources=n_sources)
         end
         if evolve_upar
-            external_source_momentum_amplitude = allocate_shared_float(nz, nr, n_sources)
+            external_source_momentum_amplitude = allocate_shared_float(; z=z, r=r, neutral_sources=n_sources)
         else
-            external_source_momentum_amplitude = allocate_shared_float(1, 1, n_sources)
+            external_source_momentum_amplitude = allocate_shared_float(; neutral_source_z=1, neutral_source_r=1, neutral_sources=n_sources)
         end
         if evolve_p
-            external_source_pressure_amplitude = allocate_shared_float(nz, nr, n_sources)
+            external_source_pressure_amplitude = allocate_shared_float(; z=z, r=r, neutral_sources=n_sources)
         else
-            external_source_pressure_amplitude = allocate_shared_float(1, 1, n_sources)
+            external_source_pressure_amplitude = allocate_shared_float(; neutral_source_z=1, neutral_source_r=1, neutral_sources=n_sources)
         end
         if any(x -> x.PI_density_controller_I != 0.0 && x.source_type ∈ 
                     ("density_profile_control", "density_midpoint_control"), neutral_source_settings)
             if any(x -> x.source_type == "density_profile_control", neutral_source_settings)
-                external_source_controller_integral = allocate_shared_float(nz, nr, n_sources)
+                external_source_controller_integral = allocate_shared_float(; z=z, r=r, neutral_sources=n_sources)
             else
-                external_source_controller_integral = allocate_shared_float(1, 1, n_sources)
+                external_source_controller_integral = allocate_shared_float(; neutral_source_z=1, neutral_source_r=1, neutral_sources=n_sources)
             end
         else
-            external_source_controller_integral = allocate_shared_float(1, 1, n_sources)
+            external_source_controller_integral = allocate_shared_float(; neutral_source_z=1, neutral_source_r=1, neutral_sources=n_sources)
         end
     else
-        external_source_amplitude = allocate_shared_float(1, 1, n_sources)
-        external_source_T_array = allocate_shared_float(1, 1, n_sources)
-        external_source_density_amplitude = allocate_shared_float(1, 1, n_sources)
-        external_source_momentum_amplitude = allocate_shared_float(1, 1, n_sources)
-        external_source_pressure_amplitude = allocate_shared_float(1, 1, n_sources)
-        external_source_controller_integral = allocate_shared_float(1, 1, n_sources)
+        external_source_amplitude = allocate_shared_float(; neutral_source_z=1, neutral_source_r=1, neutral_sources=n_sources)
+        external_source_T_array = allocate_shared_float(; neutral_source_z=1, neutral_source_r=1, neutral_sources=n_sources)
+        external_source_density_amplitude = allocate_shared_float(; neutral_source_z=1, neutral_source_r=1, neutral_sources=n_sources)
+        external_source_momentum_amplitude = allocate_shared_float(; neutral_source_z=1, neutral_source_r=1, neutral_sources=n_sources)
+        external_source_pressure_amplitude = allocate_shared_float(; neutral_source_z=1, neutral_source_r=1, neutral_sources=n_sources)
+        external_source_controller_integral = allocate_shared_float(; neutral_source_z=1, neutral_source_r=1, neutral_sources=n_sources)
     end
     # If not using PI controllers, the integrals might not otherwise be initialised, so
     # zero-initialise here.
@@ -550,9 +550,9 @@ function create_moments_neutral(nz, nr, n_species, evolve_density, evolve_upar,
     end
 
     if evolve_density || evolve_upar || evolve_p
-        constraints_A_coefficient = allocate_shared_float(nz, nr, n_species)
-        constraints_B_coefficient = allocate_shared_float(nz, nr, n_species)
-        constraints_C_coefficient = allocate_shared_float(nz, nr, n_species)
+        constraints_A_coefficient = allocate_shared_float(; z=z, r=r, neutral_species=n_species)
+        constraints_B_coefficient = allocate_shared_float(; z=z, r=r, neutral_species=n_species)
+        constraints_C_coefficient = allocate_shared_float(; z=z, r=r, neutral_species=n_species)
     else
         constraints_A_coefficient = nothing
         constraints_B_coefficient = nothing
@@ -1244,28 +1244,25 @@ the operator splitting, the time derivatives during the implicit step are done w
 explicit variables (density in particular) held fixed, and so
 `dvth_dt|_n = 0.5 * vth * dp_dt / p`.
 """
-function update_derived_electron_moment_time_derivatives!(p, moments, electron_physics)
-    @begin_r_z_region()
+function update_derived_electron_moment_time_derivatives!(p, moments, electron_physics,
+                                                          ir)
+    @begin_anyzv_z_region()
 
-    n = moments.electron.dens
-    vth = moments.electron.vth
-    dp_dt = moments.electron.dp_dt
-    dT_dt = moments.electron.dT_dt
-
-    dvth_dt = moments.electron.dvth_dt
-
-    if electron_physics == kinetic_electrons_with_temperature_equation
-        if dvth_dt !== nothing
-            T = moments.electron.temp
-            @loop_s_r_z is ir iz begin
+    if moments.electron.dvth_dt !== nothing
+        dvth_dt = @view moments.electron.dvth_dt[:,ir]
+        vth = @view moments.electron.vth[:,ir]
+        if electron_physics == kinetic_electrons_with_temperature_equation
+            dT_dt = @view moments.electron.dT_dt[:,ir]
+            T = @view moments.electron.temp[:,ir]
+            @loop_z iz begin
                 # vth = sqrt(2*T)
                 # dvth/dt = 1 / (2*T) * dT/dt
-                dvth_dt[iz,ir,is] = 0.5 * vth[iz,ir,is] * dT_dt[iz,ir,is] / T[iz,ir,is]
+                dvth_dt[iz] = 0.5 * vth[iz] * dT_dt[iz] / T[iz]
             end
-        end
-    else
-        if dvth_dt !== nothing
-            @loop_s_r_z is ir iz begin
+        else
+            dp_dt = @view moments.electron.dp_dt[:,ir]
+            p = @view moments.electron.p[:,ir]
+            @loop_z iz begin
                 # vth = sqrt(2*p/n)
                 # dvth/dt = 1 / sqrt(2*p*n) * dp/dt - sqrt(p/2/n^3) * dn/dt
                 # but no dn/dt contribution because due to the implicit/explicit splitting
@@ -1273,7 +1270,7 @@ function update_derived_electron_moment_time_derivatives!(p, moments, electron_p
                 # pressure and shape function. Therefore T_out = p_out / density_in,
                 # T_in = p_in / density_in so that effectively, for the electron update
                 # dn_dt = (density_in - density_in) / dt_implicit = 0
-                dvth_dt[iz,ir,is] = 0.5 * vth[iz,ir,is] * dp_dt[iz,ir,is] / p[iz,ir,is]
+                dvth_dt[iz] = 0.5 * vth[iz] * dp_dt[iz] / p[iz]
             end
         end
     end
@@ -1633,7 +1630,7 @@ given by `ir`.
 function calculate_electron_moment_derivatives_no_r!(moments, dens, upar, p,
                                                      scratch_dummy, z, z_spectral,
                                                      electron_mom_diss_coeff, ir)
-    @begin_serial_region()
+    @begin_anyzv_region()
 
     ppar = @view moments.electron.ppar[:,ir]
     qpar = @view moments.electron.qpar[:,ir]
@@ -1645,29 +1642,30 @@ function calculate_electron_moment_derivatives_no_r!(moments, dens, upar, p,
     buffer_3 = @view scratch_dummy.buffer_rs_3[ir,1]
     buffer_4 = @view scratch_dummy.buffer_rs_4[ir,1]
 
-    @views derivative_z!(moments.electron.dupar_dz[:,ir], upar, buffer_1, buffer_2,
-                         buffer_3, buffer_4, z_spectral, z)
+    @views derivative_z_anyzv!(moments.electron.dupar_dz[:,ir], upar, buffer_1, buffer_2,
+                               buffer_3, buffer_4, z_spectral, z)
 
-    @views derivative_z!(moments.electron.ddens_dz[:,ir], dens, buffer_1, buffer_2,
-                         buffer_3, buffer_4, z_spectral, z)
-    @views derivative_z!(moments.electron.dp_dz[:,ir], p, buffer_1, buffer_2,
-                         buffer_3, buffer_4, z_spectral, z)
-    @views derivative_z!(moments.electron.dppar_dz[:,ir], ppar, buffer_1, buffer_2,
-                         buffer_3, buffer_4, z_spectral, z)
-    @views derivative_z!(moments.electron.dqpar_dz[:,ir], qpar, buffer_1, buffer_2,
-                         buffer_3, buffer_4, z_spectral, z)
-    @views derivative_z!(moments.electron.dvth_dz[:,ir], vth, buffer_1, buffer_2,
-                         buffer_3, buffer_4, z_spectral, z)
+    @views derivative_z_anyzv!(moments.electron.ddens_dz[:,ir], dens, buffer_1, buffer_2,
+                               buffer_3, buffer_4, z_spectral, z)
+    @views derivative_z_anyzv!(moments.electron.dp_dz[:,ir], p, buffer_1, buffer_2,
+                               buffer_3, buffer_4, z_spectral, z)
+    @views derivative_z_anyzv!(moments.electron.dppar_dz[:,ir], ppar, buffer_1, buffer_2,
+                               buffer_3, buffer_4, z_spectral, z)
+    @views derivative_z_anyzv!(moments.electron.dqpar_dz[:,ir], qpar, buffer_1, buffer_2,
+                               buffer_3, buffer_4, z_spectral, z)
+    @views derivative_z_anyzv!(moments.electron.dvth_dz[:,ir], vth, buffer_1, buffer_2,
+                               buffer_3, buffer_4, z_spectral, z)
     # calculate the zed derivative of the electron temperature
-    @views derivative_z!(moments.electron.dT_dz[:,ir], temp, buffer_1, buffer_2, buffer_3,
-                         buffer_4, z_spectral, z)
-    @views derivative_z!(moments.electron.dvth_dz[:,ir], moments.electron.vth[:,ir],
-                         buffer_1, buffer_2, buffer_3, buffer_4, z_spectral, z)
+    @views derivative_z_anyzv!(moments.electron.dT_dz[:,ir], temp, buffer_1, buffer_2,
+                               buffer_3, buffer_4, z_spectral, z)
+    @views derivative_z_anyzv!(moments.electron.dvth_dz[:,ir], moments.electron.vth[:,ir],
+                               buffer_1, buffer_2, buffer_3, buffer_4, z_spectral, z)
 
     # centred second derivative for dissipation
     if electron_mom_diss_coeff > 0.0
-        @views derivative_z!(moments.electron.d2p_dz2[:,ir], moments.electron.dp_dz[:,ir], buffer_1,
-                             buffer_2, buffer_3, buffer_4, z_spectral, z)
+        @views derivative_z_anyzv!(moments.electron.d2p_dz2[:,ir],
+                                   moments.electron.dp_dz[:,ir], buffer_1, buffer_2,
+                                   buffer_3, buffer_4, z_spectral, z)
     end
 end
 

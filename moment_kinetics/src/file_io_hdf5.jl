@@ -284,10 +284,24 @@ function append_to_dynamic_var(io_var::HDF5.Dataset,
     local_ranges = Tuple(isa(c, Integer) ? (1:c) : c.local_io_range for c ∈ coords)
     global_ranges = Tuple(isa(c, Integer) ? (1:c) : c.global_io_range for c ∈ coords)
 
-    if only_root && parallel_io && global_rank[] != 0
-        # Variable should only be written from root, and this process is not root for the
-        # output file
+    if only_root === false
+        # Continue
+    elseif only_root === true
+        if parallel_io && global_rank[] != 0
+            # Variable should only be written from root, and this process is not root for the
+            # output file
+            return nothing
+        end
+    elseif MPI.Comm_rank(only_root) == 0
+        # Continue
+    elseif MPI.Comm_rank(only_root) != 0
+        # Workaround - if we want the behaviour of `only_root = true`, but on a
+        # sub-communicator rather than the global communicator, pass the communicator as
+        # `only_root` and then stop here if this process is not the root of that
+        # communicator.
         return nothing
+    else
+        error("Unexpected type '$(typeof(only_root))' for `only_root`.")
     end
     if write_from_this_rank === false
         # The variable is only written from another rank, not this one.

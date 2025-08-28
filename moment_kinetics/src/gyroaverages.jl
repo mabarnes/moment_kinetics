@@ -9,7 +9,7 @@ export init_gyro_operators
 export gyroaverage_field!
 export gyroaverage_pdf!
 
-using ..type_definitions: mk_float, mk_int
+using ..type_definitions: mk_float, mk_int, MPISharedArray
 using ..array_allocation: allocate_float, allocate_shared_float
 using ..array_allocation: allocate_int, allocate_shared_int
 using ..lagrange_polynomials: lagrange_poly
@@ -17,7 +17,7 @@ using ..moment_kinetics_structs: ion_r_boundary_section_periodic
 using ..input_structs: gyrokinetic_ions
 using ..looping
 using ..timer_utils
-using ..communication: MPISharedArray, comm_block, @_block_synchronize
+using ..communication: comm_block, @_block_synchronize
 
 struct gyro_operators
     # matrix for applying a gyroaverage to a function F(r,vpa,vperp) at fixed r, with R = r - rhovec and rhovec = b x v / Omega
@@ -45,27 +45,38 @@ function init_gyro_operators(vperp, z, r, gyrophase, geometry, boundaries, compo
                              print_info=false)
     gkions = composition.ion_physics == gyrokinetic_ions
     if !gkions
-        gyromatrix =  allocate_shared_float(1,1,1,1,1,1)
-        gyroloopsizes = allocate_shared_int(1,1,1,1)
-        izpgyroindex = allocate_shared_int(1,1,1,1,1)
-        irpgyroindex = allocate_shared_int(1,1,1,1,1)
+        gyromatrix =  allocate_shared_float(:z_gyroaverage=>1, :r_gyroaverage=>1,
+                                            :vperp_gyroaverage=>1, :z_gyroaverage=>1,
+                                            :r_gyroaverage=>1,
+                                            :ion_species_gyroaverage=>1)
+        gyroloopsizes = allocate_shared_int(:vperp_gyroaverage=>1, :z_gyroaverage=>1,
+                                            :r_gyroaverage=>1,
+                                            :ion_species_gyroaverage=>1)
+        izpgyroindex = allocate_shared_int(:z_and_r_gyroaverage=>1, :vperp_gyroaverage=>1,
+                                           :z_gyroaverage=>1, :r_gyroaverage=>1,
+                                           :ion_species_gyroaverage=>1)
+        irpgyroindex = allocate_shared_int(:z_and_r_gyroaverage=>1, :vperp_gyroaverage=>1,
+                                           :z_gyroaverage=>1, :r_gyroaverage=>1,
+                                           :ion_species_gyroaverage=>1)
     else
        if print_info
            println("Begin: init_gyro_operators")
        end
-       gyromatrix = allocate_shared_float(z.n,r.n,vperp.n,z.n,r.n,composition.n_ion_species)
+       gyromatrix = allocate_shared_float(z, r, vperp, z, r,
+                                          :ion_species=>composition.n_ion_species)
        # an array to store the value for the number of points in the z', r' sum for each gyroaveraged field index 
-       gyroloopsizes = allocate_shared_int(vperp.n,z.n,r.n,composition.n_ion_species)
+       gyroloopsizes = allocate_shared_int(; vperp=vperp, z=z, r=r,
+                                           ion_species=composition.n_ion_species)
        
        # init the matrix!
        # the first two indices are to be summed over
        # the other indices are the "field" positions of the resulting gyroaveraged quantity
        @begin_serial_region()
        @serial_region begin
-           zlist = allocate_float(gyrophase.n)
-           rlist = allocate_float(gyrophase.n)
-           zelementlist = allocate_int(gyrophase.n)
-           relementlist = allocate_int(gyrophase.n)
+           zlist = allocate_float(gyrophase)
+           rlist = allocate_float(gyrophase)
+           zelementlist = allocate_int(gyrophase)
+           relementlist = allocate_int(gyrophase)
            z_periodic = z.periodic
            if length(boundaries.r.inner_sections) > 1 || length(boundaries.r.outer_sections) > 1
                error("gyroaverages do not support multiple r boundary conditions yet")
@@ -171,8 +182,10 @@ function init_gyro_operators(vperp, z, r, gyrophase, geometry, boundaries, compo
         # use the fact that the first index cannot be larger than the size of z.n*r.n
         # and accept that we are storing undefined values in exchange for storing the useful
         # data in shared-memory.
-        izpgyroindex = allocate_shared_int(z.n*r.n,vperp.n,z.n,r.n,composition.n_ion_species)
-        irpgyroindex = allocate_shared_int(z.n*r.n,vperp.n,z.n,r.n,composition.n_ion_species)
+        izpgyroindex = allocate_shared_int(z_and_r=z.n*r.n, vperp=vperp, z=z, r=r,
+                                           ion_species=composition.n_ion_species)
+        irpgyroindex = allocate_shared_int(z_and_r=z.n*r.n, vperp=vperp, z=z, r=r,
+                                           ion_species=composition.n_ion_species)
 
         # compute the indices on the root process  
         @serial_region begin

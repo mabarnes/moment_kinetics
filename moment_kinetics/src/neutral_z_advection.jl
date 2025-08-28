@@ -55,42 +55,21 @@ function update_speed_neutral_z!(advect, uz, vth, evolve_upar, evolve_p, vz, vr,
     @boundscheck vr.n == size(advect.speed,3) || throw(BoundsError(advect))
     @boundscheck vz.n == size(advect.speed,2) || throw(BoundsError(advect))
     @boundscheck z.n == size(advect.speed,1) || throw(BoundsError(speed))
-    if z.advection.option == "default"
-        @inbounds begin
-            @loop_r_vzeta_vr_vz ir ivzeta ivr ivz begin
-                @. advect.speed[:,ivz,ivr,ivzeta,ir] = vz.grid[ivz]
-            end
-            if evolve_p
-                @loop_r_vzeta_vr_vz ir ivzeta ivr ivz begin
-                    @views @. advect.speed[:,ivz,ivr,ivzeta,ir] *= vth[:,ir]
-                end
-            end
-            if evolve_upar
-                @loop_r_vzeta_vr_vz ir ivzeta ivr ivz begin
-                    @views @. advect.speed[:,ivz,ivr,ivzeta,ir] += uz[:,ir]
-                end
-            end
-        end
-    elseif z.advection.option == "constant"
-        @inbounds begin
-            @loop_r_vzeta_vr_vz ir ivzeta ivr ivz begin
-                @. advect.speed[:,ivz,ivr,ivzeta,ir] = z.advection.constant_speed
-            end
-        end
-    elseif z.advection.option == "linear"
-        @inbounds begin
-            @loop_r_vzeta_vr_vz ir ivzeta ivr ivz begin
-                @views @. advect.speed[:,ivz,ivr,ivzeta,ir] = z.advection.constant_speed*(z.grid+0.5*z.L)
-            end
-        end
-    elseif z.advection.option == "oscillating"
-        @inbounds begin
-            @loop_r_vzeta_vr_vz ir ivzeta ivr ivz begin
-                @views @. advect.speed[:,ivz,ivr,ivzeta,ir] = z.advection.constant_speed*(1.0
-                        + z.advection.oscillation_amplitude*sinpi(t*z.advection.frequency))
-            end
+
+    @loop_r_vzeta_vr_vz ir ivzeta ivr ivz begin
+        @. advect.speed[:,ivz,ivr,ivzeta,ir] = vz.grid[ivz]
+    end
+    if evolve_p
+        @loop_r_vzeta_vr_vz ir ivzeta ivr ivz begin
+            @views @. advect.speed[:,ivz,ivr,ivzeta,ir] *= vth[:,ir]
         end
     end
+    if evolve_upar
+        @loop_r_vzeta_vr_vz ir ivzeta ivr ivz begin
+            @views @. advect.speed[:,ivz,ivr,ivzeta,ir] += uz[:,ir]
+        end
+    end
+
     return nothing
 end
 

@@ -2,7 +2,7 @@ using moment_kinetics: setup_moment_kinetics, cleanup_moment_kinetics!
 using moment_kinetics.time_advance: time_advance!
 using moment_kinetics.communication
 using moment_kinetics.looping: all_dimensions, dimension_combinations,
-                               anysv_dimension_combinations
+                               anysv_dimension_combinations, anyzv_dimension_combinations
 using moment_kinetics.type_definitions: OptionsDict
 using moment_kinetics.Glob
 using moment_kinetics.Primes
@@ -16,15 +16,32 @@ function run_test(test_input, debug_loop_type, debug_loop_parallel_dims; restart
     name = test_input["output"]["run_name"]
 
     @testset "$name" begin
-        # Provide some progress info
-        global_rank[] == 0 && println("    - bug-checking $name, $debug_loop_type, $debug_loop_parallel_dims")
+        try
+            # Provide some progress info
+            global_rank[] == 0 && println("    - bug-checking $name, $debug_loop_type, $debug_loop_parallel_dims")
 
-        # run simulation
-        mk_state = setup_moment_kinetics(test_input; debug_loop_type=debug_loop_type,
-                                         debug_loop_parallel_dims=debug_loop_parallel_dims,
-                                         restart=restart)
-        time_advance!(mk_state...)
-        cleanup_moment_kinetics!(mk_state[end-2:end]...)
+            # run simulation
+            mk_state = setup_moment_kinetics(test_input; debug_loop_type=debug_loop_type,
+                                             debug_loop_parallel_dims=debug_loop_parallel_dims,
+                                             restart=restart)
+            time_advance!(mk_state...)
+            cleanup_moment_kinetics!(mk_state[end-2:end]...)
+        catch e
+            # Stop code from hanging when running on multiple processes if only one of them
+            # throws an error
+            if global_size[] > 1
+                println(stderr, "$(typeof(e)) on process $(global_rank[]):")
+                showerror(stderr, e, catch_backtrace())
+                flush(stdout)
+                flush(stderr)
+
+                # Wait a little bit to let all processes print their errors if they can.
+                sleep(5)
+                MPI.Abort(comm_world, 1)
+            end
+
+            rethrow(e)
+        end
     end
 end
 
@@ -52,7 +69,8 @@ function runtests(; restart=false)
     # Only need to test dimension combinations that are actually used for parallel loops
     # in some part of the code
     dimension_combinations_to_test = [c for c in tuple(dimension_combinations...,
-                                                       anysv_dimension_combinations...)
+                                                       anysv_dimension_combinations...,
+                                                       anyzv_dimension_combinations...)
                                       if dimension_combination_is_used(c)]
 
     @testset "$test_type" begin
@@ -70,7 +88,13 @@ function runtests(; restart=false)
             end
 
             if :anysv ∈ debug_loop_type
-                dims_to_test = debug_loop_type[2:end]
+                # Need to add r- and z-dimensions as these are parallelised for every
+                # anysv region type.
+                dims_to_test = [:r, :z, debug_loop_type[2:end]...]
+            elseif :anyzv ∈ debug_loop_type
+                # Need to add r-dimension as it is parallelised for every anyzv region
+                # type.
+                dims_to_test = [:r, debug_loop_type[2:end]...]
             else
                 dims_to_test = debug_loop_type
             end

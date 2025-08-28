@@ -57,7 +57,7 @@ String and as a tree of HDF5 variables.
 ## Array types
 
 Most arrays in `moment_kinetics` are declared using a custom array type
-[`moment_kinetics.communication.MPISharedArray`](@ref). Most of the time this
+[`moment_kinetics.type_definitions.MPISharedArray`](@ref). Most of the time this
 type is just an alias for `Array`, and so it needs the same template parameters
 (see [Julia's Array
 documentation](https://docs.julialang.org/en/v1/manual/arrays/)) - the data

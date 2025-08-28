@@ -147,7 +147,7 @@ end
             #if nl_solver_params.solves_since_precon_update[] ≥ nl_solver_params.preconditioner_update_interval
             #    nl_solver_params.solves_since_precon_update[] = 0
 
-            #    advection_matrix = allocate_float(vpa.n, vpa.n)
+            #    advection_matrix = allocate_float(vpa, vpa)
             #    advection_matrix .= 0.0
             #    for i ∈ 1:vpa.nelement_local
             #        imin = vpa.imin[i] - (i != 1)
@@ -330,39 +330,9 @@ function update_speed_vpa!(vpa_advect, fields, fvec, moments, r_advect, z_advect
     #@boundscheck composition.n_ion_species == size(vpa_advect,2) || throw(BoundsError(vpa_advect))
     @boundscheck composition.n_ion_species == size(vpa_advect,1) || throw(BoundsError(vpa_advect))
     @boundscheck vpa.n == size(vpa_advect[1].speed,1) || throw(BoundsError(speed))
-    if vpa.advection.option == "default"
-        # dvpa/dt = Ze/m ⋅ E_parallel - (vperp^2/2B) bz dB/dz
-        # magnetic mirror term only supported for standard DK implementation
-        update_speed_vpa_default!(vpa_advect, fields, fvec, moments, r_advect, z_advect,
-                                  vpa, vperp, z, r, composition, collisions,
-                                  ion_source_settings, t, geometry)
-    elseif vpa.advection.option == "constant"
-        @begin_serial_region()
-        @serial_region begin
-            # Not usually used - just run in serial
-            # dvpa/dt = constant
-            for is ∈ 1:composition.n_ion_species
-                update_speed_vpa_constant!(vpa_advect[is], vpa, 1:vperp.n, 1:z.n, 1:r.n)
-            end
-        end
-    elseif vpa.advection.option == "linear"
-        @begin_serial_region()
-        @serial_region begin
-            # Not usually used - just run in serial
-            # dvpa/dt = constant ⋅ (vpa + L_vpa/2)
-            for is ∈ 1:composition.n_ion_species
-                update_speed_vpa_linear!(vpa_advect[is], vpa, 1:vperp.n, 1:z.n, 1:r.n)
-            end
-        end
-    end
-    return nothing
-end
 
-"""
-"""
-function update_speed_vpa_default!(vpa_advect, fields, fvec, moments, r_advect, z_advect,
-                                   vpa, vperp, z, r, composition, collisions,
-                                   ion_source_settings, t, geometry)
+    # dvpa/dt = Ze/m ⋅ E_parallel - (vperp^2/2B) bz dB/dz
+    # magnetic mirror term only supported for standard DK implementation
     if moments.evolve_p
         update_speed_vpa_n_u_p_evolution!(vpa_advect, fields, fvec, moments, r_advect,
                                           z_advect, vpa, z, r, composition, collisions,
@@ -379,6 +349,8 @@ function update_speed_vpa_default!(vpa_advect, fields, fvec, moments, r_advect, 
         update_speed_vpa_DK!(vpa_advect, fields, fvec, moments, vpa, vperp, z, r,
                              composition, collisions, ion_source_settings, geometry)
     end
+
+    return nothing
 end
 
 """
@@ -509,36 +481,6 @@ function update_speed_vpa_DK!(vpa_advect, fields, fvec, moments, vpa, vperp, z, 
         end
     end
     return nothing
-end
-
-"""
-update the advection speed dvpa/dt = constant
-"""
-function update_speed_vpa_constant!(vpa_advect, vpa, vperp_range, z_range, r_range)
-    #@inbounds @fastmath begin
-    for ir ∈ r_range
-        for iz ∈ z_range
-            for ivperp ∈ vperp_range
-                @views vpa_advect.speed[:,ivperp,iz,ir] .= vpa.advection.constant_speed
-            end
-        end
-    end
-    #end
-end
-
-"""
-update the advection speed dvpa/dt = const*(vpa + L/2)
-"""
-function update_speed_vpa_linear!(vpa_advect, vpa, vperp_range, z_range, r_range)
-    @inbounds @fastmath begin
-        for ir ∈ r_range
-            for iz ∈ z_range
-                for ivperp ∈ vperp_range
-                    @views @. vpa_advect.speed[:,ivperp,iz,ir] = vpa.advection.constant_speed*(vpa.grid+0.5*vpa.L)
-                end
-            end
-        end
-    end
 end
 
 end

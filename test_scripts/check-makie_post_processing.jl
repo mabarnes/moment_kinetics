@@ -97,7 +97,11 @@ run_moment_kinetics(test_input)
 example_output_directory = joinpath("runs", test_input["output"]["run_name"])
 
 makie_post_process(example_output_directory; input_file=postproc_input_filename)
+# Make sure shared-memory and associated MPI communicators are freed.
+moment_kinetics.finalize_comms!()
 
 # Also check comparing multiple outputs.
 makie_post_process(example_output_directory, example_output_directory; input_file=postproc_input_filename)
+moment_kinetics.finalize_comms!()
 makie_post_process(example_output_directory, example_output_directory, example_output_directory; input_file=postproc_input_filename)
+moment_kinetics.finalize_comms!()

@@ -2,6 +2,7 @@
 """
 module coordinates
 
+export coordinate
 export define_coordinate, write_coordinate
 export equally_spaced_grid
 export set_element_boundaries
@@ -17,151 +18,11 @@ using ..fourier: setup_fourier_pseudospectral
 using ..gauss_legendre: scaled_gauss_legendre_lobatto_grid, scaled_gauss_legendre_radau_grid, setup_gausslegendre_pseudospectral
 using ..input_structs
 using ..quadrature: trapezium_weights, composite_simpson_weights
-using ..input_structs
-using ..moment_kinetics_structs: null_spatial_dimension_info,
+using ..moment_kinetics_structs: coordinate, null_spatial_dimension_info,
                                  null_velocity_dimension_info, null_vperp_dimension_info
 
 using MPI
 using OrderedCollections: OrderedDict
-
-"""
-structure containing basic information related to coordinates
-"""
-struct coordinate{T <: AbstractVector{mk_float}, Ti <: AbstractVector{mk_int}, Tbparams,
-                  Tnext <: Union{mk_int,Cint}, Tprev <: Union{mk_int,Cint}}
-    # name is the name of the variable associated with this coordiante
-    name::String
-    # n_global is the total number of grid points associated with this coordinate
-    n_global::mk_int
-    # n is the total number of local grid points associated with this coordinate
-    n::mk_int
-    # ngrid is the number of grid points per element in this coordinate
-    ngrid::mk_int
-    # nelement is the number of elements associated with this coordinate globally
-    nelement_global::mk_int
-    # nelement_local is the number of elements associated with this coordinate on this rank
-    nelement_local::mk_int
-    # nrank is total number of ranks in the calculation of this coord
-    nrank::mk_int
-    # irank is the rank of this process
-    irank::mk_int
-    # nextrank is the rank of the next process on the communicator for this coordinate
-    # (may be MPI.PROC_NULL if this is the last process and the dimension is not periodic)
-    nextrank::Tnext
-    # prevrank is the rank of the previous process on the communicator for this coordinate
-    # (may be MPI.PROC_NULL if this is the first process and the dimension is not periodic)
-    prevrank::Tprev
-    # L is the box length in this coordinate
-    L::mk_float
-    # grid is the location of the grid points
-    grid::Array{mk_float,1}
-    # cell_width is the width associated with the cells between grid points
-    cell_width::Array{mk_float,1}
-    # igrid contains the grid point index within the element
-    igrid::Array{mk_int,1}
-    # ielement contains the element index
-    ielement::Array{mk_int,1}
-    # imin[j] contains the minimum index on the full grid for element j
-    imin::Array{mk_int,1}
-    # imax[j] contains the maximum index on the full grid for element j
-    imax::Array{mk_int,1}
-    # igrid_full[i,j] contains the index of the full grid for the elemental grid point i, on element j
-    igrid_full::Array{mk_int,2}
-    # discretization option for the grid
-    discretization::String
-    # if the discretization is finite differences, finite_difference_option provides the precise scheme
-    finite_difference_option::String
-    # if the discretization is chebyshev_pseudospectral, cheb_option chooses whether to use FFT or differentiation matrices for d / d coord
-    cheb_option::String
-    # bc is the boundary condition option for this coordinate
-    bc::String
-    # Flag indicating whether dimension is periodic. Useful because periodic dimensions
-    # require some extra special handling.
-    periodic::Bool
-    # struct containing some parameters that may be used for applying the boundary
-    # condition.
-    boundary_parameters::Tbparams
-    # wgts contains the integration weights associated with each grid point
-    wgts::Array{mk_float,1}
-    # uniform_grid contains location of grid points mapped to a uniform grid
-    # if finite differences used for discretization, no mapping required, and uniform_grid = grid
-    uniform_grid::Array{mk_float,1}
-    # duniform_dgrid is the local derivative of the uniform grid with respect to
-    # the coordinate grid
-    duniform_dgrid::Array{mk_float,2}
-    # scratch is an array used for intermediate calculations requiring n entries
-    scratch::Array{mk_float,1}
-    # scratch2 is an array used for intermediate calculations requiring n entries
-    scratch2::Array{mk_float,1}
-    # scratch3 is an array used for intermediate calculations requiring n entries
-    scratch3::Array{mk_float,1}
-    # scratch4 is an array used for intermediate calculations requiring n entries
-    scratch4::Array{mk_float,1}
-    # scratch5 is an array used for intermediate calculations requiring n entries
-    scratch5::Array{mk_float,1}
-    # scratch6 is an array used for intermediate calculations requiring n entries
-    scratch6::Array{mk_float,1}
-    # scratch7 is an array used for intermediate calculations requiring n entries
-    scratch7::Array{mk_float,1}
-    # scratch8 is an array used for intermediate calculations requiring n entries
-    scratch8::Array{mk_float,1}
-    # scratch9 is an array used for intermediate calculations requiring n entries
-    scratch9::Array{mk_float,1}
-    # scratch10 is an array used for intermediate calculations requiring n entries
-    scratch10::Array{mk_float,1}
-    # scratch_int_nelement_plus_1 is an integer array used for intermediate calculations
-    # requiring nelement+1 entries
-    scratch_int_nelement_plus_1::Array{mk_int,1}
-    # scratch_shared is a shared-memory array used for intermediate calculations requiring
-    # n entries
-    scratch_shared::T
-    # scratch_shared2 is a shared-memory array used for intermediate calculations requiring
-    # n entries
-    scratch_shared2::T
-    # scratch_shared3 is a shared-memory array used for intermediate calculations requiring
-    # n entries
-    scratch_shared3::T
-    # scratch_shared_int is a shared-memory array used for intermediate calculations
-    # requiring n integer entries
-    scratch_shared_int::Ti
-    # scratch_shared_int is a shared-memory array used for intermediate calculations
-    # requiring n integer entries
-    scratch_shared_int2::Ti
-    # scratch_2d and scratch2_2d are arrays used for intermediate calculations requiring
-    # ngrid x nelement entries
-    scratch_2d::Array{mk_float,2}
-    scratch2_2d::Array{mk_float,2}
-    # struct containing advection speed options/inputs
-    advection::advection_input
-    # buffer of size 1 for communicating information about cell boundaries
-    send_buffer::Array{mk_float,1}
-    # buffer of size 1 for communicating information about cell boundaries
-    receive_buffer::Array{mk_float,1}
-    # the MPI communicator appropriate for this calculation
-    comm::MPI.Comm
-    # local range to slice from variables to write to output file
-    local_io_range::UnitRange{Int64}
-    # global range to write into in output file
-    global_io_range::UnitRange{Int64}
-    # scale for each element
-    element_scale::Array{mk_float,1}
-    # shift for each element
-    element_shift::Array{mk_float,1}
-    # option used to set up element spacing
-    element_spacing_option::String
-    # list of element boundaries
-    element_boundaries::Array{mk_float,1}
-    # Does the coordinate use a 'Radau' discretization for the first element?
-    radau_first_element::Bool
-    # 'Other' nodes where the j'th Lagrange polynomial (which is 1 at x[j]) is equal to 0
-    other_nodes::Array{mk_float,3}
-    # One over the denominators of the Lagrange polynomials
-    one_over_denominator::Array{mk_float,2}
-    # mask_up -- mask function for use imposing bc at upper wall
-    mask_up::Array{mk_float,1}
-    # mask_low -- mask function for use imposing bc at lower wall
-    mask_low::Array{mk_float,1}
-end
 
 """
     get_coordinate_input(input_dict, name; ignore_MPI=false,
@@ -203,16 +64,6 @@ function get_coordinate_input(input_dict, name; ignore_MPI=false,
         element_spacing_option="uniform",
         # which boundary condition to use
         bc=default_bc,
-        # determine the option used for the advection speed in z supported options are
-        # "constant" and "oscillating", in addition to the "default" option which uses
-        # d(coord)/dt from the moment-kinetic equations as the advection speed
-        advection_option="default",
-        # constant advection speed to use with advection_option = "constant"
-        advection_speed=0.0,
-        # for advection_option = "oscillating", advection speed is of form
-        # speed = advection_speed*(1 + advection_oscillation_amplitude*sinpi(advection_oscillation_frequency*t))
-        advection_oscillation_amplitude=1.0,
-        advection_oscillation_frequency=1.0,
        )
     if coord_input_dict["nelement_local"] == -1 || ignore_MPI
         coord_input_dict["nelement_local"] = coord_input_dict["nelement"]
@@ -332,8 +183,8 @@ function define_coordinate(coord_input::NamedTuple; parallel_io::Bool=false,
     # initialize the grid and the integration weights associated with the grid
     # also obtain the Chebyshev theta grid and spacing if chosen as discretization option
     grid, wgts, uniform_grid, radau_first_element =
-        init_grid(coord_input.ngrid, coord_input.nelement_local, n_global, n_local,
-                  irank, coord_input.L, element_scale, element_shift, imin, imax, igrid,
+        init_grid(coord_input.ngrid, coord_input.nelement_local, n_global, n_local, irank,
+                  coord_input.L, element_scale, element_shift, imin, imax, igrid,
                   coord_input.discretization, coord_input.name)
     # calculate the widths of the cells between neighboring grid points
     cell_width = grid_spacing(grid, n_local)
@@ -341,22 +192,22 @@ function define_coordinate(coord_input::NamedTuple; parallel_io::Bool=false,
     # the coordinate grid
     duniform_dgrid = allocate_float(coord_input.ngrid, coord_input.nelement_local)
     # scratch is an array used for intermediate calculations requiring n entries
-    scratch = allocate_float(n_local)
+    scratch = allocate_float(; Symbol(coord_input.name)=>n_local)
     # scratch_int_nelement_plus_1 is an array used for intermediate calculations requiring
     # nelement+1 entries
     scratch_int_nelement_plus_1 = allocate_int(coord_input.nelement_local + 1)
     if ignore_MPI
-        scratch_shared = allocate_float(n_local)
-        scratch_shared2 = allocate_float(n_local)
-        scratch_shared3 = allocate_float(n_local)
-        scratch_shared_int = allocate_int(n_local)
-        scratch_shared_int2 = allocate_int(n_local)
+        scratch_shared = allocate_float(; Symbol(coord_input.name)=>n_local)
+        scratch_shared2 = allocate_float(; Symbol(coord_input.name)=>n_local)
+        scratch_shared3 = allocate_float(; Symbol(coord_input.name)=>n_local)
+        scratch_shared_int = allocate_int(; Symbol(coord_input.name)=>n_local)
+        scratch_shared_int2 = allocate_int(; Symbol(coord_input.name)=>n_local)
     else
-        scratch_shared = allocate_shared_float(n_local)
-        scratch_shared2 = allocate_shared_float(n_local)
-        scratch_shared3 = allocate_shared_float(n_local)
-        scratch_shared_int = allocate_shared_int(n_local)
-        scratch_shared_int2 = allocate_shared_int(n_local)
+        scratch_shared = allocate_shared_float(; Symbol(coord_input.name)=>n_local)
+        scratch_shared2 = allocate_shared_float(; Symbol(coord_input.name)=>n_local)
+        scratch_shared3 = allocate_shared_float(; Symbol(coord_input.name)=>n_local)
+        scratch_shared_int = allocate_shared_int(; Symbol(coord_input.name)=>n_local)
+        scratch_shared_int2 = allocate_shared_int(; Symbol(coord_input.name)=>n_local)
     end
     # Initialise scratch_shared* so that the debug checks do not complain when they get
     # printed by `println(io, all_inputs)` in mk_input().
@@ -372,11 +223,6 @@ function define_coordinate(coord_input::NamedTuple; parallel_io::Bool=false,
     end
     # scratch_2d is an array used for intermediate calculations requiring ngrid x nelement entries
     scratch_2d = allocate_float(coord_input.ngrid, coord_input.nelement_local)
-    # struct containing the advection speed options/inputs for this coordinate
-    advection = advection_input(coord_input.advection_option,
-                                coord_input.advection_speed,
-                                coord_input.advection_oscillation_frequency,
-                                coord_input.advection_oscillation_amplitude)
     # buffers for cyclic communication of boundary points
     # each chain of elements has only two external (off-rank)
     # endpoints, so only two pieces of information must be shared
@@ -444,9 +290,9 @@ function define_coordinate(coord_input::NamedTuple; parallel_io::Bool=false,
         prevrank = irank - 1
     end
 
-    mask_low = allocate_float(n_local)
+    mask_low = allocate_float(; Symbol(coord_input.name)=>n_local)
     mask_low .= 1.0
-    mask_up = allocate_float(n_local)
+    mask_up = allocate_float(; Symbol(coord_input.name)=>n_local)
     mask_up .= 1.0
     zeroval = 1.0e-8
     for i in 1:n_local
@@ -466,7 +312,7 @@ function define_coordinate(coord_input::NamedTuple; parallel_io::Bool=false,
         copy(scratch), copy(scratch), copy(scratch), copy(scratch), copy(scratch),
         copy(scratch), copy(scratch), copy(scratch), copy(scratch),
         scratch_int_nelement_plus_1, scratch_shared, scratch_shared2, scratch_shared3,
-        scratch_shared_int, scratch_shared_int2, scratch_2d, copy(scratch_2d), advection,
+        scratch_shared_int, scratch_shared_int2, scratch_2d, copy(scratch_2d),
         send_buffer, receive_buffer, comm, local_io_range, global_io_range, element_scale,
         element_shift, coord_input.element_spacing_option, element_boundaries,
         radau_first_element, other_nodes, one_over_denominator, mask_up, mask_low)
@@ -712,23 +558,26 @@ function set_element_scale_and_shift(nelement_global, nelement_local, irank, ele
     end
     return element_scale, element_shift
 end
+
 """
 setup a grid with n_global grid points on the interval [-L/2,L/2]
 """
-function init_grid(ngrid, nelement_local, n_global, n_local, irank, L, element_scale, element_shift,
-                   imin, imax, igrid, discretization, name)
+function init_grid(ngrid, nelement_local, n_global, n_local, irank, L, element_scale,
+                   element_shift, imin, imax, igrid, discretization, name)
     uniform_grid = equally_spaced_grid(n_global, n_local, irank, L)
     uniform_grid_shifted = equally_spaced_grid_shifted(n_global, n_local, irank, L)
     radau_first_element = false
     if n_global == 1
-        grid = allocate_float(n_local)
+        grid = allocate_float(; Symbol(name)=>n_local)
         grid[1] = 0.0
-        wgts = allocate_float(n_local)
+        wgts = allocate_float(; Symbol(name)=>n_local)
         wgts[1] = 1.0
     elseif discretization == "chebyshev_pseudospectral"
         if name == "vperp"
             # initialize chebyshev grid defined on [-L/2,L/2]
-            grid, wgts = scaled_chebyshev_radau_grid(ngrid, nelement_local, n_local, element_scale, element_shift, imin, imax, irank)
+            grid, wgts = scaled_chebyshev_radau_grid(name, ngrid, nelement_local, n_local,
+                                                     element_scale, element_shift, imin,
+                                                     imax, irank)
             # Integrals over vperp are actually 2d integrals
             #   ∫d^2(v_⟂)=∫dv_⟂ v_⟂∫dϕ=2π∫dv_⟂ v_⟂
             # so need to multiply the weight by 2*π*v_⟂
@@ -741,7 +590,8 @@ function init_grid(ngrid, nelement_local, n_global, n_local, irank, L, element_s
             # needed to obtain Chebyshev spectral coefficients
             # 'wgts' are the integration weights attached to each grid points
             # that are those associated with Clenshaw-Curtis quadrature
-            grid, wgts = scaled_chebyshev_grid(ngrid, nelement_local, n_local, element_scale, element_shift, imin, imax)
+            grid, wgts = scaled_chebyshev_grid(name, ngrid, nelement_local, n_local,
+                                               element_scale, element_shift, imin, imax)
         end
     elseif discretization == "gausslegendre_pseudospectral"
         if name == "vperp"

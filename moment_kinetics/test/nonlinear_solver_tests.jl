@@ -5,7 +5,6 @@ include("setup.jl")
 using moment_kinetics.array_allocation: allocate_float, allocate_shared_float
 using moment_kinetics.communication
 using moment_kinetics.coordinates: coordinate
-using moment_kinetics.input_structs: advection_input
 using moment_kinetics.looping
 using moment_kinetics.looping: setup_loop_ranges!
 using moment_kinetics.nonlinear_solvers
@@ -50,6 +49,11 @@ function linear_test()
         z = collect(0:n-1) ./ (n-1)
         b = @. - z * (1.0 - z)
 
+        if serial_solve
+            coord_comm = MPI.COMM_NULL
+        else
+            coord_comm = comm_sub_z
+        end
         the_coord = coordinate("foo", n, n, n, 1, 1, 1, 0, 0, 0, 1.0, zeros(mk_float, 0),
                                zeros(mk_float, 0), zeros(mk_int, 0), zeros(mk_int, 0),
                                zeros(mk_int, 0), zeros(mk_int, 0), zeros(mk_int, 0, 0),
@@ -61,9 +65,9 @@ function linear_test()
                                zeros(mk_float, 0), zeros(mk_int, 0), zeros(mk_float, 0),
                                zeros(mk_float, 0), zeros(mk_float, 0), zeros(mk_int, 0),
                                zeros(mk_int, 0), zeros(mk_float, 0, 0),
-                               zeros(mk_float, 0, 0), advection_input("", 0.0, 0.0, 0.0),
-                               zeros(mk_float, 0), zeros(mk_float, 0), MPI.COMM_NULL, 1:n,
-                               1:n, zeros(mk_float, 0), zeros(mk_float, 0), "",
+                               zeros(mk_float, 0, 0), zeros(mk_float, 0),
+                               zeros(mk_float, 0), coord_comm, 1:n, 1:n,
+                               zeros(mk_float, 0), zeros(mk_float, 0), "",
                                zeros(mk_float, 0), false, zeros(mk_float, 0, 0, 0),
                                zeros(mk_float, 0, 0), zeros(mk_float, 0), zeros(mk_float, 0))
         coords = NamedTuple(c => the_coord for c ∈ coord_names)
@@ -72,8 +76,8 @@ function linear_test()
             if serial_solve
                 residual .= A * x - b
             else
-                @begin_serial_region()
-                @serial_region begin
+                @begin_anyzv_region()
+                @anyzv_serial_region begin
                     residual .= A * x - b
                 end
             end
@@ -81,12 +85,12 @@ function linear_test()
         end
 
         if serial_solve
-            x = allocate_float(n)
-            residual = allocate_float(n)
-            delta_x = allocate_float(n)
-            rhs_delta = allocate_float(n)
-            v = allocate_float(n)
-            w = allocate_float(n)
+            x = allocate_float(; vpa=n)
+            residual = allocate_float(; vpa=n)
+            delta_x = allocate_float(; vpa=n)
+            rhs_delta = allocate_float(; vpa=n)
+            v = allocate_float(; vpa=n)
+            w = allocate_float(; vpa=n)
 
             x .= 0.0
             residual .= 0.0
@@ -95,12 +99,12 @@ function linear_test()
             v .= 0.0
             w .= 0.0
         else
-            x = allocate_shared_float(n)
-            residual = allocate_shared_float(n)
-            delta_x = allocate_shared_float(n)
-            rhs_delta = allocate_shared_float(n)
-            v = allocate_shared_float(n)
-            w = allocate_shared_float(n)
+            x = allocate_shared_float(; z=n)
+            residual = allocate_shared_float(; z=n)
+            delta_x = allocate_shared_float(; z=n)
+            rhs_delta = allocate_shared_float(; z=n)
+            v = allocate_shared_float(; z=n)
+            w = allocate_shared_float(; z=n)
 
             @begin_serial_region()
             @serial_region begin
@@ -120,8 +124,11 @@ function linear_test()
                                     "atol" => atol,
                                     "linear_restart" => restart,
                                     "linear_max_restarts" => max_restarts)),
-            coords; serial_solve=serial_solve)
+            coords; serial_solve=serial_solve, anyzv_region=!serial_solve)
 
+        if !serial_solve
+            @begin_r_anyzv_region()
+        end
         newton_solve!(x, rhs_func!, residual, delta_x, rhs_delta, v, w, nl_solver_params;
                       coords)
 
@@ -164,6 +171,11 @@ function nonlinear_test()
         z = collect(0:n-1) ./ (n-1)
         b = @. - z * (1.0 - z)
 
+        if serial_solve
+            coord_comm = MPI.COMM_NULL
+        else
+            coord_comm = comm_sub_z
+        end
         the_coord = coordinate("foo", n, n, n, 1, 1, 1, 0, 0, 0, 1.0, zeros(mk_float, 0),
                                zeros(mk_float, 0), zeros(mk_int, 0), zeros(mk_int, 0),
                                zeros(mk_int, 0), zeros(mk_int, 0), zeros(mk_int, 0, 0),
@@ -175,9 +187,9 @@ function nonlinear_test()
                                zeros(mk_float, 0), zeros(mk_int, 0), zeros(mk_float, 0),
                                zeros(mk_float, 0), zeros(mk_float, 0), zeros(mk_int, 0),
                                zeros(mk_int, 0), zeros(mk_float, 0, 0),
-                               zeros(mk_float, 0, 0), advection_input("", 0.0, 0.0, 0.0),
-                               zeros(mk_float, 0), zeros(mk_float, 0), MPI.COMM_NULL, 1:n,
-                               1:n, zeros(mk_float, 0), zeros(mk_float, 0), "",
+                               zeros(mk_float, 0, 0), zeros(mk_float, 0),
+                               zeros(mk_float, 0), coord_comm, 1:n, 1:n,
+                               zeros(mk_float, 0), zeros(mk_float, 0), "",
                                zeros(mk_float, 0), false, zeros(mk_float, 0, 0, 0),
                                zeros(mk_float, 0, 0), zeros(mk_float, 0), zeros(mk_float, 0))
         coords = NamedTuple(c => the_coord for c ∈ coord_names)
@@ -195,8 +207,8 @@ function nonlinear_test()
                 D = abs(x[i])^2.5
                 residual[i] = D * (x[i-1] - 2.0 * x[i]) - b[i]
             else
-                @begin_serial_region()
-                @serial_region begin
+                @begin_anyzv_region()
+                @anyzv_serial_region begin
                     i = 1
                     D = abs(x[i])^2.5
                     residual[i] = D * (- 2.0 * x[i] + x[i+1]) - b[i]
@@ -213,19 +225,19 @@ function nonlinear_test()
         end
 
         if serial_solve
-            x = allocate_float(n)
-            residual = allocate_float(n)
-            delta_x = allocate_float(n)
-            rhs_delta = allocate_float(n)
-            v = allocate_float(n)
-            w = allocate_float(n)
+            x = allocate_float(; vpa=n)
+            residual = allocate_float(; vpa=n)
+            delta_x = allocate_float(; vpa=n)
+            rhs_delta = allocate_float(; vpa=n)
+            v = allocate_float(; vpa=n)
+            w = allocate_float(; vpa=n)
         else
-            x = allocate_shared_float(n)
-            residual = allocate_shared_float(n)
-            delta_x = allocate_shared_float(n)
-            rhs_delta = allocate_shared_float(n)
-            v = allocate_shared_float(n)
-            w = allocate_shared_float(n)
+            x = allocate_shared_float(; z=n)
+            residual = allocate_shared_float(; z=n)
+            delta_x = allocate_shared_float(; z=n)
+            rhs_delta = allocate_shared_float(; z=n)
+            v = allocate_shared_float(; z=n)
+            w = allocate_shared_float(; z=n)
         end
 
         if serial_solve
@@ -255,8 +267,11 @@ function nonlinear_test()
                                     "linear_restart" => restart,
                                     "linear_max_restarts" => max_restarts,
                                     "nonlinear_max_iterations" => 100)),
-            coords; serial_solve=serial_solve)
+            coords; serial_solve=serial_solve, anyzv_region=!serial_solve)
 
+        if !serial_solve
+            @begin_r_anyzv_region()
+        end
         newton_solve!(x, rhs_func!, residual, delta_x, rhs_delta, v, w, nl_solver_params;
                       coords)
 

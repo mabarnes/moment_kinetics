@@ -70,6 +70,7 @@ struct nl_solver_info{TH,TV,Tcsg,Tlig,Tprecon,Tpretype}
     precon_upperz_vcut_inds::Vector{mk_int}
     serial_solve::Bool
     anysv_region::Bool
+    anyzv_region::Bool
     max_nonlinear_iterations_this_step::Base.RefValue{mk_int}
     max_linear_iterations_this_step::Base.RefValue{mk_int}
     total_its_soft_limit::mk_int
@@ -89,7 +90,8 @@ for example a preconditioner object for each point in that outer loop.
 """
 function setup_nonlinear_solve(active, input_dict, coords, outer_coords=();
                                section_name="nonlinear_solver", default_rtol=1.0e-5,
-                               default_atol=1.0e-12, serial_solve=false, anysv_region=false,
+                               default_atol=1.0e-12, serial_solve=false,
+                               anysv_region=false, anyzv_region=false,
                                electron_p_pdf_solve=false,
                                preconditioner_type=Val(:none), warn_unexpected=false)
     nl_solver_section = set_defaults_and_check_section!(
@@ -133,15 +135,17 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=();
         g .= 0.0
         V .= 0.0
     elseif electron_p_pdf_solve
-        H = allocate_shared_float(linear_restart + 1, linear_restart)
-        c = allocate_shared_float(linear_restart + 1)
-        s = allocate_shared_float(linear_restart + 1)
-        g = allocate_shared_float(linear_restart + 1)
-        V_ppar = allocate_shared_float(coords.z.n, linear_restart+1)
-        V_pdf = allocate_shared_float(reverse(coord_sizes)..., linear_restart+1)
+        H = allocate_shared_float(; linear_restart_plus_one=linear_restart + 1, linear_restart=linear_restart, comm=comm_anyzv_subblock[])
+        c = allocate_shared_float(; linear_restart_plus_one=linear_restart + 1, comm=comm_anyzv_subblock[])
+        s = allocate_shared_float(; linear_restart_plus_one=linear_restart + 1, comm=comm_anyzv_subblock[])
+        g = allocate_shared_float(; linear_restart_plus_one=linear_restart + 1, comm=comm_anyzv_subblock[])
+        V_ppar = allocate_shared_float(:z=>coords.z, :linear_restart_plus_one=>linear_restart+1; comm=comm_anyzv_subblock[])
+        V_pdf = allocate_shared_float(; (Symbol(c.name)=>c.n for c ∈ reverse(coords))...,
+                                      linear_restart_plus_one=linear_restart+1, comm=comm_anyzv_subblock[])
 
-        @begin_serial_region()
-        @serial_region begin
+        @begin_r_anyzv_region()
+        @begin_anyzv_region()
+        @anyzv_serial_region begin
             H .= 0.0
             c .= 0.0
             s .= 0.0
@@ -154,11 +158,18 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=();
 
         n_vcut_inds = prod(outer_coord_sizes)
     elseif anysv_region
-        H = allocate_shared_float(linear_restart + 1, linear_restart; comm=comm_anysv_subblock[])
-        c = allocate_shared_float(linear_restart + 1; comm=comm_anysv_subblock[])
-        s = allocate_shared_float(linear_restart + 1; comm=comm_anysv_subblock[])
-        g = allocate_shared_float(linear_restart + 1; comm=comm_anysv_subblock[])
-        V = allocate_shared_float(reverse(coord_sizes)..., linear_restart+1; comm=comm_anysv_subblock[])
+        H = allocate_shared_float(; comm=comm_anysv_subblock[],
+                                  linear_restart_plus_one=linear_restart + 1,
+                                  linear_restart=linear_restart)
+        c = allocate_shared_float(; comm=comm_anysv_subblock[],
+                                  linear_restart_plus_one=linear_restart + 1)
+        s = allocate_shared_float(; comm=comm_anysv_subblock[],
+                                  linear_restart_plus_one=linear_restart + 1)
+        g = allocate_shared_float(; comm=comm_anysv_subblock[],
+                                  linear_restart_plus_one=linear_restart + 1)
+        V = allocate_shared_float(; comm=comm_anysv_subblock[],
+                                  (Symbol(c.name)=>c.n for c ∈ reverse(coords))...,
+                                  linear_restart_plus_one=linear_restart+1)
         # Arrays below appear to need to be initialised to zero on setup.
         # This is inconvenient for anysv communicators because we need to switch
         # now into the special "anysv" region for this assignment,
@@ -178,12 +189,45 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=();
         # the next region call in initialisation, which
         # will not be an "anysv" call.
         @begin_serial_region()
+    elseif anyzv_region
+        H = allocate_shared_float(; comm=comm_anyzv_subblock[],
+                                  linear_restart_plus_1=linear_restart + 1,
+                                  linear_restart=linear_restart)
+        c = allocate_shared_float(; comm=comm_anyzv_subblock[],
+                                  linear_restart_plus_one=linear_restart + 1)
+        s = allocate_shared_float(; comm=comm_anyzv_subblock[],
+                                  linear_restart_plus_one=linear_restart + 1)
+        g = allocate_shared_float(; comm=comm_anyzv_subblock[],
+                                  linear_restart_plus_one=linear_restart + 1)
+        V = allocate_shared_float(; comm=comm_anyzv_subblock[],
+                                  (Symbol(c.name)=>c.n for (_,c) ∈ pairs(reverse(coords)))...,
+                                  linear_restart_plus_one=linear_restart+1)
+        # Arrays below appear to need to be initialised to zero on setup.
+        # This is inconvenient for anyzv communicators because we need to switch
+        # now into the special "anyzv" region for this assignment,
+        # to make sure that all instances of memory are initialised to zero.
+        @begin_r_anyzv_region()
+        @begin_anyzv_region()
+        if anyzv_subblock_rank[] ≥ 0
+            @anyzv_serial_region begin
+                H .= 0.0
+                c .= 0.0
+                s .= 0.0
+                g .= 0.0
+                V .= 0.0
+            end
+        end
+        # switch out of anyzv region to avoid errors on
+        # the next region call in initialisation, which
+        # will not be an "anyzv" call.
+        @begin_serial_region()
     else
-        H = allocate_shared_float(linear_restart + 1, linear_restart)
-        c = allocate_shared_float(linear_restart + 1)
-        s = allocate_shared_float(linear_restart + 1)
-        g = allocate_shared_float(linear_restart + 1)
-        V = allocate_shared_float(reverse(coord_sizes)..., linear_restart+1)
+        H = allocate_shared_float(; linear_restart_plus_one=linear_restart + 1, linear_restart=linear_restart)
+        c = allocate_shared_float(; linear_restart_plus_one=linear_restart + 1)
+        s = allocate_shared_float(; linear_restart_plus_one=linear_restart + 1)
+        g = allocate_shared_float(; linear_restart_plus_one=linear_restart + 1)
+        V = allocate_shared_float((Symbol(c.name)=>c.n for c ∈ reverse(coords))...,
+                                  linear_restart_plus_one=linear_restart + 1)
 
         @begin_serial_region()
         @serial_region begin
@@ -211,9 +255,13 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=();
     elseif preconditioner_type === Val(:electron_lu)
         pdf_plus_ppar_size = total_size_coords + coords.z.n
         preconditioners = fill((lu(sparse(1.0*I, 1, 1)),
-                                allocate_shared_float(pdf_plus_ppar_size, pdf_plus_ppar_size),
-                                allocate_shared_float(pdf_plus_ppar_size),
-                                allocate_shared_float(pdf_plus_ppar_size),
+                                allocate_shared_float(:newton_size=>pdf_plus_ppar_size,
+                                                      :newton_size=>pdf_plus_ppar_size;
+                                                      comm=comm_anyzv_subblock[]),
+                                allocate_shared_float(; newton_size=pdf_plus_ppar_size,
+                                                      comm=comm_anyzv_subblock[]),
+                                allocate_shared_float(; newton_size=pdf_plus_ppar_size,
+                                                      comm=comm_anyzv_subblock[]),
                                ),
                                reverse(outer_coord_sizes))
     elseif preconditioner_type === Val(:electron_adi)
@@ -224,7 +272,7 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=();
         v_size = nvperp * nvpa
 
         function get_adi_precon_buffers()
-            v_solve_z_range = looping.loop_ranges_store[(:z,)].z
+            v_solve_z_range = looping.loop_ranges_store[(:anyzv,:z,)].z
             v_solve_global_inds = [[((iz - 1)*v_size+1 : iz*v_size)..., total_size_coords+iz] for iz ∈ v_solve_z_range]
             v_solve_nsolve = length(v_solve_z_range)
             # Plus one for the one point of ppar that is included in the 'v solve'.
@@ -236,8 +284,8 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=();
             v_solve_buffer2 = allocate_float(v_solve_n)
             v_solve_matrix_buffer = allocate_float(v_solve_n, v_solve_n)
 
-            z_solve_vperp_range = looping.loop_ranges_store[(:vperp,:vpa)].vperp
-            z_solve_vpa_range = looping.loop_ranges_store[(:vperp,:vpa)].vpa
+            z_solve_vperp_range = looping.loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp
+            z_solve_vpa_range = looping.loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa
             z_solve_global_inds = vec([(ivperp-1)*nvpa+ivpa:v_size:(nz-1)*v_size+(ivperp-1)*nvpa+ivpa for ivperp ∈ z_solve_vperp_range, ivpa ∈ z_solve_vpa_range])
             z_solve_nsolve = length(z_solve_vperp_range) * length(z_solve_vpa_range)
             @serial_region begin
@@ -255,11 +303,17 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=();
             z_solve_buffer2 = allocate_float(z_solve_n)
             z_solve_matrix_buffer = allocate_float(z_solve_n, z_solve_n)
 
-            J_buffer = allocate_shared_float(pdf_plus_ppar_size, pdf_plus_ppar_size)
-            input_buffer = allocate_shared_float(pdf_plus_ppar_size)
-            intermediate_buffer = allocate_shared_float(pdf_plus_ppar_size)
-            output_buffer = allocate_shared_float(pdf_plus_ppar_size)
-            error_buffer = allocate_shared_float(pdf_plus_ppar_size)
+            J_buffer = allocate_shared_float(:newton_size=>pdf_plus_ppar_size,
+                                             :newton_size=>pdf_plus_ppar_size;
+                                             comm=comm_anyzv_subblock[])
+            input_buffer = allocate_shared_float(; newton_size=pdf_plus_ppar_size,
+                                                 comm=comm_anyzv_subblock[])
+            intermediate_buffer = allocate_shared_float(; newton_size=pdf_plus_ppar_size,
+                                                        comm=comm_anyzv_subblock[])
+            output_buffer = allocate_shared_float(; newton_size=pdf_plus_ppar_size,
+                                                  comm=comm_anyzv_subblock[])
+            error_buffer = allocate_shared_float(; newton_size=pdf_plus_ppar_size,
+                                                 comm=comm_anyzv_subblock[])
 
             chunk_size = (pdf_plus_ppar_size + block_size[] - 1) ÷ block_size[]
             # Set up so root process has fewest points, as root may have other work to do.
@@ -307,7 +361,8 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=();
                           Ref(0), Ref(0), Ref(0),
                           Ref(nl_solver_input.preconditioner_update_interval),
                           Ref(mk_float(0.0)), zeros(mk_int, n_vcut_inds),
-                          zeros(mk_int, n_vcut_inds), serial_solve, anysv_region, Ref(0), Ref(0),
+                          zeros(mk_int, n_vcut_inds), serial_solve, anysv_region,
+                          anyzv_region, Ref(0), Ref(0),
                           nl_solver_input.total_its_soft_limit, preconditioner_type,
                           nl_solver_input.preconditioner_update_interval, preconditioners)
 end
@@ -485,6 +540,7 @@ old_precon_iterations = nl_solver_params.precon_iterations[]
                                    initial_guess=nl_solver_params.linear_initial_guess,
                                    serial_solve=nl_solver_params.serial_solve,
                                    anysv_region=nl_solver_params.anysv_region,
+                                   anyzv_region=nl_solver_params.anyzv_region,
                                    initial_delta_x_is_zero=true)
         linear_counter += linear_its
 
@@ -594,7 +650,7 @@ end
                                rtol, atol, x) = begin
     z = coords.z
 
-    @begin_z_region()
+    @begin_anyzv_z_region()
 
     local_norm = 0.0
     if z.irank < z.nrank - 1
@@ -611,16 +667,16 @@ end
         end
     end
 
-    @_block_synchronize()
+    @_anyzv_subblock_synchronize()
     global_norm = Ref(local_norm)
-    @timeit_debug global_timer "MPI.Reduce! comm_block" MPI.Reduce!(global_norm, +, comm_block[]) # global_norm is the norm_square for the block
+    @timeit_debug global_timer "MPI.Reduce! comm_anyzv_subblock" MPI.Reduce!(global_norm, +, comm_anyzv_subblock[]) # global_norm is the norm_square for the block
 
-    if block_rank[] == 0
-        @timeit_debug global_timer "MPI.Allreduce! comm_inter_block" MPI.Allreduce!(global_norm, +, comm_inter_block[]) # global_norm is the norm_square for the whole grid
+    if anyzv_subblock_rank[] == 0
+        @timeit_debug global_timer "MPI.Allreduce! z.comm" MPI.Allreduce!(global_norm, +, z.comm) # global_norm is the norm_square for the whole grid
         global_norm[] = sqrt(global_norm[] / z.n_global)
     end
-    @_block_synchronize()
-    @timeit_debug global_timer "MPI.Bcast! comm_block" MPI.Bcast!(global_norm, comm_block[]; root=0)
+    @_anyzv_subblock_synchronize()
+    @timeit_debug global_timer "MPI.Bcast! comm_anyzv_subblock" MPI.Bcast!(global_norm, comm_anyzv_subblock[]; root=0)
 
     return global_norm[]
 end
@@ -686,7 +742,7 @@ end
         zend = z.n + 1
     end
 
-    @begin_z_region()
+    @begin_anyzv_z_region()
 
     ppar_local_norm_square = 0.0
     @loop_z iz begin
@@ -696,16 +752,16 @@ end
         ppar_local_norm_square += (ppar_residual[iz] / (rtol * abs(x_ppar[iz]) + atol))^2
     end
 
-    @_block_synchronize()
-    global_norm_ppar = Ref(ppar_local_norm_square) # global_norm_ppar is the norm_square for ppar in the block
-    @timeit_debug global_timer "MPI.Reduce! comm_block" MPI.Reduce!(global_norm_ppar, +, comm_block[])
+    @_anyzv_subblock_synchronize()
+    global_norm_ppar = Ref(ppar_local_norm_square) # global_norm_ppar is now the norm_square for ppar in the subblock
+    @timeit_debug global_timer "MPI.Reduce! comm_anyzv_subblock" MPI.Reduce!(global_norm_ppar, +, comm_anyzv_subblock[])
 
     if block_rank[] == 0
-        @timeit_debug global_timer "MPI.Allreduce! comm_inter_block" MPI.Allreduce!(global_norm_ppar, +, comm_inter_block[]) # global_norm_ppar is the norm_square for ppar in the whole grid
+        @timeit_debug global_timer "MPI.Allreduce! z.comm" MPI.Allreduce!(global_norm_ppar, +, z.comm) # global_norm_ppar is now the norm_square for ppar in the whole {z,vperp,vpa} grid
         global_norm_ppar[] = global_norm_ppar[] / z.n_global
     end
 
-    @begin_z_vperp_vpa_region()
+    @begin_anyzv_z_vperp_vpa_region()
 
     pdf_local_norm_square = 0.0
     @loop_z iz begin
@@ -717,19 +773,19 @@ end
         end
     end
 
-    @_block_synchronize()
+    @_anyzv_subblock_synchronize()
     global_norm = Ref(pdf_local_norm_square)
-    @timeit_debug global_timer "MPI.Reduce! comm_block" MPI.Reduce!(global_norm, +, comm_block[]) # global_norm is the norm_square for the block
+    @timeit_debug global_timer "MPI.Reduce! comm_anyzv_subblock" MPI.Reduce!(global_norm, +, comm_anyzv_subblock[]) # global_norm is now the norm_square for the subblock
 
     if block_rank[] == 0
-        @timeit_debug global_timer "MPI.Allreduce! comm_inter_block" MPI.Allreduce!(global_norm, +, comm_inter_block[]) # global_norm is the norm_square for the whole grid
+        @timeit_debug global_timer "MPI.Allreduce! z.comm" MPI.Allreduce!(global_norm, +, z.comm) # global_norm is now the norm_square for the whole {z,vperp,vpa} grid
         global_norm[] = global_norm[] / (z.n_global * vperp.n_global * vpa.n_global)
 
         global_norm[] = sqrt(mean((global_norm_ppar[], global_norm[])))
     end
-    @_block_synchronize()
+    @_anyzv_subblock_synchronize()
 
-    @timeit_debug global_timer "MPI.Bcast! comm_block" MPI.Bcast!(global_norm, comm_block[]; root=0)
+    @timeit_debug global_timer "MPI.Bcast! comm_anyzv_subblock" MPI.Bcast!(global_norm, comm_anyzv_subblock[]; root=0)
 
     return global_norm[]
 end
@@ -785,7 +841,7 @@ end
 
     z = coords.z
 
-    @begin_z_region()
+    @begin_anyzv_z_region()
 
     z = coords.z
 
@@ -804,12 +860,12 @@ end
         end
     end
 
-    @_block_synchronize()
+    @_anyzv_subblock_synchronize()
     global_dot = Ref(local_dot)
-    @timeit_debug global_timer "MPI.Reduce! comm_block" MPI.Reduce!(global_dot, +, comm_block[]) # global_dot is the dot for the block
+    @timeit_debug global_timer "MPI.Reduce! comm_anyzv_subblock" MPI.Reduce!(global_dot, +, comm_anyzv_subblock[]) # global_dot is the dot for the block
 
     if block_rank[] == 0
-        @timeit_debug global_timer "MPI.Allreduce! comm_inter_block" MPI.Allreduce!(global_dot, +, comm_inter_block[]) # global_dot is the dot for the whole grid
+        @timeit_debug global_timer "MPI.Allreduce! z.comm" MPI.Allreduce!(global_dot, +, z.comm) # global_dot is the dot for the whole grid
         global_dot[] = global_dot[] / z.n_global
     end
 
@@ -873,7 +929,7 @@ end
         zend = z.n + 1
     end
 
-    @begin_z_region()
+    @begin_anyzv_z_region()
 
     ppar_local_dot = 0.0
     @loop_z iz begin
@@ -883,16 +939,16 @@ end
         ppar_local_dot += v_ppar[iz] * w_ppar[iz] / (rtol * abs(x_ppar[iz]) + atol)^2
     end
 
-    @_block_synchronize()
+    @_anyzv_subblock_synchronize()
     ppar_global_dot = Ref(ppar_local_dot)
-    @timeit_debug global_timer "MPI.Reduce! comm_block" MPI.Reduce!(ppar_global_dot, +, comm_block[]) # ppar_global_dot is the ppar_dot for the block
+    @timeit_debug global_timer "MPI.Reduce! comm_anyzv_subblock" MPI.Reduce!(ppar_global_dot, +, comm_anyzv_subblock[]) # ppar_global_dot is now the ppar_dot for the subblock
 
     if block_rank[] == 0
-        @timeit_debug global_timer "MPI.Allreduce! comm_inter_block" MPI.Allreduce!(ppar_global_dot, +, comm_inter_block[]) # ppar_global_dot is the ppar_dot for the whole grid
+        @timeit_debug global_timer "MPI.Allreduce! z.comm" MPI.Allreduce!(ppar_global_dot, +, z.comm) # ppar_global_dot is now the ppar_dot for the whole {z,vperp,vpa} grid
         ppar_global_dot[] = ppar_global_dot[] / z.n_global
     end
 
-    @begin_z_vperp_vpa_region()
+    @begin_anyzv_z_vperp_vpa_region()
 
     pdf_local_dot = 0.0
     @loop_z_vperp_vpa iz ivperp ivpa begin
@@ -902,12 +958,12 @@ end
         pdf_local_dot += v_pdf[ivpa,ivperp,iz] * w_pdf[ivpa,ivperp,iz] / (rtol * abs(x_pdf[ivpa,ivperp,iz]) + atol)^2
     end
 
-    @_block_synchronize()
+    @_anyzv_subblock_synchronize()
     global_dot = Ref(pdf_local_dot)
-    @timeit_debug global_timer "MPI.Reduce! comm_block" MPI.Reduce!(global_dot, +, comm_block[]) # global_dot is the dot for the block
+    @timeit_debug global_timer "MPI.Reduce! comm_anyzv_subblock" MPI.Reduce!(global_dot, +, comm_anyzv_subblock[]) # global_dot is now the dot for the subblock
 
     if block_rank[] == 0
-        @timeit_debug global_timer "MPI.Allreduce! comm_inter_block" MPI.Allreduce!(global_dot, +, comm_inter_block[]) # global_dot is the dot for the whole grid
+        @timeit_debug global_timer "MPI.Allreduce! z.comm" MPI.Allreduce!(global_dot, +, z.comm) # global_dot is now the dot for the whole {z,vperp,vpa} grid
         global_dot[] = global_dot[] / (z.n_global * vperp.n_global * vpa.n_global)
 
         global_dot[] = mean((ppar_global_dot[], global_dot[]))
@@ -948,10 +1004,10 @@ end
 
     @_block_synchronize()
     global_dot = Ref(local_dot)
-    @timeit_debug global_timer "MPI.Reduce! comm_block" MPI.Reduce!(global_dot, +, comm_block[]) # global_dot is the dot for the block
+    @timeit_debug global_timer "MPI.Reduce! comm_block" MPI.Reduce!(global_dot, +, comm_block[]) # global_dot is now the dot for the subblock
 
     if block_rank[] == 0
-        @timeit_debug global_timer "MPI.Allreduce! comm_inter_block" MPI.Allreduce!(global_dot, +, comm_inter_block[]) # global_dot is the dot for the whole grid
+        @timeit_debug global_timer "MPI.Allreduce! comm_inter_block" MPI.Allreduce!(global_dot, +, comm_inter_block[]) # global_dot is now the dot for the whole {z,vperp,vpa} grid
         global_dot[] = global_dot[] / (n_ion_species * r.n_global * z.n_global * vperp.n_global * vpa.n_global)
     end
 
@@ -964,7 +1020,7 @@ end
 @timeit_debug global_timer parallel_map(
                   ::Val{:z}, func, result::AbstractArray{mk_float, 1}) = begin
 
-    @begin_z_region()
+    @begin_anyzv_z_region()
 
     @loop_z iz begin
         result[iz] = func()
@@ -975,7 +1031,7 @@ end
 @timeit_debug global_timer parallel_map(
                   ::Val{:z}, func, result::AbstractArray{mk_float, 1}, x1) = begin
 
-    @begin_z_region()
+    @begin_anyzv_z_region()
 
     @loop_z iz begin
         result[iz] = func(x1[iz])
@@ -986,7 +1042,7 @@ end
 @timeit_debug global_timer parallel_map(
                   ::Val{:z}, func, result::AbstractArray{mk_float, 1}, x1, x2) = begin
 
-    @begin_z_region()
+    @begin_anyzv_z_region()
 
     if isa(x2, AbstractArray)
         @loop_z iz begin
@@ -1003,7 +1059,7 @@ end
 @timeit_debug global_timer parallel_map(
                   ::Val{:z}, func, result::AbstractArray{mk_float, 1}, x1, x2, x3) = begin
 
-    @begin_z_region()
+    @begin_anyzv_z_region()
 
     if isa(x3, AbstractArray)
         @loop_z iz begin
@@ -1147,13 +1203,13 @@ end
 
     result_ppar, result_pdf = result
 
-    @begin_z_region()
+    @begin_anyzv_z_region()
 
     @loop_z iz begin
         result_ppar[iz] = func()
     end
 
-    @begin_z_vperp_vpa_region()
+    @begin_anyzv_z_vperp_vpa_region()
 
     @loop_z_vperp_vpa iz ivperp ivpa begin
         result_pdf[ivpa,ivperp,iz] = func()
@@ -1168,13 +1224,13 @@ end
     result_ppar, result_pdf = result
     x1_ppar, x1_pdf = x1
 
-    @begin_z_region()
+    @begin_anyzv_z_region()
 
     @loop_z iz begin
         result_ppar[iz] = func(x1_ppar[iz])
     end
 
-    @begin_z_vperp_vpa_region()
+    @begin_anyzv_z_vperp_vpa_region()
 
     @loop_z_vperp_vpa iz ivperp ivpa begin
         result_pdf[ivpa,ivperp,iz] = func(x1_pdf[ivpa,ivperp,iz])
@@ -1191,25 +1247,25 @@ end
 
     if isa(x2, Tuple)
         x2_ppar, x2_pdf = x2
-        @begin_z_region()
+        @begin_anyzv_z_region()
 
         @loop_z iz begin
             result_ppar[iz] = func(x1_ppar[iz], x2_ppar[iz])
         end
 
-        @begin_z_vperp_vpa_region()
+        @begin_anyzv_z_vperp_vpa_region()
 
         @loop_z_vperp_vpa iz ivperp ivpa begin
             result_pdf[ivpa,ivperp,iz] = func(x1_pdf[ivpa,ivperp,iz], x2_pdf[ivpa,ivperp,iz])
         end
     else
-        @begin_z_region()
+        @begin_anyzv_z_region()
 
         @loop_z iz begin
             result_ppar[iz] = func(x1_ppar[iz], x2)
         end
 
-        @begin_z_vperp_vpa_region()
+        @begin_anyzv_z_vperp_vpa_region()
 
         @loop_z_vperp_vpa iz ivperp ivpa begin
             result_pdf[ivpa,ivperp,iz] = func(x1_pdf[ivpa,ivperp,iz], x2)
@@ -1228,25 +1284,25 @@ end
 
     if isa(x3, Tuple)
         x3_ppar, x3_pdf = x3
-        @begin_z_region()
+        @begin_anyzv_z_region()
 
         @loop_z iz begin
             result_ppar[iz] = func(x1_ppar[iz], x2_ppar[iz], x3_ppar[iz])
         end
 
-        @begin_z_vperp_vpa_region()
+        @begin_anyzv_z_vperp_vpa_region()
 
         @loop_z_vperp_vpa iz ivperp ivpa begin
             result_pdf[ivpa,ivperp,iz] = func(x1_pdf[ivpa,ivperp,iz], x2_pdf[ivpa,ivperp,iz], x3_pdf[ivpa,ivperp,iz])
         end
     else
-        @begin_z_region()
+        @begin_anyzv_z_region()
 
         @loop_z iz begin
             result_ppar[iz] = func(x1_ppar[iz], x2_ppar[iz], x3)
         end
 
-        @begin_z_vperp_vpa_region()
+        @begin_anyzv_z_vperp_vpa_region()
 
         @loop_z_vperp_vpa iz ivperp ivpa begin
             result_pdf[ivpa,ivperp,iz] = func(x1_pdf[ivpa,ivperp,iz], x2_pdf[ivpa,ivperp,iz], x3)
@@ -1317,7 +1373,7 @@ end
 @timeit_debug global_timer parallel_delta_x_calc(
                   ::Val{:z}, delta_x::AbstractArray{mk_float, 1}, V, y) = begin
 
-    @begin_z_region()
+    @begin_anyzv_z_region()
 
     ny = length(y)
     @loop_z iz begin
@@ -1371,7 +1427,7 @@ end
 
     ny = length(y)
 
-    @begin_z_region()
+    @begin_anyzv_z_region()
 
     @loop_z iz begin
         for iy ∈ 1:ny
@@ -1379,7 +1435,7 @@ end
         end
     end
 
-    @begin_z_vperp_vpa_region()
+    @begin_anyzv_z_vperp_vpa_region()
 
     @loop_z_vperp_vpa iz ivperp ivpa begin
         for iy ∈ 1:ny
@@ -1427,7 +1483,7 @@ MGS-GMRES' in Zou (2023) [https://doi.org/10.1016/j.amc.2023.127869].
                          norm_params; coords, rtol, atol, restart, max_restarts,
                          left_preconditioner, right_preconditioner, H, c, s, g, V,
                          rhs_delta, initial_guess, serial_solve, anysv_region,
-                         initial_delta_x_is_zero) = begin
+                         anyzv_region, initial_delta_x_is_zero) = begin
     # Solve (approximately?):
     #   J δx = residual0
 
@@ -1478,6 +1534,11 @@ MGS-GMRES' in Zou (2023) [https://doi.org/10.1016/j.amc.2023.127869].
         @anysv_serial_region begin
             g[1] = beta
         end
+    elseif anyzv_region
+        @begin_anyzv_region()
+        @anyzv_serial_region begin
+            g[1] = beta
+        end
     else
         @begin_serial_region()
         @serial_region begin
@@ -1515,6 +1576,11 @@ MGS-GMRES' in Zou (2023) [https://doi.org/10.1016/j.amc.2023.127869].
                     @anysv_serial_region begin
                         H[j,i] = w_dot_Vj
                     end
+                elseif anyzv_region
+                    @begin_anyzv_region()
+                    @anysv_serial_region begin
+                        H[j,i] = w_dot_Vj
+                    end
                 else
                      @begin_serial_region()
                      @serial_region begin
@@ -1528,6 +1594,11 @@ MGS-GMRES' in Zou (2023) [https://doi.org/10.1016/j.amc.2023.127869].
                 H[i+1,i] = norm_w
             elseif anysv_region
                 @begin_anysv_region()
+                @anysv_serial_region begin
+                    H[i+1,i] = norm_w
+                end
+            elseif anyzv_region
+                @begin_anyzv_region()
                 @anysv_serial_region begin
                     H[i+1,i] = norm_w
                 end
@@ -1569,6 +1640,23 @@ MGS-GMRES' in Zou (2023) [https://doi.org/10.1016/j.amc.2023.127869].
                     g[i] = c[i] * g[i]
                 end
                 @_anysv_subblock_synchronize()
+            elseif anyzv_region
+                @begin_anyzv_region()
+                @anyzv_serial_region begin
+                    for j ∈ 1:i-1
+                        gamma = c[j] * H[j,i] + s[j] * H[j+1,i]
+                        H[j+1,i] = -s[j] * H[j,i] + c[j] * H[j+1,i]
+                        H[j,i] = gamma
+                    end
+                    delta = sqrt(H[i,i]^2 + H[i+1,i]^2)
+                    s[i] = H[i+1,i] / delta
+                    c[i] = H[i,i] / delta
+                    H[i,i] = c[i] * H[i,i] + s[i] * H[i+1,i]
+                    H[i+1,i] = 0
+                    g[i+1] = -s[i] * g[i]
+                    g[i] = c[i] * g[i]
+                end
+                @_anyzv_subblock_synchronize()
             else
                 @begin_serial_region()
                 @serial_region begin

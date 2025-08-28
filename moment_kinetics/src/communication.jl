@@ -14,12 +14,14 @@ module communication
 
 export allocate_shared, block_rank, block_size, n_blocks, comm_block, comm_inter_block,
        iblock_index, comm_world, finalize_comms!, halo_swap!, initialize_comms!,
-       global_rank, MPISharedArray, global_size, comm_anysv_subblock, anysv_subblock_rank,
-       anysv_subblock_size, anysv_isubblock_index, anysv_nsubblocks_per_block
+       global_rank, global_size, comm_anysv_subblock, anysv_subblock_rank,
+       anysv_subblock_size, anysv_isubblock_index, anysv_nsubblocks_per_block,
+       comm_anyzv_subblock, anyzv_subblock_rank, anyzv_subblock_size,
+       anyzv_isubblock_index, anyzv_nsubblocks_per_block
 export setup_distributed_memory_MPI
 export setup_distributed_memory_MPI_for_weights_precomputation
 export setup_serial_MPI
-export @_block_synchronize, @_anysv_subblock_synchronize
+export @_block_synchronize, @_anysv_subblock_synchronize, @_anyzv_subblock_synchronize
 
 using LinearAlgebra
 using MPI
@@ -28,8 +30,13 @@ using SHA
 # Import moment_kinetics so that we can refer to it in docstrings
 import moment_kinetics
 using ..debugging
+using ..loop_ranges_struct: loop_ranges, loop_ranges_store
+using ..moment_kinetics_structs: coordinate
 using ..timer_utils
 using ..type_definitions: mk_float, mk_int
+@debug_shared_array begin
+    using ..type_definitions: DebugMPISharedArray
+end
 
 """
 Can use a const `MPI.Comm` for `comm_world` and just copy the pointer from
@@ -71,6 +78,20 @@ MPI.jl delete the communicator.
 """
 const comm_anysv_subblock = Ref(MPI.COMM_NULL)
 
+"""
+Communicator for the local velocity-space subset of a shared-memory block in a 'anyzv'
+region
+
+The 'anyzv' region is used to parallelise the kinetic electron solve. See
+[`moment_kinetics.looping.get_best_anyzv_split`](@ref).
+
+Must use a `Ref{MPI.Comm}` to allow a non-const `MPI.Comm` to be stored. Need to actually
+assign to this and not just copy a pointer into the `.val` member because otherwise the
+`MPI.Comm` object created by `MPI.Comm_split()` would be deleted, which probably makes
+MPI.jl delete the communicator.
+"""
+const comm_anyzv_subblock = Ref(MPI.COMM_NULL)
+
 # Use Ref for these variables so that they can be made `const` (so have a definite
 # type), but contain a value assigned at run-time.
 """
@@ -111,6 +132,22 @@ const anysv_nsubblocks_per_block = Ref{mk_int}()
 
 """
 """
+const anyzv_subblock_rank = Ref{mk_int}()
+
+"""
+"""
+const anyzv_subblock_size = Ref{mk_int}()
+
+"""
+"""
+const anyzv_isubblock_index = Ref{Union{mk_int,Nothing}}()
+
+"""
+"""
+const anyzv_nsubblocks_per_block = Ref{mk_int}()
+
+"""
+"""
 const n_blocks = Ref{mk_int}()
 
 """
@@ -134,6 +171,23 @@ function __init__()
     # Ensure BLAS only uses 1 thread, to avoid oversubscribing processes as we are
     # probably already fully parallelised.
     BLAS.set_num_threads(1)
+end
+
+"""
+    free_MPI_comm!(comm)
+
+If `comm` is not null or one of the default communicators (COMM_WORLD or COMM_SELF), free
+it to avoid leaking MPI communicators. To be called before, e.g. `comm_block[]` is
+assigned (in case it is being reassigned). This is necessary because some MPI
+installations have a very limited number of communicators, and will error if this limit is
+exceeded.
+"""
+function free_MPI_comm!(comm)
+    if !(comm == MPI.COMM_NULL || comm == MPI.COMM_WORLD || comm == MPI.COMM_SELF ||
+             comm == MPI.COMM_TYPE_SHARED)
+        MPI.free(comm)
+    end
+    return nothing
 end
 
 """
@@ -200,6 +254,7 @@ function setup_distributed_memory_MPI(z_nelement_global,z_nelement_local,r_nelem
     block_size[] = nrank_per_zr_block
     n_blocks[] = nblocks
     # construct a communicator for intra-block communication
+    free_MPI_comm!(comm_block[])
     comm_block[] = MPI.Comm_split(comm_world,iblock,irank_block)
     # MPI.Comm_split(comm,color,key)
 	# comm -> communicator to be split
@@ -239,17 +294,20 @@ function setup_distributed_memory_MPI(z_nelement_global,z_nelement_local,r_nelem
         println("")
     end
 
-	# construct communicators for inter-block communication
-	# only communicate between lead processes on a block
+    # construct communicators for inter-block communication only communicate between lead
+    # processes on a block
+    free_MPI_comm!(comm_inter_block[])
     if block_rank[] == 0
         comm_inter_block[] = MPI.Comm_split(comm_world, 0, iblock)
-        r_comm = MPI.Comm_split(comm_world,r_igroup,r_irank)
-        z_comm = MPI.Comm_split(comm_world,z_igroup,z_irank)
     else # assign a dummy value 
         comm_inter_block[] = MPI.Comm_split(comm_world, nothing, iblock)
-        r_comm = MPI.Comm_split(comm_world,nothing,r_irank)
-        z_comm = MPI.Comm_split(comm_world,nothing,z_irank)
     end
+
+    # construct communicators for inter-block communication between corresponding
+    # processes in each block.
+    r_comm = MPI.Comm_split(comm_world, r_igroup * block_size[] + block_rank[], r_irank)
+    z_comm = MPI.Comm_split(comm_world, z_igroup * block_size[] + block_rank[], z_irank)
+
     # MPI.Comm_split(comm,color,key)
 	# comm -> communicator to be split
 	# color -> label of group of processes
@@ -273,8 +331,10 @@ function setup_serial_MPI()
     block_rank[] = 0
     block_size[] = 1
     n_blocks[] = 1
+    free_MPI_comm!(comm_block[])
     comm_block[] = MPI.COMM_SELF
 
+    free_MPI_comm!(comm_inter_block[])
     comm_inter_block[] = MPI.COMM_SELF
     r_comm = MPI.COMM_SELF
     z_comm = MPI.COMM_SELF
@@ -361,6 +421,7 @@ function setup_distributed_memory_MPI_for_weights_precomputation(vpa_nelement_gl
     block_rank[] = irank_block
     block_size[] = nrank_per_vpavperp_block
     # construct a communicator for intra-block communication
+    free_MPI_comm!(comm_block[])
     comm_block[] = MPI.Comm_split(comm_vpavperp,iblock,irank_block)
     
     vpa_ngroup = vperp_nchunks
@@ -397,6 +458,7 @@ function setup_distributed_memory_MPI_for_weights_precomputation(vpa_nelement_gl
 
 	# construct communicators for inter-block communication
 	# only communicate between lead processes on a block
+    free_MPI_comm!(comm_inter_block[])
     if block_rank[] == 0 #&& utilised_core
         comm_inter_block[] = MPI.Comm_split(comm_vpavperp, 0, iblock)
         vperp_comm = MPI.Comm_split(comm_vpavperp,vperp_igroup,vperp_irank)
@@ -416,29 +478,14 @@ function setup_distributed_memory_MPI_for_weights_precomputation(vpa_nelement_gl
 end
 
 @debug_shared_array begin
-    """
-    Special type for debugging race conditions in accesses to shared-memory arrays.
-    Only used if debugging._debug_level is high enough.
-    """
-    struct DebugMPISharedArray{T, N, TArray <: AbstractArray{T,N}, TIntArray <: AbstractArray{mk_int,N}, TBoolArray <: AbstractArray{Bool,N}} <: AbstractArray{T, N}
-        data::TArray
-        accessed::Base.RefValue{Bool}
-        is_initialized::TIntArray
-        is_read::TBoolArray
-        is_written::TBoolArray
-        creation_stack_trace::String
-        @debug_detect_redundant_block_synchronize begin
-            previous_is_read::TBoolArray
-            previous_is_written::TBoolArray
-        end
-    end
-
-    export DebugMPISharedArray
-
     # Constructors
-    function DebugMPISharedArray(array::AbstractArray, comm)
+    function DebugMPISharedArray(array::AbstractArray{T,N}, comm,
+                                 dim_names::NTuple{N, Symbol}) where {T,N}
         dims = size(array)
-        is_initialized = allocate_shared(mk_int, dims; comm=comm, maybe_debug=false)
+        dim_ranges = Tuple(1:n for n ∈ dims)
+        is_initialized = allocate_shared(mk_int, (Symbol("d$i")=>d for (i,d) ∈
+                                                  enumerate(dims))...;
+                                         comm=comm, maybe_debug=false)
         if block_rank[] == 0
             is_initialized .= 0
         end
@@ -458,12 +505,13 @@ end
             previous_is_read .= true
             previous_is_written = Array{Bool}(undef, dims)
             previous_is_written .= true
-            return DebugMPISharedArray(array, accessed, is_initialized, is_read, is_written,
+            return DebugMPISharedArray(array, dim_names, dim_ranges, accessed,
+                                       is_initialized, is_read, is_written,
                                        creation_stack_trace, previous_is_read,
                                        previous_is_written)
         end
-        return DebugMPISharedArray(array, accessed, is_initialized, is_read, is_written,
-                                   creation_stack_trace)
+        return DebugMPISharedArray(array, dim_names, dim_ranges, accessed, is_initialized,
+                                   is_read, is_written, creation_stack_trace)
     end
 
     # Define functions needed for AbstractArray interface
@@ -483,6 +531,94 @@ end
                 end
             end
         end
+
+        @debug_shared_array begin
+            # If we are in an anysv or anyzv region, check that array is accessed within
+            # the {r,z} or {r} index ranges that are handled by the subblock that this
+            # process belongs to.
+            #
+            # Note, don't have to worry about 'flattened' aka 'single-index' array
+            # accesses, like a 2d array accessed as `a[5]`, because the
+            # DebugMPISharedArray goes through the AbstractArray interface, which converts
+            # a 'single-index' access into a multi-index access, which then calls this
+            # function with the same number of indices as `A` has dimensions.
+            if loop_ranges[].is_anysv
+                if :r ∈ A.dim_names
+                    r_dims = findall(A.dim_names .== :r)
+                    subblock_r_range = loop_ranges[].r
+                    for d ∈ r_dims
+                        subblock_r_inds = A.dim_ranges[d][I[d]]
+                        if !all(i ∈ subblock_r_range for i ∈ subblock_r_inds)
+                            if A.creation_stack_trace != ""
+                                error("Attempted to read array at r-indices "
+                                      * "$subblock_r_inds in anysv region, but this "
+                                      * "subblock only handles r-indices "
+                                      * "$subblock_r_range.\n"
+                                      * "Array was created at:\n"
+                                      * A.creation_stack_trace)
+                            else
+                                error("Attempted to read array at r-indices "
+                                      * "$subblock_r_inds in anysv region, but this "
+                                      * "subblock only handles r-indices "
+                                      * "$subblock_r_range.\n"
+                                      * "Enable `debug_track_array_allocate_location` to "
+                                      * "track where array was created.")
+                            end
+                        end
+                    end
+                end
+                if :z ∈ A.dim_names
+                    z_dims = findall(A.dim_names .== :z)
+                    subblock_z_range = loop_ranges[].z
+                    for d ∈ z_dims
+                        subblock_z_inds = A.dim_ranges[d][I[d]]
+                        if !all(i ∈ subblock_z_range for i ∈ subblock_z_inds)
+                            if A.creation_stack_trace != ""
+                                error("Attempted to read array at z-indices "
+                                      * "$subblock_z_inds in anysv region, but this "
+                                      * "subblock only handles z-indices "
+                                      * "$subblock_z_range.\n"
+                                      * "Array was created at:\n"
+                                      * A.creation_stack_trace)
+                            else
+                                error("Attempted to read array at z-indices "
+                                      * "$subblock_z_inds in anysv region, but this "
+                                      * "subblock only handles z-indices "
+                                      * "$subblock_z_range.\n"
+                                      * "Enable `debug_track_array_allocate_location` to "
+                                      * "track where array was created.")
+                            end
+                        end
+                    end
+                end
+            elseif loop_ranges[].is_anyzv
+                if :r ∈ A.dim_names
+                    r_dims = findall(A.dim_names .== :r)
+                    subblock_r_range = loop_ranges[].r
+                    for d ∈ r_dims
+                        subblock_r_inds = A.dim_ranges[d][I[d]]
+                        if !all(i ∈ subblock_r_range for i ∈ subblock_r_inds)
+                            if A.creation_stack_trace != ""
+                                error("Attempted to read array at r-indices "
+                                      * "$subblock_r_inds in anyzv region, but this "
+                                      * "subblock only handles r-indices "
+                                      * "$subblock_r_range.\n"
+                                      * "Array was created at:\n"
+                                      * A.creation_stack_trace)
+                            else
+                                error("Attempted to read array at r-indices "
+                                      * "$subblock_r_inds in anyzv region, but this "
+                                      * "subblock only handles r-indices "
+                                      * "$subblock_r_range.\n"
+                                      * "Enable `debug_track_array_allocate_location` to "
+                                      * "track where array was created.")
+                            end
+                        end
+                    end
+                end
+            end
+        end
+
         A.is_read[I...] = true
         A.accessed[] = true
         return getindex(A.data, I...)
@@ -491,6 +627,94 @@ end
         @debug_track_initialized begin
             A.is_initialized[I...] = 1
         end
+
+        @debug_shared_array begin
+            # If we are in an anysv or anyzv region, check that array is accessed within
+            # the {r,z} or {r} index ranges that are handled by the subblock that this
+            # process belongs to.
+            #
+            # Note, don't have to worry about 'flattened' aka 'single-index' array
+            # accesses, like a 2d array accessed as `a[5]`, because the
+            # DebugMPISharedArray goes through the AbstractArray interface, which converts
+            # a 'single-index' access into a multi-index access, which then calls this
+            # function with the same number of indices as `A` has dimensions.
+            if isdefined(loop_ranges, 1) && loop_ranges[].is_anysv
+                if :r ∈ A.dim_names
+                    r_dims = findall(A.dim_names .== :r)
+                    subblock_r_range = loop_ranges[].r
+                    for d ∈ r_dims
+                        subblock_r_inds = A.dim_ranges[d][I[d]]
+                        if !all(i ∈ subblock_r_range for i ∈ subblock_r_inds)
+                            if A.creation_stack_trace != ""
+                                error("Attempted to write array at r-indices "
+                                      * "$subblock_r_inds in anysv region, but this "
+                                      * "subblock only handles r-indices "
+                                      * "$subblock_r_range.\n"
+                                      * "Array was created at:\n"
+                                      * A.creation_stack_trace)
+                            else
+                                error("Attempted to write array at r-indices "
+                                      * "$subblock_r_inds in anysv region, but this "
+                                      * "subblock only handles r-indices "
+                                      * "$subblock_r_range.\n"
+                                      * "Enable `debug_track_array_allocate_location` to "
+                                      * "track where array was created.")
+                            end
+                        end
+                    end
+                end
+                if :z ∈ A.dim_names
+                    z_dims = findall(A.dim_names .== :z)
+                    subblock_z_range = loop_ranges[].z
+                    for d ∈ z_dims
+                        subblock_z_inds = A.dim_ranges[d][I[d]]
+                        if !all(i ∈ subblock_z_range for i ∈ subblock_z_inds)
+                            if A.creation_stack_trace != ""
+                                error("Attempted to write array at z-indices "
+                                      * "$subblock_z_inds in anysv region, but this "
+                                      * "subblock only handles z-indices "
+                                      * "$subblock_z_range.\n"
+                                      * "Array was created at:\n"
+                                      * A.creation_stack_trace)
+                            else
+                                error("Attempted to write array at z-indices "
+                                      * "$subblock_z_inds in anysv region, but this "
+                                      * "subblock only handles z-indices "
+                                      * "$subblock_z_range.\n"
+                                      * "Enable `debug_track_array_allocate_location` to "
+                                      * "track where array was created.")
+                            end
+                        end
+                    end
+                end
+            elseif isdefined(loop_ranges, 1) && loop_ranges[].is_anyzv
+                if :r ∈ A.dim_names
+                    r_dims = findall(A.dim_names .== :r)
+                    subblock_r_range = loop_ranges[].r
+                    for d ∈ r_dims
+                        subblock_r_inds = A.dim_ranges[d][I[d]]
+                        if !all(i ∈ subblock_r_range for i ∈ subblock_r_inds)
+                            if A.creation_stack_trace != ""
+                                error("Attempted to write array at r-indices "
+                                      * "$subblock_r_inds in anyzv region, but this "
+                                      * "subblock only handles r-indices "
+                                      * "$subblock_r_range.\n"
+                                      * "Array was created at:\n"
+                                      * A.creation_stack_trace)
+                            else
+                                error("Attempted to write array at r-indices "
+                                      * "$subblock_r_inds in anyzv region, but this "
+                                      * "subblock only handles r-indices "
+                                      * "$subblock_r_range.\n"
+                                      * "Enable `debug_track_array_allocate_location` to "
+                                      * "track where array was created.")
+                            end
+                        end
+                    end
+                end
+            end
+        end
+
         A.is_written[I...] = true
         A.accessed[] = true
         return setindex!(A.data, v, I...)
@@ -520,6 +744,10 @@ end
         return DebugMPISharedArray(
             (isa(getfield(A, name), AbstractArray) ?
              view(getfield(A, name), inds...) :
+             name === :dim_names ?
+             Tuple(getfield(A, name)[i] for (i, ind) ∈ enumerate(inds) if !isa(ind, Integer)) :
+             name === :dim_ranges ?
+             Tuple(A.dim_ranges[i][ind] for (i, ind) ∈ enumerate(inds) if !isa(ind, Integer)) :
              getfield(A, name)
              for name ∈ fieldnames(typeof(A)))...)
     end
@@ -530,6 +758,10 @@ end
         return DebugMPISharedArray(
             (isa(getfield(A, name), AbstractArray) ?
              vec(getfield(A, name)) :
+             name === :dim_names ?
+             (:flattened_dim,) :
+             name === :dim_ranges ?
+             (:,) :
              getfield(A, name)
              for name ∈ fieldnames(typeof(A)))...)
     end
@@ -566,17 +798,18 @@ end
     # in different anysv sub-blocks, so debug checks within an anysv region should only
     # consider the anysv-specific arrays.
     const global_anysv_debugmpisharedarray_store = Vector{DebugMPISharedArray}(undef, 0)
+    # 'anyzv' regions require a separate array store, because within an anyzv region,
+    # processes in the same shared memory block may still not be synchronized if they are
+    # in different anyzv sub-blocks, so debug checks within an anyzv region should only
+    # consider the anyzv-specific arrays.
+    const global_anyzv_debugmpisharedarray_store = Vector{DebugMPISharedArray}(undef, 0)
 end
 
 """
-Type used to declare a shared-memory array. When debugging is not active `MPISharedArray`
-is just an alias for `Array`, but when `@debug_shared_array` is activated, it is instead
-defined as an alias for `DebugMPISharedArray`.
-"""
-const MPISharedArray = @debug_shared_array_ifelse(DebugMPISharedArray, Array)
+    allocate_shared(T; comm=nothing, maybe_debug=true, kwargs...)
+    allocate_shared(T, dims...; comm=nothing, maybe_debug=true)
 
-"""
-Get a shared-memory array of `mk_float` (shared by all processes in a 'block')
+Get a shared-memory array of `mk_float` (shared by all processes in a 'block').
 
 Create a shared-memory array using `MPI.Win_allocate_shared()`. Pointer to the memory
 allocated is wrapped in a Julia array. Memory is not managed by the Julia array though.
@@ -587,10 +820,20 @@ running a simulation/test.
 
 Arguments
 ---------
-dims - mk_int or Tuple{mk_int}
+kwargs - mk_int
+    Dimensions must be named to support shared-memory debugging tools. They can be either
+    passed as `name=dim_size` keyword arguments (`coordinate` objects can also be passed
+    as the kwarg values, for convenienc), or using `dims`.
     Dimensions of the array to be created. Dimensions passed define the size of the
     array which is being handled by the 'block' (rather than the global array, or a
     subset for a single process).
+dims - coordinate, NamedTuple, Pair{Symbol,Integer}, or Pair{String,Integer}
+    Alternative to `kwargs`. May be passed `coordinate`, `NamedTuple`,
+    `Pair{Symbol,Integer}` (enter as e.g. `:z => n` where `n` is an `mk_int`),
+    `Pair{String,Integer}` (enter as e.g. `"z" => n` where `n` is an `mk_int`),
+    `Pair{Symbol,coordinate}`, `Pair{String,coordinate}`, `Pair{Symbol,NamedTuple}`, or
+    `Pair{String,NamedTuple}` arguments from which the name and size of the name and size
+    of the dimension will be extracted.
 comm - `MPI.Comm`, default `comm_block[]`
     MPI communicator containing the processes that share the array.
 maybe_debug - Bool
@@ -602,7 +845,61 @@ Returns
 -------
 Array{mk_float}
 """
-function allocate_shared(T, dims; comm=nothing, maybe_debug=true)
+function allocate_shared end
+
+function allocate_shared(T::Type, dim1, dims...; comm=nothing, maybe_debug=true)
+    function standardise_argument(a)
+        if isa(a, coordinate)
+            return Symbol(a.name) => a.n
+        elseif isa(a, NamedTuple)
+            return Symbol(a.name) => a.n
+        elseif isa(a, Pair)
+            if isa(a[2], coordinate)
+                return Symbol(a[1]) => a[2].n
+            elseif isa(a[2], NamedTuple)
+                return Symbol(a[1]) => a[2].n
+            elseif isa(a[2], Integer)
+                return Symbol(a[1]) => mk_int(a[2])
+            else
+                error("Incorrect argument $a to `allocate_shared`. Arguments should be "
+                      * "coordinate, coordinate-like NamedTuple, or `:name=>n` "
+                      * "(`Pair{Symbol,mk_int}`).")
+            end
+        else
+            error("Incorrect argument $a to `allocate_shared`. Arguments should be "
+                  * "coordinate, coordinate-like NamedTuple, or `:name=>n` "
+                  * "(`Pair{Symbol,mk_int}`).")
+        end
+    end
+    return _allocate_shared_internal(T, (standardise_argument(d)
+                                         for d ∈ (dim1, dims...))...;
+                                     comm=comm, maybe_debug=maybe_debug)
+end
+
+function allocate_shared(T::Type; comm=nothing, maybe_debug=true, kwargs...)
+    function get_int(a)
+        if isa(a, coordinate)
+            return a.n
+        elseif isa(a, NamedTuple)
+            return mk_int(a.n)
+        elseif isa(a, Integer)
+            return mk_int(a)
+        else
+            error("Unrecognised type of argument $a")
+        end
+    end
+    return _allocate_shared_internal(T, (k => get_int(v) for (k,v) ∈ kwargs)...;
+                                     comm=comm, maybe_debug=maybe_debug)
+end
+
+# Note cannot just use `kwargs...` for the inner version, because we might want repeated
+# dimension names in some cases, but repeated `kwargs` are not allowed.
+function _allocate_shared_internal(T::Type, dims_info::Pair{Symbol,mk_int}...;
+                                   comm=nothing, maybe_debug=true)
+    if maybe_debug
+        dim_names = Tuple(d[1] for d ∈ dims_info)
+    end
+    dims = Tuple(d[2] for d ∈ dims_info)
     if comm === nothing
         comm = comm_block[]
     elseif comm == MPI.COMM_NULL
@@ -613,7 +910,7 @@ function allocate_shared(T, dims; comm=nothing, maybe_debug=true)
         @debug_shared_array begin
             # If @debug_shared_array is active, create DebugMPISharedArray instead of Array
             if maybe_debug
-                array = DebugMPISharedArray(array, comm)
+                array = DebugMPISharedArray(array, comm, dim_names)
             end
         end
 
@@ -631,7 +928,7 @@ function allocate_shared(T, dims; comm=nothing, maybe_debug=true)
         @debug_shared_array begin
             # If @debug_shared_array is active, create DebugMPISharedArray instead of Array
             if maybe_debug
-                array = DebugMPISharedArray(array, comm)
+                array = DebugMPISharedArray(array, comm, dim_names)
             end
         end
 
@@ -683,9 +980,11 @@ function allocate_shared(T, dims; comm=nothing, maybe_debug=true)
     @debug_shared_array begin
         # If @debug_shared_array is active, create DebugMPISharedArray instead of Array
         if maybe_debug
-            debug_array = DebugMPISharedArray(array, comm)
+            debug_array = DebugMPISharedArray(array, comm, dim_names)
             if comm == comm_anysv_subblock[]
                 push!(global_anysv_debugmpisharedarray_store, debug_array)
+            elseif comm == comm_anyzv_subblock[]
+                push!(global_anyzv_debugmpisharedarray_store, debug_array)
             else
                 push!(global_debugmpisharedarray_store, debug_array)
             end
@@ -822,6 +1121,10 @@ end
     function debug_check_shared_memory(; comm=comm_block[], kwargs...)
         if comm == comm_anysv_subblock[]
             for array ∈ global_anysv_debugmpisharedarray_store
+                debug_check_shared_array(array; comm=comm, kwargs...)
+            end
+        elseif comm == comm_anyzv_subblock[]
+            for array ∈ global_anyzv_debugmpisharedarray_store
                 debug_check_shared_array(array; comm=comm, kwargs...)
             end
         else
@@ -973,10 +1276,11 @@ debugging routines need to be updated.
             end
         end
 
-        # Also check 'anysv' arrays, as these are synchronized by this call.
+        # Also check 'anysv' and 'anyzv' arrays, as these are synchronized by this call.
         # `missing` passed as the call_site argument here indicates that the check of
         # call_site has already been done.
         _anysv_subblock_synchronize(missing)
+        _anyzv_subblock_synchronize(missing)
 
         MPI.Barrier(comm_block[])
     end
@@ -1030,7 +1334,7 @@ function _anysv_subblock_synchronize(call_site::Union{Nothing,Missing,UInt64})
         hash = sha256(signaturestring)
         all_hashes = reshape(MPI.Allgather(hash, comm_anysv_subblock[]), length(hash),
                              MPI.Comm_size(comm_anysv_subblock[]))
-        for i ∈ 1:block_size[]
+        for i ∈ 1:anysv_subblock_size[]
             h = all_hashes[:, i]
             if h != hash
                 error("_anysv_subblock_synchronize() called inconsistently\n",
@@ -1057,13 +1361,59 @@ function _anysv_subblock_synchronize(call_site::Union{Nothing,Missing,UInt64})
 
     @debug_shared_array begin
         # Check for potential race conditions:
-        # * Between _block_synchronize() any element of an array should be written to by
-        #   at most one rank.
+        # * Between _anysv_subblock_synchronize() any element of an array should be
+        #   written to by at most one rank.
         # * If an element is not written to, any rank can read it.
         # * If an element is written to, only the rank that writes to it should read it.
         #
+        # Check each array that was shared across comm_anysv_subblock[] as its
+        # communicator (global_anysv_debugmpisharedarray_store). Also check the slice of
+        # each array shared across comm_block[] that may be accessed inside an anysv
+        # region (i.e. the slice including only the r- and z-indices that are accessed
+        # inside the local anysv region). Assume that arrays allocated with other subblock
+        # communicators (e.g. comm_anyzv_subblock[]) are incompatible with an anysv
+        # subblock, so will never be accessed and do not need to be checked.
+        #
+        # Note that slicing of arrays from `global_debugmpisharedarray_store` is likely to
+        # cause errors if it is done before 'looping' is set up, because
+        # `loop_ranges_store` will be uninitialised or contain values from a previous run.
+        # Therefore `@_anysv_subblock_synchronize()` should not be called before
+        # `setup_loop_ranges!()` has been.
+        local_r_inds = loop_ranges_store[(:anysv,)].r
+        local_z_inds = loop_ranges_store[(:anysv,)].z
+        function get_local_slice(array)
+            if !(:r ∈ array.dim_names && :z ∈ array.dim_names)
+                # Array does not have both r- and z-dimensions, so there is no slice that
+                # is allowed to be accessed inside an anysv region.
+                return nothing
+            end
+
+            r_dims = findall(array.dim_names .== :r)
+            for dim_ind ∈ reverse(r_dims)
+                array = selectdim(array, dim_ind, local_r_inds)
+            end
+
+            z_dims = findall(array.dim_names .== :z)
+            for dim_ind ∈ reverse(z_dims)
+                array = selectdim(array, dim_ind, local_z_inds)
+            end
+            return array
+        end
         @debug_detect_redundant_block_synchronize previous_was_unnecessary = true
-        for array ∈ global_anysv_debugmpisharedarray_store
+        arrays_to_check = global_anysv_debugmpisharedarray_store
+        if call_site !== missing
+            # This is an actual anysv subblock synchronization, not just a call within
+            # _block_synchronize() to check anysv arrays.
+            arrays_to_check = (arrays_to_check..., (get_local_slice(a) for a ∈
+                                                    global_debugmpisharedarray_store)...)
+        end
+        for array ∈ arrays_to_check
+            if array === nothing
+                # `nothing` is returned by get_local_slice() if the array did not have
+                # both r- and z-dimensions, so is not allowed to be accessed inside an
+                # anysv region.
+                continue
+            end
 
             debug_check_shared_array(array; comm=comm_anysv_subblock[])
 
@@ -1139,35 +1489,230 @@ function _anysv_subblock_synchronize(call_site::Union{Nothing,Missing,UInt64})
 end
 
 """
+Call an MPI Barrier for all processors in an 'anyzv' sub-block.
+
+The 'anyzv' region is used to parallelise the kinetic electron implicit solve. See
+[`moment_kinetics.looping.get_best_anyzv_split`](@ref).
+
+Used to synchronise processors that are working on the same shared-memory array(s)
+between operations, to avoid race conditions. Should be even cheaper than
+[`@_block_synchronize`](@ref) because it only requires communication on a smaller
+communicator.
+
+Note: `_anyzv_subblock_synchronize()` may be called different numbers of times on different
+sub-blocks, depending on iteration counts and how the r-dimension is split up.
+`@debug_detect_redundant_block_synchronize` is not implemented (yet?) for
+`_anyzv_subblock_synchronize()`.
+"""
+macro _anyzv_subblock_synchronize()
+    id_hash = @debug_block_synchronize_quick_ifelse(
+                   hash(string(@__FILE__, @__LINE__)),
+                   nothing
+                  )
+    return :( _anyzv_subblock_synchronize($id_hash) )
+end
+
+"""
+Internal function called by `anyzv` synchronization macros.
+"""
+function _anyzv_subblock_synchronize(call_site::Union{Nothing,Missing,UInt64})
+    if comm_anyzv_subblock[] == MPI.COMM_NULL
+        # No synchronization to do for a null communicator
+        return nothing
+    end
+
+    MPI.Barrier(comm_anyzv_subblock[])
+
+    @debug_block_synchronize_backtrace begin
+        st = stacktrace()
+        stackstring = string([string(s, "\n") for s ∈ st]...)
+
+        # Only include file and line number in the string that we hash so that
+        # function calls with different signatures are not seen as different
+        # (e.g. time_advance!() with I/O arguments on rank-0 but not on other
+        # ranks).
+        signaturestring = string([string(s.file, s.line) for s ∈ st]...)
+
+        hash = sha256(signaturestring)
+        all_hashes = reshape(MPI.Allgather(hash, comm_anyzv_subblock[]), length(hash),
+                             MPI.Comm_size(comm_anyzv_subblock[]))
+        for i ∈ 1:anyzv_subblock_size[]
+            h = all_hashes[:, i]
+            if h != hash
+                error("_anyzv_subblock_synchronize() called inconsistently\n",
+                      "rank $(block_rank[]) called from:\n",
+                      stackstring)
+            end
+        end
+    end
+
+    @debug_block_synchronize_quick begin
+        if call_site === nothing
+            error("Got call_site=nothing. This should not happen when debugging with "
+                  * "@debug_block_synchronize_quick.")
+        end
+        # If call_site===missing, then this function was called from inside
+        # _block_synchronize(), and the call site was already checked there.
+        if call_site !== missing
+            all_hashes = MPI.Allgather(call_site, comm_anyzv_subblock[])
+            if !all(h -> h == all_hashes[1], all_hashes)
+                error("_anyzv_subblock_synchronize() called inconsistently")
+            end
+        end
+    end
+
+    @debug_shared_array begin
+        # Check for potential race conditions:
+        # * Between _anyzv_subblock_synchronize() any element of an array should be
+        #   written to by at most one rank.
+        # * If an element is not written to, any rank can read it.
+        # * If an element is written to, only the rank that writes to it should read it.
+        #
+        # Check each array that was shared across comm_anyzv_subblock[] as its
+        # communicator (global_anyzv_debugmpisharedarray_store). Also check the slice of
+        # each array shared across comm_block[] that may be accessed inside an anyzv
+        # region (i.e. the slice including only the r-indices that are accessed inside the
+        # local anyzv region). Assume that arrays allocated with other subblock
+        # communicators (e.g. comm_anysv_subblock[]) are incompatible with an anyzv
+        # subblock, so will never be accessed and do not need to be checked.
+        #
+        # Note that slicing of arrays from `global_debugmpisharedarray_store` is likely to
+        # cause errors if it is done before 'looping' is set up, because
+        # `loop_ranges_store` will be uninitialised or contain values from a previous run.
+        # Therefore `@_anyzv_subblock_synchronize()` should not be called before
+        # `setup_loop_ranges!()` has been.
+        local_r_inds = loop_ranges_store[(:anyzv,)].r
+        function get_local_slice(array)
+            if :r ∉ array.dim_names
+                # Array does not have an r-dimension, so there is no slice that is allowed
+                # to be accessed inside an anyzv region.
+                return nothing
+            end
+
+            r_dims = findall(array.dim_names .== :r)
+            for dim_ind ∈ reverse(r_dims)
+                array = selectdim(array, dim_ind, local_r_inds)
+            end
+            return array
+        end
+        @debug_detect_redundant_block_synchronize previous_was_unnecessary = true
+        arrays_to_check = global_anyzv_debugmpisharedarray_store
+        if call_site !== missing
+            # This is an actual anyzv subblock synchronization, not just a call within
+            # _block_synchronize() to check anyzv arrays.
+            arrays_to_check = (arrays_to_check..., (get_local_slice(a) for a ∈
+                                                    global_debugmpisharedarray_store)...)
+        end
+        for array ∈ arrays_to_check
+            if array === nothing
+                # `nothing` is returned by get_local_slice() if the array did not have an
+                # r-dimension, so is not allowed to be accessed inside an anyzv region.
+                continue
+            end
+
+            debug_check_shared_array(array; comm=comm_anyzv_subblock[])
+
+            @debug_detect_redundant_block_synchronize begin
+                # debug_detect_redundant_is_active[] is set to true at the beginning of
+                # time_advance!() so that we do not do these checks during
+                # initialization: they cause problems with @debug_initialize_NaN during
+                # array allocation; generally it does not matter if there are a few
+                # extra _block_synchronize() calls during initialization, so it is not
+                # worth the effort to trim them down to the absolute minimum.
+                if debug_detect_redundant_is_active[]
+
+                    if !debug_check_shared_array(array; check_redundant=true,
+                                                 comm_anyzv_subblock)
+                        # If there was a failure for at least one array, the previous
+                        # _block_synchronize was necessary - if the previous call was not
+                        # there, for this array array.is_read and array.is_written would
+                        # have the values of combined_is_read and combined_is_written,
+                        # and would fail the debug_check_shared_array() above this
+                        # @debug_detect_redundant_block_synchronize block.
+                        previous_was_unnecessary = false
+                    end
+
+                    array.previous_is_read .= array.is_read
+                    array.previous_is_written .= array.is_written
+                else
+                    # If checking is inactive, set as if at 'previous' the array was
+                    # always read/written so that the next set of checks don't detect a
+                    # 'redundant' call which is actually only 'redundant' just after an
+                    # inactive region (e.g. initialisation or writing output).
+                    array.previous_is_read .= true
+                    array.previous_is_written .= true
+                end
+            end
+
+            array.is_read .= false
+            array.is_written .= false
+        end
+        @debug_detect_redundant_block_synchronize begin
+            if debug_detect_redundant_is_active[]
+                # Check the previous call was unnecessary on all processes, not just
+                # this one
+                previous_was_unnecessary = MPI.Allreduce(previous_was_unnecessary,
+                                                         MPI.Op(&, Bool), comm_anyzv_subblock[])
+
+                if (previous_was_unnecessary && global_size[] > 1)
+                    # The intention of this debug block is to detect when calls to
+                    # _block_synchronize() are not necessary and can be removed. It's not
+                    # obvious that this will always work - it might be that a call to
+                    # _block_synchronize() is necessary with some options, but not
+                    # necessary with others. Hopefully it will be possible to handle
+                    # this by moving the _block_synchronize() call inside appropriate
+                    # if-clauses. If not, it might be necessary to define something like
+                    # _block_synchronize_ignore_redundant() to skip this check because
+                    # the check is ambiguous.
+                    #
+                    # If we are running in serial (global_size[] == 1), then none of the
+                    # _block_synchronize() calls are 'necessary', so this check is not
+                    # useful.
+                    error("Previous call to _block_synchronize() was not necessary. "
+                          * "Call was from:\n"
+                          * "$(previous_block_synchronize_stackstring[])")
+                end
+
+                st = stacktrace()
+                stackstring = string([string(s, "\n") for s ∈ st]...)
+                previous_block_synchronize_stackstring[] = stackstring
+            end
+        end
+
+        MPI.Barrier(comm_anyzv_subblock[])
+    end
+end
+
+"""
     halo_swap!(x::AbstractArray, r, z)
 
 Enforce consistency of 'halo cells' - i.e. the grid points on block boundaries (in the
 \$r\$ and \$z\$ directions) that are shared by the grids owned by two processes (or more
 on block corners).
 
-For consistency when adding random noise, just chooses the value from the inner/lower
+For consistency when adding random noise, just chooses the value from the upper/outer
 process rather than averaging.
 """
 function halo_swap! end
 
-# If we want a different operation than just taking the inner/lower value, could add an
+# If we want a different operation than just taking the upper/outer value, could add an
 # optional `op` argument, and if it is passed do an `MPI.Allreduce!()` with that operation
 # instead of the Isend/Irecv.
 
 # Version for fields or electron moments
 function halo_swap!(x::AbstractArray{T,2} where T, r, z)
     if block_rank[] == 0
-        # Send r-boundary outward.
-        req_r1 = MPI.Irecv!(@view(x[:,1]), r.comm; source=r.prevrank)
-        req_r2 = MPI.Isend(@view(x[:,end]), r.comm; dest=r.nextrank)
+        # Send r-boundary inward.
+        req_r1 = MPI.Irecv!(@view(x[:,end]), r.comm; source=r.nextrank)
+        req_r2 = MPI.Isend(@view(x[:,1]), r.comm; dest=r.prevrank)
 
         # Need to complete the r-communication before starting the z-communication to
         # ensure block-corner points are consistently communicated.
         MPI.Waitall([req_r1, req_r2])
 
-        # Send z-boundary upward.
-        req_z1 = MPI.Irecv!(@view(x[1,:]), z.comm; source=z.prevrank)
-        req_z2 = MPI.Isend(@view(x[end,:]), z.comm; dest=z.nextrank)
+        # Send z-boundary downward.
+        req_z1 = MPI.Irecv!(@view(x[end,:]), z.comm; source=z.nextrank)
+        req_z2 = MPI.Isend(@view(x[1,:]), z.comm; dest=z.prevrank)
 
         MPI.Waitall([req_z1, req_z2])
     end
@@ -1176,17 +1721,17 @@ end
 # Version for ion or neutral moments
 function halo_swap!(x::AbstractArray{T,3} where T, r, z)
     if block_rank[] == 0
-        # Send r-boundary outward.
-        req_r1 = MPI.Irecv!(@view(x[:,1,:]), r.comm; source=r.prevrank)
-        req_r2 = MPI.Isend(@view(x[:,end,:]), r.comm; dest=r.nextrank)
+        # Send r-boundary inward.
+        req_r1 = MPI.Irecv!(@view(x[:,end,:]), r.comm; source=r.nextrank)
+        req_r2 = MPI.Isend(@view(x[:,1,:]), r.comm; dest=r.prevrank)
 
         # Need to complete the r-communication before starting the z-communication to
         # ensure block-corner points are consistently communicated.
         MPI.Waitall([req_r1, req_r2])
 
-        # Send z-boundary upward.
-        req_z1 = MPI.Irecv!(@view(x[1,:,:]), z.comm; source=z.prevrank)
-        req_z2 = MPI.Isend(@view(x[end,:,:]), z.comm; dest=z.nextrank)
+        # Send z-boundary downward.
+        req_z1 = MPI.Irecv!(@view(x[end,:,:]), z.comm; source=z.nextrank)
+        req_z2 = MPI.Isend(@view(x[1,:,:]), z.comm; dest=z.prevrank)
 
         MPI.Waitall([req_z1, req_z2])
     end
@@ -1195,17 +1740,17 @@ end
 # Version for electron distribution function
 function halo_swap!(x::AbstractArray{T,4} where T, r, z)
     if block_rank[] == 0
-        # Send r-boundary outward.
-        req_r1 = MPI.Irecv!(@view(x[:,:,:,1]), r.comm; source=r.prevrank)
-        req_r2 = MPI.Isend(@view(x[:,:,:,end]), r.comm; dest=r.nextrank)
+        # Send r-boundary inward.
+        req_r1 = MPI.Irecv!(@view(x[:,:,:,end]), r.comm; source=r.nextrank)
+        req_r2 = MPI.Isend(@view(x[:,:,:,1]), r.comm; dest=r.prevrank)
 
         # Need to complete the r-communication before starting the z-communication to
         # ensure block-corner points are consistently communicated.
         MPI.Waitall([req_r1, req_r2])
 
-        # Send z-boundary upward.
-        req_z1 = MPI.Irecv!(@view(x[:,:,1,:]), z.comm; source=z.prevrank)
-        req_z2 = MPI.Isend(@view(x[:,:,end,:]), z.comm; dest=z.nextrank)
+        # Send z-boundary downward.
+        req_z1 = MPI.Irecv!(@view(x[:,:,end,:]), z.comm; source=z.nextrank)
+        req_z2 = MPI.Isend(@view(x[:,:,1,:]), z.comm; dest=z.prevrank)
 
         MPI.Waitall([req_z1, req_z2])
     end
@@ -1214,17 +1759,17 @@ end
 # Version for ion distribution function
 function halo_swap!(x::AbstractArray{T,5} where T, r, z)
     if block_rank[] == 0
-        # Send r-boundary outward.
-        req_r1 = MPI.Irecv!(@view(x[:,:,:,1,:]), r.comm; source=r.prevrank)
-        req_r2 = MPI.Isend(@view(x[:,:,:,end,:]), r.comm; dest=r.nextrank)
+        # Send r-boundary inward.
+        req_r1 = MPI.Irecv!(@view(x[:,:,:,end,:]), r.comm; source=r.nextrank)
+        req_r2 = MPI.Isend(@view(x[:,:,:,1,:]), r.comm; dest=r.prevrank)
 
         # Need to complete the r-communication before starting the z-communication to
         # ensure block-corner points are consistently communicated.
         MPI.Waitall([req_r1, req_r2])
 
-        # Send z-boundary upward.
-        req_z1 = MPI.Irecv!(@view(x[:,:,1,:,:]), z.comm; source=z.prevrank)
-        req_z2 = MPI.Isend(@view(x[:,:,end,:,:]), z.comm; dest=z.nextrank)
+        # Send z-boundary downward.
+        req_z1 = MPI.Irecv!(@view(x[:,:,end,:,:]), z.comm; source=z.nextrank)
+        req_z2 = MPI.Isend(@view(x[:,:,1,:,:]), z.comm; dest=z.prevrank)
 
         MPI.Waitall([req_z1, req_z2])
     end
@@ -1234,16 +1779,16 @@ end
 function halo_swap!(x::AbstractArray{T,6} where T, r, z)
     if block_rank[] == 0
         # Send r-boundary outward.
-        req_r1 = MPI.Irecv!(@view(x[:,:,:,:,1,:]), r.comm; source=r.prevrank)
-        req_r2 = MPI.Isend(@view(x[:,:,:,:,end,:]), r.comm; dest=r.nextrank)
+        req_r1 = MPI.Irecv!(@view(x[:,:,:,:,end,:]), r.comm; source=r.nextrank)
+        req_r2 = MPI.Isend(@view(x[:,:,:,:,1,:]), r.comm; dest=r.prevrank)
 
         # Need to complete the r-communication before starting the z-communication to
         # ensure block-corner points are consistently communicated.
         MPI.Waitall([req_r1, req_r2])
 
-        # Send z-boundary upward.
-        req_z1 = MPI.Irecv!(@view(x[:,:,:,1,:,:]), z.comm; source=z.prevrank)
-        req_z2 = MPI.Isend(@view(x[:,:,:,end,:,:]), z.comm; dest=z.nextrank)
+        # Send z-boundary downward.
+        req_z1 = MPI.Irecv!(@view(x[:,:,:,end,:,:]), z.comm; source=z.nextrank)
+        req_z2 = MPI.Isend(@view(x[:,:,:,1,:,:]), z.comm; dest=z.prevrank)
 
         MPI.Waitall([req_z1, req_z2])
     end
@@ -1289,6 +1834,7 @@ end
 function free_shared_arrays()
     @debug_shared_array resize!(global_debugmpisharedarray_store, 0)
     @debug_shared_array resize!(global_anysv_debugmpisharedarray_store, 0)
+    @debug_shared_array resize!(global_anyzv_debugmpisharedarray_store, 0)
 
     for w ∈ global_Win_store
         MPI.free(w)

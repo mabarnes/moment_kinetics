@@ -11,7 +11,7 @@ using ..array_allocation: allocate_float
 using ..communication
 using ..input_structs
 using ..looping
-using ..type_definitions: mk_float
+using ..type_definitions: mk_float, MPISharedArray
 
 using MPI
 using StatsBase: mean
@@ -441,7 +441,7 @@ coefficients. `scratch_implicit` contains the results of backward-Euler updates,
 needed for IMEX timestepping schemes.
 """
 function rk_update_variable!(scratch, scratch_implicit, var_symbol::Symbol, t_params,
-                             istage; neutrals=false, controller_integrals=false)
+                             istage; neutrals=false, controller_integrals=false, ir=nothing)
     if t_params.low_storage
         var_arrays = (getfield(scratch[istage+1], var_symbol),
                       getfield(scratch[istage], var_symbol),
@@ -472,25 +472,27 @@ function rk_update_variable!(scratch, scratch_implicit, var_symbol::Symbol, t_pa
     if neutrals
         if t_params.low_storage
             rk_update_loop_neutrals_low_storage!(rk_coefs, rk_coefs_implicit,
-                                                 var_arrays..., var_arrays_implicit...)
+                                                 var_arrays..., var_arrays_implicit...;
+                                                 ir=ir)
         else
             rk_update_loop_neutrals!(rk_coefs, rk_coefs_implicit, var_arrays,
-                                     var_arrays_implicit)
+                                     var_arrays_implicit; ir=ir)
         end
     elseif controller_integrals
         if t_params.low_storage
             rk_update_loop_low_storage_controller_integrals!(
-                rk_coefs, rk_coefs_implicit, var_arrays..., var_arrays_implicit...)
+                rk_coefs, rk_coefs_implicit, var_arrays..., var_arrays_implicit...; ir=ir)
         else
             rk_update_loop_controller_integrals!(
-                rk_coefs, rk_coefs_implicit, var_arrays, var_arrays_implicit)
+                rk_coefs, rk_coefs_implicit, var_arrays, var_arrays_implicit; ir=ir)
         end
     else
         if t_params.low_storage
             rk_update_loop_low_storage!(rk_coefs, rk_coefs_implicit, var_arrays...,
-                                        var_arrays_implicit...)
+                                        var_arrays_implicit...; ir=ir)
         else
-            rk_update_loop!(rk_coefs, rk_coefs_implicit, var_arrays, var_arrays_implicit)
+            rk_update_loop!(rk_coefs, rk_coefs_implicit, var_arrays, var_arrays_implicit;
+                            ir=ir)
         end
     end
 
@@ -505,7 +507,7 @@ The lower-order approximation is stored in `var_symbol` in `scratch[2]` (as this
 should not be needed again after the lower-order approximation is calculated).
 """
 function rk_loworder_solution!(scratch, scratch_implicit, var_symbol::Symbol, t_params;
-                               neutrals=false)
+                               neutrals=false, ir=nothing)
     if !t_params.adaptive
         error("rk_lowerder_solution!() should only be called when using adaptive "
               * "timestepping")
@@ -546,19 +548,19 @@ function rk_loworder_solution!(scratch, scratch_implicit, var_symbol::Symbol, t_
         if t_params.low_storage
             rk_update_loop_neutrals_low_storage!(loworder_coefs, loworder_coefs_implicit,
                                                  var_arrays..., var_arrays_implicit...;
-                                                 output=output)
+                                                 output=output, ir=ir)
         else
             rk_update_loop_neutrals!(loworder_coefs, loworder_coefs_implicit, var_arrays,
-                                     var_arrays_implicit; output=output)
+                                     var_arrays_implicit; output=output, ir=ir)
         end
     else
         if t_params.low_storage
             rk_update_loop_low_storage!(loworder_coefs, loworder_coefs_implicit,
                                         var_arrays..., var_arrays_implicit...;
-                                        output=output)
+                                        output=output, ir=ir)
         else
             rk_update_loop!(loworder_coefs, loworder_coefs_implicit, var_arrays,
-                            var_arrays_implicit; output=output)
+                            var_arrays_implicit; output=output, ir=ir)
         end
     end
 
@@ -570,23 +572,27 @@ function rk_update_loop_low_storage!(rk_coefs, rk_coefs_implicit,
                                      new::AbstractArray{mk_float,5},
                                      old::AbstractArray{mk_float,5},
                                      first::AbstractArray{mk_float,5}, new_implicit,
-                                     old_implicit, first_implicit; output=new)
+                                     old_implicit, first_implicit; output=new, ir)
     @boundscheck length(rk_coefs) == 3
+
+    if ir !== nothing
+        error("`ir` argument not supported in ion RK update loop")
+    end
 
     @begin_s_r_z_vperp_vpa_region()
     if rk_coefs_implicit === nothing
-        @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
-            output[ivpa,ivperp,iz,ir,is] = rk_coefs[1]*first[ivpa,ivperp,iz,ir,is] +
-                                           rk_coefs[2]*old[ivpa,ivperp,iz,ir,is] +
-                                           rk_coefs[3]*new[ivpa,ivperp,iz,ir,is]
+        @loop_s_r_z_vperp_vpa is this_ir iz ivperp ivpa begin
+            output[ivpa,ivperp,iz,this_ir,is] = rk_coefs[1]*first[ivpa,ivperp,iz,this_ir,is] +
+                                                rk_coefs[2]*old[ivpa,ivperp,iz,this_ir,is] +
+                                                rk_coefs[3]*new[ivpa,ivperp,iz,this_ir,is]
         end
     else
-        @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
-            output[ivpa,ivperp,iz,ir,is] = rk_coefs[1]*first[ivpa,ivperp,iz,ir,is] +
-                                           rk_coefs[2]*old[ivpa,ivperp,iz,ir,is] +
-                                           rk_coefs[3]*new[ivpa,ivperp,iz,ir,is] +
-                                           rk_coefs_implicit[1]*first_implicit[ivpa,ivperp,iz,ir,is] +
-                                           rk_coefs_implicit[2]*old_implicit[ivpa,ivperp,iz,ir,is]
+        @loop_s_r_z_vperp_vpa is this_ir iz ivperp ivpa begin
+            output[ivpa,ivperp,iz,this_ir,is] = rk_coefs[1]*first[ivpa,ivperp,iz,this_ir,is] +
+                                                rk_coefs[2]*old[ivpa,ivperp,iz,this_ir,is] +
+                                                rk_coefs[3]*new[ivpa,ivperp,iz,this_ir,is] +
+                                                rk_coefs_implicit[1]*first_implicit[ivpa,ivperp,iz,this_ir,is] +
+                                                rk_coefs_implicit[2]*old_implicit[ivpa,ivperp,iz,this_ir,is]
         end
     end
 
@@ -594,20 +600,24 @@ function rk_update_loop_low_storage!(rk_coefs, rk_coefs_implicit,
 end
 function rk_update_loop!(rk_coefs, rk_coefs_implicit,
                          var_arrays::NTuple{N,AbstractArray{mk_float,5}},
-                         var_arrays_implicit; output=var_arrays[N]) where N
+                         var_arrays_implicit; output=var_arrays[N], ir) where N
     @boundscheck length(rk_coefs) ≥ N
+
+    if ir !== nothing
+        error("`ir` argument not supported in ion RK update loop")
+    end
 
     @begin_s_r_z_vperp_vpa_region()
     if rk_coefs_implicit === nothing
-        @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
-            output[ivpa,ivperp,iz,ir,is] =
-                sum(rk_coefs[i] * var_arrays[i][ivpa,ivperp,iz,ir,is] for i ∈ 1:N)
+        @loop_s_r_z_vperp_vpa is this_ir iz ivperp ivpa begin
+            output[ivpa,ivperp,iz,this_ir,is] =
+                sum(rk_coefs[i] * var_arrays[i][ivpa,ivperp,iz,this_ir,is] for i ∈ 1:N)
         end
     else
-        @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
-            output[ivpa,ivperp,iz,ir,is] =
-                sum(rk_coefs[i] * var_arrays[i][ivpa,ivperp,iz,ir,is] for i ∈ 1:N) +
-                sum(rk_coefs_implicit[i] * var_arrays_implicit[i][ivpa,ivperp,iz,ir,is] for i ∈ 1:N-1)
+        @loop_s_r_z_vperp_vpa is this_ir iz ivperp ivpa begin
+            output[ivpa,ivperp,iz,this_ir,is] =
+                sum(rk_coefs[i] * var_arrays[i][ivpa,ivperp,iz,this_ir,is] for i ∈ 1:N) +
+                sum(rk_coefs_implicit[i] * var_arrays_implicit[i][ivpa,ivperp,iz,this_ir,is] for i ∈ 1:N-1)
         end
     end
 
@@ -619,23 +629,27 @@ function rk_update_loop_low_storage!(rk_coefs, rk_coefs_implicit,
                                      new::AbstractArray{mk_float,3},
                                      old::AbstractArray{mk_float,3},
                                      first::AbstractArray{mk_float,3}, new_implicit,
-                                     old_implicit, first_implicit; output=new)
+                                     old_implicit, first_implicit; output=new, ir)
     @boundscheck length(rk_coefs) == 3
+
+    if ir !== nothing
+        error("`ir` argument not supported in ion RK update loop")
+    end
 
     @begin_s_r_z_region()
     if rk_coefs_implicit === nothing
-        @loop_s_r_z is ir iz begin
-            output[iz,ir,is] = rk_coefs[1]*first[iz,ir,is] +
-                               rk_coefs[2]*old[iz,ir,is] +
-                               rk_coefs[3]*new[iz,ir,is]
+        @loop_s_r_z is this_ir iz begin
+            output[iz,this_ir,is] = rk_coefs[1]*first[iz,this_ir,is] +
+                                    rk_coefs[2]*old[iz,this_ir,is] +
+                                    rk_coefs[3]*new[iz,this_ir,is]
         end
     else
-        @loop_s_r_z is ir iz begin
-            output[iz,ir,is] = rk_coefs[1]*first[iz,ir,is] +
-                               rk_coefs[2]*old[iz,ir,is] +
-                               rk_coefs[3]*new[iz,ir,is] +
-                               rk_coefs_implicit[1]*first_implicit[iz,ir,is] +
-                               rk_coefs_implicit[2]*old_implicit[iz,ir,is]
+        @loop_s_r_z is this_ir iz begin
+            output[iz,this_ir,is] = rk_coefs[1]*first[iz,this_ir,is] +
+                                    rk_coefs[2]*old[iz,this_ir,is] +
+                                    rk_coefs[3]*new[iz,this_ir,is] +
+                                    rk_coefs_implicit[1]*first_implicit[iz,this_ir,is] +
+                                    rk_coefs_implicit[2]*old_implicit[iz,this_ir,is]
         end
     end
 
@@ -643,18 +657,22 @@ function rk_update_loop_low_storage!(rk_coefs, rk_coefs_implicit,
 end
 function rk_update_loop!(rk_coefs, rk_coefs_implicit,
                          var_arrays::NTuple{N,AbstractArray{mk_float,3}},
-                         var_arrays_implicit; output=var_arrays[N]) where N
+                         var_arrays_implicit; output=var_arrays[N], ir) where N
     @boundscheck length(rk_coefs) ≥ N
+
+    if ir !== nothing
+        error("`ir` argument not supported in ion RK update loop")
+    end
 
     @begin_s_r_z_region()
     if rk_coefs_implicit === nothing
-        @loop_s_r_z is ir iz begin
-            output[iz,ir,is] = sum(rk_coefs[i] * var_arrays[i][iz,ir,is] for i ∈ 1:N)
+        @loop_s_r_z is this_ir iz begin
+            output[iz,this_ir,is] = sum(rk_coefs[i] * var_arrays[i][iz,this_ir,is] for i ∈ 1:N)
         end
     else
-        @loop_s_r_z is ir iz begin
-            output[iz,ir,is] = sum(rk_coefs[i] * var_arrays[i][iz,ir,is] for i ∈ 1:N) +
-                               sum(rk_coefs_implicit[i] * var_arrays_implicit[i][iz,ir,is] for i ∈ 1:N-1)
+        @loop_s_r_z is this_ir iz begin
+            output[iz,this_ir,is] = sum(rk_coefs[i] * var_arrays[i][iz,this_ir,is] for i ∈ 1:N) +
+                                    sum(rk_coefs_implicit[i] * var_arrays_implicit[i][iz,this_ir,is] for i ∈ 1:N-1)
         end
     end
 
@@ -665,8 +683,12 @@ end
 function rk_update_loop_low_storage_controller_integrals!(
         rk_coefs, rk_coefs_implicit, new::AbstractArray{mk_float,3},
         old::AbstractArray{mk_float,3}, first::AbstractArray{mk_float,3}, new_implicit,
-        old_implicit, first_implicit; output=new)
+        old_implicit, first_implicit; output=new, ir=nothing)
     @boundscheck length(rk_coefs) == 3
+
+    if ir !== nothing
+        error("`ir` argument not supported in storage controller integral RK update loop")
+    end
 
     @begin_serial_region()
     @serial_region begin
@@ -682,8 +704,12 @@ function rk_update_loop_low_storage_controller_integrals!(
 end
 function rk_update_loop_controller_integrals!(
         rk_coefs, rk_coefs_implicit, var_arrays::NTuple{N,AbstractArray{mk_float,3}},
-        var_arrays_implicit; output=var_arrays[N]) where N
+        var_arrays_implicit; output=var_arrays[N], ir=nothing) where N
     @boundscheck length(rk_coefs) ≥ N
+
+    if ir !== nothing
+        error("`ir` argument not supported in storage controller integral RK update loop")
+    end
 
     @begin_serial_region()
     @serial_region begin
@@ -707,23 +733,42 @@ function rk_update_loop_low_storage!(rk_coefs, rk_coefs_implicit,
                                      new::AbstractArray{mk_float,4},
                                      old::AbstractArray{mk_float,4},
                                      first::AbstractArray{mk_float,4}, new_implicit,
-                                     old_implicit, first_implicit; output=new)
+                                     old_implicit, first_implicit; output=new, ir)
     @boundscheck length(rk_coefs) == 3
 
-    @begin_r_z_vperp_vpa_region()
-    if rk_coefs_implicit === nothing
-        @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
-            output[ivpa,ivperp,iz,ir] = rk_coefs[1]*first[ivpa,ivperp,iz,ir] +
-                                        rk_coefs[2]*old[ivpa,ivperp,iz,ir] +
-                                        rk_coefs[3]*new[ivpa,ivperp,iz,ir]
+    if ir === nothing
+        @begin_r_z_vperp_vpa_region()
+        if rk_coefs_implicit === nothing
+            @loop_r_z_vperp_vpa this_ir iz ivperp ivpa begin
+                output[ivpa,ivperp,iz,this_ir] = rk_coefs[1]*first[ivpa,ivperp,iz,this_ir] +
+                                                 rk_coefs[2]*old[ivpa,ivperp,iz,this_ir] +
+                                                 rk_coefs[3]*new[ivpa,ivperp,iz,this_ir]
+            end
+        else
+            @loop_r_z_vperp_vpa this_ir iz ivperp ivpa begin
+                output[ivpa,ivperp,iz,this_ir] = rk_coefs[1]*first[ivpa,ivperp,iz,this_ir] +
+                                                 rk_coefs[2]*old[ivpa,ivperp,iz,this_ir] +
+                                                 rk_coefs[3]*new[ivpa,ivperp,iz,this_ir] +
+                                                 rk_coefs_implicit[1]*first_implicit[ivpa,ivperp,iz,this_ir] +
+                                                 rk_coefs_implicit[2]*old_implicit[ivpa,ivperp,iz,this_ir]
+            end
         end
     else
-        @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
-            output[ivpa,ivperp,iz,ir] = rk_coefs[1]*first[ivpa,ivperp,iz,ir] +
-                                        rk_coefs[2]*old[ivpa,ivperp,iz,ir] +
-                                        rk_coefs[3]*new[ivpa,ivperp,iz,ir] +
-                                        rk_coefs_implicit[1]*first_implicit[ivpa,ivperp,iz,ir] +
-                                        rk_coefs_implicit[2]*old_implicit[ivpa,ivperp,iz,ir]
+        @begin_anyzv_z_vperp_vpa_region()
+        if rk_coefs_implicit === nothing
+            @loop_z_vperp_vpa iz ivperp ivpa begin
+                output[ivpa,ivperp,iz,ir] = rk_coefs[1]*first[ivpa,ivperp,iz,ir] +
+                                            rk_coefs[2]*old[ivpa,ivperp,iz,ir] +
+                                            rk_coefs[3]*new[ivpa,ivperp,iz,ir]
+            end
+        else
+            @loop_z_vperp_vpa iz ivperp ivpa begin
+                output[ivpa,ivperp,iz,ir] = rk_coefs[1]*first[ivpa,ivperp,iz,ir] +
+                                            rk_coefs[2]*old[ivpa,ivperp,iz,ir] +
+                                            rk_coefs[3]*new[ivpa,ivperp,iz,ir] +
+                                            rk_coefs_implicit[1]*first_implicit[ivpa,ivperp,iz,ir] +
+                                            rk_coefs_implicit[2]*old_implicit[ivpa,ivperp,iz,ir]
+            end
         end
     end
 
@@ -731,21 +776,38 @@ function rk_update_loop_low_storage!(rk_coefs, rk_coefs_implicit,
 end
 function rk_update_loop!(rk_coefs, rk_coefs_implicit,
                          var_arrays::NTuple{N,AbstractArray{mk_float,4}},
-                         var_arrays_implicit; output=var_arrays[N]) where N
+                         var_arrays_implicit; output=var_arrays[N], ir) where N
     @boundscheck length(rk_coefs) ≥ N
 
-    @begin_r_z_vperp_vpa_region()
-    if rk_coefs_implicit === nothing
-        @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
-            output[ivpa,ivperp,iz,ir] =
-                sum(rk_coefs[i] * var_arrays[i][ivpa,ivperp,iz,ir] for i ∈ 1:N)
+    if ir === nothing
+        @begin_r_z_vperp_vpa_region()
+        if rk_coefs_implicit === nothing
+            @loop_r_z_vperp_vpa this_ir iz ivperp ivpa begin
+                output[ivpa,ivperp,iz,this_ir] =
+                    sum(rk_coefs[i] * var_arrays[i][ivpa,ivperp,iz,this_ir] for i ∈ 1:N)
+            end
+        else
+            @loop_r_z_vperp_vpa this_ir iz ivperp ivpa begin
+                output[ivpa,ivperp,iz,this_ir] =
+                    sum(rk_coefs[i] * var_arrays[i][ivpa,ivperp,iz,this_ir] for i ∈ 1:N) +
+                    sum(rk_coefs_implicit[i] * var_arrays_implicit[i][ivpa,ivperp,iz,this_ir]
+                        for i ∈ 1:N-1)
+            end
         end
     else
-        @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
-            output[ivpa,ivperp,iz,ir] =
-                sum(rk_coefs[i] * var_arrays[i][ivpa,ivperp,iz,ir] for i ∈ 1:N) +
-                sum(rk_coefs_implicit[i] * var_arrays_implicit[i][ivpa,ivperp,iz,ir]
-                    for i ∈ 1:N-1)
+        @begin_anyzv_z_vperp_vpa_region()
+        if rk_coefs_implicit === nothing
+            @loop_z_vperp_vpa iz ivperp ivpa begin
+                output[ivpa,ivperp,iz,ir] =
+                    sum(rk_coefs[i] * var_arrays[i][ivpa,ivperp,iz,ir] for i ∈ 1:N)
+            end
+        else
+            @loop_z_vperp_vpa iz ivperp ivpa begin
+                output[ivpa,ivperp,iz,ir] =
+                    sum(rk_coefs[i] * var_arrays[i][ivpa,ivperp,iz,ir] for i ∈ 1:N) +
+                    sum(rk_coefs_implicit[i] * var_arrays_implicit[i][ivpa,ivperp,iz,ir]
+                        for i ∈ 1:N-1)
+            end
         end
     end
 
@@ -757,23 +819,42 @@ function rk_update_loop_low_storage!(rk_coefs, rk_coefs_implicit,
                                      new::AbstractArray{mk_float,2},
                                      old::AbstractArray{mk_float,2},
                                      first::AbstractArray{mk_float,2}, new_implicit,
-                                     old_implicit, first_implicit; output=new)
+                                     old_implicit, first_implicit; output=new, ir)
     @boundscheck length(rk_coefs) == 3
 
-    @begin_r_z_region()
-    if rk_coefs_implicit === nothing
-        @loop_r_z ir iz begin
-            output[iz,ir] = rk_coefs[1]*first[iz,ir] +
-                            rk_coefs[2]*old[iz,ir] +
-                            rk_coefs[3]*new[iz,ir]
+    if ir === nothing
+        @begin_r_z_region()
+        if rk_coefs_implicit === nothing
+            @loop_r_z this_ir iz begin
+                output[iz,this_ir] = rk_coefs[1]*first[iz,this_ir] +
+                                     rk_coefs[2]*old[iz,this_ir] +
+                                     rk_coefs[3]*new[iz,this_ir]
+            end
+        else
+            @loop_r_z this_ir iz begin
+                output[iz,this_ir] = rk_coefs[1]*first[iz,this_ir] +
+                                     rk_coefs[2]*old[iz,this_ir] +
+                                     rk_coefs[3]*new[iz,this_ir] +
+                                     rk_coefs_implicit[1]*first_implicit[iz,this_ir] +
+                                     rk_coefs_implicit[2]*old_implicit[iz,this_ir]
+            end
         end
     else
-        @loop_r_z ir iz begin
-            output[iz,ir] = rk_coefs[1]*first[iz,ir] +
-                            rk_coefs[2]*old[iz,ir] +
-                            rk_coefs[3]*new[iz,ir] +
-                            rk_coefs_implicit[1]*first_implicit[iz,ir] +
-                            rk_coefs_implicit[2]*old_implicit[iz,ir]
+        @begin_anyzv_z_region()
+        if rk_coefs_implicit === nothing
+            @loop_z iz begin
+                output[iz,ir] = rk_coefs[1]*first[iz,ir] +
+                                rk_coefs[2]*old[iz,ir] +
+                                rk_coefs[3]*new[iz,ir]
+            end
+        else
+            @loop_z iz begin
+                output[iz,ir] = rk_coefs[1]*first[iz,ir] +
+                                rk_coefs[2]*old[iz,ir] +
+                                rk_coefs[3]*new[iz,ir] +
+                                rk_coefs_implicit[1]*first_implicit[iz,ir] +
+                                rk_coefs_implicit[2]*old_implicit[iz,ir]
+            end
         end
     end
 
@@ -782,19 +863,34 @@ end
 function rk_update_loop!(rk_coefs, rk_coefs_implicit,
                          var_arrays::NTuple{N,AbstractArray{mk_float,2}},
                          var_arrays_implicit;
-                         output=var_arrays[N]) where N
+                         output=var_arrays[N], ir) where N
     @boundscheck length(rk_coefs) ≥ N
 
-    @begin_r_z_region()
-    if rk_coefs_implicit === nothing
-        @loop_r_z ir iz begin
-            output[iz,ir] = sum(rk_coefs[i] * var_arrays[i][iz,ir] for i ∈ 1:N)
+    if ir === nothing
+        @begin_r_z_region()
+        if rk_coefs_implicit === nothing
+            @loop_r_z this_ir iz begin
+                output[iz,this_ir] = sum(rk_coefs[i] * var_arrays[i][iz,this_ir] for i ∈ 1:N)
+            end
+        else
+            @loop_r_z this_ir iz begin
+                output[iz,this_ir] = sum(rk_coefs[i] * var_arrays[i][iz,this_ir] for i ∈ 1:N) +
+                                sum(rk_coefs_implicit[i] * var_arrays_implicit[i][iz,this_ir]
+                                    for i ∈ 1:N-1)
+            end
         end
     else
-        @loop_r_z ir iz begin
-            output[iz,ir] = sum(rk_coefs[i] * var_arrays[i][iz,ir] for i ∈ 1:N) +
-                            sum(rk_coefs_implicit[i] * var_arrays_implicit[i][iz,ir]
-                                for i ∈ 1:N-1)
+        @begin_anyzv_z_region()
+        if rk_coefs_implicit === nothing
+            @loop_z iz begin
+                output[iz,ir] = sum(rk_coefs[i] * var_arrays[i][iz,ir] for i ∈ 1:N)
+            end
+        else
+            @loop_z iz begin
+                output[iz,ir] = sum(rk_coefs[i] * var_arrays[i][iz,ir] for i ∈ 1:N) +
+                                sum(rk_coefs_implicit[i] * var_arrays_implicit[i][iz,ir]
+                                    for i ∈ 1:N-1)
+            end
         end
     end
 
@@ -807,23 +903,27 @@ function rk_update_loop_neutrals_low_storage!(rk_coefs, rk_coefs_implicit,
                                               old::AbstractArray{mk_float,6},
                                               first::AbstractArray{mk_float,6},
                                               new_implicit, old_implicit, first_implicit;
-                                              output=new)
+                                              output=new, ir)
     @boundscheck length(rk_coefs) == 3
+
+    if ir !== nothing
+        error("`ir` argument not supported in neutral RK update loop")
+    end
 
     @begin_sn_r_z_vzeta_vr_vz_region()
     if rk_coefs_implicit === nothing
-        @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
-            output[ivz,ivr,ivzeta,iz,ir,isn] = rk_coefs[1]*first[ivz,ivr,ivzeta,iz,ir,isn] +
-                                               rk_coefs[2]*old[ivz,ivr,ivzeta,iz,ir,isn] +
-                                               rk_coefs[3]*new[ivz,ivr,ivzeta,iz,ir,isn]
+        @loop_sn_r_z_vzeta_vr_vz isn this_ir iz ivzeta ivr ivz begin
+            output[ivz,ivr,ivzeta,iz,this_ir,isn] = rk_coefs[1]*first[ivz,ivr,ivzeta,iz,this_ir,isn] +
+                                                    rk_coefs[2]*old[ivz,ivr,ivzeta,iz,this_ir,isn] +
+                                                    rk_coefs[3]*new[ivz,ivr,ivzeta,iz,this_ir,isn]
         end
     else
-        @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
-            output[ivz,ivr,ivzeta,iz,ir,isn] = rk_coefs[1]*first[ivz,ivr,ivzeta,iz,ir,isn] +
-                                               rk_coefs[2]*old[ivz,ivr,ivzeta,iz,ir,isn] +
-                                               rk_coefs[3]*new[ivz,ivr,ivzeta,iz,ir,isn] +
-                                               rk_coefs_implicit[1]*first_implicit[ivz,ivr,ivzeta,iz,ir,isn] +
-                                               rk_coefs_implicit[2]*old_implicit[ivz,ivr,ivzeta,iz,ir,isn]
+        @loop_sn_r_z_vzeta_vr_vz isn this_ir iz ivzeta ivr ivz begin
+            output[ivz,ivr,ivzeta,iz,this_ir,isn] = rk_coefs[1]*first[ivz,ivr,ivzeta,iz,this_ir,isn] +
+                                                    rk_coefs[2]*old[ivz,ivr,ivzeta,iz,this_ir,isn] +
+                                                    rk_coefs[3]*new[ivz,ivr,ivzeta,iz,this_ir,isn] +
+                                                    rk_coefs_implicit[1]*first_implicit[ivz,ivr,ivzeta,iz,this_ir,isn] +
+                                                    rk_coefs_implicit[2]*old_implicit[ivz,ivr,ivzeta,iz,this_ir,isn]
         end
     end
 
@@ -831,20 +931,24 @@ function rk_update_loop_neutrals_low_storage!(rk_coefs, rk_coefs_implicit,
 end
 function rk_update_loop_neutrals!(rk_coefs, rk_coefs_implicit,
                                   var_arrays::NTuple{N,AbstractArray{mk_float,6}},
-                                  var_arrays_implicit; output=var_arrays[N]) where N
+                                  var_arrays_implicit; output=var_arrays[N], ir) where N
     @boundscheck length(rk_coefs) ≥ N
+
+    if ir !== nothing
+        error("`ir` argument not supported in neutral RK update loop")
+    end
 
     @begin_sn_r_z_vzeta_vr_vz_region()
     if rk_coefs_implicit === nothing
-        @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
-            output[ivz,ivr,ivzeta,iz,ir,isn] =
-                sum(rk_coefs[i] * var_arrays[i][ivz,ivr,ivzeta,iz,ir,isn] for i ∈ 1:N)
+        @loop_sn_r_z_vzeta_vr_vz isn this_ir iz ivzeta ivr ivz begin
+            output[ivz,ivr,ivzeta,iz,this_ir,isn] =
+                sum(rk_coefs[i] * var_arrays[i][ivz,ivr,ivzeta,iz,this_ir,isn] for i ∈ 1:N)
         end
     else
-        @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
-            output[ivz,ivr,ivzeta,iz,ir,isn] =
-                sum(rk_coefs[i] * var_arrays[i][ivz,ivr,ivzeta,iz,ir,isn] for i ∈ 1:N) +
-                sum(rk_coefs_implicit[i] * var_arrays_implicit[i][ivz,ivr,ivzeta,iz,ir,isn]
+        @loop_sn_r_z_vzeta_vr_vz isn this_ir iz ivzeta ivr ivz begin
+            output[ivz,ivr,ivzeta,iz,this_ir,isn] =
+                sum(rk_coefs[i] * var_arrays[i][ivz,ivr,ivzeta,iz,this_ir,isn] for i ∈ 1:N) +
+                sum(rk_coefs_implicit[i] * var_arrays_implicit[i][ivz,ivr,ivzeta,iz,this_ir,isn]
                     for i ∈ 1:N-1)
         end
     end
@@ -858,23 +962,27 @@ function rk_update_loop_neutrals_low_storage!(rk_coefs, rk_coefs_implicit,
                                               old::AbstractArray{mk_float,3},
                                               first::AbstractArray{mk_float,3},
                                               new_implicit, old_implicit, first_implicit;
-                                              output=new)
+                                              output=new, ir)
     @boundscheck length(rk_coefs) == 3
+
+    if ir !== nothing
+        error("`ir` argument not supported in neutral RK update loop")
+    end
 
     @begin_sn_r_z_region()
     if rk_coefs_implicit === nothing
-        @loop_sn_r_z isn ir iz begin
-            output[iz,ir,isn] = rk_coefs[1]*first[iz,ir,isn] +
-                                rk_coefs[2]*old[iz,ir,isn] +
-                                rk_coefs[3]*new[iz,ir,isn]
+        @loop_sn_r_z isn this_ir iz begin
+            output[iz,this_ir,isn] = rk_coefs[1]*first[iz,this_ir,isn] +
+                                     rk_coefs[2]*old[iz,this_ir,isn] +
+                                     rk_coefs[3]*new[iz,this_ir,isn]
         end
     else
-        @loop_sn_r_z isn ir iz begin
-            output[iz,ir,isn] = rk_coefs[1]*first[iz,ir,isn] +
-                                rk_coefs[2]*old[iz,ir,isn] +
-                                rk_coefs[3]*new[iz,ir,isn] +
-                                rk_coefs_implicit[1]*first_implicit[iz,ir,isn] +
-                                rk_coefs_implicit[2]*old_implicit[iz,ir,isn]
+        @loop_sn_r_z isn this_ir iz begin
+            output[iz,this_ir,isn] = rk_coefs[1]*first[iz,this_ir,isn] +
+                                     rk_coefs[2]*old[iz,this_ir,isn] +
+                                     rk_coefs[3]*new[iz,this_ir,isn] +
+                                     rk_coefs_implicit[1]*first_implicit[iz,this_ir,isn] +
+                                     rk_coefs_implicit[2]*old_implicit[iz,this_ir,isn]
         end
     end
 
@@ -882,19 +990,23 @@ function rk_update_loop_neutrals_low_storage!(rk_coefs, rk_coefs_implicit,
 end
 function rk_update_loop_neutrals!(rk_coefs, rk_coefs_implicit,
                                   var_arrays::NTuple{N,AbstractArray{mk_float,3}},
-                                  var_arrays_implicit; output=var_arrays[N]) where N
+                                  var_arrays_implicit; output=var_arrays[N], ir) where N
     @boundscheck length(rk_coefs) ≥ N
+
+    if ir !== nothing
+        error("`ir` argument not supported in neutral RK update loop")
+    end
 
     @begin_sn_r_z_region()
     if rk_coefs_implicit === nothing
-        @loop_sn_r_z isn ir iz begin
-            output[iz,ir,isn] = sum(rk_coefs[i] * var_arrays[i][iz,ir,isn] for i ∈ 1:N)
+        @loop_sn_r_z isn this_ir iz begin
+            output[iz,this_ir,isn] = sum(rk_coefs[i] * var_arrays[i][iz,this_ir,isn] for i ∈ 1:N)
         end
     else
-        @loop_sn_r_z isn ir iz begin
-            output[iz,ir,isn] = sum(rk_coefs[i] * var_arrays[i][iz,ir,isn] for i ∈ 1:N) +
-                                sum(rk_coefs_implicit[i] * var_arrays_implicit[i][iz,ir,isn]
-                                    for i ∈ 1:N-1)
+        @loop_sn_r_z isn this_ir iz begin
+            output[iz,this_ir,isn] = sum(rk_coefs[i] * var_arrays[i][iz,this_ir,isn] for i ∈ 1:N) +
+                                     sum(rk_coefs_implicit[i] * var_arrays_implicit[i][iz,this_ir,isn]
+                                         for i ∈ 1:N-1)
         end
     end
 
@@ -902,9 +1014,10 @@ function rk_update_loop_neutrals!(rk_coefs, rk_coefs_implicit,
 end
 
 """
-    local_error_norm(error, f, rtol, atol)
+    local_error_norm(error, f, rtol, atol; ir=nothing)
     local_error_norm(error, f, rtol, atol, neutral=false; method="Linf",
-                     skip_r_inner=false, skip_z_lower=false, error_sum_zero=0.0)
+                     skip_r_inner=false, skip_z_lower=false, error_sum_zero=0.0,
+                     ir=nothing)
 
 Maximum error norm in the range owned by this MPI process, given by
 ```math
@@ -930,27 +1043,47 @@ according to the `high_precision_error_sum` option in the `[timestepping]` secti
 stored in a template-typed value in the `t_params` object - when that value is passed in
 as the argument to `error_sum_zero`, that type will be used for L2sum, and the type will
 be known at compile time, allowing this function to be efficient.
+
+`ir` can be passed to calculate the error norm at a single r-index.
 """
 function local_error_norm end
 
 function local_error_norm(f_loworder::MPISharedArray{mk_float,2},
                           f::MPISharedArray{mk_float,2}, rtol, atol; method="Linf",
-                          skip_r_inner=false, skip_z_lower=false, error_sum_zero=0.0)
+                          skip_r_inner=false, skip_z_lower=false, error_sum_zero=0.0,
+                          ir=nothing)
     if method == "Linf"
         f_max = -Inf
-        @loop_r_z ir iz begin
-            error_norm = abs(f_loworder[iz,ir] - f[iz,ir]) / (rtol*abs(f[iz,ir]) + atol)
-            f_max = max(f_max, error_norm)
+        if ir === nothing
+            @loop_r_z this_ir iz begin
+                error_norm = abs(f_loworder[iz,this_ir] - f[iz,this_ir]) / (rtol*abs(f[iz,this_ir]) + atol)
+                f_max = max(f_max, error_norm)
+            end
+        else
+            @loop_z iz begin
+                error_norm = abs(f_loworder[iz,ir] - f[iz,ir]) / (rtol*abs(f[iz,ir]) + atol)
+                f_max = max(f_max, error_norm)
+            end
         end
         return f_max
     elseif method == "L2"
         L2sum = error_sum_zero
-        @loop_r_z ir iz begin
-            if (skip_r_inner && ir == 1) || (skip_z_lower && iz == 1)
-                continue
+        if ir === nothing
+            @loop_r_z this_ir iz begin
+                if (skip_r_inner && this_ir == 1) || (skip_z_lower && iz == 1)
+                    continue
+                end
+                error_norm = ((f_loworder[iz,this_ir] - f[iz,this_ir]) / (rtol*abs(f[iz,this_ir]) + atol))^2
+                L2sum += error_norm
             end
-            error_norm = ((f_loworder[iz,ir] - f[iz,ir]) / (rtol*abs(f[iz,ir]) + atol))^2
-            L2sum += error_norm
+        else
+            @loop_z iz begin
+                if (skip_r_inner && ir == 1) || (skip_z_lower && iz == 1)
+                    continue
+                end
+                error_norm = ((f_loworder[iz,ir] - f[iz,ir]) / (rtol*abs(f[iz,ir]) + atol))^2
+                L2sum += error_norm
+            end
         end
         # Will sum results from different processes in shared memory block after returning
         # from this function.
@@ -969,7 +1102,11 @@ end
 function local_error_norm(f_loworder::MPISharedArray{mk_float,3},
                           f::MPISharedArray{mk_float,3}, rtol, atol, neutral=false;
                           method="Linf", skip_r_inner=false, skip_z_lower=false,
-                          error_sum_zero=0.0)
+                          error_sum_zero=0.0, ir=nothing)
+    if ir !== nothing
+        error("`ir` argument not supported in ion/neutral local error norm")
+    end
+
     if method == "Linf"
         f_max = -Inf
         if neutral
@@ -1019,24 +1156,44 @@ function local_error_norm(f_loworder::MPISharedArray{mk_float,3},
 end
 function local_error_norm(f_loworder::MPISharedArray{mk_float,4},
                           f::MPISharedArray{mk_float,4}, rtol, atol; method="Linf",
-                          skip_r_inner=false, skip_z_lower=false, error_sum_zero=0.0)
+                          skip_r_inner=false, skip_z_lower=false, error_sum_zero=0.0,
+                          ir=nothing)
     if method == "Linf"
         f_max = -Inf
-        @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
-            error_norm = abs(f_loworder[ivpa,ivperp,iz,ir] - f[ivpa,ivperp,iz,ir]) /
-                         (rtol*abs(f[ivpa,ivperp,iz,ir]) + atol)
-            f_max = max(f_max, error_norm)
+        if ir === nothing
+            @loop_r_z_vperp_vpa this_ir iz ivperp ivpa begin
+                error_norm = abs(f_loworder[ivpa,ivperp,iz,this_ir] - f[ivpa,ivperp,iz,this_ir]) /
+                             (rtol*abs(f[ivpa,ivperp,iz,this_ir]) + atol)
+                f_max = max(f_max, error_norm)
+            end
+        else
+            @loop_z_vperp_vpa iz ivperp ivpa begin
+                error_norm = abs(f_loworder[ivpa,ivperp,iz,ir] - f[ivpa,ivperp,iz,ir]) /
+                             (rtol*abs(f[ivpa,ivperp,iz,ir]) + atol)
+                f_max = max(f_max, error_norm)
+            end
         end
         return f_max
     elseif method == "L2"
         L2sum = error_sum_zero
-        @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
-            if (skip_r_inner && ir == 1) || (skip_z_lower && iz == 1)
-                continue
+        if ir === nothing
+            @loop_r_z_vperp_vpa this_ir iz ivperp ivpa begin
+                if (skip_r_inner && this_ir == 1) || (skip_z_lower && iz == 1)
+                    continue
+                end
+                error_norm = ((f_loworder[ivpa,ivperp,iz,this_ir] - f[ivpa,ivperp,iz,this_ir]) /
+                              (rtol*abs(f[ivpa,ivperp,iz,this_ir]) + atol))^2
+                L2sum += error_norm
             end
-            error_norm = ((f_loworder[ivpa,ivperp,iz,ir] - f[ivpa,ivperp,iz,ir]) /
-                          (rtol*abs(f[ivpa,ivperp,iz,ir]) + atol))^2
-            L2sum += error_norm
+        else
+            @loop_z_vperp_vpa iz ivperp ivpa begin
+                if (skip_r_inner && ir == 1) || (skip_z_lower && iz == 1)
+                    continue
+                end
+                error_norm = ((f_loworder[ivpa,ivperp,iz,ir] - f[ivpa,ivperp,iz,ir]) /
+                              (rtol*abs(f[ivpa,ivperp,iz,ir]) + atol))^2
+                L2sum += error_norm
+            end
         end
         # Will sum results from different processes in shared memory block after returning
         # from this function.
@@ -1054,7 +1211,12 @@ function local_error_norm(f_loworder::MPISharedArray{mk_float,4},
 end
 function local_error_norm(f_loworder::MPISharedArray{mk_float,5},
                           f::MPISharedArray{mk_float,5}, rtol, atol; method="Linf",
-                          skip_r_inner=false, skip_z_lower=false, error_sum_zero=0.0)
+                          skip_r_inner=false, skip_z_lower=false, error_sum_zero=0.0,
+                          ir=nothing)
+    if ir !== nothing
+        error("`ir` argument not supported in ion local error norm")
+    end
+
     if method == "Linf"
         f_max = -Inf
         @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
@@ -1089,7 +1251,12 @@ function local_error_norm(f_loworder::MPISharedArray{mk_float,5},
 end
 function local_error_norm(f_loworder::MPISharedArray{mk_float,6},
                           f::MPISharedArray{mk_float,6}, rtol, atol; method="Linf",
-                          skip_r_inner=false, skip_z_lower=false, error_sum_zero=0.0)
+                          skip_r_inner=false, skip_z_lower=false, error_sum_zero=0.0,
+                          ir=nothing)
+    if ir !== nothing
+        error("`ir` argument not supported in neutral local error norm")
+    end
+
     if method == "Linf"
         f_max = -Inf
         @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
@@ -1121,8 +1288,8 @@ end
                                        total_points, error_norm_method, success,
                                        nl_max_its_fraction, nl_total_its_soft_limit,
                                        nl_total_its_soft_limit_reduce_dt,
-                                       composition; electron=false,
-                                       local_max_dt::mk_float=Inf)
+                                       composition, z; electron=false,
+                                       local_max_dt::mk_float=Inf, ir=nothing)
 
 Use the calculated `CFL_limits` and `error_norms` to update the timestep in `t_params`.
 """
@@ -1130,90 +1297,179 @@ function adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms,
                                             total_points, error_norm_method, success,
                                             nl_max_its_fraction, nl_total_its_soft_limit,
                                             nl_total_its_soft_limit_reduce_dt,
-                                            composition; electron=false,
-                                            local_max_dt::mk_float=Inf)
-    # Get global minimum of CFL limits
-    CFL_limit = Ref(0.0)
-    this_limit_caused_by = nothing
-    @serial_region begin
-        # Get maximum error over all blocks
-        CFL_limits_vec = [l for l ∈ values(CFL_limits)]
-        MPI.Allreduce!(CFL_limits_vec, min, comm_inter_block[])
-        CFL_limit_caused_by = argmin(CFL_limits_vec)
-        CFL_limit[] = CFL_limits_vec[CFL_limit_caused_by]
-        this_limit_caused_by = CFL_limits.keys[CFL_limit_caused_by]
-    end
-    MPI.Bcast!(CFL_limit, comm_block[])
-
-    if error_norm_method == "Linf"
-        # Get overall maximum error on the shared-memory block
-        error_norms_vec = [l for l ∈ values(error_norms)]
-        MPI.Reduce!(error_norms_vec, max, comm_block[]; root=0)
-
-        error_norm = Ref{mk_float}(0.0)
-        max_error_variable_index = -1
-        @serial_region begin
-            # Get maximum error over all blocks
-            MPI.Allreduce!(error_norms_vec, max, comm_inter_block[])
-            max_error_variable_index = argmax(error_norms)
-            error_norm[] = error_norms_vec[max_error_variable_index]
-            max_error_variable = error_norms.keys[max_error_variable_index]
-        end
-        MPI.Bcast!(error_norm, 0, comm_block[])
-    elseif error_norm_method == "L2"
-        # Get overall maximum error on the shared-memory block
-        error_norms_vec = [l for l ∈ values(error_norms)]
-        MPI.Reduce!(error_norms_vec, +, comm_block[]; root=0)
-
-        error_norm = Ref{mk_float}(0.0)
-        max_error_variable_index = -1
-        @serial_region begin
-            # Get maximum error over all blocks
-            MPI.Allreduce!(error_norms_vec, +, comm_inter_block[])
-
-            # So far `error_norms_vec` is the sum of squares of the errors. Now that summation
-            # is finished, need to divide by total number of points and take square-root.
-            error_norms_vec .= sqrt.(error_norms_vec ./ total_points)
-
-            # Weight the error from each variable equally by taking the mean, so the
-            # larger number of points in the distribution functions does not mean that
-            # error on the moments is ignored.
-            error_norm[] = mean(error_norms_vec)
-
-            # Record which variable had the maximum error
-            max_error_variable_index = argmax(error_norms_vec)
-            max_error_variable = error_norms.keys[max_error_variable_index]
-        end
-
-        MPI.Bcast!(error_norm, 0, comm_block[])
+                                            composition, z; electron=false,
+                                            local_max_dt::mk_float=Inf, ir=nothing)
+    if ir === nothing
+        is_global_root = (global_rank[] == 0)
+        is_block_root = (block_rank[] == 0)
     else
-        error("Unrecognized error_norm_method '$method'")
+        is_global_root = (z.irank == 0 && anyzv_subblock_rank[] == 0)
+        is_block_root = (anyzv_subblock_rank[] == 0)
     end
 
+    if ir === nothing
+        # Get global minimum of CFL limits
+        CFL_limit = Ref(0.0)
+        this_limit_caused_by = nothing
+        @serial_region begin
+            # Get maximum error over all blocks
+            CFL_limits_vec = [l for l ∈ values(CFL_limits)]
+            MPI.Allreduce!(CFL_limits_vec, min, comm_inter_block[])
+            CFL_limit_caused_by = argmin(CFL_limits_vec)
+            CFL_limit[] = CFL_limits_vec[CFL_limit_caused_by]
+            this_limit_caused_by = CFL_limits.keys[CFL_limit_caused_by]
+        end
+        MPI.Bcast!(CFL_limit, comm_block[])
+
+        if error_norm_method == "Linf"
+            # Get overall maximum error on the shared-memory block
+            error_norms_vec = [l for l ∈ values(error_norms)]
+            MPI.Reduce!(error_norms_vec, max, comm_block[]; root=0)
+
+            error_norm = Ref{mk_float}(0.0)
+            max_error_variable_index = -1
+            @serial_region begin
+                # Get maximum error over all blocks
+                MPI.Allreduce!(error_norms_vec, max, comm_inter_block[])
+                max_error_variable_index = argmax(error_norms)
+                error_norm[] = error_norms_vec[max_error_variable_index]
+                max_error_variable = error_norms.keys[max_error_variable_index]
+            end
+            MPI.Bcast!(error_norm, 0, comm_block[])
+        elseif error_norm_method == "L2"
+            # Get overall maximum error on the shared-memory block
+            error_norms_vec = [l for l ∈ values(error_norms)]
+            MPI.Reduce!(error_norms_vec, +, comm_block[]; root=0)
+
+            error_norm = Ref{mk_float}(0.0)
+            max_error_variable_index = -1
+            @serial_region begin
+                # Get maximum error over all blocks
+                MPI.Allreduce!(error_norms_vec, +, comm_inter_block[])
+
+                # So far `error_norms_vec` is the sum of squares of the errors. Now that summation
+                # is finished, need to divide by total number of points and take square-root.
+                error_norms_vec .= sqrt.(error_norms_vec ./ total_points)
+
+                # Weight the error from each variable equally by taking the mean, so the
+                # larger number of points in the distribution functions does not mean that
+                # error on the moments is ignored.
+                error_norm[] = mean(error_norms_vec)
+
+                # Record which variable had the maximum error
+                max_error_variable_index = argmax(error_norms_vec)
+                max_error_variable = error_norms.keys[max_error_variable_index]
+            end
+
+            MPI.Bcast!(error_norm, 0, comm_block[])
+        else
+            error("Unrecognized error_norm_method '$method'")
+        end
+
+        failure_counter = t_params.failure_counter
+        t = t_params.t
+        dt = t_params.dt
+        previous_dt = t_params.previous_dt
+        dt_before_last_fail = t_params.dt_before_last_fail
+        dt_before_output = t_params.dt_before_output
+        failure_caused_by = t_params.failure_caused_by
+        limit_caused_by = t_params.limit_caused_by
+        step_counter = t_params.step_counter
+        failure_counter = t_params.failure_counter
+    else
+        # Get global minimum of CFL limits
+        CFL_limit = Ref(0.0)
+        this_limit_caused_by = nothing
+        @anyzv_serial_region begin
+            # Get maximum error over all blocks
+            CFL_limits_vec = [l for l ∈ values(CFL_limits)]
+            MPI.Allreduce!(CFL_limits_vec, min, z.comm)
+            CFL_limit_caused_by = argmin(CFL_limits_vec)
+            CFL_limit[] = CFL_limits_vec[CFL_limit_caused_by]
+            this_limit_caused_by = CFL_limits.keys[CFL_limit_caused_by]
+        end
+        MPI.Bcast!(CFL_limit, comm_anyzv_subblock[])
+
+        if error_norm_method == "Linf"
+            # Get overall maximum error on the shared-memory block
+            error_norms_vec = [l for l ∈ values(error_norms)]
+            MPI.Reduce!(error_norms_vec, max, comm_anyzv_subblock[]; root=0)
+
+            error_norm = Ref{mk_float}(0.0)
+            max_error_variable_index = -1
+            @anyzv_serial_region begin
+                # Get maximum error over all blocks
+                MPI.Allreduce!(error_norms_vec, max, z.comm)
+                max_error_variable_index = argmax(error_norms)
+                error_norm[] = error_norms_vec[max_error_variable_index]
+                max_error_variable = error_norms.keys[max_error_variable_index]
+            end
+            MPI.Bcast!(error_norm, 0, comm_anyzv_subblock[])
+        elseif error_norm_method == "L2"
+            # Get overall maximum error on the shared-memory block
+            error_norms_vec = [l for l ∈ values(error_norms)]
+            MPI.Reduce!(error_norms_vec, +, comm_anyzv_subblock[]; root=0)
+
+            error_norm = Ref{mk_float}(0.0)
+            max_error_variable_index = -1
+            @anyzv_serial_region begin
+                # Get maximum error over all blocks
+                MPI.Allreduce!(error_norms_vec, +, z.comm)
+
+                # So far `error_norms_vec` is the sum of squares of the errors. Now that summation
+                # is finished, need to divide by total number of points and take square-root.
+                error_norms_vec .= sqrt.(error_norms_vec ./ total_points)
+
+                # Weight the error from each variable equally by taking the mean, so the
+                # larger number of points in the distribution functions does not mean that
+                # error on the moments is ignored.
+                error_norm[] = mean(error_norms_vec)
+
+                # Record which variable had the maximum error
+                max_error_variable_index = argmax(error_norms_vec)
+                max_error_variable = error_norms.keys[max_error_variable_index]
+            end
+
+            MPI.Bcast!(error_norm, 0, comm_anyzv_subblock[])
+        else
+            error("Unrecognized error_norm_method '$method'")
+        end
+
+        failure_counter = @view t_params.failure_counter[ir:ir]
+        t = @view t_params.t[ir:ir]
+        dt = @view t_params.dt[ir:ir]
+        previous_dt = @view t_params.previous_dt[ir:ir]
+        dt_before_last_fail = @view t_params.dt_before_last_fail[ir:ir]
+        dt_before_output = @view t_params.dt_before_output[ir:ir]
+        failure_caused_by = t_params.failure_caused_by[ir]
+        limit_caused_by = t_params.limit_caused_by[ir]
+        step_counter = @view t_params.step_counter[ir:ir]
+        failure_counter = @view t_params.failure_counter[ir:ir]
+    end
     if success != ""
         # Iteration failed in implicit part of timestep try decreasing timestep
 
-        t_params.failure_counter[] += 1
+        failure_counter[] += 1
 
-        if t_params.previous_dt[] > 0.0
+        if previous_dt[] > 0.0
             # If previous_dt=0, the previous step was also a failure so only update
             # dt_before_last_fail when previous_dt>0
-            t_params.dt_before_last_fail[] = t_params.previous_dt[]
+            dt_before_last_fail[] = previous_dt[]
         end
 
         # Decrease timestep by 1/2 - this factor should probably be settable!
         # Note when nonlinear solve iteration fails, we do not enforce
         # minimum_dt, as the timesolver must error if we do not decrease dt.
-        if t_params.dt[] > t_params.minimum_dt
+        if dt[] > t_params.minimum_dt
             # ...but try decreasing just to minimum_dt first, if the dt is still
             # bigger than this.
-            t_params.dt[] = max(t_params.dt[] / 2.0, t_params.minimum_dt)
+            dt[] = max(dt[] / 2.0, t_params.minimum_dt)
         else
-            t_params.dt[] = t_params.dt[] / 2.0
+            dt[] = dt[] / 2.0
         end
 
         # Don't update the simulation time, as this step failed
-        t_params.previous_dt[] = 0.0
+        previous_dt[] = 0.0
 
         # Call the 'cause' of the timestep failure the variable that has the biggest
         # error norm here.
@@ -1223,14 +1479,14 @@ function adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms,
                 composition.electron_physics ∈ (kinetic_electrons,
                                                 kinetic_electrons_with_temperature_equation)
             if success == "nonlinear-solver"
-                t_params.failure_caused_by["nonlinear_solver_convergence"] += 1
+                failure_caused_by["nonlinear_solver_convergence"] += 1
             elseif success == "kinetic-electrons"
-                t_params.failure_caused_by["kinetic_electron_convergence"] += 1
+                failure_caused_by["kinetic_electron_convergence"] += 1
             else
                 error("Unrecognised cause of convergence failure: \"$success\"")
             end
         else
-            t_params.failure_caused_by["nonlinear_solver_convergence"] += 1
+            failure_caused_by["nonlinear_solver_convergence"] += 1
         end
 
         if t_params.exact_output_times
@@ -1242,43 +1498,43 @@ function adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms,
             # If with the reduced dt the step will not pass the next output time,
             # deactivate step_to_*_output[].
             if (t_params.step_to_moments_output[]
-                && t_params.t[] + t_params.previous_dt[] + t_params.dt[] <
+                && t[] + previous_dt[] + dt[] <
                    t_params.moments_output_times[t_params.moments_output_counter[]])
                 t_params.step_to_moments_output[] = false
             end
             if (t_params.step_to_dfns_output[]
-                && t_params.t[] + t_params.previous_dt[] + t_params.dt[] <
+                && t[] + previous_dt[] + dt[] <
                    t_params.dfns_output_times[t_params.dfns_output_counter[]])
                 t_params.step_to_dfns_output[] = false
             end
         end
-    elseif (error_norm[] > 1.0 || isnan(error_norm[])) && t_params.dt[] > t_params.minimum_dt * (1.0 + 1.0e-13)
+    elseif (error_norm[] > 1.0 || isnan(error_norm[])) && dt[] > t_params.minimum_dt * (1.0 + 1.0e-13)
         # (1.0 + 1.0e-13) fudge factor accounts for possible rounding errors when
         # t+dt=next_output_time.
         #
         # Timestep failed, reduce timestep and re-try
 
-        t_params.failure_counter[] += 1
+        failure_counter[] += 1
 
-        if t_params.previous_dt[] > 0.0
+        if previous_dt[] > 0.0
             # If previous_dt=0, the previous step was also a failure so only update
             # dt_before_last_fail when previous_dt>0
-            t_params.dt_before_last_fail[] = t_params.previous_dt[]
+            dt_before_last_fail[] = previous_dt[]
         end
 
         # Get new timestep estimate using same formula as for a successful step, but
         # limit decrease to factor 1/2 - this factor should probably be settable!
-        t_params.dt[] = max(t_params.dt[] / 2.0,
-                            t_params.dt[] * t_params.step_update_prefactor * error_norm[]^(-1.0/t_params.rk_order))
-        t_params.dt[] = max(t_params.dt[], t_params.minimum_dt)
+        dt[] = max(dt[] / 2.0,
+                   dt[] * t_params.step_update_prefactor * error_norm[]^(-1.0/t_params.rk_order))
+        dt[] = max(dt[], t_params.minimum_dt)
 
         # Don't update the simulation time, as this step failed
-        t_params.previous_dt[] = 0.0
+        previous_dt[] = 0.0
 
         # Call the 'cause' of the timestep failure the variable that has the biggest
         # error norm here
-        @serial_region begin
-            t_params.failure_caused_by[max_error_variable] += 1
+        if is_block_root
+            failure_caused_by[max_error_variable] += 1
         end
 
         if t_params.exact_output_times
@@ -1290,28 +1546,28 @@ function adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms,
             # If with the reduced dt the step will not pass the next output time,
             # deactivate step_to_*_output[].
             if (t_params.step_to_moments_output[]
-                && t_params.t[] + t_params.previous_dt[] + t_params.dt[] <
+                && t[] + previous_dt[] + dt[] <
                    t_params.moments_output_times[t_params.moments_output_counter[]])
                 t_params.step_to_moments_output[] = false
             end
             if (t_params.step_to_dfns_output[]
-                && t_params.t[] + t_params.previous_dt[] + t_params.dt[] <
+                && t[] + previous_dt[] + dt[] <
                    t_params.dfns_output_times[t_params.dfns_output_counter[]])
                 t_params.step_to_dfns_output[] = false
             end
         end
 
-        #println("t=$t, timestep failed, error_norm=$(error_norm[]), error_norms=$error_norms, decreasing timestep to ", t_params.dt[])
+        #println("t=$t, timestep failed, error_norm=$(error_norm[]), error_norms=$error_norms, decreasing timestep to ", dt[])
     else
         # Save the timestep used to complete this step, this is used to update the
         # simulation time.
-        t_params.previous_dt[] = t_params.dt[]
+        previous_dt[] = dt[]
 
         if t_params.step_to_moments_output[] || t_params.step_to_dfns_output[]
             if !t_params.exact_output_times
                 # Completed an output step, reset dt to what it was before it was reduced to reach
                 # the output time
-                t_params.dt[] = t_params.dt_before_output[]
+                dt[] = dt_before_output[]
             end
 
             if t_params.step_to_moments_output[]
@@ -1323,8 +1579,8 @@ function adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms,
                 t_params.write_dfns_output[] = true
             end
 
-            if t_params.dt[] > CFL_limit[]
-                t_params.dt[] = CFL_limit[]
+            if dt[] > CFL_limit[]
+                dt[] = CFL_limit[]
             end
         end
         if !t_params.exact_output_times || !(t_params.write_moments_output[] || t_params.write_dfns_output[])
@@ -1333,15 +1589,15 @@ function adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms,
             # `step_update_prefactor` is a constant numerical factor to make the estimate
             # of a good value for the next timestep slightly conservative. It defaults to
             # 0.9.
-            t_params.dt[] *= t_params.step_update_prefactor * error_norm[]^(-1.0/t_params.rk_order)
+            dt[] *= t_params.step_update_prefactor * error_norm[]^(-1.0/t_params.rk_order)
 
-            if t_params.dt[] > CFL_limit[]
-                t_params.dt[] = CFL_limit[]
+            if dt[] > CFL_limit[]
+                dt[] = CFL_limit[]
             else
                 # Reserve first four entries of t_params.limit_caused_by for
                 # max_increase_factor, max_increase_factor_near_fail, minimum_dt and
                 # maximum_dt limits, high_nl_iterations.
-                @serial_region begin
+                if is_block_root
                     this_limit_caused_by = max_error_variable
                 end
             end
@@ -1351,129 +1607,128 @@ function adaptive_timestep_update_t_params!(t_params, CFL_limits, error_norms,
             max_cap_limit_caused_by = "max_increase_factor"
             if isinf(t_params.max_increase_factor_near_last_fail)
                 # Not using special timestep limiting near last failed dt value
-                max_cap = t_params.max_increase_factor * t_params.previous_dt[]
+                max_cap = t_params.max_increase_factor * previous_dt[]
             else
-                max_cap = t_params.max_increase_factor * t_params.previous_dt[]
-                slow_increase_threshold = t_params.dt_before_last_fail[] / t_params.last_fail_proximity_factor
-                if t_params.previous_dt[] > t_params.dt_before_last_fail[] * t_params.last_fail_proximity_factor
+                max_cap = t_params.max_increase_factor * previous_dt[]
+                slow_increase_threshold = dt_before_last_fail[] / t_params.last_fail_proximity_factor
+                if previous_dt[] > dt_before_last_fail[] * t_params.last_fail_proximity_factor
                     # dt has successfully exceeded the last failed value, so allow it
                     # to increase more quickly again
-                    t_params.dt_before_last_fail[] = Inf
+                    dt_before_last_fail[] = Inf
                 elseif max_cap > slow_increase_threshold
                     # dt is getting close to last failed value, so increase more
                     # slowly
                     max_cap = max(slow_increase_threshold,
                                   t_params.max_increase_factor_near_last_fail *
-                                  t_params.previous_dt[])
+                                  previous_dt[])
                     max_cap_limit_caused_by = "max_increase_factor_near_last_fail"
                 end
             end
-            if t_params.dt[] > max_cap
-                t_params.dt[] = max_cap
-                @serial_region begin
+            if dt[] > max_cap
+                dt[] = max_cap
+                if is_block_root
                     this_limit_caused_by = max_cap_limit_caused_by
                 end
             end
 
             # Prevent timestep from going below minimum_dt
-            if t_params.dt[] < t_params.minimum_dt
-                t_params.dt[] = t_params.minimum_dt
-                @serial_region begin
+            if dt[] < t_params.minimum_dt
+                dt[] = t_params.minimum_dt
+                if is_block_root
                     this_limit_caused_by = "minimum_dt"
                 end
             end
 
             # Prevent timestep from going above maximum_dt
             max_dt = min(t_params.maximum_dt, local_max_dt)
-            if t_params.dt[] > max_dt
-                t_params.dt[] = max_dt
-                @serial_region begin
+            if dt[] > max_dt
+                dt[] = max_dt
+                if is_block_root
                     this_limit_caused_by = "maximum_dt"
                 end
             end
 
-            if nl_total_its_soft_limit_reduce_dt && t_params.previous_dt[] > 0.0
+            if nl_total_its_soft_limit_reduce_dt && previous_dt[] > 0.0
                 # The last step took very many nonlinear iterations, so reduce the
                 # timestep slightly.
                 # If t_params.previous_dt[]==0.0, then the previous step failed so
                 # timestep will not be increasing, so do not need this check.
-                iteration_limited_dt = t_params.previous_dt[] / t_params.max_increase_factor
-                if t_params.dt[] > iteration_limited_dt
-                    t_params.dt[] = iteration_limited_dt
-                    @serial_region begin
+                iteration_limited_dt = previous_dt[] / t_params.max_increase_factor
+                if dt[] > iteration_limited_dt
+                    dt[] = iteration_limited_dt
+                    if is_block_root
                         this_limit_caused_by = "high_nl_iterations"
                     end
                 end
-            elseif (nl_max_its_fraction > 0.5 || nl_total_its_soft_limit) && t_params.previous_dt[] > 0.0
+            elseif (nl_max_its_fraction > 0.5 || nl_total_its_soft_limit) && previous_dt[] > 0.0
                 # The last step took many nonlinear iterations, so do not allow the
                 # timestep to increase.
-                # If t_params.previous_dt[]==0.0, then the previous step failed so
+                # If previous_dt[]==0.0, then the previous step failed so
                 # timestep will not be increasing, so do not need this check.
-                if t_params.dt[] > t_params.previous_dt[]
-                    t_params.dt[] = t_params.previous_dt[]
-                    @serial_region begin
+                if dt[] > previous_dt[]
+                    dt[] = previous_dt[]
+                    if is_block_root
                         this_limit_caused_by = "high_nl_iterations"
                     end
                 end
             end
 
-            @serial_region begin
-                t_params.limit_caused_by[this_limit_caused_by] += 1
+            if is_block_root
+                limit_caused_by[this_limit_caused_by] += 1
             end
 
-            if (t_params.step_counter[] % 1000 == 0) && global_rank[] == 0
+            if (step_counter[] % 1000 == 0) && is_global_root
                 prefix = electron ? "electron" : "ion"
-                println("$prefix step ", t_params.step_counter[], ": t=",
-                        round(t_params.t[], sigdigits=6), ", nfail=",
-                        t_params.failure_counter[], ", dt=", t_params.dt[])
+                println("$prefix step ", step_counter[], ": t=", round(t[], sigdigits=6),
+                        ", nfail=", failure_counter[], ", dt=", dt[])
             end
         end
     end
 
     minimum_dt = 1.e-14
-    if t_params.dt[] < minimum_dt
-        println("Time advance failed: trying to set dt=$(t_params.dt[]) less than "
-                * "$minimum_dt at t=$(t_params.t[]). Ending run.")
+    if dt[] < minimum_dt
+        println("Time advance failed: trying to set dt=$(dt[]) less than "
+                * "$minimum_dt at t=$(t[]). Ending run.")
         # Set dt negative to signal an error
-        t_params.dt[] = -1.0
+        dt[] = -1.0
     end
 
-    current_time = t_params.t[] + t_params.previous_dt[]
+    current_time = t[] + previous_dt[]
     # Store here to ensure dt_before_output is set correctly when both moments and
     # dfns are written at the same time.
-    current_dt = t_params.dt[]
+    current_dt = dt[]
     if (!t_params.write_after_fixed_step_count
         && !t_params.write_moments_output[]
         && length(t_params.moments_output_times) > 0
         && (t_params.moments_output_counter[] ≤ length(t_params.moments_output_times))
-        && (current_time + t_params.dt[] >= t_params.moments_output_times[t_params.moments_output_counter[]]))
+        && (current_time + dt[] >= t_params.moments_output_times[t_params.moments_output_counter[]]))
 
-        t_params.dt_before_output[] = current_dt
+        dt_before_output[] = current_dt
         if t_params.exact_output_times
-            t_params.dt[] = t_params.moments_output_times[t_params.moments_output_counter[]] - current_time
+            dt[] = t_params.moments_output_times[t_params.moments_output_counter[]] - current_time
         end
         t_params.step_to_moments_output[] = true
 
-        if t_params.dt[] < 0.0
+        if dt[] < 0.0
             error("When trying to step to next output time, made negative timestep "
-                  * "dt=$(t_params.dt[])")
+                  * "dt=$(dt[])")
         end
     end
     if (!t_params.write_after_fixed_step_count
         && !t_params.write_dfns_output[]
         && length(t_params.dfns_output_times) > 0
         && (t_params.dfns_output_counter[] ≤ length(t_params.dfns_output_times))
-        && (current_time + t_params.dt[] >= t_params.dfns_output_times[t_params.dfns_output_counter[]]))
+        && (current_time + dt[] >= t_params.dfns_output_times[t_params.dfns_output_counter[]]))
 
-        t_params.dt_before_output[] = current_dt
+        dt_before_output[] = current_dt
         if t_params.exact_output_times
-            t_params.dt[] = t_params.dfns_output_times[t_params.dfns_output_counter[]] - current_time
+            dt[] = t_params.dfns_output_times[t_params.dfns_output_counter[]] - current_time
         end
         t_params.step_to_dfns_output[] = true
 
-        if t_params.dt[] < 0.0
+        if dt[] < 0.0
             error("When trying to step to next output time, made negative timestep "
-                  * "dt=$(t_params.dt[])")
+                  * "dt=$(dt[])")
         end
     end
 

@@ -13,13 +13,14 @@ using StatsBase
 # be defined
 include("../../machines/shared/machine_setup.jl") # Included so Documenter.jl can find its docs
 include("check_so_newer_than_code.jl")
+include("command_line_options.jl")
+include("debugging.jl")
 include("type_definitions.jl")
 include("timer_utils.jl")
-include("command_line_options.jl")
 include("constants.jl")
-include("debugging.jl")
-include("communication.jl")
 include("moment_kinetics_structs.jl")
+include("loop_ranges_struct.jl")
+include("communication.jl")
 include("looping.jl")
 include("array_allocation.jl")
 include("interpolation.jl")
@@ -253,9 +254,9 @@ parallel loop ranges, and are only used by the tests in `debug_test/`.
         end
         # Debug initialisation only used by tests in `debug_test/`
         debug_setup_loop_ranges_split_one_combination!(
-            block_rank[], block_size[], debug_loop_type, debug_loop_parallel_dims...;
-            s=composition.n_ion_species, sn=composition.n_neutral_species, r=r.n, z=z.n,
-            vperp=vperp.n, vpa=vpa.n, vzeta=vzeta.n, vr=vr.n, vz=vz.n)
+            debug_loop_type, debug_loop_parallel_dims...; s=composition.n_ion_species,
+            sn=composition.n_neutral_species, r=r.n, z=z.n, vperp=vperp.n, vpa=vpa.n,
+            vzeta=vzeta.n, vr=vr.n, vz=vz.n)
     end
 
     external_source_settings = setup_external_sources!(input_dict, r, z,
@@ -265,8 +266,7 @@ parallel loop ranges, and are only used by the tests in `debug_test/`.
 
     # create the "fields" structure that contains arrays
     # for the electrostatic potential phi and the electromagnetic fields
-    fields = setup_em_fields(vperp.n, z.n, r.n, composition.n_ion_species,
-                             em_input)
+    fields = setup_em_fields(vperp, z, r, composition.n_ion_species, em_input)
 
     # Allocate arrays and create the pdf and moments structs
     pdf, moments =

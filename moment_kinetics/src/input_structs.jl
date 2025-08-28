@@ -19,8 +19,7 @@ export set_defaults_and_check_top_level!, set_defaults_and_check_section!,
        check_sections!, options_to_TOML, Dict_to_NamedTuple,
        convert_to_sorted_nested_OptionsDict
 
-using ..communication
-using ..type_definitions: mk_float, mk_int, OptionsDict
+using ..type_definitions: mk_float, mk_int, OptionsDict, MPISharedArray
 
 using DataStructures: SortedDict
 using MPI
@@ -68,28 +67,28 @@ export null_kinetic_ions
 an option but known at compile time when a `time_info` struct is passed as a function
 argument.
 """
-struct time_info{Terrorsum <: Real, T_debug_output, T_electron, Trkimp, Timpzero, Telectronprecon}
+struct time_info{T_varsf, T_varsi, T_caused_by, Terrorsum <: Real, T_debug_output, T_electron, Trkimp, Timpzero, Telectronprecon}
     n_variables::mk_int
     nstep::mk_int
     end_time::mk_float
-    t::Base.RefValue{mk_float}
-    dt::Base.RefValue{mk_float}
-    previous_dt::Base.RefValue{mk_float}
-    dt_before_output::Base.RefValue{mk_float}
-    dt_before_last_fail::Base.RefValue{mk_float}
+    t::T_varsf
+    dt::T_varsf
+    previous_dt::T_varsf
+    dt_before_output::T_varsf
+    dt_before_last_fail::T_varsf
     CFL_prefactor::mk_float
     step_to_moments_output::Base.RefValue{Bool}
     step_to_dfns_output::Base.RefValue{Bool}
     write_moments_output::Base.RefValue{Bool}
     write_dfns_output::Base.RefValue{Bool}
-    step_counter::Base.RefValue{mk_int}
-    max_step_count_this_ion_step::Base.RefValue{mk_int}
-    max_t_increment_this_ion_step::Base.RefValue{mk_float}
-    moments_output_counter::Base.RefValue{mk_int}
-    dfns_output_counter::Base.RefValue{mk_int}
-    failure_counter::Base.RefValue{mk_int}
-    failure_caused_by::OrderedDict{String,mk_int}
-    limit_caused_by::OrderedDict{String,mk_int}
+    step_counter::T_varsi
+    max_step_count_this_ion_step::T_varsi
+    max_t_increment_this_ion_step::T_varsf
+    moments_output_counter::T_varsi
+    dfns_output_counter::T_varsi
+    failure_counter::T_varsi
+    failure_caused_by::T_caused_by
+    limit_caused_by::T_caused_by
     nwrite_moments::mk_int
     nwrite_dfns::mk_int
     moments_output_times::Vector{mk_float}
@@ -180,19 +179,6 @@ struct advance_info
     vpa_diffusion::Bool #flag to control how vpa bc is imposed when vpa diffusion terms are present
     vperp_diffusion::Bool #flag to control how vperp bc is imposed when vperp diffusion terms are present
     vz_diffusion::Bool #flag to control how vz bc is imposed when vz diffusion terms are present
-end
-
-"""
-"""
-struct advection_input
-    # advection speed option
-    option::String
-    # constant advection speed to use with the "constant" advection option
-    constant_speed::mk_float
-    # for option = "oscillating", advection speed is of form
-    # speed = constant_speed*(1 + oscillation_amplitude*sinpi(frequency*t))
-    frequency::mk_float
-    oscillation_amplitude::mk_float
 end
 
 """
