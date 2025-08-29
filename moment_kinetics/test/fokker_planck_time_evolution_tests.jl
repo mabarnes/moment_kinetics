@@ -549,7 +549,7 @@ function runtests(; highres=false)
                          vpa=OptionsDict("bc" => vpa_bc, "L" => Lvpa),
                          evolve_moments=OptionsDict("density" => evolve_density, "parallel_flow" => evolve_upar, "pressure" => evolve_p))
             end
-            @testset "Gauss Legendre no (explicitly) enforced boundary conditions: IMEX timestepping" begin
+            @testset "Gauss Legendre no (explicitly) enforced boundary conditions: IMEX timestepping PareschiRusso3(4,3,3)" begin
                 run_name = "gausslegendre_pseudospectral_none_bc"
                 vperp_bc = "none"
                 vpa_bc = "none"
@@ -570,6 +570,28 @@ function runtests(; highres=false)
                                                                                "nonlinear_max_iterations" => 20,),
                          timestepping=OptionsDict("kinetic_ion_solver" => "implicit_ion_fp_collisions",
                                                   "type" => "PareschiRusso3(4,3,3)",))
+            end
+            @testset "Gauss Legendre no (explicitly) enforced boundary conditions: IMEX timestepping EulerIMEX" begin
+                run_name = "gausslegendre_pseudospectral_none_bc"
+                vperp_bc = "none"
+                vpa_bc = "none"
+                if highres
+                    this_expected = expected_none_bc_highres
+                    this_input = test_input_gauss_legendre_highres
+                else
+                    this_expected = expected_none_bc[(evolve_density, evolve_upar, evolve_p)]
+                    this_input = test_input_gauss_legendre
+                end
+                run_test(this_input, this_expected, 10.0 * tol3, tol4;
+                         interp_to_expected=highres,
+                         vperp=OptionsDict("bc" => vperp_bc, "L" => Lvperp),
+                         vpa=OptionsDict("bc" => vpa_bc, "L" => Lvpa),
+                         evolve_moments=OptionsDict("density" => evolve_density, "parallel_flow" => evolve_upar, "pressure" => evolve_p),
+                         fokker_planck_collisions_nonlinear_solver=OptionsDict("rtol" => 0.0,
+                                                                               "atol" => 1.0e-14,
+                                                                               "nonlinear_max_iterations" => 20,),
+                         timestepping=OptionsDict("kinetic_ion_solver" => "implicit_ion_fp_collisions",
+                                                  "type" => "EulerIMEX",))
             end
         end
     end
