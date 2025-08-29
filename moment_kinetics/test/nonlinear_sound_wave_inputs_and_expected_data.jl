@@ -173,3 +173,20 @@ test_input_chebyshev_split_3_moments =
                                 "vpa" => OptionsDict("L" => 20.784609690826528),
                                 "vz" => OptionsDict("L" => 20.784609690826528),
                                ))
+
+test_input_chebyshev_split_3_moments_ARK324 =
+    recursive_merge(test_input_chebyshev_split_3_moments,
+                    OptionsDict("output" => OptionsDict("run_name" => "chebyshev_pseudospectral_split_3_moments_ARK324"),
+                                "timestepping" => OptionsDict("type" => "KennedyCarpenterARK324",
+                                                              "kinetic_ion_solver" => "full_implicit_ion_advance"),
+                               ))
+
+test_input_chebyshev_split_3_moments_EulerIMEX =
+    recursive_merge(test_input_chebyshev_split_3_moments,
+                    OptionsDict("output" => OptionsDict("run_name" => "chebyshev_pseudospectral_split_3_moments_EulerIMEX"),
+                                "timestepping" => OptionsDict("type" => "EulerIMEX",
+                                                              "nstep" => 400,
+                                                              "dt" => 0.00017677669529663688,
+                                                              "nwrite" => 400,
+                                                              "nwrite_dfns" => 400),
+                               ))

@@ -864,8 +864,8 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
                               preconditioner_type=t_params.electron_preconditioner_type)
     nl_solver_ion_advance_params =
         setup_nonlinear_solve(t_params.implicit_ion_advance, input_dict,
-                              (s=composition.n_ion_species, r=r, z=z, vperp=vperp,
-                               vpa=vpa),
+                              (s=(name="ion_species", n=composition.n_ion_species), r=r,
+                               z=z, vperp=vperp, vpa=vpa),
                               ();
                               default_rtol=t_params.rtol / 10.0,
                               default_atol=t_params.atol / 10.0,
@@ -3490,7 +3490,7 @@ end
         # explicit, so we need the bcs and constraints.
         apply_bc_constraints = (t_params.rk_coefs_implicit === nothing
                                 || !t_params.implicit_ion_advance
-                                || (istage == n_rk_stages && t_params.implicit_coefficient_is_zero[1])
+                                || istage == n_rk_stages
                                 || t_params.implicit_coefficient_is_zero[istage+1])
         update_electrons = ((t_params.rk_coefs_implicit === nothing && t_params.kinetic_electron_solver !== explicit_time_evolving)
                             || t_params.kinetic_electron_solver ∉ (implicit_time_evolving,
@@ -4131,10 +4131,10 @@ end
     end
 
     if t_params.kinetic_ion_solver == full_implicit_ion_advance
-        ion_success = implicit_ion_advance!(fvec_out, fvec_in, pdf, fields, moments,
-                                            advect_objects, vz, vr, vzeta, vpa, vperp,
-                                            gyrophase, z, r, t_params, dt,
-                                            spectral_objects, composition, collisions,
+        ion_success = implicit_ion_advance!(fvec_out, fvec_in, scratch_electron, pdf,
+                                            fields, moments, advect_objects, vz, vr,
+                                            vzeta, vpa, vperp, gyrophase, z, r, t_params,
+                                            dt, spectral_objects, composition, collisions,
                                             geometry, scratch_dummy,
                                             manufactured_source_list,
                                             external_source_settings, num_diss_params,
@@ -4174,12 +4174,18 @@ end
 Do a backward-Euler timestep for all terms in the ion kinetic equation.
 """
 @timeit global_timer implicit_ion_advance!(
-                         fvec_out, fvec_in, pdf, fields, moments, advect_objects, vz, vr,
-                         vzeta, vpa, vperp, gyrophase, z, r, t_params, dt,
-                         spectral_objects, composition, collisions, geometry,
-                         scratch_dummy, manufactured_source_list,
+                         fvec_out, fvec_in, scratch_electron, pdf, fields, moments,
+                         advect_objects, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
+                         t_params, dt, spectral_objects, composition, collisions,
+                         geometry, scratch_dummy, manufactured_source_list,
                          external_source_settings, num_diss_params, gyroavs,
                          nl_solver_params, advance, fp_arrays, istage) = begin
+
+    if scratch_electron === nothing
+        debug_scratch_electron = nothing
+    else
+        debug_scratch_electron = scratch_electron[end]
+    end
 
     t = t_params.t[]
     vpa_spectral, vperp_spectral, r_spectral, z_spectral = spectral_objects.vpa_spectral, spectral_objects.vperp_spectral, spectral_objects.r_spectral, spectral_objects.z_spectral
@@ -4315,9 +4321,9 @@ Do a backward-Euler timestep for all terms in the ion kinetic equation.
     end
 
     # Use a forward-Euler step as the initial guess for fvec_out.pdf
-    euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, advect_objects, vz, vr,
-                        vzeta, vpa, vperp, gyrophase, z, r, t_params, dt,
-                        spectral_objects, composition, collisions, geometry,
+    euler_time_advance!(fvec_out, fvec_in, pdf, debug_scratch_electron, fields, moments,
+                        advect_objects, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
+                        t_params, dt, spectral_objects, composition, collisions, geometry,
                         scratch_dummy, manufactured_source_list, external_source_settings,
                         num_diss_params, advance, fp_arrays, istage)
 
@@ -4341,18 +4347,23 @@ Do a backward-Euler timestep for all terms in the ion kinetic equation.
 
         # scratch_pdf struct containing the array passed as f_new
         new_scratch = scratch_pdf(f_new, fvec_out.density, fvec_out.upar, fvec_out.p,
-                                  fvec_out.temp_z_s, fvec_out.electron_density,
-                                  fvec_out.electron_upar, fvec_out.electron_p,
-                                  fvec_out.electron_temp, fvec_out.pdf_neutral,
-                                  fvec_out.density_neutral, fvec_out.uz_neutral,
-                                  fvec_out.pz_neutral, fvec_out.controller_integrals)
+                                  fvec_out.ion_external_source_controller_integral,
+                                  fvec_out.temp_z_s, fvec_out.pdf_electron,
+                                  fvec_out.electron_density, fvec_out.electron_upar,
+                                  fvec_out.electron_p, fvec_out.electron_temp,
+                                  fvec_out.pdf_neutral, fvec_out.density_neutral,
+                                  fvec_out.uz_neutral, fvec_out.p_neutral,
+                                  fvec_out.neutral_external_source_controller_integral)
         # scratch_pdf struct containing the array passed as residual
         residual_scratch = scratch_pdf(residual, fvec_out.density, fvec_out.upar,
-                                       fvec_out.p, fvec_out.temp_z_s,
+                                       fvec_out.p,
+                                       fvec_out.ion_external_source_controller_integral,
+                                       fvec_out.temp_z_s, fvec_out.pdf_electron,
                                        fvec_out.electron_density, fvec_out.electron_upar,
                                        fvec_out.electron_p, fvec_out.electron_temp,
                                        fvec_out.pdf_neutral, fvec_out.density_neutral,
-                                       fvec_out.uz_neutral, fvec_out.pz_neutral, fvec_out.controller_integrals)
+                                       fvec_out.uz_neutral, fvec_out.p_neutral,
+                                       fvec_out.neutral_external_source_controller_integral)
 
         # Ensure moments are consistent with f_new
         update_derived_moments!(new_scratch, moments, vpa, vperp, z, r, composition,
@@ -4362,10 +4373,10 @@ Do a backward-Euler timestep for all terms in the ion kinetic equation.
                                           scratch_dummy, r, z, r_spectral, z_spectral,
                                           num_diss_params.ion.moment_dissipation_coefficient)
 
-        euler_time_advance!(residual_scratch, new_scratch, pdf, fields, moments,
-                            advect_objects, vz, vr, vzeta, vpa, vperp, gyrophase, z,
-                            r, t_params, dt, spectral_objects, composition, collisions,
-                            geometry, scratch_dummy, manufactured_source_list,
+        euler_time_advance!(residual_scratch, new_scratch, pdf, debug_scratch_electron,
+                            fields, moments, advect_objects, vz, vr, vzeta, vpa, vperp,
+                            gyrophase, z, r, t_params, dt, spectral_objects, composition,
+                            collisions, geometry, scratch_dummy, manufactured_source_list,
                             external_source_settings, num_diss_params, advance, fp_arrays,
                             istage)
 

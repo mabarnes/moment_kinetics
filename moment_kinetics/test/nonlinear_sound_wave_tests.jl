@@ -321,6 +321,16 @@ function runtests()
             test_input_chebyshev_split_3_moments["output"]["base_directory"] = test_output_directory
             run_test(test_input_chebyshev_split_3_moments, 1.e-3, 1.e-15)
         end
+
+        # Implicit ion solver
+        @long @testset "Chebyshev split 3 KennedyCarpenterARK324" begin
+            test_input_chebyshev_split_3_moments_ARK324["output"]["base_directory"] = test_output_directory
+            run_test(test_input_chebyshev_split_3_moments_ARK324, 1.e-3, 1.e-15, 2.0e-3)
+        end
+        @long @testset "Chebyshev split 3 EulerIMEX" begin
+            test_input_chebyshev_split_3_moments_EulerIMEX["output"]["base_directory"] = test_output_directory
+            run_test(test_input_chebyshev_split_3_moments_EulerIMEX, 1.e-3, 1.e-15, 3.0e-3)
+        end
     end
 
     if global_rank[] == 0

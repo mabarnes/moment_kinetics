@@ -125,6 +125,10 @@ end
 end
 @timeit global_timer hard_force_moment_constraints!(
                          f::AbstractArray{mk_float,5}, moments, vpa, vperp) = begin
+    if !(moments.evolve_density || moments.evolve_upar || moments.evolve_p)
+        # Full-f run, not evolving moments, so nothing to do.
+        return nothing
+    end
     A = moments.ion.constraints_A_coefficient
     B = moments.ion.constraints_B_coefficient
     C = moments.ion.constraints_C_coefficient

@@ -116,9 +116,9 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=();
 
     nl_solver_input = Dict_to_NamedTuple(nl_solver_section)
 
-    coord_sizes = Tuple(isa(c, coordinate) ? c.n : c for c ∈ coords)
+    coord_sizes = Tuple(c.n for c ∈ coords)
     total_size_coords = prod(coord_sizes)
-    outer_coord_sizes = Tuple(isa(c, coordinate) ? c.n : c for c ∈ outer_coords)
+    outer_coord_sizes = Tuple(c.n for c ∈ outer_coords)
 
     linear_restart = nl_solver_input.linear_restart
 
@@ -226,7 +226,7 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=();
         c = allocate_shared_float(; linear_restart_plus_one=linear_restart + 1)
         s = allocate_shared_float(; linear_restart_plus_one=linear_restart + 1)
         g = allocate_shared_float(; linear_restart_plus_one=linear_restart + 1)
-        V = allocate_shared_float((Symbol(c.name)=>c.n for c ∈ reverse(coords))...,
+        V = allocate_shared_float(; (Symbol(c.name)=>c.n for c ∈ reverse(coords))...,
                                   linear_restart_plus_one=linear_restart + 1)
 
         @begin_serial_region()
