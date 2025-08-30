@@ -262,7 +262,7 @@ function define_coordinate(coord_input::NamedTuple; parallel_io::Bool=false,
     end
 
     # Precompute some values for Lagrange polynomial evaluation
-    other_nodes = allocate_float(coord_input.ngrid-1, coord_input.ngrid,
+    other_nodes = allocate_float(max(coord_input.ngrid-1, 0), coord_input.ngrid,
                                  coord_input.nelement_local)
     one_over_denominator = allocate_float(coord_input.ngrid, coord_input.nelement_local)
     for ielement ∈ 1:coord_input.nelement_local
