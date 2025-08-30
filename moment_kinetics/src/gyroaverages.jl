@@ -63,10 +63,9 @@ function init_gyro_operators(vperp, z, r, gyrophase, geometry, boundaries, compo
            println("Begin: init_gyro_operators")
        end
        gyromatrix = allocate_shared_float(z, r, vperp, z, r,
-                                          :ion_species=>composition.n_ion_species)
+                                          composition.ion_species_coord)
        # an array to store the value for the number of points in the z', r' sum for each gyroaveraged field index 
-       gyroloopsizes = allocate_shared_int(; vperp=vperp, z=z, r=r,
-                                           ion_species=composition.n_ion_species)
+       gyroloopsizes = allocate_shared_int(vperp, z, r, composition.ion_species_coord)
        
        # init the matrix!
        # the first two indices are to be summed over
@@ -182,9 +181,9 @@ function init_gyro_operators(vperp, z, r, gyrophase, geometry, boundaries, compo
         # use the fact that the first index cannot be larger than the size of z.n*r.n
         # and accept that we are storing undefined values in exchange for storing the useful
         # data in shared-memory.
-        izpgyroindex = allocate_shared_int(z_and_r=z.n*r.n, vperp=vperp, z=z, r=r,
+        izpgyroindex = allocate_shared_int(; z_and_r=z.n*r.n, vperp=vperp, z=z, r=r,
                                            ion_species=composition.n_ion_species)
-        irpgyroindex = allocate_shared_int(z_and_r=z.n*r.n, vperp=vperp, z=z, r=r,
+        irpgyroindex = allocate_shared_int(; z_and_r=z.n*r.n, vperp=vperp, z=z, r=r,
                                            ion_species=composition.n_ion_species)
 
         # compute the indices on the root process  
