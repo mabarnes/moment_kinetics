@@ -123,11 +123,6 @@ function mk_input(input_dict=OptionsDict("output" => OptionsDict("run_name" => "
         save_inputs_to_txt = false
     end
     
-    # read composition and species data
-    composition = get_species_input(input_dict, warn_unexpected)
-    n_ion_species = composition.n_ion_species
-    n_neutral_species = composition.n_neutral_species
-    
     # if evolve_moments.density = true, evolve density via continuity eqn
     # and g = f/n via modified drift kinetic equation
     evolve_moments_settings = set_defaults_and_check_section!(
@@ -171,6 +166,30 @@ function mk_input(input_dict=OptionsDict("output" => OptionsDict("run_name" => "
                                   krook_input, fkpl_input, mxwl_diff_input)
 
     num_diss_params = setup_numerical_dissipation(input_dict, warn_unexpected)
+
+    # set up distributed-memory MPI information for z and r coords
+    # need grid and MPI information to determine these values 
+    # MRH just put dummy values now 
+    r_coord_input = get_coordinate_input(input_dict, "r"; ignore_MPI=ignore_MPI,
+                                         warn_unexpected=warn_unexpected)
+    z_coord_input = get_coordinate_input(input_dict, "z"; ignore_MPI=ignore_MPI,
+                                         warn_unexpected=warn_unexpected)
+    if ignore_MPI
+        irank_z = irank_r = 0
+        nrank_z = nrank_r = 1
+        comm_sub_z, comm_sub_r = setup_serial_MPI()
+    else
+        irank_z, nrank_z, comm_sub_z, irank_r, nrank_r, comm_sub_r =
+            setup_distributed_memory_MPI(z_coord_input.nelement,
+                                         z_coord_input.nelement_local,
+                                         r_coord_input.nelement,
+                                         r_coord_input.nelement_local)
+    end
+
+    # read composition and species data
+    composition = get_species_input(input_dict, warn_unexpected; ignore_MPI=ignore_MPI)
+    n_ion_species = composition.n_ion_species
+    n_neutral_species = composition.n_neutral_species
 
     # parameters related to the time stepping
     timestepping_section = set_defaults_and_check_section!(
@@ -349,25 +368,6 @@ function mk_input(input_dict=OptionsDict("output" => OptionsDict("run_name" => "
     end
     if timestepping_section["maximum_dt"] ≤ 0.0
         error("maximum_dt=$(timestepping_section["maximum_dt"]) must be positive")
-    end
-
-    # set up distributed-memory MPI information for z and r coords
-    # need grid and MPI information to determine these values 
-    # MRH just put dummy values now 
-    r_coord_input = get_coordinate_input(input_dict, "r"; ignore_MPI=ignore_MPI,
-                                         warn_unexpected=warn_unexpected)
-    z_coord_input = get_coordinate_input(input_dict, "z"; ignore_MPI=ignore_MPI,
-                                         warn_unexpected=warn_unexpected)
-    if ignore_MPI
-        irank_z = irank_r = 0
-        nrank_z = nrank_r = 1
-        comm_sub_z, comm_sub_r = setup_serial_MPI()
-    else
-        irank_z, nrank_z, comm_sub_z, irank_r, nrank_r, comm_sub_r =
-            setup_distributed_memory_MPI(z_coord_input.nelement,
-                                         z_coord_input.nelement_local,
-                                         r_coord_input.nelement,
-                                         r_coord_input.nelement_local)
     end
 
     io_immutable = setup_io_input(input_dict, timestepping_section, warn_unexpected;
