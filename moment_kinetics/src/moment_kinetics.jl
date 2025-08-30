@@ -266,7 +266,7 @@ parallel loop ranges, and are only used by the tests in `debug_test/`.
 
     # create the "fields" structure that contains arrays
     # for the electrostatic potential phi and the electromagnetic fields
-    fields = setup_em_fields(vperp, z, r, composition.n_ion_species, em_input)
+    fields = setup_em_fields(vperp, z, r, composition.ion_species_coord, em_input)
 
     # Allocate arrays and create the pdf and moments structs
     pdf, moments =

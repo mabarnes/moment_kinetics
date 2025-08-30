@@ -66,14 +66,14 @@ function allocate_pdf_and_moments(composition, r, z, vperp, vpa, vzeta, vr, vz,
     # the time-dependent entries are not initialised.
     # moments arrays have same r and z grids for both ion and neutral species
     # and so are included in the same struct
-    ion = create_moments_ion(z, r, composition.n_ion_species, evolve_moments.density,
+    ion = create_moments_ion(z, r, composition, evolve_moments.density,
                              evolve_moments.parallel_flow, evolve_moments.pressure,
                              external_source_settings.ion, num_diss_params)
     electron = create_moments_electron(z, r, composition.electron_physics,
                                        num_diss_params,
                                        length(external_source_settings.electron))
-    neutral = create_moments_neutral(z, r, composition.n_neutral_species,
-                                     evolve_moments.density, evolve_moments.parallel_flow,
+    neutral = create_moments_neutral(z, r, composition, evolve_moments.density,
+                                     evolve_moments.parallel_flow,
                                      evolve_moments.pressure,
                                      external_source_settings.neutral, num_diss_params)
 
@@ -100,12 +100,12 @@ Allocate arrays for pdfs
 """
 function create_pdf(composition, r, z, vperp, vpa, vzeta, vr, vz)
     # allocate pdf arrays
-    pdf_ion_norm = allocate_shared_float(vpa=vpa, vperp=vperp, z=z, r=r, ion_species=composition.n_ion_species)
+    pdf_ion_norm = allocate_shared_float(vpa, vperp, z, r, composition.ion_species_coord)
     # buffer array is for ion-neutral collisions, not for storing ion pdf
-    pdf_ion_buffer = allocate_shared_float(vpa=vpa, vperp=vperp, z=z, r=r, neutral_species=composition.n_neutral_species) # n.b. n_species is n_neutral_species here
-    pdf_neutral_norm = allocate_shared_float(; vz=vz, vr=vr, vzeta=vzeta, z=z, r=r, neutral_species=composition.n_neutral_species)
+    pdf_ion_buffer = allocate_shared_float(vpa, vperp, z, r, composition.neutral_species_coord) # n.b. n_species is n_neutral_species here
+    pdf_neutral_norm = allocate_shared_float(vz, vr, vzeta, z, r, composition.neutral_species_coord)
     # buffer array is for neutral-ion collisions, not for storing neutral pdf
-    pdf_neutral_buffer = allocate_shared_float(; vz=vz, vr=vr, vzeta=vzeta, z=z, r=r, neutral_species=composition.n_ion_species)
+    pdf_neutral_buffer = allocate_shared_float(vz, vr, vzeta, z, r, composition.ion_species_coord)
     if composition.electron_physics ∈ (kinetic_electrons,
                                        kinetic_electrons_with_temperature_equation)
         pdf_electron_norm = allocate_shared_float(vpa, vperp, z, r)
@@ -522,8 +522,8 @@ end
 function initialize_pdf!(pdf, moments, composition, r, z, vperp, vpa, vzeta, vr, vz,
                          vperp_spectral, vpa_spectral, vzeta_spectral, vr_spectral,
                          vz_spectral, species)
-    wall_flux_0 = allocate_float(; r=r, ion_species=composition.n_ion_species)
-    wall_flux_L = allocate_float(; r=r, ion_species=composition.n_ion_species)
+    wall_flux_0 = allocate_float(r, composition.ion_species_coord)
+    wall_flux_L = allocate_float(r, composition.ion_species_coord)
 
     @serial_region begin
         for is ∈ 1:composition.n_ion_species, ir ∈ 1:r.n
