@@ -25,6 +25,7 @@ using ..boundary_conditions: skip_f_electron_bc_points_in_Jacobian
 using ..calculus
 using ..communication
 using ..coordinates
+using ..debugging
 using ..input_structs
 using ..looping
 using ..timer_utils
@@ -1313,10 +1314,10 @@ function add_external_electron_source_to_Jacobian!(jacobian_matrix, f, moments, 
         error("Got f_offset=$f_offset the same as p_offset=$p_offset. f and p "
               * "cannot be in same place in state vector.")
     end
-    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
-    @boundscheck size(jacobian_matrix, 1) ≥ f_offset + z.n * vperp.n * vpa.n || error("f_offset=$f_offset is too big")
-    @boundscheck size(jacobian_matrix, 1) ≥ p_offset + z.n || error("p_offset=$p_offset is too big")
-    @boundscheck include ∈ (:all, :explicit_z, :explicit_v) || error("Unexpected value for include=$include")
+    @debug_consistency_checks size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
+    @debug_consistency_checks size(jacobian_matrix, 1) ≥ f_offset + z.n * vperp.n * vpa.n || error("f_offset=$f_offset is too big")
+    @debug_consistency_checks size(jacobian_matrix, 1) ≥ p_offset + z.n || error("p_offset=$p_offset is too big")
+    @debug_consistency_checks include ∈ (:all, :explicit_z, :explicit_v) || error("Unexpected value for include=$include")
 
     if !electron_source.active
         return nothing
@@ -1400,8 +1401,8 @@ function add_external_electron_source_to_z_only_Jacobian!(
         jacobian_matrix, f, moments, me, z_speed, electron_source, index, z, vperp, vpa,
         dt, ir, ivperp, ivpa)
 
-    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
-    @boundscheck size(jacobian_matrix, 1) == z.n || error("Jacobian matrix size is wrong")
+    @debug_consistency_checks size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
+    @debug_consistency_checks size(jacobian_matrix, 1) == z.n || error("Jacobian matrix size is wrong")
 
     if !electron_source.active
         return nothing
@@ -1441,8 +1442,8 @@ function add_external_electron_source_to_v_only_Jacobian!(
         jacobian_matrix, f, moments, me, z_speed, electron_source, index, z, vperp, vpa,
         dt, ir, iz)
 
-    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
-    @boundscheck size(jacobian_matrix, 1) == vperp.n * vpa.n + 1 || error("Jacobian matrix size is wrong")
+    @debug_consistency_checks size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
+    @debug_consistency_checks size(jacobian_matrix, 1) == vperp.n * vpa.n + 1 || error("Jacobian matrix size is wrong")
 
     if !electron_source.active
         return nothing
@@ -2191,8 +2192,8 @@ source amplitude.
     elseif neutral_source_settings.source_type == "recycling"
         @begin_serial_region()
         target_flux = 0.0
-        @boundscheck size(fvec_in.density, 3) == 1
-        @boundscheck size(fvec_in.density_neutral, 3) == 1
+        @debug_consistency_checks size(fvec_in.density, 3) == 1
+        @debug_consistency_checks size(fvec_in.density_neutral, 3) == 1
         is = 1
 
         # Warning: this target flux is only correct when the magnetic field is

@@ -8,6 +8,7 @@ export update_speed_vpa!
 using ..advection: advance_f_local!
 using ..boundary_conditions: enforce_v_boundary_condition_local!
 using ..communication
+using ..debugging
 using ..looping
 using ..moment_constraints: hard_force_moment_constraints!,
                             moment_constraints_on_residual!
@@ -324,12 +325,12 @@ calculate the advection speed in the vpa-direction at each grid point
 function update_speed_vpa!(vpa_advect, fields, fvec, moments, r_advect, z_advect, vpa,
                            vperp, z, r, composition, collisions, ion_source_settings, t,
                            geometry)
-    @boundscheck r.n == size(vpa_advect[1].speed,4) || throw(BoundsError(vpa_advect))
-    @boundscheck z.n == size(vpa_advect[1].speed,3) || throw(BoundsError(vpa_advect))
-    @boundscheck vperp.n == size(vpa_advect[1].speed,2) || throw(BoundsError(vpa_advect))
-    #@boundscheck composition.n_ion_species == size(vpa_advect,2) || throw(BoundsError(vpa_advect))
-    @boundscheck composition.n_ion_species == size(vpa_advect,1) || throw(BoundsError(vpa_advect))
-    @boundscheck vpa.n == size(vpa_advect[1].speed,1) || throw(BoundsError(speed))
+    @debug_consistency_checks r.n == size(vpa_advect[1].speed,4) || throw(BoundsError(vpa_advect))
+    @debug_consistency_checks z.n == size(vpa_advect[1].speed,3) || throw(BoundsError(vpa_advect))
+    @debug_consistency_checks vperp.n == size(vpa_advect[1].speed,2) || throw(BoundsError(vpa_advect))
+    #@debug_consistency_checks composition.n_ion_species == size(vpa_advect,2) || throw(BoundsError(vpa_advect))
+    @debug_consistency_checks composition.n_ion_species == size(vpa_advect,1) || throw(BoundsError(vpa_advect))
+    @debug_consistency_checks vpa.n == size(vpa_advect[1].speed,1) || throw(BoundsError(speed))
 
     # dvpa/dt = Ze/m ⋅ E_parallel - (vperp^2/2B) bz dB/dz
     # magnetic mirror term only supported for standard DK implementation

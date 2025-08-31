@@ -7,6 +7,7 @@ export neutral_ionization_collisions_1V!
 export ion_ionization_collisions_3V!
 export neutral_ionization_collisions_3V!
 
+using ..debugging
 using ..interpolation: interpolate_to_grid_vpa!
 using ..looping
 using ..timer_utils
@@ -18,11 +19,11 @@ using ..timer_utils
     # nvz = nvpa and identical vz and vpa grids 
     # nvperp = nvr = nveta = 1
     # constant charge_exchange_frequency independent of species
-    @boundscheck vpa.n == size(f_out,1) || throw(BoundsError(f_out))
-    @boundscheck 1 == size(f_out,2) || throw(BoundsError(f_out))
-    @boundscheck z.n == size(f_out,3) || throw(BoundsError(f_out))
-    @boundscheck r.n == size(f_out,4) || throw(BoundsError(f_out))
-    @boundscheck composition.n_ion_species == size(f_out,5) || throw(BoundsError(f_out))
+    @debug_consistency_checks vpa.n == size(f_out,1) || throw(BoundsError(f_out))
+    @debug_consistency_checks 1 == size(f_out,2) || throw(BoundsError(f_out))
+    @debug_consistency_checks z.n == size(f_out,3) || throw(BoundsError(f_out))
+    @debug_consistency_checks r.n == size(f_out,4) || throw(BoundsError(f_out))
+    @debug_consistency_checks composition.n_ion_species == size(f_out,5) || throw(BoundsError(f_out))
     
     @begin_r_z_region()
 
@@ -109,12 +110,12 @@ end
     # This routine assumes a 1D model with:
     # nvperp = nvr = nveta = 1
     # constant charge_exchange_frequency independent of species
-    @boundscheck vz.n == size(f_neutral_out,1) || throw(BoundsError(f_neutral_out))
-    @boundscheck 1 == size(f_neutral_out,2) || throw(BoundsError(f_neutral_out))
-    @boundscheck 1 == size(f_neutral_out,3) || throw(BoundsError(f_neutral_out))
-    @boundscheck z.n == size(f_neutral_out,4) || throw(BoundsError(f_neutral_out))
-    @boundscheck r.n == size(f_neutral_out,5) || throw(BoundsError(f_neutral_out))
-    @boundscheck composition.n_neutral_species == size(f_neutral_out,6) || throw(BoundsError(f_neutral_out))
+    @debug_consistency_checks vz.n == size(f_neutral_out,1) || throw(BoundsError(f_neutral_out))
+    @debug_consistency_checks 1 == size(f_neutral_out,2) || throw(BoundsError(f_neutral_out))
+    @debug_consistency_checks 1 == size(f_neutral_out,3) || throw(BoundsError(f_neutral_out))
+    @debug_consistency_checks z.n == size(f_neutral_out,4) || throw(BoundsError(f_neutral_out))
+    @debug_consistency_checks r.n == size(f_neutral_out,5) || throw(BoundsError(f_neutral_out))
+    @debug_consistency_checks composition.n_neutral_species == size(f_neutral_out,6) || throw(BoundsError(f_neutral_out))
 
     if !moments.evolve_density
         @begin_sn_r_z_vz_region()
@@ -139,16 +140,16 @@ end
                          f_out, f_neutral_gav_in, fvec_in, composition, vz, vr, vzeta,
                          vpa, vperp, z, r, collisions, dt) = begin
     # This routine assumes a 3V model with:
-    @boundscheck vpa.n == size(f_out,1) || throw(BoundsError(f_out))
-    @boundscheck vperp.n == size(f_out,2) || throw(BoundsError(f_out))
-    @boundscheck z.n == size(f_out,3) || throw(BoundsError(f_out))
-    @boundscheck r.n == size(f_out,4) || throw(BoundsError(f_out))
-    @boundscheck composition.n_ion_species == size(f_out,5) || throw(BoundsError(f_out))
-    @boundscheck vpa.n == size(f_neutral_gav_in,1) || throw(BoundsError(f_neutral_gav_in))
-    @boundscheck vperp.n == size(f_neutral_gav_in,2) || throw(BoundsError(f_neutral_gav_in))
-    @boundscheck z.n == size(f_neutral_gav_in,3) || throw(BoundsError(f_neutral_gav_in))
-    @boundscheck r.n == size(f_neutral_gav_in,4) || throw(BoundsError(f_neutral_gav_in))
-    @boundscheck composition.n_neutral_species == size(f_neutral_gav_in,5) || throw(BoundsError(f_neutral_gav_in))
+    @debug_consistency_checks vpa.n == size(f_out,1) || throw(BoundsError(f_out))
+    @debug_consistency_checks vperp.n == size(f_out,2) || throw(BoundsError(f_out))
+    @debug_consistency_checks z.n == size(f_out,3) || throw(BoundsError(f_out))
+    @debug_consistency_checks r.n == size(f_out,4) || throw(BoundsError(f_out))
+    @debug_consistency_checks composition.n_ion_species == size(f_out,5) || throw(BoundsError(f_out))
+    @debug_consistency_checks vpa.n == size(f_neutral_gav_in,1) || throw(BoundsError(f_neutral_gav_in))
+    @debug_consistency_checks vperp.n == size(f_neutral_gav_in,2) || throw(BoundsError(f_neutral_gav_in))
+    @debug_consistency_checks z.n == size(f_neutral_gav_in,3) || throw(BoundsError(f_neutral_gav_in))
+    @debug_consistency_checks r.n == size(f_neutral_gav_in,4) || throw(BoundsError(f_neutral_gav_in))
+    @debug_consistency_checks composition.n_neutral_species == size(f_neutral_gav_in,5) || throw(BoundsError(f_neutral_gav_in))
     
     ionization_frequency = collisions.reactions.ionization_frequency
     
@@ -173,12 +174,12 @@ end
                          f_neutral_out, fvec_in, composition, vz, vr, vzeta, vpa, vperp,
                          z, r, collisions, dt) = begin
     # This routine assumes a 3V model with:
-    @boundscheck vz.n == size(f_neutral_out,1) || throw(BoundsError(f_neutral_out))
-    @boundscheck vr.n == size(f_neutral_out,2) || throw(BoundsError(f_neutral_out))
-    @boundscheck vzeta.n == size(f_neutral_out,3) || throw(BoundsError(f_neutral_out))
-    @boundscheck z.n == size(f_neutral_out,4) || throw(BoundsError(f_neutral_out))
-    @boundscheck r.n == size(f_neutral_out,5) || throw(BoundsError(f_neutral_out))
-    @boundscheck composition.n_neutral_species == size(f_neutral_out,6) || throw(BoundsError(f_neutral_out))
+    @debug_consistency_checks vz.n == size(f_neutral_out,1) || throw(BoundsError(f_neutral_out))
+    @debug_consistency_checks vr.n == size(f_neutral_out,2) || throw(BoundsError(f_neutral_out))
+    @debug_consistency_checks vzeta.n == size(f_neutral_out,3) || throw(BoundsError(f_neutral_out))
+    @debug_consistency_checks z.n == size(f_neutral_out,4) || throw(BoundsError(f_neutral_out))
+    @debug_consistency_checks r.n == size(f_neutral_out,5) || throw(BoundsError(f_neutral_out))
+    @debug_consistency_checks composition.n_neutral_species == size(f_neutral_out,6) || throw(BoundsError(f_neutral_out))
 
     ionization_frequency = collisions.reactions.ionization_frequency
 

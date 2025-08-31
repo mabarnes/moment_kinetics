@@ -7,6 +7,7 @@ export setup_krook_collisions_input, krook_collisions!, electron_krook_collision
 
 using ..looping
 using ..boundary_conditions: skip_f_electron_bc_points_in_Jacobian
+using ..debugging
 using ..input_structs: krook_collisions_input, set_defaults_and_check_section!
 using ..timer_utils 
 using ..collision_frequencies
@@ -389,9 +390,9 @@ function add_electron_krook_collisions_to_Jacobian!(jacobian_matrix, f, dens, up
                                                     vth, upar_ion, collisions, z, vperp,
                                                     vpa, z_speed, dt, ir, include=:all;
                                                     f_offset=0, p_offset)
-    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
-    @boundscheck size(jacobian_matrix, 1) ≥ f_offset + z.n * vperp.n * vpa.n || error("f_offset=$f_offset is too big")
-    @boundscheck include ∈ (:all, :explicit_z, :explicit_v) || error("Unexpected value for include=$include")
+    @debug_consistency_checks size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
+    @debug_consistency_checks size(jacobian_matrix, 1) ≥ f_offset + z.n * vperp.n * vpa.n || error("f_offset=$f_offset is too big")
+    @debug_consistency_checks include ∈ (:all, :explicit_z, :explicit_v) || error("Unexpected value for include=$include")
 
     if collisions.krook.nuee0 ≤ 0.0 && collisions.krook.nuei0 ≤ 0.0
         return nothing
@@ -463,8 +464,8 @@ function add_electron_krook_collisions_to_z_only_Jacobian!(
         jacobian_matrix, f, dens, upar, ppar, vth, upar_ion, collisions, z, vperp, vpa,
         z_speed, dt, ir, ivperp, ivpa)
 
-    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
-    @boundscheck size(jacobian_matrix, 1) == z.n || error("Jacobian matrix size is wrong")
+    @debug_consistency_checks size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
+    @debug_consistency_checks size(jacobian_matrix, 1) == z.n || error("Jacobian matrix size is wrong")
 
     if collisions.krook.nuee0 ≤ 0.0 && collisions.krook.nuei0 ≤ 0.0
         return nothing
@@ -499,8 +500,8 @@ function add_electron_krook_collisions_to_v_only_Jacobian!(
         jacobian_matrix, f, dens, upar, p, vth, upar_ion, collisions, z, vperp, vpa,
         z_speed, dt, ir, iz)
 
-    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
-    @boundscheck size(jacobian_matrix, 1) == vperp.n * vpa.n + 1 || error("Jacobian matrix size is wrong")
+    @debug_consistency_checks size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
+    @debug_consistency_checks size(jacobian_matrix, 1) == vperp.n * vpa.n + 1 || error("Jacobian matrix size is wrong")
 
     if collisions.krook.nuee0 ≤ 0.0 && collisions.krook.nuei0 ≤ 0.0
         return nothing

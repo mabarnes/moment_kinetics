@@ -12,6 +12,7 @@ export advection_info
 using ..type_definitions: mk_float, mk_int, MPISharedArray
 using ..array_allocation: allocate_shared_float, allocate_shared_int
 using ..calculus: derivative!
+using ..debugging
 using ..looping
 
 """
@@ -80,8 +81,8 @@ calculate the factor appearing in front of f' in the advection term
 at time level n in the frame moving with the approximate characteristic
 """
 function update_advection_factor!(adv_fac, speed, n, dt)
-    @boundscheck n == length(adv_fac) || throw(BoundsError(adv_fac))
-    @boundscheck n == length(speed) || throw(BoundsError(speed))
+    @debug_consistency_checks n == length(adv_fac) || throw(BoundsError(adv_fac))
+    @debug_consistency_checks n == length(speed) || throw(BoundsError(speed))
     for i ∈ 1:n
         adv_fac[i] = -dt*speed[i]
     end
@@ -172,8 +173,8 @@ end
 """
 """
 function update_f!(f_new, rhs, n)
-    @boundscheck n == length(f_new) || throw(BoundsError(f_new))
-    @boundscheck n == length(rhs) || throw(BoundsError(rhs))
+    @debug_consistency_checks n == length(f_new) || throw(BoundsError(f_new))
+    @debug_consistency_checks n == length(rhs) || throw(BoundsError(rhs))
     
     for i ∈ 1:n
         f_new[i] += rhs[i]

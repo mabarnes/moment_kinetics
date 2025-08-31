@@ -7,6 +7,7 @@ export update_speed_z!
 
 using ..advection: advance_f_df_precomputed!
 using ..chebyshev: chebyshev_info
+using ..debugging
 using ..looping
 using ..timer_utils
 using ..derivatives: derivative_z!
@@ -50,10 +51,10 @@ calculate the advection speed in the z-direction at each grid point
 """
 function update_speed_z!(advect, upar, vth, evolve_upar, evolve_p, fields, vpa, vperp, z,
                          r, t, geometry, is)
-    @boundscheck r.n == size(advect.speed,4) || throw(BoundsError(advect))
-    @boundscheck vperp.n == size(advect.speed,3) || throw(BoundsError(advect))
-    @boundscheck vpa.n == size(advect.speed,2) || throw(BoundsError(advect))
-    @boundscheck z.n == size(advect.speed,1) || throw(BoundsError(speed))
+    @debug_consistency_checks r.n == size(advect.speed,4) || throw(BoundsError(advect))
+    @debug_consistency_checks vperp.n == size(advect.speed,3) || throw(BoundsError(advect))
+    @debug_consistency_checks vpa.n == size(advect.speed,2) || throw(BoundsError(advect))
+    @debug_consistency_checks z.n == size(advect.speed,1) || throw(BoundsError(speed))
 
     # bzed = B_z/B only used for z.advection.option == "default"
     bzed = geometry.bzed

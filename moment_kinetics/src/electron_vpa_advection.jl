@@ -9,6 +9,7 @@ export add_electron_vpa_advection_to_Jacobian!
 using ..looping
 using ..boundary_conditions: skip_f_electron_bc_points_in_Jacobian
 using ..calculus: derivative!, second_derivative!
+using ..debugging
 using ..gauss_legendre: gausslegendre_info
 using ..timer_utils
 
@@ -113,10 +114,10 @@ function add_electron_vpa_advection_to_Jacobian!(jacobian_matrix, f, dens, upar,
         error("Got f_offset=$f_offset the same as p_offset=$p_offset. f and p "
               * "cannot be in same place in state vector.")
     end
-    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
-    @boundscheck size(jacobian_matrix, 1) ≥ f_offset + z.n * vperp.n * vpa.n || error("f_offset=$f_offset is too big")
-    @boundscheck size(jacobian_matrix, 1) ≥ p_offset + z.n || error("p_offset=$p_offset is too big")
-    @boundscheck include ∈ (:all, :explicit_z, :explicit_v) || error("Unexpected value for include=$include")
+    @debug_consistency_checks size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
+    @debug_consistency_checks size(jacobian_matrix, 1) ≥ f_offset + z.n * vperp.n * vpa.n || error("f_offset=$f_offset is too big")
+    @debug_consistency_checks size(jacobian_matrix, 1) ≥ p_offset + z.n || error("p_offset=$p_offset is too big")
+    @debug_consistency_checks include ∈ (:all, :explicit_z, :explicit_v) || error("Unexpected value for include=$include")
 
     v_size = vperp.n * vpa.n
     source_density_amplitude = @view moments.electron.external_source_density_amplitude[:,ir,:]
@@ -291,8 +292,8 @@ function add_electron_vpa_advection_to_v_only_Jacobian!(
         vpa_spectral, vpa_advect, z_speed, scratch_dummy, external_source_settings, dt,
         ir, iz)
 
-    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
-    @boundscheck size(jacobian_matrix, 1) == vperp.n * vpa.n + 1 || error("Jacobian matrix size is wrong")
+    @debug_consistency_checks size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
+    @debug_consistency_checks size(jacobian_matrix, 1) == vperp.n * vpa.n + 1 || error("Jacobian matrix size is wrong")
 
     source_density_amplitude = @view moments.electron.external_source_density_amplitude[iz,ir,:]
     source_momentum_amplitude = @view moments.electron.external_source_momentum_amplitude[iz,ir,:]

@@ -14,6 +14,7 @@ export update_electron_vth_temperature!
 
 using ..calculus: integral
 using ..communication
+using ..debugging
 using ..derivatives: derivative_z_anyzv!
 using ..looping
 using ..input_structs
@@ -444,10 +445,10 @@ function add_electron_energy_equation_to_Jacobian!(jacobian_matrix, f, dens, upa
         error("Got f_offset=$f_offset the same as p_offset=$p_offset. f and p "
               * "cannot be in same place in state vector.")
     end
-    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
-    @boundscheck size(jacobian_matrix, 1) ≥ f_offset + z.n * vperp.n * vpa.n || error("f_offset=$f_offset is too big")
-    @boundscheck size(jacobian_matrix, 1) ≥ p_offset + z.n || error("p_offset=$p_offset is too big")
-    @boundscheck include ∈ (:all, :explicit_z, :explicit_v) || error("Unexpected value for include=$include")
+    @debug_consistency_checks size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
+    @debug_consistency_checks size(jacobian_matrix, 1) ≥ f_offset + z.n * vperp.n * vpa.n || error("f_offset=$f_offset is too big")
+    @debug_consistency_checks size(jacobian_matrix, 1) ≥ p_offset + z.n || error("p_offset=$p_offset is too big")
+    @debug_consistency_checks include ∈ (:all, :explicit_z, :explicit_v) || error("Unexpected value for include=$include")
 
     if composition.electron_physics == kinetic_electrons_with_temperature_equation
         error("kinetic_electrons_with_temperature_equation not "
@@ -566,8 +567,8 @@ function add_electron_energy_equation_to_z_only_Jacobian!(
         dp_dz, dthird_moment_dz, collisions, composition, z, vperp, vpa, z_spectral,
         num_diss_params, dt, ir)
 
-    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
-    @boundscheck size(jacobian_matrix, 1) == z.n || error("Jacobian matrix size is wrong")
+    @debug_consistency_checks size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
+    @debug_consistency_checks size(jacobian_matrix, 1) == z.n || error("Jacobian matrix size is wrong")
 
     if composition.electron_physics == kinetic_electrons_with_temperature_equation
         error("kinetic_electrons_with_temperature_equation not "
@@ -631,8 +632,8 @@ function add_electron_energy_equation_to_v_only_Jacobian!(
         dp_dz, dthird_moment_dz, collisions, composition, z, vperp, vpa, z_spectral,
         num_diss_params, dt, ir, iz)
 
-    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
-    @boundscheck size(jacobian_matrix, 1) == vperp.n * vpa.n + 1 || error("Jacobian matrix size is wrong")
+    @debug_consistency_checks size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
+    @debug_consistency_checks size(jacobian_matrix, 1) == vperp.n * vpa.n + 1 || error("Jacobian matrix size is wrong")
 
     if composition.electron_physics == kinetic_electrons_with_temperature_equation
         error("kinetic_electrons_with_temperature_equation not "
@@ -842,7 +843,7 @@ calculate the electron parallel pressure
 """
 function calculate_electron_ppar_no_r!(ppar, density, upar, p, vth, ff, vpa, vperp, z,
                                        me_over_mi)
-    @boundscheck z.n == size(ppar, 1) || throw(BoundsError(ppar))
+    @debug_consistency_checks z.n == size(ppar, 1) || throw(BoundsError(ppar))
 
     @begin_anyzv_z_region()
 

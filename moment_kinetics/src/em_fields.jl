@@ -15,6 +15,7 @@ using ..looping
 using ..moment_kinetics_structs: em_fields_struct
 using ..velocity_moments: update_density!
 #using ..calculus: derivative!
+using ..debugging
 using ..derivatives: derivative_r!, derivative_z!
 using ..electron_fluid_equations: calculate_Epar_from_electron_force_balance!
 using ..gyroaverages: gyro_operators, gyroaverage_field!
@@ -52,17 +53,17 @@ function update_phi!(fields, fvec, vperp, z, r, composition, collisions, moments
                      gyroavs::gyro_operators)
     n_ion_species = composition.n_ion_species
     # check bounds of fields and fvec arrays
-    @boundscheck size(fields.phi,1) == z.n || throw(BoundsError(fields.phi))
-    @boundscheck size(fields.phi,2) == r.n || throw(BoundsError(fields.phi))
-    @boundscheck size(fields.phi0,1) == z.n || throw(BoundsError(fields.phi0))
-    @boundscheck size(fields.phi0,2) == r.n || throw(BoundsError(fields.phi0))
-    @boundscheck size(fields.Er,1) == z.n || throw(BoundsError(fields.Er))
-    @boundscheck size(fields.Er,2) == r.n || throw(BoundsError(fields.Er))
-    @boundscheck size(fields.Ez,1) == z.n || throw(BoundsError(fields.Ez))
-    @boundscheck size(fields.Ez,2) == r.n || throw(BoundsError(fields.Ez))
-    @boundscheck size(fvec.density,1) == z.n || throw(BoundsError(fvec.density))
-    @boundscheck size(fvec.density,2) == r.n || throw(BoundsError(fvec.density))
-    @boundscheck size(fvec.density,3) == composition.n_ion_species || throw(BoundsError(fvec.density))
+    @debug_consistency_checks size(fields.phi,1) == z.n || throw(BoundsError(fields.phi))
+    @debug_consistency_checks size(fields.phi,2) == r.n || throw(BoundsError(fields.phi))
+    @debug_consistency_checks size(fields.phi0,1) == z.n || throw(BoundsError(fields.phi0))
+    @debug_consistency_checks size(fields.phi0,2) == r.n || throw(BoundsError(fields.phi0))
+    @debug_consistency_checks size(fields.Er,1) == z.n || throw(BoundsError(fields.Er))
+    @debug_consistency_checks size(fields.Er,2) == r.n || throw(BoundsError(fields.Er))
+    @debug_consistency_checks size(fields.Ez,1) == z.n || throw(BoundsError(fields.Ez))
+    @debug_consistency_checks size(fields.Ez,2) == r.n || throw(BoundsError(fields.Ez))
+    @debug_consistency_checks size(fvec.density,1) == z.n || throw(BoundsError(fvec.density))
+    @debug_consistency_checks size(fvec.density,2) == r.n || throw(BoundsError(fvec.density))
+    @debug_consistency_checks size(fvec.density,3) == composition.n_ion_species || throw(BoundsError(fvec.density))
     # Update phi using the set of processes that handles the first ion species
     # Means we get at least some parallelism, even though we have to sum
     # over species, and reduces number of @_block_synchronize() calls needed

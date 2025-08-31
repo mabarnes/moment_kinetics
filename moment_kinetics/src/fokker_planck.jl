@@ -53,6 +53,7 @@ using OrderedCollections: OrderedDict
 using ..type_definitions: mk_float, mk_int, OptionsDict
 using ..array_allocation: allocate_float, allocate_shared_float
 using ..communication
+using ..debugging
 using ..velocity_moments: get_density, get_upar, get_p, get_ppar, get_pperp, get_qpar, get_rmom
 using ..looping
 using ..timer_utils
@@ -291,19 +292,19 @@ where the Rosenbluth potentials are specified using analytical results.
     # N.B. only self-collisions are currently supported
     # This can be modified by adding a loop over s' below
     n_ion_species = composition.n_ion_species
-    @boundscheck vpa.n == size(pdf_out,1) || throw(BoundsError(pdf_out))
-    @boundscheck vperp.n == size(pdf_out,2) || throw(BoundsError(pdf_out))
-    @boundscheck z.n == size(pdf_out,3) || throw(BoundsError(pdf_out))
-    @boundscheck r.n == size(pdf_out,4) || throw(BoundsError(pdf_out))
-    @boundscheck n_ion_species == size(pdf_out,5) || throw(BoundsError(pdf_out))
-    @boundscheck vpa.n == size(pdf_in,1) || throw(BoundsError(pdf_in))
-    @boundscheck vperp.n == size(pdf_in,2) || throw(BoundsError(pdf_in))
-    @boundscheck z.n == size(pdf_in,3) || throw(BoundsError(pdf_in))
-    @boundscheck r.n == size(pdf_in,4) || throw(BoundsError(pdf_in))
-    @boundscheck n_ion_species == size(pdf_in,5) || throw(BoundsError(pdf_in))
-    @boundscheck z.n == size(dSdt,1) || throw(BoundsError(dSdt))
-    @boundscheck r.n == size(dSdt,2) || throw(BoundsError(dSdt))
-    @boundscheck n_ion_species == size(dSdt,3) || throw(BoundsError(dSdt))
+    @debug_consistency_checks vpa.n == size(pdf_out,1) || throw(BoundsError(pdf_out))
+    @debug_consistency_checks vperp.n == size(pdf_out,2) || throw(BoundsError(pdf_out))
+    @debug_consistency_checks z.n == size(pdf_out,3) || throw(BoundsError(pdf_out))
+    @debug_consistency_checks r.n == size(pdf_out,4) || throw(BoundsError(pdf_out))
+    @debug_consistency_checks n_ion_species == size(pdf_out,5) || throw(BoundsError(pdf_out))
+    @debug_consistency_checks vpa.n == size(pdf_in,1) || throw(BoundsError(pdf_in))
+    @debug_consistency_checks vperp.n == size(pdf_in,2) || throw(BoundsError(pdf_in))
+    @debug_consistency_checks z.n == size(pdf_in,3) || throw(BoundsError(pdf_in))
+    @debug_consistency_checks r.n == size(pdf_in,4) || throw(BoundsError(pdf_in))
+    @debug_consistency_checks n_ion_species == size(pdf_in,5) || throw(BoundsError(pdf_in))
+    @debug_consistency_checks z.n == size(dSdt,1) || throw(BoundsError(dSdt))
+    @debug_consistency_checks r.n == size(dSdt,2) || throw(BoundsError(dSdt))
+    @debug_consistency_checks n_ion_species == size(dSdt,3) || throw(BoundsError(dSdt))
     
     use_conserving_corrections = collisions.fkpl.use_conserving_corrections
     fkin = collisions.fkpl
@@ -361,19 +362,19 @@ Function for advancing with the explicit, weak-form, self-collision operator.
     # N.B. only self-collisions are currently supported
     # This can be modified by adding a loop over s' below
     n_ion_species = composition.n_ion_species
-    @boundscheck vpa.n == size(pdf_out,1) || throw(BoundsError(pdf_out))
-    @boundscheck vperp.n == size(pdf_out,2) || throw(BoundsError(pdf_out))
-    @boundscheck z.n == size(pdf_out,3) || throw(BoundsError(pdf_out))
-    @boundscheck r.n == size(pdf_out,4) || throw(BoundsError(pdf_out))
-    @boundscheck n_ion_species == size(pdf_out,5) || throw(BoundsError(pdf_out))
-    @boundscheck vpa.n == size(pdf_in,1) || throw(BoundsError(pdf_in))
-    @boundscheck vperp.n == size(pdf_in,2) || throw(BoundsError(pdf_in))
-    @boundscheck z.n == size(pdf_in,3) || throw(BoundsError(pdf_in))
-    @boundscheck r.n == size(pdf_in,4) || throw(BoundsError(pdf_in))
-    @boundscheck n_ion_species == size(pdf_in,5) || throw(BoundsError(pdf_in))
-    @boundscheck z.n == size(dSdt,1) || throw(BoundsError(dSdt))
-    @boundscheck r.n == size(dSdt,2) || throw(BoundsError(dSdt))
-    @boundscheck n_ion_species == size(dSdt,3) || throw(BoundsError(dSdt))
+    @debug_consistency_checks vpa.n == size(pdf_out,1) || throw(BoundsError(pdf_out))
+    @debug_consistency_checks vperp.n == size(pdf_out,2) || throw(BoundsError(pdf_out))
+    @debug_consistency_checks z.n == size(pdf_out,3) || throw(BoundsError(pdf_out))
+    @debug_consistency_checks r.n == size(pdf_out,4) || throw(BoundsError(pdf_out))
+    @debug_consistency_checks n_ion_species == size(pdf_out,5) || throw(BoundsError(pdf_out))
+    @debug_consistency_checks vpa.n == size(pdf_in,1) || throw(BoundsError(pdf_in))
+    @debug_consistency_checks vperp.n == size(pdf_in,2) || throw(BoundsError(pdf_in))
+    @debug_consistency_checks z.n == size(pdf_in,3) || throw(BoundsError(pdf_in))
+    @debug_consistency_checks r.n == size(pdf_in,4) || throw(BoundsError(pdf_in))
+    @debug_consistency_checks n_ion_species == size(pdf_in,5) || throw(BoundsError(pdf_in))
+    @debug_consistency_checks z.n == size(dSdt,1) || throw(BoundsError(dSdt))
+    @debug_consistency_checks r.n == size(dSdt,2) || throw(BoundsError(dSdt))
+    @debug_consistency_checks n_ion_species == size(dSdt,3) || throw(BoundsError(dSdt))
     
     # masses and collision frequencies
     ms, msp = 1.0, 1.0 # generalise!
@@ -457,10 +458,10 @@ with \$\\gamma_\\mathrm{ref} = 2 \\pi e^4 \\ln \\Lambda_{ii} / (4 \\pi
                          algebraic_solve_for_d2Gdvperp2 = false, calculate_GG=false,
                          calculate_dGdvperp=false,
                          boundary_data_option=direct_integration) = begin
-    @boundscheck vpa.n == size(ffsp_in,1) || throw(BoundsError(ffsp_in))
-    @boundscheck vperp.n == size(ffsp_in,2) || throw(BoundsError(ffsp_in))
-    @boundscheck vpa.n == size(ffs_in,1) || throw(BoundsError(ffs_in))
-    @boundscheck vperp.n == size(ffs_in,2) || throw(BoundsError(ffs_in))
+    @debug_consistency_checks vpa.n == size(ffsp_in,1) || throw(BoundsError(ffsp_in))
+    @debug_consistency_checks vperp.n == size(ffsp_in,2) || throw(BoundsError(ffsp_in))
+    @debug_consistency_checks vpa.n == size(ffs_in,1) || throw(BoundsError(ffs_in))
+    @debug_consistency_checks vperp.n == size(ffs_in,2) || throw(BoundsError(ffs_in))
     
     # extract the necessary precalculated and buffer arrays from fokkerplanck_arrays
     rhsvpavperp = fkpl_arrays.rhsvpavperp
@@ -555,8 +556,8 @@ are specified using analytical results.
                          vthsp::Array{mk_float,1},
                          fkpl_arrays::fokkerplanck_weakform_arrays_struct, vperp, vpa,
                          vperp_spectral, vpa_spectral) = begin
-    @boundscheck vpa.n == size(ffs_in,1) || throw(BoundsError(ffs_in))
-    @boundscheck vperp.n == size(ffs_in,2) || throw(BoundsError(ffs_in))
+    @debug_consistency_checks vpa.n == size(ffs_in,1) || throw(BoundsError(ffs_in))
+    @debug_consistency_checks vperp.n == size(ffs_in,2) || throw(BoundsError(ffs_in))
     
     # extract the necessary precalculated and buffer arrays from fokkerplanck_arrays
     rhsvpavperp = fkpl_arrays.rhsvpavperp
@@ -981,19 +982,19 @@ function implicit_ion_fokker_planck_self_collisions!(pdf_out, pdf_in,
                     use_end_of_step_corrections=true)
     # bounds checking
     n_ion_species = composition.n_ion_species
-    @boundscheck vpa.n == size(pdf_out,1) || throw(BoundsError(pdf_out))
-    @boundscheck vperp.n == size(pdf_out,2) || throw(BoundsError(pdf_out))
-    @boundscheck z.n == size(pdf_out,3) || throw(BoundsError(pdf_out))
-    @boundscheck r.n == size(pdf_out,4) || throw(BoundsError(pdf_out))
-    @boundscheck n_ion_species == size(pdf_out,5) || throw(BoundsError(pdf_out))
-    @boundscheck vpa.n == size(pdf_in,1) || throw(BoundsError(pdf_in))
-    @boundscheck vperp.n == size(pdf_in,2) || throw(BoundsError(pdf_in))
-    @boundscheck z.n == size(pdf_in,3) || throw(BoundsError(pdf_in))
-    @boundscheck r.n == size(pdf_in,4) || throw(BoundsError(pdf_in))
-    @boundscheck n_ion_species == size(pdf_in,5) || throw(BoundsError(pdf_in))
-    @boundscheck z.n == size(dSdt,1) || throw(BoundsError(dSdt))
-    @boundscheck r.n == size(dSdt,2) || throw(BoundsError(dSdt))
-    @boundscheck n_ion_species == size(dSdt,3) || throw(BoundsError(dSdt))
+    @debug_consistency_checks vpa.n == size(pdf_out,1) || throw(BoundsError(pdf_out))
+    @debug_consistency_checks vperp.n == size(pdf_out,2) || throw(BoundsError(pdf_out))
+    @debug_consistency_checks z.n == size(pdf_out,3) || throw(BoundsError(pdf_out))
+    @debug_consistency_checks r.n == size(pdf_out,4) || throw(BoundsError(pdf_out))
+    @debug_consistency_checks n_ion_species == size(pdf_out,5) || throw(BoundsError(pdf_out))
+    @debug_consistency_checks vpa.n == size(pdf_in,1) || throw(BoundsError(pdf_in))
+    @debug_consistency_checks vperp.n == size(pdf_in,2) || throw(BoundsError(pdf_in))
+    @debug_consistency_checks z.n == size(pdf_in,3) || throw(BoundsError(pdf_in))
+    @debug_consistency_checks r.n == size(pdf_in,4) || throw(BoundsError(pdf_in))
+    @debug_consistency_checks n_ion_species == size(pdf_in,5) || throw(BoundsError(pdf_in))
+    @debug_consistency_checks z.n == size(dSdt,1) || throw(BoundsError(dSdt))
+    @debug_consistency_checks r.n == size(dSdt,2) || throw(BoundsError(dSdt))
+    @debug_consistency_checks n_ion_species == size(dSdt,3) || throw(BoundsError(dSdt))
 
     # diagnostic parameter for user
     success = true

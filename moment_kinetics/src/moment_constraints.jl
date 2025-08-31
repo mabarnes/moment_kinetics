@@ -7,6 +7,7 @@ module moment_constraints
 
 using ..boundary_conditions: skip_f_electron_bc_points_in_Jacobian
 using ..calculus: integral
+using ..debugging
 using ..looping
 using ..timer_utils
 using ..type_definitions: mk_float
@@ -399,9 +400,9 @@ function add_electron_implicit_constraint_forcing_to_Jacobian!(
         jacobian_matrix, f, zeroth_moment, first_moment, second_moment, z_speed, z, vperp,
         vpa, constraint_forcing_rate, dt, ir, include=:all; f_offset=0)
 
-    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
-    @boundscheck size(jacobian_matrix, 1) ≥ f_offset + z.n * vperp.n * vpa.n || error("f_offset=$f_offset is too big")
-    @boundscheck include ∈ (:all, :explicit_z, :explicit_v) || error("Unexpected value for include=$include")
+    @debug_consistency_checks size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
+    @debug_consistency_checks size(jacobian_matrix, 1) ≥ f_offset + z.n * vperp.n * vpa.n || error("f_offset=$f_offset is too big")
+    @debug_consistency_checks include ∈ (:all, :explicit_z, :explicit_v) || error("Unexpected value for include=$include")
 
     vpa_grid = vpa.grid
     vpa_wgts = vpa.wgts
@@ -445,8 +446,8 @@ function add_electron_implicit_constraint_forcing_to_z_only_Jacobian!(
         jacobian_matrix, f, zeroth_moment, first_moment, second_moment, z_speed, z, vperp,
         vpa, constraint_forcing_rate, dt, ir, ivperp, ivpa)
 
-    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
-    @boundscheck size(jacobian_matrix, 1) == z.n || error("Jacobian matrix size is wrong")
+    @debug_consistency_checks size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
+    @debug_consistency_checks size(jacobian_matrix, 1) == z.n || error("Jacobian matrix size is wrong")
 
     vpa_grid = vpa.grid
     vpa_wgts = vpa.wgts
@@ -473,8 +474,8 @@ function add_electron_implicit_constraint_forcing_to_v_only_Jacobian!(
         jacobian_matrix, f, zeroth_moment, first_moment, second_moment, z_speed, z, vperp,
         vpa, constraint_forcing_rate, dt, ir, iz)
 
-    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
-    @boundscheck size(jacobian_matrix, 1) == vperp.n * vpa.n + 1 || error("Jacobian matrix size is wrong")
+    @debug_consistency_checks size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
+    @debug_consistency_checks size(jacobian_matrix, 1) == vperp.n * vpa.n + 1 || error("Jacobian matrix size is wrong")
 
     vpa_grid = vpa.grid
     vpa_wgts = vpa.wgts

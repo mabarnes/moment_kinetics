@@ -14,6 +14,7 @@ using ..array_allocation: allocate_shared_float
 using ..calculus: integral, reconcile_element_boundaries_MPI!
 using ..communication
 using ..coordinates: coordinate
+using ..debugging
 using ..input_structs
 using ..interpolation: interpolate_to_grid_1d!
 using ..looping
@@ -1816,7 +1817,7 @@ function enforce_zero_incoming_bc!(pdf, z::coordinate, vperp::coordinate, vpa::c
         error("No boundary in this block, should have returned already")
     end
     for (iz, vth) ∈ zip(z_range, vth_list)
-        @boundscheck size(pdf,2) == 1
+        @debug_consistency_checks size(pdf,2) == 1
         f = @view pdf[:,:,iz]
         if evolve_p && evolve_upar
             I0 = integral((vperp,vpa)->(1), f, vperp, vpa)

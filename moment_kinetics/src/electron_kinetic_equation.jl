@@ -15,6 +15,7 @@ using ..calculus: derivative!, second_derivative!, integral,
                   reconcile_element_boundaries_MPI_anyzv!,
                   reconcile_element_boundaries_MPI_z_pdf_vpavperpz!
 using ..communication
+using ..debugging
 using ..gauss_legendre: gausslegendre_info
 using ..input_structs
 using ..interpolation: interpolate_to_grid_1d!, fill_1d_interpolation_matrix!,
@@ -1383,7 +1384,7 @@ global_rank[] == 0 && println("recalculating precon")
                     adi_info.v_solve_explicit_matrices[v_solve_counter] = sparse(@view(explicit_J[adi_info.v_solve_global_inds[v_solve_counter],:]))
                 end
             end
-            @boundscheck v_solve_counter == adi_info.v_solve_nsolve || error("v_solve_counter($v_solve_counter) != v_solve_nsolve($(adi_info.v_solve_nsolve))")
+            @debug_consistency_checks v_solve_counter == adi_info.v_solve_nsolve || error("v_solve_counter($v_solve_counter) != v_solve_nsolve($(adi_info.v_solve_nsolve))")
 
             # Do setup for 'z solves'
             z_solve_counter = 0
@@ -1467,7 +1468,7 @@ global_rank[] == 0 && println("recalculating precon")
 
                 adi_info.z_solve_explicit_matrices[z_solve_counter] = sparse(@view(explicit_J[adi_info.z_solve_global_inds[z_solve_counter],:]))
             end
-            @boundscheck z_solve_counter == adi_info.z_solve_nsolve || error("z_solve_counter($z_solve_counter) != z_solve_nsolve($(adi_info.z_solve_nsolve))")
+            @debug_consistency_checks z_solve_counter == adi_info.z_solve_nsolve || error("z_solve_counter($z_solve_counter) != z_solve_nsolve($(adi_info.z_solve_nsolve))")
         end
 
         @timeit_debug global_timer adi_precon!(x) = begin
@@ -2702,7 +2703,7 @@ end
                          lowerz_vcut_ind=nothing, upperz_vcut_ind=nothing,
                          allow_failure=true) = begin
 
-    @boundscheck bc_constraints && !update_vcut && error("update_vcut is not used when bc_constraints=true, but update_vcut has non-default value")
+    @debug_consistency_checks bc_constraints && !update_vcut && error("update_vcut is not used when bc_constraints=true, but update_vcut has non-default value")
 
     newton_tol = 1.0e-13
 
@@ -5142,9 +5143,9 @@ function add_electron_dissipation_term_to_Jacobian!(
              jacobian_matrix::AbstractMatrix{mk_float}, f::AbstractArray{mk_float,3},
              num_diss_params, z::coordinate, vperp::coordinate, vpa::coordinate,
              vpa_spectral, z_speed, dt, ir, include=:all; f_offset=0)
-    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
-    @boundscheck size(jacobian_matrix, 1) ≥ f_offset + z.n * vperp.n * vpa.n || error("f_offset=$f_offset is too big")
-    @boundscheck include ∈ (:all, :explicit_z, :explicit_v) || error("Unexpected value for include=$include")
+    @debug_consistency_checks size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
+    @debug_consistency_checks size(jacobian_matrix, 1) ≥ f_offset + z.n * vperp.n * vpa.n || error("f_offset=$f_offset is too big")
+    @debug_consistency_checks include ∈ (:all, :explicit_z, :explicit_v) || error("Unexpected value for include=$include")
 
     vpa_dissipation_coefficient = num_diss_params.electron.vpa_dissipation_coefficient
 
@@ -5181,8 +5182,8 @@ function add_electron_dissipation_term_to_v_only_Jacobian!(
         num_diss_params, z::coordinate, vperp::coordinate, vpa::coordinate, vpa_spectral,
         z_speed, dt, ir, iz)
 
-    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
-    @boundscheck size(jacobian_matrix, 1) == vperp.n * vpa.n + 1 || error("Jacobian matrix size is wrong")
+    @debug_consistency_checks size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
+    @debug_consistency_checks size(jacobian_matrix, 1) == vperp.n * vpa.n + 1 || error("Jacobian matrix size is wrong")
 
     vpa_dissipation_coefficient = num_diss_params.electron.vpa_dissipation_coefficient
 
@@ -5273,10 +5274,10 @@ function add_contribution_from_electron_pdf_term_to_Jacobian!(
         error("Got f_offset=$f_offset the same as p_offset=$p_offset. f and p "
               * "cannot be in same place in state vector.")
     end
-    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
-    @boundscheck size(jacobian_matrix, 1) ≥ f_offset + z.n * vperp.n * vpa.n || error("f_offset=$f_offset is too big")
-    @boundscheck size(jacobian_matrix, 1) ≥ p_offset + z.n || error("p_offset=$p_offset is too big")
-    @boundscheck include ∈ (:all, :explicit_z, :explicit_v) || error("Unexpected value for include=$include")
+    @debug_consistency_checks size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
+    @debug_consistency_checks size(jacobian_matrix, 1) ≥ f_offset + z.n * vperp.n * vpa.n || error("f_offset=$f_offset is too big")
+    @debug_consistency_checks size(jacobian_matrix, 1) ≥ p_offset + z.n || error("p_offset=$p_offset is too big")
+    @debug_consistency_checks include ∈ (:all, :explicit_z, :explicit_v) || error("Unexpected value for include=$include")
 
     source_density_amplitude = moments.electron.external_source_density_amplitude
     source_momentum_amplitude = moments.electron.external_source_momentum_amplitude
@@ -5401,8 +5402,8 @@ function add_contribution_from_electron_pdf_term_to_z_only_Jacobian!(
         z::coordinate, vperp::coordinate, vpa::coordinate, z_spectral, z_speed,
         scratch_dummy, dt, ir, ivperp, ivpa)
 
-    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
-    @boundscheck size(jacobian_matrix, 1) == z.n || error("Jacobian matrix size is wrong")
+    @debug_consistency_checks size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
+    @debug_consistency_checks size(jacobian_matrix, 1) == z.n || error("Jacobian matrix size is wrong")
 
     source_density_amplitude = moments.electron.external_source_density_amplitude
     source_momentum_amplitude = moments.electron.external_source_momentum_amplitude
@@ -5440,8 +5441,8 @@ function add_contribution_from_electron_pdf_term_to_v_only_Jacobian!(
         external_source_settings, z::coordinate, vperp::coordinate, vpa::coordinate,
         z_spectral, z_speed, scratch_dummy, dt, ir, iz)
 
-    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
-    @boundscheck size(jacobian_matrix, 1) == vperp.n * vpa.n + 1 || error("Jacobian matrix size is wrong")
+    @debug_consistency_checks size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
+    @debug_consistency_checks size(jacobian_matrix, 1) == vperp.n * vpa.n + 1 || error("Jacobian matrix size is wrong")
 
     source_density_amplitude = moments.electron.external_source_density_amplitude
     source_momentum_amplitude = moments.electron.external_source_momentum_amplitude
@@ -5498,9 +5499,9 @@ end
 function add_ion_dt_forcing_of_electron_p_to_Jacobian!(
              jacobian_matrix::AbstractMatrix{mk_float}, z::coordinate, dt, ion_dt, ir,
              include=:all; p_offset=0)
-    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
-    @boundscheck size(jacobian_matrix, 1) ≥ p_offset + z.n || error("p_offset=$p_offset is too big")
-    @boundscheck include ∈ (:all, :explicit_z, :explicit_v) || error("Unexpected value for include=$include")
+    @debug_consistency_checks size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
+    @debug_consistency_checks size(jacobian_matrix, 1) ≥ p_offset + z.n || error("p_offset=$p_offset is too big")
+    @debug_consistency_checks include ∈ (:all, :explicit_z, :explicit_v) || error("Unexpected value for include=$include")
 
     if include === :all
         @begin_anyzv_z_region()
@@ -5518,8 +5519,8 @@ end
 
 function add_ion_dt_forcing_of_electron_p_to_z_only_Jacobian!(
              jacobian_matrix::AbstractMatrix{mk_float}, z::coordinate, dt, ion_dt, ir)
-    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
-    @boundscheck size(jacobian_matrix, 1) == z.n || error("Jacobian matrix size is wrong")
+    @debug_consistency_checks size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
+    @debug_consistency_checks size(jacobian_matrix, 1) == z.n || error("Jacobian matrix size is wrong")
 
     @loop_z iz begin
         # Rows corresponding to electron_p
@@ -5534,8 +5535,8 @@ end
 
 function add_ion_dt_forcing_of_electron_p_to_v_only_Jacobian!(
              jacobian_matrix::AbstractMatrix{mk_float}, z::coordinate, dt, ion_dt, ir, iz)
-    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
-    #@boundscheck size(jacobian_matrix, 1) == vperp.n * vpa.n + 1 || error("Jacobian matrix size is wrong")
+    @debug_consistency_checks size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
+    #@debug_consistency_checks size(jacobian_matrix, 1) == vperp.n * vpa.n + 1 || error("Jacobian matrix size is wrong")
 
     # Backward-Euler forcing term
     jacobian_matrix[end,end] += dt / ion_dt

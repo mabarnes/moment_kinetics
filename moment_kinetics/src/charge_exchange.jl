@@ -5,6 +5,7 @@ module charge_exchange
 export charge_exchange_collisions_3V!
 export charge_exchange_collisions_1V!
 
+using ..debugging
 using ..looping
 using ..interpolation: interpolate_to_grid_vpa!
 using ..timer_utils
@@ -170,16 +171,16 @@ end
                          f_out, f_neutral_gav_in, fvec_in, composition, vz, vr, vzeta,
                          vpa, vperp, z, r, charge_exchange_frequency, dt) = begin
     # This routine assumes a 3V model with:
-    @boundscheck vpa.n == size(f_out,1) || throw(BoundsError(f_out))
-    @boundscheck vperp.n == size(f_out,2) || throw(BoundsError(f_out))
-    @boundscheck z.n == size(f_out,3) || throw(BoundsError(f_out))
-    @boundscheck r.n == size(f_out,4) || throw(BoundsError(f_out))
-    @boundscheck composition.n_ion_species == size(f_out,5) || throw(BoundsError(f_out))
-    @boundscheck vpa.n == size(f_neutral_gav_in,1) || throw(BoundsError(f_neutral_gav_in))
-    @boundscheck vperp.n == size(f_neutral_gav_in,2) || throw(BoundsError(f_neutral_gav_in))
-    @boundscheck z.n == size(f_neutral_gav_in,3) || throw(BoundsError(f_neutral_gav_in))
-    @boundscheck r.n == size(f_neutral_gav_in,4) || throw(BoundsError(f_neutral_gav_in))
-    @boundscheck composition.n_neutral_species == size(f_neutral_gav_in,5) || throw(BoundsError(f_neutral_gav_in))
+    @debug_consistency_checks vpa.n == size(f_out,1) || throw(BoundsError(f_out))
+    @debug_consistency_checks vperp.n == size(f_out,2) || throw(BoundsError(f_out))
+    @debug_consistency_checks z.n == size(f_out,3) || throw(BoundsError(f_out))
+    @debug_consistency_checks r.n == size(f_out,4) || throw(BoundsError(f_out))
+    @debug_consistency_checks composition.n_ion_species == size(f_out,5) || throw(BoundsError(f_out))
+    @debug_consistency_checks vpa.n == size(f_neutral_gav_in,1) || throw(BoundsError(f_neutral_gav_in))
+    @debug_consistency_checks vperp.n == size(f_neutral_gav_in,2) || throw(BoundsError(f_neutral_gav_in))
+    @debug_consistency_checks z.n == size(f_neutral_gav_in,3) || throw(BoundsError(f_neutral_gav_in))
+    @debug_consistency_checks r.n == size(f_neutral_gav_in,4) || throw(BoundsError(f_neutral_gav_in))
+    @debug_consistency_checks composition.n_neutral_species == size(f_neutral_gav_in,5) || throw(BoundsError(f_neutral_gav_in))
 
     @begin_s_r_z_vperp_vpa_region()
     @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
@@ -199,18 +200,18 @@ end
                          f_neutral_out, f_ion_vrvzvzeta_in, fvec_in, composition, vz, vr,
                          vzeta, vpa, vperp, z, r, charge_exchange_frequency, dt) = begin
     # This routine assumes a 3V model with:
-    @boundscheck vz.n == size(f_neutral_out,1) || throw(BoundsError(f_neutral_out))
-    @boundscheck vr.n == size(f_neutral_out,2) || throw(BoundsError(f_neutral_out))
-    @boundscheck vzeta.n == size(f_neutral_out,3) || throw(BoundsError(f_neutral_out))
-    @boundscheck z.n == size(f_neutral_out,4) || throw(BoundsError(f_neutral_out))
-    @boundscheck r.n == size(f_neutral_out,5) || throw(BoundsError(f_neutral_out))
-    @boundscheck composition.n_neutral_species == size(f_neutral_out,6) || throw(BoundsError(f_neutral_out))
-    @boundscheck vz.n == size(f_ion_vrvzvzeta_in,1) || throw(BoundsError(f_ion_vrvzvzeta_in))
-    @boundscheck vr.n == size(f_ion_vrvzvzeta_in,2) || throw(BoundsError(f_ion_vrvzvzeta_in))
-    @boundscheck vzeta.n == size(f_ion_vrvzvzeta_in,3) || throw(BoundsError(f_ion_vrvzvzeta_in))
-    @boundscheck z.n == size(f_ion_vrvzvzeta_in,4) || throw(BoundsError(f_ion_vrvzvzeta_in))
-    @boundscheck r.n == size(f_ion_vrvzvzeta_in,5) || throw(BoundsError(f_ion_vrvzvzeta_in))
-    @boundscheck composition.n_neutral_species == size(f_ion_vrvzvzeta_in,6) || throw(BoundsError(f_ion_vrvzvzeta_in))
+    @debug_consistency_checks vz.n == size(f_neutral_out,1) || throw(BoundsError(f_neutral_out))
+    @debug_consistency_checks vr.n == size(f_neutral_out,2) || throw(BoundsError(f_neutral_out))
+    @debug_consistency_checks vzeta.n == size(f_neutral_out,3) || throw(BoundsError(f_neutral_out))
+    @debug_consistency_checks z.n == size(f_neutral_out,4) || throw(BoundsError(f_neutral_out))
+    @debug_consistency_checks r.n == size(f_neutral_out,5) || throw(BoundsError(f_neutral_out))
+    @debug_consistency_checks composition.n_neutral_species == size(f_neutral_out,6) || throw(BoundsError(f_neutral_out))
+    @debug_consistency_checks vz.n == size(f_ion_vrvzvzeta_in,1) || throw(BoundsError(f_ion_vrvzvzeta_in))
+    @debug_consistency_checks vr.n == size(f_ion_vrvzvzeta_in,2) || throw(BoundsError(f_ion_vrvzvzeta_in))
+    @debug_consistency_checks vzeta.n == size(f_ion_vrvzvzeta_in,3) || throw(BoundsError(f_ion_vrvzvzeta_in))
+    @debug_consistency_checks z.n == size(f_ion_vrvzvzeta_in,4) || throw(BoundsError(f_ion_vrvzvzeta_in))
+    @debug_consistency_checks r.n == size(f_ion_vrvzvzeta_in,5) || throw(BoundsError(f_ion_vrvzvzeta_in))
+    @debug_consistency_checks composition.n_neutral_species == size(f_ion_vrvzvzeta_in,6) || throw(BoundsError(f_ion_vrvzvzeta_in))
 
     @begin_sn_r_z_vzeta_vr_vz_region()
     @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin

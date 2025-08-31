@@ -9,6 +9,7 @@ export add_electron_z_advection_to_Jacobian!
 using ..advection: advance_f_df_precomputed!
 using ..boundary_conditions: skip_f_electron_bc_points_in_Jacobian
 using ..chebyshev: chebyshev_info
+using ..debugging
 using ..gauss_legendre: gausslegendre_info
 using ..looping
 using ..timer_utils
@@ -87,10 +88,10 @@ function add_electron_z_advection_to_Jacobian!(jacobian_matrix, f, dens, upar, p
         error("Got f_offset=$f_offset the same as p_offset=$p_offset. f and p "
               * "cannot be in same place in state vector.")
     end
-    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
-    @boundscheck size(jacobian_matrix, 1) ≥ f_offset + z.n * vperp.n * vpa.n || error("f_offset=$f_offset is too big")
-    @boundscheck size(jacobian_matrix, 1) ≥ p_offset + z.n || error("p_offset=$p_offset is too big")
-    @boundscheck include ∈ (:all, :explicit_z, :explicit_v) || error("Unexpected value for include=$include")
+    @debug_consistency_checks size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
+    @debug_consistency_checks size(jacobian_matrix, 1) ≥ f_offset + z.n * vperp.n * vpa.n || error("f_offset=$f_offset is too big")
+    @debug_consistency_checks size(jacobian_matrix, 1) ≥ p_offset + z.n || error("p_offset=$p_offset is too big")
+    @debug_consistency_checks include ∈ (:all, :explicit_z, :explicit_v) || error("Unexpected value for include=$include")
 
     v_size = vperp.n * vpa.n
 
@@ -164,8 +165,8 @@ function add_electron_z_advection_to_z_only_Jacobian!(
         jacobian_matrix, f, dens, upar, p, vth, dpdf_dz, me, z, vperp, vpa, z_spectral,
         z_advect, z_speed, scratch_dummy, dt, ir, ivperp, ivpa)
 
-    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
-    @boundscheck size(jacobian_matrix, 1) == z.n || error("Jacobian matrix size is wrong")
+    @debug_consistency_checks size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
+    @debug_consistency_checks size(jacobian_matrix, 1) == z.n || error("Jacobian matrix size is wrong")
 
     if !isa(z_spectral, gausslegendre_info)
         error("Only gausslegendre_pseudospectral z-coordinate type is supported by "
@@ -228,8 +229,8 @@ function add_electron_z_advection_to_v_only_Jacobian!(
         jacobian_matrix, f, dens, upar, p, vth, dpdf_dz, me, z, vperp, vpa, z_spectral,
         z_advect, z_speed, scratch_dummy, dt, ir, iz)
 
-    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
-    @boundscheck size(jacobian_matrix, 1) == vperp.n * vpa.n + 1 || error("Jacobian matrix size is wrong")
+    @debug_consistency_checks size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
+    @debug_consistency_checks size(jacobian_matrix, 1) == vperp.n * vpa.n + 1 || error("Jacobian matrix size is wrong")
 
     @loop_vperp_vpa ivperp ivpa begin
         if skip_f_electron_bc_points_in_Jacobian(iz, ivperp, ivpa, z, vperp, vpa,

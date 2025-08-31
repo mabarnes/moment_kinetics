@@ -6,6 +6,7 @@ using ..type_definitions: mk_float
 import ..calculus: elementwise_derivative!, second_derivative!,
                    derivative_elements_to_full_grid!
 import ..calculus: elementwise_indefinite_integration!
+using ..debugging
 using ..moment_kinetics_structs: discretization_info
 
 """
@@ -126,9 +127,9 @@ end
 """
 function upwind_first_order!(df, f, del, adv_fac, bc, igrid, ielement)
     n = length(del)
-	@boundscheck n == length(f) || throw(BoundsError(f))
-    @boundscheck n == length(del) || throw(BoundsError(del))
-	@boundscheck n == length(adv_fac) || throw(BoundsError(adv_fac))
+	@debug_consistency_checks n == length(f) || throw(BoundsError(f))
+    @debug_consistency_checks n == length(del) || throw(BoundsError(del))
+	@debug_consistency_checks n == length(adv_fac) || throw(BoundsError(adv_fac))
     @inbounds @fastmath begin
         for i ∈ 2:n-1
             if adv_fac[i] < 0
@@ -183,9 +184,9 @@ end
 """
 function upwind_second_order!(df, f, del, adv_fac, bc, igrid, ielement)
     n = length(del)
-	@boundscheck n == length(f) || throw(BoundsError(f))
-    @boundscheck n == length(del) || throw(BoundsError(del))
-	@boundscheck n == length(adv_fac) || throw(BoundsError(adv_fac))
+	@debug_consistency_checks n == length(f) || throw(BoundsError(f))
+    @debug_consistency_checks n == length(del) || throw(BoundsError(del))
+	@debug_consistency_checks n == length(adv_fac) || throw(BoundsError(adv_fac))
     @inbounds @fastmath begin
         for i ∈ 3:n-2
             if adv_fac[i] < 0
@@ -278,9 +279,9 @@ end
 """
 function upwind_third_order!(df, f, del, adv_fac, bc, igrid, ielement)
     n = length(del)
-	@boundscheck n == length(f) && n > 3 || throw(BoundsError(f))
-    @boundscheck n == length(del) || throw(BoundsError(del))
-	@boundscheck n == length(adv_fac) || throw(BoundsError(adv_fac))
+	@debug_consistency_checks n == length(f) && n > 3 || throw(BoundsError(f))
+    @debug_consistency_checks n == length(del) || throw(BoundsError(del))
+	@debug_consistency_checks n == length(adv_fac) || throw(BoundsError(adv_fac))
     #@inbounds @fastmath begin
         for i ∈ 3:n-2
 			if adv_fac[i] < 0.0
