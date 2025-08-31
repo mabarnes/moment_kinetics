@@ -458,8 +458,7 @@ end
 """
 structure containing basic information related to coordinates
 """
-struct coordinate{T <: AbstractVector{mk_float}, Ti <: AbstractVector{mk_int}, Tbparams,
-                  Tnext <: Union{mk_int,Cint}, Tprev <: Union{mk_int,Cint}}
+struct coordinate{T <: AbstractVector{mk_float}, Ti <: AbstractVector{mk_int}, Tbparams}
     # name is the name of the variable associated with this coordiante
     name::String
     # n_global is the total number of grid points associated with this coordinate
@@ -478,10 +477,10 @@ struct coordinate{T <: AbstractVector{mk_float}, Ti <: AbstractVector{mk_int}, T
     irank::mk_int
     # nextrank is the rank of the next process on the communicator for this coordinate
     # (may be MPI.PROC_NULL if this is the last process and the dimension is not periodic)
-    nextrank::Tnext
+    nextrank::Cint
     # prevrank is the rank of the previous process on the communicator for this coordinate
     # (may be MPI.PROC_NULL if this is the first process and the dimension is not periodic)
-    prevrank::Tprev
+    prevrank::Cint
     # L is the box length in this coordinate
     L::mk_float
     # grid is the location of the grid points

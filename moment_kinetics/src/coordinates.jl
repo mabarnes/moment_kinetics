@@ -288,21 +288,21 @@ function define_coordinate(coord_input::NamedTuple; parallel_io::Bool=false,
     periodic = (coord_input.bc == "periodic")
     if irank == nrank - 1
         if periodic
-            nextrank = 0
+            nextrank = Cint(0)
         else
             nextrank = MPI.PROC_NULL
         end
     else
-        nextrank = irank + 1
+        nextrank = Cint(irank + 1)
     end
     if irank == 0
         if periodic
-            prevrank = nrank - 1
+            prevrank = Cint(nrank - 1)
         else
             prevrank = MPI.PROC_NULL
         end
     else
-        prevrank = irank - 1
+        prevrank = Cint(irank - 1)
     end
 
     mask_low = allocate_float(; Symbol(coord_input.name)=>n_local)
