@@ -172,156 +172,156 @@ function run_test()
     end
 
     # Test implicit electron solve
-    for (this_kinetic_input, label, tol) ∈ ((deepcopy(kinetic_input), "", 1.0e-6),
-                                            (deepcopy(kinetic_input_adaptive_timestep), ", adaptive timestep", 2.0e-4),
-                                            (deepcopy(kinetic_input_time_evolving), ", time evolving", 4.0e-4),)
+    @testset "$label$(adi_precon_iterations < 0 ? "" : " $adi_precon_iterations")" for (this_kinetic_input, label, tol) ∈ ((deepcopy(kinetic_input), "fixed timestep", 1.0e-6),
+                                                                                                                           (deepcopy(kinetic_input_adaptive_timestep), "adaptive timestep", 2.0e-4),
+                                                                                                                           (deepcopy(kinetic_input_time_evolving), "time evolving", 4.0e-4),),
+                                                                                       adi_precon_iterations ∈ adi_precon_iterations_values
+
         this_kinetic_input["output"]["base_directory"] = test_output_directory
 
-        for adi_precon_iterations ∈ adi_precon_iterations_values
-            if adi_precon_iterations < 0
-                # Provide some progress info
-                println("    - testing kinetic electrons$label")
-                # Don't use distributed memory parallelism with LU preconditioner
-                pop!(this_kinetic_input["z"], "nelement_local")
+        if adi_precon_iterations < 0
+            # Provide some progress info
+            println("    - testing kinetic electrons, $label")
+            # Don't use distributed memory parallelism with LU preconditioner
+            pop!(this_kinetic_input["z"], "nelement_local")
+        else
+            this_kinetic_input["output"]["run_name"] *= "_adi$adi_precon_iterations"
+            this_kinetic_input["timestepping"]["kinetic_electron_preconditioner"] = "adi"
+            this_kinetic_input["nonlinear_solver"]["adi_precon_iterations"] = adi_precon_iterations
+
+            # Provide some progress info
+            println("    - testing kinetic electrons $adi_precon_iterations ADI iterations, $label")
+        end
+
+        # Suppress console output while running.
+        quietoutput() do
+            restart_from_directory = joinpath(this_boltzmann_input["output"]["base_directory"], this_boltzmann_input["output"]["run_name"])
+            restart_from_file_pattern = this_boltzmann_input["output"]["run_name"] * ".dfns*.h5"
+            restart_from_file = glob(restart_from_file_pattern, restart_from_directory)[1]
+
+            # run kinetic electron simulation
+            run_moment_kinetics(this_kinetic_input; restart=restart_from_file)
+        end
+
+        if global_rank[] == 0
+            # Load and analyse output
+            #########################
+
+            path = joinpath(realpath(this_kinetic_input["output"]["base_directory"]), this_kinetic_input["output"]["run_name"])
+
+            # open the output file(s)
+            run_info = get_run_info_no_setup(path, dfns=true)
+
+            # load fields data
+            Ez = postproc_load_variable(run_info, "Ez")[:,1,:]
+            vthe = postproc_load_variable(run_info, "electron_thermal_speed")[:,1,:]
+            electron_advance_linear_iterations = postproc_load_variable(run_info, "electron_advance_linear_iterations")[end]
+
+            close_run_info(run_info)
+
+            # Regression test
+            # Benchmark data generated in serial on Linux with the LU preconditioner
+            expected_Ez = [-1.1725882218891623 -1.1776336622726766;
+                           -1.0238608089434689 -1.0322062236537615;
+                           -0.6635650715847973 -0.6735224968546698;
+                           -0.4281091018911448 -0.43818164733207154;
+                           -0.4307326771084564 -0.44111594822983197;
+                           -0.34263847904677724 -0.3527698667635337;
+                           -0.2848762661779086 -0.2942649171566735;
+                           -0.26345168742207964 -0.2716267222973865;
+                           -0.24437326252130007 -0.25211993616621897;
+                           -0.2441434440827379 -0.25093038261480466;
+                           -0.2256969989670498 -0.2312604708231275;
+                           -0.19613183153304686 -0.20047448426408893;
+                           -0.173688463060076 -0.17753980131185232;
+                           -0.15171664075925836 -0.15481540597366636;
+                           -0.09749011345887852 -0.09941190105001846;
+                           -0.0345345905614875 -0.03520384775311136;
+                           1.0136720856087798e-14 1.2820071743800603e-14;
+                           0.03453459056147705 0.035203847753093;
+                           0.0974901134588791 0.09941190105001832;
+                           0.15171664075927124 0.15481540597370938;
+                           0.1736884630600449 0.1775398013117877;
+                           0.1961318315330768 0.20047448426410092;
+                           0.22569699896706918 0.23126047082315318;
+                           0.2441434440826907 0.25093038261474365;
+                           0.2443732625212673 0.25211993616616396;
+                           0.2634516874220768 0.27162672229737905;
+                           0.28487626617792133 0.29426491715670267;
+                           0.34263847904677097 0.35276986676353034;
+                           0.4307326771084532 0.44111594822984607;
+                           0.4281091018911668 0.43818164733210624;
+                           0.6635650715848012 0.673522496854653;
+                           1.0238608089434755 1.0322062236537737;
+                           1.1725882218891814 1.1776336622727863]
+            expected_vthe = [18.676826599688518 18.53470329289466;
+                             19.525199576911888 19.407756666941655;
+                             20.70872008146677 20.629767577551725;
+                             21.425373425297394 21.375624256352353;
+                             21.681774750114645 21.646269036297042;
+                             21.901226657252224 21.87888290595702;
+                             22.205588593755774 22.20610827501164;
+                             22.432224302260742 22.451919858547495;
+                             22.524426687095215 22.552888718220892;
+                             22.61409579788143 22.65030245174724;
+                             22.75198657730116 22.800019400346628;
+                             22.867599820270556 22.924662790410167;
+                             22.914088377045655 22.97466424154602;
+                             22.959357906177164 23.023211976762504;
+                             23.017927918956982 23.085693103965276;
+                             23.050232625793747 23.120203221415636;
+                             23.0519641128348 23.121923892065464;
+                             23.050232625793743 23.120203221415636;
+                             23.01792791895698 23.085693103965244;
+                             22.95935790617716 23.023211976762486;
+                             22.91408837704565 22.974664241545955;
+                             22.867599820270556 22.924662790410167;
+                             22.751986577301167 22.800019400346613;
+                             22.614095797881433 22.65030245174726;
+                             22.52442668709523 22.552888718220917;
+                             22.432224302260742 22.45191985854757;
+                             22.205588593755785 22.206108275011673;
+                             21.90122665725223 21.87888290595702;
+                             21.681774750114652 21.646269036297035;
+                             21.42537342529739 21.375624256352353;
+                             20.70872008146678 20.629767577551707;
+                             19.525199576911906 19.407756666941705;
+                             18.67682659968857 18.534703292894708]
+
+            if expected_Ez == nothing
+                # Error: no expected input provided
+                println("data tested would be: Ez=", Ez)
+                @test false
             else
-                this_kinetic_input["output"]["run_name"] *= "_adi$adi_precon_iterations"
-                this_kinetic_input["timestepping"]["kinetic_electron_preconditioner"] = "adi"
-                this_kinetic_input["nonlinear_solver"]["adi_precon_iterations"] = adi_precon_iterations
-
-                # Provide some progress info
-                println("    - testing kinetic electrons $adi_precon_iterations ADI iterations$label")
+                @test elementwise_isapprox(Ez, expected_Ez, rtol=0.0, atol=2.0*tol)
+            end
+            if expected_vthe == nothing
+                # Error: no expected input provided
+                println("data tested would be: vthe=", vthe)
+                @test false
+            else
+                @test elementwise_isapprox(vthe, expected_vthe, rtol=tol, atol=0.0)
             end
 
-            # Suppress console output while running.
-            quietoutput() do
-                restart_from_directory = joinpath(this_boltzmann_input["output"]["base_directory"], this_boltzmann_input["output"]["run_name"])
-                restart_from_file_pattern = this_boltzmann_input["output"]["run_name"] * ".dfns*.h5"
-                restart_from_file = glob(restart_from_file_pattern, restart_from_directory)[1]
-
-                # run kinetic electron simulation
-                run_moment_kinetics(this_kinetic_input; restart=restart_from_file)
-            end
-
-            if global_rank[] == 0
-                # Load and analyse output
-                #########################
-
-                path = joinpath(realpath(this_kinetic_input["output"]["base_directory"]), this_kinetic_input["output"]["run_name"])
-
-                # open the output file(s)
-                run_info = get_run_info_no_setup(path, dfns=true)
-
-                # load fields data
-                Ez = postproc_load_variable(run_info, "Ez")[:,1,:]
-                vthe = postproc_load_variable(run_info, "electron_thermal_speed")[:,1,:]
-                electron_advance_linear_iterations = postproc_load_variable(run_info, "electron_advance_linear_iterations")[end]
-
-                close_run_info(run_info)
-
-                # Regression test
-                # Benchmark data generated in serial on Linux with the LU preconditioner
-                expected_Ez = [-1.1725882218891623 -1.1776336622726766;
-                               -1.0238608089434689 -1.0322062236537615;
-                               -0.6635650715847973 -0.6735224968546698;
-                               -0.4281091018911448 -0.43818164733207154;
-                               -0.4307326771084564 -0.44111594822983197;
-                               -0.34263847904677724 -0.3527698667635337;
-                               -0.2848762661779086 -0.2942649171566735;
-                               -0.26345168742207964 -0.2716267222973865;
-                               -0.24437326252130007 -0.25211993616621897;
-                               -0.2441434440827379 -0.25093038261480466;
-                               -0.2256969989670498 -0.2312604708231275;
-                               -0.19613183153304686 -0.20047448426408893;
-                               -0.173688463060076 -0.17753980131185232;
-                               -0.15171664075925836 -0.15481540597366636;
-                               -0.09749011345887852 -0.09941190105001846;
-                               -0.0345345905614875 -0.03520384775311136;
-                               1.0136720856087798e-14 1.2820071743800603e-14;
-                               0.03453459056147705 0.035203847753093;
-                               0.0974901134588791 0.09941190105001832;
-                               0.15171664075927124 0.15481540597370938;
-                               0.1736884630600449 0.1775398013117877;
-                               0.1961318315330768 0.20047448426410092;
-                               0.22569699896706918 0.23126047082315318;
-                               0.2441434440826907 0.25093038261474365;
-                               0.2443732625212673 0.25211993616616396;
-                               0.2634516874220768 0.27162672229737905;
-                               0.28487626617792133 0.29426491715670267;
-                               0.34263847904677097 0.35276986676353034;
-                               0.4307326771084532 0.44111594822984607;
-                               0.4281091018911668 0.43818164733210624;
-                               0.6635650715848012 0.673522496854653;
-                               1.0238608089434755 1.0322062236537737;
-                               1.1725882218891814 1.1776336622727863]
-                expected_vthe = [18.676826599688518 18.53470329289466;
-                                 19.525199576911888 19.407756666941655;
-                                 20.70872008146677 20.629767577551725;
-                                 21.425373425297394 21.375624256352353;
-                                 21.681774750114645 21.646269036297042;
-                                 21.901226657252224 21.87888290595702;
-                                 22.205588593755774 22.20610827501164;
-                                 22.432224302260742 22.451919858547495;
-                                 22.524426687095215 22.552888718220892;
-                                 22.61409579788143 22.65030245174724;
-                                 22.75198657730116 22.800019400346628;
-                                 22.867599820270556 22.924662790410167;
-                                 22.914088377045655 22.97466424154602;
-                                 22.959357906177164 23.023211976762504;
-                                 23.017927918956982 23.085693103965276;
-                                 23.050232625793747 23.120203221415636;
-                                 23.0519641128348 23.121923892065464;
-                                 23.050232625793743 23.120203221415636;
-                                 23.01792791895698 23.085693103965244;
-                                 22.95935790617716 23.023211976762486;
-                                 22.91408837704565 22.974664241545955;
-                                 22.867599820270556 22.924662790410167;
-                                 22.751986577301167 22.800019400346613;
-                                 22.614095797881433 22.65030245174726;
-                                 22.52442668709523 22.552888718220917;
-                                 22.432224302260742 22.45191985854757;
-                                 22.205588593755785 22.206108275011673;
-                                 21.90122665725223 21.87888290595702;
-                                 21.681774750114652 21.646269036297035;
-                                 21.42537342529739 21.375624256352353;
-                                 20.70872008146678 20.629767577551707;
-                                 19.525199576911906 19.407756666941705;
-                                 18.67682659968857 18.534703292894708]
-
-                if expected_Ez == nothing
-                    # Error: no expected input provided
-                    println("data tested would be: Ez=", Ez)
-                    @test false
-                else
-                    @test elementwise_isapprox(Ez, expected_Ez, rtol=0.0, atol=2.0*tol)
-                end
-                if expected_vthe == nothing
-                    # Error: no expected input provided
-                    println("data tested would be: vthe=", vthe)
-                    @test false
-                else
-                    @test elementwise_isapprox(vthe, expected_vthe, rtol=tol, atol=0.0)
-                end
-
-                # Iteration counts are fairly inconsistent, but it's good to check that they at
-                # least don't unexpectedly increase by an order of magnitude.
-                # Expected iteration count is from a serial run on Linux.
-                expected_electron_advance_linear_iterations = 48716
-                @test electron_advance_linear_iterations < 2 * expected_electron_advance_linear_iterations
-                if !(electron_advance_linear_iterations < 2 * expected_electron_advance_linear_iterations)
-                    println("electron_advance_linear_iterations=$electron_advance_linear_iterations was greater than twice the expected $expected_electron_advance_linear_iterations.")
-                end
+            # Iteration counts are fairly inconsistent, but it's good to check that they at
+            # least don't unexpectedly increase by an order of magnitude.
+            # Expected iteration count is from a serial run on Linux.
+            expected_electron_advance_linear_iterations = 48716
+            @test electron_advance_linear_iterations < 2 * expected_electron_advance_linear_iterations
+            if !(electron_advance_linear_iterations < 2 * expected_electron_advance_linear_iterations)
+                println("electron_advance_linear_iterations=$electron_advance_linear_iterations was greater than twice the expected $expected_electron_advance_linear_iterations.")
             end
         end
     end
 
     # Test explicit electron solves - separate loop for different expected results due to
     # a shorter simulation time, and no test for iteration counts.
-    for (this_kinetic_input, label, tol) ∈ ((deepcopy(kinetic_input_implicit_ppar_explicit_pseudotimestep), ", explicit solve", 1.0e-4),
-                                            (deepcopy(kinetic_input_explicit_time_evolving), ", explicit time evolving", 4.0e-4),)
-        this_kinetic_input["output"]["base_directory"] = test_output_directory
+    @testset "$label" for (this_kinetic_input, label, tol) ∈ ((deepcopy(kinetic_input_implicit_ppar_explicit_pseudotimestep), "explicit solve", 1.0e-4),
+                                                              (deepcopy(kinetic_input_explicit_time_evolving), "explicit time evolving", 4.0e-4),)
+                          this_kinetic_input["output"]["base_directory"] = test_output_directory
 
         # Provide some progress info
-        println("    - testing kinetic electrons$label")
+        println("    - testing kinetic electrons, $label")
 
         # Suppress console output while running.
         quietoutput() do
@@ -441,7 +441,7 @@ function run_test()
 end
 
 function runtests()
-    @testset "kinetic electrons" begin
+    @testset "kinetic electrons" verbose=use_verbose begin
         println("Kinetic electron tests")
         run_test()
     end

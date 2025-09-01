@@ -32,7 +32,10 @@ using ..velocity_moments: calculate_electron_moment_derivatives!, update_derived
 using ..velocity_grid_transforms: vzvrvzeta_to_vpavperp!, vpavperp_to_vzvrvzeta!
 using ..boundary_conditions: enforce_boundary_conditions!, get_ion_z_boundary_cutoff_indices
 using ..boundary_conditions: enforce_neutral_boundary_conditions!, enforce_vperp_boundary_condition!
-using ..boundary_conditions: vpagrid_to_vpa, enforce_v_boundary_condition_local!
+using ..boundary_conditions: vpagrid_to_vpa, enforce_v_boundary_condition_local!,
+                             skip_f_electron_bc_points_in_Jacobian,
+                             skip_f_electron_bc_points_in_Jacobian_v_solve,
+                             skip_f_electron_bc_points_in_Jacobian_z_solve
 using ..input_structs
 using ..moment_constraints: hard_force_moment_constraints!,
                             hard_force_moment_constraints_neutral!,
@@ -847,7 +850,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
     # Set up parameters for Jacobian-free Newton-Krylov solver used for implicit part of
     # timesteps.
     electron_conduction_nl_solve_parameters = setup_nonlinear_solve(t_params.implicit_braginskii_conduction,
-                                                                    input_dict, (z=z,);
+                                                                    input_dict, (z=z,), (z=z_spectral,);
                                                                     default_rtol=t_params.rtol / 10.0,
                                                                     default_atol=t_params.atol / 10.0,
                                                                     anyzv_region=true)
@@ -856,17 +859,25 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
                                                                   implicit_p_implicit_pseudotimestep,
                                                                   implicit_steady_state),
                               input_dict,
-                              (z=z, vperp=vperp, vpa=vpa),
-                              (r,);
+                              (z=z, vperp=vperp, vpa=vpa), (r,),
+                              (z=z_spectral, vperp=vperp_spectral, vpa=vpa_spectral);
                               default_rtol=t_params.rtol / 10.0,
                               default_atol=t_params.atol / 10.0,
                               anyzv_region=true, electron_p_pdf_solve=true,
-                              preconditioner_type=t_params.electron_preconditioner_type)
+                              preconditioner_type=t_params.electron_preconditioner_type,
+                              boundary_skip_funcs=(full=(electron_pdf=skip_f_electron_bc_points_in_Jacobian,
+                                                         electron_p=nothing),
+                                                   v_solve=(electron_pdf=skip_f_electron_bc_points_in_Jacobian_v_solve,
+                                                            electron_p=nothing),
+                                                   z_solve=(electron_pdf=skip_f_electron_bc_points_in_Jacobian_z_solve,
+                                                            electron_p=nothing)))
     nl_solver_ion_advance_params =
         setup_nonlinear_solve(t_params.implicit_ion_advance, input_dict,
                               (s=composition.n_ion_species, r=r, z=z, vperp=vperp,
                                vpa=vpa),
-                              ();
+                              (),
+                              (r=r_spectral, z=z_spectral, vperp=vperp_spectral,
+                               vpa=vpa_spectral);
                               default_rtol=t_params.rtol / 10.0,
                               default_atol=t_params.atol / 10.0,
                               preconditioner_type=Val(:lu))
@@ -874,7 +885,8 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
     # within a parallelised s_r_z_vperp loop.
     nl_solver_vpa_advection_params =
         setup_nonlinear_solve(t_params.implicit_vpa_advection, input_dict, (vpa=vpa,),
-                              (composition.n_ion_species, r, z, vperp);
+                              (composition.n_ion_species, r, z, vperp),
+                              (vpa=vpa_spectral,);
                               default_rtol=t_params.rtol / 10.0,
                               default_atol=t_params.atol / 10.0,
                               serial_solve=true, preconditioner_type=Val(:lu))

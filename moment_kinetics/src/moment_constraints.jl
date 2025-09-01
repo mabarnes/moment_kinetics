@@ -5,16 +5,17 @@ function.
 """
 module moment_constraints
 
-using ..boundary_conditions: skip_f_electron_bc_points_in_Jacobian
 using ..calculus: integral
 using ..debugging
+using ..jacobian_matrices
 using ..looping
+using ..moment_kinetics_structs
 using ..timer_utils
-using ..type_definitions: mk_float
+using ..type_definitions
 
 export hard_force_moment_constraints!, hard_force_moment_constraints_neutral!,
        electron_implicit_constraint_forcing!,
-       add_electron_implicit_constraint_forcing_to_Jacobian!
+       get_electron_implicit_constraint_forcing_term
 
 """
     hard_force_moment_constraints!(f, moments, vpa)
@@ -392,127 +393,33 @@ timesteps that do not guarantee accurate time evolution.
 end
 
 """
-    add_electron_implicit_constraint_forcing_to_Jacobian!(jacobian_matrix, f,
-                                                          z_speed, z, vperp, vpa,
-                                                          constraint_forcing_rate,
-                                                          dt, ir, include=:all;
-                                                          f_offset=0)
+    get_electron_implicit_constraint_forcing_term(
+        f::AbstractArray{mk_float,3}, zeroth_moment::AbstractVector{mk_float},
+        first_moment::AbstractVector{mk_float},
+        second_moment::AbstractVector{mk_float}, z::coordinate, vperp::coordinate,
+        vpa::coordinate, constraint_forcing_rate::mk_float, ir::mk_int,
+        include::Symbol=:all)
 
 Add the contributions corresponding to [`electron_implicit_constraint_forcing!`](@ref) to
 `jacobian_matrix`.
 """
-function add_electron_implicit_constraint_forcing_to_Jacobian!(
-        jacobian_matrix, f, zeroth_moment, first_moment, second_moment, z_speed, z, vperp,
-        vpa, constraint_forcing_rate, dt, ir, include=:all; f_offset=0)
+function get_electron_implicit_constraint_forcing_term(sub_terms::ElectronSubTerms)
 
-    @debug_consistency_checks size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
-    @debug_consistency_checks size(jacobian_matrix, 1) ≥ f_offset + z.n * vperp.n * vpa.n || error("f_offset=$f_offset is too big")
-    @debug_consistency_checks include ∈ (:all, :explicit_z, :explicit_v) || error("Unexpected value for include=$include")
+    constraint_forcing_rate = sub_terms.constraint_forcing_rate
+    wperp = sub_terms.wperp
+    wpa = sub_terms.wpa
+    zeroth_moment = sub_terms.zeroth_moment
+    first_moment = sub_terms.first_moment
+    second_moment = sub_terms.second_moment
+    f = sub_terms.f
 
-    vpa_grid = vpa.grid
-    vpa_wgts = vpa.wgts
-    v_size = vperp.n * vpa.n
+    term = - constraint_forcing_rate * (
+              (1.0 - zeroth_moment)
+              - first_moment * wpa
+              + (1.5 - second_moment) * (wpa^2 + wperp^2)
+             ) * f
 
-    @begin_anyzv_z_vperp_vpa_region()
-    @loop_z_vperp_vpa iz ivperp ivpa begin
-        if skip_f_electron_bc_points_in_Jacobian(iz, ivperp, ivpa, z, vperp, vpa, z_speed)
-            continue
-        end
-
-        # Rows corresponding to pdf_electron
-        row = (iz - 1) * v_size + (ivperp - 1) * vpa.n + ivpa + f_offset
-
-        # Diagonal terms
-        if include === :all
-            jacobian_matrix[row,row] += -dt * constraint_forcing_rate *
-                                              ((1.0 - zeroth_moment[iz])
-                                               - first_moment[iz]*vpa_grid[ivpa]
-                                               + (1.5 - second_moment[iz])*vpa_grid[ivpa]^2)
-        end
-
-        if include ∈ (:all, :explicit_v)
-            # Integral terms
-            # d(∫dw_∥ w_∥^n g[irow])/d(g[icol]) = vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^n
-            for icolvperp ∈ 1:vperp.n, icolvpa ∈ 1:vpa.n
-                col = (iz - 1) * v_size + (icolvperp - 1) * vpa.n + icolvpa + f_offset
-                jacobian_matrix[row,col] += dt * constraint_forcing_rate *
-                                                 (1.0
-                                                  + vpa_grid[icolvpa]*vpa_grid[ivpa]
-                                                  + vpa_grid[icolvpa]^2*vpa_grid[ivpa]^2) *
-                                                 vpa_wgts[icolvpa] * f[ivpa,ivperp,iz]
-            end
-        end
-    end
-
-    return nothing
-end
-
-function add_electron_implicit_constraint_forcing_to_z_only_Jacobian!(
-        jacobian_matrix, f, zeroth_moment, first_moment, second_moment, z_speed, z, vperp,
-        vpa, constraint_forcing_rate, dt, ir, ivperp, ivpa)
-
-    @debug_consistency_checks size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
-    @debug_consistency_checks size(jacobian_matrix, 1) == z.n || error("Jacobian matrix size is wrong")
-
-    vpa_grid = vpa.grid
-    vpa_wgts = vpa.wgts
-
-    @loop_z iz begin
-        if skip_f_electron_bc_points_in_Jacobian(iz, ivperp, ivpa, z, vperp, vpa, z_speed)
-            continue
-        end
-
-        # Rows corresponding to pdf_electron
-        row = iz
-
-        # Diagonal terms
-        jacobian_matrix[row,row] += -dt * constraint_forcing_rate *
-                                          ((1.0 - zeroth_moment[iz])
-                                           - first_moment[iz]*vpa_grid[ivpa]
-                                           + (1.5 - second_moment[iz])*vpa_grid[ivpa]^2)
-    end
-
-    return nothing
-end
-
-function add_electron_implicit_constraint_forcing_to_v_only_Jacobian!(
-        jacobian_matrix, f, zeroth_moment, first_moment, second_moment, z_speed, z, vperp,
-        vpa, constraint_forcing_rate, dt, ir, iz)
-
-    @debug_consistency_checks size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
-    @debug_consistency_checks size(jacobian_matrix, 1) == vperp.n * vpa.n + 1 || error("Jacobian matrix size is wrong")
-
-    vpa_grid = vpa.grid
-    vpa_wgts = vpa.wgts
-    v_size = vperp.n * vpa.n
-
-    @loop_vperp_vpa ivperp ivpa begin
-        if skip_f_electron_bc_points_in_Jacobian(iz, ivperp, ivpa, z, vperp, vpa, z_speed)
-            continue
-        end
-
-        # Rows corresponding to pdf_electron
-        row = (ivperp - 1) * vpa.n + ivpa
-
-        # Diagonal terms
-        jacobian_matrix[row,row] += -dt * constraint_forcing_rate *
-                                          ((1.0 - zeroth_moment)
-                                           - first_moment*vpa_grid[ivpa]
-                                           + (1.5 - second_moment)*vpa_grid[ivpa]^2)
-
-        # Integral terms
-        # d(∫dw_∥ w_∥^n g[irow])/d(g[icol]) = vpa.wgts[icolvpa]/sqrt(π) * vpa.grid[icolvpa]^n
-        for icolvperp ∈ 1:vperp.n, icolvpa ∈ 1:vpa.n
-            col = (icolvperp - 1) * vpa.n + icolvpa
-            jacobian_matrix[row,col] += dt * constraint_forcing_rate *
-                                             (1.0
-                                              + vpa_grid[icolvpa]*vpa_grid[ivpa]
-                                              + vpa_grid[icolvpa]^2*vpa_grid[ivpa]^2) *
-                                             vpa_wgts[icolvpa] * f[ivpa,ivperp]
-        end
-    end
-
-    return nothing
+    return term
 end
 
 end

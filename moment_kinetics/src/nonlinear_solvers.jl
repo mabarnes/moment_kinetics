@@ -31,8 +31,10 @@ export setup_nonlinear_solve, gather_nonlinear_solver_counters!,
 
 using ..array_allocation: allocate_float, allocate_shared_float
 using ..communication
+using ..communication: _anyzv_subblock_synchronize
 using ..coordinates: coordinate
 using ..input_structs
+using ..jacobian_matrices: create_jacobian_info
 using ..looping
 using ..timer_utils
 using ..type_definitions: mk_float, mk_int
@@ -88,12 +90,13 @@ layout of the variable to be solved (i.e. fastest-varying first).
 The nonlinear solver will be called inside a loop over `outer_coords`, so we might need
 for example a preconditioner object for each point in that outer loop.
 """
-function setup_nonlinear_solve(active, input_dict, coords, outer_coords=();
+function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(), spectral=(;);
                                section_name="nonlinear_solver", default_rtol=1.0e-5,
                                default_atol=1.0e-12, serial_solve=false,
                                anysv_region=false, anyzv_region=false,
                                electron_p_pdf_solve=false,
-                               preconditioner_type=Val(:none), warn_unexpected=false)
+                               preconditioner_type=Val(:none),
+                               boundary_skip_funcs=nothing, warn_unexpected=false)
     nl_solver_section = set_defaults_and_check_section!(
         input_dict, section_name, warn_unexpected;
         rtol=default_rtol,
@@ -255,9 +258,12 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=();
     elseif preconditioner_type === Val(:electron_lu)
         pdf_plus_ppar_size = total_size_coords + coords.z.n
         preconditioners = fill((lu(sparse(1.0*I, 1, 1)),
-                                allocate_shared_float(:newton_size=>pdf_plus_ppar_size,
-                                                      :newton_size=>pdf_plus_ppar_size;
-                                                      comm=comm_anyzv_subblock[]),
+                                create_jacobian_info(coords, spectral;
+                                                     comm=comm_anyzv_subblock[],
+                                                     synchronize=_anyzv_subblock_synchronize,
+                                                     boundary_skip_funcs=boundary_skip_funcs.full,
+                                                     electron_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z)),
+                                                     electron_p=((:anyzv,:z), (:z,))),
                                 allocate_shared_float(; newton_size=pdf_plus_ppar_size,
                                                       comm=comm_anyzv_subblock[]),
                                 allocate_shared_float(; newton_size=pdf_plus_ppar_size,
@@ -282,7 +288,12 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=();
             # This buffer is not shared-memory, because it will be used for a serial LU solve.
             v_solve_buffer = allocate_float(v_solve_n)
             v_solve_buffer2 = allocate_float(v_solve_n)
-            v_solve_matrix_buffer = allocate_float(v_solve_n, v_solve_n)
+            v_solve_jacobian = create_jacobian_info(coords, spectral;
+                                                    comm=nothing,
+                                                    synchronize=nothing,
+                                                    boundary_skip_funcs=boundary_skip_funcs.v_solve,
+                                                    electron_pdf=(nothing, (:vpa, :vperp)),
+                                                    electron_p=(nothing, ()))
 
             z_solve_vperp_range = looping.loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp
             z_solve_vpa_range = looping.loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa
@@ -301,11 +312,20 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=();
             # This buffer is not shared-memory, because it will be used for a serial LU solve.
             z_solve_buffer = allocate_float(z_solve_n)
             z_solve_buffer2 = allocate_float(z_solve_n)
-            z_solve_matrix_buffer = allocate_float(z_solve_n, z_solve_n)
+            z_solve_jacobian = create_jacobian_info(coords, spectral; comm=nothing,
+                                                    synchronize=nothing,
+                                                    boundary_skip_funcs=boundary_skip_funcs.z_solve,
+                                                    electron_pdf=(nothing,(:z,)))
+            z_solve_jacobian_p = create_jacobian_info(coords, spectral; comm=nothing,
+                                                      synchronize=nothing,
+                                                      boundary_skip_funcs=boundary_skip_funcs.z_solve,
+                                                      electron_p=(nothing,(:z,)))
 
-            J_buffer = allocate_shared_float(:newton_size=>pdf_plus_ppar_size,
-                                             :newton_size=>pdf_plus_ppar_size;
-                                             comm=comm_anyzv_subblock[])
+            explicit_jacobian = create_jacobian_info(coords, spectral; comm=comm_anyzv_subblock[],
+                                                     synchronize=_anyzv_subblock_synchronize,
+                                                     boundary_skip_funcs=boundary_skip_funcs.full,
+                                                     electron_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z)),
+                                                     electron_p=((:anyzv,:z), (:z,)))
             input_buffer = allocate_shared_float(; newton_size=pdf_plus_ppar_size,
                                                  comm=comm_anyzv_subblock[])
             intermediate_buffer = allocate_shared_float(; newton_size=pdf_plus_ppar_size,
@@ -330,15 +350,16 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=();
                     v_solve_implicit_lus=v_solve_implicit_lus,
                     v_solve_explicit_matrices=v_solve_explicit_matrices,
                     v_solve_buffer=v_solve_buffer, v_solve_buffer2=v_solve_buffer2,
-                    v_solve_matrix_buffer=v_solve_matrix_buffer,
+                    v_solve_jacobian=v_solve_jacobian,
                     z_solve_global_inds=z_solve_global_inds,
                     z_solve_nsolve=z_solve_nsolve,
                     z_solve_implicit_lus=z_solve_implicit_lus,
                     z_solve_explicit_matrices=z_solve_explicit_matrices,
                     z_solve_buffer=z_solve_buffer, z_solve_buffer2=z_solve_buffer2,
-                    z_solve_matrix_buffer=z_solve_matrix_buffer, J_buffer=J_buffer,
-                    input_buffer=input_buffer, intermediate_buffer=intermediate_buffer,
-                    output_buffer=output_buffer,
+                    z_solve_jacobian=z_solve_jacobian,
+                    z_solve_jacobian_p=z_solve_jacobian_p,
+                    explicit_jacobian=explicit_jacobian, input_buffer=input_buffer,
+                    intermediate_buffer=intermediate_buffer, output_buffer=output_buffer,
                     global_index_subrange=global_index_subrange,
                     n_extra_iterations=n_extra_iterations)
         end
