@@ -39,7 +39,7 @@ using ..moment_constraints: hard_force_moment_constraints!,
                             moment_constraints_on_residual!
 using ..advection: setup_advection
 using ..z_advection: update_speed_z!, z_advection!
-using ..r_advection: update_speed_r!, r_advection!
+using ..r_advection: update_speed_r!, r_advection!, r_advection_1D_ITG!
 using ..neutral_r_advection: update_speed_neutral_r!, neutral_advection_r!
 using ..neutral_z_advection: update_speed_neutral_z!, neutral_advection_z!
 using ..neutral_vz_advection: update_speed_neutral_vz!, neutral_advection_vz!
@@ -3828,6 +3828,15 @@ implementation), a call needs to be made with `dt` scaled by some coefficient.
             r_advection!(fvec_out.pdf, fvec_in, moments, fields, r_advect, r, z, vperp, vpa,
                         dt, r_spectral, composition, geometry, scratch_dummy)
             write_debug_IO("r_advection!")
+        end
+
+        if geometry.input.option == "1D-Helical-ITG"
+            # fake r advection to try to provoke ITG. not real advection so the r_advection
+            # flag should still be false, hence the need for another loop here.
+            r_advection_1D_ITG!(fvec_out.pdf, fvec_in, moments, fields, r_advect, r, z,
+                                vperp, vpa, dt, r_spectral, composition, geometry,
+                                scratch_dummy)
+            write_debug_IO("r_advection_1D_ITG!")
         end
 
         # vpa_advection! advances the 1D advection equation in vpa.

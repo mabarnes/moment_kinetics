@@ -259,6 +259,8 @@ Base.@kwdef struct ion_species_parameters
     mass::mk_float
     # charge number, absolute w.r.t. proton charge
     zeds::mk_float
+    # radial temperature gradient scale length for 1D ITG 
+    L_T::mk_float
     # array containing the initial line-averaged temperature for this species
     initial_temperature::mk_float
     # array containing the initial line-averaged density for this species

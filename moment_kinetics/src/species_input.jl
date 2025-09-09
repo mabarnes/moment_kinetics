@@ -73,6 +73,9 @@ function get_species_input(toml_input, warn_unexpected::Bool)
             mass = 1.0,
             # charge number
             zeds = 1.0,
+            # radial temperature gradient scale length for 1D ITG 
+            # (only used if r_advection_1D_ITG is called)
+            L_T = 1.0,
             # initial density
             initial_density = 1.0,
             # initial temperature
