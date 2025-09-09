@@ -52,14 +52,14 @@ dBdr::Array{mk_float,2}
 jacobian::Array{mk_float,2}
 
 # magnetic drift physics coefficients
-# cvdriftr = (b/B) x (b.grad b) . grad r
-cvdriftr::Array{mk_float,2}
-# cvdriftz = (b/B) x (b.grad b) . grad z
-cvdriftz::Array{mk_float,2}
-# gbdriftr = (b/B^2) x grad B . grad r
-gbdriftr::Array{mk_float,2}
-# gbdriftz = (b/B^2) x grad B . grad z
-gbdriftz::Array{mk_float,2}
+# curvature_drift_r = (b/B) x (b.grad b) . grad r
+curvature_drift_r::Array{mk_float,2}
+# curvature_drift_z = (b/B) x (b.grad b) . grad z
+curvature_drift_z::Array{mk_float,2}
+# grad_B_drift_r = (b/B^2) x grad B . grad r
+grad_B_drift_r::Array{mk_float,2}
+# grad_B_drift_z = (b/B^2) x grad B . grad z
+grad_B_drift_z::Array{mk_float,2}
 end
 
 """
@@ -134,10 +134,10 @@ function init_magnetic_geometry(geometry_input_data::geometry_input,z,r)
     dBdr = allocate_float(z, r)
     dBdz = allocate_float(z, r)
     jacobian = allocate_float(z, r)
-    cvdriftr = allocate_float(z, r)
-    cvdriftz = allocate_float(z, r)
-    gbdriftr = allocate_float(z, r)
-    gbdriftz = allocate_float(z, r)
+    curvature_drift_r = allocate_float(z, r)
+    curvature_drift_z = allocate_float(z, r)
+    grad_B_drift_r = allocate_float(z, r)
+    grad_B_drift_z = allocate_float(z, r)
     
     option = geometry_input_data.option
     rhostar = geometry_input_data.rhostar
@@ -156,10 +156,10 @@ function init_magnetic_geometry(geometry_input_data::geometry_input,z,r)
                 dBdz[iz,ir] = 0.0
                 jacobian[iz,ir] = 1.0
 
-                cvdriftr[iz,ir] = 0.0
-                cvdriftz[iz,ir] = 0.0
-                gbdriftr[iz,ir] = 0.0
-                gbdriftz[iz,ir] = 0.0
+                curvature_drift_r[iz,ir] = 0.0
+                curvature_drift_z[iz,ir] = 0.0
+                grad_B_drift_r[iz,ir] = 0.0
+                grad_B_drift_z[iz,ir] = 0.0
             end
         end
     elseif option == "1D-mirror"
@@ -190,10 +190,10 @@ function init_magnetic_geometry(geometry_input_data::geometry_input,z,r)
                 dBdz[iz,ir] = (2.0/z.L)*4.0*DeltaB*zfac*(1.0 - zfac^2)
                 jacobian[iz,ir] = 1.0
 
-                cvdriftr[iz,ir] = 0.0
-                cvdriftz[iz,ir] = 0.0
-                gbdriftr[iz,ir] = 0.0
-                gbdriftz[iz,ir] = 0.0               
+                curvature_drift_r[iz,ir] = 0.0
+                curvature_drift_z[iz,ir] = 0.0
+                grad_B_drift_r[iz,ir] = 0.0
+                grad_B_drift_z[iz,ir] = 0.0               
             end
         end
     elseif option == "low-beta-helix"
@@ -215,10 +215,10 @@ function init_magnetic_geometry(geometry_input_data::geometry_input,z,r)
                 dBdr[iz,ir] = -(Bmag[iz,ir]/rr)*bzeta[iz,ir]^2
                 jacobian[iz,ir] = 1.0
                 
-                cvdriftr[iz,ir] = 0.0
-                cvdriftz[iz,ir] = -(bzeta[iz,ir]/Bmag[iz,ir])*(bzeta[iz,ir]^2)/rr
-                gbdriftr[iz,ir] = 0.0
-                gbdriftz[iz,ir] = cvdriftz[iz,ir]
+                curvature_drift_r[iz,ir] = 0.0
+                curvature_drift_z[iz,ir] = -(bzeta[iz,ir]/Bmag[iz,ir])*(bzeta[iz,ir]^2)/rr
+                grad_B_drift_r[iz,ir] = 0.0
+                grad_B_drift_z[iz,ir] = curvature_drift_z[iz,ir]
             end
         end
     elseif option == "0D-Spitzer-test"
@@ -240,10 +240,10 @@ function init_magnetic_geometry(geometry_input_data::geometry_input,z,r)
                 dBdr[iz,ir] = dBdr_constant
                 jacobian[iz,ir] = 1.0
                 
-                cvdriftr[iz,ir] = 0.0
-                cvdriftz[iz,ir] = 0.0
-                gbdriftr[iz,ir] = 0.0
-                gbdriftz[iz,ir] = 0.0
+                curvature_drift_r[iz,ir] = 0.0
+                curvature_drift_z[iz,ir] = 0.0
+                grad_B_drift_r[iz,ir] = 0.0
+                grad_B_drift_z[iz,ir] = 0.0
             end
         end
     else 
@@ -252,7 +252,7 @@ function init_magnetic_geometry(geometry_input_data::geometry_input,z,r)
 
     geometry = geometric_coefficients(geometry_input_data, rhostar,
                Bzed,Bzeta,Bmag,bzed,bzeta,dBdz,dBdr,jacobian,
-               cvdriftr,cvdriftz,gbdriftr,gbdriftz)
+               curvature_drift_r,curvature_drift_z,grad_B_drift_r,grad_B_drift_z)
     return geometry
 end
 
