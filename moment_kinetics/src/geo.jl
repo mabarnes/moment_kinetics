@@ -25,41 +25,41 @@ around the inside of the code, replacing the
 The arrays of 2 dimensions are functions of (z,r)
 """
 struct geometric_coefficients
-# for now include the reference parameters in `geometry_input`
-input::geometry_input
-# also include a copy of rhostar for ease of use
-rhostar::mk_float
-# the spatially varying coefficients
-# Bz/Bref
-Bzed::Array{mk_float,2}
-# Bzeta/Bref
-Bzeta::Array{mk_float,2}
-# Btot/Bref
-Bmag::Array{mk_float,2}
-# bz -- unit vector component in z direction
-bzed::Array{mk_float,2}
-# bz -- unit vector component in zeta direction
-bzeta::Array{mk_float,2}
+    # for now include the reference parameters in `geometry_input`
+    input::geometry_input
+    # also include a copy of rhostar for ease of use
+    rhostar::mk_float
+    # the spatially varying coefficients
+    # Bz/Bref
+    Bzed::Array{mk_float,2}
+    # Bzeta/Bref
+    Bzeta::Array{mk_float,2}
+    # Btot/Bref
+    Bmag::Array{mk_float,2}
+    # bz -- unit vector component in z direction
+    bzed::Array{mk_float,2}
+    # bz -- unit vector component in zeta direction
+    bzeta::Array{mk_float,2}
 
 
-# now the new coefficients
+    # now the new coefficients
 
-# d Bmag d z
-dBdz::Array{mk_float,2}
-# d Bmag d r
-dBdr::Array{mk_float,2}
-# jacobian =  r grad r x grad z . grad zeta
-jacobian::Array{mk_float,2}
+    # d Bmag d z
+    dBdz::Array{mk_float,2}
+    # d Bmag d r
+    dBdr::Array{mk_float,2}
+    # jacobian =  r grad r x grad z . grad zeta
+    jacobian::Array{mk_float,2}
 
-# magnetic drift physics coefficients
-# curvature_drift_r = (b/B) x (b.grad b) . grad r
-curvature_drift_r::Array{mk_float,2}
-# curvature_drift_z = (b/B) x (b.grad b) . grad z
-curvature_drift_z::Array{mk_float,2}
-# grad_B_drift_r = (b/B^2) x grad B . grad r
-grad_B_drift_r::Array{mk_float,2}
-# grad_B_drift_z = (b/B^2) x grad B . grad z
-grad_B_drift_z::Array{mk_float,2}
+    # magnetic drift physics coefficients
+    # curvature_drift_r = (b/B) x (b.grad b) . grad r
+    curvature_drift_r::Array{mk_float,2}
+    # curvature_drift_z = (b/B) x (b.grad b) . grad z
+    curvature_drift_z::Array{mk_float,2}
+    # grad_B_drift_r = (b/B^2) x grad B . grad r
+    grad_B_drift_r::Array{mk_float,2}
+    # grad_B_drift_z = (b/B^2) x grad B . grad z
+    grad_B_drift_z::Array{mk_float,2}
 end
 
 """
