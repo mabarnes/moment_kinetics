@@ -42,7 +42,7 @@ using ..moment_constraints: hard_force_moment_constraints!,
                             moment_constraints_on_residual!
 using ..advection: setup_advection
 using ..z_advection: update_speed_z!, z_advection!
-using ..r_advection: update_speed_r!, r_advection!
+using ..r_advection: update_speed_r!, r_advection!, r_advection_1D_ITG!
 using ..neutral_r_advection: update_speed_neutral_r!, neutral_advection_r!
 using ..neutral_z_advection: update_speed_neutral_z!, neutral_advection_z!
 using ..neutral_vz_advection: update_speed_neutral_vz!, neutral_advection_vz!
@@ -2233,7 +2233,7 @@ function time_advance!(pdf, scratch, scratch_implicit, scratch_electron, t_param
                             print("midpoint density: ", 
                             rpad(string(round(moments.ion.dens[midpoint,1,1], sigdigits = 8)), 7))
                             print("   midpoint temperature: ", 
-                            rpad(string(round(moments.ion.temp[midpoint,1,1], sigdigits = 8)), 7), "\n")
+                            rpad(string(round(moments.ion.p[midpoint,1,1]/moments.ion.dens[midpoint,1,1], sigdigits = 8)), 7), "\n")
                         end
                         if t_params.adaptive
                             print("nfail = ", rpad(string(t_params.failure_counter[]), 7), "  ",
@@ -3896,6 +3896,15 @@ implementation), a call needs to be made with `dt` scaled by some coefficient.
             write_debug_IO("r_advection!")
         end
 
+        if geometry.input.option == "1D-Helical-ITG"
+            # fake r advection to try to provoke ITG. not real advection so the r_advection
+            # flag should still be false, hence the need for another loop here.
+            r_advection_1D_ITG!(fvec_out.pdf, fvec_in, moments, fields, r_advect, r, z,
+                                vperp, vpa, dt, r_spectral, composition, geometry,
+                                scratch_dummy)
+            write_debug_IO("r_advection_1D_ITG!")
+        end
+
         # vpa_advection! advances the 1D advection equation in vpa.
         # Note this must be called after r_advection!() and z_advection!() so that the r-
         # and z-advection speeds have been updated.
@@ -4051,7 +4060,8 @@ implementation), a call needs to be made with `dt` scaled by some coefficient.
                             num_diss_params.ion.vperp_dissipation_coefficient)
             write_debug_IO("vperp_dissipation!")
             z_dissipation!(fvec_out.pdf, fvec_in.pdf, z, z_spectral, dt,
-                        num_diss_params.ion.z_dissipation_coefficient, scratch_dummy)
+                        num_diss_params.ion.z_dissipation_coefficient, 
+                        num_diss_params.ion.z_dissipation_degree, scratch_dummy)
             write_debug_IO("z_dissipation!")
             r_dissipation!(fvec_out.pdf, fvec_in.pdf, r, r_spectral, dt,
                         num_diss_params.ion.r_dissipation_coefficient, scratch_dummy)

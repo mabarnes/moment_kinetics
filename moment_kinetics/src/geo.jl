@@ -246,6 +246,41 @@ function init_magnetic_geometry(geometry_input_data::geometry_input,z,r)
                 grad_B_drift_z[iz,ir] = 0.0
             end
         end
+    elseif option == "1D-Helical-ITG"
+        # a 1D configuration for finding an ITG mode via implementing
+        # grad B drift and adding a radial temperature gradient term to the 
+        # drift kinetic equation we use. Although there is no R domain 
+        # in this setup, we can still claim that there is an ExB drift 
+        # advecting new temperature plasma into the domain because of the 
+        # "presence" of this radial temperature gradient.
+        # The ordering required for the mode to happen requires that 
+        # B_z/B_zeta << rho_i/2*L_B, where L_B is length scale of radial B 
+        # variation. Also need L_T << L_B. Will probably update this soon, 
+        # depending on what I see.
+        pitch = geometry_input_data.pitch
+        dB_dr = geometry_input_data.dBdr_constant
+        B_0 = 1.0
+        for ir in 1:nr
+            for iz in 1:nz
+                bzed[iz,ir] = pitch
+                bzeta[iz,ir] = sqrt(1 - bzed[iz,ir]^2)
+                Bmag[iz,ir] = B_0
+                Bzed[iz,ir] = Bmag[iz,ir]*bzed[iz,ir]
+                Bzeta[iz,ir] = Bmag[iz,ir]*bzeta[iz,ir]
+                dBdr[iz,ir] = dB_dr
+                dBdz[iz,ir] = 0.0
+                jacobian[iz,ir] = 1.0
+
+
+                curvature_drift_r[iz,ir] = 0.0
+                curvature_drift_z[iz,ir] = 0.0
+
+                grad_B_drift_r[iz,ir] = 0.0
+                grad_B_drift_z[iz,ir] = bzeta[iz,ir] * dBdr[iz,ir]/Bmag[iz,ir]
+            end
+        end
+        L_B = 1/(dB_dr*1/Bmag[1,1])
+        println("L_B = $L_B")
     else 
         input_option_error("$option", option)
     end

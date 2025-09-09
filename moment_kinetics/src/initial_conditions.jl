@@ -925,6 +925,20 @@ function init_density!(dens, z, r, spec, n_species)
                      * (1.0 + spec[is].z_IC.density_amplitude
                               * cos(2.0*π*spec[is].z_IC.wavenumber*z.grid/z.L
                                     + spec[is].z_IC.density_phase)))
+            elseif spec[is].z_IC.initialization_option == "sinusoid_sum"
+                # initial condition is sum of sinusoids in z
+                @. dens[:,ir,is] = 
+                    (spec[is].initial_density
+                      * (1.0 + spec[is].z_IC.density_amplitude
+                              * (cos(2 * 2.0*π*spec[is].z_IC.wavenumber*z.grid/z.L
+                                    + spec[is].z_IC.density_phase) + 
+                                 cos(4 * 2.0*π*spec[is].z_IC.wavenumber*z.grid/z.L
+                                    + spec[is].z_IC.density_phase) + 
+                                 cos(3 * 2.0*π*spec[is].z_IC.wavenumber*z.grid/z.L
+                                    + spec[is].z_IC.density_phase)
+                                )
+                        )
+                    )
             elseif spec[is].z_IC.initialization_option == "smoothedsquare"
                 # initial condition is first 3 Fourier harmonics of a square wave
                 argument = 2.0*π*(spec[is].z_IC.wavenumber*z.grid/z.L +
