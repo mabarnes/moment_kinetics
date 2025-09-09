@@ -222,14 +222,14 @@ function init_magnetic_geometry(geometry_input_data::geometry_input,z,r)
             end
         end
     elseif option == "0D-Spitzer-test"
-     # a 0D configuration with certain geometrical factors
-     # set to be constants to enable testing of velocity
-     # space operators such as mirror or vperp advection terms
-     pitch = geometry_input_data.pitch
-     dBdz_constant = geometry_input_data.dBdz_constant
-     dBdr_constant = geometry_input_data.dBdr_constant
-     B0 = 1.0 # chose reference field strength to be Bzeta at r = 1
-     for ir in 1:nr
+        # a 0D configuration with certain geometrical factors
+        # set to be constants to enable testing of velocity
+        # space operators such as mirror or vperp advection terms
+        pitch = geometry_input_data.pitch
+        dBdz_constant = geometry_input_data.dBdz_constant
+        dBdr_constant = geometry_input_data.dBdr_constant
+        B0 = 1.0 # chose reference field strength to be Bzeta at r = 1
+        for ir in 1:nr
             for iz in 1:nz
                 Bmag[iz,ir] = B0
                 bzed[iz,ir] = pitch
