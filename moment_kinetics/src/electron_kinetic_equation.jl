@@ -4527,8 +4527,8 @@ only. This allows `result_object` to be (possibly) passed to
 
     if soft_force_constraints
         electron_implicit_constraint_forcing!(f_out, f_in,
-                                              t_params.constraint_forcing_rate, vpa, dt,
-                                              ir)
+                                              t_params.constraint_forcing_rate, vperp,
+                                              vpa, dt, ir)
         write_debug_IO("electron_implicit_constraint_forcing!")
     end
 

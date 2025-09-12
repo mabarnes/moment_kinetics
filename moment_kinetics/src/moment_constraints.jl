@@ -358,28 +358,33 @@ function moment_constraints_on_residual!(residual::AbstractArray{T,N},
 end
 
 """
-    electron_implicit_constraint_forcing!(f_out, f_in, constraint_forcing_rate, vpa,
-                                          dt, ir)
+    electron_implicit_constraint_forcing!(f_out, f_in, constraint_forcing_rate, vperp,
+                                          vpa, dt, ir)
 
 Add terms to the electron kinetic equation that force the moment constraints to be
 approximately satisfied. Needed to avoid large errors when taking large, implicit
 timesteps that do not guarantee accurate time evolution.
 """
 @timeit global_timer electron_implicit_constraint_forcing!(
-                         f_out, f_in, constraint_forcing_rate, vpa, dt, ir) = begin
+                         f_out, f_in, constraint_forcing_rate, vperp, vpa, dt, ir) = begin
     @begin_anyzv_z_region()
     vpa_grid = vpa.grid
+    vperp_grid = vperp.grid
     @loop_z iz begin
-        @views zeroth_moment = integral(f_in[:,1,iz], vpa.wgts)
-        @views first_moment = integral(f_in[:,1,iz], vpa.grid, vpa.wgts)
-        @views second_moment = integral(f_in[:,1,iz], vpa.grid, 2, vpa.wgts)
+        @views zeroth_moment = integral(f_in[:,:,iz], vpa.grid, 0, vpa.wgts, vperp.grid,
+                                        0, vperp.wgts)
+        @views first_moment = integral(f_in[:,:,iz], vpa.grid, 1, vpa.wgts, vperp.grid, 0,
+                                       vperp.wgts)
+        @views second_moment = integral((vperp,vpa)->(vperp^2 + vpa^2), f_in[:,:,iz],
+                                        vperp, vpa)
 
         @loop_vperp_vpa ivperp ivpa begin
             f_out[ivpa,ivperp,iz] +=
                 dt * constraint_forcing_rate *
                 ((1.0 - zeroth_moment)
                  - first_moment*vpa_grid[ivpa]
-                 + (1.5 - second_moment)*vpa_grid[ivpa]^2) * f_in[ivpa,ivperp,iz]
+                 + (1.5 - second_moment)*(vpa_grid[ivpa]^2 + vperp_grid[ivperp]^2)
+                ) * f_in[ivpa,ivperp,iz]
         end
     end
 

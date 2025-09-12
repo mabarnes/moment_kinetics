@@ -2391,7 +2391,7 @@ function test_electron_implicit_constraint_forcing(test_input; rtol=(2.5e0*epsil
             end
             electron_implicit_constraint_forcing!(residual, this_f,
                                                   t_params.electron.constraint_forcing_rate,
-                                                  vpa, dt, ir)
+                                                  vperp, vpa, dt, ir)
             # Now
             #   residual = f_electron_old + dt*RHS(f_electron_newvar)
             # so update to desired residual
