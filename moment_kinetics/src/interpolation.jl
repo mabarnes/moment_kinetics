@@ -6,7 +6,7 @@ Note these are not guaranteed to be highly optimized!
 module interpolation
 
 export interpolate_to_grid_z, interpolate_to_grid_1d!, interpolate_symmetric!,
-       fill_interpolate_symmetric_matrix!
+       fill_interpolate_symmetric_matrix!, interpolate_to_grid_1d
 
 using ..array_allocation: allocate_float
 using ..moment_kinetics_structs: null_spatial_dimension_info,
