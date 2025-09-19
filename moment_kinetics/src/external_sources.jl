@@ -503,10 +503,6 @@ function setup_external_sources!(input_dict, r, z, electron_physics,
         counter += 1
     end
 
-    # If there are no ion sources, add an inactive ion source to the vector
-    if counter == 1
-        push!(ion_sources, get_settings_ions(1, false))
-    end
 
     # put all electron sources into electron_source_data struct vector, where 
     # each entry is a mirror of the ion source vector.
@@ -524,11 +520,6 @@ function setup_external_sources!(input_dict, r, z, electron_physics,
     while "neutral_source_$counter" ∈ keys(input_dict)
         push!(neutral_sources, get_settings_neutrals(counter, true))
         counter += 1
-    end
-    # If there are no neutral sources, add an inactive neutral source to the vector
-    if counter == 1
-        inactive_neutral_source = get_settings_neutrals(1, false)
-        push!(neutral_sources, inactive_neutral_source)
     end
     return (ion=ion_sources, electron=electron_sources, neutral=neutral_sources)
 end
