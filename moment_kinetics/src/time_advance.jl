@@ -3994,7 +3994,8 @@ implementation), a call needs to be made with `dt` scaled by some coefficient.
                             num_diss_params.ion.vperp_dissipation_coefficient)
             write_debug_IO("vperp_dissipation!")
             z_dissipation!(fvec_out.pdf, fvec_in.pdf, z, z_spectral, dt,
-                        num_diss_params.ion.z_dissipation_coefficient, scratch_dummy)
+                        num_diss_params.ion.z_dissipation_coefficient, 
+                        num_diss_params.ion.z_dissipation_degree, scratch_dummy)
             write_debug_IO("z_dissipation!")
             r_dissipation!(fvec_out.pdf, fvec_in.pdf, r, r_spectral, dt,
                         num_diss_params.ion.r_dissipation_coefficient, scratch_dummy)
