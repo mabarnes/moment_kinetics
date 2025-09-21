@@ -378,8 +378,8 @@ function test_get_pdf_term(test_input::AbstractDict, label::String, get_term::Fu
                                          z=z_spectral);
                                         comm=comm_anyzv_subblock[],
                                         synchronize=_anyzv_subblock_synchronize,
-                                        electron_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z)),
-                                        electron_p=((:anyzv,:z), (:z,)),
+                                        electron_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z), false),
+                                        electron_p=((:anyzv,:z), (:z,), false),
                                         boundary_skip_funcs=(electron_pdf=skip_f_electron_bc_points_in_Jacobian,
                                                              electron_p=nothing))
         jacobian_initialize_identity!(jacobian)
@@ -403,8 +403,8 @@ function test_get_pdf_term(test_input::AbstractDict, label::String, get_term::Fu
                                                    vperp=vperp_spectral, z=z_spectral);
                                                   comm=comm_anyzv_subblock[],
                                                   synchronize=_anyzv_subblock_synchronize,
-                                                  electron_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z)),
-                                                  electron_p=((:anyzv,:z), (:z,)),
+                                                  electron_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z), false),
+                                                  electron_p=((:anyzv,:z), (:z,), false),
                                                   boundary_skip_funcs=(electron_pdf=skip_f_electron_bc_points_in_Jacobian,
                                                                        electron_p=nothing))
         v_solve_jacobian_ADI_check = create_jacobian_info((; vpa=vpa, vperp=vperp),
@@ -412,15 +412,15 @@ function test_get_pdf_term(test_input::AbstractDict, label::String, get_term::Fu
                                                            vperp=vperp_spectral);
                                                           comm=nothing,
                                                           synchronize=nothing,
-                                                          electron_pdf=(nothing, (:vpa, :vperp)),
-                                                          electron_p=(nothing, ()),
+                                                          electron_pdf=(nothing, (:vpa, :vperp), false),
+                                                          electron_p=(nothing, (), false),
                                                           boundary_skip_funcs=(electron_pdf=skip_f_electron_bc_points_in_Jacobian_v_solve,
                                                                                electron_p=nothing))
         z_solve_jacobian_ADI_check = create_jacobian_info((; z=z),
                                                           (; z=z_spectral);
                                                           comm=nothing,
                                                           synchronize=nothing,
-                                                          electron_pdf=(nothing, (:z,)),
+                                                          electron_pdf=(nothing, (:z,), false),
                                                           boundary_skip_funcs=(electron_pdf=skip_f_electron_bc_points_in_Jacobian_z_solve,
                                                                                electron_p=nothing))
 
@@ -845,8 +845,8 @@ function test_get_p_term(test_input::AbstractDict, label::String, get_term::Func
                                          z=z_spectral);
                                         comm=comm_anyzv_subblock[],
                                         synchronize=_anyzv_subblock_synchronize,
-                                        electron_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z)),
-                                        electron_p=((:anyzv,:z), (:z,)),
+                                        electron_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z), false),
+                                        electron_p=((:anyzv,:z), (:z,), false),
                                         boundary_skip_funcs=(electron_pdf=skip_f_electron_bc_points_in_Jacobian,
                                                              electron_p=nothing))
         jacobian_initialize_identity!(jacobian)
@@ -870,8 +870,8 @@ function test_get_p_term(test_input::AbstractDict, label::String, get_term::Func
                                                    vperp=vperp_spectral, z=z_spectral);
                                                   comm=comm_anyzv_subblock[],
                                                   synchronize=_anyzv_subblock_synchronize,
-                                                  electron_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z)),
-                                                  electron_p=((:anyzv,:z), (:z,)),
+                                                  electron_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z), false),
+                                                  electron_p=((:anyzv,:z), (:z,), false),
                                                   boundary_skip_funcs=(electron_pdf=skip_f_electron_bc_points_in_Jacobian,
                                                                        electron_p=nothing))
         v_solve_jacobian_ADI_check = create_jacobian_info((; vpa=vpa, vperp=vperp),
@@ -879,15 +879,15 @@ function test_get_p_term(test_input::AbstractDict, label::String, get_term::Func
                                                            vperp=vperp_spectral);
                                                           comm=nothing,
                                                           synchronize=nothing,
-                                                          electron_pdf=(nothing, (:vpa, :vperp)),
-                                                          electron_p=(nothing, ()),
+                                                          electron_pdf=(nothing, (:vpa, :vperp), false),
+                                                          electron_p=(nothing, (), false),
                                                           boundary_skip_funcs=(electron_pdf=skip_f_electron_bc_points_in_Jacobian_v_solve,
                                                                                electron_p=nothing))
         z_solve_jacobian_ADI_check = create_jacobian_info((; z=z),
                                                           (; z=z_spectral);
                                                           comm=nothing,
                                                           synchronize=nothing,
-                                                          electron_p=(nothing, (:z,)),
+                                                          electron_p=(nothing, (:z,), false),
                                                           boundary_skip_funcs=(electron_pdf=skip_f_electron_bc_points_in_Jacobian_z_solve,
                                                                                electron_p=nothing))
 
@@ -1259,8 +1259,8 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
                                          z=z_spectral);
                                         comm=comm_anyzv_subblock[],
                                         synchronize=_anyzv_subblock_synchronize,
-                                        electron_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z)),
-                                        electron_p=((:anyzv,:z), (:z,)),
+                                        electron_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z), false),
+                                        electron_p=((:anyzv,:z), (:z,), false),
                                         boundary_skip_funcs=(electron_pdf=skip_f_electron_bc_points_in_Jacobian,
                                                              electron_p=nothing))
 
@@ -1280,8 +1280,8 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
                                                    vperp=vperp_spectral, z=z_spectral);
                                                   comm=comm_anyzv_subblock[],
                                                   synchronize=_anyzv_subblock_synchronize,
-                                                  electron_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z)),
-                                                  electron_p=((:anyzv,:z), (:z,)),
+                                                  electron_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z), false),
+                                                  electron_p=((:anyzv,:z), (:z,), false),
                                                   boundary_skip_funcs=(electron_pdf=skip_f_electron_bc_points_in_Jacobian,
                                                                        electron_p=nothing))
         v_solve_jacobian_ADI_check = create_jacobian_info((; vpa=vpa, vperp=vperp),
@@ -1289,15 +1289,15 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
                                                            vperp=vperp_spectral);
                                                           comm=nothing,
                                                           synchronize=nothing,
-                                                          electron_pdf=(nothing, (:vpa, :vperp)),
-                                                          electron_p=(nothing, ()),
+                                                          electron_pdf=(nothing, (:vpa, :vperp), false),
+                                                          electron_p=(nothing, (), false),
                                                           boundary_skip_funcs=(electron_pdf=skip_f_electron_bc_points_in_Jacobian_v_solve,
                                                                                electron_p=nothing))
         z_solve_jacobian_ADI_check = create_jacobian_info((; z=z),
                                                           (; z=z_spectral);
                                                           comm=nothing,
                                                           synchronize=nothing,
-                                                          electron_pdf=(nothing, (:z,)),
+                                                          electron_pdf=(nothing, (:z,), false),
                                                           boundary_skip_funcs=(electron_pdf=skip_f_electron_bc_points_in_Jacobian_z_solve,
                                                                                electron_p=nothing))
 
@@ -1305,7 +1305,7 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
                                                             (; z=z_spectral);
                                                             comm=nothing,
                                                             synchronize=nothing,
-                                                            electron_p=(nothing, (:z,)),
+                                                            electron_p=(nothing, (:z,), false),
                                                             boundary_skip_funcs=(electron_pdf=skip_f_electron_bc_points_in_Jacobian_z_solve,
                                                                                  electron_p=nothing))
 
@@ -1721,8 +1721,8 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2)
                                          z=z_spectral);
                                         comm=comm_anyzv_subblock[],
                                         synchronize=_anyzv_subblock_synchronize,
-                                        electron_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z)),
-                                        electron_p=((:anyzv,:z), (:z,)),
+                                        electron_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z), false),
+                                        electron_p=((:anyzv,:z), (:z,), false),
                                         boundary_skip_funcs=(electron_pdf=skip_f_electron_bc_points_in_Jacobian,
                                                              electron_p=nothing))
         jacobian_initialize_identity!(jacobian)
@@ -1740,8 +1740,8 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2)
                                                    vperp=vperp_spectral, z=z_spectral);
                                                   comm=comm_anyzv_subblock[],
                                                   synchronize=_anyzv_subblock_synchronize,
-                                                  electron_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z)),
-                                                  electron_p=((:anyzv,:z), (:z,)),
+                                                  electron_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z), false),
+                                                  electron_p=((:anyzv,:z), (:z,), false),
                                                   boundary_skip_funcs=(electron_pdf=skip_f_electron_bc_points_in_Jacobian,
                                                                        electron_p=nothing))
         v_solve_jacobian_ADI_check = create_jacobian_info((; vpa=vpa, vperp=vperp),
@@ -1749,8 +1749,8 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2)
                                                            vperp=vperp_spectral);
                                                           comm=nothing,
                                                           synchronize=nothing,
-                                                          electron_pdf=(nothing, (:vpa, :vperp)),
-                                                          electron_p=(nothing, ()),
+                                                          electron_pdf=(nothing, (:vpa, :vperp), false),
+                                                          electron_p=(nothing, (), false),
                                                           boundary_skip_funcs=(electron_pdf=skip_f_electron_bc_points_in_Jacobian_v_solve,
                                                                                electron_p=nothing))
 
