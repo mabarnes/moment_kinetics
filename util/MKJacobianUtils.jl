@@ -164,8 +164,8 @@ function get_electron_Jacobian_matrix(run_directory; restart_time_index=1,
                                      z=z_spectral);
                                     comm=comm_anyzv_subblock[],
                                     synchronize=_anyzv_subblock_synchronize,
-                                    electron_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z)),
-                                    electron_p=((:anyzv,:z), (:z,)),
+                                    electron_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z), false),
+                                    electron_p=((:anyzv,:z), (:z,), false),
                                     boundary_skip_funcs=(electron_pdf=skip_f_electron_bc_points_in_Jacobian,
                                                          electron_p=nothing))
 

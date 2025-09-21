@@ -284,8 +284,8 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(), spec
                                                     comm=nothing,
                                                     synchronize=nothing,
                                                     boundary_skip_funcs=boundary_skip_funcs.v_solve,
-                                                    electron_pdf=(nothing, (:vpa, :vperp)),
-                                                    electron_p=(nothing, ()))
+                                                    electron_pdf=(nothing, (:vpa, :vperp), false),
+                                                    electron_p=(nothing, (), false))
 
             z_solve_vperp_range = looping.loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp
             z_solve_vpa_range = looping.loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa
@@ -307,17 +307,17 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(), spec
             z_solve_jacobian = create_jacobian_info(coords, spectral; comm=nothing,
                                                     synchronize=nothing,
                                                     boundary_skip_funcs=boundary_skip_funcs.z_solve,
-                                                    electron_pdf=(nothing,(:z,)))
+                                                    electron_pdf=(nothing,(:z,), false))
             z_solve_jacobian_p = create_jacobian_info(coords, spectral; comm=nothing,
                                                       synchronize=nothing,
                                                       boundary_skip_funcs=boundary_skip_funcs.z_solve,
-                                                      electron_p=(nothing,(:z,)))
+                                                      electron_p=(nothing,(:z,), false))
 
             explicit_jacobian = create_jacobian_info(coords, spectral; comm=comm_anyzv_subblock[],
                                                      synchronize=_anyzv_subblock_synchronize,
                                                      boundary_skip_funcs=boundary_skip_funcs.full,
-                                                     electron_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z)),
-                                                     electron_p=((:anyzv,:z), (:z,)))
+                                                     electron_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z), false),
+                                                     electron_p=((:anyzv,:z), (:z,), false))
             input_buffer = allocate_shared_float(; newton_size=pdf_plus_ppar_size,
                                                  comm=comm_anyzv_subblock[])
             intermediate_buffer = allocate_shared_float(; newton_size=pdf_plus_ppar_size,
