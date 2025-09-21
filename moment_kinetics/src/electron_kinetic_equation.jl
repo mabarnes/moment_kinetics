@@ -4457,8 +4457,9 @@ function get_electron_sub_terms(
              moments, collisions, composition, external_source_settings, num_diss_params,
              t_params, ion_dt, z::coordinate, vperp::coordinate, vpa::coordinate,
              z_speed::AbstractArray{mk_float,3}, vpa_speed::AbstractArray{mk_float,3},
-             ir::mk_int, separate_third_moment::Bool, include::Symbol=:all;
-             include_qpar_integral_terms::Bool=true)
+             ir::mk_int, separate_zeroth_moment::Bool, separate_first_moment::Bool,
+             separate_second_moment::Bool, separate_third_moment::Bool,
+             include::Symbol=:all; include_qpar_integral_terms::Bool=true)
 
     if composition.electron_physics == kinetic_electrons_with_temperature_equation
         error("kinetic_electrons_with_temperature_equation not "
@@ -4541,8 +4542,11 @@ function get_electron_sub_terms(
         third_moment_integrand_prefactor = wpa*(wpa^2 + wperp^2)
         if include === :explicit_z
             zeroth_moment = ConstantTerm(zeroth_moment_array; z=z)
+            zeroth_moment_constraint_rhs = NullTerm()
             first_moment = ConstantTerm(first_moment_array; z=z)
+            first_moment_constraint_rhs = NullTerm()
             second_moment = ConstantTerm(second_moment_array; z=z)
+            second_moment_constraint_rhs = NullTerm()
             third_moment = ConstantTerm(third_moment_array; z=z)
             third_moment_constraint_rhs = NullTerm()
         else
@@ -4550,14 +4554,32 @@ function get_electron_sub_terms(
                                          integrand_coordinates=[vpa,vperp,z],
                                          integrand_prefactor=ConstantTerm(ones(mk_float)),
                                          z=z)
+            if separate_zeroth_moment
+                zeroth_moment_constraint_rhs = zeroth_moment
+                zeroth_moment = EquationTerm(:zeroth_moment, zeroth_moment_array; z=z)
+            else
+                zeroth_moment_constraint_rhs = NullTerm()
+            end
             first_moment = EquationTerm(:electron_pdf, first_moment_array;
                                         integrand_coordinates=[vpa,vperp,z],
                                         integrand_prefactor=wpa,
                                         z=z)
+            if separate_first_moment
+                first_moment_constraint_rhs = first_moment
+                first_moment = EquationTerm(:first_moment, first_moment_array; z=z)
+            else
+                first_moment_constraint_rhs = NullTerm()
+            end
             second_moment = EquationTerm(:electron_pdf, second_moment_array;
                                          integrand_coordinates=[vpa,vperp,z],
                                          integrand_prefactor=(wpa^2 + wperp^2),
                                          z=z)
+            if separate_second_moment
+                second_moment_constraint_rhs = second_moment
+                second_moment = EquationTerm(:second_moment, second_moment_array; z=z)
+            else
+                second_moment_constraint_rhs = NullTerm()
+            end
             third_moment = EquationTerm(:electron_pdf, third_moment_array;
                                         integrand_coordinates=[vpa,vperp,z],
                                         integrand_prefactor=third_moment_integrand_prefactor,
@@ -4581,6 +4603,7 @@ function get_electron_sub_terms(
         end
     else
         zeroth_moment = ConstantTerm(zeroth_moment_array; z=z)
+        zeroth_moment_constraint_rhs = NullTerm()
         first_moment = ConstantTerm(first_moment_array; z=z)
         second_moment = ConstantTerm(second_moment_array; z=z)
         third_moment = ConstantTerm(third_moment_array; z=z)
@@ -4632,13 +4655,15 @@ function get_electron_sub_terms(
 
     return ElectronSubTerms(; me, vpa_dissipation_coefficient, constraint_forcing_rate,
                             ion_dt, n, dn_dz, u, du_dz, p, dp_dz, vth, dvth_dz, ppar,
-                            dppar_dz, zeroth_moment, first_moment, second_moment,
-                            third_moment, dthird_moment_dz, third_moment_constraint_rhs,
-                            dq_dz, u_ion, wperp, wpa, f, df_dz, df_dvpa, d2f_dvpa2,
-                            source_type, source_amplitude, source_T_array, density_source,
-                            momentum_source, pressure_source, source_vth_factor,
-                            source_this_vth_factor, collisions, nuee0, nuei0,
-                            krook_adjust_vth_1V, krook_adjust_1V, Maxwellian_prefactor)
+                            dppar_dz, zeroth_moment, zeroth_moment_constraint_rhs,
+                            first_moment, first_moment_constraint_rhs, second_moment,
+                            second_moment_constraint_rhs, third_moment, dthird_moment_dz,
+                            third_moment_constraint_rhs, dq_dz, u_ion, wperp, wpa, f,
+                            df_dz, df_dvpa, d2f_dvpa2, source_type, source_amplitude,
+                            source_T_array, density_source, momentum_source,
+                            pressure_source, source_vth_factor, source_this_vth_factor,
+                            collisions, nuee0, nuei0, krook_adjust_vth_1V,
+                            krook_adjust_1V, Maxwellian_prefactor)
 end
 
 function get_electron_sub_terms_z_only_Jacobian(
@@ -4712,8 +4737,11 @@ function get_electron_sub_terms_z_only_Jacobian(
     wpa = vpa.grid[ivpa]
 
     zeroth_moment = ConstantTerm(zeroth_moment_array; z=z)
+    zeroth_moment_constraint_rhs = NullTerm()
     first_moment = ConstantTerm(first_moment_array; z=z)
+    first_moment_constraint_rhs = NullTerm()
     second_moment = ConstantTerm(second_moment_array; z=z)
+    second_moment_constraint_rhs = NullTerm()
     third_moment = ConstantTerm(third_moment_array; z=z)
     dthird_moment_dz = ConstantTerm(dthird_moment_dz_array; z=z)
     third_moment_constraint_rhs = NullTerm()
@@ -4760,13 +4788,15 @@ function get_electron_sub_terms_z_only_Jacobian(
 
     return ElectronSubTerms(; me, vpa_dissipation_coefficient, constraint_forcing_rate,
                             ion_dt, n, dn_dz, u, du_dz, p, dp_dz, vth, dvth_dz, ppar,
-                            dppar_dz, zeroth_moment, first_moment, second_moment,
-                            third_moment, dthird_moment_dz, third_moment_constraint_rhs,
-                            dq_dz, u_ion, wperp, wpa, f, df_dz, df_dvpa, d2f_dvpa2,
-                            source_type, source_amplitude, source_T_array, density_source,
-                            momentum_source, pressure_source, source_vth_factor,
-                            source_this_vth_factor, collisions, nuee0, nuei0,
-                            krook_adjust_vth_1V, krook_adjust_1V, Maxwellian_prefactor)
+                            dppar_dz, zeroth_moment, zeroth_moment_constraint_rhs,
+                            first_moment, first_moment_constraint_rhs, second_moment,
+                            second_moment_constraint_rhs, third_moment, dthird_moment_dz,
+                            third_moment_constraint_rhs, dq_dz, u_ion, wperp, wpa, f,
+                            df_dz, df_dvpa, d2f_dvpa2, source_type, source_amplitude,
+                            source_T_array, density_source, momentum_source,
+                            pressure_source, source_vth_factor, source_this_vth_factor,
+                            collisions, nuee0, nuei0, krook_adjust_vth_1V,
+                            krook_adjust_1V, Maxwellian_prefactor)
 end
 
 function get_electron_sub_terms_v_only_Jacobian(
@@ -4817,12 +4847,15 @@ function get_electron_sub_terms_v_only_Jacobian(
     zeroth_moment = EquationTerm(:electron_pdf, zeroth_moment_array;
                                  integrand_coordinates=[vpa,vperp],
                                  integrand_prefactor=ConstantTerm(ones(mk_float)))
+    zeroth_moment_constraint_rhs = NullTerm()
     first_moment = EquationTerm(:electron_pdf, first_moment_array;
                                 integrand_coordinates=[vpa,vperp],
                                 integrand_prefactor=wpa)
+    first_moment_constraint_rhs = NullTerm()
     second_moment = EquationTerm(:electron_pdf, second_moment_array;
                                  integrand_coordinates=[vpa,vperp],
                                  integrand_prefactor=(wpa^2 + wperp^2))
+    second_moment_constraint_rhs = NullTerm()
     third_moment = EquationTerm(:electron_pdf, third_moment_array;
                                 integrand_coordinates=[vpa,vperp],
                                 integrand_prefactor=third_moment_integrand_prefactor)
@@ -4875,14 +4908,15 @@ function get_electron_sub_terms_v_only_Jacobian(
 
     return ElectronSubTerms(; me, vpa_dissipation_coefficient, constraint_forcing_rate,
                             ion_dt, n, dn_dz, u, du_dz, p, dp_dz, vth, dvth_dz, ppar,
-                            dppar_dz, zeroth_moment, first_moment, second_moment,
-                            third_moment, dthird_moment_dz, third_moment_constraint_rhs,
-                            dq_dz, u_ion, wperp, wpa, f, df_dz, df_dvpa, d2f_dvpa2,
-                            source_type, source_amplitude, source_T_array, density_source,
-                            momentum_source, pressure_source, source_vth_factor,
-                            source_this_vth_factor, collisions, nuee0, nuei0,
-                            krook_adjust_vth_1V, krook_adjust_1V,
-                            Maxwellian_prefactor), z_speed
+                            dppar_dz, zeroth_moment, zeroth_moment_constraint_rhs,
+                            first_moment, first_moment_constraint_rhs, second_moment,
+                            second_moment_constraint_rhs, third_moment, dthird_moment_dz,
+                            third_moment_constraint_rhs, dq_dz, u_ion, wperp, wpa, f,
+                            df_dz, df_dvpa, d2f_dvpa2, source_type, source_amplitude,
+                            source_T_array, density_source, momentum_source,
+                            pressure_source, source_vth_factor, source_this_vth_factor,
+                            collisions, nuee0, nuei0, krook_adjust_vth_1V,
+                            krook_adjust_1V, Maxwellian_prefactor), z_speed
 end
 
 """
@@ -4899,9 +4933,13 @@ function get_all_electron_terms(sub_terms::ElectronSubTerms)
     p_terms = get_electron_energy_equation_term(sub_terms)
     p_terms += get_ion_dt_forcing_of_electron_p_term(sub_terms)
 
+    zeroth_moment_terms = -sub_terms.zeroth_moment_constraint_rhs
+    first_moment_terms = -sub_terms.first_moment_constraint_rhs
+    second_moment_terms = -sub_terms.second_moment_constraint_rhs
     third_moment_terms = -sub_terms.third_moment_constraint_rhs
 
-    return pdf_terms, p_terms, third_moment_terms
+    return pdf_terms, p_terms, zeroth_moment_terms, first_moment_terms,
+           second_moment_terms, third_moment_terms
 end
 
 """
@@ -5030,6 +5068,9 @@ in the time derivative term as it is for the non-boundary points.]
         jacobian_initialize_zero!(jacobian)
     end
 
+    separate_zeroth_moment = (:zeroth_moment ∈ jacobian.state_vector_entries)
+    separate_first_moment = (:first_moment ∈ jacobian.state_vector_entries)
+    separate_second_moment = (:second_moment ∈ jacobian.state_vector_entries)
     separate_third_moment = (:third_moment ∈ jacobian.state_vector_entries)
     sub_terms = get_electron_sub_terms(dens, ddens_dz, upar, dupar_dz, p, dp_dz, dvth_dz,
                                        zeroth_moment, first_moment, second_moment,
@@ -5037,10 +5078,12 @@ in the time derivative term as it is for the non-boundary points.]
                                        f, dpdf_dz, dpdf_dvpa, d2pdf_dvpa2, me, moments,
                                        collisions, composition, external_source_settings,
                                        num_diss_params, t_params, ion_dt, z, vperp, vpa,
-                                       z_speed, vpa_speed, ir, separate_third_moment,
-                                       include;
+                                       z_speed, vpa_speed, ir, separate_zeroth_moment,
+                                       separate_first_moment, separate_second_moment,
+                                       separate_third_moment, include;
                                        include_qpar_integral_terms=include_qpar_integral_terms)
-    pdf_terms, p_terms, third_moment_terms = get_all_electron_terms(sub_terms)
+    pdf_terms, p_terms, zeroth_moment_terms, first_moment_terms, second_moment_terms,
+        third_moment_terms = get_all_electron_terms(sub_terms)
 
     add_term_to_Jacobian!(jacobian, :electron_pdf, dt, pdf_terms, z_speed)
     if t_params.include_wall_bc_in_preconditioner
@@ -5051,6 +5094,9 @@ in the time derivative term as it is for the non-boundary points.]
     end
 
     add_term_to_Jacobian!(jacobian, :electron_p, dt, p_terms)
+    add_term_to_Jacobian!(jacobian, :zeroth_moment, 1.0, zeroth_moment_terms)
+    add_term_to_Jacobian!(jacobian, :first_moment, 1.0, first_moment_terms)
+    add_term_to_Jacobian!(jacobian, :second_moment, 1.0, second_moment_terms)
     add_term_to_Jacobian!(jacobian, :third_moment, 1.0, third_moment_terms)
 
     return nothing
