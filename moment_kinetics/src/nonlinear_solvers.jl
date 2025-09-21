@@ -247,14 +247,6 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(), spec
         # These will be calculated properly within the time loop.
         preconditioners = fill(lu(sparse(1.0*I, total_size_coords, total_size_coords)),
                                reverse(outer_coord_sizes))
-    elseif preconditioner_type === Val(:electron_split_lu)
-        preconditioners = (z=fill(lu(sparse(1.0*I, coords.z.n, coords.z.n)),
-                                  tuple(coords.vpa.n, reverse(outer_coord_sizes)...)),
-                           vpa=fill(lu(sparse(1.0*I, coords.vpa.n, coords.vpa.n)),
-                                    tuple(coords.z.n, reverse(outer_coord_sizes)...)),
-                           ppar=fill(lu(sparse(1.0*I, coords.z.n, coords.z.n)),
-                                     reverse(outer_coord_sizes)),
-                          )
     elseif preconditioner_type === Val(:electron_lu)
         pdf_plus_ppar_size = total_size_coords + coords.z.n
         preconditioners = fill((lu(sparse(1.0*I, 1, 1)),
