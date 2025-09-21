@@ -129,6 +129,7 @@ struct jacobian_info{NTerms,NOffsets,Tvecinds,Tvecdims,Tveccoords,Tdimsizes,Tdim
     state_vector_numbers::Tvecinds
     state_vector_dims::Tvecdims
     state_vector_coords::Tveccoords
+    state_vector_is_constraint::NTuple{NTerms, Bool}
     state_vector_sizes::NTuple{NTerms, mk_int}
     state_vector_dim_sizes::Tdimsizes
     state_vector_dim_steps::Tdimsteps
@@ -149,9 +150,11 @@ end
 Create a [`jacobian_info`](@ref) struct.
 
 `kwargs` describes the state vector. The keys are the variable names, and the arguments
-are 2 element Tuples whose first element is the 'region type' for parallel loops over that
-variable (or `nothing` if `comm = nothing` for serial operation) and whose second element
-Vector or Tuple of Symbols giving the dimensions of the variable.
+are 3 element Tuples: the first element is the 'region type' for parallel loops over that
+variable (or `nothing` if `comm = nothing` for serial operation); the second element
+Vector or Tuple of Symbols giving the dimensions of the variable; the third element is a
+`Bool` indicating whether the variable is determined by a constraint (`true`) or by a time
+evolution equation (`false`).
 
 `coords` is a NamedTuple giving all the needed coordinates, `spectral` is a NamedTuple
 with all the needed 'spectral' objects.
@@ -177,6 +180,7 @@ function create_jacobian_info(coords::NamedTuple, spectral::NamedTuple; comm=com
     state_vector_region_types = Tuple(v[1] for v ∈ values(kwargs))
     state_vector_dims = Tuple(Tuple(v[2]) for v ∈ values(kwargs))
     state_vector_coords = Tuple(Tuple(mini_coords[d] for d ∈ v) for v ∈ state_vector_dims)
+    state_vector_is_constraint = Tuple(v[3] for v ∈ values(kwargs))
     state_vector_sizes = Tuple(prod(mini_coords[d].n for d ∈ dims; init=1) for dims ∈ state_vector_dims)
     state_vector_dim_sizes = Tuple(Tuple(coords[d].n for d ∈ v) for v ∈ state_vector_dims)
     state_vector_dim_steps = Tuple(Tuple(prod(s[1:i-1]; init=mk_int(1)) for i ∈ 1:length(s))
@@ -244,7 +248,8 @@ function create_jacobian_info(coords::NamedTuple, spectral::NamedTuple; comm=com
     end
 
     return jacobian_info(jacobian_matrix, state_vector_entries, state_vector_numbers,
-                         state_vector_dims, state_vector_coords, state_vector_sizes,
+                         state_vector_dims, state_vector_coords,
+                         state_vector_is_constraint, state_vector_sizes,
                          state_vector_dim_sizes, state_vector_dim_steps,
                          state_vector_offsets, state_vector_local_ranges,
                          row_local_ranges, mini_coords, mini_spectral,
@@ -311,7 +316,11 @@ function jacobian_initialize_bc_diagonal!(jacobian::jacobian_info, boundary_spee
         col_variable_local_ranges = jacobian.state_vector_local_ranges[col_variable]
         col_variable_coords = jacobian.state_vector_coords[col_variable]
         offset = jacobian.state_vector_offsets[col_variable]
-        boundary_skip = jacobian.boundary_skip_funcs[col_variable]
+        if jacobian_state_vector_is_constraint[col_variable]
+            boundary_skip = (args...)->true
+        else
+            boundary_skip = jacobian.boundary_skip_funcs[col_variable]
+        end
         jacobian_initialize_bc_digonal_single_variable!(
             jacobian_matrix, col_variable_local_ranges, col_variable_coords, offset,
             boundary_skip, boundary_speed)
@@ -1519,9 +1528,15 @@ the z-direction.
 @timeit global_timer add_term_to_Jacobian!(jacobian::jacobian_info, rows_variable::Symbol,
                                            prefactor::mk_float, terms::EquationTerm,
                                            boundary_speed=nothing) = begin
+    if rows_variable ∉ jacobian.state_vector_entries
+        # This term not being used at the moment.
+        return nothing
+    end
+
     @inbounds begin
         jacobian_matrix = jacobian.matrix
         rows_variable_number = jacobian.state_vector_numbers[rows_variable]
+        @debug_consistency_checks jacobian.state_vector_is_constraint[rows_variable_number] && prefactor != 1.0 && error("Prefactor should be 1 for constraint equation, got $prefactor for $rows_variable equation")
         rows_variable_dims = jacobian.state_vector_dims[rows_variable_number]
         rows_variable_dim_sizes = jacobian.state_vector_dim_sizes[rows_variable_number]
         rows_variable_local_ranges = jacobian.state_vector_local_ranges[rows_variable_number]
