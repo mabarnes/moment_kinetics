@@ -1008,7 +1008,7 @@ function get_electron_split_lu_preconditioner(nl_solver_params, f_electron_new,
                                               z_advect, vpa_advect, scratch_dummy,
                                               external_source_settings, num_diss_params,
                                               t_params, ion_dt, ir, evolve_p)
-    if nl_solver_params.solves_since_precon_update[] ≥ nl_solver_params.preconditioner_update_interval
+    function recalculate_split_lu_preconditioner!()
         nl_solver_params.solves_since_precon_update[] = 0
 
         vth = @view moments.electron.vth[:,ir]
@@ -1072,7 +1072,7 @@ function get_electron_split_lu_preconditioner(nl_solver_params, f_electron_new,
     left_preconditioner = identity
     right_preconditioner = split_precon!
 
-    return left_preconditioner, right_preconditioner
+    return left_preconditioner, right_preconditioner, recalculate_split_lu_preconditioner!
 end
 
 function get_electron_lu_preconditioner(nl_solver_params, f_electron_new, electron_p_new,
@@ -1083,14 +1083,7 @@ function get_electron_lu_preconditioner(nl_solver_params, f_electron_new, electr
                                         z_advect, vpa_advect, scratch_dummy,
                                         external_source_settings, num_diss_params,
                                         t_params, ion_dt, ir, evolve_p)
-    if t_params.dt[] > 1.5 * nl_solver_params.precon_dt[] ||
-            t_params.dt[] < 2.0/3.0 * nl_solver_params.precon_dt[]
-
-        # dt has changed significantly, so update the preconditioner
-        nl_solver_params.solves_since_precon_update[] = nl_solver_params.preconditioner_update_interval
-    end
-
-    if nl_solver_params.solves_since_precon_update[] ≥ nl_solver_params.preconditioner_update_interval
+    function recalculate_lu_preconditioner!()
 global_rank[] == 0 && println("recalculating precon")
         nl_solver_params.solves_since_precon_update[] = 0
         nl_solver_params.precon_dt[] = t_params.dt[]
@@ -1211,7 +1204,7 @@ global_rank[] == 0 && println("recalculating precon")
     left_preconditioner = identity
     right_preconditioner = lu_precon!
 
-    return left_preconditioner, right_preconditioner
+    return left_preconditioner, right_preconditioner, recalculate_lu_preconditioner!
 end
 
 function get_electron_adi_preconditioner(nl_solver_params, f_electron_new, electron_p_new,
@@ -1222,14 +1215,7 @@ function get_electron_adi_preconditioner(nl_solver_params, f_electron_new, elect
                                          z_advect, vpa_advect, scratch_dummy,
                                          external_source_settings, num_diss_params,
                                          t_params, ion_dt, ir, evolve_p)
-    if t_params.dt[] > 1.5 * nl_solver_params.precon_dt[] ||
-            t_params.dt[] < 2.0/3.0 * nl_solver_params.precon_dt[]
-
-        # dt has changed significantly, so update the preconditioner
-        nl_solver_params.solves_since_precon_update[] = nl_solver_params.preconditioner_update_interval
-    end
-
-    if nl_solver_params.solves_since_precon_update[] ≥ nl_solver_params.preconditioner_update_interval
+    function recalculate_adi_preconditioner!()
 global_rank[] == 0 && println("recalculating precon")
         nl_solver_params.solves_since_precon_update[] = 0
         nl_solver_params.precon_dt[] = t_params.dt[]
@@ -1628,7 +1614,7 @@ global_rank[] == 0 && println("recalculating precon")
     left_preconditioner = identity
     right_preconditioner = adi_precon!
 
-    return left_preconditioner, right_preconditioner
+    return left_preconditioner, right_preconditioner, recalculate_adi_preconditioner!
 end
 
 function get_electron_preconditioner(nl_solver_params, f_electron_new, electron_p_new,
@@ -1673,7 +1659,10 @@ function get_electron_preconditioner(nl_solver_params, f_electron_new, electron_
     elseif nl_solver_params.preconditioner_type === Val(:none)
         left_preconditioner = identity
         right_preconditioner = identity
-        return left_preconditioner, right_preconditioner
+        # Nothing to recalculate.
+        recalculate_none_preconditioner = ()->nothing
+
+        return left_preconditioner, right_preconditioner, recalculate_none_preconditioner
     else
         error("preconditioner_type=$(nl_solver_params.preconditioner_type) is not "
               * "supported.")
@@ -1730,7 +1719,7 @@ pressure \$p_{e∥}\$.
                moments, electron_density, electron_upar, electron_p_new, scratch_dummy, z,
                z_spectral, num_diss_params.electron.moment_dissipation_coefficient, ir)
 
-    left_preconditioner, right_preconditioner =
+    left_preconditioner, right_preconditioner, recalculate_preconditioner! =
         get_electron_preconditioner(nl_solver_params, f_electron_new, electron_p_new,
                                     buffer_1, buffer_2, buffer_3, buffer_4,
                                     electron_density, electron_upar, this_phi, moments,
@@ -1738,6 +1727,18 @@ pressure \$p_{e∥}\$.
                                     vperp_spectral, vpa_spectral, z_advect, vpa_advect,
                                     scratch_dummy, external_source_settings,
                                     num_diss_params, t_params, ion_dt, ir, evolve_p)
+
+    # Does preconditioner need to be recalculated?
+    if t_params.dt[] > 1.5 * nl_solver_params.precon_dt[] ||
+            t_params.dt[] < 2.0/3.0 * nl_solver_params.precon_dt[]
+
+        # dt has changed significantly, so update the preconditioner
+        nl_solver_params.solves_since_precon_update[] = nl_solver_params.preconditioner_update_interval
+    end
+
+    if nl_solver_params.solves_since_precon_update[] ≥ nl_solver_params.preconditioner_update_interval
+        recalculate_preconditioner!()
+    end
 
     # Do a backward-Euler update of the electron pdf, and (if evove_p=true) the electron
     # parallel pressure.
