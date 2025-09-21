@@ -711,7 +711,7 @@ end
 @kwdef struct ElectronSubTerms{T1,T2,T3,T4,T5,T6,T7,T8,T9,T10,
                                T11,T12,T13,T14,T15,T16,T17,T18,T19,T20,
                                T21,T22,T23,T24,T25,T26,T27,T28,T29,T30,
-                               T31,T32}
+                               T31,T32,T33}
     me::mk_float
     vpa_dissipation_coefficient::mk_float
     constraint_forcing_rate::mk_float
@@ -731,23 +731,24 @@ end
     second_moment::T14
     third_moment::T15
     dthird_moment_dz::T16
-    dq_dz::T17
-    u_ion::T18
-    wperp::T19
-    wpa::T20
-    f::T21
-    df_dz::T22
-    df_dvpa::T23
-    d2f_dvpa2::T24
+    third_moment_constraint_rhs::T17
+    dq_dz::T18
+    u_ion::T19
+    wperp::T20
+    wpa::T21
+    f::T22
+    df_dz::T23
+    df_dvpa::T24
+    d2f_dvpa2::T25
     source_type::Vector{String}
-    source_amplitude::Vector{T25}
-    source_T_array::Vector{T26}
-    density_source::Vector{T27}
-    momentum_source::Vector{T28}
-    pressure_source::Vector{T29}
-    source_vth_factor::Vector{T30}
-    source_this_vth_factor::T31
-    collisions::T32
+    source_amplitude::Vector{T26}
+    source_T_array::Vector{T27}
+    density_source::Vector{T28}
+    momentum_source::Vector{T29}
+    pressure_source::Vector{T30}
+    source_vth_factor::Vector{T31}
+    source_this_vth_factor::T32
+    collisions::T33
     nuee0::mk_float
     nuei0::mk_float
     krook_adjust_vth_1V::mk_float

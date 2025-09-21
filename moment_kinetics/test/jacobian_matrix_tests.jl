@@ -384,6 +384,7 @@ function test_get_pdf_term(test_input::AbstractDict, label::String, get_term::Fu
                                                              electron_p=nothing))
         jacobian_initialize_identity!(jacobian)
 
+        separate_third_moment = (:third_moment ∈ jacobian.state_vector_entries)
         sub_terms = get_electron_sub_terms(dens, ddens_dz, upar_test, dupar_dz, p, dp_dz,
                                            dvth_dz, zeroth_moment, first_moment,
                                            second_moment, third_moment, dthird_moment_dz,
@@ -391,7 +392,8 @@ function test_get_pdf_term(test_input::AbstractDict, label::String, get_term::Fu
                                            d2pdf_dvpa2, me, moments, collisions,
                                            composition, external_source_settings,
                                            num_diss_params, t_params.electron, ion_dt, z,
-                                           vperp, vpa, z_speed, vpa_speed, ir)
+                                           vperp, vpa, z_speed, vpa_speed, ir,
+                                           separate_third_moment)
         equation_term = get_term(sub_terms)
         add_term_to_Jacobian!(jacobian, :electron_pdf, dt, equation_term, z_speed)
 
@@ -462,6 +464,7 @@ function test_get_pdf_term(test_input::AbstractDict, label::String, get_term::Fu
             @_anyzv_subblock_synchronize()
 
             # Add 'explicit' contribution
+            separate_third_moment = (:third_moment ∈ jacobian_ADI_check.state_vector_entries)
             explicit_v_sub_terms = get_electron_sub_terms(
                                        dens, ddens_dz, upar_test, dupar_dz, p, dp_dz,
                                        dvth_dz, zeroth_moment, first_moment,
@@ -470,7 +473,8 @@ function test_get_pdf_term(test_input::AbstractDict, label::String, get_term::Fu
                                        d2pdf_dvpa2, me, moments, collisions, composition,
                                        external_source_settings, num_diss_params,
                                        t_params.electron, ion_dt, z, vperp, vpa, z_speed,
-                                       vpa_speed, ir, :explicit_v)
+                                       vpa_speed, ir,
+                                       separate_third_moment)
             explicit_v_term = get_term(explicit_v_sub_terms)
             add_term_to_Jacobian!(jacobian_ADI_check, :electron_pdf, dt, explicit_v_term,
                                   z_speed)
@@ -520,6 +524,7 @@ function test_get_pdf_term(test_input::AbstractDict, label::String, get_term::Fu
             @_anyzv_subblock_synchronize()
 
             # Add 'explicit' contribution
+            separate_third_moment = (:third_moment ∈ jacobian_ADI_check.state_vector_entries)
             explicit_z_sub_terms = get_electron_sub_terms(
                                        dens, ddens_dz, upar_test, dupar_dz, p, dp_dz,
                                        dvth_dz, zeroth_moment, first_moment,
@@ -528,7 +533,8 @@ function test_get_pdf_term(test_input::AbstractDict, label::String, get_term::Fu
                                        d2pdf_dvpa2, me, moments, collisions, composition,
                                        external_source_settings, num_diss_params,
                                        t_params.electron, ion_dt, z, vperp, vpa, z_speed,
-                                       vpa_speed, ir, :explicit_z)
+                                       vpa_speed, ir,
+                                       separate_third_moment, :explicit_z)
             explicit_z_term = get_term(explicit_z_sub_terms)
             add_term_to_Jacobian!(jacobian_ADI_check, :electron_pdf, dt, explicit_z_term,
                                   z_speed)
@@ -851,6 +857,7 @@ function test_get_p_term(test_input::AbstractDict, label::String, get_term::Func
                                                              electron_p=nothing))
         jacobian_initialize_identity!(jacobian)
 
+        separate_third_moment = (:third_moment ∈ jacobian.state_vector_entries)
         sub_terms = get_electron_sub_terms(dens, ddens_dz, upar, dupar_dz, p, dp_dz,
                                            dvth_dz, zeroth_moment, first_moment,
                                            second_moment, third_moment, dthird_moment_dz,
@@ -858,7 +865,8 @@ function test_get_p_term(test_input::AbstractDict, label::String, get_term::Func
                                            d2pdf_dvpa2, me, moments, collisions,
                                            composition, external_source_settings,
                                            num_diss_params, t_params, ion_dt, z, vperp,
-                                           vpa, z_speed, vpa_speed, ir)
+                                           vpa, z_speed, vpa_speed, ir,
+                                           separate_third_moment)
         equation_term = get_term(sub_terms)
         add_term_to_Jacobian!(jacobian, :electron_p, dt, equation_term, z_speed)
 
@@ -924,6 +932,7 @@ function test_get_p_term(test_input::AbstractDict, label::String, get_term::Func
             @_anyzv_subblock_synchronize()
 
             # Add 'explicit' contribution
+            separate_third_moment = (:third_moment ∈ jacobian_ADI_check.state_vector_entries)
             explicit_v_sub_terms = get_electron_sub_terms(
                                        dens, ddens_dz, upar, dupar_dz, p, dp_dz, dvth_dz,
                                        zeroth_moment, first_moment, second_moment,
@@ -931,7 +940,8 @@ function test_get_p_term(test_input::AbstractDict, label::String, get_term::Func
                                        f, dpdf_dz, dpdf_dvpa, d2pdf_dvpa2, me, moments,
                                        collisions, composition, external_source_settings,
                                        num_diss_params, t_params, ion_dt, z, vperp, vpa,
-                                       z_speed, vpa_speed, ir, :explicit_v)
+                                       z_speed, vpa_speed, ir,
+                                       separate_third_moment, :explicit_v)
             explicit_v_term = get_term(explicit_v_sub_terms)
             add_term_to_Jacobian!(jacobian_ADI_check, :electron_p, dt, explicit_v_term,
                                   z_speed)
@@ -979,6 +989,7 @@ function test_get_p_term(test_input::AbstractDict, label::String, get_term::Func
             @_anyzv_subblock_synchronize()
 
             # Add 'explicit' contribution
+            separate_third_moment = (:third_moment ∈ jacobian_ADI_check.state_vector_entries)
             explicit_z_sub_terms = get_electron_sub_terms(
                                        dens, ddens_dz, upar, dupar_dz, p, dp_dz, dvth_dz,
                                        zeroth_moment, first_moment, second_moment,
@@ -986,7 +997,8 @@ function test_get_p_term(test_input::AbstractDict, label::String, get_term::Func
                                        f, dpdf_dz, dpdf_dvpa, d2pdf_dvpa2, me, moments,
                                        collisions, composition, external_source_settings,
                                        num_diss_params, t_params, ion_dt, z, vperp, vpa,
-                                       z_speed, vpa_speed, ir, :explicit_z)
+                                       z_speed, vpa_speed, ir,
+                                       separate_third_moment, :explicit_z)
             explicit_z_term = get_term(explicit_z_sub_terms)
             add_term_to_Jacobian!(jacobian_ADI_check, :electron_p, dt, explicit_z_term,
                                   z_speed)

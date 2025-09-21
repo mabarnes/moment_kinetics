@@ -275,6 +275,7 @@ function get_electron_Jacobian_matrix(run_directory; restart_time_index=1,
                                       vpa_spectral)
         end
 
+        separate_third_moment = (:third_moment ∈ jacobian.state_vector_entries)
         sub_terms = get_electron_sub_terms(dens, ddens_dz, upar, dupar_dz, p, dp_dz,
                                            dvth_dz, zeroth_moment, first_moment,
                                            second_moment, third_moment, dthird_moment_dz,
@@ -282,7 +283,8 @@ function get_electron_Jacobian_matrix(run_directory; restart_time_index=1,
                                            d2pdf_dvpa2, me, moments, collisions,
                                            composition, external_source_settings,
                                            num_diss_params, t_params.electron, ion_dt, z,
-                                           vperp, vpa, z_speed, vpa_speed, ir)
+                                           vperp, vpa, z_speed, vpa_speed, ir,
+                                           separate_third_moment)
 
         terms = NullTerm()
 
