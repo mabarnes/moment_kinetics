@@ -1042,9 +1042,17 @@ function get_derivative_matrix_slice(derivative_coord, derivative_spectral, iele
     end
 end
 
-# Traverse the tree of EquationTerms, accumulating the prefactors until reaching a leaf
-# term (`kind = ETsimple`) that represents a state vector variable, which makes a
-# contribution to the Jacobian.
+"""
+    add_term_to_Jacobian_row!(jacobian::jacobian_info,
+                              jacobian_row::AbstractVector{mk_float},
+                              rows_variable::Symbol, prefactor::mk_float,
+                              terms::EquationTerm, indices::Tuple,
+                              boundary_speed)
+
+Traverse the tree of EquationTerms, accumulating the prefactors until reaching a leaf term
+(`kind = ETsimple`) that represents a state vector variable, which makes a contribution to
+the Jacobian.
+"""
 function add_term_to_Jacobian_row!(jacobian::jacobian_info,
                                    jacobian_row::AbstractVector{mk_float},
                                    rows_variable::Symbol, prefactor::mk_float,

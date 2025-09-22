@@ -4549,6 +4549,8 @@ only. This allows `result_object` to be (possibly) passed to
     return nothing
 end
 
+"""
+"""
 function get_electron_sub_terms(
              dens_array::AbstractVector{mk_float},
              ddens_dz_array::AbstractVector{mk_float},
@@ -4979,6 +4981,8 @@ function get_electron_sub_terms_v_only_Jacobian(
                             krook_adjust_1V, Maxwellian_prefactor), z_speed
 end
 
+"""
+"""
 function get_all_electron_terms(sub_terms::ElectronSubTerms)
     pdf_terms = get_electron_z_advection_term(sub_terms)
     pdf_terms += get_electron_vpa_advection_term(sub_terms)
