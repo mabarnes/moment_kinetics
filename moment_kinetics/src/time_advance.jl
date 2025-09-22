@@ -511,6 +511,7 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
             electron_precon_types = Dict("lu_no_separate_moments" => :electron_lu_no_separate_moments,
                                          "lu_separate_third_moment" => :electron_lu_separate_third_moment,
                                          "lu" => :electron_lu,
+                                         "lu_separate_dp_dz_dq_dz" => :electron_lu_separate_dp_dz_dq_dz,
                                          "adi" => :electron_adi)
             if t_input["kinetic_electron_preconditioner"] == "default"
                 if block_size[] == 1
@@ -873,7 +874,9 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
                                                          zeroth_moment=nothing,
                                                          first_moment=nothing,
                                                          second_moment=nothing,
-                                                         third_moment=nothing),
+                                                         third_moment=nothing,
+                                                         electron_dp_dz=nothing,
+                                                         electron_dq_dz=nothing),
                                                    v_solve=(electron_pdf=skip_f_electron_bc_points_in_Jacobian_v_solve,
                                                             electron_p=nothing),
                                                    z_solve=(electron_pdf=skip_f_electron_bc_points_in_Jacobian_z_solve,

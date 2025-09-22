@@ -279,6 +279,8 @@ function get_electron_Jacobian_matrix(run_directory; restart_time_index=1,
         separate_first_moment = (:first_moment ∈ jacobian.state_vector_entries)
         separate_second_moment = (:second_moment ∈ jacobian.state_vector_entries)
         separate_third_moment = (:third_moment ∈ jacobian.state_vector_entries)
+        separate_dp_dz = (:electron_dp_dz ∈ jacobian.state_vector_entries)
+        separate_dq_dz = (:electron_dq_dz ∈ jacobian.state_vector_entries)
         sub_terms = get_electron_sub_terms(dens, ddens_dz, upar, dupar_dz, p, dp_dz,
                                            dvth_dz, zeroth_moment, first_moment,
                                            second_moment, third_moment, dthird_moment_dz,
@@ -288,7 +290,8 @@ function get_electron_Jacobian_matrix(run_directory; restart_time_index=1,
                                            num_diss_params, t_params.electron, ion_dt, z,
                                            vperp, vpa, z_speed, vpa_speed, ir,
                                            separate_zeroth_moment, separate_first_moment,
-                                           separate_second_moment, separate_third_moment)
+                                           separate_second_moment, separate_third_moment,
+                                           separate_dp_dz, separate_dq_dz)
 
         terms = NullTerm()
 
