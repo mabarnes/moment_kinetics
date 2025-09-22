@@ -711,7 +711,7 @@ end
 @kwdef struct ElectronSubTerms{T1,T2,T3,T4,T5,T6,T7,T8,T9,T10,
                                T11,T12,T13,T14,T15,T16,T17,T18,T19,T20,
                                T21,T22,T23,T24,T25,T26,T27,T28,T29,T30,
-                               T31,T32,T33,T34,T35,T36}
+                               T31,T32,T33,T34,T35,T36,T37,T38}
     me::mk_float
     vpa_dissipation_coefficient::mk_float
     constraint_forcing_rate::mk_float
@@ -722,36 +722,38 @@ end
     du_dz::T5
     p::T6
     dp_dz::T7
-    vth::T8
-    dvth_dz::T9
-    ppar::T10
-    dppar_dz::T11
-    zeroth_moment::T12
-    zeroth_moment_constraint_rhs::T13
-    first_moment::T14
-    first_moment_constraint_rhs::T15
-    second_moment::T16
-    second_moment_constraint_rhs::T17
-    third_moment::T18
-    dthird_moment_dz::T19
-    third_moment_constraint_rhs::T20
-    dq_dz::T21
-    u_ion::T22
-    wperp::T23
-    wpa::T24
-    f::T25
-    df_dz::T26
-    df_dvpa::T27
-    d2f_dvpa2::T28
+    dp_dz_constraint_rhs::T8
+    vth::T9
+    dvth_dz::T10
+    ppar::T11
+    dppar_dz::T12
+    zeroth_moment::T13
+    zeroth_moment_constraint_rhs::T14
+    first_moment::T15
+    first_moment_constraint_rhs::T16
+    second_moment::T17
+    second_moment_constraint_rhs::T18
+    third_moment::T19
+    dthird_moment_dz::T20
+    third_moment_constraint_rhs::T21
+    dq_dz::T22
+    dq_dz_constraint_rhs::T23
+    u_ion::T24
+    wperp::T25
+    wpa::T26
+    f::T27
+    df_dz::T28
+    df_dvpa::T29
+    d2f_dvpa2::T30
     source_type::Vector{String}
-    source_amplitude::Vector{T29}
-    source_T_array::Vector{T30}
-    density_source::Vector{T31}
-    momentum_source::Vector{T32}
-    pressure_source::Vector{T33}
-    source_vth_factor::Vector{T34}
-    source_this_vth_factor::T35
-    collisions::T36
+    source_amplitude::Vector{T31}
+    source_T_array::Vector{T32}
+    density_source::Vector{T33}
+    momentum_source::Vector{T34}
+    pressure_source::Vector{T35}
+    source_vth_factor::Vector{T36}
+    source_this_vth_factor::T37
+    collisions::T38
     nuee0::mk_float
     nuei0::mk_float
     krook_adjust_vth_1V::mk_float
