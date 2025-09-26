@@ -485,9 +485,16 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments,
             end
         end
     end
+    final_scratch_pdf = scratch[t_params.n_rk_stages+1].pdf_electron
+    # When there is an r-dimension, the last point in r is not solved, and needs to be
+    # communicated from the next process (if there is one - if not it will have been set
+    # by the boundary condition).
+    halo_swap!(final_scratch_pdf)
+    if evolve_p
+        halo_swap!(scratch[t_params.n_rk_stages+1].electron_p)
+    end
     # Update the 'pdf' arrays with the final result
     @begin_r_z_vperp_vpa_region()
-    final_scratch_pdf = scratch[t_params.n_rk_stages+1].pdf_electron
     @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
         pdf[ivpa,ivperp,iz,ir] = final_scratch_pdf[ivpa,ivperp,iz,ir]
     end
@@ -975,9 +982,16 @@ function electron_backward_euler_pseudotimestepping!(scratch, pdf, moments,
             dt[] = previous_dt[]
         end
     end
+    final_scratch_pdf = scratch[t_params.n_rk_stages+1].pdf_electron
+    # When there is an r-dimension, the last point in r is not solved, and needs to be
+    # communicated from the next process (if there is one - if not it will have been set
+    # by the boundary condition).
+    halo_swap!(final_scratch_pdf)
+    if evolve_p
+        halo_swap!(scratch[t_params.n_rk_stages+1].electron_p)
+    end
     # Update the 'pdf' arrays with the final result
     @begin_r_z_vperp_vpa_region()
-    final_scratch_pdf = scratch[t_params.n_rk_stages+1].pdf_electron
     @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
         pdf[ivpa,ivperp,iz,ir] = final_scratch_pdf[ivpa,ivperp,iz,ir]
     end
@@ -1952,6 +1966,14 @@ to allow the outer r-loop to be parallelised.
         if !newton_success
             break
         end
+    end
+    # When there is an r-dimension, the last point in r is not solved, and needs to be
+    # communicated from the next process (if there is one - if not it will have been set
+    # by the boundary condition).
+    halo_swap!(pdf_electron_out)
+    halo_swap!(electron_p_out)
+    if evolve_p
+        halo_swap!(scratch[t_params.n_rk_stages+1].electron_p)
     end
 
     # Fill pdf.electron.norm
