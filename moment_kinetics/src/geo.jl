@@ -10,9 +10,12 @@ export setup_geometry_input
 
 using ..input_structs: geometry_input, set_defaults_and_check_section!
 using ..file_io: input_option_error
-using ..array_allocation: allocate_float
-using ..type_definitions: mk_float, mk_int
+using ..array_allocation: allocate_shared_float
+using ..type_definitions: mk_float, mk_int, MPISharedArray
 using ..reference_parameters: setup_reference_parameters
+using ..derivatives: derivative_z!
+using ..looping
+using ..communication
 
 using OrderedCollections: OrderedDict
 
@@ -31,35 +34,35 @@ struct geometric_coefficients
     rhostar::mk_float
     # the spatially varying coefficients
     # Bz/Bref
-    Bzed::Array{mk_float,2}
+    Bzed::MPISharedArray{mk_float,2}
     # Bzeta/Bref
-    Bzeta::Array{mk_float,2}
+    Bzeta::MPISharedArray{mk_float,2}
     # Btot/Bref
-    Bmag::Array{mk_float,2}
+    Bmag::MPISharedArray{mk_float,2}
     # bz -- unit vector component in z direction
-    bzed::Array{mk_float,2}
+    bzed::MPISharedArray{mk_float,2}
     # bz -- unit vector component in zeta direction
-    bzeta::Array{mk_float,2}
+    bzeta::MPISharedArray{mk_float,2}
 
 
     # now the new coefficients
 
     # d Bmag d z
-    dBdz::Array{mk_float,2}
+    dBdz::MPISharedArray{mk_float,2}
     # d Bmag d r
-    dBdr::Array{mk_float,2}
+    dBdr::MPISharedArray{mk_float,2}
     # jacobian =  r grad r x grad z . grad zeta
-    jacobian::Array{mk_float,2}
+    jacobian::MPISharedArray{mk_float,2}
 
     # magnetic drift physics coefficients
     # curvature_drift_r = (b/B) x (b.grad b) . grad r
-    curvature_drift_r::Array{mk_float,2}
+    curvature_drift_r::MPISharedArray{mk_float,2}
     # curvature_drift_z = (b/B) x (b.grad b) . grad z
-    curvature_drift_z::Array{mk_float,2}
+    curvature_drift_z::MPISharedArray{mk_float,2}
     # grad_B_drift_r = (b/B^2) x grad B . grad r
-    grad_B_drift_r::Array{mk_float,2}
+    grad_B_drift_r::MPISharedArray{mk_float,2}
     # grad_B_drift_z = (b/B^2) x grad B . grad z
-    grad_B_drift_z::Array{mk_float,2}
+    grad_B_drift_z::MPISharedArray{mk_float,2}
 end
 
 """
@@ -123,21 +126,23 @@ input_data -- geometry_input type
 z -- coordinate type
 r -- coordinate type
 """
-function init_magnetic_geometry(geometry_input_data::geometry_input,z,r)
+function init_magnetic_geometry(geometry_input_data::geometry_input,z,r,z_spectral)
     nz = z.n
     nr = r.n
-    Bzed = allocate_float(z, r)
-    Bzeta = allocate_float(z, r)
-    Bmag = allocate_float(z, r)
-    bzed = allocate_float(z, r)
-    bzeta = allocate_float(z, r)
-    dBdr = allocate_float(z, r)
-    dBdz = allocate_float(z, r)
-    jacobian = allocate_float(z, r)
-    curvature_drift_r = allocate_float(z, r)
-    curvature_drift_z = allocate_float(z, r)
-    grad_B_drift_r = allocate_float(z, r)
-    grad_B_drift_z = allocate_float(z, r)
+    Bzed = allocate_shared_float(z, r)
+    Bzeta = allocate_shared_float(z, r)
+    Bmag = allocate_shared_float(z, r)
+    bzed = allocate_shared_float(z, r)
+    bzeta = allocate_shared_float(z, r)
+    dBdr = allocate_shared_float(z, r)
+    dBdz = allocate_shared_float(z, r)
+    jacobian = allocate_shared_float(z, r)
+    curvature_drift_r = allocate_shared_float(z, r)
+    curvature_drift_z = allocate_shared_float(z, r)
+    grad_B_drift_r = allocate_shared_float(z, r)
+    grad_B_drift_z = allocate_shared_float(z, r)
+
+    @begin_r_z_region()
     
     option = geometry_input_data.option
     rhostar = geometry_input_data.rhostar
@@ -145,22 +150,20 @@ function init_magnetic_geometry(geometry_input_data::geometry_input,z,r)
         # \vec{B} = B ( bz \hat{z} + bzeta \hat{zeta} ) 
         # with B a constant and \hat{z} x \hat{r} . \hat{zeta} = 1
         pitch = geometry_input_data.pitch
-        for ir in 1:nr
-            for iz in 1:nz
-                bzed[iz,ir] = pitch
-                bzeta[iz,ir] = sqrt(1 - bzed[iz,ir]^2)
-                Bmag[iz,ir] = 1.0
-                Bzed[iz,ir] = Bmag[iz,ir]*bzed[iz,ir]
-                Bzeta[iz,ir] = Bmag[iz,ir]*bzeta[iz,ir]
-                dBdr[iz,ir] = 0.0
-                dBdz[iz,ir] = 0.0
-                jacobian[iz,ir] = 1.0
+        @loop_r_z ir iz begin
+            bzed[iz,ir] = pitch
+            bzeta[iz,ir] = sqrt(1 - bzed[iz,ir]^2)
+            Bmag[iz,ir] = 1.0
+            Bzed[iz,ir] = Bmag[iz,ir]*bzed[iz,ir]
+            Bzeta[iz,ir] = Bmag[iz,ir]*bzeta[iz,ir]
+            dBdr[iz,ir] = 0.0
+            dBdz[iz,ir] = 0.0
+            jacobian[iz,ir] = 1.0
 
-                curvature_drift_r[iz,ir] = 0.0
-                curvature_drift_z[iz,ir] = 0.0
-                grad_B_drift_r[iz,ir] = 0.0
-                grad_B_drift_z[iz,ir] = 0.0
-            end
+            curvature_drift_r[iz,ir] = 0.0
+            curvature_drift_z[iz,ir] = 0.0
+            grad_B_drift_r[iz,ir] = 0.0
+            grad_B_drift_z[iz,ir] = 0.0
         end
     elseif option == "1D-mirror"
         # a 1D configuration for testing mirror and vperp physics 
@@ -174,27 +177,25 @@ function init_magnetic_geometry(geometry_input_data::geometry_input,z,r)
             input_option_error("$option: You have specified DeltaB < -1 -> set DeltaB > -1", option)
         end
         pitch = geometry_input_data.pitch
-        for ir in 1:nr
-            for iz in 1:nz
-                bzed[iz,ir] = pitch
-                bzeta[iz,ir] = sqrt(1 - bzed[iz,ir]^2)
-                # B(z)/Bref = 1 + DeltaB*( 2(2z/L)^2 - (2z/L)^4)
-                # chosen so that
-                # B(z)/Bref = 1 + DeltaB at 2z/L = +- 1 
-                # d B(z)d z = 0 at 2z/L = +- 1 
-                zfac = 2.0*z.grid[iz]/z.L
-                Bmag[iz,ir] = 1.0 + DeltaB*( 2.0*zfac^2 - zfac^4)
-                Bzed[iz,ir] = Bmag[iz,ir]*bzed[iz,ir]
-                Bzeta[iz,ir] = Bmag[iz,ir]*bzeta[iz,ir]
-                dBdr[iz,ir] = 0.0
-                dBdz[iz,ir] = (2.0/z.L)*4.0*DeltaB*zfac*(1.0 - zfac^2)
-                jacobian[iz,ir] = 1.0
+        @loop_r_z ir iz begin
+            bzed[iz,ir] = pitch
+            bzeta[iz,ir] = sqrt(1 - bzed[iz,ir]^2)
+            # B(z)/Bref = 1 + DeltaB*( 2(2z/L)^2 - (2z/L)^4)
+            # chosen so that
+            # B(z)/Bref = 1 + DeltaB at 2z/L = +- 1 
+            # d B(z)d z = 0 at 2z/L = +- 1 
+            zfac = 2.0*z.grid[iz]/z.L
+            Bmag[iz,ir] = 1.0 + DeltaB*( 2.0*zfac^2 - zfac^4)
+            Bzed[iz,ir] = Bmag[iz,ir]*bzed[iz,ir]
+            Bzeta[iz,ir] = Bmag[iz,ir]*bzeta[iz,ir]
+            dBdr[iz,ir] = 0.0
+            dBdz[iz,ir] = (2.0/z.L)*4.0*DeltaB*zfac*(1.0 - zfac^2)
+            jacobian[iz,ir] = 1.0
 
-                curvature_drift_r[iz,ir] = 0.0
-                curvature_drift_z[iz,ir] = 0.0
-                grad_B_drift_r[iz,ir] = 0.0
-                grad_B_drift_z[iz,ir] = 0.0               
-            end
+            curvature_drift_r[iz,ir] = 0.0
+            curvature_drift_z[iz,ir] = 0.0
+            grad_B_drift_r[iz,ir] = 0.0
+            grad_B_drift_z[iz,ir] = 0.0               
         end
     elseif option == "low-beta-helix"
         # a 2D configuration for testing magnetic drift physics
@@ -203,23 +204,20 @@ function init_magnetic_geometry(geometry_input_data::geometry_input,z,r)
         pitch = geometry_input_data.pitch
         B0 = 1.0 # chose reference field strength to be Bzeta at r = 1
         Bz = pitch*B0 # pitch determines ratio of Bz/B0 at r = 1
-        for ir in 1:nr
-            rr = r.grid[ir]
-            for iz in 1:nz
-                Bmag[iz,ir] = sqrt( (B0/rr)^2 + Bz^2 )
-                bzed[iz,ir] = Bz/Bmag[iz,ir]
-                bzeta[iz,ir] = B0/(rr*Bmag[iz,ir])
-                Bzed[iz,ir] = bzed[iz,ir]*Bmag[iz,ir]
-                Bzeta[iz,ir] = bzeta[iz,ir]*Bmag[iz,ir]
-                dBdz[iz,ir] = 0.0
-                dBdr[iz,ir] = -(Bmag[iz,ir]/rr)*bzeta[iz,ir]^2
-                jacobian[iz,ir] = 1.0
-                
-                curvature_drift_r[iz,ir] = 0.0
-                curvature_drift_z[iz,ir] = -(bzeta[iz,ir]/Bmag[iz,ir])*(bzeta[iz,ir]^2)/rr
-                grad_B_drift_r[iz,ir] = 0.0
-                grad_B_drift_z[iz,ir] = curvature_drift_z[iz,ir]
-            end
+        @loop_r_z ir iz begin
+            Bmag[iz,ir] = sqrt( (B0/r.grid[ir])^2 + Bz^2 )
+            bzed[iz,ir] = Bz/Bmag[iz,ir]
+            bzeta[iz,ir] = B0/(r.grid[ir]*Bmag[iz,ir])
+            Bzed[iz,ir] = bzed[iz,ir]*Bmag[iz,ir]
+            Bzeta[iz,ir] = bzeta[iz,ir]*Bmag[iz,ir]
+            dBdz[iz,ir] = 0.0
+            dBdr[iz,ir] = -(Bmag[iz,ir]/r.grid[ir])*bzeta[iz,ir]^2
+            jacobian[iz,ir] = 1.0
+            
+            curvature_drift_r[iz,ir] = 0.0
+            curvature_drift_z[iz,ir] = -(bzeta[iz,ir]/Bmag[iz,ir])*(bzeta[iz,ir]^2)/r.grid[ir]
+            grad_B_drift_r[iz,ir] = 0.0
+            grad_B_drift_z[iz,ir] = curvature_drift_z[iz,ir]
         end
     elseif option == "0D-Spitzer-test"
         # a 0D configuration with certain geometrical factors
@@ -229,22 +227,20 @@ function init_magnetic_geometry(geometry_input_data::geometry_input,z,r)
         dBdz_constant = geometry_input_data.dBdz_constant
         dBdr_constant = geometry_input_data.dBdr_constant
         B0 = 1.0 # chose reference field strength to be Bzeta at r = 1
-        for ir in 1:nr
-            for iz in 1:nz
-                Bmag[iz,ir] = B0
-                bzed[iz,ir] = pitch
-                bzeta[iz,ir] = sqrt(1 - pitch^2)
-                Bzed[iz,ir] = bzed[iz,ir]*Bmag[iz,ir]
-                Bzeta[iz,ir] = bzeta[iz,ir]*Bmag[iz,ir]
-                dBdz[iz,ir] = dBdz_constant
-                dBdr[iz,ir] = dBdr_constant
-                jacobian[iz,ir] = 1.0
-                
-                curvature_drift_r[iz,ir] = 0.0
-                curvature_drift_z[iz,ir] = 0.0
-                grad_B_drift_r[iz,ir] = 0.0
-                grad_B_drift_z[iz,ir] = 0.0
-            end
+        @loop_r_z ir iz begin
+            Bmag[iz,ir] = B0
+            bzed[iz,ir] = pitch
+            bzeta[iz,ir] = sqrt(1 - pitch^2)
+            Bzed[iz,ir] = bzed[iz,ir]*Bmag[iz,ir]
+            Bzeta[iz,ir] = bzeta[iz,ir]*Bmag[iz,ir]
+            dBdz[iz,ir] = dBdz_constant
+            dBdr[iz,ir] = dBdr_constant
+            jacobian[iz,ir] = 1.0
+            
+            curvature_drift_r[iz,ir] = 0.0
+            curvature_drift_z[iz,ir] = 0.0
+            grad_B_drift_r[iz,ir] = 0.0
+            grad_B_drift_z[iz,ir] = 0.0
         end
     elseif option == "1D-Helical-ITG"
         # a 1D configuration for finding an ITG mode via implementing
@@ -260,34 +256,73 @@ function init_magnetic_geometry(geometry_input_data::geometry_input,z,r)
         pitch = geometry_input_data.pitch
         dB_dr = geometry_input_data.dBdr_constant
         B_0 = 1.0
-        for ir in 1:nr
-            for iz in 1:nz
-                bzed[iz,ir] = pitch
-                bzeta[iz,ir] = sqrt(1 - bzed[iz,ir]^2)
-                Bmag[iz,ir] = B_0
-                Bzed[iz,ir] = Bmag[iz,ir]*bzed[iz,ir]
-                Bzeta[iz,ir] = Bmag[iz,ir]*bzeta[iz,ir]
-                dBdr[iz,ir] = dB_dr
-                dBdz[iz,ir] = 0.0
-                jacobian[iz,ir] = 1.0
+        @loop_r_z ir iz begin
+            bzed[iz,ir] = pitch
+            bzeta[iz,ir] = sqrt(1 - bzed[iz,ir]^2)
+            Bmag[iz,ir] = B_0
+            Bzed[iz,ir] = Bmag[iz,ir]*bzed[iz,ir]
+            Bzeta[iz,ir] = Bmag[iz,ir]*bzeta[iz,ir]
+            dBdr[iz,ir] = dB_dr
+            dBdz[iz,ir] = 0.0
+            jacobian[iz,ir] = 1.0
 
+            curvature_drift_r[iz,ir] = 0.0
+            curvature_drift_z[iz,ir] = 0.0
 
-                curvature_drift_r[iz,ir] = 0.0
-                curvature_drift_z[iz,ir] = 0.0
-
-                grad_B_drift_r[iz,ir] = 0.0
-                grad_B_drift_z[iz,ir] = bzeta[iz,ir] * dBdr[iz,ir]/Bmag[iz,ir]
-            end
+            grad_B_drift_r[iz,ir] = 0.0
+            grad_B_drift_z[iz,ir] = bzeta[iz,ir] * dBdr[iz,ir]/Bmag[iz,ir]
         end
         L_B = 1/(dB_dr*1/Bmag[1,1])
-        println("L_B = $L_B")
-    else 
+        #println("L_B = $L_B")
+    elseif option == "1D-mirror-MAST-edge"
+        # a 1D configuration along z, with no pitch, but the magnetic field 
+        # strength varies along the line. Its variation matches very closely to 
+        # a single field line in the edge of MAST (from a hypnotoad analysis of 
+        # an eqdsk file), assuming uniform z (i.e. arc length along field line.)
+        # Aim is to see the mirror force in action, and trapping physics in the edge.
+        # field line fit (really quite accurate!) is: 
+        # a0=0.32884641, a2=-0.4199673, a4=3.1528366, a6=-6.3052343, a8=4.0532678
+        # z grid needs to be mapped from -1 to 1 for these polynomials to work.
+        a0, a2, a4, a6, a8 = 0.32884641, -0.4199673, 3.1528366, -6.3052343, 4.0532678
+
+        pitch = geometry_input_data.pitch
+        if pitch != 1.0
+            input_option_error("option: You have specified pitch != 1, but z is arc length coordinate in 1D-mirror-MAST-edge geometry", option)
+        end
+
+        B_0 = 1.0
+
+        @loop_r_z ir iz begin
+            bzed[iz,ir] = pitch
+            bzeta[iz,ir] = sqrt(1 - bzed[iz,ir]^2)
+            Bmag[iz,ir] = B_0 * (a0 + (z.grid[iz]*(2.0/z.L))^2 * (a2 + (z.grid[iz]*(2.0/z.L))^2 * (a4 + 
+                                        (z.grid[iz]*(2.0/z.L))^2 * (a6 + a8 * (z.grid[iz]*(2.0/z.L))^2))))
+            Bzed[iz,ir] = Bmag[iz,ir]*bzed[iz,ir]
+            Bzeta[iz,ir] = Bmag[iz,ir]*bzeta[iz,ir]
+            dBdr[iz,ir] = 0.0
+
+            jacobian[iz,ir] = 1.0
+
+
+            curvature_drift_r[iz,ir] = 0.0
+            curvature_drift_z[iz,ir] = 0.0
+
+            grad_B_drift_r[iz,ir] = 0.0
+            grad_B_drift_z[iz,ir] = 0.0
+        end
+
+        # now calculate dBdz using spectral derivative
+        @views derivative_z!(dBdz, Bmag, r.scratch_shared, r.scratch_shared2,
+                             r.scratch_shared3, r.scratch_shared4, z_spectral, z)
+    else
         input_option_error("$option", option)
     end
 
     geometry = geometric_coefficients(geometry_input_data, rhostar,
                Bzed,Bzeta,Bmag,bzed,bzeta,dBdz,dBdr,jacobian,
                curvature_drift_r,curvature_drift_z,grad_B_drift_r,grad_B_drift_z)
+
+    @_block_synchronize()
     return geometry
 end
 
