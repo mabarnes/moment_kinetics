@@ -422,7 +422,7 @@ function mk_input(input_dict=OptionsDict("output" => OptionsDict("run_name" => "
                                               run_directory=run_directory,
                                               ignore_MPI=ignore_MPI)
 
-    geometry = init_magnetic_geometry(geometry_in,z,r)
+    geometry = init_magnetic_geometry(geometry_in,z,r,z_spectral)
     if any(geometry.dBdz .!= 0.0) &&
             (evolve_moments.density || evolve_moments.parallel_flow ||
              evolve_moments.pressure)

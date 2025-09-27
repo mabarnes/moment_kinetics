@@ -13,6 +13,7 @@ using ..file_io: input_option_error
 using ..array_allocation: allocate_float
 using ..type_definitions: mk_float, mk_int
 using ..reference_parameters: setup_reference_parameters
+using ..derivatives: derivative_z!
 
 using OrderedCollections: OrderedDict
 
@@ -123,7 +124,7 @@ input_data -- geometry_input type
 z -- coordinate type
 r -- coordinate type
 """
-function init_magnetic_geometry(geometry_input_data::geometry_input,z,r)
+function init_magnetic_geometry(geometry_input_data::geometry_input,z,r,z_spectral)
     nz = z.n
     nr = r.n
     Bzed = allocate_float(z, r)
@@ -281,6 +282,50 @@ function init_magnetic_geometry(geometry_input_data::geometry_input,z,r)
         end
         L_B = 1/(dB_dr*1/Bmag[1,1])
         println("L_B = $L_B")
+    elseif option == "1D-mirror-MAST-edge"
+        # a 1D configuration along z, with no pitch, but the magnetic field 
+        # strength varies along the line. Its variation matches very closely to 
+        # a single field line in the edge of MAST (from a hypnotoad analysis of 
+        # an eqdsk file), assuming uniform z (i.e. arc length along field line.)
+        # Aim is to see the mirror force in action, and trapping physics in the edge.
+        # field line fit (really quite accurate!) is: 
+        # a0=0.32884641, a2=-0.4199673, a4=3.1528366, a6=-6.3052343, a8=4.0532678
+        # z grid needs to be mapped from -1 to 1 for these polynomials to work.
+        a0, a2, a4, a6, a8 = 0.32884641, -0.4199673, 3.1528366, -6.3052343, 4.0532678
+
+        pitch = geometry_input_data.pitch
+        if pitch != 1.0
+            input_option_error("option: You have specified pitch != 1, but z is arc length coordinate in 1D-mirror-MAST-edge geometry", option)
+        end
+
+        B_0 = 1.0
+        buffer_r_1 = allocate_float(r)
+        buffer_r_2 = allocate_float(r)
+        buffer_r_3 = allocate_float(r)
+        buffer_r_4 = allocate_float(r)
+        for ir in 1:nr
+            for iz in 1:nz
+                bzed[iz,ir] = pitch
+                bzeta[iz,ir] = sqrt(1 - bzed[iz,ir]^2)
+                Bmag[iz,ir] = B_0 * (a0 + (z.grid[iz]*(2.0/z.L))^2 * (a2 + (z.grid[iz]*(2.0/z.L))^2 * (a4 + 
+                                          (z.grid[iz]*(2.0/z.L))^2 * (a6 + a8 * (z.grid[iz]*(2.0/z.L))^2))))
+                Bzed[iz,ir] = Bmag[iz,ir]*bzed[iz,ir]
+                Bzeta[iz,ir] = Bmag[iz,ir]*bzeta[iz,ir]
+                dBdr[iz,ir] = 0.0
+
+                jacobian[iz,ir] = 1.0
+
+
+                curvature_drift_r[iz,ir] = 0.0
+                curvature_drift_z[iz,ir] = 0.0
+
+                grad_B_drift_r[iz,ir] = 0.0
+                grad_B_drift_z[iz,ir] = 0.0
+            end
+        end
+        # now calculate dBdz using spectral derivative
+        @views derivative_z!(dBdz, Bmag, buffer_r_1, buffer_r_2, 
+                             buffer_r_3, buffer_r_4, z_spectral, z)
     else 
         input_option_error("$option", option)
     end
