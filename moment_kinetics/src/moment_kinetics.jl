@@ -231,33 +231,16 @@ parallel loop ranges, and are only used by the tests in `debug_test/`.
     end
 
     input = mk_input(input_dict; save_inputs_to_txt=true, ignore_MPI=false,
+                     debug_loop_type=debug_loop_type, 
+                     debug_loop_parallel_dims=debug_loop_parallel_dims,
                      warn_unexpected=warn_unexpected_input, write_output=write_output)
+
     # obtain input options from moment_kinetics_input.jl
     # and check input to catch errors
     io_input, evolve_moments, t_input, z, z_spectral, r, r_spectral, vpa, vpa_spectral,
         vperp, vperp_spectral, gyrophase, gyrophase_spectral, vz, vz_spectral, vr,
         vr_spectral, vzeta, vzeta_spectral, composition, species, collisions, geometry,
         em_input, num_diss_params, manufactured_solns_input = input
-
-    # Create loop range variables for shared-memory-parallel loops
-    if debug_loop_type === nothing
-        # Non-debug case used for all simulations
-        looping.setup_loop_ranges!(block_rank[], block_size[];
-                                   s=composition.n_ion_species,
-                                   sn=composition.n_neutral_species,
-                                   r=r.n, z=z.n, vperp=vperp.n, vpa=vpa.n,
-                                   vzeta=vzeta.n, vr=vr.n, vz=vz.n)
-    else
-        if debug_loop_parallel_dims === nothing
-            error("debug_loop_parallel_dims must not be `nothing` when debug_loop_type "
-                  * "is not `nothing`.")
-        end
-        # Debug initialisation only used by tests in `debug_test/`
-        debug_setup_loop_ranges_split_one_combination!(
-            debug_loop_type, debug_loop_parallel_dims...; s=composition.n_ion_species,
-            sn=composition.n_neutral_species, r=r.n, z=z.n, vperp=vperp.n, vpa=vpa.n,
-            vzeta=vzeta.n, vr=vr.n, vz=vz.n)
-    end
 
     external_source_settings = setup_external_sources!(input_dict, r, z,
                                                        composition.electron_physics,
