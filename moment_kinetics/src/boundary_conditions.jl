@@ -14,6 +14,7 @@ using ..array_allocation: allocate_shared_float
 using ..calculus: integral, reconcile_element_boundaries_MPI!
 using ..communication
 using ..coordinates: coordinate
+using ..debugging
 using ..input_structs
 using ..interpolation: interpolate_to_grid_1d!
 using ..looping
@@ -1816,7 +1817,7 @@ function enforce_zero_incoming_bc!(pdf, z::coordinate, vperp::coordinate, vpa::c
         error("No boundary in this block, should have returned already")
     end
     for (iz, vth) ∈ zip(z_range, vth_list)
-        @boundscheck size(pdf,2) == 1
+        @debug_consistency_checks size(pdf,2) == 1
         f = @view pdf[:,:,iz]
         if evolve_p && evolve_upar
             I0 = integral((vperp,vpa)->(1), f, vperp, vpa)
@@ -2516,7 +2517,7 @@ function enforce_vperp_boundary_condition!(f::AbstractArray{mk_float,3}, bc, vpe
 end
 
 """
-    skip_f_electron_bc_points_in_Jacobian(iz, ivperp, ivpa, z, vperp, vpa)
+    skip_f_electron_bc_points_in_Jacobian(z_speed, ivpa, ivperp, iz, vpa, vperp, z)
 
 This function returns `true` when the grid point specified by `iz`, `ivperp`, `ivpa` would
 be set by the boundary conditions on the electron distribution function. When this
@@ -2524,7 +2525,7 @@ happens, the corresponding row should be skipped when adding contributions to th
 matrix, so that the row remains the same as a row of the identity matrix, so that the
 Jacobian matrix does not modify those points. Returns `false` otherwise.
 """
-function skip_f_electron_bc_points_in_Jacobian(iz, ivperp, ivpa, z, vperp, vpa, z_speed)
+function skip_f_electron_bc_points_in_Jacobian(z_speed, ivpa, ivperp, iz, vpa, vperp, z)
     # z boundary condition
     # Treat as if using Dirichlet boundary condition for incoming part of the distribution
     # function on the block boundary, regardless of the actual boundary condition and
@@ -2544,6 +2545,65 @@ function skip_f_electron_bc_points_in_Jacobian(iz, ivperp, ivpa, z, vperp, vpa, 
     end
 
     if ivpa == 1 || ivpa == vpa.n
+        return true
+    end
+
+    return false
+end
+
+function skip_f_electron_bc_points_in_Jacobian_v_solve(z_speed, ivpa, ivperp, vpa, vperp)
+    # z boundary condition
+    # Treat as if using Dirichlet boundary condition for incoming part of the distribution
+    # function on the block boundary, regardless of the actual boundary condition and
+    # whether this is an internal boundary or an actual domain boundary. This prevents the
+    # matrix evaluated for a single block (without coupling to neighbouring blocks) from
+    # becoming singular
+    if z_speed !== nothing
+        is_lower_boundary, speed = z_speed
+        if is_lower_boundary
+            if speed[ivpa,ivperp] ≥ 0.0
+                return true
+            end
+        else
+            if speed[ivpa,ivperp] ≤ 0.0
+                return true
+            end
+        end
+    end
+
+    # vperp boundary condition
+    if vperp.n > 1 && ivperp == vperp.n
+        return true
+    end
+
+    if ivpa == 1 || ivpa == vpa.n
+        return true
+    end
+
+    return false
+end
+
+@inline function get_ADI_boundary_v_solve_z_speed(z_speed, z, iz)
+    if iz == 1
+        return (true, z_speed)
+    elseif iz == z.n
+        return (false, z_speed)
+    else
+        return nothing
+    end
+end
+
+function skip_f_electron_bc_points_in_Jacobian_z_solve(z_speed, iz, z)
+    # z boundary condition
+    # Treat as if using Dirichlet boundary condition for incoming part of the distribution
+    # function on the block boundary, regardless of the actual boundary condition and
+    # whether this is an internal boundary or an actual domain boundary. This prevents the
+    # matrix evaluated for a single block (without coupling to neighbouring blocks) from
+    # becoming singular
+    if iz == 1 && z_speed[iz] ≥ 0.0
+        return true
+    end
+    if iz == z.n && z_speed[iz] ≤ 0.0
         return true
     end
 

@@ -7,6 +7,7 @@ export update_speed_neutral_vz!
 
 using ..advection: advance_f_local!
 using ..communication
+using ..debugging
 using ..looping
 using ..timer_utils
 
@@ -41,12 +42,12 @@ calculate the advection speed in the vz-direction at each grid point
 """
 function update_speed_neutral_vz!(advect, fields, fvec, moments, vz, vr, vzeta, z, r,
                                   composition, collisions, neutral_source_settings)
-    @boundscheck r.n == size(advect[1].speed,5) || throw(BoundsError(advect[1].speed))
-    @boundscheck z.n == size(advect[1].speed,4) || throw(BoundsError(advect[1].speed))
-    @boundscheck vzeta.n == size(advect[1].speed,3) || throw(BoundsError(advect[1].speed))
-    @boundscheck vr.n == size(advect[1].speed,2) || throw(BoundsError(advect[1].speed))
-    @boundscheck composition.n_neutral_species == size(advect,1) || throw(BoundsError(advect))
-    @boundscheck vz.n == size(advect[1].speed,1) || throw(BoundsError(advect[1].speed))
+    @debug_consistency_checks r.n == size(advect[1].speed,5) || throw(BoundsError(advect[1].speed))
+    @debug_consistency_checks z.n == size(advect[1].speed,4) || throw(BoundsError(advect[1].speed))
+    @debug_consistency_checks vzeta.n == size(advect[1].speed,3) || throw(BoundsError(advect[1].speed))
+    @debug_consistency_checks vr.n == size(advect[1].speed,2) || throw(BoundsError(advect[1].speed))
+    @debug_consistency_checks composition.n_neutral_species == size(advect,1) || throw(BoundsError(advect))
+    @debug_consistency_checks vz.n == size(advect[1].speed,1) || throw(BoundsError(advect[1].speed))
 
     # dvpa/dt = Ze/m ⋅ E_parallel
     if moments.evolve_p && moments.evolve_upar

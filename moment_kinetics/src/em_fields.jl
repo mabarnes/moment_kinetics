@@ -15,6 +15,7 @@ using ..looping
 using ..moment_kinetics_structs: em_fields_struct
 using ..velocity_moments: update_density!
 #using ..calculus: derivative!
+using ..debugging
 using ..derivatives: derivative_r!, derivative_z!
 using ..electron_fluid_equations: calculate_Epar_from_electron_force_balance!
 using ..gyroaverages: gyro_operators, gyroaverage_field!
@@ -24,19 +25,16 @@ using MPI
 
 """
 """
-function setup_em_fields(vperp, z, r, n_ion_species, em_input)
+function setup_em_fields(vperp, z, r, ion_species_coord, em_input)
     phi = allocate_shared_float(z, r)
     phi0 = allocate_shared_float(z, r)
     Er = allocate_shared_float(z, r)
     Ez = allocate_shared_float(z, r)
     vEr = allocate_shared_float(z, r)
     vEz = allocate_shared_float(z, r)
-    gphi = allocate_shared_float(; vperp=vperp.n, z=z.n, r=r.n,
-                                 ion_species=n_ion_species)
-    gEr = allocate_shared_float(; vperp=vperp.n, z=z.n, r=r.n,
-                                ion_species=n_ion_species)
-    gEz = allocate_shared_float(; vperp=vperp.n, z=z.n, r=r.n,
-                                ion_species=n_ion_species)
+    gphi = allocate_shared_float(vperp, z, r, ion_species_coord)
+    gEr = allocate_shared_float(vperp, z, r, ion_species_coord)
+    gEz = allocate_shared_float(vperp, z, r, ion_species_coord)
     @begin_serial_region()
     @serial_region begin
         # Ensure these fields are never used uninitialised.
@@ -55,17 +53,17 @@ function update_phi!(fields, fvec, vperp, z, r, composition, collisions, moments
                      gyroavs::gyro_operators)
     n_ion_species = composition.n_ion_species
     # check bounds of fields and fvec arrays
-    @boundscheck size(fields.phi,1) == z.n || throw(BoundsError(fields.phi))
-    @boundscheck size(fields.phi,2) == r.n || throw(BoundsError(fields.phi))
-    @boundscheck size(fields.phi0,1) == z.n || throw(BoundsError(fields.phi0))
-    @boundscheck size(fields.phi0,2) == r.n || throw(BoundsError(fields.phi0))
-    @boundscheck size(fields.Er,1) == z.n || throw(BoundsError(fields.Er))
-    @boundscheck size(fields.Er,2) == r.n || throw(BoundsError(fields.Er))
-    @boundscheck size(fields.Ez,1) == z.n || throw(BoundsError(fields.Ez))
-    @boundscheck size(fields.Ez,2) == r.n || throw(BoundsError(fields.Ez))
-    @boundscheck size(fvec.density,1) == z.n || throw(BoundsError(fvec.density))
-    @boundscheck size(fvec.density,2) == r.n || throw(BoundsError(fvec.density))
-    @boundscheck size(fvec.density,3) == composition.n_ion_species || throw(BoundsError(fvec.density))
+    @debug_consistency_checks size(fields.phi,1) == z.n || throw(BoundsError(fields.phi))
+    @debug_consistency_checks size(fields.phi,2) == r.n || throw(BoundsError(fields.phi))
+    @debug_consistency_checks size(fields.phi0,1) == z.n || throw(BoundsError(fields.phi0))
+    @debug_consistency_checks size(fields.phi0,2) == r.n || throw(BoundsError(fields.phi0))
+    @debug_consistency_checks size(fields.Er,1) == z.n || throw(BoundsError(fields.Er))
+    @debug_consistency_checks size(fields.Er,2) == r.n || throw(BoundsError(fields.Er))
+    @debug_consistency_checks size(fields.Ez,1) == z.n || throw(BoundsError(fields.Ez))
+    @debug_consistency_checks size(fields.Ez,2) == r.n || throw(BoundsError(fields.Ez))
+    @debug_consistency_checks size(fvec.density,1) == z.n || throw(BoundsError(fvec.density))
+    @debug_consistency_checks size(fvec.density,2) == r.n || throw(BoundsError(fvec.density))
+    @debug_consistency_checks size(fvec.density,3) == composition.n_ion_species || throw(BoundsError(fvec.density))
     # Update phi using the set of processes that handles the first ion species
     # Means we get at least some parallelism, even though we have to sum
     # over species, and reduces number of @_block_synchronize() calls needed

@@ -19,6 +19,7 @@ using ..type_definitions: mk_float, mk_int
 using MPI
 using ..communication: block_rank
 using ..communication: @_block_synchronize, @_anyzv_subblock_synchronize
+using ..debugging
 using ..looping
 
 using LinearAlgebra
@@ -177,7 +178,7 @@ function second_derivative!(d2f, f, coord, spectral)
         d2f[1] -= C * coord.scratch2_2d[end,end]
         # With the first derivative from the opposite end of the grid, d2f[end] here
         # should be equal to d2f[1] up to rounding errors...
-        @boundscheck isapprox(d2f[end] + C * coord.scratch2_2d[1,1], d2f[1]; atol=1.0e-14)
+        @debug_consistency_checks isapprox(d2f[end] + C * coord.scratch2_2d[1,1], d2f[1]; atol=1.0e-14)
         # ...but because arithmetic operations were in a different order, there may be
         # rounding errors, so set the two ends exactly equal to ensure consistency for the
         # rest of the code - we assume that duplicate versions of the 'same point' on
@@ -295,7 +296,7 @@ function second_derivative!(d2f, f, coord, spectral::weak_discretization_info)
 
     if coord.periodic
         # d2f[end] here should be equal to d2f[1] up to rounding errors...
-        @boundscheck isapprox(d2f[end], d2f[1]; atol=1.0e-14)
+        @debug_consistency_checks isapprox(d2f[end], d2f[1]; atol=1.0e-14)
         # ...but in the matrix operations arithmetic operations are not necessarily in
         # exactly the same order, there may be rounding errors, so set the two ends
         # exactly equal to ensure consistency for the rest of the code - we assume that
@@ -917,8 +918,8 @@ function integral(integrand, wgts)
     n = length(wgts)
     # initialize 'integral' to zero before sum
     integral = 0.0
-    @boundscheck n == length(integrand) || throw(BoundsError(integrand))
-    @boundscheck n == length(wgts) || throw(BoundsError(wgts))
+    @debug_consistency_checks n == length(integrand) || throw(BoundsError(integrand))
+    @debug_consistency_checks n == length(wgts) || throw(BoundsError(wgts))
     @inbounds for i ∈ 1:n
         integral += integrand[i]*wgts[i]
     end
@@ -933,9 +934,9 @@ function integral(integrand, v, wgts)
     n = length(wgts)
     # initialize 'integral' to zero before sum
     integral = 0.0
-    @boundscheck n == length(integrand) || throw(BoundsError(integrand))
-    @boundscheck n == length(v) || throw(BoundsError(v))
-    @boundscheck n == length(wgts) || throw(BoundsError(wgts))
+    @debug_consistency_checks n == length(integrand) || throw(BoundsError(integrand))
+    @debug_consistency_checks n == length(v) || throw(BoundsError(v))
+    @debug_consistency_checks n == length(wgts) || throw(BoundsError(wgts))
     @inbounds for i ∈ 1:n
         integral += integrand[i] * v[i] * wgts[i]
     end
@@ -950,9 +951,9 @@ function integral(integrand, v, n, wgts)
     n_v = length(wgts)
     # initialize 'integral' to zero before sum
     integral = 0.0
-    @boundscheck n_v == length(integrand) || throw(BoundsError(integrand))
-    @boundscheck n_v == length(v) || throw(BoundsError(v))
-    @boundscheck n_v == length(wgts) || throw(BoundsError(wgts))
+    @debug_consistency_checks n_v == length(integrand) || throw(BoundsError(integrand))
+    @debug_consistency_checks n_v == length(v) || throw(BoundsError(v))
+    @debug_consistency_checks n_v == length(wgts) || throw(BoundsError(wgts))
     @inbounds for i ∈ 1:n_v
         integral += integrand[i] * v[i] ^ n * wgts[i]
     end
@@ -965,7 +966,7 @@ Compute the 1D integral `∫dv prefactor(v)*integrand`
 In this variant `v` should be a `coordinate` object.
 """
 function integral(prefactor::Function, integrand, v)
-    @boundscheck v.n == length(integrand) || throw(BoundsError(integrand))
+    @debug_consistency_checks v.n == length(integrand) || throw(BoundsError(integrand))
     v_grid = v.grid
     wgts = v.wgts
     integral = 0.0
@@ -984,7 +985,7 @@ Note that vperp_wgts contains the extra factor of vperp required for the
 Jacobian.
 """
 function integral(prefactor::Function, integrand, vperp, vpa)
-    @boundscheck (vpa.n, vperp.n) == size(integrand) || throw(BoundsError(integrand))
+    @debug_consistency_checks (vpa.n, vperp.n) == size(integrand) || throw(BoundsError(integrand))
     vperp_grid = vperp.grid
     vperp_wgts = vperp.wgts
     vpa_grid = vpa.grid
@@ -1003,7 +1004,7 @@ Compute the 3D integral `∫dvzeta.dvr.dvz prefactor(vzeta,vr,vz)*integrand`
 In this variant `vzeta`, `vr`, and `vz` should be `coordinate` objects.
 """
 function integral(prefactor::Function, integrand, vzeta, vr, vz)
-    @boundscheck (vz.n, vr.n, vzeta.n) == size(integrand) || throw(BoundsError(integrand))
+    @debug_consistency_checks (vz.n, vr.n, vzeta.n) == size(integrand) || throw(BoundsError(integrand))
     vzeta_grid = vzeta.grid
     vzeta_wgts = vzeta.wgts
     vr_grid = vr.grid
@@ -1032,12 +1033,12 @@ function integral(integrand, vx, px, wgtsx, vy, py, wgtsy)
     ny = length(wgtsy)
     # initialize 'integral' to zero before sum
     integral = 0.0
-    @boundscheck nx == size(integrand,1) || throw(BoundsError(integrand))
-    @boundscheck ny == size(integrand,2) || throw(BoundsError(integrand))
-    @boundscheck nx == length(vx) || throw(BoundsError(vx))
-    @boundscheck ny == length(vy) || throw(BoundsError(vy))
-#    @boundscheck ny == length(wgtsy) || throw(BoundsError(wtgsy))
-#    @boundscheck nx == length(wgtsx) || throw(BoundsError(wtgsx))
+    @debug_consistency_checks nx == size(integrand,1) || throw(BoundsError(integrand))
+    @debug_consistency_checks ny == size(integrand,2) || throw(BoundsError(integrand))
+    @debug_consistency_checks nx == length(vx) || throw(BoundsError(vx))
+    @debug_consistency_checks ny == length(vy) || throw(BoundsError(vy))
+#    @debug_consistency_checks ny == length(wgtsy) || throw(BoundsError(wtgsy))
+#    @debug_consistency_checks nx == length(wgtsx) || throw(BoundsError(wtgsx))
 
     @inbounds for j ∈ 1:ny
         @inbounds for i ∈ 1:nx
@@ -1062,12 +1063,12 @@ function integral(integrand, vx, px, wgtsx, vy, py, wgtsy, vz, pz, wgtsz)
     nz = length(wgtsz)
     # initialize 'integral' to zero before sum
     integral = 0.0
-    @boundscheck nx == size(integrand,1) || throw(BoundsError(integrand))
-    @boundscheck ny == size(integrand,2) || throw(BoundsError(integrand))
-    @boundscheck nz == size(integrand,3) || throw(BoundsError(integrand))
-    @boundscheck nx == length(vx) || throw(BoundsError(vx))
-    @boundscheck ny == length(vy) || throw(BoundsError(vy))
-    @boundscheck nz == length(vz) || throw(BoundsError(vz))
+    @debug_consistency_checks nx == size(integrand,1) || throw(BoundsError(integrand))
+    @debug_consistency_checks ny == size(integrand,2) || throw(BoundsError(integrand))
+    @debug_consistency_checks nz == size(integrand,3) || throw(BoundsError(integrand))
+    @debug_consistency_checks nx == length(vx) || throw(BoundsError(vx))
+    @debug_consistency_checks ny == length(vy) || throw(BoundsError(vy))
+    @debug_consistency_checks nz == length(vz) || throw(BoundsError(vz))
 
     @inbounds for k ∈ 1:nz
         @inbounds for j ∈ 1:ny
@@ -1092,7 +1093,7 @@ function elementwise_indefinite_integration!(coord, ff, spectral::discretization
     # define local variable nelement for convenience
     nelement = coord.nelement_local
     # check array bounds
-    @boundscheck nelement == size(pf,2) && coord.ngrid == size(pf,1) || throw(BoundsError(pf))
+    @debug_consistency_checks nelement == size(pf,2) && coord.ngrid == size(pf,1) || throw(BoundsError(pf))
 
     # variable k will be used to avoid double counting of overlapping point
     k = 0

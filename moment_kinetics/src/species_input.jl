@@ -7,6 +7,7 @@ module species_input
 export get_species_input
 
 using ..type_definitions: mk_float, mk_int
+using ..coordinates: define_coordinate
 using ..input_structs: set_defaults_and_check_section!
 using ..input_structs: species_composition, ion_species_parameters, neutral_species_parameters
 using ..input_structs: spatial_initial_condition_input, velocity_initial_condition_input
@@ -16,7 +17,7 @@ using ..reference_parameters: setup_reference_parameters
 
 using OrderedCollections: OrderedDict
 
-function get_species_input(toml_input, warn_unexpected::Bool)
+function get_species_input(toml_input, warn_unexpected::Bool; ignore_MPI=false)
     
     reference_params = setup_reference_parameters(toml_input, warn_unexpected)
     
@@ -61,6 +62,29 @@ function get_species_input(toml_input, warn_unexpected::Bool)
     nspec_ion = composition_section["n_ion_species"]
     nspec_neutral = composition_section["n_neutral_species"]
     nspec_tot = nspec_ion + nspec_neutral
+
+    # Define 'coordinate' objects corresponding to 'species' dimensions of some arrays.
+    # These are not really coordinates and cannot be differentiated along, etc., but in
+    # some places it is convenient to have a 'coordinate' corresponding to each dimension
+    # of an array, to enable more generic functions.
+    ion_species_coord, _ = define_coordinate((name="ion_species", ngrid=nspec_ion,
+                                              nelement=1, nelement_local=1, L=NaN,
+                                              bc="none", discretization="species",
+                                              element_spacing_option="species",
+                                              finite_difference_option="", cheb_option="",
+                                              boundary_parameters=nothing);
+                                             ignore_MPI=ignore_MPI,
+                                             species_coordinate=true)
+    neutral_species_coord, _ = define_coordinate((name="neutral_species",
+                                                  ngrid=nspec_neutral, nelement=1,
+                                                  nelement_local=1, L=NaN, bc="none",
+                                                  discretization="species",
+                                                  element_spacing_option="species",
+                                                  finite_difference_option="",
+                                                  cheb_option="",
+                                                  boundary_parameters=nothing);
+                                                 ignore_MPI=ignore_MPI,
+                                                 species_coordinate=true)
     
     # read individual species parameters
     ion_spec_params_list = Array{ion_species_parameters,1}(undef,nspec_ion)
@@ -131,7 +155,9 @@ function get_species_input(toml_input, warn_unexpected::Bool)
     # construct composition struct
     composition_input = OrderedDict(Symbol(k)=>v for (k,v) in composition_section)
     composition = species_composition(; n_species=nspec_tot, ion=ion_spec_params_list,
+                                        ion_species_coord=ion_species_coord,
                                         neutral=neutral_spec_params_list,
+                                        neutral_species_coord=neutral_species_coord,
                                         composition_input...)
     
     ## checks and errors

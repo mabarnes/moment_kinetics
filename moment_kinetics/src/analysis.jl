@@ -11,6 +11,7 @@ using ..calculus: integral
 using ..communication
 using ..coordinates: coordinate
 using ..boundary_conditions: vpagrid_to_vpa
+using ..debugging
 using ..interpolation: interpolate_to_grid_1d
 using ..load_data: open_readonly_output_file, get_nranks, load_pdf_data, load_rank_data
 using ..load_data: load_distributed_ion_pdf_slice
@@ -867,19 +868,19 @@ function steady_state_square_residuals(variable, variable_at_previous_time, dt,
             # Finish calculating block-local mean/max
             packed_block_results = similar(packed_results)
             if only_max_abs
-                @boundscheck ndims(packed_results) == 1
-                @boundscheck ndims(gathered_results) == 2
+                @debug_consistency_checks ndims(packed_results) == 1
+                @debug_consistency_checks ndims(gathered_results) == 2
                 packed_block_results .= maximum(gathered_results, dims=2)
             else
-                @boundscheck ndims(packed_results) == 2
-                @boundscheck ndims(gathered_results) == 3
+                @debug_consistency_checks ndims(packed_results) == 2
+                @debug_consistency_checks ndims(gathered_results) == 3
                 packed_block_results[:,1] = sum(@view(gathered_results[:,1,:]), dims=2)
                 packed_block_results[:,2] = maximum(@view(gathered_results[:,2,:]), dims=2)
                 packed_block_results[:,3] = sum(@view(gathered_results[:,3,:]), dims=2)
                 packed_block_results[:,4] = maximum(@view(gathered_results[:,4,:]), dims=2)
 
                 #block_mean_square = block_total_square / (prod(size(variable)) / prod(size(dt)))
-                @boundscheck prod(size(variable)) % prod(size(dt)) == 0
+                @debug_consistency_checks prod(size(variable)) % prod(size(dt)) == 0
                 block_npoints = prod(size(variable)) ÷ prod(size(dt))
                 packed_block_results[:,1] /= block_npoints
                 packed_block_results[:,3] /= block_npoints

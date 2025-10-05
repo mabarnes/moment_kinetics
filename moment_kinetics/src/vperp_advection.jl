@@ -5,6 +5,7 @@ export update_speed_vperp!
 
 using ..advection: advance_f_local!
 using ..chebyshev: chebyshev_info
+using ..debugging
 using ..looping
 using ..timer_utils
 using ..z_advection: update_speed_z!
@@ -37,10 +38,10 @@ end
 # note that the vperp advection speed depends on the z and r advection speeds
 # It is important to ensure that z_advect and r_advect are updated before vperp_advect
 function update_speed_vperp!(vperp_advect, fvec, vpa, vperp, z, r, z_advect, r_advect, geometry, moments)
-    @boundscheck z.n == size(vperp_advect[1].speed,3) || throw(BoundsError(vperp_advect[1]))
-    @boundscheck vperp.n == size(vperp_advect[1].speed,1) || throw(BoundsError(vperp_advect[1]))
-    @boundscheck vpa.n == size(vperp_advect[1].speed,2) || throw(BoundsError(vperp_advect[1]))
-    @boundscheck r.n == size(vperp_advect[1].speed,4) || throw(BoundsError(vperp_advect[1]))
+    @debug_consistency_checks z.n == size(vperp_advect[1].speed,3) || throw(BoundsError(vperp_advect[1]))
+    @debug_consistency_checks vperp.n == size(vperp_advect[1].speed,1) || throw(BoundsError(vperp_advect[1]))
+    @debug_consistency_checks vpa.n == size(vperp_advect[1].speed,2) || throw(BoundsError(vperp_advect[1]))
+    @debug_consistency_checks r.n == size(vperp_advect[1].speed,4) || throw(BoundsError(vperp_advect[1]))
     @begin_s_r_z_vpa_region()
     if moments.evolve_p
         update_speed_vperp_n_u_p_evolution!(vperp_advect, fvec, vpa, vperp, z, r, z_advect, r_advect, geometry, moments)

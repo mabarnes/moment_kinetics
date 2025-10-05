@@ -31,6 +31,7 @@ using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float
 import ..calculus: elementwise_derivative!, mass_matrix_solve!,
                    elementwise_indefinite_integration!
+using ..debugging
 import ..interpolation: single_element_interpolate!,
                         fill_single_element_interpolation_matrix!
 using ..lagrange_polynomials: lagrange_poly_optimised, lagrange_poly_derivative_optimised, lagrange_poly
@@ -352,7 +353,7 @@ function elementwise_derivative!(coord, ff, gausslegendre::gausslegendre_info)
     # define local variable nelement for convenience
     nelement = coord.nelement_local
     # check array bounds
-    @boundscheck nelement == size(df,2) && coord.ngrid == size(df,1) || throw(BoundsError(df))
+    @debug_consistency_checks nelement == size(df,2) && coord.ngrid == size(df,1) || throw(BoundsError(df))
     
     # variable k will be used to avoid double counting of overlapping point
     k = 0

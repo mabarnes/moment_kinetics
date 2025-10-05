@@ -19,6 +19,7 @@ using ..clenshaw_curtis: clenshawcurtisweights
 import ..calculus: elementwise_derivative!
 import ..calculus: elementwise_indefinite_integration!
 using ..communication
+using ..debugging
 import ..interpolation: single_element_interpolate!
 using ..moment_kinetics_structs: discretization_info
 using ..gauss_legendre: integration_matrix!
@@ -288,9 +289,9 @@ function elementwise_derivative!(coord, ff, chebyshev::chebyshev_info)
     # define local variable nelement for convenience
     nelement = coord.nelement_local
     # check array bounds
-    @boundscheck nelement == size(chebyshev.lobatto.f,2) || throw(BoundsError(chebyshev.lobatto.f))
-    @boundscheck nelement == size(chebyshev.radau.f,2) || throw(BoundsError(chebyshev.radau.f))
-    @boundscheck nelement == size(df,2) && coord.ngrid == size(df,1) || throw(BoundsError(df))
+    @debug_consistency_checks nelement == size(chebyshev.lobatto.f,2) || throw(BoundsError(chebyshev.lobatto.f))
+    @debug_consistency_checks nelement == size(chebyshev.radau.f,2) || throw(BoundsError(chebyshev.radau.f))
+    @debug_consistency_checks nelement == size(df,2) && coord.ngrid == size(df,1) || throw(BoundsError(df))
     # note that one must multiply by a coordinate transform factor 1/element_scale[j]
     # for each element j to get derivative on the extended grid
     
@@ -439,8 +440,8 @@ function update_df_chebyshev!(df, chebyshev, coord)
     ngrid = coord.ngrid
     nelement = coord.nelement
     L = coord.L
-    @boundscheck nelement == size(chebyshev.f,2) || throw(BoundsError(chebyshev.f))
-    @boundscheck nelement == size(df,2) && ngrid == size(df,1) || throw(BoundsError(df))
+    @debug_consistency_checks nelement == size(chebyshev.f,2) || throw(BoundsError(chebyshev.f))
+    @debug_consistency_checks nelement == size(df,2) && ngrid == size(df,1) || throw(BoundsError(df))
     # obtain Chebyshev spectral coefficients of f'[z]
     # note that must multiply by 2/Lz to get derivative
     # in scaled coordinate
@@ -464,7 +465,7 @@ use Chebyshev basis to compute the first derivative of f
 """
 function chebyshev_spectral_derivative!(df,f)
     m = length(f)
-    @boundscheck m == length(df) || throw(BoundsError(df))
+    @debug_consistency_checks m == length(df) || throw(BoundsError(df))
     @inbounds begin
         df[m] = 0.
         df[m-1] = 2*(m-1)*f[m]

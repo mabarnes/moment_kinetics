@@ -13,6 +13,7 @@ using ..array_allocation: allocate_float, allocate_complex
 import ..calculus: elementwise_derivative!
 import ..calculus: elementwise_indefinite_integration!
 using ..communication
+using ..debugging
 import ..interpolation: single_element_interpolate!
 using ..moment_kinetics_structs: discretization_info
 
@@ -136,7 +137,7 @@ Fourier transform f to get spectral coefficients and use them to calculate f'.
 function elementwise_derivative!(coord, ff, fourier::fourier_info)
     df = @view coord.scratch_2d[:,1]
     # check array bounds
-    @boundscheck coord.ngrid == size(df,1) || throw(BoundsError(df))
+    @debug_consistency_checks coord.ngrid == size(df,1) || throw(BoundsError(df))
 
     # note that one must multiply by  1/element_scale[j] get derivative
     # in scaled coordinate on element j

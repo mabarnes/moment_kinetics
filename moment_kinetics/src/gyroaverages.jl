@@ -12,6 +12,7 @@ export gyroaverage_pdf!
 using ..type_definitions: mk_float, mk_int, MPISharedArray
 using ..array_allocation: allocate_float, allocate_shared_float
 using ..array_allocation: allocate_int, allocate_shared_int
+using ..debugging
 using ..lagrange_polynomials: lagrange_poly
 using ..moment_kinetics_structs: ion_r_boundary_section_periodic
 using ..input_structs: gyrokinetic_ions
@@ -63,10 +64,9 @@ function init_gyro_operators(vperp, z, r, gyrophase, geometry, boundaries, compo
            println("Begin: init_gyro_operators")
        end
        gyromatrix = allocate_shared_float(z, r, vperp, z, r,
-                                          :ion_species=>composition.n_ion_species)
+                                          composition.ion_species_coord)
        # an array to store the value for the number of points in the z', r' sum for each gyroaveraged field index 
-       gyroloopsizes = allocate_shared_int(; vperp=vperp, z=z, r=r,
-                                           ion_species=composition.n_ion_species)
+       gyroloopsizes = allocate_shared_int(vperp, z, r, composition.ion_species_coord)
        
        # init the matrix!
        # the first two indices are to be summed over
@@ -182,9 +182,9 @@ function init_gyro_operators(vperp, z, r, gyrophase, geometry, boundaries, compo
         # use the fact that the first index cannot be larger than the size of z.n*r.n
         # and accept that we are storing undefined values in exchange for storing the useful
         # data in shared-memory.
-        izpgyroindex = allocate_shared_int(z_and_r=z.n*r.n, vperp=vperp, z=z, r=r,
+        izpgyroindex = allocate_shared_int(; z_and_r=z.n*r.n, vperp=vperp, z=z, r=r,
                                            ion_species=composition.n_ion_species)
-        irpgyroindex = allocate_shared_int(z_and_r=z.n*r.n, vperp=vperp, z=z, r=r,
+        irpgyroindex = allocate_shared_int(; z_and_r=z.n*r.n, vperp=vperp, z=z, r=r,
                                            ion_species=composition.n_ion_species)
 
         # compute the indices on the root process  
@@ -274,12 +274,12 @@ and filling the result into an array of shape (vperp,z,r,s)
 """
 @timeit global_timer gyroaverage_field!(
                          gfield_out,field_in,gyro,vperp,z,r,composition) = begin
-    @boundscheck z.n == size(field_in, 1) || throw(BoundsError(field_in))
-    @boundscheck r.n == size(field_in, 2) || throw(BoundsError(field_in))
-    @boundscheck vperp.n == size(gfield_out, 1) || throw(BoundsError(gfield))
-    @boundscheck z.n == size(gfield_out, 2) || throw(BoundsError(gfield))
-    @boundscheck r.n == size(gfield_out, 3) || throw(BoundsError(gfield))
-    @boundscheck composition.n_ion_species == size(gfield_out, 4) || throw(BoundsError(gfield))
+    @debug_consistency_checks z.n == size(field_in, 1) || throw(BoundsError(field_in))
+    @debug_consistency_checks r.n == size(field_in, 2) || throw(BoundsError(field_in))
+    @debug_consistency_checks vperp.n == size(gfield_out, 1) || throw(BoundsError(gfield))
+    @debug_consistency_checks z.n == size(gfield_out, 2) || throw(BoundsError(gfield))
+    @debug_consistency_checks r.n == size(gfield_out, 3) || throw(BoundsError(gfield))
+    @debug_consistency_checks composition.n_ion_species == size(gfield_out, 4) || throw(BoundsError(gfield))
     
     nr = r.n
     nz = z.n
@@ -312,16 +312,16 @@ and filling the result into an of the same shape
 """
 @timeit global_timer gyroaverage_pdf!(
                          gpdf_out,pdf_in,gyro,vpa,vperp,z,r,composition) = begin
-    @boundscheck vpa.n == size(pdf_in, 1) || throw(BoundsError(pdf_in))
-    @boundscheck vperp.n == size(pdf_in, 2) || throw(BoundsError(pdf_in))
-    @boundscheck z.n == size(pdf_in, 3) || throw(BoundsError(pdf_in))
-    @boundscheck r.n == size(pdf_in, 4) || throw(BoundsError(pdf_in))
-    @boundscheck composition.n_ion_species == size(pdf_in, 5) || throw(BoundsError(pdf_in))
-    @boundscheck vpa.n == size(gpdf_out, 1) || throw(BoundsError(gpdf_out))
-    @boundscheck vperp.n == size(gpdf_out, 2) || throw(BoundsError(gpdf_out))
-    @boundscheck z.n == size(gpdf_out, 3) || throw(BoundsError(gpdf_out))
-    @boundscheck r.n == size(gpdf_out, 4) || throw(BoundsError(gpdf_out))
-    @boundscheck composition.n_ion_species == size(gpdf_out, 5) || throw(BoundsError(gpdf_out))
+    @debug_consistency_checks vpa.n == size(pdf_in, 1) || throw(BoundsError(pdf_in))
+    @debug_consistency_checks vperp.n == size(pdf_in, 2) || throw(BoundsError(pdf_in))
+    @debug_consistency_checks z.n == size(pdf_in, 3) || throw(BoundsError(pdf_in))
+    @debug_consistency_checks r.n == size(pdf_in, 4) || throw(BoundsError(pdf_in))
+    @debug_consistency_checks composition.n_ion_species == size(pdf_in, 5) || throw(BoundsError(pdf_in))
+    @debug_consistency_checks vpa.n == size(gpdf_out, 1) || throw(BoundsError(gpdf_out))
+    @debug_consistency_checks vperp.n == size(gpdf_out, 2) || throw(BoundsError(gpdf_out))
+    @debug_consistency_checks z.n == size(gpdf_out, 3) || throw(BoundsError(gpdf_out))
+    @debug_consistency_checks r.n == size(gpdf_out, 4) || throw(BoundsError(gpdf_out))
+    @debug_consistency_checks composition.n_ion_species == size(gpdf_out, 5) || throw(BoundsError(gpdf_out))
     
     nr = r.n
     nz = z.n

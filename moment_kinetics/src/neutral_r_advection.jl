@@ -7,6 +7,7 @@ export update_speed_neutral_r!
 
 using ..advection: advance_f_df_precomputed!
 using ..chebyshev: chebyshev_info
+using ..debugging
 using ..looping
 using ..timer_utils
 using ..derivatives: derivative_r!
@@ -47,11 +48,11 @@ end
 calculate the advection speed in the r-direction at each grid point
 """
 function update_speed_neutral_r!(advect, r, z, vzeta, vr, vz)
-    @boundscheck z.n == size(advect.speed,5) || throw(BoundsError(advect))
-    @boundscheck vzeta.n == size(advect.speed,4) || throw(BoundsError(advect))
-    @boundscheck vr.n == size(advect.speed,3) || throw(BoundsError(advect))
-    @boundscheck vz.n == size(advect.speed,2) || throw(BoundsError(advect))
-    @boundscheck r.n == size(advect.speed,1) || throw(BoundsError(speed))
+    @debug_consistency_checks z.n == size(advect.speed,5) || throw(BoundsError(advect))
+    @debug_consistency_checks vzeta.n == size(advect.speed,4) || throw(BoundsError(advect))
+    @debug_consistency_checks vr.n == size(advect.speed,3) || throw(BoundsError(advect))
+    @debug_consistency_checks vz.n == size(advect.speed,2) || throw(BoundsError(advect))
+    @debug_consistency_checks r.n == size(advect.speed,1) || throw(BoundsError(speed))
     if r.n > 1
         @inbounds begin
             @loop_z_vzeta_vr_vz iz ivzeta ivr ivz begin
