@@ -9,6 +9,7 @@ export interpolate_to_grid_z, interpolate_to_grid_1d!, interpolate_symmetric!,
        fill_interpolate_symmetric_matrix!, interpolate_to_grid_1d
 
 using ..array_allocation: allocate_float
+using ..debugging
 using ..moment_kinetics_structs: null_spatial_dimension_info,
                                  null_velocity_dimension_info, null_vperp_dimension_info
 using ..type_definitions: mk_float, mk_int
@@ -81,7 +82,7 @@ function interpolate_to_grid_1d!(result, newgrid, f, coord, spectral,
 
         # In a coordinate with a Radau first element, no point should be less than zero.
         # If bounds checking is enabled, check that first `newgrid` point is ≥0.
-        @boundscheck newgrid[1] ≥ 0.0
+        @debug_consistency_checks newgrid[1] ≥ 0.0
     else
         first_element_spectral = spectral.lobatto
         # set the starting index by finding the start of coord.grid
@@ -187,7 +188,7 @@ function fill_1d_interpolation_matrix!(matrix, newgrid, coord, spectral)
 
         # In a coordinate with a Radau first element, no point should be less than zero.
         # If bounds checking is enabled, check that first `newgrid` point is ≥0.
-        @boundscheck newgrid[1] ≥ 0.0
+        @debug_consistency_checks newgrid[1] ≥ 0.0
     else
         first_element_spectral = spectral.lobatto
         # set the starting index by finding the start of coord.grid
@@ -436,9 +437,9 @@ function interpolate_symmetric!(result, newgrid, f, oldgrid, derivative::Val{0}=
 
     # Check all points in newgrid are covered by oldgrid (i.e. between zero and the
     # maximum of oldgrid)
-    @boundscheck maximum(abs.(newgrid)) ≤ maximum(abs.(oldgrid)) || error("newgrid bigger ($(maximum(abs.(newgrid)))) than oldgrid ($(maximum(abs.(oldgrid)))).")
-    @boundscheck size(result) == size(newgrid) || error("Size of result ($(size(result))) is not the same as size of newgrid ($(size(newgrid))).")
-    @boundscheck size(f) == size(oldgrid) || error("Size of f ($(size(f))) is not the same as size of oldgrid ($(size(oldgrid))).")
+    @debug_consistency_checks maximum(abs.(newgrid)) ≤ maximum(abs.(oldgrid)) || error("newgrid bigger ($(maximum(abs.(newgrid)))) than oldgrid ($(maximum(abs.(oldgrid)))).")
+    @debug_consistency_checks size(result) == size(newgrid) || error("Size of result ($(size(result))) is not the same as size of newgrid ($(size(newgrid))).")
+    @debug_consistency_checks size(f) == size(oldgrid) || error("Size of f ($(size(f))) is not the same as size of oldgrid ($(size(oldgrid))).")
 
     if nold == 1
         # Interpolating 'polynomial' is just a constant
@@ -467,9 +468,9 @@ function interpolate_symmetric!(result, newgrid, f, oldgrid, derivative::Val{1})
 
     # Check all points in newgrid are covered by oldgrid (i.e. between zero and the
     # maximum of oldgrid)
-    @boundscheck maximum(abs.(newgrid)) ≤ maximum(abs.(oldgrid)) || error("newgrid bigger ($(maximum(abs.(newgrid)))) than oldgrid ($(maximum(abs.(oldgrid)))).")
-    @boundscheck size(result) == size(newgrid) || error("Size of result ($(size(result))) is not the same as size of newgrid ($(size(newgrid))).")
-    @boundscheck size(f) == size(oldgrid) || error("Size of f ($(size(f))) is not the same as size of oldgrid ($(size(oldgrid))).")
+    @debug_consistency_checks maximum(abs.(newgrid)) ≤ maximum(abs.(oldgrid)) || error("newgrid bigger ($(maximum(abs.(newgrid)))) than oldgrid ($(maximum(abs.(oldgrid)))).")
+    @debug_consistency_checks size(result) == size(newgrid) || error("Size of result ($(size(result))) is not the same as size of newgrid ($(size(newgrid))).")
+    @debug_consistency_checks size(f) == size(oldgrid) || error("Size of f ($(size(f))) is not the same as size of oldgrid ($(size(oldgrid))).")
 
     if nold == 1
         # Interpolating 'polynomial' is just a constant
@@ -503,7 +504,7 @@ function fill_interpolate_symmetric_matrix!(matrix_slice, newgrid, oldgrid)
     nnew = length(newgrid)
     nold = length(oldgrid)
 
-    @boundscheck size(matrix_slice) == (nnew, nold) || error("Dimensions of matrix_slice ($(size(matrix_slice))) are not the same as (nnew($nnew),nold($nold)).")
+    @debug_consistency_checks size(matrix_slice) == (nnew, nold) || error("Dimensions of matrix_slice ($(size(matrix_slice))) are not the same as (nnew($nnew),nold($nold)).")
 
     if nold == 1
         # Interpolating 'polynomial' is just a constant

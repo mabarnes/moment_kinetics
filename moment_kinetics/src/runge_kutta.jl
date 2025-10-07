@@ -9,6 +9,7 @@ export setup_runge_kutta_coefficients!, rk_update_evolved_moments!,
 
 using ..array_allocation: allocate_float
 using ..communication
+using ..debugging
 using ..input_structs
 using ..looping
 using ..type_definitions: mk_float, MPISharedArray
@@ -584,7 +585,7 @@ function rk_update_loop_low_storage!(rk_coefs, rk_coefs_implicit,
                                      old::AbstractArray{mk_float,5},
                                      first::AbstractArray{mk_float,5}, new_implicit,
                                      old_implicit, first_implicit; output=new, ir)
-    @boundscheck length(rk_coefs) == 3
+    @debug_consistency_checks length(rk_coefs) == 3
 
     if ir !== nothing
         error("`ir` argument not supported in ion RK update loop")
@@ -612,7 +613,7 @@ end
 function rk_update_loop!(rk_coefs, rk_coefs_implicit,
                          var_arrays::NTuple{N,AbstractArray{mk_float,5}},
                          var_arrays_implicit; output=var_arrays[N], ir) where N
-    @boundscheck length(rk_coefs) ≥ N
+    @debug_consistency_checks length(rk_coefs) ≥ N
 
     if ir !== nothing
         error("`ir` argument not supported in ion RK update loop")
@@ -641,7 +642,7 @@ function rk_update_loop_low_storage!(rk_coefs, rk_coefs_implicit,
                                      old::AbstractArray{mk_float,3},
                                      first::AbstractArray{mk_float,3}, new_implicit,
                                      old_implicit, first_implicit; output=new, ir)
-    @boundscheck length(rk_coefs) == 3
+    @debug_consistency_checks length(rk_coefs) == 3
 
     if ir !== nothing
         error("`ir` argument not supported in ion RK update loop")
@@ -669,7 +670,7 @@ end
 function rk_update_loop!(rk_coefs, rk_coefs_implicit,
                          var_arrays::NTuple{N,AbstractArray{mk_float,3}},
                          var_arrays_implicit; output=var_arrays[N], ir) where N
-    @boundscheck length(rk_coefs) ≥ N
+    @debug_consistency_checks length(rk_coefs) ≥ N
 
     if ir !== nothing
         error("`ir` argument not supported in ion RK update loop")
@@ -695,7 +696,7 @@ function rk_update_loop_low_storage_controller_integrals!(
         rk_coefs, rk_coefs_implicit, new::AbstractArray{mk_float,3},
         old::AbstractArray{mk_float,3}, first::AbstractArray{mk_float,3}, new_implicit,
         old_implicit, first_implicit; output=new, ir=nothing)
-    @boundscheck length(rk_coefs) == 3
+    @debug_consistency_checks length(rk_coefs) == 3
 
     if ir !== nothing
         error("`ir` argument not supported in storage controller integral RK update loop")
@@ -716,7 +717,7 @@ end
 function rk_update_loop_controller_integrals!(
         rk_coefs, rk_coefs_implicit, var_arrays::NTuple{N,AbstractArray{mk_float,3}},
         var_arrays_implicit; output=var_arrays[N], ir=nothing) where N
-    @boundscheck length(rk_coefs) ≥ N
+    @debug_consistency_checks length(rk_coefs) ≥ N
 
     if ir !== nothing
         error("`ir` argument not supported in storage controller integral RK update loop")
@@ -745,7 +746,7 @@ function rk_update_loop_low_storage!(rk_coefs, rk_coefs_implicit,
                                      old::AbstractArray{mk_float,4},
                                      first::AbstractArray{mk_float,4}, new_implicit,
                                      old_implicit, first_implicit; output=new, ir)
-    @boundscheck length(rk_coefs) == 3
+    @debug_consistency_checks length(rk_coefs) == 3
 
     if ir === nothing
         @begin_r_z_vperp_vpa_region()
@@ -788,7 +789,7 @@ end
 function rk_update_loop!(rk_coefs, rk_coefs_implicit,
                          var_arrays::NTuple{N,AbstractArray{mk_float,4}},
                          var_arrays_implicit; output=var_arrays[N], ir) where N
-    @boundscheck length(rk_coefs) ≥ N
+    @debug_consistency_checks length(rk_coefs) ≥ N
 
     if ir === nothing
         @begin_r_z_vperp_vpa_region()
@@ -831,7 +832,7 @@ function rk_update_loop_low_storage!(rk_coefs, rk_coefs_implicit,
                                      old::AbstractArray{mk_float,2},
                                      first::AbstractArray{mk_float,2}, new_implicit,
                                      old_implicit, first_implicit; output=new, ir)
-    @boundscheck length(rk_coefs) == 3
+    @debug_consistency_checks length(rk_coefs) == 3
 
     if ir === nothing
         @begin_r_z_region()
@@ -875,7 +876,7 @@ function rk_update_loop!(rk_coefs, rk_coefs_implicit,
                          var_arrays::NTuple{N,AbstractArray{mk_float,2}},
                          var_arrays_implicit;
                          output=var_arrays[N], ir) where N
-    @boundscheck length(rk_coefs) ≥ N
+    @debug_consistency_checks length(rk_coefs) ≥ N
 
     if ir === nothing
         @begin_r_z_region()
@@ -915,7 +916,7 @@ function rk_update_loop_neutrals_low_storage!(rk_coefs, rk_coefs_implicit,
                                               first::AbstractArray{mk_float,6},
                                               new_implicit, old_implicit, first_implicit;
                                               output=new, ir)
-    @boundscheck length(rk_coefs) == 3
+    @debug_consistency_checks length(rk_coefs) == 3
 
     if ir !== nothing
         error("`ir` argument not supported in neutral RK update loop")
@@ -943,7 +944,7 @@ end
 function rk_update_loop_neutrals!(rk_coefs, rk_coefs_implicit,
                                   var_arrays::NTuple{N,AbstractArray{mk_float,6}},
                                   var_arrays_implicit; output=var_arrays[N], ir) where N
-    @boundscheck length(rk_coefs) ≥ N
+    @debug_consistency_checks length(rk_coefs) ≥ N
 
     if ir !== nothing
         error("`ir` argument not supported in neutral RK update loop")
@@ -974,7 +975,7 @@ function rk_update_loop_neutrals_low_storage!(rk_coefs, rk_coefs_implicit,
                                               first::AbstractArray{mk_float,3},
                                               new_implicit, old_implicit, first_implicit;
                                               output=new, ir)
-    @boundscheck length(rk_coefs) == 3
+    @debug_consistency_checks length(rk_coefs) == 3
 
     if ir !== nothing
         error("`ir` argument not supported in neutral RK update loop")
@@ -1002,7 +1003,7 @@ end
 function rk_update_loop_neutrals!(rk_coefs, rk_coefs_implicit,
                                   var_arrays::NTuple{N,AbstractArray{mk_float,3}},
                                   var_arrays_implicit; output=var_arrays[N], ir) where N
-    @boundscheck length(rk_coefs) ≥ N
+    @debug_consistency_checks length(rk_coefs) ≥ N
 
     if ir !== nothing
         error("`ir` argument not supported in neutral RK update loop")

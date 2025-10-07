@@ -8,6 +8,7 @@ export update_speed_r!
 
 using ..advection: advance_f_df_precomputed!
 using ..chebyshev: chebyshev_info
+using ..debugging
 using ..looping
 using ..timer_utils
 using ..derivatives: derivative_r!
@@ -89,10 +90,10 @@ calculate the advection speed in the r-direction at each grid point
 """
 function update_speed_r!(advect, fields, evolve_density, evolve_upar, evolve_p, vpa,
                          vperp, z, r, geometry, is)
-    @boundscheck z.n == size(advect.speed,4) || throw(BoundsError(advect))
-    @boundscheck vperp.n == size(advect.speed,3) || throw(BoundsError(advect))
-    @boundscheck vpa.n == size(advect.speed,2) || throw(BoundsError(advect))
-    @boundscheck r.n == size(advect.speed,1) || throw(BoundsError(speed))
+    @debug_consistency_checks z.n == size(advect.speed,4) || throw(BoundsError(advect))
+    @debug_consistency_checks vperp.n == size(advect.speed,3) || throw(BoundsError(advect))
+    @debug_consistency_checks vpa.n == size(advect.speed,2) || throw(BoundsError(advect))
+    @debug_consistency_checks r.n == size(advect.speed,1) || throw(BoundsError(speed))
 
     if r.n > 1
         if evolve_density || evolve_upar || evolve_p

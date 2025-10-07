@@ -27,7 +27,6 @@ using moment_kinetics.load_data: load_ion_moments_data, load_neutral_particle_mo
 using moment_kinetics.load_data: load_neutral_pdf_data, load_time_data, load_species_data
 using moment_kinetics.load_data: load_block_data, load_coordinate_data, load_input
 using moment_kinetics.load_data: read_distributed_zr_data!, construct_global_zr_coords
-using moment_kinetics.velocity_moments: integrate_over_vspace
 using moment_kinetics.manufactured_solns: manufactured_solutions, manufactured_electric_fields
 using moment_kinetics.moment_kinetics_input: mk_input, read_input_file
 using moment_kinetics.input_structs: geometry_input

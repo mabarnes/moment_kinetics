@@ -17,6 +17,7 @@ export ndim_pdf_ion, ndim_pdf_neutral, ndim_pdf_electron, ndim_field, ndim_momen
        ndim_pdf_neutral_boundary
 export discretization_info, weak_discretization_info, null_spatial_dimension_info,
        null_velocity_dimension_info, null_vperp_dimension_info
+export ElectronSubTerms
 
 # variables to define the number of dimensions in arrays
 const ndim_pdf_ion = 5 #(vpa + vperp + z + r + s)
@@ -458,8 +459,7 @@ end
 """
 structure containing basic information related to coordinates
 """
-struct coordinate{T <: AbstractVector{mk_float}, Ti <: AbstractVector{mk_int}, Tbparams,
-                  Tnext <: Union{mk_int,Cint}, Tprev <: Union{mk_int,Cint}}
+struct coordinate{T <: AbstractVector{mk_float}, Ti <: AbstractVector{mk_int}, Tbparams}
     # name is the name of the variable associated with this coordiante
     name::String
     # n_global is the total number of grid points associated with this coordinate
@@ -478,10 +478,10 @@ struct coordinate{T <: AbstractVector{mk_float}, Ti <: AbstractVector{mk_int}, T
     irank::mk_int
     # nextrank is the rank of the next process on the communicator for this coordinate
     # (may be MPI.PROC_NULL if this is the last process and the dimension is not periodic)
-    nextrank::Tnext
+    nextrank::Cint
     # prevrank is the rank of the previous process on the communicator for this coordinate
     # (may be MPI.PROC_NULL if this is the first process and the dimension is not periodic)
-    prevrank::Tprev
+    prevrank::Cint
     # L is the box length in this coordinate
     L::mk_float
     # grid is the location of the grid points
@@ -706,6 +706,56 @@ end
 struct boundary_info
     r::r_boundary_info
     z::z_boundary_info
+end
+
+
+# Structs for Jacobian matrix calculations
+
+@kwdef struct ElectronSubTerms{T1,T2,T3,T4,T5,T6,T7,T8,T9,T10,
+                               T11,T12,T13,T14,T15,T16,T17,T18,T19,T20,
+                               T21,T22,T23,T24,T25,T26,T27,T28,T29,T30,
+                               T31,T32}
+    me::mk_float
+    vpa_dissipation_coefficient::mk_float
+    constraint_forcing_rate::mk_float
+    ion_dt::T1
+    n::T2
+    dn_dz::T3
+    u::T4
+    du_dz::T5
+    p::T6
+    dp_dz::T7
+    vth::T8
+    dvth_dz::T9
+    ppar::T10
+    dppar_dz::T11
+    zeroth_moment::T12
+    first_moment::T13
+    second_moment::T14
+    third_moment::T15
+    dthird_moment_dz::T16
+    dq_dz::T17
+    u_ion::T18
+    wperp::T19
+    wpa::T20
+    f::T21
+    df_dz::T22
+    df_dvpa::T23
+    d2f_dvpa2::T24
+    source_type::Vector{String}
+    source_amplitude::Vector{T25}
+    source_T_array::Vector{T26}
+    density_source::Vector{T27}
+    momentum_source::Vector{T28}
+    pressure_source::Vector{T29}
+    source_vth_factor::Vector{T30}
+    source_this_vth_factor::T31
+    collisions::T32
+    nuee0::mk_float
+    nuei0::mk_float
+    krook_adjust_vth_1V::mk_float
+    krook_adjust_1V::mk_float
+    Maxwellian_prefactor::mk_float
 end
 
 end

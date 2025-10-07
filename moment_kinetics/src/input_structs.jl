@@ -19,6 +19,7 @@ export set_defaults_and_check_top_level!, set_defaults_and_check_section!,
        check_sections!, options_to_TOML, Dict_to_NamedTuple,
        convert_to_sorted_nested_OptionsDict
 
+using ..moment_kinetics_structs: coordinate
 using ..type_definitions: mk_float, mk_int, OptionsDict, MPISharedArray
 
 using DataStructures: SortedDict
@@ -331,8 +332,12 @@ Base.@kwdef struct species_composition
     recycling_fraction::mk_float
     # array of structs of parameters for each ion species
     ion::Vector{ion_species_parameters}
+    # coordinate object corresponding to ion_species dimension of arrays
+    ion_species_coord::coordinate
     # array of structs of parameters for each neutral species
     neutral::Vector{neutral_species_parameters}
+    # coordinate object corresponding to neutral_species dimension of arrays
+    neutral_species_coord::coordinate
 end
 
 """

@@ -140,7 +140,7 @@ end
 function define_coordinate(coord_input::NamedTuple; parallel_io::Bool=false,
                            run_directory=nothing, ignore_MPI=false,
                            collision_operator_dim::Bool=true, irank=0, nrank=1,
-                           comm=MPI.COMM_NULL)
+                           comm=MPI.COMM_NULL, species_coordinate=false)
 
     if coord_input.name ∉ ("r", "z")
         if irank != 0 || nrank != 1 || comm != MPI.COMM_NULL
@@ -169,28 +169,43 @@ function define_coordinate(coord_input::NamedTuple; parallel_io::Bool=false,
     # to the full grid
     imin, imax, igrid_full = elemental_to_full_grid_map(coord_input.ngrid,
                                                         coord_input.nelement_local)
-    # initialise the data used to construct the grid
-    # boundaries for each element
-    element_boundaries = set_element_boundaries(coord_input.nelement,
-                                                coord_input.L,
-                                                coord_input.element_spacing_option,
-                                                coord_input.name)
-    # shift and scale factors for each local element
-    element_scale, element_shift =
-        set_element_scale_and_shift(coord_input.nelement, coord_input.nelement_local,
-                                    irank, element_boundaries)
 
-    # initialize the grid and the integration weights associated with the grid
-    # also obtain the Chebyshev theta grid and spacing if chosen as discretization option
-    grid, wgts, uniform_grid, radau_first_element =
-        init_grid(coord_input.ngrid, coord_input.nelement_local, n_global, n_local, irank,
-                  coord_input.L, element_scale, element_shift, imin, imax, igrid,
-                  coord_input.discretization, coord_input.name)
-    # calculate the widths of the cells between neighboring grid points
-    cell_width = grid_spacing(grid, n_local)
-    # duniform_dgrid is the local derivative of the uniform grid with respect to
-    # the coordinate grid
-    duniform_dgrid = allocate_float(coord_input.ngrid, coord_input.nelement_local)
+    if species_coordinate
+        element_boundaries = fill(mk_float(NaN), coord_input.nelement+1)
+        element_scale = fill(mk_float(NaN), coord_input.nelement)
+        element_shift = fill(mk_float(NaN), coord_input.nelement)
+        grid = fill(mk_float(NaN), n_local)
+        wgts = fill(mk_float(NaN), n_local)
+        uniform_grid = fill(mk_float(NaN), n_local)
+        radau_first_element = false
+        cell_width = fill(mk_float(NaN), n_local)
+        duniform_dgrid = fill(mk_float(NaN), coord_input.ngrid,
+                              coord_input.nelement_local)
+    else
+        # initialise the data used to construct the grid
+        # boundaries for each element
+        element_boundaries = set_element_boundaries(coord_input.nelement,
+                                                    coord_input.L,
+                                                    coord_input.element_spacing_option,
+                                                    coord_input.name)
+        # shift and scale factors for each local element
+        element_scale, element_shift =
+            set_element_scale_and_shift(coord_input.nelement, coord_input.nelement_local,
+                                        irank, element_boundaries)
+
+        # initialize the grid and the integration weights associated with the grid
+        # also obtain the Chebyshev theta grid and spacing if chosen as discretization option
+        grid, wgts, uniform_grid, radau_first_element =
+            init_grid(coord_input.ngrid, coord_input.nelement_local, n_global, n_local, irank,
+                      coord_input.L, element_scale, element_shift, imin, imax, igrid,
+                      coord_input.discretization, coord_input.name)
+        # calculate the widths of the cells between neighboring grid points
+        cell_width = grid_spacing(grid, n_local)
+        # duniform_dgrid is the local derivative of the uniform grid with respect to
+        # the coordinate grid
+        duniform_dgrid = allocate_float(coord_input.ngrid, coord_input.nelement_local)
+    end
+
     # scratch is an array used for intermediate calculations requiring n entries
     scratch = allocate_float(; Symbol(coord_input.name)=>n_local)
     # scratch_int_nelement_plus_1 is an array used for intermediate calculations requiring
@@ -250,7 +265,7 @@ function define_coordinate(coord_input::NamedTuple; parallel_io::Bool=false,
     end
 
     # Precompute some values for Lagrange polynomial evaluation
-    other_nodes = allocate_float(coord_input.ngrid-1, coord_input.ngrid,
+    other_nodes = allocate_float(max(coord_input.ngrid-1, 0), coord_input.ngrid,
                                  coord_input.nelement_local)
     one_over_denominator = allocate_float(coord_input.ngrid, coord_input.nelement_local)
     for ielement ∈ 1:coord_input.nelement_local
@@ -276,21 +291,21 @@ function define_coordinate(coord_input::NamedTuple; parallel_io::Bool=false,
     periodic = (coord_input.bc == "periodic")
     if irank == nrank - 1
         if periodic
-            nextrank = 0
+            nextrank = Cint(0)
         else
             nextrank = MPI.PROC_NULL
         end
     else
-        nextrank = irank + 1
+        nextrank = Cint(irank + 1)
     end
     if irank == 0
         if periodic
-            prevrank = nrank - 1
+            prevrank = Cint(nrank - 1)
         else
             prevrank = MPI.PROC_NULL
         end
     else
-        prevrank = irank - 1
+        prevrank = Cint(irank - 1)
     end
 
     mask_low = allocate_float(; Symbol(coord_input.name)=>n_local)
@@ -321,7 +336,9 @@ function define_coordinate(coord_input::NamedTuple; parallel_io::Bool=false,
         element_boundaries, radau_first_element, other_nodes, one_over_denominator, 
         mask_up, mask_low)
 
-    if coord.n == 1 && coord.name == "vperp"
+    if species_coordinate
+        spectral = nothing
+    elseif coord.n == 1 && coord.name == "vperp"
         spectral = null_vperp_dimension_info()
         coord.duniform_dgrid .= 1.0
     elseif coord.n == 1 && occursin("v", coord.name)

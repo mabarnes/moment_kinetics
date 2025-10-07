@@ -6,6 +6,7 @@ export vzvrvzeta_to_vpavperp!
 export vpavperp_to_vzvrvzeta!
 
 using Interpolations
+using ..debugging
 using ..looping
 using ..timer_utils
 """
@@ -14,17 +15,17 @@ using ..timer_utils
 @timeit global_timer vzvrvzeta_to_vpavperp!(
                          f_out, f_in, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
                          geometry, composition) = begin
-    @boundscheck vz.n == size(f_in, 1) || throw(BoundsError(f_in))
-    @boundscheck vr.n == size(f_in, 2) || throw(BoundsError(f_in))
-    @boundscheck vzeta.n == size(f_in, 3) || throw(BoundsError(f_in))
-    @boundscheck z.n == size(f_in, 4) || throw(BoundsError(f_in))
-    @boundscheck r.n == size(f_in, 5) || throw(BoundsError(f_in))
-    @boundscheck composition.n_neutral_species == size(f_in, 6) || throw(BoundsError(f_in))
-    @boundscheck vpa.n == size(f_out, 1) || throw(BoundsError(f_out))
-    @boundscheck vperp.n == size(f_out, 2) || throw(BoundsError(f_out))
-    @boundscheck z.n == size(f_out, 3) || throw(BoundsError(f_out))
-    @boundscheck r.n == size(f_out, 4) || throw(BoundsError(f_out))
-    @boundscheck composition.n_neutral_species == size(f_out, 5) || throw(BoundsError(f_out))
+    @debug_consistency_checks vz.n == size(f_in, 1) || throw(BoundsError(f_in))
+    @debug_consistency_checks vr.n == size(f_in, 2) || throw(BoundsError(f_in))
+    @debug_consistency_checks vzeta.n == size(f_in, 3) || throw(BoundsError(f_in))
+    @debug_consistency_checks z.n == size(f_in, 4) || throw(BoundsError(f_in))
+    @debug_consistency_checks r.n == size(f_in, 5) || throw(BoundsError(f_in))
+    @debug_consistency_checks composition.n_neutral_species == size(f_in, 6) || throw(BoundsError(f_in))
+    @debug_consistency_checks vpa.n == size(f_out, 1) || throw(BoundsError(f_out))
+    @debug_consistency_checks vperp.n == size(f_out, 2) || throw(BoundsError(f_out))
+    @debug_consistency_checks z.n == size(f_out, 3) || throw(BoundsError(f_out))
+    @debug_consistency_checks r.n == size(f_out, 4) || throw(BoundsError(f_out))
+    @debug_consistency_checks composition.n_neutral_species == size(f_out, 5) || throw(BoundsError(f_out))
 
     @begin_sn_r_z_region()
     @loop_sn_r_z isn ir iz begin
@@ -39,11 +40,11 @@ end
 @timeit global_timer vzvrvzeta_to_vpavperp_species!(
                          f_out, f_in, vz, vr, vzeta, vpa, vperp, gyrophase, bzed,
                          bzeta) = begin
-    @boundscheck vz.n == size(f_in, 1) || throw(BoundsError(f_in))
-    @boundscheck vr.n == size(f_in, 2) || throw(BoundsError(f_in))
-    @boundscheck vzeta.n == size(f_in, 3) || throw(BoundsError(f_in))
-    @boundscheck vpa.n == size(f_out, 1) || throw(BoundsError(f_out))
-    @boundscheck vperp.n == size(f_out, 2) || throw(BoundsError(f_out))
+    @debug_consistency_checks vz.n == size(f_in, 1) || throw(BoundsError(f_in))
+    @debug_consistency_checks vr.n == size(f_in, 2) || throw(BoundsError(f_in))
+    @debug_consistency_checks vzeta.n == size(f_in, 3) || throw(BoundsError(f_in))
+    @debug_consistency_checks vpa.n == size(f_out, 1) || throw(BoundsError(f_out))
+    @debug_consistency_checks vperp.n == size(f_out, 2) || throw(BoundsError(f_out))
 
     pdf_interp = linear_interpolation((vz.grid,vr.grid,vzeta.grid),f_in,extrapolation_bc = 0.0)
     # pdf_interp( vz_val, vr_val, vzeta_val) is interpolated value of f_in
@@ -70,17 +71,17 @@ end
 @timeit global_timer vpavperp_to_vzvrvzeta!(
                          f_out, f_in, vz, vr, vzeta, vpa, vperp, z, r, geometry,
                          composition) = begin
-    @boundscheck vpa.n == size(f_in, 1) || throw(BoundsError(f_in))
-    @boundscheck vperp.n == size(f_in, 2) || throw(BoundsError(f_in))
-    @boundscheck z.n == size(f_in, 3) || throw(BoundsError(f_in))
-    @boundscheck r.n == size(f_in, 4) || throw(BoundsError(f_in))
-    @boundscheck composition.n_ion_species == size(f_in, 5) || throw(BoundsError(f_in))
-    @boundscheck vz.n == size(f_out, 1) || throw(BoundsError(f_out))
-    @boundscheck vr.n == size(f_out, 2) || throw(BoundsError(f_out))
-    @boundscheck vzeta.n == size(f_out, 3) || throw(BoundsError(f_out))
-    @boundscheck z.n == size(f_out, 4) || throw(BoundsError(f_out))
-    @boundscheck r.n == size(f_out, 5) || throw(BoundsError(f_out))
-    @boundscheck composition.n_ion_species == size(f_out, 6) || throw(BoundsError(f_out))
+    @debug_consistency_checks vpa.n == size(f_in, 1) || throw(BoundsError(f_in))
+    @debug_consistency_checks vperp.n == size(f_in, 2) || throw(BoundsError(f_in))
+    @debug_consistency_checks z.n == size(f_in, 3) || throw(BoundsError(f_in))
+    @debug_consistency_checks r.n == size(f_in, 4) || throw(BoundsError(f_in))
+    @debug_consistency_checks composition.n_ion_species == size(f_in, 5) || throw(BoundsError(f_in))
+    @debug_consistency_checks vz.n == size(f_out, 1) || throw(BoundsError(f_out))
+    @debug_consistency_checks vr.n == size(f_out, 2) || throw(BoundsError(f_out))
+    @debug_consistency_checks vzeta.n == size(f_out, 3) || throw(BoundsError(f_out))
+    @debug_consistency_checks z.n == size(f_out, 4) || throw(BoundsError(f_out))
+    @debug_consistency_checks r.n == size(f_out, 5) || throw(BoundsError(f_out))
+    @debug_consistency_checks composition.n_ion_species == size(f_out, 6) || throw(BoundsError(f_out))
     
     @begin_s_r_z_region()
     @loop_s_r_z is ir iz begin
@@ -95,11 +96,11 @@ end
 
 @timeit global_timer vpavperp_to_vzvrvzeta_species!(
                          f_out, f_in, vz, vr, vzeta, vpa, vperp, bzed, bzeta) = begin
-    @boundscheck vz.n == size(f_out, 1) || throw(BoundsError(f_out))
-    @boundscheck vr.n == size(f_out, 2) || throw(BoundsError(f_out))
-    @boundscheck vzeta.n == size(f_out, 3) || throw(BoundsError(f_out))
-    @boundscheck vpa.n == size(f_in, 1) || throw(BoundsError(f_in))
-    @boundscheck vperp.n == size(f_in, 2) || throw(BoundsError(f_in))
+    @debug_consistency_checks vz.n == size(f_out, 1) || throw(BoundsError(f_out))
+    @debug_consistency_checks vr.n == size(f_out, 2) || throw(BoundsError(f_out))
+    @debug_consistency_checks vzeta.n == size(f_out, 3) || throw(BoundsError(f_out))
+    @debug_consistency_checks vpa.n == size(f_in, 1) || throw(BoundsError(f_in))
+    @debug_consistency_checks vperp.n == size(f_in, 2) || throw(BoundsError(f_in))
 
     pdf_interp = linear_interpolation((vpa.grid,vperp.grid),f_in,extrapolation_bc = 0.0)
     # pdf_interp( vz_val, vr_val, vzeta_val) is interpolated value of f_in

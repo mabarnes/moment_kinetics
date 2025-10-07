@@ -54,11 +54,12 @@ function linear_test()
         else
             coord_comm = comm_sub_z
         end
-        the_coord = coordinate("foo", n, n, n, 1, 1, 1, 0, 0, 0, 1.0, zeros(mk_float, 0),
-                               zeros(mk_float, 0), zeros(mk_int, 0), zeros(mk_int, 0),
-                               zeros(mk_int, 0), zeros(mk_int, 0), zeros(mk_int, 0, 0),
-                               "", "", "", "", false, nothing, zeros(mk_float, 0),
-                               zeros(mk_float, 0), zeros(mk_float, 0, 0),
+        the_coord = coordinate("foo", n, n, n, 1, 1, 1, 0, Cint(0), Cint(0), 1.0,
+                               zeros(mk_float, 0), zeros(mk_float, 0), zeros(mk_int, 0),
+                               zeros(mk_int, 0), zeros(mk_int, 0), zeros(mk_int, 0),
+                               zeros(mk_int, 0, 0), "", "", "", "", false, nothing,
+                               zeros(mk_float, 0), zeros(mk_float, 0),
+                               zeros(mk_float, 0, 0), zeros(mk_float, 0),
                                zeros(mk_float, 0), zeros(mk_float, 0), zeros(mk_float, 0),
                                zeros(mk_float, 0), zeros(mk_float, 0), zeros(mk_float, 0),
                                zeros(mk_float, 0), zeros(mk_float, 0), zeros(mk_float, 0),
@@ -69,7 +70,8 @@ function linear_test()
                                zeros(mk_float, 0), coord_comm, 1:n, 1:n,
                                zeros(mk_float, 0), zeros(mk_float, 0), "",
                                zeros(mk_float, 0), false, zeros(mk_float, 0, 0, 0),
-                               zeros(mk_float, 0, 0), zeros(mk_float, 0), zeros(mk_float, 0))
+                               zeros(mk_float, 0, 0), zeros(mk_float, 0),
+                               zeros(mk_float, 0))
         coords = NamedTuple(c => the_coord for c ∈ coord_names)
 
         function rhs_func!(residual, x; krylov=false)
@@ -176,11 +178,12 @@ function nonlinear_test()
         else
             coord_comm = comm_sub_z
         end
-        the_coord = coordinate("foo", n, n, n, 1, 1, 1, 0, 0, 0, 1.0, zeros(mk_float, 0),
-                               zeros(mk_float, 0), zeros(mk_int, 0), zeros(mk_int, 0),
-                               zeros(mk_int, 0), zeros(mk_int, 0), zeros(mk_int, 0, 0),
-                               "", "", "", "", false, nothing, zeros(mk_float, 0),
-                               zeros(mk_float, 0), zeros(mk_float, 0, 0),
+        the_coord = coordinate("foo", n, n, n, 1, 1, 1, 0, Cint(0), Cint(0), 1.0,
+                               zeros(mk_float, 0), zeros(mk_float, 0), zeros(mk_int, 0),
+                               zeros(mk_int, 0), zeros(mk_int, 0), zeros(mk_int, 0),
+                               zeros(mk_int, 0, 0), "", "", "", "", false, nothing,
+                               zeros(mk_float, 0), zeros(mk_float, 0),
+                               zeros(mk_float, 0, 0), zeros(mk_float, 0),
                                zeros(mk_float, 0), zeros(mk_float, 0), zeros(mk_float, 0),
                                zeros(mk_float, 0), zeros(mk_float, 0), zeros(mk_float, 0),
                                zeros(mk_float, 0), zeros(mk_float, 0), zeros(mk_float, 0),
@@ -191,7 +194,8 @@ function nonlinear_test()
                                zeros(mk_float, 0), coord_comm, 1:n, 1:n,
                                zeros(mk_float, 0), zeros(mk_float, 0), "",
                                zeros(mk_float, 0), false, zeros(mk_float, 0, 0, 0),
-                               zeros(mk_float, 0, 0), zeros(mk_float, 0), zeros(mk_float, 0))
+                               zeros(mk_float, 0, 0), zeros(mk_float, 0),
+                               zeros(mk_float, 0))
         coords = NamedTuple(c => the_coord for c ∈ coord_names)
 
         function rhs_func!(residual, x; krylov=false)

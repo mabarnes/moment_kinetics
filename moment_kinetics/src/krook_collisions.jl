@@ -3,12 +3,15 @@
 module krook_collisions
 
 export setup_krook_collisions_input, krook_collisions!, electron_krook_collisions!,
-       add_electron_krook_collisions_to_Jacobian!
+       get_electron_krook_collisions_term
 
 using ..looping
-using ..boundary_conditions: skip_f_electron_bc_points_in_Jacobian
+using ..debugging
 using ..input_structs: krook_collisions_input, set_defaults_and_check_section!
+using ..jacobian_matrices
+using ..moment_kinetics_structs
 using ..timer_utils 
+using ..type_definitions
 using ..collision_frequencies
 using ..reference_parameters
 using OrderedCollections: OrderedDict
@@ -385,172 +388,51 @@ Note that this function operates on a single point in `r`, so `pdf_out`, `pdf_in
     return nothing
 end
 
-function add_electron_krook_collisions_to_Jacobian!(jacobian_matrix, f, dens, upar, p,
-                                                    vth, upar_ion, collisions, z, vperp,
-                                                    vpa, z_speed, dt, ir, include=:all;
-                                                    f_offset=0, p_offset)
-    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
-    @boundscheck size(jacobian_matrix, 1) ≥ f_offset + z.n * vperp.n * vpa.n || error("f_offset=$f_offset is too big")
-    @boundscheck include ∈ (:all, :explicit_z, :explicit_v) || error("Unexpected value for include=$include")
+function get_electron_krook_collisions_term(sub_terms::ElectronSubTerms)
 
-    if collisions.krook.nuee0 ≤ 0.0 && collisions.krook.nuei0 ≤ 0.0
-        return nothing
+    nuee0 = sub_terms.nuee0
+    nuei0 = sub_terms.nuei0
+    collisions = sub_terms.collisions
+
+    if collisions === nothing || nuee0 ≤ 0.0 && nuei0 ≤ 0.0
+        return NullTerm()
     end
 
-    if vperp.n == 1
-        Maxwellian_prefactor = 1.0 / sqrt(π)
-    else
-        Maxwellian_prefactor = 1.0 / π^1.5
-    end
+    # Terms from `electron_krook_collisions!()`
+    #   nu_ee * (pdf_in[ivpa,ivperp,iz]
+    #            - Maxwellian_prefactor * krook_adjust_1V *
+    #              exp(-(wpa*krook_adjust_1V)^2 - (wperp*krook_adjust_1V)^2))
+    #   + nu_ei * (pdf_in[ivpa,ivperp,iz]
+    #              - Maxwellian_prefactor * krook_adjust_1V *
+    #                exp(-((wpa + (upar_ion - upar)/vth)*krook_adjust_1V)^2 - (wperp*krook_adjust_1V)^2))
 
-    v_size = vperp.n * vpa.n
+    krook_adjust_vth_1V = sub_terms.krook_adjust_vth_1V
+    krook_adjust_1V = sub_terms.krook_adjust_1V
+    Maxwellian_prefactor = sub_terms.Maxwellian_prefactor
 
-    using_reference_parameters = (collisions.krook.frequency_option == "reference_parameters")
+    n = sub_terms.n
+    u = sub_terms.u
+    u_ion = sub_terms.u_ion
+    p = sub_terms.p
+    vth = sub_terms.vth
+    nu_ee = get_collision_frequency_ee(collisions, n, vth * krook_adjust_vth_1V)
+    nu_ei = get_collision_frequency_ei(collisions, n, vth * krook_adjust_vth_1V)
+    wperp = sub_terms.wperp
+    wpa = sub_terms.wpa
+    f = sub_terms.f
 
-    @begin_anyzv_z_vperp_vpa_region()
-    @loop_z_vperp_vpa iz ivperp ivpa begin
-        if skip_f_electron_bc_points_in_Jacobian(iz, ivperp, ivpa, z, vperp, vpa, z_speed)
-            continue
-        end
+    term = (
+            nu_ee * (f
+                     - Maxwellian_prefactor * krook_adjust_1V * exp(-krook_adjust_1V^2 * (wpa^2 + wperp^2))
+                    )
+            + nu_ei * (f
+                       - Maxwellian_prefactor * krook_adjust_1V
+                       * exp(-krook_adjust_1V^2 * ((wpa + (u_ion - u) * vth^(-1))^2
+                                                   + wperp^2))
+                      )
+           )
 
-        # Rows corresponding to pdf_electron
-        row = (iz - 1) * v_size + (ivperp - 1) * vpa.n + ivpa + f_offset
-
-        # Contribution from electron_krook_collisions!()
-        if vperp.n == 1
-            # For 1V need to use parallel temperature for Maxwellian in Krook
-            # operator, and for consistency with old 1D1V results also calculate
-            # collision frequency using parallel temperature.
-            Krook_vth = sqrt(3.0) * vth[iz]
-            adjust_1V = 1.0 / sqrt(3.0)
-        else
-            Krook_vth = vth[iz]
-            adjust_1V = 1.0
-        end
-        nu_ee = get_collision_frequency_ee(collisions, dens[iz], Krook_vth)
-        nu_ei = get_collision_frequency_ei(collisions, dens[iz], Krook_vth)
-        if include === :all
-            jacobian_matrix[row,row] += dt * (nu_ee + nu_ei)
-        end
-
-        if include ∈ (:all, :explicit_v)
-            fM_i = Maxwellian_prefactor * adjust_1V *
-                   exp(-((vpa.grid[ivpa] + (upar_ion[iz] - upar[iz])/vth[iz])*adjust_1V)^2 - (vperp.grid[ivperp]*adjust_1V)^2)
-            #   d(f_M(u_i)[irowz])/d(p[icolz])
-            #       = -2*(vpa.grid+(upar_ion-upar)/vth)*(upar_ion-upar)*(-1/2/vth/p)*f_M(u_i) * delta(irow,icolz)
-            #       = (vpa.grid+(upar_ion-upar)/vth)*(upar_ion-upar)/vth/p*f_M(u_i) * delta(irow,icolz)
-            jacobian_matrix[row,p_offset+iz] +=
-                -dt * nu_ei * (vpa.grid[ivpa]+(upar_ion[iz]-upar[iz])/vth[iz])*adjust_1V*(upar_ion[iz]-upar[iz])/vth[iz]*adjust_1V/p[iz]*fM_i
-
-            if using_reference_parameters
-                # Both collision frequencies are proportional to n/vth^3=n^(5/2)*(me/2/p)^3/2,
-                # so
-                #   d(nu[irowz])/d(p[icolz]) = -3/2*nu/p * delta(irowz,icolz)
-                #   d(-(vpa.grid+(upar_ion-upar)/vth)^2[irowz])/d(p[icoliz]
-                #       = -(vpa.grid+(upar_ion-upar)/vth)*(upar_ion-upar)/vth/p * delta(irow,icolz)
-                jacobian_matrix[row,p_offset+iz] +=
-                    -dt * 1.5 / p[iz] *
-                          (nu_ee * (f[ivpa,ivperp,iz] - Maxwellian_prefactor * adjust_1V * exp(-(vpa.grid[ivpa]*adjust_1V)^2 - (vperp.grid[ivperp]*adjust_1V)^2))
-                           + nu_ei * (f[ivpa,ivperp,iz] - fM_i))
-            end
-        end
-    end
-
-    return nothing
-end
-
-function add_electron_krook_collisions_to_z_only_Jacobian!(
-        jacobian_matrix, f, dens, upar, ppar, vth, upar_ion, collisions, z, vperp, vpa,
-        z_speed, dt, ir, ivperp, ivpa)
-
-    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
-    @boundscheck size(jacobian_matrix, 1) == z.n || error("Jacobian matrix size is wrong")
-
-    if collisions.krook.nuee0 ≤ 0.0 && collisions.krook.nuei0 ≤ 0.0
-        return nothing
-    end
-
-    @loop_z iz begin
-        if skip_f_electron_bc_points_in_Jacobian(iz, ivperp, ivpa, z, vperp, vpa, z_speed)
-            continue
-        end
-
-        # Rows corresponding to pdf_electron
-        row = iz
-
-        # Contribution from electron_krook_collisions!()
-        if vperp.n == 1
-            # For 1V need to use parallel temperature for Maxwellian in Krook
-            # operator, and for consistency with old 1D1V results also calculate
-            # collision frequency using parallel temperature.
-            Krook_vth = sqrt(3.0) * vth[iz]
-        else
-            Krook_vth = vth[iz]
-        end
-        nu_ee = get_collision_frequency_ee(collisions, dens[iz], Krook_vth)
-        nu_ei = get_collision_frequency_ei(collisions, dens[iz], Krook_vth)
-        jacobian_matrix[row,row] += dt * (nu_ee + nu_ei)
-    end
-
-    return nothing
-end
-
-function add_electron_krook_collisions_to_v_only_Jacobian!(
-        jacobian_matrix, f, dens, upar, p, vth, upar_ion, collisions, z, vperp, vpa,
-        z_speed, dt, ir, iz)
-
-    @boundscheck size(jacobian_matrix, 1) == size(jacobian_matrix, 2) || error("Jacobian is not square")
-    @boundscheck size(jacobian_matrix, 1) == vperp.n * vpa.n + 1 || error("Jacobian matrix size is wrong")
-
-    if collisions.krook.nuee0 ≤ 0.0 && collisions.krook.nuei0 ≤ 0.0
-        return nothing
-    end
-
-    if vperp.n == 1
-        Maxwellian_prefactor = 1.0 / sqrt(π)
-    else
-        Maxwellian_prefactor = 1.0 / π^1.5
-    end
-
-    using_reference_parameters = (collisions.krook.frequency_option == "reference_parameters")
-
-    @loop_vperp_vpa ivperp ivpa begin
-        if skip_f_electron_bc_points_in_Jacobian(iz, ivperp, ivpa, z, vperp, vpa, z_speed)
-            continue
-        end
-
-        # Rows corresponding to pdf_electron
-        row = (ivperp - 1) * vpa.n + ivpa
-
-        # Contribution from electron_krook_collisions!()
-        if vperp.n == 1
-            # For 1V need to use parallel temperature for Maxwellian in Krook
-            # operator, and for consistency with old 1D1V results also calculate
-            # collision frequency using parallel temperature.
-            Krook_vth = sqrt(3.0) * vth
-            adjust_1V = 1.0 / sqrt(3.0)
-        else
-            Krook_vth = vth
-            adjust_1V = 1.0
-        end
-        nu_ee = get_collision_frequency_ee(collisions, dens, Krook_vth)
-        nu_ei = get_collision_frequency_ei(collisions, dens, Krook_vth)
-        jacobian_matrix[row,row] += dt * (nu_ee + nu_ei)
-
-        fM_i = Maxwellian_prefactor * adjust_1V *
-               exp(-((vpa.grid[ivpa] + (upar_ion - upar)/vth)*adjust_1V)^2 - (vperp.grid[ivperp]*adjust_1V)^2)
-        jacobian_matrix[row,end] +=
-            -dt * nu_ei * (vpa.grid[ivpa]+(upar_ion-upar)/vth)*adjust_1V*(upar_ion-upar)/vth*adjust_1V/p*fM_i
-
-        if using_reference_parameters
-            jacobian_matrix[row,end] +=
-                -dt * 1.5 / p *
-                      (nu_ee * (f[ivpa,ivperp] - Maxwellian_prefactor * adjust_1V * exp(-(vpa.grid[ivpa]*adjust_1V)^2 - (vperp.grid[ivperp]*adjust_1V)^2))
-                       + nu_ei * (f[ivpa,ivperp] - fM_i))
-        end
-    end
-
-    return nothing
+    return term
 end
 
 end # krook_collisions
