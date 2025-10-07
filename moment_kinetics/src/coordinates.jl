@@ -207,7 +207,7 @@ function define_coordinate(coord_input::NamedTuple; parallel_io::Bool=false,
         scratch_shared = allocate_shared_float(; Symbol(coord_input.name)=>n_local)
         scratch_shared2 = allocate_shared_float(; Symbol(coord_input.name)=>n_local)
         scratch_shared3 = allocate_shared_float(; Symbol(coord_input.name)=>n_local)
-        scratch_shared4 = allocate_float(; Symbol(coord_input.name)=>n_local)
+        scratch_shared4 = allocate_shared_float(; Symbol(coord_input.name)=>n_local)
         scratch_shared_int = allocate_shared_int(; Symbol(coord_input.name)=>n_local)
         scratch_shared_int2 = allocate_shared_int(; Symbol(coord_input.name)=>n_local)
     end
