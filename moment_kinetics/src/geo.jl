@@ -272,7 +272,7 @@ function init_magnetic_geometry(geometry_input_data::geometry_input,z,r,z_spectr
             grad_B_drift_z[iz,ir] = bzeta[iz,ir] * dBdr[iz,ir]/Bmag[iz,ir]
         end
         L_B = 1/(dB_dr*1/Bmag[1,1])
-        println("L_B = $L_B")
+        #println("L_B = $L_B")
     elseif option == "1D-mirror-MAST-edge"
         # a 1D configuration along z, with no pitch, but the magnetic field 
         # strength varies along the line. Its variation matches very closely to 

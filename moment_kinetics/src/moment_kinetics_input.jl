@@ -439,7 +439,7 @@ function mk_input(input_dict=OptionsDict("output" => OptionsDict("run_name" => "
                   * "is not `nothing`.")
         end
         # Debug initialisation only used by tests in `debug_test/`
-        debug_setup_loop_ranges_split_one_combination!(
+        looping.debug_setup_loop_ranges_split_one_combination!(
             debug_loop_type, debug_loop_parallel_dims...; s=composition.n_ion_species,
             sn=composition.n_neutral_species, r=r.n, z=z.n, vperp=vperp.n, vpa=vpa.n,
             vzeta=vzeta.n, vr=vr.n, vz=vz.n)
