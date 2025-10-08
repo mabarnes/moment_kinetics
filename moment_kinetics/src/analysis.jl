@@ -5,6 +5,7 @@ module analysis
 export analyze_fields_data
 export analyze_moments_data
 export analyze_pdf_data
+export get_growth_rate_of_box_mode_1D
 
 using ..array_allocation: allocate_float, allocate_int
 using ..calculus: integral
@@ -14,7 +15,7 @@ using ..boundary_conditions: vpagrid_to_vpa
 using ..debugging
 using ..interpolation: interpolate_to_grid_1d
 using ..load_data: open_readonly_output_file, get_nranks, load_pdf_data, load_rank_data
-using ..load_data: load_distributed_ion_pdf_slice
+using ..load_data: load_distributed_ion_pdf_slice, get_variable
 using ..looping
 using ..type_definitions: mk_int, mk_float
 
@@ -1245,6 +1246,97 @@ function fit_phi0_vs_time(phi0, tmod)
     fit_error = sqrt(mean(@.((phi0/phi0[1] - fitted_function)^2 / norm)))
 
     return fit.param[1], fit.param[2], fit.param[3], fit_error
+end
+
+function get_growth_rate_of_box_mode_1D(run_info)
+    # designed for the 1D ITG mode test. Assuming the initialised phi 
+    # is a sinusoid the length of the (periodic) 1D box, the growth rate 
+    # of this mode is calculated as a function of time and returned.
+    phi         = get_variable(run_info, "phi")       
+    dt          = get_variable(run_info, "dt")[1]  * get_variable(run_info, "steps_per_output")[end]  # scalar
+    n_t_max     = size(density)[end]
+    z           = run_info.z
+
+    number_of_peaks = 1
+    peak_amplitudes_list = zeros(number_of_peaks, n_t_max)
+    peak_wavenumbers_list = zeros(number_of_peaks, n_t_max)
+
+    for t in 1:1:n_t_max
+        phi_data_t = phi[:,1,t]
+        # phi_data_t = density[:,1,1,t]  # try density instead of phi
+        uniform_grid_z, phi_data_interpolated = interpolate_to_uniform_z(phi_data_t,z,run_info)
+        mean_phi = mean(phi_data_interpolated)
+        phi_data_interpolated .-= mean_phi
+        Δz = uniform_grid_z[2]-uniform_grid_z[1]
+
+        # compute fourier transform of phi_data_interpolated
+        fourier_spectrum = fftshift(fft(phi_data_interpolated))
+        wavenumbers = 2π * fftshift(fftfreq(length(phi_data_interpolated), 1/Δz))
+
+        amplitudes = abs.(fourier_spectrum)
+
+        # Restrict to nonnegative frequencies
+        nonnegative_mask = wavenumbers .>= 0
+        positive_wavenumbers = wavenumbers[nonnegative_mask]
+        positive_amplitudes = amplitudes[nonnegative_mask]
+
+
+        # Sort by amplitude and select top N peaks
+        # Step 1: find indices of 4 largest peaks by amplitude
+        top_indices = sortperm(positive_amplitudes, rev=true)[1:number_of_peaks]
+
+        # Step 2: reorder those 4 by their wavenumber
+        sorted_indices = sort(top_indices; by=i -> positive_wavenumbers[i])
+        peak_wavenumbers = positive_wavenumbers[sorted_indices]
+        peak_amplitudes  = positive_amplitudes[sorted_indices]
+
+        peak_amplitudes_list[:, t] = peak_amplitudes
+        peak_wavenumbers_list[:, t] = peak_wavenumbers
+    end
+
+    peak_second_half_gradients = zeros(number_of_peaks)
+    # fig_peak = Figure(size = (700, 450))
+    for peak in 1:number_of_peaks
+        peak_amplitude_over_t = peak_amplitudes_list[peak, :]
+        peak_wavenumber_over_t = peak_wavenumbers_list[peak, 1] # assume this doesn't change.
+
+        log_peak_amplitude_over_t = log.(peak_amplitude_over_t)
+    
+        # append straight line gradient fit of second half of log.(normalised_peak_amplitude) data
+        # to peak_second_half_gradients
+        half_index = Int(round(size(peak_amplitude_over_t, 1)/2))
+        sample_xarray = collect(1:size(peak_amplitude_over_t, 1))[half_index:end] .* dt
+        sample_yarray = log.(normalised_peak_amplitude)[half_index:end]
+        straight_fit = curve_fit(straight_model, sample_xarray, sample_yarray, [100.0, 0.0])
+        m = coef(straight_fit)[1]
+        c = coef(straight_fit)[2]
+        println("gradient is $(coef(straight_fit)[1]), intercept is $(coef(straight_fit)[2])")
+        peak_second_half_gradients[peak] = m/peak_wavenumber_over_t
+    end
+
+    return peak_second_half_gradients
+end
+
+function interpolate_to_uniform_z(non_uniform_data, z, run_info)
+
+    if z.discretization == "fourier_pseudospectral"
+        # Grid is already uniform and fourier-transformable
+        uniform_data = non_uniform_data
+        uniform_grid_z = z.grid
+    else
+        uniform_points_per_element_z = z.ngrid * 5
+        n_uniform_z = z.nelement_global * uniform_points_per_element_z
+        uniform_spacing_z = z.L / n_uniform_z
+        uniform_grid_z = collect(0:(n_uniform_z-1)).*uniform_spacing_z .+ 0.5.*uniform_spacing_z .- 0.5.*z.L
+        #println("uniform_grid_z = $uniform_grid_z")
+        uniform_data = zeros(n_uniform_z)
+
+        @views uniform_data[:] =
+             interpolate_to_grid_1d(uniform_grid_z, non_uniform_data[:], z,
+                                    run_info.z_spectral)
+    end
+
+    return uniform_grid_z, uniform_data
 end
 
 end
