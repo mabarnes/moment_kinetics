@@ -1248,13 +1248,18 @@ function fit_phi0_vs_time(phi0, tmod)
     return fit.param[1], fit.param[2], fit.param[3], fit_error
 end
 
+"""
+Function for calculating the growth rate of a box size mode (can also
+be initialised with multiple modes, number_of_peaks decides how many
+of the largest peaks are tracked). Used by the ITG_1D tests.
+"""
 function get_growth_rate_of_box_mode_1D(run_info)
     # designed for the 1D ITG mode test. Assuming the initialised phi 
     # is a sinusoid the length of the (periodic) 1D box, the growth rate 
     # of this mode is calculated as a function of time and returned.
     phi         = get_variable(run_info, "phi")       
     dt          = get_variable(run_info, "dt")[1]  * get_variable(run_info, "steps_per_output")[end]  # scalar
-    n_t_max     = size(density)[end]
+    n_t_max     = size(phi)[end]
     z           = run_info.z
 
     number_of_peaks = 1
@@ -1294,6 +1299,7 @@ function get_growth_rate_of_box_mode_1D(run_info)
         peak_wavenumbers_list[:, t] = peak_wavenumbers
     end
 
+    straight_model(x, s) = s[1] .* x .+ s[2]
     peak_second_half_gradients = zeros(number_of_peaks)
     # fig_peak = Figure(size = (700, 450))
     for peak in 1:number_of_peaks
@@ -1301,7 +1307,9 @@ function get_growth_rate_of_box_mode_1D(run_info)
         peak_wavenumber_over_t = peak_wavenumbers_list[peak, 1] # assume this doesn't change.
 
         log_peak_amplitude_over_t = log.(peak_amplitude_over_t)
-    
+
+        normalised_peak_amplitude = similar(peak_amplitude_over_t)
+        normalised_peak_amplitude .= peak_amplitude_over_t ./ peak_amplitude_over_t[1]
         # append straight line gradient fit of second half of log.(normalised_peak_amplitude) data
         # to peak_second_half_gradients
         half_index = Int(round(size(peak_amplitude_over_t, 1)/2))
@@ -1311,7 +1319,7 @@ function get_growth_rate_of_box_mode_1D(run_info)
         m = coef(straight_fit)[1]
         c = coef(straight_fit)[2]
         println("gradient is $(coef(straight_fit)[1]), intercept is $(coef(straight_fit)[2])")
-        peak_second_half_gradients[peak] = m/peak_wavenumber_over_t
+        peak_second_half_gradients[peak] = m
     end
 
     return peak_second_half_gradients
