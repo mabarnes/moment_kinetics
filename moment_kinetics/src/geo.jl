@@ -15,6 +15,7 @@ using ..type_definitions: mk_float, mk_int, MPISharedArray
 using ..reference_parameters: setup_reference_parameters
 using ..derivatives: derivative_z!
 using ..looping
+using ..communication
 
 using OrderedCollections: OrderedDict
 
@@ -320,6 +321,8 @@ function init_magnetic_geometry(geometry_input_data::geometry_input,z,r,z_spectr
     geometry = geometric_coefficients(geometry_input_data, rhostar,
                Bzed,Bzeta,Bmag,bzed,bzeta,dBdz,dBdr,jacobian,
                curvature_drift_r,curvature_drift_z,grad_B_drift_r,grad_B_drift_z)
+
+    @_block_synchronize()
     return geometry
 end
 
