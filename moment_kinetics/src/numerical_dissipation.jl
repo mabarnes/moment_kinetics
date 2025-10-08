@@ -17,7 +17,7 @@ using ..derivatives: derivative_r!, derivative_z!, second_derivative_r!,
                      second_derivative_z!
 using ..input_structs
 using ..timer_utils
-using ..type_definitions: mk_float
+using ..type_definitions: mk_float, mk_int
 
 # define individual structs for each species with their particular parameters
 Base.@kwdef struct ion_num_diss_params
@@ -26,6 +26,7 @@ Base.@kwdef struct ion_num_diss_params
     vpa_dissipation_coefficient::mk_float = -1.0
     vperp_dissipation_coefficient::mk_float = -1.0
     z_dissipation_coefficient::mk_float = -1.0
+    z_dissipation_degree::mk_int = 2
     r_dissipation_coefficient::mk_float = -1.0
     moment_dissipation_coefficient::mk_float = -1.0
     force_minimum_pdf_value::mk_float = -Inf
@@ -373,14 +374,16 @@ vperp_dissipation_coefficient = 0.1
 end
 
 """
-Add diffusion in the z direction to suppress oscillations
+Add diffusion in the z direction to suppress oscillations, with derivatives of 
+degree n.
 
 Disabled by default.
 
-The diffusion coefficient is set in the input TOML file by the parameter
+The diffusion coefficient and degree are set in the input TOML file by the parameter
 ```
 [ion_numerical_dissipation]
 z_dissipation_coefficient = 0.1
+z_dissipation_degree = 2
 ```
 
 Note that the current distributed-memory compatible
@@ -390,7 +393,7 @@ on internal or external element boundaries
 """
 @timeit global_timer z_dissipation!(
                          f_out, f_in, z, z_spectral, dt, diffusion_coefficient,
-                         scratch_dummy) = begin
+                         degree, scratch_dummy) = begin
 
     if diffusion_coefficient <= 0.0 || z.n == 1
         return nothing
@@ -398,13 +401,32 @@ on internal or external element boundaries
 
     @begin_s_r_vperp_vpa_region()
 
-    # calculate d^2 f / d z^2 using distributed memory compatible routines
-    second_derivative_z!(scratch_dummy.buffer_vpavperpzrs_1, f_in,
-                         scratch_dummy.buffer_vpavperprs_1,
-                         scratch_dummy.buffer_vpavperprs_2,
-                         scratch_dummy.buffer_vpavperprs_3,scratch_dummy.buffer_vpavperprs_4,
-                         z_spectral,z)
-    # advance f due to diffusion_coefficient * d^2 f / d z^2
+    if degree == 2
+        # calculate d^2 f / d z^2 using distributed memory compatible routines
+        second_derivative_z!(scratch_dummy.buffer_vpavperpzrs_1, f_in,
+                            scratch_dummy.buffer_vpavperprs_1,
+                            scratch_dummy.buffer_vpavperprs_2,
+                            scratch_dummy.buffer_vpavperprs_3,scratch_dummy.buffer_vpavperprs_4,
+                            z_spectral,z)
+
+    elseif degree == 4
+        # calculate d^2 f / d z^2 using distributed memory compatible routines
+        second_derivative_z!(scratch_dummy.buffer_vpavperpzrs_2, f_in,
+                            scratch_dummy.buffer_vpavperprs_1,
+                            scratch_dummy.buffer_vpavperprs_2,
+                            scratch_dummy.buffer_vpavperprs_3,scratch_dummy.buffer_vpavperprs_4,
+                            z_spectral,z)
+        # calculate d^4 f / d z^4
+        second_derivative_z!(scratch_dummy.buffer_vpavperpzrs_1, scratch_dummy.buffer_vpavperpzrs_2,
+                            scratch_dummy.buffer_vpavperprs_1,
+                            scratch_dummy.buffer_vpavperprs_2,
+                            scratch_dummy.buffer_vpavperprs_3,scratch_dummy.buffer_vpavperprs_4,
+                            z_spectral,z)
+    else
+        error("Only degree 2 and 4 dissipation implemented, got degree = $degree")
+    end
+
+    # advance f due to diffusion_coefficient * d^n f / d z^n where n is the degree of dissipation
     @loop_s_r_vperp_vpa is ir ivperp ivpa begin
         @views @. f_out[ivpa,ivperp,:,ir,is] += dt * diffusion_coefficient * scratch_dummy.buffer_vpavperpzrs_1[ivpa,ivperp,:,ir,is]
     end

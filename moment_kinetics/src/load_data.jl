@@ -3720,10 +3720,6 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
         vz_chunk_size = 1
     end
 
-    looping.setup_loop_ranges!(block_rank[], block_size[]; s=composition.n_ion_species,
-                               sn=composition.n_neutral_species, r=r.n, z=z.n,
-                               vperp=vperp.n, vpa=vpa.n, vzeta=vzeta.n, vr=vr.n, vz=vz.n)
-
     zero = 1.0e-14
     boundaries = create_boundary_info(input, nothing, nothing, r, z, vperp, vpa, vzeta,
                                       vr, vz, r_spectral, composition, zero;
