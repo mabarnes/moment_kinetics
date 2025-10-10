@@ -489,9 +489,9 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments,
     # When there is an r-dimension, the last point in r is not solved, and needs to be
     # communicated from the next process (if there is one - if not it will have been set
     # by the boundary condition).
-    halo_swap!(final_scratch_pdf)
+    halo_swap!(final_scratch_pdf, r, z)
     if evolve_p
-        halo_swap!(scratch[t_params.n_rk_stages+1].electron_p)
+        halo_swap!(scratch[t_params.n_rk_stages+1].electron_p, r, z)
     end
     # Update the 'pdf' arrays with the final result
     @begin_r_z_vperp_vpa_region()
@@ -986,9 +986,9 @@ function electron_backward_euler_pseudotimestepping!(scratch, pdf, moments,
     # When there is an r-dimension, the last point in r is not solved, and needs to be
     # communicated from the next process (if there is one - if not it will have been set
     # by the boundary condition).
-    halo_swap!(final_scratch_pdf)
+    halo_swap!(final_scratch_pdf, r, z)
     if evolve_p
-        halo_swap!(scratch[t_params.n_rk_stages+1].electron_p)
+        halo_swap!(scratch[t_params.n_rk_stages+1].electron_p, r, z)
     end
     # Update the 'pdf' arrays with the final result
     @begin_r_z_vperp_vpa_region()
@@ -1970,10 +1970,10 @@ to allow the outer r-loop to be parallelised.
     # When there is an r-dimension, the last point in r is not solved, and needs to be
     # communicated from the next process (if there is one - if not it will have been set
     # by the boundary condition).
-    halo_swap!(pdf_electron_out)
-    halo_swap!(electron_p_out)
+    halo_swap!(pdf_electron_out, r, z)
+    halo_swap!(electron_p_out, r, z)
     if evolve_p
-        halo_swap!(scratch[t_params.n_rk_stages+1].electron_p)
+        halo_swap!(scratch[t_params.n_rk_stages+1].electron_p, r, z)
     end
 
     # Fill pdf.electron.norm
