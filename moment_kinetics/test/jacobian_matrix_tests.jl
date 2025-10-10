@@ -220,6 +220,44 @@ function generate_norm_factor(perturbed_residual::AbstractArray{mk_float,1})
     norm_factor_unsmoothed = mean(abs.(perturbed_residual); dims=1)
 end
 
+function jacobian_isapprox(a::jacobian_info, b::jacobian_info; kwargs...)
+    success = true
+    for (row_a, row_b) ∈ zip(a.matrix, b.matrix)
+        for (block_a, block_b) ∈ zip(row_a, row_b)
+            success = success && elementwise_isapprox(block_a, block_b; kwargs...)
+        end
+    end
+    return success
+end
+function jacobian_extrema(j::jacobian_info)
+    minima_list = mk_float[]
+    maxima_list = mk_float[]
+    for row ∈ j.matrix
+        for block ∈ row
+            l, u = extrema(block)
+            push!(minima_list, l)
+            push!(maxima_list, u)
+        end
+    end
+    return minimum(minima_list), maximum(maxima_list)
+end
+function adi_plus_equals!(jfull::jacobian_info, jADI::jacobian_info, f_slice, p_slice)
+    @views jfull.matrix[1][1][f_slice,f_slice] .+= jADI.matrix[1][1]
+    @views jfull.matrix[1][2][f_slice,p_slice] .+= jADI.matrix[1][2]
+    @views jfull.matrix[2][1][p_slice,f_slice] .+= jADI.matrix[2][1]
+    @views jfull.matrix[2][2][p_slice,p_slice] .+= jADI.matrix[2][2]
+    return jfull
+end
+function jacobian_vector_product(j::jacobian_info, v::Tuple)
+    result = Tuple(zeros(size(w)) for w ∈ v)
+    for (x, row) ∈ zip(result, j.matrix)
+        for (w, block) ∈ zip(v, row)
+            mul!(x, block, w, 1.0, 1.0)
+        end
+    end
+    return result
+end
+
 function test_get_pdf_term(test_input::AbstractDict, label::String, get_term::Function,
                            rhs_func!::Function, rtol::mk_float)
     test_input = deepcopy(test_input)
@@ -446,7 +484,7 @@ function test_get_pdf_term(test_input::AbstractDict, label::String, get_term::Fu
 
                 # We are reusing z_solve_jacobian_ADI_check, so need to zero out its
                 # matrix.
-                z_solve_jacobian_ADI_check.matrix .= 0.0
+                jacobian_initialize_zero!(z_solve_jacobian_ADI_check)
 
                 implicit_z_sub_terms = @views get_electron_sub_terms_z_only_Jacobian(
                                                   dens, ddens_dz, upar_test, dupar_dz, p,
@@ -466,7 +504,7 @@ function test_get_pdf_term(test_input::AbstractDict, label::String, get_term::Fu
                 @views add_term_to_Jacobian!(z_solve_jacobian_ADI_check, :electron_pdf,
                                              dt, implict_z_term, z_speed[:,ivpa,ivperp])
 
-                @views jacobian_ADI_check.matrix[this_slice,this_slice] .+= z_solve_jacobian_ADI_check.matrix
+                @views jacobian_ADI_check.matrix[1][1][this_slice,this_slice] .+= z_solve_jacobian_ADI_check.matrix[1][1]
             end
             @_anyzv_subblock_synchronize()
 
@@ -495,9 +533,8 @@ function test_get_pdf_term(test_input::AbstractDict, label::String, get_term::Fu
 
             @begin_anyzv_region()
             @anyzv_serial_region begin
-                @test elementwise_isapprox(jacobian_ADI_check.matrix, jacobian.matrix;
-                                           rtol=1.0e-15,
-                                           atol=1.0e-15*max(extrema(jacobian.matrix)...))
+                @test jacobian_isapprox(jacobian_ADI_check, jacobian; rtol=1.0e-15,
+                                        atol=1.0e-15*max(abs.(jacobian_extrema(jacobian))...))
             end
             @_anyzv_subblock_synchronize()
         end
@@ -511,12 +548,12 @@ function test_get_pdf_term(test_input::AbstractDict, label::String, get_term::Fu
             # Add 'implicit' contribution
             @begin_anyzv_z_region()
             @loop_z iz begin
-                this_slice = collect((iz - 1)*v_size + 1:iz*v_size)
-                push!(this_slice, iz + pdf_size)
+                f_slice = (iz - 1)*v_size + 1:iz*v_size
+                p_slice = iz:iz
 
                 # We are reusing v_solve_jacobian_ADI_check, so need to zero out its
                 # matrix.
-                v_solve_jacobian_ADI_check.matrix .= 0.0
+                jacobian_initialize_zero!(v_solve_jacobian_ADI_check)
 
                 implicit_v_sub_terms, this_z_speed =
                     get_electron_sub_terms_v_only_Jacobian(
@@ -533,7 +570,8 @@ function test_get_pdf_term(test_input::AbstractDict, label::String, get_term::Fu
                 implicit_v_term = get_term(implicit_v_sub_terms)
                 add_term_to_Jacobian!(v_solve_jacobian_ADI_check, :electron_pdf, dt,
                                       implicit_v_term, this_z_speed)
-                @views jacobian_ADI_check.matrix[this_slice,this_slice] .+= v_solve_jacobian_ADI_check.matrix
+                adi_plus_equals!(jacobian_ADI_check, v_solve_jacobian_ADI_check, f_slice,
+                                 p_slice)
             end
             @_anyzv_subblock_synchronize()
 
@@ -562,7 +600,8 @@ function test_get_pdf_term(test_input::AbstractDict, label::String, get_term::Fu
 
             @begin_anyzv_region()
             @anyzv_serial_region begin
-                @test elementwise_isapprox(jacobian_ADI_check.matrix, jacobian.matrix; rtol=1.0e-15, atol=2.0e-15*max(extrema(jacobian.matrix)...))
+                @test jacobian_isapprox(jacobian_ADI_check, jacobian; rtol=1.0e-15,
+                                        atol=2.0e-15*max(abs.(jacobian_extrema(jacobian))...))
             end
         end
 
@@ -662,13 +701,13 @@ function test_get_pdf_term(test_input::AbstractDict, label::String, get_term::Fu
 
             @begin_anyzv_region()
             @anyzv_serial_region begin
-                delta_state = zeros(mk_float, total_size)
-                delta_state[1:pdf_size] .= vec(delta_f)
-                residual_update_with_Jacobian = jacobian.matrix * delta_state
-                perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1:pdf_size]
+                delta_state = (zeros(mk_float, pdf_size), zeros(mk_float, p_size))
+                delta_state[1] .= vec(delta_f)
+                residual_update_with_Jacobian = jacobian_vector_product(jacobian, delta_state)
+                perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1]
 
                 # Check p did not get perturbed by the Jacobian
-                @test elementwise_isapprox(residual_update_with_Jacobian[pdf_size+1:end],
+                @test elementwise_isapprox(residual_update_with_Jacobian[2],
                                            zeros(p_size); atol=1.0e-15)
 
                 norm_factor = generate_norm_factor(perturbed_residual)
@@ -684,14 +723,14 @@ function test_get_pdf_term(test_input::AbstractDict, label::String, get_term::Fu
 
             @begin_anyzv_region()
             @anyzv_serial_region begin
-                delta_state = zeros(mk_float, total_size)
-                delta_state[pdf_size+1:end] .= vec(delta_p)
-                residual_update_with_Jacobian = jacobian.matrix * delta_state
-                perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1:pdf_size]
+                delta_state = (zeros(mk_float, pdf_size), zeros(mk_float, p_size))
+                delta_state[2] .= vec(delta_p)
+                residual_update_with_Jacobian = jacobian_vector_product(jacobian, delta_state)
+                perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1]
 
                 # Check p did not get perturbed by the Jacobian
-                @test elementwise_isapprox(residual_update_with_Jacobian[pdf_size+1:end],
-                                           delta_state[pdf_size+1:end]; atol=1.0e-15)
+                @test elementwise_isapprox(residual_update_with_Jacobian[2],
+                                           delta_state[2]; atol=1.0e-15)
 
                 norm_factor = generate_norm_factor(perturbed_residual)
                 @test elementwise_isapprox(perturbed_residual ./ norm_factor,
@@ -706,15 +745,15 @@ function test_get_pdf_term(test_input::AbstractDict, label::String, get_term::Fu
 
             @begin_anyzv_region()
             @anyzv_serial_region begin
-                delta_state = zeros(mk_float, total_size)
-                delta_state[1:pdf_size] .= vec(delta_f)
-                delta_state[pdf_size+1:end] .= vec(delta_p)
-                residual_update_with_Jacobian = jacobian.matrix * delta_state
-                perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1:pdf_size]
+                delta_state = (zeros(mk_float, pdf_size), zeros(mk_float, p_size))
+                delta_state[1] .= vec(delta_f)
+                delta_state[2] .= vec(delta_p)
+                residual_update_with_Jacobian = jacobian_vector_product(jacobian, delta_state)
+                perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1]
 
                 # Check p did not get perturbed by the Jacobian
-                @test elementwise_isapprox(residual_update_with_Jacobian[pdf_size+1:end],
-                                           delta_state[pdf_size+1:end]; atol=1.0e-15)
+                @test elementwise_isapprox(residual_update_with_Jacobian[2],
+                                           delta_state[2]; atol=1.0e-15)
 
                 norm_factor = generate_norm_factor(perturbed_residual)
                 @test elementwise_isapprox(perturbed_residual ./ norm_factor,
@@ -934,11 +973,9 @@ function test_get_p_term(test_input::AbstractDict, label::String, get_term::Func
             v_size = vperp.n * vpa.n
 
             @serial_region begin
-                this_slice = total_size - z.n + 1:total_size
-
                 # We are reusing z_solve_jacobian_ADI_check, so need to zero out its
                 # matrix.
-                z_solve_jacobian_ADI_check.matrix .= 0.0
+                jacobian_initialize_zero!(z_solve_jacobian_ADI_check)
 
                 implicit_z_sub_terms = @views get_electron_sub_terms_z_only_Jacobian(
                                                   dens, ddens_dz, upar, dupar_dz, p,
@@ -955,7 +992,7 @@ function test_get_p_term(test_input::AbstractDict, label::String, get_term::Func
                 add_term_to_Jacobian!(z_solve_jacobian_ADI_check, :electron_p, dt,
                                       implict_z_term)
 
-                @views jacobian_ADI_check.matrix[this_slice,this_slice] .+= z_solve_jacobian_ADI_check.matrix
+                @views jacobian_ADI_check.matrix[2][2] .+= z_solve_jacobian_ADI_check.matrix[1][1]
             end
             @_anyzv_subblock_synchronize()
 
@@ -983,7 +1020,8 @@ function test_get_p_term(test_input::AbstractDict, label::String, get_term::Func
 
             @begin_anyzv_region()
             @anyzv_serial_region begin
-                @test elementwise_isapprox(jacobian_ADI_check.matrix, jacobian.matrix; rtol=0.0, atol=1.0e-15)
+                @test jacobian_isapprox(jacobian_ADI_check, jacobian; rtol=0.0,
+                                        atol=1.0e-15)
             end
             @_anyzv_subblock_synchronize()
         end
@@ -997,12 +1035,12 @@ function test_get_p_term(test_input::AbstractDict, label::String, get_term::Func
             # Add 'implicit' contribution
             @begin_anyzv_z_region()
             @loop_z iz begin
-                this_slice = collect((iz - 1)*v_size + 1:iz*v_size)
-                push!(this_slice, iz + pdf_size)
+                f_slice = (iz - 1)*v_size + 1:iz*v_size
+                p_slice = iz:iz
 
                 # We are reusing v_solve_jacobian_ADI_check, so need to zero out its
                 # matrix.
-                v_solve_jacobian_ADI_check.matrix .= 0.0
+                jacobian_initialize_zero!(v_solve_jacobian_ADI_check)
 
                 implicit_v_sub_terms, this_z_speed =
                     get_electron_sub_terms_v_only_Jacobian(
@@ -1019,7 +1057,8 @@ function test_get_p_term(test_input::AbstractDict, label::String, get_term::Func
                 implicit_v_term = get_term(implicit_v_sub_terms)
                 add_term_to_Jacobian!(v_solve_jacobian_ADI_check, :electron_p, dt,
                                       implicit_v_term, this_z_speed)
-                jacobian_ADI_check.matrix[this_slice,this_slice] .+= v_solve_jacobian_ADI_check.matrix
+                adi_plus_equals!(jacobian_ADI_check, v_solve_jacobian_ADI_check, f_slice,
+                                 p_slice)
             end
             @_anyzv_subblock_synchronize()
 
@@ -1047,9 +1086,8 @@ function test_get_p_term(test_input::AbstractDict, label::String, get_term::Func
 
             @begin_anyzv_region()
             @anyzv_serial_region begin
-                @test elementwise_isapprox(jacobian_ADI_check.matrix, jacobian.matrix;
-                                           rtol=0.0,
-                                           atol=1.0e-15*max(extrema(jacobian.matrix)...))
+                @test jacobian_isapprox(jacobian_ADI_check, jacobian; rtol=0.0,
+                                        atol=1.0e-15*max(abs.(jacobian_extrema(jacobian))...))
             end
         end
 
@@ -1098,14 +1136,14 @@ function test_get_p_term(test_input::AbstractDict, label::String, get_term::Func
 
             @begin_anyzv_region()
             @anyzv_serial_region begin
-                delta_state = zeros(mk_float, total_size)
-                delta_state[1:pdf_size] .= vec(delta_f)
-                residual_update_with_Jacobian = jacobian.matrix * delta_state
-                perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[pdf_size+1:end]
+                delta_state = (zeros(mk_float, pdf_size), zeros(mk_float, p_size))
+                delta_state[1] .= vec(delta_f)
+                residual_update_with_Jacobian = jacobian_vector_product(jacobian, delta_state)
+                perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[2]
 
                 # Check f did not get perturbed by the Jacobian
-                @test elementwise_isapprox(residual_update_with_Jacobian[1:pdf_size],
-                                           delta_state[1:pdf_size]; atol=1.0e-15)
+                @test elementwise_isapprox(residual_update_with_Jacobian[1],
+                                           delta_state[1]; atol=1.0e-15)
 
                 if label == "ion_dt_forcing_of_electron_p"
                     # No norm factor, because both perturbed residuals should be zero
@@ -1128,13 +1166,13 @@ function test_get_p_term(test_input::AbstractDict, label::String, get_term::Func
 
             @begin_anyzv_region()
             @anyzv_serial_region begin
-                delta_state = zeros(mk_float, total_size)
-                delta_state[pdf_size+1:end] .= vec(delta_p)
-                residual_update_with_Jacobian = jacobian.matrix * delta_state
-                perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[pdf_size+1:end]
+                delta_state = (zeros(mk_float, pdf_size), zeros(mk_float, p_size))
+                delta_state[2] .= vec(delta_p)
+                residual_update_with_Jacobian = jacobian_vector_product(jacobian, delta_state)
+                perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[2]
 
                 # Check f did not get perturbed by the Jacobian
-                @test elementwise_isapprox(residual_update_with_Jacobian[1:pdf_size],
+                @test elementwise_isapprox(residual_update_with_Jacobian[1],
                                            zeros(pdf_size); atol=1.0e-15)
 
                 norm_factor = generate_norm_factor(perturbed_residual)
@@ -1150,15 +1188,15 @@ function test_get_p_term(test_input::AbstractDict, label::String, get_term::Func
 
             @begin_anyzv_region()
             @anyzv_serial_region begin
-                delta_state = zeros(mk_float, total_size)
-                delta_state[1:pdf_size] .= vec(delta_f)
-                delta_state[pdf_size+1:end] .= vec(delta_p)
-                residual_update_with_Jacobian = jacobian.matrix * delta_state
-                perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[pdf_size+1:end]
+                delta_state = (zeros(mk_float, pdf_size), zeros(mk_float, p_size))
+                delta_state[1] .= vec(delta_f)
+                delta_state[2] .= vec(delta_p)
+                residual_update_with_Jacobian = jacobian_vector_product(jacobian, delta_state)
+                perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[2]
 
                 # Check p did not get perturbed by the Jacobian
-                @test elementwise_isapprox(residual_update_with_Jacobian[1:pdf_size],
-                                           delta_state[1:pdf_size]; atol=1.0e-15)
+                @test elementwise_isapprox(residual_update_with_Jacobian[1],
+                                           delta_state[1]; atol=1.0e-15)
 
                 norm_factor = generate_norm_factor(perturbed_residual)
                 @test elementwise_isapprox(perturbed_residual ./ norm_factor,
@@ -1383,13 +1421,12 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
                     external_source_settings, num_diss_params, t_params.electron, ion_dt,
                     ir, ivperp, ivpa)
 
-                @views jacobian_ADI_check.matrix[this_slice,this_slice] .+= z_solve_jacobian_ADI_check.matrix
+                @views jacobian_ADI_check.matrix[1][1][this_slice,this_slice] .+= z_solve_jacobian_ADI_check.matrix[1][1]
             end
 
             @begin_anyzv_region()
             @anyzv_serial_region begin
                 # Add 'implicit' contribution
-                this_slice = (pdf_size + 1):total_size
                 @views fill_electron_kinetic_equation_z_only_Jacobian_p!(
                     z_solve_p_jacobian_ADI_check, p, f[1,1,:], dpdf_dz[1,1,:],
                     dpdf_dvpa[1,1,:], d2pdf_dvpa2[1,1,:], z_speed[:,1,1], moments,
@@ -1399,7 +1436,7 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
                     external_source_settings, num_diss_params, t_params.electron, ion_dt,
                     ir, true)
                 @begin_anyzv_region()
-                @views jacobian_ADI_check.matrix[this_slice,this_slice] .+= z_solve_p_jacobian_ADI_check.matrix
+                @views jacobian_ADI_check.matrix[2][2] .+= z_solve_p_jacobian_ADI_check.matrix[1][1]
             end
             @_anyzv_subblock_synchronize()
 
@@ -1412,7 +1449,7 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
                 t_params.electron, ion_dt, ir, true, :explicit_v)
             @begin_anyzv_region()
             @anyzv_serial_region begin
-                jacobian_ADI_check.matrix .+= jacobian.matrix
+                adi_plus_equals!(jacobian_ADI_check, jacobian, :, :)
             end
             @_anyzv_subblock_synchronize()
 
@@ -1429,7 +1466,8 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
                 # Jacobian matrix functions without being too messed up by floating-point
                 # rounding errors. The result is that some entries in the Jacobian matrix
                 # here are O(1.0e5), so it is important to use `rtol` here.
-                @test elementwise_isapprox(jacobian_ADI_check.matrix, jacobian.matrix; rtol=adi_tol, atol=1.0e-15)
+                @test jacobian_isapprox(jacobian_ADI_check, jacobian; rtol=adi_tol,
+                                        atol=1.0e-15)
             end
             @_anyzv_subblock_synchronize()
         end
@@ -1443,8 +1481,8 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
             # Add 'implicit' contribution
             @begin_anyzv_z_region()
             @loop_z iz begin
-                this_slice = collect((iz - 1)*v_size + 1:iz*v_size)
-                push!(this_slice, iz + pdf_size)
+                f_slice = (iz - 1)*v_size + 1:iz*v_size
+                p_slice = iz:iz
                 fill_electron_kinetic_equation_v_only_Jacobian!(
                     v_solve_jacobian_ADI_check, @view(f[:,:,iz]), @view(p[iz]),
                     @view(dpdf_dz[:,:,iz]), @view(dpdf_dvpa[:,:,iz]),
@@ -1455,7 +1493,8 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
                     composition, z, vperp, vpa, z_spectral, vperp_spectral, vpa_spectral,
                     z_advect, vpa_advect, scratch_dummy, external_source_settings,
                     num_diss_params, t_params.electron, ion_dt, ir, iz, true)
-                @views jacobian_ADI_check.matrix[this_slice,this_slice] .+= v_solve_jacobian_ADI_check.matrix
+                adi_plus_equals!(jacobian_ADI_check, v_solve_jacobian_ADI_check, f_slice,
+                                 p_slice)
             end
             @_anyzv_subblock_synchronize()
 
@@ -1469,7 +1508,7 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
 
             @begin_anyzv_region()
             @anyzv_serial_region begin
-                jacobian_ADI_check.matrix .+= jacobian.matrix
+                adi_plus_equals!(jacobian_ADI_check, jacobian, :, :)
             end
             @_anyzv_subblock_synchronize()
 
@@ -1486,7 +1525,8 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
                 # Jacobian matrix functions without being too messed up by floating-point
                 # rounding errors. The result is that some entries in the Jacobian matrix
                 # here are O(1.0e5), so it is important to use `rtol` here.
-                @test elementwise_isapprox(jacobian_ADI_check.matrix, jacobian.matrix; rtol=10.0*adi_tol, atol=1.0e-13)
+                @test jacobian_isapprox(jacobian_ADI_check, jacobian; rtol=10.0*adi_tol,
+                                        atol=1.0e-13)
             end
         end
 
@@ -1572,14 +1612,14 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
 
             @begin_anyzv_region()
             @anyzv_serial_region begin
-                delta_state = zeros(mk_float, total_size)
+                delta_state = (zeros(mk_float, pdf_size), zeros(mk_float, p_size))
                 # Take this difference rather than using delta_f directly because we need
                 # the effect of the boundary condition having been applied to
                 # f_plus_delta_f.
-                delta_state[1:pdf_size] .= vec(f_plus_delta_f .- f)
-                residual_update_with_Jacobian = jacobian.matrix * delta_state
-                perturbed_with_Jacobian_f = vec(original_residual_f) .+ residual_update_with_Jacobian[1:pdf_size]
-                perturbed_with_Jacobian_p = vec(original_residual_p) .+ residual_update_with_Jacobian[pdf_size+1:end]
+                delta_state[1] .= vec(f_plus_delta_f .- f)
+                residual_update_with_Jacobian = jacobian_vector_product(jacobian, delta_state)
+                perturbed_with_Jacobian_f = vec(original_residual_f) .+ residual_update_with_Jacobian[1]
+                perturbed_with_Jacobian_p = vec(original_residual_p) .+ residual_update_with_Jacobian[2]
 
                 norm_factor_f = generate_norm_factor(perturbed_residual_f)
                 @test elementwise_isapprox(perturbed_residual_f ./ norm_factor_f,
@@ -1598,15 +1638,15 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
 
             @begin_anyzv_region()
             @anyzv_serial_region begin
-                delta_state = zeros(mk_float, total_size)
+                delta_state = (zeros(mk_float, pdf_size), zeros(mk_float, p_size))
                 # Take this difference rather than using delta_f directly because we need
                 # the effect of the boundary condition having been applied to
                 # f_with_delta_p.
-                delta_state[1:pdf_size] .= vec(f_with_delta_p .- f)
-                delta_state[pdf_size+1:end] .= vec(delta_p)
-                residual_update_with_Jacobian = jacobian.matrix * delta_state
-                perturbed_with_Jacobian_f = vec(original_residual_f) .+ residual_update_with_Jacobian[1:pdf_size]
-                perturbed_with_Jacobian_p = vec(original_residual_p) .+ residual_update_with_Jacobian[pdf_size+1:end]
+                delta_state[1] .= vec(f_with_delta_p .- f)
+                delta_state[2] .= vec(delta_p)
+                residual_update_with_Jacobian = jacobian_vector_product(jacobian, delta_state)
+                perturbed_with_Jacobian_f = vec(original_residual_f) .+ residual_update_with_Jacobian[1]
+                perturbed_with_Jacobian_p = vec(original_residual_p) .+ residual_update_with_Jacobian[2]
 
                 norm_factor_f = generate_norm_factor(perturbed_residual_f)
                 @test elementwise_isapprox(perturbed_residual_f ./ norm_factor_f,
@@ -1625,15 +1665,15 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
 
             @begin_anyzv_region()
             @anyzv_serial_region begin
-                delta_state = zeros(mk_float, total_size)
+                delta_state = (zeros(mk_float, pdf_size), zeros(mk_float, p_size))
                 # Take this difference rather than using delta_f directly because we need
                 # the effect of the boundary condition having been applied to
                 # f_plus_delta_f.
-                delta_state[1:pdf_size] .= vec(f_plus_delta_f .- f)
-                delta_state[pdf_size+1:end] .= vec(delta_p)
-                residual_update_with_Jacobian = jacobian.matrix * delta_state
-                perturbed_with_Jacobian_f = vec(original_residual_f) .+ residual_update_with_Jacobian[1:pdf_size]
-                perturbed_with_Jacobian_p = vec(original_residual_p) .+ residual_update_with_Jacobian[pdf_size+1:end]
+                delta_state[1] .= vec(f_plus_delta_f .- f)
+                delta_state[2] .= vec(delta_p)
+                residual_update_with_Jacobian = jacobian_vector_product(jacobian, delta_state)
+                perturbed_with_Jacobian_f = vec(original_residual_f) .+ residual_update_with_Jacobian[1]
+                perturbed_with_Jacobian_p = vec(original_residual_p) .+ residual_update_with_Jacobian[2]
 
                 norm_factor_f = generate_norm_factor(perturbed_residual_f)
                 @test elementwise_isapprox(perturbed_residual_f ./ norm_factor_f,
@@ -1823,7 +1863,7 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2)
 
             @begin_anyzv_region()
             @anyzv_serial_region begin
-                @test elementwise_isapprox(jacobian_ADI_check.matrix, jacobian.matrix; rtol=0.0, atol=1.0e-15)
+                @test jacobian_isapprox(jacobian_ADI_check, jacobian; rtol=0.0, atol=1.0e-15)
             end
             @_anyzv_subblock_synchronize()
         end
@@ -1837,19 +1877,20 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2)
             # Add 'implicit' contribution
             @begin_anyzv_z_region()
             @loop_z iz begin
-                this_slice = collect((iz - 1)*v_size + 1:iz*v_size)
-                push!(this_slice, iz + pdf_size)
+                f_slice = (iz - 1)*v_size + 1:iz*v_size
+                p_slice = iz:iz
 
                 # We are reusing v_solve_jacobian_ADI_check, so need to zero out its
                 # matrix.
-                v_solve_jacobian_ADI_check.matrix .= 0.0
+                jacobian_initialize_zero!(v_solve_jacobian_ADI_check)
 
                 @views add_wall_boundary_condition_to_Jacobian!(
                     v_solve_jacobian_ADI_check, phi[iz], f[:,:,iz], p[iz], vth[iz],
                     upar[iz], z, vperp, vpa, vperp_spectral, vpa_spectral, vpa_advect,
                     moments, num_diss_params.electron.vpa_dissipation_coefficient, me, ir,
                     :implicit_v, iz)
-                @views jacobian_ADI_check.matrix[this_slice,this_slice] .+= v_solve_jacobian_ADI_check.matrix
+                adi_plus_equals!(jacobian_ADI_check, v_solve_jacobian_ADI_check, f_slice,
+                                 p_slice)
             end
             @_anyzv_subblock_synchronize()
 
@@ -1862,7 +1903,7 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2)
 
             @begin_anyzv_region()
             @anyzv_serial_region begin
-                @test elementwise_isapprox(jacobian_ADI_check.matrix, jacobian.matrix; rtol=0.0, atol=1.0e-15)
+                @test jacobian_isapprox(jacobian_ADI_check, jacobian; rtol=0.0, atol=1.0e-15)
             end
         end
 
@@ -1946,16 +1987,16 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2)
 
             @begin_anyzv_region()
             @anyzv_serial_region begin
-                delta_state = zeros(mk_float, total_size)
+                delta_state = (zeros(mk_float, pdf_size), zeros(mk_float, p_size))
                 # Take this difference rather than using delta_f directly because we need
                 # the effect of the boundary condition having been applied to
                 # f_plus_delta_f.
-                delta_state[1:pdf_size] .= vec(f_plus_delta_f .- f)
-                residual_update_with_Jacobian = jacobian.matrix * delta_state
-                perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1:pdf_size]
+                delta_state[1] .= vec(f_plus_delta_f .- f)
+                residual_update_with_Jacobian = jacobian_vector_product(jacobian, delta_state)
+                perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1]
 
                 # Check p did not get perturbed by the Jacobian
-                @test elementwise_isapprox(residual_update_with_Jacobian[pdf_size+1:end],
+                @test elementwise_isapprox(residual_update_with_Jacobian[2],
                                            zeros(p_size); atol=1.0e-15)
 
                 # Check that something happened, to make sure that for example the
@@ -1978,17 +2019,17 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2)
 
             @begin_anyzv_region()
             @anyzv_serial_region begin
-                delta_state = zeros(mk_float, total_size)
+                delta_state = (zeros(mk_float, pdf_size), zeros(mk_float, p_size))
                 # Take this difference rather than using delta_f directly because we need
                 # the effect of the boundary condition having been applied to
                 # f_with_delta_p.
-                delta_state[1:pdf_size] .= vec(f_with_delta_p .- f)
-                delta_state[pdf_size+1:end] .= vec(delta_p)
-                residual_update_with_Jacobian = jacobian.matrix * delta_state
-                perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1:pdf_size]
+                delta_state[1] .= vec(f_with_delta_p .- f)
+                delta_state[2] .= vec(delta_p)
+                residual_update_with_Jacobian = jacobian_vector_product(jacobian, delta_state)
+                perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1]
 
                 # Check p did not get perturbed by the Jacobian
-                @test elementwise_isapprox(residual_update_with_Jacobian[pdf_size+1:end],
+                @test elementwise_isapprox(residual_update_with_Jacobian[2],
                                            vec(delta_p); atol=1.0e-15)
 
                 # Check that something happened, to make sure that for example the
@@ -2011,17 +2052,17 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2)
 
             @begin_anyzv_region()
             @anyzv_serial_region begin
-                delta_state = zeros(mk_float, total_size)
+                delta_state = (zeros(mk_float, pdf_size), zeros(mk_float, p_size))
                 # Take this difference rather than using delta_f directly because we need
                 # the effect of the boundary condition having been applied to
                 # f_plus_delta_f.
-                delta_state[1:pdf_size] .= vec(f_plus_delta_f .- f)
-                delta_state[pdf_size+1:end] .= vec(delta_p)
-                residual_update_with_Jacobian = jacobian.matrix * delta_state
-                perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1:pdf_size]
+                delta_state[1] .= vec(f_plus_delta_f .- f)
+                delta_state[2] .= vec(delta_p)
+                residual_update_with_Jacobian = jacobian_vector_product(jacobian, delta_state)
+                perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1]
 
                 # Check p did not get perturbed by the Jacobian
-                @test elementwise_isapprox(residual_update_with_Jacobian[pdf_size+1:end],
+                @test elementwise_isapprox(residual_update_with_Jacobian[2],
                                            vec(delta_p); atol=1.0e-15)
 
                 # Check that something happened, to make sure that for example the
