@@ -344,7 +344,7 @@ function jacobian_initialize_bc_digonal_single_variable!(
         col = i + offset
         jacobian_matrix[:,col] .= 0.0
         if boundary_skip !== nothing && boundary_skip(boundary_speed, indices...,
-                                                      rows_variable_coords...)
+                                                      col_variable_coords...)
             jacobian_matrix[col,col] .= 1.0
         end
     end
