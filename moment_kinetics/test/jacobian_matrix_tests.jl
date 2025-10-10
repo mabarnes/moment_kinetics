@@ -446,7 +446,7 @@ function test_get_pdf_term(test_input::AbstractDict, label::String, get_term::Fu
 
                 # We are reusing z_solve_jacobian_ADI_check, so need to zero out its
                 # matrix.
-                z_solve_jacobian_ADI_check.matrix .= 0.0
+                jacobian_initialize_zero!(z_solve_jacobian_ADI_check)
 
                 implicit_z_sub_terms = @views get_electron_sub_terms_z_only_Jacobian(
                                                   dens, ddens_dz, upar_test, dupar_dz, p,
@@ -466,7 +466,7 @@ function test_get_pdf_term(test_input::AbstractDict, label::String, get_term::Fu
                 @views add_term_to_Jacobian!(z_solve_jacobian_ADI_check, :electron_pdf,
                                              dt, implict_z_term, z_speed[:,ivpa,ivperp])
 
-                @views jacobian_ADI_check.matrix[this_slice,this_slice] .+= z_solve_jacobian_ADI_check.matrix
+                @views jacobian_ADI_check.matrix[1][1][this_slice,this_slice] .+= z_solve_jacobian_ADI_check.matrix[1][1]
             end
             @_anyzv_subblock_synchronize()
 
@@ -511,12 +511,12 @@ function test_get_pdf_term(test_input::AbstractDict, label::String, get_term::Fu
             # Add 'implicit' contribution
             @begin_anyzv_z_region()
             @loop_z iz begin
-                this_slice = collect((iz - 1)*v_size + 1:iz*v_size)
-                push!(this_slice, iz + pdf_size)
+                f_slice = collect((iz - 1)*v_size + 1:iz*v_size)
+                p_slice = iz
 
                 # We are reusing v_solve_jacobian_ADI_check, so need to zero out its
                 # matrix.
-                v_solve_jacobian_ADI_check.matrix .= 0.0
+                jacobian_initialize_zero!(v_solve_jacobian_ADI_check)
 
                 implicit_v_sub_terms, this_z_speed =
                     get_electron_sub_terms_v_only_Jacobian(
@@ -533,7 +533,10 @@ function test_get_pdf_term(test_input::AbstractDict, label::String, get_term::Fu
                 implicit_v_term = get_term(implicit_v_sub_terms)
                 add_term_to_Jacobian!(v_solve_jacobian_ADI_check, :electron_pdf, dt,
                                       implicit_v_term, this_z_speed)
-                @views jacobian_ADI_check.matrix[this_slice,this_slice] .+= v_solve_jacobian_ADI_check.matrix
+                @views jacobian_ADI_check.matrix[1][1][f_slice,f_slice] .+= v_solve_jacobian_ADI_check.matrix[1][1]
+                @views jacobian_ADI_check.matrix[1][2][f_slice,p_slice] .+= v_solve_jacobian_ADI_check.matrix[1][2]
+                @views jacobian_ADI_check.matrix[2][1][p_slice,f_slice] .+= v_solve_jacobian_ADI_check.matrix[2][1]
+                @views jacobian_ADI_check.matrix[2][2][p_slice,p_slice] .+= v_solve_jacobian_ADI_check.matrix[2][2]
             end
             @_anyzv_subblock_synchronize()
 
@@ -938,7 +941,7 @@ function test_get_p_term(test_input::AbstractDict, label::String, get_term::Func
 
                 # We are reusing z_solve_jacobian_ADI_check, so need to zero out its
                 # matrix.
-                z_solve_jacobian_ADI_check.matrix .= 0.0
+                jacobian_initialize_zero!(z_solve_jacobian_ADI_check)
 
                 implicit_z_sub_terms = @views get_electron_sub_terms_z_only_Jacobian(
                                                   dens, ddens_dz, upar, dupar_dz, p,
@@ -955,7 +958,7 @@ function test_get_p_term(test_input::AbstractDict, label::String, get_term::Func
                 add_term_to_Jacobian!(z_solve_jacobian_ADI_check, :electron_p, dt,
                                       implict_z_term)
 
-                @views jacobian_ADI_check.matrix[this_slice,this_slice] .+= z_solve_jacobian_ADI_check.matrix
+                @views jacobian_ADI_check.matrix[1][1][this_slice,this_slice] .+= z_solve_jacobian_ADI_check.matrix[1][1]
             end
             @_anyzv_subblock_synchronize()
 
@@ -1002,7 +1005,7 @@ function test_get_p_term(test_input::AbstractDict, label::String, get_term::Func
 
                 # We are reusing v_solve_jacobian_ADI_check, so need to zero out its
                 # matrix.
-                v_solve_jacobian_ADI_check.matrix .= 0.0
+                jacobian_initialize_zero!(v_solve_jacobian_ADI_check)
 
                 implicit_v_sub_terms, this_z_speed =
                     get_electron_sub_terms_v_only_Jacobian(
@@ -1019,7 +1022,10 @@ function test_get_p_term(test_input::AbstractDict, label::String, get_term::Func
                 implicit_v_term = get_term(implicit_v_sub_terms)
                 add_term_to_Jacobian!(v_solve_jacobian_ADI_check, :electron_p, dt,
                                       implicit_v_term, this_z_speed)
-                jacobian_ADI_check.matrix[this_slice,this_slice] .+= v_solve_jacobian_ADI_check.matrix
+                @views jacobian_ADI_check.matrix[1][1][f_slice,f_slice] .+= v_solve_jacobian_ADI_check.matrix[1][1]
+                @views jacobian_ADI_check.matrix[1][2][f_slice,p_slice] .+= v_solve_jacobian_ADI_check.matrix[1][2]
+                @views jacobian_ADI_check.matrix[2][1][p_slice,f_slice] .+= v_solve_jacobian_ADI_check.matrix[2][1]
+                @views jacobian_ADI_check.matrix[2][2][p_slice,p_slice] .+= v_solve_jacobian_ADI_check.matrix[2][2]
             end
             @_anyzv_subblock_synchronize()
 
@@ -1383,13 +1389,13 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
                     external_source_settings, num_diss_params, t_params.electron, ion_dt,
                     ir, ivperp, ivpa)
 
-                @views jacobian_ADI_check.matrix[this_slice,this_slice] .+= z_solve_jacobian_ADI_check.matrix
+                @views jacobian_ADI_check.matrix[1][1][this_slice,this_slice] .+= z_solve_jacobian_ADI_check.matrix[1][1]
             end
 
             @begin_anyzv_region()
             @anyzv_serial_region begin
                 # Add 'implicit' contribution
-                this_slice = (pdf_size + 1):total_size
+                this_slice = 1:p_size
                 @views fill_electron_kinetic_equation_z_only_Jacobian_p!(
                     z_solve_p_jacobian_ADI_check, p, f[1,1,:], dpdf_dz[1,1,:],
                     dpdf_dvpa[1,1,:], d2pdf_dvpa2[1,1,:], z_speed[:,1,1], moments,
@@ -1399,7 +1405,7 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
                     external_source_settings, num_diss_params, t_params.electron, ion_dt,
                     ir, true)
                 @begin_anyzv_region()
-                @views jacobian_ADI_check.matrix[this_slice,this_slice] .+= z_solve_p_jacobian_ADI_check.matrix
+                @views jacobian_ADI_check.matrix[2][2][this_slice,this_slice] .+= z_solve_p_jacobian_ADI_check[1][1].matrix
             end
             @_anyzv_subblock_synchronize()
 
@@ -1412,7 +1418,10 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
                 t_params.electron, ion_dt, ir, true, :explicit_v)
             @begin_anyzv_region()
             @anyzv_serial_region begin
-                jacobian_ADI_check.matrix .+= jacobian.matrix
+                jacobian_ADI_check.matrix[1][1] .+= jacobian.matrix[1][1]
+                jacobian_ADI_check.matrix[1][2] .+= jacobian.matrix[1][2]
+                jacobian_ADI_check.matrix[2][1] .+= jacobian.matrix[2][1]
+                jacobian_ADI_check.matrix[2][2] .+= jacobian.matrix[2][2]
             end
             @_anyzv_subblock_synchronize()
 
@@ -1455,7 +1464,10 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
                     composition, z, vperp, vpa, z_spectral, vperp_spectral, vpa_spectral,
                     z_advect, vpa_advect, scratch_dummy, external_source_settings,
                     num_diss_params, t_params.electron, ion_dt, ir, iz, true)
-                @views jacobian_ADI_check.matrix[this_slice,this_slice] .+= v_solve_jacobian_ADI_check.matrix
+                @views jacobian_ADI_check.matrix[1][1][f_slice,f_slice] .+= v_solve_jacobian_ADI_check.matrix[1][1]
+                @views jacobian_ADI_check.matrix[1][2][f_slice,p_slice] .+= v_solve_jacobian_ADI_check.matrix[1][2]
+                @views jacobian_ADI_check.matrix[2][1][p_slice,f_slice] .+= v_solve_jacobian_ADI_check.matrix[2][1]
+                @views jacobian_ADI_check.matrix[2][2][p_slice,p_slice] .+= v_solve_jacobian_ADI_check.matrix[2][2]
             end
             @_anyzv_subblock_synchronize()
 
@@ -1469,7 +1481,10 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
 
             @begin_anyzv_region()
             @anyzv_serial_region begin
-                jacobian_ADI_check.matrix .+= jacobian.matrix
+                jacobian_ADI_check.matrix[1][1] .+= jacobian.matrix[1][1]
+                jacobian_ADI_check.matrix[1][2] .+= jacobian.matrix[1][2]
+                jacobian_ADI_check.matrix[2][1] .+= jacobian.matrix[2][1]
+                jacobian_ADI_check.matrix[2][2] .+= jacobian.matrix[2][2]
             end
             @_anyzv_subblock_synchronize()
 
@@ -1486,7 +1501,10 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
                 # Jacobian matrix functions without being too messed up by floating-point
                 # rounding errors. The result is that some entries in the Jacobian matrix
                 # here are O(1.0e5), so it is important to use `rtol` here.
-                @test elementwise_isapprox(jacobian_ADI_check.matrix, jacobian.matrix; rtol=10.0*adi_tol, atol=1.0e-13)
+                @test elementwise_isapprox(jacobian_ADI_check.matrix[1][1], jacobian.matrix[1][1]; rtol=10.0*adi_tol, atol=1.0e-13)
+                @test elementwise_isapprox(jacobian_ADI_check.matrix[1][2], jacobian.matrix[1][2]; rtol=10.0*adi_tol, atol=1.0e-13)
+                @test elementwise_isapprox(jacobian_ADI_check.matrix[2][1], jacobian.matrix[2][1]; rtol=10.0*adi_tol, atol=1.0e-13)
+                @test elementwise_isapprox(jacobian_ADI_check.matrix[2][2], jacobian.matrix[2][2]; rtol=10.0*adi_tol, atol=1.0e-13)
             end
         end
 
@@ -1842,7 +1860,7 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2)
 
                 # We are reusing v_solve_jacobian_ADI_check, so need to zero out its
                 # matrix.
-                v_solve_jacobian_ADI_check.matrix .= 0.0
+                jacobian_initialize_zero!(v_solve_jacobian_ADI_check)
 
                 @views add_wall_boundary_condition_to_Jacobian!(
                     v_solve_jacobian_ADI_check, phi[iz], f[:,:,iz], p[iz], vth[iz],
