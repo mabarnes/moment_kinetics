@@ -1027,21 +1027,21 @@ global_rank[] == 0 && println("recalculating precon")
                 # Have not properly created the LU decomposition before, so
                 # cannot reuse it.
                 @timeit_debug global_timer "lu" nl_solver_params.preconditioners[ir] =
-                    (lu(sparse(precon.matrix)), precon, input_buffer,
+                    (lu(sparse(get_joined_array(precon))), precon, input_buffer,
                      output_buffer)
             else
                 # LU decomposition was previously created. The Jacobian always
                 # has the same sparsity pattern, so by using `lu!()` we can
                 # reuse some setup.
                 try
-                    @timeit_debug global_timer "lu!" lu!(orig_lu, sparse(precon.matrix); check=false)
+                    @timeit_debug global_timer "lu!" lu!(orig_lu, sparse(get_joined_array(precon)); check=false)
                 catch e
                     if !isa(e, ArgumentError)
                         rethrow(e)
                     end
                     println("Sparsity pattern of matrix changed, rebuilding "
                             * " LU from scratch")
-                    @timeit_debug global_timer "lu" orig_lu = lu(sparse(precon.matrix))
+                    @timeit_debug global_timer "lu" orig_lu = lu(sparse(get_joined_array(precon)))
                 end
                 nl_solver_params.preconditioners[ir] =
                     (orig_lu, precon, input_buffer, output_buffer)
@@ -1255,7 +1255,7 @@ global_rank[] == 0 && println("recalculating precon")
                 vpa_spectral, z_advect, vpa_advect, scratch_dummy,
                 external_source_settings, num_diss_params, t_params, ion_dt, ir, iz,
                 evolve_p, add_identity)
-            A_sparse = sparse(A.matrix)
+            A_sparse = sparse(get_joined_array(A))
             if !isassigned(adi_info.v_solve_implicit_lus, v_solve_counter)
                 @timeit_debug global_timer "lu" adi_info.v_solve_implicit_lus[v_solve_counter] = lu(A_sparse)
             else
@@ -1278,7 +1278,7 @@ global_rank[] == 0 && println("recalculating precon")
                 # If we only do one 'iteration' we don't need the 'explicit
                 # matrix' for the first solve (the v-solve), because the
                 # initial guess is zero,
-                adi_info.v_solve_explicit_matrices[v_solve_counter] = sparse(@view(explicit_J.matrix[adi_info.v_solve_global_inds[v_solve_counter],:]))
+                adi_info.v_solve_explicit_matrices[v_solve_counter] = sparse(get_joined_array_adi(explicit_J, adi_info.v_solve_global_inds[v_solve_counter]...))
             end
         end
         @debug_consistency_checks v_solve_counter == adi_info.v_solve_nsolve || error("v_solve_counter($v_solve_counter) != v_solve_nsolve($(adi_info.v_solve_nsolve))")
@@ -1309,7 +1309,7 @@ global_rank[] == 0 && println("recalculating precon")
                 external_source_settings, num_diss_params, t_params, ion_dt, ir,
                 ivperp, ivpa, add_identity)
 
-            A_sparse = sparse(A.matrix)
+            A_sparse = sparse(get_joined_array(A))
             if !isassigned(adi_info.z_solve_implicit_lus, z_solve_counter)
                 @timeit_debug global_timer "lu" adi_info.z_solve_implicit_lus[z_solve_counter] = lu(A_sparse)
             else
@@ -1329,6 +1329,7 @@ global_rank[] == 0 && println("recalculating precon")
             end
 
             adi_info.z_solve_explicit_matrices[z_solve_counter] = sparse(@view(explicit_J.matrix[adi_info.z_solve_global_inds[z_solve_counter],:]))
+            adi_info.z_solve_explicit_matrices[z_solve_counter] = sparse(explicit_J, adi_info.z_solve_global_inds[z_solve_counter]...)
         end
 
         A_p = adi_info.z_solve_jacobian_p
@@ -1349,7 +1350,7 @@ global_rank[] == 0 && println("recalculating precon")
                 external_source_settings, num_diss_params, t_params, ion_dt, ir,
                 evolve_p, add_identity)
 
-            A_sparse = sparse(A_p.matrix)
+            A_sparse = sparse(A_p.matrix[1][1])
             if !isassigned(adi_info.z_solve_implicit_lus, z_solve_counter)
                 @timeit_debug global_timer "lu" adi_info.z_solve_implicit_lus[z_solve_counter] = lu(A_sparse)
             else
@@ -1368,7 +1369,8 @@ global_rank[] == 0 && println("recalculating precon")
                 end
             end
 
-            adi_info.z_solve_explicit_matrices[z_solve_counter] = sparse(@view(explicit_J.matrix[adi_info.z_solve_global_inds[z_solve_counter],:]))
+            joined_explicit_array = get_joined_array(explicit_J)
+            adi_info.z_solve_explicit_matrices[z_solve_counter] = sparse(@view(joined_explicit_array[adi_info.z_solve_global_inds[z_solve_counter],:]))
         end
         @debug_consistency_checks z_solve_counter == adi_info.z_solve_nsolve || error("z_solve_counter($z_solve_counter) != z_solve_nsolve($(adi_info.z_solve_nsolve))")
     end

@@ -15,6 +15,7 @@ using ..moment_kinetics_structs: coordinate, discretization_info
 using ..timer_utils
 using ..type_definitions
 
+using BlockArrays
 using MPI
 
 # Stores some information from `coordinate` struct, but has no type parameters so can be
@@ -389,6 +390,21 @@ function jacobian_initialize_bc_digonal_single_variable!(
         end
     end
     return nothing
+end
+
+function get_joined_array(jacobian::jacobian_info)
+    n_entries = precon.n_entries
+    array_of_arrays = [precon.matrix[i][j] for i ∈ 1:n_entries, j ∈ 1:n_entries]
+    joined_array = mortar(array_of_arrays)
+    return joined_array
+end
+
+function get_joined_array_adi(jacobian::jacobian_info, f_slice, p_slice)
+    n_entries = precon.n_entries
+    array_of_arrays = @views [precon.matrix[1][1][f_slice,f_slice] precon.matrix[1][2][f_slice,p_slice] ;;
+                              precon.matrix[2][1][p_slice,f_slice] precon.matrix[2][2][p_slice,p_slice]]
+    joined_array = mortar(array_of_arrays)
+    return joined_array
 end
 
 # Lookup tables for function and derivatives that can be used with EquationTerms.

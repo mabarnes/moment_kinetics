@@ -352,7 +352,7 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(), spec
 
         function get_adi_precon_buffers()
             v_solve_z_range = looping.loop_ranges_store[(:anyzv,:z,)].z
-            v_solve_global_inds = [[((iz - 1)*v_size+1 : iz*v_size)..., total_size_coords+iz] for iz ∈ v_solve_z_range]
+            v_solve_global_inds = [((iz - 1)*v_size+1 : iz*v_size, iz:iz) for iz ∈ v_solve_z_range]
             v_solve_nsolve = length(v_solve_z_range)
             # Plus one for the one point of ppar that is included in the 'v solve'.
             v_solve_n = nvperp * nvpa + 1
