@@ -314,9 +314,9 @@ Initialize `jacobian.matrix` to zero.
 function jacobian_initialize_zero!(jacobian::jacobian_info)
     jacobian_matrix = jacobian.matrix
     n_entries = jacobian.n_entries
-    state_vector_local_ranges = jacobian.state_vector_local_ranges
+    state_vector_local_flattened_ranges = jacobian.state_vector_local_flattened_ranges
     for col_variable ∈ 1:n_entries
-        col_range = state_vector_local_ranges[col_variable]
+        col_range = state_vector_local_flattened_ranges[col_variable]
         for row_variable ∈ 1:n_entries
             this_block = jacobian_matrix[row_variable][col_variable]
             for col ∈ col_range
