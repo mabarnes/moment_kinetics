@@ -3141,9 +3141,8 @@ boundary condition on those entries of δg (when the right-hand-side is set to z
         return nothing
     end
 
-    jacobian_matrix = jacobian.matrix
-    pdf_offset = jacobian.state_vector_offsets[1]
-    p_offset = jacobian.state_vector_offsets[2]
+    jacobian_matrix_ff = jacobian.matrix[1][1]
+    jacobian_matrix_fp = jacobian.matrix[1][2]
 
     if include ∈ (:all, :explicit_v)
         include_lower = (z.irank == 0)
@@ -3195,9 +3194,9 @@ boundary condition on those entries of δg (when the right-hand-side is set to z
             # Ignore constraints, as these are non-linear and also should be small
             # corrections which should not matter much for a preconditioner.
 
-            jac_range = pdf_offset+(ivperp-1)*vpa.n+1 : pdf_offset+ivperp*vpa.n
-            jacobian_zbegin = @view jacobian_matrix[jac_range,jac_range]
-            jacobian_zbegin_p = @view jacobian_matrix[jac_range,p_offset+1]
+            jac_range = (ivperp-1)*vpa.n+1 : ivperp*vpa.n
+            jacobian_zbegin = @view jacobian_matrix_ff[jac_range,jac_range]
+            jacobian_zbegin_p = @view jacobian_matrix_fp[jac_range,1]
 
             vpa_unnorm, u_over_vt, vcut, minus_vcut_ind, sigma, sigma_ind, sigma_fraction,
                 element_with_zero, element_with_zero_boundary, last_point_near_zero,
@@ -3687,9 +3686,9 @@ boundary condition on those entries of δg (when the right-hand-side is set to z
             # Ignore constraints, as these are non-linear and also should be small
             # corrections which should not matter much for a preconditioner.
 
-            jac_range = pdf_offset+(zend-1)*vperp.n*vpa.n+(ivperp-1)*vpa.n+1 : pdf_offset+(zend-1)*vperp.n*vpa.n+ivperp*vpa.n
-            jacobian_zend = @view jacobian_matrix[jac_range,jac_range]
-            jacobian_zend_p = @view jacobian_matrix[jac_range,p_offset+zend]
+            jac_range = (zend-1)*vperp.n*vpa.n+(ivperp-1)*vpa.n+1 : (zend-1)*vperp.n*vpa.n+ivperp*vpa.n
+            jacobian_zend = @view jacobian_matrix_ff[jac_range,jac_range]
+            jacobian_zend_p = @view jacobian_matrix_fp[jac_range,zend]
 
             vpa_unnorm, u_over_vt, vcut, plus_vcut_ind, sigma, sigma_ind, sigma_fraction,
                 element_with_zero, element_with_zero_boundary, first_point_near_zero,
