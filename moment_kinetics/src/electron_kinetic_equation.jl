@@ -1040,7 +1040,7 @@ global_rank[] == 0 && println("recalculating precon")
                         rethrow(e)
                     end
                     println("Sparsity pattern of matrix changed, rebuilding "
-                            * " LU from scratch")
+                            * "LU from scratch")
                     @timeit_debug global_timer "lu" orig_lu = lu(sparse(get_joined_array(precon)))
                 end
                 nl_solver_params.preconditioners[ir] =
@@ -1269,7 +1269,7 @@ global_rank[] == 0 && println("recalculating precon")
                         rethrow(e)
                     end
                     println("Sparsity pattern of matrix changed, rebuilding "
-                            * " LU from scratch ir=$ir, iz=$iz")
+                            * "LU from scratch ir=$ir, iz=$iz")
                     @timeit_debug global_timer "lu" adi_info.v_solve_implicit_lus[v_solve_counter] = lu(A_sparse)
                 end
             end
@@ -1324,7 +1324,7 @@ global_rank[] == 0 && println("recalculating precon")
                         rethrow(e)
                     end
                     println("Sparsity pattern of matrix changed, rebuilding "
-                            * " LU from scratch ir=$ir, ivperp=$ivperp, ivpa=$ivpa")
+                            * "LU from scratch ir=$ir, ivperp=$ivperp, ivpa=$ivpa")
                     @timeit_debug global_timer "lu" adi_info.z_solve_implicit_lus[z_solve_counter] = lu(A_sparse)
                 end
             end
@@ -1365,7 +1365,7 @@ global_rank[] == 0 && println("recalculating precon")
                         rethrow(e)
                     end
                     println("Sparsity pattern of matrix changed, rebuilding "
-                            * " LU from scratch ir=$ir, p z-solve")
+                            * "LU from scratch ir=$ir, p z-solve")
                     @timeit_debug global_timer "lu" adi_info.z_solve_implicit_lus[z_solve_counter] = lu(A_sparse)
                 end
             end
