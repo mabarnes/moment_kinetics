@@ -54,6 +54,7 @@ using moment_kinetics.timer_utils: reset_mk_timers!
 using moment_kinetics.type_definitions: mk_float
 using moment_kinetics.velocity_moments: calculate_electron_moment_derivatives_no_r!
 
+using moment_kinetics.BlockBandedMatrices
 using LinearAlgebra
 using moment_kinetics.StatsBase
 
@@ -234,7 +235,11 @@ function jacobian_extrema(j::jacobian_info)
     maxima_list = mk_float[]
     for row ∈ j.matrix
         for block ∈ row
-            l, u = extrema(block)
+            if isa(block, BlockSkylineMatrix)
+                l, u = extrema(block.data)
+            else
+                l, u = extrema(block)
+            end
             push!(minima_list, l)
             push!(maxima_list, u)
         end

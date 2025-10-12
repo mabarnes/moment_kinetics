@@ -22,6 +22,7 @@ using moment_kinetics.command_line_options: get_options
 using moment_kinetics.type_definitions: OptionsDict
 using moment_kinetics.utils: recursive_merge
 
+using moment_kinetics.BlockBandedMatrices
 using MPI
 
 const use_verbose = get_options()["verbose"]
@@ -97,6 +98,9 @@ kwarg.
 """
 @inline function elementwise_isapprox(args...; kwargs...)
     return isapprox(args...; norm=(x)->NaN, kwargs...)
+end
+@inline function elementwise_isapprox(args::BlockSkylineMatrix...; kwargs...)
+    return isapprox((a.data for a ∈ args)...; norm=(x)->NaN, kwargs...)
 end
 
 """
