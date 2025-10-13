@@ -231,7 +231,7 @@ recursive_merge(test_input_chebyshev_1D1V_split_2_moments,
                             "evolve_moments" => OptionsDict("pressure" => true)))
 
 # Use "netcdf" for a few tests to test the NetCDF I/O if it is available.
-const binary_format = io_has_implementation(netcdf) ? "netcdf" : "hdf5"
+const binary_format = io_has_implementation(Val(netcdf)) ? "netcdf" : "hdf5"
 
 test_input_chebyshev_cx0_1D1V =
 recursive_merge(test_input_chebyshev_1D1V,
