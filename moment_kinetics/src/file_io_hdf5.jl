@@ -8,6 +8,10 @@ using MPI
 # when using parallel I/O (as of version 0.17.2).
 const string_array_size = 256
 
+function io_has_implementation(::Val{hdf5})
+    return true
+end
+
 function io_has_parallel(::Val{hdf5})
     return HDF5.has_parallel()
 end
