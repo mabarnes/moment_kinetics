@@ -5,8 +5,8 @@ module jacobian_matrices
 
 export jacobian_info, create_jacobian_info, jacobian_initialize_identity!,
        jacobian_initialize_zero!, jacobian_initialize_bc_diagonal!, get_joined_array,
-       get_joined_array_adi, EquationTerm, ConstantTerm, CompoundTerm, NullTerm,
-       add_term_to_Jacobian!
+       get_sparse_joined_array, get_joined_array_adi, EquationTerm, ConstantTerm,
+       CompoundTerm, NullTerm, add_term_to_Jacobian!
 
 using ..array_allocation: allocate_shared_float, allocate_float
 using ..communication
@@ -19,6 +19,7 @@ using ..type_definitions
 using BlockArrays
 using BlockBandedMatrices
 using MPI
+using SparseArrays
 
 # Stores some information from `coordinate` struct, but has no type parameters so can be
 # stored in a Vector or looked up from a Tuple without type instability.
@@ -593,6 +594,13 @@ end
     return joined_array
 end
 
+@timeit_debug global_timer get_sparse_joined_array(jacobian::jacobian_info) = begin
+    n_entries = jacobian.n_entries
+    array_of_arrays = [sparse(jacobian.matrix[i][j]) for j ∈ 1:n_entries, i ∈ 1:n_entries]
+    joined_array = sparse_hvcat(Tuple(n_entries for _ ∈ 1:n_entries), array_of_arrays...)
+    return joined_array
+end
+
 @timeit_debug global_timer get_joined_array_adi(jacobian::jacobian_info, f_slice,
                                                 p_slice) = begin
     n_entries = jacobian.n_entries
@@ -600,6 +608,59 @@ end
                               jacobian.matrix[2][1][p_slice,f_slice] jacobian.matrix[2][2][p_slice,p_slice]]
     joined_array = mortar(array_of_arrays)
     return joined_array
+end
+
+# Optimise conversion of BlockSkylineMatrix to SparseMatrixCSC, because the default goes
+# through the AbstractArray interface and is horribly slow, but we sometimes want a
+# SparseMatrixCSC to pass to UMFPACK.jl (via LinearAlgebra/SparseArrays).
+import SparseArrays: sparse
+function sparse(m::BlockSkylineMatrix)
+    s = spzeros(size(m))
+    s_nzvals = SparseArrays.nonzeros(s)
+    s_rowvals = SparseArrays.rowvals(s)
+    s_colptr = SparseArrays.getcolptr(s)
+
+    # Number of blocks
+    N, M = blocksize(m)
+    l, u = BlockBandedMatrices.colblockbandwidths(m)
+    m_block_sizes = blocksizes(m)
+    column_widths = [bs[2] for bs ∈ m_block_sizes[1,:]]
+    column_starts = [0]
+    append!(column_starts, cumsum(@view(column_widths[1:end-1])))
+    @views column_starts .+= 1
+    row_sizes = [bs[1] for bs ∈ m_block_sizes]
+    row_offsets = [0]
+    append!(row_offsets, cumsum(row_sizes[1:end-1]))
+    for J ∈ 1:M
+        KR = max(1,J-u[J]):min(J+l[J],N)
+        if !isempty(KR)
+            # Don't use BlockArrays.jl interface for extracting blocks, because that would
+            # not be type-stable. We only select blocks that are a contiguous, dense array
+            # so can construct a `Matrix` using the block start and block size.
+            n_cols = column_widths[J]
+            n_rows = sum(row_sizes[KR,J])
+            n_block = n_cols * n_rows
+            this_start = BlockBandedMatrices.blockstart(m, KR[1], J)
+            this_block = reshape(@view(m.data[this_start:this_start+n_block-1]), n_rows, n_cols)
+            sparse_block = sparse(this_block)
+
+            this_nzvals = SparseArrays.nonzeros(sparse_block)
+            append!(s_nzvals, this_nzvals)
+
+            # The rows in the full matrix actually start at row_offsets[KR[1]]+1, so add
+            # the offset to all the rowvals.
+            this_rowvals = SparseArrays.rowvals(sparse_block) .+ row_offsets[KR[1]]
+            append!(s_rowvals, this_rowvals)
+
+            this_col_start = column_starts[J]
+            this_col_end = this_col_start + n_cols - 1
+            this_colptr = SparseArrays.getcolptr(sparse_block)
+            @. @views s_colptr[this_col_start+1:this_col_end+1] += this_colptr[2:end] - 1
+            @. @views s_colptr[this_col_end+2:end] += this_colptr[end] - 1
+        end
+    end
+
+    return s
 end
 
 # Lookup tables for function and derivatives that can be used with EquationTerms.
