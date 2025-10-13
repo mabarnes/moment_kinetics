@@ -138,6 +138,7 @@ test_input = OptionsDict("output" => OptionsDict("run_name" => "jacobian_matrix"
                                              "element_spacing_option" => "coarse_tails8.660254037844386"),
                          "timestepping" => OptionsDict("type" => "KennedyCarpenterARK324",
                                                        "kinetic_electron_solver" => "implicit_p_implicit_pseudotimestep",
+                                                       "kinetic_electron_preconditioner" => "lu_no_separate_moments",
                                                        "kinetic_ion_solver" => "full_explicit_ion_advance",
                                                        "nstep" => 1,
                                                        "dt" => ion_dt,
@@ -411,15 +412,7 @@ function test_get_pdf_term(test_input::AbstractDict, label::String, get_term::Fu
                                                 vperp, vpa)
         end
 
-        jacobian = create_jacobian_info((; vpa=vpa, vperp=vperp, z=z),
-                                        (; vpa=vpa_spectral, vperp=vperp_spectral,
-                                         z=z_spectral);
-                                        comm=comm_anyzv_subblock[],
-                                        synchronize=_anyzv_subblock_synchronize,
-                                        electron_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z), false),
-                                        electron_p=((:anyzv,:z), (:z,), false),
-                                        boundary_skip_funcs=(electron_pdf=skip_f_electron_bc_points_in_Jacobian,
-                                                             electron_p=nothing))
+        jacobian = nl_solver_params.electron_advance.preconditioners[1][2]
         jacobian_initialize_identity!(jacobian)
 
         separate_zeroth_moment = (:zeroth_moment ∈ jacobian.state_vector_entries)
@@ -442,166 +435,169 @@ function test_get_pdf_term(test_input::AbstractDict, label::String, get_term::Fu
         equation_term = get_term(sub_terms)
         add_term_to_Jacobian!(jacobian, :electron_pdf, dt, equation_term, z_speed)
 
-        # Test 'ADI Jacobians' before other tests, because residual_func() may modify some
-        # variables (vth, etc.).
+        if test_input["timestepping"]["kinetic_electron_preconditioner"] == "lu_no_separate_moments"
+            # ADI only (currently?) supported for "lu_no_separate_moments".
+            # Test 'ADI Jacobians' before other tests, because residual_func() may modify some
+            # variables (vth, etc.).
 
-        jacobian_ADI_check = create_jacobian_info((; vpa=vpa, vperp=vperp, z=z),
-                                                  (; vpa=vpa_spectral,
-                                                   vperp=vperp_spectral, z=z_spectral);
-                                                  comm=comm_anyzv_subblock[],
-                                                  synchronize=_anyzv_subblock_synchronize,
-                                                  electron_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z), false),
-                                                  electron_p=((:anyzv,:z), (:z,), false),
-                                                  boundary_skip_funcs=(electron_pdf=skip_f_electron_bc_points_in_Jacobian,
-                                                                       electron_p=nothing))
-        v_solve_jacobian_ADI_check = create_jacobian_info((; vpa=vpa, vperp=vperp),
-                                                          (; vpa=vpa_spectral,
-                                                           vperp=vperp_spectral);
-                                                          comm=nothing,
-                                                          synchronize=nothing,
-                                                          electron_pdf=(nothing, (:vpa, :vperp), false),
-                                                          electron_p=(nothing, (), false),
-                                                          boundary_skip_funcs=(electron_pdf=skip_f_electron_bc_points_in_Jacobian_v_solve,
-                                                                               electron_p=nothing))
-        z_solve_jacobian_ADI_check = create_jacobian_info((; z=z),
-                                                          (; z=z_spectral);
-                                                          comm=nothing,
-                                                          synchronize=nothing,
-                                                          electron_pdf=(nothing, (:z,), false),
-                                                          boundary_skip_funcs=(electron_pdf=skip_f_electron_bc_points_in_Jacobian_z_solve,
-                                                                               electron_p=nothing))
+            jacobian_ADI_check = create_jacobian_info((; vpa=vpa, vperp=vperp, z=z),
+                                                      (; vpa=vpa_spectral,
+                                                       vperp=vperp_spectral, z=z_spectral);
+                                                      comm=comm_anyzv_subblock[],
+                                                      synchronize=_anyzv_subblock_synchronize,
+                                                      electron_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z), false),
+                                                      electron_p=((:anyzv,:z), (:z,), false),
+                                                      boundary_skip_funcs=(electron_pdf=skip_f_electron_bc_points_in_Jacobian,
+                                                                           electron_p=nothing))
+            v_solve_jacobian_ADI_check = create_jacobian_info((; vpa=vpa, vperp=vperp),
+                                                              (; vpa=vpa_spectral,
+                                                               vperp=vperp_spectral);
+                                                              comm=nothing,
+                                                              synchronize=nothing,
+                                                              electron_pdf=(nothing, (:vpa, :vperp), false),
+                                                              electron_p=(nothing, (), false),
+                                                              boundary_skip_funcs=(electron_pdf=skip_f_electron_bc_points_in_Jacobian_v_solve,
+                                                                                   electron_p=nothing))
+            z_solve_jacobian_ADI_check = create_jacobian_info((; z=z),
+                                                              (; z=z_spectral);
+                                                              comm=nothing,
+                                                              synchronize=nothing,
+                                                              electron_pdf=(nothing, (:z,), false),
+                                                              boundary_skip_funcs=(electron_pdf=skip_f_electron_bc_points_in_Jacobian_z_solve,
+                                                                                   electron_p=nothing))
 
-        @testset "ADI Jacobians - implicit z" begin
-            # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
-            jacobian_initialize_identity!(jacobian_ADI_check)
+            @testset "ADI Jacobians - implicit z" begin
+                # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
+                jacobian_initialize_identity!(jacobian_ADI_check)
 
-            v_size = vperp.n * vpa.n
+                v_size = vperp.n * vpa.n
 
-            # Add 'implicit' contribution
-            @begin_anyzv_vperp_vpa_region()
-            @loop_vperp_vpa ivperp ivpa begin
-                this_slice = (ivperp - 1)*vpa.n + ivpa:v_size:(z.n - 1)*v_size + (ivperp - 1)*vpa.n + ivpa
+                # Add 'implicit' contribution
+                @begin_anyzv_vperp_vpa_region()
+                @loop_vperp_vpa ivperp ivpa begin
+                    this_slice = (ivperp - 1)*vpa.n + ivpa:v_size:(z.n - 1)*v_size + (ivperp - 1)*vpa.n + ivpa
 
-                # We are reusing z_solve_jacobian_ADI_check, so need to zero out its
-                # matrix.
-                jacobian_initialize_zero!(z_solve_jacobian_ADI_check)
+                    # We are reusing z_solve_jacobian_ADI_check, so need to zero out its
+                    # matrix.
+                    jacobian_initialize_zero!(z_solve_jacobian_ADI_check)
 
-                implicit_z_sub_terms = @views get_electron_sub_terms_z_only_Jacobian(
-                                                  dens, ddens_dz, upar_test, dupar_dz, p,
-                                                  dp_dz, dvth_dz, zeroth_moment,
-                                                  first_moment, second_moment,
-                                                  third_moment, dthird_moment_dz,
-                                                  dqpar_dz, ion_upar, f[ivpa,ivperp,:],
-                                                  dpdf_dz[ivpa,ivperp,:],
-                                                  dpdf_dvpa[ivpa,ivperp,:],
-                                                  d2pdf_dvpa2[ivpa,ivperp,:], me, moments,
-                                                  collisions, external_source_settings,
-                                                  num_diss_params, t_params.electron,
-                                                  ion_dt, z, vperp, vpa,
-                                                  z_speed[:,ivpa,ivperp], ir, ivperp,
-                                                  ivpa)
-                implict_z_term = get_term(implicit_z_sub_terms)
-                @views add_term_to_Jacobian!(z_solve_jacobian_ADI_check, :electron_pdf,
-                                             dt, implict_z_term, z_speed[:,ivpa,ivperp])
+                    implicit_z_sub_terms = @views get_electron_sub_terms_z_only_Jacobian(
+                                                      dens, ddens_dz, upar_test, dupar_dz, p,
+                                                      dp_dz, dvth_dz, zeroth_moment,
+                                                      first_moment, second_moment,
+                                                      third_moment, dthird_moment_dz,
+                                                      dqpar_dz, ion_upar, f[ivpa,ivperp,:],
+                                                      dpdf_dz[ivpa,ivperp,:],
+                                                      dpdf_dvpa[ivpa,ivperp,:],
+                                                      d2pdf_dvpa2[ivpa,ivperp,:], me, moments,
+                                                      collisions, external_source_settings,
+                                                      num_diss_params, t_params.electron,
+                                                      ion_dt, z, vperp, vpa,
+                                                      z_speed[:,ivpa,ivperp], ir, ivperp,
+                                                      ivpa)
+                    implict_z_term = get_term(implicit_z_sub_terms)
+                    @views add_term_to_Jacobian!(z_solve_jacobian_ADI_check, :electron_pdf,
+                                                 dt, implict_z_term, z_speed[:,ivpa,ivperp])
 
-                @views jacobian_ADI_check.matrix[1][1][this_slice,this_slice] .+= z_solve_jacobian_ADI_check.matrix[1][1]
+                    @views jacobian_ADI_check.matrix[1][1][this_slice,this_slice] .+= z_solve_jacobian_ADI_check.matrix[1][1]
+                end
+                @_anyzv_subblock_synchronize()
+
+                # Add 'explicit' contribution
+                separate_zeroth_moment = (:zeroth_moment ∈ jacobian_ADI_check.state_vector_entries)
+                separate_first_moment = (:first_moment ∈ jacobian_ADI_check.state_vector_entries)
+                separate_second_moment = (:second_moment ∈ jacobian_ADI_check.state_vector_entries)
+                separate_third_moment = (:third_moment ∈ jacobian_ADI_check.state_vector_entries)
+                separate_dp_dz = (:electron_dp_dz ∈ jacobian_ADI_check.state_vector_entries)
+                separate_dq_dz = (:electron_dq_dz ∈ jacobian_ADI_check.state_vector_entries)
+                explicit_v_sub_terms = get_electron_sub_terms(
+                                           dens, ddens_dz, upar_test, dupar_dz, p, dp_dz,
+                                           dvth_dz, zeroth_moment, first_moment,
+                                           second_moment, third_moment, dthird_moment_dz,
+                                           dqpar_dz, ion_upar, f, dpdf_dz, dpdf_dvpa,
+                                           d2pdf_dvpa2, me, moments, collisions, composition,
+                                           external_source_settings, num_diss_params,
+                                           t_params.electron, ion_dt, z, vperp, vpa, z_speed,
+                                           vpa_speed, ir, separate_zeroth_moment,
+                                           separate_first_moment, separate_second_moment,
+                                           separate_third_moment, separate_dp_dz,
+                                           separate_dq_dz, :explicit_v)
+                explicit_v_term = get_term(explicit_v_sub_terms)
+                add_term_to_Jacobian!(jacobian_ADI_check, :electron_pdf, dt, explicit_v_term,
+                                      z_speed)
+
+                @begin_anyzv_region()
+                @anyzv_serial_region begin
+                    @test jacobian_isapprox(jacobian_ADI_check, jacobian; rtol=1.0e-15,
+                                            atol=1.0e-15*max(abs.(jacobian_extrema(jacobian))...))
+                end
+                @_anyzv_subblock_synchronize()
             end
-            @_anyzv_subblock_synchronize()
 
-            # Add 'explicit' contribution
-            separate_zeroth_moment = (:zeroth_moment ∈ jacobian_ADI_check.state_vector_entries)
-            separate_first_moment = (:first_moment ∈ jacobian_ADI_check.state_vector_entries)
-            separate_second_moment = (:second_moment ∈ jacobian_ADI_check.state_vector_entries)
-            separate_third_moment = (:third_moment ∈ jacobian_ADI_check.state_vector_entries)
-            separate_dp_dz = (:electron_dp_dz ∈ jacobian_ADI_check.state_vector_entries)
-            separate_dq_dz = (:electron_dq_dz ∈ jacobian_ADI_check.state_vector_entries)
-            explicit_v_sub_terms = get_electron_sub_terms(
-                                       dens, ddens_dz, upar_test, dupar_dz, p, dp_dz,
-                                       dvth_dz, zeroth_moment, first_moment,
-                                       second_moment, third_moment, dthird_moment_dz,
-                                       dqpar_dz, ion_upar, f, dpdf_dz, dpdf_dvpa,
-                                       d2pdf_dvpa2, me, moments, collisions, composition,
-                                       external_source_settings, num_diss_params,
-                                       t_params.electron, ion_dt, z, vperp, vpa, z_speed,
-                                       vpa_speed, ir, separate_zeroth_moment,
-                                       separate_first_moment, separate_second_moment,
-                                       separate_third_moment, separate_dp_dz,
-                                       separate_dq_dz, :explicit_v)
-            explicit_v_term = get_term(explicit_v_sub_terms)
-            add_term_to_Jacobian!(jacobian_ADI_check, :electron_pdf, dt, explicit_v_term,
-                                  z_speed)
+            @testset "ADI Jacobians - implicit v" begin
+                # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
+                jacobian_initialize_identity!(jacobian_ADI_check)
 
-            @begin_anyzv_region()
-            @anyzv_serial_region begin
-                @test jacobian_isapprox(jacobian_ADI_check, jacobian; rtol=1.0e-15,
-                                        atol=1.0e-15*max(abs.(jacobian_extrema(jacobian))...))
-            end
-            @_anyzv_subblock_synchronize()
-        end
+                v_size = vperp.n * vpa.n
 
-        @testset "ADI Jacobians - implicit v" begin
-            # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
-            jacobian_initialize_identity!(jacobian_ADI_check)
+                # Add 'implicit' contribution
+                @begin_anyzv_z_region()
+                @loop_z iz begin
+                    f_slice = (iz - 1)*v_size + 1:iz*v_size
+                    p_slice = iz:iz
 
-            v_size = vperp.n * vpa.n
+                    # We are reusing v_solve_jacobian_ADI_check, so need to zero out its
+                    # matrix.
+                    jacobian_initialize_zero!(v_solve_jacobian_ADI_check)
 
-            # Add 'implicit' contribution
-            @begin_anyzv_z_region()
-            @loop_z iz begin
-                f_slice = (iz - 1)*v_size + 1:iz*v_size
-                p_slice = iz:iz
+                    implicit_v_sub_terms, this_z_speed =
+                        get_electron_sub_terms_v_only_Jacobian(
+                            dens[iz], ddens_dz[iz], upar_test[iz], dupar_dz[iz], @view(p[iz]),
+                            dp_dz[iz], @view(dvth_dz[iz]), @view(zeroth_moment[iz]),
+                            @view(first_moment[iz]), @view(second_moment[iz]),
+                            @view(third_moment[iz]), dthird_moment_dz[iz],
+                            @view(dqpar_dz[iz]), ion_upar[iz], @view(f[:,:,iz]),
+                            @view(dpdf_dz[:,:,iz]), @view(dpdf_dvpa[:,:,iz]),
+                            @view(d2pdf_dvpa2[:,:,iz]), me, moments, collisions,
+                            external_source_settings, num_diss_params, t_params.electron,
+                            ion_dt, z, vperp, vpa, @view(z_speed[iz,:,:]),
+                            @view(vpa_speed[:,:,iz]), ir, iz)
+                    implicit_v_term = get_term(implicit_v_sub_terms)
+                    add_term_to_Jacobian!(v_solve_jacobian_ADI_check, :electron_pdf, dt,
+                                          implicit_v_term, this_z_speed)
+                    adi_plus_equals!(jacobian_ADI_check, v_solve_jacobian_ADI_check, f_slice,
+                                     p_slice)
+                end
+                @_anyzv_subblock_synchronize()
 
-                # We are reusing v_solve_jacobian_ADI_check, so need to zero out its
-                # matrix.
-                jacobian_initialize_zero!(v_solve_jacobian_ADI_check)
+                # Add 'explicit' contribution
+                separate_zeroth_moment = (:zeroth_moment ∈ jacobian_ADI_check.state_vector_entries)
+                separate_first_moment = (:first_moment ∈ jacobian_ADI_check.state_vector_entries)
+                separate_second_moment = (:second_moment ∈ jacobian_ADI_check.state_vector_entries)
+                separate_third_moment = (:third_moment ∈ jacobian_ADI_check.state_vector_entries)
+                separate_dp_dz = (:electron_dp_dz ∈ jacobian_ADI_check.state_vector_entries)
+                separate_dq_dz = (:electron_dq_dz ∈ jacobian_ADI_check.state_vector_entries)
+                explicit_z_sub_terms = get_electron_sub_terms(
+                                           dens, ddens_dz, upar_test, dupar_dz, p, dp_dz,
+                                           dvth_dz, zeroth_moment, first_moment,
+                                           second_moment, third_moment, dthird_moment_dz,
+                                           dqpar_dz, ion_upar, f, dpdf_dz, dpdf_dvpa,
+                                           d2pdf_dvpa2, me, moments, collisions, composition,
+                                           external_source_settings, num_diss_params,
+                                           t_params.electron, ion_dt, z, vperp, vpa, z_speed,
+                                           vpa_speed, ir, separate_zeroth_moment,
+                                           separate_first_moment, separate_second_moment,
+                                           separate_third_moment, separate_dp_dz,
+                                           separate_dq_dz, :explicit_z)
+                explicit_z_term = get_term(explicit_z_sub_terms)
+                add_term_to_Jacobian!(jacobian_ADI_check, :electron_pdf, dt, explicit_z_term,
+                                      z_speed)
 
-                implicit_v_sub_terms, this_z_speed =
-                    get_electron_sub_terms_v_only_Jacobian(
-                        dens[iz], ddens_dz[iz], upar_test[iz], dupar_dz[iz], @view(p[iz]),
-                        dp_dz[iz], @view(dvth_dz[iz]), @view(zeroth_moment[iz]),
-                        @view(first_moment[iz]), @view(second_moment[iz]),
-                        @view(third_moment[iz]), dthird_moment_dz[iz],
-                        @view(dqpar_dz[iz]), ion_upar[iz], @view(f[:,:,iz]),
-                        @view(dpdf_dz[:,:,iz]), @view(dpdf_dvpa[:,:,iz]),
-                        @view(d2pdf_dvpa2[:,:,iz]), me, moments, collisions,
-                        external_source_settings, num_diss_params, t_params.electron,
-                        ion_dt, z, vperp, vpa, @view(z_speed[iz,:,:]),
-                        @view(vpa_speed[:,:,iz]), ir, iz)
-                implicit_v_term = get_term(implicit_v_sub_terms)
-                add_term_to_Jacobian!(v_solve_jacobian_ADI_check, :electron_pdf, dt,
-                                      implicit_v_term, this_z_speed)
-                adi_plus_equals!(jacobian_ADI_check, v_solve_jacobian_ADI_check, f_slice,
-                                 p_slice)
-            end
-            @_anyzv_subblock_synchronize()
-
-            # Add 'explicit' contribution
-            separate_zeroth_moment = (:zeroth_moment ∈ jacobian_ADI_check.state_vector_entries)
-            separate_first_moment = (:first_moment ∈ jacobian_ADI_check.state_vector_entries)
-            separate_second_moment = (:second_moment ∈ jacobian_ADI_check.state_vector_entries)
-            separate_third_moment = (:third_moment ∈ jacobian_ADI_check.state_vector_entries)
-            separate_dp_dz = (:electron_dp_dz ∈ jacobian_ADI_check.state_vector_entries)
-            separate_dq_dz = (:electron_dq_dz ∈ jacobian_ADI_check.state_vector_entries)
-            explicit_z_sub_terms = get_electron_sub_terms(
-                                       dens, ddens_dz, upar_test, dupar_dz, p, dp_dz,
-                                       dvth_dz, zeroth_moment, first_moment,
-                                       second_moment, third_moment, dthird_moment_dz,
-                                       dqpar_dz, ion_upar, f, dpdf_dz, dpdf_dvpa,
-                                       d2pdf_dvpa2, me, moments, collisions, composition,
-                                       external_source_settings, num_diss_params,
-                                       t_params.electron, ion_dt, z, vperp, vpa, z_speed,
-                                       vpa_speed, ir, separate_zeroth_moment,
-                                       separate_first_moment, separate_second_moment,
-                                       separate_third_moment, separate_dp_dz,
-                                       separate_dq_dz, :explicit_z)
-            explicit_z_term = get_term(explicit_z_sub_terms)
-            add_term_to_Jacobian!(jacobian_ADI_check, :electron_pdf, dt, explicit_z_term,
-                                  z_speed)
-
-            @begin_anyzv_region()
-            @anyzv_serial_region begin
-                @test jacobian_isapprox(jacobian_ADI_check, jacobian; rtol=1.0e-15,
-                                        atol=2.0e-15*max(abs.(jacobian_extrema(jacobian))...))
+                @begin_anyzv_region()
+                @anyzv_serial_region begin
+                    @test jacobian_isapprox(jacobian_ADI_check, jacobian; rtol=1.0e-15,
+                                            atol=2.0e-15*max(abs.(jacobian_extrema(jacobian))...))
+                end
             end
         end
 
@@ -906,15 +902,7 @@ function test_get_p_term(test_input::AbstractDict, label::String, get_term::Func
                                       vpa_spectral)
         end
 
-        jacobian = create_jacobian_info((; vpa=vpa, vperp=vperp, z=z),
-                                        (; vpa=vpa_spectral, vperp=vperp_spectral,
-                                         z=z_spectral);
-                                        comm=comm_anyzv_subblock[],
-                                        synchronize=_anyzv_subblock_synchronize,
-                                        electron_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z), false),
-                                        electron_p=((:anyzv,:z), (:z,), false),
-                                        boundary_skip_funcs=(electron_pdf=skip_f_electron_bc_points_in_Jacobian,
-                                                             electron_p=nothing))
+        jacobian = nl_solver_params.electron_advance.preconditioners[1][2]
         jacobian_initialize_identity!(jacobian)
 
         separate_zeroth_moment = (:zeroth_moment ∈ jacobian.state_vector_entries)
@@ -937,157 +925,160 @@ function test_get_p_term(test_input::AbstractDict, label::String, get_term::Func
         equation_term = get_term(sub_terms)
         add_term_to_Jacobian!(jacobian, :electron_p, dt, equation_term, z_speed)
 
-        # Test 'ADI Jacobians' before other tests, because residual_func() may modify some
-        # variables (vth, etc.).
+        if test_input["timestepping"]["kinetic_electron_preconditioner"] == "lu_no_separate_moments"
+            # ADI only (currently?) supported for "lu_no_separate_moments".
+            # Test 'ADI Jacobians' before other tests, because residual_func() may modify some
+            # variables (vth, etc.).
 
-        jacobian_ADI_check = create_jacobian_info((; vpa=vpa, vperp=vperp, z=z),
-                                                  (; vpa=vpa_spectral,
-                                                   vperp=vperp_spectral, z=z_spectral);
-                                                  comm=comm_anyzv_subblock[],
-                                                  synchronize=_anyzv_subblock_synchronize,
-                                                  electron_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z), false),
-                                                  electron_p=((:anyzv,:z), (:z,), false),
-                                                  boundary_skip_funcs=(electron_pdf=skip_f_electron_bc_points_in_Jacobian,
-                                                                       electron_p=nothing))
-        v_solve_jacobian_ADI_check = create_jacobian_info((; vpa=vpa, vperp=vperp),
-                                                          (; vpa=vpa_spectral,
-                                                           vperp=vperp_spectral);
-                                                          comm=nothing,
-                                                          synchronize=nothing,
-                                                          electron_pdf=(nothing, (:vpa, :vperp), false),
-                                                          electron_p=(nothing, (), false),
-                                                          boundary_skip_funcs=(electron_pdf=skip_f_electron_bc_points_in_Jacobian_v_solve,
-                                                                               electron_p=nothing))
-        z_solve_jacobian_ADI_check = create_jacobian_info((; z=z),
-                                                          (; z=z_spectral);
-                                                          comm=nothing,
-                                                          synchronize=nothing,
-                                                          electron_p=(nothing, (:z,), false),
-                                                          boundary_skip_funcs=(electron_pdf=skip_f_electron_bc_points_in_Jacobian_z_solve,
-                                                                               electron_p=nothing))
+            jacobian_ADI_check = create_jacobian_info((; vpa=vpa, vperp=vperp, z=z),
+                                                      (; vpa=vpa_spectral,
+                                                       vperp=vperp_spectral, z=z_spectral);
+                                                      comm=comm_anyzv_subblock[],
+                                                      synchronize=_anyzv_subblock_synchronize,
+                                                      electron_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z), false),
+                                                      electron_p=((:anyzv,:z), (:z,), false),
+                                                      boundary_skip_funcs=(electron_pdf=skip_f_electron_bc_points_in_Jacobian,
+                                                                           electron_p=nothing))
+            v_solve_jacobian_ADI_check = create_jacobian_info((; vpa=vpa, vperp=vperp),
+                                                              (; vpa=vpa_spectral,
+                                                               vperp=vperp_spectral);
+                                                              comm=nothing,
+                                                              synchronize=nothing,
+                                                              electron_pdf=(nothing, (:vpa, :vperp), false),
+                                                              electron_p=(nothing, (), false),
+                                                              boundary_skip_funcs=(electron_pdf=skip_f_electron_bc_points_in_Jacobian_v_solve,
+                                                                                   electron_p=nothing))
+            z_solve_jacobian_ADI_check = create_jacobian_info((; z=z),
+                                                              (; z=z_spectral);
+                                                              comm=nothing,
+                                                              synchronize=nothing,
+                                                              electron_p=(nothing, (:z,), false),
+                                                              boundary_skip_funcs=(electron_pdf=skip_f_electron_bc_points_in_Jacobian_z_solve,
+                                                                                   electron_p=nothing))
 
-        @testset "ADI Jacobians - implicit z" begin
-            # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
-            jacobian_initialize_identity!(jacobian_ADI_check)
+            @testset "ADI Jacobians - implicit z" begin
+                # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
+                jacobian_initialize_identity!(jacobian_ADI_check)
 
-            v_size = vperp.n * vpa.n
+                v_size = vperp.n * vpa.n
 
-            @serial_region begin
-                # We are reusing z_solve_jacobian_ADI_check, so need to zero out its
-                # matrix.
-                jacobian_initialize_zero!(z_solve_jacobian_ADI_check)
+                @serial_region begin
+                    # We are reusing z_solve_jacobian_ADI_check, so need to zero out its
+                    # matrix.
+                    jacobian_initialize_zero!(z_solve_jacobian_ADI_check)
 
-                implicit_z_sub_terms = @views get_electron_sub_terms_z_only_Jacobian(
-                                                  dens, ddens_dz, upar, dupar_dz, p,
-                                                  dp_dz, dvth_dz, zeroth_moment,
-                                                  first_moment, second_moment,
-                                                  third_moment, dthird_moment_dz,
-                                                  dqpar_dz, ion_upar, f[1,1,:],
-                                                  dpdf_dz[1,1,:], dpdf_dvpa[1,1,:],
-                                                  d2pdf_dvpa2[1,1,:], me, moments,
-                                                  collisions, external_source_settings,
-                                                  num_diss_params, t_params, ion_dt, z,
-                                                  vperp, vpa, z_speed[:,1,1], ir, 1, 1)
-                implict_z_term = get_term(implicit_z_sub_terms)
-                add_term_to_Jacobian!(z_solve_jacobian_ADI_check, :electron_p, dt,
-                                      implict_z_term)
+                    implicit_z_sub_terms = @views get_electron_sub_terms_z_only_Jacobian(
+                                                      dens, ddens_dz, upar, dupar_dz, p,
+                                                      dp_dz, dvth_dz, zeroth_moment,
+                                                      first_moment, second_moment,
+                                                      third_moment, dthird_moment_dz,
+                                                      dqpar_dz, ion_upar, f[1,1,:],
+                                                      dpdf_dz[1,1,:], dpdf_dvpa[1,1,:],
+                                                      d2pdf_dvpa2[1,1,:], me, moments,
+                                                      collisions, external_source_settings,
+                                                      num_diss_params, t_params, ion_dt, z,
+                                                      vperp, vpa, z_speed[:,1,1], ir, 1, 1)
+                    implict_z_term = get_term(implicit_z_sub_terms)
+                    add_term_to_Jacobian!(z_solve_jacobian_ADI_check, :electron_p, dt,
+                                          implict_z_term)
 
-                @views jacobian_ADI_check.matrix[2][2] .+= z_solve_jacobian_ADI_check.matrix[1][1]
+                    @views jacobian_ADI_check.matrix[2][2] .+= z_solve_jacobian_ADI_check.matrix[1][1]
+                end
+                @_anyzv_subblock_synchronize()
+
+                # Add 'explicit' contribution
+                separate_zeroth_moment = (:zeroth_moment ∈ jacobian_ADI_check.state_vector_entries)
+                separate_first_moment = (:first_moment ∈ jacobian_ADI_check.state_vector_entries)
+                separate_second_moment = (:second_moment ∈ jacobian_ADI_check.state_vector_entries)
+                separate_third_moment = (:third_moment ∈ jacobian_ADI_check.state_vector_entries)
+                separate_dp_dz = (:electron_dp_dz ∈ jacobian_ADI_check.state_vector_entries)
+                separate_dq_dz = (:electron_dq_dz ∈ jacobian_ADI_check.state_vector_entries)
+                explicit_v_sub_terms = get_electron_sub_terms(
+                                           dens, ddens_dz, upar, dupar_dz, p, dp_dz, dvth_dz,
+                                           zeroth_moment, first_moment, second_moment,
+                                           third_moment, dthird_moment_dz, dqpar_dz, ion_upar,
+                                           f, dpdf_dz, dpdf_dvpa, d2pdf_dvpa2, me, moments,
+                                           collisions, composition, external_source_settings,
+                                           num_diss_params, t_params, ion_dt, z, vperp, vpa,
+                                           z_speed, vpa_speed, ir, separate_zeroth_moment,
+                                           separate_first_moment, separate_second_moment,
+                                           separate_third_moment, separate_dp_dz,
+                                           separate_dq_dz, :explicit_v)
+                explicit_v_term = get_term(explicit_v_sub_terms)
+                add_term_to_Jacobian!(jacobian_ADI_check, :electron_p, dt, explicit_v_term,
+                                      z_speed)
+
+                @begin_anyzv_region()
+                @anyzv_serial_region begin
+                    @test jacobian_isapprox(jacobian_ADI_check, jacobian; rtol=0.0,
+                                            atol=1.0e-15)
+                end
+                @_anyzv_subblock_synchronize()
             end
-            @_anyzv_subblock_synchronize()
 
-            # Add 'explicit' contribution
-            separate_zeroth_moment = (:zeroth_moment ∈ jacobian_ADI_check.state_vector_entries)
-            separate_first_moment = (:first_moment ∈ jacobian_ADI_check.state_vector_entries)
-            separate_second_moment = (:second_moment ∈ jacobian_ADI_check.state_vector_entries)
-            separate_third_moment = (:third_moment ∈ jacobian_ADI_check.state_vector_entries)
-            separate_dp_dz = (:electron_dp_dz ∈ jacobian_ADI_check.state_vector_entries)
-            separate_dq_dz = (:electron_dq_dz ∈ jacobian_ADI_check.state_vector_entries)
-            explicit_v_sub_terms = get_electron_sub_terms(
-                                       dens, ddens_dz, upar, dupar_dz, p, dp_dz, dvth_dz,
-                                       zeroth_moment, first_moment, second_moment,
-                                       third_moment, dthird_moment_dz, dqpar_dz, ion_upar,
-                                       f, dpdf_dz, dpdf_dvpa, d2pdf_dvpa2, me, moments,
-                                       collisions, composition, external_source_settings,
-                                       num_diss_params, t_params, ion_dt, z, vperp, vpa,
-                                       z_speed, vpa_speed, ir, separate_zeroth_moment,
-                                       separate_first_moment, separate_second_moment,
-                                       separate_third_moment, separate_dp_dz,
-                                       separate_dq_dz, :explicit_v)
-            explicit_v_term = get_term(explicit_v_sub_terms)
-            add_term_to_Jacobian!(jacobian_ADI_check, :electron_p, dt, explicit_v_term,
-                                  z_speed)
+            @testset "ADI Jacobians - implicit v" begin
+                # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
+                jacobian_initialize_identity!(jacobian_ADI_check)
 
-            @begin_anyzv_region()
-            @anyzv_serial_region begin
-                @test jacobian_isapprox(jacobian_ADI_check, jacobian; rtol=0.0,
-                                        atol=1.0e-15)
-            end
-            @_anyzv_subblock_synchronize()
-        end
+                v_size = vperp.n * vpa.n
 
-        @testset "ADI Jacobians - implicit v" begin
-            # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
-            jacobian_initialize_identity!(jacobian_ADI_check)
+                # Add 'implicit' contribution
+                @begin_anyzv_z_region()
+                @loop_z iz begin
+                    f_slice = (iz - 1)*v_size + 1:iz*v_size
+                    p_slice = iz:iz
 
-            v_size = vperp.n * vpa.n
+                    # We are reusing v_solve_jacobian_ADI_check, so need to zero out its
+                    # matrix.
+                    jacobian_initialize_zero!(v_solve_jacobian_ADI_check)
 
-            # Add 'implicit' contribution
-            @begin_anyzv_z_region()
-            @loop_z iz begin
-                f_slice = (iz - 1)*v_size + 1:iz*v_size
-                p_slice = iz:iz
+                    implicit_v_sub_terms, this_z_speed =
+                        get_electron_sub_terms_v_only_Jacobian(
+                            dens[iz], ddens_dz[iz], upar[iz], dupar_dz[iz], @view(p[iz]),
+                            dp_dz[iz], @view(dvth_dz[iz]), @view(zeroth_moment[iz]),
+                            @view(first_moment[iz]), @view(second_moment[iz]),
+                            @view(third_moment[iz]), dthird_moment_dz[iz],
+                            @view(dqpar_dz[iz]), ion_upar[iz], @view(f[:,:,iz]),
+                            @view(dpdf_dz[:,:,iz]), @view(dpdf_dvpa[:,:,iz]),
+                            @view(d2pdf_dvpa2[:,:,iz]), me, moments, collisions,
+                            external_source_settings, num_diss_params, t_params, ion_dt, z,
+                            vperp, vpa, @view(z_speed[iz,:,:]), @view(vpa_speed[:,:,iz]), ir,
+                            iz)
+                    implicit_v_term = get_term(implicit_v_sub_terms)
+                    add_term_to_Jacobian!(v_solve_jacobian_ADI_check, :electron_p, dt,
+                                          implicit_v_term, this_z_speed)
+                    adi_plus_equals!(jacobian_ADI_check, v_solve_jacobian_ADI_check, f_slice,
+                                     p_slice)
+                end
+                @_anyzv_subblock_synchronize()
 
-                # We are reusing v_solve_jacobian_ADI_check, so need to zero out its
-                # matrix.
-                jacobian_initialize_zero!(v_solve_jacobian_ADI_check)
+                # Add 'explicit' contribution
+                separate_zeroth_moment = (:zeroth_moment ∈ jacobian_ADI_check.state_vector_entries)
+                separate_first_moment = (:first_moment ∈ jacobian_ADI_check.state_vector_entries)
+                separate_second_moment = (:second_moment ∈ jacobian_ADI_check.state_vector_entries)
+                separate_third_moment = (:third_moment ∈ jacobian_ADI_check.state_vector_entries)
+                separate_dp_dz = (:electron_dp_dz ∈ jacobian_ADI_check.state_vector_entries)
+                separate_dq_dz = (:electron_dq_dz ∈ jacobian_ADI_check.state_vector_entries)
+                explicit_z_sub_terms = get_electron_sub_terms(
+                                           dens, ddens_dz, upar, dupar_dz, p, dp_dz, dvth_dz,
+                                           zeroth_moment, first_moment, second_moment,
+                                           third_moment, dthird_moment_dz, dqpar_dz, ion_upar,
+                                           f, dpdf_dz, dpdf_dvpa, d2pdf_dvpa2, me, moments,
+                                           collisions, composition, external_source_settings,
+                                           num_diss_params, t_params, ion_dt, z, vperp, vpa,
+                                           z_speed, vpa_speed, ir, separate_zeroth_moment,
+                                           separate_first_moment, separate_second_moment,
+                                           separate_third_moment, separate_dp_dz,
+                                           separate_dq_dz, :explicit_z)
+                explicit_z_term = get_term(explicit_z_sub_terms)
+                add_term_to_Jacobian!(jacobian_ADI_check, :electron_p, dt, explicit_z_term,
+                                      z_speed)
 
-                implicit_v_sub_terms, this_z_speed =
-                    get_electron_sub_terms_v_only_Jacobian(
-                        dens[iz], ddens_dz[iz], upar[iz], dupar_dz[iz], @view(p[iz]),
-                        dp_dz[iz], @view(dvth_dz[iz]), @view(zeroth_moment[iz]),
-                        @view(first_moment[iz]), @view(second_moment[iz]),
-                        @view(third_moment[iz]), dthird_moment_dz[iz],
-                        @view(dqpar_dz[iz]), ion_upar[iz], @view(f[:,:,iz]),
-                        @view(dpdf_dz[:,:,iz]), @view(dpdf_dvpa[:,:,iz]),
-                        @view(d2pdf_dvpa2[:,:,iz]), me, moments, collisions,
-                        external_source_settings, num_diss_params, t_params, ion_dt, z,
-                        vperp, vpa, @view(z_speed[iz,:,:]), @view(vpa_speed[:,:,iz]), ir,
-                        iz)
-                implicit_v_term = get_term(implicit_v_sub_terms)
-                add_term_to_Jacobian!(v_solve_jacobian_ADI_check, :electron_p, dt,
-                                      implicit_v_term, this_z_speed)
-                adi_plus_equals!(jacobian_ADI_check, v_solve_jacobian_ADI_check, f_slice,
-                                 p_slice)
-            end
-            @_anyzv_subblock_synchronize()
-
-            # Add 'explicit' contribution
-            separate_zeroth_moment = (:zeroth_moment ∈ jacobian_ADI_check.state_vector_entries)
-            separate_first_moment = (:first_moment ∈ jacobian_ADI_check.state_vector_entries)
-            separate_second_moment = (:second_moment ∈ jacobian_ADI_check.state_vector_entries)
-            separate_third_moment = (:third_moment ∈ jacobian_ADI_check.state_vector_entries)
-            separate_dp_dz = (:electron_dp_dz ∈ jacobian_ADI_check.state_vector_entries)
-            separate_dq_dz = (:electron_dq_dz ∈ jacobian_ADI_check.state_vector_entries)
-            explicit_z_sub_terms = get_electron_sub_terms(
-                                       dens, ddens_dz, upar, dupar_dz, p, dp_dz, dvth_dz,
-                                       zeroth_moment, first_moment, second_moment,
-                                       third_moment, dthird_moment_dz, dqpar_dz, ion_upar,
-                                       f, dpdf_dz, dpdf_dvpa, d2pdf_dvpa2, me, moments,
-                                       collisions, composition, external_source_settings,
-                                       num_diss_params, t_params, ion_dt, z, vperp, vpa,
-                                       z_speed, vpa_speed, ir, separate_zeroth_moment,
-                                       separate_first_moment, separate_second_moment,
-                                       separate_third_moment, separate_dp_dz,
-                                       separate_dq_dz, :explicit_z)
-            explicit_z_term = get_term(explicit_z_sub_terms)
-            add_term_to_Jacobian!(jacobian_ADI_check, :electron_p, dt, explicit_z_term,
-                                  z_speed)
-
-            @begin_anyzv_region()
-            @anyzv_serial_region begin
-                @test jacobian_isapprox(jacobian_ADI_check, jacobian; rtol=0.0,
-                                        atol=1.0e-15*max(abs.(jacobian_extrema(jacobian))...))
+                @begin_anyzv_region()
+                @anyzv_serial_region begin
+                    @test jacobian_isapprox(jacobian_ADI_check, jacobian; rtol=0.0,
+                                            atol=1.0e-15*max(abs.(jacobian_extrema(jacobian))...))
+                end
             end
         end
 
@@ -1346,15 +1337,7 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
                                                 vperp, vpa)
         end
 
-        jacobian = create_jacobian_info((; vpa=vpa, vperp=vperp, z=z),
-                                        (; vpa=vpa_spectral, vperp=vperp_spectral,
-                                         z=z_spectral);
-                                        comm=comm_anyzv_subblock[],
-                                        synchronize=_anyzv_subblock_synchronize,
-                                        electron_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z), false),
-                                        electron_p=((:anyzv,:z), (:z,), false),
-                                        boundary_skip_funcs=(electron_pdf=skip_f_electron_bc_points_in_Jacobian,
-                                                             electron_p=nothing))
+        jacobian = nl_solver_params.electron_advance.preconditioners[1][2]
 
         # Calculate jacobian later, so that we can use `jacobian` as a temporary buffer,
         # to avoid allocating too much shared memory for the Github Actions CI servers.
@@ -1364,170 +1347,179 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
         #    scratch_dummy, external_source_settings, num_diss_params,
         #    t_params.electron, ion_dt, ir, true)
 
-        # Test 'ADI Jacobians' before other tests, because residual_func() may modify some
-        # variables (vth, etc.).
+        if test_input["timestepping"]["kinetic_electron_preconditioner"] == "lu_no_separate_moments"
+            # ADI only (currently?) supported for "lu_no_separate_moments".
+            # Test 'ADI Jacobians' before other tests, because residual_func() may modify some
+            # variables (vth, etc.).
 
-        jacobian_ADI_check = create_jacobian_info((; vpa=vpa, vperp=vperp, z=z),
-                                                  (; vpa=vpa_spectral,
-                                                   vperp=vperp_spectral, z=z_spectral);
-                                                  comm=comm_anyzv_subblock[],
-                                                  synchronize=_anyzv_subblock_synchronize,
-                                                  electron_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z), false),
-                                                  electron_p=((:anyzv,:z), (:z,), false),
-                                                  boundary_skip_funcs=(electron_pdf=skip_f_electron_bc_points_in_Jacobian,
-                                                                       electron_p=nothing))
-        v_solve_jacobian_ADI_check = create_jacobian_info((; vpa=vpa, vperp=vperp),
-                                                          (; vpa=vpa_spectral,
-                                                           vperp=vperp_spectral);
-                                                          comm=nothing,
-                                                          synchronize=nothing,
-                                                          electron_pdf=(nothing, (:vpa, :vperp), false),
-                                                          electron_p=(nothing, (), false),
-                                                          boundary_skip_funcs=(electron_pdf=skip_f_electron_bc_points_in_Jacobian_v_solve,
-                                                                               electron_p=nothing))
-        z_solve_jacobian_ADI_check = create_jacobian_info((; z=z),
-                                                          (; z=z_spectral);
-                                                          comm=nothing,
-                                                          synchronize=nothing,
-                                                          electron_pdf=(nothing, (:z,), false),
-                                                          boundary_skip_funcs=(electron_pdf=skip_f_electron_bc_points_in_Jacobian_z_solve,
-                                                                               electron_p=nothing))
+            jacobian_ADI_check = create_jacobian_info((; vpa=vpa, vperp=vperp, z=z),
+                                                      (; vpa=vpa_spectral,
+                                                       vperp=vperp_spectral, z=z_spectral);
+                                                      comm=comm_anyzv_subblock[],
+                                                      synchronize=_anyzv_subblock_synchronize,
+                                                      electron_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z), false),
+                                                      electron_p=((:anyzv,:z), (:z,), false),
+                                                      boundary_skip_funcs=(electron_pdf=skip_f_electron_bc_points_in_Jacobian,
+                                                                           electron_p=nothing))
+            v_solve_jacobian_ADI_check = create_jacobian_info((; vpa=vpa, vperp=vperp),
+                                                              (; vpa=vpa_spectral,
+                                                               vperp=vperp_spectral);
+                                                              comm=nothing,
+                                                              synchronize=nothing,
+                                                              electron_pdf=(nothing, (:vpa, :vperp), false),
+                                                              electron_p=(nothing, (), false),
+                                                              boundary_skip_funcs=(electron_pdf=skip_f_electron_bc_points_in_Jacobian_v_solve,
+                                                                                   electron_p=nothing))
+            z_solve_jacobian_ADI_check = create_jacobian_info((; z=z),
+                                                              (; z=z_spectral);
+                                                              comm=nothing,
+                                                              synchronize=nothing,
+                                                              electron_pdf=(nothing, (:z,), false),
+                                                              boundary_skip_funcs=(electron_pdf=skip_f_electron_bc_points_in_Jacobian_z_solve,
+                                                                                   electron_p=nothing))
 
-        z_solve_p_jacobian_ADI_check = create_jacobian_info((; z=z),
-                                                            (; z=z_spectral);
-                                                            comm=nothing,
-                                                            synchronize=nothing,
-                                                            electron_p=(nothing, (:z,), false),
-                                                            boundary_skip_funcs=(electron_pdf=skip_f_electron_bc_points_in_Jacobian_z_solve,
-                                                                                 electron_p=nothing))
+            z_solve_p_jacobian_ADI_check = create_jacobian_info((; z=z),
+                                                                (; z=z_spectral);
+                                                                comm=nothing,
+                                                                synchronize=nothing,
+                                                                electron_p=(nothing, (:z,), false),
+                                                                boundary_skip_funcs=(electron_pdf=skip_f_electron_bc_points_in_Jacobian_z_solve,
+                                                                                     electron_p=nothing))
 
-        @testset "ADI Jacobians - implicit z" begin
-            # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
-            jacobian_initialize_zero!(jacobian_ADI_check)
+            @testset "ADI Jacobians - implicit z" begin
+                # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
+                jacobian_initialize_zero!(jacobian_ADI_check)
 
-            v_size = vperp.n * vpa.n
+                v_size = vperp.n * vpa.n
 
-            # Add 'implicit' contribution
-            @begin_anyzv_vperp_vpa_region()
-            @loop_vperp_vpa ivperp ivpa begin
-                this_slice = (ivperp - 1)*vpa.n + ivpa:v_size:(z.n - 1)*v_size + (ivperp - 1)*vpa.n + ivpa
-                @views fill_electron_kinetic_equation_z_only_Jacobian_f!(
-                    z_solve_jacobian_ADI_check, f[ivpa,ivperp,:], p,
-                    dpdf_dz[ivpa,ivperp,:], dpdf_dvpa[ivpa,ivperp,:],
-                    d2pdf_dvpa2[ivpa,ivperp,:], z_speed[:,ivpa,ivperp], moments,
-                    zeroth_moment, first_moment, second_moment, third_moment,
-                    dthird_moment_dz, collisions, composition, z, vperp, vpa, z_spectral,
-                    vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
-                    external_source_settings, num_diss_params, t_params.electron, ion_dt,
-                    ir, ivperp, ivpa)
-
-                @views jacobian_ADI_check.matrix[1][1][this_slice,this_slice] .+= z_solve_jacobian_ADI_check.matrix[1][1]
-            end
-
-            @begin_anyzv_region()
-            @anyzv_serial_region begin
                 # Add 'implicit' contribution
-                @views fill_electron_kinetic_equation_z_only_Jacobian_p!(
-                    z_solve_p_jacobian_ADI_check, p, f[1,1,:], dpdf_dz[1,1,:],
-                    dpdf_dvpa[1,1,:], d2pdf_dvpa2[1,1,:], z_speed[:,1,1], moments,
-                    zeroth_moment, first_moment, second_moment, third_moment,
-                    dthird_moment_dz, collisions, composition, z, vperp, vpa, z_spectral,
-                    vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
-                    external_source_settings, num_diss_params, t_params.electron, ion_dt,
-                    ir, true)
+                @begin_anyzv_vperp_vpa_region()
+                @loop_vperp_vpa ivperp ivpa begin
+                    this_slice = (ivperp - 1)*vpa.n + ivpa:v_size:(z.n - 1)*v_size + (ivperp - 1)*vpa.n + ivpa
+                    @views fill_electron_kinetic_equation_z_only_Jacobian_f!(
+                        z_solve_jacobian_ADI_check, f[ivpa,ivperp,:], p,
+                        dpdf_dz[ivpa,ivperp,:], dpdf_dvpa[ivpa,ivperp,:],
+                        d2pdf_dvpa2[ivpa,ivperp,:], z_speed[:,ivpa,ivperp], moments,
+                        zeroth_moment, first_moment, second_moment, third_moment,
+                        dthird_moment_dz, collisions, composition, z, vperp, vpa, z_spectral,
+                        vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
+                        external_source_settings, num_diss_params, t_params.electron, ion_dt,
+                        ir, ivperp, ivpa)
+
+                    @views jacobian_ADI_check.matrix[1][1][this_slice,this_slice] .+= z_solve_jacobian_ADI_check.matrix[1][1]
+                end
+
                 @begin_anyzv_region()
-                @views jacobian_ADI_check.matrix[2][2] .+= z_solve_p_jacobian_ADI_check.matrix[1][1]
-            end
-            @_anyzv_subblock_synchronize()
+                @anyzv_serial_region begin
+                    # Add 'implicit' contribution
+                    @views fill_electron_kinetic_equation_z_only_Jacobian_p!(
+                        z_solve_p_jacobian_ADI_check, p, f[1,1,:], dpdf_dz[1,1,:],
+                        dpdf_dvpa[1,1,:], d2pdf_dvpa2[1,1,:], z_speed[:,1,1], moments,
+                        zeroth_moment, first_moment, second_moment, third_moment,
+                        dthird_moment_dz, collisions, composition, z, vperp, vpa, z_spectral,
+                        vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
+                        external_source_settings, num_diss_params, t_params.electron, ion_dt,
+                        ir, true)
+                    @begin_anyzv_region()
+                    @views jacobian_ADI_check.matrix[2][2] .+= z_solve_p_jacobian_ADI_check.matrix[1][1]
+                end
+                @_anyzv_subblock_synchronize()
 
-            # Add 'explicit' contribution
-            # Use jacobian as a temporary buffer here.
-            fill_electron_kinetic_equation_Jacobian!(
-                jacobian, f, p, moments, phi, collisions, composition, z, vperp, vpa,
-                z_spectral, vperp_spectral, vpa_spectral, z_advect, vpa_advect,
-                scratch_dummy, external_source_settings, num_diss_params,
-                t_params.electron, ion_dt, ir, true, :explicit_v)
-            @begin_anyzv_region()
-            @anyzv_serial_region begin
-                adi_plus_equals!(jacobian_ADI_check, jacobian, :, :)
-            end
-            @_anyzv_subblock_synchronize()
+                # Add 'explicit' contribution
+                # Use jacobian as a temporary buffer here.
+                fill_electron_kinetic_equation_Jacobian!(
+                    jacobian, f, p, moments, phi, collisions, composition, z, vperp, vpa,
+                    z_spectral, vperp_spectral, vpa_spectral, z_advect, vpa_advect,
+                    scratch_dummy, external_source_settings, num_diss_params,
+                    t_params.electron, ion_dt, ir, true, :explicit_v)
+                @begin_anyzv_region()
+                @anyzv_serial_region begin
+                    adi_plus_equals!(jacobian_ADI_check, jacobian, :, :)
+                end
+                @_anyzv_subblock_synchronize()
 
+                fill_electron_kinetic_equation_Jacobian!(
+                    jacobian, f, p, moments, phi, collisions, composition, z, vperp, vpa,
+                    z_spectral, vperp_spectral, vpa_spectral, z_advect, vpa_advect,
+                    scratch_dummy, external_source_settings, num_diss_params,
+                    t_params.electron, ion_dt, ir, true)
+
+                @begin_anyzv_region()
+                @anyzv_serial_region begin
+                    # The settings for this test are a bit strange, due to trying to get the
+                    # finite-difference approximation to the Jacobian to agree with the
+                    # Jacobian matrix functions without being too messed up by floating-point
+                    # rounding errors. The result is that some entries in the Jacobian matrix
+                    # here are O(1.0e5), so it is important to use `rtol` here.
+                    @test jacobian_isapprox(jacobian_ADI_check, jacobian; rtol=adi_tol,
+                                            atol=1.0e-15)
+                end
+                @_anyzv_subblock_synchronize()
+            end
+
+            @testset "ADI Jacobians - implicit v" begin
+                # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
+                jacobian_initialize_zero!(jacobian_ADI_check)
+
+                v_size = vperp.n * vpa.n
+
+                # Add 'implicit' contribution
+                @begin_anyzv_z_region()
+                @loop_z iz begin
+                    f_slice = (iz - 1)*v_size + 1:iz*v_size
+                    p_slice = iz:iz
+                    fill_electron_kinetic_equation_v_only_Jacobian!(
+                        v_solve_jacobian_ADI_check, @view(f[:,:,iz]), @view(p[iz]),
+                        @view(dpdf_dz[:,:,iz]), @view(dpdf_dvpa[:,:,iz]),
+                        @view(d2pdf_dvpa2[:,:,iz]), @view(z_speed[iz,:,:]),
+                        @view(vpa_speed[:,:,iz]), moments, @view(zeroth_moment[iz]),
+                        @view(first_moment[iz]), @view(second_moment[iz]),
+                        @view(third_moment[iz]), dthird_moment_dz[iz], phi[iz], collisions,
+                        composition, z, vperp, vpa, z_spectral, vperp_spectral, vpa_spectral,
+                        z_advect, vpa_advect, scratch_dummy, external_source_settings,
+                        num_diss_params, t_params.electron, ion_dt, ir, iz, true)
+                    adi_plus_equals!(jacobian_ADI_check, v_solve_jacobian_ADI_check, f_slice,
+                                     p_slice)
+                end
+                @_anyzv_subblock_synchronize()
+
+                # Add 'explicit' contribution
+                # Use jacobian as a temporary buffer here.
+                fill_electron_kinetic_equation_Jacobian!(
+                    jacobian, f, p, moments, phi, collisions, composition, z, vperp, vpa,
+                    z_spectral, vperp_spectral, vpa_spectral, z_advect, vpa_advect,
+                    scratch_dummy, external_source_settings, num_diss_params,
+                    t_params.electron, ion_dt, ir, true, :explicit_z)
+
+                @begin_anyzv_region()
+                @anyzv_serial_region begin
+                    adi_plus_equals!(jacobian_ADI_check, jacobian, :, :)
+                end
+                @_anyzv_subblock_synchronize()
+
+                fill_electron_kinetic_equation_Jacobian!(
+                    jacobian, f, p, moments, phi, collisions, composition, z, vperp, vpa,
+                    z_spectral, vperp_spectral, vpa_spectral, z_advect, vpa_advect,
+                    scratch_dummy, external_source_settings, num_diss_params,
+                    t_params.electron, ion_dt, ir, true)
+
+                @begin_anyzv_region()
+                @anyzv_serial_region begin
+                    # The settings for this test are a bit strange, due to trying to get the
+                    # finite-difference approximation to the Jacobian to agree with the
+                    # Jacobian matrix functions without being too messed up by floating-point
+                    # rounding errors. The result is that some entries in the Jacobian matrix
+                    # here are O(1.0e5), so it is important to use `rtol` here.
+                    @test jacobian_isapprox(jacobian_ADI_check, jacobian; rtol=10.0*adi_tol,
+                                            atol=1.0e-13)
+                end
+            end
+        else
             fill_electron_kinetic_equation_Jacobian!(
                 jacobian, f, p, moments, phi, collisions, composition, z, vperp, vpa,
                 z_spectral, vperp_spectral, vpa_spectral, z_advect, vpa_advect,
                 scratch_dummy, external_source_settings, num_diss_params,
                 t_params.electron, ion_dt, ir, true)
-
-            @begin_anyzv_region()
-            @anyzv_serial_region begin
-                # The settings for this test are a bit strange, due to trying to get the
-                # finite-difference approximation to the Jacobian to agree with the
-                # Jacobian matrix functions without being too messed up by floating-point
-                # rounding errors. The result is that some entries in the Jacobian matrix
-                # here are O(1.0e5), so it is important to use `rtol` here.
-                @test jacobian_isapprox(jacobian_ADI_check, jacobian; rtol=adi_tol,
-                                        atol=1.0e-15)
-            end
-            @_anyzv_subblock_synchronize()
-        end
-
-        @testset "ADI Jacobians - implicit v" begin
-            # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
-            jacobian_initialize_zero!(jacobian_ADI_check)
-
-            v_size = vperp.n * vpa.n
-
-            # Add 'implicit' contribution
-            @begin_anyzv_z_region()
-            @loop_z iz begin
-                f_slice = (iz - 1)*v_size + 1:iz*v_size
-                p_slice = iz:iz
-                fill_electron_kinetic_equation_v_only_Jacobian!(
-                    v_solve_jacobian_ADI_check, @view(f[:,:,iz]), @view(p[iz]),
-                    @view(dpdf_dz[:,:,iz]), @view(dpdf_dvpa[:,:,iz]),
-                    @view(d2pdf_dvpa2[:,:,iz]), @view(z_speed[iz,:,:]),
-                    @view(vpa_speed[:,:,iz]), moments, @view(zeroth_moment[iz]),
-                    @view(first_moment[iz]), @view(second_moment[iz]),
-                    @view(third_moment[iz]), dthird_moment_dz[iz], phi[iz], collisions,
-                    composition, z, vperp, vpa, z_spectral, vperp_spectral, vpa_spectral,
-                    z_advect, vpa_advect, scratch_dummy, external_source_settings,
-                    num_diss_params, t_params.electron, ion_dt, ir, iz, true)
-                adi_plus_equals!(jacobian_ADI_check, v_solve_jacobian_ADI_check, f_slice,
-                                 p_slice)
-            end
-            @_anyzv_subblock_synchronize()
-
-            # Add 'explicit' contribution
-            # Use jacobian as a temporary buffer here.
-            fill_electron_kinetic_equation_Jacobian!(
-                jacobian, f, p, moments, phi, collisions, composition, z, vperp, vpa,
-                z_spectral, vperp_spectral, vpa_spectral, z_advect, vpa_advect,
-                scratch_dummy, external_source_settings, num_diss_params,
-                t_params.electron, ion_dt, ir, true, :explicit_z)
-
-            @begin_anyzv_region()
-            @anyzv_serial_region begin
-                adi_plus_equals!(jacobian_ADI_check, jacobian, :, :)
-            end
-            @_anyzv_subblock_synchronize()
-
-            fill_electron_kinetic_equation_Jacobian!(
-                jacobian, f, p, moments, phi, collisions, composition, z, vperp, vpa,
-                z_spectral, vperp_spectral, vpa_spectral, z_advect, vpa_advect,
-                scratch_dummy, external_source_settings, num_diss_params,
-                t_params.electron, ion_dt, ir, true)
-
-            @begin_anyzv_region()
-            @anyzv_serial_region begin
-                # The settings for this test are a bit strange, due to trying to get the
-                # finite-difference approximation to the Jacobian to agree with the
-                # Jacobian matrix functions without being too messed up by floating-point
-                # rounding errors. The result is that some entries in the Jacobian matrix
-                # here are O(1.0e5), so it is important to use `rtol` here.
-                @test jacobian_isapprox(jacobian_ADI_check, jacobian; rtol=10.0*adi_tol,
-                                        atol=1.0e-13)
-            end
         end
 
         function residual_func!(residual_f, residual_p, this_f, this_p)
@@ -1810,15 +1802,7 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2)
                                vpa_advect[1].adv_fac[:,ivperp,iz,ir], vpa_spectral)
         end
 
-        jacobian = create_jacobian_info((; vpa=vpa, vperp=vperp, z=z),
-                                        (; vpa=vpa_spectral, vperp=vperp_spectral,
-                                         z=z_spectral);
-                                        comm=comm_anyzv_subblock[],
-                                        synchronize=_anyzv_subblock_synchronize,
-                                        electron_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z), false),
-                                        electron_p=((:anyzv,:z), (:z,), false),
-                                        boundary_skip_funcs=(electron_pdf=skip_f_electron_bc_points_in_Jacobian,
-                                                             electron_p=nothing))
+        jacobian = nl_solver_params.electron_advance.preconditioners[1][2]
         jacobian_initialize_identity!(jacobian)
 
         add_wall_boundary_condition_to_Jacobian!(
@@ -1826,84 +1810,87 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2)
             vpa_advect, moments, num_diss_params.electron.vpa_dissipation_coefficient, me,
             ir, :all)
 
-        # Test 'ADI Jacobians' before other tests, because residual_func() may modify some
-        # variables (vth, etc.).
+        if test_input["timestepping"]["kinetic_electron_preconditioner"] == "lu_no_separate_moments"
+            # ADI only (currently?) supported for "lu_no_separate_moments".
+            # Test 'ADI Jacobians' before other tests, because residual_func() may modify some
+            # variables (vth, etc.).
 
-        jacobian_ADI_check = create_jacobian_info((; vpa=vpa, vperp=vperp, z=z),
-                                                  (; vpa=vpa_spectral,
-                                                   vperp=vperp_spectral, z=z_spectral);
-                                                  comm=comm_anyzv_subblock[],
-                                                  synchronize=_anyzv_subblock_synchronize,
-                                                  electron_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z), false),
-                                                  electron_p=((:anyzv,:z), (:z,), false),
-                                                  boundary_skip_funcs=(electron_pdf=skip_f_electron_bc_points_in_Jacobian,
-                                                                       electron_p=nothing))
-        v_solve_jacobian_ADI_check = create_jacobian_info((; vpa=vpa, vperp=vperp),
-                                                          (; vpa=vpa_spectral,
-                                                           vperp=vperp_spectral);
-                                                          comm=nothing,
-                                                          synchronize=nothing,
-                                                          electron_pdf=(nothing, (:vpa, :vperp), false),
-                                                          electron_p=(nothing, (), false),
-                                                          boundary_skip_funcs=(electron_pdf=skip_f_electron_bc_points_in_Jacobian_v_solve,
-                                                                               electron_p=nothing))
+            jacobian_ADI_check = create_jacobian_info((; vpa=vpa, vperp=vperp, z=z),
+                                                      (; vpa=vpa_spectral,
+                                                       vperp=vperp_spectral, z=z_spectral);
+                                                      comm=comm_anyzv_subblock[],
+                                                      synchronize=_anyzv_subblock_synchronize,
+                                                      electron_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z), false),
+                                                      electron_p=((:anyzv,:z), (:z,), false),
+                                                      boundary_skip_funcs=(electron_pdf=skip_f_electron_bc_points_in_Jacobian,
+                                                                           electron_p=nothing))
+            v_solve_jacobian_ADI_check = create_jacobian_info((; vpa=vpa, vperp=vperp),
+                                                              (; vpa=vpa_spectral,
+                                                               vperp=vperp_spectral);
+                                                              comm=nothing,
+                                                              synchronize=nothing,
+                                                              electron_pdf=(nothing, (:vpa, :vperp), false),
+                                                              electron_p=(nothing, (), false),
+                                                              boundary_skip_funcs=(electron_pdf=skip_f_electron_bc_points_in_Jacobian_v_solve,
+                                                                                   electron_p=nothing))
 
-        @testset "ADI Jacobians - implicit z" begin
-            # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
-            jacobian_initialize_identity!(jacobian_ADI_check)
+            @testset "ADI Jacobians - implicit z" begin
+                # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
+                jacobian_initialize_identity!(jacobian_ADI_check)
 
-            # There is no 'implicit z' contribution for wall bc
+                # There is no 'implicit z' contribution for wall bc
 
-            # Add 'explicit' contribution
-            add_wall_boundary_condition_to_Jacobian!(
-                jacobian_ADI_check, phi, f, p, vth, upar, z, vperp, vpa, vperp_spectral,
-                vpa_spectral, vpa_advect, moments,
-                num_diss_params.electron.vpa_dissipation_coefficient, me, ir, :explicit_v)
-            @_anyzv_subblock_synchronize()
+                # Add 'explicit' contribution
+                add_wall_boundary_condition_to_Jacobian!(
+                    jacobian_ADI_check, phi, f, p, vth, upar, z, vperp, vpa, vperp_spectral,
+                    vpa_spectral, vpa_advect, moments,
+                    num_diss_params.electron.vpa_dissipation_coefficient, me, ir, :explicit_v)
+                @_anyzv_subblock_synchronize()
 
-            @begin_anyzv_region()
-            @anyzv_serial_region begin
-                @test jacobian_isapprox(jacobian_ADI_check, jacobian; rtol=0.0, atol=1.0e-15)
+                @begin_anyzv_region()
+                @anyzv_serial_region begin
+                    @test jacobian_isapprox(jacobian_ADI_check, jacobian; rtol=0.0, atol=1.0e-15)
+                end
+                @_anyzv_subblock_synchronize()
             end
-            @_anyzv_subblock_synchronize()
-        end
 
-        @testset "ADI Jacobians - implicit v" begin
-            # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
-            jacobian_initialize_identity!(jacobian_ADI_check)
+            @testset "ADI Jacobians - implicit v" begin
+                # 'Implicit' and 'explicit' parts of Jacobian should add up to full Jacobian.
+                jacobian_initialize_identity!(jacobian_ADI_check)
 
-            v_size = vperp.n * vpa.n
+                v_size = vperp.n * vpa.n
 
-            # Add 'implicit' contribution
-            @begin_anyzv_z_region()
-            @loop_z iz begin
-                f_slice = (iz - 1)*v_size + 1:iz*v_size
-                p_slice = iz:iz
+                # Add 'implicit' contribution
+                @begin_anyzv_z_region()
+                @loop_z iz begin
+                    f_slice = (iz - 1)*v_size + 1:iz*v_size
+                    p_slice = iz:iz
 
-                # We are reusing v_solve_jacobian_ADI_check, so need to zero out its
-                # matrix.
-                jacobian_initialize_zero!(v_solve_jacobian_ADI_check)
+                    # We are reusing v_solve_jacobian_ADI_check, so need to zero out its
+                    # matrix.
+                    jacobian_initialize_zero!(v_solve_jacobian_ADI_check)
 
-                @views add_wall_boundary_condition_to_Jacobian!(
-                    v_solve_jacobian_ADI_check, phi[iz], f[:,:,iz], p[iz], vth[iz],
-                    upar[iz], z, vperp, vpa, vperp_spectral, vpa_spectral, vpa_advect,
-                    moments, num_diss_params.electron.vpa_dissipation_coefficient, me, ir,
-                    :implicit_v, iz)
-                adi_plus_equals!(jacobian_ADI_check, v_solve_jacobian_ADI_check, f_slice,
-                                 p_slice)
-            end
-            @_anyzv_subblock_synchronize()
+                    @views add_wall_boundary_condition_to_Jacobian!(
+                        v_solve_jacobian_ADI_check, phi[iz], f[:,:,iz], p[iz], vth[iz],
+                        upar[iz], z, vperp, vpa, vperp_spectral, vpa_spectral, vpa_advect,
+                        moments, num_diss_params.electron.vpa_dissipation_coefficient, me, ir,
+                        :implicit_v, iz)
+                    adi_plus_equals!(jacobian_ADI_check, v_solve_jacobian_ADI_check, f_slice,
+                                     p_slice)
+                end
+                @_anyzv_subblock_synchronize()
 
-            # Add 'explicit' contribution
-            add_wall_boundary_condition_to_Jacobian!(
-                jacobian_ADI_check, phi, f, p, vth, upar, z, vperp, vpa, vperp_spectral,
-                vpa_spectral, vpa_advect, moments,
-                num_diss_params.electron.vpa_dissipation_coefficient, me, ir, :explicit_z)
-            @_anyzv_subblock_synchronize()
+                # Add 'explicit' contribution
+                add_wall_boundary_condition_to_Jacobian!(
+                    jacobian_ADI_check, phi, f, p, vth, upar, z, vperp, vpa, vperp_spectral,
+                    vpa_spectral, vpa_advect, moments,
+                    num_diss_params.electron.vpa_dissipation_coefficient, me, ir, :explicit_z)
+                @_anyzv_subblock_synchronize()
 
-            @begin_anyzv_region()
-            @anyzv_serial_region begin
-                @test jacobian_isapprox(jacobian_ADI_check, jacobian; rtol=0.0, atol=1.0e-15)
+                @begin_anyzv_region()
+                @anyzv_serial_region begin
+                    @test jacobian_isapprox(jacobian_ADI_check, jacobian; rtol=0.0, atol=1.0e-15)
+                end
             end
         end
 
@@ -2095,8 +2082,11 @@ function runtests()
     test_output_directory = get_MPI_tempdir()
     test_input["output"]["base_directory"] = test_output_directory
 
-    @testset "Jacobian matrix" verbose=use_verbose begin
-        println("Jacobian matrix")
+    @testset "Jacobian matrix ($kinetic_electron_preconditioner)" verbose=use_verbose for kinetic_electron_preconditioner ∈ ("lu_no_separate_moments", "lu_separate_third_moment", "lu", "lu_separate_dp_dz_dq_dz")
+        println("Jacobian matrix ($kinetic_electron_preconditioner)")
+
+        this_test_input = deepcopy(test_input)
+        this_test_input["timestepping"]["kinetic_electron_preconditioner"] = kinetic_electron_preconditioner
 
         # Quite large multipliers for rtol in these tests, but it is plausible that a
         # nonlinear error (∼epsilon^2) could be multiplied by
@@ -2109,7 +2099,7 @@ function runtests()
                                   kwargs[:scratch_dummy], kwargs[:dt], kwargs[:ir])
             return nothing
         end
-        test_get_pdf_term(test_input, "electron_z_advection",
+        test_get_pdf_term(this_test_input, "electron_z_advection",
                           get_electron_z_advection_term, z_advection_wrapper!,
                           (2.5e2*epsilon)^2)
 
@@ -2123,7 +2113,7 @@ function runtests()
                                     kwargs[:ir])
             return nothing
         end
-        test_get_pdf_term(test_input, "electron_vpa_advection",
+        test_get_pdf_term(this_test_input, "electron_vpa_advection",
                           get_electron_vpa_advection_term, vpa_advection_wrapper!,
                           (3.0e2*epsilon)^2)
 
@@ -2136,7 +2126,7 @@ function runtests()
                                             kwargs[:ir])
             return nothing
         end
-        test_get_pdf_term(test_input, "contribution_from_electron_pdf_term",
+        test_get_pdf_term(this_test_input, "contribution_from_electron_pdf_term",
                           get_contribution_from_electron_pdf_term,
                           contribution_from_electron_pdf_term_wrapper!, (4.0e2*epsilon)^2)
 
@@ -2147,7 +2137,7 @@ function runtests()
                                   kwargs[:num_diss_params], kwargs[:dt])
             return nothing
         end
-        test_get_pdf_term(test_input, "electron_dissipation_term",
+        test_get_pdf_term(this_test_input, "electron_dissipation_term",
                           get_electron_dissipation_term,
                           contribution_from_electron_dissipation_term!, (1.0e1*epsilon)^2)
 
@@ -2158,7 +2148,7 @@ function runtests()
                                        kwargs[:dt])
             return nothing
         end
-        test_get_pdf_term(test_input, "electron_krook_collisions",
+        test_get_pdf_term(this_test_input, "electron_krook_collisions",
                           get_electron_krook_collisions_term,
                           contribution_from_krook_collisions!, (2.0e1*epsilon)^2)
 
@@ -2171,7 +2161,7 @@ function runtests()
                                              kwargs[:ir])
             return nothing
         end
-        test_get_pdf_term(test_input, "external_electron_sources",
+        test_get_pdf_term(this_test_input, "external_electron_sources",
                           get_total_external_electron_source_term,
                           contribution_from_external_electron_sources!, (3.0e1*epsilon)^2)
 
@@ -2204,7 +2194,7 @@ function runtests()
                                                   kwargs[:dt], kwargs[:ir])
             return nothing
         end
-        test_get_pdf_term(test_input, "implicit_constraint_forcing",
+        test_get_pdf_term(this_test_input, "implicit_constraint_forcing",
                           get_electron_implicit_constraint_forcing_term,
                           contribution_from_implicit_constraint_forcing!, (2.5e0*epsilon))
 
@@ -2219,7 +2209,7 @@ function runtests()
                 kwargs[:z], kwargs[:ir])
             return nothing
         end
-        test_get_p_term(test_input, "electron_energy_equation",
+        test_get_p_term(this_test_input, "electron_energy_equation",
                         get_electron_energy_equation_term,
                         contribution_from_electron_energy_equation!, (6.0e2*epsilon)^2)
 
@@ -2241,14 +2231,14 @@ function runtests()
             end
             return nothing
         end
-        test_get_p_term(test_input, "ion_dt_forcing_of_electron_p",
+        test_get_p_term(this_test_input, "ion_dt_forcing_of_electron_p",
                         get_ion_dt_forcing_of_electron_p_term,
                         contribution_from_ion_dt_forcing_of_electron_p!,
                         (1.5e1*epsilon)^2)
 
-        test_electron_wall_bc(test_input)
+        test_electron_wall_bc(this_test_input)
 
-        test_electron_kinetic_equation(test_input)
+        test_electron_kinetic_equation(this_test_input)
     end
 
     if global_rank[] == 0
