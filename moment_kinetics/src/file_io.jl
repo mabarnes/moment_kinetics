@@ -400,7 +400,7 @@ Test if the backend supports parallel I/O.
 """
 function io_has_parallel end
 
-function io_has_implementation(binary_format)
+function io_has_implementation(::Val)
     # This method will be overridden by more specific versions (some only if an extension
     # is loaded).
     return false
