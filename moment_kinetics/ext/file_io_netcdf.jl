@@ -24,6 +24,7 @@ end
 
 function open_output_file_implementation(::Val{netcdf}, prefix, io_input, io_comm,
                                          mode="c")
+println("\n\n************************************************\nOpening NetCDF\n**********************************************************\n\n")
     io_input.parallel_io && error("NetCDF interface does not support parallel I/O")
 
     # the netcdf file will be given by output_dir/run_name with .cdf appended
