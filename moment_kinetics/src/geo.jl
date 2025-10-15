@@ -286,7 +286,7 @@ function init_magnetic_geometry(geometry_input_data::geometry_input,z,r,z_spectr
         if option == "1D-mirror-MAST-edge"
             a0, a2, a4, a6, a8 = 0.32884641, -0.4199673, 3.1528366, -6.3052343, 4.0532678
         elseif option == "1D-mirror-STEP-edge-rough"
-            a0, a2, a4, a6, a8 = 1.2, 7.2, 2.8, -27.6, 17.2
+            a0, a2, a4, a6, a8 = 0.6, 3.6, 1.4, -13.8, 8.6
         end
         
         pitch = geometry_input_data.pitch
