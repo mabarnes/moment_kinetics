@@ -11,11 +11,19 @@ using moment_kinetics.looping
 using moment_kinetics.moment_kinetics_structs
 using moment_kinetics.type_definitions: mk_int, mk_float
 
-import moment_kinetics.manufactured_solns: manufactured_solutions, manufactured_sources_setup,
-                                           manufactured_electric_fields, manufactured_geometry
+import moment_kinetics.manufactured_solns: manufactured_solutions_extension_loadable,
+                                           manufactured_solutions,
+                                           manufactured_sources_setup,
+                                           manufactured_electric_fields,
+                                           manufactured_geometry
 
 using Symbolics
 using IfElse
+
+    function manufactured_solutions_extension_loadable()
+        # Used to check whether this extension is loaded.
+        return true
+    end
 
     @variables r z vpa vperp t vz vr vzeta
     const typed_zero(vz) = zero(vz)

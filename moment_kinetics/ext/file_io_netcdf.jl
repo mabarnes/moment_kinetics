@@ -6,16 +6,20 @@
 # `using Pkg; Pkg.precompile(strict=true)`.
 module file_io_netcdf
 
-import moment_kinetics.file_io: io_has_parallel, open_output_file_implementation,
-                                create_io_group, get_group, is_group, get_subgroup_keys,
-                                get_variable_keys, add_attribute!, modify_attribute!,
-                                write_single_value!, create_dynamic_variable!,
-                                append_to_dynamic_var
+import moment_kinetics.file_io: io_has_implementation, io_has_parallel,
+                                open_output_file_implementation, create_io_group,
+                                get_group, is_group, get_subgroup_keys, get_variable_keys,
+                                add_attribute!, modify_attribute!, write_single_value!,
+                                create_dynamic_variable!, append_to_dynamic_var
 import moment_kinetics.load_data: open_file_to_read, get_attribute, load_variable, load_slice
 using moment_kinetics.coordinates: coordinate
 using moment_kinetics.input_structs: netcdf
 
 using NCDatasets
+
+function io_has_implementation(::Val{netcdf})
+    return true
+end
 
 function io_has_parallel(::Val{netcdf})
     # NCDatasets.jl does not support parallel I/O yet

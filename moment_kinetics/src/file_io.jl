@@ -400,15 +400,10 @@ Test if the backend supports parallel I/O.
 """
 function io_has_parallel end
 
-function io_has_implementation(binary_format::binary_format_type)
-    if binary_format == hdf5
-        return true
-    elseif binary_format == netcdf
-        netcdf_ext = Base.get_extension(@__MODULE__, :file_io_netcdf)
-        return netcdf_ext !== nothing
-    else
-        error("Unrecognised binary format $binary_format")
-    end
+function io_has_implementation(::Val)
+    # This method will be overridden by more specific versions (some only if an extension
+    # is loaded).
+    return false
 end
 
 """
@@ -417,7 +412,7 @@ end
 Check that an implementation is available for `binary_format`, raising an error if not.
 """
 function check_io_implementation(binary_format)
-    if !io_has_implementation(binary_format)
+    if !io_has_implementation(Val(binary_format))
         if binary_format == netcdf
             error("NCDatasets is not installed, cannot use NetCDF I/O. Re-run "
                   * "machines/machine-setup.sh and activate NetCDF, or install "
