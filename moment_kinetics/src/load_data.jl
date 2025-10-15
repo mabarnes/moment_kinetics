@@ -824,6 +824,23 @@ function reload_evolving_fields!(pdf, moments, fields, restart_prefix_iblock, ti
                     moments.ion.chodura_integral_upper .= 0.0
                 end
             end
+            println("length of moments.ion.external_source_controller_integral: ",
+                            length(moments.ion.external_source_controller_integral))
+                    println("size of moments.ion.external_source_controller_integral: ",
+                            size(moments.ion.external_source_controller_integral))
+                    println("time_index = ", time_index)
+                    println("size of other variable such as density is: ",
+                            size(moments.ion.dens))
+                    pdf.ion.norm .= reload_ion_pdf(dynamic, time_index, moments, coords,
+                                                reload_ranges, restart_coords,
+                                                interpolation_needed, restart_evolve_density,
+                                                restart_evolve_upar, restart_evolve_p)
+                    println("size(pdf.ion.norm) = ", size(pdf.ion.norm))
+            density_over_time = load_variable(dynamic, "density")
+            println("size(density_over_time)", size(density_over_time))
+            controller_over_time = load_variable(dynamic, "external_source_controller_integral")
+            println("size(controller_over_time)", size(controller_over_time))
+            display(controller_over_time)
 
             if "external_source_controller_integral" ∈ get_variable_keys(dynamic)
                 moments.ion.external_source_controller_integral .=
