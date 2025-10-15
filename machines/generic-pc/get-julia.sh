@@ -5,11 +5,11 @@
 case "$(uname -s)" in
 
    Darwin*)
-     machines/shared/get-julia-macos.sh
+     machines/shared/get-julia-macos.sh $@
      ;;
 
    Linux*)
-     machines/shared/get-julia-linux-x86_64.sh
+     machines/shared/get-julia-linux-x86_64.sh $@
      ;;
 
    CYGWIN*|MINGW*|MINGW32*|MSYS*)
