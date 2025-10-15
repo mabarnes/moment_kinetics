@@ -274,7 +274,7 @@ function init_magnetic_geometry(geometry_input_data::geometry_input,z,r,z_spectr
         end
         L_B = 1/(dB_dr*1/Bmag[1,1])
         #println("L_B = $L_B")
-    elseif option == "1D-mirror-MAST-edge"
+    elseif option == "1D-mirror-MAST-edge" || option == "1D-mirror-STEP-edge-rough"
         # a 1D configuration along z, with no pitch, but the magnetic field 
         # strength varies along the line. Its variation matches very closely to 
         # a single field line in the edge of MAST (from a hypnotoad analysis of 
@@ -283,8 +283,12 @@ function init_magnetic_geometry(geometry_input_data::geometry_input,z,r,z_spectr
         # field line fit (really quite accurate!) is: 
         # a0=0.32884641, a2=-0.4199673, a4=3.1528366, a6=-6.3052343, a8=4.0532678
         # z grid needs to be mapped from -1 to 1 for these polynomials to work.
-        a0, a2, a4, a6, a8 = 0.32884641, -0.4199673, 3.1528366, -6.3052343, 4.0532678
-
+        if option == "1D-mirror-MAST-edge"
+            a0, a2, a4, a6, a8 = 0.32884641, -0.4199673, 3.1528366, -6.3052343, 4.0532678
+        elseif option == "1D-mirror-STEP-edge-rough"
+            a0, a2, a4, a6, a8 = 1.2, 7.2, 2.8, -27.6, 17.2
+        end
+        
         pitch = geometry_input_data.pitch
         if pitch != 1.0
             input_option_error("option: You have specified pitch != 1, but z is arc length coordinate in 1D-mirror-MAST-edge geometry", option)
