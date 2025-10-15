@@ -31,6 +31,8 @@ function __init__()
     end
 end
 
+function manufactured_solutions_extension_loadable end
+
 function setup_manufactured_solutions(input_dict, warn_unexpected::Bool)
     use_for_init_is_default = !(("manufactured_solns" ∈ keys(input_dict)) &&
                                 ("use_for_init" ∈ keys(input_dict["manufactured_solns"])))
@@ -51,13 +53,18 @@ function setup_manufactured_solutions(input_dict, warn_unexpected::Bool)
         manufactured_solns_section["use_for_init"] = true
     end
     if manufactured_solns_section["use_for_init"] || manufactured_solns_section["use_for_advance"]
-        manufactured_solutions_ext = Base.get_extension(@__MODULE__, :manufactured_solns_ext)
-        if manufactured_solutions_ext === nothing
-            # If Symbolics is not installed, then the extension manufactured_solns_ext
-            # will not be loaded, in which case we cannot use manufactured solutions.
-            error("Symbolics and/or IfELse packages are not installed, so manufactured "
-                  * "solutions are not available. Re-run machines/machine-setup.sh and "
-                  * "activate manufactured solutions, or install Symbolics and IfElse.")
+        try
+            manufactured_solutions_extension_loadable()
+        catch e
+            if isa(e, MethodError)
+                # If Symbolics is not installed, then the extension manufactured_solns_ext
+                # will not be loaded, in which case we cannot use manufactured solutions.
+                error("Symbolics and/or IfELse packages are not installed, so manufactured "
+                      * "solutions are not available. Re-run machines/machine-setup.sh and "
+                      * "activate manufactured solutions, or install Symbolics and IfElse.")
+            else
+                rethrow()
+            end
         end
     end
     if manufactured_solns_section["use_vpabar_in_mms_dfni"]

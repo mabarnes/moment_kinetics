@@ -21,7 +21,7 @@ const regression_range = 5:10
 
 # Use "netcdf" to test the NetCDF I/O if it is available (or if we are forcing optional
 # dependencies to be used, e.g. for CI tests), otherwise fall back to "hdf5".
-const binary_format = (force_optional_dependencies || io_has_implementation(netcdf)) ?
+const binary_format = (force_optional_dependencies || io_has_implementation(Val(netcdf))) ?
                       "netcdf" : "hdf5"
 
 # default inputs for tests
