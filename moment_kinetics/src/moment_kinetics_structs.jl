@@ -552,6 +552,9 @@ struct coordinate{T <: AbstractVector{mk_float}, Ti <: AbstractVector{mk_int}, T
     # scratch_shared3 is a shared-memory array used for intermediate calculations requiring
     # n entries
     scratch_shared3::T
+    # scratch_shared4 is a shared-memory array used for intermediate calculations requiring
+    # n entries
+    scratch_shared4::T
     # scratch_shared_int is a shared-memory array used for intermediate calculations
     # requiring n integer entries
     scratch_shared_int::Ti

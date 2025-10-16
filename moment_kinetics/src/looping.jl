@@ -901,6 +901,7 @@ function debug_setup_loop_ranges_split_one_combination!(
 end
 
 export setup_loop_ranges!
+export debug_setup_loop_ranges_split_one_combination!
 
 # Create macros for looping over any set of dimensions
 for dims ∈ dimension_combinations
