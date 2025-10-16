@@ -715,6 +715,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
                              write_electron_error_diagnostics=false,
                              write_electron_steady_state_diagnostics=false,
                              display_timing_info=false,
+                             save_inputs_to_txt=false,
                             )
         # Need to exclude internal implementation variable "_section_check_store" from
         # input to be written to debug file.

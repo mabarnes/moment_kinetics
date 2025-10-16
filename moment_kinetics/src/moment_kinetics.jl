@@ -232,8 +232,8 @@ parallel loop ranges, and are only used by the tests in `debug_test/`.
         flush(stdout)
     end
 
-    input = mk_input(input_dict; save_inputs_to_txt=true, ignore_MPI=false,
-                     warn_unexpected=warn_unexpected_input, write_output=write_output)
+    input = mk_input(input_dict; ignore_MPI=false, warn_unexpected=warn_unexpected_input,
+                     write_output=write_output)
     # obtain input options from moment_kinetics_input.jl
     # and check input to catch errors
     io_input, evolve_moments, t_input, z, z_spectral, r, r_spectral, vpa, vpa_spectral,
