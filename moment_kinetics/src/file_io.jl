@@ -56,6 +56,7 @@ Base.@kwdef struct io_input_struct
     write_electron_error_diagnostics::Bool
     write_electron_steady_state_diagnostics::Bool
     display_timing_info::Bool
+    save_inputs_to_txt::Bool
 end
 
 """
@@ -355,6 +356,7 @@ function setup_io_input(input_dict, timestepping_section, warn_unexpected::Bool;
         binary_format=hdf5,
         parallel_io="",
         display_timing_info=true,
+        save_inputs_to_txt=false,
        )
     if io_settings["run_name"] == ""
         error("When passing a Dict directly for input, it is required to set `run_name` "
