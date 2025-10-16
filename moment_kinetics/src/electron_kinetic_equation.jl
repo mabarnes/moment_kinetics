@@ -6,7 +6,7 @@ using OrderedCollections
 using SparseArrays
 
 using ..looping
-using ..analysis: steady_state_residuals
+using ..analysis: get_steady_state_global_maxabs_residual
 using ..derivatives: derivative_z_anyzv!, derivative_z_pdf_vpavperpz!
 using ..boundary_conditions: enforce_v_boundary_condition_local!,
                              enforce_vperp_boundary_condition!,
@@ -416,33 +416,29 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments,
                 # of iterations (especially during initialization when there are likely to be
                 # a large number of iterations required) to avoid the expense, and especially
                 # the global MPI.Bcast()?
-                residual = steady_state_residuals(scratch[t_params.n_rk_stages+1].pdf_electron,
-                                                  scratch[1].pdf_electron, previous_dt[];
-                                                  use_mpi=true, only_max_abs=true, ir=ir,
-                                                  comm_local=comm_anyzv_subblock[],
-                                                  comm_global=z.comm)
-                if block_rank[] == 0 && z.irank == 0
-                    residual = first(values(residual))[1]
-                end
+                residual = get_steady_state_global_maxabs_residual(
+                               scratch[t_params.n_rk_stages+1].pdf_electron,
+                               scratch[1].pdf_electron, previous_dt[]; ir=ir,
+                               comm_local=comm_anyzv_subblock[], comm_global=z.comm)
                 if evolve_p
-                    p_residual =
-                        steady_state_residuals(scratch[t_params.n_rk_stages+1].electron_p,
-                                               scratch[1].electron_p, previous_dt[];
-                                               use_mpi=true, only_max_abs=true, ir=ir,
-                                               comm_local=comm_anyzv_subblock[],
-                                               comm_global=z.comm)
-                    if block_rank[] == 0 && z.irank == 0
-                        p_residual = first(values(p_residual))[1]
+                    p_residual = get_steady_state_global_maxabs_residual(
+                                     scratch[t_params.n_rk_stages+1].electron_p,
+                                     scratch[1].electron_p, previous_dt[]; ir=ir,
+                                     comm_local=comm_anyzv_subblock[], comm_global=z.comm)
+                    if anyzv_subblock_rank[] == 0 && z.irank == 0
                         residual = max(residual, p_residual)
                     end
                 end
-                if block_rank[] == 0 && z.irank == 0
+                if anyzv_subblock_rank[] == 0 && z.irank == 0
                     if residual_tolerance === nothing
                         residual_tolerance = t_params.converged_residual_value
                     end
                     electron_pdf_converged[] = abs(residual) < residual_tolerance
                 end
-                @timeit_debug global_timer "MPI.Bcast comm_world" electron_pdf_converged[] = MPI.Bcast(electron_pdf_converged[], 0, comm_world)
+                if anyzv_subblock_rank[] == 0
+                    @timeit_debug global_timer "MPI.Bcast z.comm" MPI.Bcast!(electron_pdf_converged, 0, z.comm)
+                end
+                @timeit_debug global_timer "MPI.Bcast comm_anyzv_subblock[]" MPI.Bcast!(electron_pdf_converged, 0, comm_anyzv_subblock[])
             end
 
             if (mod(step_counter[] - initial_step_counter,100) == 0)
@@ -850,49 +846,33 @@ function electron_backward_euler_pseudotimestepping!(scratch, pdf, moments,
             residual_norm = -1.0
             if step_success
                 # Calculate residuals to decide if iteration is converged.
-                # Might want an option to calculate the r_normesidual only after a certain
-                # number of iterations (especially during initialization when there are
-                # likely to be a large number of iterations required) to avoid the
-                # expense, and especially the global MPI.Bcast()?
-                @begin_anyzv_z_vperp_vpa_region()
-                if global_rank[] == 0
-                    residual_norm = steady_state_residuals(new_scratch.pdf_electron,
-                                                           old_scratch.pdf_electron,
-                                                           dt[]; use_mpi=true,
-                                                           only_max_abs=true, ir=ir,
-                                                           comm_local=comm_anyzv_subblock[],
-                                                           comm_global=z.comm)[1]
-                else
-                    steady_state_residuals(new_scratch.pdf_electron,
-                                           old_scratch.pdf_electron, dt[]; use_mpi=true,
-                                           only_max_abs=true, ir=ir,
-                                           comm_local=comm_anyzv_subblock[],
-                                           comm_global=z.comm)
-                end
+                # Might want an option to calculate the residual only after a certain number
+                # of iterations (especially during initialization when there are likely to be
+                # a large number of iterations required) to avoid the expense, and especially
+                # the global MPI.Bcast()?
+                residual = get_steady_state_global_maxabs_residual(
+                               new_scratch.pdf_electron, old_scratch.pdf_electron, dt[];
+                               ir=ir, comm_local=comm_anyzv_subblock[],
+                               comm_global=z.comm)
                 if evolve_p
-                    if global_rank[] == 0
-                        p_residual =
-                            steady_state_residuals(new_scratch.electron_p,
-                                                   old_scratch.electron_p,
-                                                   dt[]; use_mpi=true, only_max_abs=true,
-                                                   ir=ir, comm_local=comm_anyzv_subblock[],
-                                                   comm_global=z.comm)[1]
-                        residual_norm = max(residual_norm, p_residual)
-                    else
-                        steady_state_residuals(new_scratch.electron_p,
-                                               old_scratch.electron_p,
-                                               dt[]; use_mpi=true, only_max_abs=true,
-                                               ir=ir, comm_local=comm_anyzv_subblock[],
-                                               comm_global=z.comm)
+                    p_residual = get_steady_state_global_maxabs_residual(
+                                     new_scratch.electron_p, old_scratch.electron_p, dt[];
+                                     ir=ir, comm_local=comm_anyzv_subblock[],
+                                     comm_global=z.comm)
+                    if anyzv_subblock_rank[] == 0 && z.irank == 0
+                        residual = max(residual, p_residual)
                     end
                 end
-                if block_rank[] == 0 && z.irank == 0
+                if anyzv_subblock_rank[] == 0 && z.irank == 0
                     if residual_tolerance === nothing
                         residual_tolerance = t_params.converged_residual_value
                     end
-                    electron_pdf_converged[] = abs(residual_norm) < residual_tolerance
+                    electron_pdf_converged[] = abs(residual) < residual_tolerance
                 end
-                @timeit_debug global_timer "MPI.Bcast! comm_world" MPI.Bcast!(electron_pdf_converged, 0, comm_world)
+                if anyzv_subblock_rank[] == 0
+                    @timeit_debug global_timer "MPI.Bcast z.comm" MPI.Bcast!(electron_pdf_converged, 0, z.comm)
+                end
+                @timeit_debug global_timer "MPI.Bcast comm_anyzv_subblock[]" MPI.Bcast!(electron_pdf_converged, 0, comm_anyzv_subblock[])
             end
 
             if (mod(step_counter[] - initial_step_counter,100) == 0)

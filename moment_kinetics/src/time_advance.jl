@@ -102,7 +102,7 @@ using ..derivatives: derivative_z!
 @debug_detect_redundant_block_synchronize using ..communication: debug_detect_redundant_is_active
 
 using Dates
-using ..analysis: steady_state_residuals
+using ..analysis: get_steady_state_global_maxabs_residual
 #using ..post_processing: draw_v_parallel_zero!
 
 struct scratch_dummy_arrays
@@ -2214,11 +2214,10 @@ function time_advance!(pdf, scratch, scratch_implicit, scratch_electron, t_param
                     all_residuals = Vector{mk_float}()
                     @loop_s is begin
                         @views residual_ni =
-                            steady_state_residuals(scratch[t_params.n_rk_stages+1].density[:,:,is],
-                                                   scratch[1].density[:,:,is], t_params.previous_dt[];
-                                                   use_mpi=true, only_max_abs=true)
+                            get_steady_state_global_maxabs_residual(scratch[t_params.n_rk_stages+1].density[:,:,is],
+                                                                    scratch[1].density[:,:,is],
+                                                                    t_params.previous_dt[])
                         if global_rank[] == 0
-                            residual_ni = first(values(residual_ni))[1]
                             push!(all_residuals, residual_ni)
                             result_string *= "  density "
                             result_string *= rpad(string(round(residual_ni; sigdigits=4)), 11)
@@ -2227,12 +2226,10 @@ function time_advance!(pdf, scratch, scratch_implicit, scratch_electron, t_param
                     if composition.n_neutral_species > 0
                         @loop_sn isn begin
                             residual_nn =
-                                steady_state_residuals(scratch[t_params.n_rk_stages+1].density_neutral[:,:,isn],
-                                                       scratch[1].density_neutral[:,:,isn],
-                                                       t_params.previous_dt[]; use_mpi=true,
-                                                       only_max_abs=true)
+                                get_steady_state_global_maxabs_residual(scratch[t_params.n_rk_stages+1].density_neutral[:,:,isn],
+                                                                        scratch[1].density_neutral[:,:,isn],
+                                                                        t_params.previous_dt[])
                             if global_rank[] == 0
-                                residual_nn = first(values(residual_nn))[1]
                                 push!(all_residuals, residual_nn)
                                 result_string *= " density_neutral "
                                 result_string *= rpad(string(round(residual_nn; sigdigits=4)), 11)
