@@ -938,6 +938,106 @@ function steady_state_square_residuals(variable, variable_at_previous_time, dt,
     end
 end
 
+"""
+    get_steady_state_global_maxabs_residual(variable, variable_at_previous_time, dt;
+                                            only_max_abs=true, ir=nothing,
+                                            comm_local=nothing, comm_global=nothing)
+
+More limited alternative to steady_state_residuals, designed to be type stable. Calculates
+the maximum absolute value of `(variable - variable_at_previous_time) / dt`, and returns
+the result on the root of `comm`. Only works with the equivalent of `use_mpi=true`, and
+for a single time point (no time series data).
+"""
+function get_steady_state_global_maxabs_residual(variable, variable_at_previous_time, dt;
+                                                 only_max_abs=true, ir=nothing,
+                                                 comm_local=nothing, comm_global=nothing)
+    if ((ir === nothing && comm_local !== nothing && comm_global !== nothing)
+            || (ir !== nothing && comm_local === nothing && comm_global === nothing))
+        error("If any of `ir`, `comm_local` and `comm_global` are passed, all must be.")
+    end
+
+    if comm_local === nothing
+        comm_local = comm_block[]
+        local_rank = block_rank[]
+        local_size = block_size[]
+    else
+        local_rank = MPI.Comm_rank(comm_local)
+        local_size = MPI.Comm_size(comm_local)
+    end
+    if comm_global === nothing
+        comm_global = comm_inter_block[]
+        is_global_root = global_rank[] == 0
+    else
+        # Check local_rank first in case global_comm is only defined on local_rank=0.
+        is_global_root = (local_rank == 0 && MPI.Comm_rank(comm_global) == 0)
+    end
+
+    ndims_variable = ndims(variable)
+
+    # local_max_absolute should be a 1d array of size 1, not a 0d array, so that the
+    # MPI.Gather() below works correctly.
+    local_max_absolute = zeros(mk_float, 1)
+
+    if ir === nothing
+        @loop_r_z this_ir iz begin
+            this_slice = selectdim(selectdim(variable, ndims_variable, this_ir),
+                                   ndims_variable - 1, iz)
+            this_slice_previous_time = selectdim(selectdim(variable_at_previous_time,
+                                                           ndims_variable, this_ir),
+                                                 ndims_variable - 1, iz)
+
+            absolute_residual =
+                _steady_state_absolute_residual(this_slice,
+                                                this_slice_previous_time, dt)
+            # Need to wrap the maximum(...) in a call to vec(...) so that we return a
+            # Vector, not an N-dimensional array where the first (N-1) dimensions all
+            # have size 1.
+            this_dims = tuple((1:ndims_variable-2)...)
+            if this_dims === ()
+                local_max_absolute = max.(local_max_absolute, [absolute_residual])
+            else
+                local_max_absolute = max.(local_max_absolute,
+                                          vec(maximum(absolute_residual,
+                                                      dims=this_dims)))
+            end
+        end
+    else
+        @loop_z iz begin
+            this_slice = selectdim(selectdim(variable, ndims_variable, ir),
+                                   ndims_variable - 1, iz)
+            this_slice_previous_time = selectdim(selectdim(variable_at_previous_time,
+                                                           ndims_variable, ir),
+                                                 ndims_variable - 1, iz)
+
+            absolute_residual =
+                _steady_state_absolute_residual(this_slice, this_slice_previous_time,
+                                                dt)
+            # Need to wrap the maximum(...) in a call to vec(...) so that we return a
+            # Vector, not an N-dimensional array where the first (N-1) dimensions all
+            # have size 1.
+            this_dims = tuple((1:ndims_variable-2)...)
+            if this_dims === ()
+                local_max_absolute = max.(local_max_absolute, [absolute_residual])
+            else
+                local_max_absolute = max.(local_max_absolute,
+                                          vec(maximum(absolute_residual,
+                                                      dims=this_dims)))
+            end
+        end
+    end
+
+    MPI.Reduce!(local_max_absolute, max, comm_local; root=0)
+
+    if local_rank == 0
+        MPI.Reduce!(local_max_absolute, max, comm_global; root=0)
+    end
+    if is_global_root
+        return local_max_absolute[1]
+    else
+        return mk_float(-1.0)
+    end
+end
+
 # Utility function for the steady-state square residual to avoid code duplication in
 # steady_state_square_residuals()
 function _steady_state_square_residual(variable, variable_at_previous_time, reshaped_dt,
