@@ -882,7 +882,7 @@ function write_provenance_tracking_info!(fid, parallel_io, run_id, restart_time_
                             parallel_io=parallel_io,
                             description="Information about all dependency packages (output of `Pkg.dependencies()`)")
 
-        if previous_runs_info !== nothing
+        if !isempty(previous_runs_info)
             for (i, info) ∈ enumerate(previous_runs_info)
                 section = create_io_group(provenance_tracking, "previous_run_$i")
                 write_Dict_to_section(section, info, parallel_io)
