@@ -206,7 +206,9 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments,
                                            composition.electron_physics)
 
     if ion_dt !== nothing
-        evolve_p = true
+        if !evolve_p
+            error("evolve_p must be `true` when `ion_dt` is passed. ion_dt=$ion_dt")
+        end
 
         # Use forward-Euler step (with `ion_dt` as the timestep) as initial guess for
         # updated electron_p

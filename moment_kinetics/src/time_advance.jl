@@ -726,7 +726,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
                                  r, z, vperp, vpa, vzeta, vr, vz, composition, collisions,
                                  moments.evolve_density, moments.evolve_upar,
                                  moments.evolve_p, external_source_settings, nothing,
-                                 1, fake_input_dict, comm_inter_block[], nothing, 0.0,
+                                 1, fake_input_dict, comm_inter_block[], (), 0.0,
                                  fake_t_params, (); is_debug=true)
     elseif t_input["debug_io"]
         # Need to synchronize shared-memory blocks before/after I/O. Set debug_io=true so
@@ -740,6 +740,10 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
                                dt_before_last_fail_reload, composition,
                                manufactured_solns_input, io_input, input_dict, r;
                                electron=electron_t_params, debug_io=debug_io)
+    t_input_copy = copy(t_input)
+    t_input_copy["electron_t_input"] = Dict_to_NamedTuple(t_input_copy["electron_t_input"])
+    # Make NamedTuple version to improve type stability in later function calls.
+    t_input_tuple = Dict_to_NamedTuple(t_input_copy)
 
     # Set up entries for counters for which variable caused timestep limits and
     # timestep failures the right length. Do this setup even when not using adaptive
@@ -925,18 +929,18 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
 
     @begin_serial_region()
 
-    if t_input["add_random_noise"] > 0.0
+    if t_input_tuple.add_random_noise > 0.0
         # Add random noise to the ion/electron density to seed turbulence/instabilities.
         @serial_region begin
             rng = Random.default_rng()
-            if t_input["random_noise_seed"] ≥ 0
+            if t_input_tuple.random_noise_seed ≥ 0
                 # Allow the seed to be specified so that simulaions are reproducible (at
                 # least when using a given version of Julia, Random, etc.).
                 # Add global_rank[] to ensure that all MPI processes get a different seed,
                 # so that the random numbers are not repeated between different processes.
-                Random.seed!(rng, t_input["random_noise_seed"] + global_rank[])
+                Random.seed!(rng, t_input_tuple.random_noise_seed + global_rank[])
             end
-            noise = 1.0 .+ t_input["add_random_noise"] .* rand(rng, mk_float, size(moments.ion.dens)...)
+            noise = 1.0 .+ t_input_tuple.add_random_noise .* rand(rng, mk_float, size(moments.ion.dens)...)
             moments.ion.dens .*= noise
 
             if !moments.evolve_density
@@ -1038,7 +1042,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
                               vperp, vpa, vzeta, vr, vz, z_spectral, r_spectral,
                               vperp_spectral, vpa_spectral, collisions, gyroavs,
                               external_source_settings, scratch_dummy, scratch,
-                              scratch_electron, nl_solver_params, t_params, t_input,
+                              scratch_electron, nl_solver_params, t_params, t_input_tuple,
                               num_diss_params, advection_structs, io_input, input_dict;
                               restart_electron_physics=restart_electron_physics,
                               skip_electron_solve=skip_electron_solve)
