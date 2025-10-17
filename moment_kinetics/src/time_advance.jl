@@ -2719,7 +2719,7 @@ moments and moment derivatives
                electron_vpa_advect, scratch_dummy, t_params.electron, collisions,
                composition, external_source_settings, num_diss_params,
                nl_solver_params.electron_advance, max_electron_pdf_iterations,
-               max_electron_sim_time, solution_method="artificial_time_derivative")
+               max_electron_sim_time, solution_method=Val("artificial_time_derivative"))
             success = kinetic_electron_success
         end
     end
@@ -4137,7 +4137,7 @@ end
                                                 nl_solver_params.electron_advance,
                                                 max_electron_pdf_iterations,
                                                 max_electron_sim_time;
-                                                solution_method="artificial_time_derivative",
+                                                solution_method=Val(:artificial_time_derivative),
                                                 evolve_p=true, ion_dt=dt)
 
         # Update `fvec_out.electron_p` with the new electron pressure
