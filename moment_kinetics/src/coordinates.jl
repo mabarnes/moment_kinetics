@@ -111,6 +111,41 @@ function get_coordinate_input(input_dict, name; ignore_MPI=false,
     return coord_input
 end
 
+function get_coordinate_spectral(species_coordinate, ::Val{n}, ::Val{name},
+                                 ::Val{discretization}, collision_operator_dim,
+                                 run_directory, coord;
+                                 ignore_MPI) where {n,name,discretization}
+    if species_coordinate === Val(true)
+        spectral = nothing
+    elseif n == 1 && name == :vperp
+        spectral = null_vperp_dimension_info()
+    elseif n == 1 && occursin("v", String(name))
+        spectral = null_velocity_dimension_info()
+    elseif n == 1
+        spectral = null_spatial_dimension_info()
+    elseif discretization == :chebyshev_pseudospectral
+        # create arrays needed for explicit Chebyshev pseudospectral treatment in this
+        # coordinate and create the plans for the forward and backward fast Chebyshev
+        # transforms
+        spectral = setup_chebyshev_pseudospectral(coord, run_directory; ignore_MPI=ignore_MPI)
+    elseif discretization == :gausslegendre_pseudospectral
+        # create arrays needed for explicit GaussLegendre pseudospectral treatment in this
+        # coordinate and create the matrices for differentiation
+        spectral = setup_gausslegendre_pseudospectral(coord, collision_operator_dim=collision_operator_dim)
+    elseif discretization == :fourier_pseudospectral
+        if coord.bc ∉ ("periodic", "default")
+            error("fourier_pseudospectral discretization can only be used for a periodic dimension")
+        end
+        spectral = setup_fourier_pseudospectral(coord, run_directory; ignore_MPI=ignore_MPI)
+    else
+        # finite_difference_info is just a type so that derivative methods, etc., dispatch
+        # to the finite difference versions, it does not contain any information.
+        spectral = finite_difference_info()
+    end
+
+    return spectral
+end
+
 """
     define_coordinate(input_dict, name; parallel_io::Bool=false,
                       run_directory=nothing, ignore_MPI=false,
@@ -327,33 +362,11 @@ function define_coordinate(coord_input::NamedTuple; parallel_io::Bool=false,
         coord_input.element_spacing_option, element_boundaries, radau_first_element,
         other_nodes, one_over_denominator, mask_up, mask_low)
 
-    if species_coordinate
-        spectral = nothing
-    elseif coord.n == 1 && coord.name == "vperp"
-        spectral = null_vperp_dimension_info()
-    elseif coord.n == 1 && occursin("v", coord.name)
-        spectral = null_velocity_dimension_info()
-    elseif coord.n == 1
-        spectral = null_spatial_dimension_info()
-    elseif coord_input.discretization == "chebyshev_pseudospectral"
-        # create arrays needed for explicit Chebyshev pseudospectral treatment in this
-        # coordinate and create the plans for the forward and backward fast Chebyshev
-        # transforms
-        spectral = setup_chebyshev_pseudospectral(coord, run_directory; ignore_MPI=ignore_MPI)
-    elseif coord_input.discretization == "gausslegendre_pseudospectral"
-        # create arrays needed for explicit GaussLegendre pseudospectral treatment in this
-        # coordinate and create the matrices for differentiation
-        spectral = setup_gausslegendre_pseudospectral(coord, collision_operator_dim=collision_operator_dim)
-    elseif coord_input.discretization == "fourier_pseudospectral"
-        if coord.bc ∉ ("periodic", "default")
-            error("fourier_pseudospectral discretization can only be used for a periodic dimension")
-        end
-        spectral = setup_fourier_pseudospectral(coord, run_directory; ignore_MPI=ignore_MPI)
-    else
-        # finite_difference_info is just a type so that derivative methods, etc., dispatch
-        # to the finite difference versions, it does not contain any information.
-        spectral = finite_difference_info()
-    end
+    spectral = get_coordinate_spectral(Val(species_coordinate), Val(coord.n),
+                                       Val(Symbol(coord.name)),
+                                       Val(Symbol(coord.discretization)),
+                                       collision_operator_dim, run_directory, coord;
+                                       ignore_MPI=ignore_MPI)
 
     return coord, spectral
 end
