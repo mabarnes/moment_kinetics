@@ -179,8 +179,6 @@ function define_coordinate(coord_input::NamedTuple; parallel_io::Bool=false,
         uniform_grid = fill(mk_float(NaN), n_local)
         radau_first_element = false
         cell_width = fill(mk_float(NaN), n_local)
-        duniform_dgrid = fill(mk_float(NaN), coord_input.ngrid,
-                              coord_input.nelement_local)
     else
         # initialise the data used to construct the grid
         # boundaries for each element
@@ -201,9 +199,6 @@ function define_coordinate(coord_input::NamedTuple; parallel_io::Bool=false,
                       coord_input.discretization, coord_input.name)
         # calculate the widths of the cells between neighboring grid points
         cell_width = grid_spacing(grid, n_local)
-        # duniform_dgrid is the local derivative of the uniform grid with respect to
-        # the coordinate grid
-        duniform_dgrid = allocate_float(coord_input.ngrid, coord_input.nelement_local)
     end
 
     # scratch is an array used for intermediate calculations requiring n entries
@@ -323,50 +318,41 @@ function define_coordinate(coord_input::NamedTuple; parallel_io::Bool=false,
         prevrank, mk_float(coord_input.L), grid, cell_width, igrid, ielement, imin, imax,
         igrid_full, coord_input.discretization, coord_input.finite_difference_option,
         coord_input.cheb_option, coord_input.bc, periodic,
-        coord_input.boundary_parameters, wgts, uniform_grid, duniform_dgrid, scratch,
+        coord_input.boundary_parameters, wgts, uniform_grid, scratch, copy(scratch),
         copy(scratch), copy(scratch), copy(scratch), copy(scratch), copy(scratch),
-        copy(scratch), copy(scratch), copy(scratch), copy(scratch),
-        scratch_int_nelement_plus_1, scratch_shared, scratch_shared2, scratch_shared3,
-        scratch_shared_int, scratch_shared_int2, scratch_2d, copy(scratch_2d),
-        send_buffer, receive_buffer, comm, local_io_range, global_io_range, element_scale,
-        element_shift, coord_input.element_spacing_option, element_boundaries,
-        radau_first_element, other_nodes, one_over_denominator, mask_up, mask_low)
+        copy(scratch), copy(scratch), copy(scratch), scratch_int_nelement_plus_1,
+        scratch_shared, scratch_shared2, scratch_shared3, scratch_shared_int,
+        scratch_shared_int2, scratch_2d, copy(scratch_2d), send_buffer, receive_buffer,
+        comm, local_io_range, global_io_range, element_scale, element_shift,
+        coord_input.element_spacing_option, element_boundaries, radau_first_element,
+        other_nodes, one_over_denominator, mask_up, mask_low)
 
     if species_coordinate
         spectral = nothing
     elseif coord.n == 1 && coord.name == "vperp"
         spectral = null_vperp_dimension_info()
-        coord.duniform_dgrid .= 1.0
     elseif coord.n == 1 && occursin("v", coord.name)
         spectral = null_velocity_dimension_info()
-        coord.duniform_dgrid .= 1.0
     elseif coord.n == 1
         spectral = null_spatial_dimension_info()
-        coord.duniform_dgrid .= 1.0
     elseif coord_input.discretization == "chebyshev_pseudospectral"
         # create arrays needed for explicit Chebyshev pseudospectral treatment in this
         # coordinate and create the plans for the forward and backward fast Chebyshev
         # transforms
         spectral = setup_chebyshev_pseudospectral(coord, run_directory; ignore_MPI=ignore_MPI)
-        # obtain the local derivatives of the uniform grid with respect to the used grid
-        derivative!(coord.duniform_dgrid, coord.uniform_grid, coord, spectral)
     elseif coord_input.discretization == "gausslegendre_pseudospectral"
         # create arrays needed for explicit GaussLegendre pseudospectral treatment in this
         # coordinate and create the matrices for differentiation
         spectral = setup_gausslegendre_pseudospectral(coord, collision_operator_dim=collision_operator_dim)
-        # obtain the local derivatives of the uniform grid with respect to the used grid
-        derivative!(coord.duniform_dgrid, coord.uniform_grid, coord, spectral)
     elseif coord_input.discretization == "fourier_pseudospectral"
         if coord.bc ∉ ("periodic", "default")
             error("fourier_pseudospectral discretization can only be used for a periodic dimension")
         end
         spectral = setup_fourier_pseudospectral(coord, run_directory; ignore_MPI=ignore_MPI)
-        derivative!(coord.duniform_dgrid, coord.uniform_grid, coord, spectral)
     else
         # finite_difference_info is just a type so that derivative methods, etc., dispatch
         # to the finite difference versions, it does not contain any information.
         spectral = finite_difference_info()
-        coord.duniform_dgrid .= 1.0
     end
 
     return coord, spectral

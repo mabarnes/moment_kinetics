@@ -517,9 +517,6 @@ struct coordinate{T <: AbstractVector{mk_float}, Ti <: AbstractVector{mk_int}, T
     # uniform_grid contains location of grid points mapped to a uniform grid
     # if finite differences used for discretization, no mapping required, and uniform_grid = grid
     uniform_grid::Array{mk_float,1}
-    # duniform_dgrid is the local derivative of the uniform grid with respect to
-    # the coordinate grid
-    duniform_dgrid::Array{mk_float,2}
     # scratch is an array used for intermediate calculations requiring n entries
     scratch::Array{mk_float,1}
     # scratch2 is an array used for intermediate calculations requiring n entries
