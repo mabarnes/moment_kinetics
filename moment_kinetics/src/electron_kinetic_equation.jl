@@ -1642,7 +1642,19 @@ pressure \$p_{e∥}\$.
 
     # Do a backward-Euler update of the electron pdf, and (if evove_p=true) the electron
     # parallel pressure.
-    function residual_func!(this_residual, new_variables; krylov=false)
+    # Use `let` block to hint to the compiler that the captured variables don't change -
+    # see https://docs.julialang.org/en/v1/manual/performance-tips/#man-performance-captured
+    
+    residual_func!(this_residual, new_variables; krylov=false) = let evolve_p=evolve_p,
+            moments=moments, composition=composition, collisions=collisions,
+            external_source_settings=external_source_settings, t_params=t_params,
+            ion_dt=ion_dt, scratch_dummy=scratch_dummy, this_phi=this_phi,
+            electron_density=electron_density, electron_upar=electron_upar,
+            ion_density=ion_density, ion_upar=ion_upar, z=z, vperp=vperp, vpa=vpa,
+            z_spectral=z_spectral, vperp_spectral=vperp_spectral,
+            vpa_spectral=vpa_spectral, z_advect=z_advect, vpa_advect=vpa_advect,
+            num_diss_params=num_diss_params, ir=ir
+
         electron_p_residual, f_electron_residual = this_residual
         electron_p_newvar, f_electron_newvar = new_variables
 
@@ -1844,7 +1856,17 @@ to allow the outer r-loop to be parallelised.
             recalculate_preconditioner!()
         end
 
-        function residual_func!(residual, new_variables; debug=false, krylov=false)
+        residual_func!(residual, new_variables; debug=false, krylov=false) = let
+                evolve_p=evolve_p, moments=moments, composition=composition,
+                collisions=collisions, external_source_settings=external_source_settings,
+                t_params=t_params, ion_dt=ion_dt, scratch_dummy=scratch_dummy,
+                this_phi=this_phi, electron_density=electron_density,
+                electron_upar=electron_upar, ion_density=ion_density, ion_upar=ion_upar,
+                z=z, vperp=vperp, vpa=vpa, z_spectral=z_spectral,
+                vperp_spectral=vperp_spectral, vpa_spectral=vpa_spectral,
+                z_advect=z_advect, vpa_advect=vpa_advect, num_diss_params=num_diss_params,
+                ir=ir
+
             electron_p_residual, f_electron_residual = residual
             electron_p_new, f_electron_new = new_variables
 
