@@ -364,7 +364,8 @@ function define_coordinate(coord_input::NamedTuple; parallel_io::Bool=false,
     spectral = get_coordinate_spectral(Val(species_coordinate), Val(coord.n),
                                        Val(Symbol(coord.name)),
                                        Val(Symbol(coord.discretization)),
-                                       collision_operator_dim, coord)
+                                       collision_operator_dim, coord;
+                                       ignore_MPI=ignore_MPI)
 
     return coord, spectral
 end
