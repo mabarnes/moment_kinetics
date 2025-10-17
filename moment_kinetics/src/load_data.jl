@@ -826,16 +826,8 @@ function reload_evolving_fields!(pdf, moments, fields, restart_prefix_iblock, ti
             end
 
             if "external_source_controller_integral" ∈ get_variable_keys(dynamic)
-                if length(moments.ion.external_source_controller_integral) == 1
-                    moments.ion.external_source_controller_integral .=
-                        load_slice(dynamic, "external_source_controller_integral", time_index)
-            elseif size(moments.ion.external_source_controller_integral)[1] > 1 ||
-                    size(moments.ion.external_source_controller_integral)[2] > 1 
-                    moments.ion.external_source_controller_integral .=
-                        reload_moment("external_source_controller_integral", dynamic,
-                                      time_index, coords, reload_ranges, restart_coords,
-                                      interpolation_needed)
-                end
+                moments.ion.external_source_controller_integral .=
+                    load_slice(dynamic, "external_source_controller_integral", :,:,:,time_index)
             end
 
             pdf.ion.norm .= reload_ion_pdf(dynamic, time_index, moments, coords,
