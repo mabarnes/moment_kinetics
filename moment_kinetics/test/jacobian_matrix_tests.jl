@@ -371,7 +371,7 @@ function test_get_pdf_term(test_input::AbstractDict, label::String, get_term::Fu
         vpa_speed = @view vpa_advect[1].speed[:,:,:,ir]
         me = composition.me_over_mi
 
-        delta_p = allocate_shared_float(z)
+        delta_p = allocate_shared_float(z; comm=comm_anyzv_subblock[])
         p_amplitude = epsilon * maximum(p)
         f = @view pdf.electron.norm[:,:,:,ir]
 
@@ -383,8 +383,11 @@ function test_get_pdf_term(test_input::AbstractDict, label::String, get_term::Fu
         buffer_4 = @view scratch_dummy.buffer_rs_4[ir,1]
 
         # Reconstruct w_∥^3 moment of g_e from already-calculated qpar
-        third_moment = scratch_dummy.buffer_z_1
-        dthird_moment_dz = scratch_dummy.buffer_z_2
+        # Note must use buffer with r-dimension, because use of z-only buffers is not
+        # allowed within anyzv regions (as this would cause errors when the r-dimension is
+        # split).
+        third_moment = @view scratch_dummy.buffer_zrs_1[:,1,1]
+        dthird_moment_dz = @view scratch_dummy.buffer_zrs_2[:,1,1]
         @begin_anyzv_z_region()
         @loop_z iz begin
             third_moment[iz] = qpar[iz] / p[iz] / vth[iz]
@@ -403,12 +406,12 @@ function test_get_pdf_term(test_input::AbstractDict, label::String, get_term::Fu
         # Ensure initial electron distribution function obeys constraints
         hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa, vperp)
         @begin_r_anyzv_region()
-        delta_f = allocate_shared_float(vpa, vperp, z)
-        f_amplitude = epsilon * maximum(f)
+        delta_f = allocate_shared_float(vpa, vperp, z; comm=comm_anyzv_subblock[])
         # Use exp(sin()) in vpa so that perturbation does not have any symmetry that makes
         # low-order moments vanish exactly.
         @begin_anyzv_region()
         @anyzv_serial_region begin
+            f_amplitude = epsilon * maximum(f)
             delta_f .= f_amplitude .*
                        reshape(sin.(2.0.*π.*test_wavenumber.*z.grid./z.L), 1, 1, z.n) .*
                        reshape(exp.(sin.(2.0.*π.*test_wavenumber.*vpa.grid./vpa.L)) .- 1.0, vpa.n, 1, 1) .*
@@ -420,15 +423,15 @@ function test_get_pdf_term(test_input::AbstractDict, label::String, get_term::Fu
             # `calculate_electron_moments_no_r!()`. For this test, we want to artificially
             # keep a difference between electron and ion upar, so use upar_test (which is
             # copied here before ion_upar is modified) in place of the usual upar array.
-            upar_test = allocate_shared_float(z)
+            upar_test = allocate_shared_float(z; comm=comm_anyzv_subblock[])
             @begin_anyzv_region()
             @anyzv_serial_region begin
                 upar_test .= @view moments.electron.upar[:,ir]
-            end
 
-            # Modify ion_upar to make sure it is different from upar_electron so that the
-            # term proportional to (u_i-u_e) gets tested in case it is ever needed.
-            @. ion_upar += sin(4.0*π*test_wavenumber*z.grid/z.L)
+                # Modify ion_upar to make sure it is different from upar_electron so that the
+                # term proportional to (u_i-u_e) gets tested in case it is ever needed.
+                @. ion_upar += sin(4.0*π*test_wavenumber*z.grid/z.L)
+            end
         else
             upar_test = upar
         end
@@ -476,9 +479,9 @@ function test_get_pdf_term(test_input::AbstractDict, label::String, get_term::Fu
                                       vpa_spectral)
         end
 
-        zeroth_moment = z.scratch_shared
-        first_moment = z.scratch_shared2
-        second_moment = z.scratch_shared3
+        zeroth_moment = allocate_shared_float(z; comm=comm_anyzv_subblock[])
+        first_moment = allocate_shared_float(z; comm=comm_anyzv_subblock[])
+        second_moment = allocate_shared_float(z; comm=comm_anyzv_subblock[])
         @begin_anyzv_z_region()
         @loop_z iz begin
             @views zeroth_moment[iz] = integral(f[:,:,iz], vpa.grid, 0, vpa.wgts,
@@ -765,8 +768,8 @@ function test_get_pdf_term(test_input::AbstractDict, label::String, get_term::Fu
             return nothing
         end
 
-        original_residual = allocate_shared_float(vpa, vperp, z)
-        perturbed_residual = allocate_shared_float(vpa, vperp, z)
+        original_residual = allocate_shared_float(vpa, vperp, z; comm=comm_anyzv_subblock[])
+        perturbed_residual = allocate_shared_float(vpa, vperp, z; comm=comm_anyzv_subblock[])
 
         @testset "δf only" begin
             residual_func!(original_residual, f, p)
@@ -896,9 +899,9 @@ function test_get_p_term(test_input::AbstractDict, label::String, get_term::Func
 
         @begin_r_anyzv_region()
 
-        zeroth_moment = z.scratch_shared
-        first_moment = z.scratch_shared2
-        second_moment = z.scratch_shared3
+        zeroth_moment = allocate_shared_float(z; comm=comm_anyzv_subblock[])
+        first_moment = allocate_shared_float(z; comm=comm_anyzv_subblock[])
+        second_moment = allocate_shared_float(z; comm=comm_anyzv_subblock[])
         @begin_anyzv_z_region()
         @loop_z iz begin
             @views zeroth_moment[iz] = integral(f[:,:,iz], vpa.grid, 0, vpa.wgts,
@@ -915,8 +918,11 @@ function test_get_p_term(test_input::AbstractDict, label::String, get_term::Func
         buffer_4 = @view scratch_dummy.buffer_rs_4[ir,1]
 
         # Reconstruct w_∥^3 moment of g_e from already-calculated qpar
-        third_moment = scratch_dummy.buffer_z_1
-        dthird_moment_dz = scratch_dummy.buffer_z_2
+        # Note must use buffer with r-dimension, because use of z-only buffers is not
+        # allowed within anyzv regions (as this would cause errors when the r-dimension is
+        # split).
+        third_moment = @view scratch_dummy.buffer_zrs_1[:,1,1]
+        dthird_moment_dz = @view scratch_dummy.buffer_zrs_2[:,1,1]
         @begin_anyzv_z_region()
         @loop_z iz begin
             third_moment[iz] = qpar[iz] / p[iz] / vth[iz]
@@ -928,7 +934,7 @@ function test_get_p_term(test_input::AbstractDict, label::String, get_term::Func
         update_electron_speed_z!(z_advect[1], upar, vth, vpa.grid, ir)
         z_speed = @view z_advect[1].speed[:,:,:,ir]
 
-        delta_p = allocate_shared_float(z)
+        delta_p = allocate_shared_float(z; comm=comm_anyzv_subblock[])
         p_amplitude = epsilon * maximum(p)
         f = @view pdf.electron.norm[:,:,:,ir]
         @begin_anyzv_region()
@@ -942,10 +948,10 @@ function test_get_p_term(test_input::AbstractDict, label::String, get_term::Func
         # Ensure initial electron distribution function obeys constraints
         hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa, vperp)
         @begin_r_anyzv_region()
-        delta_f = allocate_shared_float(vpa, vperp, z)
-        f_amplitude = epsilon * maximum(f)
+        delta_f = allocate_shared_float(vpa, vperp, z; comm=comm_anyzv_subblock[])
         @begin_anyzv_region()
         @anyzv_serial_region begin
+            f_amplitude = epsilon * maximum(f)
             # Use exp(sin()) in vpa so that perturbation does not have any symmetry that makes
             # low-order moments vanish exactly.
             delta_f .= f_amplitude .*
@@ -1211,8 +1217,8 @@ function test_get_p_term(test_input::AbstractDict, label::String, get_term::Func
             end
         end
 
-        original_residual = allocate_shared_float(z)
-        perturbed_residual = allocate_shared_float(z)
+        original_residual = allocate_shared_float(z; comm=comm_anyzv_subblock[])
+        perturbed_residual = allocate_shared_float(z; comm=comm_anyzv_subblock[])
 
         @testset "δf only" begin
             residual_func!(original_residual, f, p)
@@ -1347,7 +1353,7 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
         vpa_advect = advection_structs.vpa_advect
         me = composition.me_over_mi
 
-        delta_p = allocate_shared_float(z)
+        delta_p = allocate_shared_float(z; comm=comm_anyzv_subblock[])
         p_amplitude = epsilon * maximum(p)
         f = @view pdf.electron.norm[:,:,:,ir]
 
@@ -1364,12 +1370,12 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
         # Ensure initial electron distribution function obeys constraints
         hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa, vperp)
         @begin_r_anyzv_region()
-        delta_f = allocate_shared_float(vpa, vperp, z)
-        f_amplitude = epsilon * maximum(f)
+        delta_f = allocate_shared_float(vpa, vperp, z; comm=comm_anyzv_subblock[])
         # Use exp(sin()) in vpa so that perturbation does not have any symmetry that makes
         # low-order moments vanish exactly.
         @begin_anyzv_region()
         @anyzv_serial_region begin
+            f_amplitude = epsilon * maximum(f)
             delta_f .= f_amplitude .*
                        reshape(sin.(2.0.*π.*test_wavenumber.*z.grid./z.L), 1, 1, z.n) .*
                        reshape(exp.(sin.(2.0.*π.*test_wavenumber.*vpa.grid./vpa.L)) .- 1.0, vpa.n, 1, 1) .*
@@ -1388,8 +1394,11 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
         buffer_2 = @view scratch_dummy.buffer_rs_2[ir,1]
         buffer_3 = @view scratch_dummy.buffer_rs_3[ir,1]
         buffer_4 = @view scratch_dummy.buffer_rs_4[ir,1]
-        third_moment = scratch_dummy.buffer_z_1
-        dthird_moment_dz = scratch_dummy.buffer_z_2
+        # Note must use buffer with r-dimension, because use of z-only buffers is not
+        # allowed within anyzv regions (as this would cause errors when the r-dimension is
+        # split).
+        third_moment = @view scratch_dummy.buffer_zrs_1[:,1,1]
+        dthird_moment_dz = @view scratch_dummy.buffer_zrs_2[:,1,1]
         @begin_anyzv_z_region()
         @loop_z iz begin
             third_moment[iz] = qpar[iz] / p[iz] / vth[iz]
@@ -1437,9 +1446,9 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
                                       vpa_spectral)
         end
 
-        zeroth_moment = z.scratch_shared
-        first_moment = z.scratch_shared2
-        second_moment = z.scratch_shared3
+        zeroth_moment = allocate_shared_float(z; comm=comm_anyzv_subblock[])
+        first_moment = allocate_shared_float(z; comm=comm_anyzv_subblock[])
+        second_moment = allocate_shared_float(z; comm=comm_anyzv_subblock[])
         @begin_anyzv_z_region()
         @loop_z iz begin
             @views zeroth_moment[iz] = integral(f[:,:,iz], vpa.grid, 0, vpa.wgts,
@@ -1700,18 +1709,18 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
             return nothing
         end
 
-        original_residual_f = allocate_shared_float(vpa, vperp, z)
-        original_residual_p = allocate_shared_float(z)
-        perturbed_residual_f = allocate_shared_float(vpa, vperp, z)
-        perturbed_residual_p = allocate_shared_float(z)
-        f_plus_delta_f = allocate_shared_float(vpa, vperp, z)
-        f_with_delta_p = allocate_shared_float(vpa, vperp, z)
+        original_residual_f = allocate_shared_float(vpa, vperp, z; comm=comm_anyzv_subblock[])
+        original_residual_p = allocate_shared_float(z; comm=comm_anyzv_subblock[])
+        perturbed_residual_f = allocate_shared_float(vpa, vperp, z; comm=comm_anyzv_subblock[])
+        perturbed_residual_p = allocate_shared_float(z; comm=comm_anyzv_subblock[])
+        f_plus_delta_f = allocate_shared_float(vpa, vperp, z; comm=comm_anyzv_subblock[])
+        f_with_delta_p = allocate_shared_float(vpa, vperp, z; comm=comm_anyzv_subblock[])
         @begin_anyzv_z_vperp_vpa_region()
         @loop_z_vperp_vpa iz ivperp ivpa begin
             f_plus_delta_f[ivpa,ivperp,iz] = f[ivpa,ivperp,iz] + delta_f[ivpa,ivperp,iz]
             f_with_delta_p[ivpa,ivperp,iz] = f[ivpa,ivperp,iz]
         end
-        p_plus_delta_p = allocate_shared_float(z)
+        p_plus_delta_p = allocate_shared_float(z; comm=comm_anyzv_subblock[])
         @begin_anyzv_z_region()
         @loop_z iz begin
             p_plus_delta_p[iz] = p[iz] + delta_p[iz]
@@ -1875,8 +1884,11 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2)
         v_size = vperp.n * vpa.n
 
         # Reconstruct w_∥^3 moment of g_e from already-calculated qpar
-        third_moment = scratch_dummy.buffer_z_1
-        dthird_moment_dz = scratch_dummy.buffer_z_2
+        # Note must use buffer with r-dimension, because use of z-only buffers is not
+        # allowed within anyzv regions (as this would cause errors when the r-dimension is
+        # split).
+        third_moment = @view scratch_dummy.buffer_zrs_1[:,1,1]
+        dthird_moment_dz = @view scratch_dummy.buffer_zrs_2[:,1,1]
         @begin_anyzv_z_region()
         @loop_z iz begin
             third_moment[iz] = qpar[iz] / p[iz] / vth[iz]
@@ -1888,7 +1900,7 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2)
         update_electron_speed_z!(z_advect[1], upar, vth, vpa.grid, ir)
         z_speed = @view z_advect[1].speed[:,:,:,ir]
 
-        delta_p = allocate_shared_float(z)
+        delta_p = allocate_shared_float(z; comm=comm_anyzv_subblock[])
         p_amplitude = epsilon * maximum(p)
         f = @view pdf.electron.norm[:,:,:,ir]
         @begin_anyzv_region()
@@ -1906,14 +1918,14 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2)
                    vpa_advect, moments,
                    num_diss_params.electron.vpa_dissipation_coefficient > 0.0,
                    composition.me_over_mi, ir; bc_constraints=false, update_vcut=false)
-        delta_f = allocate_shared_float(vpa, vperp, z)
-        f_amplitude = epsilon * maximum(f)
+        delta_f = allocate_shared_float(vpa, vperp, z; comm=comm_anyzv_subblock[])
         # Use exp(sin()) in vpa so that perturbation does not have any symmetry that makes
         # low-order moments vanish exactly.
         # For this test have no z-dependence in delta_f so that it does not vanish
         # at the z-boundaries
         @begin_anyzv_region()
         @anyzv_serial_region begin
+            f_amplitude = epsilon * maximum(f)
             @. delta_p = p_amplitude
 
             delta_f .= f_amplitude .*
@@ -2096,16 +2108,16 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2)
             return nothing
         end
 
-        original_residual = allocate_shared_float(vpa, vperp, z)
-        perturbed_residual = allocate_shared_float(vpa, vperp, z)
-        f_plus_delta_f = allocate_shared_float(vpa, vperp, z)
-        f_with_delta_p = allocate_shared_float(vpa, vperp, z)
+        original_residual = allocate_shared_float(vpa, vperp, z; comm=comm_anyzv_subblock[])
+        perturbed_residual = allocate_shared_float(vpa, vperp, z; comm=comm_anyzv_subblock[])
+        f_plus_delta_f = allocate_shared_float(vpa, vperp, z; comm=comm_anyzv_subblock[])
+        f_with_delta_p = allocate_shared_float(vpa, vperp, z; comm=comm_anyzv_subblock[])
         @begin_anyzv_z_vperp_vpa_region()
         @loop_z_vperp_vpa iz ivperp ivpa begin
             f_plus_delta_f[ivpa,ivperp,iz] = f[ivpa,ivperp,iz] + delta_f[ivpa,ivperp,iz]
             f_with_delta_p[ivpa,ivperp,iz] = f[ivpa,ivperp,iz]
         end
-        p_plus_delta_p = allocate_shared_float(z)
+        p_plus_delta_p = allocate_shared_float(z; comm=comm_anyzv_subblock[])
         @begin_anyzv_z_region()
         @loop_z iz begin
             p_plus_delta_p[iz] = p[iz] + delta_p[iz]
