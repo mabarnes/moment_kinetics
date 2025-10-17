@@ -1728,7 +1728,8 @@ pressure \$p_{e∥}\$.
             @begin_anyzv_z_vpa_region()
             enforce_vperp_boundary_condition!(f_electron_residual, vperp.bc,
                                               vperp, vperp_spectral, vperp_adv,
-                                              vperp_diffusion, ir)
+                                              num_diss_params.electron.vpa_dissipation_coefficient > 0.0,
+                                              ir)
         end
         zero_z_boundary_condition_points(f_electron_residual, z, vpa, moments, ir)
 
@@ -1910,7 +1911,8 @@ to allow the outer r-loop to be parallelised.
             if vperp.n > 1
                 @begin_anyzv_z_vpa_region()
                 enforce_vperp_boundary_condition!(f_electron_residual, vperp.bc, vperp, vperp_spectral,
-                                                  vperp_adv, vperp_diffusion)
+                                                  vperp_adv,
+                                                  num_diss_params.electron.vpa_dissipation_coefficient > 0.0)
             end
             zero_z_boundary_condition_points(f_electron_residual, z, vpa, moments, ir)
             return nothing
