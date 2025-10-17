@@ -108,17 +108,17 @@ OUTPUT:
                          external_source_settings, num_diss_params, nl_solver_params,
                          max_electron_pdf_iterations, max_electron_sim_time;
                          initial_time=nothing, residual_tolerance=nothing, evolve_p=false,
-                         ion_dt=nothing, solution_method="backward_euler") = begin
+                         ion_dt=nothing, solution_method::Val=Val(:backward_euler)) = begin
 
     # solve the electron kinetic equation using the specified method
-    if solution_method == "artificial_time_derivative"
+    if solution_method == Val(:artificial_time_derivative)
         return update_electron_pdf_with_time_advance!(scratch, pdf, moments, phi,
             collisions, composition, r, z, vperp, vpa, z_spectral, vperp_spectral,
             vpa_spectral, z_advect, vpa_advect, scratch_dummy, t_params,
             external_source_settings, num_diss_params, max_electron_pdf_iterations,
             max_electron_sim_time; initial_time=initial_time,
             residual_tolerance=residual_tolerance, evolve_p=evolve_p, ion_dt=ion_dt)
-    elseif solution_method == "backward_euler"
+    elseif solution_method == Val(:backward_euler)
         return electron_backward_euler_pseudotimestepping!(scratch, pdf, moments, phi,
             collisions, composition, r, z, vperp, vpa, z_spectral, vperp_spectral,
             vpa_spectral, z_advect, vpa_advect, scratch_dummy, t_params,

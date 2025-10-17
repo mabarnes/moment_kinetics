@@ -717,7 +717,7 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
                 # Can't let this counter stay set to 0
                 t_params.electron.dfns_output_counter[] = max(t_params.electron.dfns_output_counter[], 1)
                 implicit_electron_pseudotimestep = (nl_solver_params.electron_advance !== nothing)
-                electron_solution_method = implicit_electron_pseudotimestep ? "backward_euler" : "artificial_time_derivative"
+                electron_solution_method = Val(implicit_electron_pseudotimestep ? :backward_euler : :artificial_time_derivative)
                 success =
                     @views update_electron_pdf!(scratch_electron, pdf.electron.norm,
                                                 moments, fields.phi, r, z, vperp, vpa,
