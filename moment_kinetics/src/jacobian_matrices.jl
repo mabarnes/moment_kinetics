@@ -173,7 +173,7 @@ if no function is needed for the variable).
 """
 function create_jacobian_info(coords::NamedTuple, spectral::NamedTuple; comm=comm_block[],
                               synchronize::Union{Function,Nothing}=_block_synchronize,
-                              boundary_skip_funcs=nothing, block_banded=true, kwargs...)
+                              boundary_skip_funcs::BSF=nothing, block_banded=true, kwargs...) where {BSF}
 
     @debug_consistency_checks all(all(d ∈ keys(coords) for d ∈ v[2]) for v ∈ values(kwargs)) || error("Some coordinate required by the state variables were not included in `coords`.")
 
@@ -555,8 +555,8 @@ correspond to boundary condition points (i.e. those skipped by
 end
 function jacobian_initialize_bc_digonal_single_variable!(
              jacobian_block::BlockSkylineMatrix, col_variable_local_ranges,
-             col_local_block_ranges, col_variable_coords, boundary_skip, boundary_speed,
-             synchronize_shared)
+             col_local_block_ranges, col_variable_coords, boundary_skip::F,
+             boundary_speed, synchronize_shared) where {F}
     this_block = jacobian_matrix[row_variable][col_variable]
     this_block.data[col_local_block_ranges] .= 0.0
 
@@ -575,7 +575,8 @@ function jacobian_initialize_bc_digonal_single_variable!(
 end
 function jacobian_initialize_bc_digonal_single_variable!(
              jacobian_block, col_variable_local_ranges, col_local_block_ranges,
-             col_variable_coords, boundary_skip, boundary_speed, synchronize_shared)
+             col_variable_coords, boundary_skip::F, boundary_speed,
+             synchronize_shared) where {F}
     for (col, indices_CartesianIndex) ∈ enumerate(CartesianIndices(col_variable_local_ranges))
         indices = Tuple(indices_CartesianIndex)
         jacobian_block[:,col] .= 0.0
@@ -1888,7 +1889,7 @@ function add_term_to_Jacobian!(jacobian::jacobian_info, rows_variable::Symbol,
                                rows_variable_number::mk_int, rows_variable_dims::Tuple,
                                rows_variable_dim_sizes::Tuple,
                                rows_variable_local_ranges::Tuple,
-                               rows_variable_coords::Tuple, boundary_skip)
+                               rows_variable_coords::Tuple, boundary_skip::F) where {F}
     @inbounds begin
         for indices_CartesianIndex ∈ CartesianIndices(rows_variable_local_ranges)
             indices = Tuple(indices_CartesianIndex)

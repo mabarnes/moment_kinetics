@@ -548,9 +548,8 @@ end
         v = @view scratch_dummy.buffer_zs_4[:,1]
         w = @view scratch_dummy.buffer_zrs_1[:,1,1]
 
-        success = newton_solve!(p_out, residual_func!, residual, delta_x, rhs_delta, v,
-                                w, nl_solver_params; left_preconditioner=nothing,
-                                right_preconditioner=nothing, coords=(z=z,))
+        success = newton_solve!(p_out, residual_func!, residual, delta_x, rhs_delta, v, w,
+                                nl_solver_params; coords=(z=z,))
         if !success
             return success
         end

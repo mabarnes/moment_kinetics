@@ -96,7 +96,8 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(), spec
                                anysv_region=false, anyzv_region=false,
                                electron_p_pdf_solve=false,
                                preconditioner_type=Val(:none),
-                               boundary_skip_funcs=nothing, warn_unexpected=false)
+                               boundary_skip_funcs::BSF=nothing,
+                               warn_unexpected=false) where {BSF}
     nl_solver_section = set_defaults_and_check_section!(
         input_dict, section_name, warn_unexpected;
         rtol=default_rtol,
@@ -511,7 +512,7 @@ end
 
 """
     newton_solve!(x, rhs_func!, residual, delta_x, rhs_delta, w, nl_solver_params;
-                  left_preconditioner=nothing, right_preconditioner=nothing, coords)
+                  left_preconditioner=identity, right_preconditioner=identity, coords)
 
 `x` is the initial guess at the solution, and is overwritten by the result of the Newton
 solve.
@@ -570,32 +571,29 @@ As the GMRES solve is only used to get the right `direction' for the next Newton
 is not necessary to have a very tight `linear_rtol` for the GMRES solve.
 """
 @timeit global_timer newton_solve!(
-                         x, residual_func!, residual, delta_x, rhs_delta, v, w,
-                         nl_solver_params; left_preconditioner=nothing,
-                         right_preconditioner=nothing, recalculate_preconditioner=nothing,
-                         coords) = begin
+                         x, residual_func!::F, residual, delta_x, rhs_delta, v, w,
+                         nl_solver_params; left_preconditioner::LP=identity,
+                         right_preconditioner::RP=identity,
+                         recalculate_preconditioner::RECALC=nothing,
+                         coords) where {F,LP,RP,RECALC} = begin
     # This wrapper function constructs the `solver_type` from coords, so that the body of
     # the inner `newton_solve!()` can be fully type-stable
     solver_type = Val(Symbol((c for c ∈ keys(coords))...))
     return newton_solve!(x, residual_func!, residual, delta_x, rhs_delta, v, w,
-                         nl_solver_params, solver_type; left_preconditioner=left_preconditioner,
+                         nl_solver_params, solver_type;
+                         left_preconditioner=left_preconditioner,
                          right_preconditioner=right_preconditioner,
                          recalculate_preconditioner=recalculate_preconditioner,
                          coords=coords)
 end
-function newton_solve!(x, residual_func!, residual, delta_x, rhs_delta, v, w,
-                       nl_solver_params, solver_type::Val; left_preconditioner=nothing,
-                       right_preconditioner=nothing, recalculate_preconditioner=nothing,
-                       coords)
+function newton_solve!(x, residual_func!::F, residual, delta_x, rhs_delta, v, w,
+                       nl_solver_params, solver_type::Val;
+                       left_preconditioner::LP=identity,
+                       right_preconditioner::RP=identity,
+                       recalculate_preconditioner::RECALC=nothing,
+                       coords) where {F,LP,RP,RECALC}
     rtol = nl_solver_params.rtol
     atol = nl_solver_params.atol
-
-    if left_preconditioner === nothing
-        left_preconditioner = identity
-    end
-    if right_preconditioner === nothing
-        right_preconditioner = identity
-    end
 
     norm_params = (coords, nl_solver_params.rtol, nl_solver_params.atol, x)
 
@@ -1573,11 +1571,11 @@ solution, without calculating a least-squares minimisation at each step. See 'al
 MGS-GMRES' in Zou (2023) [https://doi.org/10.1016/j.amc.2023.127869].
 """
 @timeit global_timer linear_solve!(
-                         x, residual_func!, residual0, delta_x, v, w, solver_type::Val,
+                         x, residual_func!::F, residual0, delta_x, v, w, solver_type::Val,
                          norm_params; coords, rtol, atol, restart, max_restarts,
-                         left_preconditioner, right_preconditioner, H, c, s, g, V,
+                         left_preconditioner::LP, right_preconditioner::RP, H, c, s, g, V,
                          rhs_delta, initial_guess, serial_solve, anysv_region,
-                         anyzv_region, initial_delta_x_is_zero) = begin
+                         anyzv_region, initial_delta_x_is_zero) where {F,LP,RP} = begin
     # Solve (approximately?):
     #   J δx = residual0
 
@@ -1798,7 +1796,7 @@ MGS-GMRES' in Zou (2023) [https://doi.org/10.1016/j.amc.2023.127869].
         parallel_map(solver_type, (delta_x) -> delta_x, v, delta_x)
         approximate_Jacobian_vector_product!(v)
 
-        # Note residual0 has already had the left_preconditioner!() applied to it.
+        # Note residual0 has already had the left_preconditioner() applied to it.
         parallel_map(solver_type, (residual0, v) -> -residual0 - v, v, residual0, v)
         beta = distributed_norm(solver_type, v, norm_params...)
         for i ∈ 2:length(y)
