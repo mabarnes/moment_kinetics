@@ -20,7 +20,7 @@ using ..gauss_legendre: gausslegendre_info
 using ..input_structs
 using ..interpolation: interpolate_to_grid_1d!, fill_1d_interpolation_matrix!,
                        interpolate_symmetric!, fill_interpolate_symmetric_matrix!
-using ..type_definitions: mk_float, mk_int
+using ..type_definitions
 using ..array_allocation: allocate_float
 using ..electron_fluid_equations: calculate_electron_moments!,
                                   calculate_electron_moments_no_r!,
@@ -981,6 +981,198 @@ function electron_backward_euler_pseudotimestepping!(scratch, pdf, moments,
     return success
 end
 
+@kwdef struct kinetic_electron_recalculate_lu!{Tnl,Tfe,Tpe,Tmom,Tphi,Tcoll,Tcomp,Tz,
+                                               Tvperp,Tvpa,Tzsp,Tvperpsp,Tvpasp,Tzadv,
+                                               Tvpaadv,Tdum,Text,Tdiss,Ttp,Tidt}
+    nl_solver_params::Tnl
+    f_electron_new::Tfe
+    electron_p_new::Tpe
+    moments::Tmom
+    this_phi::Tphi
+    collisions::Tcoll
+    composition::Tcomp
+    z::Tz
+    vperp::Tvperp
+    vpa::Tvpa
+    z_spectral::Tzsp
+    vperp_spectral::Tvperpsp
+    vpa_spectral::Tvpasp
+    z_advect::Tzadv
+    vpa_advect::Tvpaadv
+    scratch_dummy::Tdum
+    external_source_settings::Text
+    num_diss_params::Tdiss
+    t_params::Ttp
+    ion_dt::Tidt
+    evolve_p::Bool
+    add_identity::Bool
+    ir::mk_int
+end
+
+function (recalc::kinetic_electron_recalculate_lu!)()
+    nl_solver_params = recalc.nl_solver_params
+    f_electron_new = recalc.f_electron_new
+    electron_p_new = recalc.electron_p_new
+    moments = recalc.moments
+    this_phi = recalc.this_phi
+    collisions = recalc.collisions
+    composition = recalc.composition
+    z = recalc.z
+    vperp = recalc.vperp
+    vpa = recalc.vpa
+    z_spectral = recalc.z_spectral
+    vperp_spectral = recalc.vperp_spectral
+    vpa_spectral = recalc.vpa_spectral
+    z_advect = recalc.z_advect
+    vpa_advect = recalc.vpa_advect
+    scratch_dummy = recalc.scratch_dummy
+    external_source_settings = recalc.external_source_settings
+    num_diss_params = recalc.num_diss_params
+    t_params = recalc.t_params
+    ion_dt = recalc.ion_dt
+    evolve_p = recalc.evolve_p
+    add_identity = recalc.add_identity
+    ir = recalc.ir
+
+global_rank[] == 0 && println("recalculating precon")
+
+    nl_solver_params.solves_since_precon_update[] = 0
+    nl_solver_params.precon_dt[] = t_params.dt[]
+
+    orig_lu, precon, input_buffer, output_buffer =
+        nl_solver_params.preconditioners[ir]
+
+    fill_electron_kinetic_equation_Jacobian!(
+        precon, f_electron_new, electron_p_new, moments, this_phi, collisions,
+        composition, z, vperp, vpa, z_spectral, vperp_spectral, vpa_spectral,
+        z_advect, vpa_advect, scratch_dummy, external_source_settings,
+        num_diss_params, t_params, ion_dt, ir, evolve_p, :all, true, add_identity)
+
+    @begin_anyzv_region()
+    if anyzv_subblock_rank[] == 0
+        if size(orig_lu) == (1, 1)
+            # Have not properly created the LU decomposition before, so
+            # cannot reuse it.
+            @timeit_debug global_timer "lu" nl_solver_params.preconditioners[ir] =
+                (lu(get_sparse_joined_array(precon)), precon, input_buffer,
+                 output_buffer)
+        else
+            # LU decomposition was previously created. The Jacobian always
+            # has the same sparsity pattern, so by using `lu!()` we can
+            # reuse some setup.
+            try
+                @timeit_debug global_timer "lu!" lu!(orig_lu, get_sparse_joined_array(precon); check=false)
+            catch e
+                if !isa(e, ArgumentError)
+                    rethrow(e)
+                end
+                println("Sparsity pattern of matrix changed, rebuilding "
+                        * "LU from scratch")
+                @timeit_debug global_timer "lu" orig_lu = lu(get_sparse_joined_array(precon))
+            end
+            nl_solver_params.preconditioners[ir] =
+                (orig_lu, precon, input_buffer, output_buffer)
+        end
+    else
+        nl_solver_params.preconditioners[ir] =
+            (orig_lu, precon, input_buffer, output_buffer)
+    end
+
+    return nothing
+end
+
+@kwdef struct kinetic_electron_lu_precon!{Tnl,Tdum,Tb1,Tb2,Tb3,Tb4,Tz}
+    nl_solver_params::Tnl
+    scratch_dummy::Tdum
+    buffer_1::Tb1
+    buffer_2::Tb2
+    buffer_3::Tb3
+    buffer_4::Tb4
+    z::Tz
+    ir::mk_int
+end
+
+@timeit_debug global_timer (lu_pre::kinetic_electron_lu_precon!)(x) = begin
+    nl_solver_params = lu_pre.nl_solver_params
+    scratch_dummy = lu_pre.scratch_dummy
+    buffer_1 = lu_pre.buffer_1
+    buffer_2 = lu_pre.buffer_2
+    buffer_3 = lu_pre.buffer_3
+    buffer_4 = lu_pre.buffer_4
+    z = lu_pre.z
+    ir = lu_pre.ir
+
+    precon_p, precon_f = x
+
+    precon_lu, _, this_input_buffer, this_output_buffer =
+        nl_solver_params.preconditioners[ir]
+
+    @begin_anyzv_region()
+    counter = 1
+    @loop_z_vperp_vpa iz ivperp ivpa begin
+        this_input_buffer[counter] = precon_f[ivpa,ivperp,iz]
+        counter += 1
+    end
+    @loop_z iz begin
+        this_input_buffer[counter] = precon_p[iz]
+        counter += 1
+    end
+
+    @begin_anyzv_region()
+    @anyzv_serial_region begin
+        @timeit_debug global_timer "ldiv!" ldiv!(this_output_buffer, precon_lu, this_input_buffer)
+    end
+
+    @begin_anyzv_region()
+    counter = 1
+    @loop_z_vperp_vpa iz ivperp ivpa begin
+        precon_f[ivpa,ivperp,iz] = this_output_buffer[counter]
+        counter += 1
+    end
+    @loop_z iz begin
+        precon_p[iz] = this_output_buffer[counter]
+        counter += 1
+    end
+
+    # Ensure values of precon_f and precon_p are consistent across
+    # distributed-MPI block boundaries. For precon_f take the upwind
+    # value, and for precon_p take the average.
+    f_lower_endpoints = @view scratch_dummy.buffer_vpavperpr_1[:,:,ir]
+    f_upper_endpoints = @view scratch_dummy.buffer_vpavperpr_2[:,:,ir]
+    receive_buffer1 = @view scratch_dummy.buffer_vpavperpr_3[:,:,ir]
+    receive_buffer2 = @view scratch_dummy.buffer_vpavperpr_4[:,:,ir]
+    @begin_anyzv_vperp_vpa_region()
+    @loop_vperp_vpa ivperp ivpa begin
+        f_lower_endpoints[ivpa,ivperp] = precon_f[ivpa,ivperp,1]
+        f_upper_endpoints[ivpa,ivperp] = precon_f[ivpa,ivperp,end]
+    end
+    # We upwind the z-derivatives in `electron_z_advection!()`, so would
+    # expect that upwinding the results here in z would make sense.
+    # However, upwinding here makes convergence much slower (~10x),
+    # compared to picking the values from one side or other of the block
+    # boundary, or taking the average of the values on either side.
+    # Neither direction is special, so taking the average seems most
+    # sensible (although in an intial test it does not seem to converge
+    # faster than just picking one or the other).
+    # Maybe this could indicate that it is more important to have a fully
+    # self-consistent Jacobian inversion for the
+    # `electron_vpa_advection()` part rather than taking half(ish) of the
+    # values from one block and the other half(ish) from the other.
+    reconcile_element_boundaries_MPI_z_pdf_vpavperpz!(
+        precon_f, f_lower_endpoints, f_upper_endpoints, receive_buffer1,
+        receive_buffer2, z)
+
+    @begin_anyzv_region()
+    @anyzv_serial_region begin
+        buffer_1[] = precon_p[1]
+        buffer_2[] = precon_p[end]
+    end
+    reconcile_element_boundaries_MPI_anyzv!(
+        precon_p, buffer_1, buffer_2, buffer_3, buffer_4, z)
+
+    return nothing
+end
+
 function get_electron_lu_preconditioner(nl_solver_params, f_electron_new, electron_p_new,
                                         buffer_1, buffer_2, buffer_3, buffer_4,
                                         electron_density, electron_upar, this_phi,
@@ -989,96 +1181,384 @@ function get_electron_lu_preconditioner(nl_solver_params, f_electron_new, electr
                                         z_advect, vpa_advect, scratch_dummy,
                                         external_source_settings, num_diss_params,
                                         t_params, ion_dt, ir, evolve_p, add_identity=true)
-    function recalculate_lu_preconditioner!()
+
+    recalculate_lu_preconditioner! = kinetic_electron_recalculate_lu!(;
+                                         nl_solver_params, f_electron_new, electron_p_new,
+                                         moments, this_phi, collisions, composition, z,
+                                         vperp, vpa, z_spectral, vperp_spectral,
+                                         vpa_spectral, z_advect, vpa_advect,
+                                         scratch_dummy, external_source_settings,
+                                         num_diss_params, t_params, ion_dt, evolve_p,
+                                         add_identity, ir)
+
+    lu_precon! = kinetic_electron_lu_precon!(; nl_solver_params, scratch_dummy, buffer_1,
+                                             buffer_2, buffer_3, buffer_4, z, ir)
+
+    left_preconditioner = identity
+    right_preconditioner = lu_precon!
+
+    return left_preconditioner, right_preconditioner, recalculate_lu_preconditioner!
+end
+
+@kwdef struct kinetic_electron_recalculate_adi!{Tnl,Tfe,Tpe,Tb1,Tb2,Tb3,Tb4,Tne,Tue,Tphi,
+                                                Tmom,Tcoll,Tcomp,Tz,Tvperp,Tvpa,Tzsp,
+                                                Tvperpsp,Tvpasp,Tzadv,Tvpaadv,Tdum,Text,
+                                                Tdiss,Ttp,Tidt}
+    nl_solver_params::Tnl
+    f_electron_new::Tfe
+    electron_p_new::Tpe
+    buffer_1::Tb1
+    buffer_2::Tb2
+    buffer_3::Tb3
+    buffer_4::Tb4
+    electron_density::Tne
+    electron_upar::Tue
+    this_phi::Tphi
+    moments::Tmom
+    collisions::Tcoll
+    composition::Tcomp
+    z::Tz
+    vperp::Tvperp
+    vpa::Tvpa
+    z_spectral::Tzsp
+    vperp_spectral::Tvperpsp
+    vpa_spectral::Tvpasp
+    z_advect::Tzadv
+    vpa_advect::Tvpaadv
+    scratch_dummy::Tdum
+    external_source_settings::Text
+    num_diss_params::Tdiss
+    t_params::Ttp
+    ion_dt::Tidt
+    ir::mk_int
+    evolve_p::Bool
+    add_identity::Bool
+end
+
+function (recalc_adi::kinetic_electron_recalculate_adi!)()
+    nl_solver_params = recalc_adi.nl_solver_params
+    f_electron_new = recalc_adi.f_electron_new
+    electron_p_new = recalc_adi.electron_p_new
+    buffer_1 = recalc_adi.buffer_1
+    buffer_2 = recalc_adi.buffer_2
+    buffer_3 = recalc_adi.buffer_3
+    buffer_4 = recalc_adi.buffer_4
+    electron_density = recalc_adi.electron_density
+    electron_upar = recalc_adi.electron_upar
+    this_phi = recalc_adi.this_phi
+    moments = recalc_adi.moments
+    collisions = recalc_adi.collisions
+    composition = recalc_adi.composition
+    z = recalc_adi.z
+    vperp = recalc_adi.vperp
+    vperp = recalc_adi.vperp
+    vpa = recalc_adi.vpa
+    z_spectral = recalc_adi.z_spectral
+    vperp_spectral = recalc_adi.vperp_spectral
+    vpa_spectral = recalc_adi.vpa_spectral
+    z_advect = recalc_adi.z_advect
+    vpa_advect = recalc_adi.vpa_advect
+    scratch_dummy = recalc_adi.scratch_dummy
+    external_source_settings = recalc_adi.external_source_settings
+    num_diss_params = recalc_adi.num_diss_params
+    t_params = recalc_adi.t_params
+    ion_dt = recalc_adi.ion_dt
+    ir = recalc_adi.ir
+    evolve_p = recalc_adi.evolve_p
+    add_identity = recalc_adi.add_identity
+
 global_rank[] == 0 && println("recalculating precon")
-        nl_solver_params.solves_since_precon_update[] = 0
-        nl_solver_params.precon_dt[] = t_params.dt[]
 
-        orig_lu, precon, input_buffer, output_buffer =
-            nl_solver_params.preconditioners[ir]
+    nl_solver_params.solves_since_precon_update[] = 0
+    nl_solver_params.precon_dt[] = t_params.dt[]
 
+    adi_info = nl_solver_params.preconditioners[ir]
+
+    vth = @view moments.electron.vth[:,ir]
+    qpar = @view moments.electron.qpar[:,ir]
+
+    # Reconstruct w_∥^3 moment of g_e from already-calculated qpar
+    third_moment = @view scratch_dummy.buffer_zrs_1[:,ir,1]
+    dthird_moment_dz = @view scratch_dummy.buffer_zrs_2[:,ir,1]
+    @begin_anyzv_z_region()
+    @loop_z iz begin
+        third_moment[iz] = 0.5 * qpar[iz] / electron_p_new[iz] / vth[iz]
+    end
+    derivative_z_anyzv!(dthird_moment_dz, third_moment, buffer_1, buffer_2,
+                        buffer_3, buffer_4, z_spectral, z)
+
+    z_speed = @view z_advect[1].speed[:,:,:,ir]
+
+    dpdf_dz = @view scratch_dummy.buffer_vpavperpzr_1[:,:,:,ir]
+    @begin_anyzv_vperp_vpa_region()
+    update_electron_speed_z!(z_advect[1], electron_upar, vth, vpa.grid, ir)
+    @loop_vperp_vpa ivperp ivpa begin
+        @views z_advect[1].adv_fac[:,ivpa,ivperp,ir] = -z_speed[:,ivpa,ivperp]
+    end
+    #calculate the upwind derivative
+    @views derivative_z_pdf_vpavperpz!(dpdf_dz, f_electron_new,
+                                       z_advect[1].adv_fac[:,:,:,ir],
+                                       scratch_dummy.buffer_vpavperpr_1[:,:,ir],
+                                       scratch_dummy.buffer_vpavperpr_2[:,:,ir],
+                                       scratch_dummy.buffer_vpavperpr_3[:,:,ir],
+                                       scratch_dummy.buffer_vpavperpr_4[:,:,ir],
+                                       scratch_dummy.buffer_vpavperpr_5[:,:,ir],
+                                       scratch_dummy.buffer_vpavperpr_6[:,:,ir],
+                                       z_spectral, z)
+
+    dpdf_dvpa = @view scratch_dummy.buffer_vpavperpzr_2[:,:,:,ir]
+    @begin_anyzv_z_vperp_region()
+    update_electron_speed_vpa!(vpa_advect[1], electron_density, electron_upar,
+                               electron_p_new, moments, composition.me_over_mi,
+                               vpa.grid, external_source_settings.electron, ir)
+    @loop_z_vperp iz ivperp begin
+        @views @. vpa_advect[1].adv_fac[:,ivperp,iz,ir] = -vpa_advect[1].speed[:,ivperp,iz,ir]
+    end
+    #calculate the upwind derivative of the electron pdf w.r.t. wpa
+    @loop_z_vperp iz ivperp begin
+        @views derivative!(dpdf_dvpa[:,ivperp,iz], f_electron_new[:,ivperp,iz], vpa,
+                           vpa_advect[1].adv_fac[:,ivperp,iz,ir], vpa_spectral)
+    end
+    vpa_speed = @view vpa_advect[1].speed[:,:,:,ir]
+
+    zeroth_moment = @view scratch_dummy.buffer_zrs_3[:,ir,1]
+    first_moment = @view scratch_dummy.buffer_zrs_4[:,ir,1]
+    second_moment = @view scratch_dummy.buffer_zrs_5[:,ir,1]
+    @begin_anyzv_z_region()
+    vpa_grid = vpa.grid
+    vpa_wgts = vpa.wgts
+    @loop_z iz begin
+        @views zeroth_moment[iz] = integral(f_electron_new[:,1,iz], vpa_wgts)
+        @views first_moment[iz] = integral(f_electron_new[:,1,iz], vpa_grid, vpa_wgts)
+        @views second_moment[iz] = integral(f_electron_new[:,1,iz], vpa_grid, 2, vpa_wgts)
+    end
+
+    v_size = vperp.n * vpa.n
+
+    # Do setup for 'v solves'
+    v_solve_counter = 0
+    A = adi_info.v_solve_jacobian
+    explicit_J = adi_info.explicit_jacobian
+    # Get sparse matrix for explicit, right-hand-side part of the
+    # solve.
+    if adi_info.n_extra_iterations > 0
+        # If we only do one 'iteration' we don't need the 'explicit
+        # matrix' for the first solve (the v-solve), because the initial
+        # guess is zero,
         fill_electron_kinetic_equation_Jacobian!(
-            precon, f_electron_new, electron_p_new, moments, this_phi, collisions,
-            composition, z, vperp, vpa, z_spectral, vperp_spectral, vpa_spectral,
-            z_advect, vpa_advect, scratch_dummy, external_source_settings,
-            num_diss_params, t_params, ion_dt, ir, evolve_p, :all, true, add_identity)
+            explicit_J, f_electron_new, electron_p_new, moments, this_phi,
+            collisions, composition, z, vperp, vpa, z_spectral, vperp_spectral,
+            vpa_spectral, z_advect, vpa_advect, scratch_dummy,
+            external_source_settings, num_diss_params, t_params, ion_dt, ir,
+            evolve_p, :explicit_z, false, add_identity)
 
-        @begin_anyzv_region()
-        if anyzv_subblock_rank[] == 0
-            if size(orig_lu) == (1, 1)
-                # Have not properly created the LU decomposition before, so
-                # cannot reuse it.
-                @timeit_debug global_timer "lu" nl_solver_params.preconditioners[ir] =
-                    (lu(get_sparse_joined_array(precon)), precon, input_buffer,
-                     output_buffer)
-            else
-                # LU decomposition was previously created. The Jacobian always
-                # has the same sparsity pattern, so by using `lu!()` we can
-                # reuse some setup.
-                try
-                    @timeit_debug global_timer "lu!" lu!(orig_lu, get_sparse_joined_array(precon); check=false)
-                catch e
-                    if !isa(e, ArgumentError)
-                        rethrow(e)
-                    end
-                    println("Sparsity pattern of matrix changed, rebuilding "
-                            * "LU from scratch")
-                    @timeit_debug global_timer "lu" orig_lu = lu(get_sparse_joined_array(precon))
-                end
-                nl_solver_params.preconditioners[ir] =
-                    (orig_lu, precon, input_buffer, output_buffer)
+        # This is calculated and stored in scratch_dummy.buffer_vpavperpzr_3 in
+        # fill_electron_kinetic_equation_Jacobian!().
+        d2pdf_dvpa2 = @view scratch_dummy.buffer_vpavperpzr_3[:,:,:,ir]
+    else
+        d2pdf_dvpa2 = @view scratch_dummy.buffer_vpavperpzr_3[:,:,:,ir]
+        if num_diss_params.electron.vpa_dissipation_coefficient > 0.0
+            @begin_anyzv_z_vperp_region()
+            @loop_z_vperp iz ivperp begin
+                @views second_derivative!(d2pdf_dvpa2[:,ivperp,iz],
+                                          f_electron_new[:,ivperp,iz], vpa,
+                                          vpa_spectral)
             end
-        else
-            nl_solver_params.preconditioners[ir] =
-                (orig_lu, precon, input_buffer, output_buffer)
         end
     end
 
-
-    @timeit_debug global_timer lu_precon!(x) = begin
-        precon_p, precon_f = x
-
-        precon_lu, _, this_input_buffer, this_output_buffer =
-            nl_solver_params.preconditioners[ir]
-
-        @begin_anyzv_region()
-        counter = 1
-        @loop_z_vperp_vpa iz ivperp ivpa begin
-            this_input_buffer[counter] = precon_f[ivpa,ivperp,iz]
-            counter += 1
+    @begin_anyzv_z_region()
+    @loop_z iz begin
+        v_solve_counter += 1
+        # Get LU-factorized matrix for implicit part of the solve
+        fill_electron_kinetic_equation_v_only_Jacobian!(
+            A, @view(f_electron_new[:,:,iz]), @view(electron_p_new[iz]),
+            @view(dpdf_dz[:,:,iz]), @view(dpdf_dvpa[:,:,iz]),
+            @view(d2pdf_dvpa2[:,:,iz]), @view(z_speed[iz,:,:]),
+            @view(vpa_speed[:,:,iz]), moments, @view(zeroth_moment[iz]),
+            @view(first_moment[iz]), @view(second_moment[iz]),
+            @view(third_moment[iz]), dthird_moment_dz[iz], this_phi[iz],
+            collisions, composition, z, vperp, vpa, z_spectral, vperp_spectral,
+            vpa_spectral, z_advect, vpa_advect, scratch_dummy,
+            external_source_settings, num_diss_params, t_params, ion_dt, ir, iz,
+            evolve_p, add_identity)
+        A_sparse = get_sparse_joined_array(A)
+        if !isassigned(adi_info.v_solve_implicit_lus, v_solve_counter)
+            @timeit_debug global_timer "lu" adi_info.v_solve_implicit_lus[v_solve_counter] = lu(A_sparse)
+        else
+            # LU decomposition was previously created. The Jacobian always
+            # has the same sparsity pattern, so by using `lu!()` we can
+            # reuse some setup.
+            try
+                @timeit_debug global_timer "lu!" lu!(adi_info.v_solve_implicit_lus[v_solve_counter], A_sparse; check=false)
+            catch e
+                if !isa(e, ArgumentError)
+                    rethrow(e)
+                end
+                println("Sparsity pattern of matrix changed, rebuilding "
+                        * "LU from scratch ir=$ir, iz=$iz")
+                @timeit_debug global_timer "lu" adi_info.v_solve_implicit_lus[v_solve_counter] = lu(A_sparse)
+            end
         end
-        @loop_z iz begin
-            this_input_buffer[counter] = precon_p[iz]
-            counter += 1
+
+        if adi_info.n_extra_iterations > 0
+            # If we only do one 'iteration' we don't need the 'explicit
+            # matrix' for the first solve (the v-solve), because the
+            # initial guess is zero,
+            joined_explicit_array = get_joined_array(explicit_J)
+            adi_info.v_solve_explicit_matrices[v_solve_counter] = sparse(@view(joined_explicit_array[adi_info.v_solve_global_inds[v_solve_counter],:]))
+        end
+    end
+    @debug_consistency_checks v_solve_counter == adi_info.v_solve_nsolve || error("v_solve_counter($v_solve_counter) != v_solve_nsolve($(adi_info.v_solve_nsolve))")
+
+    # Do setup for 'z solves'
+    z_solve_counter = 0
+    A = adi_info.z_solve_jacobian
+    # Get sparse matrix for explicit, right-hand-side part of the
+    # solve.
+    fill_electron_kinetic_equation_Jacobian!(
+        explicit_J, f_electron_new, electron_p_new, moments, this_phi, collisions,
+        composition, z, vperp, vpa, z_spectral, vperp_spectral, vpa_spectral,
+        z_advect, vpa_advect, scratch_dummy, external_source_settings,
+        num_diss_params, t_params, ion_dt, ir, evolve_p, :explicit_v, false,
+        add_identity)
+    @begin_anyzv_vperp_vpa_region()
+    @loop_vperp_vpa ivperp ivpa begin
+        z_solve_counter += 1
+
+        # Get LU-factorized matrix for implicit part of the solve
+        @views fill_electron_kinetic_equation_z_only_Jacobian_f!(
+            A, f_electron_new[ivpa,ivperp,:], electron_p_new,
+            dpdf_dz[ivpa,ivperp,:], dpdf_dvpa[ivpa,ivperp,:],
+            d2pdf_dvpa2[ivpa,ivperp,:], z_speed[:,ivpa,ivperp], moments,
+            zeroth_moment, first_moment, second_moment, third_moment,
+            dthird_moment_dz, collisions, composition, z, vperp, vpa, z_spectral,
+            vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
+            external_source_settings, num_diss_params, t_params, ion_dt, ir,
+            ivperp, ivpa, add_identity)
+
+        A_sparse = get_sparse_joined_array(A)
+        if !isassigned(adi_info.z_solve_implicit_lus, z_solve_counter)
+            @timeit_debug global_timer "lu" adi_info.z_solve_implicit_lus[z_solve_counter] = lu(A_sparse)
+        else
+            # LU decomposition was previously created. The Jacobian always
+            # has the same sparsity pattern, so by using `lu!()` we can
+            # reuse some setup.
+            try
+                @timeit_debug global_timer "lu!" lu!(adi_info.z_solve_implicit_lus[z_solve_counter], A_sparse; check=false)
+            catch e
+                if !isa(e, ArgumentError)
+                    rethrow(e)
+                end
+                println("Sparsity pattern of matrix changed, rebuilding "
+                        * "LU from scratch ir=$ir, ivperp=$ivperp, ivpa=$ivpa")
+                @timeit_debug global_timer "lu" adi_info.z_solve_implicit_lus[z_solve_counter] = lu(A_sparse)
+            end
         end
 
-        @begin_anyzv_region()
-        @anyzv_serial_region begin
-            @timeit_debug global_timer "ldiv!" ldiv!(this_output_buffer, precon_lu, this_input_buffer)
+        joined_explicit_array = get_joined_array(explicit_J)
+        adi_info.z_solve_explicit_matrices[z_solve_counter] = sparse(@view(joined_explicit_array[adi_info.z_solve_global_inds[z_solve_counter],:]))
+    end
+
+    A_p = adi_info.z_solve_jacobian_p
+    @begin_anyzv_region(true)
+    @anyzv_serial_region begin
+        # Do the solve for p on the rank-0 process, which has the fewest grid
+        # points to handle if there are not an exactly equal number of points for
+        # each process.
+        z_solve_counter += 1
+
+        # Get LU-factorized matrix for implicit part of the solve
+        @views fill_electron_kinetic_equation_z_only_Jacobian_p!(
+            A_p, electron_p_new, f_electron_new[1,1,:], dpdf_dz[1,1,:],
+            dpdf_dvpa[1,1,:], d2pdf_dvpa2[1,1,:], z_speed[:,1,1], moments,
+            zeroth_moment, first_moment, second_moment, third_moment,
+            dthird_moment_dz, collisions, composition, z, vperp, vpa, z_spectral,
+            vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
+            external_source_settings, num_diss_params, t_params, ion_dt, ir,
+            evolve_p, add_identity)
+
+        A_sparse = sparse(A_p.matrix[1][1])
+        if !isassigned(adi_info.z_solve_implicit_lus, z_solve_counter)
+            @timeit_debug global_timer "lu" adi_info.z_solve_implicit_lus[z_solve_counter] = lu(A_sparse)
+        else
+            # LU decomposition was previously created. The Jacobian always
+            # has the same sparsity pattern, so by using `lu!()` we can
+            # reuse some setup.
+            try
+                @timeit_debug global_timer "lu!" lu!(adi_info.z_solve_implicit_lus[z_solve_counter], A_sparse; check=false)
+            catch e
+                if !isa(e, ArgumentError)
+                    rethrow(e)
+                end
+                println("Sparsity pattern of matrix changed, rebuilding "
+                        * "LU from scratch ir=$ir, p z-solve")
+                @timeit_debug global_timer "lu" adi_info.z_solve_implicit_lus[z_solve_counter] = lu(A_sparse)
+            end
         end
 
-        @begin_anyzv_region()
-        counter = 1
-        @loop_z_vperp_vpa iz ivperp ivpa begin
-            precon_f[ivpa,ivperp,iz] = this_output_buffer[counter]
-            counter += 1
-        end
-        @loop_z iz begin
-            precon_p[iz] = this_output_buffer[counter]
-            counter += 1
-        end
+        joined_explicit_array = get_joined_array(explicit_J)
+        adi_info.z_solve_explicit_matrices[z_solve_counter] = sparse(@view(joined_explicit_array[adi_info.z_solve_global_inds[z_solve_counter],:]))
+    end
+    @debug_consistency_checks z_solve_counter == adi_info.z_solve_nsolve || error("z_solve_counter($z_solve_counter) != z_solve_nsolve($(adi_info.z_solve_nsolve))")
 
+    return nothing
+end
+
+@kwdef struct kinetic_electron_adi_precon!{Tnl,Tz,Tvperp,Tvpa,Tb1,Tb2,Tb3,Tb4,Tdum}
+    nl_solver_params::Tnl
+    z::Tz
+    vperp::Tvperp
+    vpa::Tvpa
+    ir::mk_int
+    buffer_1::Tb1
+    buffer_2::Tb2
+    buffer_3::Tb3
+    buffer_4::Tb4
+    scratch_dummy::Tdum
+end
+
+@timeit_debug global_timer (adi_pre::kinetic_electron_adi_precon!)(x) = begin
+    nl_solver_params = adi_pre.nl_solver_params
+    z = adi_pre.z
+    vperp = adi_pre.vperp
+    vpa = adi_pre.vpa
+    ir = adi_pre.ir
+    buffer_1 = adi_pre.buffer_1
+    buffer_2 = adi_pre.buffer_2
+    buffer_3 = adi_pre.buffer_3
+    buffer_4 = adi_pre.buffer_4
+    scratch_dummy = adi_pre.scratch_dummy
+
+    precon_p, precon_f = x
+
+    adi_info = nl_solver_params.preconditioners[ir]
+    precon_iterations = nl_solver_params.precon_iterations
+    this_input_buffer = adi_info.input_buffer
+    this_intermediate_buffer = adi_info.intermediate_buffer
+    this_output_buffer = adi_info.output_buffer
+    global_index_subrange = adi_info.global_index_subrange
+    n_extra_iterations = adi_info.n_extra_iterations
+
+    v_size = vperp.n * vpa.n
+    pdf_size = z.n * v_size
+
+    # Use these views to communicate block-boundary points
+    output_buffer_pdf_view = reshape(@view(this_output_buffer[1:pdf_size]), size(precon_f))
+    output_buffer_p_view = @view(this_output_buffer[pdf_size+1:end])
+    f_lower_endpoints = @view scratch_dummy.buffer_vpavperpr_1[:,:,ir]
+    f_upper_endpoints = @view scratch_dummy.buffer_vpavperpr_2[:,:,ir]
+    receive_buffer1 = @view scratch_dummy.buffer_vpavperpr_3[:,:,ir]
+    receive_buffer2 = @view scratch_dummy.buffer_vpavperpr_4[:,:,ir]
+
+    function adi_communicate_boundary_points()
         # Ensure values of precon_f and precon_p are consistent across
-        # distributed-MPI block boundaries. For precon_f take the upwind
-        # value, and for precon_p take the average.
-        f_lower_endpoints = @view scratch_dummy.buffer_vpavperpr_1[:,:,ir]
-        f_upper_endpoints = @view scratch_dummy.buffer_vpavperpr_2[:,:,ir]
-        receive_buffer1 = @view scratch_dummy.buffer_vpavperpr_3[:,:,ir]
-        receive_buffer2 = @view scratch_dummy.buffer_vpavperpr_4[:,:,ir]
+        # distributed-MPI block boundaries. For precon_f take the upwind value,
+        # and for precon_p take the average.
         @begin_anyzv_vperp_vpa_region()
         @loop_vperp_vpa ivperp ivpa begin
-            f_lower_endpoints[ivpa,ivperp] = precon_f[ivpa,ivperp,1]
-            f_upper_endpoints[ivpa,ivperp] = precon_f[ivpa,ivperp,end]
+            f_lower_endpoints[ivpa,ivperp] = output_buffer_pdf_view[ivpa,ivperp,1]
+            f_upper_endpoints[ivpa,ivperp] = output_buffer_pdf_view[ivpa,ivperp,end]
         end
         # We upwind the z-derivatives in `electron_z_advection!()`, so would
         # expect that upwinding the results here in z would make sense.
@@ -1093,24 +1573,124 @@ global_rank[] == 0 && println("recalculating precon")
         # `electron_vpa_advection()` part rather than taking half(ish) of the
         # values from one block and the other half(ish) from the other.
         reconcile_element_boundaries_MPI_z_pdf_vpavperpz!(
-            precon_f, f_lower_endpoints, f_upper_endpoints, receive_buffer1,
+            output_buffer_pdf_view, f_lower_endpoints, f_upper_endpoints, receive_buffer1,
             receive_buffer2, z)
 
         @begin_anyzv_region()
         @anyzv_serial_region begin
-            buffer_1[] = precon_p[1]
-            buffer_2[] = precon_p[end]
+            buffer_1[] = output_buffer_p_view[1]
+            buffer_2[] = output_buffer_p_view[end]
         end
         reconcile_element_boundaries_MPI_anyzv!(
-            precon_p, buffer_1, buffer_2, buffer_3, buffer_4, z)
+            output_buffer_p_view, buffer_1, buffer_2, buffer_3, buffer_4, z)
 
         return nothing
     end
 
-    left_preconditioner = identity
-    right_preconditioner = lu_precon!
+    @begin_anyzv_z_vperp_vpa_region()
+    @loop_z_vperp_vpa iz ivperp ivpa begin
+        row = (iz - 1)*v_size + (ivperp - 1)*vpa.n + ivpa
+        this_input_buffer[row] = precon_f[ivpa,ivperp,iz]
+    end
+    @begin_anyzv_z_region()
+    @loop_z iz begin
+        row = pdf_size + iz
+        this_input_buffer[row] = precon_p[iz]
+    end
+    @_anyzv_subblock_synchronize()
 
-    return left_preconditioner, right_preconditioner, recalculate_lu_preconditioner!
+    # Use this to copy current guess from output_buffer to
+    # intermediate_buffer, to avoid race conditions as new guess is
+    # written into output_buffer.
+    function fill_intermediate_buffer!()
+        @_anyzv_subblock_synchronize()
+        for i ∈ global_index_subrange
+            this_intermediate_buffer[i] = this_output_buffer[i]
+        end
+        @_anyzv_subblock_synchronize()
+    end
+
+    v_solve_global_inds = adi_info.v_solve_global_inds
+    v_solve_nsolve = adi_info.v_solve_nsolve
+    v_solve_implicit_lus = adi_info.v_solve_implicit_lus
+    v_solve_explicit_matrices = adi_info.v_solve_explicit_matrices
+    v_solve_buffer = adi_info.v_solve_buffer
+    v_solve_buffer2 = adi_info.v_solve_buffer2
+    function first_adi_v_solve!()
+        # The initial guess is all-zero, so for the first solve there is
+        # no need to multiply by the 'explicit matrix' as x==0, so E.x==0
+        for isolve ∈ 1:v_solve_nsolve
+            this_inds = v_solve_global_inds[isolve]
+            v_solve_buffer .= @view this_input_buffer[this_inds]
+            @timeit_debug global_timer "ldiv!" ldiv!(v_solve_buffer2, v_solve_implicit_lus[isolve], v_solve_buffer)
+            this_output_buffer[this_inds] .= v_solve_buffer2
+        end
+    end
+    function adi_v_solve!()
+        for isolve ∈ 1:v_solve_nsolve
+            this_inds = v_solve_global_inds[isolve]
+            v_solve_buffer .= @view this_input_buffer[this_inds]
+            # Need to multiply the 'explicit matrix' by -1, because all
+            # the Jacobian-calculation functions are defined as if the
+            # terms are being added to the left-hand-side preconditioner
+            # matrix, but here the 'explicit matrix' terms are added on
+            # the right-hand-side.
+            @timeit_debug global_timer "mul!" mul!(v_solve_buffer, v_solve_explicit_matrices[isolve],
+                 this_intermediate_buffer, -1.0, 1.0)
+            @timeit_debug global_timer "ldiv!" ldiv!(v_solve_buffer2, v_solve_implicit_lus[isolve], v_solve_buffer)
+            this_output_buffer[this_inds] .= v_solve_buffer2
+        end
+    end
+
+    z_solve_global_inds = adi_info.z_solve_global_inds
+    z_solve_nsolve = adi_info.z_solve_nsolve
+    z_solve_implicit_lus = adi_info.z_solve_implicit_lus
+    z_solve_explicit_matrices = adi_info.z_solve_explicit_matrices
+    z_solve_buffer = adi_info.z_solve_buffer
+    z_solve_buffer2 = adi_info.z_solve_buffer2
+    function adi_z_solve!()
+        for isolve ∈ 1:z_solve_nsolve
+            this_inds = z_solve_global_inds[isolve]
+            z_solve_buffer .= @view this_input_buffer[this_inds]
+            # Need to multiply the 'explicit matrix' by -1, because all
+            # the Jacobian-calculation functions are defined as if the
+            # terms are being added to the left-hand-side preconditioner
+            # matrix, but here the 'explicit matrix' terms are added on
+            # the right-hand-side.
+            @timeit_debug global_timer "mul!" mul!(z_solve_buffer, z_solve_explicit_matrices[isolve], this_intermediate_buffer, -1.0, 1.0)
+            @timeit_debug global_timer "ldiv!" ldiv!(z_solve_buffer2, z_solve_implicit_lus[isolve], z_solve_buffer)
+            this_output_buffer[this_inds] .= z_solve_buffer2
+        end
+    end
+
+    precon_iterations[] += 1
+    first_adi_v_solve!()
+    fill_intermediate_buffer!()
+    adi_z_solve!()
+    adi_communicate_boundary_points()
+
+    for n ∈ 1:n_extra_iterations
+        precon_iterations[] += 1
+        fill_intermediate_buffer!()
+        adi_v_solve!()
+        fill_intermediate_buffer!()
+        adi_z_solve!()
+        adi_communicate_boundary_points()
+    end
+
+    # Unpack preconditioner solution
+    @begin_anyzv_z_vperp_vpa_region()
+    @loop_z_vperp_vpa iz ivperp ivpa begin
+        row = (iz - 1)*v_size + (ivperp - 1)*vpa.n + ivpa
+        precon_f[ivpa,ivperp,iz] = this_output_buffer[row]
+    end
+    @begin_anyzv_z_region()
+    @loop_z iz begin
+        row = pdf_size + iz
+        precon_p[iz] = this_output_buffer[row]
+    end
+
+    return nothing
 end
 
 function get_electron_adi_preconditioner(nl_solver_params, f_electron_new, electron_p_new,
@@ -1122,405 +1702,20 @@ function get_electron_adi_preconditioner(nl_solver_params, f_electron_new, elect
                                          external_source_settings, num_diss_params,
                                          t_params, ion_dt, ir, evolve_p,
                                          add_identity=true)
-    function recalculate_adi_preconditioner!()
-global_rank[] == 0 && println("recalculating precon")
-        nl_solver_params.solves_since_precon_update[] = 0
-        nl_solver_params.precon_dt[] = t_params.dt[]
+    recalculate_adi_preconditioner! = kinetic_electron_recalculate_adi!(
+                                          nl_solver_params, f_electron_new,
+                                          electron_p_new, buffer_1, buffer_2, buffer_3,
+                                          buffer_4, electron_density, electron_upar,
+                                          this_phi, moments, collisions, composition, z,
+                                          vperp, vpa, z_spectral, vperp_spectral,
+                                          vpa_spectral, z_advect, vpa_advect,
+                                          scratch_dummy, external_source_settings,
+                                          num_diss_params, t_params, ion_dt, ir, evolve_p,
+                                          add_identity)
 
-        adi_info = nl_solver_params.preconditioners[ir]
-
-        vth = @view moments.electron.vth[:,ir]
-        qpar = @view moments.electron.qpar[:,ir]
-
-        # Reconstruct w_∥^3 moment of g_e from already-calculated qpar
-        third_moment = @view scratch_dummy.buffer_zrs_1[:,ir,1]
-        dthird_moment_dz = @view scratch_dummy.buffer_zrs_2[:,ir,1]
-        @begin_anyzv_z_region()
-        @loop_z iz begin
-            third_moment[iz] = 0.5 * qpar[iz] / electron_p_new[iz] / vth[iz]
-        end
-        derivative_z_anyzv!(dthird_moment_dz, third_moment, buffer_1, buffer_2,
-                            buffer_3, buffer_4, z_spectral, z)
-
-        z_speed = @view z_advect[1].speed[:,:,:,ir]
-
-        dpdf_dz = @view scratch_dummy.buffer_vpavperpzr_1[:,:,:,ir]
-        @begin_anyzv_vperp_vpa_region()
-        update_electron_speed_z!(z_advect[1], electron_upar, vth, vpa.grid, ir)
-        @loop_vperp_vpa ivperp ivpa begin
-            @views z_advect[1].adv_fac[:,ivpa,ivperp,ir] = -z_speed[:,ivpa,ivperp]
-        end
-        #calculate the upwind derivative
-        @views derivative_z_pdf_vpavperpz!(dpdf_dz, f_electron_new,
-                                           z_advect[1].adv_fac[:,:,:,ir],
-                                           scratch_dummy.buffer_vpavperpr_1[:,:,ir],
-                                           scratch_dummy.buffer_vpavperpr_2[:,:,ir],
-                                           scratch_dummy.buffer_vpavperpr_3[:,:,ir],
-                                           scratch_dummy.buffer_vpavperpr_4[:,:,ir],
-                                           scratch_dummy.buffer_vpavperpr_5[:,:,ir],
-                                           scratch_dummy.buffer_vpavperpr_6[:,:,ir],
-                                           z_spectral, z)
-
-        dpdf_dvpa = @view scratch_dummy.buffer_vpavperpzr_2[:,:,:,ir]
-        @begin_anyzv_z_vperp_region()
-        update_electron_speed_vpa!(vpa_advect[1], electron_density, electron_upar,
-                                   electron_p_new, moments, composition.me_over_mi,
-                                   vpa.grid, external_source_settings.electron, ir)
-        @loop_z_vperp iz ivperp begin
-            @views @. vpa_advect[1].adv_fac[:,ivperp,iz,ir] = -vpa_advect[1].speed[:,ivperp,iz,ir]
-        end
-        #calculate the upwind derivative of the electron pdf w.r.t. wpa
-        @loop_z_vperp iz ivperp begin
-            @views derivative!(dpdf_dvpa[:,ivperp,iz], f_electron_new[:,ivperp,iz], vpa,
-                               vpa_advect[1].adv_fac[:,ivperp,iz,ir], vpa_spectral)
-        end
-        vpa_speed = @view vpa_advect[1].speed[:,:,:,ir]
-
-        zeroth_moment = @view scratch_dummy.buffer_zrs_3[:,ir,1]
-        first_moment = @view scratch_dummy.buffer_zrs_4[:,ir,1]
-        second_moment = @view scratch_dummy.buffer_zrs_5[:,ir,1]
-        @begin_anyzv_z_region()
-        vpa_grid = vpa.grid
-        vpa_wgts = vpa.wgts
-        @loop_z iz begin
-            @views zeroth_moment[iz] = integral(f_electron_new[:,1,iz], vpa_wgts)
-            @views first_moment[iz] = integral(f_electron_new[:,1,iz], vpa_grid, vpa_wgts)
-            @views second_moment[iz] = integral(f_electron_new[:,1,iz], vpa_grid, 2, vpa_wgts)
-        end
-
-        v_size = vperp.n * vpa.n
-
-        # Do setup for 'v solves'
-        v_solve_counter = 0
-        A = adi_info.v_solve_jacobian
-        explicit_J = adi_info.explicit_jacobian
-        # Get sparse matrix for explicit, right-hand-side part of the
-        # solve.
-        if adi_info.n_extra_iterations > 0
-            # If we only do one 'iteration' we don't need the 'explicit
-            # matrix' for the first solve (the v-solve), because the initial
-            # guess is zero,
-            fill_electron_kinetic_equation_Jacobian!(
-                explicit_J, f_electron_new, electron_p_new, moments, this_phi,
-                collisions, composition, z, vperp, vpa, z_spectral, vperp_spectral,
-                vpa_spectral, z_advect, vpa_advect, scratch_dummy,
-                external_source_settings, num_diss_params, t_params, ion_dt, ir,
-                evolve_p, :explicit_z, false, add_identity)
-
-            # This is calculated and stored in scratch_dummy.buffer_vpavperpzr_3 in
-            # fill_electron_kinetic_equation_Jacobian!().
-            d2pdf_dvpa2 = @view scratch_dummy.buffer_vpavperpzr_3[:,:,:,ir]
-        else
-            d2pdf_dvpa2 = @view scratch_dummy.buffer_vpavperpzr_3[:,:,:,ir]
-            if num_diss_params.electron.vpa_dissipation_coefficient > 0.0
-                @begin_anyzv_z_vperp_region()
-                @loop_z_vperp iz ivperp begin
-                    @views second_derivative!(d2pdf_dvpa2[:,ivperp,iz],
-                                              f_electron_new[:,ivperp,iz], vpa,
-                                              vpa_spectral)
-                end
-            end
-        end
-
-        @begin_anyzv_z_region()
-        @loop_z iz begin
-            v_solve_counter += 1
-            # Get LU-factorized matrix for implicit part of the solve
-            fill_electron_kinetic_equation_v_only_Jacobian!(
-                A, @view(f_electron_new[:,:,iz]), @view(electron_p_new[iz]),
-                @view(dpdf_dz[:,:,iz]), @view(dpdf_dvpa[:,:,iz]),
-                @view(d2pdf_dvpa2[:,:,iz]), @view(z_speed[iz,:,:]),
-                @view(vpa_speed[:,:,iz]), moments, @view(zeroth_moment[iz]),
-                @view(first_moment[iz]), @view(second_moment[iz]),
-                @view(third_moment[iz]), dthird_moment_dz[iz], this_phi[iz],
-                collisions, composition, z, vperp, vpa, z_spectral, vperp_spectral,
-                vpa_spectral, z_advect, vpa_advect, scratch_dummy,
-                external_source_settings, num_diss_params, t_params, ion_dt, ir, iz,
-                evolve_p, add_identity)
-            A_sparse = get_sparse_joined_array(A)
-            if !isassigned(adi_info.v_solve_implicit_lus, v_solve_counter)
-                @timeit_debug global_timer "lu" adi_info.v_solve_implicit_lus[v_solve_counter] = lu(A_sparse)
-            else
-                # LU decomposition was previously created. The Jacobian always
-                # has the same sparsity pattern, so by using `lu!()` we can
-                # reuse some setup.
-                try
-                    @timeit_debug global_timer "lu!" lu!(adi_info.v_solve_implicit_lus[v_solve_counter], A_sparse; check=false)
-                catch e
-                    if !isa(e, ArgumentError)
-                        rethrow(e)
-                    end
-                    println("Sparsity pattern of matrix changed, rebuilding "
-                            * "LU from scratch ir=$ir, iz=$iz")
-                    @timeit_debug global_timer "lu" adi_info.v_solve_implicit_lus[v_solve_counter] = lu(A_sparse)
-                end
-            end
-
-            if adi_info.n_extra_iterations > 0
-                # If we only do one 'iteration' we don't need the 'explicit
-                # matrix' for the first solve (the v-solve), because the
-                # initial guess is zero,
-                joined_explicit_array = get_joined_array(explicit_J)
-                adi_info.v_solve_explicit_matrices[v_solve_counter] = sparse(@view(joined_explicit_array[adi_info.v_solve_global_inds[v_solve_counter],:]))
-            end
-        end
-        @debug_consistency_checks v_solve_counter == adi_info.v_solve_nsolve || error("v_solve_counter($v_solve_counter) != v_solve_nsolve($(adi_info.v_solve_nsolve))")
-
-        # Do setup for 'z solves'
-        z_solve_counter = 0
-        A = adi_info.z_solve_jacobian
-        # Get sparse matrix for explicit, right-hand-side part of the
-        # solve.
-        fill_electron_kinetic_equation_Jacobian!(
-            explicit_J, f_electron_new, electron_p_new, moments, this_phi, collisions,
-            composition, z, vperp, vpa, z_spectral, vperp_spectral, vpa_spectral,
-            z_advect, vpa_advect, scratch_dummy, external_source_settings,
-            num_diss_params, t_params, ion_dt, ir, evolve_p, :explicit_v, false,
-            add_identity)
-        @begin_anyzv_vperp_vpa_region()
-        @loop_vperp_vpa ivperp ivpa begin
-            z_solve_counter += 1
-
-            # Get LU-factorized matrix for implicit part of the solve
-            @views fill_electron_kinetic_equation_z_only_Jacobian_f!(
-                A, f_electron_new[ivpa,ivperp,:], electron_p_new,
-                dpdf_dz[ivpa,ivperp,:], dpdf_dvpa[ivpa,ivperp,:],
-                d2pdf_dvpa2[ivpa,ivperp,:], z_speed[:,ivpa,ivperp], moments,
-                zeroth_moment, first_moment, second_moment, third_moment,
-                dthird_moment_dz, collisions, composition, z, vperp, vpa, z_spectral,
-                vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
-                external_source_settings, num_diss_params, t_params, ion_dt, ir,
-                ivperp, ivpa, add_identity)
-
-            A_sparse = get_sparse_joined_array(A)
-            if !isassigned(adi_info.z_solve_implicit_lus, z_solve_counter)
-                @timeit_debug global_timer "lu" adi_info.z_solve_implicit_lus[z_solve_counter] = lu(A_sparse)
-            else
-                # LU decomposition was previously created. The Jacobian always
-                # has the same sparsity pattern, so by using `lu!()` we can
-                # reuse some setup.
-                try
-                    @timeit_debug global_timer "lu!" lu!(adi_info.z_solve_implicit_lus[z_solve_counter], A_sparse; check=false)
-                catch e
-                    if !isa(e, ArgumentError)
-                        rethrow(e)
-                    end
-                    println("Sparsity pattern of matrix changed, rebuilding "
-                            * "LU from scratch ir=$ir, ivperp=$ivperp, ivpa=$ivpa")
-                    @timeit_debug global_timer "lu" adi_info.z_solve_implicit_lus[z_solve_counter] = lu(A_sparse)
-                end
-            end
-
-            joined_explicit_array = get_joined_array(explicit_J)
-            adi_info.z_solve_explicit_matrices[z_solve_counter] = sparse(@view(joined_explicit_array[adi_info.z_solve_global_inds[z_solve_counter],:]))
-        end
-
-        A_p = adi_info.z_solve_jacobian_p
-        @begin_anyzv_region(true)
-        @anyzv_serial_region begin
-            # Do the solve for p on the rank-0 process, which has the fewest grid
-            # points to handle if there are not an exactly equal number of points for
-            # each process.
-            z_solve_counter += 1
-
-            # Get LU-factorized matrix for implicit part of the solve
-            @views fill_electron_kinetic_equation_z_only_Jacobian_p!(
-                A_p, electron_p_new, f_electron_new[1,1,:], dpdf_dz[1,1,:],
-                dpdf_dvpa[1,1,:], d2pdf_dvpa2[1,1,:], z_speed[:,1,1], moments,
-                zeroth_moment, first_moment, second_moment, third_moment,
-                dthird_moment_dz, collisions, composition, z, vperp, vpa, z_spectral,
-                vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
-                external_source_settings, num_diss_params, t_params, ion_dt, ir,
-                evolve_p, add_identity)
-
-            A_sparse = sparse(A_p.matrix[1][1])
-            if !isassigned(adi_info.z_solve_implicit_lus, z_solve_counter)
-                @timeit_debug global_timer "lu" adi_info.z_solve_implicit_lus[z_solve_counter] = lu(A_sparse)
-            else
-                # LU decomposition was previously created. The Jacobian always
-                # has the same sparsity pattern, so by using `lu!()` we can
-                # reuse some setup.
-                try
-                    @timeit_debug global_timer "lu!" lu!(adi_info.z_solve_implicit_lus[z_solve_counter], A_sparse; check=false)
-                catch e
-                    if !isa(e, ArgumentError)
-                        rethrow(e)
-                    end
-                    println("Sparsity pattern of matrix changed, rebuilding "
-                            * "LU from scratch ir=$ir, p z-solve")
-                    @timeit_debug global_timer "lu" adi_info.z_solve_implicit_lus[z_solve_counter] = lu(A_sparse)
-                end
-            end
-
-            joined_explicit_array = get_joined_array(explicit_J)
-            adi_info.z_solve_explicit_matrices[z_solve_counter] = sparse(@view(joined_explicit_array[adi_info.z_solve_global_inds[z_solve_counter],:]))
-        end
-        @debug_consistency_checks z_solve_counter == adi_info.z_solve_nsolve || error("z_solve_counter($z_solve_counter) != z_solve_nsolve($(adi_info.z_solve_nsolve))")
-    end
-
-    @timeit_debug global_timer adi_precon!(x) = begin
-        precon_p, precon_f = x
-
-        adi_info = nl_solver_params.preconditioners[ir]
-        precon_iterations = nl_solver_params.precon_iterations
-        this_input_buffer = adi_info.input_buffer
-        this_intermediate_buffer = adi_info.intermediate_buffer
-        this_output_buffer = adi_info.output_buffer
-        global_index_subrange = adi_info.global_index_subrange
-        n_extra_iterations = adi_info.n_extra_iterations
-
-        v_size = vperp.n * vpa.n
-        pdf_size = z.n * v_size
-
-        # Use these views to communicate block-boundary points
-        output_buffer_pdf_view = reshape(@view(this_output_buffer[1:pdf_size]), size(precon_f))
-        output_buffer_p_view = @view(this_output_buffer[pdf_size+1:end])
-        f_lower_endpoints = @view scratch_dummy.buffer_vpavperpr_1[:,:,ir]
-        f_upper_endpoints = @view scratch_dummy.buffer_vpavperpr_2[:,:,ir]
-        receive_buffer1 = @view scratch_dummy.buffer_vpavperpr_3[:,:,ir]
-        receive_buffer2 = @view scratch_dummy.buffer_vpavperpr_4[:,:,ir]
-
-        function adi_communicate_boundary_points()
-            # Ensure values of precon_f and precon_p are consistent across
-            # distributed-MPI block boundaries. For precon_f take the upwind value,
-            # and for precon_p take the average.
-            @begin_anyzv_vperp_vpa_region()
-            @loop_vperp_vpa ivperp ivpa begin
-                f_lower_endpoints[ivpa,ivperp] = output_buffer_pdf_view[ivpa,ivperp,1]
-                f_upper_endpoints[ivpa,ivperp] = output_buffer_pdf_view[ivpa,ivperp,end]
-            end
-            # We upwind the z-derivatives in `electron_z_advection!()`, so would
-            # expect that upwinding the results here in z would make sense.
-            # However, upwinding here makes convergence much slower (~10x),
-            # compared to picking the values from one side or other of the block
-            # boundary, or taking the average of the values on either side.
-            # Neither direction is special, so taking the average seems most
-            # sensible (although in an intial test it does not seem to converge
-            # faster than just picking one or the other).
-            # Maybe this could indicate that it is more important to have a fully
-            # self-consistent Jacobian inversion for the
-            # `electron_vpa_advection()` part rather than taking half(ish) of the
-            # values from one block and the other half(ish) from the other.
-            reconcile_element_boundaries_MPI_z_pdf_vpavperpz!(
-                output_buffer_pdf_view, f_lower_endpoints, f_upper_endpoints, receive_buffer1,
-                receive_buffer2, z)
-
-            @begin_anyzv_region()
-            @anyzv_serial_region begin
-                buffer_1[] = output_buffer_p_view[1]
-                buffer_2[] = output_buffer_p_view[end]
-            end
-            reconcile_element_boundaries_MPI_anyzv!(
-                output_buffer_p_view, buffer_1, buffer_2, buffer_3, buffer_4, z)
-
-            return nothing
-        end
-
-        @begin_anyzv_z_vperp_vpa_region()
-        @loop_z_vperp_vpa iz ivperp ivpa begin
-            row = (iz - 1)*v_size + (ivperp - 1)*vpa.n + ivpa
-            this_input_buffer[row] = precon_f[ivpa,ivperp,iz]
-        end
-        @begin_anyzv_z_region()
-        @loop_z iz begin
-            row = pdf_size + iz
-            this_input_buffer[row] = precon_p[iz]
-        end
-        @_anyzv_subblock_synchronize()
-
-        # Use this to copy current guess from output_buffer to
-        # intermediate_buffer, to avoid race conditions as new guess is
-        # written into output_buffer.
-        function fill_intermediate_buffer!()
-            @_anyzv_subblock_synchronize()
-            for i ∈ global_index_subrange
-                this_intermediate_buffer[i] = this_output_buffer[i]
-            end
-            @_anyzv_subblock_synchronize()
-        end
-
-        v_solve_global_inds = adi_info.v_solve_global_inds
-        v_solve_nsolve = adi_info.v_solve_nsolve
-        v_solve_implicit_lus = adi_info.v_solve_implicit_lus
-        v_solve_explicit_matrices = adi_info.v_solve_explicit_matrices
-        v_solve_buffer = adi_info.v_solve_buffer
-        v_solve_buffer2 = adi_info.v_solve_buffer2
-        function first_adi_v_solve!()
-            # The initial guess is all-zero, so for the first solve there is
-            # no need to multiply by the 'explicit matrix' as x==0, so E.x==0
-            for isolve ∈ 1:v_solve_nsolve
-                this_inds = v_solve_global_inds[isolve]
-                v_solve_buffer .= @view this_input_buffer[this_inds]
-                @timeit_debug global_timer "ldiv!" ldiv!(v_solve_buffer2, v_solve_implicit_lus[isolve], v_solve_buffer)
-                this_output_buffer[this_inds] .= v_solve_buffer2
-            end
-        end
-        function adi_v_solve!()
-            for isolve ∈ 1:v_solve_nsolve
-                this_inds = v_solve_global_inds[isolve]
-                v_solve_buffer .= @view this_input_buffer[this_inds]
-                # Need to multiply the 'explicit matrix' by -1, because all
-                # the Jacobian-calculation functions are defined as if the
-                # terms are being added to the left-hand-side preconditioner
-                # matrix, but here the 'explicit matrix' terms are added on
-                # the right-hand-side.
-                @timeit_debug global_timer "mul!" mul!(v_solve_buffer, v_solve_explicit_matrices[isolve],
-                     this_intermediate_buffer, -1.0, 1.0)
-                @timeit_debug global_timer "ldiv!" ldiv!(v_solve_buffer2, v_solve_implicit_lus[isolve], v_solve_buffer)
-                this_output_buffer[this_inds] .= v_solve_buffer2
-            end
-        end
-
-        z_solve_global_inds = adi_info.z_solve_global_inds
-        z_solve_nsolve = adi_info.z_solve_nsolve
-        z_solve_implicit_lus = adi_info.z_solve_implicit_lus
-        z_solve_explicit_matrices = adi_info.z_solve_explicit_matrices
-        z_solve_buffer = adi_info.z_solve_buffer
-        z_solve_buffer2 = adi_info.z_solve_buffer2
-        function adi_z_solve!()
-            for isolve ∈ 1:z_solve_nsolve
-                this_inds = z_solve_global_inds[isolve]
-                z_solve_buffer .= @view this_input_buffer[this_inds]
-                # Need to multiply the 'explicit matrix' by -1, because all
-                # the Jacobian-calculation functions are defined as if the
-                # terms are being added to the left-hand-side preconditioner
-                # matrix, but here the 'explicit matrix' terms are added on
-                # the right-hand-side.
-                @timeit_debug global_timer "mul!" mul!(z_solve_buffer, z_solve_explicit_matrices[isolve], this_intermediate_buffer, -1.0, 1.0)
-                @timeit_debug global_timer "ldiv!" ldiv!(z_solve_buffer2, z_solve_implicit_lus[isolve], z_solve_buffer)
-                this_output_buffer[this_inds] .= z_solve_buffer2
-            end
-        end
-
-        precon_iterations[] += 1
-        first_adi_v_solve!()
-        fill_intermediate_buffer!()
-        adi_z_solve!()
-        adi_communicate_boundary_points()
-
-        for n ∈ 1:n_extra_iterations
-            precon_iterations[] += 1
-            fill_intermediate_buffer!()
-            adi_v_solve!()
-            fill_intermediate_buffer!()
-            adi_z_solve!()
-            adi_communicate_boundary_points()
-        end
-
-        # Unpack preconditioner solution
-        @begin_anyzv_z_vperp_vpa_region()
-        @loop_z_vperp_vpa iz ivperp ivpa begin
-            row = (iz - 1)*v_size + (ivperp - 1)*vpa.n + ivpa
-            precon_f[ivpa,ivperp,iz] = this_output_buffer[row]
-        end
-        @begin_anyzv_z_region()
-        @loop_z iz begin
-            row = pdf_size + iz
-            precon_p[iz] = this_output_buffer[row]
-        end
-
-        return nothing
-    end
+    adi_precon! = kinetic_electron_adi_precon!(nl_solver_params, z, vperp, vpa, ir,
+                                               buffer_1, buffer_2, buffer_3, buffer_4,
+                                               scratch_dummy)
 
     left_preconditioner = identity
     right_preconditioner = adi_precon!
@@ -1569,6 +1764,158 @@ function get_electron_preconditioner(nl_solver_params, f_electron_new, electron_
         error("preconditioner_type=$(nl_solver_params.preconditioner_type) is not "
               * "supported.")
     end
+end
+
+@kwdef struct kinetic_electron_residual!{Tfeold,Tpeold,Tmom,Tcomp,Tcol,Text,Ttp,Tidt,Tdum,
+                                         Tphi,Tne,Tue,Tni,Tui,Tr,Tz,Tvperp,Tvpa,Tzsp,
+                                         Tvperpsp,Tvpasp,Tzadv,Tvpaadv,Tdiss}
+    f_electron_old::Tfeold
+    electron_p_old::Tpeold
+    evolve_p::Bool
+    moments::Tmom
+    composition::Tcomp
+    collisions::Tcol
+    external_source_settings::Text
+    t_params::Ttp
+    ion_dt::Tidt
+    scratch_dummy::Tdum
+    this_phi::Tphi
+    electron_density::Tne
+    electron_upar::Tue
+    ion_density::Tni
+    ion_upar::Tui
+    r::Tr
+    z::Tz
+    vperp::Tvperp
+    vpa::Tvpa
+    z_spectral::Tzsp
+    vperp_spectral::Tvperpsp
+    vpa_spectral::Tvpasp
+    z_advect::Tzadv
+    vpa_advect::Tvpaadv
+    num_diss_params::Tdiss
+    ir::mk_int
+end
+
+function (res::kinetic_electron_residual!)(this_residual, new_variables; krylov=false)
+    f_electron_old = res.f_electron_old
+    electron_p_old = res.electron_p_old
+    evolve_p = res.evolve_p
+    moments = res.moments
+    composition = res.composition
+    collisions = res.collisions
+    external_source_settings = res.external_source_settings
+    t_params = res.t_params
+    ion_dt = res.ion_dt
+    scratch_dummy = res.scratch_dummy
+    this_phi = res.this_phi
+    electron_density = res.electron_density
+    electron_upar = res.electron_upar
+    ion_density = res.ion_density
+    ion_upar = res.ion_upar
+    r = res.r
+    z = res.z
+    vperp = res.vperp
+    vpa = res.vpa
+    z_spectral = res.z_spectral
+    vperp_spectral = res.vperp_spectral
+    vpa_spectral = res.vpa_spectral
+    z_advect = res.z_advect
+    vpa_advect = res.vpa_advect
+    num_diss_params = res.num_diss_params
+    ir = res.ir
+
+    electron_p_residual, f_electron_residual = this_residual
+    electron_p_newvar, f_electron_newvar = new_variables
+
+    if evolve_p
+        this_vth = @view moments.electron.vth[:,ir]
+        @begin_anyzv_z_region()
+        @loop_z iz begin
+            # update the electron thermal speed using the updated electron
+            # parallel pressure
+            this_vth[iz] = sqrt(abs(2.0 * electron_p_newvar[iz] /
+                                    (electron_density[iz] * composition.me_over_mi)))
+        end
+    end
+
+    # enforce the boundary condition(s) on the electron pdf
+    @views enforce_boundary_condition_on_electron_pdf!(
+               f_electron_newvar, this_phi, moments.electron.vth[:,ir], electron_upar,
+               z, vperp, vpa, vperp_spectral, vpa_spectral, vpa_advect, moments,
+               num_diss_params.electron.vpa_dissipation_coefficient > 0.0,
+               composition.me_over_mi, ir; bc_constraints=false, update_vcut=!krylov)
+
+    # Calculate derived moments and derivatives using new_variables
+    calculate_electron_moments_no_r!(f_electron_newvar, electron_density,
+                                     electron_upar, electron_p_newvar, ion_density,
+                                     ion_upar, moments, composition, collisions, r, z,
+                                     vperp, vpa, ir)
+    calculate_electron_moment_derivatives_no_r!(
+        moments, electron_density, electron_upar, electron_p_newvar, scratch_dummy, z,
+        z_spectral, num_diss_params.electron.moment_dissipation_coefficient, ir)
+
+    if evolve_p
+        @begin_anyzv_z_region()
+        @loop_z iz begin
+            electron_p_residual[iz] = electron_p_old[iz,ir]
+        end
+    else
+        @begin_anyzv_z_region()
+        @loop_z iz begin
+            electron_p_residual[iz] = 0.0
+        end
+    end
+
+    # electron_kinetic_equation_euler_update!() just adds dt*d(g_e)/dt to the
+    # electron_pdf member of the first argument, so if we set the electron_pdf member
+    # of the first argument to zero, and pass dt=1, then it will evaluate the time
+    # derivative, which is the residual for a steady-state solution.
+    @begin_anyzv_z_vperp_vpa_region()
+    @loop_z_vperp_vpa iz ivperp ivpa begin
+        f_electron_residual[ivpa,ivperp,iz] = f_electron_old[ivpa,ivperp,iz]
+    end
+    electron_kinetic_equation_euler_update!(
+        (f_electron_residual, electron_p_residual), f_electron_newvar,
+        electron_p_newvar, moments, z, vperp, vpa, z_spectral, vpa_spectral,
+        z_advect, vpa_advect, scratch_dummy, collisions, composition,
+        external_source_settings, num_diss_params, t_params, ir; evolve_p=evolve_p,
+        ion_dt=ion_dt, soft_force_constraints=true)
+
+    # Now
+    #   residual = f_electron_old + dt*RHS(f_electron_newvar)
+    # so update to desired residual
+    @begin_anyzv_z_vperp_vpa_region()
+    @loop_z_vperp_vpa iz ivperp ivpa begin
+        f_electron_residual[ivpa,ivperp,iz] = f_electron_newvar[ivpa,ivperp,iz] - f_electron_residual[ivpa,ivperp,iz]
+    end
+    if evolve_p
+        @begin_anyzv_z_region()
+        @loop_z iz begin
+            electron_p_residual[iz] = electron_p_newvar[iz] - electron_p_residual[iz]
+        end
+    end
+
+    # Set residual to zero where pdf_electron is determined by boundary conditions.
+    if vpa.n > 1
+        @begin_anyzv_z_vperp_region()
+        @loop_z_vperp iz ivperp begin
+            @views enforce_v_boundary_condition_local!(f_electron_residual[:,ivperp,iz], vpa.bc,
+                                                       vpa_advect[1].speed[:,ivperp,iz,ir],
+                                                       num_diss_params.electron.vpa_dissipation_coefficient > 0.0,
+                                                       vpa, vpa_spectral)
+        end
+    end
+    if vperp.n > 1
+        @begin_anyzv_z_vpa_region()
+        enforce_vperp_boundary_condition!(f_electron_residual, vperp.bc,
+                                          vperp, vperp_spectral, vperp_adv,
+                                          num_diss_params.electron.vpa_dissipation_coefficient > 0.0,
+                                          ir)
+    end
+    zero_z_boundary_condition_points(f_electron_residual, z, vpa, moments, ir)
+
+    return nothing
 end
 
 """
@@ -1643,99 +1990,17 @@ pressure \$p_{e∥}\$.
 
     # Do a backward-Euler update of the electron pdf, and (if evove_p=true) the electron
     # parallel pressure.
-    function residual_func!(this_residual, new_variables; krylov=false)
-        electron_p_residual, f_electron_residual = this_residual
-        electron_p_newvar, f_electron_newvar = new_variables
-
-        if evolve_p
-            this_vth = @view moments.electron.vth[:,ir]
-            @begin_anyzv_z_region()
-            @loop_z iz begin
-                # update the electron thermal speed using the updated electron
-                # parallel pressure
-                this_vth[iz] = sqrt(abs(2.0 * electron_p_newvar[iz] /
-                                        (electron_density[iz] * composition.me_over_mi)))
-            end
-        end
-
-        # enforce the boundary condition(s) on the electron pdf
-        @views enforce_boundary_condition_on_electron_pdf!(
-                   f_electron_newvar, this_phi, moments.electron.vth[:,ir], electron_upar,
-                   z, vperp, vpa, vperp_spectral, vpa_spectral, vpa_advect, moments,
-                   num_diss_params.electron.vpa_dissipation_coefficient > 0.0,
-                   composition.me_over_mi, ir; bc_constraints=false, update_vcut=!krylov)
-
-        # Calculate derived moments and derivatives using new_variables
-        calculate_electron_moments_no_r!(f_electron_newvar, electron_density,
-                                         electron_upar, electron_p_newvar, ion_density,
-                                         ion_upar, moments, composition, collisions, r, z,
-                                         vperp, vpa, ir)
-        calculate_electron_moment_derivatives_no_r!(
-            moments, electron_density, electron_upar, electron_p_newvar, scratch_dummy, z,
-            z_spectral, num_diss_params.electron.moment_dissipation_coefficient, ir)
-
-        if evolve_p
-            @begin_anyzv_z_region()
-            @loop_z iz begin
-                electron_p_residual[iz] = electron_p_old[iz,ir]
-            end
-        else
-            @begin_anyzv_z_region()
-            @loop_z iz begin
-                electron_p_residual[iz] = 0.0
-            end
-        end
-
-        # electron_kinetic_equation_euler_update!() just adds dt*d(g_e)/dt to the
-        # electron_pdf member of the first argument, so if we set the electron_pdf member
-        # of the first argument to zero, and pass dt=1, then it will evaluate the time
-        # derivative, which is the residual for a steady-state solution.
-        @begin_anyzv_z_vperp_vpa_region()
-        @loop_z_vperp_vpa iz ivperp ivpa begin
-            f_electron_residual[ivpa,ivperp,iz] = f_electron_old[ivpa,ivperp,iz]
-        end
-        electron_kinetic_equation_euler_update!(
-            (f_electron_residual, electron_p_residual), f_electron_newvar,
-            electron_p_newvar, moments, z, vperp, vpa, z_spectral, vpa_spectral,
-            z_advect, vpa_advect, scratch_dummy, collisions, composition,
-            external_source_settings, num_diss_params, t_params, ir; evolve_p=evolve_p,
-            ion_dt=ion_dt, soft_force_constraints=true)
-
-        # Now
-        #   residual = f_electron_old + dt*RHS(f_electron_newvar)
-        # so update to desired residual
-        @begin_anyzv_z_vperp_vpa_region()
-        @loop_z_vperp_vpa iz ivperp ivpa begin
-            f_electron_residual[ivpa,ivperp,iz] = f_electron_newvar[ivpa,ivperp,iz] - f_electron_residual[ivpa,ivperp,iz]
-        end
-        if evolve_p
-            @begin_anyzv_z_region()
-            @loop_z iz begin
-                electron_p_residual[iz] = electron_p_newvar[iz] - electron_p_residual[iz]
-            end
-        end
-
-        # Set residual to zero where pdf_electron is determined by boundary conditions.
-        if vpa.n > 1
-            @begin_anyzv_z_vperp_region()
-            @loop_z_vperp iz ivperp begin
-                @views enforce_v_boundary_condition_local!(f_electron_residual[:,ivperp,iz], vpa.bc,
-                                                           vpa_advect[1].speed[:,ivperp,iz,ir],
-                                                           num_diss_params.electron.vpa_dissipation_coefficient > 0.0,
-                                                           vpa, vpa_spectral)
-            end
-        end
-        if vperp.n > 1
-            @begin_anyzv_z_vpa_region()
-            enforce_vperp_boundary_condition!(f_electron_residual, vperp.bc,
-                                              vperp, vperp_spectral, vperp_adv,
-                                              num_diss_params.electron.vpa_dissipation_coefficient > 0.0,
-                                              ir)
-        end
-        zero_z_boundary_condition_points(f_electron_residual, z, vpa, moments, ir)
-
-        return nothing
-    end
+    # Use `let` block to hint to the compiler that the captured variables don't change -
+    # see https://docs.julialang.org/en/v1/manual/performance-tips/#man-performance-captured
+    
+    residual_func! = kinetic_electron_residual!(; f_electron_old, electron_p_old,
+                                                evolve_p, moments, composition,
+                                                collisions, external_source_settings,
+                                                t_params, ion_dt, scratch_dummy, this_phi,
+                                                electron_density, electron_upar,
+                                                ion_density, ion_upar, r, z, vperp, vpa,
+                                                z_spectral, vperp_spectral, vpa_spectral,
+                                                z_advect, vpa_advect, num_diss_params, ir)
 
     residual = (scratch_dummy.implicit_buffer_z_1, scratch_dummy.implicit_buffer_vpavperpz_1)
     delta_x = (scratch_dummy.implicit_buffer_z_2,
@@ -1845,7 +2110,17 @@ to allow the outer r-loop to be parallelised.
             recalculate_preconditioner!()
         end
 
-        function residual_func!(residual, new_variables; debug=false, krylov=false)
+        residual_func!(residual, new_variables; debug=false, krylov=false) = let
+                evolve_p=evolve_p, moments=moments, composition=composition,
+                collisions=collisions, external_source_settings=external_source_settings,
+                t_params=t_params, ion_dt=ion_dt, scratch_dummy=scratch_dummy,
+                this_phi=this_phi, electron_density=electron_density,
+                electron_upar=electron_upar, ion_density=ion_density, ion_upar=ion_upar,
+                z=z, vperp=vperp, vpa=vpa, z_spectral=z_spectral,
+                vperp_spectral=vperp_spectral, vpa_spectral=vpa_spectral,
+                z_advect=z_advect, vpa_advect=vpa_advect, num_diss_params=num_diss_params,
+                ir=ir
+
             electron_p_residual, f_electron_residual = residual
             electron_p_new, f_electron_new = new_variables
 
