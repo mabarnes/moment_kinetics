@@ -58,8 +58,8 @@ function setup_advection_per_species(coords...)
     # create array for storing ∂f/∂(coordinate)
     # NB: need to store on nelement x ngrid_per_element array, as must keep info
     # about multi-valued derivative at overlapping point at element boundaries
-    df = allocate_shared_float(coords[1].name * "_ngrid"=>coords[1].ngrid,
-                               coords[1].name * "_nelement"=>coords[1].nelement_local,
+    df = allocate_shared_float(Symbol(coords[1].name * "_ngrid")=>coords[1].ngrid,
+                               Symbol(coords[1].name * "_nelement")=>coords[1].nelement_local,
                                coords[2:end]...)
     # create array for storing the advection coefficient
     adv_fac = allocate_shared_float(coords...)

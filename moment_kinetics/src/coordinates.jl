@@ -242,17 +242,17 @@ function define_coordinate(coord_input::NamedTuple; parallel_io::Bool=false,
     # nelement+1 entries
     scratch_int_nelement_plus_1 = allocate_int(coord_input.nelement_local + 1)
     if ignore_MPI
-        scratch_shared = allocate_float(; Symbol(coord_input.name)=>n_local)
-        scratch_shared2 = allocate_float(; Symbol(coord_input.name)=>n_local)
-        scratch_shared3 = allocate_float(; Symbol(coord_input.name)=>n_local)
-        scratch_shared_int = allocate_int(; Symbol(coord_input.name)=>n_local)
-        scratch_shared_int2 = allocate_int(; Symbol(coord_input.name)=>n_local)
+        scratch_shared = allocate_float(Symbol(coord_input.name)=>n_local)
+        scratch_shared2 = allocate_float(Symbol(coord_input.name)=>n_local)
+        scratch_shared3 = allocate_float(Symbol(coord_input.name)=>n_local)
+        scratch_shared_int = allocate_int(Symbol(coord_input.name)=>n_local)
+        scratch_shared_int2 = allocate_int(Symbol(coord_input.name)=>n_local)
     else
-        scratch_shared = allocate_shared_float(; Symbol(coord_input.name)=>n_local)
-        scratch_shared2 = allocate_shared_float(; Symbol(coord_input.name)=>n_local)
-        scratch_shared3 = allocate_shared_float(; Symbol(coord_input.name)=>n_local)
-        scratch_shared_int = allocate_shared_int(; Symbol(coord_input.name)=>n_local)
-        scratch_shared_int2 = allocate_shared_int(; Symbol(coord_input.name)=>n_local)
+        scratch_shared = allocate_shared_float(Symbol(coord_input.name)=>n_local)
+        scratch_shared2 = allocate_shared_float(Symbol(coord_input.name)=>n_local)
+        scratch_shared3 = allocate_shared_float(Symbol(coord_input.name)=>n_local)
+        scratch_shared_int = allocate_shared_int(Symbol(coord_input.name)=>n_local)
+        scratch_shared_int2 = allocate_shared_int(Symbol(coord_input.name)=>n_local)
     end
     # Initialise scratch_shared* so that the debug checks do not complain when they get
     # printed by `println(io, all_inputs)` in mk_input().

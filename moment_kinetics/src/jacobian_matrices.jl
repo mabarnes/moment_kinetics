@@ -345,7 +345,7 @@ function create_jacobian_info(coords::NamedTuple, spectral::NamedTuple; comm=com
                                                                       off_diagonals,
                                                                       off_diagonals)
                 data_length = BlockBandedMatrices.bb_numentries(skyline_sizes)
-                data = allocate_shared_float(; jacobian_data=data_length, comm=comm)
+                data = allocate_shared_float(:jacobian_data=>data_length, comm=comm)
                 return BlockBandedMatrices._BlockSkylineMatrix(data, skyline_sizes)
             else
                 return allocate_shared_float(Symbol(:jacobian_size, i)=>state_vector_sizes[i],

@@ -33,7 +33,7 @@ using ..debugging
 using ..loop_ranges_struct: loop_ranges, loop_ranges_store
 using ..moment_kinetics_structs: coordinate
 using ..timer_utils
-using ..type_definitions: mk_float, mk_int
+using ..type_definitions
 @debug_shared_array begin
     using ..type_definitions: DebugMPISharedArray
 end
@@ -483,9 +483,9 @@ end
                                  dim_names::NTuple{N, Symbol}) where {T,N}
         dims = size(array)
         dim_ranges = Tuple(1:n for n ∈ dims)
-        is_initialized = allocate_shared(mk_int, (Symbol("d$i")=>d for (i,d) ∈
-                                                  enumerate(dims))...;
-                                         comm=comm, maybe_debug=false)
+        is_initialized = allocate_shared(mk_int, comm, false,
+                                         (Symbol("d$i")=>d for (i,d) ∈
+                                          enumerate(dims))...)
         if block_rank[] == 0
             is_initialized .= 0
         end
@@ -806,10 +806,10 @@ end
 end
 
 """
-    allocate_shared(T; comm=nothing, maybe_debug=true, kwargs...)
-    allocate_shared(T, dims...; comm=nothing, maybe_debug=true)
+    allocate_shared(T::Type, comm::Union{MPI.Comm,Nothing}, maybe_debug::Bool,
+                    dims::Union{coordinate,Pair{Symbol,mk_int}}...)
 
-Get a shared-memory array of `mk_float` (shared by all processes in a 'block').
+Get a shared-memory array of type `T` (shared by all processes in a 'block').
 
 Create a shared-memory array using `MPI.Win_allocate_shared()`. Pointer to the memory
 allocated is wrapped in a Julia array. Memory is not managed by the Julia array though.
@@ -820,82 +820,43 @@ running a simulation/test.
 
 Arguments
 ---------
-kwargs - mk_int
-    Dimensions must be named to support shared-memory debugging tools. They can be either
-    passed as `name=dim_size` keyword arguments (`coordinate` objects can also be passed
-    as the kwarg values, for convenienc), or using `dims`.
-    Dimensions of the array to be created. Dimensions passed define the size of the
-    array which is being handled by the 'block' (rather than the global array, or a
-    subset for a single process).
-dims - coordinate, NamedTuple, Pair{Symbol,Integer}, or Pair{String,Integer}
-    Alternative to `kwargs`. May be passed `coordinate`, `NamedTuple`,
-    `Pair{Symbol,Integer}` (enter as e.g. `:z => n` where `n` is an `mk_int`),
-    `Pair{String,Integer}` (enter as e.g. `"z" => n` where `n` is an `mk_int`),
-    `Pair{Symbol,coordinate}`, `Pair{String,coordinate}`, `Pair{Symbol,NamedTuple}`, or
-    `Pair{String,NamedTuple}` arguments from which the name and size of the name and size
-    of the dimension will be extracted.
-comm - `MPI.Comm`, default `comm_block[]`
+comm - `MPI.Comm`
     MPI communicator containing the processes that share the array.
 maybe_debug - Bool
     Can be set to `false` to force not creating a DebugMPISharedArray when debugging is
     active. This avoids recursion when including a shared-memory array as a member of a
     DebugMPISharedArray for debugging purposes.
+dims - coordinate, NamedTuple, Pair{Symbol,Integer}, or Pair{String,Integer}
+    May be passed `coordinate`, `NamedTuple`, `Pair{Symbol,Integer}` (enter as e.g. `:z =>
+    n` where `n` is an `mk_int`), `Pair{String,Integer}` (enter as e.g. `"z" => n` where
+    `n` is an `mk_int`), `Pair{Symbol,coordinate}`, `Pair{String,coordinate}`,
+    `Pair{Symbol,NamedTuple}`, or `Pair{String,NamedTuple}` arguments from which the name
+    and size of the name and size of the dimension will be extracted.
 
 Returns
 -------
 Array{mk_float}
 """
-function allocate_shared end
+function allocate_shared(T::Type, comm::Union{MPI.Comm,Nothing}, maybe_debug::Bool,
+                         dims::Union{coordinate,Pair{Symbol,mk_int}}...)
+    # Use @nospecialize for the function arguments because run time is not important, but
+    # the many possible combinations of argument types are otherwise demanding for the
+    # compiler.
 
-function allocate_shared(T::Type, dim1, dims...; comm=nothing, maybe_debug=true)
-    function standardise_argument(a)
-        if isa(a, coordinate)
-            return Symbol(a.name) => a.n
-        elseif isa(a, NamedTuple)
-            return Symbol(a.name) => a.n
-        elseif isa(a, Pair)
-            if isa(a[2], coordinate)
-                return Symbol(a[1]) => a[2].n
-            elseif isa(a[2], NamedTuple)
-                return Symbol(a[1]) => a[2].n
-            elseif isa(a[2], Integer)
-                return Symbol(a[1]) => mk_int(a[2])
-            else
-                error("Incorrect argument $a to `allocate_shared`. Arguments should be "
-                      * "coordinate, coordinate-like NamedTuple, or `:name=>n` "
-                      * "(`Pair{Symbol,mk_int}`).")
-            end
-        else
-            error("Incorrect argument $a to `allocate_shared`. Arguments should be "
-                  * "coordinate, coordinate-like NamedTuple, or `:name=>n` "
-                  * "(`Pair{Symbol,mk_int}`).")
-        end
+    function standardise_argument(a::coordinate)::Pair{Symbol,mk_int}
+        return Symbol(a.name) => a.n::mk_int
     end
-    return _allocate_shared_internal(T, (standardise_argument(d)
-                                         for d ∈ (dim1, dims...))...;
-                                     comm=comm, maybe_debug=maybe_debug)
-end
-
-function allocate_shared(T::Type; comm=nothing, maybe_debug=true, kwargs...)
-    function get_int(a)
-        if isa(a, coordinate)
-            return a.n
-        elseif isa(a, NamedTuple)
-            return mk_int(a.n)
-        elseif isa(a, Integer)
-            return mk_int(a)
-        else
-            error("Unrecognised type of argument $a")
-        end
+    function standardise_argument(a::Pair{Symbol,mk_int})::Pair{Symbol,mk_int}
+        return a
     end
-    return _allocate_shared_internal(T, (k => get_int(v) for (k,v) ∈ kwargs)...;
-                                     comm=comm, maybe_debug=maybe_debug)
+    return _allocate_shared_internal(T, comm, maybe_debug,
+                                     (standardise_argument(d) for d ∈ dims)...)
 end
 
 # Note cannot just use `kwargs...` for the inner version, because we might want repeated
 # dimension names in some cases, but repeated `kwargs` are not allowed.
-function _allocate_shared_internal(T::Type, dims_info::Pair{Symbol,mk_int}...;
-                                   comm=nothing, maybe_debug=true)
+function _allocate_shared_internal(T::Type, comm, maybe_debug,
+                                   dims_info::Pair{Symbol,mk_int}...)
     if maybe_debug
         dim_names = Tuple(d[1] for d ∈ dims_info)
     end

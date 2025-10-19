@@ -1824,12 +1824,12 @@ function setup_dummy_and_buffer_arrays(r, z, vpa, vperp, vz, vr, vzeta, composit
         implicit_buffer_vpavperpz_5 = allocate_shared_float(vpa, vperp, z; comm=comm_anyzv_subblock[])
         implicit_buffer_vpavperpz_6 = allocate_shared_float(vpa, vperp, z; comm=comm_anyzv_subblock[])
     else
-        implicit_buffer_z_1 = allocate_shared_float(; implicit_buffer=0)
-        implicit_buffer_z_2 = allocate_shared_float(; implicit_buffer=0)
-        implicit_buffer_z_3 = allocate_shared_float(; implicit_buffer=0)
-        implicit_buffer_z_4 = allocate_shared_float(; implicit_buffer=0)
-        implicit_buffer_z_5 = allocate_shared_float(; implicit_buffer=0)
-        implicit_buffer_z_6 = allocate_shared_float(; implicit_buffer=0)
+        implicit_buffer_z_1 = allocate_shared_float(:implicit_buffer=>0)
+        implicit_buffer_z_2 = allocate_shared_float(:implicit_buffer=>0)
+        implicit_buffer_z_3 = allocate_shared_float(:implicit_buffer=>0)
+        implicit_buffer_z_4 = allocate_shared_float(:implicit_buffer=>0)
+        implicit_buffer_z_5 = allocate_shared_float(:implicit_buffer=>0)
+        implicit_buffer_z_6 = allocate_shared_float(:implicit_buffer=>0)
 
         implicit_buffer_vpavperpz_1 = allocate_shared_float(:implicit_buffer=>0, :implicit_buffer=>0, :implicit_buffer=>0)
         implicit_buffer_vpavperpz_2 = allocate_shared_float(:implicit_buffer=>0, :implicit_buffer=>0, :implicit_buffer=>0)
@@ -1953,7 +1953,7 @@ function setup_scratch_arrays(moments, pdf, n, time_evolve_electrons, compositio
         if time_evolve_electrons
             pdf_electron_array = allocate_shared_float(vpa, vperp, z, r)
         else
-            pdf_electron_array = allocate_shared_float(; electron_vpa=0, electron_vperp=0, electron_z=0, electron_r=0)
+            pdf_electron_array = allocate_shared_float(:electron_vpa=>0, :electron_vperp=>0, :electron_z=>0, :electron_r=>0)
         end
         density_electron_array = allocate_shared_float(z, r)
         upar_electron_array = allocate_shared_float(z, r)
@@ -1966,11 +1966,11 @@ function setup_scratch_arrays(moments, pdf, n, time_evolve_electrons, compositio
         p_neutral_array = allocate_shared_float(z, r, composition.neutral_species_coord)
 
         ion_external_source_controller_integral =
-            allocate_shared_float(; ion_source_z=ion_source_nz, ion_source_r=ion_source_nr, n_ion_sources=n_ion_sources)
+            allocate_shared_float(:ion_source_z=>ion_source_nz, :ion_source_r=>ion_source_nr, :n_ion_sources=>n_ion_sources)
         #electron_external_source_controller_integral =
         #    allocate_shared_float(; electron_source_z=electron_source_nz, electron_source_r=electron_source_nr, n_electron_sources=n_electron_sources)
         neutral_external_source_controller_integral =
-            allocate_shared_float(; neutral_source_z=neutral_source_nz, neutral_source_r=neutral_source_nr, n_neutral_sources=n_neutral_sources)
+            allocate_shared_float(:neutral_source_z=>neutral_source_nz, :neutral_source_r=>neutral_source_nr, :n_neutral_sources=>n_neutral_sources)
 
         scratch[istage] = scratch_pdf(pdf_array, density_array, upar_array, p_array,
                                       ion_external_source_controller_integral,

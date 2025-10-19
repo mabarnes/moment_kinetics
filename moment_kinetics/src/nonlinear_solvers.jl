@@ -139,13 +139,14 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(), spec
         g .= 0.0
         V .= 0.0
     elseif electron_p_pdf_solve
-        H = allocate_shared_float(; linear_restart_plus_one=linear_restart + 1, linear_restart=linear_restart, comm=comm_anyzv_subblock[])
-        c = allocate_shared_float(; linear_restart_plus_one=linear_restart + 1, comm=comm_anyzv_subblock[])
-        s = allocate_shared_float(; linear_restart_plus_one=linear_restart + 1, comm=comm_anyzv_subblock[])
-        g = allocate_shared_float(; linear_restart_plus_one=linear_restart + 1, comm=comm_anyzv_subblock[])
-        V_ppar = allocate_shared_float(:z=>coords.z, :linear_restart_plus_one=>linear_restart+1; comm=comm_anyzv_subblock[])
-        V_pdf = allocate_shared_float(; (Symbol(c.name)=>c.n for c ∈ reverse(coords))...,
-                                      linear_restart_plus_one=linear_restart+1, comm=comm_anyzv_subblock[])
+        H = allocate_shared_float(:linear_restart_plus_one=>linear_restart + 1, :linear_restart=>linear_restart, comm=comm_anyzv_subblock[])
+        c = allocate_shared_float(:linear_restart_plus_one=>linear_restart + 1, comm=comm_anyzv_subblock[])
+        s = allocate_shared_float(:linear_restart_plus_one=>linear_restart + 1, comm=comm_anyzv_subblock[])
+        g = allocate_shared_float(:linear_restart_plus_one=>linear_restart + 1, comm=comm_anyzv_subblock[])
+        V_ppar = allocate_shared_float(coords.z, :linear_restart_plus_one=>linear_restart+1; comm=comm_anyzv_subblock[])
+        V_pdf = allocate_shared_float(reverse(coords)...,
+                                      :linear_restart_plus_one=>linear_restart+1,
+                                      comm=comm_anyzv_subblock[])
 
         @begin_r_anyzv_region()
         @begin_anyzv_region()
@@ -162,18 +163,18 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(), spec
 
         n_vcut_inds = prod(outer_coord_sizes)
     elseif anysv_region
-        H = allocate_shared_float(; comm=comm_anysv_subblock[],
-                                  linear_restart_plus_one=linear_restart + 1,
-                                  linear_restart=linear_restart)
-        c = allocate_shared_float(; comm=comm_anysv_subblock[],
-                                  linear_restart_plus_one=linear_restart + 1)
-        s = allocate_shared_float(; comm=comm_anysv_subblock[],
-                                  linear_restart_plus_one=linear_restart + 1)
-        g = allocate_shared_float(; comm=comm_anysv_subblock[],
-                                  linear_restart_plus_one=linear_restart + 1)
-        V = allocate_shared_float(; comm=comm_anysv_subblock[],
-                                  (Symbol(c.name)=>c.n for c ∈ reverse(coords))...,
-                                  linear_restart_plus_one=linear_restart+1)
+        H = allocate_shared_float(:linear_restart_plus_one=>linear_restart + 1,
+                                  :linear_restart=>linear_restart;
+                                  comm=comm_anysv_subblock[])
+        c = allocate_shared_float(:linear_restart_plus_one=>linear_restart + 1;
+                                  comm=comm_anysv_subblock[])
+        s = allocate_shared_float(:linear_restart_plus_one=>linear_restart + 1;
+                                  comm=comm_anysv_subblock[])
+        g = allocate_shared_float(:linear_restart_plus_one=>linear_restart + 1;
+                                  comm=comm_anysv_subblock[])
+        V = allocate_shared_float(reverse(coords)...,
+                                  :linear_restart_plus_one=>linear_restart+1;
+                                  comm=comm_anysv_subblock[])
         # Arrays below appear to need to be initialised to zero on setup.
         # This is inconvenient for anysv communicators because we need to switch
         # now into the special "anysv" region for this assignment,
@@ -194,18 +195,18 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(), spec
         # will not be an "anysv" call.
         @begin_serial_region()
     elseif anyzv_region
-        H = allocate_shared_float(; comm=comm_anyzv_subblock[],
-                                  linear_restart_plus_1=linear_restart + 1,
-                                  linear_restart=linear_restart)
-        c = allocate_shared_float(; comm=comm_anyzv_subblock[],
-                                  linear_restart_plus_one=linear_restart + 1)
-        s = allocate_shared_float(; comm=comm_anyzv_subblock[],
-                                  linear_restart_plus_one=linear_restart + 1)
-        g = allocate_shared_float(; comm=comm_anyzv_subblock[],
-                                  linear_restart_plus_one=linear_restart + 1)
-        V = allocate_shared_float(; comm=comm_anyzv_subblock[],
-                                  (Symbol(c.name)=>c.n for (_,c) ∈ pairs(reverse(coords)))...,
-                                  linear_restart_plus_one=linear_restart+1)
+        H = allocate_shared_float(:linear_restart_plus_1=>linear_restart + 1,
+                                  :linear_restart=>linear_restart;
+                                  comm=comm_anyzv_subblock[])
+        c = allocate_shared_float(:linear_restart_plus_one=>linear_restart + 1;
+                                  comm=comm_anyzv_subblock[])
+        s = allocate_shared_float(:linear_restart_plus_one=>linear_restart + 1;
+                                  comm=comm_anyzv_subblock[])
+        g = allocate_shared_float(:linear_restart_plus_one=>linear_restart + 1;
+                                  comm=comm_anyzv_subblock[])
+        V = allocate_shared_float(reverse(coords)...,
+                                  :linear_restart_plus_one=>linear_restart+1;
+                                  comm=comm_anyzv_subblock[])
         # Arrays below appear to need to be initialised to zero on setup.
         # This is inconvenient for anyzv communicators because we need to switch
         # now into the special "anyzv" region for this assignment,
@@ -226,12 +227,12 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(), spec
         # will not be an "anyzv" call.
         @begin_serial_region()
     else
-        H = allocate_shared_float(; linear_restart_plus_one=linear_restart + 1, linear_restart=linear_restart)
-        c = allocate_shared_float(; linear_restart_plus_one=linear_restart + 1)
-        s = allocate_shared_float(; linear_restart_plus_one=linear_restart + 1)
-        g = allocate_shared_float(; linear_restart_plus_one=linear_restart + 1)
-        V = allocate_shared_float((Symbol(c.name)=>c.n for c ∈ reverse(coords))...,
-                                  linear_restart_plus_one=linear_restart + 1)
+        H = allocate_shared_float(:linear_restart_plus_one=>linear_restart + 1, :linear_restart=>linear_restart)
+        c = allocate_shared_float(:linear_restart_plus_one=>linear_restart + 1)
+        s = allocate_shared_float(:linear_restart_plus_one=>linear_restart + 1)
+        g = allocate_shared_float(:linear_restart_plus_one=>linear_restart + 1)
+        V = allocate_shared_float(reverse(coords)...,
+                                  :linear_restart_plus_one=>linear_restart + 1)
 
         @begin_serial_region()
         @serial_region begin
@@ -264,9 +265,9 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(), spec
                                                      electron_dp_dz=((:anyzv,:z), (:z,), true),
                                                      electron_dq_dz=((:anyzv,:z), (:z,), true),
                                                     ),
-                                allocate_shared_float(; newton_size=pdf_plus_p_plus_constraints_size,
+                                allocate_shared_float(:newton_size=>pdf_plus_p_plus_constraints_size;
                                                       comm=comm_anyzv_subblock[]),
-                                allocate_shared_float(; newton_size=pdf_plus_p_plus_constraints_size,
+                                allocate_shared_float(:newton_size=>pdf_plus_p_plus_constraints_size;
                                                       comm=comm_anyzv_subblock[]),
                                ),
                                reverse(outer_coord_sizes))
@@ -291,9 +292,9 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(), spec
                                                      first_moment=((:anyzv,:z), (:z,), true),
                                                      second_moment=((:anyzv,:z), (:z,), true),
                                                      third_moment=((:anyzv,:z), (:z,), true)),
-                                allocate_shared_float(; newton_size=pdf_plus_p_plus_constraints_size,
+                                allocate_shared_float(:newton_size=>pdf_plus_p_plus_constraints_size;
                                                       comm=comm_anyzv_subblock[]),
-                                allocate_shared_float(; newton_size=pdf_plus_p_plus_constraints_size,
+                                allocate_shared_float(:newton_size=>pdf_plus_p_plus_constraints_size;
                                                       comm=comm_anyzv_subblock[]),
                                ),
                                reverse(outer_coord_sizes))
@@ -315,9 +316,9 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(), spec
                                                      electron_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z), false),
                                                      electron_p=((:anyzv,:z), (:z,), false),
                                                      third_moment=((:anyzv,:z), (:z,), true)),
-                                allocate_shared_float(; newton_size=pdf_plus_p_plus_constraints_size,
+                                allocate_shared_float(:newton_size=>pdf_plus_p_plus_constraints_size;
                                                       comm=comm_anyzv_subblock[]),
-                                allocate_shared_float(; newton_size=pdf_plus_p_plus_constraints_size,
+                                allocate_shared_float(:newton_size=>pdf_plus_p_plus_constraints_size;
                                                       comm=comm_anyzv_subblock[]),
                                ),
                                reverse(outer_coord_sizes))
@@ -338,9 +339,9 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(), spec
                                                      boundary_skip_funcs=boundary_skip_funcs.full,
                                                      electron_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z), false),
                                                      electron_p=((:anyzv,:z), (:z,), false)),
-                                allocate_shared_float(; newton_size=pdf_plus_p_size,
+                                allocate_shared_float(:newton_size=>pdf_plus_p_size;
                                                       comm=comm_anyzv_subblock[]),
-                                allocate_shared_float(; newton_size=pdf_plus_p_size,
+                                allocate_shared_float(:newton_size=>pdf_plus_p_size;
                                                       comm=comm_anyzv_subblock[]),
                                ),
                                reverse(outer_coord_sizes))
@@ -400,13 +401,13 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(), spec
                                                      boundary_skip_funcs=boundary_skip_funcs.full,
                                                      electron_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z), false),
                                                      electron_p=((:anyzv,:z), (:z,), false))
-            input_buffer = allocate_shared_float(; newton_size=pdf_plus_p_size,
+            input_buffer = allocate_shared_float(:newton_size=>pdf_plus_p_size;
                                                  comm=comm_anyzv_subblock[])
-            intermediate_buffer = allocate_shared_float(; newton_size=pdf_plus_p_size,
+            intermediate_buffer = allocate_shared_float(:newton_size=>pdf_plus_p_size;
                                                         comm=comm_anyzv_subblock[])
-            output_buffer = allocate_shared_float(; newton_size=pdf_plus_p_size,
+            output_buffer = allocate_shared_float(:newton_size=>pdf_plus_p_size;
                                                   comm=comm_anyzv_subblock[])
-            error_buffer = allocate_shared_float(; newton_size=pdf_plus_p_size,
+            error_buffer = allocate_shared_float(:newton_size=>pdf_plus_p_size;
                                                  comm=comm_anyzv_subblock[])
 
             chunk_size = (pdf_plus_p_size + block_size[] - 1) ÷ block_size[]
