@@ -858,9 +858,9 @@ end
 function _allocate_shared_internal(T::Type, comm, maybe_debug,
                                    dims_info::Pair{Symbol,mk_int}...)
     if maybe_debug
-        dim_names = Tuple(d[1] for d ∈ dims_info)
+        dim_names = map(d->d[1], dims_info)
     end
-    dims = Tuple(d[2] for d ∈ dims_info)
+    dims = map(d->d[2], dims_info)
     if comm === nothing
         comm = comm_block[]
     elseif comm == MPI.COMM_NULL
@@ -900,7 +900,7 @@ function _allocate_shared_internal(T::Type, comm, maybe_debug,
         # Allocate points on rank-0 for simplicity
         dims_local = dims
     else
-        dims_local = Tuple(0 for _ ∈ dims)
+        dims_local = map(d->0, dims)
     end
 
     @debug_shared_array_allocate begin

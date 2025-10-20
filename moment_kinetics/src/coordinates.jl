@@ -237,7 +237,7 @@ function define_coordinate(coord_input::NamedTuple; parallel_io::Bool=false,
     end
 
     # scratch is an array used for intermediate calculations requiring n entries
-    scratch = allocate_float(; Symbol(coord_input.name)=>n_local)
+    scratch = allocate_float(Symbol(coord_input.name)=>n_local)
     # scratch_int_nelement_plus_1 is an array used for intermediate calculations requiring
     # nelement+1 entries
     scratch_int_nelement_plus_1 = allocate_int(coord_input.nelement_local + 1)
@@ -335,9 +335,9 @@ function define_coordinate(coord_input::NamedTuple; parallel_io::Bool=false,
         prevrank = Cint(irank - 1)
     end
 
-    mask_low = allocate_float(; Symbol(coord_input.name)=>n_local)
+    mask_low = allocate_float(Symbol(coord_input.name)=>n_local)
     mask_low .= 1.0
-    mask_up = allocate_float(; Symbol(coord_input.name)=>n_local)
+    mask_up = allocate_float(Symbol(coord_input.name)=>n_local)
     mask_up .= 1.0
     zeroval = 1.0e-8
     for i in 1:n_local
@@ -584,9 +584,9 @@ function init_grid(ngrid, nelement_local, n_global, n_local, irank, L, element_s
     uniform_grid_shifted = equally_spaced_grid_shifted(n_global, n_local, irank, L)
     radau_first_element = false
     if n_global == 1
-        grid = allocate_float(; Symbol(name)=>n_local)
+        grid = allocate_float(Symbol(name)=>n_local)
         grid[1] = 0.0
-        wgts = allocate_float(; Symbol(name)=>n_local)
+        wgts = allocate_float(Symbol(name)=>n_local)
         wgts[1] = 1.0
     elseif discretization == "chebyshev_pseudospectral"
         if name == "vperp"

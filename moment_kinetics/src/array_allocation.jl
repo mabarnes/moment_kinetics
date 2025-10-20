@@ -26,8 +26,6 @@ function _allocate_array(type::Type, dims...)
     function get_int(a)
         if isa(a, coordinate)
             return a.n
-        elseif isa(a, NamedTuple)
-            return mk_int(a.n)
         elseif isa(a, Integer)
             return mk_int(a)
         elseif isa(a, Pair)
@@ -39,16 +37,7 @@ function _allocate_array(type::Type, dims...)
                   * "(`Pair{Symbol,mk_int}`), or mk_int.")
         end
     end
-    return _allocate_array(type, (get_int(d) for d ∈ dims)...)
-end
-
-# Overload to handle keyword arguments
-function _allocate_array(type::Type; kwargs...)
-    if length(kwargs) == 0
-        # Special handling if there are no kwargs to avoid stack overflow.
-        return Array{type}(undef)
-    end
-    return _allocate_array(type, (v for v ∈ values(kwargs))...)
+    return _allocate_array(type, map(get_int, dims)...)
 end
 
 """
