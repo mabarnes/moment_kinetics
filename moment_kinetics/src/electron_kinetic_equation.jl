@@ -2615,20 +2615,20 @@ end
         if z.irank == 0
             @loop_vperp_vpa ivperp ivpa begin
                 u = upar[1]
-                vthe = vth[1]
-                speed = vpa.grid[ivpa] * vthe + u
+                this_vthe = vthe[1]
+                speed = vpa.grid[ivpa] * this_vthe + u
                 if speed > 0.0
-                    pdf[ivpa,ivperp,1] = density_offset / dens[1] * vthe[1] * exp(-(speed^2 + vperp.grid[ivperp]^2)/vwidth^2)
+                    pdf[ivpa,ivperp,1] = density_offset / dens[1] * this_vthe * exp(-(speed^2 + vperp.grid[ivperp]^2)/vwidth^2)
                 end
             end
         end
         if z.irank == z.nrank - 1
             @loop_vperp_vpa ivperp ivpa begin
                 u = upar[end]
-                vthe = vth[end]
-                speed = vpa.grid[ivpa] * vthe + u
+                this_vthe = vthe[end]
+                speed = vpa.grid[ivpa] * this_vthe + u
                 if speed > 0.0
-                    pdf[ivpa,ivperp,end] = density_offset / dens[end] * vthe[end] * exp(-(speed^2 + vperp.grid[ivperp]^2)/vwidth^2)
+                    pdf[ivpa,ivperp,end] = density_offset / dens[end] * this_vthe * exp(-(speed^2 + vperp.grid[ivperp]^2)/vwidth^2)
                 end
             end
         end
