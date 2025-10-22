@@ -4,6 +4,7 @@ module moment_kinetics
 
 export run_moment_kinetics
 
+using BlockBandedMatrices
 using MPI
 using StableRNGs # Included so it can be imported conveniently into tests. Not used within moment_kinetics.
 using StatsBase

@@ -247,24 +247,105 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(), spec
         # These will be calculated properly within the time loop.
         preconditioners = fill(lu(sparse(1.0*I, total_size_coords, total_size_coords)),
                                reverse(outer_coord_sizes))
-    elseif preconditioner_type === Val(:electron_lu)
-        pdf_plus_ppar_size = total_size_coords + coords.z.n
+    elseif preconditioner_type === Val(:electron_lu_separate_dp_dz_dq_dz)
+        pdf_plus_p_plus_constraints_size = total_size_coords + coords.z.n + 6 * coords.z.n
         preconditioners = fill((lu(sparse(1.0*I, 1, 1)),
                                 create_jacobian_info(coords, spectral;
                                                      comm=comm_anyzv_subblock[],
                                                      synchronize=_anyzv_subblock_synchronize,
                                                      boundary_skip_funcs=boundary_skip_funcs.full,
-                                                     electron_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z)),
-                                                     electron_p=((:anyzv,:z), (:z,))),
-                                allocate_shared_float(; newton_size=pdf_plus_ppar_size,
+                                                     electron_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z), false),
+                                                     electron_p=((:anyzv,:z), (:z,), false),
+                                                     zeroth_moment=((:anyzv,:z), (:z,), true),
+                                                     first_moment=((:anyzv,:z), (:z,), true),
+                                                     second_moment=((:anyzv,:z), (:z,), true),
+                                                     third_moment=((:anyzv,:z), (:z,), true),
+                                                     electron_dp_dz=((:anyzv,:z), (:z,), true),
+                                                     electron_dq_dz=((:anyzv,:z), (:z,), true),
+                                                    ),
+                                allocate_shared_float(; newton_size=pdf_plus_p_plus_constraints_size,
                                                       comm=comm_anyzv_subblock[]),
-                                allocate_shared_float(; newton_size=pdf_plus_ppar_size,
+                                allocate_shared_float(; newton_size=pdf_plus_p_plus_constraints_size,
+                                                      comm=comm_anyzv_subblock[]),
+                               ),
+                               reverse(outer_coord_sizes))
+        # Initialise input buffers to zero so that constraint equations have zero on the
+        # RHS.
+        @begin_serial_region()
+        @serial_region begin
+            for p ∈ preconditioners
+                p[3] .= 0.0
+            end
+        end
+    elseif preconditioner_type === Val(:electron_lu)
+        pdf_plus_p_plus_constraints_size = total_size_coords + coords.z.n + 4 * coords.z.n
+        preconditioners = fill((lu(sparse(1.0*I, 1, 1)),
+                                create_jacobian_info(coords, spectral;
+                                                     comm=comm_anyzv_subblock[],
+                                                     synchronize=_anyzv_subblock_synchronize,
+                                                     boundary_skip_funcs=boundary_skip_funcs.full,
+                                                     electron_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z), false),
+                                                     electron_p=((:anyzv,:z), (:z,), false),
+                                                     zeroth_moment=((:anyzv,:z), (:z,), true),
+                                                     first_moment=((:anyzv,:z), (:z,), true),
+                                                     second_moment=((:anyzv,:z), (:z,), true),
+                                                     third_moment=((:anyzv,:z), (:z,), true)),
+                                allocate_shared_float(; newton_size=pdf_plus_p_plus_constraints_size,
+                                                      comm=comm_anyzv_subblock[]),
+                                allocate_shared_float(; newton_size=pdf_plus_p_plus_constraints_size,
+                                                      comm=comm_anyzv_subblock[]),
+                               ),
+                               reverse(outer_coord_sizes))
+        # Initialise input buffers to zero so that constraint equations have zero on the
+        # RHS.
+        @begin_serial_region()
+        @serial_region begin
+            for p ∈ preconditioners
+                p[3] .= 0.0
+            end
+        end
+    elseif preconditioner_type === Val(:electron_lu_separate_third_moment)
+        pdf_plus_p_plus_constraints_size = total_size_coords + coords.z.n + coords.z.n
+        preconditioners = fill((lu(sparse(1.0*I, 1, 1)),
+                                create_jacobian_info(coords, spectral;
+                                                     comm=comm_anyzv_subblock[],
+                                                     synchronize=_anyzv_subblock_synchronize,
+                                                     boundary_skip_funcs=boundary_skip_funcs.full,
+                                                     electron_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z), false),
+                                                     electron_p=((:anyzv,:z), (:z,), false),
+                                                     third_moment=((:anyzv,:z), (:z,), true)),
+                                allocate_shared_float(; newton_size=pdf_plus_p_plus_constraints_size,
+                                                      comm=comm_anyzv_subblock[]),
+                                allocate_shared_float(; newton_size=pdf_plus_p_plus_constraints_size,
+                                                      comm=comm_anyzv_subblock[]),
+                               ),
+                               reverse(outer_coord_sizes))
+        # Initialise input buffers to zero so that constraint equations have zero on the
+        # RHS.
+        @begin_serial_region()
+        @serial_region begin
+            for p ∈ preconditioners
+                p[3] .= 0.0
+            end
+        end
+    elseif preconditioner_type === Val(:electron_lu_no_separate_moments)
+        pdf_plus_p_size = total_size_coords + coords.z.n
+        preconditioners = fill((lu(sparse(1.0*I, 1, 1)),
+                                create_jacobian_info(coords, spectral;
+                                                     comm=comm_anyzv_subblock[],
+                                                     synchronize=_anyzv_subblock_synchronize,
+                                                     boundary_skip_funcs=boundary_skip_funcs.full,
+                                                     electron_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z), false),
+                                                     electron_p=((:anyzv,:z), (:z,), false)),
+                                allocate_shared_float(; newton_size=pdf_plus_p_size,
+                                                      comm=comm_anyzv_subblock[]),
+                                allocate_shared_float(; newton_size=pdf_plus_p_size,
                                                       comm=comm_anyzv_subblock[]),
                                ),
                                reverse(outer_coord_sizes))
     elseif preconditioner_type === Val(:electron_adi)
         nz = coords.z.n
-        pdf_plus_ppar_size = total_size_coords + nz
+        pdf_plus_p_size = total_size_coords + nz
         nvperp = coords.vperp.n
         nvpa = coords.vpa.n
         v_size = nvperp * nvpa
@@ -284,8 +365,8 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(), spec
                                                     comm=nothing,
                                                     synchronize=nothing,
                                                     boundary_skip_funcs=boundary_skip_funcs.v_solve,
-                                                    electron_pdf=(nothing, (:vpa, :vperp)),
-                                                    electron_p=(nothing, ()))
+                                                    electron_pdf=(nothing, (:vpa, :vperp), false),
+                                                    electron_p=(nothing, (), false))
 
             z_solve_vperp_range = looping.loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp
             z_solve_vpa_range = looping.loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa
@@ -307,29 +388,29 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(), spec
             z_solve_jacobian = create_jacobian_info(coords, spectral; comm=nothing,
                                                     synchronize=nothing,
                                                     boundary_skip_funcs=boundary_skip_funcs.z_solve,
-                                                    electron_pdf=(nothing,(:z,)))
+                                                    electron_pdf=(nothing,(:z,), false))
             z_solve_jacobian_p = create_jacobian_info(coords, spectral; comm=nothing,
                                                       synchronize=nothing,
                                                       boundary_skip_funcs=boundary_skip_funcs.z_solve,
-                                                      electron_p=(nothing,(:z,)))
+                                                      electron_p=(nothing,(:z,), false))
 
             explicit_jacobian = create_jacobian_info(coords, spectral; comm=comm_anyzv_subblock[],
                                                      synchronize=_anyzv_subblock_synchronize,
                                                      boundary_skip_funcs=boundary_skip_funcs.full,
-                                                     electron_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z)),
-                                                     electron_p=((:anyzv,:z), (:z,)))
-            input_buffer = allocate_shared_float(; newton_size=pdf_plus_ppar_size,
+                                                     electron_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z), false),
+                                                     electron_p=((:anyzv,:z), (:z,), false))
+            input_buffer = allocate_shared_float(; newton_size=pdf_plus_p_size,
                                                  comm=comm_anyzv_subblock[])
-            intermediate_buffer = allocate_shared_float(; newton_size=pdf_plus_ppar_size,
+            intermediate_buffer = allocate_shared_float(; newton_size=pdf_plus_p_size,
                                                         comm=comm_anyzv_subblock[])
-            output_buffer = allocate_shared_float(; newton_size=pdf_plus_ppar_size,
+            output_buffer = allocate_shared_float(; newton_size=pdf_plus_p_size,
                                                   comm=comm_anyzv_subblock[])
-            error_buffer = allocate_shared_float(; newton_size=pdf_plus_ppar_size,
+            error_buffer = allocate_shared_float(; newton_size=pdf_plus_p_size,
                                                  comm=comm_anyzv_subblock[])
 
-            chunk_size = (pdf_plus_ppar_size + block_size[] - 1) ÷ block_size[]
+            chunk_size = (pdf_plus_p_size + block_size[] - 1) ÷ block_size[]
             # Set up so root process has fewest points, as root may have other work to do.
-            global_index_subrange = max(1, pdf_plus_ppar_size - (block_size[] - block_rank[]) * chunk_size + 1):(pdf_plus_ppar_size - (block_size[] - block_rank[] - 1) * chunk_size)
+            global_index_subrange = max(1, pdf_plus_p_size - (block_size[] - block_rank[]) * chunk_size + 1):(pdf_plus_p_size - (block_size[] - block_rank[] - 1) * chunk_size)
 
             if nl_solver_input.adi_precon_iterations < 1
                 error("Setting adi_precon_iterations=$(nl_solver_input.adi_precon_iterations) "

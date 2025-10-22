@@ -200,7 +200,7 @@ function derivative_z_anyzv!(dfdz::AbstractArray{mk_float,1}, f::AbstractArray{m
     # now reconcile element boundaries across
     # processes with large message involving all y
     if z.nelement_local < z.nelement_global
-        reconcile_element_boundaries_MPI!(
+        reconcile_element_boundaries_MPI_anyzv!(
             dfdz, dfdz_lower_endpoints, dfdz_upper_endpoints, z_send_buffer,
             z_receive_buffer, z)
     end

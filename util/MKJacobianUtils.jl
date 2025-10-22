@@ -164,8 +164,8 @@ function get_electron_Jacobian_matrix(run_directory; restart_time_index=1,
                                      z=z_spectral);
                                     comm=comm_anyzv_subblock[],
                                     synchronize=_anyzv_subblock_synchronize,
-                                    electron_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z)),
-                                    electron_p=((:anyzv,:z), (:z,)),
+                                    electron_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z), false),
+                                    electron_p=((:anyzv,:z), (:z,), false),
                                     boundary_skip_funcs=(electron_pdf=skip_f_electron_bc_points_in_Jacobian,
                                                          electron_p=nothing))
 
@@ -275,6 +275,12 @@ function get_electron_Jacobian_matrix(run_directory; restart_time_index=1,
                                       vpa_spectral)
         end
 
+        separate_zeroth_moment = (:zeroth_moment ∈ jacobian.state_vector_entries)
+        separate_first_moment = (:first_moment ∈ jacobian.state_vector_entries)
+        separate_second_moment = (:second_moment ∈ jacobian.state_vector_entries)
+        separate_third_moment = (:third_moment ∈ jacobian.state_vector_entries)
+        separate_dp_dz = (:electron_dp_dz ∈ jacobian.state_vector_entries)
+        separate_dq_dz = (:electron_dq_dz ∈ jacobian.state_vector_entries)
         sub_terms = get_electron_sub_terms(dens, ddens_dz, upar, dupar_dz, p, dp_dz,
                                            dvth_dz, zeroth_moment, first_moment,
                                            second_moment, third_moment, dthird_moment_dz,
@@ -282,7 +288,10 @@ function get_electron_Jacobian_matrix(run_directory; restart_time_index=1,
                                            d2pdf_dvpa2, me, moments, collisions,
                                            composition, external_source_settings,
                                            num_diss_params, t_params.electron, ion_dt, z,
-                                           vperp, vpa, z_speed, vpa_speed, ir)
+                                           vperp, vpa, z_speed, vpa_speed, ir,
+                                           separate_zeroth_moment, separate_first_moment,
+                                           separate_second_moment, separate_third_moment,
+                                           separate_dp_dz, separate_dq_dz)
 
         terms = NullTerm()
 
