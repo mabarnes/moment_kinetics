@@ -126,9 +126,10 @@ because it is set by boundary conditions.
 `synchronize` is the function to be called to synchronize all processes in the
 shared-memory group that is working with this `jacobian_info` object.
 """
-struct jacobian_info{Tmat,NTerms,Tvecinds,Tvecdims,Tveccoords,Tdimsizes,Tdimsteps,Tranges,Tfranges,Tlbranges,Tlbdranges,Tcoords,Tspectral,Tbskip,Tsync}
+struct jacobian_info{Tmat,N2,NTerms,Tvecinds,Tvecdims,Tveccoords,Tdimsizes,Tdimsteps,Tranges,Tfranges,Tlbranges,Tlbdranges,Tcoords,Tspectral,Tbskip,Tsync}
     matrix::Tmat
     n_entries::mk_int
+    n_entries_squared_val::Val{N2}
     state_vector_entries::NTuple{NTerms, Symbol}
     state_vector_numbers::Tvecinds
     state_vector_dims::Tvecdims
@@ -392,13 +393,14 @@ function create_jacobian_info(coords::NamedTuple, spectral::NamedTuple; comm=com
         synchronize = (call_site)->nothing
     end
 
-    return jacobian_info(jacobian_matrix, n_entries, state_vector_entries,
-                         state_vector_numbers, state_vector_dims, state_vector_coords,
-                         state_vector_is_constraint, state_vector_sizes,
-                         state_vector_dim_sizes, state_vector_dim_steps,
-                         state_vector_local_ranges, state_vector_local_flattened_ranges,
-                         local_block_ranges, local_block_diagonal_inds, mini_coords,
-                         mini_spectral, boundary_skip_funcs, synchronize)
+    return jacobian_info(jacobian_matrix, n_entries, Val(n_entries^2),
+                         state_vector_entries, state_vector_numbers, state_vector_dims,
+                         state_vector_coords, state_vector_is_constraint,
+                         state_vector_sizes, state_vector_dim_sizes,
+                         state_vector_dim_steps, state_vector_local_ranges,
+                         state_vector_local_flattened_ranges, local_block_ranges,
+                         local_block_diagonal_inds, mini_coords, mini_spectral,
+                         boundary_skip_funcs, synchronize)
 end
 
 """
@@ -596,9 +598,9 @@ end
 end
 
 @timeit_debug global_timer get_sparse_joined_array(jacobian::jacobian_info) = begin
-    n_entries = jacobian.n_entries
-    array_of_arrays = [sparse(jacobian.matrix[i][j]) for j ∈ 1:n_entries, i ∈ 1:n_entries]
-    joined_array = sparse_hvcat(Tuple(n_entries for _ ∈ 1:n_entries), array_of_arrays...)
+    n_entries = length(jacobian.state_vector_entries)
+    array_of_arrays = ntuple(i->sparse(jacobian.matrix[(i-1)÷n_entries+1][(i-1)%n_entries+1]), jacobian.n_entries_squared_val)
+    joined_array = sparse_hvcat(ntuple(i->n_entries, n_entries), array_of_arrays...)::SparseMatrixCSC{mk_float,Int64}
     return joined_array
 end
 
