@@ -1561,6 +1561,36 @@ function select_from_V(V, i)
     return selectdim(V,ndims(V),i)
 end
 
+@kwdef struct nonlinear_solvers_approximate_Jacobian_vector_product!{F,LP,RP,Tx,Tr0,Tdel,Tst}
+    residual_func!::F
+    left_preconditioner::LP
+    right_preconditioner::RP
+    x::Tx
+    residual0::Tr0
+    rhs_delta::Tdel
+    Jv_scale_factor::mk_float
+    inv_Jv_scale_factor::mk_float
+    solver_type::Tst
+end
+
+function (approx_Jv::nonlinear_solvers_approximate_Jacobian_vector_product!)(
+             v, skip_first_precon::Bool=false)
+    if !skip_first_precon
+        approx_Jv.right_preconditioner(v)
+    end
+
+    solver_type = approx_Jv.solver_type
+    rhs_delta = approx_Jv.rhs_delta
+
+    parallel_map(solver_type, (x,v) -> x + approx_Jv.Jv_scale_factor * v, v, approx_Jv.x, v)
+    approx_Jv.residual_func!(rhs_delta, v; krylov=true)
+    parallel_map(solver_type,
+                 (rhs_delta, residual0) -> (rhs_delta - residual0) * approx_Jv.inv_Jv_scale_factor,
+                 v, rhs_delta, approx_Jv.residual0)
+    approx_Jv.left_preconditioner(v)
+    return v
+end
+
 """
 Apply the GMRES algorithm to solve the 'linear problem' J.δx^n = R(x^n), which is needed
 at each step of the outer Newton iteration (in `newton_solve!()`).
@@ -1592,18 +1622,10 @@ MGS-GMRES' in Zou (2023) [https://doi.org/10.1016/j.amc.2023.127869].
     # by a large number `Jv_scale_factor` (in constrast to the small `epsilon` in the
     # 'usual' case where the norm does not include either reative or absolute tolerance)
     # to ensure that we get a reasonable estimate of J.v.
-    function approximate_Jacobian_vector_product!(v, skip_first_precon::Bool=false)
-        if !skip_first_precon
-            right_preconditioner(v)
-        end
-
-        parallel_map(solver_type, (x,v) -> x + Jv_scale_factor * v, v, x, v)
-        residual_func!(rhs_delta, v; krylov=true)
-        parallel_map(solver_type, (rhs_delta, residual0) -> (rhs_delta - residual0) * inv_Jv_scale_factor,
-                     v, rhs_delta, residual0)
-        left_preconditioner(v)
-        return v
-    end
+    approximate_Jacobian_vector_product! =
+        nonlinear_solvers_approximate_Jacobian_vector_product!(;
+            residual_func!, left_preconditioner, right_preconditioner, x, residual0,
+            rhs_delta, Jv_scale_factor, inv_Jv_scale_factor, solver_type)
 
     # To start with we use 'w' as a buffer to make a copy of residual0 to which we can apply
     # the left-preconditioner.
