@@ -274,7 +274,8 @@ function init_magnetic_geometry(geometry_input_data::geometry_input,z,r,z_spectr
         end
         L_B = 1/(dB_dr*1/Bmag[1,1])
         #println("L_B = $L_B")
-    elseif option == "1D-mirror-MAST-edge" || option == "1D-mirror-STEP-edge-rough"
+    elseif option == "1D-mirror-MAST-edge" || option == "1D-mirror-STEP-edge-rough" ||
+            option == "1D-mirror-STEP-edge-precise" || option == "1D_quadratic_well"
         # a 1D configuration along z, with no pitch, but the magnetic field 
         # strength varies along the line. Its variation matches very closely to 
         # a single field line in the edge of MAST (from a hypnotoad analysis of 
@@ -285,13 +286,27 @@ function init_magnetic_geometry(geometry_input_data::geometry_input,z,r,z_spectr
         # z grid needs to be mapped from -1 to 1 for these polynomials to work.
         if option == "1D-mirror-MAST-edge"
             a0, a2, a4, a6, a8 = 0.32884641, -0.4199673, 3.1528366, -6.3052343, 4.0532678
+        elseif option == "1D-mirror-STEP-edge-precise"
+            a0, a2, a4, a6, a8, a10, a12, a14, a16, a18, a20, a22, a24, a26, a28, a30 =
+                    2.5076007, 25.017435, 316.9655, -13616.124, 198167.82, -1677583.2,
+                    9331055.5, -36017361, 99319698, -1.9842134e+08, 2.8779297e+08,
+                    -2.9998095e+08, 2.1890741e+08, -1.0612807e+08, 30697326, -4008047.5
         elseif option == "1D-mirror-STEP-edge-rough"
-            a0, a2, a4, a6, a8 = 0.6, 3.6, 1.4, -13.8, 8.6
+            #a0, a2, a4, a6, a8 = 0.6, 3.6, 1.4, -13.8, 8.6 # might be too steep changes in B, weaker well below
+            well_prefactor = 0.3
+            a0, a2, a4, a6, a8 = 0.1, 0.8, 0.3, -2.5, 1.5
+            a0 = a0 * well_prefactor + 0.2
+            a2 = a2 * well_prefactor
+            a4 = a4 * well_prefactor
+            a6 = a6 * well_prefactor
+            a8 = a8 * well_prefactor
+        elseif option == "1D_quadratic_well"
+            a0, a2, a4, a6, a8 = 0.5, 0.2, 0.0, 0.0, 0.0
         end
         
         pitch = geometry_input_data.pitch
         if pitch != 1.0
-            input_option_error("option: You have specified pitch != 1, but z is arc length coordinate in 1D-mirror-MAST-edge geometry", option)
+            input_option_error("option: You have specified pitch != 1, but z is arc length coordinate in this geometry:", option)
         end
 
         B_0 = 1.0
