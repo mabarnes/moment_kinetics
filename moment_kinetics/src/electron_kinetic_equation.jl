@@ -1027,21 +1027,21 @@ global_rank[] == 0 && println("recalculating precon")
                 # Have not properly created the LU decomposition before, so
                 # cannot reuse it.
                 @timeit_debug global_timer "lu" nl_solver_params.preconditioners[ir] =
-                    (lu(sparse(precon.matrix)), precon, input_buffer,
+                    (lu(get_sparse_joined_array(precon)), precon, input_buffer,
                      output_buffer)
             else
                 # LU decomposition was previously created. The Jacobian always
                 # has the same sparsity pattern, so by using `lu!()` we can
                 # reuse some setup.
                 try
-                    @timeit_debug global_timer "lu!" lu!(orig_lu, sparse(precon.matrix); check=false)
+                    @timeit_debug global_timer "lu!" lu!(orig_lu, get_sparse_joined_array(precon); check=false)
                 catch e
                     if !isa(e, ArgumentError)
                         rethrow(e)
                     end
                     println("Sparsity pattern of matrix changed, rebuilding "
-                            * " LU from scratch")
-                    @timeit_debug global_timer "lu" orig_lu = lu(sparse(precon.matrix))
+                            * "LU from scratch")
+                    @timeit_debug global_timer "lu" orig_lu = lu(get_sparse_joined_array(precon))
                 end
                 nl_solver_params.preconditioners[ir] =
                     (orig_lu, precon, input_buffer, output_buffer)
@@ -1255,7 +1255,7 @@ global_rank[] == 0 && println("recalculating precon")
                 vpa_spectral, z_advect, vpa_advect, scratch_dummy,
                 external_source_settings, num_diss_params, t_params, ion_dt, ir, iz,
                 evolve_p, add_identity)
-            A_sparse = sparse(A.matrix)
+            A_sparse = get_sparse_joined_array(A)
             if !isassigned(adi_info.v_solve_implicit_lus, v_solve_counter)
                 @timeit_debug global_timer "lu" adi_info.v_solve_implicit_lus[v_solve_counter] = lu(A_sparse)
             else
@@ -1269,7 +1269,7 @@ global_rank[] == 0 && println("recalculating precon")
                         rethrow(e)
                     end
                     println("Sparsity pattern of matrix changed, rebuilding "
-                            * " LU from scratch ir=$ir, iz=$iz")
+                            * "LU from scratch ir=$ir, iz=$iz")
                     @timeit_debug global_timer "lu" adi_info.v_solve_implicit_lus[v_solve_counter] = lu(A_sparse)
                 end
             end
@@ -1278,7 +1278,8 @@ global_rank[] == 0 && println("recalculating precon")
                 # If we only do one 'iteration' we don't need the 'explicit
                 # matrix' for the first solve (the v-solve), because the
                 # initial guess is zero,
-                adi_info.v_solve_explicit_matrices[v_solve_counter] = sparse(@view(explicit_J.matrix[adi_info.v_solve_global_inds[v_solve_counter],:]))
+                joined_explicit_array = get_joined_array(explicit_J)
+                adi_info.v_solve_explicit_matrices[v_solve_counter] = sparse(@view(joined_explicit_array[adi_info.v_solve_global_inds[v_solve_counter],:]))
             end
         end
         @debug_consistency_checks v_solve_counter == adi_info.v_solve_nsolve || error("v_solve_counter($v_solve_counter) != v_solve_nsolve($(adi_info.v_solve_nsolve))")
@@ -1309,7 +1310,7 @@ global_rank[] == 0 && println("recalculating precon")
                 external_source_settings, num_diss_params, t_params, ion_dt, ir,
                 ivperp, ivpa, add_identity)
 
-            A_sparse = sparse(A.matrix)
+            A_sparse = get_sparse_joined_array(A)
             if !isassigned(adi_info.z_solve_implicit_lus, z_solve_counter)
                 @timeit_debug global_timer "lu" adi_info.z_solve_implicit_lus[z_solve_counter] = lu(A_sparse)
             else
@@ -1323,12 +1324,13 @@ global_rank[] == 0 && println("recalculating precon")
                         rethrow(e)
                     end
                     println("Sparsity pattern of matrix changed, rebuilding "
-                            * " LU from scratch ir=$ir, ivperp=$ivperp, ivpa=$ivpa")
+                            * "LU from scratch ir=$ir, ivperp=$ivperp, ivpa=$ivpa")
                     @timeit_debug global_timer "lu" adi_info.z_solve_implicit_lus[z_solve_counter] = lu(A_sparse)
                 end
             end
 
-            adi_info.z_solve_explicit_matrices[z_solve_counter] = sparse(@view(explicit_J.matrix[adi_info.z_solve_global_inds[z_solve_counter],:]))
+            joined_explicit_array = get_joined_array(explicit_J)
+            adi_info.z_solve_explicit_matrices[z_solve_counter] = sparse(@view(joined_explicit_array[adi_info.z_solve_global_inds[z_solve_counter],:]))
         end
 
         A_p = adi_info.z_solve_jacobian_p
@@ -1349,7 +1351,7 @@ global_rank[] == 0 && println("recalculating precon")
                 external_source_settings, num_diss_params, t_params, ion_dt, ir,
                 evolve_p, add_identity)
 
-            A_sparse = sparse(A_p.matrix)
+            A_sparse = sparse(A_p.matrix[1][1])
             if !isassigned(adi_info.z_solve_implicit_lus, z_solve_counter)
                 @timeit_debug global_timer "lu" adi_info.z_solve_implicit_lus[z_solve_counter] = lu(A_sparse)
             else
@@ -1363,12 +1365,13 @@ global_rank[] == 0 && println("recalculating precon")
                         rethrow(e)
                     end
                     println("Sparsity pattern of matrix changed, rebuilding "
-                            * " LU from scratch ir=$ir, p z-solve")
+                            * "LU from scratch ir=$ir, p z-solve")
                     @timeit_debug global_timer "lu" adi_info.z_solve_implicit_lus[z_solve_counter] = lu(A_sparse)
                 end
             end
 
-            adi_info.z_solve_explicit_matrices[z_solve_counter] = sparse(@view(explicit_J.matrix[adi_info.z_solve_global_inds[z_solve_counter],:]))
+            joined_explicit_array = get_joined_array(explicit_J)
+            adi_info.z_solve_explicit_matrices[z_solve_counter] = sparse(@view(joined_explicit_array[adi_info.z_solve_global_inds[z_solve_counter],:]))
         end
         @debug_consistency_checks z_solve_counter == adi_info.z_solve_nsolve || error("z_solve_counter($z_solve_counter) != z_solve_nsolve($(adi_info.z_solve_nsolve))")
     end
@@ -1465,7 +1468,7 @@ global_rank[] == 0 && println("recalculating precon")
             # no need to multiply by the 'explicit matrix' as x==0, so E.x==0
             for isolve ∈ 1:v_solve_nsolve
                 this_inds = v_solve_global_inds[isolve]
-                v_solve_buffer .= this_input_buffer[this_inds]
+                v_solve_buffer .= @view this_input_buffer[this_inds]
                 @timeit_debug global_timer "ldiv!" ldiv!(v_solve_buffer2, v_solve_implicit_lus[isolve], v_solve_buffer)
                 this_output_buffer[this_inds] .= v_solve_buffer2
             end
@@ -3141,9 +3144,8 @@ boundary condition on those entries of δg (when the right-hand-side is set to z
         return nothing
     end
 
-    jacobian_matrix = jacobian.matrix
-    pdf_offset = jacobian.state_vector_offsets[1]
-    p_offset = jacobian.state_vector_offsets[2]
+    jacobian_matrix_ff = jacobian.matrix[1][1]
+    jacobian_matrix_fp = jacobian.matrix[1][2]
 
     if include ∈ (:all, :explicit_v)
         include_lower = (z.irank == 0)
@@ -3195,9 +3197,9 @@ boundary condition on those entries of δg (when the right-hand-side is set to z
             # Ignore constraints, as these are non-linear and also should be small
             # corrections which should not matter much for a preconditioner.
 
-            jac_range = pdf_offset+(ivperp-1)*vpa.n+1 : pdf_offset+ivperp*vpa.n
-            jacobian_zbegin = @view jacobian_matrix[jac_range,jac_range]
-            jacobian_zbegin_p = @view jacobian_matrix[jac_range,p_offset+1]
+            jac_range = (ivperp-1)*vpa.n+1 : ivperp*vpa.n
+            jacobian_zbegin = @view jacobian_matrix_ff[jac_range,jac_range]
+            jacobian_zbegin_p = @view jacobian_matrix_fp[jac_range,1]
 
             vpa_unnorm, u_over_vt, vcut, minus_vcut_ind, sigma, sigma_ind, sigma_fraction,
                 element_with_zero, element_with_zero_boundary, last_point_near_zero,
@@ -3687,9 +3689,9 @@ boundary condition on those entries of δg (when the right-hand-side is set to z
             # Ignore constraints, as these are non-linear and also should be small
             # corrections which should not matter much for a preconditioner.
 
-            jac_range = pdf_offset+(zend-1)*vperp.n*vpa.n+(ivperp-1)*vpa.n+1 : pdf_offset+(zend-1)*vperp.n*vpa.n+ivperp*vpa.n
-            jacobian_zend = @view jacobian_matrix[jac_range,jac_range]
-            jacobian_zend_p = @view jacobian_matrix[jac_range,p_offset+zend]
+            jac_range = (zend-1)*vperp.n*vpa.n+(ivperp-1)*vpa.n+1 : (zend-1)*vperp.n*vpa.n+ivperp*vpa.n
+            jacobian_zend = @view jacobian_matrix_ff[jac_range,jac_range]
+            jacobian_zend_p = @view jacobian_matrix_fp[jac_range,zend]
 
             vpa_unnorm, u_over_vt, vcut, plus_vcut_ind, sigma, sigma_ind, sigma_fraction,
                 element_with_zero, element_with_zero_boundary, first_point_near_zero,
@@ -4457,7 +4459,10 @@ function get_electron_sub_terms(
              moments, collisions, composition, external_source_settings, num_diss_params,
              t_params, ion_dt, z::coordinate, vperp::coordinate, vpa::coordinate,
              z_speed::AbstractArray{mk_float,3}, vpa_speed::AbstractArray{mk_float,3},
-             ir::mk_int, include::Symbol=:all; include_qpar_integral_terms::Bool=true)
+             ir::mk_int, separate_zeroth_moment::Bool, separate_first_moment::Bool,
+             separate_second_moment::Bool, separate_third_moment::Bool,
+             separate_dp_dz::Bool, separate_dq_dz::Bool, include::Symbol=:all;
+             include_qpar_integral_terms::Bool=true)
 
     if composition.electron_physics == kinetic_electrons_with_temperature_equation
         error("kinetic_electrons_with_temperature_equation not "
@@ -4495,6 +4500,12 @@ function get_electron_sub_terms(
         p = EquationTerm(:electron_p, p_array; z=z)
     end
     dp_dz = EquationTerm(:electron_p, dp_dz_array; derivatives=[:z], z=z)
+    if separate_dp_dz
+        dp_dz_constraint_rhs = dp_dz
+        dp_dz = EquationTerm(:electron_dp_dz, dp_dz_array; z=z)
+    else
+        dp_dz_constraint_rhs = NullTerm()
+    end
     vth = sqrt(2.0 / me) * p^0.5 * n^(-0.5)
     if vperp.n == 1
         ppar = 3.0 * p
@@ -4534,42 +4545,81 @@ function get_electron_sub_terms(
     wpa = ConstantTerm(vpa.grid; vpa=vpa)
     wperp = ConstantTerm(vperp.grid; vperp=vperp)
 
+    @debug_consistency_checks include !== :all && separate_third_moment && error("separate_third_moment is not supported for ADI preconditioner, so must have include=:all. Got include=$include")
+
     if include_qpar_integral_terms
         third_moment_integrand_prefactor = wpa*(wpa^2 + wperp^2)
         if include === :explicit_z
             zeroth_moment = ConstantTerm(zeroth_moment_array; z=z)
+            zeroth_moment_constraint_rhs = NullTerm()
             first_moment = ConstantTerm(first_moment_array; z=z)
+            first_moment_constraint_rhs = NullTerm()
             second_moment = ConstantTerm(second_moment_array; z=z)
+            second_moment_constraint_rhs = NullTerm()
             third_moment = ConstantTerm(third_moment_array; z=z)
+            third_moment_constraint_rhs = NullTerm()
         else
             zeroth_moment = EquationTerm(:electron_pdf, zeroth_moment_array;
                                          integrand_coordinates=[vpa,vperp,z],
                                          integrand_prefactor=ConstantTerm(ones(mk_float)),
                                          z=z)
+            if separate_zeroth_moment
+                zeroth_moment_constraint_rhs = zeroth_moment
+                zeroth_moment = EquationTerm(:zeroth_moment, zeroth_moment_array; z=z)
+            else
+                zeroth_moment_constraint_rhs = NullTerm()
+            end
             first_moment = EquationTerm(:electron_pdf, first_moment_array;
                                         integrand_coordinates=[vpa,vperp,z],
                                         integrand_prefactor=wpa,
                                         z=z)
+            if separate_first_moment
+                first_moment_constraint_rhs = first_moment
+                first_moment = EquationTerm(:first_moment, first_moment_array; z=z)
+            else
+                first_moment_constraint_rhs = NullTerm()
+            end
             second_moment = EquationTerm(:electron_pdf, second_moment_array;
                                          integrand_coordinates=[vpa,vperp,z],
                                          integrand_prefactor=(wpa^2 + wperp^2),
                                          z=z)
+            if separate_second_moment
+                second_moment_constraint_rhs = second_moment
+                second_moment = EquationTerm(:second_moment, second_moment_array; z=z)
+            else
+                second_moment_constraint_rhs = NullTerm()
+            end
             third_moment = EquationTerm(:electron_pdf, third_moment_array;
                                         integrand_coordinates=[vpa,vperp,z],
                                         integrand_prefactor=third_moment_integrand_prefactor,
                                         z=z)
+            if separate_third_moment
+                third_moment_constraint_rhs = third_moment
+                third_moment = EquationTerm(:third_moment, third_moment_array; z=z)
+            else
+                third_moment_constraint_rhs = NullTerm()
+            end
         end
-        dthird_moment_dz = EquationTerm(:electron_pdf, dthird_moment_dz_array;
-                                        derivatives=[:z],
-                                        integrand_coordinates=[vpa,vperp,z],
-                                        integrand_prefactor=third_moment_integrand_prefactor,
-                                        z=z)
+        if separate_third_moment
+            dthird_moment_dz = EquationTerm(:third_moment, dthird_moment_dz_array;
+                                            derivatives=[:z], z=z)
+        else
+            dthird_moment_dz = EquationTerm(:electron_pdf, dthird_moment_dz_array;
+                                            derivatives=[:z],
+                                            integrand_coordinates=[vpa,vperp,z],
+                                            integrand_prefactor=third_moment_integrand_prefactor,
+                                            z=z)
+        end
     else
         zeroth_moment = ConstantTerm(zeroth_moment_array; z=z)
+        zeroth_moment_constraint_rhs = NullTerm()
         first_moment = ConstantTerm(first_moment_array; z=z)
+        first_moment_constraint_rhs = NullTerm()
         second_moment = ConstantTerm(second_moment_array; z=z)
+        second_moment_constraint_rhs = NullTerm()
         third_moment = ConstantTerm(third_moment_array; z=z)
         dthird_moment_dz = ConstantTerm(dthird_moment_dz_array; z=z)
+        third_moment_constraint_rhs = NullTerm()
     end
 
     dvth_dz_expanded = sqrt(2.0 / me) * 0.5 * (p^(-0.5) * n^(-0.5) * dp_dz
@@ -4581,6 +4631,12 @@ function get_electron_sub_terms(
                                      n^(-0.5) * p^1.5 * dthird_moment_dz
                                     )
     dq_dz = CompoundTerm(dq_dz_expanded, dq_dz_array; z=z)
+    if separate_dq_dz
+        dq_dz_constraint_rhs = dq_dz
+        dq_dz = EquationTerm(:electron_dq_dz, dq_dz_array; z=z)
+    else
+        dq_dz_constraint_rhs = NullTerm()
+    end
 
     source_type = collect(s.source_type for s ∈ external_source_settings.electron)
     source_amplitude = collect(ConstantTerm(@view(moments.electron.external_source_amplitude[:,ir,index]); z=z)
@@ -4615,14 +4671,17 @@ function get_electron_sub_terms(
     end
 
     return ElectronSubTerms(; me, vpa_dissipation_coefficient, constraint_forcing_rate,
-                            ion_dt, n, dn_dz, u, du_dz, p, dp_dz, vth, dvth_dz, ppar,
-                            dppar_dz, zeroth_moment, first_moment, second_moment,
-                            third_moment, dthird_moment_dz, dq_dz, u_ion, wperp, wpa, f,
-                            df_dz, df_dvpa, d2f_dvpa2, source_type, source_amplitude,
-                            source_T_array, density_source, momentum_source,
-                            pressure_source, source_vth_factor, source_this_vth_factor,
-                            collisions, nuee0, nuei0, krook_adjust_vth_1V,
-                            krook_adjust_1V, Maxwellian_prefactor)
+                            ion_dt, n, dn_dz, u, du_dz, p, dp_dz, dp_dz_constraint_rhs,
+                            vth, dvth_dz, ppar, dppar_dz, zeroth_moment,
+                            zeroth_moment_constraint_rhs, first_moment,
+                            first_moment_constraint_rhs, second_moment,
+                            second_moment_constraint_rhs, third_moment, dthird_moment_dz,
+                            third_moment_constraint_rhs, dq_dz, dq_dz_constraint_rhs,
+                            u_ion, wperp, wpa, f, df_dz, df_dvpa, d2f_dvpa2, source_type,
+                            source_amplitude, source_T_array, density_source,
+                            momentum_source, pressure_source, source_vth_factor,
+                            source_this_vth_factor, collisions, nuee0, nuei0,
+                            krook_adjust_vth_1V, krook_adjust_1V, Maxwellian_prefactor)
 end
 
 function get_electron_sub_terms_z_only_Jacobian(
@@ -4696,10 +4755,15 @@ function get_electron_sub_terms_z_only_Jacobian(
     wpa = vpa.grid[ivpa]
 
     zeroth_moment = ConstantTerm(zeroth_moment_array; z=z)
+    zeroth_moment_constraint_rhs = NullTerm()
     first_moment = ConstantTerm(first_moment_array; z=z)
+    first_moment_constraint_rhs = NullTerm()
     second_moment = ConstantTerm(second_moment_array; z=z)
+    second_moment_constraint_rhs = NullTerm()
     third_moment = ConstantTerm(third_moment_array; z=z)
     dthird_moment_dz = ConstantTerm(dthird_moment_dz_array; z=z)
+    third_moment_constraint_rhs = NullTerm()
+    dp_dz_constraint_rhs = NullTerm()
     dvth_dz_expanded = sqrt(2.0 / me) * 0.5 * (p^(-0.5) * n^(-0.5) * dp_dz
                                                - p^(0.5) * n^(-1.5) * dn_dz)
     dvth_dz = CompoundTerm(dvth_dz_expanded, dvth_dz_array; z=z)
@@ -4708,6 +4772,7 @@ function get_electron_sub_terms_z_only_Jacobian(
                                      + n^(-0.5) * p^1.5 * dthird_moment_dz
                                     )
     dq_dz = CompoundTerm(dq_dz_expanded, dq_dz_array; z=z)
+    dq_dz_constraint_rhs = NullTerm()
 
     source_type = collect(s.source_type for s ∈ external_source_settings.electron)
     source_amplitude = collect(ConstantTerm(@view(moments.electron.external_source_amplitude[:,ir,index]); z=z)
@@ -4742,14 +4807,17 @@ function get_electron_sub_terms_z_only_Jacobian(
     end
 
     return ElectronSubTerms(; me, vpa_dissipation_coefficient, constraint_forcing_rate,
-                            ion_dt, n, dn_dz, u, du_dz, p, dp_dz, vth, dvth_dz, ppar,
-                            dppar_dz, zeroth_moment, first_moment, second_moment,
-                            third_moment, dthird_moment_dz, dq_dz, u_ion, wperp, wpa, f,
-                            df_dz, df_dvpa, d2f_dvpa2, source_type, source_amplitude,
-                            source_T_array, density_source, momentum_source,
-                            pressure_source, source_vth_factor, source_this_vth_factor,
-                            collisions, nuee0, nuei0, krook_adjust_vth_1V,
-                            krook_adjust_1V, Maxwellian_prefactor)
+                            ion_dt, n, dn_dz, u, du_dz, p, dp_dz, dp_dz_constraint_rhs,
+                            vth, dvth_dz, ppar, dppar_dz, zeroth_moment,
+                            zeroth_moment_constraint_rhs, first_moment,
+                            first_moment_constraint_rhs, second_moment,
+                            second_moment_constraint_rhs, third_moment, dthird_moment_dz,
+                            third_moment_constraint_rhs, dq_dz, dq_dz_constraint_rhs,
+                            u_ion, wperp, wpa, f, df_dz, df_dvpa, d2f_dvpa2, source_type,
+                            source_amplitude, source_T_array, density_source,
+                            momentum_source, pressure_source, source_vth_factor,
+                            source_this_vth_factor, collisions, nuee0, nuei0,
+                            krook_adjust_vth_1V, krook_adjust_1V, Maxwellian_prefactor)
 end
 
 function get_electron_sub_terms_v_only_Jacobian(
@@ -4800,15 +4868,20 @@ function get_electron_sub_terms_v_only_Jacobian(
     zeroth_moment = EquationTerm(:electron_pdf, zeroth_moment_array;
                                  integrand_coordinates=[vpa,vperp],
                                  integrand_prefactor=ConstantTerm(ones(mk_float)))
+    zeroth_moment_constraint_rhs = NullTerm()
     first_moment = EquationTerm(:electron_pdf, first_moment_array;
                                 integrand_coordinates=[vpa,vperp],
                                 integrand_prefactor=wpa)
+    first_moment_constraint_rhs = NullTerm()
     second_moment = EquationTerm(:electron_pdf, second_moment_array;
                                  integrand_coordinates=[vpa,vperp],
                                  integrand_prefactor=(wpa^2 + wperp^2))
+    second_moment_constraint_rhs = NullTerm()
     third_moment = EquationTerm(:electron_pdf, third_moment_array;
                                 integrand_coordinates=[vpa,vperp],
                                 integrand_prefactor=third_moment_integrand_prefactor)
+    third_moment_constraint_rhs = NullTerm()
+    dp_dz_constraint_rhs = NullTerm()
     dvth_dz_expanded = sqrt(2.0 / me) * 0.5 * (p^(-0.5) * n^(-0.5) * dp_dz
                                                - p^(0.5) * n^(-1.5) * dn_dz)
     dvth_dz = CompoundTerm(dvth_dz_expanded, dvth_dz_array)
@@ -4817,6 +4890,7 @@ function get_electron_sub_terms_v_only_Jacobian(
                                      + n^(-0.5) * p^1.5 * dthird_moment_dz
                                     )
     dq_dz = CompoundTerm(dq_dz_expanded, dq_dz_array)
+    dq_dz_constraint_rhs = NullTerm()
 
     source_type = collect(s.source_type for s ∈ external_source_settings.electron)
     source_amplitude = collect(moments.electron.external_source_amplitude[iz,ir,index]
@@ -4856,14 +4930,18 @@ function get_electron_sub_terms_v_only_Jacobian(
     z_speed = get_ADI_boundary_v_solve_z_speed(z_speed, z, iz)
 
     return ElectronSubTerms(; me, vpa_dissipation_coefficient, constraint_forcing_rate,
-                            ion_dt, n, dn_dz, u, du_dz, p, dp_dz, vth, dvth_dz, ppar,
-                            dppar_dz, zeroth_moment, first_moment, second_moment,
-                            third_moment, dthird_moment_dz, dq_dz, u_ion, wperp, wpa, f,
-                            df_dz, df_dvpa, d2f_dvpa2, source_type, source_amplitude,
-                            source_T_array, density_source, momentum_source,
-                            pressure_source, source_vth_factor, source_this_vth_factor,
-                            collisions, nuee0, nuei0, krook_adjust_vth_1V,
-                            krook_adjust_1V, Maxwellian_prefactor), z_speed
+                            ion_dt, n, dn_dz, u, du_dz, p, dp_dz, dp_dz_constraint_rhs,
+                            vth, dvth_dz, ppar, dppar_dz, zeroth_moment,
+                            zeroth_moment_constraint_rhs, first_moment,
+                            first_moment_constraint_rhs, second_moment,
+                            second_moment_constraint_rhs, third_moment, dthird_moment_dz,
+                            third_moment_constraint_rhs, dq_dz, dq_dz_constraint_rhs,
+                            u_ion, wperp, wpa, f, df_dz, df_dvpa, d2f_dvpa2, source_type,
+                            source_amplitude, source_T_array, density_source,
+                            momentum_source, pressure_source, source_vth_factor,
+                            source_this_vth_factor, collisions, nuee0, nuei0,
+                            krook_adjust_vth_1V, krook_adjust_1V,
+                            Maxwellian_prefactor), z_speed
 end
 
 """
@@ -4880,7 +4958,15 @@ function get_all_electron_terms(sub_terms::ElectronSubTerms)
     p_terms = get_electron_energy_equation_term(sub_terms)
     p_terms += get_ion_dt_forcing_of_electron_p_term(sub_terms)
 
-    return pdf_terms, p_terms
+    zeroth_moment_terms = -sub_terms.zeroth_moment_constraint_rhs
+    first_moment_terms = -sub_terms.first_moment_constraint_rhs
+    second_moment_terms = -sub_terms.second_moment_constraint_rhs
+    third_moment_terms = -sub_terms.third_moment_constraint_rhs
+    dp_dz_terms = -sub_terms.dp_dz_constraint_rhs
+    dq_dz_terms = -sub_terms.dq_dz_constraint_rhs
+
+    return pdf_terms, p_terms, zeroth_moment_terms, first_moment_terms,
+           second_moment_terms, third_moment_terms, dp_dz_terms, dq_dz_terms
 end
 
 """
@@ -5009,15 +5095,25 @@ in the time derivative term as it is for the non-boundary points.]
         jacobian_initialize_zero!(jacobian)
     end
 
+    separate_zeroth_moment = (:zeroth_moment ∈ jacobian.state_vector_entries)
+    separate_first_moment = (:first_moment ∈ jacobian.state_vector_entries)
+    separate_second_moment = (:second_moment ∈ jacobian.state_vector_entries)
+    separate_third_moment = (:third_moment ∈ jacobian.state_vector_entries)
+    separate_dp_dz = (:electron_dp_dz ∈ jacobian.state_vector_entries)
+    separate_dq_dz = (:electron_dq_dz ∈ jacobian.state_vector_entries)
     sub_terms = get_electron_sub_terms(dens, ddens_dz, upar, dupar_dz, p, dp_dz, dvth_dz,
                                        zeroth_moment, first_moment, second_moment,
                                        third_moment, dthird_moment_dz, dqpar_dz, upar_ion,
                                        f, dpdf_dz, dpdf_dvpa, d2pdf_dvpa2, me, moments,
                                        collisions, composition, external_source_settings,
                                        num_diss_params, t_params, ion_dt, z, vperp, vpa,
-                                       z_speed, vpa_speed, ir, include;
+                                       z_speed, vpa_speed, ir, separate_zeroth_moment,
+                                       separate_first_moment, separate_second_moment,
+                                       separate_third_moment, separate_dp_dz,
+                                       separate_dq_dz, include;
                                        include_qpar_integral_terms=include_qpar_integral_terms)
-    pdf_terms, p_terms = get_all_electron_terms(sub_terms)
+    pdf_terms, p_terms, zeroth_moment_terms, first_moment_terms, second_moment_terms,
+        third_moment_terms, dp_dz_terms, dq_dz_terms = get_all_electron_terms(sub_terms)
 
     add_term_to_Jacobian!(jacobian, :electron_pdf, dt, pdf_terms, z_speed)
     if t_params.include_wall_bc_in_preconditioner
@@ -5028,6 +5124,12 @@ in the time derivative term as it is for the non-boundary points.]
     end
 
     add_term_to_Jacobian!(jacobian, :electron_p, dt, p_terms)
+    add_term_to_Jacobian!(jacobian, :zeroth_moment, 1.0, zeroth_moment_terms)
+    add_term_to_Jacobian!(jacobian, :first_moment, 1.0, first_moment_terms)
+    add_term_to_Jacobian!(jacobian, :second_moment, 1.0, second_moment_terms)
+    add_term_to_Jacobian!(jacobian, :third_moment, 1.0, third_moment_terms)
+    add_term_to_Jacobian!(jacobian, :electron_dp_dz, 1.0, dp_dz_terms)
+    add_term_to_Jacobian!(jacobian, :electron_dq_dz, 1.0, dq_dz_terms)
 
     return nothing
 end

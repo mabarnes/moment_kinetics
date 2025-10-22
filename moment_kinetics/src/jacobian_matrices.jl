@@ -4,8 +4,9 @@ Generic utilities to simplify calculation of (contributions to) Jacobian matrice
 module jacobian_matrices
 
 export jacobian_info, create_jacobian_info, jacobian_initialize_identity!,
-       jacobian_initialize_zero!, jacobian_initialize_bc_diagonal!, EquationTerm,
-       ConstantTerm, CompoundTerm, NullTerm, add_term_to_Jacobian!
+       jacobian_initialize_zero!, jacobian_initialize_bc_diagonal!, get_joined_array,
+       get_sparse_joined_array, get_joined_array_adi, EquationTerm, ConstantTerm,
+       CompoundTerm, NullTerm, add_term_to_Jacobian!
 
 using ..array_allocation: allocate_shared_float, allocate_float
 using ..communication
@@ -15,7 +16,10 @@ using ..moment_kinetics_structs: coordinate, discretization_info
 using ..timer_utils
 using ..type_definitions
 
+using BlockArrays
+using BlockBandedMatrices
 using MPI
+using SparseArrays
 
 # Stores some information from `coordinate` struct, but has no type parameters so can be
 # stored in a Vector or looked up from a Tuple without type instability.
@@ -69,12 +73,15 @@ struct mini_discretization_info
     end
 end
 
-const JacobianMatrixType = @debug_shared_array_ifelse(Union{MPISharedArray{mk_float,2},Matrix{mk_float}},Matrix{mk_float})
-
 """
 Jacobian matrix and some associated information.
 
-`matrix` is a (non-sparse) array containing the Jacobian matrix.
+`matrix` is a block-structured Jacobian matrix. Each block is a (non-sparse) array
+containing the Jacobian which is the response of the 'row variable' to the 'column
+variable'. The blocks are assembled into rows (a Tuple of arrays for each block in the
+row). `matrix` is then a Tuple of rows (Tuple of Tuples of arrays).
+
+`n_entries` is the number of variables in `state_vector_entries`.
 
 `state_vector_entries` are Symbols giving the names of the variables in the state vector.
 
@@ -97,18 +104,14 @@ dimensions of that variable.
 `state_vector_dim_steps` gives the step needed in the flattened state vector to move one
 point in each dimension in `state_vector_dims`.
 
-`state_vector_offsets` gives the offset from indices in the corresponding variable to
-indices in the full state vector. The first entry of `state_vector_offsets` is 0.
-`state_vector_offsets` has a length one greater than `state_vector_entries` - the final
-element is the total size of the state vector. 
-
 `state_vector_local_ranges` gives the index range in each dimension of `state_vector_dims`
 that is locally owned by this process - used for parallelised loops over rows (or
 columns) when dealing with a single variable at a time from the state vector.
 
-`row_local_ranges` gives an index range of locally owned rows of `matrix` - used for
-parallelised loops over rows (or columns) of the full `matrix` when it is not necessary to
-know which variable a row corresponds to.
+`state_vector_local_flattened_ranges[i]` gives an index range for the flattened index
+within the range `1:state_vector_sizes[i]` that is locally owned by this process - used
+for parallelised loops over rows (or columns) when dealing with a single variable at a
+time from the state vector.
 
 `coords` is a NamedTuple containing `mini_coordinate` objects for all the dimensions
 involved in the `jacobian_info`.
@@ -123,18 +126,21 @@ because it is set by boundary conditions.
 `synchronize` is the function to be called to synchronize all processes in the
 shared-memory group that is working with this `jacobian_info` object.
 """
-struct jacobian_info{NTerms,NOffsets,Tvecinds,Tvecdims,Tveccoords,Tdimsizes,Tdimsteps,Tranges,Tcoords,Tspectral,Tbskip,Tsync}
-    matrix::JacobianMatrixType
+struct jacobian_info{Tmat,NTerms,Tvecinds,Tvecdims,Tveccoords,Tdimsizes,Tdimsteps,Tranges,Tfranges,Tlbranges,Tlbdranges,Tcoords,Tspectral,Tbskip,Tsync}
+    matrix::Tmat
+    n_entries::mk_int
     state_vector_entries::NTuple{NTerms, Symbol}
     state_vector_numbers::Tvecinds
     state_vector_dims::Tvecdims
     state_vector_coords::Tveccoords
+    state_vector_is_constraint::NTuple{NTerms, Bool}
     state_vector_sizes::NTuple{NTerms, mk_int}
     state_vector_dim_sizes::Tdimsizes
     state_vector_dim_steps::Tdimsteps
-    state_vector_offsets::NTuple{NOffsets, mk_int}
     state_vector_local_ranges::Tranges
-    row_local_ranges::UnitRange{mk_int}
+    state_vector_local_flattened_ranges::Tfranges
+    local_block_ranges::Tlbranges
+    local_block_diagonal_inds::Tlbdranges
     coords::Tcoords
     spectral::Tspectral
     boundary_skip_funcs::Tbskip
@@ -149,9 +155,11 @@ end
 Create a [`jacobian_info`](@ref) struct.
 
 `kwargs` describes the state vector. The keys are the variable names, and the arguments
-are 2 element Tuples whose first element is the 'region type' for parallel loops over that
-variable (or `nothing` if `comm = nothing` for serial operation) and whose second element
-Vector or Tuple of Symbols giving the dimensions of the variable.
+are 3 element Tuples: the first element is the 'region type' for parallel loops over that
+variable (or `nothing` if `comm = nothing` for serial operation); the second element
+Vector or Tuple of Symbols giving the dimensions of the variable; the third element is a
+`Bool` indicating whether the variable is determined by a constraint (`true`) or by a time
+evolution equation (`false`).
 
 `coords` is a NamedTuple giving all the needed coordinates, `spectral` is a NamedTuple
 with all the needed 'spectral' objects.
@@ -165,7 +173,7 @@ if no function is needed for the variable).
 """
 function create_jacobian_info(coords::NamedTuple, spectral::NamedTuple; comm=comm_block[],
                               synchronize::Union{Function,Nothing}=_block_synchronize,
-                              boundary_skip_funcs=nothing, kwargs...)
+                              boundary_skip_funcs=nothing, block_banded=true, kwargs...)
 
     @debug_consistency_checks all(all(d ∈ keys(coords) for d ∈ v[2]) for v ∈ values(kwargs)) || error("Some coordinate required by the state variables were not included in `coords`.")
 
@@ -173,15 +181,32 @@ function create_jacobian_info(coords::NamedTuple, spectral::NamedTuple; comm=com
     mini_spectral = (; (k=>mini_discretization_info(v) for (k,v) ∈ pairs(spectral))...)
 
     state_vector_entries = Tuple(keys(kwargs))
+    n_entries = length(state_vector_entries)
     state_vector_numbers = (; (name => i for (i,name) ∈ enumerate(state_vector_entries))...)
     state_vector_region_types = Tuple(v[1] for v ∈ values(kwargs))
     state_vector_dims = Tuple(Tuple(v[2]) for v ∈ values(kwargs))
     state_vector_coords = Tuple(Tuple(mini_coords[d] for d ∈ v) for v ∈ state_vector_dims)
+    state_vector_is_constraint = Tuple(v[3] for v ∈ values(kwargs))
     state_vector_sizes = Tuple(prod(mini_coords[d].n for d ∈ dims; init=1) for dims ∈ state_vector_dims)
     state_vector_dim_sizes = Tuple(Tuple(coords[d].n for d ∈ v) for v ∈ state_vector_dims)
     state_vector_dim_steps = Tuple(Tuple(prod(s[1:i-1]; init=mk_int(1)) for i ∈ 1:length(s))
                                    for s ∈ state_vector_dim_sizes)
-    state_vector_offsets = Tuple(cumsum([0, state_vector_sizes...]))
+
+    if state_vector_coords[1][end].nelement_local == 1
+        # When there is only one element in the outer-most coordinate, cannot make a
+        # block-structured matrix in the way that we do it below, and probably more
+        # efficient anyway to stick with a simple dense matrix, since the block-structured
+        # one would not have any zero blocks even if we were to handle this special case.
+        block_banded = false
+    end
+    if (state_vector_coords[1][end].periodic && state_vector_coords[1][end].irank == 0
+            && state_vector_coords[1][end].nrank == 1)
+        # Periodic, but this cannot be handled by the structure of BlockSkylineMatrix at
+        # the moment, so revert to dense matrices.
+        println("WARNING: periodic bcs not compatible with block-banded matrix "
+                * "strucutre, using dense matrix storage for Jacobian matrix.")
+        block_banded = false
+    end
 
     # For each variable, get the corresponding 'region type' from
     # `state_vector_region_types`. Use that to get the corresponding `LoopRanges` object,
@@ -191,31 +216,36 @@ function create_jacobian_info(coords::NamedTuple, spectral::NamedTuple; comm=com
     state_vector_local_ranges = Tuple(rt === nothing ? Tuple(1:mini_coords[d].n for d ∈ v) :
                                       Tuple(getfield(looping.loop_ranges_store[rt], d) for d ∈ v)
                                       for (rt,v) ∈ zip(state_vector_region_types,state_vector_dims))
-
-    n = state_vector_offsets[end] # `jacobian_matrix` is n x n
-    if comm === nothing
-        row_local_ranges = 1:n
-    else
-        # Ranges for shared-memory-parallel loop over flattened row indices.
-        # For consistency with choices elsewhere the total set of points is split into groups
-        # of size [m,m,...,m,(m+1),...,(m+1),(m+1)]
-        n_blocks = MPI.Comm_size(comm)
-        rank = MPI.Comm_rank(comm)
-        m = n ÷ n_blocks
-        n_extra_point_blocks = n - n_blocks*m
-        # Note `rank` is a zero-based index
-        if rank < n_blocks - n_extra_point_blocks
-            # This rank has `m` points.
-            startind = rank * m + 1
-            stopind = (rank + 1) * m
+    # Flattened ranges for shared-memory-parallel loops over each variable.
+    function get_local_flattened_range(n)
+        if comm === nothing
+            local_range = 1:n
         else
-            # How far is rank into the set of ranks with (m+1) points per rank?
-            rank_extra_points = rank - (n_blocks - n_extra_point_blocks)
-            startind = (n_blocks - n_extra_point_blocks) * m + rank_extra_points * (m + 1) + 1
-            stopind = (n_blocks - n_extra_point_blocks) * m + (rank_extra_points + 1) * (m + 1)
+            n_blocks = MPI.Comm_size(comm)
+            rank = MPI.Comm_rank(comm)
+            # Ranges for shared-memory-parallel loop over flattened row indices.
+            # For consistency with choices elsewhere the total set of points is split into groups
+            # of size [m,m,...,m,(m+1),...,(m+1),(m+1)]
+            m = n ÷ n_blocks
+            n_extra_point_blocks = n - n_blocks*m
+            # Note `rank` is a zero-based index
+            if rank < n_blocks - n_extra_point_blocks
+                # This rank has `m` points.
+                startind = rank * m + 1
+                stopind = (rank + 1) * m
+            else
+                # How far is rank into the set of ranks with (m+1) points per rank?
+                rank_extra_points = rank - (n_blocks - n_extra_point_blocks)
+                startind = (n_blocks - n_extra_point_blocks) * m + rank_extra_points * (m + 1) + 1
+                stopind = (n_blocks - n_extra_point_blocks) * m + (rank_extra_points + 1) * (m + 1)
+            end
+            local_range = startind:stopind
         end
-        row_local_ranges = startind:stopind
+        return local_range
     end
+    state_vector_local_flattened_ranges =
+        Tuple(get_local_flattened_range(state_vector_sizes[i]) for i ∈ 1:n_entries)
+
 
     if boundary_skip_funcs === nothing
         boundary_skip_funcs = (; (name=>nothing for name ∈ state_vector_entries)...)
@@ -227,12 +257,131 @@ function create_jacobian_info(coords::NamedTuple, spectral::NamedTuple; comm=com
         end
     end
 
+    function get_block_sizes(outer_nelement, outer_ngrid, inner_row_dims_length,
+                             inner_column_dims_length)
+        # Can represent any block of the jacobian in a block-structured way, as long as
+        # both variables share the same outer-most dimension so that the ngrid and
+        # nelement are the same. The matrix entries where both row and column are in an
+        # element interior are 'a', where both are an element boundary are 'd', and the
+        # rest are 'b' and 'c'.
+        # a  a  a  │  b  │  ⋅  ⋅  │  ⋅  │  ⋅  ⋅  ⋅
+        # a  a  a  │  b  │  ⋅  ⋅  │  ⋅  │  ⋅  ⋅  ⋅
+        # a  a  a  │  b  │  ⋅  ⋅  │  ⋅  │  ⋅  ⋅  ⋅
+        # ─────────┼─────┼────────┼─────┼─────────
+        # c  c  c  │  d  │  c  c  │  d  │  ⋅  ⋅  ⋅
+        # ─────────┼─────┼────────┼─────┼─────────
+        # ⋅  ⋅  ⋅  │  b  │  a  a  │  b  │  ⋅  ⋅  ⋅
+        # ⋅  ⋅  ⋅  │  b  │  a  a  │  b  │  ⋅  ⋅  ⋅
+        # ─────────┼─────┼────────┼─────┼─────────
+        # ⋅  ⋅  ⋅  │  d  │  c  c  │  d  │  c  c  c
+        # ─────────┼─────┼────────┼─────┼─────────
+        # ⋅  ⋅  ⋅  │  ⋅  │  ⋅  ⋅  │  b  │  a  a  a
+        # ⋅  ⋅  ⋅  │  ⋅  │  ⋅  ⋅  │  b  │  a  a  a
+        # ⋅  ⋅  ⋅  │  ⋅  │  ⋅  ⋅  │  b  │  a  a  a
+
+        outer_block_sizes = [outer_ngrid - 1]
+        push!(outer_block_sizes, 1)
+        for ielement ∈ 2:outer_nelement-1
+            push!(outer_block_sizes, outer_ngrid - 2)
+            push!(outer_block_sizes, 1)
+        end
+        push!(outer_block_sizes, outer_ngrid - 1)
+
+        row_block_sizes = outer_block_sizes .* inner_row_dims_length
+        column_block_sizes = outer_block_sizes .* inner_column_dims_length
+
+        # Need one 'off diagonal' block on either side inside elements, but two 'off
+        # diagonal' blocks for element boundaries.
+        off_diagonals = mk_int[(i - 1) % 2 + 1 for i ∈ 1:2*outer_nelement-1]
+        return row_block_sizes, column_block_sizes, off_diagonals
+    end
     if comm === nothing
         # No shared memory needed
-        jacobian_matrix = allocate_float(:jacobian_size=>n, :jacobian_size=>n)
+        function get_sub_matrix(i, j)
+            if block_banded
+                if state_vector_coords[i][end].name != state_vector_coords[j][end].name
+                    error("Cannot create block-banded matrix for Jacobian block for "
+                          * "block ($i,$j) when outer coordinates "
+                          * "($(state_vector_coords[i][end].name) and "
+                          * "$(state_vector_coords[j][end].name)) are not the same.")
+                end
+                outer_coord = state_vector_coords[i][end]
+                row_block_sizes, column_block_sizes, off_diagonals =
+                    get_block_sizes(outer_coord.nelement_local, outer_coord.ngrid,
+                                    state_vector_dim_steps[i][end],
+                                    state_vector_dim_steps[j][end])
+                return BlockSkylineMatrix{mk_float}(BlockBandedMatrices.Zeros(sum(row_block_sizes),
+                                                                              sum(column_block_sizes)),
+                                                    row_block_sizes, column_block_sizes,
+                                                    (off_diagonals,off_diagonals))
+            else
+                # Use dense matrices.
+                return allocate_float(Symbol(:jacobian_size, i)=>state_vector_sizes[i],
+                                      Symbol(:jacobian_size, j)=>state_vector_sizes[j])
+            end
+        end
+        jacobian_matrix = Tuple(Tuple(get_sub_matrix(i,j) for j ∈ 1:n_entries)
+                                for i ∈ 1:n_entries)
     else
-        jacobian_matrix = allocate_shared_float(:jacobian_size=>n, :jacobian_size=>n;
-                                                comm=comm)
+        function get_shared_sub_matrix(i, j)
+            if block_banded
+                if state_vector_coords[i][end].name != state_vector_coords[j][end].name
+                    error("Cannot create block-banded matrix for Jacobian block for "
+                          * "block ($i,$j) when outer coordinates "
+                          * "($(state_vector_coords[i][end].name) and "
+                          * "$(state_vector_coords[j][end].name)) are not the same.")
+                end
+                # Need to use lower level interface so that the memory backing the
+                # BlockSkylineMatrix is a shared-memory array allocated with
+                # allocate_shared_float().
+                outer_coord = state_vector_coords[i][end]
+                row_block_sizes, column_block_sizes, off_diagonals =
+                    get_block_sizes(outer_coord.nelement_local, outer_coord.ngrid,
+                                    state_vector_dim_steps[i][end],
+                                    state_vector_dim_steps[j][end])
+                skyline_sizes = BlockBandedMatrices.BlockSkylineSizes(row_block_sizes,
+                                                                      column_block_sizes,
+                                                                      off_diagonals,
+                                                                      off_diagonals)
+                data_length = BlockBandedMatrices.bb_numentries(skyline_sizes)
+                data = allocate_shared_float(; jacobian_data=data_length, comm=comm)
+                return BlockBandedMatrices._BlockSkylineMatrix(data, skyline_sizes)
+            else
+                return allocate_shared_float(Symbol(:jacobian_size, i)=>state_vector_sizes[i],
+                                             Symbol(:jacobian_size, j)=>state_vector_sizes[j];
+                                             comm=comm)
+            end
+        end
+        jacobian_matrix = Tuple(Tuple(get_shared_sub_matrix(i,j) for j ∈ 1:n_entries)
+                                for i ∈ 1:n_entries)
+    end
+
+    if block_banded
+        function get_row_local_ranges(row)
+            return Tuple(get_local_flattened_range(length(block.data)) for block ∈ row)
+        end
+        local_block_ranges = Tuple(get_row_local_ranges(r) for r ∈ jacobian_matrix)
+
+        function get_block_diagonal_inds(block, block_local_range)
+            all_diagonal_inds = Int64[]
+            n_blocks = length(blockaxes(block)[1])
+            col_lengths = blocklengths(block.block_sizes.axes[1])
+            for block_ind ∈ 1:n_blocks
+                block_start = BlockBandedMatrices.blockstart(block, block_ind, block_ind)
+                block_stride = BlockBandedMatrices.blockstride(block, block_ind)
+                block_ncols = col_lengths[block_ind]
+                for i ∈ 0:block_ncols-1
+                    push!(all_diagonal_inds, block_start + i * block_stride + i)
+                end
+            end
+            return intersect(all_diagonal_inds, block_local_range)
+        end
+        local_block_diagonal_inds = Tuple(get_block_diagonal_inds(jacobian_matrix[ib][ib],
+                                                                  local_block_ranges[ib][ib])
+                                          for ib ∈ 1:n_entries)
+    else
+        local_block_ranges = nothing
+        local_block_diagonal_inds = nothing
     end
 
     if synchronize === nothing
@@ -243,12 +392,13 @@ function create_jacobian_info(coords::NamedTuple, spectral::NamedTuple; comm=com
         synchronize = (call_site)->nothing
     end
 
-    return jacobian_info(jacobian_matrix, state_vector_entries, state_vector_numbers,
-                         state_vector_dims, state_vector_coords, state_vector_sizes,
+    return jacobian_info(jacobian_matrix, n_entries, state_vector_entries,
+                         state_vector_numbers, state_vector_dims, state_vector_coords,
+                         state_vector_is_constraint, state_vector_sizes,
                          state_vector_dim_sizes, state_vector_dim_steps,
-                         state_vector_offsets, state_vector_local_ranges,
-                         row_local_ranges, mini_coords, mini_spectral,
-                         boundary_skip_funcs, synchronize)
+                         state_vector_local_ranges, state_vector_local_flattened_ranges,
+                         local_block_ranges, local_block_diagonal_inds, mini_coords,
+                         mini_spectral, boundary_skip_funcs, synchronize)
 end
 
 """
@@ -256,12 +406,41 @@ end
 
 Initialize `jacobian.matrix` with the identity.
 """
-function jacobian_initialize_identity!(jacobian::jacobian_info)
+@timeit_debug global_timer jacobian_initialize_identity!(jacobian::jacobian_info) = begin
     jacobian_matrix = jacobian.matrix
-    ncols = size(jacobian_matrix, 1)
-    for col ∈ jacobian.row_local_ranges
-        jacobian_matrix[:,col] .= 0.0
-        jacobian_matrix[col,col] = 1.0
+    n_entries = jacobian.n_entries
+    if isa(jacobian_matrix[1][1], BlockSkylineMatrix)
+        local_block_ranges = jacobian.local_block_ranges
+        local_block_diagonal_inds = jacobian.local_block_diagonal_inds
+        for col_variable ∈ 1:n_entries
+            for row_variable ∈ 1:n_entries
+                this_block = jacobian_matrix[row_variable][col_variable]
+                local_range = local_block_ranges[row_variable][col_variable]
+                this_block.data[local_range] .= 0.0
+                if col_variable == row_variable
+                    local_diagonal_inds = local_block_diagonal_inds[row_variable]
+                    this_block.data[local_diagonal_inds] .= 1.0
+                end
+            end
+        end
+    else
+        state_vector_local_flattened_ranges = jacobian.state_vector_local_flattened_ranges
+        for col_variable ∈ 1:n_entries
+            col_range = state_vector_local_flattened_ranges[col_variable]
+            for row_variable ∈ 1:n_entries
+                this_block = jacobian_matrix[row_variable][col_variable]
+                if col_variable == row_variable
+                    for col ∈ col_range
+                        this_block[:,col] .= 0.0
+                        this_block[col,col] = 1.0
+                    end
+                else
+                    for col ∈ col_range
+                        this_block[:,col] .= 0.0
+                    end
+                end
+            end
+        end
     end
 
     # Because we store the `synchronize` function in the `jacobian_info` object, we cannot
@@ -276,15 +455,33 @@ function jacobian_initialize_identity!(jacobian::jacobian_info)
 end
 
 """
-    jacobian_initialize_identity!(jacobian::jacobian_info)
+    jacobian_initialize_zero!(jacobian::jacobian_info)
 
 Initialize `jacobian.matrix` to zero.
 """
-function jacobian_initialize_zero!(jacobian::jacobian_info)
+@timeit_debug global_timer jacobian_initialize_zero!(jacobian::jacobian_info) = begin
     jacobian_matrix = jacobian.matrix
-    ncols = size(jacobian_matrix, 1)
-    for col ∈ jacobian.row_local_ranges
-        jacobian_matrix[:,col] .= 0.0
+    n_entries = jacobian.n_entries
+    if isa(jacobian_matrix[1][1], BlockSkylineMatrix)
+        local_block_ranges = jacobian.local_block_ranges
+        for col_variable ∈ 1:n_entries
+            for row_variable ∈ 1:n_entries
+                this_block = jacobian_matrix[row_variable][col_variable]
+                local_range = local_block_ranges[row_variable][col_variable]
+                this_block.data[local_range] .= 0.0
+            end
+        end
+    else
+        state_vector_local_flattened_ranges = jacobian.state_vector_local_flattened_ranges
+        for col_variable ∈ 1:n_entries
+            col_range = state_vector_local_flattened_ranges[col_variable]
+            for row_variable ∈ 1:n_entries
+                this_block = jacobian_matrix[row_variable][col_variable]
+                for col ∈ col_range
+                    this_block[:,col] .= 0.0
+                end
+            end
+        end
     end
 
     # Because we store the `synchronize` function in the `jacobian_info` object, we cannot
@@ -305,16 +502,45 @@ Initialize `jacobian.matrix` to zero, but with ones on the diagonal for rows tha
 correspond to boundary condition points (i.e. those skipped by
 `jacobian.boundary_skip_funcs`).
 """
-function jacobian_initialize_bc_diagonal!(jacobian::jacobian_info, boundary_speed)
+@timeit_debug global_timer jacobian_initialize_bc_diagonal!(jacobian::jacobian_info,
+                                                            boundary_speed) = begin
     jacobian_matrix = jacobian.matrix
     for col_variable ∈ 1:length(jacobian.state_vector_entries)
+        if isa(jacobian_matrix[1][1], BlockSkylineMatrix)
+            col_local_block_ranges = jacobian.local_block_ranges[col_variable][col_variable]
+        else
+            col_local_block_ranges = nothing
+        end
         col_variable_local_ranges = jacobian.state_vector_local_ranges[col_variable]
         col_variable_coords = jacobian.state_vector_coords[col_variable]
-        offset = jacobian.state_vector_offsets[col_variable]
-        boundary_skip = jacobian.boundary_skip_funcs[col_variable]
+        if jacobian_state_vector_is_constraint[col_variable]
+            boundary_skip = (args...)->true
+        else
+            boundary_skip = jacobian.boundary_skip_funcs[col_variable]
+        end
+        diagonal_block = jacobian_matrix[col_variable][col_variable]
         jacobian_initialize_bc_digonal_single_variable!(
-            jacobian_matrix, col_variable_local_ranges, col_variable_coords, offset,
-            boundary_skip, boundary_speed)
+            diagonal_block, col_variable_local_ranges, col_variable_coords, boundary_skip,
+            boundary_speed, jacobian.synchronize_shared)
+
+        if isa(jacobian_matrix[1][1], BlockSkylineMatrix)
+            local_block_ranges = jacobian.local_block_ranges
+            for col_variable ∈ 1:n_entries
+                for row_variable ∈ vcat(1:col_variable-1, col_variable+1:n_entries)
+                    this_block = jacobian_matrix[row_variable][col_variable]
+                    local_range = local_block_ranges[row_variable][col_variable]
+                    this_block.data[local_range] .= 0.0
+                end
+            end
+        else
+            col_flattened_range = jacobian.state_vector_local_flattened_ranges[col_variable]
+            for row_variable ∈ vcat(1:col_variable-1, col_variable+1:n_entries)
+                this_block = jacobian_matrix[row_variable][col_variable]
+                for col ∈ col_flattened_range
+                    this_block[:,col] .= 0.0
+                end
+            end
+        end
     end
 
     # Because we store the `synchronize` function in the `jacobian_info` object, we cannot
@@ -328,18 +554,113 @@ function jacobian_initialize_bc_diagonal!(jacobian::jacobian_info, boundary_spee
     return nothing
 end
 function jacobian_initialize_bc_digonal_single_variable!(
-             jacobian_matrix, col_variable_local_ranges, col_variable_coords, offset,
-             boundary_skip, boundary_speed)
-    for (i, indices_CartesianIndex) ∈ enumerate(CartesianIndices(col_variable_local_ranges))
+             jacobian_block::BlockSkylineMatrix, col_variable_local_ranges,
+             col_local_block_ranges, col_variable_coords, boundary_skip, boundary_speed,
+             synchronize_shared)
+    this_block = jacobian_matrix[row_variable][col_variable]
+    this_block.data[col_local_block_ranges] .= 0.0
+
+    # Need to synchronize here as `col_variable_local_ranges` and `col_local_block_ranges`
+    # do not necessarily contain exactly the same points.
+    synchronize_shared()
+
+    for (col, indices_CartesianIndex) ∈ enumerate(CartesianIndices(col_variable_local_ranges))
         indices = Tuple(indices_CartesianIndex)
-        col = i + offset
-        jacobian_matrix[:,col] .= 0.0
         if boundary_skip !== nothing && boundary_skip(boundary_speed, indices...,
-                                                      rows_variable_coords...)
-            jacobian_matrix[col,col] .= 1.0
+                                                      col_variable_coords...)
+            jacobian_block[col,col] .= 1.0
         end
     end
     return nothing
+end
+function jacobian_initialize_bc_digonal_single_variable!(
+             jacobian_block, col_variable_local_ranges, col_local_block_ranges,
+             col_variable_coords, boundary_skip, boundary_speed, synchronize_shared)
+    for (col, indices_CartesianIndex) ∈ enumerate(CartesianIndices(col_variable_local_ranges))
+        indices = Tuple(indices_CartesianIndex)
+        jacobian_block[:,col] .= 0.0
+        if boundary_skip !== nothing && boundary_skip(boundary_speed, indices...,
+                                                      col_variable_coords...)
+            jacobian_block[col,col] .= 1.0
+        end
+    end
+    return nothing
+end
+
+@timeit_debug global_timer get_joined_array(jacobian::jacobian_info) = begin
+    n_entries = jacobian.n_entries
+    array_of_arrays = [jacobian.matrix[i][j] for i ∈ 1:n_entries, j ∈ 1:n_entries]
+    joined_array = mortar(array_of_arrays)
+    return joined_array
+end
+
+@timeit_debug global_timer get_sparse_joined_array(jacobian::jacobian_info) = begin
+    n_entries = jacobian.n_entries
+    array_of_arrays = [sparse(jacobian.matrix[i][j]) for j ∈ 1:n_entries, i ∈ 1:n_entries]
+    joined_array = sparse_hvcat(Tuple(n_entries for _ ∈ 1:n_entries), array_of_arrays...)
+    return joined_array
+end
+
+@timeit_debug global_timer get_joined_array_adi(jacobian::jacobian_info, f_slice,
+                                                p_slice) = begin
+    n_entries = jacobian.n_entries
+    array_of_arrays = @views [jacobian.matrix[1][1][f_slice,f_slice] jacobian.matrix[1][2][f_slice,p_slice] ;;
+                              jacobian.matrix[2][1][p_slice,f_slice] jacobian.matrix[2][2][p_slice,p_slice]]
+    joined_array = mortar(array_of_arrays)
+    return joined_array
+end
+
+# Optimise conversion of BlockSkylineMatrix to SparseMatrixCSC, because the default goes
+# through the AbstractArray interface and is horribly slow, but we sometimes want a
+# SparseMatrixCSC to pass to UMFPACK.jl (via LinearAlgebra/SparseArrays).
+import SparseArrays: sparse
+function sparse(m::BlockSkylineMatrix)
+    s = spzeros(size(m))
+    s_nzvals = SparseArrays.nonzeros(s)
+    s_rowvals = SparseArrays.rowvals(s)
+    s_colptr = SparseArrays.getcolptr(s)
+
+    # Number of blocks
+    N, M = blocksize(m)
+    l, u = BlockBandedMatrices.colblockbandwidths(m)
+    m_block_sizes = blocksizes(m)
+    column_widths = [bs[2] for bs ∈ m_block_sizes[1,:]]
+    column_starts = [0]
+    append!(column_starts, cumsum(@view(column_widths[1:end-1])))
+    @views column_starts .+= 1
+    row_sizes = [bs[1] for bs ∈ m_block_sizes]
+    row_offsets = [0]
+    append!(row_offsets, cumsum(row_sizes[1:end-1]))
+    for J ∈ 1:M
+        KR = max(1,J-u[J]):min(J+l[J],N)
+        if !isempty(KR)
+            # Don't use BlockArrays.jl interface for extracting blocks, because that would
+            # not be type-stable. We only select blocks that are a contiguous, dense array
+            # so can construct a `Matrix` using the block start and block size.
+            n_cols = column_widths[J]
+            n_rows = sum(row_sizes[KR,J])
+            n_block = n_cols * n_rows
+            this_start = BlockBandedMatrices.blockstart(m, KR[1], J)
+            this_block = reshape(@view(m.data[this_start:this_start+n_block-1]), n_rows, n_cols)
+            sparse_block = sparse(this_block)
+
+            this_nzvals = SparseArrays.nonzeros(sparse_block)
+            append!(s_nzvals, this_nzvals)
+
+            # The rows in the full matrix actually start at row_offsets[KR[1]]+1, so add
+            # the offset to all the rowvals.
+            this_rowvals = SparseArrays.rowvals(sparse_block) .+ row_offsets[KR[1]]
+            append!(s_rowvals, this_rowvals)
+
+            this_col_start = column_starts[J]
+            this_col_end = this_col_start + n_cols - 1
+            this_colptr = SparseArrays.getcolptr(sparse_block)
+            @. @views s_colptr[this_col_start+1:this_col_end+1] += this_colptr[2:end] - 1
+            @. @views s_colptr[this_col_end+2:end] += this_colptr[end] - 1
+        end
+    end
+
+    return s
 end
 
 # Lookup tables for function and derivatives that can be used with EquationTerms.
@@ -986,11 +1307,11 @@ end
 @inline function get_column_index(jacobian::jacobian_info, state_variable::Symbol, indices)
     @inbounds begin
         variable_index = jacobian.state_vector_numbers[state_variable]
-        return get_column_index(jacobian, variable_index, indices)
+        return variable_index, get_column_index(jacobian, variable_index, indices)
     end
 end
 @inline function get_column_index(jacobian::jacobian_info, variable_index, indices)
-    return @inbounds get_flattened_index(jacobian.state_vector_dim_sizes[variable_index], indices) + jacobian.state_vector_offsets[variable_index]
+    return @inbounds get_flattened_index(jacobian.state_vector_dim_sizes[variable_index], indices)
 end
 
 # Get the global column indices corresponding to the entire element in 'dim'  that
@@ -1044,7 +1365,7 @@ end
 
 """
     add_term_to_Jacobian_row!(jacobian::jacobian_info,
-                              jacobian_row::AbstractVector{mk_float},
+                              jacobian_row::NTuple{N,<:AbstractVector{mk_float}} where N,
                               rows_variable::Symbol, prefactor::mk_float,
                               terms::EquationTerm, indices::Tuple,
                               boundary_speed)
@@ -1054,7 +1375,7 @@ Traverse the tree of EquationTerms, accumulating the prefactors until reaching a
 the Jacobian.
 """
 function add_term_to_Jacobian_row!(jacobian::jacobian_info,
-                                   jacobian_row::AbstractVector{mk_float},
+                                   jacobian_row::NTuple{N,<:AbstractVector{mk_float}} where N,
                                    rows_variable::Symbol, prefactor::mk_float,
                                    terms::EquationTerm, indices::Tuple,
                                    boundary_speed)
@@ -1121,7 +1442,7 @@ end
 # `term` is just one of the state vector variables, so add its prefactor to the
 # corresponding column.
 function add_simple_term_to_Jacobian_row!(jacobian::jacobian_info,
-                                          jacobian_row::AbstractVector{mk_float},
+                                          jacobian_row::NTuple{N,<:AbstractVector{mk_float}} where N,
                                           rows_variable::Symbol, prefactor::mk_float,
                                           term::EquationTerm, indices::Tuple)
 
@@ -1130,9 +1451,9 @@ function add_simple_term_to_Jacobian_row!(jacobian::jacobian_info,
         for (i, j) ∈ enumerate(term.dimension_numbers)
             current_indices[i] = indices[j]
         end
-        column_index = get_column_index(jacobian, term.state_variable, current_indices)
+        block_index, column_index = get_column_index(jacobian, term.state_variable, current_indices)
 
-        jacobian_row[column_index] += prefactor
+        jacobian_row[block_index][column_index] += prefactor
 
         return nothing
     end
@@ -1144,7 +1465,7 @@ end
 # corresponding to the row is an element boundary, depending on upwinding), and insert
 # `prefactor` times a column of the derivative matrix into those points.
 function add_derivative_term_to_Jacobian_row!(jacobian::jacobian_info,
-                                              jacobian_row::AbstractVector{mk_float},
+                                              jacobian_row::NTuple{N,<:AbstractVector{mk_float}} where N,
                                               rows_variable::Symbol, prefactor::mk_float,
                                               term::EquationTerm, indices::Union{Tuple,Vector})
     @inbounds begin
@@ -1166,6 +1487,8 @@ function add_derivative_term_to_Jacobian_row!(jacobian::jacobian_info,
         derivative_dim_index = current_indices[derivative_dim_number]
         ielement = derivative_coord.ielement[derivative_dim_index]
         igrid = derivative_coord.igrid[derivative_dim_index]
+
+        jacobian_row_block = jacobian_row[derivative_variable_index]
 
         if length(term.upwind_speeds) > 0
             if length(term.upwind_speeds[1]) == 0
@@ -1207,7 +1530,7 @@ function add_derivative_term_to_Jacobian_row!(jacobian::jacobian_info,
                                                     derivative_coord.nelement_global,
                                                     derivative_coord.ngrid)
                     for (i, ci) ∈ enumerate(column_inds)
-                        jacobian_row[ci] += 0.5 * prefactor * Dmat_slice[i] / scale
+                        jacobian_row_block[ci] += 0.5 * prefactor * Dmat_slice[i] / scale
                     end
 
                     column_inds =
@@ -1220,7 +1543,7 @@ function add_derivative_term_to_Jacobian_row!(jacobian::jacobian_info,
                         get_derivative_matrix_slice(derivative_coord, derivative_spectral,
                                                     ielement, igrid)
                     for (i, ci) ∈ enumerate(column_inds)
-                        jacobian_row[ci] += 0.5 * prefactor * Dmat_slice[i] / scale
+                        jacobian_row_block[ci] += 0.5 * prefactor * Dmat_slice[i] / scale
                     end
                 elseif upwind_speed > 0.0
                     # Add derivative contribution from the 'previous' element on the
@@ -1237,7 +1560,7 @@ function add_derivative_term_to_Jacobian_row!(jacobian::jacobian_info,
                                                     derivative_coord.nelement_global,
                                                     derivative_coord.ngrid)
                     for (i, ci) ∈ enumerate(column_inds)
-                        jacobian_row[ci] += prefactor * Dmat_slice[i] / scale
+                        jacobian_row_block[ci] += prefactor * Dmat_slice[i] / scale
                     end
                 else # upwind_speed < 0.0
                     column_inds =
@@ -1250,7 +1573,7 @@ function add_derivative_term_to_Jacobian_row!(jacobian::jacobian_info,
                         get_derivative_matrix_slice(derivative_coord, derivative_spectral,
                                                     ielement, igrid)
                     for (i, ci) ∈ enumerate(column_inds)
-                        jacobian_row[ci] += prefactor * Dmat_slice[i] / scale
+                        jacobian_row_block[ci] += prefactor * Dmat_slice[i] / scale
                     end
                 end
             end
@@ -1266,7 +1589,7 @@ function add_derivative_term_to_Jacobian_row!(jacobian::jacobian_info,
                     get_derivative_matrix_slice(derivative_coord, derivative_spectral,
                                                 ielement, igrid)
                 for (i, ci) ∈ enumerate(column_inds)
-                    jacobian_row[ci] += prefactor * Dmat_slice[i] / scale
+                    jacobian_row_block[ci] += prefactor * Dmat_slice[i] / scale
                 end
             else
                 # For now, we do not allow the Jacobian matrix to couple different
@@ -1281,7 +1604,7 @@ function add_derivative_term_to_Jacobian_row!(jacobian::jacobian_info,
                     get_derivative_matrix_slice(derivative_coord, derivative_spectral,
                                                 ielement, igrid)
                 for (i, ci) ∈ enumerate(column_inds)
-                    jacobian_row[ci] += prefactor * Dmat_slice[i] / scale
+                    jacobian_row_block[ci] += prefactor * Dmat_slice[i] / scale
                 end
             end
         elseif ielement == derivative_coord.nelement_local && igrid == derivative_coord.ngrid
@@ -1296,7 +1619,7 @@ function add_derivative_term_to_Jacobian_row!(jacobian::jacobian_info,
                     get_derivative_matrix_slice(derivative_coord, derivative_spectral,
                                                 ielement, igrid)
                 for (i, ci) ∈ enumerate(column_inds)
-                    jacobian_row[ci] += prefactor * Dmat_slice[i] / scale
+                    jacobian_row_block[ci] += prefactor * Dmat_slice[i] / scale
                 end
             else
                 # For now, we do not allow the Jacobian matrix to couple different
@@ -1311,7 +1634,7 @@ function add_derivative_term_to_Jacobian_row!(jacobian::jacobian_info,
                     get_derivative_matrix_slice(derivative_coord, derivative_spectral,
                                                 ielement, igrid)
                 for (i, ci) ∈ enumerate(column_inds)
-                    jacobian_row[ci] += prefactor * Dmat_slice[i] / scale
+                    jacobian_row_block[ci] += prefactor * Dmat_slice[i] / scale
                 end
             end
         elseif igrid == derivative_coord.ngrid
@@ -1327,7 +1650,7 @@ function add_derivative_term_to_Jacobian_row!(jacobian::jacobian_info,
                     get_derivative_matrix_slice(derivative_coord, derivative_spectral,
                                                 ielement, igrid)
                 for (i, ci) ∈ enumerate(column_inds)
-                    jacobian_row[ci] += 0.5 * prefactor * Dmat_slice[i] / scale
+                    jacobian_row_block[ci] += 0.5 * prefactor * Dmat_slice[i] / scale
                 end
 
                 # Add derivative contribution from the 'next' element index
@@ -1342,7 +1665,7 @@ function add_derivative_term_to_Jacobian_row!(jacobian::jacobian_info,
                     get_derivative_matrix_slice(derivative_coord, derivative_spectral,
                                                 ielement + 1, 1)
                 for (i, ci) ∈ enumerate(column_inds)
-                    jacobian_row[ci] += 0.5 * prefactor * Dmat_slice[i] / scale
+                    jacobian_row_block[ci] += 0.5 * prefactor * Dmat_slice[i] / scale
                 end
             elseif upwind_speed > 0.0
                 column_inds =
@@ -1355,7 +1678,7 @@ function add_derivative_term_to_Jacobian_row!(jacobian::jacobian_info,
                     get_derivative_matrix_slice(derivative_coord, derivative_spectral,
                                                 ielement, igrid)
                 for (i, ci) ∈ enumerate(column_inds)
-                    jacobian_row[ci] += prefactor * Dmat_slice[i] / scale
+                    jacobian_row_block[ci] += prefactor * Dmat_slice[i] / scale
                 end
             else # upwind_speed < 0.0
                 # Add derivative contribution from the 'next' element index
@@ -1370,7 +1693,7 @@ function add_derivative_term_to_Jacobian_row!(jacobian::jacobian_info,
                     get_derivative_matrix_slice(derivative_coord, derivative_spectral,
                                                 ielement + 1, 1)
                 for (i, ci) ∈ enumerate(column_inds)
-                    jacobian_row[ci] += prefactor * Dmat_slice[i] / scale
+                    jacobian_row_block[ci] += prefactor * Dmat_slice[i] / scale
                 end
             end
         else
@@ -1384,7 +1707,7 @@ function add_derivative_term_to_Jacobian_row!(jacobian::jacobian_info,
                 get_derivative_matrix_slice(derivative_coord, derivative_spectral,
                                             ielement, igrid)
             for (i, ci) ∈ enumerate(column_inds)
-                jacobian_row[ci] += prefactor * Dmat_slice[i] / scale
+                jacobian_row_block[ci] += prefactor * Dmat_slice[i] / scale
             end
         end
 
@@ -1400,7 +1723,8 @@ end
 # improved by special handling of the mass matrix (or matrices, e.g. for each velocity
 # dimension) in future.
 function add_second_derivative_term_to_Jacobian_row!(
-             jacobian::jacobian_info, jacobian_row::AbstractVector{mk_float},
+             jacobian::jacobian_info,
+             jacobian_row::NTuple{N,<:AbstractVector{mk_float}} where N,
              rows_variable::Symbol, prefactor::mk_float, term::EquationTerm,
              indices::Union{Tuple,Vector})
     @inbounds begin
@@ -1420,6 +1744,8 @@ function add_second_derivative_term_to_Jacobian_row!(
         derivative_dim_number = term.second_derivative_dim_numbers[1]
         derivative_dim_index = current_indices[derivative_dim_number]
 
+        jacobian_row_block = jacobian_row[derivative_variable_index]
+
         # Point within an element
         column_inds =
             get_dimension_inds(jacobian, current_indices,
@@ -1428,7 +1754,7 @@ function add_second_derivative_term_to_Jacobian_row!(
                                derivative_dim_number, derivative_coord)
         Dmat_slice = @view derivative_spectral.dense_second_deriv_matrix[derivative_dim_index,:]
         for (i, ci) ∈ enumerate(column_inds)
-            jacobian_row[ci] += prefactor * Dmat_slice[i]
+            jacobian_row_block[ci] += prefactor * Dmat_slice[i]
         end
 
         return nothing
@@ -1439,7 +1765,7 @@ end
 # derivative of a state vector variable). Loops over the columns corresponding to every
 # point in the dimensions `term.integrals`.
 function add_integral_term_to_Jacobian_row!(jacobian::jacobian_info,
-                                            jacobian_row::AbstractVector{mk_float},
+                                            jacobian_row::NTuple{N,<:AbstractVector{mk_float}} where N,
                                             rows_variable::Symbol, prefactor::mk_float,
                                             term::EquationTerm, row_indices::Tuple)
 
@@ -1465,7 +1791,7 @@ end
 # `CartesianIndices(integral_dim_sizes)` to be type stable as the length of
 # `integral_dim_sizes` is known at compile time.
 function add_integral_term_to_Jacobian_row!(jacobian::jacobian_info,
-                                            jacobian_row::AbstractVector{mk_float},
+                                            jacobian_row::NTuple{N,<:AbstractVector{mk_float}} where N,
                                             rows_variable::Symbol, prefactor::mk_float,
                                             term::EquationTerm, row_indices::Tuple,
                                             integrand_variable, integral_dim_sizes,
@@ -1474,6 +1800,9 @@ function add_integral_term_to_Jacobian_row!(jacobian::jacobian_info,
     @inbounds begin
         current_indices = term.integrand_current_indices
         integral_dim_integrand_current_indices_slice = term.integral_dim_integrand_current_indices_slice
+
+        integral_variable_index = jacobian.state_vector_numbers[term.state_variable]
+        jacobian_row_block = jacobian_row[integral_variable_index]
 
         for indices ∈ CartesianIndices(integral_dim_sizes)
             for (i,j) ∈ enumerate(integral_dim_integrand_current_indices_slice)
@@ -1484,8 +1813,8 @@ function add_integral_term_to_Jacobian_row!(jacobian::jacobian_info,
             set_current_values!(jacobian, integrand_prefactor, current_indices)
 
             if length(term.derivatives) == 0
-                column_index = get_column_index(jacobian, term.state_variable, current_indices)
-                jacobian_row[column_index] += prefactor * integrand_prefactor.current_value[] * this_wgt
+                column_index = get_column_index(jacobian, integral_variable_index, current_indices)
+                jacobian_row_block[column_index] += prefactor * integrand_prefactor.current_value[] * this_wgt
             elseif length(term.derivatives) == 1
                 # Can re-use `add_derivative_term_to_Jacobian_row!()` here, with
                 # `current_indices` taking the place of the row index.
@@ -1519,23 +1848,30 @@ the z-direction.
 @timeit global_timer add_term_to_Jacobian!(jacobian::jacobian_info, rows_variable::Symbol,
                                            prefactor::mk_float, terms::EquationTerm,
                                            boundary_speed=nothing) = begin
+    if rows_variable ∉ jacobian.state_vector_entries
+        # This term not being used at the moment.
+        return nothing
+    end
+
     @inbounds begin
         jacobian_matrix = jacobian.matrix
         rows_variable_number = jacobian.state_vector_numbers[rows_variable]
+        @debug_consistency_checks jacobian.state_vector_is_constraint[rows_variable_number] && prefactor != 1.0 && error("Prefactor should be 1 for constraint equation, got $prefactor for $rows_variable equation")
         rows_variable_dims = jacobian.state_vector_dims[rows_variable_number]
         rows_variable_dim_sizes = jacobian.state_vector_dim_sizes[rows_variable_number]
         rows_variable_local_ranges = jacobian.state_vector_local_ranges[rows_variable_number]
         rows_variable_coords = jacobian.state_vector_coords[rows_variable_number]
-        row_offset = jacobian.state_vector_offsets[rows_variable_number]
 
         boundary_skip = jacobian.boundary_skip_funcs[rows_variable]
 
         set_dimension_numbers!(jacobian, rows_variable_number, terms)
 
+        block_row = jacobian_matrix[rows_variable_number]
+
         add_term_to_Jacobian!(jacobian, rows_variable, prefactor, terms, boundary_speed,
-                              jacobian_matrix, rows_variable_number, rows_variable_dims,
+                              block_row, rows_variable_number, rows_variable_dims,
                               rows_variable_dim_sizes, rows_variable_local_ranges,
-                              rows_variable_coords, row_offset, boundary_skip)
+                              rows_variable_coords, boundary_skip)
     end
 
     return nothing
@@ -1548,12 +1884,11 @@ end
 # ensure type stability.
 function add_term_to_Jacobian!(jacobian::jacobian_info, rows_variable::Symbol,
                                prefactor::mk_float, terms::EquationTerm, boundary_speed,
-                               jacobian_matrix::AbstractMatrix{mk_float},
+                               block_row::NTuple{N,AbstractMatrix{mk_float}} where N,
                                rows_variable_number::mk_int, rows_variable_dims::Tuple,
                                rows_variable_dim_sizes::Tuple,
                                rows_variable_local_ranges::Tuple,
-                               rows_variable_coords::Tuple, row_offset::mk_int,
-                               boundary_skip)
+                               rows_variable_coords::Tuple, boundary_skip)
     @inbounds begin
         for indices_CartesianIndex ∈ CartesianIndices(rows_variable_local_ranges)
             indices = Tuple(indices_CartesianIndex)
@@ -1562,8 +1897,8 @@ function add_term_to_Jacobian!(jacobian::jacobian_info, rows_variable::Symbol,
                 continue
             end
 
-            row_index = get_flattened_index(rows_variable_dim_sizes, indices) + row_offset
-            jacobian_row = @view jacobian_matrix[row_index,:]
+            row_index = get_flattened_index(rows_variable_dim_sizes, indices)
+            jacobian_row = Tuple(@view block[row_index,:] for block ∈ block_row)
 
             set_current_values!(jacobian, terms, indices)
 
