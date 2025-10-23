@@ -189,7 +189,8 @@ function get_mk_state(test_input)
 
     mk_state = nothing
     quietoutput() do
-        mk_state = setup_moment_kinetics(test_input; skip_electron_solve=true)
+        mk_state = setup_moment_kinetics(test_input; skip_electron_solve=true,
+                                         write_output=false)
     end
     return mk_state
 end
