@@ -124,10 +124,14 @@ dimensions involved in the `jacobian_info`.
 `state_vector_entries`) that indicate when a grid point should be skipped in the Jacobian
 because it is set by boundary conditions.
 
+`handle_overlaps` is `Val(true)` or `Val(false)`, indicating whether the Jacobian matrix is
+to be solved coupled across all distributed-MPI subdomains, or restricted to a single
+distributed-MPI subdomain (for a more approximate but more parallelisable preconditioner).
+
 `synchronize` is the function to be called to synchronize all processes in the
 shared-memory group that is working with this `jacobian_info` object.
 """
-struct jacobian_info{Tmat,N2,NTerms,Tvecinds,Tvecdims,Tveccoords,Tdimsizes,Tdimsteps,Tranges,Tfranges,Tlbranges,Tcoords,Tspectral,Tbskip,Tsync}
+struct jacobian_info{Tmat,N2,NTerms,Tvecinds,Tvecdims,Tveccoords,Tdimsizes,Tdimsteps,Tranges,Tfranges,Tlbranges,Tcoords,Tspectral,Tbskip,Tho,Tsync}
     matrix::Tmat
     n_entries::mk_int
     n_entries_squared_val::Val{N2}
@@ -145,13 +149,16 @@ struct jacobian_info{Tmat,N2,NTerms,Tvecinds,Tvecdims,Tveccoords,Tdimsizes,Tdims
     coords::Tcoords
     spectral::Tspectral
     boundary_skip_funcs::Tbskip
+    handle_overlaps::Tho
     synchronize::Tsync
 end
 
 """
     create_jacobian_info(coords::NamedTuple, spectral::NamedTuple; comm=comm_block[],
                          synchronize::Union{Function,Nothing}=_block_synchronize,
-                         boundary_skip_funcs=nothing, kwargs...)
+                         boundary_skip_funcs::BSF=nothing,
+                         handle_overlaps::Val=Val(true), block_banded=true,
+                         kwargs...) where {BSF}
 
 Create a [`jacobian_info`](@ref) struct.
 
@@ -171,10 +178,20 @@ function used to synchronize between shared-memory operations.
 `boundary_skip_funcs` is a NamedTuple whose keys are the variable names and whose values
 are functions to use to skip points that would be set by boundary conditions (or `nothing`
 if no function is needed for the variable).
+
+`handle_overlaps` is `Val(true)` or `Val(false)`, indicating whether the Jacobian matrix is
+to be solved coupled across all distributed-MPI subdomains, or restricted to a single
+distributed-MPI subdomain (for a more approximate but more parallelisable preconditioner).
+
+`block_banded=false` can be passed to store the Jacobian matrix in a dense
+`MPISharedArray`, rather than the default block-banded matrix type (BlockSkylineMatrix,
+with data stored in a shared-memory array).
 """
 function create_jacobian_info(coords::NamedTuple, spectral::NamedTuple; comm=comm_block[],
                               synchronize::Union{Function,Nothing}=_block_synchronize,
-                              boundary_skip_funcs::BSF=nothing, block_banded=true, kwargs...) where {BSF}
+                              boundary_skip_funcs::BSF=nothing,
+                              handle_overlaps::Val=Val(true), block_banded=true,
+                              kwargs...) where {BSF}
 
     @debug_consistency_checks all(all(d ∈ keys(coords) for d ∈ v[2]) for v ∈ values(kwargs)) || error("Some coordinate required by the state variables were not included in `coords`.")
 
@@ -396,7 +413,7 @@ function create_jacobian_info(coords::NamedTuple, spectral::NamedTuple; comm=com
                          state_vector_dim_steps, state_vector_local_ranges,
                          state_vector_local_flattened_ranges, local_block_ranges,
                          mini_coords, mini_spectral, boundary_skip_funcs,
-                         synchronize)
+                         handle_overlaps, synchronize)
 end
 
 """
@@ -462,11 +479,13 @@ function initialize_identity_diagonal_block!(jacobian, this_block,
                                              rows_variable_coords)
     for indices_CartesianIndex ∈ CartesianIndices(rows_variable_local_ranges)
         indices = Tuple(indices_CartesianIndex)
+        overlap_factor = get_overlap_factor(indices, rows_variable_coords,
+                                            jacobian.handle_overlaps)
         # We only put a non-zero entry on the diagonal here, and this is a diagonal block,
         # so we can operate by columns instead of by rows for efficiency.
         col_index = get_flattened_index(rows_variable_dim_sizes, indices)
         this_block[:,col_index] .= 0
-        this_block[col_index,col_index] = 1.0
+        this_block[col_index,col_index] = overlap_factor
     end
     return nothing
 end
@@ -538,7 +557,7 @@ correspond to boundary condition points (i.e. those skipped by
         diagonal_block = jacobian_matrix[col_variable][col_variable]
         jacobian_initialize_bc_digonal_single_variable!(
             diagonal_block, col_variable_local_ranges, col_variable_coords, boundary_skip,
-            boundary_speed, jacobian.synchronize_shared)
+            boundary_speed, jacobian.handle_overlaps, jacobian.synchronize_shared)
 
         if isa(jacobian_matrix[1][1], BlockSkylineMatrix)
             local_block_ranges = jacobian.local_block_ranges
@@ -573,7 +592,7 @@ end
 function jacobian_initialize_bc_digonal_single_variable!(
              jacobian_block::BlockSkylineMatrix, col_variable_local_ranges,
              col_local_block_ranges, col_variable_coords, boundary_skip::F,
-             boundary_speed, synchronize_shared) where {F}
+             boundary_speed, handle_ovelaps::Val, synchronize_shared) where {F}
     this_block = jacobian_matrix[row_variable][col_variable]
     this_block.data[col_local_block_ranges] .= 0.0
 
@@ -583,8 +602,8 @@ function jacobian_initialize_bc_digonal_single_variable!(
 
     for (col, indices_CartesianIndex) ∈ enumerate(CartesianIndices(col_variable_local_ranges))
         indices = Tuple(indices_CartesianIndex)
-        if boundary_skip !== nothing && boundary_skip(boundary_speed, indices...,
-                                                      col_variable_coords...)
+        if boundary_skip !== nothing && boundary_skip(boundary_speed, handle_overlaps,
+                                                      indices..., col_variable_coords...)
             jacobian_block[col,col] .= 1.0
         end
     end
@@ -592,13 +611,13 @@ function jacobian_initialize_bc_digonal_single_variable!(
 end
 function jacobian_initialize_bc_digonal_single_variable!(
              jacobian_block, col_variable_local_ranges, col_local_block_ranges,
-             col_variable_coords, boundary_skip::F, boundary_speed,
+             col_variable_coords, boundary_skip::F, boundary_speed, handle_overlaps::Val,
              synchronize_shared) where {F}
     for (col, indices_CartesianIndex) ∈ enumerate(CartesianIndices(col_variable_local_ranges))
         indices = Tuple(indices_CartesianIndex)
         jacobian_block[:,col] .= 0.0
-        if boundary_skip !== nothing && boundary_skip(boundary_speed, indices...,
-                                                      col_variable_coords...)
+        if boundary_skip !== nothing && boundary_skip(boundary_speed, handle_overlaps,
+                                                      indices..., col_variable_coords...)
             jacobian_block[col,col] .= 1.0
         end
     end
@@ -1364,12 +1383,65 @@ function get_derivative_matrix_slice(derivative_coord, derivative_spectral, iele
     end
 end
 
+# When we are using a distributed-memory domain decomposition, the grid points on the
+# sub-domain boundaries are shared by two subdomains (or more at corners), and so are
+# 'overlapping' as the same entry exists on multiple sub-domains. To deal with this
+# overlap, we choose to require that when all the overlapping entries are added together,
+# we get the true matrix entry. To achieve this, derivative terms are just added normally
+# as the contributions from the elements on either side of the subdomain boundary (after
+# accounting for upwinding) need to be added anyway. All other entries are 'diagonal'
+# (i.e. non-zero only where the column index is equal to the row index) - any dimensions
+# that are integrated over in integral terms are forbidden from being distributed over
+# multiple subdomains, so do not need to be handled. For the diagonal terms, we add an
+# equal contribution from every subdomain, so the contribution has to be reduced by the
+# `overlap_factor` (i.e. 0.5 if the point is shared by two subdomains, 0.25 if it is
+# shared by four, etc.).
+function get_overlap_factor(indices::NTuple{N,mk_int}, coords::NTuple{N,mini_coordinate},
+                            handle_overlaps::Val{true},
+                            derivative_dim_number=nothing) where {N}
+    overlap_factor = 1.0
+    if derivative_dim_number === nothing
+        for (i, c) ∈ zip(indices, coords)
+            if i == 1 && (c.periodic || c.irank > 0)
+                # Is part of the subdomain lower boundary in coordinate `c`.
+                overlap_factor *= 0.5
+            elseif i == c.n && (c.periodic || c.irank < c.nrank - 1)
+                # Is part of the subdomain upper boundary in coordinate `c`.
+                overlap_factor *= 0.5
+            end
+        end
+    else
+        for (idim, (i, c)) ∈ enumerate(zip(indices, coords))
+            if idim != derivative_dim_number
+                if i == 1 && (c.periodic || c.irank > 0)
+                    # Is part of the subdomain lower boundary in coordinate `c`.
+                    overlap_factor *= 0.5
+                elseif i == c.n && (c.periodic || c.irank < c.nrank - 1)
+                    # Is part of the subdomain upper boundary in coordinate `c`.
+                    overlap_factor *= 0.5
+                end
+            end
+        end
+    end
+    return overlap_factor
+end
+
+# Sometimes we want to construct/invert separate matrices on each subdomain (as an
+# approximate preconditioner), in which case 'overlapping' entries should have their full
+# value on every subdomain, because the contributions will never be added together.
+function get_overlap_factor(indices::NTuple{N,mk_int}, coords::NTuple{N,mini_coordinate},
+                            handle_overlaps::Val{false},
+                            derivative_dim_number=nothing) where {N}
+    return 1.0
+end
+
 """
     add_term_to_Jacobian_row!(jacobian::jacobian_info,
                               jacobian_row::NTuple{N,<:AbstractVector{mk_float}} where N,
                               rows_variable::Symbol, prefactor::mk_float,
                               terms::EquationTerm, indices::Tuple,
-                              boundary_speed)
+                              boundary_speed, overlap_factor::mk_float,
+                              derivative_overlap_factors::NamedTuple)
 
 Traverse the tree of EquationTerms, accumulating the prefactors until reaching a leaf term
 (`kind = ETsimple`) that represents a state vector variable, which makes a contribution to
@@ -1378,8 +1450,9 @@ the Jacobian.
 function add_term_to_Jacobian_row!(jacobian::jacobian_info,
                                    jacobian_row::NTuple{N,<:AbstractVector{mk_float}} where N,
                                    rows_variable::Symbol, prefactor::mk_float,
-                                   terms::EquationTerm, indices::Tuple,
-                                   boundary_speed)
+                                   terms::EquationTerm, indices::Tuple, boundary_speed,
+                                   overlap_factor::mk_float,
+                                   derivative_overlap_factors::NamedTuple)
 
     @inbounds begin
         if terms.is_constant || terms.kind === ETnull
@@ -1391,14 +1464,17 @@ function add_term_to_Jacobian_row!(jacobian::jacobian_info,
                                        for (j,t) ∈ enumerate(terms.sub_terms) if j ≠ i)
                     add_term_to_Jacobian_row!(jacobian, jacobian_row, rows_variable,
                                               prefactor*other_terms, sub_term, indices,
-                                              boundary_speed)
+                                              boundary_speed, overlap_factor,
+                                              derivative_overlap_factors)
                 end
             end
         elseif terms.kind === ETsum
             for sub_term ∈ terms.sub_terms
                 if !sub_term.is_constant
                     add_term_to_Jacobian_row!(jacobian, jacobian_row, rows_variable,
-                                              prefactor, sub_term, indices, boundary_speed)
+                                              prefactor, sub_term, indices,
+                                              boundary_speed, overlap_factor,
+                                              derivative_overlap_factors)
                 end
             end
         elseif terms.kind === ETpower
@@ -1407,33 +1483,39 @@ function add_term_to_Jacobian_row!(jacobian::jacobian_info,
             exponent = terms.exponent
             power_prefactor = prefactor * exponent * sub_term.current_value[]^(exponent - 1)
             add_term_to_Jacobian_row!(jacobian, jacobian_row, rows_variable,
-                                      power_prefactor, sub_term, indices, boundary_speed)
+                                      power_prefactor, sub_term, indices, boundary_speed,
+                                      overlap_factor, derivative_overlap_factors)
         elseif terms.kind === ETfunction
             @debug_consistency_checks length(terms.sub_terms) == 1 || error("'function' EquationTerm must have exactly one `sub_term` element")
             sub_term = terms.sub_terms[1]
             func_derivative_prefactor = prefactor * func_derivative_lookup[terms.func_name](sub_term.current_value[])
             add_term_to_Jacobian_row!(jacobian, jacobian_row, rows_variable,
                                       func_derivative_prefactor, sub_term, indices,
-                                      boundary_speed)
+                                      boundary_speed, overlap_factor,
+                                      derivative_overlap_factors)
         elseif terms.kind === ETcompound
             @debug_consistency_checks length(terms.sub_terms) == 1 || error("'compound' EquationTerm must have exactly one `sub_term` element")
             add_term_to_Jacobian_row!(jacobian, jacobian_row, rows_variable, prefactor,
-                                      terms.sub_terms[1], indices, boundary_speed)
+                                      terms.sub_terms[1], indices, boundary_speed,
+                                      overlap_factor, derivative_overlap_factors)
         elseif length(terms.integrals) > 0
             # Derivative-of-integral terms are also handled by
             # add_integral_term_to_Jacobian_row!().
             add_integral_term_to_Jacobian_row!(jacobian, jacobian_row, rows_variable,
-                                               prefactor, terms, indices)
+                                               prefactor, terms, indices, overlap_factor,
+                                               derivative_overlap_factors)
         elseif length(terms.derivatives) > 0
             add_derivative_term_to_Jacobian_row!(jacobian, jacobian_row, rows_variable,
-                                                 prefactor, terms, indices)
+                                                 prefactor, terms, indices,
+                                                 derivative_overlap_factors)
         elseif length(terms.second_derivatives) > 0
             add_second_derivative_term_to_Jacobian_row!(jacobian, jacobian_row,
                                                         rows_variable, prefactor, terms,
-                                                        indices)
+                                                        indices,
+                                                        derivative_overlap_factors)
         else
             add_simple_term_to_Jacobian_row!(jacobian, jacobian_row, rows_variable,
-                                             prefactor, terms, indices)
+                                             prefactor, terms, indices, overlap_factor)
         end
 
         return nothing
@@ -1445,7 +1527,8 @@ end
 function add_simple_term_to_Jacobian_row!(jacobian::jacobian_info,
                                           jacobian_row::NTuple{N,<:AbstractVector{mk_float}} where N,
                                           rows_variable::Symbol, prefactor::mk_float,
-                                          term::EquationTerm, indices::Tuple)
+                                          term::EquationTerm, indices::Tuple,
+                                          overlap_factor::mk_float)
 
     @inbounds begin
         current_indices = term.current_indices
@@ -1454,7 +1537,7 @@ function add_simple_term_to_Jacobian_row!(jacobian::jacobian_info,
         end
         block_index, column_index = get_column_index(jacobian, term.state_variable, current_indices)
 
-        jacobian_row[block_index][column_index] += prefactor
+        jacobian_row[block_index][column_index] += overlap_factor * prefactor
 
         return nothing
     end
@@ -1467,8 +1550,10 @@ end
 # `prefactor` times a column of the derivative matrix into those points.
 function add_derivative_term_to_Jacobian_row!(jacobian::jacobian_info,
                                               jacobian_row::NTuple{N,<:AbstractVector{mk_float}} where N,
-                                              rows_variable::Symbol, prefactor::mk_float,
-                                              term::EquationTerm, indices::Union{Tuple,Vector})
+                                              rows_variable::Symbol,
+                                              prefactor::mk_float, term::EquationTerm,
+                                              indices::Union{Tuple,Vector},
+                                              derivative_overlap_factors::NamedTuple)
     @inbounds begin
         @debug_consistency_checks length(term.derivatives) > 1 && error("More than one derivative not supported yet")
         current_indices = term.current_indices
@@ -1489,6 +1574,8 @@ function add_derivative_term_to_Jacobian_row!(jacobian::jacobian_info,
         ielement = derivative_coord.ielement[derivative_dim_index]
         igrid = derivative_coord.igrid[derivative_dim_index]
 
+        prefactor *= derivative_overlap_factors[derivative_dim]
+
         jacobian_row_block = jacobian_row[derivative_variable_index]
 
         if length(term.upwind_speeds) > 0
@@ -1501,75 +1588,79 @@ function add_derivative_term_to_Jacobian_row!(jacobian::jacobian_info,
             upwind_speed = 0.0
         end
 
-        if igrid == 1 && derivative_coord.periodic
-            if derivative_coord.nrank > 1
-                error("Distributed MPI not supported in Jacobian matrix construction "
-                      * "for periodic dimension yet.")
-            else
-                if upwind_speed == 0.0
-                    # Add derivative contribution from the 'previous' element on the
-                    # other side of the periodic boundary, index `nelement_global`.
-                    column_inds =
-                        get_element_inds(jacobian, current_indices,
-                                         term.current_derivative_indices,
-                                         derivative_variable_index, term_variable_ndims,
-                                         derivative_dim_number, derivative_coord,
-                                         derivative_coord.nelement_global,
-                                         derivative_coord.ngrid)
-                    Dmat_slice, scale =
-                        get_derivative_matrix_slice(derivative_coord, derivative_spectral,
-                                                    derivative_coord.nelement_global,
-                                                    derivative_coord.ngrid)
-                    for (i, ci) ∈ enumerate(column_inds)
-                        jacobian_row_block[ci] += 0.5 * prefactor * Dmat_slice[i] / scale
-                    end
+        # Note `igrid == 1` only occurs in the first element (where `ielement == 1`), as
+        # all the other element boundary points are included as the upper boundary of the
+        # elements.
+        if igrid == 1 && derivative_coord.nrank == 1 && derivative_coord.periodic && jacobian.handle_overlaps === Val(false)
+            if upwind_speed == 0.0
+                # Add derivative contribution from the 'previous' element on the
+                # other side of the periodic boundary, index `nelement_global`.
+                column_inds =
+                    get_element_inds(jacobian, current_indices,
+                                     term.current_derivative_indices,
+                                     derivative_variable_index, term_variable_ndims,
+                                     derivative_dim_number, derivative_coord,
+                                     derivative_coord.nelement_global,
+                                     derivative_coord.ngrid)
+                Dmat_slice, scale =
+                    get_derivative_matrix_slice(derivative_coord, derivative_spectral,
+                                                derivative_coord.nelement_global,
+                                                derivative_coord.ngrid)
+                for (i, ci) ∈ enumerate(column_inds)
+                    jacobian_row_block[ci] += 0.5 * prefactor * Dmat_slice[i] / scale
+                end
 
-                    column_inds =
-                        get_element_inds(jacobian, current_indices,
-                                         term.current_derivative_indices,
-                                         derivative_variable_index, term_variable_ndims,
-                                         derivative_dim_number, derivative_coord,
-                                         ielement, igrid)
-                    Dmat_slice, scale =
-                        get_derivative_matrix_slice(derivative_coord, derivative_spectral,
-                                                    ielement, igrid)
-                    for (i, ci) ∈ enumerate(column_inds)
-                        jacobian_row_block[ci] += 0.5 * prefactor * Dmat_slice[i] / scale
-                    end
-                elseif upwind_speed > 0.0
-                    # Add derivative contribution from the 'previous' element on the
-                    # other side of the periodic boundary, index `nelement_global`.
-                    column_inds =
-                        get_element_inds(jacobian, current_indices,
-                                         term.current_derivative_indices,
-                                         derivative_variable_index, term_variable_ndims,
-                                         derivative_dim_number, derivative_coord,
-                                         derivative_coord.nelement_global,
-                                         derivative_coord.ngrid)
-                    Dmat_slice, scale =
-                        get_derivative_matrix_slice(derivative_coord, derivative_spectral,
-                                                    derivative_coord.nelement_global,
-                                                    derivative_coord.ngrid)
-                    for (i, ci) ∈ enumerate(column_inds)
-                        jacobian_row_block[ci] += prefactor * Dmat_slice[i] / scale
-                    end
-                else # upwind_speed < 0.0
-                    column_inds =
-                        get_element_inds(jacobian, current_indices,
-                                         term.current_derivative_indices,
-                                         derivative_variable_index, term_variable_ndims,
-                                         derivative_dim_number, derivative_coord,
-                                         ielement, igrid)
-                    Dmat_slice, scale =
-                        get_derivative_matrix_slice(derivative_coord, derivative_spectral,
-                                                    ielement, igrid)
-                    for (i, ci) ∈ enumerate(column_inds)
-                        jacobian_row_block[ci] += prefactor * Dmat_slice[i] / scale
-                    end
+                column_inds =
+                    get_element_inds(jacobian, current_indices,
+                                     term.current_derivative_indices,
+                                     derivative_variable_index, term_variable_ndims,
+                                     derivative_dim_number, derivative_coord,
+                                     ielement, igrid)
+                Dmat_slice, scale =
+                    get_derivative_matrix_slice(derivative_coord, derivative_spectral,
+                                                ielement, igrid)
+                for (i, ci) ∈ enumerate(column_inds)
+                    jacobian_row_block[ci] += 0.5 * prefactor * Dmat_slice[i] / scale
+                end
+            elseif upwind_speed > 0.0
+                # Add derivative contribution from the 'previous' element on the
+                # other side of the periodic boundary, index `nelement_global`.
+                column_inds =
+                    get_element_inds(jacobian, current_indices,
+                                     term.current_derivative_indices,
+                                     derivative_variable_index, term_variable_ndims,
+                                     derivative_dim_number, derivative_coord,
+                                     derivative_coord.nelement_global,
+                                     derivative_coord.ngrid)
+                Dmat_slice, scale =
+                    get_derivative_matrix_slice(derivative_coord, derivative_spectral,
+                                                derivative_coord.nelement_global,
+                                                derivative_coord.ngrid)
+                for (i, ci) ∈ enumerate(column_inds)
+                    jacobian_row_block[ci] += prefactor * Dmat_slice[i] / scale
+                end
+            else # upwind_speed < 0.0
+                column_inds =
+                    get_element_inds(jacobian, current_indices,
+                                     term.current_derivative_indices,
+                                     derivative_variable_index, term_variable_ndims,
+                                     derivative_dim_number, derivative_coord,
+                                     ielement, igrid)
+                Dmat_slice, scale =
+                    get_derivative_matrix_slice(derivative_coord, derivative_spectral,
+                                                ielement, igrid)
+                for (i, ci) ∈ enumerate(column_inds)
+                    jacobian_row_block[ci] += prefactor * Dmat_slice[i] / scale
                 end
             end
         elseif igrid == 1
-            if derivative_coord.irank == 0
+            if (jacobian.handle_overlaps === Val(false)
+                    || (derivative_coord.irank == 0 && !derivative_coord.periodic)
+                    || upwind_speed < 0.0)
+                # Is a non-periodic domain boundary, or a subdomain boundary where we are
+                # neglecting coupling between sub-domains, or an upwind boundary where the
+                # upwind speed is towards the boundary, so just use the one-sided
+                # derivative.
                 column_inds =
                     get_element_inds(jacobian, current_indices,
                                      term.current_derivative_indices,
@@ -1582,9 +1673,8 @@ function add_derivative_term_to_Jacobian_row!(jacobian::jacobian_info,
                 for (i, ci) ∈ enumerate(column_inds)
                     jacobian_row_block[ci] += prefactor * Dmat_slice[i] / scale
                 end
-            else
-                # For now, we do not allow the Jacobian matrix to couple different
-                # shared-memory blocks, so just use the one-sided derivative
+            elseif upwind_speed == 0.0
+                # One half of the 'centred' derivative.
                 column_inds =
                     get_element_inds(jacobian, current_indices,
                                      term.current_derivative_indices,
@@ -1595,15 +1685,24 @@ function add_derivative_term_to_Jacobian_row!(jacobian::jacobian_info,
                     get_derivative_matrix_slice(derivative_coord, derivative_spectral,
                                                 ielement, igrid)
                 for (i, ci) ∈ enumerate(column_inds)
-                    jacobian_row_block[ci] += prefactor * Dmat_slice[i] / scale
+                    jacobian_row_block[ci] += 0.5 * prefactor * Dmat_slice[i] / scale
                 end
+            else # upwind_speed > 0.0
+                # No contribution to add from this side.
             end
-        elseif ielement == derivative_coord.nelement_local &&
+        elseif jacobian.handle_overlaps === Val(false) &&
+                ielement == derivative_coord.nelement_local &&
                 igrid == derivative_coord.ngrid && derivative_coord.periodic
             # In serial, periodic case, only contribution to the upper boundary rows is
             # the periodicity constraint, so no need to do anything here.
         elseif ielement == derivative_coord.nelement_local && igrid == derivative_coord.ngrid
-            if (derivative_coord.irank == derivative_coord.nrank - 1)
+            if (jacobian.handle_overlaps === Val(false)
+                    || (derivative_coord.irank == derivative_coord.nrank - 1 && !derivative_coord.periodic)
+                    || upwind_speed > 0.0)
+                # Is a non-periodic domain boundary, or a subdomain boundary where we are
+                # neglecting coupling between sub-domains, or an upwind boundary where the
+                # upwind speed is towards the boundary, so just use the one-sided
+                # derivative.
                 column_inds =
                     get_element_inds(jacobian, current_indices,
                                      term.current_derivative_indices,
@@ -1616,9 +1715,8 @@ function add_derivative_term_to_Jacobian_row!(jacobian::jacobian_info,
                 for (i, ci) ∈ enumerate(column_inds)
                     jacobian_row_block[ci] += prefactor * Dmat_slice[i] / scale
                 end
-            else
-                # For now, we do not allow the Jacobian matrix to couple different
-                # shared-memory blocks, so just use the one-sided derivative
+            elseif upwind_speed == 0.0
+                # One half of the 'centred' derivative.
                 column_inds =
                     get_element_inds(jacobian, current_indices,
                                      term.current_derivative_indices,
@@ -1629,8 +1727,10 @@ function add_derivative_term_to_Jacobian_row!(jacobian::jacobian_info,
                     get_derivative_matrix_slice(derivative_coord, derivative_spectral,
                                                 ielement, igrid)
                 for (i, ci) ∈ enumerate(column_inds)
-                    jacobian_row_block[ci] += prefactor * Dmat_slice[i] / scale
+                    jacobian_row_block[ci] += 0.5 * prefactor * Dmat_slice[i] / scale
                 end
+            else # upwind_speed < 0.0
+                # No contribution to add from this side.
             end
         elseif igrid == derivative_coord.ngrid
             # Element boundary, not a block boundary
@@ -1721,23 +1821,23 @@ function add_second_derivative_term_to_Jacobian_row!(
              jacobian::jacobian_info,
              jacobian_row::NTuple{N,<:AbstractVector{mk_float}} where N,
              rows_variable::Symbol, prefactor::mk_float, term::EquationTerm,
-             indices::Union{Tuple,Vector})
+             indices::Union{Tuple,Vector}, derivative_overlap_factors::NamedTuple)
     @inbounds begin
         @debug_consistency_checks length(term.derivatives) > 1 && error("More than one derivative not supported yet")
         current_indices = term.current_indices
         for (i, j) ∈ enumerate(term.dimension_numbers)
             current_indices[i] = indices[j]
         end
-        term_ndims = length(term.dimensions)
         term_variable_ndims = length(term.dimensions)
         derivative_dim = term.second_derivatives[1]
         derivative_coord = jacobian.coords[derivative_dim]
         derivative_spectral = jacobian.spectral[derivative_dim]
-        term_dims = term.dimensions
 
         derivative_variable_index = jacobian.state_vector_numbers[term.state_variable]
         derivative_dim_number = term.second_derivative_dim_numbers[1]
         derivative_dim_index = current_indices[derivative_dim_number]
+
+        prefactor *= derivative_overlap_factors[derivative_dim]
 
         jacobian_row_block = jacobian_row[derivative_variable_index]
 
@@ -1762,7 +1862,9 @@ end
 function add_integral_term_to_Jacobian_row!(jacobian::jacobian_info,
                                             jacobian_row::NTuple{N,<:AbstractVector{mk_float}} where N,
                                             rows_variable::Symbol, prefactor::mk_float,
-                                            term::EquationTerm, row_indices::Tuple)
+                                            term::EquationTerm, row_indices::Tuple,
+                                            overlap_factor::mk_float,
+                                            derivative_overlap_factors::NamedTuple)
 
     @inbounds begin
         integral_dim_sizes = Tuple(term.integral_dim_sizes)
@@ -1776,7 +1878,8 @@ function add_integral_term_to_Jacobian_row!(jacobian::jacobian_info,
         add_integral_term_to_Jacobian_row!(jacobian, jacobian_row, rows_variable, prefactor,
                                            term, row_indices, term.state_variable,
                                            integral_dim_sizes, integrand_prefactor,
-                                           term.integral_wgts)
+                                           term.integral_wgts, overlap_factor,
+                                           derivative_overlap_factors)
 
         return nothing
     end
@@ -1790,7 +1893,8 @@ function add_integral_term_to_Jacobian_row!(jacobian::jacobian_info,
                                             rows_variable::Symbol, prefactor::mk_float,
                                             term::EquationTerm, row_indices::Tuple,
                                             integrand_variable, integral_dim_sizes,
-                                            integrand_prefactor, wgts)
+                                            integrand_prefactor, wgts, overlap_factor,
+                                            derivative_overlap_factors::NamedTuple)
 
     @inbounds begin
         current_indices = term.integrand_current_indices
@@ -1809,14 +1913,17 @@ function add_integral_term_to_Jacobian_row!(jacobian::jacobian_info,
 
             if length(term.derivatives) == 0
                 column_index = get_column_index(jacobian, integral_variable_index, current_indices)
-                jacobian_row_block[column_index] += prefactor * integrand_prefactor.current_value[] * this_wgt
+                jacobian_row_block[column_index] += overlap_factor * prefactor *
+                                                    integrand_prefactor.current_value[] *
+                                                    this_wgt
             elseif length(term.derivatives) == 1
                 # Can re-use `add_derivative_term_to_Jacobian_row!()` here, with
                 # `current_indices` taking the place of the row index.
                 add_derivative_term_to_Jacobian_row!(jacobian, jacobian_row, integrand_variable,
                                                      prefactor * integrand_prefactor.current_value[] * this_wgt,
                                                      term.integral_derivative_term,
-                                                     current_indices)
+                                                     current_indices,
+                                                     derivative_overlap_factors)
             else
                 error("Multiple derivatives not supported in integral-of-derivative term yet.")
             end
@@ -1887,10 +1994,19 @@ function add_term_to_Jacobian!(jacobian::jacobian_info, rows_variable::Symbol,
     @inbounds begin
         for indices_CartesianIndex ∈ CartesianIndices(rows_variable_local_ranges)
             indices = Tuple(indices_CartesianIndex)
-            if boundary_skip !== nothing && boundary_skip(boundary_speed, indices...,
+            if boundary_skip !== nothing && boundary_skip(boundary_speed,
+                                                          jacobian.handle_overlaps,
+                                                          indices...,
                                                           rows_variable_coords...)
                 continue
             end
+
+            overlap_factor = get_overlap_factor(indices, rows_variable_coords,
+                                                jacobian.handle_overlaps)
+            derivative_overlap_factors =
+                NamedTuple(d => get_overlap_factor(indices, rows_variable_coords,
+                                                   jacobian.handle_overlaps, idim)
+                           for (idim, d) ∈ enumerate(rows_variable_dims))
 
             row_index = get_flattened_index(rows_variable_dim_sizes, indices)
             jacobian_row = Tuple(@view block[row_index,:] for block ∈ block_row)
@@ -1898,7 +2014,8 @@ function add_term_to_Jacobian!(jacobian::jacobian_info, rows_variable::Symbol,
             set_current_values!(jacobian, terms, indices)
 
             add_term_to_Jacobian_row!(jacobian, jacobian_row, rows_variable, prefactor, terms,
-                                      indices, boundary_speed)
+                                      indices, boundary_speed, overlap_factor,
+                                      derivative_overlap_factors)
         end
 
         id_hash = @debug_block_synchronize_quick_ifelse(
@@ -1926,6 +2043,12 @@ this way minimises the number of places in the code where the `handle_overlaps=V
 but periodic case needs to be handled specially.
 """
 function add_periodicity_constraint_to_jacobian!(jacobian::jacobian_info)
+    if jacobian.handle_overlaps === Val(true)
+        # No need to add extra constraint, as perioidicity is already handled as part of
+        # the 'overlaps'.
+        return nothing
+    end
+
     @timeit global_timer "add_periodicity_constraint_to_jacobian!" begin
         @inbounds begin
             jacobian_matrix = jacobian.matrix
