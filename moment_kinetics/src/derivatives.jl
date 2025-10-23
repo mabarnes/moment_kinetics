@@ -12,6 +12,7 @@ export derivative_r!, derivative_r_chrg!, derivative_r_ntrl!
 export derivative_z!, derivative_z_chrg!, derivative_z_ntrl!
 
 using ..calculus: derivative!, second_derivative!, reconcile_element_boundaries_MPI!,
+                  reconcile_element_boundaries_MPI_anyzv!,
                   reconcile_element_boundaries_MPI_z_pdf_vpavperpz!, apply_adv_fac!
 using ..communication
 using ..type_definitions: mk_float
