@@ -104,6 +104,8 @@ function setup_geometry_input(toml_input::AbstractDict, warn_unexpected::Bool)
         option = "constant-helical",# "1D-mirror"
         # pitch ( = Bzed/Bmag if geometry_option == "constant-helical")
         pitch = 1.0,
+        # well depth is depth of the quadratic well, for option == "1D-mirror-quadratic-well"
+        well_depth = 0.0,
         # DeltaB ( = (Bzed(z=L/2) - Bzed(0))/Bref if geometry_option == "1D-mirror")
         DeltaB = 0.0,
         # constant for testing nonzero Er when nr = 1
@@ -275,7 +277,7 @@ function init_magnetic_geometry(geometry_input_data::geometry_input,z,r,z_spectr
         L_B = 1/(dB_dr*1/Bmag[1,1])
         #println("L_B = $L_B")
     elseif option == "1D-mirror-MAST-edge" || option == "1D-mirror-STEP-edge-rough" ||
-            option == "1D-mirror-STEP-edge-precise" || option == "1D_quadratic_well"
+            option == "1D-mirror-STEP-edge-precise" || option == "1D-mirror-quadratic-well"
         # a 1D configuration along z, with no pitch, but the magnetic field 
         # strength varies along the line. Its variation matches very closely to 
         # a single field line in the edge of MAST (from a hypnotoad analysis of 
@@ -287,6 +289,7 @@ function init_magnetic_geometry(geometry_input_data::geometry_input,z,r,z_spectr
         if option == "1D-mirror-MAST-edge"
             a0, a2, a4, a6, a8 = 0.32884641, -0.4199673, 3.1528366, -6.3052343, 4.0532678
         elseif option == "1D-mirror-STEP-edge-precise"
+            # These are polynomial coefficients for an accurate fit to the STEP edge field line
             a0, a2, a4, a6, a8, a10, a12, a14, a16, a18, a20, a22, a24, a26, a28, a30 =
                     2.5076007, 25.017435, 316.9655, -13616.124, 198167.82, -1677583.2,
                     9331055.5, -36017361, 99319698, -1.9842134e+08, 2.8779297e+08,
@@ -300,8 +303,9 @@ function init_magnetic_geometry(geometry_input_data::geometry_input,z,r,z_spectr
             a4 = a4 * well_prefactor
             a6 = a6 * well_prefactor
             a8 = a8 * well_prefactor
-        elseif option == "1D_quadratic_well"
-            a0, a2, a4, a6, a8 = 0.5, 0.2, 0.0, 0.0, 0.0
+        elseif option == "1D-mirror-quadratic-well"
+            well_depth = geometry_input_data.well_depth
+            a0, a2, a4, a6, a8 = 0.5, well_depth, 0.0, 0.0, 0.0
         end
         
         pitch = geometry_input_data.pitch
