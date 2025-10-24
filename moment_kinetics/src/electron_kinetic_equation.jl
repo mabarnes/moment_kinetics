@@ -1743,7 +1743,10 @@ function get_electron_preconditioner(nl_solver_params, f_electron_new, electron_
                                      scratch_dummy, external_source_settings,
                                      num_diss_params, t_params, ion_dt, ir, evolve_p,
                                      add_identity=true)
-    if nl_solver_params.preconditioner_type === Val(:electron_lu)
+    if nl_solver_params.preconditioner_type ∈ (Val(:electron_lu_no_separate_moments),
+                                               Val(:electron_lu_separate_third_moment),
+                                               Val(:electron_lu),
+                                               Val(:electron_lu_separate_dp_dz_dq_dz))
         return get_electron_lu_preconditioner(nl_solver_params, f_electron_new,
                                               electron_p_new, buffer_1, buffer_2,
                                               buffer_3, buffer_4, electron_density,
