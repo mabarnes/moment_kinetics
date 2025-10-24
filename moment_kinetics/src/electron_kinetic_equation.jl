@@ -2012,8 +2012,6 @@ pressure \$p_{e∥}\$.
 
     # Do a backward-Euler update of the electron pdf, and (if evove_p=true) the electron
     # parallel pressure.
-    # Use `let` block to hint to the compiler that the captured variables don't change -
-    # see https://docs.julialang.org/en/v1/manual/performance-tips/#man-performance-captured
     
     residual_func! = kinetic_electron_residual!(; f_electron_old, electron_p_old,
                                                 evolve_p, moments, composition,
