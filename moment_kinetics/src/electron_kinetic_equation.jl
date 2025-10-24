@@ -806,22 +806,12 @@ function electron_backward_euler_pseudotimestepping!(scratch, pdf, moments,
                 nl_solver_params.solves_since_precon_update[] = nl_solver_params.preconditioner_update_interval
 
                 # Swap old_scratch and new_scratch so that the next step restarts from the
-                # same state. Copy values over here rather than just swapping references
-                # to arrays, because f_electron_old and electron_p_old are captured by
-                # residual_func!() above, so any change in the things they refer to will
-                # cause type instability in residual_func!().
+                # same state.
+                old_scratch, new_scratch = new_scratch, old_scratch
                 f_electron_new = @view new_scratch.pdf_electron[:,:,:,ir]
                 f_electron_old = @view old_scratch.pdf_electron[:,:,:,ir]
                 electron_p_new = @view new_scratch.electron_p[:,ir]
                 electron_p_old = @view old_scratch.electron_p[:,ir]
-                @begin_anyzv_z_vperp_vpa_region()
-                @loop_z_vperp_vpa iz ivperp ivpa begin
-                    f_electron_new[ivpa,ivperp,iz] = f_electron_old[ivpa,ivperp,iz]
-                end
-                @begin_anyzv_z_region()
-                @loop_z iz begin
-                    electron_p_new[iz] = electron_p_old[iz]
-                end
 
                 bc_constraints_converged = apply_electron_bc_and_constraints_no_r!(
                                                f_electron_new, this_phi, moments, r, z, vperp,
