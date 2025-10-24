@@ -26,8 +26,6 @@ function _allocate_array(type::Type, dims...)
     function get_int(a)
         if isa(a, coordinate)
             return a.n
-        elseif isa(a, NamedTuple)
-            return mk_int(a.n)
         elseif isa(a, Integer)
             return mk_int(a)
         elseif isa(a, Pair)
@@ -39,16 +37,7 @@ function _allocate_array(type::Type, dims...)
                   * "(`Pair{Symbol,mk_int}`), or mk_int.")
         end
     end
-    return _allocate_array(type, (get_int(d) for d ∈ dims)...)
-end
-
-# Overload to handle keyword arguments
-function _allocate_array(type::Type; kwargs...)
-    if length(kwargs) == 0
-        # Special handling if there are no kwargs to avoid stack overflow.
-        return Array{type}(undef)
-    end
-    return _allocate_array(type, (v for v ∈ values(kwargs))...)
+    return _allocate_array(type, map(get_int, dims)...)
 end
 
 """
@@ -61,8 +50,8 @@ end
 """
 variant where array is in shared memory for all processors in the 'block'
 """
-function allocate_shared_bool(dims...; comm=nothing, kwargs...)
-    return array = allocate_shared(Bool, dims...; comm=comm, kwargs...)
+function allocate_shared_bool(dims...; comm=nothing, maybe_debug=true)
+    return array = allocate_shared(Bool, comm, maybe_debug, dims...)
 end
 
 """
@@ -75,8 +64,8 @@ end
 """
 variant where array is in shared memory for all processors in the 'block'
 """
-function allocate_shared_int(dims...; comm=nothing, kwargs...)
-    return array = allocate_shared(mk_int, dims...; comm=comm, kwargs...)
+function allocate_shared_int(dims...; comm=nothing, maybe_debug=true)
+    return array = allocate_shared(mk_int, comm, maybe_debug, dims...)
 end
 
 """
@@ -93,8 +82,8 @@ end
 """
 variant where array is in shared memory for all processors in the 'block'
 """
-function allocate_shared_float(dims...; comm=nothing, kwargs...)
-    array = allocate_shared(mk_float, dims...; comm=comm, kwargs...)
+function allocate_shared_float(dims...; comm=nothing, maybe_debug=true)
+    array = allocate_shared(mk_float, comm, maybe_debug, dims...)
     @debug_initialize_NaN begin
         # Initialize as NaN to try and catch use of uninitialized values
         if comm === nothing
@@ -138,8 +127,8 @@ end
 """
 variant where array is in shared memory for all processors in the 'block'
 """
-function allocate_shared_complex(dims...; comm=nothing, kwargs...)
-    array = allocate_shared(Complex{mk_float}, dims...; comm=comm, kwargs...)
+function allocate_shared_complex(dims...; comm=nothing, maybe_debug=true)
+    array = allocate_shared(Complex{mk_float}, comm, maybe_debug, dims...)
     @debug_initialize_NaN begin
         # Initialize as NaN to try and catch use of uninitialized values
         if comm === nothing

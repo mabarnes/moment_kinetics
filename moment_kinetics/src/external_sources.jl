@@ -130,10 +130,10 @@ function setup_external_sources!(input_dict, r, z, electron_physics,
             PI_density_target = input["PI_density_target_amplitude"]
 
             if ignore_MPI
-                PI_controller_amplitude = allocate_float(; pi_controller_amplitude=1)
+                PI_controller_amplitude = allocate_float(:pi_controller_amplitude=>1)
                 controller_source_profile = allocate_float(z, r)
             else
-                PI_controller_amplitude = allocate_shared_float(; pi_controller_amplitude=1)
+                PI_controller_amplitude = allocate_shared_float(:pi_controller_amplitude=>1)
                 controller_source_profile = allocate_shared_float(z, r)
             end
             for ir ∈ 1:r.n, iz ∈ 1:z.n
@@ -177,10 +177,10 @@ function setup_external_sources!(input_dict, r, z, electron_physics,
             PI_density_target_rank = nothing
 
             if ignore_MPI
-                PI_controller_amplitude = allocate_float(; pi_controller_amplitude=1)
+                PI_controller_amplitude = allocate_float(:pi_controller_amplitude=>1)
                 controller_source_profile = allocate_float(z, r)
             else
-                PI_controller_amplitude = allocate_shared_float(; pi_controller_amplitude=1)
+                PI_controller_amplitude = allocate_shared_float(:pi_controller_amplitude=>1)
                 controller_source_profile = allocate_shared_float(z, r)
             end
             for ir ∈ 1:r.n, iz ∈ 1:z.n
@@ -325,10 +325,10 @@ function setup_external_sources!(input_dict, r, z, electron_physics,
             PI_density_target = input["PI_density_target_amplitude"]
 
             if comm_block[] != MPI.COMM_NULL
-                PI_controller_amplitude = allocate_shared_float(; pi_controller_amplitude=1)
+                PI_controller_amplitude = allocate_shared_float(:pi_controller_amplitude=>1)
                 controller_source_profile = allocate_shared_float(z, r)
             else
-                PI_controller_amplitude = allocate_float(; pi_controller_amplitude=1)
+                PI_controller_amplitude = allocate_float(:pi_controller_amplitude=>1)
                 controller_source_profile = allocate_float(z, r)
             end
             for ir ∈ 1:r.n, iz ∈ 1:z.n

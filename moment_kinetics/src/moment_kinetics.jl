@@ -232,8 +232,8 @@ parallel loop ranges, and are only used by the tests in `debug_test/`.
         flush(stdout)
     end
 
-    input = mk_input(input_dict; save_inputs_to_txt=true, ignore_MPI=false,
-                     warn_unexpected=warn_unexpected_input, write_output=write_output)
+    input = mk_input(input_dict; ignore_MPI=false, warn_unexpected=warn_unexpected_input,
+                     write_output=write_output)
     # obtain input options from moment_kinetics_input.jl
     # and check input to catch errors
     io_input, evolve_moments, t_input, z, z_spectral, r, r_spectral, vpa, vpa_spectral,
@@ -303,7 +303,7 @@ parallel loop ranges, and are only used by the tests in `debug_test/`.
                               vpa, vzeta, vr, vz, z_spectral, r_spectral, vperp_spectral,
                               vpa_spectral, vzeta_spectral, vr_spectral, vz_spectral,
                               r_bc, species, collisions, external_source_settings,
-                              manufactured_solns_input, t_input, num_diss_params,
+                              manufactured_solns_input, num_diss_params,
                               advection_structs, io_input, input_dict)
         # initialize time variable
         code_time = mk_float(0.0)
@@ -311,7 +311,7 @@ parallel loop ranges, and are only used by the tests in `debug_test/`.
         dt_before_last_fail = nothing
         electron_dt = nothing
         electron_dt_before_last_fail = nothing
-        previous_runs_info = nothing
+        previous_runs_info = ()
         restart_electron_physics = nothing
     else
         restarting = true

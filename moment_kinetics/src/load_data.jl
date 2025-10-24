@@ -467,7 +467,7 @@ function load_time_data(fid; printout=false)
     end
 
     group = get_group(first(fid), "dynamic_data")
-    time = load_variable(group, "time")
+    time = load_variable(group, "time")::Vector{mk_float}
     restarts_nt = [length(time)]
     for f ∈ fid[2:end]
         group = get_group(f, "dynamic_data")
@@ -702,7 +702,7 @@ function reload_evolving_fields!(pdf, moments, fields, restart_prefix_iblock, ti
     dt_before_last_fail = Ref(Inf)
     electron_dt = fill(mk_float(-Inf), r.n)
     electron_dt_before_last_fail = fill(mk_float(Inf), r.n)
-    previous_runs_info = nothing
+    previous_runs_info = ()
     restart_electron_physics = nothing
     @begin_serial_region()
     @serial_region begin
@@ -1076,7 +1076,7 @@ function reload_electron_data!(pdf, moments, phi, t_params, restart_prefix_ibloc
                                time_index, geometry, r, z, vpa, vperp, vzeta, vr, vz)
     code_time = fill(mk_float(0.0), r.n)
     pdf_electron_converged = Ref(false)
-    previous_runs_info = nothing
+    previous_runs_info = ()
     @begin_serial_region()
     @serial_region begin
         fid = open_readonly_output_file(restart_prefix_iblock[1], "initial_electron";

@@ -126,9 +126,10 @@ because it is set by boundary conditions.
 `synchronize` is the function to be called to synchronize all processes in the
 shared-memory group that is working with this `jacobian_info` object.
 """
-struct jacobian_info{Tmat,NTerms,Tvecinds,Tvecdims,Tveccoords,Tdimsizes,Tdimsteps,Tranges,Tfranges,Tlbranges,Tlbdranges,Tcoords,Tspectral,Tbskip,Tsync}
+struct jacobian_info{Tmat,N2,NTerms,Tvecinds,Tvecdims,Tveccoords,Tdimsizes,Tdimsteps,Tranges,Tfranges,Tlbranges,Tlbdranges,Tcoords,Tspectral,Tbskip,Tsync}
     matrix::Tmat
     n_entries::mk_int
+    n_entries_squared_val::Val{N2}
     state_vector_entries::NTuple{NTerms, Symbol}
     state_vector_numbers::Tvecinds
     state_vector_dims::Tvecdims
@@ -173,7 +174,7 @@ if no function is needed for the variable).
 """
 function create_jacobian_info(coords::NamedTuple, spectral::NamedTuple; comm=comm_block[],
                               synchronize::Union{Function,Nothing}=_block_synchronize,
-                              boundary_skip_funcs=nothing, block_banded=true, kwargs...)
+                              boundary_skip_funcs::BSF=nothing, block_banded=true, kwargs...) where {BSF}
 
     @debug_consistency_checks all(all(d ∈ keys(coords) for d ∈ v[2]) for v ∈ values(kwargs)) || error("Some coordinate required by the state variables were not included in `coords`.")
 
@@ -344,7 +345,7 @@ function create_jacobian_info(coords::NamedTuple, spectral::NamedTuple; comm=com
                                                                       off_diagonals,
                                                                       off_diagonals)
                 data_length = BlockBandedMatrices.bb_numentries(skyline_sizes)
-                data = allocate_shared_float(; jacobian_data=data_length, comm=comm)
+                data = allocate_shared_float(:jacobian_data=>data_length, comm=comm)
                 return BlockBandedMatrices._BlockSkylineMatrix(data, skyline_sizes)
             else
                 return allocate_shared_float(Symbol(:jacobian_size, i)=>state_vector_sizes[i],
@@ -392,13 +393,14 @@ function create_jacobian_info(coords::NamedTuple, spectral::NamedTuple; comm=com
         synchronize = (call_site)->nothing
     end
 
-    return jacobian_info(jacobian_matrix, n_entries, state_vector_entries,
-                         state_vector_numbers, state_vector_dims, state_vector_coords,
-                         state_vector_is_constraint, state_vector_sizes,
-                         state_vector_dim_sizes, state_vector_dim_steps,
-                         state_vector_local_ranges, state_vector_local_flattened_ranges,
-                         local_block_ranges, local_block_diagonal_inds, mini_coords,
-                         mini_spectral, boundary_skip_funcs, synchronize)
+    return jacobian_info(jacobian_matrix, n_entries, Val(n_entries^2),
+                         state_vector_entries, state_vector_numbers, state_vector_dims,
+                         state_vector_coords, state_vector_is_constraint,
+                         state_vector_sizes, state_vector_dim_sizes,
+                         state_vector_dim_steps, state_vector_local_ranges,
+                         state_vector_local_flattened_ranges, local_block_ranges,
+                         local_block_diagonal_inds, mini_coords, mini_spectral,
+                         boundary_skip_funcs, synchronize)
 end
 
 """
@@ -555,8 +557,8 @@ correspond to boundary condition points (i.e. those skipped by
 end
 function jacobian_initialize_bc_digonal_single_variable!(
              jacobian_block::BlockSkylineMatrix, col_variable_local_ranges,
-             col_local_block_ranges, col_variable_coords, boundary_skip, boundary_speed,
-             synchronize_shared)
+             col_local_block_ranges, col_variable_coords, boundary_skip::F,
+             boundary_speed, synchronize_shared) where {F}
     this_block = jacobian_matrix[row_variable][col_variable]
     this_block.data[col_local_block_ranges] .= 0.0
 
@@ -575,7 +577,8 @@ function jacobian_initialize_bc_digonal_single_variable!(
 end
 function jacobian_initialize_bc_digonal_single_variable!(
              jacobian_block, col_variable_local_ranges, col_local_block_ranges,
-             col_variable_coords, boundary_skip, boundary_speed, synchronize_shared)
+             col_variable_coords, boundary_skip::F, boundary_speed,
+             synchronize_shared) where {F}
     for (col, indices_CartesianIndex) ∈ enumerate(CartesianIndices(col_variable_local_ranges))
         indices = Tuple(indices_CartesianIndex)
         jacobian_block[:,col] .= 0.0
@@ -595,9 +598,9 @@ end
 end
 
 @timeit_debug global_timer get_sparse_joined_array(jacobian::jacobian_info) = begin
-    n_entries = jacobian.n_entries
-    array_of_arrays = [sparse(jacobian.matrix[i][j]) for j ∈ 1:n_entries, i ∈ 1:n_entries]
-    joined_array = sparse_hvcat(Tuple(n_entries for _ ∈ 1:n_entries), array_of_arrays...)
+    n_entries = length(jacobian.state_vector_entries)
+    array_of_arrays = ntuple(i->sparse(jacobian.matrix[(i-1)÷n_entries+1][(i-1)%n_entries+1]), jacobian.n_entries_squared_val)
+    joined_array = sparse_hvcat(ntuple(i->n_entries, n_entries), array_of_arrays...)::SparseMatrixCSC{mk_float,Int64}
     return joined_array
 end
 
@@ -1888,7 +1891,7 @@ function add_term_to_Jacobian!(jacobian::jacobian_info, rows_variable::Symbol,
                                rows_variable_number::mk_int, rows_variable_dims::Tuple,
                                rows_variable_dim_sizes::Tuple,
                                rows_variable_local_ranges::Tuple,
-                               rows_variable_coords::Tuple, boundary_skip)
+                               rows_variable_coords::Tuple, boundary_skip::F) where {F}
     @inbounds begin
         for indices_CartesianIndex ∈ CartesianIndices(rows_variable_local_ranges)
             indices = Tuple(indices_CartesianIndex)

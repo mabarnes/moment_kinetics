@@ -169,7 +169,7 @@ function gyroaverage_test(absolute_error; rhostar=0.1, pitch=0.5, ngrid=5, kr=2,
         # initialise a test field
         phi = fields.phi
         gphi = fields.gphi
-        gphi_exact = allocate_float(; vperp=vperp, z=z, r=r, n_ion_species=composition.n_ion_species)
+        gphi_exact = allocate_float(vperp, z, r, composition.ion_species_coord)
         gphi_err = allocate_float(vperp, z, r)
         @begin_serial_region()
         @serial_region begin 
@@ -199,11 +199,11 @@ function gyroaverage_test(absolute_error; rhostar=0.1, pitch=0.5, ngrid=5, kr=2,
         
         # repeat the test for a pdf
         # initialise a test field
-        n_ion_species = composition.n_ion_species
-        pdf = allocate_shared_float(; vpa=vpa, vperp=vperp, z=z, r=r, n_ion_species=n_ion_species)
-        gpdf = allocate_shared_float(; vpa=vpa, vperp=vperp, z=z, r=r, n_ion_species=n_ion_species)
-        gpdf_exact = allocate_float(; vpa=vpa, vperp=vperp, z=z, r=r, n_ion_species=n_ion_species)
-        gpdf_err = allocate_float(; vpa=vpa, vperp=vperp, z=z, r=r, n_ion_species=n_ion_species)
+        ion_species_coord = composition.ion_species_coord
+        pdf = allocate_shared_float(vpa, vperp, z, r, ion_species_coord)
+        gpdf = allocate_shared_float(vpa, vperp, z, r, ion_species_coord)
+        gpdf_exact = allocate_float(vpa, vperp, z, r, ion_species_coord)
+        gpdf_err = allocate_float(vpa, vperp, z, r, ion_species_coord)
         @begin_serial_region()
         @serial_region begin
             fill_pdf_test_arrays!(pdf,gpdf_exact,vpa,vperp,z,r,composition,geometry,kz,kr,phasez,phaser)
@@ -217,7 +217,7 @@ function gyroaverage_test(absolute_error; rhostar=0.1, pitch=0.5, ngrid=5, kr=2,
             if print_test_results
                 println("Test gyroaverage_pdf!()")
             end
-            for is in 1:n_ion_species
+            for is in 1:composition.n_ion_species
                 for ivperp in 1:vperp.n
                     for ivpa in 1:vpa.n
                         if print_test_results

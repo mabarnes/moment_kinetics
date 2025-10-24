@@ -134,7 +134,7 @@ function init_pdf_and_moments!(pdf, moments, fields, geometry, composition, r, z
                                vpa, vzeta, vr, vz, z_spectral, r_spectral, vperp_spectral,
                                vpa_spectral, vzeta_spectral, vr_spectral, vz_spectral,
                                r_bc, species, collisions, external_source_settings,
-                               manufactured_solns_input, t_input, num_diss_params,
+                               manufactured_solns_input, num_diss_params,
                                advection_structs, io_input, input_dict)
     if manufactured_solns_input.use_for_init
         init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, vperp, z,
@@ -285,7 +285,7 @@ function initialize_electrons!(pdf, moments, fields, geometry, composition, r, z
                                vperp, vpa, vzeta, vr, vz, z_spectral, r_spectral,
                                vperp_spectral, vpa_spectral, collisions, gyroavs,
                                external_source_settings, scratch_dummy, scratch,
-                               scratch_electron, nl_solver_params, t_params, t_input,
+                               scratch_electron, nl_solver_params, t_params, t_input_tuple,
                                num_diss_params, advection_structs, io_input, input_dict;
                                restart_electron_physics, skip_electron_solve=false)
     
@@ -511,7 +511,7 @@ function initialize_electrons!(pdf, moments, fields, geometry, composition, r, z
                              advection_structs.electron_vpa_advect, scratch_dummy,
                              collisions, composition, geometry, external_source_settings,
                              num_diss_params, gyroavs, nl_solver_params, t_params,
-                             t_input["electron_t_input"], io_input, input_dict;
+                             t_input_tuple.electron_t_input, io_input, input_dict;
                              skip_electron_solve=skip_electron_solve)
 
     return nothing
@@ -586,17 +586,17 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
                                   vperp_spectral, vpa_spectral, z_advect, vpa_advect,
                                   scratch_dummy, collisions, composition, geometry,
                                   external_source_settings, num_diss_params, gyroavs,
-                                  nl_solver_params, t_params, t_input, io_input,
+                                  nl_solver_params, t_params, t_input_tuple, io_input,
                                   input_dict; skip_electron_solve)
 
-    if t_input["skip_electron_initial_solve"]
+    if t_input_tuple.skip_electron_initial_solve
         skip_electron_solve = true
     end
 
     if composition.electron_physics ∈ (kinetic_electrons,
                                        kinetic_electrons_with_temperature_equation)
         @begin_serial_region()
-        if t_input["no_restart"]
+        if t_input_tuple.no_restart
             restart_filename = nothing
         else
             restart_filename = get_default_restart_filename(io_input, "initial_electron";
@@ -608,7 +608,7 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
         end
         if restart_filename === nothing
             # No file to restart from
-            previous_runs_info = nothing
+            previous_runs_info = ()
             code_time = fill(mk_float(0.0), r.n)
             restart_time_index = -1
             pdf_electron_converged = false
@@ -692,7 +692,7 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
                                       composition, collisions, moments.evolve_density,
                                       moments.evolve_upar, moments.evolve_p,
                                       external_source_settings, t_params.electron,
-                                      t_params.electron.debug_io[2], -1, nothing,
+                                      t_params.electron.debug_io[2], -1, (),
                                       "electron_debug"; ir=ir)
                 end
             end
@@ -717,7 +717,7 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
                 # Can't let this counter stay set to 0
                 t_params.electron.dfns_output_counter[] = max(t_params.electron.dfns_output_counter[], 1)
                 implicit_electron_pseudotimestep = (nl_solver_params.electron_advance !== nothing)
-                electron_solution_method = implicit_electron_pseudotimestep ? "backward_euler" : "artificial_time_derivative"
+                electron_solution_method = Val(implicit_electron_pseudotimestep ? :backward_euler : :artificial_time_derivative)
                 success =
                     @views update_electron_pdf!(scratch_electron, pdf.electron.norm,
                                                 moments, fields.phi, r, z, vperp, vpa,
@@ -730,7 +730,7 @@ function initialize_electron_pdf!(scratch, scratch_electron, pdf, moments, field
                                                 max_electron_pdf_iterations,
                                                 max_electron_sim_time;
                                                 initial_time=code_time,
-                                                residual_tolerance=t_input["initialization_residual_value"],
+                                                residual_tolerance=t_input_tuple.initialization_residual_value,
                                                 evolve_p=true,
                                                 solution_method=electron_solution_method)
                 if success != ""

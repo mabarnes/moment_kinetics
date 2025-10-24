@@ -182,10 +182,10 @@ function init_gyro_operators(vperp, z, r, gyrophase, geometry, boundaries, compo
         # use the fact that the first index cannot be larger than the size of z.n*r.n
         # and accept that we are storing undefined values in exchange for storing the useful
         # data in shared-memory.
-        izpgyroindex = allocate_shared_int(; z_and_r=z.n*r.n, vperp=vperp, z=z, r=r,
-                                           ion_species=composition.n_ion_species)
-        irpgyroindex = allocate_shared_int(; z_and_r=z.n*r.n, vperp=vperp, z=z, r=r,
-                                           ion_species=composition.n_ion_species)
+        izpgyroindex = allocate_shared_int(:z_and_r=>z.n*r.n, vperp, z, r,
+                                           composition.ion_species_coord)
+        irpgyroindex = allocate_shared_int(:z_and_r=>z.n*r.n, vperp, z, r,
+                                           composition.ion_species_coord)
 
         # compute the indices on the root process  
         @serial_region begin

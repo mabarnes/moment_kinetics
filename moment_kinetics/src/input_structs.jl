@@ -293,7 +293,7 @@ end
 
 """
 """
-Base.@kwdef struct species_composition
+Base.@kwdef struct species_composition{Tic<:coordinate,Tnc<:coordinate}
     # n_species = total number of evolved species (including ions, neutrals and electrons)
     # a diagnostic, not an input parameter
     n_species::mk_int
@@ -331,11 +331,11 @@ Base.@kwdef struct species_composition
     # array of structs of parameters for each ion species
     ion::Vector{ion_species_parameters}
     # coordinate object corresponding to ion_species dimension of arrays
-    ion_species_coord::coordinate
+    ion_species_coord::Tic
     # array of structs of parameters for each neutral species
     neutral::Vector{neutral_species_parameters}
     # coordinate object corresponding to neutral_species dimension of arrays
-    neutral_species_coord::coordinate
+    neutral_species_coord::Tnc
 end
 
 """

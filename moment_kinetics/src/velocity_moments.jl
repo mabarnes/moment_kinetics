@@ -206,40 +206,40 @@ function create_moments_ion(z, r, composition, evolve_density, evolve_upar,
 
     n_sources = length(ion_source_settings)
     if any(x -> x.active, ion_source_settings)
-        external_source_amplitude = allocate_shared_float(; z=z, r=r, ion_sources=n_sources)
-        external_source_T_array = allocate_shared_float(; z=z, r=r, ion_sources=n_sources)
+        external_source_amplitude = allocate_shared_float(z, r, :ion_sources=>n_sources)
+        external_source_T_array = allocate_shared_float(z, r, :ion_sources=>n_sources)
         if evolve_density
-            external_source_density_amplitude = allocate_shared_float(; z=z, r=r, ion_sources=n_sources)
+            external_source_density_amplitude = allocate_shared_float(z, r, :ion_sources=>n_sources)
         else
-            external_source_density_amplitude = allocate_shared_float(; ion_source_z=1, ion_source_r=1, ion_sources=n_sources)
+            external_source_density_amplitude = allocate_shared_float(:ion_source_z=>1, :ion_source_r=>1, :ion_sources=>n_sources)
         end
         if evolve_upar
-            external_source_momentum_amplitude = allocate_shared_float(; z=z, r=r, ion_sources=n_sources)
+            external_source_momentum_amplitude = allocate_shared_float(z, r, :ion_sources=>n_sources)
         else
-            external_source_momentum_amplitude = allocate_shared_float(; ion_source_z=1, ion_source_r=1, ion_sources=n_sources)
+            external_source_momentum_amplitude = allocate_shared_float(:ion_source_z=>1, :ion_source_r=>1, :ion_sources=>n_sources)
         end
         if evolve_p
-            external_source_pressure_amplitude = allocate_shared_float(; z=z, r=r, ion_sources=n_sources)
+            external_source_pressure_amplitude = allocate_shared_float(z, r, :ion_sources=>n_sources)
         else
-            external_source_pressure_amplitude = allocate_shared_float(; ion_source_z=1, ion_source_r=1, ion_sources=n_sources)
+            external_source_pressure_amplitude = allocate_shared_float(:ion_source_z=>1, :ion_source_r=>1, :ion_sources=>n_sources)
         end
         if any(x -> x.PI_density_controller_I != 0.0 && x.source_type ∈ 
                     ("density_profile_control", "density_midpoint_control"), ion_source_settings)
             if any(x -> x.source_type == "density_profile_control", ion_source_settings)
-                external_source_controller_integral = allocate_shared_float(; z=z, r=r, ion_sources=n_sources)
+                external_source_controller_integral = allocate_shared_float(z, r, :ion_sources=>n_sources)
             else
-                external_source_controller_integral = allocate_shared_float(; ion_source_z=1, ion_source_r=1, ion_sources=n_sources)
+                external_source_controller_integral = allocate_shared_float(:ion_source_z=>1, :ion_source_r=>1, :ion_sources=>n_sources)
             end
         else
-            external_source_controller_integral = allocate_shared_float(; ion_source_z=1, ion_source_r=1, ion_sources=n_sources)
+            external_source_controller_integral = allocate_shared_float(:ion_source_z=>1, :ion_source_r=>1, :ion_sources=>n_sources)
         end
     else
-        external_source_amplitude = allocate_shared_float(; ion_source_z=1, ion_source_r=1, ion_sources=n_sources)
-        external_source_T_array = allocate_shared_float(; ion_source_z=1, ion_source_r=1, ion_sources=n_sources)
-        external_source_density_amplitude = allocate_shared_float(; ion_source_z=1, ion_source_r=1, ion_sources=n_sources)
-        external_source_momentum_amplitude = allocate_shared_float(; ion_source_z=1, ion_source_r=1, ion_sources=n_sources)
-        external_source_pressure_amplitude = allocate_shared_float(; ion_source_z=1, ion_source_r=1, ion_sources=n_sources)
-        external_source_controller_integral = allocate_shared_float(; ion_source_z=1, ion_source_r=1, ion_sources=n_sources)
+        external_source_amplitude = allocate_shared_float(:ion_source_z=>1, :ion_source_r=>1, :ion_sources=>n_sources)
+        external_source_T_array = allocate_shared_float(:ion_source_z=>1, :ion_source_r=>1, :ion_sources=>n_sources)
+        external_source_density_amplitude = allocate_shared_float(:ion_source_z=>1, :ion_source_r=>1, :ion_sources=>n_sources)
+        external_source_momentum_amplitude = allocate_shared_float(:ion_source_z=>1, :ion_source_r=>1, :ion_sources=>n_sources)
+        external_source_pressure_amplitude = allocate_shared_float(:ion_source_z=>1, :ion_source_r=>1, :ion_sources=>n_sources)
+        external_source_controller_integral = allocate_shared_float(:ion_source_z=>1, :ion_source_r=>1, :ion_sources=>n_sources)
     end
     # If not using PI controllers, the integrals might not otherwise be initialised, so
     # zero-initialise here.
@@ -304,11 +304,11 @@ function create_moments_electron(z, r, electron_model, num_diss_params, n_source
     # allocate array used for the election-ion parallel friction force
     parallel_friction_force = allocate_shared_float(z, r)
     # allocate arrays used for external sources (third index is for the different sources)
-    external_source_amplitude = allocate_shared_float(; z=z, r=r, electron_sources=n_sources)
-    external_source_T_array = allocate_shared_float(; z=z, r=r, electron_sources=n_sources)
-    external_source_density_amplitude = allocate_shared_float(; z=z, r=r, electron_sources=n_sources)
-    external_source_momentum_amplitude = allocate_shared_float(; z=z, r=r, electron_sources=n_sources)
-    external_source_pressure_amplitude = allocate_shared_float(; z=z, r=r, electron_sources=n_sources)
+    external_source_amplitude = allocate_shared_float(z, r, :electron_sources=>n_sources)
+    external_source_T_array = allocate_shared_float(z, r, :electron_sources=>n_sources)
+    external_source_density_amplitude = allocate_shared_float(z, r, :electron_sources=>n_sources)
+    external_source_momentum_amplitude = allocate_shared_float(z, r, :electron_sources=>n_sources)
+    external_source_pressure_amplitude = allocate_shared_float(z, r, :electron_sources=>n_sources)
     # allocate array used for the thermal speed
     thermal_speed = allocate_shared_float(z, r)
     # if evolving the electron pdf, it will be a function of the vth-normalised peculiar velocity
@@ -508,40 +508,40 @@ function create_moments_neutral(z, r, composition, evolve_density, evolve_upar,
 
     n_sources = length(neutral_source_settings)
     if any(x -> x.active, neutral_source_settings)
-        external_source_amplitude = allocate_shared_float(; z=z, r=r, neutral_sources=n_sources)
-        external_source_T_array = allocate_shared_float(; z=z, r=r, neutral_sources=n_sources)
+        external_source_amplitude = allocate_shared_float(z, r, :neutral_sources=>n_sources)
+        external_source_T_array = allocate_shared_float(z, r, :neutral_sources=>n_sources)
         if evolve_density
-            external_source_density_amplitude = allocate_shared_float(; z=z, r=r, neutral_sources=n_sources)
+            external_source_density_amplitude = allocate_shared_float(z, r, :neutral_sources=>n_sources)
         else
-            external_source_density_amplitude = allocate_shared_float(; neutral_source_z=1, neutral_source_r=1, neutral_sources=n_sources)
+            external_source_density_amplitude = allocate_shared_float(:neutral_source_z=>1, :neutral_source_r=>1, :neutral_sources=>n_sources)
         end
         if evolve_upar
-            external_source_momentum_amplitude = allocate_shared_float(; z=z, r=r, neutral_sources=n_sources)
+            external_source_momentum_amplitude = allocate_shared_float(z, r, :neutral_sources=>n_sources)
         else
-            external_source_momentum_amplitude = allocate_shared_float(; neutral_source_z=1, neutral_source_r=1, neutral_sources=n_sources)
+            external_source_momentum_amplitude = allocate_shared_float(:neutral_source_z=>1, :neutral_source_r=>1, :neutral_sources=>n_sources)
         end
         if evolve_p
-            external_source_pressure_amplitude = allocate_shared_float(; z=z, r=r, neutral_sources=n_sources)
+            external_source_pressure_amplitude = allocate_shared_float(z, r, :neutral_sources=>n_sources)
         else
-            external_source_pressure_amplitude = allocate_shared_float(; neutral_source_z=1, neutral_source_r=1, neutral_sources=n_sources)
+            external_source_pressure_amplitude = allocate_shared_float(:neutral_source_z=>1, :neutral_source_r=>1, :neutral_sources=>n_sources)
         end
         if any(x -> x.PI_density_controller_I != 0.0 && x.source_type ∈ 
                     ("density_profile_control", "density_midpoint_control"), neutral_source_settings)
             if any(x -> x.source_type == "density_profile_control", neutral_source_settings)
-                external_source_controller_integral = allocate_shared_float(; z=z, r=r, neutral_sources=n_sources)
+                external_source_controller_integral = allocate_shared_float(z, r, :neutral_sources=>n_sources)
             else
-                external_source_controller_integral = allocate_shared_float(; neutral_source_z=1, neutral_source_r=1, neutral_sources=n_sources)
+                external_source_controller_integral = allocate_shared_float(:neutral_source_z=>1, :neutral_source_r=>1, :neutral_sources=>n_sources)
             end
         else
-            external_source_controller_integral = allocate_shared_float(; neutral_source_z=1, neutral_source_r=1, neutral_sources=n_sources)
+            external_source_controller_integral = allocate_shared_float(:neutral_source_z=>1, :neutral_source_r=>1, :neutral_sources=>n_sources)
         end
     else
-        external_source_amplitude = allocate_shared_float(; neutral_source_z=1, neutral_source_r=1, neutral_sources=n_sources)
-        external_source_T_array = allocate_shared_float(; neutral_source_z=1, neutral_source_r=1, neutral_sources=n_sources)
-        external_source_density_amplitude = allocate_shared_float(; neutral_source_z=1, neutral_source_r=1, neutral_sources=n_sources)
-        external_source_momentum_amplitude = allocate_shared_float(; neutral_source_z=1, neutral_source_r=1, neutral_sources=n_sources)
-        external_source_pressure_amplitude = allocate_shared_float(; neutral_source_z=1, neutral_source_r=1, neutral_sources=n_sources)
-        external_source_controller_integral = allocate_shared_float(; neutral_source_z=1, neutral_source_r=1, neutral_sources=n_sources)
+        external_source_amplitude = allocate_shared_float(:neutral_source_z=>1, :neutral_source_r=>1, :neutral_sources=>n_sources)
+        external_source_T_array = allocate_shared_float(:neutral_source_z=>1, :neutral_source_r=>1, :neutral_sources=>n_sources)
+        external_source_density_amplitude = allocate_shared_float(:neutral_source_z=>1, :neutral_source_r=>1, :neutral_sources=>n_sources)
+        external_source_momentum_amplitude = allocate_shared_float(:neutral_source_z=>1, :neutral_source_r=>1, :neutral_sources=>n_sources)
+        external_source_pressure_amplitude = allocate_shared_float(:neutral_source_z=>1, :neutral_source_r=>1, :neutral_sources=>n_sources)
+        external_source_controller_integral = allocate_shared_float(:neutral_source_z=>1, :neutral_source_r=>1, :neutral_sources=>n_sources)
     end
     # If not using PI controllers, the integrals might not otherwise be initialised, so
     # zero-initialise here.

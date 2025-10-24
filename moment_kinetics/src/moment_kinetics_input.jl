@@ -46,15 +46,11 @@ end
 """
 Process user-supplied inputs
 
-`save_inputs_to_txt` should be true when actually running a simulation, but defaults to
-false for other situations (e.g. when post-processing).
-
 `ignore_MPI` should be false when actually running a simulation, but defaults to true for
 other situations (e.g. when post-processing).
 """
 function mk_input(input_dict=OptionsDict("output" => OptionsDict("run_name" => "default"));
-                  save_inputs_to_txt=false, ignore_MPI=true, warn_unexpected=false,
-                  write_output=true)
+                  ignore_MPI=true, warn_unexpected=false, write_output=true)
 
     # Check for input options that used to exist, but do not any more. If these are
     # present, the user probably needs to update their input file.
@@ -119,10 +115,6 @@ function mk_input(input_dict=OptionsDict("output" => OptionsDict("run_name" => "
         end
     end
 
-    if !write_output
-        save_inputs_to_txt = false
-    end
-    
     # if evolve_moments.density = true, evolve density via continuity eqn
     # and g = f/n via modified drift kinetic equation
     evolve_moments_settings = set_defaults_and_check_section!(
@@ -439,6 +431,12 @@ function mk_input(input_dict=OptionsDict("output" => OptionsDict("run_name" => "
     # be with the `_section_check_store` variable still contained in it (which is used and
     # removed by `check_sections!()`) - it therefore has to be called in the middle of
     # `setup_time_advance!()`.
+
+    if !write_output
+        save_inputs_to_txt = false
+    else
+        save_inputs_to_txt = io_immutable.save_inputs_to_txt
+    end
 
     if global_rank[] == 0 && save_inputs_to_txt
         # Make file to log some information about inputs into.

@@ -97,9 +97,9 @@ Function to allocate an instance of `sparse_matrix_constructor`.
 """
 function allocate_sparse_matrix_constructor(nsparse::mk_int; sharedmem=false)
     if sharedmem
-        II = allocate_shared_int(; comm=comm_anysv_subblock[], vpa_and_vperp=nsparse)
-        JJ = allocate_shared_int(; comm=comm_anysv_subblock[], vpa_and_vperp=nsparse)
-        SS = allocate_shared_float(; comm=comm_anysv_subblock[], vpa_and_vperp=nsparse)
+        II = allocate_shared_int(:vpa_and_vperp=>nsparse; comm=comm_anysv_subblock[])
+        JJ = allocate_shared_int(:vpa_and_vperp=>nsparse; comm=comm_anysv_subblock[])
+        SS = allocate_shared_float(:vpa_and_vperp=>nsparse; comm=comm_anysv_subblock[])
         @begin_r_z_anysv_region()
         if anysv_subblock_rank[] ≥ 0
             @begin_anysv_region()
@@ -1192,7 +1192,7 @@ function allocate_rosenbluth_potential_boundary_data(vpa, vperp)
     d2Gdvperp2_data = allocate_boundary_data(vpa, vperp)
     d2Gdvperpdvpa_data = allocate_boundary_data(vpa, vperp)
     d2Gdvpa2_data = allocate_boundary_data(vpa, vperp)
-    integrals_buffer = allocate_shared_float(; comm=comm_anysv_subblock[], fp_integrals=25)
+    integrals_buffer = allocate_shared_float(:fp_integrals=>25; comm=comm_anysv_subblock[])
     return rosenbluth_potential_boundary_data(H_data,dHdvpa_data,
         dHdvperp_data,G_data,dGdvperp_data,d2Gdvperp2_data,
         d2Gdvperpdvpa_data,d2Gdvpa2_data, integrals_buffer)

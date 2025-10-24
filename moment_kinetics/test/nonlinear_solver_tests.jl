@@ -59,15 +59,15 @@ function linear_test()
                                zeros(mk_int, 0), zeros(mk_int, 0), zeros(mk_int, 0),
                                zeros(mk_int, 0, 0), "", "", "", "", false, nothing,
                                zeros(mk_float, 0), zeros(mk_float, 0),
+                               zeros(mk_float, 0), zeros(mk_float, 0), zeros(mk_float, 0),
+                               zeros(mk_float, 0), zeros(mk_float, 0), zeros(mk_float, 0),
+                               zeros(mk_float, 0), zeros(mk_float, 0), zeros(mk_float, 0),
+                               zeros(mk_float, 0), zeros(mk_int, 0), zeros(mk_float, 0),
+                               zeros(mk_float, 0), zeros(mk_float, 0), zeros(mk_int, 0),
+                               zeros(mk_int, 0), zeros(mk_float, 0, 0),
                                zeros(mk_float, 0, 0), zeros(mk_float, 0),
-                               zeros(mk_float, 0), zeros(mk_float, 0), zeros(mk_float, 0),
-                               zeros(mk_float, 0), zeros(mk_float, 0), zeros(mk_float, 0),
-                               zeros(mk_float, 0), zeros(mk_float, 0), zeros(mk_float, 0),
-                               zeros(mk_int, 0), zeros(mk_float, 0), zeros(mk_float, 0),
-                               zeros(mk_float, 0), zeros(mk_int, 0), zeros(mk_int, 0),
-                               zeros(mk_float, 0, 0), zeros(mk_float, 0, 0),
-                               zeros(mk_float, 0), zeros(mk_float, 0), coord_comm, 1:n,
-                               1:n, zeros(mk_float, 0), zeros(mk_float, 0), "",
+                               zeros(mk_float, 0), coord_comm, 1:n, 1:n,
+                               zeros(mk_float, 0), zeros(mk_float, 0), "",
                                zeros(mk_float, 0), false, zeros(mk_float, 0, 0, 0),
                                zeros(mk_float, 0, 0), zeros(mk_float, 0),
                                zeros(mk_float, 0))
@@ -86,12 +86,12 @@ function linear_test()
         end
 
         if serial_solve
-            x = allocate_float(; vpa=n)
-            residual = allocate_float(; vpa=n)
-            delta_x = allocate_float(; vpa=n)
-            rhs_delta = allocate_float(; vpa=n)
-            v = allocate_float(; vpa=n)
-            w = allocate_float(; vpa=n)
+            x = allocate_float(:vpa=>n)
+            residual = allocate_float(:vpa=>n)
+            delta_x = allocate_float(:vpa=>n)
+            rhs_delta = allocate_float(:vpa=>n)
+            v = allocate_float(:vpa=>n)
+            w = allocate_float(:vpa=>n)
 
             x .= 0.0
             residual .= 0.0
@@ -100,12 +100,12 @@ function linear_test()
             v .= 0.0
             w .= 0.0
         else
-            x = allocate_shared_float(; z=n)
-            residual = allocate_shared_float(; z=n)
-            delta_x = allocate_shared_float(; z=n)
-            rhs_delta = allocate_shared_float(; z=n)
-            v = allocate_shared_float(; z=n)
-            w = allocate_shared_float(; z=n)
+            x = allocate_shared_float(:z=>n)
+            residual = allocate_shared_float(:z=>n)
+            delta_x = allocate_shared_float(:z=>n)
+            rhs_delta = allocate_shared_float(:z=>n)
+            v = allocate_shared_float(:z=>n)
+            w = allocate_shared_float(:z=>n)
 
             @begin_serial_region()
             @serial_region begin
@@ -182,15 +182,15 @@ function nonlinear_test()
                                zeros(mk_int, 0), zeros(mk_int, 0), zeros(mk_int, 0),
                                zeros(mk_int, 0, 0), "", "", "", "", false, nothing,
                                zeros(mk_float, 0), zeros(mk_float, 0),
+                               zeros(mk_float, 0), zeros(mk_float, 0), zeros(mk_float, 0),
+                               zeros(mk_float, 0), zeros(mk_float, 0), zeros(mk_float, 0),
+                               zeros(mk_float, 0), zeros(mk_float, 0), zeros(mk_float, 0),
+                               zeros(mk_float, 0), zeros(mk_int, 0), zeros(mk_float, 0),
+                               zeros(mk_float, 0), zeros(mk_float, 0), zeros(mk_int, 0),
+                               zeros(mk_int, 0), zeros(mk_float, 0, 0),
                                zeros(mk_float, 0, 0), zeros(mk_float, 0),
-                               zeros(mk_float, 0), zeros(mk_float, 0), zeros(mk_float, 0),
-                               zeros(mk_float, 0), zeros(mk_float, 0), zeros(mk_float, 0),
-                               zeros(mk_float, 0), zeros(mk_float, 0), zeros(mk_float, 0),
-                               zeros(mk_int, 0), zeros(mk_float, 0), zeros(mk_float, 0),
-                               zeros(mk_float, 0), zeros(mk_int, 0), zeros(mk_int, 0),
-                               zeros(mk_float, 0, 0), zeros(mk_float, 0, 0),
-                               zeros(mk_float, 0), zeros(mk_float, 0), coord_comm, 1:n,
-                               1:n, zeros(mk_float, 0), zeros(mk_float, 0), "",
+                               zeros(mk_float, 0), coord_comm, 1:n, 1:n,
+                               zeros(mk_float, 0), zeros(mk_float, 0), "",
                                zeros(mk_float, 0), false, zeros(mk_float, 0, 0, 0),
                                zeros(mk_float, 0, 0), zeros(mk_float, 0),
                                zeros(mk_float, 0))
@@ -227,19 +227,19 @@ function nonlinear_test()
         end
 
         if serial_solve
-            x = allocate_float(; vpa=n)
-            residual = allocate_float(; vpa=n)
-            delta_x = allocate_float(; vpa=n)
-            rhs_delta = allocate_float(; vpa=n)
-            v = allocate_float(; vpa=n)
-            w = allocate_float(; vpa=n)
+            x = allocate_float(:vpa=>n)
+            residual = allocate_float(:vpa=>n)
+            delta_x = allocate_float(:vpa=>n)
+            rhs_delta = allocate_float(:vpa=>n)
+            v = allocate_float(:vpa=>n)
+            w = allocate_float(:vpa=>n)
         else
-            x = allocate_shared_float(; z=n)
-            residual = allocate_shared_float(; z=n)
-            delta_x = allocate_shared_float(; z=n)
-            rhs_delta = allocate_shared_float(; z=n)
-            v = allocate_shared_float(; z=n)
-            w = allocate_shared_float(; z=n)
+            x = allocate_shared_float(:z=>n)
+            residual = allocate_shared_float(:z=>n)
+            delta_x = allocate_shared_float(:z=>n)
+            rhs_delta = allocate_shared_float(:z=>n)
+            v = allocate_shared_float(:z=>n)
+            w = allocate_shared_float(:z=>n)
         end
 
         if serial_solve

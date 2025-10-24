@@ -102,7 +102,7 @@ using ..derivatives: derivative_z!
 @debug_detect_redundant_block_synchronize using ..communication: debug_detect_redundant_is_active
 
 using Dates
-using ..analysis: steady_state_residuals
+using ..analysis: get_steady_state_global_maxabs_residual
 #using ..post_processing: draw_v_parallel_zero!
 
 struct scratch_dummy_arrays
@@ -586,6 +586,74 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
                      debug_io, electron_t_params)
 end
 
+function get_nl_solver_params(t_params, input_dict, composition, r, z, vperp, vpa,
+                              r_spectral, z_spectral, vperp_spectral, vpa_spectral)
+    # Set up parameters for Jacobian-free Newton-Krylov solver used for implicit part of
+    # timesteps.
+    electron_conduction_nl_solve_parameters = setup_nonlinear_solve(t_params.implicit_braginskii_conduction,
+                                                                    input_dict, (z=z,), (z=z_spectral,);
+                                                                    default_rtol=t_params.rtol / 10.0,
+                                                                    default_atol=t_params.atol / 10.0,
+                                                                    anyzv_region=true)
+    nl_solver_electron_advance_params =
+        setup_nonlinear_solve(t_params.kinetic_electron_solver ∈ (implicit_time_evolving,
+                                                                  implicit_p_implicit_pseudotimestep,
+                                                                  implicit_steady_state),
+                              input_dict,
+                              (z=z, vperp=vperp, vpa=vpa), (r,),
+                              (z=z_spectral, vperp=vperp_spectral, vpa=vpa_spectral);
+                              default_rtol=t_params.rtol / 10.0,
+                              default_atol=t_params.atol / 10.0,
+                              anyzv_region=true, electron_p_pdf_solve=true,
+                              preconditioner_type=t_params.electron_preconditioner_type,
+                              boundary_skip_funcs=(full=(electron_pdf=skip_f_electron_bc_points_in_Jacobian,
+                                                         electron_p=nothing,
+                                                         zeroth_moment=nothing,
+                                                         first_moment=nothing,
+                                                         second_moment=nothing,
+                                                         third_moment=nothing,
+                                                         electron_dp_dz=nothing,
+                                                         electron_dq_dz=nothing),
+                                                   v_solve=(electron_pdf=skip_f_electron_bc_points_in_Jacobian_v_solve,
+                                                            electron_p=nothing),
+                                                   z_solve=(electron_pdf=skip_f_electron_bc_points_in_Jacobian_z_solve,
+                                                            electron_p=nothing)))
+    nl_solver_ion_advance_params =
+        setup_nonlinear_solve(t_params.implicit_ion_advance, input_dict,
+                              (s=composition.n_ion_species, r=r, z=z, vperp=vperp,
+                               vpa=vpa),
+                              (),
+                              (r=r_spectral, z=z_spectral, vperp=vperp_spectral,
+                               vpa=vpa_spectral);
+                              default_rtol=t_params.rtol / 10.0,
+                              default_atol=t_params.atol / 10.0,
+                              preconditioner_type=Val(:lu))
+    # Implicit solve for vpa_advection term should be done in serial, as it will be called
+    # within a parallelised s_r_z_vperp loop.
+    nl_solver_vpa_advection_params =
+        setup_nonlinear_solve(t_params.implicit_vpa_advection, input_dict, (vpa=vpa,),
+                              (composition.n_ion_species, r, z, vperp),
+                              (vpa=vpa_spectral,);
+                              default_rtol=t_params.rtol / 10.0,
+                              default_atol=t_params.atol / 10.0,
+                              serial_solve=true, preconditioner_type=Val(:lu))
+    if nl_solver_ion_advance_params !== nothing &&
+            nl_solver_vpa_advection_params !== nothing
+        error("Cannot use implicit_ion_advance and implicit_vpa_advection at the same "
+              * "time")
+    end
+    nl_solver_ion_fp_collisions = setup_fp_nl_solve(t_params.use_implicit_ion_fp_collisions,
+                                                    input_dict, (vperp=vperp, vpa=vpa))
+
+    nl_solver_params = (electron_conduction=electron_conduction_nl_solve_parameters,
+                        electron_advance=nl_solver_electron_advance_params,
+                        ion_advance=nl_solver_ion_advance_params,
+                        vpa_advection=nl_solver_vpa_advection_params,
+                        ion_fp_collisions=nl_solver_ion_fp_collisions)
+
+    return nl_solver_params
+end
+
 """
 create arrays and do other work needed to setup
 the main time advance loop.
@@ -603,14 +671,10 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
                              num_diss_params, manufactured_solns_input, advection_structs,
                              io_input, restarting, restart_electron_physics, input_dict;
                              skip_electron_solve=false)
-    
 
     # define some local variables for convenience/tidiness
     n_ion_species = composition.n_ion_species
     n_neutral_species = composition.n_neutral_species
-    ion_mom_diss_coeff = num_diss_params.ion.moment_dissipation_coefficient
-    electron_mom_diss_coeff = num_diss_params.electron.moment_dissipation_coefficient
-    neutral_mom_diss_coeff = num_diss_params.neutral.moment_dissipation_coefficient
 
     if composition.electron_physics != restart_electron_physics
 
@@ -715,6 +779,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
                              write_electron_error_diagnostics=false,
                              write_electron_steady_state_diagnostics=false,
                              display_timing_info=false,
+                             save_inputs_to_txt=false,
                             )
         # Need to exclude internal implementation variable "_section_check_store" from
         # input to be written to debug file.
@@ -725,7 +790,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
                                  r, z, vperp, vpa, vzeta, vr, vz, composition, collisions,
                                  moments.evolve_density, moments.evolve_upar,
                                  moments.evolve_p, external_source_settings, nothing,
-                                 1, fake_input_dict, comm_inter_block[], nothing, 0.0,
+                                 1, fake_input_dict, comm_inter_block[], (), 0.0,
                                  fake_t_params, (); is_debug=true)
     elseif t_input["debug_io"]
         # Need to synchronize shared-memory blocks before/after I/O. Set debug_io=true so
@@ -739,6 +804,10 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
                                dt_before_last_fail_reload, composition,
                                manufactured_solns_input, io_input, input_dict, r;
                                electron=electron_t_params, debug_io=debug_io)
+    t_input_copy = copy(t_input)
+    t_input_copy["electron_t_input"] = Dict_to_NamedTuple(t_input_copy["electron_t_input"])
+    # Make NamedTuple version to improve type stability in later function calls.
+    t_input_tuple = Dict_to_NamedTuple(t_input_copy)
 
     # Set up entries for counters for which variable caused timestep limits and
     # timestep failures the right length. Do this setup even when not using adaptive
@@ -827,6 +896,44 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
         t_params.failure_caused_by["nonlinear_solver_convergence"] = 0
     end
 
+    nl_solver_params = get_nl_solver_params(t_params, input_dict, composition, r, z,
+                                            vperp, vpa, r_spectral, z_spectral,
+                                            vperp_spectral, vpa_spectral)
+
+    return _setup_time_advance_internal!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r,
+                                         gyrophase, vz_spectral, vr_spectral,
+                                         vzeta_spectral, vpa_spectral, vperp_spectral,
+                                         z_spectral, r_spectral, composition, moments,
+                                         t_input, code_time, dt_reload,
+                                         dt_before_last_fail_reload, electron_dt_reload,
+                                         electron_dt_before_last_fail_reload, collisions,
+                                         species, geometry, boundaries,
+                                         external_source_settings, num_diss_params,
+                                         manufactured_solns_input, advection_structs,
+                                         io_input, restarting, restart_electron_physics,
+                                         input_dict, t_input_tuple, t_params,
+                                         electron_t_params, nl_solver_params;
+                                         skip_electron_solve=skip_electron_solve)
+end
+
+function _setup_time_advance_internal!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrophase,
+                             vz_spectral, vr_spectral, vzeta_spectral, vpa_spectral,
+                             vperp_spectral, z_spectral, r_spectral, composition,
+                             moments, t_input, code_time, dt_reload,
+                             dt_before_last_fail_reload, electron_dt_reload,
+                             electron_dt_before_last_fail_reload, collisions, species,
+                             geometry, boundaries, external_source_settings,
+                             num_diss_params, manufactured_solns_input, advection_structs,
+                             io_input, restarting, restart_electron_physics, input_dict,
+                             t_input_tuple, t_params, electron_t_params, nl_solver_params;
+                             skip_electron_solve=false)
+    # define some local variables for convenience/tidiness
+    n_ion_species = composition.n_ion_species
+    n_neutral_species = composition.n_neutral_species
+    ion_mom_diss_coeff = num_diss_params.ion.moment_dissipation_coefficient
+    electron_mom_diss_coeff = num_diss_params.electron.moment_dissipation_coefficient
+    neutral_mom_diss_coeff = num_diss_params.neutral.moment_dissipation_coefficient
+
     # create the 'advance' struct to be used in later Euler advance to
     # indicate which parts of the equations are to be advanced concurrently.
     # if no splitting of operators, all terms advanced concurrently;
@@ -851,69 +958,6 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
         end
     end
 
-    # Set up parameters for Jacobian-free Newton-Krylov solver used for implicit part of
-    # timesteps.
-    electron_conduction_nl_solve_parameters = setup_nonlinear_solve(t_params.implicit_braginskii_conduction,
-                                                                    input_dict, (z=z,), (z=z_spectral,);
-                                                                    default_rtol=t_params.rtol / 10.0,
-                                                                    default_atol=t_params.atol / 10.0,
-                                                                    anyzv_region=true)
-    nl_solver_electron_advance_params =
-        setup_nonlinear_solve(t_params.kinetic_electron_solver ∈ (implicit_time_evolving,
-                                                                  implicit_p_implicit_pseudotimestep,
-                                                                  implicit_steady_state),
-                              input_dict,
-                              (z=z, vperp=vperp, vpa=vpa), (r,),
-                              (z=z_spectral, vperp=vperp_spectral, vpa=vpa_spectral);
-                              default_rtol=t_params.rtol / 10.0,
-                              default_atol=t_params.atol / 10.0,
-                              anyzv_region=true, electron_p_pdf_solve=true,
-                              preconditioner_type=t_params.electron_preconditioner_type,
-                              boundary_skip_funcs=(full=(electron_pdf=skip_f_electron_bc_points_in_Jacobian,
-                                                         electron_p=nothing,
-                                                         zeroth_moment=nothing,
-                                                         first_moment=nothing,
-                                                         second_moment=nothing,
-                                                         third_moment=nothing,
-                                                         electron_dp_dz=nothing,
-                                                         electron_dq_dz=nothing),
-                                                   v_solve=(electron_pdf=skip_f_electron_bc_points_in_Jacobian_v_solve,
-                                                            electron_p=nothing),
-                                                   z_solve=(electron_pdf=skip_f_electron_bc_points_in_Jacobian_z_solve,
-                                                            electron_p=nothing)))
-    nl_solver_ion_advance_params =
-        setup_nonlinear_solve(t_params.implicit_ion_advance, input_dict,
-                              (s=composition.n_ion_species, r=r, z=z, vperp=vperp,
-                               vpa=vpa),
-                              (),
-                              (r=r_spectral, z=z_spectral, vperp=vperp_spectral,
-                               vpa=vpa_spectral);
-                              default_rtol=t_params.rtol / 10.0,
-                              default_atol=t_params.atol / 10.0,
-                              preconditioner_type=Val(:lu))
-    # Implicit solve for vpa_advection term should be done in serial, as it will be called
-    # within a parallelised s_r_z_vperp loop.
-    nl_solver_vpa_advection_params =
-        setup_nonlinear_solve(t_params.implicit_vpa_advection, input_dict, (vpa=vpa,),
-                              (composition.n_ion_species, r, z, vperp),
-                              (vpa=vpa_spectral,);
-                              default_rtol=t_params.rtol / 10.0,
-                              default_atol=t_params.atol / 10.0,
-                              serial_solve=true, preconditioner_type=Val(:lu))
-    if nl_solver_ion_advance_params !== nothing &&
-            nl_solver_vpa_advection_params !== nothing
-        error("Cannot use implicit_ion_advance and implicit_vpa_advection at the same "
-              * "time")
-    end
-    nl_solver_ion_fp_collisions = setup_fp_nl_solve(t_params.use_implicit_ion_fp_collisions,
-                                                    input_dict, (vperp=vperp, vpa=vpa))
-
-    nl_solver_params = (electron_conduction=electron_conduction_nl_solve_parameters,
-                        electron_advance=nl_solver_electron_advance_params,
-                        ion_advance=nl_solver_ion_advance_params,
-                        vpa_advection=nl_solver_vpa_advection_params,
-                        ion_fp_collisions=nl_solver_ion_fp_collisions)
-
     # Check that no unexpected sections or top-level options were passed (helps to catch
     # typos in input files). Needs to be called after calls to `setup_nonlinear_solve()`
     # because the inputs for nonlinear solvers are only read there, but before electron
@@ -924,18 +968,18 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
 
     @begin_serial_region()
 
-    if t_input["add_random_noise"] > 0.0
+    if t_input_tuple.add_random_noise > 0.0
         # Add random noise to the ion/electron density to seed turbulence/instabilities.
         @serial_region begin
             rng = Random.default_rng()
-            if t_input["random_noise_seed"] ≥ 0
+            if t_input_tuple.random_noise_seed ≥ 0
                 # Allow the seed to be specified so that simulaions are reproducible (at
                 # least when using a given version of Julia, Random, etc.).
                 # Add global_rank[] to ensure that all MPI processes get a different seed,
                 # so that the random numbers are not repeated between different processes.
-                Random.seed!(rng, t_input["random_noise_seed"] + global_rank[])
+                Random.seed!(rng, t_input_tuple.random_noise_seed + global_rank[])
             end
-            noise = 1.0 .+ t_input["add_random_noise"] .* rand(rng, mk_float, size(moments.ion.dens)...)
+            noise = 1.0 .+ t_input_tuple.add_random_noise .* rand(rng, mk_float, size(moments.ion.dens)...)
             moments.ion.dens .*= noise
 
             if !moments.evolve_density
@@ -1037,7 +1081,7 @@ function setup_time_advance!(pdf, fields, vz, vr, vzeta, vpa, vperp, z, r, gyrop
                               vperp, vpa, vzeta, vr, vz, z_spectral, r_spectral,
                               vperp_spectral, vpa_spectral, collisions, gyroavs,
                               external_source_settings, scratch_dummy, scratch,
-                              scratch_electron, nl_solver_params, t_params, t_input,
+                              scratch_electron, nl_solver_params, t_params, t_input_tuple,
                               num_diss_params, advection_structs, io_input, input_dict;
                               restart_electron_physics=restart_electron_physics,
                               skip_electron_solve=skip_electron_solve)
@@ -1780,12 +1824,12 @@ function setup_dummy_and_buffer_arrays(r, z, vpa, vperp, vz, vr, vzeta, composit
         implicit_buffer_vpavperpz_5 = allocate_shared_float(vpa, vperp, z; comm=comm_anyzv_subblock[])
         implicit_buffer_vpavperpz_6 = allocate_shared_float(vpa, vperp, z; comm=comm_anyzv_subblock[])
     else
-        implicit_buffer_z_1 = allocate_shared_float(; implicit_buffer=0)
-        implicit_buffer_z_2 = allocate_shared_float(; implicit_buffer=0)
-        implicit_buffer_z_3 = allocate_shared_float(; implicit_buffer=0)
-        implicit_buffer_z_4 = allocate_shared_float(; implicit_buffer=0)
-        implicit_buffer_z_5 = allocate_shared_float(; implicit_buffer=0)
-        implicit_buffer_z_6 = allocate_shared_float(; implicit_buffer=0)
+        implicit_buffer_z_1 = allocate_shared_float(:implicit_buffer=>0)
+        implicit_buffer_z_2 = allocate_shared_float(:implicit_buffer=>0)
+        implicit_buffer_z_3 = allocate_shared_float(:implicit_buffer=>0)
+        implicit_buffer_z_4 = allocate_shared_float(:implicit_buffer=>0)
+        implicit_buffer_z_5 = allocate_shared_float(:implicit_buffer=>0)
+        implicit_buffer_z_6 = allocate_shared_float(:implicit_buffer=>0)
 
         implicit_buffer_vpavperpz_1 = allocate_shared_float(:implicit_buffer=>0, :implicit_buffer=>0, :implicit_buffer=>0)
         implicit_buffer_vpavperpz_2 = allocate_shared_float(:implicit_buffer=>0, :implicit_buffer=>0, :implicit_buffer=>0)
@@ -1909,7 +1953,7 @@ function setup_scratch_arrays(moments, pdf, n, time_evolve_electrons, compositio
         if time_evolve_electrons
             pdf_electron_array = allocate_shared_float(vpa, vperp, z, r)
         else
-            pdf_electron_array = allocate_shared_float(; electron_vpa=0, electron_vperp=0, electron_z=0, electron_r=0)
+            pdf_electron_array = allocate_shared_float(:electron_vpa=>0, :electron_vperp=>0, :electron_z=>0, :electron_r=>0)
         end
         density_electron_array = allocate_shared_float(z, r)
         upar_electron_array = allocate_shared_float(z, r)
@@ -1922,11 +1966,11 @@ function setup_scratch_arrays(moments, pdf, n, time_evolve_electrons, compositio
         p_neutral_array = allocate_shared_float(z, r, composition.neutral_species_coord)
 
         ion_external_source_controller_integral =
-            allocate_shared_float(; ion_source_z=ion_source_nz, ion_source_r=ion_source_nr, n_ion_sources=n_ion_sources)
+            allocate_shared_float(:ion_source_z=>ion_source_nz, :ion_source_r=>ion_source_nr, :n_ion_sources=>n_ion_sources)
         #electron_external_source_controller_integral =
         #    allocate_shared_float(; electron_source_z=electron_source_nz, electron_source_r=electron_source_nr, n_electron_sources=n_electron_sources)
         neutral_external_source_controller_integral =
-            allocate_shared_float(; neutral_source_z=neutral_source_nz, neutral_source_r=neutral_source_nr, n_neutral_sources=n_neutral_sources)
+            allocate_shared_float(:neutral_source_z=>neutral_source_nz, :neutral_source_r=>neutral_source_nr, :n_neutral_sources=>n_neutral_sources)
 
         scratch[istage] = scratch_pdf(pdf_array, density_array, upar_array, p_array,
                                       ion_external_source_controller_integral,
@@ -2214,11 +2258,10 @@ function time_advance!(pdf, scratch, scratch_implicit, scratch_electron, t_param
                     all_residuals = Vector{mk_float}()
                     @loop_s is begin
                         @views residual_ni =
-                            steady_state_residuals(scratch[t_params.n_rk_stages+1].density[:,:,is],
-                                                   scratch[1].density[:,:,is], t_params.previous_dt[];
-                                                   use_mpi=true, only_max_abs=true)
+                            get_steady_state_global_maxabs_residual(scratch[t_params.n_rk_stages+1].density[:,:,is],
+                                                                    scratch[1].density[:,:,is],
+                                                                    t_params.previous_dt[])
                         if global_rank[] == 0
-                            residual_ni = first(values(residual_ni))[1]
                             push!(all_residuals, residual_ni)
                             result_string *= "  density "
                             result_string *= rpad(string(round(residual_ni; sigdigits=4)), 11)
@@ -2227,12 +2270,10 @@ function time_advance!(pdf, scratch, scratch_implicit, scratch_electron, t_param
                     if composition.n_neutral_species > 0
                         @loop_sn isn begin
                             residual_nn =
-                                steady_state_residuals(scratch[t_params.n_rk_stages+1].density_neutral[:,:,isn],
-                                                       scratch[1].density_neutral[:,:,isn],
-                                                       t_params.previous_dt[]; use_mpi=true,
-                                                       only_max_abs=true)
+                                get_steady_state_global_maxabs_residual(scratch[t_params.n_rk_stages+1].density_neutral[:,:,isn],
+                                                                        scratch[1].density_neutral[:,:,isn],
+                                                                        t_params.previous_dt[])
                             if global_rank[] == 0
-                                residual_nn = first(values(residual_nn))[1]
                                 push!(all_residuals, residual_nn)
                                 result_string *= " density_neutral "
                                 result_string *= rpad(string(round(residual_nn; sigdigits=4)), 11)
@@ -2717,7 +2758,7 @@ moments and moment derivatives
                electron_vpa_advect, scratch_dummy, t_params.electron, collisions,
                composition, external_source_settings, num_diss_params,
                nl_solver_params.electron_advance, max_electron_pdf_iterations,
-               max_electron_sim_time, solution_method="artificial_time_derivative")
+               max_electron_sim_time, solution_method=Val("artificial_time_derivative"))
             success = kinetic_electron_success
         end
     end
@@ -4135,7 +4176,7 @@ end
                                                 nl_solver_params.electron_advance,
                                                 max_electron_pdf_iterations,
                                                 max_electron_sim_time;
-                                                solution_method="artificial_time_derivative",
+                                                solution_method=Val(:artificial_time_derivative),
                                                 evolve_p=true, ion_dt=dt)
 
         # Update `fvec_out.electron_p` with the new electron pressure

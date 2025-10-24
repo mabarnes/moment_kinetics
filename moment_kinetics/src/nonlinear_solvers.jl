@@ -96,7 +96,8 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(), spec
                                anysv_region=false, anyzv_region=false,
                                electron_p_pdf_solve=false,
                                preconditioner_type=Val(:none),
-                               boundary_skip_funcs=nothing, warn_unexpected=false)
+                               boundary_skip_funcs::BSF=nothing,
+                               warn_unexpected=false) where {BSF}
     nl_solver_section = set_defaults_and_check_section!(
         input_dict, section_name, warn_unexpected;
         rtol=default_rtol,
@@ -138,13 +139,14 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(), spec
         g .= 0.0
         V .= 0.0
     elseif electron_p_pdf_solve
-        H = allocate_shared_float(; linear_restart_plus_one=linear_restart + 1, linear_restart=linear_restart, comm=comm_anyzv_subblock[])
-        c = allocate_shared_float(; linear_restart_plus_one=linear_restart + 1, comm=comm_anyzv_subblock[])
-        s = allocate_shared_float(; linear_restart_plus_one=linear_restart + 1, comm=comm_anyzv_subblock[])
-        g = allocate_shared_float(; linear_restart_plus_one=linear_restart + 1, comm=comm_anyzv_subblock[])
-        V_ppar = allocate_shared_float(:z=>coords.z, :linear_restart_plus_one=>linear_restart+1; comm=comm_anyzv_subblock[])
-        V_pdf = allocate_shared_float(; (Symbol(c.name)=>c.n for c ∈ reverse(coords))...,
-                                      linear_restart_plus_one=linear_restart+1, comm=comm_anyzv_subblock[])
+        H = allocate_shared_float(:linear_restart_plus_one=>linear_restart + 1, :linear_restart=>linear_restart, comm=comm_anyzv_subblock[])
+        c = allocate_shared_float(:linear_restart_plus_one=>linear_restart + 1, comm=comm_anyzv_subblock[])
+        s = allocate_shared_float(:linear_restart_plus_one=>linear_restart + 1, comm=comm_anyzv_subblock[])
+        g = allocate_shared_float(:linear_restart_plus_one=>linear_restart + 1, comm=comm_anyzv_subblock[])
+        V_ppar = allocate_shared_float(coords.z, :linear_restart_plus_one=>linear_restart+1; comm=comm_anyzv_subblock[])
+        V_pdf = allocate_shared_float(reverse(coords)...,
+                                      :linear_restart_plus_one=>linear_restart+1,
+                                      comm=comm_anyzv_subblock[])
 
         @begin_r_anyzv_region()
         @begin_anyzv_region()
@@ -161,18 +163,18 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(), spec
 
         n_vcut_inds = prod(outer_coord_sizes)
     elseif anysv_region
-        H = allocate_shared_float(; comm=comm_anysv_subblock[],
-                                  linear_restart_plus_one=linear_restart + 1,
-                                  linear_restart=linear_restart)
-        c = allocate_shared_float(; comm=comm_anysv_subblock[],
-                                  linear_restart_plus_one=linear_restart + 1)
-        s = allocate_shared_float(; comm=comm_anysv_subblock[],
-                                  linear_restart_plus_one=linear_restart + 1)
-        g = allocate_shared_float(; comm=comm_anysv_subblock[],
-                                  linear_restart_plus_one=linear_restart + 1)
-        V = allocate_shared_float(; comm=comm_anysv_subblock[],
-                                  (Symbol(c.name)=>c.n for c ∈ reverse(coords))...,
-                                  linear_restart_plus_one=linear_restart+1)
+        H = allocate_shared_float(:linear_restart_plus_one=>linear_restart + 1,
+                                  :linear_restart=>linear_restart;
+                                  comm=comm_anysv_subblock[])
+        c = allocate_shared_float(:linear_restart_plus_one=>linear_restart + 1;
+                                  comm=comm_anysv_subblock[])
+        s = allocate_shared_float(:linear_restart_plus_one=>linear_restart + 1;
+                                  comm=comm_anysv_subblock[])
+        g = allocate_shared_float(:linear_restart_plus_one=>linear_restart + 1;
+                                  comm=comm_anysv_subblock[])
+        V = allocate_shared_float(reverse(coords)...,
+                                  :linear_restart_plus_one=>linear_restart+1;
+                                  comm=comm_anysv_subblock[])
         # Arrays below appear to need to be initialised to zero on setup.
         # This is inconvenient for anysv communicators because we need to switch
         # now into the special "anysv" region for this assignment,
@@ -193,18 +195,18 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(), spec
         # will not be an "anysv" call.
         @begin_serial_region()
     elseif anyzv_region
-        H = allocate_shared_float(; comm=comm_anyzv_subblock[],
-                                  linear_restart_plus_1=linear_restart + 1,
-                                  linear_restart=linear_restart)
-        c = allocate_shared_float(; comm=comm_anyzv_subblock[],
-                                  linear_restart_plus_one=linear_restart + 1)
-        s = allocate_shared_float(; comm=comm_anyzv_subblock[],
-                                  linear_restart_plus_one=linear_restart + 1)
-        g = allocate_shared_float(; comm=comm_anyzv_subblock[],
-                                  linear_restart_plus_one=linear_restart + 1)
-        V = allocate_shared_float(; comm=comm_anyzv_subblock[],
-                                  (Symbol(c.name)=>c.n for (_,c) ∈ pairs(reverse(coords)))...,
-                                  linear_restart_plus_one=linear_restart+1)
+        H = allocate_shared_float(:linear_restart_plus_1=>linear_restart + 1,
+                                  :linear_restart=>linear_restart;
+                                  comm=comm_anyzv_subblock[])
+        c = allocate_shared_float(:linear_restart_plus_one=>linear_restart + 1;
+                                  comm=comm_anyzv_subblock[])
+        s = allocate_shared_float(:linear_restart_plus_one=>linear_restart + 1;
+                                  comm=comm_anyzv_subblock[])
+        g = allocate_shared_float(:linear_restart_plus_one=>linear_restart + 1;
+                                  comm=comm_anyzv_subblock[])
+        V = allocate_shared_float(reverse(coords)...,
+                                  :linear_restart_plus_one=>linear_restart+1;
+                                  comm=comm_anyzv_subblock[])
         # Arrays below appear to need to be initialised to zero on setup.
         # This is inconvenient for anyzv communicators because we need to switch
         # now into the special "anyzv" region for this assignment,
@@ -225,12 +227,12 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(), spec
         # will not be an "anyzv" call.
         @begin_serial_region()
     else
-        H = allocate_shared_float(; linear_restart_plus_one=linear_restart + 1, linear_restart=linear_restart)
-        c = allocate_shared_float(; linear_restart_plus_one=linear_restart + 1)
-        s = allocate_shared_float(; linear_restart_plus_one=linear_restart + 1)
-        g = allocate_shared_float(; linear_restart_plus_one=linear_restart + 1)
-        V = allocate_shared_float((Symbol(c.name)=>c.n for c ∈ reverse(coords))...,
-                                  linear_restart_plus_one=linear_restart + 1)
+        H = allocate_shared_float(:linear_restart_plus_one=>linear_restart + 1, :linear_restart=>linear_restart)
+        c = allocate_shared_float(:linear_restart_plus_one=>linear_restart + 1)
+        s = allocate_shared_float(:linear_restart_plus_one=>linear_restart + 1)
+        g = allocate_shared_float(:linear_restart_plus_one=>linear_restart + 1)
+        V = allocate_shared_float(reverse(coords)...,
+                                  :linear_restart_plus_one=>linear_restart + 1)
 
         @begin_serial_region()
         @serial_region begin
@@ -263,9 +265,9 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(), spec
                                                      electron_dp_dz=((:anyzv,:z), (:z,), true),
                                                      electron_dq_dz=((:anyzv,:z), (:z,), true),
                                                     ),
-                                allocate_shared_float(; newton_size=pdf_plus_p_plus_constraints_size,
+                                allocate_shared_float(:newton_size=>pdf_plus_p_plus_constraints_size;
                                                       comm=comm_anyzv_subblock[]),
-                                allocate_shared_float(; newton_size=pdf_plus_p_plus_constraints_size,
+                                allocate_shared_float(:newton_size=>pdf_plus_p_plus_constraints_size;
                                                       comm=comm_anyzv_subblock[]),
                                ),
                                reverse(outer_coord_sizes))
@@ -290,9 +292,9 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(), spec
                                                      first_moment=((:anyzv,:z), (:z,), true),
                                                      second_moment=((:anyzv,:z), (:z,), true),
                                                      third_moment=((:anyzv,:z), (:z,), true)),
-                                allocate_shared_float(; newton_size=pdf_plus_p_plus_constraints_size,
+                                allocate_shared_float(:newton_size=>pdf_plus_p_plus_constraints_size;
                                                       comm=comm_anyzv_subblock[]),
-                                allocate_shared_float(; newton_size=pdf_plus_p_plus_constraints_size,
+                                allocate_shared_float(:newton_size=>pdf_plus_p_plus_constraints_size;
                                                       comm=comm_anyzv_subblock[]),
                                ),
                                reverse(outer_coord_sizes))
@@ -314,9 +316,9 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(), spec
                                                      electron_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z), false),
                                                      electron_p=((:anyzv,:z), (:z,), false),
                                                      third_moment=((:anyzv,:z), (:z,), true)),
-                                allocate_shared_float(; newton_size=pdf_plus_p_plus_constraints_size,
+                                allocate_shared_float(:newton_size=>pdf_plus_p_plus_constraints_size;
                                                       comm=comm_anyzv_subblock[]),
-                                allocate_shared_float(; newton_size=pdf_plus_p_plus_constraints_size,
+                                allocate_shared_float(:newton_size=>pdf_plus_p_plus_constraints_size;
                                                       comm=comm_anyzv_subblock[]),
                                ),
                                reverse(outer_coord_sizes))
@@ -337,9 +339,9 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(), spec
                                                      boundary_skip_funcs=boundary_skip_funcs.full,
                                                      electron_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z), false),
                                                      electron_p=((:anyzv,:z), (:z,), false)),
-                                allocate_shared_float(; newton_size=pdf_plus_p_size,
+                                allocate_shared_float(:newton_size=>pdf_plus_p_size;
                                                       comm=comm_anyzv_subblock[]),
-                                allocate_shared_float(; newton_size=pdf_plus_p_size,
+                                allocate_shared_float(:newton_size=>pdf_plus_p_size;
                                                       comm=comm_anyzv_subblock[]),
                                ),
                                reverse(outer_coord_sizes))
@@ -399,13 +401,13 @@ function setup_nonlinear_solve(active, input_dict, coords, outer_coords=(), spec
                                                      boundary_skip_funcs=boundary_skip_funcs.full,
                                                      electron_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z), false),
                                                      electron_p=((:anyzv,:z), (:z,), false))
-            input_buffer = allocate_shared_float(; newton_size=pdf_plus_p_size,
+            input_buffer = allocate_shared_float(:newton_size=>pdf_plus_p_size;
                                                  comm=comm_anyzv_subblock[])
-            intermediate_buffer = allocate_shared_float(; newton_size=pdf_plus_p_size,
+            intermediate_buffer = allocate_shared_float(:newton_size=>pdf_plus_p_size;
                                                         comm=comm_anyzv_subblock[])
-            output_buffer = allocate_shared_float(; newton_size=pdf_plus_p_size,
+            output_buffer = allocate_shared_float(:newton_size=>pdf_plus_p_size;
                                                   comm=comm_anyzv_subblock[])
-            error_buffer = allocate_shared_float(; newton_size=pdf_plus_p_size,
+            error_buffer = allocate_shared_float(:newton_size=>pdf_plus_p_size;
                                                  comm=comm_anyzv_subblock[])
 
             chunk_size = (pdf_plus_p_size + block_size[] - 1) ÷ block_size[]
@@ -511,7 +513,7 @@ end
 
 """
     newton_solve!(x, rhs_func!, residual, delta_x, rhs_delta, w, nl_solver_params;
-                  left_preconditioner=nothing, right_preconditioner=nothing, coords)
+                  left_preconditioner=identity, right_preconditioner=identity, coords)
 
 `x` is the initial guess at the solution, and is overwritten by the result of the Newton
 solve.
@@ -570,32 +572,29 @@ As the GMRES solve is only used to get the right `direction' for the next Newton
 is not necessary to have a very tight `linear_rtol` for the GMRES solve.
 """
 @timeit global_timer newton_solve!(
-                         x, residual_func!, residual, delta_x, rhs_delta, v, w,
-                         nl_solver_params; left_preconditioner=nothing,
-                         right_preconditioner=nothing, recalculate_preconditioner=nothing,
-                         coords) = begin
+                         x, residual_func!::F, residual, delta_x, rhs_delta, v, w,
+                         nl_solver_params; left_preconditioner::LP=identity,
+                         right_preconditioner::RP=identity,
+                         recalculate_preconditioner::RECALC=nothing,
+                         coords) where {F,LP,RP,RECALC} = begin
     # This wrapper function constructs the `solver_type` from coords, so that the body of
     # the inner `newton_solve!()` can be fully type-stable
     solver_type = Val(Symbol((c for c ∈ keys(coords))...))
     return newton_solve!(x, residual_func!, residual, delta_x, rhs_delta, v, w,
-                         nl_solver_params, solver_type; left_preconditioner=left_preconditioner,
+                         nl_solver_params, solver_type;
+                         left_preconditioner=left_preconditioner,
                          right_preconditioner=right_preconditioner,
                          recalculate_preconditioner=recalculate_preconditioner,
                          coords=coords)
 end
-function newton_solve!(x, residual_func!, residual, delta_x, rhs_delta, v, w,
-                       nl_solver_params, solver_type::Val; left_preconditioner=nothing,
-                       right_preconditioner=nothing, recalculate_preconditioner=nothing,
-                       coords)
+function newton_solve!(x, residual_func!::F, residual, delta_x, rhs_delta, v, w,
+                       nl_solver_params, solver_type::Val;
+                       left_preconditioner::LP=identity,
+                       right_preconditioner::RP=identity,
+                       recalculate_preconditioner::RECALC=nothing,
+                       coords) where {F,LP,RP,RECALC}
     rtol = nl_solver_params.rtol
     atol = nl_solver_params.atol
-
-    if left_preconditioner === nothing
-        left_preconditioner = identity
-    end
-    if right_preconditioner === nothing
-        right_preconditioner = identity
-    end
 
     norm_params = (coords, nl_solver_params.rtol, nl_solver_params.atol, x)
 
@@ -1563,6 +1562,36 @@ function select_from_V(V, i)
     return selectdim(V,ndims(V),i)
 end
 
+@kwdef struct nonlinear_solvers_approximate_Jacobian_vector_product!{F,LP,RP,Tx,Tr0,Tdel,Tst}
+    residual_func!::F
+    left_preconditioner::LP
+    right_preconditioner::RP
+    x::Tx
+    residual0::Tr0
+    rhs_delta::Tdel
+    Jv_scale_factor::mk_float
+    inv_Jv_scale_factor::mk_float
+    solver_type::Tst
+end
+
+function (approx_Jv::nonlinear_solvers_approximate_Jacobian_vector_product!)(
+             v, skip_first_precon::Bool=false)
+    if !skip_first_precon
+        approx_Jv.right_preconditioner(v)
+    end
+
+    solver_type = approx_Jv.solver_type
+    rhs_delta = approx_Jv.rhs_delta
+
+    parallel_map(solver_type, (x,v) -> x + approx_Jv.Jv_scale_factor * v, v, approx_Jv.x, v)
+    approx_Jv.residual_func!(rhs_delta, v; krylov=true)
+    parallel_map(solver_type,
+                 (rhs_delta, residual0) -> (rhs_delta - residual0) * approx_Jv.inv_Jv_scale_factor,
+                 v, rhs_delta, approx_Jv.residual0)
+    approx_Jv.left_preconditioner(v)
+    return v
+end
+
 """
 Apply the GMRES algorithm to solve the 'linear problem' J.δx^n = R(x^n), which is needed
 at each step of the outer Newton iteration (in `newton_solve!()`).
@@ -1573,11 +1602,11 @@ solution, without calculating a least-squares minimisation at each step. See 'al
 MGS-GMRES' in Zou (2023) [https://doi.org/10.1016/j.amc.2023.127869].
 """
 @timeit global_timer linear_solve!(
-                         x, residual_func!, residual0, delta_x, v, w, solver_type::Val,
+                         x, residual_func!::F, residual0, delta_x, v, w, solver_type::Val,
                          norm_params; coords, rtol, atol, restart, max_restarts,
-                         left_preconditioner, right_preconditioner, H, c, s, g, V,
+                         left_preconditioner::LP, right_preconditioner::RP, H, c, s, g, V,
                          rhs_delta, initial_guess, serial_solve, anysv_region,
-                         anyzv_region, initial_delta_x_is_zero) = begin
+                         anyzv_region, initial_delta_x_is_zero) where {F,LP,RP} = begin
     # Solve (approximately?):
     #   J δx = residual0
 
@@ -1594,18 +1623,10 @@ MGS-GMRES' in Zou (2023) [https://doi.org/10.1016/j.amc.2023.127869].
     # by a large number `Jv_scale_factor` (in constrast to the small `epsilon` in the
     # 'usual' case where the norm does not include either reative or absolute tolerance)
     # to ensure that we get a reasonable estimate of J.v.
-    function approximate_Jacobian_vector_product!(v, skip_first_precon::Bool=false)
-        if !skip_first_precon
-            right_preconditioner(v)
-        end
-
-        parallel_map(solver_type, (x,v) -> x + Jv_scale_factor * v, v, x, v)
-        residual_func!(rhs_delta, v; krylov=true)
-        parallel_map(solver_type, (rhs_delta, residual0) -> (rhs_delta - residual0) * inv_Jv_scale_factor,
-                     v, rhs_delta, residual0)
-        left_preconditioner(v)
-        return v
-    end
+    approximate_Jacobian_vector_product! =
+        nonlinear_solvers_approximate_Jacobian_vector_product!(;
+            residual_func!, left_preconditioner, right_preconditioner, x, residual0,
+            rhs_delta, Jv_scale_factor, inv_Jv_scale_factor, solver_type)
 
     # To start with we use 'w' as a buffer to make a copy of residual0 to which we can apply
     # the left-preconditioner.
@@ -1798,7 +1819,7 @@ MGS-GMRES' in Zou (2023) [https://doi.org/10.1016/j.amc.2023.127869].
         parallel_map(solver_type, (delta_x) -> delta_x, v, delta_x)
         approximate_Jacobian_vector_product!(v)
 
-        # Note residual0 has already had the left_preconditioner!() applied to it.
+        # Note residual0 has already had the left_preconditioner() applied to it.
         parallel_map(solver_type, (residual0, v) -> -residual0 - v, v, residual0, v)
         beta = distributed_norm(solver_type, v, norm_params...)
         for i ∈ 2:length(y)

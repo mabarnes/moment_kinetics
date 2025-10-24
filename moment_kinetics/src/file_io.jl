@@ -56,6 +56,7 @@ Base.@kwdef struct io_input_struct
     write_electron_error_diagnostics::Bool
     write_electron_steady_state_diagnostics::Bool
     display_timing_info::Bool
+    save_inputs_to_txt::Bool
 end
 
 """
@@ -355,6 +356,7 @@ function setup_io_input(input_dict, timestepping_section, warn_unexpected::Bool;
         binary_format=hdf5,
         parallel_io="",
         display_timing_info=true,
+        save_inputs_to_txt=false,
        )
     if io_settings["run_name"] == ""
         error("When passing a Dict directly for input, it is required to set `run_name` "
@@ -880,7 +882,7 @@ function write_provenance_tracking_info!(fid, parallel_io, run_id, restart_time_
                             parallel_io=parallel_io,
                             description="Information about all dependency packages (output of `Pkg.dependencies()`)")
 
-        if previous_runs_info !== nothing
+        if !isempty(previous_runs_info)
             for (i, info) ∈ enumerate(previous_runs_info)
                 section = create_io_group(provenance_tracking, "previous_run_$i")
                 write_Dict_to_section(section, info, parallel_io)
