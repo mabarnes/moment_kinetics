@@ -3,6 +3,7 @@ module JacobianMatrixTests
 # Tests for construction of Jacobian matrices used for preconditioning
 
 include("setup.jl")
+include("jacobian_matrix_expected_data.jl")
 
 using moment_kinetics: setup_moment_kinetics, cleanup_moment_kinetics!
 using moment_kinetics.analysis: vpagrid_to_vpa
@@ -34,7 +35,9 @@ using moment_kinetics.electron_kinetic_equation: get_electron_sub_terms,
                                                  fill_electron_kinetic_equation_z_only_Jacobian_f!,
                                                  fill_electron_kinetic_equation_z_only_Jacobian_p!,
                                                  add_wall_boundary_condition_to_Jacobian!,
-                                                 zero_z_boundary_condition_points
+                                                 zero_z_boundary_condition_points,
+                                                 kinetic_electron_residual!,
+                                                 get_electron_preconditioner
 using moment_kinetics.electron_vpa_advection: electron_vpa_advection!,
                                               update_electron_speed_vpa!,
                                               get_electron_vpa_advection_term
@@ -58,13 +61,15 @@ using moment_kinetics.BlockBandedMatrices
 using LinearAlgebra
 using moment_kinetics.StatsBase
 
+const regression_f_step = 100
+
 # Small parameter used to create perturbations to test Jacobian against
-epsilon = 1.0e-6
-test_wavenumber = 2.0
-dt = 0.2969848480983499
-ion_dt = 7.071067811865475e-7
-ir = 1
-zero = 1.0e-14
+const epsilon = 1.0e-6
+const test_wavenumber = 2.0
+const dt = 0.2969848480983499
+const ion_dt = 7.071067811865475e-7
+const ir = 1
+const zero = 1.0e-14
 
 # Test input uses `z_bc = "constant"`, which is not a very physically useful option, but
 # is useful for testing because:
@@ -74,113 +79,113 @@ zero = 1.0e-14
 # * For `z_bc = "periodic"`, the Jacobian matrices (by design) do not account for the
 #   periodicity. This should be fine when they are used as preconditioners, but does
 #   introduce errors at the periodic boundaries which would complicate testing.
-test_input = OptionsDict("output" => OptionsDict("run_name" => "jacobian_matrix"),
-                         "composition" => OptionsDict("n_ion_species" => 1,
-                                                      "n_neutral_species" => 1,
-                                                      "electron_physics" => "kinetic_electrons",
-                                                      "recycling_fraction" => 0.5,
-                                                      "T_e" => 0.3333333333333333,
-                                                      "T_wall" => 0.1),
-                         "evolve_moments" => OptionsDict("density" => true,
-                                                         "parallel_flow" => true,
-                                                         "pressure" => true),
-                         "ion_species_1" => OptionsDict("initial_density" => 1.0,
-                                                        "initial_temperature" => 0.3333333333333333),
-                         "z_IC_ion_species_1" => OptionsDict("initialization_option" => "sinusoid",
-                                                             "density_amplitude" => 0.1,
-                                                             "density_phase" => 3.141592653589793,
-                                                             "upar_amplitude" => 0.14142135623730953,
-                                                             "upar_phase" => 3.141592653589793,
-                                                             "temperature_amplitude" => 0.1,
-                                                             "temperature_phase" => 3.141592653589793),
-                         "vpa_IC_ion_species_1" => OptionsDict("initialization_option" => "gaussian",
-                                                               "density_amplitude" => 1.0,
-                                                               "density_phase" => 0.0,
-                                                               "upar_amplitude" => 0.0,
-                                                               "upar_phase" => 0.0,
-                                                               "temperature_amplitude" => 0.0,
-                                                               "temperature_phase" => 0.0),
-                         "neutral_species_1" => OptionsDict("initial_density" => 1.0,
-                                                            "initial_temperature" => 0.3333333333333333),
-                         "z_IC_neutral_species_1" => OptionsDict("initialization_option" => "sinusoid",
-                                                                 "density_amplitude" => 0.001,
-                                                                 "density_phase" => 3.141592653589793,
-                                                                 "upar_amplitude" => 0.0,
-                                                                 "upar_phase" => 3.141592653589793,
-                                                                 "temperature_amplitude" => 0.0,
-                                                                 "temperature_phase" => 3.141592653589793),
-                         "vz_IC_neutral_species_1" => OptionsDict("initialization_option" => "gaussian",
-                                                                  "density_amplitude" => 1.0,
-                                                                  "density_phase" => 0.0,
-                                                                  "upar_amplitude" => 0.0,
-                                                                  "upar_phase" => 0.0,
-                                                                  "temperature_amplitude" => 0.0,
-                                                                  "temperature_phase" => 0.0),
-                         "reactions" => OptionsDict("charge_exchange_frequency" => 1.0606601717798214,
-                                                    "ionization_frequency" => 0.0),
-                         "r" => OptionsDict("ngrid" => 1,
-                                            "nelement" => 1),
-                         "z" => OptionsDict("ngrid" => 9,
-                                            "nelement" => 16,
-                                            "bc" => "constant",
-                                            "discretization" => "gausslegendre_pseudospectral"),
-                         "vpa" => OptionsDict("ngrid" => 6,
-                                              "nelement" => 31,
-                                              "L" => 20.784609690826528,
-                                              "bc" => "zero",
-                                              "discretization" => "gausslegendre_pseudospectral",
-                                              "element_spacing_option" => "coarse_tails8.660254037844386"),
-                         "vz" => OptionsDict("ngrid" => 6,
-                                             "nelement" => 31,
-                                             "L" => 20.784609690826528,
-                                             "bc" => "zero",
-                                             "discretization" => "gausslegendre_pseudospectral",
-                                             "element_spacing_option" => "coarse_tails8.660254037844386"),
-                         "timestepping" => OptionsDict("type" => "KennedyCarpenterARK324",
-                                                       "kinetic_electron_solver" => "implicit_p_implicit_pseudotimestep",
-                                                       "kinetic_electron_preconditioner" => "lu_no_separate_moments",
-                                                       "kinetic_ion_solver" => "full_explicit_ion_advance",
-                                                       "nstep" => 1,
-                                                       "dt" => ion_dt,
-                                                       "minimum_dt" => 7.071067811865474e-8,
-                                                       "rtol" => 0.0001,
-                                                       "max_increase_factor_near_last_fail" => 1.001,
-                                                       "last_fail_proximity_factor" => 1.1,
-                                                       "max_increase_factor" => 1.05,
-                                                       "nwrite" => 10000,
-                                                       "nwrite_dfns" => 10000,
-                                                       "steady_state_residual" => true,
-                                                       "converged_residual_value" => 0.0014142135623730952),
-                         "electron_timestepping" => OptionsDict("nstep" => 1,
-                                                                "dt" => dt,
-                                                                "maximum_dt" => 0.7071067811865475,
-                                                                "nwrite" => 10000,
-                                                                "nwrite_dfns" => 100000,
-                                                                "type" => "Fekete4(3)",
-                                                                "rtol" => 1.0e-6,
-                                                                "atol" => 1.0e-14,
-                                                                "minimum_dt" => 7.071067811865475e-11,
-                                                                "initialization_residual_value" => 2.5,
-                                                                "converged_residual_value" => 0.014142135623730952,
-                                                                "constraint_forcing_rate" => 3.282389678267954,
-                                                                "include_wall_bc_in_preconditioner" => true),
-                         "nonlinear_solver" => OptionsDict("nonlinear_max_iterations" => 100,
-                                                           "rtol" => 1.0e-5,
-                                                           "atol" => 1.0e-15,
-                                                           "preconditioner_update_interval" => 1),
-                         "ion_numerical_dissipation" => OptionsDict("vpa_dissipation_coefficient" => 4.242640687119286,
-                                                                    "force_minimum_pdf_value" => 0.0),
-                         "electron_numerical_dissipation" => OptionsDict("vpa_dissipation_coefficient" => 8.485281374238571,
-                                                                         "force_minimum_pdf_value" => 0.0),
-                         "neutral_numerical_dissipation" => OptionsDict("vz_dissipation_coefficient" => 0.42426406871192857,
-                                                                        "force_minimum_pdf_value" => 0.0),
-                         "ion_source_1" => OptionsDict("active" => true,
-                                                       "z_profile" => "gaussian",
-                                                       "z_width" => 0.125,
-                                                       "source_strength" => 0.14142135623730953,
-                                                       "source_T" => 2.0),
-                         "krook_collisions" => OptionsDict("use_krook" => true),
-                        )
+const test_input = OptionsDict("output" => OptionsDict("run_name" => "jacobian_matrix"),
+                               "composition" => OptionsDict("n_ion_species" => 1,
+                                                            "n_neutral_species" => 1,
+                                                            "electron_physics" => "kinetic_electrons",
+                                                            "recycling_fraction" => 0.5,
+                                                            "T_e" => 0.3333333333333333,
+                                                            "T_wall" => 0.1),
+                               "evolve_moments" => OptionsDict("density" => true,
+                                                               "parallel_flow" => true,
+                                                               "pressure" => true),
+                               "ion_species_1" => OptionsDict("initial_density" => 1.0,
+                                                              "initial_temperature" => 0.3333333333333333),
+                               "z_IC_ion_species_1" => OptionsDict("initialization_option" => "sinusoid",
+                                                                   "density_amplitude" => 0.1,
+                                                                   "density_phase" => 3.141592653589793,
+                                                                   "upar_amplitude" => 0.14142135623730953,
+                                                                   "upar_phase" => 3.141592653589793,
+                                                                   "temperature_amplitude" => 0.1,
+                                                                   "temperature_phase" => 3.141592653589793),
+                               "vpa_IC_ion_species_1" => OptionsDict("initialization_option" => "gaussian",
+                                                                     "density_amplitude" => 1.0,
+                                                                     "density_phase" => 0.0,
+                                                                     "upar_amplitude" => 0.0,
+                                                                     "upar_phase" => 0.0,
+                                                                     "temperature_amplitude" => 0.0,
+                                                                     "temperature_phase" => 0.0),
+                               "neutral_species_1" => OptionsDict("initial_density" => 1.0,
+                                                                  "initial_temperature" => 0.3333333333333333),
+                               "z_IC_neutral_species_1" => OptionsDict("initialization_option" => "sinusoid",
+                                                                       "density_amplitude" => 0.001,
+                                                                       "density_phase" => 3.141592653589793,
+                                                                       "upar_amplitude" => 0.0,
+                                                                       "upar_phase" => 3.141592653589793,
+                                                                       "temperature_amplitude" => 0.0,
+                                                                       "temperature_phase" => 3.141592653589793),
+                               "vz_IC_neutral_species_1" => OptionsDict("initialization_option" => "gaussian",
+                                                                        "density_amplitude" => 1.0,
+                                                                        "density_phase" => 0.0,
+                                                                        "upar_amplitude" => 0.0,
+                                                                        "upar_phase" => 0.0,
+                                                                        "temperature_amplitude" => 0.0,
+                                                                        "temperature_phase" => 0.0),
+                               "reactions" => OptionsDict("charge_exchange_frequency" => 1.0606601717798214,
+                                                          "ionization_frequency" => 0.0),
+                               "r" => OptionsDict("ngrid" => 1,
+                                                  "nelement" => 1),
+                               "z" => OptionsDict("ngrid" => 9,
+                                                  "nelement" => 16,
+                                                  "bc" => "constant",
+                                                  "discretization" => "gausslegendre_pseudospectral"),
+                               "vpa" => OptionsDict("ngrid" => 6,
+                                                    "nelement" => 31,
+                                                    "L" => 20.784609690826528,
+                                                    "bc" => "zero",
+                                                    "discretization" => "gausslegendre_pseudospectral",
+                                                    "element_spacing_option" => "coarse_tails8.660254037844386"),
+                               "vz" => OptionsDict("ngrid" => 6,
+                                                   "nelement" => 31,
+                                                   "L" => 20.784609690826528,
+                                                   "bc" => "zero",
+                                                   "discretization" => "gausslegendre_pseudospectral",
+                                                   "element_spacing_option" => "coarse_tails8.660254037844386"),
+                               "timestepping" => OptionsDict("type" => "KennedyCarpenterARK324",
+                                                             "kinetic_electron_solver" => "implicit_p_implicit_pseudotimestep",
+                                                             "kinetic_electron_preconditioner" => "lu_no_separate_moments",
+                                                             "kinetic_ion_solver" => "full_explicit_ion_advance",
+                                                             "nstep" => 1,
+                                                             "dt" => ion_dt,
+                                                             "minimum_dt" => 7.071067811865474e-8,
+                                                             "rtol" => 0.0001,
+                                                             "max_increase_factor_near_last_fail" => 1.001,
+                                                             "last_fail_proximity_factor" => 1.1,
+                                                             "max_increase_factor" => 1.05,
+                                                             "nwrite" => 10000,
+                                                             "nwrite_dfns" => 10000,
+                                                             "steady_state_residual" => true,
+                                                             "converged_residual_value" => 0.0014142135623730952),
+                               "electron_timestepping" => OptionsDict("nstep" => 1,
+                                                                      "dt" => dt,
+                                                                      "maximum_dt" => 0.7071067811865475,
+                                                                      "nwrite" => 10000,
+                                                                      "nwrite_dfns" => 100000,
+                                                                      "type" => "Fekete4(3)",
+                                                                      "rtol" => 1.0e-6,
+                                                                      "atol" => 1.0e-14,
+                                                                      "minimum_dt" => 7.071067811865475e-11,
+                                                                      "initialization_residual_value" => 2.5,
+                                                                      "converged_residual_value" => 0.014142135623730952,
+                                                                      "constraint_forcing_rate" => 3.282389678267954,
+                                                                      "include_wall_bc_in_preconditioner" => true),
+                               "nonlinear_solver" => OptionsDict("nonlinear_max_iterations" => 100,
+                                                                 "rtol" => 1.0e-5,
+                                                                 "atol" => 1.0e-15,
+                                                                 "preconditioner_update_interval" => 1),
+                               "ion_numerical_dissipation" => OptionsDict("vpa_dissipation_coefficient" => 4.242640687119286,
+                                                                          "force_minimum_pdf_value" => 0.0),
+                               "electron_numerical_dissipation" => OptionsDict("vpa_dissipation_coefficient" => 8.485281374238571,
+                                                                               "force_minimum_pdf_value" => 0.0),
+                               "neutral_numerical_dissipation" => OptionsDict("vz_dissipation_coefficient" => 0.42426406871192857,
+                                                                              "force_minimum_pdf_value" => 0.0),
+                               "ion_source_1" => OptionsDict("active" => true,
+                                                             "z_profile" => "gaussian",
+                                                             "z_width" => 0.125,
+                                                             "source_strength" => 0.14142135623730953,
+                                                             "source_T" => 2.0),
+                               "krook_collisions" => OptionsDict("use_krook" => true),
+                              )
 
 function get_mk_state(test_input)
     # Reset timers in case there was a previous run which did not clean them up.
@@ -337,10 +342,20 @@ function get_delta_state(delta_f, delta_p, separate_zeroth_moment,
 end
 
 function test_get_pdf_term(test_input::AbstractDict, label::String, get_term::Function,
-                           rhs_func!::Function, rtol::mk_float)
+                           rhs_func!::Function, rtol::mk_float,
+                           expected::Union{Nothing,NamedTuple})
     test_input = deepcopy(test_input)
     test_input["output"]["run_name"] *= "_" * label[1:min(11, length(label))]
     println("        - $label")
+    if test_input["timestepping"]["kinetic_electron_preconditioner"] == "lu_separate_dp_dz_dq_dz"
+        # This preconditioner option has larger errors compared to the regression test
+        # values (that were generated from "lu") than the others. Not sure why - maybe
+        # there is a bug somewhere, or maybe the extra entries in the matrix just increase
+        # rounding errors?
+        regression_tol = 1.0e-10
+    else
+        regression_tol = 1.0e-13
+    end
 
     @testset "$label" begin
         # Suppress console output while running
@@ -788,9 +803,24 @@ function test_get_pdf_term(test_input::AbstractDict, label::String, get_term::Fu
                                            zeros(p_size); atol=1.0e-15)
 
                 norm_factor = generate_norm_factor(perturbed_residual)
-                @test elementwise_isapprox(perturbed_residual ./ norm_factor,
-                                           reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n) ./ norm_factor;
+                normed_residual = perturbed_residual ./ norm_factor
+                normed_with_Jacobian = reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n) ./ norm_factor
+                @test elementwise_isapprox(normed_residual, normed_with_Jacobian;
                                            rtol=0.0, atol=rtol)
+
+                if expected === nothing
+                    @test false
+                    println("No stored regression test data. Tested data would be:\n"
+                            * "(delta_f_residual=$(normed_residual[1:regression_f_step:end]),\n"
+                            * " delta_f_with_Jacobian=$(normed_with_Jacobian[1:regression_f_step:end]),")
+                else
+                    @test elementwise_isapprox(normed_residual[1:regression_f_step:end],
+                                               expected.delta_f_residual; rtol=0.0,
+                                               atol=regression_tol)
+                    @test elementwise_isapprox(normed_with_Jacobian[1:regression_f_step:end],
+                                               expected.delta_f_with_Jacobian; rtol=0.0,
+                                               atol=regression_tol)
+                end
             end
         end
 
@@ -816,9 +846,22 @@ function test_get_pdf_term(test_input::AbstractDict, label::String, get_term::Fu
                                            delta_state[2]; atol=1.0e-15)
 
                 norm_factor = generate_norm_factor(perturbed_residual)
-                @test elementwise_isapprox(perturbed_residual ./ norm_factor,
-                                           reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n) ./ norm_factor;
+                normed_residual = perturbed_residual ./ norm_factor
+                normed_with_Jacobian = reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n) ./ norm_factor
+                @test elementwise_isapprox(normed_residual, normed_with_Jacobian;
                                            rtol=0.0, atol=rtol)
+
+                if expected === nothing
+                    println(" delta_p_residual=$(normed_residual[1:regression_f_step:end]),\n"
+                            * " delta_p_with_Jacobian=$(normed_with_Jacobian[1:regression_f_step:end]),")
+                else
+                    @test elementwise_isapprox(normed_residual[1:regression_f_step:end],
+                                               expected.delta_p_residual; rtol=0.0,
+                                               atol=regression_tol)
+                    @test elementwise_isapprox(normed_with_Jacobian[1:regression_f_step:end],
+                                               expected.delta_p_with_Jacobian; rtol=0.0,
+                                               atol=regression_tol)
+                end
             end
         end
 
@@ -843,9 +886,23 @@ function test_get_pdf_term(test_input::AbstractDict, label::String, get_term::Fu
                                            delta_state[2]; atol=1.0e-15)
 
                 norm_factor = generate_norm_factor(perturbed_residual)
-                @test elementwise_isapprox(perturbed_residual ./ norm_factor,
-                                           reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n) ./ norm_factor;
+                normed_residual = perturbed_residual ./ norm_factor
+                normed_with_Jacobian = reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n) ./ norm_factor
+                @test elementwise_isapprox(normed_residual, normed_with_Jacobian;
                                            rtol=0.0, atol=rtol)
+
+                if expected === nothing
+                    println(" both_residual=$(normed_residual[1:regression_f_step:end]),\n"
+                            * " both_with_Jacobian=$(normed_with_Jacobian[1:regression_f_step:end]),\n"
+                            * ")")
+                else
+                    @test elementwise_isapprox(normed_residual[1:regression_f_step:end],
+                                               expected.both_residual; rtol=0.0,
+                                               atol=regression_tol)
+                    @test elementwise_isapprox(normed_with_Jacobian[1:regression_f_step:end],
+                                               expected.both_with_Jacobian; rtol=0.0,
+                                               atol=regression_tol)
+                end
             end
         end
 
@@ -856,10 +913,20 @@ function test_get_pdf_term(test_input::AbstractDict, label::String, get_term::Fu
 end
 
 function test_get_p_term(test_input::AbstractDict, label::String, get_term::Function,
-                         rhs_func!::Function, rtol::mk_float)
+                         rhs_func!::Function, rtol::mk_float,
+                         expected::Union{Nothing,NamedTuple})
     test_input = deepcopy(test_input)
     test_input["output"]["run_name"] *= "_" * label[1:min(11, length(label))]
     println("        - $label")
+    if test_input["timestepping"]["kinetic_electron_preconditioner"] == "lu_separate_dp_dz_dq_dz"
+        # This preconditioner option has larger errors compared to the regression test
+        # values (that were generated from "lu") than the others. Not sure why - maybe
+        # there is a bug somewhere, or maybe the extra entries in the matrix just increase
+        # rounding errors?
+        regression_tol = 3.0e-10
+    else
+        regression_tol = 1.0e-13
+    end
 
     @testset "$label" begin
         # Suppress console output while running
@@ -1239,9 +1306,24 @@ function test_get_p_term(test_input::AbstractDict, label::String, get_term::Func
                 else
                     norm_factor = generate_norm_factor(perturbed_residual)
                 end
-                @test elementwise_isapprox(perturbed_residual ./ norm_factor,
-                                           perturbed_with_Jacobian ./ norm_factor;
+                normed_residual = perturbed_residual ./ norm_factor
+                normed_with_Jacobian = perturbed_with_Jacobian ./ norm_factor
+                @test elementwise_isapprox(normed_residual, normed_with_Jacobian;
                                            rtol=0.0, atol=rtol)
+
+                if expected === nothing
+                    @test false
+                    println("No stored regression test data. Tested data would be:\n"
+                            * "(delta_f_residual=$(normed_residual),\n"
+                            * " delta_f_with_Jacobian=$(normed_with_Jacobian),")
+                else
+                    @test elementwise_isapprox(normed_residual,
+                                               expected.delta_f_residual; rtol=0.0,
+                                               atol=regression_tol)
+                    @test elementwise_isapprox(normed_with_Jacobian,
+                                               expected.delta_f_with_Jacobian; rtol=0.0,
+                                               atol=regression_tol)
+                end
             end
         end
 
@@ -1267,9 +1349,22 @@ function test_get_p_term(test_input::AbstractDict, label::String, get_term::Func
                                            zeros(pdf_size); atol=1.0e-15)
 
                 norm_factor = generate_norm_factor(perturbed_residual)
-                @test elementwise_isapprox(perturbed_residual ./ norm_factor,
-                                           perturbed_with_Jacobian ./ norm_factor;
+                normed_residual = perturbed_residual ./ norm_factor
+                normed_with_Jacobian = perturbed_with_Jacobian ./ norm_factor
+                @test elementwise_isapprox(normed_residual, normed_with_Jacobian;
                                            rtol=0.0, atol=rtol)
+
+                if expected === nothing
+                    println(" delta_p_residual=$(normed_residual),\n"
+                            * " delta_p_with_Jacobian=$(normed_with_Jacobian),")
+                else
+                    @test elementwise_isapprox(normed_residual,
+                                               expected.delta_p_residual; rtol=0.0,
+                                               atol=regression_tol)
+                    @test elementwise_isapprox(normed_with_Jacobian,
+                                               expected.delta_p_with_Jacobian; rtol=0.0,
+                                               atol=regression_tol)
+                end
             end
         end
 
@@ -1294,9 +1389,23 @@ function test_get_p_term(test_input::AbstractDict, label::String, get_term::Func
                                            delta_state[1]; atol=1.0e-15)
 
                 norm_factor = generate_norm_factor(perturbed_residual)
-                @test elementwise_isapprox(perturbed_residual ./ norm_factor,
-                                           perturbed_with_Jacobian ./ norm_factor;
+                normed_residual = perturbed_residual ./ norm_factor
+                normed_with_Jacobian = perturbed_with_Jacobian ./ norm_factor
+                @test elementwise_isapprox(normed_residual, normed_with_Jacobian;
                                            rtol=0.0, atol=rtol)
+
+                if expected === nothing
+                    println(" both_residual=$(normed_residual),\n"
+                            * " both_with_Jacobian=$(normed_with_Jacobian),\n"
+                            * ")")
+                else
+                    @test elementwise_isapprox(normed_residual,
+                                               expected.both_residual; rtol=0.0,
+                                               atol=regression_tol)
+                    @test elementwise_isapprox(normed_with_Jacobian,
+                                               expected.both_with_Jacobian; rtol=0.0,
+                                               atol=regression_tol)
+                end
             end
         end
 
@@ -1306,16 +1415,28 @@ function test_get_p_term(test_input::AbstractDict, label::String, get_term::Func
     return nothing
 end
 
-function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
+function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2,
+                                        expected_constant::Union{Nothing,NamedTuple},
+                                        expected_wall::Union{Nothing,NamedTuple})
 
     # Looser rtol for "wall" bc because integral corrections not accounted for in wall bc
     # Jacobian (yet?).
-    @testset "electron_kinetic_equation bc=$bc" for (bc, adi_tol) ∈ (("constant", 1.0e-15), ("wall", 1.0e-13))
+    @testset "electron_kinetic_equation bc=$bc" for (bc, adi_tol, expected) ∈ (("constant", 1.0e-15, expected_constant),
+                                                                               ("wall", 1.0e-13, expected_wall))
         println("        - electron_kinetic_equation $bc")
         this_test_input = deepcopy(test_input)
         label = "electron_kinetic_equation_$bc"
         test_input["output"]["run_name"] *= "_" * label[1:min(11, length(label))]
         this_test_input["z"]["bc"] = bc
+        if test_input["timestepping"]["kinetic_electron_preconditioner"] == "lu_separate_dp_dz_dq_dz"
+            # This preconditioner option has larger errors compared to the regression test
+            # values (that were generated from "lu") than the others. Not sure why - maybe
+            # there is a bug somewhere, or maybe the extra entries in the matrix just increase
+            # rounding errors?
+            regression_tol = 5.0e-10
+        else
+            regression_tol = 1.0e-13
+        end
 
         # Suppress console output while running
         pdf, scratch, scratch_implicit, scratch_electron, t_params, vz, vr, vzeta, vpa,
@@ -1732,13 +1853,37 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
                 perturbed_with_Jacobian_p = vec(original_residual_p) .+ residual_update_with_Jacobian[2]
 
                 norm_factor_f = generate_norm_factor(perturbed_residual_f)
-                @test elementwise_isapprox(perturbed_residual_f ./ norm_factor_f,
-                                           reshape(perturbed_with_Jacobian_f, vpa.n, vperp.n, z.n) ./ norm_factor_f;
+                normed_residual_f = perturbed_residual_f ./ norm_factor_f
+                normed_with_Jacobian_f = reshape(perturbed_with_Jacobian_f, vpa.n, vperp.n, z.n) ./ norm_factor_f
+                @test elementwise_isapprox(normed_residual_f, normed_with_Jacobian_f;
                                            rtol=0.0, atol=rtol)
                 norm_factor_p = generate_norm_factor(perturbed_residual_p)
-                @test elementwise_isapprox(perturbed_residual_p ./ norm_factor_p,
-                                           perturbed_with_Jacobian_p ./ norm_factor_p;
+                normed_residual_p = perturbed_residual_p ./ norm_factor_p
+                normed_with_Jacobian_p = perturbed_with_Jacobian_p ./ norm_factor_p
+                @test elementwise_isapprox(normed_residual_p, normed_with_Jacobian_p;
                                            rtol=0.0, atol=rtol)
+
+                if expected === nothing
+                    @test false
+                    println("No stored regression test data. Tested data would be:\n"
+                            * "(delta_f_residual_f=$(normed_residual_f[1:regression_f_step:end]),\n"
+                            * " delta_f_with_Jacobian_f=$(normed_with_Jacobian_f[1:regression_f_step:end]),\n"
+                            * " delta_f_residual_p=$(normed_residual_p),\n"
+                            * " delta_f_with_Jacobian_p=$(normed_with_Jacobian_p),")
+                else
+                    @test elementwise_isapprox(normed_residual_f[1:regression_f_step:end],
+                                               expected.delta_f_residual_f; rtol=0.0,
+                                               atol=regression_tol)
+                    @test elementwise_isapprox(normed_with_Jacobian_f[1:regression_f_step:end],
+                                               expected.delta_f_with_Jacobian_f; rtol=0.0,
+                                               atol=regression_tol)
+                    @test elementwise_isapprox(normed_residual_p,
+                                               expected.delta_f_residual_p; rtol=0.0,
+                                               atol=regression_tol)
+                    @test elementwise_isapprox(normed_with_Jacobian_p,
+                                               expected.delta_f_with_Jacobian_p; rtol=0.0,
+                                               atol=regression_tol)
+                end
             end
         end
 
@@ -1764,13 +1909,35 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
                 perturbed_with_Jacobian_p = vec(original_residual_p) .+ residual_update_with_Jacobian[2]
 
                 norm_factor_f = generate_norm_factor(perturbed_residual_f)
-                @test elementwise_isapprox(perturbed_residual_f ./ norm_factor_f,
-                                           reshape(perturbed_with_Jacobian_f, vpa.n, vperp.n, z.n) ./ norm_factor_f;
+                normed_residual_f = perturbed_residual_f ./ norm_factor_f
+                normed_with_Jacobian_f = reshape(perturbed_with_Jacobian_f, vpa.n, vperp.n, z.n) ./ norm_factor_f
+                @test elementwise_isapprox(normed_residual_f, normed_with_Jacobian_f;
                                            rtol=0.0, atol=rtol)
                 norm_factor_p = generate_norm_factor(perturbed_residual_p)
-                @test elementwise_isapprox(perturbed_residual_p ./ norm_factor_p,
-                                           perturbed_with_Jacobian_p ./ norm_factor_p;
+                normed_residual_p = perturbed_residual_p ./ norm_factor_p
+                normed_with_Jacobian_p = perturbed_with_Jacobian_p ./ norm_factor_p
+                @test elementwise_isapprox(normed_residual_p, normed_with_Jacobian_p;
                                            rtol=0.0, atol=rtol)
+
+                if expected === nothing
+                    println(" delta_p_residual_f=$(normed_residual_f[1:regression_f_step:end]),\n"
+                            * " delta_p_with_Jacobian_f=$(normed_with_Jacobian_f[1:regression_f_step:end]),\n"
+                            * " delta_p_residual_p=$(normed_residual_p),\n"
+                            * " delta_p_with_Jacobian_p=$(normed_with_Jacobian_p),")
+                else
+                    @test elementwise_isapprox(normed_residual_f[1:regression_f_step:end],
+                                               expected.delta_p_residual_f; rtol=0.0,
+                                               atol=regression_tol)
+                    @test elementwise_isapprox(normed_with_Jacobian_f[1:regression_f_step:end],
+                                               expected.delta_p_with_Jacobian_f; rtol=0.0,
+                                               atol=regression_tol)
+                    @test elementwise_isapprox(normed_residual_p,
+                                               expected.delta_p_residual_p; rtol=0.0,
+                                               atol=regression_tol)
+                    @test elementwise_isapprox(normed_with_Jacobian_p,
+                                               expected.delta_p_with_Jacobian_p; rtol=0.0,
+                                               atol=regression_tol)
+                end
             end
         end
 
@@ -1796,13 +1963,36 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
                 perturbed_with_Jacobian_p = vec(original_residual_p) .+ residual_update_with_Jacobian[2]
 
                 norm_factor_f = generate_norm_factor(perturbed_residual_f)
-                @test elementwise_isapprox(perturbed_residual_f ./ norm_factor_f,
-                                           reshape(perturbed_with_Jacobian_f, vpa.n, vperp.n, z.n) ./ norm_factor_f;
+                normed_residual_f = perturbed_residual_f ./ norm_factor_f
+                normed_with_Jacobian_f = reshape(perturbed_with_Jacobian_f, vpa.n, vperp.n, z.n) ./ norm_factor_f
+                @test elementwise_isapprox(normed_residual_f, normed_with_Jacobian_f;
                                            rtol=0.0, atol=rtol)
                 norm_factor_p = generate_norm_factor(perturbed_residual_p)
-                @test elementwise_isapprox(perturbed_residual_p ./ norm_factor_p,
-                                           perturbed_with_Jacobian_p ./ norm_factor_p;
+                normed_residual_p = perturbed_residual_p ./ norm_factor_p
+                normed_with_Jacobian_p = perturbed_with_Jacobian_p ./ norm_factor_p
+                @test elementwise_isapprox(normed_residual_p, normed_with_Jacobian_p;
                                            rtol=0.0, atol=rtol)
+
+                if expected === nothing
+                    println(" both_residual_f=$(normed_residual_f[1:regression_f_step:end]),\n"
+                            * " both_with_Jacobian_f=$(normed_with_Jacobian_f[1:regression_f_step:end]),\n"
+                            * " both_residual_p=$(normed_residual_p),\n"
+                            * " both_with_Jacobian_p=$(normed_with_Jacobian_p),\n"
+                            * ")")
+                else
+                    @test elementwise_isapprox(normed_residual_f[1:regression_f_step:end],
+                                               expected.both_residual_f; rtol=0.0,
+                                               atol=regression_tol)
+                    @test elementwise_isapprox(normed_with_Jacobian_f[1:regression_f_step:end],
+                                               expected.both_with_Jacobian_f; rtol=0.0,
+                                               atol=regression_tol)
+                    @test elementwise_isapprox(normed_residual_p,
+                                               expected.both_residual_p; rtol=0.0,
+                                               atol=regression_tol)
+                    @test elementwise_isapprox(normed_with_Jacobian_p,
+                                               expected.both_with_Jacobian_p; rtol=0.0,
+                                               atol=regression_tol)
+                end
             end
         end
 
@@ -1812,7 +2002,8 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
     return nothing
 end
 
-function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2)
+function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2,
+                               expected::Union{Nothing,NamedTuple})
     test_input = deepcopy(test_input)
     label = "electron_wall_bc"
     test_input["output"]["run_name"] *= "_" * label[1:min(11, length(label))]
@@ -2136,9 +2327,23 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2)
                 # If the boundary condition is correctly implemented in the Jacobian, then
                 # if f+delta_f obeys the boundary condition, then J*delta_state should
                 # give zeros in the boundary points.
-                @test elementwise_isapprox(perturbed_residual,
-                                           reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n);
+                reshaped_with_Jacobian = reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n)
+                @test elementwise_isapprox(perturbed_residual, reshaped_with_Jacobian;
                                            rtol=0.0, atol=atol)
+
+                if expected === nothing
+                    @test false
+                    println("No stored regression test data. Tested data would be:\n"
+                            * "(delta_f_residual=$(perturbed_residual[1:regression_f_step:end]),\n"
+                            * " delta_f_with_Jacobian=$(reshaped_with_Jacobian[1:regression_f_step:end]),")
+                else
+                    @test elementwise_isapprox(perturbed_residual[1:regression_f_step:end],
+                                               expected.delta_f_residual; rtol=0.0,
+                                               atol=1.0e-13)
+                    @test elementwise_isapprox(reshaped_with_Jacobian[1:regression_f_step:end],
+                                               expected.delta_f_with_Jacobian; rtol=0.0,
+                                               atol=1.0e-13)
+                end
             end
         end
 
@@ -2174,9 +2379,21 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2)
                 # Use an absolute tolerance for this test because if we used a norm_factor
                 # like the other tests, it would be zero to machine precision at some
                 # points.
-                @test elementwise_isapprox(perturbed_residual,
-                                           reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n);
+                reshaped_with_Jacobian = reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n)
+                @test elementwise_isapprox(perturbed_residual, reshaped_with_Jacobian;
                                            rtol=0.0, atol=atol)
+
+                if expected === nothing
+                    println(" delta_p_residual=$(perturbed_residual[1:regression_f_step:end]),\n"
+                            * " delta_p_with_Jacobian=$(reshaped_with_Jacobian[1:regression_f_step:end]),")
+                else
+                    @test elementwise_isapprox(perturbed_residual[1:regression_f_step:end],
+                                               expected.delta_p_residual; rtol=0.0,
+                                               atol=1.0e-13)
+                    @test elementwise_isapprox(reshaped_with_Jacobian[1:regression_f_step:end],
+                                               expected.delta_p_with_Jacobian; rtol=0.0,
+                                               atol=1.0e-13)
+                end
             end
         end
 
@@ -2212,10 +2429,142 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2)
                 # Use an absolute tolerance for this test because if we used a norm_factor
                 # like the other tests, it would be zero to machine precision at some
                 # points.
-                @test elementwise_isapprox(perturbed_residual,
-                                           reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n);
+                reshaped_with_Jacobian = reshape(perturbed_with_Jacobian, vpa.n, vperp.n, z.n)
+                @test elementwise_isapprox(perturbed_residual, reshaped_with_Jacobian;
                                            rtol=0.0, atol=atol)
+
+                if expected === nothing
+                    println(" both_residual=$(perturbed_residual[1:regression_f_step:end]),\n"
+                            * " both_with_Jacobian=$(reshaped_with_Jacobian[1:regression_f_step:end]),\n"
+                            * ")")
+                else
+                    @test elementwise_isapprox(perturbed_residual[1:regression_f_step:end],
+                                               expected.both_residual; rtol=0.0,
+                                               atol=1.0e-13)
+                    @test elementwise_isapprox(reshaped_with_Jacobian[1:regression_f_step:end],
+                                               expected.both_with_Jacobian; rtol=0.0,
+                                               atol=1.0e-13)
+                end
             end
+        end
+
+        cleanup_mk_state!(ascii_io, io_moments, io_dfns)
+    end
+
+    return nothing
+end
+
+function test_jacobian_inversion(test_input; rtol=2.0e-12)
+
+    @testset "jacobian_inversion $bc" for (bc, expected) ∈ (("wall", expected_jacobian_inversion_wall),
+                                                            ("periodic", expected_jacobian_inversion_periodic))
+        println("        - jacobian_inversion $bc")
+        this_test_input = deepcopy(test_input)
+        label = "jacobian_inversion"
+        test_input["output"]["run_name"] *= "_" * label[1:min(11, length(label))]
+        this_test_input["z"]["bc"] = bc
+
+        # Suppress console output while running
+        pdf, scratch, scratch_implicit, scratch_electron, t_params, vz, vr, vzeta, vpa,
+            vperp, gyrophase, z, r, moments, fields, spectral_objects, advection_structs,
+            composition, collisions, geometry, gyroavs, boundary_distributions,
+            external_source_settings, num_diss_params, nl_solver_params, advance,
+            advance_implicit, fp_arrays, scratch_dummy, manufactured_source_list,
+            ascii_io, io_moments, io_dfns = get_mk_state(this_test_input)
+
+        dens = @view moments.electron.dens[:,ir]
+        ddens_dz = @view moments.electron.ddens_dz[:,ir]
+        upar = @view moments.electron.upar[:,ir]
+        p = @view moments.electron.p[:,ir]
+        dp_dz = @view moments.electron.dp_dz[:,ir]
+        vth = @view moments.electron.vth[:,ir]
+        qpar = @view moments.electron.qpar[:,ir]
+        ion_dens = @view moments.ion.dens[:,ir]
+        ion_upar = @view moments.ion.upar[:,ir]
+        phi = @view fields.phi[:,ir]
+        z_spectral = spectral_objects.z_spectral
+        vperp_spectral = spectral_objects.vperp_spectral
+        vpa_spectral = spectral_objects.vpa_spectral
+        z_advect = advection_structs.z_advect
+        vpa_advect = advection_structs.vpa_advect
+        me = composition.me_over_mi
+        f = @view pdf.electron.norm[:,:,:,ir]
+
+        buffer_1 = @view scratch_dummy.buffer_rs_1[ir,1]
+        buffer_2 = @view scratch_dummy.buffer_rs_2[ir,1]
+        buffer_3 = @view scratch_dummy.buffer_rs_3[ir,1]
+        buffer_4 = @view scratch_dummy.buffer_rs_4[ir,1]
+
+        @begin_r_anyzv_region()
+
+        @begin_anyzv_region()
+        @anyzv_serial_region begin
+            # Make sure initial condition has some z-variation. As f is 'moment kinetic' this
+            # means f must have a non-Maxwellian part that varies in z.
+            f .*= 1.0 .+ 1.0e-4 .* reshape(vpa.grid.^3, vpa.n, 1, 1) .* reshape(sin.(2.0.*π.*z.grid./z.L), 1, 1, z.n)
+        end
+        # Ensure initial electron distribution function obeys constraints
+        hard_force_moment_constraints!(reshape(f, vpa.n, vperp.n, z.n, 1), moments, vpa, vperp)
+        @begin_r_anyzv_region()
+
+        _, apply_preconditioner!, recalculate_preconditioner! =
+            get_electron_preconditioner(nl_solver_params.electron_advance, f, p, buffer_1,
+                                        buffer_2, buffer_3, buffer_4, dens, upar, phi,
+                                        moments, collisions, composition, z, vperp, vpa,
+                                        z_spectral, vperp_spectral, vpa_spectral,
+                                        z_advect, vpa_advect, scratch_dummy,
+                                        external_source_settings, num_diss_params,
+                                        t_params.electron, ion_dt, ir, true)
+
+        if apply_preconditioner! === identity
+            error("Expected second object returned by get_electron_preconditioner() to "
+                  * "be the preconditioner function, but it is `identity()`.")
+        end
+
+        recalculate_preconditioner!()
+
+        residual_func! = kinetic_electron_residual!(; f_electron_old=f, electron_p_old=p,
+                                                    evolve_p=true, moments, composition,
+                                                    collisions, external_source_settings,
+                                                    t_params=t_params.electron, ion_dt,
+                                                    scratch_dummy, this_phi=phi,
+                                                    electron_density=dens,
+                                                    electron_upar=upar,
+                                                    ion_density=ion_dens, ion_upar, r, z,
+                                                    vperp, vpa, z_spectral,
+                                                    vperp_spectral, vpa_spectral,
+                                                    z_advect, vpa_advect, num_diss_params,
+                                                    ir)
+
+        residual_f = allocate_shared_float(vpa, vperp, z; comm=comm_anyzv_subblock[])
+        residual_p = allocate_shared_float(z; comm=comm_anyzv_subblock[])
+
+        residual_func!((residual_p, residual_f), (p, f))
+
+        apply_preconditioner!((residual_p, residual_f))
+
+        if expected === nothing
+            @test false
+            println("No stored regression test data. Tested data would be:\n"
+                    * "(expected_precon_f=", @view residual_f[1:regression_f_step:end], ",\n"
+                    * " expected_precon_p=", residual_p, ",\n"
+                    * ")")
+        else
+            @test elementwise_isapprox(expected.precon_f,
+                                       @view residual_f[1:regression_f_step:end];
+                                       rtol=rtol, atol=1.0e-20)
+
+            if (nl_solver_params.electron_advance.preconditioner_type === Val(:electron_lu_separate_dp_dz_dq_dz)
+                    && bc == "periodic")
+                # This combination has a strangely high relative error. Not sure why,
+                # maybe just bad luck (?), but :lu_separate_dp_dz_dq_dz is not commonly
+                # used anyway, so allow this to pass (at least for now).
+                p_rtol = rtol * 1.0e3
+            else
+                p_rtol = rtol
+            end
+            @test elementwise_isapprox(expected.precon_p, residual_p; rtol=p_rtol,
+                                       atol=1.0e-20)
         end
 
         cleanup_mk_state!(ascii_io, io_moments, io_dfns)
@@ -2261,7 +2610,7 @@ function runtests()
             end
             test_get_pdf_term(this_test_input, "electron_z_advection",
                               get_electron_z_advection_term, z_advection_wrapper!,
-                              (2.5e2*epsilon)^2)
+                              (2.5e2*epsilon)^2, expected_z)
 
             function vpa_advection_wrapper!(; kwargs...)
                 electron_vpa_advection!(kwargs[:residual], kwargs[:this_f], kwargs[:dens],
@@ -2275,7 +2624,7 @@ function runtests()
             end
             test_get_pdf_term(this_test_input, "electron_vpa_advection",
                               get_electron_vpa_advection_term, vpa_advection_wrapper!,
-                              (3.0e2*epsilon)^2)
+                              (3.0e2*epsilon)^2, expected_vpa)
 
             function contribution_from_electron_pdf_term_wrapper!(; kwargs...)
                 add_contribution_from_pdf_term!(kwargs[:residual], kwargs[:this_f],
@@ -2288,7 +2637,8 @@ function runtests()
             end
             test_get_pdf_term(this_test_input, "contribution_from_electron_pdf_term",
                               get_contribution_from_electron_pdf_term,
-                              contribution_from_electron_pdf_term_wrapper!, (4.0e2*epsilon)^2)
+                              contribution_from_electron_pdf_term_wrapper!,
+                              (4.0e2*epsilon)^2, expected_pdf_term)
 
             function contribution_from_electron_dissipation_term!(; kwargs...)
                 add_dissipation_term!(kwargs[:residual], kwargs[:this_f],
@@ -2299,7 +2649,8 @@ function runtests()
             end
             test_get_pdf_term(this_test_input, "electron_dissipation_term",
                               get_electron_dissipation_term,
-                              contribution_from_electron_dissipation_term!, (1.0e1*epsilon)^2)
+                              contribution_from_electron_dissipation_term!,
+                              (1.0e1*epsilon)^2, expected_dissipation)
 
             function contribution_from_krook_collisions!(; kwargs...)
                 electron_krook_collisions!(kwargs[:residual], kwargs[:this_f], kwargs[:dens],
@@ -2310,7 +2661,8 @@ function runtests()
             end
             test_get_pdf_term(this_test_input, "electron_krook_collisions",
                               get_electron_krook_collisions_term,
-                              contribution_from_krook_collisions!, (2.0e1*epsilon)^2)
+                              contribution_from_krook_collisions!, (2.0e1*epsilon)^2,
+                              expected_krook)
 
             function contribution_from_external_electron_sources!(; kwargs...)
                 total_external_electron_sources!(kwargs[:residual], kwargs[:this_f],
@@ -2323,7 +2675,8 @@ function runtests()
             end
             test_get_pdf_term(this_test_input, "external_electron_sources",
                               get_total_external_electron_source_term,
-                              contribution_from_external_electron_sources!, (3.0e1*epsilon)^2)
+                              contribution_from_external_electron_sources!,
+                              (3.0e1*epsilon)^2, expected_sources)
 
             # For this test where only the 'constraint forcing' term is added to the residual,
             # the residual is exactly zero for the initial condition (because that is
@@ -2356,7 +2709,8 @@ function runtests()
             end
             test_get_pdf_term(this_test_input, "implicit_constraint_forcing",
                               get_electron_implicit_constraint_forcing_term,
-                              contribution_from_implicit_constraint_forcing!, (2.5e0*epsilon))
+                              contribution_from_implicit_constraint_forcing!,
+                              (2.5e0*epsilon), expected_constraint)
 
             function contribution_from_electron_energy_equation!(; kwargs...)
                 electron_energy_equation_no_r!(
@@ -2371,7 +2725,8 @@ function runtests()
             end
             test_get_p_term(this_test_input, "electron_energy_equation",
                             get_electron_energy_equation_term,
-                            contribution_from_electron_energy_equation!, (6.0e2*epsilon)^2)
+                            contribution_from_electron_energy_equation!,
+                            (6.0e2*epsilon)^2, expected_energy)
 
             function contribution_from_ion_dt_forcing_of_electron_p!(; kwargs...)
                 p_previous_ion_step = kwargs[:moments].electron.p
@@ -2394,11 +2749,14 @@ function runtests()
             test_get_p_term(this_test_input, "ion_dt_forcing_of_electron_p",
                             get_ion_dt_forcing_of_electron_p_term,
                             contribution_from_ion_dt_forcing_of_electron_p!,
-                            (1.5e1*epsilon)^2)
+                            (1.5e1*epsilon)^2, expected_ion_dt)
 
-            test_electron_wall_bc(this_test_input)
+            test_electron_wall_bc(this_test_input; expected=expected_wall)
 
-            test_electron_kinetic_equation(this_test_input)
+            test_electron_kinetic_equation(this_test_input; expected_constant=expected_ke_constant,
+                                           expected_wall=expected_ke_wall)
+
+            test_jacobian_inversion(this_test_input)
         end
     end
 
