@@ -6,6 +6,7 @@ export coordinate
 export define_coordinate, write_coordinate
 export equally_spaced_grid
 export set_element_boundaries
+export get_global_indices
 
 using LinearAlgebra
 using ..type_definitions: mk_float, mk_int, OptionsDict
@@ -17,6 +18,7 @@ using ..finite_differences: finite_difference_info
 using ..fourier: setup_fourier_pseudospectral
 using ..gauss_legendre: scaled_gauss_legendre_lobatto_grid, scaled_gauss_legendre_radau_grid, setup_gausslegendre_pseudospectral
 using ..input_structs
+using ..looping
 using ..quadrature: trapezium_weights, composite_simpson_weights
 using ..moment_kinetics_structs: coordinate, null_spatial_dimension_info,
                                  null_velocity_dimension_info, null_vperp_dimension_info
@@ -396,12 +398,13 @@ function define_test_coordinate(input_dict::AbstractDict; kwargs...)
     name = pop!(input_dict, "name")
     return define_coordinate(OptionsDict(name => input_dict), name; kwargs...)
 end
-function define_test_coordinate(name; collision_operator_dim=true, kwargs...)
+function define_test_coordinate(name; collision_operator_dim=true, irank=0, nrank=1,
+                                kwargs...)
     coord_input_dict = OptionsDict(String(k) => v for (k,v) in kwargs)
     coord_input_dict["name"] = name
     return define_test_coordinate(coord_input_dict;
                                   collision_operator_dim=collision_operator_dim,
-                                  ignore_MPI=true)
+                                  irank=irank, nrank=nrank, ignore_MPI=true)
 end
 
 function set_element_boundaries(nelement_global, L, element_spacing_option, coord_name)
@@ -763,6 +766,82 @@ function elemental_to_full_grid_map(ngrid, nelement)
         end
     end
     return imin, imax, igrid_full
+end
+
+"""
+    get_global_indices(n_variables::mk_int, coords::Tuple)
+    get_global_indices(coords::Tuple...)
+
+Get flattened global indices for one or more variables whose dimensions are respectively
+`coords`.
+
+Short version if all variables have the same dimensions, can pass `n_variables` to give
+the number of variables.
+"""
+function get_global_indices end
+function get_global_indices(n_variables::mk_int, coords::Tuple)
+    return get_global_indices(ntuple(i->coords, n_variables)...)
+end
+function get_global_indices(coords1::Tuple, other_coords::Tuple...)
+    coords = tuple(coords1, other_coords...)
+
+    total_local_size = sum(prod(c.n for c ∈ this_coords) for this_coords ∈ coords)
+
+    # These indices will only ever be read after this function completes, so to save
+    # memory can be shared by the full shared-memory block even if these will be used
+    # within an anysv or anyzv region.
+    global_indices = allocate_shared_int(:flattened_dim=>total_local_size)
+
+    # In principle the following setup is parallelisable, but it should only be called
+    # during initialisation. The serial version is probably less error-prone.
+    @begin_serial_region()
+    @serial_region begin
+        global_offset = 0
+        local_offset = 0
+        for this_coords ∈ coords
+            coord_initial_global_offset = Tuple(c.irank * (c.n - 1) for c ∈ this_coords)
+            global_steps = cumprod(c.n_global for c ∈ this_coords[1:end-1])
+            global_steps = [1, global_steps...]
+            function insert_global_indices!(coord_list, initial_global_offset_list,
+                                            global_steps_list, global_offset, local_offset)
+                c = coord_list[end]
+                c_initial_global_offset = initial_global_offset_list[end]
+                last_periodic = (c.periodic && c.irank == c.nrank - 1)
+                if length(coord_list) == 1
+                    # Reached the fastest-varying coordinate, so actually add values.
+                    global_indices[local_offset+1:local_offset+c.n] .= 1:c.n
+                    @views global_indices[local_offset+1:local_offset+c.n] .+= global_offset + c_initial_global_offset
+                    if last_periodic
+                        # Last point is actually identical to the first global grid point
+                        global_indices[local_offset + c.n] = global_offset + 1
+                    end
+                    local_offset += c.n
+                else
+                    for i ∈ 1:c.n
+                        c_global_offset = i - 1 + c_initial_global_offset
+                        this_global_offset = global_offset + c_global_offset * global_steps_list[end]
+                        if last_periodic && i == c.n
+                            this_global_offset = global_offset
+                        end
+                        local_offset = insert_global_indices!(coord_list[1:end-1],
+                                                              initial_global_offset_list[1:end-1],
+                                                              global_steps_list[1:end-1],
+                                                              this_global_offset,
+                                                              local_offset)
+                    end
+                end
+
+                return local_offset
+            end
+            local_offset = insert_global_indices!(this_coords,
+                                                  coord_initial_global_offset,
+                                                  global_steps, global_offset,
+                                                  local_offset)
+            global_offset += prod(c.n_global for c ∈ this_coords)
+        end
+    end
+
+    return global_indices
 end
 
 end
