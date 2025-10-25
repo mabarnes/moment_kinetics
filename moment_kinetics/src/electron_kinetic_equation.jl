@@ -1189,6 +1189,222 @@ function get_electron_preconditioners(preconditioner_type, nl_solver_input, coor
     return preconditioners
 end
 
+@kwdef @concrete struct kinetic_electron_recalculate_schur_complement!
+    nl_solver_params
+    f_electron_new
+    electron_p_new
+    moments
+    this_phi
+    collisions
+    composition
+    z
+    vperp
+    vpa
+    z_spectral
+    vperp_spectral
+    vpa_spectral
+    z_advect
+    vpa_advect
+    scratch_dummy
+    external_source_settings
+    num_diss_params
+    t_params
+    ion_dt
+    evolve_p::Bool
+    add_identity::Bool
+    ir::mk_int
+end
+
+function (recalc::kinetic_electron_recalculate_schur_complement!)()
+    nl_solver_params = recalc.nl_solver_params
+    f_electron_new = recalc.f_electron_new
+    electron_p_new = recalc.electron_p_new
+    moments = recalc.moments
+    this_phi = recalc.this_phi
+    collisions = recalc.collisions
+    composition = recalc.composition
+    z = recalc.z
+    vperp = recalc.vperp
+    vpa = recalc.vpa
+    z_spectral = recalc.z_spectral
+    vperp_spectral = recalc.vperp_spectral
+    vpa_spectral = recalc.vpa_spectral
+    z_advect = recalc.z_advect
+    vpa_advect = recalc.vpa_advect
+    scratch_dummy = recalc.scratch_dummy
+    external_source_settings = recalc.external_source_settings
+    num_diss_params = recalc.num_diss_params
+    t_params = recalc.t_params
+    ion_dt = recalc.ion_dt
+    evolve_p = recalc.evolve_p
+    add_identity = recalc.add_identity
+    ir = recalc.ir
+
+global_rank[] == 0 && println("recalculating precon")
+
+    nl_solver_params.solves_since_precon_update[] = 0
+    nl_solver_params.precon_dt[] = t_params.dt[]
+
+    orig_lu, precon, input_buffer, output_buffer =
+        nl_solver_params.preconditioners[ir]
+
+    fill_electron_kinetic_equation_Jacobian!(
+        precon, f_electron_new, electron_p_new, moments, this_phi, collisions,
+        composition, z, vperp, vpa, z_spectral, vperp_spectral, vpa_spectral,
+        z_advect, vpa_advect, scratch_dummy, external_source_settings,
+        num_diss_params, t_params, ion_dt, ir, evolve_p, :all, true, add_identity)
+
+    @begin_anyzv_region()
+    if anyzv_subblock_rank[] == 0
+        if size(orig_lu) == (1, 1)
+            # Have not properly created the LU decomposition before, so
+            # cannot reuse it.
+            @timeit_debug global_timer "lu" nl_solver_params.preconditioners[ir] =
+                (lu(get_sparse_joined_array(precon)), precon, input_buffer,
+                 output_buffer)
+        else
+            # LU decomposition was previously created. The Jacobian always
+            # has the same sparsity pattern, so by using `lu!()` we can
+            # reuse some setup.
+            try
+                @timeit_debug global_timer "lu!" lu!(orig_lu, get_sparse_joined_array(precon); check=false)
+            catch e
+                if !isa(e, ArgumentError)
+                    rethrow(e)
+                end
+                println("Sparsity pattern of matrix changed, rebuilding "
+                        * "LU from scratch")
+                @timeit_debug global_timer "lu" orig_lu = lu(get_sparse_joined_array(precon))
+            end
+            nl_solver_params.preconditioners[ir] =
+                (orig_lu, precon, input_buffer, output_buffer)
+        end
+    else
+        nl_solver_params.preconditioners[ir] =
+            (orig_lu, precon, input_buffer, output_buffer)
+    end
+
+    return nothing
+end
+
+@kwdef @concrete struct kinetic_electron_schur_complement_precon!
+    nl_solver_params
+    scratch_dummy
+    buffer_1
+    buffer_2
+    buffer_3
+    buffer_4
+    z
+    ir::mk_int
+end
+
+@timeit_debug global_timer (schur_complement_pre::kinetic_electron_schur_complement_precon!)(x) = begin
+    nl_solver_params = schur_complement_pre.nl_solver_params
+    scratch_dummy = schur_complement_pre.scratch_dummy
+    buffer_1 = schur_complement_pre.buffer_1
+    buffer_2 = schur_complement_pre.buffer_2
+    buffer_3 = schur_complement_pre.buffer_3
+    buffer_4 = schur_complement_pre.buffer_4
+    z = schur_complement_pre.z
+    ir = schur_complement_pre.ir
+
+    precon_p, precon_f = x
+
+    precon_lu, _, this_input_buffer, this_output_buffer =
+        nl_solver_params.preconditioners[ir]
+
+    @begin_anyzv_region()
+    counter = 1
+    @loop_z_vperp_vpa iz ivperp ivpa begin
+        this_input_buffer[counter] = precon_f[ivpa,ivperp,iz]
+        counter += 1
+    end
+    @loop_z iz begin
+        this_input_buffer[counter] = precon_p[iz]
+        counter += 1
+    end
+
+    @begin_anyzv_region()
+    @anyzv_serial_region begin
+        @timeit_debug global_timer "ldiv!" ldiv!(this_output_buffer, precon_lu, this_input_buffer)
+    end
+
+    @begin_anyzv_region()
+    counter = 1
+    @loop_z_vperp_vpa iz ivperp ivpa begin
+        precon_f[ivpa,ivperp,iz] = this_output_buffer[counter]
+        counter += 1
+    end
+    @loop_z iz begin
+        precon_p[iz] = this_output_buffer[counter]
+        counter += 1
+    end
+
+    # Ensure values of precon_f and precon_p are consistent across
+    # distributed-MPI block boundaries. For precon_f take the upwind
+    # value, and for precon_p take the average.
+    f_lower_endpoints = @view scratch_dummy.buffer_vpavperpr_1[:,:,ir]
+    f_upper_endpoints = @view scratch_dummy.buffer_vpavperpr_2[:,:,ir]
+    receive_buffer1 = @view scratch_dummy.buffer_vpavperpr_3[:,:,ir]
+    receive_buffer2 = @view scratch_dummy.buffer_vpavperpr_4[:,:,ir]
+    @begin_anyzv_vperp_vpa_region()
+    @loop_vperp_vpa ivperp ivpa begin
+        f_lower_endpoints[ivpa,ivperp] = precon_f[ivpa,ivperp,1]
+        f_upper_endpoints[ivpa,ivperp] = precon_f[ivpa,ivperp,end]
+    end
+    # We upwind the z-derivatives in `electron_z_advection!()`, so would
+    # expect that upwinding the results here in z would make sense.
+    # However, upwinding here makes convergence much slower (~10x),
+    # compared to picking the values from one side or other of the block
+    # boundary, or taking the average of the values on either side.
+    # Neither direction is special, so taking the average seems most
+    # sensible (although in an intial test it does not seem to converge
+    # faster than just picking one or the other).
+    # Maybe this could indicate that it is more important to have a fully
+    # self-consistent Jacobian inversion for the
+    # `electron_vpa_advection()` part rather than taking half(ish) of the
+    # values from one block and the other half(ish) from the other.
+    reconcile_element_boundaries_MPI_z_pdf_vpavperpz!(
+        precon_f, f_lower_endpoints, f_upper_endpoints, receive_buffer1,
+        receive_buffer2, z)
+
+    @begin_anyzv_region()
+    @anyzv_serial_region begin
+        buffer_1[] = precon_p[1]
+        buffer_2[] = precon_p[end]
+    end
+    reconcile_element_boundaries_MPI_anyzv!(
+        precon_p, buffer_1, buffer_2, buffer_3, buffer_4, z)
+
+    return nothing
+end
+
+function get_electron_schur_complement_preconditioner(
+             nl_solver_params, f_electron_new, electron_p_new, buffer_1, buffer_2,
+             buffer_3, buffer_4, electron_density, electron_upar, this_phi, moments,
+             collisions, composition, z, vperp, vpa, z_spectral, vperp_spectral,
+             vpa_spectral, z_advect, vpa_advect, scratch_dummy, external_source_settings,
+             num_diss_params, t_params, ion_dt, ir, evolve_p, add_identity=true)
+
+    recalculate_schur_complement_preconditioner! =
+        kinetic_electron_recalculate_schur_complement!(;
+            nl_solver_params, f_electron_new, electron_p_new, moments, this_phi,
+            collisions, composition, z, vperp, vpa, z_spectral, vperp_spectral,
+            vpa_spectral, z_advect, vpa_advect, scratch_dummy, external_source_settings,
+            num_diss_params, t_params, ion_dt, evolve_p, add_identity, ir)
+
+    schur_complement_precon! =
+        kinetic_electron_schur_complement_precon!(; nl_solver_params, scratch_dummy,
+                                                  buffer_1, buffer_2, buffer_3, buffer_4,
+                                                  z, ir)
+
+    left_preconditioner = identity
+    right_preconditioner = schur_complement_precon!
+
+    return left_preconditioner, right_preconditioner,
+           recalculate_schur_complement_preconditioner!
+end
+
 @kwdef @concrete struct kinetic_electron_recalculate_lu!
     nl_solver_params
     f_electron_new
@@ -1934,10 +2150,18 @@ function get_electron_preconditioner(nl_solver_params, f_electron_new, electron_
                                      scratch_dummy, external_source_settings,
                                      num_diss_params, t_params, ion_dt, ir, evolve_p,
                                      add_identity=true)
-    if nl_solver_params.preconditioner_type ∈ (Val(:electron_lu_no_separate_moments),
-                                               Val(:electron_lu_separate_third_moment),
-                                               Val(:electron_lu),
-                                               Val(:electron_lu_separate_dp_dz_dq_dz))
+    if nl_solver_params.preconditioner_type === Val(:electron_schur_complement)
+        return get_electron_schur_complement_preconditioner(
+                   nl_solver_params, f_electron_new, electron_p_new, buffer_1, buffer_2,
+                   buffer_3, buffer_4, electron_density, electron_upar, this_phi, moments,
+                   collisions, composition, z, vperp, vpa, z_spectral, vperp_spectral,
+                   vpa_spectral, z_advect, vpa_advect, scratch_dummy,
+                   external_source_settings, num_diss_params, t_params, ion_dt, ir,
+                   evolve_p, add_identity)
+    elseif nl_solver_params.preconditioner_type ∈ (Val(:electron_lu_no_separate_moments),
+                                                   Val(:electron_lu_separate_third_moment),
+                                                   Val(:electron_lu),
+                                                   Val(:electron_lu_separate_dp_dz_dq_dz))
         return get_electron_lu_preconditioner(nl_solver_params, f_electron_new,
                                               electron_p_new, buffer_1, buffer_2,
                                               buffer_3, buffer_4, electron_density,
