@@ -980,7 +980,57 @@ function get_electron_preconditioners(preconditioner_type, nl_solver_input, coor
     total_size_coords = prod(coord_sizes)
     outer_coord_sizes = Tuple(isa(c, coordinate) ? c.n : c for c ∈ outer_coords)
 
-    if preconditioner_type === Val(:electron_lu_separate_dp_dz_dq_dz)
+    if preconditioner_type === Val(:electron_schur_complement)
+        moments_vector_size = 5 * coords.z.n
+        function get_schur_precon()
+            jacobian = create_jacobian_info(coords, spectral; comm=comm_anyzv_subblock[],
+                                            synchronize=_anyzv_subblock_synchronize,
+                                            handle_overlaps=Val(false),
+                                            boundary_skip_funcs=boundary_skip_funcs.full,
+                                            electron_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z), false),
+                                            electron_p=((:anyzv,:z), (:z,), false),
+                                            zeroth_moment=((:anyzv,:z), (:z,), true),
+                                            first_moment=((:anyzv,:z), (:z,), true),
+                                            second_moment=((:anyzv,:z), (:z,), true),
+                                            third_moment=((:anyzv,:z), (:z,), true))
+            input_buffer = (allocate_shared_float(:newton_size_pdf=>total_size_coords),
+                            allocate_shared_float(:newton_size_moments=>moments_vector_size))
+            output_buffer = (allocate_shared_float(:newton_size_pdf=>total_size_coords),
+                             allocate_shared_float(:newton_size_moments=>moments_vector_size))
+
+            # Initialise input buffers to zero so that constraint equations have zero on
+            # the RHS.
+            @begin_serial_region()
+            @serial_region begin
+                input_buffer[2] .= 0.0
+            end
+
+            A = jacobian.matrix[1][1]
+            B = get_joined_array(jacobian.matrix, 1:1, 2:jacobian.n_entries)
+            C = get_joined_array(jacobian.matrix, 2:jacobian.n_entries, 1:1)
+            D = get_joined_array(jacobian.matrix, 2:jacobian.n_entries, 2:jacobian.n_entries)
+
+            Alu = lu(sparse(A))
+
+            # External package MPISchurComplements cannot use our macro
+            # @_anyzv_subblock_synchronize() to retrieve line numbers, so (if using
+            # @debug_block_synchronize_quick) get a hash for the location of the following
+            # line, and pass that instead.
+            fake_call_site = @debug_block_synchronize_quick_ifelse(
+                                 hash(string(@__FILE__, @__LINE__)),
+                                 nothing
+                                )
+            schur_complement_lu = mpi_schur_complement(Alu, B, C, D, pdf_global_indices,
+                                                       moments_global_indices;
+                                                       distributed_comm=coords.z.comm,
+                                                       shared_comm=anyzv_subblock_comm[],
+                                                       allocate_array=allocate_shared_float,
+                                                       synchronize_shared=()->_anyzv_subblock_synchronize(fake_call_site))
+
+            return schur_complement_lu, jacobian, input_buffer, output_buffer
+        end
+        preconditioners = [get_schur_precon() for _ ∈ CartesianIndices(reverse(outer_coord_sizes))]
+    elseif preconditioner_type === Val(:electron_lu_separate_dp_dz_dq_dz)
         pdf_plus_p_plus_constraints_size = total_size_coords + coords.z.n + 6 * coords.z.n
         preconditioners = [(lu(sparse(1.0*I, 1, 1)),
                             create_jacobian_info(coords, spectral;
