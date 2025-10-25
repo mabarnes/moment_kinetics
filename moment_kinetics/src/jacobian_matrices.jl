@@ -630,9 +630,11 @@ function jacobian_initialize_bc_digonal_single_variable!(
     return nothing
 end
 
-@timeit_debug global_timer get_joined_array(jacobian::jacobian_info) = begin
+@timeit_debug global_timer get_joined_array(jacobian::jacobian_info,
+                                            row_range=1:jacobian.n_entries,
+                                            col_range=1:jacobian.n_entries) = begin
     n_entries = jacobian.n_entries
-    array_of_arrays = [jacobian.matrix[i][j] for i ∈ 1:n_entries, j ∈ 1:n_entries]
+    array_of_arrays = [jacobian.matrix[i][j] for i ∈ row_range, j ∈ col_range]
     joined_array = mortar(array_of_arrays)
     return joined_array
 end

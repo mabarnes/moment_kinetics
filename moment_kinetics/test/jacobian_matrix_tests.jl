@@ -2588,7 +2588,7 @@ function runtests()
         precon_list = String[]
         @long push!(precon_list, "lu_no_separate_moments")
         @long push!(precon_list, "lu_separate_third_moment")
-        push!(precon_list, "lu")
+        @long push!(precon_list, "lu")
         @long push!(precon_list, "lu_separate_dp_dz_dq_dz")
         @testset "$kinetic_electron_preconditioner" verbose=use_verbose for kinetic_electron_preconditioner ∈ precon_list
             println("    - $kinetic_electron_preconditioner")
