@@ -119,12 +119,10 @@ function linear_test()
         end
 
         nl_solver_params = setup_nonlinear_solve(
-            true,
-            OptionsDict("nonlinear_solver" =>
-                        OptionsDict("rtol" => 0.0,
-                                    "atol" => atol,
-                                    "linear_restart" => restart,
-                                    "linear_max_restarts" => max_restarts)),
+            (rtol=0.0, atol=atol, linear_restart=restart,
+             linear_max_restarts=max_restarts, nonlinear_max_iterations=20,
+             linear_rtol=1.0e-3, linear_atol=1.0, preconditioner_update_interval=300,
+             total_its_soft_limit=50, adi_precon_iterations=1),
             coords; serial_solve=serial_solve, anyzv_region=!serial_solve)
 
         if !serial_solve
@@ -262,13 +260,10 @@ function nonlinear_test()
         end
 
         nl_solver_params = setup_nonlinear_solve(
-            true,
-            OptionsDict("nonlinear_solver" =>
-                        OptionsDict("rtol" => 0.0,
-                                    "atol" => atol,
-                                    "linear_restart" => restart,
-                                    "linear_max_restarts" => max_restarts,
-                                    "nonlinear_max_iterations" => 100)),
+            (rtol=0.0, atol=atol, linear_restart=restart,
+             linear_max_restarts=max_restarts, nonlinear_max_iterations=100,
+             linear_rtol=1.0e-3, linear_atol=1.0, preconditioner_update_interval=300,
+             total_its_soft_limit=50, adi_precon_iterations=1),
             coords; serial_solve=serial_solve, anyzv_region=!serial_solve)
 
         if !serial_solve

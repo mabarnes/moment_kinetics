@@ -55,7 +55,8 @@ using ..charge_exchange: ion_charge_exchange_collisions_1V!,
 using ..electron_kinetic_equation: update_electron_pdf!, implicit_electron_advance!,
                                    electron_backward_euler!,
                                    electron_kinetic_equation_euler_update!,
-                                   apply_electron_bc_and_constraints_no_r!
+                                   apply_electron_bc_and_constraints_no_r!,
+                                   get_electron_preconditioners
 using ..electron_vpa_advection: update_electron_speed_vpa!
 using ..electron_z_advection: update_electron_speed_z!
 using ..ionization: ion_ionization_collisions_1V!, neutral_ionization_collisions_1V!,
@@ -586,64 +587,125 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
                      debug_io, electron_t_params)
 end
 
+function get_ion_preconditioners(preconditioner_type, coords, outer_coords;
+                                 boundary_skip_funcs::BSF=nothing) where {BSF}
+    coord_sizes = Tuple(isa(c, coordinate) ? c.n : c for c ∈ coords)
+    total_size_coords = prod(coord_sizes)
+    outer_coord_sizes = Tuple(isa(c, coordinate) ? c.n : c for c ∈ outer_coords)
+
+    if preconditioner_type === Val(:lu)
+        # Create dummy LU solver objects so we can create an array for preconditioners.
+        # These will be calculated properly within the time loop.
+        preconditioners = fill(lu(sparse(1.0*I, total_size_coords, total_size_coords)),
+                               reverse(outer_coord_sizes))
+    elseif preconditioner_type === Val(:none)
+        preconditioners = nothing
+    else
+        error("Unrecognised preconditioner_type=$preconditioner_type")
+    end
+
+    return preconditioners
+end
+
 function get_nl_solver_params(t_params, input_dict, composition, r, z, vperp, vpa,
                               r_spectral, z_spectral, vperp_spectral, vpa_spectral)
     # Set up parameters for Jacobian-free Newton-Krylov solver used for implicit part of
     # timesteps.
-    electron_conduction_nl_solve_parameters = setup_nonlinear_solve(t_params.implicit_braginskii_conduction,
-                                                                    input_dict, (z=z,), (z=z_spectral,);
-                                                                    default_rtol=t_params.rtol / 10.0,
-                                                                    default_atol=t_params.atol / 10.0,
-                                                                    anyzv_region=true)
-    nl_solver_electron_advance_params =
-        setup_nonlinear_solve(t_params.kinetic_electron_solver ∈ (implicit_time_evolving,
-                                                                  implicit_p_implicit_pseudotimestep,
-                                                                  implicit_steady_state),
-                              input_dict,
-                              (z=z, vperp=vperp, vpa=vpa), (r,),
-                              (z=z_spectral, vperp=vperp_spectral, vpa=vpa_spectral);
-                              default_rtol=t_params.rtol / 10.0,
-                              default_atol=t_params.atol / 10.0,
-                              anyzv_region=true, electron_p_pdf_solve=true,
-                              preconditioner_type=t_params.electron_preconditioner_type,
-                              boundary_skip_funcs=(full=(electron_pdf=skip_f_electron_bc_points_in_Jacobian,
-                                                         electron_p=nothing,
-                                                         zeroth_moment=nothing,
-                                                         first_moment=nothing,
-                                                         second_moment=nothing,
-                                                         third_moment=nothing,
-                                                         electron_dp_dz=nothing,
-                                                         electron_dq_dz=nothing),
-                                                   v_solve=(electron_pdf=skip_f_electron_bc_points_in_Jacobian_v_solve,
-                                                            electron_p=nothing),
-                                                   z_solve=(electron_pdf=skip_f_electron_bc_points_in_Jacobian_z_solve,
-                                                            electron_p=nothing)))
-    nl_solver_ion_advance_params =
-        setup_nonlinear_solve(t_params.implicit_ion_advance, input_dict,
-                              (s=composition.n_ion_species, r=r, z=z, vperp=vperp,
-                               vpa=vpa),
-                              (),
-                              (r=r_spectral, z=z_spectral, vperp=vperp_spectral,
-                               vpa=vpa_spectral);
-                              default_rtol=t_params.rtol / 10.0,
-                              default_atol=t_params.atol / 10.0,
-                              preconditioner_type=Val(:lu))
-    # Implicit solve for vpa_advection term should be done in serial, as it will be called
-    # within a parallelised s_r_z_vperp loop.
-    nl_solver_vpa_advection_params =
-        setup_nonlinear_solve(t_params.implicit_vpa_advection, input_dict, (vpa=vpa,),
-                              (composition.n_ion_species, r, z, vperp),
-                              (vpa=vpa_spectral,);
-                              default_rtol=t_params.rtol / 10.0,
-                              default_atol=t_params.atol / 10.0,
-                              serial_solve=true, preconditioner_type=Val(:lu))
+
+    nl_solver_section = set_defaults_and_check_section!(
+        input_dict, "nonlinear_solver", false;
+        rtol=t_params.rtol / 10.0,
+        atol=t_params.atol / 10.0,
+        nonlinear_max_iterations=20,
+        linear_rtol=1.0e-3,
+        linear_atol=1.0,
+        linear_restart=10,
+        linear_max_restarts=0,
+        preconditioner_update_interval=300,
+        total_its_soft_limit=50,
+        adi_precon_iterations=1,
+       )
+
+    nl_solver_input = Dict_to_NamedTuple(nl_solver_section)
+
+    if t_params.implicit_braginskii_conduction
+        electron_conduction_nl_solve_parameters = setup_nonlinear_solve(nl_solver_input,
+                                                                        (z=z,);
+                                                                        anyzv_region=true)
+    else
+        electron_conduction_nl_solve_parameters = nothing
+    end
+
+    if t_params.kinetic_electron_solver ∈ (implicit_time_evolving,
+                                           implicit_p_implicit_pseudotimestep,
+                                           implicit_steady_state)
+        electron_coords = (z=z, vperp=vperp, vpa=vpa)
+        electron_outer_coords = (r,)
+        electron_spectral = (z=z_spectral, vperp=vperp_spectral, vpa=vpa_spectral)
+        electron_precon = get_electron_preconditioners(t_params.electron_preconditioner_type,
+                                                       nl_solver_input, electron_coords,
+                                                       electron_outer_coords,
+                                                       electron_spectral;
+                                                       boundary_skip_funcs=(full=(electron_pdf=skip_f_electron_bc_points_in_Jacobian,
+                                                                                  electron_p=nothing,
+                                                                                  zeroth_moment=nothing,
+                                                                                  first_moment=nothing,
+                                                                                  second_moment=nothing,
+                                                                                  third_moment=nothing,
+                                                                                  electron_dp_dz=nothing,
+                                                                                  electron_dq_dz=nothing),
+                                                                            v_solve=(electron_pdf=skip_f_electron_bc_points_in_Jacobian_v_solve,
+                                                                                     electron_p=nothing),
+                                                                            z_solve=(electron_pdf=skip_f_electron_bc_points_in_Jacobian_z_solve,
+                                                                                     electron_p=nothing)))
+        nl_solver_electron_advance_params =
+            setup_nonlinear_solve(nl_solver_input, electron_coords, electron_outer_coords;
+                                  anyzv_region=true, electron_p_pdf_solve=true,
+                                  preconditioner_type=t_params.electron_preconditioner_type,
+                                  preconditioners=electron_precon)
+    else
+        nl_solver_electron_advance_params = nothing
+    end
+
+    if t_params.implicit_ion_advance
+        ion_coords = (s=composition.n_ion_species, r=r, z=z, vperp=vperp, vpa=vpa)
+        ion_outer_coords = ()
+        ion_precon_type = Val(:none)
+        nl_solver_ion_advance_params =
+            setup_nonlinear_solve(nl_solver_input, ion_coords, ion_outer_coords;
+                                  preconditioner_type=ion_precon_type,
+                                  preconditioners=get_ion_preconditioners(ion_precon_type,
+                                                                          ion_coords,
+                                                                          ion_outer_coords))
+    else
+        nl_solver_ion_advance_params = nothing
+    end
+
+    if t_params.implicit_vpa_advection
+        # Implicit solve for vpa_advection term should be done in serial, as it will be called
+        # within a parallelised s_r_z_vperp loop.
+        vpa_coords = (vpa=vpa,)
+        vpa_outer_coords = (composition.n_ion_species, r, z, vperp)
+        vpa_precon_type = Val(:none)
+        nl_solver_vpa_advection_params =
+            setup_nonlinear_solve(nl_solver_input, vpa_coords, vpa_outer_coords;
+                                  serial_solve=true, preconditioner_type=vpa_precon_type,
+                                  preconditioners=get_ion_preconditioners(vpa_precon_type,
+                                                                          vpa_coords,
+                                                                          vpa_outer_coords))
+    else
+        nl_solver_vpa_advection_params = nothing
+    end
+
     if nl_solver_ion_advance_params !== nothing &&
             nl_solver_vpa_advection_params !== nothing
         error("Cannot use implicit_ion_advance and implicit_vpa_advection at the same "
               * "time")
     end
-    nl_solver_ion_fp_collisions = setup_fp_nl_solve(t_params.use_implicit_ion_fp_collisions,
-                                                    input_dict, (vperp=vperp, vpa=vpa))
+
+    nl_solver_ion_fp_collisions =
+        setup_fp_nl_solve(t_params.use_implicit_ion_fp_collisions, input_dict,
+                          (vperp=vperp, vpa=vpa))
 
     nl_solver_params = (electron_conduction=electron_conduction_nl_solve_parameters,
                         electron_advance=nl_solver_electron_advance_params,

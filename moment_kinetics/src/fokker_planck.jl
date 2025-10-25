@@ -57,7 +57,7 @@ using ..debugging
 using ..velocity_moments: get_density, get_upar, get_p, get_ppar, get_pperp, get_qpar, get_rmom
 using ..looping
 using ..timer_utils
-using ..input_structs: fkpl_collisions_input, set_defaults_and_check_section!
+using ..input_structs: fkpl_collisions_input, set_defaults_and_check_section!, Dict_to_NamedTuple
 using ..input_structs: multipole_expansion, direct_integration
 using ..looping: get_best_ranges
 using ..reference_parameters: get_reference_collision_frequency_ii
@@ -954,22 +954,34 @@ function setup_fp_nl_solve(implicit_ion_fp_collisions::Bool,
         input_dict::OptionsDict,
         #coords = (vperp=vperp,vpa=vpa)
         coords)
-    # section name in TOML input for nonlinear solver
-    # options for FP collisions
-    section_name = "fokker_planck_collisions_nonlinear_solver"
+
     # Default values of atol, rtol
     # for which implicit FP collisions have
     # been tested. Taking large timesteps
     # with smaller atol challenges the solver
     # with bc="zero".
-    default_atol = 1.0e-10
-    default_rtol = 0.0
-    return setup_nonlinear_solve(
-        implicit_ion_fp_collisions,
-        input_dict,
-        coords; serial_solve=false, anysv_region=true,
-        section_name = section_name,
-        default_atol=default_atol, default_rtol=default_rtol)
+    fp_solver_section = set_defaults_and_check_section!(
+        input_dict, "fokker_planck_collisions_nonlinear_solver", false;
+        rtol=0.0,
+        atol=1.0e-10,
+        nonlinear_max_iterations=20,
+        linear_rtol=1.0e-3,
+        linear_atol=1.0,
+        linear_restart=10,
+        linear_max_restarts=0,
+        preconditioner_update_interval=300,
+        total_its_soft_limit=50,
+        adi_precon_iterations=1,
+       )
+
+    fp_solver_input = Dict_to_NamedTuple(fp_solver_section)
+
+    if implicit_ion_fp_collisions
+        return setup_nonlinear_solve(fp_solver_input, coords; serial_solve=false,
+                                     anysv_region=true)
+    else
+        return nothing
+    end
 end
 
 function implicit_ion_fokker_planck_self_collisions!(pdf_out, pdf_in,
