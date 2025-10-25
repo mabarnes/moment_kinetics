@@ -596,8 +596,8 @@ function get_ion_preconditioners(preconditioner_type, coords, outer_coords;
     if preconditioner_type === Val(:lu)
         # Create dummy LU solver objects so we can create an array for preconditioners.
         # These will be calculated properly within the time loop.
-        preconditioners = fill(lu(sparse(1.0*I, total_size_coords, total_size_coords)),
-                               reverse(outer_coord_sizes))
+        preconditioners = [lu(sparse(1.0*I, total_size_coords, total_size_coords))
+                           for _ ∈ CartesianIndices(reverse(outer_coord_sizes))]
     elseif preconditioner_type === Val(:none)
         preconditioners = nothing
     else
