@@ -706,7 +706,9 @@ end
 
 # Structs for Jacobian matrix calculations
 
-@kwdef @concrete struct ElectronSubTerms{T1,T2,T3,T4,T5,T6}
+# Hopefully temporary: don't use Vector type parameters, due to
+# https://github.com/jonniedie/ConcreteStructs.jl/issues/18.
+@kwdef @concrete struct ElectronSubTerms#{T1,T2,T3,T4,T5,T6}
     me::mk_float
     vpa_dissipation_coefficient::mk_float
     constraint_forcing_rate::mk_float
@@ -741,12 +743,12 @@ end
     df_dvpa
     d2f_dvpa2
     source_type::Vector{String}
-    source_amplitude::Vector{T1}
-    source_T_array::Vector{T2}
-    density_source::Vector{T3}
-    momentum_source::Vector{T4}
-    pressure_source::Vector{T5}
-    source_vth_factor::Vector{T6}
+    source_amplitude#::Vector{T1}
+    source_T_array#::Vector{T2}
+    density_source#::Vector{T3}
+    momentum_source#::Vector{T4}
+    pressure_source#::Vector{T5}
+    source_vth_factor#::Vector{T6}
     source_this_vth_factor
     collisions
     nuee0::mk_float
