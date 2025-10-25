@@ -1,5 +1,6 @@
 module electron_kinetic_equation
 
+using ConcreteStructs
 using LinearAlgebra
 using MPI
 using OrderedCollections
@@ -993,29 +994,27 @@ function electron_backward_euler_pseudotimestepping!(scratch, pdf, moments,
     return success
 end
 
-@kwdef struct kinetic_electron_recalculate_lu!{Tnl,Tfe,Tpe,Tmom,Tphi,Tcoll,Tcomp,Tz,
-                                               Tvperp,Tvpa,Tzsp,Tvperpsp,Tvpasp,Tzadv,
-                                               Tvpaadv,Tdum,Text,Tdiss,Ttp,Tidt}
-    nl_solver_params::Tnl
-    f_electron_new::Tfe
-    electron_p_new::Tpe
-    moments::Tmom
-    this_phi::Tphi
-    collisions::Tcoll
-    composition::Tcomp
-    z::Tz
-    vperp::Tvperp
-    vpa::Tvpa
-    z_spectral::Tzsp
-    vperp_spectral::Tvperpsp
-    vpa_spectral::Tvpasp
-    z_advect::Tzadv
-    vpa_advect::Tvpaadv
-    scratch_dummy::Tdum
-    external_source_settings::Text
-    num_diss_params::Tdiss
-    t_params::Ttp
-    ion_dt::Tidt
+@kwdef @concrete struct kinetic_electron_recalculate_lu!
+    nl_solver_params
+    f_electron_new
+    electron_p_new
+    moments
+    this_phi
+    collisions
+    composition
+    z
+    vperp
+    vpa
+    z_spectral
+    vperp_spectral
+    vpa_spectral
+    z_advect
+    vpa_advect
+    scratch_dummy
+    external_source_settings
+    num_diss_params
+    t_params
+    ion_dt
     evolve_p::Bool
     add_identity::Bool
     ir::mk_int
@@ -1093,14 +1092,14 @@ global_rank[] == 0 && println("recalculating precon")
     return nothing
 end
 
-@kwdef struct kinetic_electron_lu_precon!{Tnl,Tdum,Tb1,Tb2,Tb3,Tb4,Tz}
-    nl_solver_params::Tnl
-    scratch_dummy::Tdum
-    buffer_1::Tb1
-    buffer_2::Tb2
-    buffer_3::Tb3
-    buffer_4::Tb4
-    z::Tz
+@kwdef @concrete struct kinetic_electron_lu_precon!
+    nl_solver_params
+    scratch_dummy
+    buffer_1
+    buffer_2
+    buffer_3
+    buffer_4
+    z
     ir::mk_int
 end
 
@@ -1212,36 +1211,33 @@ function get_electron_lu_preconditioner(nl_solver_params, f_electron_new, electr
     return left_preconditioner, right_preconditioner, recalculate_lu_preconditioner!
 end
 
-@kwdef struct kinetic_electron_recalculate_adi!{Tnl,Tfe,Tpe,Tb1,Tb2,Tb3,Tb4,Tne,Tue,Tphi,
-                                                Tmom,Tcoll,Tcomp,Tz,Tvperp,Tvpa,Tzsp,
-                                                Tvperpsp,Tvpasp,Tzadv,Tvpaadv,Tdum,Text,
-                                                Tdiss,Ttp,Tidt}
-    nl_solver_params::Tnl
-    f_electron_new::Tfe
-    electron_p_new::Tpe
-    buffer_1::Tb1
-    buffer_2::Tb2
-    buffer_3::Tb3
-    buffer_4::Tb4
-    electron_density::Tne
-    electron_upar::Tue
-    this_phi::Tphi
-    moments::Tmom
-    collisions::Tcoll
-    composition::Tcomp
-    z::Tz
-    vperp::Tvperp
-    vpa::Tvpa
-    z_spectral::Tzsp
-    vperp_spectral::Tvperpsp
-    vpa_spectral::Tvpasp
-    z_advect::Tzadv
-    vpa_advect::Tvpaadv
-    scratch_dummy::Tdum
-    external_source_settings::Text
-    num_diss_params::Tdiss
-    t_params::Ttp
-    ion_dt::Tidt
+@kwdef @concrete struct kinetic_electron_recalculate_adi!
+    nl_solver_params
+    f_electron_new
+    electron_p_new
+    buffer_1
+    buffer_2
+    buffer_3
+    buffer_4
+    electron_density
+    electron_upar
+    this_phi
+    moments
+    collisions
+    composition
+    z
+    vperp
+    vpa
+    z_spectral
+    vperp_spectral
+    vpa_spectral
+    z_advect
+    vpa_advect
+    scratch_dummy
+    external_source_settings
+    num_diss_params
+    t_params
+    ion_dt
     ir::mk_int
     evolve_p::Bool
     add_identity::Bool
@@ -1517,17 +1513,17 @@ global_rank[] == 0 && println("recalculating precon")
     return nothing
 end
 
-@kwdef struct kinetic_electron_adi_precon!{Tnl,Tz,Tvperp,Tvpa,Tb1,Tb2,Tb3,Tb4,Tdum}
-    nl_solver_params::Tnl
-    z::Tz
-    vperp::Tvperp
-    vpa::Tvpa
+@kwdef @concrete struct kinetic_electron_adi_precon!
+    nl_solver_params
+    z
+    vperp
+    vpa
     ir::mk_int
-    buffer_1::Tb1
-    buffer_2::Tb2
-    buffer_3::Tb3
-    buffer_4::Tb4
-    scratch_dummy::Tdum
+    buffer_1
+    buffer_2
+    buffer_3
+    buffer_4
+    scratch_dummy
 end
 
 @timeit_debug global_timer (adi_pre::kinetic_electron_adi_precon!)(x) = begin
@@ -1781,36 +1777,34 @@ function get_electron_preconditioner(nl_solver_params, f_electron_new, electron_
     end
 end
 
-@kwdef struct kinetic_electron_residual!{Tfeold,Tpeold,Tmom,Tcomp,Tcol,Text,Ttp,Tidt,Tdum,
-                                         Tphi,Tne,Tue,Tni,Tui,Tr,Tz,Tvperp,Tvpa,Tzsp,
-                                         Tvperpsp,Tvpasp,Tzadv,Tvpaadv,Tdiss,Tss<:Val}
-    f_electron_old::Tfeold
-    electron_p_old::Tpeold
+@kwdef @concrete struct kinetic_electron_residual!
+    f_electron_old
+    electron_p_old
     evolve_p::Bool
-    moments::Tmom
-    composition::Tcomp
-    collisions::Tcol
-    external_source_settings::Text
-    t_params::Ttp
-    ion_dt::Tidt
-    scratch_dummy::Tdum
-    this_phi::Tphi
-    electron_density::Tne
-    electron_upar::Tue
-    ion_density::Tni
-    ion_upar::Tui
-    r::Tr
-    z::Tz
-    vperp::Tvperp
-    vpa::Tvpa
-    z_spectral::Tzsp
-    vperp_spectral::Tvperpsp
-    vpa_spectral::Tvpasp
-    z_advect::Tzadv
-    vpa_advect::Tvpaadv
-    num_diss_params::Tdiss
+    moments
+    composition
+    collisions
+    external_source_settings
+    t_params
+    ion_dt
+    scratch_dummy
+    this_phi
+    electron_density
+    electron_upar
+    ion_density
+    ion_upar
+    r
+    z
+    vperp
+    vpa
+    z_spectral
+    vperp_spectral
+    vpa_spectral
+    z_advect
+    vpa_advect
+    num_diss_params
     ir::mk_int
-    steady_state_f::Tss=Val(false)
+    steady_state_f=Val(false)
 end
 
 function (res::kinetic_electron_residual!)(this_residual, new_variables; krylov=false)
