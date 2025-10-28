@@ -1344,7 +1344,7 @@ function define_dynamic_ion_moment_variables!(fid, n_ion_species, r::coordinate,
         evolve_p, write_error_diagnostics, write_steady_state_diagnostics)
 
     dynamic = get_group(fid, "dynamic_data")
-    ion_species_coord = (name="ion_species", n=n_ion_species)
+    ion_species_coord = (name="ion_species", n=n_ion_species, nrank=1)
 
     # io_density is the handle for the ion particle density
     io_density = create_dynamic_variable!(dynamic, "density", mk_float, z, r,
@@ -1452,18 +1452,18 @@ function define_dynamic_ion_moment_variables!(fid, n_ion_species, r::coordinate,
 
     ion_source_settings = external_source_settings.ion
     if any(x -> x.active, ion_source_settings)
-        n_sources = (name="n_ion_sources", n=length(ion_source_settings))
+        ion_sources = (name="ion_sources", n=length(ion_source_settings), nrank=1)
         external_source_amplitude = create_dynamic_variable!(
-            dynamic, "external_source_amplitude", mk_float, z, r, n_sources;
+            dynamic, "external_source_amplitude", mk_float, z, r, ion_sources;
             parallel_io=parallel_io, description="Amplitude of the external source for ions",
             units="n_ref/c_ref^3*c_ref/L_ref")
         external_source_T_array = create_dynamic_variable!(
-            dynamic, "external_source_T_array", mk_float, z, r, n_sources;
+            dynamic, "external_source_T_array", mk_float, z, r, ion_sources;
             parallel_io=parallel_io, description="Temperature of the external source for ions",
             units="T_ref")
         if evolve_density
             external_source_density_amplitude = create_dynamic_variable!(
-                dynamic, "external_source_density_amplitude", mk_float, z, r, n_sources;
+                dynamic, "external_source_density_amplitude", mk_float, z, r, ion_sources;
                 parallel_io=parallel_io, description="Amplitude of the external density source for ions",
                 units="n_ref*c_ref/L_ref")
         else
@@ -1471,7 +1471,7 @@ function define_dynamic_ion_moment_variables!(fid, n_ion_species, r::coordinate,
         end
         if evolve_upar
             external_source_momentum_amplitude = create_dynamic_variable!(
-                dynamic, "external_source_momentum_amplitude", mk_float, z, r, n_sources;
+                dynamic, "external_source_momentum_amplitude", mk_float, z, r, ion_sources;
                 parallel_io=parallel_io, description="Amplitude of the external momentum source for ions",
                 units="m_ref*n_ref*c_ref*c_ref/L_ref")
         else
@@ -1479,7 +1479,7 @@ function define_dynamic_ion_moment_variables!(fid, n_ion_species, r::coordinate,
         end
         if evolve_p
             external_source_pressure_amplitude = create_dynamic_variable!(
-                dynamic, "external_source_pressure_amplitude", mk_float, z, r, n_sources;
+                dynamic, "external_source_pressure_amplitude", mk_float, z, r, ion_sources;
                 parallel_io=parallel_io, description="Amplitude of the external pressure source for ions",
                 units="n_ref*T_ref*c_ref/L_ref")
         else
@@ -1489,14 +1489,14 @@ function define_dynamic_ion_moment_variables!(fid, n_ion_species, r::coordinate,
                     ("density_profile_control", "density_midpoint_control"), ion_source_settings)
             if any(x -> x.source_type == "density_profile_control", ion_source_settings)
                 external_source_controller_integral = create_dynamic_variable!(
-                    dynamic, "external_source_controller_integral", mk_float, z, r, n_sources;
+                    dynamic, "external_source_controller_integral", mk_float, z, r, ion_sources;
                     parallel_io=parallel_io,
                     description="Integral term for the PID controller of the external source for ions")
             else
-                r_midpoint = (name="midpoint_controller_r", n=1)
-                z_midpoint = (name="midpoint_controller_z", n=1)
+                r_midpoint = (name="midpoint_controller_r", n=1, nrank=1)
+                z_midpoint = (name="midpoint_controller_z", n=1, nrank=1)
                 external_source_controller_integral = create_dynamic_variable!(
-                    dynamic, "external_source_controller_integral", mk_float, r_midpoint, z_midpoint, n_sources;
+                    dynamic, "external_source_controller_integral", mk_float, r_midpoint, z_midpoint, ion_sources;
                     parallel_io=parallel_io,
                     description="Integral term for the PID controller of the external source for ions")
             end
@@ -1683,25 +1683,25 @@ function define_dynamic_electron_moment_variables!(fid, r::coordinate, z::coordi
 
     electron_source_settings = external_source_settings.electron
     if any(x -> x.active, electron_source_settings)
-        n_sources = (name="n_electron_sources", n=length(electron_source_settings))
+        electron_sources = (name="electron_sources", n=length(electron_source_settings), nrank=1)
         external_source_electron_amplitude = create_dynamic_variable!(
-            dynamic, "external_source_electron_amplitude", mk_float, z, io_r, n_sources;
+            dynamic, "external_source_electron_amplitude", mk_float, z, io_r, electron_sources;
             parallel_io=parallel_io, description="Amplitude of the external source for electrons",
             units="n_ref/c_ref^3*c_ref/L_ref")
         external_source_electron_T_array = create_dynamic_variable!(
-            dynamic, "external_source_electron_T_array", mk_float, z, io_r, n_sources;
+            dynamic, "external_source_electron_T_array", mk_float, z, io_r, electron_sources;
             parallel_io=parallel_io, description="Temperature of the external source for electrons",
             units="T_ref")
         external_source_electron_density_amplitude = create_dynamic_variable!(
-            dynamic, "external_source_electron_density_amplitude", mk_float, z, io_r, n_sources;
+            dynamic, "external_source_electron_density_amplitude", mk_float, z, io_r, electron_sources;
             parallel_io=parallel_io, description="Amplitude of the external density source for electrons",
             units="n_ref*c_ref/L_ref")
         external_source_electron_momentum_amplitude = create_dynamic_variable!(
-            dynamic, "external_source_electron_momentum_amplitude", mk_float, z, io_r, n_sources;
+            dynamic, "external_source_electron_momentum_amplitude", mk_float, z, io_r, electron_sources;
             parallel_io=parallel_io, description="Amplitude of the external momentum source for electrons",
             units="m_ref*n_ref*c_ref*c_ref/L_ref")
         external_source_electron_pressure_amplitude = create_dynamic_variable!(
-            dynamic, "external_source_electron_pressure_amplitude", mk_float, z, io_r, n_sources;
+            dynamic, "external_source_electron_pressure_amplitude", mk_float, z, io_r, electron_sources;
             parallel_io=parallel_io, description="Amplitude of the external pressure source for electrons",
             units="n_ref*T_ref*c_ref/L_ref")
     else
@@ -1799,7 +1799,7 @@ function define_dynamic_neutral_moment_variables!(fid, n_neutral_species, r::coo
         evolve_p, write_error_diagnostics, write_steady_state_diagnostics)
 
     dynamic = get_group(fid, "dynamic_data")
-    neutral_species_coord = (name="neutral_species", n=n_neutral_species)
+    neutral_species_coord = (name="neutral_species", n=n_neutral_species, nrank=1)
 
     # io_density_neutral is the handle for the neutral particle density
     io_density_neutral = create_dynamic_variable!(dynamic, "density_neutral", mk_float, z,
@@ -1900,18 +1900,18 @@ function define_dynamic_neutral_moment_variables!(fid, n_neutral_species, r::coo
 
     neutral_source_settings = external_source_settings.neutral
     if n_neutral_species > 0 && any(x -> x.active, neutral_source_settings)
-        n_sources = (name="n_neutral_sources", n=length(neutral_source_settings))
+        neutral_sources = (name="neutral_sources", n=length(neutral_source_settings), nrank=1)
         external_source_neutral_amplitude = create_dynamic_variable!(
-            dynamic, "external_source_neutral_amplitude", mk_float, z, r, n_sources;
+            dynamic, "external_source_neutral_amplitude", mk_float, z, r, neutral_sources;
             parallel_io=parallel_io, description="Amplitude of the external source for neutrals",
             units="n_ref/c_ref^3*c_ref/L_ref")
         external_source_neutral_T_array = create_dynamic_variable!(
-            dynamic, "external_source_neutral_T_array", mk_float, z, r, n_sources;
+            dynamic, "external_source_neutral_T_array", mk_float, z, r, neutral_sources;
             parallel_io=parallel_io, description="Temperature of the external source for neutrals",
             units="T_ref")
         if evolve_density
             external_source_neutral_density_amplitude = create_dynamic_variable!(
-                dynamic, "external_source_neutral_density_amplitude", mk_float, z, r, n_sources;
+                dynamic, "external_source_neutral_density_amplitude", mk_float, z, r, neutral_sources;
                 parallel_io=parallel_io, description="Amplitude of the external density source for neutrals",
                 units="n_ref*c_ref/L_ref")
         else
@@ -1919,7 +1919,7 @@ function define_dynamic_neutral_moment_variables!(fid, n_neutral_species, r::coo
         end
         if evolve_upar
             external_source_neutral_momentum_amplitude = create_dynamic_variable!(
-                dynamic, "external_source_neutral_momentum_amplitude", mk_float, z, r, n_sources;
+                dynamic, "external_source_neutral_momentum_amplitude", mk_float, z, r, neutral_sources;
                 parallel_io=parallel_io, description="Amplitude of the external momentum source for neutrals",
                 units="m_ref*n_ref*c_ref*c_ref/L_ref")
         else
@@ -1927,7 +1927,7 @@ function define_dynamic_neutral_moment_variables!(fid, n_neutral_species, r::coo
         end
         if evolve_p
             external_source_neutral_pressure_amplitude = create_dynamic_variable!(
-                dynamic, "external_source_neutral_pressure_amplitude", mk_float, z, r, n_sources;
+                dynamic, "external_source_neutral_pressure_amplitude", mk_float, z, r, neutral_sources;
                 parallel_io=parallel_io, description="Amplitude of the external pressure source for neutrals",
                 units="n_ref*T_ref*c_ref/L_ref")
         else
@@ -1937,7 +1937,7 @@ function define_dynamic_neutral_moment_variables!(fid, n_neutral_species, r::coo
                     ("density_profile_control", "density_midpoint_control"), neutral_source_settings)
             if any(x -> x.source_type == "density_profile_control", neutral_source_settings)
                 external_source_neutral_controller_integral = create_dynamic_variable!(
-                    dynamic, "external_source_neutral_controller_integral", mk_float, z, r, n_sources;
+                    dynamic, "external_source_neutral_controller_integral", mk_float, z, r, neutral_sources;
                     parallel_io=parallel_io,
                     description="Integral term for the PID controller of the external source for neutrals")
             else
@@ -2013,7 +2013,7 @@ function define_dynamic_dfn_variables!(fid, r, z, vperp, vpa, vzeta, vr, vz, com
                                                       t_params, nl_solver_params)
 
         dynamic = get_group(fid, "dynamic_data")
-        ion_species_coord = (name="ion_species", n=composition.n_ion_species)
+        ion_species_coord = (name="ion_species", n=composition.n_ion_species, nrank=1)
 
         # io_f is the handle for the ion pdf
         io_f = create_dynamic_variable!(dynamic, "f", mk_float, vpa, vperp, z, r,
@@ -2068,7 +2068,7 @@ function define_dynamic_dfn_variables!(fid, r, z, vperp, vpa, vzeta, vr, vz, com
             io_f_electron_start_last_timestep = nothing
         end
 
-        neutral_species_coord = (name="neutral_species", n=composition.n_neutral_species)
+        neutral_species_coord = (name="neutral_species", n=composition.n_neutral_species, nrank=1)
 
         # io_f_neutral is the handle for the neutral pdf
         io_f_neutral = create_dynamic_variable!(dynamic, "f_neutral", mk_float, vz, vr, vzeta, z, r,
@@ -2713,13 +2713,13 @@ function write_timing_data(io_moments, t_idx, dfns=false)
     function create_new_timer_io_variables!(new_timer_names, timer_group, parallel_io)
         for n ∈ new_timer_names
             create_dynamic_variable!(io_group, "time:" * n, mk_int,
-                                     (name="rank", n=global_size[]);
+                                     (name="rank", n=global_size[], nrank=1);
                                      parallel_io=parallel_io)
             create_dynamic_variable!(io_group, "ncalls:" * n, mk_int,
-                                     (name="rank", n=global_size[]);
+                                     (name="rank", n=global_size[], nrank=1);
                                      parallel_io=parallel_io)
             create_dynamic_variable!(io_group, "allocs:" * n, mk_int,
-                                     (name="rank", n=global_size[]);
+                                     (name="rank", n=global_size[], nrank=1);
                                      parallel_io=parallel_io)
         end
         return nothing
