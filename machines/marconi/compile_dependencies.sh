@@ -30,17 +30,17 @@ if [ -d hdf5-build ]; then
 fi
 
 if [ $BUILDHDF5 -eq 0 ]; then
-  HDF5=hdf5-1.14.3
+  HDF5=hdf5-hdf5_1.14.6
   # Download and extract the source
-  wget -O ${HDF5}.tar.bz2 https://support.hdfgroup.org/ftp/HDF5/releases/hdf5-1.14/hdf5-1.14.3/src/hdf5-1.14.3.tar.bz2
-  tar xjf ${HDF5}.tar.bz2
+  wget -O ${HDF5}.tar.gz https://github.com/HDFGroup/hdf5/archive/refs/tags/hdf5_1.14.6.tar.gz
+  tar xzf ${HDF5}.tar.gz
 
   cd $HDF5
 
   # Configure and compile
-  CC=mpicc ./configure --enable-parallel --prefix=$ARTIFACT_DIR/hdf5-build/
-  make -j 16
-  make install
+  CC=mpicc ./configure --enable-parallel --prefix=$ARTIFACT_DIR/hdf5-build/ | tee config.log
+  make -j 16 | tee make.log
+  make install | tee -a make.log
 fi
 
 exit 0
