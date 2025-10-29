@@ -198,10 +198,108 @@ function hdf5_get_fixed_dim_sizes(coords, parallel_io)
     else
         dim_sizes = Tuple(isa(c, mk_int) ? c : c.n for c in coords)
     end
+    function get_chunk_sizes(block_sizes)
+        # ARCHER2 docs suggest that on that system the best size for a block of I/O is
+        # 1MiB (2^20 bytes) (https://docs.archer2.ac.uk/user-guide/io/), which corresponds
+        # to 2^20/8=2^17 double precision floats.
+        target_exponent = 17
+        target_size = 2^target_exponent
+
+        if prod(block_sizes) > 8 * target_size
+            # block size is large, so break into 'many' smaller chunks. Some chunks
+            # probably overlap (see comment in 'else'), but as there are many chunks, the
+            # chances of 2 procesess trying to write the same chunk at the same time is
+            # small, so no need to worry about this.
+            # When we read data, we often want to read only a slice, not the full array.
+            # When HDF5 loads data, it loads a chunk at a time, then takes the slice from
+            # that chunk, so the optimal thing for reading is if the dimension(s) being
+            # sliced is split into small chunks. However, we might want to slice any
+            # dimension - there is not an obvious way to pick 'special' dimensions.
+            # Therefore try to make the chunk size in each dimension the same, in such a
+            # way that the product of all the chunk sizes is `target_size`. As 17 is
+            # prime, unless nd==1 we will have to have two different chunk sizes
+            # (differing by a factor of 2) to make the product exactly `target_size`, but
+            # we also need to make sure that the chunk size is never bigger than the
+            # corresponding block size, as that would be inefficient.
+            nd = length(block_sizes)
+            is_max_size = fill(false, length(block_sizes))
+            for (i,s) ∈ enumerate(block_sizes)
+                if s == 1
+                    # Dimension is size one, so ignore it when chunking.
+                    nd -= 1
+                    is_max_size[i] = true
+                end
+            end
+            dim_chunk_exponent = target_exponent ÷ nd
+            # Work out how many chunks should use dim_chunk_exponent, and how many should
+            # use (dim_chunk_exponent+1). Assume we want to slice spatial dimensions
+            # slightly more often, while loading full velocity dimensions, so first
+            # dimensions should use (dim_chunk_exponent+1) and last dimensions should use
+            # dim_chunk_exponent.
+            # m*(dim_chunk_exponent + 1) + (nd - m)*dim_chunk_exponent = target_exponent
+            # m*dim_chunk_exponent + m + nd*dim_chunk_exponent - m*dim_chunk_exponent = target_exponent
+            # m + nd*dim_chunk_exponent = target_exponent
+            m = target_exponent - nd * dim_chunk_exponent
+            first_guess_sizes_partial = [(i ≤ m ? 2^(dim_chunk_exponent+1) : 2^dim_chunk_exponent) for i ∈ 1:nd]
+            # sizes_full includes the length==1 dimensions.
+            counter = 1
+            sizes_full = mk_int[]
+            for s ∈ block_sizes
+                if s == 1
+                    push!(sizes_full, 1)
+                else
+                    push!(sizes_full, first_guess_sizes_partial[counter])
+                    counter += 1
+                end
+            end
+
+            # Ensure that no chunk size is greater than a block size.
+            extra_two_factors = 0
+            for i ∈ eachindex(sizes_full)
+                while sizes_full[i] > block_sizes[i]
+                    sizes_full[i] = sizes_full[i] ÷ 2
+                    extra_two_factors += 1
+                end
+            end
+
+            # Now need to put the extra factors back into larger block_sizes.
+            # The following should always terminate, but just in case make sure the while
+            # loop does not continue infinitely.
+            max_iterations = extra_two_factors
+            for _ ∈ 1:max_iterations
+                if extra_two_factors == 0
+                    break
+                end
+                # Iterate in reverse as the last chunk sizes are possibly bigger than the
+                # first chunk sizes.
+                for i ∈ reverse(eachindex(sizes_full))
+                    if extra_two_factors > 0 && block_sizes[i] ≥ 2 * sizes_full[i]
+                        sizes_full[i] *= 2
+                        extra_two_factors -= 1
+                    end
+                end
+            end
+
+            chunk_sizes = ntuple(i->sizes_full[i], length(block_sizes))
+        else
+            # block size is smaller than target_size, or not much larger, so if we split
+            # the block into chunks there would be few chunks, and so possibly a high
+            # chance of overlap/contention between different ranks - as the block is
+            # probably not exactly divisible (generically our dimensions are not nice
+            # powers of 2 or similar, due to the odd final element boundary point) into
+            # chunks, some chunks would overlap block boundaries and need to be written to
+            # by multiple processes. To avoid this, just write a single chunk per block.
+            chunk_sizes = block_sizes
+        end
+        return chunk_sizes
+    end
     if parallel_io
-        chunk_sizes = Tuple(isa(c, mk_int) ? c : max(c.n-1,1) for c in coords)
+        block_sizes = Tuple(isa(c, mk_int) ? c : # species index, not a coordinate, never distributed
+                            c.nrank == 1 ? c.n : # coordinate is not distributed, so no overlap with other writing MPI processes
+                            max(c.n-1,1) for c in coords) # coordinate is distributed, this block size would mean no overlap with other processes
+        chunk_sizes = get_chunk_sizes(block_sizes)
     else
-        chunk_sizes = dim_sizes
+        chunk_sizes = get_chunk_sizes(dim_sizes)
     end
 
     return dim_sizes, chunk_sizes
