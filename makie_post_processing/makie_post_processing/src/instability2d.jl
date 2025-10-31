@@ -97,7 +97,17 @@ function instability2D_plots_for_variable(run_info::Vector{Any}, variable_name;
         for (i, a) ∈ enumerate(ax)
             push!(axes_and_observables[i], a)
         end
+        fig, ax = get_1d_ax(title="$symbol mode amplitude", xlabel="time",
+                            ylabel="amplitude", yscale=log10)
+        push!(figs, fig)
+        for (i, a) ∈ enumerate(ax)
+            push!(axes_and_observables[i], a)
+        end
     else
+        push!(figs, nothing)
+        for i ∈ 1:n_runs
+            push!(axes_and_observables[i], nothing)
+        end
         push!(figs, nothing)
         for i ∈ 1:n_runs
             push!(axes_and_observables[i], nothing)
@@ -175,6 +185,12 @@ function instability2D_plots_for_variable(run_info::Vector{Any}, variable_name;
 
     fig = figs[4]
     if fig !== nothing
+        outfile = string(plot_prefix, "$(variable_name)_amplitude_vs_t.pdf")
+        save(outfile, fig)
+    end
+
+    fig = figs[5]
+    if fig !== nothing
         frame_index = axes_and_observables[1][4][3]
         nt = minimum(ri.nt for ri ∈ run_info)
         outfile = plot_prefix * variable_name * "_Fourier." *
@@ -182,7 +198,7 @@ function instability2D_plots_for_variable(run_info::Vector{Any}, variable_name;
         save_animation(fig, frame_index, nt, outfile)
     end
 
-    fig = figs[5]
+    fig = figs[6]
     if fig !== nothing
         frame_index = axes_and_observables[1][5][3]
         nt = minimum(ri.nt for ri ∈ run_info)
@@ -364,6 +380,23 @@ function instability2D_plots_for_variable(run_info, variable_name; plot_prefix,
 
         # Do this to allow memory to be garbage-collected.
         variable_Fourier_1D = nothing
+
+        # Take a crude but hopefully robust estimate of the mode amplitude.
+        # Take the maximum over z of the the RMS over r of the variable.
+        # Pass `corrected=false` to `StatsBase.std` so that it just calculates the RMS,
+        # not the unbiased standard deviation.
+        amplitude = maximum(std(variable; corrected=false, dims=2); dims=1)[1,1,:]
+        if axes_and_observables === nothing
+            fig, ax = get_1d_ax(title="$(get_variable_symbol(variable_name)) mode amplitude",
+                                xlabel="time", ylabel="amplitude", yscale=log10)
+        else
+            ax = axes_and_observables[4]
+        end
+        plot_1d(run_info.time, amplitude; ax=ax)
+        if axes_and_observables === nothing
+            outfile = string(plot_prefix, "$(variable_name)_amplitude_vs_t.pdf")
+            save(outfile, fig)
+        end
     end
 
     if instability2D_options.plot_2d
@@ -373,7 +406,7 @@ function instability2D_plots_for_variable(run_info, variable_name; plot_prefix,
                                     ylabel="amplitude", yscale=log10)
             else
                 fig = nothing
-                ax = axes_and_observables[3]
+                ax = axes_and_observables[4]
                 ax.title = run_info.run_name
             end
 
@@ -400,7 +433,7 @@ function instability2D_plots_for_variable(run_info, variable_name; plot_prefix,
                 outfile = plot_prefix * name * "_Fourier." * instability2D_options.animation_ext
                 title = "$symbol Fourier components"
             else
-                ax, colorbar_place, frame_index = axes_and_observables[4]
+                ax, colorbar_place, frame_index = axes_and_observables[5]
                 outfile = nothing
                 title = run_info.run_name
             end
@@ -438,7 +471,7 @@ function instability2D_plots_for_variable(run_info, variable_name; plot_prefix,
                 outfile = plot_prefix*variable_name*"_perturbation." * instability2D_options.animation_ext
                 title = "$(get_variable_symbol(variable_name)) perturbation"
             else
-                ax, colorbar_place, frame_index = axes_and_observables[5]
+                ax, colorbar_place, frame_index = axes_and_observables[6]
                 outfile = nothing
                 title = run_info.run_name
             end
