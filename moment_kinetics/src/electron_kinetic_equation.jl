@@ -489,6 +489,13 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments,
     @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
         pdf[ivpa,ivperp,iz,ir] = final_scratch_pdf[ivpa,ivperp,iz,ir]
     end
+    # The anyzv loop over r above skips points in r that are duplicated (i.e. one of the
+    # copies of the element boundary points at sub-domain or periodic boundaries). Now
+    # fill in the duplicate points.
+    halo_swap!(pdf, r, z)
+    halo_swap!(moments.electron.ppar, r, z)
+    halo_swap!(moments.electron.qpar, r, z)
+
     if evolve_p
         # Update `moments.electron.p` with the final electron pressure
         @begin_r_z_region()
@@ -497,6 +504,10 @@ function update_electron_pdf_with_time_advance!(scratch, pdf, moments,
         @loop_r_z ir iz begin
             moments_p[iz,ir] = scratch_p[iz,ir]
         end
+        halo_swap!(moments_p, r, z)
+        halo_swap!(moments.electron.upar, r, z)
+        halo_swap!(moments.electron.vth, r, z)
+        halo_swap!(moments.electron.temp, r, z)
     end
     if !all(all_electron_pdf_converged)
         success = "kinetic-electrons"
@@ -963,6 +974,13 @@ function electron_backward_euler_pseudotimestepping!(scratch, pdf, moments,
     @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
         pdf[ivpa,ivperp,iz,ir] = final_scratch_pdf[ivpa,ivperp,iz,ir]
     end
+    # The anyzv loop over r above skips points in r that are duplicated (i.e. one of the
+    # copies of the element boundary points at sub-domain or periodic boundaries). Now
+    # fill in the duplicate points.
+    halo_swap!(pdf, r, z)
+    halo_swap!(moments.electron.ppar, r, z)
+    halo_swap!(moments.electron.qpar, r, z)
+
     if evolve_p
         # Update `moments.electron.p` with the final electron pressure
         @begin_r_z_region()
@@ -971,6 +989,10 @@ function electron_backward_euler_pseudotimestepping!(scratch, pdf, moments,
         @loop_r_z ir iz begin
             moments_p[iz,ir] = scratch_p[iz,ir]
         end
+        halo_swap!(moments_p, r, z)
+        halo_swap!(moments.electron.upar, r, z)
+        halo_swap!(moments.electron.vth, r, z)
+        halo_swap!(moments.electron.temp, r, z)
     end
 
     if !all(all_electron_pdf_converged)
@@ -2215,6 +2237,16 @@ to allow the outer r-loop to be parallelised.
             break
         end
     end
+    # The anyzv loop over r above skips points in r that are duplicated (i.e. one of the
+    # copies of the element boundary points at sub-domain or periodic boundaries). Now
+    # fill in the duplicate points.
+    halo_swap!(pdf_electron_out, r, z)
+    halo_swap!(electron_p_out, r, z)
+    halo_swap!(moments.electron.ppar, r, z)
+    halo_swap!(moments.electron.qpar, r, z)
+    halo_swap!(mometns.electron.upar, r, z)
+    halo_swap!(moments.electron.vth, r, z)
+    halo_swap!(moments.electron.temp, r, z)
 
     # Fill pdf.electron.norm
     non_scratch_pdf = pdf.electron.norm
