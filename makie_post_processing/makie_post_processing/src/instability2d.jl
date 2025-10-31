@@ -3,6 +3,7 @@ using moment_kinetics.analysis: get_r_perturbation, get_Fourier_modes_2D,
 using moment_kinetics.interpolation: interpolate_to_grid_1d!
 
 using LsqFit
+using Printf
 
 """
     instability_plots(run_info; plot_prefix)
@@ -79,7 +80,7 @@ function instability2D_plots_for_variable(run_info::Vector{Any}, variable_name;
 
     if n_runs == 1
         # Don't need to set up for comparison plots, or include run_name in subplot titles
-        zi = instability2D_plots_for_variable(run_info[1], variable_name,
+        zi = instability2D_plots_for_variable(run_info[1], variable_name;
                                               plot_prefix=plot_prefix, zind=zind[1])
         return Union{mk_int,Nothing}[zi]
     end
@@ -97,7 +98,20 @@ function instability2D_plots_for_variable(run_info::Vector{Any}, variable_name;
         for (i, a) ∈ enumerate(ax)
             push!(axes_and_observables[i], a)
         end
+        fig, ax = get_1d_ax(title="$var_symbol mode amplitude", xlabel="time",
+                            ylabel="amplitude", yscale=log10)
+        # Ensure the first row width is 3/4 of the column width so that
+        # the plot does not get squashed by the legend
+        rowsize!(fig.layout, 1, Aspect(1, 3/4))
+        push!(figs, fig)
+        for i ∈ 1:n_runs
+            push!(axes_and_observables[i], ax)
+        end
     else
+        push!(figs, nothing)
+        for i ∈ 1:n_runs
+            push!(axes_and_observables[i], nothing)
+        end
         push!(figs, nothing)
         for i ∈ 1:n_runs
             push!(axes_and_observables[i], nothing)
@@ -150,8 +164,9 @@ function instability2D_plots_for_variable(run_info::Vector{Any}, variable_name;
     end
 
     for (i, (ri, ax_ob, zi)) ∈ enumerate(zip(run_info, axes_and_observables, zind))
-        zi = instability2D_plots_for_variable(ri, variable_name, plot_prefix=plot_prefix,
-                                              zind=zi, axes_and_observables=ax_ob)
+        zi = instability2D_plots_for_variable(ri, variable_name; irun=i,
+                                              plot_prefix=plot_prefix, zind=zi,
+                                              axes_and_observables=ax_ob)
         zind[i] = zi
     end
 
@@ -169,22 +184,30 @@ function instability2D_plots_for_variable(run_info::Vector{Any}, variable_name;
 
     fig = figs[3]
     if fig !== nothing
-        outfile = string(plot_prefix, "$(variable_name)_Fourier_components.pdf")
+        put_legend_below(fig, axes_and_observables[1][3])
+        resize_to_layout!(fig)
+        outfile = string(plot_prefix, "$(variable_name)_amplitude_vs_t.pdf")
         save(outfile, fig)
     end
 
     fig = figs[4]
     if fig !== nothing
-        frame_index = axes_and_observables[1][4][3]
+        outfile = string(plot_prefix, "$(variable_name)_Fourier_components.pdf")
+        save(outfile, fig)
+    end
+
+    fig = figs[5]
+    if fig !== nothing
+        frame_index = axes_and_observables[1][5][3]
         nt = minimum(ri.nt for ri ∈ run_info)
         outfile = plot_prefix * variable_name * "_Fourier." *
                   instability2D_options.animation_ext
         save_animation(fig, frame_index, nt, outfile)
     end
 
-    fig = figs[5]
+    fig = figs[6]
     if fig !== nothing
-        frame_index = axes_and_observables[1][5][3]
+        frame_index = axes_and_observables[1][6][3]
         nt = minimum(ri.nt for ri ∈ run_info)
         outfile = plot_prefix * variable_name * "_perturbation." *
                   instability2D_options.animation_ext
@@ -194,7 +217,7 @@ function instability2D_plots_for_variable(run_info::Vector{Any}, variable_name;
     return zind
 end
 
-function instability2D_plots_for_variable(run_info, variable_name; plot_prefix,
+function instability2D_plots_for_variable(run_info, variable_name; irun=1, plot_prefix,
                                           zind=nothing, axes_and_observables=nothing)
     instability2D_options = Dict_to_NamedTuple(input_dict["instability2D"])
 
@@ -364,6 +387,41 @@ function instability2D_plots_for_variable(run_info, variable_name; plot_prefix,
 
         # Do this to allow memory to be garbage-collected.
         variable_Fourier_1D = nothing
+
+        # Take a crude but hopefully robust estimate of the mode amplitude.
+        # Take the maximum over z of the the RMS over r of the variable.
+        # Pass `corrected=false` to `StatsBase.std` so that it just calculates the RMS,
+        # not the unbiased standard deviation.
+        amplitude = maximum(std(variable; corrected=false, dims=2); dims=1)[1,1,:]
+
+        # Fit A*exp(γ*time) to exponentially-growing interval.
+        γ, A, tmin, tmax = partial_fit_exponential_growth(run_info.time, amplitude)
+        println(run_info.run_name, " for $variable_name γ = $γ")
+
+        if axes_and_observables === nothing
+            fig, ax = get_1d_ax(title="$(get_variable_symbol(variable_name)) mode amplitude",
+                                xlabel="time", ylabel="amplitude", yscale=log10)
+        else
+            ax = axes_and_observables[3]
+        end
+
+        plot_1d(run_info.time, amplitude; ax=ax, color=Cycled(irun), linestyle=:dot)
+
+        # Plot the fitted exponential growth
+        fit_t = run_info.time[@. run_info.time > tmin && run_info.time < tmax]
+        fit_amplitude = @. A * exp(γ * fit_t)
+        plot_1d(fit_t, fit_amplitude; ax=ax, color=Cycled(irun), label=run_info.run_name)
+        label_t = 0.5 * (fit_t[1] + fit_t[end])
+        gamma_string = @sprintf("%.5g", γ)
+        with_theme(Text=(; cycle=:color)) do
+            text!(ax, Point2f(label_t, A * exp(γ * label_t)); text="γ = $gamma_string",
+                  align=(:left, :top), color=Cycled(irun))
+        end
+
+        if axes_and_observables === nothing
+            outfile = string(plot_prefix, "$(variable_name)_amplitude_vs_t.pdf")
+            save(outfile, fig)
+        end
     end
 
     if instability2D_options.plot_2d
@@ -373,7 +431,7 @@ function instability2D_plots_for_variable(run_info, variable_name; plot_prefix,
                                     ylabel="amplitude", yscale=log10)
             else
                 fig = nothing
-                ax = axes_and_observables[3]
+                ax = axes_and_observables[4]
                 ax.title = run_info.run_name
             end
 
@@ -400,7 +458,7 @@ function instability2D_plots_for_variable(run_info, variable_name; plot_prefix,
                 outfile = plot_prefix * name * "_Fourier." * instability2D_options.animation_ext
                 title = "$symbol Fourier components"
             else
-                ax, colorbar_place, frame_index = axes_and_observables[4]
+                ax, colorbar_place, frame_index = axes_and_observables[5]
                 outfile = nothing
                 title = run_info.run_name
             end
@@ -438,7 +496,7 @@ function instability2D_plots_for_variable(run_info, variable_name; plot_prefix,
                 outfile = plot_prefix*variable_name*"_perturbation." * instability2D_options.animation_ext
                 title = "$(get_variable_symbol(variable_name)) perturbation"
             else
-                ax, colorbar_place, frame_index = axes_and_observables[5]
+                ax, colorbar_place, frame_index = axes_and_observables[6]
                 outfile = nothing
                 title = run_info.run_name
             end
