@@ -4295,7 +4295,7 @@ end
 
 function get_variable(run_info, variable_name; normalize_advection_speed_shape=true,
                       kwargs...)
-    return _get_variable_internal(run_info, Val(Symbol(variable_name));
+    return _get_variable_internal(run_info, Symbol(variable_name);
                                   normalize_advection_speed_shape=normalize_advection_speed_shape,
                                   kwargs...)
 end
@@ -4434,8 +4434,8 @@ end
 
 # Define internal function with a `Symbol` argument because this allows the compiler to
 # optimize out (most of?) the large if-elseif-... chain below to improve the compile time.
-function _get_variable_internal(run_info, ::Val{variable_name};
-                                normalize_advection_speed_shape=true, kwargs...) where variable_name
+function _get_variable_internal(run_info, variable_name::Symbol;
+                                normalize_advection_speed_shape=true, kwargs...)
     # Set up loop macros for serial operation, in case they are used by any functions
     # below.
     looping.setup_loop_ranges!(0, 1;
