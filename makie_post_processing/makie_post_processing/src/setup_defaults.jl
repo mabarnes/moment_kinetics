@@ -246,6 +246,20 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
     animate_log_options_1d = Tuple(Symbol(:animate_log_vs_, d) for d ∈ one_dimension_combinations_no_t)
     animate_options_2d = Tuple(Symbol(:animate_vs_, d2, :_, d1) for (d1, d2) ∈ two_dimension_combinations_no_t)
     animate_log_options_2d = Tuple(Symbol(:animate_log_vs_, d2, :_, d1) for (d1, d2) ∈ two_dimension_combinations_no_t)
+    iterate_options_1d = Tuple(Symbol(:iterate_along_, d1, :_vs_, d2) for (d1, d2) ∈ two_dimension_combinations_no_t for (d1, d2) ∈ ((d1,d2), (d2,d1)))
+    iterate_log_options_1d = Tuple(Symbol(:iterate_log_along_, d1, :_vs_, d2) for (d1, d2) ∈ two_dimension_combinations_no_t for (d1, d2) ∈ ((d1,d2), (d2,d1)))
+    # The following two options allow you to have half the number of iterate functions, in return for
+    # only allowing one combination of x dimensions and y dimensions (e.g. vperp along x and vpa along y, but not vice versa).
+    # iterate_options_2d = Tuple(Symbol(:iterate_along_, d1, :_vs_, d2, :_, d3) for d1 ∈ one_dimension_combinations_no_t
+    #                                    for (d2, d3) ∈ combinations(setdiff(one_dimension_combinations_no_t, (d1,)), 2))
+    # iterate_log_options_2d = Tuple(Symbol(:iterate_log_along_, d1, :_vs_, d2, :_, d3) for d1 ∈ one_dimension_combinations_no_t
+    #                                    for (d2, d3) ∈ combinations(setdiff(one_dimension_combinations_no_t, (d1,)), 2))
+    iterate_options_2d = Tuple(Symbol(:iterate_along_, d1, :_vs_, d2, :_, d3) for d1 ∈ one_dimension_combinations_no_t
+                                                                             for d2 ∈ setdiff(one_dimension_combinations_no_t, (d1,))
+                                                                             for d3 ∈ setdiff(one_dimension_combinations_no_t, (d1,d2)))
+    iterate_log_options_2d = Tuple(Symbol(:iterate_log_along_, d1, :_vs_, d2, :_, d3) for d1 ∈ one_dimension_combinations_no_t
+                                                                                 for d2 ∈ setdiff(one_dimension_combinations_no_t, (d1,))
+                                                                                 for d3 ∈ setdiff(one_dimension_combinations_no_t, (d1,d2)))
     for variable_name ∈ all_dfn_variables
         set_defaults_and_check_section!(
             this_input_dict, variable_name, warn_unexpected;
@@ -258,6 +272,10 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
             (o=>false for o ∈ animate_log_options_1d if String(o) ∉ keys(section_defaults))...,
             (o=>false for o ∈ animate_options_2d if String(o) ∉ keys(section_defaults))...,
             (o=>false for o ∈ animate_log_options_2d if String(o) ∉ keys(section_defaults))...,
+            (o=>false for o ∈ iterate_options_1d if String(o) ∉ keys(section_defaults))...,
+            (o=>false for o ∈ iterate_log_options_1d if String(o) ∉ keys(section_defaults))...,
+            (o=>false for o ∈ iterate_options_2d if String(o) ∉ keys(section_defaults))...,
+            (o=>false for o ∈ iterate_log_options_2d if String(o) ∉ keys(section_defaults))...,
             plot_unnorm_vs_vpa=false,
             plot_unnorm_vs_vz=false,
             plot_unnorm_vs_vpa_z=false,

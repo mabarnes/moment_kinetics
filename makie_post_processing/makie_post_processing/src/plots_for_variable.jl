@@ -236,7 +236,7 @@ function plots_for_dfn_variable(run_info, variable_name; plot_prefix, has_rdim=t
 
     # test if any plot is needed
     if !any(v for (k,v) in pairs(input) if
-            startswith(String(k), "plot") || startswith(String(k), "animate"))
+            startswith(String(k), "plot") || startswith(String(k), "animate") || startswith(String(k), "iterate"))
         return nothing
     end
 
@@ -394,6 +394,32 @@ function plots_for_dfn_variable(run_info, variable_name; plot_prefix, has_rdim=t
                     outfile = var_prefix * "vs_$dim." * input.animation_ext
                     func(run_info, variable_name; data=variable, is=is, input=input,
                          outfile=outfile, yscale=yscale, transform=transform, kwargs...)
+                end
+            end
+            for dim1 ∈ animate_dims
+                for dim2 ∈ setdiff(animate_dims, (dim1,))
+                    if input[Symbol(:iterate, log, :_along_, dim1, :_vs_, dim2)]
+                        func = getfield(makie_post_processing, Symbol(:iterate_along_, dim1, :_vs_, dim2))
+                        outfile = var_prefix * "along_$(dim1)_vs_$(dim2)." * input.animation_ext
+                        func(run_info, variable_name; data=variable, is=is, input=input,
+                            outfile=outfile, yscale=yscale, transform=transform, kwargs...)
+                    end
+                end
+            end
+            # This combination is if you want to avoid double the plotting functions
+            # (i.e. iterate_along_z_vs_vpa_vperp and iterate_along_z_vs_vperp_vpa).
+            # for dim1 ∈ animate_dims
+            #     for (dim2, dim3) ∈ combinations(setdiff(animate_dims, (dim1,)), 2)
+            for dim1 ∈ animate_dims
+                for dim2 ∈ setdiff(animate_dims, (dim1,))
+                    for dim3 ∈ setdiff(animate_dims, (dim1, dim2))
+                        if input[Symbol(:iterate, log, :_along_, dim1, :_vs_, dim2, :_, dim3)]
+                            func = getfield(makie_post_processing, Symbol(:iterate_along_, dim1, :_vs_, dim2, :_, dim3))
+                            outfile = var_prefix * "along_$(dim1)_vs_$(dim2)_$(dim3)." * input.animation_ext
+                            func(run_info, variable_name; data=variable, is=is, input=input,
+                                outfile=outfile, colorscale=yscale, transform=transform, kwargs...)
+                        end
+                    end
                 end
             end
             for (dim1, dim2) ∈ combinations(animate_dims, 2)
