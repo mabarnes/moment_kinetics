@@ -19,6 +19,7 @@ using ..calculus: derivative!, second_derivative!, integral,
                   reconcile_element_boundaries_MPI_z_pdf_vpavperpz!
 using ..communication
 using ..communication: _anyzv_subblock_synchronize
+using ..coordinates
 using ..debugging
 using ..gauss_legendre: gausslegendre_info
 using ..input_structs
@@ -1030,9 +1031,12 @@ function get_electron_preconditioners(preconditioner_type, nl_solver_input, coor
             end
 
             A = jacobian.matrix[1][1]
-            B = get_joined_array(jacobian.matrix, 1:1, 2:jacobian.n_entries)
-            C = get_joined_array(jacobian.matrix, 2:jacobian.n_entries, 1:1)
-            D = get_joined_array(jacobian.matrix, 2:jacobian.n_entries, 2:jacobian.n_entries)
+            B = get_joined_array(jacobian, 1:1, 2:jacobian.n_entries)
+            C = get_joined_array(jacobian, 2:jacobian.n_entries, 1:1)
+            D = get_joined_array(jacobian, 2:jacobian.n_entries, 2:jacobian.n_entries)
+
+            pdf_global_indices = get_global_indices((coords.vpa, coords.vperp, coords.z))
+            moments_global_indices = get_global_indices(5, (coords.z,))
 
             Alu = FakeMPILU(A, pdf_global_indices, pdf_global_indices; comm=coords.z.comm,
                             shared_comm=comm_anyzv_subblock[])
