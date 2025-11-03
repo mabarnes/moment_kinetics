@@ -1,5 +1,6 @@
 test_type = "Kinetic electron"
 using moment_kinetics.type_definitions: OptionsDict
+using moment_kinetics.communication: global_size
 
 test_input = OptionsDict("composition" => OptionsDict("n_ion_species" => 1,
                                                       "n_neutral_species" => 0, #1,
@@ -63,7 +64,7 @@ test_input = OptionsDict("composition" => OptionsDict("n_ion_species" => 1,
                          "r" => OptionsDict("ngrid" => 1,
                                             "nelement" => 1),
                          "z" => OptionsDict("ngrid" => 3,
-                                            "nelement" => 1,
+                                            "nelement" => 2, # Use more than one element so that `jacobian.matrix` can use BlockSkylineMatrix format
                                             "bc" => "wall",
                                             "discretization" => "gausslegendre_pseudospectral",
                                             "element_spacing_option" => "uniform"),
@@ -92,12 +93,31 @@ test_input = OptionsDict("composition" => OptionsDict("n_ion_species" => 1,
                          "neutral_numerical_dissipation" => OptionsDict("force_minimum_pdf_value" => 0.0,
                                                                         "vz_dissipation_coefficient" => 1e-2))
 
-test_input_adi = deepcopy(test_input)
-test_input_adi["output"]["run_name"] = "kinetic_electron_adi"
-test_input_adi["timestepping"]["kinetic_electron_preconditioner"] = "adi"
+#test_input_adi = deepcopy(test_input)
+#test_input_adi["output"]["run_name"] = "kinetic_electron_adi"
+#test_input_adi["timestepping"]["kinetic_electron_preconditioner"] = "adi"
+
+test_input_schur = deepcopy(test_input)
+test_input_schur["output"]["run_name"] = "kinetic_electron_schur"
+test_input_schur["timestepping"]["kinetic_electron_preconditioner"] = "schur_complement"
+
+test_input_schur_periodic = deepcopy(test_input_schur)
+test_input_schur_periodic["output"]["run_name"] = "kinetic_electron_schur_periodic"
+test_input_schur_periodic["z"]["bc"] = "periodic"
 
 
 test_input_list = [
-     test_input,
-     test_input_adi,
+     #test_input,
+     #test_input_adi,
+     test_input_schur,
+     test_input_schur_periodic,
     ]
+
+if global_size[] > 2 && global_size[] % 2 == 0
+    # Can check distributed-MPI parallelised version too.
+    test_input_schur_periodic_distributed = deepcopy(test_input_schur_periodic)
+    test_input_schur_periodic_distributed["output"]["run_name"] = "kinetic_electron_schur_periodic_distributed"
+    test_input_schur_periodic_distributed["z"]["nelement"] = 4
+    test_input_schur_periodic_distributed["z"]["nelement_local"] = 2
+    push!(test_input_list, test_input_schur_periodic_distributed)
+end

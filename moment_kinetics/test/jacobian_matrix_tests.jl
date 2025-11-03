@@ -2586,7 +2586,11 @@ function runtests()
     @testset "Jacobian matrix " verbose=use_verbose begin
         println("Jacobian matrix")
         precon_list = String[]
-        @long push!(precon_list, "lu_no_separate_moments")
+        push!(precon_list, "schur_complement")
+        # Test this by default as it has a different structure in the Jacobian matrix than
+        # `schur_complement`, so although "lu" is used more often, this provides more test
+        # coverage.
+        push!(precon_list, "lu_no_separate_moments")
         @long push!(precon_list, "lu_separate_third_moment")
         @long push!(precon_list, "lu")
         @long push!(precon_list, "lu_separate_dp_dz_dq_dz")
