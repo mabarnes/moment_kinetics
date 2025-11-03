@@ -2717,6 +2717,7 @@ function runtests()
     @testset "Jacobian matrix " verbose=use_verbose begin
         println("Jacobian matrix")
         precon_list = String[]
+        push!(precon_list, "schur_complement")
         @long push!(precon_list, "lu_no_separate_moments")
         @long push!(precon_list, "lu_separate_third_moment")
         push!(precon_list, "lu")
