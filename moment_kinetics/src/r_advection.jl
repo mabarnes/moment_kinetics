@@ -60,29 +60,24 @@ function r_advection_1D_ITG!(
                          f_out, fvec_in, moments, fields, advect, r, z, vperp, vpa, dt,
                          r_spectral, composition, geometry, scratch_dummy)
 
+    @begin_s_z_vperp_vpa_region()
     # only needs to be one of the terms because it's constant in z and r
     B_factor = geometry.Bzeta[1,1] / geometry.Bmag[1,1]^2
     L_T = composition.ion[1].L_T
     #println("B_factor = $B_factor")
     #println("L_T = $L_T")
 
-    T = zeros(size(moments.ion.dens))
-    @. T = moments.ion.p/moments.ion.dens
     f = fvec_in.pdf
     Ez = fields.gEz
+    p = moments.ion.p
+    n = moments.ion.dens
 
     # Expression is B_zeta/B^2 * Ez * f/T * dT/dr * (m(vperp^2 + vpa^2)/2T - 3/2)
-    for is in 1:1
-        for iz in 1:z.n
-            for ivperp in 1:vperp.n
-                for ivpa in 1:vpa.n
-                    f_out[ivpa,ivperp,iz,1,is] += B_factor * Ez[ivperp,iz,1,is] * f[ivpa,ivperp,iz,1,is]/L_T *
-                                                    (1/2 * (vperp.grid[ivperp]^2 + vpa.grid[ivpa]^2)/T[iz,1,is] - 3/2) * dt
-                end
-            end
-        end
+    @loop_s_z_vperp_vpa is iz ivperp ivpa begin
+        f_out[ivpa,ivperp,iz,1,is] += B_factor * Ez[ivperp,iz,1,is] * f[ivpa,ivperp,iz,1,is]/L_T *
+                                        (1/2 * (vperp.grid[ivperp]^2 + vpa.grid[ivpa]^2)/
+                                                (p[iz,1,is]/n[iz,1,is]) - 3/2) * dt
     end
-
 end
 
 """
