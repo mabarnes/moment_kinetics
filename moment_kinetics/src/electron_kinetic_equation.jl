@@ -1034,7 +1034,8 @@ function get_electron_preconditioners(preconditioner_type, nl_solver_input, coor
             C = get_joined_array(jacobian.matrix, 2:jacobian.n_entries, 1:1)
             D = get_joined_array(jacobian.matrix, 2:jacobian.n_entries, 2:jacobian.n_entries)
 
-            Alu = lu(sparse(A))
+            Alu = FakeMPILU(A, pdf_global_indices, pdf_global_indices; comm=z.comm,
+                            shared_comm=comm_anyzv_subblock[])
 
             # External package MPISchurComplements cannot use our macro
             # @_anyzv_subblock_synchronize() to retrieve line numbers, so (if using
