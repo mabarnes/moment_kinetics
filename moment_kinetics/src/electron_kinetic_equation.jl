@@ -1035,7 +1035,8 @@ function get_electron_preconditioners(preconditioner_type, nl_solver_input, coor
             pdf_global_indices = get_global_indices((coords.vpa, coords.vperp, coords.z))
             moments_global_indices = get_global_indices(5, (coords.z,))
 
-            Alu = lu(sparse(A))
+            Alu = FakeMPILU(A, pdf_global_indices, pdf_global_indices; comm=coords.z.comm,
+                            shared_comm=comm_anyzv_subblock[], use_sparse=true, skip_factorization=true)
 
             function schur_complement_allocate(dim_sizes...)
                 return allocate_shared_float(ntuple(i->(Symbol("schur_complement$i")=>dim_sizes[i]),
