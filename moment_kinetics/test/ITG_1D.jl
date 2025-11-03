@@ -171,8 +171,8 @@ function run_test(test_input, expected_phi, growth_rate; rtol=4.e-14, atol=1.e-1
     input["output"]["run_name"] = name
 
     # Suppress console output while running
-    phi = undef
-    γ = undef
+    phi = nothing
+    γ = nothing
     quietoutput() do
         # run simulation
         run_moment_kinetics(input)
