@@ -161,36 +161,24 @@ function run_test()
         run_moment_kinetics(this_boltzmann_input)
     end
 
-    if ("nelement_local" ∈ keys(kinetic_input["z"])
-        && kinetic_input["z"]["nelement"] ÷ kinetic_input["z"]["nelement_local"] < global_size[]
-       )
-        # Using shared-memory parallelism, test both LU and ADI preconditioners
-        adi_precon_iterations_values = (-1,1,2)
-    else
-        adi_precon_iterations_values = -1
-    end
+    preconditioners = ["schur_complement", "lu"]
 
     # Test implicit electron solve
     test_inputs = [(deepcopy(kinetic_input), "fixed timestep", 1.0e-6),
                    (deepcopy(kinetic_input_time_evolving), "time evolving", 4.0e-4),]
     @long push!(test_inputs, (deepcopy(kinetic_input_adaptive_timestep), "adaptive timestep", 2.0e-4))
-    @testset "$label$(adi_precon_iterations < 0 ? "" : " $adi_precon_iterations")" for (this_kinetic_input, label, tol) ∈ test_inputs,
-                                                                                       adi_precon_iterations ∈ adi_precon_iterations_values
+    @testset "$label $precon" for (this_kinetic_input, label, tol) ∈ test_inputs,
+                                  precon ∈ preconditioners
 
         this_kinetic_input["output"]["base_directory"] = test_output_directory
+        this_kinetic_input["output"]["run_name"] *= "_$precon"
+        this_kinetic_input["timestepping"]["kinetic_electron_preconditioner"] = precon
 
-        if adi_precon_iterations < 0
+        println("    - testing kinetic electrons, $label, $precon")
+        if precon == "lu"
             # Provide some progress info
-            println("    - testing kinetic electrons, $label")
             # Don't use distributed memory parallelism with LU preconditioner
             pop!(this_kinetic_input["z"], "nelement_local")
-        else
-            this_kinetic_input["output"]["run_name"] *= "_adi$adi_precon_iterations"
-            this_kinetic_input["timestepping"]["kinetic_electron_preconditioner"] = "adi"
-            this_kinetic_input["nonlinear_solver"]["adi_precon_iterations"] = adi_precon_iterations
-
-            # Provide some progress info
-            println("    - testing kinetic electrons $adi_precon_iterations ADI iterations, $label")
         end
 
         # Suppress console output while running.
