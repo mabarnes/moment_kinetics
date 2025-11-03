@@ -714,6 +714,575 @@ for dim ∈ one_dimension_combinations_no_t
          end)
 end
 
+# Generate 1d animation functions for each dimension along each other coord dimension (not time)
+for dim1 ∈ one_dimension_combinations_no_t
+    for dim2 ∈ setdiff(one_dimension_combinations_no_t, (dim1,))
+        function_name_str = "iterate_along_$(dim1)_vs_$(dim2)"
+        function_name = Symbol(function_name_str)
+        spaces = " " ^ (length(function_name_str) + 1)
+        dim1_str = String(dim1)
+        dim2_str = String(dim2)
+        dim1_grid = :( run_info.$dim1.grid )
+        dim2_grid = :( run_info.$dim2.grid )
+        idim1 = Symbol(:i, dim1)
+        idim2 = Symbol(:i, dim2)
+        eval(quote
+                export $function_name
+
+                """
+                    $($function_name_str)(run_info::Vector{Any}, var_name; is=1, data=nothing,
+                    $($spaces)input=nothing, outfile=nothing, yscale=nothing,
+                    $($spaces)transform=identity, ylims=nothing,
+                    $($spaces)axis_args=Dict{Symbol,Any}(), it=nothing, ir=nothing, iz=nothing,
+                    $($spaces)ivperp=nothing, ivpa=nothing, ivzeta=nothing, ivr=nothing,
+                    $($spaces)ivz=nothing, kwargs...)
+                    $($function_name_str)(run_info, var_name; is=1, data=nothing,
+                    $($spaces)input=nothing, frame_index=nothing, ax=nothing,
+                    $($spaces)fig=nothing, outfile=nothing, yscale=nothing,
+                    $($spaces)transform=identity, ylims=nothing, label=nothing,
+                    $($spaces)axis_args=Dict{Symbol,Any}(), it=nothing, ir=nothing, iz=nothing,
+                    $($spaces)ivperp=nothing, ivpa=nothing, ivzeta=nothing, ivr=nothing,
+                    $($spaces)ivz=nothing, kwargs...)
+
+                Animate `var_name` from the run(s) represented by `run_info` (as returned by
+                [`get_run_info`](@ref)) along $($dim1_str) vs $($dim2_str).
+
+                If a Vector of `run_info` is passed, the animations from each run are
+                overlayed on the same axis, and a legend is added.
+
+                `it`, `is`, `ir`, `iz`, `ivperp`, `ivpa`, `ivzeta`, `ivr`, and `ivz` can be
+                used to select different indices (for non-plotted dimensions) or range (for
+                the plotted dimension, except `it` which is not compatible as a plotted
+                dimension) to use.
+
+                `ylims` can be passed a Tuple (ymin, ymax) to set the y-axis limits. By
+                default the minimum and maximum of the data (over all time points) will be
+                used.
+
+                `yscale` can be used to set the scaling function for the y-axis. Options are
+                `identity`, `log`, `log2`, `log10`, `sqrt`, `Makie.logit`,
+                `Makie.pseudolog10` and `Makie.Symlog10`. `transform` is a function that is
+                applied element-by-element to the data before it is plotted. For example when
+                using a log scale on data that may contain some negative values it might be
+                useful to pass `transform=abs` (to plot the absolute value) or
+                `transform=positive_or_nan` (to ignore any negative or zero values).
+
+                `axis_args` are passed as keyword arguments to `get_1d_ax()`, and from there
+                to the `Axis` constructor.
+
+                Extra `kwargs` are passed to Makie's `lines!() function`.
+
+                When a single `run_info` is passed, an `Axis` can be passed to `ax`. If it
+                is, the plot will be added to `ax`.
+
+                When a single `run_info` is passed, `label` can be passed to set a custom
+                label for the line. By default the `run_info.run_name` is used.
+
+                `outfile` is required for animations unless `ax` is passed. The animation
+                will be saved to a file named `outfile`.  The suffix determines the file
+                type. If both `outfile` and `ax` are passed, then the `Figure` containing
+                `ax` must be passed to `fig` to allow the animation to be saved.
+
+                By default the data for the variable is loaded from the output represented by
+                `run_info`. The data can optionally be passed to `data` if you have already
+                loaded it.
+
+                Returns the `Figure`, unless `ax` was passed in which case returns `nothing`.
+
+                By default relevant settings are read from the `var_name` section of
+                [`input_dict_dfns`](@ref) (if output that has distribution functions is being
+                read) or [`input_dict`](@ref) (otherwise). The settings can also be passed as
+                an `AbstractDict` or `NamedTuple` via the `input` argument.  Sometimes
+                needed, for example if `var_name` is not present in `input_dict` (in which
+                case you would have had to create the array to be plotted and pass it to
+                `data`).
+                """
+                function $function_name end
+
+                function $function_name(run_info::Vector{Any}, var_name; is=1, data=nothing,
+                                        input=nothing, outfile=nothing, yscale=nothing,
+                                        ylims=nothing, axis_args=Dict{Symbol,Any}(),
+                                        it=nothing, $idim1=nothing, $idim2=nothing, kwargs...)
+
+                    try
+                        if data === nothing
+                            data = [nothing for _ in run_info]
+                        end
+                        if outfile === nothing
+                            error("`outfile` is required for $($function_name_str)")
+                        end
+
+                        if input === nothing
+                            if run_info[1].dfns
+                                if var_name ∈ keys(input_dict_dfns)
+                                    input = input_dict_dfns[var_name]
+                                else
+                                    input = input_dict_dfns
+                                end
+                            else
+                                if var_name ∈ keys(input_dict)
+                                    input = input_dict[var_name]
+                                else
+                                    input = input_dict
+                                end
+                            end
+                        end
+                        if input isa AbstractDict
+                            input = Dict_to_NamedTuple(input)
+                        end
+
+                        n_runs = length(run_info)
+
+                        frame_index = Observable(1)
+                        if length(run_info) == 1 ||
+                            all(ri.$dim1.n == run_info[1].$dim1.n &&
+                                all(isapprox.(ri.$dim1.grid, run_info[1].$dim1.grid))
+                                for ri ∈ run_info[2:end])
+                            # All iterated coordinate positions are the same
+                            positions = run_info[1].$dim1.grid
+                            title = lift(i->string("$($dim1_str) = ", positions[i]), frame_index)
+                        else
+                            makie_post_processing_error_handler(
+                                ArgumentError("Cannot create animation iterating over $($dim1_str) "
+                                            * "when the runs have different $($dim1_str) "
+                                            * "coordinates."),
+                                "$($function_name_str)() failed for $var_name, is=$is.")
+                        end
+                        fig, ax = get_1d_ax(; xlabel="$($dim2_str)",
+                                            ylabel=get_variable_symbol(var_name),
+                                            title=title, yscale=yscale, axis_args...)
+
+                        for (d, ri) ∈ zip(data, run_info)
+                            $function_name(ri, var_name; is=is, data=d, input=input,
+                                            ylims=ylims, frame_index=frame_index, ax=ax,
+                                            it=it, $idim1=$idim1, $idim2=$idim2, kwargs...)
+                        end
+
+                        if input.show_element_boundaries
+                            # Just plot element boundaries from first run, assuming that all
+                            # runs being compared use the same grid.
+                            ri = run_info[1]
+                            element_boundary_inds =
+                                [i for i ∈ 1:ri.$dim2.ngrid-1:ri.$dim2.n_global
+                                    if $idim2 === nothing || i ∈ $idim2]
+                            element_boundary_positions = ri.$dim2.grid[element_boundary_inds]
+                            vlines!(ax, element_boundary_positions, color=:black, alpha=0.3)
+                        end
+
+                        if n_runs > 1
+                            put_legend_below(fig, ax)
+                            # Ensure the first row width is 3/4 of the column width so that
+                            # the plot does not get squashed by the legend
+                            rowsize!(fig.layout, 1, Aspect(1, 3/4))
+                            resize_to_layout!(fig)
+                        end
+
+                        n_frames = minimum(ri.$dim1.n for ri ∈ run_info)
+
+                        save_animation(fig, frame_index, n_frames, outfile)
+
+                        return fig
+                    catch e
+                        return makie_post_processing_error_handler(
+                                    e,
+                                    "$($function_name_str)() failed for $var_name, is=$is.")
+                    end
+                end
+
+                function $function_name(run_info, var_name; is=1, data=nothing,
+                                        input=nothing, frame_index=nothing, ax=nothing,
+                                        fig=nothing, outfile=nothing, yscale=nothing,
+                                        ylims=nothing, label=nothing,
+                                        axis_args=Dict{Symbol,Any}(), it=nothing, ir=nothing,
+                                        iz=nothing, ivperp=nothing, ivpa=nothing,
+                                        ivzeta=nothing, ivr=nothing, ivz=nothing, kwargs...)
+                    if input === nothing
+                        if run_info.dfns
+                            if var_name ∈ keys(input_dict_dfns)
+                                input = input_dict_dfns[var_name]
+                            else
+                                input = input_dict_dfns
+                            end
+                        else
+                            if var_name ∈ keys(input_dict)
+                                input = input_dict[var_name]
+                            else
+                                input = input_dict
+                            end
+                        end
+                    end
+                    if isa(input, AbstractDict)
+                        input = Dict_to_NamedTuple(input)
+                    end
+
+                    dim_slices = get_dimension_slice_indices($(QuoteNode(dim1)), $(QuoteNode(dim2));
+                                                            run_info=run_info,
+                                                            input=input, it=it, is=is,
+                                                            ir=ir, iz=iz, ivperp=ivperp,
+                                                            ivpa=ivpa, ivzeta=ivzeta,
+                                                            ivr=ivr, ivz=ivz)
+                    named_dim_slices = (; dim_slices...)
+                    transpose_data = findfirst(==($(QuoteNode(idim1))), keys(named_dim_slices)) >
+                                        findfirst(==($(QuoteNode(idim2))), keys(named_dim_slices))
+
+                    if data === nothing
+                        data = get_variable(run_info, var_name; dim_slices...)
+                    else
+                        data = select_slice(data, $(QuoteNode(dim1)), $(QuoteNode(dim2)); input=input, it=it,
+                                            is=is, ir=ir, iz=iz, ivperp=ivperp, ivpa=ivpa,
+                                            ivzeta=ivzeta, ivr=ivr, ivz=ivz)
+                    end
+
+                    # the data array is assumed to have the last dimension as the iterated dimension, so to
+                    # make use of the time index assumption in animate_1d we just need to make sure the last
+                    # dimension in data is the one we want to iterate along.
+                    data = transpose_data ? permutedims(data, (2,1)) : data
+
+                    if frame_index === nothing
+                        ind = Observable(1)
+                    else
+                        ind = frame_index
+                    end
+                    if ax === nothing
+                        position = run_info.$dim1.grid
+                        title = lift(i->string("$($dim1_str) = ", position[i]), ind)
+                        fig, ax = get_1d_ax(; xlabel="$($dim1_str)",
+                                            ylabel=get_variable_symbol(var_name),
+                                            yscale=yscale, title=title, axis_args...)
+                    else
+                        fig = nothing
+                    end
+                    if label === nothing
+                        label = run_info.run_name
+                    end
+
+                    x = $dim2_grid
+                    if $idim2 !== nothing
+                        x = x[$idim2]
+                    end
+                    animate_1d(x, data; ax=ax, ylims=ylims, frame_index=ind,
+                                label=label, kwargs...)
+
+                    if input.show_element_boundaries && fig !== nothing
+                        element_boundary_inds =
+                            [i for i ∈ 1:run_info.$dim2.ngrid-1:run_info.$dim2.n_global
+                                if $idim2 === nothing || i ∈ $idim2]
+                        element_boundary_positions = run_info.$dim2.grid[element_boundary_inds]
+                        vlines!(ax, element_boundary_positions, color=:black, alpha=0.3)
+                    end
+
+                    if frame_index === nothing
+                        if outfile === nothing
+                            error("`outfile` is required for $($function_name_str)")
+                        end
+                        if fig === nothing
+                            error("When `outfile` is passed to save the plot, must either pass both "
+                                * "`fig` and `ax` or neither. Only `ax` was passed.")
+                        end
+
+                        n_frames = size(data, 2)
+
+                        save_animation(fig, ind, n_frames, outfile)
+                    end
+
+                    return fig
+                end
+            end)
+    end
+end
+
+# Generate 2d animation functions for all combinations of dimensions
+# these two commented out loops are what you would use if you wanted to avoid having double the
+# plotting functions (i.e. iterate_along_z_vs_vpa_vperp and iterate_along_z_vs_vperp_vpa). Note
+# that you'd need to use the commented out sections in setup_defaults.jl and plots_for_variable.jl
+# as well.
+# for dim1 ∈ one_dimension_combinations_no_t
+#     for (dim2, dim3) ∈ combinations(setdiff(one_dimension_combinations_no_t, (dim1,)), 2)
+for dim1 ∈ one_dimension_combinations_no_t
+    for dim2 ∈ setdiff(one_dimension_combinations_no_t, (dim1,))
+        for dim3 ∈ setdiff(one_dimension_combinations_no_t, (dim1, dim2))
+
+            function_name_str = "iterate_along_$(dim1)_vs_$(dim2)_$(dim3)"
+            function_name = Symbol(function_name_str)
+            spaces = " " ^ (length(function_name_str) + 1)
+            dim1_str = String(dim1)
+            dim2_str = String(dim2)
+            dim3_str = String(dim3)
+            dim1_grid = :( run_info.$dim1.grid )
+            dim2_grid = :( run_info.$dim2.grid )
+            dim3_grid = :( run_info.$dim3.grid )
+            idim1 = Symbol(:i, dim1)
+            idim2 = Symbol(:i, dim2)
+            idim3 = Symbol(:i, dim3)
+            eval(quote
+                    export $function_name
+
+                    """
+                        $($function_name_str)(run_info::Vector{Any}, var_name; is=1, data=nothing,
+                        $($spaces)input=nothing, outfile=nothing, colorscale=identity,
+                        $($spaces)transform=identity, axis_args=Dict{Symbol,Any}(),
+                        $($spaces)it=nothing, ir=nothing, iz=nothing, ivperp=nothing,
+                        $($spaces)ivpa=nothing, ivzeta=nothing, ivr=nothing, ivz=nothing,
+                        $($spaces)kwargs...)
+                        $($function_name_str)(run_info, var_name; is=1, data=nothing,
+                        $($spaces)input=nothing, frame_index=nothing, ax=nothing,
+                        $($spaces)fig=nothing, colorbar_place=colorbar_place,
+                        $($spaces)title=nothing, outfile=nothing, colorscale=identity,
+                        $($spaces)transform=identity, axis_args=Dict{Symbol,Any}(),
+                        $($spaces)it=nothing, ir=nothing, iz=nothing, ivperp=nothing,
+                        $($spaces)ivpa=nothing, ivzeta=nothing, ivr=nothing, ivz=nothing,
+                        $($spaces)kwargs...)
+
+                    Animate `var_name` from the run(s) represented by `run_info` (as returned by
+                    [`get_run_info`](@ref)) along $($dim1_str) vs $($dim2_str) and $($dim3_str).
+
+                    If a Vector of `run_info` is passed, the animations from each run are
+                    created in a horizontal row, with each sub-animation having the 'run name' as
+                    its subtitle.
+
+                    `it`, `is`, `ir`, `iz`, `ivperp`, `ivpa`, `ivzeta`, `ivr`, and `ivz` can be
+                    used to select different indices (for non-plotted dimensions) or range (for
+                    the plotted dimension, except `it` which is not compatible as a plotted
+                    dimension) to use.
+
+                    `colorscale` can be used to set the scaling function for the colors. Options
+                    are `identity`, `log`, `log2`, `log10`, `sqrt`, `Makie.logit`,
+                    `Makie.pseudolog10` and `Makie.Symlog10`. `transform` is a function that is
+                    applied element-by-element to the data before it is plotted. For example when
+                    using a log scale on data that may contain some negative values it might be
+                    useful to pass `transform=abs` (to plot the absolute value) or
+                    `transform=positive_or_nan` (to ignore any negative or zero values).
+
+                    `axis_args` are passed as keyword arguments to `get_2d_ax()`, and from there
+                    to the `Axis` constructor.
+
+                    Extra `kwargs` are passed to Makie's `heatmap!() function`.
+
+                    When a single `run_info` is passed, an `Axis` can be passed to `ax`. If it
+                    is, the plot will be created in `ax`. When `ax` is passed, a colorbar will be
+                    created at `colorbar_place` if a `GridPosition` is passed to
+                    `colorbar_place`.
+
+                    `outfile` is required for animations unless `ax` is passed. The animation
+                    will be saved to a file named `outfile`.  The suffix determines the file
+                    type. If both `outfile` and `ax` are passed, then the `Figure` containing
+                    `ax` must be passed to `fig` to allow the animation to be saved.
+
+                    When a single `run_info` is passed, the (sub-)title can be set with the
+                    `title` argument.
+
+                    By default the data for the variable is loaded from the output represented by
+                    `run_info`. The data can optionally be passed to `data` if you have already
+                    loaded it.
+
+                    Returns the `Figure`, unless `ax` was passed in which case returns `nothing`.
+
+                    By default relevant settings are read from the `var_name` section of
+                    [`input_dict_dfns`](@ref) (if output that has distribution functions is being
+                    read) or [`input_dict`](@ref) (otherwise). The settings can also be passed as
+                    an `AbstractDict` or `NamedTuple` via the `input` argument.  Sometimes
+                    needed, for example if `var_name` is not present in `input_dict` (in which
+                    case you would have had to create the array to be plotted and pass it to
+                    `data`).
+                    """
+                    function $function_name end
+
+                    function $function_name(run_info::Vector{Any}, var_name; is=1, data=nothing,
+                                            input=nothing, outfile=nothing, transform=identity,
+                                            axis_args=Dict{Symbol,Any}(), it=nothing, kwargs...)
+
+                        try
+                            if data === nothing
+                                data = [nothing for _ in run_info]
+                            end
+                            if outfile === nothing
+                                error("`outfile` is required for $($function_name_str)")
+                            end
+
+                            frame_index = Observable(1)
+
+                            if length(run_info) > 1
+                                title = get_variable_symbol(var_name)
+                                subtitles = (lift(i->string(ri.run_name, "\n$($dim1_str) = ",
+                                                            ri.$dim1.grid[i]), frame_index)
+                                            for ri ∈ run_info)
+                            else
+                                positions = run_info[1].$dim1.grid
+                                title = lift(i->string(get_variable_symbol(var_name), "\n$($dim1_str) = ",
+                                                        positions[i]),frame_index)
+                                subtitles = nothing
+                            end
+
+                            fig, ax, colorbar_places = get_2d_ax(length(run_info);
+                                                                title=title,
+                                                                subtitles=subtitles,
+                                                                axis_args...)
+
+                            for (d, ri, a, cp) ∈ zip(data, run_info, ax, colorbar_places)
+                                $function_name(ri, var_name; is=is, data=d, input=input,
+                                                transform=transform, frame_index=frame_index,
+                                                ax=a, colorbar_place=cp, it=it, kwargs...)
+                            end
+
+                            n_frames = minimum(ri.$dim1.n for ri ∈ run_info)
+
+                            save_animation(fig, frame_index, n_frames, outfile)
+
+                            return fig
+                        catch e
+                            return makie_post_processing_error_handler(
+                                        e,
+                                        "$($function_name_str) failed for $var_name, is=$is.")
+                        end
+                    end
+
+                    function $function_name(run_info, var_name; is=1, data=nothing,
+                                            input=nothing, frame_index=nothing, ax=nothing,
+                                            fig=nothing, colorbar_place=nothing,
+                                            title=nothing, outfile=nothing,
+                                            axis_args=Dict{Symbol,Any}(), it=nothing, ir=nothing,
+                                            iz=nothing, ivperp=nothing, ivpa=nothing,
+                                            ivzeta=nothing, ivr=nothing, ivz=nothing, kwargs...)
+                        if input === nothing
+                            if run_info.dfns
+                                if var_name ∈ keys(input_dict_dfns)
+                                    input = input_dict_dfns[var_name]
+                                else
+                                    input = input_dict_dfns
+                                end
+                            else
+                                if var_name ∈ keys(input_dict)
+                                    input = input_dict[var_name]
+                                else
+                                    input = input_dict
+                                end
+                            end
+                        end
+                        if isa(input, AbstractDict)
+                            input = Dict_to_NamedTuple(input)
+                        end
+                        if frame_index === nothing
+                            ind = Observable(1)
+                        else
+                            ind = frame_index
+                        end
+
+                        dim_slices = get_dimension_slice_indices($(QuoteNode(dim1)),
+                                                                $(QuoteNode(dim2)),
+                                                                $(QuoteNode(dim3));
+                                                                run_info=run_info,
+                                                                input=input, it=it, is=is,
+                                                                ir=ir, iz=iz, ivperp=ivperp,
+                                                                ivpa=ivpa, ivzeta=ivzeta,
+                                                                ivr=ivr, ivz=ivz)
+                        named_dim_slices = (; dim_slices...)
+                        dim1_index = findfirst(==($(QuoteNode(idim1))), keys(named_dim_slices))
+                        dim2_index = findfirst(==($(QuoteNode(idim2))), keys(named_dim_slices))
+                        dim3_index = findfirst(==($(QuoteNode(idim3))), keys(named_dim_slices))
+
+                        if data === nothing
+                            data = get_variable(run_info, var_name; dim_slices...)
+                        else
+                            data = select_slice(data, $(QuoteNode(dim1)), $(QuoteNode(dim2)),
+                                                $(QuoteNode(dim3)); input=input, it=it, is=is,
+                                                ir=ir, iz=iz, ivperp=ivperp, ivpa=ivpa,
+                                                ivzeta=ivzeta, ivr=ivr, ivz=ivz)
+                        end
+
+                        # data must be arranged so that the iterated dimension is last, and x and y
+                        # are in order they appeared in function name (i.e. iterate_along_z_vs_vperp_vpa
+                        # has vperp on x axis, unlike iterate_along_z_vs_vpa_vperp which has vpa on x axis)
+                        # this allows us to make use of animate_2d()'s assumptions that time is the
+                        # last dimension and that time is the dimension we are iterating along.
+                        if dim1_index > max(dim2_index, dim3_index)
+                            if dim2_index > dim3_index
+                                data = permutedims(data, (2,3,1))
+                            else
+                                data = permutedims(data, (3,2,1))
+                            end
+                        elseif dim1_index < min(dim2_index, dim3_index)
+                            if dim2_index > dim3_index
+                                data = permutedims(data, (1,2,3))
+                            else
+                                data = permutedims(data, (2,1,3))
+                            end
+                        else
+                            if dim2_index > dim3_index
+                                data = permutedims(data, (1,3,2))
+                            else
+                                data = permutedims(data, (3,1,2))
+                            end
+                        end
+
+
+                        if input === nothing
+                            colormap = "reverse_deep"
+                        else
+                            colormap = input.colormap
+                        end
+                        if title === nothing && ax == nothing
+                            positions = run_info.$dim1.grid
+                            title = lift(i->string(get_variable_symbol(var_name), "\n$($dim1_str) = ",
+                                                    positions[i]), ind)
+                        end
+
+                        if ax === nothing
+                            fig, ax, colorbar_place = get_2d_ax(; title=title, axis_args...)
+                            ax_was_nothing = true
+                        else
+                            ax_was_nothing = false
+                        end
+
+                        x = $dim2_grid
+                        if $idim2 !== nothing
+                            x = x[$idim2]
+                        end
+                        y = $dim3_grid
+                        if $idim3 !== nothing
+                            y = y[$idim3]
+                        end
+
+                        anim = animate_2d(x, y, data; xlabel="$($dim2_str)",
+                                        ylabel="$($dim3_str)", frame_index=ind, ax=ax,
+                                        colorbar_place=colorbar_place, colormap=colormap,
+                                        kwargs...)
+
+                        if input.show_element_boundaries
+                            element_boundary_inds =
+                                [i for i ∈ 1:run_info.$dim2.ngrid-1:run_info.$dim2.n_global
+                                    if $idim2 === nothing || i ∈ $idim2]
+                            element_boundary_positions = run_info.$dim2.grid[element_boundary_inds]
+                            vlines!(ax, element_boundary_positions, color=:white, alpha=0.5)
+                        end
+                        if input.show_element_boundaries
+                            element_boundary_inds =
+                                [i for i ∈ 1:run_info.$dim3.ngrid-1:run_info.$dim3.n_global
+                                    if $idim3 === nothing || i ∈ $idim3]
+                            element_boundary_positions = run_info.$dim3.grid[element_boundary_inds]
+                            hlines!(ax, element_boundary_positions, color=:white, alpha=0.5)
+                        end
+
+                        if frame_index === nothing
+                            if outfile === nothing
+                                error("`outfile` is required for $($function_name_str)")
+                            end
+                            if ax_was_nothing && fig === nothing
+                                error("When `outfile` is passed to save the plot, must either pass both "
+                                    * "`fig` and `ax` or neither. Only `ax` was passed.")
+                            end
+
+                            n_frames = size(data, 3)
+
+                            save_animation(fig, ind, n_frames, outfile)
+                        end
+
+                        return fig
+                    end
+                end)
+        end
+    end
+end
+
 # Generate 2d animation functions for all combinations of dimensions
 for (dim1, dim2) ∈ two_dimension_combinations_no_t
     function_name_str = "animate_vs_$(dim2)_$(dim1)"
