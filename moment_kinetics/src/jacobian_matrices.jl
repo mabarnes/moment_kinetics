@@ -406,14 +406,20 @@ function create_jacobian_info(coords::NamedTuple, spectral::NamedTuple; comm=com
         synchronize = (call_site)->nothing
     end
 
-    return jacobian_info(jacobian_matrix, n_entries, Val(n_entries^2),
-                         state_vector_entries, state_vector_numbers, state_vector_dims,
-                         state_vector_coords, state_vector_is_constraint,
-                         state_vector_sizes, state_vector_dim_sizes,
-                         state_vector_dim_steps, state_vector_local_ranges,
-                         state_vector_local_flattened_ranges, local_block_ranges,
-                         mini_coords, mini_spectral, boundary_skip_funcs,
-                         handle_overlaps, synchronize)
+    jacobian =  jacobian_info(jacobian_matrix, n_entries, Val(n_entries^2),
+                              state_vector_entries, state_vector_numbers,
+                              state_vector_dims, state_vector_coords,
+                              state_vector_is_constraint, state_vector_sizes,
+                              state_vector_dim_sizes, state_vector_dim_steps,
+                              state_vector_local_ranges,
+                              state_vector_local_flattened_ranges, local_block_ranges,
+                              mini_coords, mini_spectral, boundary_skip_funcs,
+                              handle_overlaps, synchronize)
+
+    # Initialise identity so that initial matrix is invertible.
+    jacobian_initialize_identity!(jacobian)
+
+    return jacobian
 end
 
 """
