@@ -1008,39 +1008,40 @@ function get_electron_preconditioners(preconditioner_type, nl_solver_input, coor
     if preconditioner_type === Val(:electron_schur_complement)
         moments_vector_size = 5 * coords.z.n
         function get_schur_precon()
-            jacobian = create_jacobian_info(coords, spectral; comm=comm_anyzv_subblock[],
-                                            synchronize=_anyzv_subblock_synchronize,
-                                            handle_overlaps=Val(false),
-                                            boundary_skip_funcs=boundary_skip_funcs.full,
-                                            electron_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z), false),
-                                            electron_p=((:anyzv,:z), (:z,), false),
-                                            zeroth_moment=((:anyzv,:z), (:z,), true),
-                                            first_moment=((:anyzv,:z), (:z,), true),
-                                            second_moment=((:anyzv,:z), (:z,), true),
-                                            third_moment=((:anyzv,:z), (:z,), true))
-            input_buffer = (allocate_shared_float(:newton_size_pdf=>total_size_coords),
-                            allocate_shared_float(:newton_size_moments=>moments_vector_size))
-            output_buffer = (allocate_shared_float(:newton_size_pdf=>total_size_coords),
-                             allocate_shared_float(:newton_size_moments=>moments_vector_size))
+            precon = create_jacobian_info(coords, spectral; comm=comm_anyzv_subblock[],
+                                          synchronize=_anyzv_subblock_synchronize,
+                                          handle_overlaps=Val(false),
+                                          boundary_skip_funcs=boundary_skip_funcs.full,
+                                          electron_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z), false),
+                                          electron_p=((:anyzv,:z), (:z,), false),
+                                          zeroth_moment=((:anyzv,:z), (:z,), true),
+                                          first_moment=((:anyzv,:z), (:z,), true),
+                                          second_moment=((:anyzv,:z), (:z,), true),
+                                          third_moment=((:anyzv,:z), (:z,), true))
+            moments_buffer = allocate_shared_float(:newton_size_moments=>moments_vector_size)
 
-            # Initialise input buffers to zero so that constraint equations have zero on
+            # Initialise moments_buffer to zero so that constraint equations have zero on
             # the RHS.
             @begin_serial_region()
             @serial_region begin
-                input_buffer[2] .= 0.0
+                moments_buffer .= 0.0
             end
 
-            A = jacobian.matrix[1][1]
-            B = get_joined_array(jacobian, 1:1, 2:jacobian.n_entries)
-            C = get_joined_array(jacobian, 2:jacobian.n_entries, 1:1)
-            D = get_joined_array(jacobian, 2:jacobian.n_entries, 2:jacobian.n_entries)
+            A = precon.matrix[1][1]
+            B = get_joined_array(precon, 1:1, 2:precon.n_entries)
+            C = get_joined_array(precon, 2:precon.n_entries, 1:1)
+            D = get_joined_array(precon, 2:precon.n_entries, 2:precon.n_entries)
 
             pdf_global_indices = get_global_indices((coords.vpa, coords.vperp, coords.z))
             moments_global_indices = get_global_indices(5, (coords.z,))
 
             Alu = FakeMPILU(A, pdf_global_indices, pdf_global_indices; comm=coords.z.comm,
-                            shared_comm=comm_anyzv_subblock[])
+                            shared_comm=comm_anyzv_subblock[], use_sparse=true, skip_factorization=true)
 
+            function schur_complement_allocate(dim_sizes...)
+                return allocate_shared_float(ntuple(i->(Symbol("schur_complement$i")=>dim_sizes[i]),
+                                                    length(dim_sizes))...)
+            end
             # External package MPISchurComplements cannot use our macro
             # @_anyzv_subblock_synchronize() to retrieve line numbers, so (if using
             # @debug_block_synchronize_quick) get a hash for the location of the following
@@ -1049,18 +1050,16 @@ function get_electron_preconditioners(preconditioner_type, nl_solver_input, coor
                                  hash(string(@__FILE__, @__LINE__)),
                                  nothing
                                 )
-            function schur_complement_allocate(dim_sizes...)
-                return allocate_shared_float(ntuple(i->(Symbol("schur_complement$i")=>dim_sizes[i]),
-                                                    length(dim_sizes))...)
-            end
-            schur_complement_lu = mpi_schur_complement(Alu, B, C, D, pdf_global_indices,
-                                                       moments_global_indices;
-                                                       distributed_comm=coords.z.comm,
-                                                       shared_comm=comm_anyzv_subblock[],
-                                                       allocate_array=schur_complement_allocate,
-                                                       synchronize_shared=()->_anyzv_subblock_synchronize(fake_call_site))
+            schur_complement_factorization =
+                mpi_schur_complement(Alu, B, C, D, pdf_global_indices,
+                                     moments_global_indices;
+                                     distributed_comm=coords.z.comm,
+                                     shared_comm=comm_anyzv_subblock[],
+                                     allocate_array=schur_complement_allocate,
+                                     synchronize_shared=()->_anyzv_subblock_synchronize(fake_call_site),
+                                     skip_factorization=true)
 
-            return schur_complement_lu, jacobian, input_buffer, output_buffer
+            return schur_complement_factorization, precon, moments_buffer
         end
         preconditioners = [get_schur_precon() for _ ∈ CartesianIndices(reverse(outer_coord_sizes))]
     elseif preconditioner_type === Val(:electron_lu_separate_dp_dz_dq_dz)
@@ -1328,7 +1327,7 @@ global_rank[] == 0 && println("recalculating precon")
     nl_solver_params.solves_since_precon_update[] = 0
     nl_solver_params.precon_dt[] = t_params.dt[]
 
-    orig_lu, precon, input_buffer, output_buffer =
+    schur_complement_factorization, precon, moments_buffer =
         nl_solver_params.preconditioners[ir]
 
     fill_electron_kinetic_equation_Jacobian!(
@@ -1337,35 +1336,14 @@ global_rank[] == 0 && println("recalculating precon")
         z_advect, vpa_advect, scratch_dummy, external_source_settings,
         num_diss_params, t_params, ion_dt, ir, evolve_p, :all, true, add_identity)
 
-    @begin_anyzv_region()
-    if anyzv_subblock_rank[] == 0
-        if size(orig_lu) == (1, 1)
-            # Have not properly created the LU decomposition before, so
-            # cannot reuse it.
-            @timeit_debug global_timer "lu" nl_solver_params.preconditioners[ir] =
-                (lu(get_sparse_joined_array(precon)), precon, input_buffer,
-                 output_buffer)
-        else
-            # LU decomposition was previously created. The Jacobian always
-            # has the same sparsity pattern, so by using `lu!()` we can
-            # reuse some setup.
-            try
-                @timeit_debug global_timer "lu!" lu!(orig_lu, get_sparse_joined_array(precon); check=false)
-            catch e
-                if !isa(e, ArgumentError)
-                    rethrow(e)
-                end
-                println("Sparsity pattern of matrix changed, rebuilding "
-                        * "LU from scratch")
-                @timeit_debug global_timer "lu" orig_lu = lu(get_sparse_joined_array(precon))
-            end
-            nl_solver_params.preconditioners[ir] =
-                (orig_lu, precon, input_buffer, output_buffer)
-        end
-    else
-        nl_solver_params.preconditioners[ir] =
-            (orig_lu, precon, input_buffer, output_buffer)
-    end
+    A = precon.matrix[1][1]
+    B = get_joined_array(precon, 1:1, 2:precon.n_entries)
+    C = get_joined_array(precon, 2:precon.n_entries, 1:1)
+    D = get_joined_array(precon, 2:precon.n_entries, 2:precon.n_entries)
+    update_schur_complement!(schur_complement_factorization, A, B, C, D)
+
+    nl_solver_params.preconditioners[ir] =
+        (schur_complement_factorization, precon, moments_buffer)
 
     return nothing
 end
@@ -1393,71 +1371,65 @@ end
 
     precon_p, precon_f = x
 
-    precon_lu, _, this_input_buffer, this_output_buffer =
+    schur_complement_factorization, _, moments_buffer =
         nl_solver_params.preconditioners[ir]
 
-    @begin_anyzv_region()
-    counter = 1
-    @loop_z_vperp_vpa iz ivperp ivpa begin
-        this_input_buffer[counter] = precon_f[ivpa,ivperp,iz]
-        counter += 1
-    end
+    # Apart from p, all moments are set by constraint equations that have zeros on the
+    # RHS - these entries in this_input_moments_buffer were initialized to zero, no need
+    # to alter here.
+    @begin_anyzv_z_region()
     @loop_z iz begin
-        this_input_buffer[counter] = precon_p[iz]
-        counter += 1
+        moments_buffer[iz] = precon_p[iz]
     end
 
-    @begin_anyzv_region()
-    @anyzv_serial_region begin
-        @timeit_debug global_timer "ldiv!" ldiv!(this_output_buffer, precon_lu, this_input_buffer)
-    end
+    @timeit_debug global_timer "ldiv!" ldiv!(schur_complement_factorization,
+                                             vec(precon_f), moments_buffer)
 
-    @begin_anyzv_region()
-    counter = 1
-    @loop_z_vperp_vpa iz ivperp ivpa begin
-        precon_f[ivpa,ivperp,iz] = this_output_buffer[counter]
-        counter += 1
-    end
+    @begin_anyzv_z_region()
     @loop_z iz begin
-        precon_p[iz] = this_output_buffer[counter]
-        counter += 1
+        precon_p[iz] = moments_buffer[iz]
     end
 
-    # Ensure values of precon_f and precon_p are consistent across
-    # distributed-MPI block boundaries. For precon_f take the upwind
-    # value, and for precon_p take the average.
-    f_lower_endpoints = @view scratch_dummy.buffer_vpavperpr_1[:,:,ir]
-    f_upper_endpoints = @view scratch_dummy.buffer_vpavperpr_2[:,:,ir]
-    receive_buffer1 = @view scratch_dummy.buffer_vpavperpr_3[:,:,ir]
-    receive_buffer2 = @view scratch_dummy.buffer_vpavperpr_4[:,:,ir]
-    @begin_anyzv_vperp_vpa_region()
-    @loop_vperp_vpa ivperp ivpa begin
-        f_lower_endpoints[ivpa,ivperp] = precon_f[ivpa,ivperp,1]
-        f_upper_endpoints[ivpa,ivperp] = precon_f[ivpa,ivperp,end]
-    end
-    # We upwind the z-derivatives in `electron_z_advection!()`, so would
-    # expect that upwinding the results here in z would make sense.
-    # However, upwinding here makes convergence much slower (~10x),
-    # compared to picking the values from one side or other of the block
-    # boundary, or taking the average of the values on either side.
-    # Neither direction is special, so taking the average seems most
-    # sensible (although in an intial test it does not seem to converge
-    # faster than just picking one or the other).
-    # Maybe this could indicate that it is more important to have a fully
-    # self-consistent Jacobian inversion for the
-    # `electron_vpa_advection()` part rather than taking half(ish) of the
-    # values from one block and the other half(ish) from the other.
-    reconcile_element_boundaries_MPI_z_pdf_vpavperpz!(
-        precon_f, f_lower_endpoints, f_upper_endpoints, receive_buffer1,
-        receive_buffer2, z)
+    # Don't think the following is necessary when using MPISchurComplements for the
+    # preconditioner solve, but just comment out in case it turns out to be needed in
+    # future (bitwise consistency of repeated/overlapping entries in the result seems to
+    # depend on the algorithm used in `mul!()` - probably coming from BLAS - which might
+    # change in future or on different platforms).
+    ## Ensure values of precon_f and precon_p are consistent across
+    ## distributed-MPI block boundaries. For precon_f take the upwind
+    ## value, and for precon_p take the average.
+    #f_lower_endpoints = @view scratch_dummy.buffer_vpavperpr_1[:,:,ir]
+    #f_upper_endpoints = @view scratch_dummy.buffer_vpavperpr_2[:,:,ir]
+    #receive_buffer1 = @view scratch_dummy.buffer_vpavperpr_3[:,:,ir]
+    #receive_buffer2 = @view scratch_dummy.buffer_vpavperpr_4[:,:,ir]
+    #@begin_anyzv_vperp_vpa_region()
+    #@loop_vperp_vpa ivperp ivpa begin
+    #    f_lower_endpoints[ivpa,ivperp] = precon_f[ivpa,ivperp,1]
+    #    f_upper_endpoints[ivpa,ivperp] = precon_f[ivpa,ivperp,end]
+    #end
+    ## We upwind the z-derivatives in `electron_z_advection!()`, so would
+    ## expect that upwinding the results here in z would make sense.
+    ## However, upwinding here makes convergence much slower (~10x),
+    ## compared to picking the values from one side or other of the block
+    ## boundary, or taking the average of the values on either side.
+    ## Neither direction is special, so taking the average seems most
+    ## sensible (although in an intial test it does not seem to converge
+    ## faster than just picking one or the other).
+    ## Maybe this could indicate that it is more important to have a fully
+    ## self-consistent Jacobian inversion for the
+    ## `electron_vpa_advection()` part rather than taking half(ish) of the
+    ## values from one block and the other half(ish) from the other.
+    #reconcile_element_boundaries_MPI_z_pdf_vpavperpz!(
+    #    precon_f, f_lower_endpoints, f_upper_endpoints, receive_buffer1,
+    #    receive_buffer2, z)
 
-    @begin_anyzv_region()
-    @anyzv_serial_region begin
-        buffer_1[] = precon_p[1]
-        buffer_2[] = precon_p[end]
-    end
-    reconcile_element_boundaries_MPI_anyzv!(
-        precon_p, buffer_1, buffer_2, buffer_3, buffer_4, z)
+    #@begin_anyzv_region()
+    #@anyzv_serial_region begin
+    #    buffer_1[] = precon_p[1]
+    #    buffer_2[] = precon_p[end]
+    #end
+    #reconcile_element_boundaries_MPI_anyzv!(
+    #    precon_p, buffer_1, buffer_2, buffer_3, buffer_4, z)
 
     return nothing
 end
