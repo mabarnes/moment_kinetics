@@ -990,12 +990,13 @@ function _setup_time_advance_internal!(pdf, fields, vz, vr, vzeta, vpa, vperp, z
                 end
             end
         end
-        @_block_synchronize()
-        halo_swap!(moments.ion.dens, r, z)
+        # halo_swap!() effecively works in a serial region, so no need to synchronize
+        # here.
         if !moments.evolve_density
-            halo_swap!(pdf.ion.norm, r, z)
+            halo_swap!(r, z, moments.ion.dens, pdf.ion.norm)
+        else
+            halo_swap!(r, z, moments.ion.dens)
         end
-        @_block_synchronize()
         @serial_region begin
             @views moments.electron.dens .= moments.ion.dens[:,:,1]
         end

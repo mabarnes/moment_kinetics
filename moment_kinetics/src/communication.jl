@@ -1645,114 +1645,139 @@ function _anyzv_subblock_synchronize(call_site::Union{Nothing,Missing,UInt64})
 end
 
 """
-    halo_swap!(x::AbstractArray, r, z)
+    halo_swap!(r::coordinate, z::coordinate, x_list::AbstractArray...)
 
 Enforce consistency of 'halo cells' - i.e. the grid points on block boundaries (in the
 \$r\$ and \$z\$ directions) that are shared by the grids owned by two processes (or more
-on block corners).
+on block corners) for the variables in `x_list`.
 
 For consistency when adding random noise, just chooses the value from the upper/outer
 process rather than averaging.
 """
-function halo_swap! end
+function halo_swap!(r::coordinate, z::coordinate, x_list::AbstractArray...)
+    # Allow for multiple variables at the same time, as it will be more efficient to only
+    # wait twice, rather than twice for each variable as would be necessary if each
+    # variable was handled separately.
 
-# If we want a different operation than just taking the upper/outer value, could add an
-# optional `op` argument, and if it is passed do an `MPI.Allreduce!()` with that operation
-# instead of the Isend/Irecv.
-
-# Version for fields or electron moments
-function halo_swap!(x::AbstractArray{T,2} where T, r, z)
+    # This module has to be defined before `looping`, so cannot use
+    # @begin_serial_region(), etc., here. However, we are doing 'serial' operations, so
+    # need to synchronize here in case we are not inside a 'serial region'.
+    @_block_synchronize()
     if block_rank[] == 0
-        # Send r-boundary inward.
-        req_r1 = MPI.Irecv!(@view(x[:,end]), r.comm; source=r.nextrank)
-        req_r2 = MPI.Isend(@view(x[:,1]), r.comm; dest=r.prevrank)
-
+        reqs_r = MPI.Request[]
+        for x ∈ x_list
+            start_halo_swap_r!(x, r, z, reqs_r)
+        end
         # Need to complete the r-communication before starting the z-communication to
         # ensure block-corner points are consistently communicated.
-        MPI.Waitall([req_r1, req_r2])
+        MPI.Waitall(reqs_r)
 
-        # Send z-boundary downward.
-        req_z1 = MPI.Irecv!(@view(x[end,:]), z.comm; source=z.nextrank)
-        req_z2 = MPI.Isend(@view(x[1,:]), z.comm; dest=z.prevrank)
-
-        MPI.Waitall([req_z1, req_z2])
+        reqs_z = MPI.Request[]
+        for x ∈ x_list
+            start_halo_swap_z!(x, r, z, reqs_r)
+        end
+        MPI.Waitall(reqs_z)
     end
+    @_block_synchronize()
+end
+
+# Version for fields or electron moments
+function start_halo_swap_r!(x::AbstractArray{T,2} where T, r, z,
+                            reqs::Vector{MPI.Request})
+    if block_rank[] == 0
+        # Send r-boundary inward.
+        push!(reqs, MPI.Irecv!(@view(x[:,end]), r.comm; source=r.nextrank))
+        push!(reqs, MPI.Isend(@view(x[:,1]), r.comm; dest=r.prevrank))
+    end
+    return nothing
+end
+function start_halo_swap_z!(x::AbstractArray{T,2} where T, r, z, reqs)
+    if block_rank[] == 0
+        # Send z-boundary downward.
+        push!(reqs, MPI.Irecv!(@view(x[end,:]), z.comm; source=z.nextrank))
+        push!(reqs, MPI.Isend(@view(x[1,:]), z.comm; dest=z.prevrank))
+    end
+    return nothing
 end
 
 # Version for ion or neutral moments
-function halo_swap!(x::AbstractArray{T,3} where T, r, z)
+function start_halo_swap_r!(x::AbstractArray{T,3} where T, r, z,
+                            reqs::Vector{MPI.Request})
     if block_rank[] == 0
         # Send r-boundary inward.
-        req_r1 = MPI.Irecv!(@view(x[:,end,:]), r.comm; source=r.nextrank)
-        req_r2 = MPI.Isend(@view(x[:,1,:]), r.comm; dest=r.prevrank)
-
-        # Need to complete the r-communication before starting the z-communication to
-        # ensure block-corner points are consistently communicated.
-        MPI.Waitall([req_r1, req_r2])
-
-        # Send z-boundary downward.
-        req_z1 = MPI.Irecv!(@view(x[end,:,:]), z.comm; source=z.nextrank)
-        req_z2 = MPI.Isend(@view(x[1,:,:]), z.comm; dest=z.prevrank)
-
-        MPI.Waitall([req_z1, req_z2])
+        push!(reqs, MPI.Irecv!(@view(x[:,end,:]), r.comm; source=r.nextrank))
+        push!(reqs, MPI.Isend(@view(x[:,1,:]), r.comm; dest=r.prevrank))
     end
+    return nothing
+end
+function start_halo_swap_z!(x::AbstractArray{T,3} where T, r, z,
+                            reqs::Vector{MPI.Request})
+    if block_rank[] == 0
+        # Send z-boundary downward.
+        push!(reqs, MPI.Irecv!(@view(x[end,:,:]), z.comm; source=z.nextrank))
+        push!(reqs, MPI.Isend(@view(x[1,:,:]), z.comm; dest=z.prevrank))
+    end
+    return nothing
 end
 
 # Version for electron distribution function
-function halo_swap!(x::AbstractArray{T,4} where T, r, z)
+function start_halo_swap_r!(x::AbstractArray{T,4} where T, r, z,
+                            reqs::Vector{MPI.Request})
     if block_rank[] == 0
         # Send r-boundary inward.
-        req_r1 = MPI.Irecv!(@view(x[:,:,:,end]), r.comm; source=r.nextrank)
-        req_r2 = MPI.Isend(@view(x[:,:,:,1]), r.comm; dest=r.prevrank)
-
-        # Need to complete the r-communication before starting the z-communication to
-        # ensure block-corner points are consistently communicated.
-        MPI.Waitall([req_r1, req_r2])
-
-        # Send z-boundary downward.
-        req_z1 = MPI.Irecv!(@view(x[:,:,end,:]), z.comm; source=z.nextrank)
-        req_z2 = MPI.Isend(@view(x[:,:,1,:]), z.comm; dest=z.prevrank)
-
-        MPI.Waitall([req_z1, req_z2])
+        push!(reqs, MPI.Irecv!(@view(x[:,:,:,end]), r.comm; source=r.nextrank))
+        push!(reqs, MPI.Isend(@view(x[:,:,:,1]), r.comm; dest=r.prevrank))
     end
+    return nothing
+end
+function start_halo_swap_z!(x::AbstractArray{T,4} where T, r, z,
+                            reqs::Vector{MPI.Request})
+    if block_rank[] == 0
+        # Send z-boundary downward.
+        push!(reqs, MPI.Irecv!(@view(x[:,:,end,:]), z.comm; source=z.nextrank))
+        push!(reqs, MPI.Isend(@view(x[:,:,1,:]), z.comm; dest=z.prevrank))
+    end
+    return nothing
 end
 
 # Version for ion distribution function
-function halo_swap!(x::AbstractArray{T,5} where T, r, z)
+function start_halo_swap_r!(x::AbstractArray{T,5} where T, r, z,
+                            reqs::Vector{MPI.Request})
     if block_rank[] == 0
         # Send r-boundary inward.
-        req_r1 = MPI.Irecv!(@view(x[:,:,:,end,:]), r.comm; source=r.nextrank)
-        req_r2 = MPI.Isend(@view(x[:,:,:,1,:]), r.comm; dest=r.prevrank)
-
-        # Need to complete the r-communication before starting the z-communication to
-        # ensure block-corner points are consistently communicated.
-        MPI.Waitall([req_r1, req_r2])
-
-        # Send z-boundary downward.
-        req_z1 = MPI.Irecv!(@view(x[:,:,end,:,:]), z.comm; source=z.nextrank)
-        req_z2 = MPI.Isend(@view(x[:,:,1,:,:]), z.comm; dest=z.prevrank)
-
-        MPI.Waitall([req_z1, req_z2])
+        push!(reqs, MPI.Irecv!(@view(x[:,:,:,end,:]), r.comm; source=r.nextrank))
+        push!(reqs, MPI.Isend(@view(x[:,:,:,1,:]), r.comm; dest=r.prevrank))
     end
+    return nothing
+end
+function start_halo_swap_z!(x::AbstractArray{T,5} where T, r, z,
+                            reqs::Vector{MPI.Request})
+    if block_rank[] == 0
+        # Send z-boundary downward.
+        push!(reqs, MPI.Irecv!(@view(x[:,:,end,:,:]), z.comm; source=z.nextrank))
+        push!(reqs, MPI.Isend(@view(x[:,:,1,:,:]), z.comm; dest=z.prevrank))
+    end
+    return nothing
 end
 
 # Version for neutral distribution function
-function halo_swap!(x::AbstractArray{T,6} where T, r, z)
+function start_halo_swap_r!(x::AbstractArray{T,6} where T, r, z,
+                            reqs::Vector{MPI.Request})
     if block_rank[] == 0
         # Send r-boundary outward.
-        req_r1 = MPI.Irecv!(@view(x[:,:,:,:,end,:]), r.comm; source=r.nextrank)
-        req_r2 = MPI.Isend(@view(x[:,:,:,:,1,:]), r.comm; dest=r.prevrank)
-
-        # Need to complete the r-communication before starting the z-communication to
-        # ensure block-corner points are consistently communicated.
-        MPI.Waitall([req_r1, req_r2])
-
-        # Send z-boundary downward.
-        req_z1 = MPI.Irecv!(@view(x[:,:,:,end,:,:]), z.comm; source=z.nextrank)
-        req_z2 = MPI.Isend(@view(x[:,:,:,1,:,:]), z.comm; dest=z.prevrank)
-
-        MPI.Waitall([req_z1, req_z2])
+        push!(reqs, MPI.Irecv!(@view(x[:,:,:,:,end,:]), r.comm; source=r.nextrank))
+        push!(reqs, MPI.Isend(@view(x[:,:,:,:,1,:]), r.comm; dest=r.prevrank))
     end
+    return nothing
+end
+function start_halo_swap_z!(x::AbstractArray{T,6} where T, r, z,
+                            reqs::Vector{MPI.Request})
+    if block_rank[] == 0
+        # Send z-boundary downward.
+        push!(reqs, MPI.Irecv!(@view(x[:,:,:,end,:,:]), z.comm; source=z.nextrank))
+        push!(reqs, MPI.Isend(@view(x[:,:,:,1,:,:]), z.comm; dest=z.prevrank))
+    end
+    return nothing
 end
 
 """

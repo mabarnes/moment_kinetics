@@ -170,6 +170,14 @@ function calculate_electron_moments!(scratch, pdf, moments, composition, collisi
                                                 composition, collisions, r, z, vperp, vpa,
                                                 ir)
     end
+
+    # The anyzv loop over r above skips points in r that are duplicated (i.e. one of the
+    # copies of the element boundary points at sub-domain or periodic boundaries). Now
+    # fill in the duplicate points.
+    halo_swap!(r, z, scratch.electron_density, scratch.electron_upar, scratch.electron_p,
+               moments.electron.vth, moments.electron.temp, moments.electron.ppar,
+               moments.electron.qpar)
+
     return nothing
 end
 
