@@ -1049,11 +1049,15 @@ function get_electron_preconditioners(preconditioner_type, nl_solver_input, coor
                                  hash(string(@__FILE__, @__LINE__)),
                                  nothing
                                 )
+            function schur_complement_allocate(dim_sizes...)
+                return allocate_shared_float(ntuple(i->(Symbol("schur_complement$i")=>dim_sizes[i]),
+                                                    length(dim_sizes))...)
+            end
             schur_complement_lu = mpi_schur_complement(Alu, B, C, D, pdf_global_indices,
                                                        moments_global_indices;
                                                        distributed_comm=coords.z.comm,
-                                                       shared_comm=anyzv_subblock_comm[],
-                                                       allocate_array=allocate_shared_float,
+                                                       shared_comm=comm_anyzv_subblock[],
+                                                       allocate_array=schur_complement_allocate,
                                                        synchronize_shared=()->_anyzv_subblock_synchronize(fake_call_site))
 
             return schur_complement_lu, jacobian, input_buffer, output_buffer
