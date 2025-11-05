@@ -3,6 +3,11 @@ ngrid = 5
 discretization = "gausslegendre_pseudospectral"
 nelement = 32
 nelement_local = 32
+
+[inner_r_bc_1]
+bc = "Dirichlet"
+
+[outer_r_bc_1]
 bc = "Dirichlet"
 
 [z]
