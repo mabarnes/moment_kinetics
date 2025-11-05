@@ -36,8 +36,8 @@ else
   # Apply heuristics to try and get a default value for MACHINE.
   # Note these are machine-specific guesses, and the tests may well be broken by
   # changes to machine configuration, etc.
-  if ls /marconi > /dev/null 2>&1; then
-    DEFAULT_MACHINE=marconi
+  if ls /pitagora > /dev/null 2>&1; then
+    DEFAULT_MACHINE=pitagora
   elif module avail 2>&1 | grep -q epcc; then
     DEFAULT_MACHINE=archer
   elif $(command -v module avail); then
@@ -51,9 +51,9 @@ fi
 mkdir -p machines/artifacts
 
 # Get name of 'machine'
-while [[ -z $MACHINE || !( $MACHINE == "generic-pc" || $MACHINE == "generic-batch" || $MACHINE == "archer" || $MACHINE == "marconi" ) ]]; do
+while [[ -z $MACHINE || !( $MACHINE == "generic-pc" || $MACHINE == "generic-batch" || $MACHINE == "archer" || $MACHINE == "pitagora" ) ]]; do
   echo "Enter name of the machine to set up (must be one of 'generic-pc',"
-  echo "'generic-batch', 'archer', or 'marconi') [$DEFAULT_MACHINE]:"
+  echo "'generic-batch', 'archer', 'pitagora') [$DEFAULT_MACHINE]:"
   read -p "> "  MACHINE
   echo
   if [ -z $MACHINE ]; then

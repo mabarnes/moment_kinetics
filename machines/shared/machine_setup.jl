@@ -38,9 +38,10 @@ default_settings["generic-batch"] = deepcopy(default_settings["base"])
 default_settings["archer"] = merge(default_settings["base"],
                                    Dict("default_partition"=>"standard",
                                         "default_qos"=>"standard"))
-default_settings["marconi"] = merge(default_settings["base"],
-                                    Dict("default_partition"=>"skl_fua_prod",
-                                         "default_qos"=>"normal"))
+default_settings["pitagora"] = merge(default_settings["base"],
+                                     Dict("default_partition"=>"dcgp_fua_prod",
+                                          "default_postproc_time"=>"0:30:00",
+                                          "default_qos"=>"normal"))
 """
     get_user_input(possible_values, default_value)
 
@@ -147,8 +148,8 @@ Currently supported machines:
 * `"generic-batch"` - A generic cluster using a batch queue. Requires some manual setup
     first, see `machines/generic-batch-template/README.md`.
 * `"archer"` - the UK supercomputer [ARCHER2](https://www.archer2.ac.uk/)
-* `"marconi"` - the EUROfusion supercomputer
-    [Marconi](https://wiki.u-gov.it/confluence/display/SCAIUS/UG3.1%3A+MARCONI+UserGuide)
+* "pitagora" - the EUROfusion supercomputer
+  [Pitagora](https://docs.hpc.cineca.it/hpc/pitagora.html)
 
 !!! note
     The settings created by this function are saved in LocalPreferences.toml. It might
@@ -374,7 +375,13 @@ function machine_setup_moment_kinetics(machine::String; no_force_exit::Bool=fals
         needs_account = true
     elseif machine == "archer"
         needs_account = true
-    elseif machine == "marconi"
+        if julia_directory == ""
+            error("On ARCHER2, the `julia_directory` setting is required, because the "
+                  * "default location for the `.julia` directory is in your home "
+                  * "directory and the `/home/` filesystem is not available on the "
+                  * "compute nodes.")
+        end
+    elseif machine == "pitagora"
         needs_account = true
     else
         error("Unsupported machine '$machine'")

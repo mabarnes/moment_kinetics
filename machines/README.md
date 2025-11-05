@@ -12,8 +12,8 @@ Currently supported:
 * "generic-batch" - A generic cluster using a batch queue. Requires some manual setup
   first, see `machines/generic-batch-template/README.md`.
 * "archer" - the UK supercomputer [ARCHER2](https://www.archer2.ac.uk/)
-* "marconi" - the EUROfusion supercomputer
-  [Marconi](https://wiki.u-gov.it/confluence/display/SCAIUS/UG3.1%3A+MARCONI+UserGuide)
+* "pitagora" - the EUROfusion supercomputer
+  [Pitagora](https://docs.hpc.cineca.it/hpc/pitagora.html)
 
 The usage is described in [Getting started](@ref). This page contains some
 extra technical information.
