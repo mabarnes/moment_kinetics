@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+
+#SBATCH --ntasks=1
+#SBATCH --ntasks-per-node=1
+# As of 5/11/2025 it is important to set `--ntasks-per-socket` explicitly to avoid poor performance on Pitagora.
+#SBATCH --ntasks-per-socket=1
+#SBATCH --cpus-per-task=128
+#SBATCH --time=0:30:00
+#SBATCH --account=ACCOUNT
+#SBATCH --partition=dcgp_fua_dbg
+#SBATCH --output=PRECOMPILEDIRslurm-%j.out
+
+set -e
+
+cd $SLURM_SUBMIT_DIR
+
+# Get setup for Julia
+source julia.env
+
+echo "precompiling $(date)"
+
+bin/julia -t 128 --project -O3 precompile.jl
+
+echo "finished! $(date)"
