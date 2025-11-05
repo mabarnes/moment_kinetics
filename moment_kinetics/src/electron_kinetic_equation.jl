@@ -16,13 +16,14 @@ using ..calculus: derivative!, second_derivative!, integral,
                   reconcile_element_boundaries_MPI_anyzv!,
                   reconcile_element_boundaries_MPI_z_pdf_vpavperpz!
 using ..communication
+using ..communication: _anyzv_subblock_synchronize
 using ..debugging
 using ..gauss_legendre: gausslegendre_info
 using ..input_structs
 using ..interpolation: interpolate_to_grid_1d!, fill_1d_interpolation_matrix!,
                        interpolate_symmetric!, fill_interpolate_symmetric_matrix!
 using ..type_definitions
-using ..array_allocation: allocate_float
+using ..array_allocation: allocate_float, allocate_shared_float
 using ..electron_fluid_equations: calculate_electron_moments!,
                                   calculate_electron_moments_no_r!,
                                   update_electron_vth_temperature!,
@@ -992,6 +993,214 @@ function electron_backward_euler_pseudotimestepping!(scratch, pdf, moments,
         success = ""
     end
     return success
+end
+
+function get_electron_preconditioners(preconditioner_type, nl_solver_input, coords,
+                                      outer_coords, spectral;
+                                      boundary_skip_funcs::BSF=nothing) where {BSF}
+    coord_sizes = Tuple(isa(c, coordinate) ? c.n : c for c ∈ coords)
+    total_size_coords = prod(coord_sizes)
+    outer_coord_sizes = Tuple(isa(c, coordinate) ? c.n : c for c ∈ outer_coords)
+
+    if preconditioner_type === Val(:electron_lu_separate_dp_dz_dq_dz)
+        pdf_plus_p_plus_constraints_size = total_size_coords + coords.z.n + 6 * coords.z.n
+        preconditioners = [(lu(sparse(1.0*I, 1, 1)),
+                            create_jacobian_info(coords, spectral;
+                                                 comm=comm_anyzv_subblock[],
+                                                 synchronize=_anyzv_subblock_synchronize,
+                                                 boundary_skip_funcs=boundary_skip_funcs.full,
+                                                 electron_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z), false),
+                                                 electron_p=((:anyzv,:z), (:z,), false),
+                                                 zeroth_moment=((:anyzv,:z), (:z,), true),
+                                                 first_moment=((:anyzv,:z), (:z,), true),
+                                                 second_moment=((:anyzv,:z), (:z,), true),
+                                                 third_moment=((:anyzv,:z), (:z,), true),
+                                                 electron_dp_dz=((:anyzv,:z), (:z,), true),
+                                                 electron_dq_dz=((:anyzv,:z), (:z,), true),
+                                                ),
+                            allocate_shared_float(:newton_size=>pdf_plus_p_plus_constraints_size;
+                                                  comm=comm_anyzv_subblock[]),
+                            allocate_shared_float(:newton_size=>pdf_plus_p_plus_constraints_size;
+                                                  comm=comm_anyzv_subblock[]),
+                           )
+                           for _ ∈ CartesianIndices(reverse(outer_coord_sizes))]
+        # Initialise input buffers to zero so that constraint equations have zero on the
+        # RHS.
+        @begin_serial_region()
+        @serial_region begin
+            for p ∈ preconditioners
+                p[3] .= 0.0
+            end
+        end
+    elseif preconditioner_type === Val(:electron_lu)
+        pdf_plus_p_plus_constraints_size = total_size_coords + coords.z.n + 4 * coords.z.n
+        preconditioners = [(lu(sparse(1.0*I, 1, 1)),
+                            create_jacobian_info(coords, spectral;
+                                                 comm=comm_anyzv_subblock[],
+                                                 synchronize=_anyzv_subblock_synchronize,
+                                                 boundary_skip_funcs=boundary_skip_funcs.full,
+                                                 electron_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z), false),
+                                                 electron_p=((:anyzv,:z), (:z,), false),
+                                                 zeroth_moment=((:anyzv,:z), (:z,), true),
+                                                 first_moment=((:anyzv,:z), (:z,), true),
+                                                 second_moment=((:anyzv,:z), (:z,), true),
+                                                 third_moment=((:anyzv,:z), (:z,), true)),
+                            allocate_shared_float(:newton_size=>pdf_plus_p_plus_constraints_size;
+                                                  comm=comm_anyzv_subblock[]),
+                            allocate_shared_float(:newton_size=>pdf_plus_p_plus_constraints_size;
+                                                  comm=comm_anyzv_subblock[]),
+                           )
+                           for _ ∈ CartesianIndices(reverse(outer_coord_sizes))]
+        # Initialise input buffers to zero so that constraint equations have zero on the
+        # RHS.
+        @begin_serial_region()
+        @serial_region begin
+            for p ∈ preconditioners
+                p[3] .= 0.0
+            end
+        end
+    elseif preconditioner_type === Val(:electron_lu_separate_third_moment)
+        pdf_plus_p_plus_constraints_size = total_size_coords + coords.z.n + coords.z.n
+        preconditioners = [(lu(sparse(1.0*I, 1, 1)),
+                            create_jacobian_info(coords, spectral;
+                                                 comm=comm_anyzv_subblock[],
+                                                 synchronize=_anyzv_subblock_synchronize,
+                                                 boundary_skip_funcs=boundary_skip_funcs.full,
+                                                 electron_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z), false),
+                                                 electron_p=((:anyzv,:z), (:z,), false),
+                                                 third_moment=((:anyzv,:z), (:z,), true)),
+                            allocate_shared_float(:newton_size=>pdf_plus_p_plus_constraints_size;
+                                                  comm=comm_anyzv_subblock[]),
+                            allocate_shared_float(:newton_size=>pdf_plus_p_plus_constraints_size;
+                                                  comm=comm_anyzv_subblock[]),
+                           )
+                           for _ ∈ CartesianIndices(reverse(outer_coord_sizes))]
+        # Initialise input buffers to zero so that constraint equations have zero on the
+        # RHS.
+        @begin_serial_region()
+        @serial_region begin
+            for p ∈ preconditioners
+                p[3] .= 0.0
+            end
+        end
+    elseif preconditioner_type === Val(:electron_lu_no_separate_moments)
+        pdf_plus_p_size = total_size_coords + coords.z.n
+        preconditioners = [(lu(sparse(1.0*I, 1, 1)),
+                            create_jacobian_info(coords, spectral;
+                                                 comm=comm_anyzv_subblock[],
+                                                 synchronize=_anyzv_subblock_synchronize,
+                                                 boundary_skip_funcs=boundary_skip_funcs.full,
+                                                 electron_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z), false),
+                                                 electron_p=((:anyzv,:z), (:z,), false)),
+                            allocate_shared_float(:newton_size=>pdf_plus_p_size;
+                                                  comm=comm_anyzv_subblock[]),
+                            allocate_shared_float(:newton_size=>pdf_plus_p_size;
+                                                  comm=comm_anyzv_subblock[]),
+                           )
+                           for _ ∈ CartesianIndices(reverse(outer_coord_sizes))]
+    elseif preconditioner_type === Val(:electron_adi)
+        nz = coords.z.n
+        pdf_plus_p_size = total_size_coords + nz
+        nvperp = coords.vperp.n
+        nvpa = coords.vpa.n
+        v_size = nvperp * nvpa
+
+        function get_adi_precon_buffers()
+            v_solve_z_range = looping.loop_ranges_store[(:anyzv,:z,)].z
+            v_solve_global_inds = [[((iz - 1)*v_size+1 : iz*v_size)..., total_size_coords+iz] for iz ∈ v_solve_z_range]
+            v_solve_nsolve = length(v_solve_z_range)
+            # Plus one for the one point of ppar that is included in the 'v solve'.
+            v_solve_n = nvperp * nvpa + 1
+            v_solve_implicit_lus = Vector{SparseArrays.UMFPACK.UmfpackLU{mk_float, mk_int}}(undef, v_solve_nsolve)
+            v_solve_explicit_matrices = Vector{SparseMatrixCSC{mk_float, mk_int}}(undef, v_solve_nsolve)
+            # This buffer is not shared-memory, because it will be used for a serial LU solve.
+            v_solve_buffer = allocate_float(v_solve_n)
+            v_solve_buffer2 = allocate_float(v_solve_n)
+            v_solve_jacobian = create_jacobian_info(coords, spectral;
+                                                    comm=nothing,
+                                                    synchronize=nothing,
+                                                    boundary_skip_funcs=boundary_skip_funcs.v_solve,
+                                                    electron_pdf=(nothing, (:vpa, :vperp), false),
+                                                    electron_p=(nothing, (), false))
+
+            z_solve_vperp_range = looping.loop_ranges_store[(:anyzv,:vperp,:vpa)].vperp
+            z_solve_vpa_range = looping.loop_ranges_store[(:anyzv,:vperp,:vpa)].vpa
+            z_solve_global_inds = vec([(ivperp-1)*nvpa+ivpa:v_size:(nz-1)*v_size+(ivperp-1)*nvpa+ivpa for ivperp ∈ z_solve_vperp_range, ivpa ∈ z_solve_vpa_range])
+            z_solve_nsolve = length(z_solve_vperp_range) * length(z_solve_vpa_range)
+            @serial_region begin
+                # Do the solve for ppar on the rank-0 process, which has the fewest grid
+                # points to handle if there are not an exactly equal number of points for each
+                # process.
+                push!(z_solve_global_inds, total_size_coords+1 : total_size_coords+nz)
+                z_solve_nsolve += 1
+            end
+            z_solve_n = nz
+            z_solve_implicit_lus = Vector{SparseArrays.UMFPACK.UmfpackLU{mk_float, mk_int}}(undef, z_solve_nsolve)
+            z_solve_explicit_matrices = Vector{SparseMatrixCSC{mk_float, mk_int}}(undef, z_solve_nsolve)
+            # This buffer is not shared-memory, because it will be used for a serial LU solve.
+            z_solve_buffer = allocate_float(z_solve_n)
+            z_solve_buffer2 = allocate_float(z_solve_n)
+            z_solve_jacobian = create_jacobian_info(coords, spectral; comm=nothing,
+                                                    synchronize=nothing,
+                                                    boundary_skip_funcs=boundary_skip_funcs.z_solve,
+                                                    electron_pdf=(nothing,(:z,), false))
+            z_solve_jacobian_p = create_jacobian_info(coords, spectral; comm=nothing,
+                                                      synchronize=nothing,
+                                                      boundary_skip_funcs=boundary_skip_funcs.z_solve,
+                                                      electron_p=(nothing,(:z,), false))
+
+            explicit_jacobian = create_jacobian_info(coords, spectral; comm=comm_anyzv_subblock[],
+                                                     synchronize=_anyzv_subblock_synchronize,
+                                                     boundary_skip_funcs=boundary_skip_funcs.full,
+                                                     electron_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z), false),
+                                                     electron_p=((:anyzv,:z), (:z,), false))
+            input_buffer = allocate_shared_float(:newton_size=>pdf_plus_p_size;
+                                                 comm=comm_anyzv_subblock[])
+            intermediate_buffer = allocate_shared_float(:newton_size=>pdf_plus_p_size;
+                                                        comm=comm_anyzv_subblock[])
+            output_buffer = allocate_shared_float(:newton_size=>pdf_plus_p_size;
+                                                  comm=comm_anyzv_subblock[])
+            error_buffer = allocate_shared_float(:newton_size=>pdf_plus_p_size;
+                                                 comm=comm_anyzv_subblock[])
+
+            chunk_size = (pdf_plus_p_size + block_size[] - 1) ÷ block_size[]
+            # Set up so root process has fewest points, as root may have other work to do.
+            global_index_subrange = max(1, pdf_plus_p_size - (block_size[] - block_rank[]) * chunk_size + 1):(pdf_plus_p_size - (block_size[] - block_rank[] - 1) * chunk_size)
+
+            if nl_solver_input.adi_precon_iterations < 1
+                error("Setting adi_precon_iterations=$(nl_solver_input.adi_precon_iterations) "
+                      * "would mean the preconditioner does nothing.")
+            end
+            n_extra_iterations = nl_solver_input.adi_precon_iterations - 1
+
+            return (v_solve_global_inds=v_solve_global_inds,
+                    v_solve_nsolve=v_solve_nsolve,
+                    v_solve_implicit_lus=v_solve_implicit_lus,
+                    v_solve_explicit_matrices=v_solve_explicit_matrices,
+                    v_solve_buffer=v_solve_buffer, v_solve_buffer2=v_solve_buffer2,
+                    v_solve_jacobian=v_solve_jacobian,
+                    z_solve_global_inds=z_solve_global_inds,
+                    z_solve_nsolve=z_solve_nsolve,
+                    z_solve_implicit_lus=z_solve_implicit_lus,
+                    z_solve_explicit_matrices=z_solve_explicit_matrices,
+                    z_solve_buffer=z_solve_buffer, z_solve_buffer2=z_solve_buffer2,
+                    z_solve_jacobian=z_solve_jacobian,
+                    z_solve_jacobian_p=z_solve_jacobian_p,
+                    explicit_jacobian=explicit_jacobian, input_buffer=input_buffer,
+                    intermediate_buffer=intermediate_buffer, output_buffer=output_buffer,
+                    global_index_subrange=global_index_subrange,
+                    n_extra_iterations=n_extra_iterations)
+        end
+
+        preconditioners = [get_adi_precon_buffers()
+                           for _ ∈ CartesianIndices(reverse(outer_coord_sizes))]
+    elseif preconditioner_type === Val(:none)
+        preconditioners = nothing
+    else
+        error("Unrecognised preconditioner_type=$preconditioner_type")
+    end
+
+    return preconditioners
 end
 
 @kwdef @concrete struct kinetic_electron_recalculate_lu!
