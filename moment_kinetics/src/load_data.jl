@@ -67,7 +67,8 @@ const timestep_diagnostic_variables = ("time_for_run", "step_counter", "dt",
                                        "electron_average_successful_dt")
 const em_variables = ("phi", "Er", "Ez", "vEr", "vEz")
 const ion_moment_variables = ("density", "parallel_flow", "pressure", "parallel_pressure",
-                              "thermal_speed", "temperature", "parallel_heat_flux",
+                              "thermal_speed", "temperature", "parallel_temperature",
+                              "perpendicular_temperature", "parallel_heat_flux",
                               "collision_frequency_ii", "sound_speed", "mach_number",
                               "total_energy", "total_energy_flux")
 const ion_moment_gradient_variables = ("ddens_dr", "ddens_dr_upwind", "ddens_dz",
@@ -4548,6 +4549,14 @@ function _get_variable_internal(run_info, variable_name::Symbol;
     if variable_name == :temperature
         vth = get_variable(run_info, "thermal_speed"; kwargs...)
         variable = 0.5 * vth.^2
+    elseif variable_name == :perpendicular_temperature
+        perpendicular_pressure = get_variable(run_info, "perpendicular_pressure"; kwargs...)
+        density = get_variable(run_info, "density"; kwargs...)
+        variable = perpendicular_pressure ./ density
+    elseif variable_name == :parallel_temperature
+        parallel_pressure = get_variable(run_info, "parallel_pressure"; kwargs...)
+        density = get_variable(run_info, "density"; kwargs...)
+        variable = parallel_pressure ./ density
     elseif variable_name == :ddens_dr
         variable = get_r_derivative(run_info, "density"; kwargs...)
     elseif variable_name == :ddens_dr_upwind

@@ -58,6 +58,7 @@ function setup_external_sources!(input_dict, r, z, electron_physics,
                      source_strength=1.0,
                      source_n=1.0,
                      source_T=1.0,
+                     source_Tperp_over_Tpar=1.0,
                      source_v0=0.0, # birth speed for "alphas" option
                      source_vpa0=0.0, # birth vpa for "beam" option
                      source_vperp0=0.0, # birth vperp for "beam" option
@@ -969,6 +970,7 @@ Add external source term to the ion kinetic equation.
     @views source_amplitude = moments.ion.external_source_amplitude[:,:,index]
     source_T_array = ion_source.source_T_array
     source_n = ion_source.source_n
+    Tperp_over_Tpar = ion_source.source_Tperp_over_Tpar
     if vperp.n == 1
         Maxwellian_prefactor = 1.0 / sqrt(π)
     else
@@ -1002,7 +1004,8 @@ Add external source term to the ion kinetic equation.
                     vpa_unnorm = vpa_grid[ivpa] * this_vth + this_upar
                     pdf[ivpa,ivperp,iz,ir,is] +=
                         this_prefactor * source_n *
-                        exp(-(vperp_unnorm^2 + vpa_unnorm^2) / (2.0 * source_T_array[iz,ir]))
+                        exp( - (vperp_unnorm^2) / (2.0 * (3.0 * source_T_array[iz,ir]/(2+1/Tperp_over_Tpar)))
+                             - (vpa_unnorm^2) / (2.0 * (3.0 * source_T_array[iz,ir]/(1+2*Tperp_over_Tpar))) )
                 end
             end
         elseif moments.evolve_upar && moments.evolve_density
@@ -1023,7 +1026,8 @@ Add external source term to the ion kinetic equation.
                     vpa_unnorm = vpa_grid[ivpa] + this_upar
                     pdf[ivpa,ivperp,iz,ir,is] +=
                         this_prefactor * source_n *
-                        exp(-(vperp_grid[ivperp]^2 + vpa_unnorm^2) / (2.0 * source_T_array[iz,ir]))
+                        exp( - (vperp_grid[ivperp]^2) / (2.0 * (3.0 * source_T_array[iz,ir]/(2+1/Tperp_over_Tpar)))
+                             - (vpa_unnorm^2) / (2.0 * (3.0 * source_T_array[iz,ir]/(1+2*Tperp_over_Tpar))) )
                 end
             end
         elseif moments.evolve_density
@@ -1039,9 +1043,12 @@ Add external source term to the ion kinetic equation.
                 @loop_vperp_vpa ivperp ivpa begin
                     # Factor of 1/sqrt(π) (for 1V) or 1/π^(3/2) (for 2V/3V) is absorbed by the
                     # normalisation of F
+                    # Splitting into Tperp and Tpar means, if α = Tpar/Tperp, that
+                    # Tpar = 3T/(1+2α) and Tperp = 3T/(2+1/α)
                     pdf[ivpa,ivperp,iz,ir,is] +=
                         this_prefactor * source_n *
-                        exp(-(vperp_grid[ivperp]^2 + vpa_grid[ivpa]^2) / (2.0 * source_T_array[iz,ir]))
+                        exp( - (vperp_grid[ivperp]^2) / (2.0 * (3.0 * source_T_array[iz,ir]/(2+1/Tperp_over_Tpar)))
+                             - (vpa_grid[ivpa]^2) / (2.0 * (3.0 * source_T_array[iz,ir]/(1+2*Tperp_over_Tpar))) )
                 end
             end
         elseif !moments.evolve_p && !moments.evolve_upar && !moments.evolve_density
@@ -1058,7 +1065,8 @@ Add external source term to the ion kinetic equation.
                     # normalisation of F
                     pdf[ivpa,ivperp,iz,ir,is] +=
                         this_prefactor * source_n *
-                        exp(-(vperp_grid[ivperp]^2 + vpa_grid[ivpa]^2) / (2.0 *source_T_array[iz,ir]))
+                        exp( - (vperp_grid[ivperp]^2) / (2.0 * (3.0 * source_T_array[iz,ir]/(2+1/Tperp_over_Tpar)))
+                             - (vpa_grid[ivpa]^2) / (2.0 * (3.0 * source_T_array[iz,ir]/(1+2*Tperp_over_Tpar))) )
                 end
             end
         else

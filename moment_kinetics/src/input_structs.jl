@@ -364,6 +364,8 @@ Base.@kwdef struct ion_source_data
     source_n::mk_float
     # Amplitude of temperature source
     source_T::mk_float
+    # Ratio of perpendicular to parallel temperature (Maxwellian default = 1.0)
+    source_Tperp_over_Tpar::mk_float
     # Temperature of source
     source_T_array::MPISharedArray{mk_float,2}
     # birth speed for "alphas" option
