@@ -1,5 +1,6 @@
 module electron_kinetic_equation
 
+using ConcreteStructs
 using LinearAlgebra
 using MPI
 using OrderedCollections
@@ -806,22 +807,12 @@ function electron_backward_euler_pseudotimestepping!(scratch, pdf, moments,
                 nl_solver_params.solves_since_precon_update[] = nl_solver_params.preconditioner_update_interval
 
                 # Swap old_scratch and new_scratch so that the next step restarts from the
-                # same state. Copy values over here rather than just swapping references
-                # to arrays, because f_electron_old and electron_p_old are captured by
-                # residual_func!() above, so any change in the things they refer to will
-                # cause type instability in residual_func!().
+                # same state.
+                old_scratch, new_scratch = new_scratch, old_scratch
                 f_electron_new = @view new_scratch.pdf_electron[:,:,:,ir]
                 f_electron_old = @view old_scratch.pdf_electron[:,:,:,ir]
                 electron_p_new = @view new_scratch.electron_p[:,ir]
                 electron_p_old = @view old_scratch.electron_p[:,ir]
-                @begin_anyzv_z_vperp_vpa_region()
-                @loop_z_vperp_vpa iz ivperp ivpa begin
-                    f_electron_new[ivpa,ivperp,iz] = f_electron_old[ivpa,ivperp,iz]
-                end
-                @begin_anyzv_z_region()
-                @loop_z iz begin
-                    electron_p_new[iz] = electron_p_old[iz]
-                end
 
                 bc_constraints_converged = apply_electron_bc_and_constraints_no_r!(
                                                f_electron_new, this_phi, moments, r, z, vperp,
@@ -1003,29 +994,27 @@ function electron_backward_euler_pseudotimestepping!(scratch, pdf, moments,
     return success
 end
 
-@kwdef struct kinetic_electron_recalculate_lu!{Tnl,Tfe,Tpe,Tmom,Tphi,Tcoll,Tcomp,Tz,
-                                               Tvperp,Tvpa,Tzsp,Tvperpsp,Tvpasp,Tzadv,
-                                               Tvpaadv,Tdum,Text,Tdiss,Ttp,Tidt}
-    nl_solver_params::Tnl
-    f_electron_new::Tfe
-    electron_p_new::Tpe
-    moments::Tmom
-    this_phi::Tphi
-    collisions::Tcoll
-    composition::Tcomp
-    z::Tz
-    vperp::Tvperp
-    vpa::Tvpa
-    z_spectral::Tzsp
-    vperp_spectral::Tvperpsp
-    vpa_spectral::Tvpasp
-    z_advect::Tzadv
-    vpa_advect::Tvpaadv
-    scratch_dummy::Tdum
-    external_source_settings::Text
-    num_diss_params::Tdiss
-    t_params::Ttp
-    ion_dt::Tidt
+@kwdef @concrete struct kinetic_electron_recalculate_lu!
+    nl_solver_params
+    f_electron_new
+    electron_p_new
+    moments
+    this_phi
+    collisions
+    composition
+    z
+    vperp
+    vpa
+    z_spectral
+    vperp_spectral
+    vpa_spectral
+    z_advect
+    vpa_advect
+    scratch_dummy
+    external_source_settings
+    num_diss_params
+    t_params
+    ion_dt
     evolve_p::Bool
     add_identity::Bool
     ir::mk_int
@@ -1103,14 +1092,14 @@ global_rank[] == 0 && println("recalculating precon")
     return nothing
 end
 
-@kwdef struct kinetic_electron_lu_precon!{Tnl,Tdum,Tb1,Tb2,Tb3,Tb4,Tz}
-    nl_solver_params::Tnl
-    scratch_dummy::Tdum
-    buffer_1::Tb1
-    buffer_2::Tb2
-    buffer_3::Tb3
-    buffer_4::Tb4
-    z::Tz
+@kwdef @concrete struct kinetic_electron_lu_precon!
+    nl_solver_params
+    scratch_dummy
+    buffer_1
+    buffer_2
+    buffer_3
+    buffer_4
+    z
     ir::mk_int
 end
 
@@ -1222,36 +1211,33 @@ function get_electron_lu_preconditioner(nl_solver_params, f_electron_new, electr
     return left_preconditioner, right_preconditioner, recalculate_lu_preconditioner!
 end
 
-@kwdef struct kinetic_electron_recalculate_adi!{Tnl,Tfe,Tpe,Tb1,Tb2,Tb3,Tb4,Tne,Tue,Tphi,
-                                                Tmom,Tcoll,Tcomp,Tz,Tvperp,Tvpa,Tzsp,
-                                                Tvperpsp,Tvpasp,Tzadv,Tvpaadv,Tdum,Text,
-                                                Tdiss,Ttp,Tidt}
-    nl_solver_params::Tnl
-    f_electron_new::Tfe
-    electron_p_new::Tpe
-    buffer_1::Tb1
-    buffer_2::Tb2
-    buffer_3::Tb3
-    buffer_4::Tb4
-    electron_density::Tne
-    electron_upar::Tue
-    this_phi::Tphi
-    moments::Tmom
-    collisions::Tcoll
-    composition::Tcomp
-    z::Tz
-    vperp::Tvperp
-    vpa::Tvpa
-    z_spectral::Tzsp
-    vperp_spectral::Tvperpsp
-    vpa_spectral::Tvpasp
-    z_advect::Tzadv
-    vpa_advect::Tvpaadv
-    scratch_dummy::Tdum
-    external_source_settings::Text
-    num_diss_params::Tdiss
-    t_params::Ttp
-    ion_dt::Tidt
+@kwdef @concrete struct kinetic_electron_recalculate_adi!
+    nl_solver_params
+    f_electron_new
+    electron_p_new
+    buffer_1
+    buffer_2
+    buffer_3
+    buffer_4
+    electron_density
+    electron_upar
+    this_phi
+    moments
+    collisions
+    composition
+    z
+    vperp
+    vpa
+    z_spectral
+    vperp_spectral
+    vpa_spectral
+    z_advect
+    vpa_advect
+    scratch_dummy
+    external_source_settings
+    num_diss_params
+    t_params
+    ion_dt
     ir::mk_int
     evolve_p::Bool
     add_identity::Bool
@@ -1527,17 +1513,17 @@ global_rank[] == 0 && println("recalculating precon")
     return nothing
 end
 
-@kwdef struct kinetic_electron_adi_precon!{Tnl,Tz,Tvperp,Tvpa,Tb1,Tb2,Tb3,Tb4,Tdum}
-    nl_solver_params::Tnl
-    z::Tz
-    vperp::Tvperp
-    vpa::Tvpa
+@kwdef @concrete struct kinetic_electron_adi_precon!
+    nl_solver_params
+    z
+    vperp
+    vpa
     ir::mk_int
-    buffer_1::Tb1
-    buffer_2::Tb2
-    buffer_3::Tb3
-    buffer_4::Tb4
-    scratch_dummy::Tdum
+    buffer_1
+    buffer_2
+    buffer_3
+    buffer_4
+    scratch_dummy
 end
 
 @timeit_debug global_timer (adi_pre::kinetic_electron_adi_precon!)(x) = begin
@@ -1753,7 +1739,10 @@ function get_electron_preconditioner(nl_solver_params, f_electron_new, electron_
                                      scratch_dummy, external_source_settings,
                                      num_diss_params, t_params, ion_dt, ir, evolve_p,
                                      add_identity=true)
-    if nl_solver_params.preconditioner_type === Val(:electron_lu)
+    if nl_solver_params.preconditioner_type ∈ (Val(:electron_lu_no_separate_moments),
+                                               Val(:electron_lu_separate_third_moment),
+                                               Val(:electron_lu),
+                                               Val(:electron_lu_separate_dp_dz_dq_dz))
         return get_electron_lu_preconditioner(nl_solver_params, f_electron_new,
                                               electron_p_new, buffer_1, buffer_2,
                                               buffer_3, buffer_4, electron_density,
@@ -1788,35 +1777,34 @@ function get_electron_preconditioner(nl_solver_params, f_electron_new, electron_
     end
 end
 
-@kwdef struct kinetic_electron_residual!{Tfeold,Tpeold,Tmom,Tcomp,Tcol,Text,Ttp,Tidt,Tdum,
-                                         Tphi,Tne,Tue,Tni,Tui,Tr,Tz,Tvperp,Tvpa,Tzsp,
-                                         Tvperpsp,Tvpasp,Tzadv,Tvpaadv,Tdiss}
-    f_electron_old::Tfeold
-    electron_p_old::Tpeold
+@kwdef @concrete struct kinetic_electron_residual!
+    f_electron_old
+    electron_p_old
     evolve_p::Bool
-    moments::Tmom
-    composition::Tcomp
-    collisions::Tcol
-    external_source_settings::Text
-    t_params::Ttp
-    ion_dt::Tidt
-    scratch_dummy::Tdum
-    this_phi::Tphi
-    electron_density::Tne
-    electron_upar::Tue
-    ion_density::Tni
-    ion_upar::Tui
-    r::Tr
-    z::Tz
-    vperp::Tvperp
-    vpa::Tvpa
-    z_spectral::Tzsp
-    vperp_spectral::Tvperpsp
-    vpa_spectral::Tvpasp
-    z_advect::Tzadv
-    vpa_advect::Tvpaadv
-    num_diss_params::Tdiss
+    moments
+    composition
+    collisions
+    external_source_settings
+    t_params
+    ion_dt
+    scratch_dummy
+    this_phi
+    electron_density
+    electron_upar
+    ion_density
+    ion_upar
+    r
+    z
+    vperp
+    vpa
+    z_spectral
+    vperp_spectral
+    vpa_spectral
+    z_advect
+    vpa_advect
+    num_diss_params
     ir::mk_int
+    steady_state_f=Val(false)
 end
 
 function (res::kinetic_electron_residual!)(this_residual, new_variables; krylov=false)
@@ -1846,6 +1834,7 @@ function (res::kinetic_electron_residual!)(this_residual, new_variables; krylov=
     vpa_advect = res.vpa_advect
     num_diss_params = res.num_diss_params
     ir = res.ir
+    steady_state_f = res.steady_state_f
 
     electron_p_residual, f_electron_residual = this_residual
     electron_p_newvar, f_electron_newvar = new_variables
@@ -1877,25 +1866,55 @@ function (res::kinetic_electron_residual!)(this_residual, new_variables; krylov=
         moments, electron_density, electron_upar, electron_p_newvar, scratch_dummy, z,
         z_spectral, num_diss_params.electron.moment_dissipation_coefficient, ir)
 
-    if evolve_p
-        @begin_anyzv_z_region()
-        @loop_z iz begin
-            electron_p_residual[iz] = electron_p_old[iz,ir]
+    if steady_state_f === Val(false)
+        if evolve_p
+            @begin_anyzv_z_region()
+            @loop_z iz begin
+                electron_p_residual[iz] = electron_p_old[iz,ir]
+            end
+        else
+            @begin_anyzv_z_region()
+            @loop_z iz begin
+                electron_p_residual[iz] = 0.0
+            end
         end
-    else
+
+        @begin_anyzv_z_vperp_vpa_region()
+        @loop_z_vperp_vpa iz ivperp ivpa begin
+            f_electron_residual[ivpa,ivperp,iz] = f_electron_old[ivpa,ivperp,iz]
+        end
+    elseif steady_state_f === Val(true)
+        # electron_kinetic_equation_euler_update!() just adds dt*d(p_e)/dt and
+        # dt*d(g_e)/dt to the electron_p and electron_pdf member of the first argument, so
+        # if we set the electron_pdf member of the first argument to zero, and pass dt=1,
+        # then it will evaluate the time derivative, which is the residual for a
+        # steady-state solution.
+        # When `evolve_p === true`, there is a forcing term added to the RHS of the
+        # electron pressure equation so that the 'steady state' of this solve corresponds
+        # to a backward-euler ion-timestep of the electron pressure, so (apart from adding
+        # the forcing term) the electron pressure residual is treated in the same way as
+        # the shape function residual.
         @begin_anyzv_z_region()
         @loop_z iz begin
             electron_p_residual[iz] = 0.0
         end
-    end
+        @begin_anyzv_z_vperp_vpa_region()
+        @loop_z_vperp_vpa iz ivperp ivpa begin
+            f_electron_residual[ivpa,ivperp,iz] = 0.0
+        end
 
-    # electron_kinetic_equation_euler_update!() just adds dt*d(g_e)/dt to the
-    # electron_pdf member of the first argument, so if we set the electron_pdf member
-    # of the first argument to zero, and pass dt=1, then it will evaluate the time
-    # derivative, which is the residual for a steady-state solution.
-    @begin_anyzv_z_vperp_vpa_region()
-    @loop_z_vperp_vpa iz ivperp ivpa begin
-        f_electron_residual[ivpa,ivperp,iz] = f_electron_old[ivpa,ivperp,iz]
+        # If we just defined the residual for the electron distribution function solve to
+        # be 'dg/dt=0', then we would be asking the solver (roughly) to find g such that
+        # 'dg/dt<tol' for some tolerance. However dg/dt has some typical timescale, τ, so
+        # 'dg/dt∼g/τ'. It would be inconvenient to have to define the tolerances taking τ
+        # (normalised to the reference sound crossing time) into account, so instead
+        # estimate the relevant timescale as 'sqrt(me/mi)*z.L', i.e. as the electron
+        # thermal crossing time at reference parameters. We pass this as 'dt' to
+        # electron_kinetic_equation_euler_update!() so that it multiplies the residual.
+        pdf_electron_normalisation_factor = sqrt(composition.me_over_mi) * z.L
+        t_params.dt[] = pdf_electron_normalisation_factor
+    else
+        error("Unexpected argument for steady_state_f=$steady_state_f.")
     end
     electron_kinetic_equation_euler_update!(
         (f_electron_residual, electron_p_residual), f_electron_newvar,
@@ -1904,17 +1923,21 @@ function (res::kinetic_electron_residual!)(this_residual, new_variables; krylov=
         external_source_settings, num_diss_params, t_params, ir; evolve_p=evolve_p,
         ion_dt=ion_dt, soft_force_constraints=true)
 
-    # Now
-    #   residual = f_electron_old + dt*RHS(f_electron_newvar)
-    # so update to desired residual
-    @begin_anyzv_z_vperp_vpa_region()
-    @loop_z_vperp_vpa iz ivperp ivpa begin
-        f_electron_residual[ivpa,ivperp,iz] = f_electron_newvar[ivpa,ivperp,iz] - f_electron_residual[ivpa,ivperp,iz]
-    end
-    if evolve_p
-        @begin_anyzv_z_region()
-        @loop_z iz begin
-            electron_p_residual[iz] = electron_p_newvar[iz] - electron_p_residual[iz]
+    # When `steady_state_f === Val(false)` the residual is just proportional to the dg/dt,
+    # so does not need updating now.
+    if steady_state_f === Val(false)
+        # Now
+        #   residual = f_electron_old + dt*RHS(f_electron_newvar)
+        # so update to desired residual
+        @begin_anyzv_z_vperp_vpa_region()
+        @loop_z_vperp_vpa iz ivperp ivpa begin
+            f_electron_residual[ivpa,ivperp,iz] = f_electron_newvar[ivpa,ivperp,iz] - f_electron_residual[ivpa,ivperp,iz]
+        end
+        if evolve_p
+            @begin_anyzv_z_region()
+            @loop_z iz begin
+                electron_p_residual[iz] = electron_p_newvar[iz] - electron_p_residual[iz]
+            end
         end
     end
 
@@ -2012,8 +2035,6 @@ pressure \$p_{e∥}\$.
 
     # Do a backward-Euler update of the electron pdf, and (if evove_p=true) the electron
     # parallel pressure.
-    # Use `let` block to hint to the compiler that the captured variables don't change -
-    # see https://docs.julialang.org/en/v1/manual/performance-tips/#man-performance-captured
     
     residual_func! = kinetic_electron_residual!(; f_electron_old, electron_p_old,
                                                 evolve_p, moments, composition,
@@ -2132,89 +2153,16 @@ to allow the outer r-loop to be parallelised.
             recalculate_preconditioner!()
         end
 
-        residual_func!(residual, new_variables; debug=false, krylov=false) = let
-                evolve_p=evolve_p, moments=moments, composition=composition,
-                collisions=collisions, external_source_settings=external_source_settings,
-                t_params=t_params, ion_dt=ion_dt, scratch_dummy=scratch_dummy,
-                this_phi=this_phi, electron_density=electron_density,
-                electron_upar=electron_upar, ion_density=ion_density, ion_upar=ion_upar,
-                z=z, vperp=vperp, vpa=vpa, z_spectral=z_spectral,
-                vperp_spectral=vperp_spectral, vpa_spectral=vpa_spectral,
-                z_advect=z_advect, vpa_advect=vpa_advect, num_diss_params=num_diss_params,
-                ir=ir
-
-            electron_p_residual, f_electron_residual = residual
-            electron_p_new, f_electron_new = new_variables
-
-            this_vth = moments.electron.vth
-            @begin_anyzv_z_region()
-            @loop_z iz begin
-                # update the electron thermal speed using the updated electron
-                # parallel pressure
-                this_vth[iz,ir] = sqrt(abs(2.0 * electron_p_new[iz,ir] /
-                                           (electron_density[iz] *
-                                            composition.me_over_mi)))
-            end
-
-            # enforce the boundary condition(s) on the electron pdf
-            @views enforce_boundary_condition_on_electron_pdf!(
-                       f_electron_new, this_phi, moments.electron.vth[:,ir],
-                       electron_upar, z, vperp, vpa, vperp_spectral, vpa_spectral,
-                       vpa_advect, moments,
-                       num_diss_params.electron.vpa_dissipation_coefficient > 0.0,
-                       composition.me_over_mi, ir; bc_constraints=false,
-                       update_vcut=!krylov)
-
-            calculate_electron_moments_no_r!(f_electron_new, electron_density,
-                                             electron_upar, electron_p_new, ion_density,
-                                             ion_upar, moments, composition, collisions,
-                                             r, z, vperp, vpa, ir)
-
-            calculate_electron_moment_derivatives_no_r!(
-                moments, electron_density, electron_upar, electron_p_new, scratch_dummy,
-                z, z_spectral, num_diss_params.electron.moment_dissipation_coefficient,
-                ir)
-
-            @begin_anyzv_z_region()
-            @loop_z iz begin
-                electron_p_residual[iz] = 0.0
-            end
-
-            # electron_kinetic_equation_euler_update!() just adds dt*d(g_e)/dt to the
-            # electron_pdf member of the first argument, so if we set the electron_pdf member
-            # of the first argument to zero, and pass dt=1, then it will evaluate the time
-            # derivative, which is the residual for a steady-state solution.
-            @begin_anyzv_z_vperp_vpa_region()
-            @loop_z_vperp_vpa iz ivperp ivpa begin
-                f_electron_residual[ivpa,ivperp,iz] = 0.0
-            end
-            t_params.dt[] = pdf_electron_normalisation_factor
-            electron_kinetic_equation_euler_update!(
-                (f_electron_residual, electron_p_residual), f_electron_new,
-                electron_p_new, moments, z, vperp, vpa, z_spectral, vpa_spectral,
-                z_advect, vpa_advect, scratch_dummy, collisions, composition,
-                external_source_settings, num_diss_params, t_params, ir; evolve_p=true,
-                ion_dt=ion_dt, soft_force_constraints=true)
-
-            # Set residual to zero where pdf_electron is determined by boundary conditions.
-            if vpa.n > 1
-                @begin_anyzv_z_vperp_region()
-                @loop_z_vperp iz ivperp begin
-                    @views enforce_v_boundary_condition_local!(f_electron_residual[:,ivperp,iz], vpa.bc,
-                                                               vpa_advect[1].speed[:,ivperp,iz],
-                                                               num_diss_params.electron.vpa_dissipation_coefficient > 0.0,
-                                                               vpa, vpa_spectral)
-                end
-            end
-            if vperp.n > 1
-                @begin_anyzv_z_vpa_region()
-                enforce_vperp_boundary_condition!(f_electron_residual, vperp.bc, vperp, vperp_spectral,
-                                                  vperp_adv,
-                                                  num_diss_params.electron.vpa_dissipation_coefficient > 0.0)
-            end
-            zero_z_boundary_condition_points(f_electron_residual, z, vpa, moments, ir)
-            return nothing
-        end
+        residual_func! = kinetic_electron_residual!(; f_electron_old, electron_p_old,
+                                                    evolve_p, moments, composition,
+                                                    collisions, external_source_settings,
+                                                    t_params, ion_dt, scratch_dummy,
+                                                    this_phi, electron_density,
+                                                    electron_upar, ion_density, ion_upar,
+                                                    r, z, vperp, vpa, z_spectral,
+                                                    vperp_spectral, vpa_spectral,
+                                                    z_advect, vpa_advect, num_diss_params,
+                                                    ir)
 
         residual = (scratch_dummy.implicit_buffer_z_1,
                     scratch_dummy.implicit_buffer_vpavperpz_1)
