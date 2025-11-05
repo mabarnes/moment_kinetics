@@ -488,42 +488,42 @@ function create_r_section(this_input, ion_pdf, ion_density, ion_upar, ion_p, ele
             end
 
             if species == "ion"
-                bc_ion_pdf = allocate_shared_float(; vpa=vpa, vperp=vperp,
-                                                   z_segment=length(z_range),
-                                                   ion_species=composition.n_ion_species)
-                bc_ion_density = allocate_shared_float(; z_segment=length(z_range),
-                                                       ion_species=composition.n_ion_species)
-                bc_ion_upar = allocate_shared_float(; z_segment=length(z_range),
-                                                    ion_species=composition.n_ion_species)
-                bc_ion_p = allocate_shared_float(; z_segment=length(z_range),
-                                                 ion_species=composition.n_ion_species)
+                bc_ion_pdf = allocate_shared_float(vpa, vperp,
+                                                   :z_segment=>length(z_range),
+                                                   composition.ion_species_coord)
+                bc_ion_density = allocate_shared_float(:z_segment=>length(z_range),
+                                                       composition.ion_species_coord)
+                bc_ion_upar = allocate_shared_float(:z_segment=>length(z_range),
+                                                    composition.ion_species_coord)
+                bc_ion_p = allocate_shared_float(:z_segment=>length(z_range),
+                                                 composition.ion_species_coord)
 
                 @begin_s_region()
                 @loop_s is begin
-                    bc_ion_density[z_range,is] = n_val
-                    bc_ion_upar[z_range,is] = u_val
-                    bc_ion_p[z_range,is] = n_val * T_val
+                    bc_ion_density[z_range,is] .= n_val
+                    bc_ion_upar[z_range,is] .= u_val
+                    bc_ion_p[z_range,is] .= n_val * T_val
                     if moments.evolve_p
                         @loop_vperp_vpa ivperp ivpa begin
-                            bc_ion_pdf[ivperp,ivpa,z_range,is] =
+                            bc_ion_pdf[ivpa,ivperp,z_range,is] .=
                                 Maxwellian_prefactor / fudge_factor_1V *
                                 exp(-(vpa_grid[ivpa]^2 + vperp_grid[ivperp]^2) / fudge_factor_1V^2)
                         end
                     elseif moments.evolve_upar
                         @loop_vperp_vpa ivperp ivpa begin
-                            bc_ion_pdf[ivperp,ivpa,z_range,is] =
+                            bc_ion_pdf[ivpa,ivperp,z_range,is] .=
                                 Maxwellian_prefactor / vth^vth_power *
                                 exp(-(vpa_grid[ivpa]^2 + vperp_grid[ivperp]^2) / vth^2)
                         end
                     elseif moments.evolve_density
                         @loop_vperp_vpa ivperp ivpa begin
-                            bc_ion_pdf[ivperp,ivpa,z_range,is] =
+                            bc_ion_pdf[ivpa,ivperp,z_range,is] .=
                                 Maxwellian_prefactor / vth^vth_power *
                                 exp(-((vpa_grid[ivpa] - u_val)^2 + vperp_grid[ivperp]^2) / vth^2)
                         end
                     else
                         @loop_vperp_vpa ivperp ivpa begin
-                            bc_ion_pdf[ivperp,ivpa,z_range,is] =
+                            bc_ion_pdf[ivpa,ivperp,z_range,is] .=
                                 Maxwellian_prefactor * n_val / vth^vth_power *
                                 exp(-((vpa_grid[ivpa] - u_val)^2 + vperp_grid[ivperp]^2) / vth^2)
                         end
@@ -536,37 +536,37 @@ function create_r_section(this_input, ion_pdf, ion_density, ion_upar, ion_p, ele
             elseif species == "electron"
                 vth /= sqrt(composition.me_over_mi)
 
-                bc_electron_pdf = allocate_shared_float(; vpa=vpa, vperp=vperp, z_segment=length(z_range))
-                bc_electron_density = allocate_shared_float(; z_segment=length(z_range))
-                bc_electron_upar = allocate_shared_float(; z_segment=length(z_range))
-                bc_electron_p = allocate_shared_float(; z_segment=length(z_range))
+                bc_electron_pdf = allocate_shared_float(vpa, vperp, :z_segment=>length(z_range))
+                bc_electron_density = allocate_shared_float(:z_segment=>length(z_range))
+                bc_electron_upar = allocate_shared_float(:z_segment=>length(z_range))
+                bc_electron_p = allocate_shared_float(:z_segment=>length(z_range))
 
                 @begin_serial_region()
                 @serial_region begin
-                    bc_electron_density[z_range,is] = n_val
-                    bc_electron_upar[z_range,is] = u_val
-                    bc_electron_p[z_range,is] = n_val * T_val
+                    bc_electron_density[z_range] .= n_val
+                    bc_electron_upar[z_range] .= u_val
+                    bc_electron_p[z_range] .= n_val * T_val
                     if moments.evolve_p
                         @loop_vperp_vpa ivperp ivpa begin
-                            bc_electron_pdf[ivperp,ivpa,z_range,is] =
+                            bc_electron_pdf[ivpa,ivperp,z_range] .=
                                 Maxwellian_prefactor / fudge_factor_1V *
                                 exp(-(vpa_grid[ivpa]^2 + vperp_grid[ivperp]^2) / fudge_factor_1V^2)
                         end
                     elseif moments.evolve_upar
                         @loop_vperp_vpa ivperp ivpa begin
-                            bc_electron_pdf[ivperp,ivpa,z_range,is] =
+                            bc_electron_pdf[ivpa,ivperp,z_range] .=
                                 Maxwellian_prefactor / vth^vth_power *
                                 exp(-(vpa_grid[ivpa]^2 + vperp_grid[ivperp]^2) / vth^2)
                         end
                     elseif moments.evolve_density
                         @loop_vperp_vpa ivperp ivpa begin
-                            bc_electron_pdf[ivperp,ivpa,z_range,is] =
+                            bc_electron_pdf[ivpa,ivperp,z_range] .=
                                 Maxwellian_prefactor / vth^vth_power *
                                 exp(-((vpa_grid[ivpa] - u_val)^2 + vperp_grid[ivperp]^2) / vth^2)
                         end
                     else
                         @loop_vperp_vpa ivperp ivpa begin
-                            bc_electron_pdf[ivperp,ivpa,z_range,is] =
+                            bc_electron_pdf[ivpa,ivperp,z_range] .=
                                 Maxwellian_prefactor * n_val / vth^vth_power *
                                 exp(-((vpa_grid[ivpa] - u_val)^2 + vperp_grid[ivperp]^2) / vth^2)
                         end
@@ -578,42 +578,42 @@ function create_r_section(this_input, ion_pdf, ion_density, ion_upar, ion_p, ele
                                                                      bc_electron_upar,
                                                                      bc_electron_p)
             elseif species == "neutral"
-                bc_neutral_pdf = allocate_shared_float(; vz=vz, vr=vr, vzeta=vzeta,
-                                                       z_segment=length(z_range),
-                                                       neutral_species=composition.n_neutral_species)
-                bc_neutral_density = allocate_shared_float(; z_segment=length(z_range),
-                                                           neutral_species=composition.n_neutral_species)
-                bc_neutral_upar = allocate_shared_float(; z_segment=length(z_range),
-                                                        neutral_species=composition.n_neutral_species)
-                bc_neutral_p = allocate_shared_float(; z_segment=length(z_range),
-                                                     neutral_species=composition.n_neutral_species)
+                bc_neutral_pdf = allocate_shared_float(vz, vr, vzeta,
+                                                       :z_segment=>length(z_range),
+                                                       composition.neutral_species_coord)
+                bc_neutral_density = allocate_shared_float(:z_segment=>length(z_range),
+                                                           composition.neutral_species_coord)
+                bc_neutral_upar = allocate_shared_float(:z_segment=>length(z_range),
+                                                        composition.neutral_species_coord)
+                bc_neutral_p = allocate_shared_float(:z_segment=>length(z_range),
+                                                     composition.neutral_species_coord)
 
                 @begin_sn_region()
                 @loop_sn isn begin
-                    bc_neutral_density[z_range,isn] = n_val
-                    bc_neutral_upar[z_range,isn] = u_val
-                    bc_neutral_p[z_range,isn] = n_val * T_val
+                    bc_neutral_density[z_range,isn] .= n_val
+                    bc_neutral_upar[z_range,isn] .= u_val
+                    bc_neutral_p[z_range,isn] .= n_val * T_val
                     if moments.evolve_p
                         @loop_vperp_vpa ivperp ivpa begin
-                            bc_neutral_pdf[ivperp,ivpa,z_range,isn] =
+                            bc_neutral_pdf[ivpa,ivperp,z_range,isn] .=
                                 Maxwellian_prefactor / fudge_factor_1V *
                                 exp(-(vpa_grid[ivpa]^2 + vperp_grid[ivperp]^2) / fudge_factor_1V^2)
                         end
                     elseif moments.evolve_upar
                         @loop_vperp_vpa ivperp ivpa begin
-                            bc_neutral_pdf[ivperp,ivpa,z_range,isn] =
+                            bc_neutral_pdf[ivpa,ivperp,z_range,isn] .=
                                 Maxwellian_prefactor / vth^vth_power *
                                 exp(-(vpa_grid[ivpa]^2 + vperp_grid[ivperp]^2) / vth^2)
                         end
                     elseif moments.evolve_density
                         @loop_vperp_vpa ivperp ivpa begin
-                            bc_neutral_pdf[ivperp,ivpa,z_range,isn] =
+                            bc_neutral_pdf[ivpa,ivperp,z_range,isn] .=
                                 Maxwellian_prefactor / vth^vth_power *
                                 exp(-((vpa_grid[ivpa] - u_val)^2 + vperp_grid[ivperp]^2) / vth^2)
                         end
                     else
                         @loop_vperp_vpa ivperp ivpa begin
-                            bc_neutral_pdf[ivperp,ivpa,z_range,isn] =
+                            bc_neutral_pdf[ivpa,ivperp,z_range,isn] .=
                                 Maxwellian_prefactor * n_val / vth^vth_power *
                                 exp(-((vpa_grid[ivpa] - u_val)^2 + vperp_grid[ivperp]^2) / vth^2)
                         end
@@ -628,22 +628,22 @@ function create_r_section(this_input, ion_pdf, ion_density, ion_upar, ion_p, ele
         elseif this_input["$(species)_bc"] == "pin_initial"
             if species == "ion"
                 if ion_pdf === nothing
-                    bc_ion_pdf = allocate_shared_float(; vpa=vpa, vperp=vperp,
-                                                       z_segment=length(z_range),
-                                                       ion_species=composition.n_ion_species)
-                    bc_ion_density = allocate_shared_float(; z_segment=length(z_range),
-                                                           ion_species=composition.n_ion_species)
-                    bc_ion_upar = allocate_shared_float(; z_segment=length(z_range),
-                                                        ion_species=composition.n_ion_species)
-                    bc_ion_p = allocate_shared_float(; z_segment=length(z_range),
-                                                     ion_species=composition.n_ion_species)
+                    bc_ion_pdf = allocate_shared_float(vpa, vperp,
+                                                       :z_segment=>length(z_range),
+                                                       composition.ion_species_coord)
+                    bc_ion_density = allocate_shared_float(:z_segment=>length(z_range),
+                                                           composition.ion_species_coord)
+                    bc_ion_upar = allocate_shared_float(:z_segment=>length(z_range),
+                                                        composition.ion_species_coord)
+                    bc_ion_p = allocate_shared_float(:z_segment=>length(z_range),
+                                                     composition.ion_species_coord)
 
                     @begin_s_region()
                     @loop_s is begin
-                        @views bc_ion_pdf[:,:,z_range,is] = ion_pdf[:,:,z_range,is]
-                        @views bc_ion_density[z_range,is] = ion_density[z_range,is]
-                        @views bc_ion_upar[z_range,is] = ion_upar[z_range,is]
-                        @views bc_ion_p[z_range,is] = ion_p[z_range,is]
+                        @views bc_ion_pdf[:,:,z_range,is] .= ion_pdf[:,:,z_range,is]
+                        @views bc_ion_density[z_range,is] .= ion_density[z_range,is]
+                        @views bc_ion_upar[z_range,is] .= ion_upar[z_range,is]
+                        @views bc_ion_p[z_range,is] .= ion_p[z_range,is]
                     end
 
                     this_section = ion_r_boundary_section_Dirichlet(bc_ion_pdf,
@@ -657,21 +657,21 @@ function create_r_section(this_input, ion_pdf, ion_density, ion_upar, ion_p, ele
                 if electron_pdf === nothing
                     bc_electron_pdf = zeros(0, 0, 0)
                 else
-                    bc_electron_pdf = allocate_shared_float(; vpa=vpa, vperp=vperp, z_segment=length(z_range))
+                    bc_electron_pdf = allocate_shared_float(vpa, vperp, :z_segment=>length(z_range))
                 end
                 if electron_pdf === nothing && electron_density === nothing
-                    bc_electron_density = allocate_shared_float(; z_segment=length(z_range))
-                    bc_electron_upar = allocate_shared_float(; z_segment=length(z_range))
-                    bc_electron_p = allocate_shared_float(; z_segment=length(z_range))
+                    bc_electron_density = allocate_shared_float(:z_segment=>length(z_range))
+                    bc_electron_upar = allocate_shared_float(:z_segment=>length(z_range))
+                    bc_electron_p = allocate_shared_float(:z_segment=>length(z_range))
 
                     @begin_serial_region()
                     @serial_region begin
                         if electron_pdf !== nothing
-                            @views bc_electron_pdf[:,:,z_range] = electron_pdf[:,:,z_range]
+                            @views bc_electron_pdf[:,:,z_range] .= electron_pdf[:,:,z_range]
                         end
-                        @views bc_electron_density[z_range] = electron_density[z_range]
-                        @views bc_electron_upar[z_range] = electron_upar[z_range]
-                        @views bc_electron_p[z_range] = electron_p[z_range]
+                        @views bc_electron_density[z_range] .= electron_density[z_range]
+                        @views bc_electron_upar[z_range] .= electron_upar[z_range]
+                        @views bc_electron_p[z_range] .= electron_p[z_range]
                     end
                 else
                     bc_electron_density = nothing
@@ -685,22 +685,22 @@ function create_r_section(this_input, ion_pdf, ion_density, ion_upar, ion_p, ele
                                                                        bc_electron_p)
             elseif species == "neutral"
                 if neutral_pdf === nothing
-                    bc_neutral_pdf = allocate_shared_float(; vz=vz, vr=vr, vzeta=vzeta,
-                                                           z_segment=length(z_range),
-                                                           neutral_species=composition.n_neutral_species)
-                    bc_neutral_density = allocate_shared_float(; z_segment=length(z_range),
-                                                               neutral_species=composition.n_neutral_species)
-                    bc_neutral_upar = allocate_shared_float(; z_segment=length(z_range),
-                                                            neutral_species=composition.n_neutral_species)
-                    bc_neutral_p = allocate_shared_float(; z_segment=length(z_range),
-                                                         neutral_species=composition.n_neutral_species)
+                    bc_neutral_pdf = allocate_shared_float(vz, vr, vzeta,
+                                                           :z_segment=>length(z_range),
+                                                           composition.neutral_species_coord)
+                    bc_neutral_density = allocate_shared_float(:z_segment=>length(z_range),
+                                                               composition.neutral_species_coord)
+                    bc_neutral_upar = allocate_shared_float(:z_segment=>length(z_range),
+                                                            composition.neutral_species_coord)
+                    bc_neutral_p = allocate_shared_float(:z_segment=>length(z_range),
+                                                         composition.neutral_species_coord)
 
                     @begin_sn_region()
                     @loop_sn isn begin
-                        @views bc_neutral_pdf[:,:,z_range,isn] = neutral_pdf[:,:,z_range,isn]
-                        @views bc_neutral_density[z_range,isn] = neutral_density[z_range,isn]
-                        @views bc_neutral_uz[z_range,isn] = neutral_uz[z_range,isn]
-                        @views bc_neutral_p[z_range,isn] = neutral_p[z_range,isn]
+                        @views bc_neutral_pdf[:,:,z_range,isn] .= neutral_pdf[:,:,z_range,isn]
+                        @views bc_neutral_density[z_range,isn] .= neutral_density[z_range,isn]
+                        @views bc_neutral_uz[z_range,isn] .= neutral_uz[z_range,isn]
+                        @views bc_neutral_p[z_range,isn] .= neutral_p[z_range,isn]
                     end
 
                     this_section = neutral_r_boundary_section_pin_initial(bc_neutral_pdf,
