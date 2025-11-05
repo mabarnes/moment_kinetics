@@ -23,6 +23,7 @@ using ..numerical_dissipation: setup_numerical_dissipation
 using ..reference_parameters
 using ..geo: init_magnetic_geometry, setup_geometry_input
 using ..species_input: get_species_input
+using ..looping
 using MPI
 using TOML
 
@@ -50,7 +51,10 @@ Process user-supplied inputs
 other situations (e.g. when post-processing).
 """
 function mk_input(input_dict=OptionsDict("output" => OptionsDict("run_name" => "default"));
-                  ignore_MPI=true, warn_unexpected=false, write_output=true)
+                  save_inputs_to_txt=false, ignore_MPI=true,
+                  debug_loop_type::Union{Nothing,NTuple{N,Symbol} where N}=nothing,
+                  debug_loop_parallel_dims::Union{Nothing,NTuple{N,Symbol} where N}=nothing,
+                  warn_unexpected=false, write_output=true)
 
     # Check for input options that used to exist, but do not any more. If these are
     # present, the user probably needs to update their input file.
@@ -414,7 +418,27 @@ function mk_input(input_dict=OptionsDict("output" => OptionsDict("run_name" => "
                                               run_directory=run_directory,
                                               ignore_MPI=ignore_MPI)
 
-    geometry = init_magnetic_geometry(geometry_in,z,r)
+        # Create loop range variables for shared-memory-parallel loops
+    if debug_loop_type === nothing
+        # Non-debug case used for all simulations
+        looping.setup_loop_ranges!(block_rank[], block_size[];
+                                   s=composition.n_ion_species,
+                                   sn=composition.n_neutral_species,
+                                   r=r.n, z=z.n, vperp=vperp.n, vpa=vpa.n,
+                                   vzeta=vzeta.n, vr=vr.n, vz=vz.n)
+    else
+        if debug_loop_parallel_dims === nothing
+            error("debug_loop_parallel_dims must not be `nothing` when debug_loop_type "
+                  * "is not `nothing`.")
+        end
+        # Debug initialisation only used by tests in `debug_test/`
+        looping.debug_setup_loop_ranges_split_one_combination!(
+            debug_loop_type, debug_loop_parallel_dims...; s=composition.n_ion_species,
+            sn=composition.n_neutral_species, r=r.n, z=z.n, vperp=vperp.n, vpa=vpa.n,
+            vzeta=vzeta.n, vr=vr.n, vz=vz.n)
+    end
+
+    geometry = init_magnetic_geometry(geometry_in,z,r,z_spectral)
     if any(geometry.dBdz .!= 0.0) &&
             (evolve_moments.density || evolve_moments.parallel_flow ||
              evolve_moments.pressure)

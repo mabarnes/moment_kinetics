@@ -260,6 +260,8 @@ Base.@kwdef struct ion_species_parameters
     mass::mk_float
     # charge number, absolute w.r.t. proton charge
     zeds::mk_float
+    # radial temperature gradient scale length for 1D ITG 
+    L_T::mk_float
     # array containing the initial line-averaged temperature for this species
     initial_temperature::mk_float
     # array containing the initial line-averaged density for this species
@@ -654,6 +656,8 @@ Base.@kwdef struct geometry_input
     option::String = "constant-helical" # "1D-mirror"
     # pitch ( = Bzed/Bmag if geometry_option == "constant-helical")
     pitch::mk_float = 1.0
+    # well_depth ( = depth of the quadratic well, for option == "1D-mirror-quadratic-well")
+    well_depth::mk_float = 0.0
     # DeltaB ( = (Bzed(z=L/2) - Bzed(0))/Bref if geometry_option == "1D-mirror")
     DeltaB::mk_float = 0.0
     # constant for testing nonzero Er when nr = 1

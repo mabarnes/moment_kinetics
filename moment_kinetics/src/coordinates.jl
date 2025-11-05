@@ -245,12 +245,14 @@ function define_coordinate(coord_input::NamedTuple; parallel_io::Bool=false,
         scratch_shared = allocate_float(Symbol(coord_input.name)=>n_local)
         scratch_shared2 = allocate_float(Symbol(coord_input.name)=>n_local)
         scratch_shared3 = allocate_float(Symbol(coord_input.name)=>n_local)
+        scratch_shared4 = allocate_float(Symbol(coord_input.name)=>n_local)
         scratch_shared_int = allocate_int(Symbol(coord_input.name)=>n_local)
         scratch_shared_int2 = allocate_int(Symbol(coord_input.name)=>n_local)
     else
         scratch_shared = allocate_shared_float(Symbol(coord_input.name)=>n_local)
         scratch_shared2 = allocate_shared_float(Symbol(coord_input.name)=>n_local)
         scratch_shared3 = allocate_shared_float(Symbol(coord_input.name)=>n_local)
+        scratch_shared4 = allocate_shared_float(Symbol(coord_input.name)=>n_local)
         scratch_shared_int = allocate_shared_int(Symbol(coord_input.name)=>n_local)
         scratch_shared_int2 = allocate_shared_int(Symbol(coord_input.name)=>n_local)
     end
@@ -260,6 +262,7 @@ function define_coordinate(coord_input::NamedTuple; parallel_io::Bool=false,
         scratch_shared .= NaN
         scratch_shared2 .= NaN
         scratch_shared3 .= NaN
+        scratch_shared4 .= NaN
         scratch_shared_int .= typemin(mk_int)
         scratch_shared_int2 .= typemin(mk_int)
     end
@@ -354,13 +357,13 @@ function define_coordinate(coord_input::NamedTuple; parallel_io::Bool=false,
         igrid_full, coord_input.discretization, coord_input.finite_difference_option,
         coord_input.cheb_option, coord_input.bc, periodic,
         coord_input.boundary_parameters, wgts, uniform_grid, scratch, copy(scratch),
-        copy(scratch), copy(scratch), copy(scratch), copy(scratch), copy(scratch),
-        copy(scratch), copy(scratch), copy(scratch), scratch_int_nelement_plus_1,
-        scratch_shared, scratch_shared2, scratch_shared3, scratch_shared_int,
-        scratch_shared_int2, scratch_2d, copy(scratch_2d), send_buffer, receive_buffer,
-        comm, local_io_range, global_io_range, element_scale, element_shift,
-        coord_input.element_spacing_option, element_boundaries, radau_first_element,
-        other_nodes, one_over_denominator, mask_up, mask_low)
+        copy(scratch), copy(scratch), copy(scratch), copy(scratch),
+        copy(scratch), copy(scratch), copy(scratch), copy(scratch),
+        scratch_int_nelement_plus_1, scratch_shared, scratch_shared2, scratch_shared3,
+        scratch_shared4, scratch_shared_int, scratch_shared_int2, scratch_2d, copy(scratch_2d),
+        send_buffer, receive_buffer, comm, local_io_range, global_io_range, element_scale,
+        element_shift, coord_input.element_spacing_option, element_boundaries,
+        radau_first_element, other_nodes, one_over_denominator, mask_up, mask_low)
 
     spectral = get_coordinate_spectral(Val(species_coordinate), Val(coord.n),
                                        Val(Symbol(coord.name)),
