@@ -488,89 +488,103 @@ function create_r_section(this_input, ion_pdf, ion_density, ion_upar, ion_p, ele
             end
 
             if species == "ion"
-                bc_ion_pdf = allocate_shared_float(vpa, vperp,
-                                                   :z_segment=>length(z_range),
-                                                   composition.ion_species_coord)
-                bc_ion_density = allocate_shared_float(:z_segment=>length(z_range),
+                if ion_pdf !== nothing && ion_density !== nothing
+                    bc_ion_pdf = allocate_shared_float(vpa, vperp,
+                                                       :z_segment=>length(z_range),
                                                        composition.ion_species_coord)
-                bc_ion_upar = allocate_shared_float(:z_segment=>length(z_range),
-                                                    composition.ion_species_coord)
-                bc_ion_p = allocate_shared_float(:z_segment=>length(z_range),
-                                                 composition.ion_species_coord)
+                    bc_ion_density = allocate_shared_float(:z_segment=>length(z_range),
+                                                           composition.ion_species_coord)
+                    bc_ion_upar = allocate_shared_float(:z_segment=>length(z_range),
+                                                        composition.ion_species_coord)
+                    bc_ion_p = allocate_shared_float(:z_segment=>length(z_range),
+                                                     composition.ion_species_coord)
 
-                @begin_s_region()
-                @loop_s is begin
-                    bc_ion_density[z_range,is] .= n_val
-                    bc_ion_upar[z_range,is] .= u_val
-                    bc_ion_p[z_range,is] .= n_val * T_val
-                    if moments.evolve_p
-                        @loop_vperp_vpa ivperp ivpa begin
-                            bc_ion_pdf[ivpa,ivperp,z_range,is] .=
-                                Maxwellian_prefactor / fudge_factor_1V *
-                                exp(-(vpa_grid[ivpa]^2 + vperp_grid[ivperp]^2) / fudge_factor_1V^2)
-                        end
-                    elseif moments.evolve_upar
-                        @loop_vperp_vpa ivperp ivpa begin
-                            bc_ion_pdf[ivpa,ivperp,z_range,is] .=
-                                Maxwellian_prefactor / vth^vth_power *
-                                exp(-(vpa_grid[ivpa]^2 + vperp_grid[ivperp]^2) / vth^2)
-                        end
-                    elseif moments.evolve_density
-                        @loop_vperp_vpa ivperp ivpa begin
-                            bc_ion_pdf[ivpa,ivperp,z_range,is] .=
-                                Maxwellian_prefactor / vth^vth_power *
-                                exp(-((vpa_grid[ivpa] - u_val)^2 + vperp_grid[ivperp]^2) / vth^2)
-                        end
-                    else
-                        @loop_vperp_vpa ivperp ivpa begin
-                            bc_ion_pdf[ivpa,ivperp,z_range,is] .=
-                                Maxwellian_prefactor * n_val / vth^vth_power *
-                                exp(-((vpa_grid[ivpa] - u_val)^2 + vperp_grid[ivperp]^2) / vth^2)
+                    @begin_s_region()
+                    @loop_s is begin
+                        bc_ion_density[z_range,is] .= n_val
+                        bc_ion_upar[z_range,is] .= u_val
+                        bc_ion_p[z_range,is] .= n_val * T_val
+                        if moments.evolve_p
+                            @loop_vperp_vpa ivperp ivpa begin
+                                bc_ion_pdf[ivpa,ivperp,z_range,is] .=
+                                    Maxwellian_prefactor / fudge_factor_1V *
+                                    exp(-(vpa_grid[ivpa]^2 + vperp_grid[ivperp]^2) / fudge_factor_1V^2)
+                            end
+                        elseif moments.evolve_upar
+                            @loop_vperp_vpa ivperp ivpa begin
+                                bc_ion_pdf[ivpa,ivperp,z_range,is] .=
+                                    Maxwellian_prefactor / vth^vth_power *
+                                    exp(-(vpa_grid[ivpa]^2 + vperp_grid[ivperp]^2) / vth^2)
+                            end
+                        elseif moments.evolve_density
+                            @loop_vperp_vpa ivperp ivpa begin
+                                bc_ion_pdf[ivpa,ivperp,z_range,is] .=
+                                    Maxwellian_prefactor / vth^vth_power *
+                                    exp(-((vpa_grid[ivpa] - u_val)^2 + vperp_grid[ivperp]^2) / vth^2)
+                            end
+                        else
+                            @loop_vperp_vpa ivperp ivpa begin
+                                bc_ion_pdf[ivpa,ivperp,z_range,is] .=
+                                    Maxwellian_prefactor * n_val / vth^vth_power *
+                                    exp(-((vpa_grid[ivpa] - u_val)^2 + vperp_grid[ivperp]^2) / vth^2)
+                            end
                         end
                     end
+                else
+                    bc_ion_pdf = allocate_shared_float(:fake=>0, :fake=>0, :fake=>0, :fake=>0)
+                    bc_ion_density = allocate_shared_float(:fake=>0, :fake=>0)
+                    bc_ion_upar = allocate_shared_float(:fake=>0, :fake=>0)
+                    bc_ion_p = allocate_shared_float(:fake=>0, :fake=>0)
                 end
 
                 this_section = ion_r_boundary_section_Dirichlet(bc_ion_pdf,
                                                                 bc_ion_density,
                                                                 bc_ion_upar, bc_ion_p)
             elseif species == "electron"
-                vth /= sqrt(composition.me_over_mi)
+                if electron_pdf !== nothing && electron_density !== nothing
+                    vth /= sqrt(composition.me_over_mi)
 
-                bc_electron_pdf = allocate_shared_float(vpa, vperp, :z_segment=>length(z_range))
-                bc_electron_density = allocate_shared_float(:z_segment=>length(z_range))
-                bc_electron_upar = allocate_shared_float(:z_segment=>length(z_range))
-                bc_electron_p = allocate_shared_float(:z_segment=>length(z_range))
+                    bc_electron_pdf = allocate_shared_float(vpa, vperp, :z_segment=>length(z_range))
+                    bc_electron_density = allocate_shared_float(:z_segment=>length(z_range))
+                    bc_electron_upar = allocate_shared_float(:z_segment=>length(z_range))
+                    bc_electron_p = allocate_shared_float(:z_segment=>length(z_range))
 
-                @begin_serial_region()
-                @serial_region begin
-                    bc_electron_density[z_range] .= n_val
-                    bc_electron_upar[z_range] .= u_val
-                    bc_electron_p[z_range] .= n_val * T_val
-                    if moments.evolve_p
-                        @loop_vperp_vpa ivperp ivpa begin
-                            bc_electron_pdf[ivpa,ivperp,z_range] .=
-                                Maxwellian_prefactor / fudge_factor_1V *
-                                exp(-(vpa_grid[ivpa]^2 + vperp_grid[ivperp]^2) / fudge_factor_1V^2)
-                        end
-                    elseif moments.evolve_upar
-                        @loop_vperp_vpa ivperp ivpa begin
-                            bc_electron_pdf[ivpa,ivperp,z_range] .=
-                                Maxwellian_prefactor / vth^vth_power *
-                                exp(-(vpa_grid[ivpa]^2 + vperp_grid[ivperp]^2) / vth^2)
-                        end
-                    elseif moments.evolve_density
-                        @loop_vperp_vpa ivperp ivpa begin
-                            bc_electron_pdf[ivpa,ivperp,z_range] .=
-                                Maxwellian_prefactor / vth^vth_power *
-                                exp(-((vpa_grid[ivpa] - u_val)^2 + vperp_grid[ivperp]^2) / vth^2)
-                        end
-                    else
-                        @loop_vperp_vpa ivperp ivpa begin
-                            bc_electron_pdf[ivpa,ivperp,z_range] .=
-                                Maxwellian_prefactor * n_val / vth^vth_power *
-                                exp(-((vpa_grid[ivpa] - u_val)^2 + vperp_grid[ivperp]^2) / vth^2)
+                    @begin_serial_region()
+                    @serial_region begin
+                        bc_electron_density[z_range] .= n_val
+                        bc_electron_upar[z_range] .= u_val
+                        bc_electron_p[z_range] .= n_val * T_val
+                        if moments.evolve_p
+                            @loop_vperp_vpa ivperp ivpa begin
+                                bc_electron_pdf[ivpa,ivperp,z_range] .=
+                                    Maxwellian_prefactor / fudge_factor_1V *
+                                    exp(-(vpa_grid[ivpa]^2 + vperp_grid[ivperp]^2) / fudge_factor_1V^2)
+                            end
+                        elseif moments.evolve_upar
+                            @loop_vperp_vpa ivperp ivpa begin
+                                bc_electron_pdf[ivpa,ivperp,z_range] .=
+                                    Maxwellian_prefactor / vth^vth_power *
+                                    exp(-(vpa_grid[ivpa]^2 + vperp_grid[ivperp]^2) / vth^2)
+                            end
+                        elseif moments.evolve_density
+                            @loop_vperp_vpa ivperp ivpa begin
+                                bc_electron_pdf[ivpa,ivperp,z_range] .=
+                                    Maxwellian_prefactor / vth^vth_power *
+                                    exp(-((vpa_grid[ivpa] - u_val)^2 + vperp_grid[ivperp]^2) / vth^2)
+                            end
+                        else
+                            @loop_vperp_vpa ivperp ivpa begin
+                                bc_electron_pdf[ivpa,ivperp,z_range] .=
+                                    Maxwellian_prefactor * n_val / vth^vth_power *
+                                    exp(-((vpa_grid[ivpa] - u_val)^2 + vperp_grid[ivperp]^2) / vth^2)
+                            end
                         end
                     end
+                else
+                    bc_electron_pdf = allocate_shared_float(:fake=>0, :fake=>0, :fake=>0)
+                    bc_electron_density = allocate_shared_float(:fake=>0)
+                    bc_electron_upar = allocate_shared_float(:fake=>0)
+                    bc_electron_p = allocate_shared_float(:fake=>0)
                 end
 
                 this_section = electron_r_boundary_section_Dirichlet(bc_electron_pdf,
@@ -578,46 +592,54 @@ function create_r_section(this_input, ion_pdf, ion_density, ion_upar, ion_p, ele
                                                                      bc_electron_upar,
                                                                      bc_electron_p)
             elseif species == "neutral"
-                bc_neutral_pdf = allocate_shared_float(vz, vr, vzeta,
-                                                       :z_segment=>length(z_range),
-                                                       composition.neutral_species_coord)
-                bc_neutral_density = allocate_shared_float(:z_segment=>length(z_range),
+                if neutral_pdf !== nothing && neutral_density !== nothing
+                    bc_neutral_pdf = allocate_shared_float(vz, vr, vzeta,
+                                                           :z_segment=>length(z_range),
                                                            composition.neutral_species_coord)
-                bc_neutral_upar = allocate_shared_float(:z_segment=>length(z_range),
-                                                        composition.neutral_species_coord)
-                bc_neutral_p = allocate_shared_float(:z_segment=>length(z_range),
-                                                     composition.neutral_species_coord)
+                    bc_neutral_density = allocate_shared_float(:z_segment=>length(z_range),
+                                                               composition.neutral_species_coord)
+                    bc_neutral_upar = allocate_shared_float(:z_segment=>length(z_range),
+                                                            composition.neutral_species_coord)
+                    bc_neutral_p = allocate_shared_float(:z_segment=>length(z_range),
+                                                         composition.neutral_species_coord)
 
-                @begin_sn_region()
-                @loop_sn isn begin
-                    bc_neutral_density[z_range,isn] .= n_val
-                    bc_neutral_upar[z_range,isn] .= u_val
-                    bc_neutral_p[z_range,isn] .= n_val * T_val
-                    if moments.evolve_p
-                        @loop_vperp_vpa ivperp ivpa begin
-                            bc_neutral_pdf[ivpa,ivperp,z_range,isn] .=
-                                Maxwellian_prefactor / fudge_factor_1V *
-                                exp(-(vpa_grid[ivpa]^2 + vperp_grid[ivperp]^2) / fudge_factor_1V^2)
-                        end
-                    elseif moments.evolve_upar
-                        @loop_vperp_vpa ivperp ivpa begin
-                            bc_neutral_pdf[ivpa,ivperp,z_range,isn] .=
-                                Maxwellian_prefactor / vth^vth_power *
-                                exp(-(vpa_grid[ivpa]^2 + vperp_grid[ivperp]^2) / vth^2)
-                        end
-                    elseif moments.evolve_density
-                        @loop_vperp_vpa ivperp ivpa begin
-                            bc_neutral_pdf[ivpa,ivperp,z_range,isn] .=
-                                Maxwellian_prefactor / vth^vth_power *
-                                exp(-((vpa_grid[ivpa] - u_val)^2 + vperp_grid[ivperp]^2) / vth^2)
-                        end
-                    else
-                        @loop_vperp_vpa ivperp ivpa begin
-                            bc_neutral_pdf[ivpa,ivperp,z_range,isn] .=
-                                Maxwellian_prefactor * n_val / vth^vth_power *
-                                exp(-((vpa_grid[ivpa] - u_val)^2 + vperp_grid[ivperp]^2) / vth^2)
+                    @begin_sn_region()
+                    @loop_sn isn begin
+                        bc_neutral_density[z_range,isn] .= n_val
+                        bc_neutral_upar[z_range,isn] .= u_val
+                        bc_neutral_p[z_range,isn] .= n_val * T_val
+                        if moments.evolve_p
+                            @loop_vperp_vpa ivperp ivpa begin
+                                bc_neutral_pdf[ivpa,ivperp,z_range,isn] .=
+                                    Maxwellian_prefactor / fudge_factor_1V *
+                                    exp(-(vpa_grid[ivpa]^2 + vperp_grid[ivperp]^2) / fudge_factor_1V^2)
+                            end
+                        elseif moments.evolve_upar
+                            @loop_vperp_vpa ivperp ivpa begin
+                                bc_neutral_pdf[ivpa,ivperp,z_range,isn] .=
+                                    Maxwellian_prefactor / vth^vth_power *
+                                    exp(-(vpa_grid[ivpa]^2 + vperp_grid[ivperp]^2) / vth^2)
+                            end
+                        elseif moments.evolve_density
+                            @loop_vperp_vpa ivperp ivpa begin
+                                bc_neutral_pdf[ivpa,ivperp,z_range,isn] .=
+                                    Maxwellian_prefactor / vth^vth_power *
+                                    exp(-((vpa_grid[ivpa] - u_val)^2 + vperp_grid[ivperp]^2) / vth^2)
+                            end
+                        else
+                            @loop_vperp_vpa ivperp ivpa begin
+                                bc_neutral_pdf[ivpa,ivperp,z_range,isn] .=
+                                    Maxwellian_prefactor * n_val / vth^vth_power *
+                                    exp(-((vpa_grid[ivpa] - u_val)^2 + vperp_grid[ivperp]^2) / vth^2)
+                            end
                         end
                     end
+                else
+                    bc_neutral_pdf = allocate_shared_float(:fake=>0, :fake=>0, :fake=>0,
+                                                           :fake=>0, :fake=>0)
+                    bc_neutral_density = allocate_shared_float(:fake=>0, :fake=>0)
+                    bc_neutral_upar = allocate_shared_float(:fake=>0, :fake=>0)
+                    bc_neutral_p = allocate_shared_float(:fake=>0, :fake=>0)
                 end
 
                 this_section = neutral_r_boundary_section_Dirichlet(bc_neutral_pdf,
