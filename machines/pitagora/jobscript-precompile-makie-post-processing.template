@@ -17,7 +17,7 @@ cd $SLURM_SUBMIT_DIR
 # Get setup for Julia
 source julia.env
 
-echo "precompiling $(date)"
+echo "precompiling makie_post_processing $(date)"
 
 bin/julia -t 128 --project=makie_post_processing/ precompile-makie-post-processing.jl
 
