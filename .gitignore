@@ -21,6 +21,7 @@ LocalPreferences.toml
 /.julia_default.txt
 /.julia_directory_default.txt
 /.this_machine_name.txt
+/compute-node-temp.julia.tar.bz
 moment_kinetics.so
 makie_postproc.so
 plots_postproc.so

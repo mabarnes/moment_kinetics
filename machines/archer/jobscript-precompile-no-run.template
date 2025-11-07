@@ -22,6 +22,25 @@ export SRUN_CPUS_PER_TASK=$SLURM_CPUS_PER_TASK
 
 echo "precompiling $(date)"
 
+# Create the Julia 'depot' in /tmp/$USER, which (on ARCHER2) lives in RAM locally on each compute node
+mkdir -p /tmp/$USER
+
+if [ -e compute-node-temp.julia.tar.bz ]; then
+  tar -xjf compute-node-temp.julia.tar.bz -C /tmp/$USER/
+else
+  echo "compute-node-temp.julia.tar.bz does not exist but is required: run machines/machine_setup.sh to create it."
+  exit 1
+fi
+
+export JULIA_DEPOT_PATH=/tmp/$USER/compute-node-temp.julia
+
 bin/julia --project -O3 precompile-no-run.jl
+
+# Don't re-save the tar file, because it might overwrite one being created by
+# machines/machine-setup.sh (e.g. one with post-processing packages included).
+#tar cjf compute-node-temp.julia.tar.bz -C /tmp/$USER/ compute-node-temp.julia/
+
+# I think /tmp/ should be cleaned up automatically, but just in case, delete our temporary depot.
+rm -rf /tmp/$USER
 
 echo "finished! $(date)"
