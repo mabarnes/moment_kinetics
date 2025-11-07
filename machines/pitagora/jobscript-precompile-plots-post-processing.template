@@ -17,7 +17,7 @@ cd $SLURM_SUBMIT_DIR
 # Get setup for Julia
 source julia.env
 
-echo "precompiling $(date)"
+echo "precompiling plots_post_processing $(date)"
 
 bin/julia -t 128 --project=plots_post_processing/ precompile-plots-post-processing.jl
 
