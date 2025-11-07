@@ -296,7 +296,8 @@ function timing_data(run_info; plot_prefix=nothing, threshold=nothing,
         label = "time_advance! step"
         irank_slice = total_time[irank+1,:]
         lines!(times_ax, run_info.time, irank_slice .* time_unit_conversion;
-               color=:black, linestyle=linestyles[irun], label=label,
+               color=:black, linestyle=linestyles[mod1(irun, length(linestyles))],
+               label=label,
                inspector_label=(self,i,p) -> "$(self.label[]) $irank\nx: $(p[1])\ny: $(p[2])")
         label_irank(times_ax, irank_slice, irank, :black, time_unit_conversion)
     end
@@ -320,7 +321,7 @@ function timing_data(run_info; plot_prefix=nothing, threshold=nothing,
             label = split(variable_name, "time_advance! step;")[2]
             irank_slice = variable[irank+1,:]
             l = lines!(times_ax, run_info.time, irank_slice .* time_unit_conversion;
-                       color=Cycled(variable_counter), linestyle=linestyles[irun],
+                       color=Cycled(variable_counter), linestyle=linestyles[mod1(irun, length(linestyles))],
                        label=label, inspector_label=(self,i,p) -> "$(self.label[]) $irank\nx: $(p[1])\ny: $(p[2])")
             label_irank(times_ax, irank_slice, irank, l.color, time_unit_conversion)
         end
@@ -334,7 +335,7 @@ function timing_data(run_info; plot_prefix=nothing, threshold=nothing,
         label = "time_advance! step"
         irank_slice = total_ncalls[irank+1,:]
         lines!(ncalls_ax, run_info.time, irank_slice; color=:black,
-               linestyle=linestyles[irun], label=label,
+               linestyle=linestyles[mod1(irun, length(linestyles))], label=label,
                inspector_label=(self,i,p) -> "$(self.label[]) $irank\nx: $(p[1])\ny: $(p[2])")
         label_irank(ncalls_ax, irank_slice, irank, :black)
     end
@@ -358,7 +359,7 @@ function timing_data(run_info; plot_prefix=nothing, threshold=nothing,
             label = split(variable_name, "time_advance! step;")[2]
             irank_slice = variable[irank+1,:]
             l = lines!(ncalls_ax, run_info.time, irank_slice;
-                       color=Cycled(variable_counter), linestyle=linestyles[irun],
+                       color=Cycled(variable_counter), linestyle=linestyles[mod1(irun, length(linestyles))],
                        label=label, inspector_label=(self,i,p) -> "$(self.label[]) $irank\nx: $(p[1])\ny: $(p[2])")
             label_irank(ncalls_ax, irank_slice, irank, l.color)
         end
@@ -373,7 +374,7 @@ function timing_data(run_info; plot_prefix=nothing, threshold=nothing,
         label = "time_advance! step"
         irank_slice = total_allocs[irank+1,:]
         lines!(allocs_ax, run_info.time, irank_slice .* allocs_unit_conversion;
-               color=:black, linestyle=linestyles[irun], label=label,
+               color=:black, linestyle=linestyles[mod1(irun, length(linestyles))], label=label,
                inspector_label=(self,i,p) -> "$(self.label[]) $irank\nx: $(p[1])\ny: $(p[2])")
         label_irank(allocs_ax, irank_slice, irank, :black, allocs_unit_conversion)
     end
@@ -397,7 +398,7 @@ function timing_data(run_info; plot_prefix=nothing, threshold=nothing,
             label = split(variable_name, "time_advance! step;")[2]
             irank_slice = variable[irank+1,:]
             l = lines!(allocs_ax, run_info.time, irank_slice .* allocs_unit_conversion;
-                       color=Cycled(variable_counter), linestyle=linestyles[irun],
+                       color=Cycled(variable_counter), linestyle=linestyles[mod1(irun, length(linestyles))],
                        label=label, inspector_label=(self,i,p) -> "$(self.label[]) $irank\nx: $(p[1])\ny: $(p[2])")
             label_irank(allocs_ax, irank_slice, irank, l.color, allocs_unit_conversion)
         end
