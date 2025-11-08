@@ -100,8 +100,9 @@ function instability2D_plots_for_variable(run_info::Vector{Any}, variable_name;
         fig, ax = get_1d_ax(title="$var_symbol mode amplitude", xlabel="time",
                             ylabel="amplitude", yscale=log10)
         push!(figs, fig)
-        for (i, a) ∈ enumerate(ax)
-            push!(axes_and_observables[i], a)
+        push!(axes_and_observables[1], a)
+        for i ∈ 2:n_runs
+            push!(axes_and_observables[i], nothing)
         end
     else
         push!(figs, nothing)
@@ -390,7 +391,7 @@ function instability2D_plots_for_variable(run_info, variable_name; plot_prefix,
             fig, ax = get_1d_ax(title="$(get_variable_symbol(variable_name)) mode amplitude",
                                 xlabel="time", ylabel="amplitude", yscale=log10)
         else
-            ax = axes_and_observables[4]
+            ax = axes_and_observables[4][1]
         end
         plot_1d(run_info.time, amplitude; ax=ax)
         if axes_and_observables === nothing
