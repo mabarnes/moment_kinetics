@@ -134,7 +134,7 @@ function partial_fit_exponential_growth(time, amplitude)
         fit_error += (log_amplitude[imin] - fit_values[imin])^2 * (face_positions[imin+1] - tmin)
         fit_error += (log_amplitude[imax-1] - fit_values[imax-1])^2 * (tmax - face_positions[imax-1])
 
-        return fit_error
+        return fit_error / (imax - imin + 1)
     end
 
     # First find a linear fit to the full time series. This will give us an error value
@@ -157,9 +157,10 @@ function partial_fit_exponential_growth(time, amplitude)
         linear_fit_cost = linear_fit_error(m, c, tmin, tmax) / initial_error
 
         # Interval size penalty - needs to be large for small intervals.
-        # Multiply by 1/2 so that the 'cost' when tmax-tmin is half the total interval is
-        # 1 (i.e. equal to the normalised cost of the `initial_error`).
-        interval_cost = 0.5 * (time[end] - time[1]) / (tmax - tmin)
+        # Multiply by 0.1 as this seems to give a reasonable balance with the normalised
+        # cost of the linear fit error (possibly this prefactor should be a settable
+        # parameter).
+        interval_cost = 0.1 * (time[end] - time[1]) / (tmax - tmin)
 
         # Don't want `tmin` or `tmax` to be outside the bounds of `time`, so add penalty
         # to ensure this does not happen. Without this there is some chance that if the
@@ -182,7 +183,7 @@ function partial_fit_exponential_growth(time, amplitude)
     end
 
     # Find the best combined linear fit and interval.
-    fit = optimize(cost_function, [initial_m, initial_c, time[1], time[end]])
+    fit = optimize(cost_function, [initial_m, initial_c, time[1], time[end]], LBFGS())
 
     m, c, tmin, tmax = Optim.minimizer(fit)
 
