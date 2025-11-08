@@ -387,13 +387,24 @@ function instability2D_plots_for_variable(run_info, variable_name; plot_prefix,
         # Pass `corrected=false` to `StatsBase.std` so that it just calculates the RMS,
         # not the unbiased standard deviation.
         amplitude = maximum(std(variable; corrected=false, dims=2); dims=1)[1,1,:]
+
+        # Fit A*exp(γ*time) to exponentially-growing interval.
+        γ, A, tmin, tmax = partial_fit_exponential_growth(run_info.time, amplitude)
+
         if axes_and_observables === nothing
             fig, ax = get_1d_ax(title="$(get_variable_symbol(variable_name)) mode amplitude",
                                 xlabel="time", ylabel="amplitude", yscale=log10)
         else
             ax = axes_and_observables[4][1]
         end
+
         plot_1d(run_info.time, amplitude; ax=ax)
+
+        # Plot the fitted exponential growth
+        fit_t = run_info.time[run_info.time > tmin && run_info.time < tmax]
+        fit_amplitude = @. A * exp(γ * fit_t)
+        plot_1d(fit_t, fit_amplitude; ax=ax)
+
         if axes_and_observables === nothing
             outfile = string(plot_prefix, "$(variable_name)_amplitude_vs_t.pdf")
             save(outfile, fig)
