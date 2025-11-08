@@ -97,7 +97,7 @@ function instability2D_plots_for_variable(run_info::Vector{Any}, variable_name;
         for (i, a) ∈ enumerate(ax)
             push!(axes_and_observables[i], a)
         end
-        fig, ax = get_1d_ax(title="$symbol mode amplitude", xlabel="time",
+        fig, ax = get_1d_ax(title="$var_symbol mode amplitude", xlabel="time",
                             ylabel="amplitude", yscale=log10)
         push!(figs, fig)
         for (i, a) ∈ enumerate(ax)
