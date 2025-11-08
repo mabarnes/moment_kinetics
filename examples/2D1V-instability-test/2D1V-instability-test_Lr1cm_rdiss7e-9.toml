@@ -77,7 +77,7 @@ bc = "zero"
 
 [timestepping]
 type = "Fekete4(3)"
-nstep = 1000000
+nstep = 10000000
 dt = 1.0e-5
 minimum_dt = 1.0e-5
 CFL_prefactor = 3.0
@@ -88,7 +88,7 @@ random_noise_seed = 1234
 nwrite = 25000
 nwrite_dfns = 25000
 steady_state_residual = true
-converged_residual_value = 1.0e-4
+converged_residual_value = 1.0e-9
 
 [ion_numerical_dissipation]
 r_dissipation_coefficient = 7.0e-9

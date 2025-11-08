@@ -88,7 +88,7 @@ random_noise_seed = 1234
 nwrite = 25000
 nwrite_dfns = 25000
 steady_state_residual = true
-converged_residual_value = 1.0e-4
+converged_residual_value = 1.0e-7
 
 [ion_numerical_dissipation]
 r_dissipation_coefficient = 4.0e-9
