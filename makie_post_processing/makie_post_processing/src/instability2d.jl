@@ -100,7 +100,7 @@ function instability2D_plots_for_variable(run_info::Vector{Any}, variable_name;
         fig, ax = get_1d_ax(title="$var_symbol mode amplitude", xlabel="time",
                             ylabel="amplitude", yscale=log10)
         push!(figs, fig)
-        push!(axes_and_observables[1], a)
+        push!(axes_and_observables[1], ax)
         for i ∈ 2:n_runs
             push!(axes_and_observables[i], nothing)
         end
