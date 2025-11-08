@@ -401,7 +401,7 @@ function instability2D_plots_for_variable(run_info, variable_name; plot_prefix,
         plot_1d(run_info.time, amplitude; ax=ax)
 
         # Plot the fitted exponential growth
-        fit_t = run_info.time[run_info.time > tmin && run_info.time < tmax]
+        fit_t = run_info.time[@. run_info.time > tmin && run_info.time < tmax]
         fit_amplitude = @. A * exp(γ * fit_t)
         plot_1d(fit_t, fit_amplitude; ax=ax)
 
