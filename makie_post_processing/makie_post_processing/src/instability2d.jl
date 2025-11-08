@@ -3,6 +3,7 @@ using moment_kinetics.analysis: get_r_perturbation, get_Fourier_modes_2D,
 using moment_kinetics.interpolation: interpolate_to_grid_1d!
 
 using LsqFit
+using Printf
 
 """
     instability_plots(run_info; plot_prefix)
@@ -79,7 +80,7 @@ function instability2D_plots_for_variable(run_info::Vector{Any}, variable_name;
 
     if n_runs == 1
         # Don't need to set up for comparison plots, or include run_name in subplot titles
-        zi = instability2D_plots_for_variable(run_info[1], variable_name,
+        zi = instability2D_plots_for_variable(run_info[1], variable_name;
                                               plot_prefix=plot_prefix, zind=zind[1])
         return Union{mk_int,Nothing}[zi]
     end
@@ -161,8 +162,9 @@ function instability2D_plots_for_variable(run_info::Vector{Any}, variable_name;
     end
 
     for (i, (ri, ax_ob, zi)) ∈ enumerate(zip(run_info, axes_and_observables, zind))
-        zi = instability2D_plots_for_variable(ri, variable_name, plot_prefix=plot_prefix,
-                                              zind=zi, axes_and_observables=ax_ob)
+        zi = instability2D_plots_for_variable(ri, variable_name; irun=i,
+                                              plot_prefix=plot_prefix, zind=zi,
+                                              axes_and_observables=ax_ob)
         zind[i] = zi
     end
 
@@ -211,7 +213,7 @@ function instability2D_plots_for_variable(run_info::Vector{Any}, variable_name;
     return zind
 end
 
-function instability2D_plots_for_variable(run_info, variable_name; plot_prefix,
+function instability2D_plots_for_variable(run_info, variable_name; irun=1, plot_prefix,
                                           zind=nothing, axes_and_observables=nothing)
     instability2D_options = Dict_to_NamedTuple(input_dict["instability2D"])
 
@@ -390,6 +392,7 @@ function instability2D_plots_for_variable(run_info, variable_name; plot_prefix,
 
         # Fit A*exp(γ*time) to exponentially-growing interval.
         γ, A, tmin, tmax = partial_fit_exponential_growth(run_info.time, amplitude)
+        println(run_info.run_name, " for $variable_name γ = $γ")
 
         if axes_and_observables === nothing
             fig, ax = get_1d_ax(title="$(get_variable_symbol(variable_name)) mode amplitude",
@@ -398,12 +401,19 @@ function instability2D_plots_for_variable(run_info, variable_name; plot_prefix,
             ax = axes_and_observables[4][1]
         end
 
-        plot_1d(run_info.time, amplitude; ax=ax)
+        plot_1d(run_info.time, amplitude; ax=ax, color=Cycled(irun), linestyle=:dot)
 
         # Plot the fitted exponential growth
         fit_t = run_info.time[@. run_info.time > tmin && run_info.time < tmax]
         fit_amplitude = @. A * exp(γ * fit_t)
-        plot_1d(fit_t, fit_amplitude; ax=ax)
+        plot_1d(fit_t, fit_amplitude; ax=ax, color=Cycled(irun))
+        label_t = 0.5 * (fit_t[1] + fit_t[end])
+        gamma_string = @sprintf("%.5g", γ)
+        # For now setting the text color with Cycled(irun) doesn't work in Makie.jl.
+        #text!(ax, Point2f(label_t, A * exp(γ * label_t)); text="γ = $gamma_string",
+        #      align=(:left, :top), color=Cycled(irun))
+        text!(ax, Point2f(label_t, A * exp(γ * label_t)); text="γ = $gamma_string",
+              align=(:left, :top))
 
         if axes_and_observables === nothing
             outfile = string(plot_prefix, "$(variable_name)_amplitude_vs_t.pdf")
