@@ -476,8 +476,9 @@ function instability2D_compare_perturbed_Maxwellian(run_info_dfns::Vector{Any};
                                                     plot_prefix=plot_prefix)
     # Comparison plots not yet supported for this function.
     if length(run_info_dfns) > 1
-        error("Comparison plots not yet supported in "
-              * "instability2D_compare_perturbed_Maxwellian()")
+        println("Comparison plots not yet supported in "
+                * "instability2D_compare_perturbed_Maxwellian()")
+        return nothing
     end
     return instability2D_compare_perturbed_Maxwellian(run_info_dfns[1];
                                                       plot_prefix=plot_prefix)
