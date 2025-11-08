@@ -101,9 +101,8 @@ function instability2D_plots_for_variable(run_info::Vector{Any}, variable_name;
         fig, ax = get_1d_ax(title="$var_symbol mode amplitude", xlabel="time",
                             ylabel="amplitude", yscale=log10)
         push!(figs, fig)
-        push!(axes_and_observables[1], ax)
-        for i ∈ 2:n_runs
-            push!(axes_and_observables[i], nothing)
+        for i ∈ 1:n_runs
+            push!(axes_and_observables[i], ax)
         end
     else
         push!(figs, nothing)
@@ -182,19 +181,19 @@ function instability2D_plots_for_variable(run_info::Vector{Any}, variable_name;
 
     fig = figs[3]
     if fig !== nothing
-        outfile = string(plot_prefix, "$(variable_name)_Fourier_components.pdf")
+        outfile = string(plot_prefix, "$(variable_name)_amplitude_vs_t.pdf")
         save(outfile, fig)
     end
 
     fig = figs[4]
     if fig !== nothing
-        outfile = string(plot_prefix, "$(variable_name)_amplitude_vs_t.pdf")
+        outfile = string(plot_prefix, "$(variable_name)_Fourier_components.pdf")
         save(outfile, fig)
     end
 
     fig = figs[5]
     if fig !== nothing
-        frame_index = axes_and_observables[1][4][3]
+        frame_index = axes_and_observables[1][5][3]
         nt = minimum(ri.nt for ri ∈ run_info)
         outfile = plot_prefix * variable_name * "_Fourier." *
                   instability2D_options.animation_ext
@@ -203,7 +202,7 @@ function instability2D_plots_for_variable(run_info::Vector{Any}, variable_name;
 
     fig = figs[6]
     if fig !== nothing
-        frame_index = axes_and_observables[1][5][3]
+        frame_index = axes_and_observables[1][6][3]
         nt = minimum(ri.nt for ri ∈ run_info)
         outfile = plot_prefix * variable_name * "_perturbation." *
                   instability2D_options.animation_ext
@@ -398,7 +397,7 @@ function instability2D_plots_for_variable(run_info, variable_name; irun=1, plot_
             fig, ax = get_1d_ax(title="$(get_variable_symbol(variable_name)) mode amplitude",
                                 xlabel="time", ylabel="amplitude", yscale=log10)
         else
-            ax = axes_and_observables[4][1]
+            ax = axes_and_observables[3]
         end
 
         plot_1d(run_info.time, amplitude; ax=ax, color=Cycled(irun), linestyle=:dot)
