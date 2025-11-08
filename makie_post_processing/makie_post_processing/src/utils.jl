@@ -101,24 +101,34 @@ function partial_fit_exponential_growth(time, amplitude)
     # Find sizes of the 'cells' in time. Not really well defined if the grid spacing
     # changes, but hopefully good enough for this kind of fitting.
     face_positions = [time[1] - 0.5*(time[2] - time[1])]
-    push!(face_positions, @views 0.5 * (time[1:end-1] .+ time[2:end]))
+    face_positions = vcat(face_positions, @views @. 0.5 * (time[1:end-1] + time[2:end]))
     push!(face_positions, time[end] + 0.5 * (time[end] - time[end-1]))
     cell_sizes = face_positions[2:end] .- face_positions[1:end-1]
 
     function linear_fit(x, m, c)
         # Fit y = m*x + c
-        return m*x + c
+        return @. m*x + c
     end
 
     function linear_fit_error(m, c, tmin, tmax)
-        imin = searchsortedfirst(tmin, time)
-        imax = searchsortedfirst(tmax, time) # Note that imax may be length(time)+1 if tmax > time[end].
+        if tmin > tmax
+            # If this happens, the interval is too small and should be penalised by the
+            # inveral-size cost function.
+            return 0.0
+        end
+        imin = searchsortedfirst(time, tmin)
+        imax = searchsortedfirst(time, tmax) # Note that imax may be length(time)+1 if tmax > time[end].
 
         # Start by calculating the fit error for points that are not at the ends of the
         # interval. Weight each point by the size of the associated grid cell.
-        fit_values = linear_fit.(time, m, c)
-        r = imin+1:imax-2
-        fit_error = (log_amplitude[r] .- fit_values[r]).^2 .* cell_sizes[r]
+        fit_values = linear_fit(time, m, c)
+
+        if imin < imax - 2
+            r = imin+1:imax-2
+            fit_error = sum(@. (log_amplitude[r] - fit_values[r])^2 * cell_sizes[r])
+        else
+            fit_error = 0.0
+        end
 
         # Add contributions from first and last points in the interval.
         fit_error += (log_amplitude[imin] - fit_values[imin])^2 * (face_positions[imin+1] - tmin)
@@ -139,6 +149,10 @@ function partial_fit_exponential_growth(time, amplitude)
         # Evaluate a 'cost' that balances minimising the error on the fit with maximising
         # the size of the interval.
         m, c, tmin, tmax = p
+
+        if tmin > tmax
+            return Inf
+        end
 
         linear_fit_cost = linear_fit_error(m, c, tmin, tmax) / initial_error
 
@@ -162,7 +176,7 @@ function partial_fit_exponential_growth(time, amplitude)
             bounds_cost += 100.0 * (tmax - time[end]) / total_t
         end
 
-        cost = fit_error + interval_cost + bounds_cost
+        cost = linear_fit_cost + interval_cost + bounds_cost
 
         return cost
     end
@@ -170,9 +184,12 @@ function partial_fit_exponential_growth(time, amplitude)
     # Find the best combined linear fit and interval.
     fit = optimize(cost_function, [initial_m, initial_c, time[1], time[end]])
 
-    # `(m,c)` for the linear fit to `log(amplitude)` correspond to `(γ,A)` for the
+    m, c, tmin, tmax = Optim.minimizer(fit)
+
+    # `(m,c)` for the linear fit to `log(amplitude)` correspond to `(γ,log(A))` for the
     # exponential fit to `amplitude`.
-    γ, A, tmin, tmax = Optim.minimizer(fit)
+    γ = m
+    A = exp(c)
 
     return γ, A, tmin, tmax
 end
