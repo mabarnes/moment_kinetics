@@ -1024,7 +1024,8 @@ end
 """
 enforce boundary conditions on ions in r
 """
-function enforce_r_boundary_condition!(f::AbstractArray{mk_float,ndim_pdf_ion},
+@timeit_debug global_timer enforce_r_boundary_condition!(
+        f::AbstractArray{mk_float,ndim_pdf_ion},
         density::AbstractArray{mk_float,ndim_moment},
         upar::AbstractArray{mk_float,ndim_moment}, p::AbstractArray{mk_float,ndim_moment},
         moment_r_speed::AbstractArray{mk_float,ndim_field},
@@ -1032,7 +1033,7 @@ function enforce_r_boundary_condition!(f::AbstractArray{mk_float,ndim_pdf_ion},
         end1::AbstractArray{mk_float,ndim_pdf_ion_boundary},
         end2::AbstractArray{mk_float,ndim_pdf_ion_boundary},
         buffer1::AbstractArray{mk_float,ndim_pdf_ion_boundary},
-        buffer2::AbstractArray{mk_float,ndim_pdf_ion_boundary}, r_diffusion::Bool)
+        buffer2::AbstractArray{mk_float,ndim_pdf_ion_boundary}, r_diffusion::Bool) = begin
 
     nr = r.n
     zero = 1.0e-10
@@ -1092,13 +1093,14 @@ enforce boundary conditions on ion particle f in z
 `vpavperp_buffer` should be an unshared array, as it is used inside a
 shared-memory-parallelised loop.
 """
-function enforce_z_boundary_condition!(pdf, density, upar, p, fields, moments, bc::String,
+@timeit_debug global_timer enforce_z_boundary_condition!(
+                                       pdf, density, upar, p, fields, moments, bc::String,
                                        adv, z, vperp, vpa, composition, geometry,
                                        end1::AbstractArray{mk_float,4},
                                        end2::AbstractArray{mk_float,4},
                                        buffer1::AbstractArray{mk_float,4},
                                        buffer2::AbstractArray{mk_float,4},
-                                       vpavperp_buffer::AbstractArray{mk_float,2})
+                                       vpavperp_buffer::AbstractArray{mk_float,2}) = begin
     # this block ensures periodic BC can be supported with distributed memory MPI
     if z.nelement_global > z.nelement_local
         # reconcile internal element boundaries across processes
@@ -1330,7 +1332,8 @@ end
 """
 enforce boundary conditions on electrons in r
 """
-function enforce_electron_r_boundary_condition!(f::AbstractArray{mk_float,ndim_pdf_electron},
+@timeit_debug global_timer enforce_electron_r_boundary_condition!(
+        f::AbstractArray{mk_float,ndim_pdf_electron},
         density::AbstractArray{mk_float,ndim_field},
         upar::AbstractArray{mk_float,ndim_field}, p::AbstractArray{mk_float,ndim_field},
         moment_r_speed::AbstractArray{mk_float,ndim_field},
@@ -1338,7 +1341,7 @@ function enforce_electron_r_boundary_condition!(f::AbstractArray{mk_float,ndim_p
         end1::AbstractArray{mk_float,ndim_pdf_electron_boundary},
         end2::AbstractArray{mk_float,ndim_pdf_electron_boundary},
         buffer1::AbstractArray{mk_float,ndim_pdf_electron_boundary},
-        buffer2::AbstractArray{mk_float,ndim_pdf_electron_boundary}, r_diffusion::Bool)
+        buffer2::AbstractArray{mk_float,ndim_pdf_electron_boundary}, r_diffusion::Bool) = begin
 
     nr = r.n
     zero = 1.0e-10
@@ -1589,7 +1592,7 @@ end
 """
 enforce boundary conditions on neutrals in r
 """
-function enforce_neutral_r_boundary_condition!(
+@timeit_debug global_timer enforce_neutral_r_boundary_condition!(
         f::AbstractArray{mk_float,ndim_pdf_neutral},
         density::AbstractArray{mk_float,ndim_moment},
         uz::AbstractArray{mk_float,ndim_moment}, ur::AbstractArray{mk_float,ndim_moment},
@@ -1598,7 +1601,7 @@ function enforce_neutral_r_boundary_condition!(
         end1::AbstractArray{mk_float,ndim_pdf_neutral_boundary},
         end2::AbstractArray{mk_float,ndim_pdf_neutral_boundary},
         buffer1::AbstractArray{mk_float,ndim_pdf_neutral_boundary},
-        buffer2::AbstractArray{mk_float,ndim_pdf_neutral_boundary}, r_diffusion::Bool)
+        buffer2::AbstractArray{mk_float,ndim_pdf_neutral_boundary}, r_diffusion::Bool) = begin
 
     nr = r.n
     zero = 1.0e-10
@@ -1660,12 +1663,13 @@ end
 """
 enforce boundary conditions on neutral particle f in z
 """
-function enforce_neutral_z_boundary_condition!(pdf, density, uz, pz, moments, density_ion,
+@timeit_debug global_timer enforce_neutral_z_boundary_condition!(
+                                               pdf, density, uz, pz, moments, density_ion,
                                                upar_ion, Er, z_boundaries, adv,
                                                z, vzeta, vr, vz, composition, geometry,
                                                end1::AbstractArray{mk_float,5}, end2::AbstractArray{mk_float,5},
                                                buffer1::AbstractArray{mk_float,5}, buffer2::AbstractArray{mk_float,5},
-                                               buffer3::AbstractArray{mk_float,5})
+                                               buffer3::AbstractArray{mk_float,5}) = begin
 
 
     if z.nelement_global > z.nelement_local
