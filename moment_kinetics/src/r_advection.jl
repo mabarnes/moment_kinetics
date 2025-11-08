@@ -29,21 +29,21 @@ do a single stage time advance (potentially as part of a multi-stage RK scheme)
         # update adv_fac
         speed = advect[is].speed
         @loop_z_vperp_vpa iz ivperp ivpa begin
-            @. advect[is].adv_fac[:,ivpa,ivperp,iz] = -dt * speed[:,ivpa,ivperp,iz]
+            @views @. advect[is].adv_fac[:,ivpa,ivperp,iz] = -dt * speed[:,ivpa,ivperp,iz]
         end
     end
     # calculate the upwind derivative along r
-    derivative_r!(scratch_dummy.buffer_vpavperpzrs_1, fvec_in.pdf, advect,
-                  scratch_dummy.buffer_vpavperpzs_1, scratch_dummy.buffer_vpavperpzs_2,
+    df_dr = scratch_dummy.buffer_vpavperpzrs_1
+    derivative_r!(df_dr, fvec_in.pdf, advect, scratch_dummy.buffer_vpavperpzs_1,
+                  scratch_dummy.buffer_vpavperpzs_2,
                   scratch_dummy.buffer_vpavperpzs_3,scratch_dummy.buffer_vpavperpzs_4,
                   scratch_dummy.buffer_vpavperpzs_5,scratch_dummy.buffer_vpavperpzs_6,
                   r_spectral,r)
 
     # advance r-advection equation
     @loop_s_z_vperp_vpa is iz ivperp ivpa begin
-        @. @views r.scratch = scratch_dummy.buffer_vpavperpzrs_1[ivpa,ivperp,iz,:,is]
         @views advance_f_df_precomputed!(f_out[ivpa,ivperp,iz,:,is],
-          r.scratch, advect[is], ivpa, ivperp, iz, r, dt)
+          df_dr[ivpa,ivperp,iz,:,is], advect[is], ivpa, ivperp, iz, r, dt)
     end
 end
 
