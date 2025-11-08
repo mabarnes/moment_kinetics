@@ -4331,7 +4331,7 @@ end
 function select_slice_of_variable(variable::AbstractVector; it=nothing,
                                   is=nothing, ir=nothing, iz=nothing, ivperp=nothing,
                                   ivpa=nothing, ivzeta=nothing, ivr=nothing,
-                                  ivz=nothing)
+                                  ivz=nothing, kwargs...)
     if it !== nothing
         variable = selectdim(variable, 1, it)
     end
@@ -4343,7 +4343,7 @@ end
 function select_slice_of_variable(variable::AbstractArray{T,3} where T; it=nothing,
                                   is=nothing, ir=nothing, iz=nothing, ivperp=nothing,
                                   ivpa=nothing, ivzeta=nothing, ivr=nothing,
-                                  ivz=nothing)
+                                  ivz=nothing, kwargs...)
     if it !== nothing
         variable = selectdim(variable, 3, it)
     end
@@ -4361,7 +4361,7 @@ end
 function select_slice_of_variable(variable::AbstractArray{T,4} where T; it=nothing,
                                   is=nothing, ir=nothing, iz=nothing, ivperp=nothing,
                                   ivpa=nothing, ivzeta=nothing, ivr=nothing,
-                                  ivz=nothing)
+                                  ivz=nothing, kwargs...)
     if it !== nothing
         variable = selectdim(variable, 4, it)
     end
@@ -4382,7 +4382,7 @@ end
 function select_slice_of_variable(variable::AbstractArray{T,6} where T; it=nothing,
                                   is=nothing, ir=nothing, iz=nothing, ivperp=nothing,
                                   ivpa=nothing, ivzeta=nothing, ivr=nothing,
-                                  ivz=nothing)
+                                  ivz=nothing, kwargs...)
     if it !== nothing
         variable = selectdim(variable, 6, it)
     end
@@ -4409,7 +4409,7 @@ end
 function select_slice_of_variable(variable::AbstractArray{T,5} where T; it=nothing,
                                   is=nothing, ir=nothing, iz=nothing, ivperp=nothing,
                                   ivpa=nothing, ivzeta=nothing, ivr=nothing,
-                                  ivz=nothing)
+                                  ivz=nothing, kwargs...)
     if it !== nothing
         variable = selectdim(variable, 5, it)
     end
@@ -4433,7 +4433,7 @@ end
 function select_slice_of_variable(variable::AbstractArray{T,7} where T; it=nothing,
                                   is=nothing, ir=nothing, iz=nothing, ivperp=nothing,
                                   ivpa=nothing, ivzeta=nothing, ivr=nothing,
-                                  ivz=nothing)
+                                  ivz=nothing, kwargs...)
     if it !== nothing
         variable = selectdim(variable, 7, it)
     end
@@ -4541,7 +4541,7 @@ function get_z_derivative_of_loaded_variable(run_info, x; kwargs...)
     return dx_dz
 end
 
-function get_electron_z_derivative(run_inf, x; kwargs)
+function get_electron_z_derivative(run_info, x; kwargs)
     dx_dz = similar(x)
     if :iz ∈ keys(kwargs) && kwargs[:iz] !== nothing
         error("Cannot take z-derivative when iz!==nothing")
