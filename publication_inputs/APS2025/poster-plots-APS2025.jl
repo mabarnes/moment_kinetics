@@ -95,6 +95,12 @@ for (sim_dir, label) ∈ (("runs/1D1V-instability-test/", "background_1D"),
     ax_1d.ylabel = "chi_i_classical"
 
     save(joinpath(dir_1d, label * "_chi_i_classical.png"), fig_1d; px_per_unit=16.0)
+
+    fig_1d, ax_1d, l = lines(parallel_coordinate, rho_i)
+    ax_1d.xlabel = "parallel distance"
+    ax_1d.ylabel = "rho_i"
+
+    save(joinpath(dir_1d, label * "_rho_i.png"), fig_1d; px_per_unit=16.0)
 end
 
 # Instability analysis - scan in radial resolution

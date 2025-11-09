@@ -108,7 +108,7 @@ n_{\mathrm{ref}}=10^{19}m^{-3};\,T_{\mathrm{ref}}=100eV;\,L_{\mathrm{ref}}=10m;\
 Derived reference parameters:
 \begin_inset Formula 
 \[
-c_{\mathrm{ref}}=\sqrt{\frac{T_{\mathrm{ref}}}{m_{\mathrm{ref}}}}\approx6.9\times10^{4}m/s;\,t_{\mathrm{ref}}=\frac{L_{\mathrm{ref}}}{c_{\mathrm{ref}}}=0.14ms;\,\nu_{\mathrm{ref}}=\frac{1}{t_{\mathrm{ref}}}\approx6.9kHz
+c_{\mathrm{ref}}=\sqrt{\frac{T_{\mathrm{ref}}}{m_{\mathrm{ref}}}}\approx6.9\times10^{4}m/s;\,t_{\mathrm{ref}}=\frac{L_{\mathrm{ref}}}{c_{\mathrm{ref}}}=1.4\times10^{-4}s;\,\nu_{\mathrm{ref}}=\frac{1}{t_{\mathrm{ref}}}\approx6.9\times10^{3}Hz
 \]
 
 \end_inset
@@ -503,7 +503,12 @@ Using a finite-element discretization in
 
  with 4,
  8,
- or 16 elements,
+ or 16 elements (and 
+\begin_inset Formula $\mathtt{ngrid=5}$
+\end_inset
+
+,
+ so 4th order polynomials),
  the growth rate increases with 
 \begin_inset Formula $r$
 \end_inset
@@ -689,7 +694,16 @@ For comparison classical particle diffusivity
 \begin_inset Formula $\chi_{i,\mathrm{classical}}=4.8\times10^{-8}L_{\mathrm{ref}}c_{\mathrm{ref}}\approx3.3\times10^{-2}m^{2}/s$
 \end_inset
 
- (see plots below)
+ (see plots below).
+ Also 
+\begin_inset Formula $\rho_{i}=9\times10^{-5}L_{\mathrm{ref}}=0.9mm$
+\end_inset
+
+ is around 1/10th of the radial box width (which is 
+\begin_inset Formula $10^{-3}L_{\mathrm{ref}}=1cm$
+\end_inset
+
+).
 \end_layout
 
 \begin_layout Standard
@@ -724,6 +738,25 @@ background_1D/background_1D_D_classical.png
 
 \begin_layout Standard
 background_1D/background_1D_chi_i_classical.png
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename background_1D/background_1D_rho_i.png
+	lyxscale 5
+	height 5cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+background_1D/background_1D_rho_i.png
 \begin_inset Newline newline
 \end_inset
 
