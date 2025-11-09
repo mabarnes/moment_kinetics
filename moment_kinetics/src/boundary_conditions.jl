@@ -886,6 +886,141 @@ function enforce_boundary_conditions!(fvec_out::scratch_pdf, moments,
                                  r_diffusion, vpa_diffusion, vperp_diffusion)
 end
 
+function enforce_r_boundary_section!(f, density, upar, p, adv, moment_r_speed,
+                                     r_diffusion::Bool, r::coordinate, ir::mk_int,
+                                     zero::mk_float, section::r_boundary_section,
+                                     ion_section::ion_r_boundary_section_periodic)
+    # 'periodic' BC enforces periodicity by taking the average of the boundary points
+    # enforce the condition if r is local
+    if r.nelement_global != r.nelement_local
+        error("Periodic r-boundaries not yet implemented when r-dimension "
+              * " is distributed")
+    end
+    if ir > 1
+        # Both r-boundaries for periodic sections handled by inner boundary.
+        # We have checked that there is a corresponding periodic outer-boundary section
+        # defined.
+        return nothing
+    end
+    nr = r.n
+    @begin_s_vperp_vpa_region()
+    @loop_s is begin
+        for iz ∈ section.z_range
+            @loop_vperp_vpa ivperp ivpa begin
+                f[ivpa,ivperp,iz,1,is] = 0.5 * (f[ivpa,ivperp,iz,nr,is] +
+                                                f[ivpa,ivperp,iz,1,is])
+                f[ivpa,ivperp,iz,nr,is] = f[ivpa,ivperp,iz,1,is]
+            end
+        end
+    end
+    @begin_s_region()
+    @loop_s is begin
+        for iz ∈ section.z_range
+            density[iz,1,is] = 0.5 * (density[iz,nr,is] + density[iz,1,is])
+            density[iz,nr,is] = density[iz,1,is]
+            upar[iz,1,is] = 0.5 * (upar[iz,nr,is] + upar[iz,1,is])
+            upar[iz,nr,is] = upar[iz,1,is]
+            p[iz,1,is] = 0.5 * (p[iz,nr,is] + p[iz,1,is])
+            p[iz,nr,is] = p[iz,1,is]
+        end
+    end
+    return nothing
+end
+
+function enforce_r_boundary_section!(f, density, upar, p, adv, moment_r_speed,
+                                     r_diffusion::Bool, r::coordinate, ir::mk_int,
+                                     zero::mk_float, section::r_boundary_section,
+                                     ion_section::ion_r_boundary_section_Dirichlet)
+    # use the old distribution to force the new distribution to have consistant-in-time
+    # values at the boundary
+    # with bc = "Dirichlet" and r_diffusion = false
+    # impose bc for incoming parts of velocity space only (Hyperbolic PDE)
+    # with bc = "Dirichlet" and r_diffusion = true
+    # impose bc on both sides of the domain to accomodate a diffusion operator d^2 / d r^2
+    f_boundary = ion_section.pdf
+    @begin_s_vperp_vpa_region()
+    @loop_s is begin
+        adv_speed = adv[is].speed
+        for (iz_section, iz) ∈ enumerate(section.z_range)
+            @loop_vperp_vpa ivperp ivpa begin
+                if r_diffusion || (ir == 1 ? adv[is].speed[ir,ivpa,ivperp,iz] > zero
+                                           : adv[is].speed[ir,ivpa,ivperp,iz] < -zero)
+                    f[ivpa,ivperp,iz,ir,is] = f_boundary[ivpa,ivperp,iz_section,is]
+                end
+            end
+        end
+    end
+    n_boundary = ion_section.density
+    u_boundary = ion_section.upar
+    p_boundary = ion_section.p
+    @begin_s_region()
+    @loop_s is begin
+        for (iz_section, iz) ∈ enumerate(section.z_range)
+            if r_diffusion || (ir == 1 ? moment_r_speed[iz,ir] > zero
+                                       : moment_r_speed[iz,ir] < -zero)
+                density[iz,ir,is] = n_boundary[iz_section,is]
+                upar[iz,ir,is] = u_boundary[iz_section,is]
+                p[iz,ir,is] = p[iz_section,is]
+            end
+        end
+    end
+    return nothing
+end
+
+function enforce_r_boundary_section!(f, density, upar, p, adv, moment_r_speed,
+                                     r_diffusion::Bool, r::coordinate, ir::mk_int,
+                                     zero::mk_float, section::r_boundary_section,
+                                     ion_section::ion_r_boundary_section_Neumann)
+    # with bc = "Neumann" and r_diffusion = false
+    # impose bc for incoming parts of velocity space only (Hyperbolic PDE)
+    # with bc = "Neumann" and r_diffusion = true
+    # impose bc on both sides of the domain to accomodate a diffusion operator d^2 / d r^2
+    one_over_logarithmic_gradient_value_minus_Db =
+        ion_section.one_over_logarithmic_gradient_value_minus_Db
+    derivative_coefficients = ion_section.derivative_coefficients
+    if ion_section.is_inner
+        other_elements_range = 2:r.ngrid
+    else
+        other_elements_range = r.n-r.ngrid+1:r.n-1
+    end
+    @begin_s_vperp_vpa_region()
+    @loop_s is begin
+        adv_speed = adv[is].speed
+        for (iz_section, iz) ∈ enumerate(section.z_range)
+            @loop_vperp_vpa ivperp ivpa begin
+                if r_diffusion || (ir == 1 ? adv[is].speed[ir,ivpa,ivperp,iz] > zero
+                                           : adv[is].speed[ir,ivpa,ivperp,iz] < -zero)
+                    @views f[ivpa,ivperp,iz,ir,is] =
+                        dot(derivative_coefficients,
+                            f[ivpa,ivperp,iz,other_elements_range,is]) *
+                        one_over_logarithmic_gradient_value_minus_Db
+                end
+            end
+        end
+    end
+    @begin_s_region()
+    @loop_s is begin
+        for iz ∈ section.z_range
+            if r_diffusion || (ir == 1 ? moment_r_speed[iz,ir] > zero
+                                       : moment_r_speed[iz,ir] < -zero)
+                @views density[iz,ir,is] =
+                    dot(derivative_coefficients,
+                        density[iz,other_elements_range,is]) *
+                    one_over_logarithmic_gradient_value_minus_Db
+                @views upar[iz,ir,is] =
+                    dot(derivative_coefficients,
+                        upar[iz,other_elements_range,is]) *
+                    one_over_logarithmic_gradient_value_minus_Db
+                @views p[iz,ir,is] =
+                    dot(derivative_coefficients,
+                        p[iz,other_elements_range,is]) *
+                    one_over_logarithmic_gradient_value_minus_Db
+            end
+        end
+    end
+    return nothing
+end
+
 """
 enforce boundary conditions on ions in r
 """
@@ -945,126 +1080,8 @@ function enforce_r_boundary_condition!(f::AbstractArray{mk_float,ndim_pdf_ion},
     for (ir, sections_tuple) ∈ ((1, r_boundaries.inner_sections),
                                 (nr, r_boundaries.outer_sections))
         for section ∈ sections_tuple
-            ion_section = section.ion
-            # 'periodic' BC enforces periodicity by taking the average of the boundary points
-            # enforce the condition if r is local
-            if isa(ion_section, ion_r_boundary_section_periodic)
-                if r.nelement_global != r.nelement_local
-                    error("Periodic r-boundaries not yet implemented when r-dimension "
-                          * " is distributed")
-                end
-                if ir > 1
-                    # Both r-boundaries for periodic sections handled by inner boundary.
-                    # We have checked that there is a corresponding periodic
-                    # outer-boundary section defined.
-                    continue
-                end
-                @begin_s_vperp_vpa_region()
-                @loop_s is begin
-                    for iz ∈ section.z_range
-                        @loop_vperp_vpa ivperp ivpa begin
-                            f[ivpa,ivperp,iz,1,is] = 0.5 * (f[ivpa,ivperp,iz,nr,is] +
-                                                            f[ivpa,ivperp,iz,1,is])
-                            f[ivpa,ivperp,iz,nr,is] = f[ivpa,ivperp,iz,1,is]
-                        end
-                    end
-                end
-                @begin_s_region()
-                @loop_s is begin
-                    for iz ∈ section.z_range
-                        density[iz,1,is] = 0.5 * (density[iz,nr,is] + density[iz,1,is])
-                        density[iz,nr,is] = density[iz,1,is]
-                        upar[iz,1,is] = 0.5 * (upar[iz,nr,is] + upar[iz,1,is])
-                        upar[iz,nr,is] = upar[iz,1,is]
-                        p[iz,1,is] = 0.5 * (p[iz,nr,is] + p[iz,1,is])
-                        p[iz,nr,is] = p[iz,1,is]
-                    end
-                end
-            elseif isa(ion_section, ion_r_boundary_section_Dirichlet)
-                # use the old distribution to force the new distribution to have
-                # consistant-in-time values at the boundary
-                # with bc = "Dirichlet" and r_diffusion = false
-                # impose bc for incoming parts of velocity space only (Hyperbolic PDE)
-                # with bc = "Dirichlet" and r_diffusion = true
-                # impose bc on both sides of the domain to accomodate a diffusion operator d^2 / d r^2
-                f_boundary = ion_section.pdf
-                @begin_s_vperp_vpa_region()
-                @loop_s is begin
-                    adv_speed = adv[is].speed
-                    for (iz_section, iz) ∈ enumerate(section.z_range)
-                        @loop_vperp_vpa ivperp ivpa begin
-                            if r_diffusion || (ir == 1 ? adv[is].speed[ir,ivpa,ivperp,iz] > zero
-                                                       : adv[is].speed[ir,ivpa,ivperp,iz] < -zero)
-                                f[ivpa,ivperp,iz,ir,is] = f_boundary[ivpa,ivperp,iz_section,is]
-                            end
-                        end
-                    end
-                end
-                n_boundary = ion_section.density
-                u_boundary = ion_section.upar
-                p_boundary = ion_section.p
-                @begin_s_region()
-                @loop_s is begin
-                    for (iz_section, iz) ∈ enumerate(section.z_range)
-                        if r_diffusion || (ir == 1 ? moment_r_speed[iz,ir] > zero
-                                                   : moment_r_speed[iz,ir] < -zero)
-                            density[iz,ir,is] = n_boundary[iz_section,is]
-                            upar[iz,ir,is] = u_boundary[iz_section,is]
-                            p[iz,ir,is] = p[iz_section,is]
-                        end
-                    end
-                end
-            elseif isa(ion_section, ion_r_boundary_section_Neumann)
-                # with bc = "Neumann" and r_diffusion = false
-                # impose bc for incoming parts of velocity space only (Hyperbolic PDE)
-                # with bc = "Neumann" and r_diffusion = true
-                # impose bc on both sides of the domain to accomodate a diffusion operator d^2 / d r^2
-                one_over_logarithmic_gradient_value_minus_Db =
-                    ion_section.one_over_logarithmic_gradient_value_minus_Db
-                derivative_coefficients = ion_section.derivative_coefficients
-                if ion_section.is_inner
-                    other_elements_range = 2:r.ngrid
-                else
-                    other_elements_range = r.n-r.ngrid+1:r.n-1
-                end
-                @begin_s_vperp_vpa_region()
-                @loop_s is begin
-                    adv_speed = adv[is].speed
-                    for (iz_section, iz) ∈ enumerate(section.z_range)
-                        @loop_vperp_vpa ivperp ivpa begin
-                            if r_diffusion || (ir == 1 ? adv[is].speed[ir,ivpa,ivperp,iz] > zero
-                                                       : adv[is].speed[ir,ivpa,ivperp,iz] < -zero)
-                                @views f[ivpa,ivperp,iz,ir,is] =
-                                    dot(derivative_coefficients,
-                                        f[ivpa,ivperp,iz,other_elements_range,is]) *
-                                    one_over_logarithmic_gradient_value_minus_Db
-                            end
-                        end
-                    end
-                end
-                @begin_s_region()
-                @loop_s is begin
-                    for iz ∈ section.z_range
-                        if r_diffusion || (ir == 1 ? moment_r_speed[iz,ir] > zero
-                                                   : moment_r_speed[iz,ir] < -zero)
-                            @views density[iz,ir,is] =
-                                dot(derivative_coefficients,
-                                    density[iz,other_elements_range,is]) *
-                                one_over_logarithmic_gradient_value_minus_Db
-                            @views upar[iz,ir,is] =
-                                dot(derivative_coefficients,
-                                    upar[iz,other_elements_range,is]) *
-                                one_over_logarithmic_gradient_value_minus_Db
-                            @views p[iz,ir,is] =
-                                dot(derivative_coefficients,
-                                    p[iz,other_elements_range,is]) *
-                                one_over_logarithmic_gradient_value_minus_Db
-                        end
-                    end
-                end
-            else
-                error("Unsupported section type $(typeof(ion_section)).")
-            end
+            enforce_r_boundary_section!(f, density, upar, p, adv, moment_r_speed,
+                                        r_diffusion, r, ir, zero, section, section.ion)
         end
     end
 end
@@ -1179,6 +1196,137 @@ function enforce_z_boundary_condition!(pdf, density, upar, p, fields, moments, b
     end
 end
 
+function enforce_electron_r_boundary_section!(f, density, upar, p, adv, moment_r_speed,
+                                              r_diffusion::Bool, r::coordinate,
+                                              ir::mk_int, zero::mk_float,
+                                              section::r_boundary_section,
+                                              electron_section::electron_r_boundary_section_periodic)
+    # 'periodic' BC enforces periodicity by taking the average of the boundary points
+    # enforce the condition if r is local
+    if r.nelement_global != r.nelement_local
+        error("Periodic r-boundaries not yet implemented when r-dimension "
+              * " is distributed")
+    end
+    if ir > 1
+        # Both r-boundaries for periodic sections handled by inner boundary.
+        # We have checked that there is a corresponding periodic outer-boundary section
+        # defined.
+        return nothing
+    end
+
+    nr = r.n
+    @begin_vperp_vpa_region()
+    for iz ∈ section.z_range
+        @loop_vperp_vpa ivperp ivpa begin
+            f[ivpa,ivperp,iz,1] = 0.5 * (f[ivpa,ivperp,iz,nr] +
+                                         f[ivpa,ivperp,iz,1])
+            f[ivpa,ivperp,iz,nr] = f[ivpa,ivperp,iz,1]
+        end
+    end
+    @begin_serial_region()
+    @serial_region begin
+        for iz ∈ section.z_range
+            density[iz,1] = 0.5 * (density[iz,nr] + density[iz,1])
+            density[iz,nr] = density[iz,1]
+            upar[iz,1] = 0.5 * (upar[iz,nr] + upar[iz,1])
+            upar[iz,nr] = upar[iz,1]
+            p[iz,1] = 0.5 * (p[iz,nr] + p[iz,1])
+            p[iz,nr] = p[iz,1]
+        end
+    end
+    return nothing
+end
+
+function enforce_electron_r_boundary_section!(f, density, upar, p, adv, moment_r_speed,
+                                              r_diffusion::Bool, r::coordinate,
+                                              ir::mk_int, zero::mk_float,
+                                              section::r_boundary_section,
+                                              electron_section::electron_r_boundary_section_Dirichlet)
+    # use the old distribution to force the new distribution to have consistant-in-time
+    # values at the boundary
+    # with bc = "Dirichlet" and r_diffusion = false
+    # impose bc for incoming parts of velocity space only (Hyperbolic PDE)
+    # with bc = "Dirichlet" and r_diffusion = true
+    # impose bc on both sides of the domain to accomodate a diffusion operator d^2 / d r^2
+    f_boundary = electron_section.pdf
+    @begin_vperp_vpa_region()
+    for (iz_section, iz) ∈ enumerate(section.z_range)
+        @loop_vperp_vpa ivperp ivpa begin
+            if r_diffusion || (ir == 1 ? adv[1].speed[ir,ivpa,ivperp,iz] > zero
+                                       : adv[1].speed[ir,ivpa,ivperp,iz] < -zero)
+                f[ivpa,ivperp,iz,ir] = f_boundary[ivpa,ivperp,iz_section]
+            end
+        end
+    end
+    n_boundary = ion_section.density
+    u_boundary = ion_section.upar
+    p_boundary = ion_section.p
+    @begin_serial_region()
+    @serial_region begin
+        for (iz_section, iz) ∈ enumerate(section.z_range)
+            if r_diffusion || (ir == 1 ? moment_r_speed[iz,ir] > zero
+                                       : moment_r_speed[iz,ir] < -zero)
+                density[iz,ir] = n_boundary[iz_section]
+                upar[iz,ir] = u_boundary[iz_section]
+                p[iz,ir] = p[iz_section]
+            end
+        end
+    end
+    return nothing
+end
+
+function enforce_electron_r_boundary_section!(f, density, upar, p, adv, moment_r_speed,
+                                              r_diffusion::Bool, r::coordinate,
+                                              ir::mk_int, zero::mk_float,
+                                              section::r_boundary_section,
+                                              electron_section::electron_r_boundary_section_Neumann)
+    # with bc = "Neumann" and r_diffusion = false
+    # impose bc for incoming parts of velocity space only (Hyperbolic PDE)
+    # with bc = "Neumann" and r_diffusion = true
+    # impose bc on both sides of the domain to accomodate a diffusion operator d^2 / d r^2
+    one_over_logarithmic_gradient_value_minus_Db =
+        electron_section.one_over_logarithmic_gradient_value_minus_Db
+    derivative_coefficients = electron_section.derivative_coefficients
+    if electron_section.is_inner
+        other_elements_range = 2:r.ngrid
+    else
+        other_elements_range = r.n-r.ngrid+1:r.n-1
+    end
+    @begin_vperp_vpa_region()
+    for (iz_section, iz) ∈ enumerate(section.z_range)
+        @loop_vperp_vpa ivperp ivpa begin
+            if r_diffusion || (ir == 1 ? adv[1].speed[ir,ivpa,ivperp,iz] > zero
+                                       : adv[1].speed[ir,ivpa,ivperp,iz] < -zero)
+                @views f[ivpa,ivperp,iz,ir,is] =
+                    dot(derivative_coefficients,
+                        f[ivpa,ivperp,iz,other_elements_range,is]) *
+                    one_over_logarithmic_gradient_value_minus_Db
+            end
+        end
+    end
+    @begin_serial_region()
+    @serial_region begin
+        for iz ∈ section.z_range
+            if r_diffusion || (ir == 1 ? moment_r_speed[iz,ir] > zero
+                                       : moment_r_speed[iz,ir] < -zero)
+                @views density[iz,ir] =
+                    dot(derivative_coefficients,
+                        density[iz,other_elements_range]) *
+                    one_over_logarithmic_gradient_value_minus_Db
+                @views upar[iz,ir] =
+                    dot(derivative_coefficients,
+                        upar[iz,other_elements_range]) *
+                    one_over_logarithmic_gradient_value_minus_Db
+                @views p[iz,ir] =
+                    dot(derivative_coefficients,
+                        p[iz,other_elements_range]) *
+                    one_over_logarithmic_gradient_value_minus_Db
+            end
+        end
+    end
+    return nothing
+end
+
 """
 enforce boundary conditions on electrons in r
 """
@@ -1234,118 +1382,9 @@ function enforce_electron_r_boundary_condition!(f::AbstractArray{mk_float,ndim_p
     for (ir, sections_tuple) ∈ ((1, r_boundaries.inner_sections),
                                 (nr, r_boundaries.outer_sections))
         for section ∈ sections_tuple
-            electron_section = section.electron
-            # 'periodic' BC enforces periodicity by taking the average of the boundary points
-            # enforce the condition if r is local
-            if isa(electron_section, electron_r_boundary_section_periodic)
-                if r.nelement_global != r.nelement_local
-                    error("Periodic r-boundaries not yet implemented when r-dimension "
-                          * " is distributed")
-                end
-                if ir > 1
-                    # Both r-boundaries for periodic sections handled by inner boundary.
-                    # We have checked that there is a corresponding periodic
-                    # outer-boundary section defined.
-                    continue
-                end
-                @begin_vperp_vpa_region()
-                for iz ∈ section.z_range
-                    @loop_vperp_vpa ivperp ivpa begin
-                        f[ivpa,ivperp,iz,1] = 0.5 * (f[ivpa,ivperp,iz,nr] +
-                                                     f[ivpa,ivperp,iz,1])
-                        f[ivpa,ivperp,iz,nr] = f[ivpa,ivperp,iz,1]
-                    end
-                end
-                @begin_serial_region()
-                @serial_region begin
-                    for iz ∈ section.z_range
-                        density[iz,1] = 0.5 * (density[iz,nr] + density[iz,1])
-                        density[iz,nr] = density[iz,1]
-                        upar[iz,1] = 0.5 * (upar[iz,nr] + upar[iz,1])
-                        upar[iz,nr] = upar[iz,1]
-                        p[iz,1] = 0.5 * (p[iz,nr] + p[iz,1])
-                        p[iz,nr] = p[iz,1]
-                    end
-                end
-            elseif isa(electron_section, electron_r_boundary_section_Dirichlet)
-                # use the old distribution to force the new distribution to have
-                # consistant-in-time values at the boundary
-                # with bc = "Dirichlet" and r_diffusion = false
-                # impose bc for incoming parts of velocity space only (Hyperbolic PDE)
-                # with bc = "Dirichlet" and r_diffusion = true
-                # impose bc on both sides of the domain to accomodate a diffusion operator d^2 / d r^2
-                f_boundary = electron_section.pdf
-                @begin_vperp_vpa_region()
-                for (iz_section, iz) ∈ enumerate(section.z_range)
-                    @loop_vperp_vpa ivperp ivpa begin
-                        if r_diffusion || (ir == 1 ? adv[1].speed[ir,ivpa,ivperp,iz] > zero
-                                                   : adv[1].speed[ir,ivpa,ivperp,iz] < -zero)
-                            f[ivpa,ivperp,iz,ir] = f_boundary[ivpa,ivperp,iz_section]
-                        end
-                    end
-                end
-                n_boundary = ion_section.density
-                u_boundary = ion_section.upar
-                p_boundary = ion_section.p
-                @begin_serial_region()
-                @serial_region begin
-                    for (iz_section, iz) ∈ enumerate(section.z_range)
-                        if r_diffusion || (ir == 1 ? moment_r_speed[iz,ir] > zero
-                                                   : moment_r_speed[iz,ir] < -zero)
-                            density[iz,ir] = n_boundary[iz_section]
-                            upar[iz,ir] = u_boundary[iz_section]
-                            p[iz,ir] = p[iz_section]
-                        end
-                    end
-                end
-            elseif isa(electron_section, electron_r_boundary_section_Neumann)
-                # with bc = "Neumann" and r_diffusion = false
-                # impose bc for incoming parts of velocity space only (Hyperbolic PDE)
-                # with bc = "Neumann" and r_diffusion = true
-                # impose bc on both sides of the domain to accomodate a diffusion operator d^2 / d r^2
-                one_over_logarithmic_gradient_value_minus_Db =
-                    electron_section.one_over_logarithmic_gradient_value_minus_Db
-                derivative_coefficients = electron_section.derivative_coefficients
-                if electron_section.is_inner
-                    other_elements_range = 2:r.ngrid
-                else
-                    other_elements_range = r.n-r.ngrid+1:r.n-1
-                end
-                @begin_vperp_vpa_region()
-                for (iz_section, iz) ∈ enumerate(section.z_range)
-                    @loop_vperp_vpa ivperp ivpa begin
-                        if r_diffusion || (ir == 1 ? adv[1].speed[ir,ivpa,ivperp,iz] > zero
-                                                   : adv[1].speed[ir,ivpa,ivperp,iz] < -zero)
-                            @views f[ivpa,ivperp,iz,ir,is] =
-                                dot(derivative_coefficients,
-                                    f[ivpa,ivperp,iz,other_elements_range,is]) *
-                                one_over_logarithmic_gradient_value_minus_Db
-                        end
-                    end
-                end
-                @begin_serial_region()
-                @serial_region begin
-                    for iz ∈ section.z_range
-                        if r_diffusion || (ir == 1 ? moment_r_speed[iz,ir] > zero
-                                                   : moment_r_speed[iz,ir] < -zero)
-                            @views density[iz,ir] =
-                                dot(derivative_coefficients,
-                                    density[iz,other_elements_range]) *
-                                one_over_logarithmic_gradient_value_minus_Db
-                            @views upar[iz,ir] =
-                                dot(derivative_coefficients,
-                                    upar[iz,other_elements_range]) *
-                                one_over_logarithmic_gradient_value_minus_Db
-                            @views p[iz,ir] =
-                                dot(derivative_coefficients,
-                                    p[iz,other_elements_range]) *
-                                one_over_logarithmic_gradient_value_minus_Db
-                        end
-                    end
-                end
-            else
-                error("Unsupported section type $(typeof(electron_section)).")
-            end
+            enforce_electron_r_boundary_section!(f, density, upar, p, adv, moment_r_speed,
+                                                 r_diffusion, r, ir, zero, section,
+                                                 section.electron)
         end
     end
 end
@@ -1413,6 +1452,140 @@ enforce boundary conditions on neutral particle distribution function
     end
 end
 
+function enforce_neutral_r_boundary_section!(f, density, ur, uz, p, adv,
+                                             r_diffusion::Bool, r::coordinate, ir::mk_int,
+                                             zero::mk_float, section::r_boundary_section,
+                                             neutral_section::neutral_r_boundary_section_periodic)
+    # 'periodic' BC enforces periodicity by taking the average of the boundary points
+    # enforce the condition if r is local
+    if r.nelement_global != r.nelement_local
+        error("Periodic r-boundaries not yet implemented when r-dimension "
+              * " is distributed")
+    end
+    if ir > 1
+        # Both r-boundaries for periodic sections handled by inner boundary.
+        # We have checked that there is a corresponding periodic outer-boundary section
+        # defined.
+        return nothing
+    end
+
+    nr = r.n
+    @begin_sn_vzeta_vr_vz_region()
+    @loop_sn isn begin
+        for iz ∈ section.z_range
+            @loop_vzeta_vr_vz ivzeta ivr ivz begin
+                f[ivz,ivr,ivzeta,iz,1,isn] = 0.5 * (f[ivz,ivr,ivzeta,iz,nr,isn] +
+                                                   f[ivz,ivr,ivzeta,iz,1,isn])
+                f[ivz,ivr,ivzeta,iz,nr,isn] = f[ivz,ivr,ivzeta,iz,1,isn]
+            end
+        end
+    end
+    @begin_sn_region()
+    @loop_sn isn begin
+        for iz ∈ section.z_range
+            density[iz,1,isn] = 0.5 * (density[iz,nr,isn] + density[iz,1,isn])
+            density[iz,nr,isn] = density[iz,1,isn]
+            uz[iz,1,isn] = 0.5 * (uz[iz,nr,isn] + uz[iz,1,isn])
+            uz[iz,nr,isn] = uz[iz,1,isn]
+            p[iz,1,isn] = 0.5 * (p[iz,nr,isn] + p[iz,1,isn])
+            p[iz,nr,isn] = p[iz,1,isn]
+        end
+    end
+    return nothing
+end
+
+function enforce_neutral_r_boundary_section!(f, density, ur, uz, p, adv,
+                                             r_diffusion::Bool, r::coordinate, ir::mk_int,
+                                             zero::mk_float, section::r_boundary_section,
+                                             neutral_section::neutral_r_boundary_section_Dirichlet)
+    # use the old distribution to force the new distribution to have consistant-in-time
+    # values at the boundary
+    # with bc = "Dirichlet" and r_diffusion = false
+    # impose bc for incoming parts of velocity space only (Hyperbolic PDE)
+    # with bc = "Dirichlet" and r_diffusion = true
+    # impose bc on both sides of the domain to accomodate a diffusion operator d^2 / d r^2
+    f_boundary = ion_section.pdf
+    @begin_sn_vzeta_vr_vz_region()
+    @loop_sn isn begin
+        for (iz_section, iz) ∈ enumerate(section.z_range)
+            @loop_vzeta_vr_vz ivzeta ivr ivz begin
+                if r_diffusion || (ir == 1 ? adv[isn].speed[ir,ivz,ivr,ivzeta,iz] > zero
+                                           : adv[isn].speed[ir,ivz,ivr,ivzeta,iz] < -zero)
+                    f[ivz,ivr,ivzeta,iz,ir,isn] = f_boundary[ivz,ivr,ivzeta,iz_section,isn]
+                end
+            end
+        end
+    end
+    n_boundary = neutral_section.density
+    u_boundary = neutral_section.uz
+    p_boundary = neutral_section.p
+    @begin_sn_region()
+    @loop_sn isn begin
+        for (iz_section, iz) ∈ enumerate(section.z_range)
+            if r_diffusion || (ir == 1 ? ur[iz,ir,isn] > zero
+                                       : ur[iz,ir,isn] < -zero)
+                density[iz,ir,isn] = n_boundary[iz_section,isn]
+                uz[iz,ir,isn] = u_boundary[iz_section,isn]
+                p[iz,ir,isn] = p[iz_section,isn]
+            end
+        end
+    end
+    return nothing
+end
+
+function enforce_neutral_r_boundary_section!(f, density, ur, uz, p, adv,
+                                             r_diffusion::Bool, r::coordinate, ir::mk_int,
+                                             zero::mk_float, section::r_boundary_section,
+                                             neutral_section::neutral_r_boundary_section_Neumann)
+    # with bc = "Neumann" and r_diffusion = false
+    # impose bc for incoming parts of velocity space only (Hyperbolic PDE)
+    # with bc = "Neumann" and r_diffusion = true
+    # impose bc on both sides of the domain to accomodate a diffusion operator d^2 / d r^2
+    one_over_logarithmic_gradient_value_minus_Db =
+        neutral_section.one_over_logarithmic_gradient_value_minus_Db
+    derivative_coefficients = neutral_section.derivative_coefficients
+    if neutral_section.is_inner
+        other_elements_range = 2:r.ngrid
+    else
+        other_elements_range = r.n-r.ngrid+1:r.n-1
+    end
+    @begin_sn_vzeta_vr_vz_region()
+    @loop_sn isn begin
+        for (iz_section, iz) ∈ enumerate(section.z_range)
+            @loop_vzeta_vr_vz ivzeta ivr ivz begin
+                if r_diffusion || (ir == 1 ? adv[isn].speed[ir,ivz,ivr,ivzeta,iz] > zero
+                                           : adv[isn].speed[ir,ivz,ivr,ivzeta,iz] < -zero)
+                    @views f[ivz,ivr,ivzeta,iz,ir,isn] =
+                        dot(derivative_coefficients,
+                            f[ivz,ivr,ivzeta,iz,other_elements_range,isn]) *
+                        one_over_logarithmic_gradient_value_minus_Db
+                end
+            end
+        end
+    end
+    @begin_sn_region()
+    @loop_sn isn begin
+        for iz ∈ section.z_range
+            if r_diffusion || (ir == 1 ? ur[iz,ir,isn] > zero
+                                       : ur[iz,ir,isn] < -zero)
+                @views density[iz,ir,isn] =
+                    dot(derivative_coefficients,
+                        density[iz,other_elements_range,isn]) *
+                    one_over_logarithmic_gradient_value_minus_Db
+                @views uz[iz,ir,isn] =
+                    dot(derivative_coefficients,
+                        uz[iz,other_elements_range,isn]) *
+                    one_over_logarithmic_gradient_value_minus_Db
+                @views p[iz,ir,isn] =
+                    dot(derivative_coefficients,
+                        p[iz,other_elements_range,isn]) *
+                    one_over_logarithmic_gradient_value_minus_Db
+            end
+        end
+    end
+    return nothing
+end
+
 """
 enforce boundary conditions on neutrals in r
 """
@@ -1476,125 +1649,10 @@ function enforce_neutral_r_boundary_condition!(
 
     for (ir, sections_tuple) ∈ ((1, r_boundaries.inner_sections),
                                 (nr, r_boundaries.outer_sections))
+
         for section ∈ sections_tuple
-            neutral_section = section.neutral
-            # 'periodic' BC enforces periodicity by taking the average of the boundary points
-            # enforce the condition if r is local
-            if isa(neutral_section, neutral_r_boundary_section_periodic)
-                if r.nelement_global != r.nelement_local
-                    error("Periodic r-boundaries not yet implemented when r-dimension "
-                          * " is distributed")
-                end
-                if ir > 1
-                    # Both r-boundaries for periodic sections handled by inner boundary.
-                    # We have checked that there is a corresponding periodic
-                    # outer-boundary section defined.
-                    continue
-                end
-                @begin_sn_vzeta_vr_vz_region()
-                @loop_sn isn begin
-                    for iz ∈ section.z_range
-                        @loop_vzeta_vr_vz ivzeta ivr ivz begin
-                            f[ivz,ivr,ivzeta,iz,1,isn] = 0.5 * (f[ivz,ivr,ivzeta,iz,nr,isn] +
-                                                               f[ivz,ivr,ivzeta,iz,1,isn])
-                            f[ivz,ivr,ivzeta,iz,nr,isn] = f[ivz,ivr,ivzeta,iz,1,isn]
-                        end
-                    end
-                end
-                @begin_sn_region()
-                @loop_sn isn begin
-                    for iz ∈ section.z_range
-                        density[iz,1,isn] = 0.5 * (density[iz,nr,isn] + density[iz,1,isn])
-                        density[iz,nr,isn] = density[iz,1,isn]
-                        uz[iz,1,isn] = 0.5 * (uz[iz,nr,isn] + uz[iz,1,isn])
-                        uz[iz,nr,isn] = uz[iz,1,isn]
-                        p[iz,1,isn] = 0.5 * (p[iz,nr,isn] + p[iz,1,isn])
-                        p[iz,nr,isn] = p[iz,1,isn]
-                    end
-                end
-            elseif isa(neutral_section, neutral_r_boundary_section_Dirichlet)
-                # use the old distribution to force the new distribution to have
-                # consistant-in-time values at the boundary
-                # with bc = "Dirichlet" and r_diffusion = false
-                # impose bc for incoming parts of velocity space only (Hyperbolic PDE)
-                # with bc = "Dirichlet" and r_diffusion = true
-                # impose bc on both sides of the domain to accomodate a diffusion operator d^2 / d r^2
-                f_boundary = ion_section.pdf
-                @begin_sn_vzeta_vr_vz_region()
-                @loop_sn isn begin
-                    for (iz_section, iz) ∈ enumerate(section.z_range)
-                        @loop_vzeta_vr_vz ivzeta ivr ivz begin
-                            if r_diffusion || (ir == 1 ? adv[isn].speed[ir,ivz,ivr,ivzeta,iz] > zero
-                                                       : adv[isn].speed[ir,ivz,ivr,ivzeta,iz] < -zero)
-                                f[ivz,ivr,ivzeta,iz,ir,isn] = f_boundary[ivz,ivr,ivzeta,iz_section,isn]
-                            end
-                        end
-                    end
-                end
-                n_boundary = neutral_section.density
-                u_boundary = neutral_section.uz
-                p_boundary = neutral_section.p
-                @begin_sn_region()
-                @loop_sn isn begin
-                    for (iz_section, iz) ∈ enumerate(section.z_range)
-                        if r_diffusion || (ir == 1 ? ur[iz,ir,isn] > zero
-                                                   : ur[iz,ir,isn] < -zero)
-                            density[iz,ir,isn] = n_boundary[iz_section,isn]
-                            uz[iz,ir,isn] = u_boundary[iz_section,isn]
-                            p[iz,ir,isn] = p[iz_section,isn]
-                        end
-                    end
-                end
-            elseif isa(neutral_section, neutral_r_boundary_section_Neumann)
-                # with bc = "Neumann" and r_diffusion = false
-                # impose bc for incoming parts of velocity space only (Hyperbolic PDE)
-                # with bc = "Neumann" and r_diffusion = true
-                # impose bc on both sides of the domain to accomodate a diffusion operator d^2 / d r^2
-                one_over_logarithmic_gradient_value_minus_Db =
-                    neutral_section.one_over_logarithmic_gradient_value_minus_Db
-                derivative_coefficients = neutral_section.derivative_coefficients
-                if neutral_section.is_inner
-                    other_elements_range = 2:r.ngrid
-                else
-                    other_elements_range = r.n-r.ngrid+1:r.n-1
-                end
-                @begin_sn_vzeta_vr_vz_region()
-                @loop_sn isn begin
-                    for (iz_section, iz) ∈ enumerate(section.z_range)
-                        @loop_vzeta_vr_vz ivzeta ivr ivz begin
-                            if r_diffusion || (ir == 1 ? adv[isn].speed[ir,ivz,ivr,ivzeta,iz] > zero
-                                                       : adv[isn].speed[ir,ivz,ivr,ivzeta,iz] < -zero)
-                                @views f[ivz,ivr,ivzeta,iz,ir,isn] =
-                                    dot(derivative_coefficients,
-                                        f[ivz,ivr,ivzeta,iz,other_elements_range,isn]) *
-                                    one_over_logarithmic_gradient_value_minus_Db
-                            end
-                        end
-                    end
-                end
-                @begin_sn_region()
-                @loop_sn isn begin
-                    for iz ∈ section.z_range
-                        if r_diffusion || (ir == 1 ? ur[iz,ir,isn] > zero
-                                                   : ur[iz,ir,isn] < -zero)
-                            @views density[iz,ir,isn] =
-                                dot(derivative_coefficients,
-                                    density[iz,other_elements_range,isn]) *
-                                one_over_logarithmic_gradient_value_minus_Db
-                            @views uz[iz,ir,isn] =
-                                dot(derivative_coefficients,
-                                    uz[iz,other_elements_range,isn]) *
-                                one_over_logarithmic_gradient_value_minus_Db
-                            @views p[iz,ir,isn] =
-                                dot(derivative_coefficients,
-                                    p[iz,other_elements_range,isn]) *
-                                one_over_logarithmic_gradient_value_minus_Db
-                        end
-                    end
-                end
-            else
-                error("Unsupported section type $(typeof(neutral_section)).")
-            end
+            enforce_neutral_r_boundary_section!(f, density, ur, uz, p, adv, r_diffusion,
+                                                r, ir, zero, section, section.neutral)
         end
     end
 end
