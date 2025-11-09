@@ -42,9 +42,22 @@ for (sim_dir, label) ∈ (("runs/1D1V-instability-test/", "background_1D"),
 
     fig_1d, ax_1d, l = lines(parallel_coordinate, u; label="u")
     ax_1d.xlabel = "parallel distance"
+    ax_1d.ylabel = "u_∥"
     Legend(fig_1d[2,1], ax_1d; tellheight=true, tellwidth=false)
 
     save(joinpath(dir_1d, label * "_upar_profiles.png"), fig_1d; px_per_unit=16.0)
+
+    if label == "background_1D"
+        nu_ii_Krook = get_variable(ri_1d, "Krook_collision_frequency_ii"; it=ri_1d.nt,
+                                   is=1, ir=1)
+
+        fig_1d, ax_1d, l = lines(parallel_coordinate, nu_ii_Krook; label="nu_ii_Krook")
+        ax_1d.xlabel = "parallel distance"
+        ax_1d.ylabel = "nu_ii"
+        Legend(fig_1d[2,1], ax_1d; tellheight=true, tellwidth=false)
+
+        save(joinpath(dir_1d, label * "_nu_ii_Krook_profiles.png"), fig_1d; px_per_unit=16.0)
+    end
 
     # Plot distribution function
     f = get_variable(ri_1d, "f"; it=ri_1d.nt, is=1, ir=1, ivperp=1)
@@ -152,7 +165,7 @@ save(joinpath(dir_r_nelement_scan, "growth_rate_r-resolution-scan.png"), fig; px
 # Check convergence with r_nelement of stabilisation at Dr=1e-8.
 stabilised_run_dirs = ("runs/2D1V-instability-test_Lr1cm_rdiss1e-8/",
                        "runs/2D1V-instability-test_Lr1cm-rnelement16-rdiss1e-8/",
-                       #"runs/2D1V-instability-test_Lr1cm-rnelement32-rdiss1e-8/",
+                       "runs/2D1V-instability-test_Lr1cm-rnelement32-rdiss1e-8/",
                       )
 ri_stabilised = get_run_info(stabilised_run_dirs...; dfns=true)
 
@@ -202,3 +215,40 @@ end
 
 Legend(fig[2,1], ax; tellheight=true, tellwidth=false)
 save(joinpath(dir_r_nelement_scan, "converged-rdiss7e-9-resolution-scan.png"), fig; px_per_unit=16.0)
+
+# Compare case with Krook collisions switched off
+dir_no_Krook = mkpath(joinpath(plots_dir, "instability_2D_no-Krook"))
+no_Krook_run_dirs = ("runs/2D1V-instability-test_Lr1cm-no-Krook/",
+                     "runs/2D1V-instability-test_Lr1cm-rnelement8-no-Krook/",
+                     "runs/2D1V-instability-test_Lr1cm-rnelement16-no-Krook/",
+                     "runs/2D1V-instability-test_Lr1cm-rnelement32-no-Krook/",
+                    )
+ri_no_Krook = get_run_info(no_Krook_run_dirs...; dfns=true)
+fig, ax = get_1d_ax(xlabel="time", ylabel="amplitude", yscale=log10)
+
+for (irun, this_ri) ∈ enumerate(ri_no_Krook)
+    phi = get_variable(this_ri, "phi")
+
+    plot_mode_amplitude(this_ri, phi, ax, irun)
+
+    # make animation of perturbation
+    _, perturbation = makie_post_processing.get_r_perturbation(phi)
+    outfile = joinpath(dir_no_Krook, "phi_perturbation_no-Krook_r-nelement$(this_ri.r.nelement_global).gif")
+    title = "no Krook, r_nelement = $(this_ri.r.nelement_global)"
+    makie_post_processing.animate_2d(this_ri.z.grid, this_ri.r.grid, perturbation,
+                                     xlabel="z", ylabel="r", title=title,
+                                     colormap="reverse_deep", outfile=outfile)
+
+    # Plot final time point
+    final_perturbation = @view perturbation[:,:,end]
+    final_fig, final_ax, hm = heatmap(this_ri.z.grid, this_ri.r.grid, final_perturbation)
+    final_ax.xlabel = "z"
+    final_ax.ylabel = "r"
+    final_ax.title = "no Krook, r_nelement = $(this_ri.r.nelement_global)"
+    save(joinpath(dir_no_Krook,
+                  "final_phi_perturbation_no-Krook_r-nelement$(this_ri.r.nelement_global).png"),
+                  final_fig; px_per_unit=16.0)
+end
+
+Legend(fig[2,1], ax; tellheight=true, tellwidth=false)
+save(joinpath(dir_no_Krook, "growth_rate_no-Krook_r-resolution-scan.png"), fig; px_per_unit=16.0)

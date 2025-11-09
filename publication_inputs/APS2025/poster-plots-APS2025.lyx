@@ -320,6 +320,25 @@ background_1D/background_1D_upar_profiles.png
 
 \begin_layout Standard
 \begin_inset Graphics
+	filename background_1D/background_1D_nu_ii_Krook_profiles.png
+	lyxscale 5
+	height 5cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+background_1D/background_1D_nu_ii_Krook_profiles.png
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
 	filename background_1D/background_1D_f.png
 	lyxscale 5
 	height 5cm
@@ -485,7 +504,11 @@ Using a finite-element discretization in
  with 4,
  8,
  or 16 elements,
- the growth rate increases.
+ the growth rate increases with 
+\begin_inset Formula $r$
+\end_inset
+
+ resolution.
 \end_layout
 
 \begin_layout Standard
@@ -868,6 +891,123 @@ instability_2D_r-resolution-scan/final_phi_perturbation_rdiss7e-9_r-nelement32.p
 \end_inset
 
 
+\end_layout
+
+\begin_layout Subsubsection
+No Krook collisions
+\end_layout
+
+\begin_layout Standard
+For comparison,
+ did the same resolution scan as above,
+ without r-dissipation,
+ with the Krook collision operator disabled (restarting from the 1D1V profiles with no Krook collisions).
+ Animations of these perturbations are
+\begin_inset Newline newline
+\end_inset
+
+instability_2D_no-Krook/phi_perturbation_no-Krook_r-nelement4.gif,
+ instability_2D_no-Krook/phi_perturbation_no-Krook_r-nelement8.gif,
+\begin_inset Newline newline
+\end_inset
+
+instability_2D_no-Krook/phi_perturbation_no-Krook_r-nelement16.gif,
+ instability_2D_no-Krook/phi_perturbation_no-Krook_r-nelement32.gif.
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename instability_2D_no-Krook/growth_rate_no-Krook_r-resolution-scan.png
+	lyxscale 5
+	height 5cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+instability_2D_no-Krook/growth_rate_no-Krook_r-resolution-scan.png
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename instability_2D_no-Krook/final_phi_perturbation_no-Krook_r-nelement4.png
+	lyxscale 5
+	height 5cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+instability_2D_no-Krook/final_phi_perturbation_no-Krook_r-nelement4.png
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename instability_2D_no-Krook/final_phi_perturbation_no-Krook_r-nelement8.png
+	lyxscale 5
+	height 5cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+instability_2D_no-Krook/final_phi_perturbation_no-Krook_r-nelement8.png
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename instability_2D_no-Krook/final_phi_perturbation_no-Krook_r-nelement16.png
+	lyxscale 5
+	height 5cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+instability_2D_no-Krook/final_phi_perturbation_no-Krook_r-nelement16.png
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename instability_2D_no-Krook/final_phi_perturbation_no-Krook_r-nelement32.png
+	lyxscale 5
+	height 5cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+instability_2D_no-Krook/final_phi_perturbation_no-Krook_r-nelement32.png
 \end_layout
 
 \end_body
