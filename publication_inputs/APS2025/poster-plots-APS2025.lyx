@@ -1,0 +1,2025 @@
+#LyX 2.4 created this file. For more info see https://www.lyx.org/
+\lyxformat 620
+\begin_document
+\begin_header
+\save_transient_properties true
+\origin unavailable
+\textclass article
+\use_default_options true
+\maintain_unincluded_children no
+\language british
+\language_package default
+\inputencoding utf8
+\fontencoding auto
+\font_roman "default" "default"
+\font_sans "default" "default"
+\font_typewriter "default" "default"
+\font_math "auto" "auto"
+\font_default_family default
+\use_non_tex_fonts false
+\font_sc false
+\font_roman_osf false
+\font_sans_osf false
+\font_typewriter_osf false
+\font_sf_scale 100 100
+\font_tt_scale 100 100
+\use_microtype false
+\use_dash_ligatures true
+\graphics default
+\default_output_format default
+\output_sync 0
+\bibtex_command default
+\index_command default
+\float_placement class
+\float_alignment class
+\paperfontsize default
+\spacing single
+\use_hyperref false
+\papersize default
+\use_geometry true
+\use_package amsmath 1
+\use_package amssymb 1
+\use_package cancel 1
+\use_package esint 1
+\use_package mathdots 1
+\use_package mathtools 1
+\use_package mhchem 1
+\use_package stackrel 1
+\use_package stmaryrd 1
+\use_package undertilde 1
+\cite_engine basic
+\cite_engine_type default
+\biblio_style plain
+\use_bibtopic false
+\use_indices false
+\paperorientation portrait
+\suppress_date false
+\justification true
+\use_refstyle 1
+\use_formatted_ref 0
+\use_minted 0
+\use_lineno 0
+\index Index
+\shortcut idx
+\color #008000
+\end_index
+\leftmargin 2cm
+\topmargin 2cm
+\rightmargin 2cm
+\bottommargin 2cm
+\secnumdepth 3
+\tocdepth 3
+\paragraph_separation indent
+\paragraph_indentation default
+\is_math_indent 0
+\math_numbering_side default
+\quotes_style english
+\dynamic_quotes 0
+\papercolumns 1
+\papersides 1
+\paperpagestyle default
+\tablestyle default
+\tracking_changes false
+\output_changes false
+\change_bars false
+\postpone_fragile_content true
+\html_math_output 0
+\html_css_as_file 0
+\html_be_strict false
+\docbook_table_output 0
+\docbook_mathml_prefix 1
+\end_header
+
+\begin_body
+
+\begin_layout Section
+Info on plots and simulations
+\end_layout
+
+\begin_layout Standard
+Reference parameters:
+\begin_inset Formula 
+\[
+n_{\mathrm{ref}}=10^{19}m^{-3};\,T_{\mathrm{ref}}=100eV;\,L_{\mathrm{ref}}=10m;\,m_{\mathrm{ref}}=m_{D}\approx3.3\times10^{-27}kg;\,B_{\mathrm{ref}}=1T
+\]
+
+\end_inset
+
+Derived reference parameters:
+\begin_inset Formula 
+\[
+c_{\mathrm{ref}}=\sqrt{\frac{T_{\mathrm{ref}}}{m_{\mathrm{ref}}}}\approx6.9\times10^{4}m/s;\,t_{\mathrm{ref}}=\frac{L_{\mathrm{ref}}}{c_{\mathrm{ref}}}=1.4\times10^{-4}s;\,\nu_{\mathrm{ref}}=\frac{1}{t_{\mathrm{ref}}}\approx6.9\times10^{3}Hz
+\]
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Subsection
+Simulation model setup
+\end_layout
+
+\begin_layout Itemize
+Boltzmann electrons
+\end_layout
+
+\begin_layout Itemize
+\begin_inset Quotes els
+\end_inset
+
+full-f
+\begin_inset Quotes ers
+\end_inset
+
+,
+ 2D1V ions - no moment-kinetics in these simulations,
+ because radial diffusion only implemented for 
+\begin_inset Quotes els
+\end_inset
+
+full-f
+\begin_inset Quotes ers
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Itemize
+No magnetic drifts,
+ only 
+\begin_inset Formula $E\times B$
+\end_inset
+
+ drifts.
+\end_layout
+
+\begin_layout Itemize
+Krook collision operator.
+ Collision frequency is Braginskii's ion-ion collision frequency,
+ evaluated with local density and temperature.
+\end_layout
+
+\begin_layout Subsection
+Domain/grid
+\end_layout
+
+\begin_layout Itemize
+10m parallel length,
+ 1m vertical height,
+ 1cm radial width
+\end_layout
+
+\begin_layout Itemize
+sheath-edge boundary conditions at top/bottom
+\end_layout
+
+\begin_layout Itemize
+periodic radial boundary conditions
+\end_layout
+
+\begin_layout Itemize
+Compressed grid (in 
+\begin_inset Formula $z$
+\end_inset
+
+) near the targets.
+ Velocity space grid is coarser at large 
+\begin_inset Formula $v_{\|}$
+\end_inset
+
+ to allow a large 
+\begin_inset Formula $v_{\|,\mathrm{max}}=12c_{\mathrm{ref}}$
+\end_inset
+
+ without having too many grid points where the distribution function is very small.
+ [This coarsened 
+\begin_inset Formula $v_{\|}$
+\end_inset
+
+ grid is mostly implemented/used because in moment-kinetic simulations it would make the CFL limit less strict - I just forgot to switch to a uniform grid for these full-f simulation,
+ but I don't think it causes a problem.]
+\end_layout
+
+\begin_layout Itemize
+All simulations use:
+\end_layout
+
+\begin_deeper
+\begin_layout Itemize
+16 elements in 
+\begin_inset Formula $z$
+\end_inset
+
+,
+ with 
+\begin_inset Formula $\mathtt{ngrid}=5$
+\end_inset
+
+ (4th order polynomials)
+\end_layout
+
+\begin_layout Itemize
+31 elements in 
+\begin_inset Formula $v_{\parallel}$
+\end_inset
+
+,
+ with 
+\begin_inset Formula $\mathtt{ngrid}=6$
+\end_inset
+
+ (5th order polynomials) [this choice means there is no grid point at 
+\begin_inset Formula $v_{\parallel}=0$
+\end_inset
+
+ - it is the middle of an element,
+ and each element contains an even number of grid points]
+\end_layout
+
+\end_deeper
+\begin_layout Itemize
+Radial resolution for 2D simulations is varied as described in the results.
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename 2D-instability-sim-setup.png
+	lyxscale 5
+	width 100text%
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+2D-instability-sim-setup.png
+\end_layout
+
+\begin_layout Subsection
+Initialisation
+\end_layout
+
+\begin_layout Standard
+First run a 1D1V simulation to steady state.
+ Source amplitude and temperature peak in the middle of the box and decrease towards the walls.
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename background_1D/background_1D_source.png
+	lyxscale 5
+	height 10cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+background_1D/background_1D_source.png
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+This source gives the background profiles
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename background_1D/background_1D_nT_profiles.png
+	lyxscale 5
+	height 10cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+background_1D/background_1D_nT_profiles.png
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename background_1D/background_1D_upar_profiles.png
+	lyxscale 5
+	height 10cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+background_1D/background_1D_upar_profiles.png
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename background_1D/background_1D_nu_ii_Krook_profiles.png
+	lyxscale 5
+	height 10cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+background_1D/background_1D_nu_ii_Krook_profiles.png
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename background_1D/background_1D_f.png
+	lyxscale 5
+	height 10cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+background_1D/background_1D_f.png
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename background_1D/background_1D_f_vs_vpa.png
+	lyxscale 5
+	height 10cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+background_1D/background_1D_f_vs_vpa.png
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename background_1D/background_1D_logf_vs_vpa.png
+	lyxscale 5
+	height 10cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+background_1D/background_1D_logf_vs_vpa.png
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+For comparison,
+ without Krook collisions and using the same sources the profiles would be
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename background_1D_no-Krook/background_1D_no-Krook_source.png
+	lyxscale 5
+	height 5cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+background_1D_no-Krook/background_1D_no-Krook_source.png
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename background_1D_no-Krook/background_1D_no-Krook_nT_profiles.png
+	lyxscale 5
+	height 5cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+background_1D_no-Krook/background_1D_no-Krook_nT_profiles.png
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename background_1D_no-Krook/background_1D_no-Krook_upar_profiles.png
+	lyxscale 5
+	height 5cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+background_1D_no-Krook/background_1D_no-Krook_upar_profiles.png
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename background_1D_no-Krook/background_1D_no-Krook_f.png
+	lyxscale 5
+	height 5cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+background_1D_no-Krook/background_1D_no-Krook_f.png
+\end_layout
+
+\begin_layout Subsection
+Instability (with wall bc)
+\end_layout
+
+\begin_layout Standard
+2D1V simulations are run by restarting from the converged,
+ steady-state 1D1V profiles and adding some random noise with relative amplitude 
+\begin_inset Formula $10^{-9}$
+\end_inset
+
+ to the density - i.e.
+ density is multiplied by a factor 
+\begin_inset Formula $(1+10^{-9}\mathtt{rand()})$
+\end_inset
+
+ at each point.
+\end_layout
+
+\begin_layout Standard
+For a simple measure of the mode amplitude at a given time,
+ we look at the 
+\begin_inset Formula $\phi$
+\end_inset
+
+ profiles,
+ remove the background by taking the root-mean-square over the 
+\begin_inset Formula $r$
+\end_inset
+
+-dimension,
+ then take the maximum over 
+\begin_inset Formula $z$
+\end_inset
+
+.
+\begin_inset Formula 
+\[
+A=\max_{z}\left(\sqrt{\frac{\sum_{r}\left(\phi-\left\langle \phi\right\rangle _{r}\right)^{2}}{n_{r}}}\right)
+\]
+
+\end_inset
+
+where 
+\begin_inset Formula $\left\langle \phi\right\rangle _{r}=\frac{\sum_{r}\phi}{n_{r}}$
+\end_inset
+
+ is the mean over 
+\begin_inset Formula $r$
+\end_inset
+
+.
+ This measure is a bit crude - it just averages the grid point values,
+ ignoring the finite-element nature of the grid,
+ but should be good enough because the simulations show a long period of linear growth with a more or less unchanging eigenvector.
+\end_layout
+
+\begin_layout Subsubsection
+\begin_inset Formula $r$
+\end_inset
+
+-resolution scan
+\end_layout
+
+\begin_layout Standard
+Using a finite-element discretization in 
+\begin_inset Formula $r$
+\end_inset
+
+ with 4,
+ 8,
+ or 16 elements (and 
+\begin_inset Formula $\mathtt{ngrid=5}$
+\end_inset
+
+,
+ so 4th order polynomials),
+ the growth rate increases with 
+\begin_inset Formula $r$
+\end_inset
+
+ resolution.
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename instability_2D_r-resolution-scan/growth_rate_r-resolution-scan.png
+	lyxscale 5
+	height 5cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+instability_2D_r-resolution-scan/growth_rate_r-resolution-scan.png
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+The simulations eventually crash when the perturbation grows too large.
+ The perturbed potential 
+\begin_inset Formula $\left(\phi-\left\langle \phi\right\rangle _{r}\right)$
+\end_inset
+
+ is shown as animations in
+\begin_inset Newline newline
+\end_inset
+
+instability_2D_r-resolution-scan/phi_perturbation_r-nelement4.gif,
+ instability_2D_r-resolution-scan/phi_perturbation_r-nelement8.gif,
+\begin_inset Newline newline
+\end_inset
+
+instability_2D_r-resolution-scan/phi_perturbation_r-nelement16.gif,
+ instability_2D_r-resolution-scan/phi_perturbation_r-nelement32.gif.
+\begin_inset Newline newline
+\end_inset
+
+The perturbations at the final time point of the simulations are:
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename instability_2D_r-resolution-scan/final_phi_perturbation_r-nelement4.png
+	lyxscale 5
+	height 5cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+instability_2D_r-resolution-scan/final_phi_perturbation_r-nelement4.png
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename instability_2D_r-resolution-scan/final_phi_perturbation_r-nelement8.png
+	lyxscale 5
+	height 5cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+instability_2D_r-resolution-scan/final_phi_perturbation_r-nelement8.png
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename instability_2D_r-resolution-scan/final_phi_perturbation_r-nelement16.png
+	lyxscale 5
+	height 5cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+instability_2D_r-resolution-scan/final_phi_perturbation_r-nelement16.png
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename instability_2D_r-resolution-scan/final_phi_perturbation_r-nelement32.png
+	lyxscale 5
+	height 5cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+instability_2D_r-resolution-scan/final_phi_perturbation_r-nelement32.png
+\end_layout
+
+\begin_layout Subsubsection
+Effect of radial dissipation
+\end_layout
+
+\begin_layout Standard
+Adding radial dissipation in the form of diffusion
+\begin_inset Formula 
+\[
+\frac{\partial f}{\partial t}=\ldots+D_{r}\frac{\partial^{2}f}{\partial r^{2}}
+\]
+
+\end_inset
+
+can entirely stabilise the instability.
+\end_layout
+
+\begin_layout Standard
+Values of 
+\begin_inset Formula $D_{r}$
+\end_inset
+
+ are reported in dimensionless form below.
+ To get values in 
+\begin_inset Formula $m^{2}/s$
+\end_inset
+
+ multiply by 
+\begin_inset Formula $L_{\mathrm{ref}}c_{\mathrm{ref}}=6.9\times10^{5}m^{2}/s$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Standard
+For comparison classical particle diffusivity 
+\begin_inset Formula $D_{\mathrm{classical}}=\rho_{e}^{2}\nu_{ei}$
+\end_inset
+
+ and classical heat diffusivity 
+\begin_inset Formula $\chi_{i,\mathrm{classical}}=\rho_{i}^{2}\nu_{ii}$
+\end_inset
+
+ (calculated using 
+\begin_inset Formula $T_{i\parallel}$
+\end_inset
+
+ in place of 
+\begin_inset Formula $T_{i}$
+\end_inset
+
+ because these are 1V simulations),
+ evaluated using the background parameters,
+ are around 
+\begin_inset Formula $D_{\mathrm{classical}}=3.5\times10^{-9}L_{\mathrm{ref}}c_{\mathrm{ref}}\approx2.4\times10^{-3}m^{2}/s$
+\end_inset
+
+ and 
+\begin_inset Formula $\chi_{i,\mathrm{classical}}=4.8\times10^{-8}L_{\mathrm{ref}}c_{\mathrm{ref}}\approx3.3\times10^{-2}m^{2}/s$
+\end_inset
+
+ (see plots below).
+ Also 
+\begin_inset Formula $\rho_{i}=9\times10^{-5}L_{\mathrm{ref}}=0.9mm$
+\end_inset
+
+ is around 1/10th of the radial box width (which is 
+\begin_inset Formula $10^{-3}L_{\mathrm{ref}}=1cm$
+\end_inset
+
+).
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename background_1D/background_1D_D_classical.png
+	lyxscale 5
+	height 10cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+background_1D/background_1D_D_classical.png
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename background_1D/background_1D_chi_i_classical.png
+	lyxscale 5
+	height 10cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+background_1D/background_1D_chi_i_classical.png
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename background_1D/background_1D_rho_i.png
+	lyxscale 5
+	height 10cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+background_1D/background_1D_rho_i.png
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+With 
+\begin_inset Formula $D_{r}=10^{-8}$
+\end_inset
+
+ the instability is stabilised - checked this with 4,
+ 16,
+ and 32 elements in 
+\begin_inset Formula $r$
+\end_inset
+
+.
+ [The r_nelement=4 line has a spike because I restarted the simulation and accidentally added random noise again - can re-run to make a clean version if needed.]
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename instability_2D_r-resolution-scan/stabilised-resolution-scan.png
+	lyxscale 5
+	height 10cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+instability_2D_r-resolution-scan/stabilised-resolution-scan.png
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+At slightly lower dissipation of 
+\begin_inset Formula $D_{r}=7\times10^{-9}$
+\end_inset
+
+ the instability appears to be well resolved in 
+\begin_inset Formula $r$
+\end_inset
+
+,
+ with 2 peaks/troughs that are not obviously spiked on element boundaries.
+ See also the animations in
+\begin_inset Newline newline
+\end_inset
+
+phi_perturbation_rdiss7e-9_r-nelement4.gif,
+ phi_perturbation_rdiss7e-9_r-nelement8.gif,
+\begin_inset Newline newline
+\end_inset
+
+phi_perturbation_rdiss7e-9_r-nelement16.gif,
+ phi_perturbation_rdiss7e-9_r-nelement32.gif.
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename instability_2D_r-resolution-scan/converged-rdiss7e-9-resolution-scan.png
+	lyxscale 5
+	height 5cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+instability_2D_r-resolution-scan/converged-rdiss7e-9-resolution-scan.png
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename instability_2D_r-resolution-scan/final_phi_perturbation_rdiss7e-9_r-nelement4.png
+	lyxscale 5
+	height 5cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+instability_2D_r-resolution-scan/final_phi_perturbation_rdiss7e-9_r-nelement4.png
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename instability_2D_r-resolution-scan/final_phi_perturbation_rdiss7e-9_r-nelement8.png
+	lyxscale 5
+	height 5cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+instability_2D_r-resolution-scan/final_phi_perturbation_rdiss7e-9_r-nelement8.png
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename instability_2D_r-resolution-scan/final_phi_perturbation_rdiss7e-9_r-nelement16.png
+	lyxscale 5
+	height 5cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+instability_2D_r-resolution-scan/final_phi_perturbation_rdiss7e-9_r-nelement16.png
+\begin_inset Newline newline
+\end_inset
+
+
+\begin_inset Newline newline
+\end_inset
+
+
+\begin_inset Graphics
+	filename instability_2D_r-resolution-scan/final_phi_perturbation_rdiss7e-9_r-nelement32.png
+	lyxscale 5
+	height 5cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+instability_2D_r-resolution-scan/final_phi_perturbation_rdiss7e-9_r-nelement32.png
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+Scan in radial dissipation between 
+\begin_inset Formula $D_{r}=1\times10^{-9}-7\times10^{-9}$
+\end_inset
+
+ to see what happens to the eigenvectors.
+ Animations are
+\begin_inset Newline newline
+\end_inset
+
+instability_2D_rdiss-scan/phi_perturbation_rdiss1e-9.gif,
+ instability_2D_rdiss-scan/phi_perturbation_rdiss2e-9.gif
+\begin_inset Newline newline
+\end_inset
+
+instability_2D_rdiss-scan/phi_perturbation_rdiss3e-9.gif,
+ instability_2D_rdiss-scan/phi_perturbation_rdiss4e-9.gif
+\begin_inset Newline newline
+\end_inset
+
+instability_2D_rdiss-scan/phi_perturbation_rdiss5e-9.gif,
+ instability_2D_rdiss-scan/phi_perturbation_rdiss6e-9.gif,
+\begin_inset Newline newline
+\end_inset
+
+instability_2D_rdiss-scan/phi_perturbation_rdiss7e-9.gif
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename instability_2D_rdiss-scan/rdiss-scan.png
+	lyxscale 5
+	height 10cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+instability_2D_rdiss-scan/rdiss-scan.png
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename instability_2D_rdiss-scan/mid_phi_perturbation_rdiss1e-9.png
+	lyxscale 5
+	height 10cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+instability_2D_rdiss-scan/mid_phi_perturbation_rdiss1e-9.png
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename instability_2D_rdiss-scan/mid_phi_perturbation_rdiss2e-9.png
+	lyxscale 5
+	height 10cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+instability_2D_rdiss-scan/mid_phi_perturbation_rdiss2e-9.png
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename instability_2D_rdiss-scan/mid_phi_perturbation_rdiss3e-9.png
+	lyxscale 5
+	height 10cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+instability_2D_rdiss-scan/mid_phi_perturbation_rdiss3e-9.png
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename instability_2D_rdiss-scan/mid_phi_perturbation_rdiss4e-9.png
+	lyxscale 5
+	height 10cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+instability_2D_rdiss-scan/mid_phi_perturbation_rdiss4e-9.png
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename instability_2D_rdiss-scan/mid_phi_perturbation_rdiss5e-9.png
+	lyxscale 5
+	height 10cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+instability_2D_rdiss-scan/mid_phi_perturbation_rdiss5e-9.png
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename instability_2D_rdiss-scan/mid_phi_perturbation_rdiss6e-9.png
+	lyxscale 5
+	height 10cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+instability_2D_rdiss-scan/mid_phi_perturbation_rdiss6e-9.png
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename instability_2D_rdiss-scan/mid_phi_perturbation_rdiss7e-9.png
+	lyxscale 5
+	height 10cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+instability_2D_rdiss-scan/mid_phi_perturbation_rdiss7e-9.png
+\end_layout
+
+\begin_layout Subsubsection
+Radial profiles
+\end_layout
+
+\begin_layout Standard
+For the 
+\begin_inset Formula $D_{r}=7\times10^{-9}$
+\end_inset
+
+ case,
+ radial profiles at some selected points in 
+\begin_inset Formula $z$
+\end_inset
+
+:
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename instability_2D_rdiss-scan/mid_r-profiles_rdiss7e-9_phi_vs_r.png
+	lyxscale 5
+	height 10cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+instability_2D_rdiss-scan/mid_r-profiles_rdiss7e-9_phi_vs_r.png
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename instability_2D_rdiss-scan/mid_r-profiles_rdiss7e-9_n_vs_r.png
+	lyxscale 5
+	height 10cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+instability_2D_rdiss-scan/mid_r-profiles_rdiss7e-9_n_vs_r.png
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename instability_2D_rdiss-scan/mid_r-profiles_rdiss7e-9_upar_vs_r.png
+	lyxscale 5
+	height 10cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+instability_2D_rdiss-scan/mid_r-profiles_rdiss7e-9_upar_vs_r.png
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename instability_2D_rdiss-scan/mid_r-profiles_rdiss7e-9_T_vs_r.png
+	lyxscale 5
+	height 10cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+instability_2D_rdiss-scan/mid_r-profiles_rdiss7e-9_upar_vs_r.png
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename instability_2D_rdiss-scan/mid_r-profiles_rdiss7e-9_f_vs_vpa_r_iz1.png
+	lyxscale 5
+	height 10cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+instability_2D_rdiss-scan/mid_r-profiles_rdiss7e-9_f_vs_vpa_r_iz1.png
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename instability_2D_rdiss-scan/mid_r-profiles_rdiss7e-9_f_vs_vpa_r_iz11.png
+	lyxscale 5
+	height 10cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+instability_2D_rdiss-scan/mid_r-profiles_rdiss7e-9_f_vs_vpa_r_iz11.png
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename instability_2D_rdiss-scan/mid_r-profiles_rdiss7e-9_f_vs_vpa_r_iz23.png
+	lyxscale 5
+	height 10cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+instability_2D_rdiss-scan/mid_r-profiles_rdiss7e-9_f_vs_vpa_r_iz23.png
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename instability_2D_rdiss-scan/mid_r-profiles_rdiss7e-9_f_vs_vpa_r_iz33.png
+	lyxscale 5
+	height 10cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+instability_2D_rdiss-scan/mid_r-profiles_rdiss7e-9_f_vs_vpa_r_iz33.png
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Subsubsection
+No Krook collisions
+\end_layout
+
+\begin_layout Standard
+For comparison,
+ did the same resolution scan as above,
+ without r-dissipation,
+ with the Krook collision operator disabled (restarting from the 1D1V profiles with no Krook collisions).
+ Animations of these perturbations are
+\begin_inset Newline newline
+\end_inset
+
+instability_2D_no-Krook/phi_perturbation_no-Krook_r-nelement4.gif,
+ instability_2D_no-Krook/phi_perturbation_no-Krook_r-nelement8.gif,
+\begin_inset Newline newline
+\end_inset
+
+instability_2D_no-Krook/phi_perturbation_no-Krook_r-nelement16.gif,
+ instability_2D_no-Krook/phi_perturbation_no-Krook_r-nelement32.gif.
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename instability_2D_no-Krook/growth_rate_no-Krook_r-resolution-scan.png
+	lyxscale 5
+	height 5cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+instability_2D_no-Krook/growth_rate_no-Krook_r-resolution-scan.png
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename instability_2D_no-Krook/final_phi_perturbation_no-Krook_r-nelement4.png
+	lyxscale 5
+	height 5cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+instability_2D_no-Krook/final_phi_perturbation_no-Krook_r-nelement4.png
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename instability_2D_no-Krook/final_phi_perturbation_no-Krook_r-nelement8.png
+	lyxscale 5
+	height 5cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+instability_2D_no-Krook/final_phi_perturbation_no-Krook_r-nelement8.png
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename instability_2D_no-Krook/final_phi_perturbation_no-Krook_r-nelement16.png
+	lyxscale 5
+	height 5cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+instability_2D_no-Krook/final_phi_perturbation_no-Krook_r-nelement16.png
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename instability_2D_no-Krook/final_phi_perturbation_no-Krook_r-nelement32.png
+	lyxscale 5
+	height 5cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+instability_2D_no-Krook/final_phi_perturbation_no-Krook_r-nelement32.png
+\end_layout
+
+\begin_layout Subsection
+Instability (with periodic-
+\begin_inset Formula $z$
+\end_inset
+
+ bc)
+\begin_inset CommandInset label
+LatexCommand label
+name "subsec:Instability-with-periodic-z-bc"
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+For simulations in a periodic box,
+ we set background profiles of density and temperature,
+ which are kept fixed by a manufactured source term.
+ The background temperature is
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename instability_2D_periodic5/periodic5_background_Tpar.png
+	lyxscale 5
+	height 5cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+instability_2D_periodic5/periodic5_background_Tpar.png
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+while the background density is
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename instability_2D_periodic5/periodic5_background_n.png
+	lyxscale 5
+	height 5cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+instability_2D_periodic5/periodic5_background_n.png
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+The amplitude of the sinusoidal fluctuation in the background density is adjusted to control the ratio of parallel temperature and density gradients in the background.
+\end_layout
+
+\begin_layout Standard
+Mode amplitudes show a strong,
+ apparently linear dependence on the ratio of amplitudes/gradients 
+\begin_inset Formula $A_{n}/A_{T}=L_{T}/L_{n}$
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename instability_2D_periodic5/growth_rate_periodic5-AT0.1-An-scan.png
+	lyxscale 5
+	height 5cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+instability_2D_periodic5/growth_rate_periodic5-AT0.1-An-scan.png
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename instability_2D_periodic5/growth_rate_vs_LToverLn.png
+	lyxscale 5
+	height 5cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+instability_2D_periodic5/growth_rate_vs_LToverLn.png
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+The intercept of the fit with the x-axis (the point where 
+\begin_inset Formula $\gamma=0$
+\end_inset
+
+) is 
+\begin_inset Formula $L_{T}/L_{n}\approx0.26$
+\end_inset
+
+,
+ which is less than the expected (?) 
+\begin_inset Formula $1/3$
+\end_inset
+
+.
+ However,
+ the modes in these simulations are grid-scale,
+ hence not well resolved,
+ so it would not be surprising if there was significant numerical dissipation decreasing the growth rates,
+ so this value seems consistent with 
+\begin_inset Formula $1/3$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Standard
+The mode structures at the final time point of this simulation:
+\begin_inset Newline newline
+\end_inset
+
+
+\begin_inset Graphics
+	filename instability_2D_periodic5/final_phi_perturbation_periodic5_AT0.1_An-0.1.png
+	lyxscale 5
+	width 19col%
+
+\end_inset
+
+
+\begin_inset Graphics
+	filename instability_2D_periodic5/final_phi_perturbation_periodic5_AT0.1_An-0.05.png
+	lyxscale 5
+	width 19col%
+
+\end_inset
+
+
+\begin_inset Graphics
+	filename instability_2D_periodic5/final_phi_perturbation_periodic5_AT0.1_An-0.04.png
+	lyxscale 5
+	width 19col%
+
+\end_inset
+
+
+\begin_inset Graphics
+	filename instability_2D_periodic5/final_phi_perturbation_periodic5_AT0.1_An-0.03.png
+	lyxscale 5
+	width 19col%
+
+\end_inset
+
+
+\begin_inset Graphics
+	filename instability_2D_periodic5/final_phi_perturbation_periodic5_AT0.1_An-0.02.png
+	lyxscale 5
+	width 19col%
+
+\end_inset
+
+
+\begin_inset Newline newline
+\end_inset
+
+
+\begin_inset Graphics
+	filename instability_2D_periodic5/final_phi_perturbation_periodic5_AT0.1_An-0.01.png
+	lyxscale 5
+	width 19col%
+
+\end_inset
+
+
+\begin_inset Graphics
+	filename instability_2D_periodic5/final_phi_perturbation_periodic5_AT0.1_An-0.005.png
+	lyxscale 5
+	width 19col%
+
+\end_inset
+
+
+\begin_inset Graphics
+	filename instability_2D_periodic5/final_phi_perturbation_periodic5_AT0.1_An0.0.png
+	lyxscale 5
+	width 19col%
+
+\end_inset
+
+
+\begin_inset Graphics
+	filename instability_2D_periodic5/final_phi_perturbation_periodic5_AT0.1_An0.005.png
+	lyxscale 5
+	width 19col%
+
+\end_inset
+
+
+\begin_inset Graphics
+	filename instability_2D_periodic5/final_phi_perturbation_periodic5_AT0.1_An0.01.png
+	lyxscale 5
+	width 19col%
+
+\end_inset
+
+
+\begin_inset Newline newline
+\end_inset
+
+
+\begin_inset Graphics
+	filename instability_2D_periodic5/final_phi_perturbation_periodic5_AT0.1_An0.015.png
+	lyxscale 5
+	width 19col%
+
+\end_inset
+
+
+\begin_inset Graphics
+	filename instability_2D_periodic5/final_phi_perturbation_periodic5_AT0.1_An0.02.png
+	lyxscale 5
+	width 19col%
+
+\end_inset
+
+
+\begin_inset Graphics
+	filename instability_2D_periodic5/final_phi_perturbation_periodic5_AT0.1_An0.025.png
+	lyxscale 5
+	width 19col%
+
+\end_inset
+
+
+\begin_inset Graphics
+	filename instability_2D_periodic5/final_phi_perturbation_periodic5_AT0.1_An0.03.png
+	lyxscale 5
+	width 19col%
+
+\end_inset
+
+
+\begin_inset Graphics
+	filename instability_2D_periodic5/final_phi_perturbation_periodic5_AT0.1_An0.04.png
+	lyxscale 5
+	width 19col%
+
+\end_inset
+
+
+\begin_inset Newline newline
+\end_inset
+
+
+\begin_inset Graphics
+	filename instability_2D_periodic5/final_phi_perturbation_periodic5_AT0.1_An0.05.png
+	lyxscale 5
+	width 19col%
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+instability_2D_periodic5/final_phi_perturbation_periodic5_AT0.1_An*.png
+\end_layout
+
+\begin_layout Subsubsection
+Fourier discretization in r-direction
+\end_layout
+
+\begin_layout Standard
+Without at least carefully-chosen levels of 
+\begin_inset Formula $r$
+\end_inset
+
+-diffusion,
+ the instability tends to grow at the grid scale in the 
+\begin_inset Formula $r$
+\end_inset
+
+-direction on a finite element grid,
+ which might mean that growth rates,
+ etc.
+ are significantly affected by numerical errors.
+\end_layout
+
+\begin_layout Standard
+To run without 
+\begin_inset Formula $r$
+\end_inset
+
+-diffusion and without numerical error for a single 
+\begin_inset Formula $\left|k_{r}\right|$
+\end_inset
+
+,
+ we could instead use a Fourier 
+\begin_inset Quotes els
+\end_inset
+
+pseudospectral
+\begin_inset Quotes ers
+\end_inset
+
+ discretisation for the 
+\begin_inset Formula $r$
+\end_inset
+
+ dimension,
+ where we keep 3 distinct spatial grid points,
+ so that when we Fourier-transform there is only the constant-in-
+\begin_inset Formula $r$
+\end_inset
+
+ component and 
+\begin_inset Formula $\pm k_{r}$
+\end_inset
+
+ (with 
+\begin_inset Formula $k_{r}$
+\end_inset
+
+ being set by the radial size of the box 
+\begin_inset Formula $L_{r}$
+\end_inset
+
+).
+\end_layout
+
+\begin_layout Standard
+As a bonus,
+ this makes simulations cheaper,
+ as there are only 3 
+\begin_inset Formula $r$
+\end_inset
+
+-grid points,
+ rather than 
+\begin_inset Formula $n_{\mathrm{element}}n_{\mathrm{grid}}\sim64$
+\end_inset
+
+ 
+\begin_inset Formula $r$
+\end_inset
+
+-grid points on a typical finite element grid.
+\end_layout
+
+\begin_layout Standard
+Any nonlinearities that physically would couple different non-zero 
+\begin_inset Formula $k_{r}$
+\end_inset
+
+ are missing,
+ but we only want to look at the linear phase of the mode here,
+ so that should be OK.
+\end_layout
+
+\begin_layout Standard
+For the same backgrounds as in 
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "subsec:Instability-with-periodic-z-bc"
+plural "false"
+caps "false"
+noprefix "false"
+nolink "false"
+
+\end_inset
+
+,
+ the amplitudes and growth rates are
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename instability_2D_periodic5_Fourier-r/growth_rate_periodic5_Fourier-r-AT0.1-An-scan.png
+	lyxscale 5
+	height 5cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+instability_2D_periodic5_Fourier-r/growth_rate_periodic5_Fourier-r-AT0.1-An-scan.png
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename instability_2D_periodic5_Fourier-r/Fourier-r_growth_rate_vs_LToverLn.png
+	lyxscale 5
+	height 5cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+instability_2D_periodic5_Fourier-r/Fourier-r_growth_rate_vs_LToverLn.png
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+The mode structures (at the final time point) look like:
+\begin_inset Newline newline
+\end_inset
+
+
+\begin_inset Graphics
+	filename instability_2D_periodic5_Fourier-r/final_phi_perturbation_periodic5_Fourier-r_AT0.1_An-0.1.png
+	lyxscale 5
+	width 19col%
+
+\end_inset
+
+
+\begin_inset Graphics
+	filename instability_2D_periodic5_Fourier-r/final_phi_perturbation_periodic5_Fourier-r_AT0.1_An-0.05.png
+	lyxscale 5
+	width 19col%
+
+\end_inset
+
+
+\begin_inset Graphics
+	filename instability_2D_periodic5_Fourier-r/final_phi_perturbation_periodic5_Fourier-r_AT0.1_An-0.04.png
+	lyxscale 5
+	width 19col%
+
+\end_inset
+
+
+\begin_inset Graphics
+	filename instability_2D_periodic5_Fourier-r/final_phi_perturbation_periodic5_Fourier-r_AT0.1_An-0.02.png
+	lyxscale 5
+	width 19col%
+
+\end_inset
+
+
+\begin_inset Graphics
+	filename instability_2D_periodic5_Fourier-r/final_phi_perturbation_periodic5_Fourier-r_AT0.1_An-0.01.png
+	lyxscale 5
+	width 19col%
+
+\end_inset
+
+
+\begin_inset Newline newline
+\end_inset
+
+
+\begin_inset Graphics
+	filename instability_2D_periodic5_Fourier-r/final_phi_perturbation_periodic5_Fourier-r_AT0.1_An-0.005.png
+	lyxscale 5
+	width 19col%
+
+\end_inset
+
+
+\begin_inset Graphics
+	filename instability_2D_periodic5_Fourier-r/final_phi_perturbation_periodic5_Fourier-r_AT0.1_An0.0.png
+	lyxscale 5
+	width 19col%
+
+\end_inset
+
+
+\begin_inset Graphics
+	filename instability_2D_periodic5_Fourier-r/final_phi_perturbation_periodic5_Fourier-r_AT0.1_An0.005.png
+	lyxscale 5
+	width 19col%
+
+\end_inset
+
+
+\begin_inset Graphics
+	filename instability_2D_periodic5_Fourier-r/final_phi_perturbation_periodic5_Fourier-r_AT0.1_An0.01.png
+	lyxscale 5
+	width 19col%
+
+\end_inset
+
+
+\begin_inset Graphics
+	filename instability_2D_periodic5_Fourier-r/final_phi_perturbation_periodic5_Fourier-r_AT0.1_An0.015.png
+	lyxscale 5
+	width 19col%
+
+\end_inset
+
+
+\begin_inset Newline newline
+\end_inset
+
+
+\begin_inset Graphics
+	filename instability_2D_periodic5_Fourier-r/final_phi_perturbation_periodic5_Fourier-r_AT0.1_An0.02.png
+	lyxscale 5
+	width 19col%
+
+\end_inset
+
+
+\begin_inset Graphics
+	filename instability_2D_periodic5_Fourier-r/final_phi_perturbation_periodic5_Fourier-r_AT0.1_An0.025.png
+	lyxscale 5
+	width 19col%
+
+\end_inset
+
+
+\begin_inset Graphics
+	filename instability_2D_periodic5_Fourier-r/final_phi_perturbation_periodic5_Fourier-r_AT0.1_An0.03.png
+	lyxscale 5
+	width 19col%
+
+\end_inset
+
+
+\begin_inset Graphics
+	filename instability_2D_periodic5_Fourier-r/final_phi_perturbation_periodic5_Fourier-r_AT0.1_An0.04.png
+	lyxscale 5
+	width 19col%
+
+\end_inset
+
+
+\begin_inset Graphics
+	filename instability_2D_periodic5_Fourier-r/final_phi_perturbation_periodic5_Fourier-r_AT0.1_An0.05.png
+	lyxscale 5
+	width 19col%
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+instability_2D_periodic5_Fourier-r/final_phi_perturbation_periodic5_Fourier-r_AT0.1_An-*.png
+\begin_inset Newline newline
+\end_inset
+
+
+\begin_inset Formula $2.5\times10^{-6}$
+\end_inset
+
+
+\end_layout
+
+\end_body
+\end_document
