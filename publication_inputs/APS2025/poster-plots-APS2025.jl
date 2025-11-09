@@ -222,6 +222,47 @@ end
 Legend(fig[2,1], ax; tellheight=true, tellwidth=false)
 save(joinpath(dir_r_nelement_scan, "converged-rdiss7e-9-resolution-scan.png"), fig; px_per_unit=16.0)
 
+# Scan dissipation between Dr=1e-9 (unsure if the instability is radial-grid-scale) and Dr=7e-9 (instability seems well resolved).
+dir_rdiss_scan = mkpath(joinpath(plots_dir, "instability_2D_rdiss-scan"))
+rdiss_scan_run_dirs = ("runs/2D1V-instability-test_Lr1cm-rnelement16-rdiss1e-9/",
+                       "runs/2D1V-instability-test_Lr1cm-rnelement16-rdiss2e-9/",
+                       "runs/2D1V-instability-test_Lr1cm-rnelement16-rdiss3e-9/",
+                       "runs/2D1V-instability-test_Lr1cm-rnelement16-rdiss4e-9/",
+                       "runs/2D1V-instability-test_Lr1cm-rnelement16-rdiss5e-9/",
+                       "runs/2D1V-instability-test_Lr1cm-rnelement16-rdiss6e-9/",
+                       "runs/2D1V-instability-test_Lr1cm-rnelement16-rdiss7e-9/",
+                      )
+ri_rdiss_scan = get_run_info(rdiss_scan_run_dirs...; dfns=true)
+
+fig, ax = get_1d_ax(xlabel="time", ylabel="amplitude", yscale=log10)
+
+for (irun, this_ri) ∈ enumerate(ri_rdiss_scan)
+    phi = get_variable(this_ri, "phi")
+
+    plot_mode_amplitude(this_ri, phi, ax, irun)
+
+    # make animation of perturbation
+    _, perturbation = makie_post_processing.get_r_perturbation(phi)
+    outfile = joinpath(dir_rdiss_scan, "phi_perturbation_rdiss$(irun)e-9.gif")
+    title = "r_nelement = 16, Dr = $(irun)e-9"
+    makie_post_processing.animate_2d(this_ri.z.grid, this_ri.r.grid, perturbation,
+                                     xlabel="z", ylabel="r", title=title,
+                                     colormap="reverse_deep", outfile=outfile)
+
+    # Plot final time point
+    final_perturbation = @view perturbation[:,:,end]
+    final_fig, final_ax, hm = heatmap(this_ri.z.grid, this_ri.r.grid, final_perturbation)
+    final_ax.xlabel = "z"
+    final_ax.ylabel = "r"
+    final_ax.title = "r_nelement = 16, Dr = $(irun)e-9"
+    save(joinpath(dir_rdiss_scan,
+                  "final_phi_perturbation_rdiss$(irun)e-9.png"),
+                  final_fig; px_per_unit=16.0)
+end
+
+Legend(fig[2,1], ax; tellheight=true, tellwidth=false)
+save(joinpath(dir_rdiss_scan, "rdiss-scan.png"), fig; px_per_unit=16.0)
+
 # Compare case with Krook collisions switched off
 dir_no_Krook = mkpath(joinpath(plots_dir, "instability_2D_no-Krook"))
 no_Krook_run_dirs = ("runs/2D1V-instability-test_Lr1cm-no-Krook/",
