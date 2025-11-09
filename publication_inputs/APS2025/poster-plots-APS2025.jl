@@ -165,3 +165,40 @@ end
 
 Legend(fig[2,1], ax; tellheight=true, tellwidth=false)
 save(joinpath(dir_r_nelement_scan, "stabilised-resolution-scan.png"), fig; px_per_unit=16.0)
+
+# Show apparently converged mode with Dr=7e-9
+converged_rdiss7em9_run_dirs = ("runs/2D1V-instability-test_Lr1cm_rdiss7e-9/",
+                                "runs/2D1V-instability-test_Lr1cm-rnelement8-rdiss7e-9/",
+                                "runs/2D1V-instability-test_Lr1cm-rnelement16-rdiss7e-9/",
+                                #"runs/2D1V-instability-test_Lr1cm-rnelement32-rdiss7e-9/",
+                               )
+ri_converged = get_run_info(converged_rdiss7em9_run_dirs...; dfns=true)
+
+fig, ax = get_1d_ax(xlabel="time", ylabel="amplitude", yscale=log10)
+
+for (irun, this_ri) ∈ enumerate(ri_converged)
+    phi = get_variable(this_ri, "phi")
+
+    plot_mode_amplitude(this_ri, phi, ax, irun)
+
+    # make animation of perturbation
+    _, perturbation = makie_post_processing.get_r_perturbation(phi)
+    outfile = joinpath(dir_r_nelement_scan, "phi_perturbation_rdiss7e-9_r-nelement$(this_ri.r.nelement_global).gif")
+    title = "r_nelement = $(this_ri.r.nelement_global), Dr = 7e-9"
+    makie_post_processing.animate_2d(this_ri.z.grid, this_ri.r.grid, perturbation,
+                                     xlabel="z", ylabel="r", title=title,
+                                     colormap="reverse_deep", outfile=outfile)
+
+    # Plot final time point
+    final_perturbation = @view perturbation[:,:,end]
+    final_fig, final_ax, hm = heatmap(this_ri.z.grid, this_ri.r.grid, final_perturbation)
+    final_ax.xlabel = "z"
+    final_ax.ylabel = "r"
+    final_ax.title = "r_nelement = $(this_ri.r.nelement_global), Dr = 7e-9"
+    save(joinpath(dir_r_nelement_scan,
+                  "final_phi_perturbation_rdiss7e-9_r-nelement$(this_ri.r.nelement_global).png"),
+                  final_fig; px_per_unit=16.0)
+end
+
+Legend(fig[2,1], ax; tellheight=true, tellwidth=false)
+save(joinpath(dir_r_nelement_scan, "converged-rdiss7e-9-resolution-scan.png"), fig; px_per_unit=16.0)
