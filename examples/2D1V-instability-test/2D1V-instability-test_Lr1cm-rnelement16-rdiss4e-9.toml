@@ -91,7 +91,7 @@ steady_state_residual = true
 converged_residual_value = 1.0e-9
 
 [ion_numerical_dissipation]
-r_dissipation_coefficient = 1.0e-9
+r_dissipation_coefficient = 4.0e-9
 #vpa_dissipation_coefficient = 1.0e-1
 #vpa_dissipation_coefficient = 1.0e-2
 #vpa_dissipation_coefficient = 1.0e-3
