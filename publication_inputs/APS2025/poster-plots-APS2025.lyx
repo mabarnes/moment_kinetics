@@ -236,6 +236,7 @@ Radial resolution for 2D simulations is varied as described in the results.
 \begin_layout Standard
 \begin_inset Graphics
 	filename 2D-instability-sim-setup.png
+	lyxscale 5
 	width 100text%
 
 \end_inset
@@ -259,6 +260,7 @@ First run a 1D1V simulation to steady state.
 \begin_layout Standard
 \begin_inset Graphics
 	filename background_1D/background_1D_source.png
+	lyxscale 5
 	height 5cm
 
 \end_inset
@@ -281,6 +283,7 @@ This source gives the background profiles
 \begin_layout Standard
 \begin_inset Graphics
 	filename background_1D/background_1D_nT_profiles.png
+	lyxscale 5
 	height 5cm
 
 \end_inset
@@ -299,6 +302,7 @@ background_1D/background_1D_nT_profiles.png
 \begin_layout Standard
 \begin_inset Graphics
 	filename background_1D/background_1D_upar_profiles.png
+	lyxscale 5
 	height 5cm
 
 \end_inset
@@ -317,6 +321,7 @@ background_1D/background_1D_upar_profiles.png
 \begin_layout Standard
 \begin_inset Graphics
 	filename background_1D/background_1D_f.png
+	lyxscale 5
 	height 5cm
 
 \end_inset
@@ -340,6 +345,7 @@ For comparison,
 \begin_layout Standard
 \begin_inset Graphics
 	filename background_1D_no-Krook/background_1D_no-Krook_source.png
+	lyxscale 5
 	height 5cm
 
 \end_inset
@@ -358,6 +364,7 @@ background_1D_no-Krook/background_1D_no-Krook_source.png
 \begin_layout Standard
 \begin_inset Graphics
 	filename background_1D_no-Krook/background_1D_no-Krook_nT_profiles.png
+	lyxscale 5
 	height 5cm
 
 \end_inset
@@ -376,6 +383,7 @@ background_1D_no-Krook/background_1D_no-Krook_nT_profiles.png
 \begin_layout Standard
 \begin_inset Graphics
 	filename background_1D_no-Krook/background_1D_no-Krook_upar_profiles.png
+	lyxscale 5
 	height 5cm
 
 \end_inset
@@ -394,6 +402,7 @@ background_1D_no-Krook/background_1D_no-Krook_upar_profiles.png
 \begin_layout Standard
 \begin_inset Graphics
 	filename background_1D_no-Krook/background_1D_no-Krook_f.png
+	lyxscale 5
 	height 5cm
 
 \end_inset
@@ -482,6 +491,7 @@ Using a finite-element discretization in
 \begin_layout Standard
 \begin_inset Graphics
 	filename instability_2D_r-resolution-scan/growth_rate_r-resolution-scan.png
+	lyxscale 5
 	height 5cm
 
 \end_inset
@@ -503,16 +513,27 @@ The simulations eventually crash when the perturbation grows too large.
 \begin_inset Formula $\left(\phi-\left\langle \phi\right\rangle _{r}\right)$
 \end_inset
 
- is shown as animations in instability_2D_r-resolution-scan/phi_perturbation_r-nelement4.gif,
+ is shown as animations in
+\begin_inset Newline newline
+\end_inset
+
+instability_2D_r-resolution-scan/phi_perturbation_r-nelement4.gif,
  instability_2D_r-resolution-scan/phi_perturbation_r-nelement8.gif,
- instability_2D_r-resolution-scan/phi_perturbation_r-nelement16.gif,
+\begin_inset Newline newline
+\end_inset
+
+instability_2D_r-resolution-scan/phi_perturbation_r-nelement16.gif,
  instability_2D_r-resolution-scan/phi_perturbation_r-nelement32.gif.
- The perturbations at the final time point of the simulations are:
+\begin_inset Newline newline
+\end_inset
+
+The perturbations at the final time point of the simulations are:
 \end_layout
 
 \begin_layout Standard
 \begin_inset Graphics
 	filename instability_2D_r-resolution-scan/final_phi_perturbation_r-nelement4.png
+	lyxscale 5
 	height 5cm
 
 \end_inset
@@ -535,6 +556,7 @@ instability_2D_r-resolution-scan/final_phi_perturbation_r-nelement4.png
 \begin_layout Standard
 \begin_inset Graphics
 	filename instability_2D_r-resolution-scan/final_phi_perturbation_r-nelement8.png
+	lyxscale 5
 	height 5cm
 
 \end_inset
@@ -553,6 +575,7 @@ instability_2D_r-resolution-scan/final_phi_perturbation_r-nelement8.png
 \begin_layout Standard
 \begin_inset Graphics
 	filename instability_2D_r-resolution-scan/final_phi_perturbation_r-nelement16.png
+	lyxscale 5
 	height 5cm
 
 \end_inset
@@ -571,6 +594,7 @@ instability_2D_r-resolution-scan/final_phi_perturbation_r-nelement16.png
 \begin_layout Standard
 \begin_inset Graphics
 	filename instability_2D_r-resolution-scan/final_phi_perturbation_r-nelement32.png
+	lyxscale 5
 	height 5cm
 
 \end_inset
@@ -648,6 +672,7 @@ For comparison classical particle diffusivity
 \begin_layout Standard
 \begin_inset Graphics
 	filename background_1D/background_1D_D_classical.png
+	lyxscale 5
 	height 5cm
 
 \end_inset
@@ -666,6 +691,7 @@ background_1D/background_1D_D_classical.png
 \begin_layout Standard
 \begin_inset Graphics
 	filename background_1D/background_1D_chi_i_classical.png
+	lyxscale 5
 	height 5cm
 
 \end_inset
@@ -693,6 +719,26 @@ With
 \end_inset
 
 .
+ [The r_nelement=4 line has a spike because I restarted the simulation and accidentally added random noise again - can re-run to make a clean version if needed.]
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename instability_2D_r-resolution-scan/stabilised-resolution-scan.png
+	lyxscale 5
+	height 5cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+instability_2D_r-resolution-scan/stabilised-resolution-scan.png
 \begin_inset Newline newline
 \end_inset
 
@@ -710,6 +756,118 @@ At slightly lower dissipation of
 
 ,
  with 2 peaks/troughs that are not obviously spiked on element boundaries.
+ See also the animations in
+\begin_inset Newline newline
+\end_inset
+
+phi_perturbation_rdiss7e-9_r-nelement4.gif,
+ phi_perturbation_rdiss7e-9_r-nelement8.gif,
+\begin_inset Newline newline
+\end_inset
+
+phi_perturbation_rdiss7e-9_r-nelement16.gif,
+ phi_perturbation_rdiss7e-9_r-nelement32.gif.
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename instability_2D_r-resolution-scan/converged-rdiss7e-9-resolution-scan.png
+	lyxscale 5
+	height 5cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+instability_2D_r-resolution-scan/converged-rdiss7e-9-resolution-scan.png
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename instability_2D_r-resolution-scan/final_phi_perturbation_rdiss7e-9_r-nelement4.png
+	lyxscale 5
+	height 5cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+instability_2D_r-resolution-scan/final_phi_perturbation_rdiss7e-9_r-nelement4.png
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename instability_2D_r-resolution-scan/final_phi_perturbation_rdiss7e-9_r-nelement8.png
+	lyxscale 5
+	height 5cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+instability_2D_r-resolution-scan/final_phi_perturbation_rdiss7e-9_r-nelement8.png
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename instability_2D_r-resolution-scan/final_phi_perturbation_rdiss7e-9_r-nelement16.png
+	lyxscale 5
+	height 5cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+instability_2D_r-resolution-scan/final_phi_perturbation_rdiss7e-9_r-nelement16.png
+\begin_inset Newline newline
+\end_inset
+
+
+\begin_inset Newline newline
+\end_inset
+
+
+\begin_inset Note Note
+status open
+
+\begin_layout Plain Layout
+\begin_inset Graphics
+	filename instability_2D_r-resolution-scan/final_phi_perturbation_rdiss7e-9_r-nelement32.png
+	lyxscale 5
+	height 5cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Plain Layout
+instability_2D_r-resolution-scan/final_phi_perturbation_rdiss7e-9_r-nelement32.png
+\end_layout
+
+\end_inset
+
+
 \end_layout
 
 \end_body
