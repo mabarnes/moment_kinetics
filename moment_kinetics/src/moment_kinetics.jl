@@ -109,7 +109,7 @@ using .looping: debug_setup_loop_ranges_split_one_combination!
 using .moment_kinetics_input: mk_input, read_input_file
 using .time_advance: setup_time_advance!, time_advance!
 using .timer_utils
-using .type_definitions: mk_float, mk_int, OptionsDict
+using .type_definitions
 using .utils: to_minutes, get_default_restart_filename,
               get_prefix_iblock_and_move_existing_file
 using .em_fields: setup_em_fields
@@ -155,18 +155,26 @@ function run_moment_kinetics(input_dict::OptionsDict; restart=false, restart_tim
         # last 3 elements of mk_state are ascii_io, io_moments, and io_dfns
         cleanup_moment_kinetics!(mk_state[end-2:end]...)
     catch e
-        # Stop code from hanging when running on multiple processes if only one of them
-        # throws an error
-        if global_size[] > 1
+        if isa(e, MKFileNotFound)
+            # This error should always be thrown on all process, so no need to call
+            # MPI.Abort()
+            cleanup_moment_kinetics!(mk_state[end-2:end]...)
+            rethrow(e)
+        end
+        if isa(e, MKFileNotFound) || global_size[] == 1
+            # MKFileNotFound should always be thrown on all process, so no need to call
+            # MPI.Abort().
+            # Error almost certainly occured before cleanup. If running in serial we can
+            # still finalise file I/O
+            cleanup_moment_kinetics!(mk_state[end-2:end]...)
+        else
+            # Stop code from hanging when running on multiple processes if only one of
+            # them throws an error.
             println(stderr, "$(typeof(e)) on process $(global_rank[]):")
             showerror(stderr, e, catch_backtrace())
             flush(stdout)
             flush(stderr)
             MPI.Abort(comm_world, 1)
-        else
-            # Error almost certainly occured before cleanup. If running in serial we can
-            # still finalise file I/O
-            cleanup_moment_kinetics!(mk_state[end-2:end]...)
         end
 
         rethrow(e)
