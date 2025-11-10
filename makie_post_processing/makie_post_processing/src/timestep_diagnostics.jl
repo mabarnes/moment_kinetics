@@ -748,21 +748,21 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
         end
     end
 
-    if run_info_dfns[1].dfns
+    if run_info[1].dfns
         this_input_dict = input_dict_dfns
     else
         this_input_dict = input_dict
     end
     if electron
-        variable_list = (v for v ∈ union((ri.evolving_variables for ri in run_info_dfns)...)
+        variable_list = (v for v ∈ union((ri.evolving_variables for ri in run_info)...)
                          if occursin("electron", v))
     else
-        variable_list = (v for v ∈ union((ri.evolving_variables for ri in run_info_dfns)...)
+        variable_list = (v for v ∈ union((ri.evolving_variables for ri in run_info)...)
                          if !occursin("electron", v))
     end
-    all_variable_names = union((ri.variable_names for ri ∈ run_info_dfns)...)
+    all_variable_names = union((ri.variable_names for ri ∈ run_info)...)
 
-    has_r_dim = any(ri.r.n > 1 for ri ∈ run_info_dfns)
+    has_r_dim = any(ri.r.n > 1 for ri ∈ run_info)
 
     #error_norm_method = "Linf"
     error_norm_method = "L2"
