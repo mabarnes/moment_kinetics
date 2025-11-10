@@ -665,12 +665,10 @@ function parallel_scaling(run_info; plot_prefix=nothing, this_input_dict=nothing
         # Ensure the first row width is 3/4 of the column width so that the plot does not
         # get squashed by the legend
         rowsize!(fig_time_all.layout, 1, Aspect(1, 3/4))
-        resize_to_layout!(fig_time_all)
 
         # Ensure the first row width is 3/4 of the column width so that the plot does not
         # get squashed by the legend
         rowsize!(fig_efficiency_all.layout, 1, Aspect(1, 3/4))
-        resize_to_layout!(fig_efficiency_all)
     end
 
     if plot_prefix === nothing && string(Makie.current_backend()) == "GLMakie"
@@ -714,6 +712,8 @@ function parallel_scaling(run_info; plot_prefix=nothing, this_input_dict=nothing
             Legend(legend_place_time_all, ax_time_all; tellheight=true, tellwidth=true)
             Legend(legend_place_efficiency_all, ax_efficiency_all; tellheight=true,
                    tellwidth=true)
+            resize_to_layout!(fig_time_all)
+            resize_to_layout!(fig_efficiency_all)
 
             if plot_prefix !== nothing
                 if weak
