@@ -15,7 +15,7 @@ using ..reference_parameters
 
 # Import moment_kinetics so we can refer to it in docstrings
 import ..moment_kinetics
-using moment_kinetics.type_definitions: OptionsDict
+using moment_kinetics.type_definitions
 
 using Dates
 using Glob
@@ -168,7 +168,7 @@ to.
 """
 function get_backup_filename(filename)
     if !isfile(filename)
-        error("Requested to restart from $filename, but this file does not exist")
+        throw(MKFileNotFound("Requested to restart from $filename, but this file does not exist"))
     end
     counter = 1
     temp, extension = splitext(filename)
