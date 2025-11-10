@@ -797,7 +797,7 @@ function write_manufactured_solutions!(fid, parallel_io, manufactured_source_lis
 
         if :Source_i_array ∈ keys(manufactured_source_list) && length(manufactured_source_list.Source_i_array) > 0
             write_single_value!(manufactured_solutions, "Source_i_array",
-                                manufactured_source_list.Source_i_array, vpa, vperp, r, z;
+                                manufactured_source_list.Source_i_array, vpa, vperp, z, r;
                                 parallel_io=parallel_io,
                                 description="Time-independent ion manufactured source array.")
         end
@@ -809,7 +809,7 @@ function write_manufactured_solutions!(fid, parallel_io, manufactured_source_lis
 
         if :Source_n_array ∈ keys(manufactured_source_list) && length(manufactured_source_list.Source_n_array) > 0
             write_single_value!(manufactured_solutions, "Source_n_array",
-                                manufactured_source_list.Source_n_array, vz, vr, vzeta, r, z;
+                                manufactured_source_list.Source_n_array, vz, vr, vzeta, z, r;
                                 parallel_io=parallel_io,
                                 description="Time-independent neutral manufactured source array.")
         end
