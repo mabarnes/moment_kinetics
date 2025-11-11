@@ -603,6 +603,11 @@ using IfElse
         if length(boundaries.r.inner_sections) > 1 || length(boundaries.r.outer_sections) > 1
             error("Manufactured solutions do not support multiple radial boundary sections")
         end
+        if length(boundaries.r.inner_sections) == 0 || length(boundaries.r.outer_sections) == 0
+            # No radial domain, so r_bc does not matter
+            return "periodic"
+        end
+
         r_bc_type = typeof(boundaries.r.inner_sections[1].ion)
         if typeof(boundaries.r.outer_sections[1].ion) !== r_bc_type
             error("Inner and outer radial boundary conditions are different "
