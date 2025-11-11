@@ -181,6 +181,7 @@ function instability2D_plots_for_variable(run_info::Vector{Any}, variable_name;
 
     fig = figs[3]
     if fig !== nothing
+        put_legend_below(fig, axes_and_observables[1][3])
         outfile = string(plot_prefix, "$(variable_name)_amplitude_vs_t.pdf")
         save(outfile, fig)
     end
@@ -405,14 +406,13 @@ function instability2D_plots_for_variable(run_info, variable_name; irun=1, plot_
         # Plot the fitted exponential growth
         fit_t = run_info.time[@. run_info.time > tmin && run_info.time < tmax]
         fit_amplitude = @. A * exp(γ * fit_t)
-        plot_1d(fit_t, fit_amplitude; ax=ax, color=Cycled(irun))
+        plot_1d(fit_t, fit_amplitude; ax=ax, color=Cycled(irun), label=run_info.run_name)
         label_t = 0.5 * (fit_t[1] + fit_t[end])
         gamma_string = @sprintf("%.5g", γ)
-        # For now setting the text color with Cycled(irun) doesn't work in Makie.jl.
-        #text!(ax, Point2f(label_t, A * exp(γ * label_t)); text="γ = $gamma_string",
-        #      align=(:left, :top), color=Cycled(irun))
-        text!(ax, Point2f(label_t, A * exp(γ * label_t)); text="γ = $gamma_string",
-              align=(:left, :top))
+        with_theme(Text=(; cycle=:color)) do
+            text!(ax, Point2f(label_t, A * exp(γ * label_t)); text="γ = $gamma_string",
+                  align=(:left, :top), color=Cycled(irun))
+        end
 
         if axes_and_observables === nothing
             outfile = string(plot_prefix, "$(variable_name)_amplitude_vs_t.pdf")
