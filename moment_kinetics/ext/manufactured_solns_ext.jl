@@ -292,6 +292,7 @@ using IfElse
                   * (1.0 + temperature_amplitude
                      * sin(2.0*π*background_wavenumber*z/Lz)
                     ))
+            return T0
         else
             error("Unrecognized option "
                   * "manufactured_solns:type=$(manufactured_solns_input.type)")
@@ -322,9 +323,12 @@ using IfElse
     
     # ion parallel pressure symbolic function 
     function ppari_sym(Lr,Lz,r_bc,z_bc,composition,manufactured_solns_input,species)
-        # normalisation factor due to pressure normalisation convention in master pref = nref mref cref^2
-        norm_fac = 0.5
-        if z_bc == "periodic"
+        if manufactured_solns_input.type == "2D-instability"
+            densi = densi_sym(Lr,Lz,r_bc,z_bc,composition,manufactured_solns_input,species)
+            Tpari = Ti_sym(Lr, Lz, r_bc, z_bc, composition, manufactured_solns_input,
+                           species)
+            ppari = densi * Tpari
+        elseif z_bc == "periodic"
             densi = densi_sym(Lr,Lz,r_bc,z_bc,composition,manufactured_solns_input,species)
             ppari = densi
         elseif z_bc == "wall"
@@ -337,20 +341,24 @@ using IfElse
                       - (2.0/(pi*densi))*((z/Lz + 0.5)*nplus_sym(Lr,Lz,r_bc,z_bc,epsilon,alpha) 
                       - (0.5 - z/Lz)*nminus_sym(Lr,Lz,r_bc,z_bc,epsilon,alpha))^2 )
         end
-        return ppari*norm_fac
+        return ppari
     end
     
     # ion perpendicular pressure symbolic function 
     function pperpi_sym(Lr,Lz,r_bc,z_bc,composition,manufactured_solns_input,species,nvperp)
         densi = densi_sym(Lr,Lz,r_bc,z_bc,composition,manufactured_solns_input,species)
-        normfac = 0.5 # if pressure normalised to 0.5* nref * Tref = mref cref^2
-        #normfac = 1.0 # if pressure normalised to nref*Tref
         if nvperp > 1
-            pperpi = densi # simple vperp^2 dependence of dfni
+            if manufactured_solns_input.type == "2D-instability"
+                Tperpi = Ti_sym(Lr, Lz, r_bc, z_bc, composition, manufactured_solns_input,
+                               species)
+                pperpi = densi * Tperpi
+            else
+                pperpi = densi # simple vperp^2 dependence of dfni
+            end
         else
             pperpi = 0.0 # marginalised model has nvperp = 1, vperp[1] = 0
         end
-        return pperpi*normfac
+        return pperpi
     end
     
     # ion thermal speed symbolic function 
