@@ -61,7 +61,7 @@ function manufactured_solutions_get_field_and_field_sym(run_info, variable_name;
                                          run_info.z.bc, run_info.composition,
                                          run_info.geometry.input, run_info.r.n,
                                          run_info.manufactured_solns_input,
-                                         run_info.species)
+                                         run_info.species.ion[1])
     elseif variable_name ∈ (:density, :parallel_flow, :parallel_pressure,
                             :perpendicular_pressure, :density_neutral, :f, :f_neutral)
         manufactured_funcs =
