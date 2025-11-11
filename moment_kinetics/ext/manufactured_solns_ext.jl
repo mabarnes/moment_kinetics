@@ -739,18 +739,20 @@ using IfElse
                - ionization_frequency*dense*gav_dfnn )
         nu_krook = collisions.krook.nuii0
         if nu_krook > 0.0
-            Ti_over_Tref = vthi^2
             if collisions.krook.frequency_option == "manual"
                 nuii_krook = nu_krook
             else # default option
-                nuii_krook = nu_krook * densi * Ti_over_Tref^(-1.5)
+                nuii_krook = nu_krook * densi / vthi^3
             end
             if vperp_coord.n > 1
                 pvth  = 3
+                Krook_vthi = vthi
             else 
                 pvth = 1
+                Krook_vthi = sqrt(3.0) * vthi
+                nuii_krook /= 3.0^1.5
             end
-            FMaxwellian = (densi/vthi^pvth)/π^(pvth/2)*exp( -( ( vpa-upari)^2 + vperp^2 )/vthi^2)
+            FMaxwellian = (densi/Krook_vthi^pvth)/π^(pvth/2)*exp( -( ( vpa-upari)^2 + vperp^2 )/Krook_vthi^2)
             Si += - nuii_krook*(FMaxwellian - dfni)
         end
         include_num_diss_in_MMS = true
