@@ -3,6 +3,10 @@ using makie_post_processing
 using makie_post_processing.Printf
 using StatsBase
 
+# Increase this well above 1.0 to get poster-quality plots, but because we are outputting
+# as png here, also increases file size quite a bit.
+resolution_increase_factor = 1.0
+
 plots_dir = "publication_inputs/APS2025"
 
 # 1D backgrounds
@@ -25,7 +29,7 @@ for (sim_dir, label) ∈ (("runs/1D1V-instability-test/", "background_1D"),
     ax_1d.xlabel = "parallel distance"
     Legend(fig_1d[2,1], ax_1d; tellheight=true, tellwidth=false)
 
-    save(joinpath(dir_1d, label * "_source.png"), fig_1d; px_per_unit=16.0)
+    save(joinpath(dir_1d, label * "_source.png"), fig_1d; px_per_unit=resolution_increase_factor)
 
     # Plot moment profiles
     n = get_variable(ri_1d, "density"; it=ri_1d.nt, is=1, ir=1)
@@ -36,7 +40,7 @@ for (sim_dir, label) ∈ (("runs/1D1V-instability-test/", "background_1D"),
     ax_1d.xlabel = "parallel distance"
     Legend(fig_1d[2,1], ax_1d; tellheight=true, tellwidth=false)
 
-    save(joinpath(dir_1d, label * "_nT_profiles.png"), fig_1d; px_per_unit=16.0)
+    save(joinpath(dir_1d, label * "_nT_profiles.png"), fig_1d; px_per_unit=resolution_increase_factor)
 
     u = get_variable(ri_1d, "parallel_flow"; it=ri_1d.nt, is=1, ir=1)
 
@@ -45,7 +49,7 @@ for (sim_dir, label) ∈ (("runs/1D1V-instability-test/", "background_1D"),
     ax_1d.ylabel = "u_∥"
     Legend(fig_1d[2,1], ax_1d; tellheight=true, tellwidth=false)
 
-    save(joinpath(dir_1d, label * "_upar_profiles.png"), fig_1d; px_per_unit=16.0)
+    save(joinpath(dir_1d, label * "_upar_profiles.png"), fig_1d; px_per_unit=resolution_increase_factor)
 
     if label == "background_1D"
         nu_ii_Krook = get_variable(ri_1d, "Krook_collision_frequency_ii"; it=ri_1d.nt,
@@ -56,18 +60,18 @@ for (sim_dir, label) ∈ (("runs/1D1V-instability-test/", "background_1D"),
         ax_1d.ylabel = "nu_ii"
         Legend(fig_1d[2,1], ax_1d; tellheight=true, tellwidth=false)
 
-        save(joinpath(dir_1d, label * "_nu_ii_Krook_profiles.png"), fig_1d; px_per_unit=16.0)
+        save(joinpath(dir_1d, label * "_nu_ii_Krook_profiles.png"), fig_1d; px_per_unit=resolution_increase_factor)
     end
 
     # Plot distribution function
     f = get_variable(ri_1d, "f"; it=ri_1d.nt, is=1, ir=1, ivperp=1)
 
     fig_1d, ax_1d, hm = heatmap(ri_1d.vpa.grid, parallel_coordinate, f)
+    Colorbar(fig_1d[1,2], hm)
     ax_1d.xlabel = "parallel distance"
     ax_1d.ylabel = "v_∥"
-    Colorbar(fig_1d[1,2], hm)
 
-    save(joinpath(dir_1d, label * "_f.png"), fig_1d; px_per_unit=16.0)
+    save(joinpath(dir_1d, label * "_f.png"), fig_1d; px_per_unit=resolution_increase_factor)
 
     # Classical particle diffusivity and classical heat diffusivity.
     nu_ii = get_variable(ri_1d, "Krook_collision_frequency_ii"; it=ri_1d.nt, is=1, ir=1)
@@ -88,19 +92,19 @@ for (sim_dir, label) ∈ (("runs/1D1V-instability-test/", "background_1D"),
     ax_1d.xlabel = "parallel distance"
     ax_1d.ylabel = "D_classical"
 
-    save(joinpath(dir_1d, label * "_D_classical.png"), fig_1d; px_per_unit=16.0)
+    save(joinpath(dir_1d, label * "_D_classical.png"), fig_1d; px_per_unit=resolution_increase_factor)
 
     fig_1d, ax_1d, l = lines(parallel_coordinate, chi_i_classical)
     ax_1d.xlabel = "parallel distance"
     ax_1d.ylabel = "chi_i_classical"
 
-    save(joinpath(dir_1d, label * "_chi_i_classical.png"), fig_1d; px_per_unit=16.0)
+    save(joinpath(dir_1d, label * "_chi_i_classical.png"), fig_1d; px_per_unit=resolution_increase_factor)
 
     fig_1d, ax_1d, l = lines(parallel_coordinate, rho_i)
     ax_1d.xlabel = "parallel distance"
     ax_1d.ylabel = "rho_i"
 
-    save(joinpath(dir_1d, label * "_rho_i.png"), fig_1d; px_per_unit=16.0)
+    save(joinpath(dir_1d, label * "_rho_i.png"), fig_1d; px_per_unit=resolution_increase_factor)
 end
 
 # Instability analysis - scan in radial resolution
@@ -162,11 +166,11 @@ for (irun, this_ri) ∈ enumerate(ri_r_nelement_scan)
     final_ax.title = "r_nelement = $(this_ri.r.nelement_global)"
     save(joinpath(dir_r_nelement_scan,
                   "final_phi_perturbation_r-nelement$(this_ri.r.nelement_global).png"),
-                  final_fig; px_per_unit=16.0)
+                  final_fig; px_per_unit=resolution_increase_factor)
 end
 
 Legend(fig[2,1], ax; tellheight=true, tellwidth=false)
-save(joinpath(dir_r_nelement_scan, "growth_rate_r-resolution-scan.png"), fig; px_per_unit=16.0)
+save(joinpath(dir_r_nelement_scan, "growth_rate_r-resolution-scan.png"), fig; px_per_unit=resolution_increase_factor)
 
 # Check convergence with r_nelement of stabilisation at Dr=1e-8.
 stabilised_run_dirs = ("runs/2D1V-instability-test_Lr1cm_rdiss1e-8/",
@@ -183,7 +187,7 @@ for (irun, this_ri) ∈ enumerate(ri_stabilised)
 end
 
 Legend(fig[2,1], ax; tellheight=true, tellwidth=false)
-save(joinpath(dir_r_nelement_scan, "stabilised-resolution-scan.png"), fig; px_per_unit=16.0)
+save(joinpath(dir_r_nelement_scan, "stabilised-resolution-scan.png"), fig; px_per_unit=resolution_increase_factor)
 
 # Show apparently converged mode with Dr=7e-9
 converged_rdiss7em9_run_dirs = ("runs/2D1V-instability-test_Lr1cm_rdiss7e-9/",
@@ -216,11 +220,11 @@ for (irun, this_ri) ∈ enumerate(ri_converged)
     final_ax.title = "r_nelement = $(this_ri.r.nelement_global), Dr = 7e-9"
     save(joinpath(dir_r_nelement_scan,
                   "final_phi_perturbation_rdiss7e-9_r-nelement$(this_ri.r.nelement_global).png"),
-                  final_fig; px_per_unit=16.0)
+                  final_fig; px_per_unit=resolution_increase_factor)
 end
 
 Legend(fig[2,1], ax; tellheight=true, tellwidth=false)
-save(joinpath(dir_r_nelement_scan, "converged-rdiss7e-9-resolution-scan.png"), fig; px_per_unit=16.0)
+save(joinpath(dir_r_nelement_scan, "converged-rdiss7e-9-resolution-scan.png"), fig; px_per_unit=resolution_increase_factor)
 
 # Scan dissipation between Dr=1e-9 (unsure if the instability is radial-grid-scale) and Dr=7e-9 (instability seems well resolved).
 dir_rdiss_scan = mkpath(joinpath(plots_dir, "instability_2D_rdiss-scan"))
@@ -257,11 +261,11 @@ for (irun, this_ri) ∈ enumerate(ri_rdiss_scan)
     final_ax.title = "r_nelement = 16, Dr = $(irun)e-9"
     save(joinpath(dir_rdiss_scan,
                   "final_phi_perturbation_rdiss$(irun)e-9.png"),
-                  final_fig; px_per_unit=16.0)
+                  final_fig; px_per_unit=resolution_increase_factor)
 end
 
 Legend(fig[2,1], ax; tellheight=true, tellwidth=false)
-save(joinpath(dir_rdiss_scan, "rdiss-scan.png"), fig; px_per_unit=16.0)
+save(joinpath(dir_rdiss_scan, "rdiss-scan.png"), fig; px_per_unit=resolution_increase_factor)
 
 # Compare case with Krook collisions switched off
 dir_no_Krook = mkpath(joinpath(plots_dir, "instability_2D_no-Krook"))
@@ -294,8 +298,8 @@ for (irun, this_ri) ∈ enumerate(ri_no_Krook)
     final_ax.title = "no Krook, r_nelement = $(this_ri.r.nelement_global)"
     save(joinpath(dir_no_Krook,
                   "final_phi_perturbation_no-Krook_r-nelement$(this_ri.r.nelement_global).png"),
-                  final_fig; px_per_unit=16.0)
+                  final_fig; px_per_unit=resolution_increase_factor)
 end
 
 Legend(fig[2,1], ax; tellheight=true, tellwidth=false)
-save(joinpath(dir_no_Krook, "growth_rate_no-Krook_r-resolution-scan.png"), fig; px_per_unit=16.0)
+save(joinpath(dir_no_Krook, "growth_rate_no-Krook_r-resolution-scan.png"), fig; px_per_unit=resolution_increase_factor)
