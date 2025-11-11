@@ -116,7 +116,8 @@ r_r_nelement_scan_run_dirs = ("runs/2D1V-instability-test_Lr1cm/",
                            )
 ri_r_nelement_scan = get_run_info(r_r_nelement_scan_run_dirs...; dfns=true)
 
-function plot_mode_amplitude(this_ri, phi, ax, irun)
+function plot_mode_amplitude(this_ri, phi, ax, irun;
+                             label="r_nelement = $(this_ri.r.nelement_global)")
     # Take a crude but hopefully robust estimate of the mode amplitude.
     # Take the maximum over z of the the RMS over r of the variable.
     # Pass `corrected=false` to `StatsBase.std` so that it just calculates the RMS,
@@ -132,15 +133,13 @@ function plot_mode_amplitude(this_ri, phi, ax, irun)
     # Plot the fitted exponential growth
     fit_t = this_ri.time[@. this_ri.time > tmin && this_ri.time < tmax]
     fit_amplitude = @. A * exp(γ * fit_t)
-    lines!(ax, fit_t, fit_amplitude; color=Cycled(irun),
-           label="r_nelement = $(this_ri.r.nelement_global)")
+    lines!(ax, fit_t, fit_amplitude; color=Cycled(irun), label=label)
     label_t = 0.5 * (fit_t[1] + fit_t[end])
     gamma_string = @sprintf("%.5g", γ)
-    # For now setting the text color with Cycled(irun) doesn't work in Makie.jl.
-    #text!(ax, Point2f(label_t, A * exp(γ * label_t)); text="γ = $gamma_string",
-    #      align=(:left, :top), color=Cycled(irun))
-    text!(ax, Point2f(label_t, A * exp(γ * label_t)); text="γ = $gamma_string",
-          align=(:left, :top))
+    with_theme(Text=(; cycle=:color)) do
+        text!(ax, Point2f(label_t, A * exp(γ * label_t)); text="γ = $gamma_string",
+              align=(:left, :top), color=Cycled(irun))
+    end
 end
 
 fig, ax = get_1d_ax(xlabel="time", ylabel="amplitude", yscale=log10)
@@ -161,6 +160,7 @@ for (irun, this_ri) ∈ enumerate(ri_r_nelement_scan)
     # Plot final time point
     final_perturbation = @view perturbation[:,:,end]
     final_fig, final_ax, hm = heatmap(this_ri.z.grid, this_ri.r.grid, final_perturbation)
+    Colorbar(final_fig[1,2], hm)
     final_ax.xlabel = "z"
     final_ax.ylabel = "r"
     final_ax.title = "r_nelement = $(this_ri.r.nelement_global)"
@@ -215,6 +215,7 @@ for (irun, this_ri) ∈ enumerate(ri_converged)
     # Plot final time point
     final_perturbation = @view perturbation[:,:,end]
     final_fig, final_ax, hm = heatmap(this_ri.z.grid, this_ri.r.grid, final_perturbation)
+    Colorbar(final_fig[1,2], hm)
     final_ax.xlabel = "z"
     final_ax.ylabel = "r"
     final_ax.title = "r_nelement = $(this_ri.r.nelement_global), Dr = 7e-9"
@@ -243,7 +244,7 @@ fig, ax = get_1d_ax(xlabel="time", ylabel="amplitude", yscale=log10)
 for (irun, this_ri) ∈ enumerate(ri_rdiss_scan)
     phi = get_variable(this_ri, "phi")
 
-    plot_mode_amplitude(this_ri, phi, ax, irun)
+    plot_mode_amplitude(this_ri, phi, ax, irun; label="rdiss = $(irun)e-9")
 
     # make animation of perturbation
     _, perturbation = makie_post_processing.get_r_perturbation(phi)
@@ -256,6 +257,7 @@ for (irun, this_ri) ∈ enumerate(ri_rdiss_scan)
     # Plot final time point
     final_perturbation = @view perturbation[:,:,end]
     final_fig, final_ax, hm = heatmap(this_ri.z.grid, this_ri.r.grid, final_perturbation)
+    Colorbar(final_fig[1,2], hm)
     final_ax.xlabel = "z"
     final_ax.ylabel = "r"
     final_ax.title = "r_nelement = 16, Dr = $(irun)e-9"
@@ -293,6 +295,7 @@ for (irun, this_ri) ∈ enumerate(ri_no_Krook)
     # Plot final time point
     final_perturbation = @view perturbation[:,:,end]
     final_fig, final_ax, hm = heatmap(this_ri.z.grid, this_ri.r.grid, final_perturbation)
+    Colorbar(final_fig[1,2], hm)
     final_ax.xlabel = "z"
     final_ax.ylabel = "r"
     final_ax.title = "no Krook, r_nelement = $(this_ri.r.nelement_global)"

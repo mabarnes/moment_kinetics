@@ -146,6 +146,15 @@ full-f
 \end_layout
 
 \begin_layout Itemize
+No magnetic drifts,
+ only 
+\begin_inset Formula $E\times B$
+\end_inset
+
+ drifts.
+\end_layout
+
+\begin_layout Itemize
 Krook collision operator.
  Collision frequency is Braginskii's ion-ion collision frequency,
  evaluated with local density and temperature.
