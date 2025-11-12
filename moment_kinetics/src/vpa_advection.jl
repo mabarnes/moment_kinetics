@@ -336,14 +336,14 @@ function update_speed_vpa!(vpa_advect, fields, fvec, moments, r_advect, z_advect
     # magnetic mirror term only supported for standard DK implementation
     if moments.evolve_p
         update_speed_vpa_n_u_p_evolution!(vpa_advect, fields, fvec, moments, r_advect,
-                                          z_advect, vpa, z, r, composition, collisions,
+                                          z_advect, vpa, vperp, z, r, composition, collisions,
                                           ion_source_settings, geometry)
     elseif moments.evolve_upar
         update_speed_vpa_n_u_evolution!(vpa_advect, fields, fvec, moments, r_advect,
-                                        z_advect, vpa, z, r, composition, collisions,
+                                        z_advect, vpa, vperp, z, r, composition, collisions,
                                         ion_source_settings, geometry)
     elseif moments.evolve_density
-        update_speed_vpa_n_evolution!(vpa_advect, fields, fvec, moments, vpa, z, r,
+        update_speed_vpa_n_evolution!(vpa_advect, fields, fvec, moments, vpa, vperp, z, r,
                                       composition, collisions, ion_source_settings,
                                       geometry)
     else
@@ -361,12 +361,12 @@ in this case, the parallel velocity coordinate is the normalized peculiar veloci
 wpa = (vpa - upar)/vth
 """
 function update_speed_vpa_n_u_p_evolution!(vpa_advect, fields, fvec, moments, r_advect,
-                                           z_advect, vpa, z, r, composition, collisions,
+                                           z_advect, vpa, vperp, z, r, composition, collisions,
                                            ion_source_settings, geometry)
-    upar = fvec.upar
     vth = moments.ion.vth
-    Ez = fields.Ez
-    bz = geometry.bzed
+    bzed = geometry.bzed
+    dBdz = geometry.dBdz
+    Bmag = geometry.Bmag
     dupar_dr = moments.ion.dupar_dr
     dupar_dz = moments.ion.dupar_dz
     dvth_dr = moments.ion.dvth_dr
@@ -374,6 +374,7 @@ function update_speed_vpa_n_u_p_evolution!(vpa_advect, fields, fvec, moments, r_
     dupar_dt = moments.ion.dupar_dt
     dvth_dt = moments.ion.dvth_dt
     wpa = vpa.grid
+    wperp = vperp.grid
     @loop_s is begin
         speed = vpa_advect[is].speed
         r_speed = r_advect[is].speed
@@ -381,14 +382,16 @@ function update_speed_vpa_n_u_p_evolution!(vpa_advect, fields, fvec, moments, r_
         @loop_r ir begin
             # update parallel acceleration to account for:
             @loop_z_vperp_vpa iz ivperp ivpa begin
+                mu = 0.5*(wperp[ivperp]^2 * vth[iz,ir,is]^2)/Bmag[iz,ir]
                 speed[ivpa,ivperp,iz,ir] =
-                    (bz[iz,ir] * Ez[iz,ir]
+                    (bzed[iz,ir] * fields.gEz[ivperp,iz,ir,is]
                      - (dupar_dt[iz,ir,is]
                         + r_speed[ir,ivpa,ivperp,iz] * dupar_dr[iz,ir,is]
                         + z_speed[iz,ivpa,ivperp,ir] * dupar_dz[iz,ir,is])
                      - wpa[ivpa] * (dvth_dt[iz,ir,is]
                                     + r_speed[ir,ivpa,ivperp,iz] * dvth_dr[iz,ir,is]
                                     + z_speed[iz,ivpa,ivperp,ir] * dvth_dz[iz,ir,is])
+                     - (mu*bzed[iz,ir]*dBdz[iz,ir])
                     ) / vth[iz,ir,is]
             end
         end
@@ -404,10 +407,13 @@ in this case, the parallel velocity coordinate is the peculiar velocity
 wpa = vpa-upar
 """
 function update_speed_vpa_n_u_evolution!(vpa_advect, fields, fvec, moments, r_advect,
-                                         z_advect, vpa, z, r, composition, collisions,
-                                         ion_source_settings, geometry) upar = fvec.upar
-    Ez = fields.Ez
-    bz = geometry.bzed
+                                         z_advect, vpa, vperp, z, r, composition, collisions,
+                                         ion_source_settings, geometry)
+    bzed = geometry.bzed
+    dBdz = geometry.dBdz
+    Bmag = geometry.Bmag
+
+    # Ez = fields.Ez
     dupar_dr = moments.ion.dupar_dr
     dupar_dz = moments.ion.dupar_dz
     dupar_dt = moments.ion.dupar_dt
@@ -419,11 +425,13 @@ function update_speed_vpa_n_u_evolution!(vpa_advect, fields, fvec, moments, r_ad
         @loop_r ir begin
             # update parallel acceleration to account for:
             @loop_z_vperp_vpa iz ivperp ivpa begin
+                mu = 0.5*(vperp.grid[ivperp]^2)/Bmag[iz,ir]
                 speed[ivpa,ivperp,iz,ir] =
-                    (bz[iz,ir] * Ez[iz,ir]
+                    (bzed[iz,ir] * fields.gEz[ivperp,iz,ir,is]
                      - (dupar_dt[iz,ir,is]
                         + r_speed[ir,ivpa,ivperp,iz] * dupar_dr[iz,ir,is]
                         + z_speed[iz,ivpa,ivperp,ir] * dupar_dz[iz,ir,is])
+                     - (mu*bzed[iz,ir]*dBdz[iz,ir])
                     )
             end
         end
@@ -437,18 +445,16 @@ update the advection speed in the parallel velocity coordinate for the case
 where density is evolved independently from the pdf;
 in this case, the parallel velocity coordinate is unchanged.
 """
-function update_speed_vpa_n_evolution!(vpa_advect, fields, fvec, moments, vpa, z, r,
+function update_speed_vpa_n_evolution!(vpa_advect, fields, fvec, moments, vpa, vperp, z, r,
                                        composition, collisions, ion_source_settings,
                                        geometry)
-    Ez = fields.Ez
-    bz = geometry.bzed
-    @loop_s is begin
-        speed = vpa_advect[is].speed
-        @loop_r ir begin
-            @loop_z_vperp iz ivperp begin
-                @. speed[:,ivperp,iz,ir] = bz[iz,ir] * Ez[iz,ir]
-            end
-        end
+    bzed = geometry.bzed
+    dBdz = geometry.dBdz
+    Bmag = geometry.Bmag
+    @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
+        mu = 0.5*(vperp.grid[ivperp]^2)/Bmag[iz,ir]
+        vpa_advect[is].speed[ivpa,ivperp,iz,ir] = (bzed[iz,ir]*fields.gEz[ivperp,iz,ir,is] -
+                                                mu*bzed[iz,ir]*dBdz[iz,ir])
     end
 
     return nothing
@@ -460,15 +466,6 @@ where no moments are evolved independently from the pdf. vpa is unchanged.
 """
 function update_speed_vpa_DK!(vpa_advect, fields, fvec, moments, vpa, vperp, z, r,
                                      composition, collisions, ion_source_settings, geometry)
-    gEz = fields.gEz
-    @loop_s is begin
-        speed = vpa_advect[is].speed
-        @loop_r ir begin
-            @loop_z_vperp iz ivperp begin
-                @. speed[:,ivperp,iz,ir] = gEz[ivperp,iz,ir,is]
-            end
-        end
-    end
     bzed = geometry.bzed
     dBdz = geometry.dBdz
     Bmag = geometry.Bmag

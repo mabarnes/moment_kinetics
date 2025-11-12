@@ -447,11 +447,11 @@ function mk_input(input_dict=OptionsDict("output" => OptionsDict("run_name" => "
     end
 
     geometry = init_magnetic_geometry(geometry_in,z,r,z_spectral)
-    if any(geometry.dBdz .!= 0.0) &&
-            (evolve_moments.density || evolve_moments.parallel_flow ||
-             evolve_moments.pressure)
-        error("Mirror terms not yet implemented for moment-kinetic modes")
-    end
+    # if any(geometry.dBdz .!= 0.0) &&
+    #         (evolve_moments.density || evolve_moments.parallel_flow ||
+    #          evolve_moments.pressure)
+    #     error("Mirror terms not yet implemented for moment-kinetic modes")
+    # end
 
     species_immutable = (ion = composition.ion, neutral = composition.neutral)
 
