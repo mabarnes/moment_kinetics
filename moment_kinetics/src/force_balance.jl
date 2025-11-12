@@ -31,10 +31,15 @@ to update the parallel particle flux dens*upar for each species
     dupar_dz_upwind = moments.ion.dupar_dz_upwind
     dupar_dz = moments.ion.dupar_dz
     dppar_dz = moments.ion.dppar_dz
+    ppar = moments.ion.ppar
+    pperp = moments.ion.pperp
     Ez = fields.Ez
     vEr = fields.vEr
     vEz = fields.vEz
     bz = geometry.bzed
+    Bmag = geometry.Bmag
+    dBdz = geometry.dBdz
+    dBdr = geometry.dBdr
     @loop_s_r_z is ir iz begin
         dnupar_dt[iz,ir,is] =
             -(vEr[iz,ir] * (density[iz,ir,is] * dupar_dr_upwind[iz,ir,is]
@@ -43,10 +48,14 @@ to update the parallel particle flux dens*upar for each species
                                                              + upar[iz,ir,is] * ddens_dz_upwind[iz,ir,is])
               + bz[iz,ir] * density[iz,ir,is] * upar[iz,ir,is] * dupar_dz[iz,ir,is]
               + bz[iz,ir] * dppar_dz[iz,ir,is]
-              - bz[iz,ir] * Ez[iz,ir] * density[iz,ir,is])
+              - bz[iz,ir] * Ez[iz,ir] * density[iz,ir,is]
+              + bz[iz,ir] * (1/Bmag[iz,ir]) * dBdz[iz,ir] * (pperp[iz,ir,is] - ppar[iz,ir,is])
+              - (1/Bmag[iz,ir]) * density[iz,ir,is] * upar[iz,ir,is] *
+                (vEr[iz,ir] * dBdr[iz,ir] + (vEz[iz,ir] + bz[iz,ir] * upar[iz,ir,is]) * dBdz[iz,ir]))
         end
 
     for index ∈ eachindex(ion_source_settings)
+        # no momentum source in our sources for now, make this false so code doesn't have to add zero
         if ion_source_settings[index].active && false
             @views source_amplitude = moments.ion.external_source_momentum_amplitude[:, :, index]
             @loop_s_r_z is ir iz begin

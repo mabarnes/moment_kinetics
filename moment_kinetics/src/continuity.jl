@@ -28,12 +28,16 @@ species
     dn_dz_upwind = moments.ion.ddens_dz_upwind
     du_dz = moments.ion.dupar_dz
     bz = geometry.bzed
+    Bmag = geometry.Bmag
+    dBdz = geometry.dBdz
+    dBdr = geometry.dBdr
     @loop_s_r_z is ir iz begin
         # Use ddens_dz is upwinded using upar
         ddens_dt[iz,ir,is] =
             -(vEr[iz,ir] * dn_dr_upwind[iz,ir,is]
               + (vEz[iz,ir] + bz[iz,ir] * upar[iz,ir,is]) * dn_dz_upwind[iz,ir,is]
-              + bz[iz,ir] * n[iz,ir,is] * du_dz[iz,ir,is])
+              + bz[iz,ir] * n[iz,ir,is] * du_dz[iz,ir,is]
+              - (1/Bmag[iz,ir]) * (vEr[iz,ir] * dBdr[iz,ir] + (vEz[iz,ir] + bz[iz,ir] * upar[iz,ir,is]) * dBdz[iz,ir]) * n[iz,ir,is])
     end
 
     # update the density to account for ionization collisions;
