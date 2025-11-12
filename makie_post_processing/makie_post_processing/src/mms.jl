@@ -163,6 +163,11 @@ function compare_moment_symbolic_test(run_info, plot_prefix, field_label, field_
     if input === nothing
         input = Dict_to_NamedTuple(input_dict["manufactured_solns"])
     end
+    if !any(x for x ∈ values(input) if isa(x, Bool))
+        # No analysis to do.
+        println("No MMS analysis enabled.")
+        return nothing
+    end
 
     field, field_sym =
         manufactured_solutions_get_field_and_field_sym(run_info, variable_name)
@@ -534,6 +539,12 @@ function compare_ion_pdf_symbolic_test(run_info, plot_prefix; io=nothing,
 
     println("Doing MMS analysis and making plots for $variable_name")
     flush(stdout)
+
+    if !any(x for x ∈ values(input) if isa(x, Bool))
+        # No analysis to do.
+        println("No MMS analysis enabled.")
+        return nothing
+    end
 
     if input === nothing
         input = Dict_to_NamedTuple(input_dict_dfns["manufactured_solns"])
