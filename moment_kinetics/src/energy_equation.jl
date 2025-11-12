@@ -19,24 +19,33 @@ evolve the parallel pressure by solving the energy equation
 
     @begin_s_r_z_region()
 
+    density = fvec.density
     upar = fvec.upar
     p = fvec.p
     ppar = moments.ion.ppar
+    pperp = moments.ion.pperp
     dupar_dz = moments.ion.dupar_dz
     dp_dr_upwind = moments.ion.dp_dr_upwind
     dp_dz_upwind = moments.ion.dp_dz_upwind
+    qpar = moments.ion.qpar
     dqpar_dz = moments.ion.dqpar_dz
     dp_dt = moments.ion.dp_dt
     vEr = fields.vEr
     vEz = fields.vEz
     bz = geometry.bzed
+    Bmag = geometry.Bmag
+    dBdz = geometry.dBdz
+    dBdr = geometry.dBdr
 
     @loop_s_r_z is ir iz begin
         dp_dt[iz,ir,is] = -(vEr[iz,ir] * dp_dr_upwind[iz,ir,is]
                             + (vEz[iz,ir] + bz[iz,ir] * upar[iz,ir,is]) * dp_dz_upwind[iz,ir,is]
                             + bz[iz,ir] * p[iz,ir,is] * dupar_dz[iz,ir,is]
                             + 2.0/3.0 * bz[iz,ir] * dqpar_dz[iz,ir,is]
-                            + 2.0/3.0 * bz[iz,ir] * ppar[iz,ir,is]*moments.ion.dupar_dz[iz,ir,is])
+                            + 2.0/3.0 * bz[iz,ir] * ppar[iz,ir,is] * moments.ion.dupar_dz[iz,ir,is]
+                            - 2.0/3.0 * (1/Bmag[iz,ir]) * ((2 * pperp[iz,ir,is] + 0.5 * ppar[iz,ir,is]) *
+                            (vEr[iz,ir] * dBdr[iz,ir] + (vEz[iz,ir] + bz[iz,ir] * upar[iz,ir,is]) * dBdz[iz,ir])
+                                                 + bz[iz,ir] * dBdz[iz,ir] * qpar[iz,ir,is]))
     end
 
 

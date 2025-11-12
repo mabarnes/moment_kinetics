@@ -333,7 +333,6 @@ function update_speed_vpa!(vpa_advect, fields, fvec, moments, r_advect, z_advect
     @debug_consistency_checks vpa.n == size(vpa_advect[1].speed,1) || throw(BoundsError(speed))
 
     # dvpa/dt = Ze/m ⋅ E_parallel - (vperp^2/2B) bz dB/dz
-    # magnetic mirror term only supported for standard DK implementation
     if moments.evolve_p
         update_speed_vpa_n_u_p_evolution!(vpa_advect, fields, fvec, moments, r_advect,
                                           z_advect, vpa, vperp, z, r, composition, collisions,
