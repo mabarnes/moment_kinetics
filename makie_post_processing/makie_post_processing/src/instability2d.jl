@@ -100,6 +100,9 @@ function instability2D_plots_for_variable(run_info::Vector{Any}, variable_name;
         end
         fig, ax = get_1d_ax(title="$var_symbol mode amplitude", xlabel="time",
                             ylabel="amplitude", yscale=log10)
+        # Ensure the first row width is 3/4 of the column width so that
+        # the plot does not get squashed by the legend
+        rowsize!(fig.layout, 1, Aspect(1, 3/4))
         push!(figs, fig)
         for i ∈ 1:n_runs
             push!(axes_and_observables[i], ax)
@@ -182,6 +185,7 @@ function instability2D_plots_for_variable(run_info::Vector{Any}, variable_name;
     fig = figs[3]
     if fig !== nothing
         put_legend_below(fig, axes_and_observables[1][3])
+        resize_to_layout!(fig)
         outfile = string(plot_prefix, "$(variable_name)_amplitude_vs_t.pdf")
         save(outfile, fig)
     end
