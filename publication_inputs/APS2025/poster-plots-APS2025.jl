@@ -143,6 +143,9 @@ function plot_mode_amplitude(this_ri, phi, ax, irun;
 end
 
 fig, ax = get_1d_ax(xlabel="time", ylabel="amplitude", yscale=log10)
+# Ensure the first row width is 3/4 of the column width so that the plot does not get
+# squashed by the legend
+rowsize!(fig.layout, 1, Aspect(1, 3/4))
 
 for (irun, this_ri) ∈ enumerate(ri_r_nelement_scan)
     phi = get_variable(this_ri, "phi")
@@ -170,6 +173,7 @@ for (irun, this_ri) ∈ enumerate(ri_r_nelement_scan)
 end
 
 Legend(fig[2,1], ax; tellheight=true, tellwidth=false)
+resize_to_layout!(fig)
 save(joinpath(dir_r_nelement_scan, "growth_rate_r-resolution-scan.png"), fig; px_per_unit=resolution_increase_factor)
 
 # Check convergence with r_nelement of stabilisation at Dr=1e-8.
@@ -180,6 +184,9 @@ stabilised_run_dirs = ("runs/2D1V-instability-test_Lr1cm_rdiss1e-8/",
 ri_stabilised = get_run_info(stabilised_run_dirs...; dfns=true)
 
 fig, ax = get_1d_ax(xlabel="time", ylabel="amplitude", yscale=log10)
+# Ensure the first row width is 3/4 of the column width so that the plot does not get
+# squashed by the legend
+rowsize!(fig.layout, 1, Aspect(1, 3/4))
 
 for (irun, this_ri) ∈ enumerate(ri_stabilised)
     phi = get_variable(this_ri, "phi")
@@ -187,6 +194,7 @@ for (irun, this_ri) ∈ enumerate(ri_stabilised)
 end
 
 Legend(fig[2,1], ax; tellheight=true, tellwidth=false)
+resize_to_layout!(fig)
 save(joinpath(dir_r_nelement_scan, "stabilised-resolution-scan.png"), fig; px_per_unit=resolution_increase_factor)
 
 # Show apparently converged mode with Dr=7e-9
@@ -198,6 +206,9 @@ converged_rdiss7em9_run_dirs = ("runs/2D1V-instability-test_Lr1cm_rdiss7e-9/",
 ri_converged = get_run_info(converged_rdiss7em9_run_dirs...; dfns=true)
 
 fig, ax = get_1d_ax(xlabel="time", ylabel="amplitude", yscale=log10)
+# Ensure the first row width is 3/4 of the column width so that the plot does not get
+# squashed by the legend
+rowsize!(fig.layout, 1, Aspect(1, 3/4))
 
 for (irun, this_ri) ∈ enumerate(ri_converged)
     phi = get_variable(this_ri, "phi")
@@ -225,6 +236,7 @@ for (irun, this_ri) ∈ enumerate(ri_converged)
 end
 
 Legend(fig[2,1], ax; tellheight=true, tellwidth=false)
+resize_to_layout!(fig)
 save(joinpath(dir_r_nelement_scan, "converged-rdiss7e-9-resolution-scan.png"), fig; px_per_unit=resolution_increase_factor)
 
 # Scan dissipation between Dr=1e-9 (unsure if the instability is radial-grid-scale) and Dr=7e-9 (instability seems well resolved).
@@ -240,6 +252,9 @@ rdiss_scan_run_dirs = ("runs/2D1V-instability-test_Lr1cm-rnelement16-rdiss1e-9/"
 ri_rdiss_scan = get_run_info(rdiss_scan_run_dirs...; dfns=true)
 
 fig, ax = get_1d_ax(xlabel="time", ylabel="amplitude", yscale=log10)
+# Ensure the first row width is 3/4 of the column width so that the plot does not get
+# squashed by the legend
+rowsize!(fig.layout, 1, Aspect(1, 3/4))
 
 for (irun, this_ri) ∈ enumerate(ri_rdiss_scan)
     phi = get_variable(this_ri, "phi")
@@ -267,6 +282,7 @@ for (irun, this_ri) ∈ enumerate(ri_rdiss_scan)
 end
 
 Legend(fig[2,1], ax; tellheight=true, tellwidth=false)
+resize_to_layout!(fig)
 save(joinpath(dir_rdiss_scan, "rdiss-scan.png"), fig; px_per_unit=resolution_increase_factor)
 
 # Compare case with Krook collisions switched off
@@ -278,6 +294,9 @@ no_Krook_run_dirs = ("runs/2D1V-instability-test_Lr1cm-no-Krook/",
                     )
 ri_no_Krook = get_run_info(no_Krook_run_dirs...; dfns=true)
 fig, ax = get_1d_ax(xlabel="time", ylabel="amplitude", yscale=log10)
+# Ensure the first row width is 3/4 of the column width so that the plot does not get
+# squashed by the legend
+rowsize!(fig.layout, 1, Aspect(1, 3/4))
 
 for (irun, this_ri) ∈ enumerate(ri_no_Krook)
     phi = get_variable(this_ri, "phi")
@@ -305,4 +324,5 @@ for (irun, this_ri) ∈ enumerate(ri_no_Krook)
 end
 
 Legend(fig[2,1], ax; tellheight=true, tellwidth=false)
+resize_to_layout!(fig)
 save(joinpath(dir_no_Krook, "growth_rate_no-Krook_r-resolution-scan.png"), fig; px_per_unit=resolution_increase_factor)
