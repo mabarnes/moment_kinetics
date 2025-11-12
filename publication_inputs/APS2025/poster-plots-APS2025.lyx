@@ -443,7 +443,7 @@ background_1D_no-Krook/background_1D_no-Krook_f.png
 \end_layout
 
 \begin_layout Subsection
-Instability
+Instability (with wall bc)
 \end_layout
 
 \begin_layout Standard
@@ -1234,6 +1234,140 @@ instability_2D_no-Krook/final_phi_perturbation_no-Krook_r-nelement16.png
 
 \begin_layout Standard
 instability_2D_no-Krook/final_phi_perturbation_no-Krook_r-nelement32.png
+\end_layout
+
+\begin_layout Subsection
+Instability (with periodic-
+\begin_inset Formula $z$
+\end_inset
+
+ bc)
+\end_layout
+
+\begin_layout Standard
+For simulations in a periodic box,
+ we set background profiles of density and temperature,
+ which are kept fixed by a manufactured source term.
+ The background temperature is
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename instability_2D_periodic5/periodic5_background_Tpar.png
+	lyxscale 5
+	height 5cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+instability_2D_periodic5/periodic5_background_Tpar.png
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+while the background density is
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename instability_2D_periodic5/periodic5_background_n.png
+	lyxscale 5
+	height 5cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+instability_2D_periodic5/periodic5_background_n.png
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+The amplitude of the sinusoidal fluctuation in the background density is adjusted to control the ratio of parallel temperature and density gradients in the background.
+\end_layout
+
+\begin_layout Standard
+Mode amplitudes show a strong,
+ apparently linear dependence on the ratio of amplitudes/gradients 
+\begin_inset Formula $A_{n}/A_{T}=L_{T}/L_{n}$
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename instability_2D_periodic5/growth_rate_periodic5-AT0.1-An-scan.png
+	lyxscale 5
+	height 5cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+instability_2D_periodic5/growth_rate_periodic5-AT0.1-An-scan.png
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Graphics
+	filename instability_2D_periodic5/growth_rate_vs_LToverLn.png
+	lyxscale 5
+	height 5cm
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+instability_2D_periodic5/growth_rate_vs_LToverLn.png
+\begin_inset Newline newline
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+The intercept of the fit with the x-axis (the point where 
+\begin_inset Formula $\gamma=0$
+\end_inset
+
+) is 
+\begin_inset Formula $L_{T}/L_{n}\approx0.26$
+\end_inset
+
+,
+ which is less than the expected (?) 
+\begin_inset Formula $1/3$
+\end_inset
+
+.
+ However,
+ the modes in these simulations are grid-scale,
+ hence not well resolved,
+ so it would not be surprising if there was significant numerical dissipation decreasing the growth rates,
+ so this value seems consistent with 
+\begin_inset Formula $1/3$
+\end_inset
+
+.
 \end_layout
 
 \end_body

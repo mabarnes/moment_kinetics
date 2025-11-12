@@ -1,4 +1,5 @@
 using CairoMakie
+using LsqFit
 using makie_post_processing
 using makie_post_processing.Printf
 using StatsBase
@@ -140,6 +141,8 @@ function plot_mode_amplitude(this_ri, phi, ax, irun;
         text!(ax, Point2f(label_t, A * exp(γ * label_t)); text="γ = $gamma_string",
               align=(:left, :top), color=Cycled(irun))
     end
+
+    return γ
 end
 
 fig, ax = get_1d_ax(xlabel="time", ylabel="amplitude", yscale=log10)
@@ -326,3 +329,94 @@ end
 Legend(fig[2,1], ax; tellheight=true, tellwidth=false)
 resize_to_layout!(fig)
 save(joinpath(dir_no_Krook, "growth_rate_no-Krook_r-resolution-scan.png"), fig; px_per_unit=resolution_increase_factor)
+
+# Compare case in periodic box, with source-sustained 'background' perturbation having a
+# z-variation with a wavenumber of 5.
+dir_periodic5 = mkpath(joinpath(plots_dir, "instability_2D_periodic5"))
+AT = 0.1
+periodic5_run_dirs = (("runs/2D1V-instability-periodic5-test-AT0.1-An0.0/", 0.0),
+                      ("runs/2D1V-instability-periodic5-test-AT0.1-An0.005/", 0.005),
+                      ("runs/2D1V-instability-periodic5-test-AT0.1-An0.01/", 0.01),
+                      ("runs/2D1V-instability-periodic5-test-AT0.1-An0.015/", 0.015),
+                      ("runs/2D1V-instability-periodic5-test-AT0.1-An0.02/", 0.02),
+                      ("runs/2D1V-instability-periodic5-test-AT0.1-An0.025/", 0.025),
+                      ("runs/2D1V-instability-periodic5-test-AT0.1-An0.03/", 0.03),
+                      ("runs/2D1V-instability-periodic5-test-AT0.1-An0.04/", 0.04),
+                      ("runs/2D1V-instability-periodic5-test-AT0.1-An0.05/", 0.05),
+                     )
+ri_periodic5 = Any[(get_run_info(d; dfns=true), An) for (d, An) ∈ periodic5_run_dirs]
+
+fig_bg, ax_bg = get_1d_ax(xlabel="z", ylabel="T_∥")
+Tpar = get_variable(ri_periodic5[1][1], "parallel_pressure"; it=1, is=1, ir=1) ./ get_variable(ri_periodic5[1][1], "density"; it=1, is=1, ir=1)
+lines!(ax_bg, ri_periodic5[1][1].z.grid, Tpar)
+save(joinpath(dir_periodic5, "periodic5_background_Tpar.png"), fig_bg; px_per_unit=resolution_increase_factor)
+
+fig_bg, ax_bg = get_1d_ax(xlabel="z", ylabel="n")
+# Ensure the first row width is 3/4 of the column width so that the plot does not get
+# squashed by the legend
+rowsize!(fig_bg.layout, 1, Aspect(1, 3/4))
+
+fig, ax = get_1d_ax(xlabel="time", ylabel="amplitude", yscale=log10)
+# Ensure the first row width is 3/4 of the column width so that the plot does not get
+# squashed by the legend
+rowsize!(fig.layout, 1, Aspect(1, 3/4))
+
+An_list = Float64[]
+gammas = Float64[]
+for (irun, (this_ri, An)) ∈ enumerate(ri_periodic5)
+    lines!(ax_bg, this_ri.z.grid, get_variable(this_ri, "density"; it=1, is=1, ir=1);
+           label=this_ri.run_name)
+
+    phi = get_variable(this_ri, "phi")
+
+    γ = plot_mode_amplitude(this_ri, phi, ax, irun; label="An=$An")
+    push!(An_list, An)
+    push!(gammas, γ)
+
+    # make animation of perturbation
+    _, perturbation = makie_post_processing.get_r_perturbation(phi)
+    outfile = joinpath(dir_periodic5, "phi_perturbation_periodic5_AT$(AT)_An$(An).gif")
+    title = "periodic5, AT=$(AT) An=$(An)"
+    makie_post_processing.animate_2d(this_ri.z.grid, this_ri.r.grid, perturbation,
+                                     xlabel="z", ylabel="r", title=title,
+                                     colormap="reverse_deep", outfile=outfile)
+
+    # Plot final time point
+    final_perturbation = @view perturbation[:,:,end]
+    final_fig, final_ax, hm = heatmap(this_ri.z.grid, this_ri.r.grid, final_perturbation)
+    Colorbar(final_fig[1,2], hm)
+    final_ax.xlabel = "z"
+    final_ax.ylabel = "r"
+    final_ax.title = "periodic5, AT=$(AT) An=$(An)"
+    save(joinpath(dir_periodic5,
+                  "final_phi_perturbation_periodic5_AT$(AT)_An$(An).png"),
+                  final_fig; px_per_unit=resolution_increase_factor)
+end
+
+Legend(fig_bg[2,1], ax_bg; tellheight=true, tellwidth=false)
+resize_to_layout!(fig_bg)
+save(joinpath(dir_periodic5, "periodic5_background_n.png"), fig_bg; px_per_unit=resolution_increase_factor)
+
+xlims!(ax, 0.0, 20.0)
+Legend(fig[2,1], ax; tellheight=true, tellwidth=false)
+resize_to_layout!(fig)
+save(joinpath(dir_periodic5, "growth_rate_periodic5-AT$(AT)-An-scan.png"), fig; px_per_unit=resolution_increase_factor)
+
+max_positive_gamma_ind = 6
+fig, ax, s = scatter(An_list[1:max_positive_gamma_ind] ./ AT, gammas[1:max_positive_gamma_ind])
+ax.xlabel = "An/AT = LT/Ln"
+ax.ylabel = "γ"
+
+# Also plot a linear fit to the scan.
+linear_fit(x, p) = @. p[1] * x + p[2]
+x = An_list[1:max_positive_gamma_ind] ./ AT
+y = gammas[1:max_positive_gamma_ind]
+fit = curve_fit(linear_fit, x, y, [0.0, 0.0])
+p = coef(fit)
+x_fit = collect(extrema(x))
+x_mid = 0.5 * (x_fit[1] + x_fit[2])
+lines!(x_fit, linear_fit(x_fit, p); color=:grey, linestyle=:dash)
+text!(ax, Point2f(x_mid, linear_fit(x_mid, p)); text="γ = $(round(p[1]; sigdigits=5)) (An/AT - $(round(-p[2]/p[1]; sigdigits=5)))",
+      align=(:left, :bottom), color=:grey)
+
+save(joinpath(dir_periodic5, "growth_rate_vs_LToverLn.png"), fig; px_per_unit=resolution_increase_factor)
