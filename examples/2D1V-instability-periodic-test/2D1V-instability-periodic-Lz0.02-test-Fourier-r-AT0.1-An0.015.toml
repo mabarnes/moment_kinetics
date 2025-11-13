@@ -69,7 +69,7 @@ bc = "zero"
 
 [timestepping]
 type = "Fekete4(3)"
-nstep = 1000000000
+nstep = 30000000
 dt = 1.0e-5
 minimum_dt = 1.0e-5
 CFL_prefactor = 2.0
@@ -77,8 +77,8 @@ rtol = 1.0e-5
 atol = 1.0e-12
 add_random_noise = 1.0e-9
 random_noise_seed = 1234
-nwrite = 10000
-nwrite_dfns = 10000
+nwrite = 100000
+nwrite_dfns = 100000
 steady_state_residual = true
 converged_residual_value = 1.0e-12
 
