@@ -112,7 +112,7 @@ function update_speed_r!(advect, fields, evolve_density, evolve_upar, evolve_p, 
             speed = advect.speed
             @loop_z_vperp_vpa iz ivperp ivpa begin
                 # ExB drift
-                @. geofac = bzeta[iz,:]*jacobian[iz,:]/Bmag[iz,:]
+                @views @. geofac = bzeta[iz,:]*jacobian[iz,:]/Bmag[iz,:]
                 @views @. speed[:,ivpa,ivperp,iz] = rhostar*geofac*gEz[ivperp,iz,:,is]
                 # magnetic curvature drift
                 @. @views speed[:,ivpa,ivperp,iz] += rhostar*(vpa.grid[ivpa]^2)*curvature_drift_r[iz,:]
@@ -123,7 +123,7 @@ function update_speed_r!(advect, fields, evolve_density, evolve_upar, evolve_p, 
     else
         # no advection if no length in r
         @loop_z_vperp_vpa iz ivperp ivpa begin
-            advect.speed[:,ivpa,ivperp,iz] .= 0.
+            advect.speed[:,ivpa,ivperp,iz] .= 0.0
         end
     end
     return nothing
