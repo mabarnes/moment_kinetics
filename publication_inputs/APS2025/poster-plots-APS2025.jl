@@ -343,6 +343,13 @@ periodic5_run_dirs = (("runs/2D1V-instability-periodic5-test-AT0.1-An0.0/", 0.0)
                       ("runs/2D1V-instability-periodic5-test-AT0.1-An0.03/", 0.03),
                       ("runs/2D1V-instability-periodic5-test-AT0.1-An0.04/", 0.04),
                       ("runs/2D1V-instability-periodic5-test-AT0.1-An0.05/", 0.05),
+                      ("runs/2D1V-instability-periodic5-test-AT0.1-An-0.005/", -0.005),
+                      ("runs/2D1V-instability-periodic5-test-AT0.1-An-0.01/", -0.01),
+                      ("runs/2D1V-instability-periodic5-test-AT0.1-An-0.02/", -0.02),
+                      ("runs/2D1V-instability-periodic5-test-AT0.1-An-0.03/", -0.03),
+                      ("runs/2D1V-instability-periodic5-test-AT0.1-An-0.04/", -0.04),
+                      ("runs/2D1V-instability-periodic5-test-AT0.1-An-0.05/", -0.05),
+                      ("runs/2D1V-instability-periodic5-test-AT0.1-An-0.1/", -0.1),
                      )
 ri_periodic5 = Any[(get_run_info(d; dfns=true), An) for (d, An) ∈ periodic5_run_dirs]
 
@@ -404,6 +411,8 @@ save(joinpath(dir_periodic5, "growth_rate_periodic5-AT$(AT)-An-scan.png"), fig; 
 
 max_positive_gamma_ind = 6
 fig, ax, s = scatter(An_list[1:max_positive_gamma_ind] ./ AT, gammas[1:max_positive_gamma_ind])
+first_negative_An_ind = 10
+scatter!(ax, An_list[first_negative_An_ind:end] ./ AT, gammas[first_negative_An_ind:end])
 ax.xlabel = "An/AT = LT/Ln"
 ax.ylabel = "γ"
 
@@ -417,6 +426,6 @@ x_fit = collect(extrema(x))
 x_mid = 0.5 * (x_fit[1] + x_fit[2])
 lines!(x_fit, linear_fit(x_fit, p); color=:grey, linestyle=:dash)
 text!(ax, Point2f(x_mid, linear_fit(x_mid, p)); text="γ = $(round(p[1]; sigdigits=5)) (An/AT - $(round(-p[2]/p[1]; sigdigits=5)))",
-      align=(:left, :bottom), color=:grey)
+      align=(:right, :top), color=:grey)
 
 save(joinpath(dir_periodic5, "growth_rate_vs_LToverLn.png"), fig; px_per_unit=resolution_increase_factor)
