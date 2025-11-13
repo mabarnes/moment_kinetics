@@ -39,7 +39,7 @@ using ..velocity_moments: update_neutral_density!, update_neutral_pz!, update_ne
 using ..velocity_moments: update_neutral_uz!, update_neutral_ur!, update_neutral_uzeta!, update_neutral_qz!
 using ..velocity_moments: update_p!, update_ppar!, update_upar!, update_density!,
                           update_pperp!, update_vth!, reset_moments_status!
-using ..electron_fluid_equations: calculate_electron_density!
+using ..electron_fluid_equations: calculate_electron_density!, calculate_electron_density_no_r!
 using ..electron_fluid_equations: calculate_electron_upar_from_charge_conservation!
 using ..electron_fluid_equations: calculate_electron_qpar!, electron_fluid_qpar_boundary_condition!
 using ..electron_fluid_equations: calculate_electron_parallel_friction_force!
@@ -1104,6 +1104,23 @@ function init_electron_density!(electron_density, updated, ion_density)
     # use quasineutrality to obtain the electron density from the initial
     # densities of the various ion species
     calculate_electron_density!(electron_density, updated, ion_density)
+
+    nr = size(electron_density, 2)
+    if nr > 1
+        # Also initialize the final point in r, as this might be needed to initialize a
+        # Dirichlet boundary condition.
+        @begin_r_anyzv_region()
+        @loop_r ir begin
+            if ir > 1
+                # Use this hack because we don't actually want to loop over r, but do want
+                # to be in an anyzv region inside calculate_electron_density_no_r!().
+                continue
+            end
+            @views calculate_electron_density_no_r!(electron_density[:,nr],
+                                                    ion_density[:,nr,:], nr)
+        end
+    end
+
     return nothing
 end
 

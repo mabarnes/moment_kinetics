@@ -88,7 +88,7 @@ function derivative_r!(dfdr::AbstractArray{mk_float,3}, f::AbstractArray{mk_floa
 	if r.nelement_local < r.nelement_global
 		reconcile_element_boundaries_MPI!(dfdr,
 		 dfdr_lower_endpoints,dfdr_upper_endpoints,
-		 r_receive_buffer1, r_receive_buffer2, r)
+		 r_receive_buffer1, r_receive_buffer2, r; neutrals)
 	end
     end
 end
@@ -267,7 +267,7 @@ function derivative_z!(dfdz::AbstractArray{mk_float,3}, f::AbstractArray{mk_floa
 	if z.nelement_local < z.nelement_global
 		reconcile_element_boundaries_MPI!(dfdz,
 		 dfdz_lower_endpoints,dfdz_upper_endpoints,
-		 z_send_buffer, z_receive_buffer, z)
+		 z_send_buffer, z_receive_buffer, z; neutrals)
 	end
     end
 end
@@ -443,7 +443,7 @@ function second_derivative_r!(d2fdr2::AbstractArray{mk_float,3}, f::AbstractArra
         if r.nelement_local < r.nelement_global
             reconcile_element_boundaries_MPI!(d2fdr2, d2fdr2_lower_endpoints,
                                               d2fdr2_upper_endpoints, r_receive_buffer1,
-                                              r_receive_buffer2, r)
+                                              r_receive_buffer2, r; neutrals)
         end
     end
 end
@@ -566,7 +566,7 @@ function second_derivative_z!(d2fdz2::AbstractArray{mk_float,3}, f::AbstractArra
         if z.nelement_local < z.nelement_global
             reconcile_element_boundaries_MPI!(d2fdz2, d2fdz2_lower_endpoints,
                                               d2fdz2_upper_endpoints, z_send_buffer,
-                                              z_receive_buffer, z)
+                                              z_receive_buffer, z; neutrals)
         end
     end
 end
@@ -706,7 +706,7 @@ function derivative_r!(dfdr::AbstractArray{mk_float,3}, f::AbstractArray{mk_floa
         if r.nelement_local < r.nelement_global
             reconcile_element_boundaries_MPI!(
                 dfdr, adv_fac_lower_buffer, adv_fac_upper_buffer, dfdr_lower_endpoints,
-                dfdr_upper_endpoints, r_receive_buffer1, r_receive_buffer2, r)
+                dfdr_upper_endpoints, r_receive_buffer1, r_receive_buffer2, r; neutrals)
         end
     end
 end
@@ -850,7 +850,8 @@ function derivative_z!(dfdz::AbstractArray{mk_float,3}, f::AbstractArray{mk_floa
         if z.nelement_local < z.nelement_global
             reconcile_element_boundaries_MPI!(
                 dfdz, adv_fac_lower_buffer, adv_fac_upper_buffer,
-                dfdz_lower_endpoints,dfdz_upper_endpoints, z_send_buffer, z_receive_buffer, z)
+                dfdz_lower_endpoints,dfdz_upper_endpoints, z_send_buffer,
+                z_receive_buffer, z; neutrals)
         end
     end
 end

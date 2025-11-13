@@ -640,7 +640,7 @@ abstract type neutral_r_boundary_section end
 struct r_boundary_section{Tion <: ion_r_boundary_section,
                           Telectron <: electron_r_boundary_section,
                           Tneutral <: neutral_r_boundary_section}
-    z_range::UnitRange
+    z_range::UnitRange{mk_int}
     ion::Tion
     electron::Telectron
     neutral::Tneutral
