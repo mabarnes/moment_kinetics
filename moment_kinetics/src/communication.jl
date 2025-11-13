@@ -35,7 +35,7 @@ using ..moment_kinetics_structs: coordinate
 using ..timer_utils
 using ..type_definitions
 @debug_shared_array begin
-    using ..type_definitions: DebugMPISharedArray
+    import ..type_definitions: DebugMPISharedArray
 end
 
 """
