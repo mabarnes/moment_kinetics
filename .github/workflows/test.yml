@@ -31,6 +31,5 @@ jobs:
       - run: |
           # Currently (17/11/2025) having issues with using 'too many communicators' in longtest.yml when using the default MPICH_jll. To avoid this, use OpenMPI_jll instead.
           julia --project=moment_kinetics/ -e 'import Pkg; Pkg.add("MPIPreferences"); using MPIPreferences; MPIPreferences.use_jll_binary("OpenMPI_jll")'
-          #julia --check-bounds=yes --color=yes --depwarn=yes --project=moment_kinetics/ -e 'import Pkg; Pkg.test(; test_args=["--ci", "--force-optional-dependencies"])'
-          julia --check-bounds=yes --color=yes --depwarn=yes --project=moment_kinetics/ -e 'import Pkg; Pkg.test(; test_args=["--ci"])'
+          julia --check-bounds=yes --color=yes --depwarn=yes --project=moment_kinetics/ -e 'import Pkg; Pkg.test(; test_args=["--ci", "--force-optional-dependencies"])'
         shell: bash
