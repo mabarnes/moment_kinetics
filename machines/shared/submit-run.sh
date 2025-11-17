@@ -102,9 +102,17 @@ if [ -z "$INPUTFILE" ]; then
 fi
 
 if [[ $POSTPROC -eq 0 ]]; then
-  echo "Submitting $INPUTFILE for run and post-processing..."
+  if [[ $SUBMIT -eq 0 ]]; then
+    echo "Submitting $INPUTFILE for run and post-processing..."
+  else
+    echo "Creating submission script from $INPUTFILE for run and post-processing..."
+  fi
 else
-  echo "Submitting $INPUTFILE for run..."
+  if [[ $SUBMIT -eq 0 ]]; then
+    echo "Submitting $INPUTFILE for run..."
+  else
+    echo "Creating submission script from $INPUTFILE for run..."
+  fi
 fi
 
 RUNNAME=$(util/get-run-name.jl $INPUTFILE)

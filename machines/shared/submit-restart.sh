@@ -112,9 +112,17 @@ RUNDIR=runs/$RUNNAME/
 mkdir -p $RUNDIR
 
 if [[ $POSTPROC -eq 0 ]]; then
-  echo "Submitting $INPUTFILE for restart from '$RESTARTFROM' and post-processing..."
+  if [[ $SUBMIT -eq 0 ]]; then
+    echo "Submitting $INPUTFILE for restart from '$RESTARTFROM' and post-processing..."
+  else
+    echo "Creating submission script from $INPUTFILE for restart from '$RESTARTFROM' and post-processing..."
+  fi
 else
-  echo "Submitting $INPUTFILE for restart from '$RESTARTFROM'..."
+  if [[ $SUBMIT -eq 0 ]]; then
+    echo "Submitting $INPUTFILE for restart from '$RESTARTFROM'..."
+  else
+    echo "Creating submission script from $INPUTFILE for restart from '$RESTARTFROM'..."
+  fi
 fi
 
 # Create a submission script for the run
