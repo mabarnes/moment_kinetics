@@ -28,23 +28,24 @@ do a single stage time advance (potentially as part of a multi-stage RK scheme)
                                moments.evolve_upar, moments.evolve_p, vpa, vperp, z, r,
                                geometry, is)
         # update adv_fac
-        speed = advect[is].speed
+        this_adv_fac = advect[is].adv_fac
+        this_speed = advect[is].speed
         @loop_z_vperp_vpa iz ivperp ivpa begin
-            @. advect[is].adv_fac[:,ivpa,ivperp,iz] = -dt * speed[:,ivpa,ivperp,iz]
+            @views @. this_adv_fac[:,ivpa,ivperp,iz] = -dt * this_speed[:,ivpa,ivperp,iz]
         end
     end
     # calculate the upwind derivative along r
-    derivative_r!(scratch_dummy.buffer_vpavperpzrs_1, fvec_in.pdf, advect,
-                  scratch_dummy.buffer_vpavperpzs_1, scratch_dummy.buffer_vpavperpzs_2,
+    df_dr = scratch_dummy.buffer_vpavperpzrs_1
+    derivative_r!(df_dr, fvec_in.pdf, advect, scratch_dummy.buffer_vpavperpzs_1,
+                  scratch_dummy.buffer_vpavperpzs_2,
                   scratch_dummy.buffer_vpavperpzs_3,scratch_dummy.buffer_vpavperpzs_4,
                   scratch_dummy.buffer_vpavperpzs_5,scratch_dummy.buffer_vpavperpzs_6,
                   r_spectral,r)
 
     # advance r-advection equation
     @loop_s_z_vperp_vpa is iz ivperp ivpa begin
-        @. @views r.scratch = scratch_dummy.buffer_vpavperpzrs_1[ivpa,ivperp,iz,:,is]
         @views advance_f_df_precomputed!(f_out[ivpa,ivperp,iz,:,is],
-          r.scratch, advect[is], ivpa, ivperp, iz, r, dt)
+          df_dr[ivpa,ivperp,iz,:,is], advect[is], ivpa, ivperp, iz, r, dt)
     end
 end
 
@@ -111,7 +112,7 @@ function update_speed_r!(advect, fields, evolve_density, evolve_upar, evolve_p, 
             speed = advect.speed
             @loop_z_vperp_vpa iz ivperp ivpa begin
                 # ExB drift
-                @. geofac = bzeta[iz,:]*jacobian[iz,:]/Bmag[iz,:]
+                @views @. geofac = bzeta[iz,:]*jacobian[iz,:]/Bmag[iz,:]
                 @views @. speed[:,ivpa,ivperp,iz] = rhostar*geofac*gEz[ivperp,iz,:,is]
                 # magnetic curvature drift
                 @. @views speed[:,ivpa,ivperp,iz] += rhostar*(vpa.grid[ivpa]^2)*curvature_drift_r[iz,:]
@@ -122,7 +123,7 @@ function update_speed_r!(advect, fields, evolve_density, evolve_upar, evolve_p, 
     else
         # no advection if no length in r
         @loop_z_vperp_vpa iz ivperp ivpa begin
-            advect.speed[:,ivpa,ivperp,iz] .= 0.
+            advect.speed[:,ivpa,ivperp,iz] .= 0.0
         end
     end
     return nothing

@@ -20,6 +20,7 @@ using ..derivatives: derivative_r!, derivative_z!
 using ..electron_fluid_equations: calculate_Epar_from_electron_force_balance!
 using ..gyroaverages: gyro_operators, gyroaverage_field!
 using ..calculus: indefinite_integral!
+using ..timer_utils
 
 using MPI
 
@@ -48,9 +49,9 @@ end
 """
 update_phi updates the electrostatic potential, phi
 """
-function update_phi!(fields, fvec, vperp, z, r, composition, collisions, moments,
-                     geometry, z_spectral, r_spectral, scratch_dummy,
-                     gyroavs::gyro_operators)
+@timeit_debug global_timer update_phi!(fields, fvec, vperp, z, r, composition, collisions,
+                                       moments, geometry, z_spectral, r_spectral,
+                                       scratch_dummy, gyroavs::gyro_operators) = begin
     n_ion_species = composition.n_ion_species
     # check bounds of fields and fvec arrays
     @debug_consistency_checks size(fields.phi,1) == z.n || throw(BoundsError(fields.phi))
