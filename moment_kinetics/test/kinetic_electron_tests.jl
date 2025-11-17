@@ -172,9 +172,10 @@ function run_test()
     end
 
     # Test implicit electron solve
-    @testset "$label$(adi_precon_iterations < 0 ? "" : " $adi_precon_iterations")" for (this_kinetic_input, label, tol) ∈ ((deepcopy(kinetic_input), "fixed timestep", 1.0e-6),
-                                                                                                                           (deepcopy(kinetic_input_adaptive_timestep), "adaptive timestep", 2.0e-4),
-                                                                                                                           (deepcopy(kinetic_input_time_evolving), "time evolving", 4.0e-4),),
+    test_inputs = [(deepcopy(kinetic_input), "fixed timestep", 1.0e-6),
+                   (deepcopy(kinetic_input_time_evolving), "time evolving", 4.0e-4),]
+    @long push!(test_inputs, (deepcopy(kinetic_input_adaptive_timestep), "adaptive timestep", 2.0e-4))
+    @testset "$label$(adi_precon_iterations < 0 ? "" : " $adi_precon_iterations")" for (this_kinetic_input, label, tol) ∈ test_inputs,
                                                                                        adi_precon_iterations ∈ adi_precon_iterations_values
 
         this_kinetic_input["output"]["base_directory"] = test_output_directory
@@ -316,9 +317,9 @@ function run_test()
 
     # Test explicit electron solves - separate loop for different expected results due to
     # a shorter simulation time, and no test for iteration counts.
-    @testset "$label" for (this_kinetic_input, label, tol) ∈ ((deepcopy(kinetic_input_implicit_ppar_explicit_pseudotimestep), "explicit solve", 1.0e-4),
-                                                              (deepcopy(kinetic_input_explicit_time_evolving), "explicit time evolving", 4.0e-4),)
-                          this_kinetic_input["output"]["base_directory"] = test_output_directory
+    @long @testset "$label" for (this_kinetic_input, label, tol) ∈ ((deepcopy(kinetic_input_implicit_ppar_explicit_pseudotimestep), "explicit solve", 1.0e-4),
+                                                                    (deepcopy(kinetic_input_explicit_time_evolving), "explicit time evolving", 4.0e-4),)
+        this_kinetic_input["output"]["base_directory"] = test_output_directory
 
         # Provide some progress info
         println("    - testing kinetic electrons, $label")
