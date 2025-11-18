@@ -1,0 +1,69 @@
+[ion_source_1]
+z_profile = "constant"
+source_strength = 1.4142135623730951
+source_T = 0.25
+
+[evolve_moments]
+density = false
+parallel_flow = false
+moments_conservation = false
+pressure = false
+
+[z]
+ngrid = 5
+nelement = 128
+nelement_local = 16
+bc = "wall"
+element_spacing_option = "sqrt"
+discretization = "chebyshev_pseudospectral"
+
+[r]
+ngrid = 1
+nelement = 1
+nelement_local = 1
+discretization = "chebyshev_pseudospectral"
+bc = "periodic"
+
+[vpa]
+ngrid = 6
+nelement = 31
+L = 8.485281374238571
+bc = "zero"
+discretization = "gausslegendre_pseudospectral"
+
+[vperp]
+ngrid = 6
+nelement = 15
+L = 4.242640687119286
+discretization = "gausslegendre_pseudospectral"
+
+[composition]
+n_ion_species = 1
+n_neutral_species = 0
+electron_physics = "boltzmann_electron_response"
+T_e = 1.0
+T_wall = 1.0
+
+[ion_species_1]
+initial_density = 0.5
+initial_temperature = 1.0
+
+[z_IC_ion_species_1]
+initialization_option = "sinusoid"
+density_amplitude = 0.001
+density_phase = 0.0
+upar_amplitude = 0.0
+upar_phase = 0.0
+temperature_amplitude = 0.0
+temperature_phase = 0.0
+
+[fokker_planck_collisions]
+use_fokker_planck = true
+nuii = 4.0
+frequency_option = "manual"
+
+[timestepping]
+nstep = 100
+dt = 1e-5
+nwrite = 100
+nwrite_dfns = 100
