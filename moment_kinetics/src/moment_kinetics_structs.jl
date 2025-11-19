@@ -15,7 +15,7 @@ export scratch_pdf, scratch_electron_pdf, em_fields_struct, moments_ion_substruc
 export ndim_pdf_ion, ndim_pdf_neutral, ndim_pdf_electron, ndim_field, ndim_moment,
        ndim_moment_electron, ndim_v, ndim_v_neutral, ndim_pdf_ion_boundary,
        ndim_moment_boundary, ndim_pdf_electron_boundary, ndim_electron_moment_boundary,
-       ndim_pdf_neutral_boundary
+       ndim_pdf_neutral_boundary, ndim_field_boundary
 export discretization_info, weak_discretization_info, null_spatial_dimension_info,
        null_velocity_dimension_info, null_vperp_dimension_info
 export ElectronSubTerms
@@ -35,6 +35,7 @@ const ndim_pdf_ion_boundary = ndim_pdf_ion - 1
 const ndim_moment_boundary = ndim_moment - 1
 const ndim_pdf_electron_boundary = ndim_pdf_electron - 1
 const ndim_electron_moment_boundary = ndim_field - 1
+const ndim_field_boundary = ndim_field - 1
 const ndim_pdf_neutral_boundary = ndim_pdf_neutral - 1
 
 
@@ -628,22 +629,26 @@ struct null_vperp_dimension_info <: discretization_info end
 export ion_r_boundary_section, electron_r_boundary_section, neutral_r_boundary_section,
        r_boundary_section, ion_r_boundary_section_periodic,
        electron_r_boundary_section_periodic, neutral_r_boundary_section_periodic,
-       ion_r_boundary_section_Neumann, electron_r_boundary_section_Neumann,
-       neutral_r_boundary_section_Neumann, ion_r_boundary_section_Dirichlet,
+       em_r_boundary_section_periodic, ion_r_boundary_section_Neumann,
+       electron_r_boundary_section_Neumann, neutral_r_boundary_section_Neumann,
+       em_r_boundary_section_Neumann, ion_r_boundary_section_Dirichlet,
        electron_r_boundary_section_Dirichlet, neutral_r_boundary_section_Dirichlet,
-       r_boundary_info, z_boundary_info, boundary_info
+       em_r_boundary_section_Dirichlet, r_boundary_info, z_boundary_info, boundary_info
 
 abstract type ion_r_boundary_section end
 abstract type electron_r_boundary_section end
 abstract type neutral_r_boundary_section end
+abstract type em_r_boundary_section end
 
 struct r_boundary_section{Tion <: ion_r_boundary_section,
                           Telectron <: electron_r_boundary_section,
-                          Tneutral <: neutral_r_boundary_section}
+                          Tneutral <: neutral_r_boundary_section,
+                          Tem <: em_r_boundary_section}
     z_range::UnitRange{mk_int}
     ion::Tion
     electron::Telectron
     neutral::Tneutral
+    em::Tem
 end
 
 struct ion_r_boundary_section_periodic <: ion_r_boundary_section end
@@ -651,6 +656,8 @@ struct ion_r_boundary_section_periodic <: ion_r_boundary_section end
 struct electron_r_boundary_section_periodic <: electron_r_boundary_section end
 
 struct neutral_r_boundary_section_periodic <: neutral_r_boundary_section end
+
+struct em_r_boundary_section_periodic <: em_r_boundary_section end
 
 struct ion_r_boundary_section_Neumann <: ion_r_boundary_section
     is_inner::Bool
@@ -665,6 +672,12 @@ struct electron_r_boundary_section_Neumann <: electron_r_boundary_section
 end
 
 struct neutral_r_boundary_section_Neumann <: neutral_r_boundary_section
+    is_inner::Bool
+    one_over_logarithmic_gradient_value_minus_Db::mk_float
+    derivative_coefficients::Vector{mk_float}
+end
+
+struct em_r_boundary_section_Neumann <: em_r_boundary_section
     is_inner::Bool
     one_over_logarithmic_gradient_value_minus_Db::mk_float
     derivative_coefficients::Vector{mk_float}
@@ -689,6 +702,10 @@ struct neutral_r_boundary_section_Dirichlet <: neutral_r_boundary_section
     density::Union{MPISharedArray{mk_float,ndim_moment_boundary}}
     uz::Union{MPISharedArray{mk_float,ndim_moment_boundary}}
     p::Union{MPISharedArray{mk_float,ndim_moment_boundary}}
+end
+
+struct em_r_boundary_section_Dirichlet <: em_r_boundary_section
+    phi::Union{MPISharedArray{mk_float,ndim_field_boundary}}
 end
 
 struct r_boundary_info{Tinner <: NTuple{M,r_boundary_section} where M,
