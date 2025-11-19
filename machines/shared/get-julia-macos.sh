@@ -3,9 +3,9 @@
 ARTIFACT_DIR=machines/artifacts/
 
 ARCH=""
-while [[ ! $ARCH -eq "x86_64" && ! $ARCH -eq "aarch64" ]]; do
-  echo "Which architecture does your Mac use - 'x86_64' (Intel processor)"
-  echo "or 'aarch64' (Apple processor)? x86_64/[aarch64]"
+while [[ "$ARCH" != "x86_64" && "$ARCH" != "aarch64" ]]; do
+  echo "Which architecture does your Mac use - 'x86_64' (Intel processor)" > /dev/tty
+  echo "or 'aarch64' (Apple processor)? x86_64/[aarch64]" > /dev/tty
   read -p "> " ARCH
   if [[ -z $ARCH ]]; then
     ARCH=aarch64
