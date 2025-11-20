@@ -2182,6 +2182,10 @@ function plot_f_unnorm_vs_vpa(run_info::Vector{Any}; f_over_vpa2=false, electron
     try
         n_runs = length(run_info)
 
+        if any(ri.vperp.n != 1 for ri in run_info)
+            error("plot_f_unnorm_vs_vpa() only supported for 1D1V moment-kinetic runs.")
+        end
+
         species_label = neutral ? "n" : "i"
         divide_by = f_over_vpa2 ? L"/v_\parallel^2" : ""
         ylabel = L"f_{%$species_label,\mathrm{unnormalized}}%$divide_by"
@@ -2368,6 +2372,11 @@ function plot_f_unnorm_vs_vpa_z(run_info::Vector{Any}; electron=false, neutral=f
                                 title=nothing, subtitles=nothing, kwargs...)
     try
         n_runs = length(run_info)
+
+        if any(ri.vperp.n != 1 for ri in run_info)
+            error("plot_f_unnorm_vs_vpa() only supported for 1D1V moment-kinetic runs.")
+        end
+
         if subtitles === nothing
             subtitles = [nothing for _ ∈ 1:n_runs]
         end
@@ -2535,6 +2544,10 @@ function animate_f_unnorm_vs_vpa(run_info::Vector{Any}; f_over_vpa2=false, elect
                                  axis_args=Dict{Symbol,Any}(), kwargs...)
     try
         n_runs = length(run_info)
+
+        if any(ri.vperp.n != 1 for ri in run_info)
+            error("plot_f_unnorm_vs_vpa() only supported for 1D1V moment-kinetic runs.")
+        end
 
         frame_index = Observable(1)
 
@@ -2774,6 +2787,10 @@ function animate_f_unnorm_vs_vpa_z(run_info::Vector{Any}; electron=false, neutra
                                    kwargs...)
     try
         n_runs = length(run_info)
+
+        if any(ri.vperp.n != 1 for ri in run_info)
+            error("plot_f_unnorm_vs_vpa() only supported for 1D1V moment-kinetic runs.")
+        end
 
         frame_index = Observable(1)
 
