@@ -2103,7 +2103,7 @@ function convert_full_f_ion_to_normalised!(f, density, upar, p, vth, vperp, vpa,
         if vperp.n == 1
             vperp_wgts_input = vperp.wgts
         else
-            vperp_wgts_input = vperp.wgts .* vgrid_scale_factor[iz]
+            vperp_wgts_input = vperp.wgts .* vgrid_scale_factor[iz]^2
         end
 
         # Calculate moments
