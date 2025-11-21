@@ -2416,7 +2416,7 @@ function time_advance!(pdf, scratch, scratch_implicit, scratch_electron, t_param
                     vr, vzeta, vpa, vperp, z, r, spectral_objects, advect_objects, composition,
                     collisions, geometry, gyroavs, external_source_settings, num_diss_params,
                     t_params, nl_solver_params, advance, scratch_dummy, false, 0, 0.0;
-                    pdf_bc_constraints=false, update_electrons=false)
+                    pdf_bc_constraints=false)
             end
 
             if finish_now
@@ -2711,7 +2711,7 @@ moments and moment derivatives
                          external_source_settings, num_diss_params, t_params,
                          nl_solver_params, advance, scratch_dummy, diagnostic_moments,
                          max_electron_pdf_iterations, max_electron_sim_time;
-                         pdf_bc_constraints=true, update_electrons=true) = begin
+                         pdf_bc_constraints=true) = begin
 
     @begin_s_r_z_region()
 
@@ -2804,25 +2804,6 @@ moments and moment derivatives
             moments.electron.dens[iz,ir] = this_scratch.electron_density[iz,ir]
             moments.electron.upar[iz,ir] = this_scratch.electron_upar[iz,ir]
             moments.electron.p[iz,ir] = this_scratch.electron_p[iz,ir]
-        end
-
-        # When we do not need to apply bc's and constraints to the ion/neutral pdf
-        # (because this function is being called after a failed timestep, to reset to the
-        # state at the beginning of the step), we also do not need to update the
-        # electrons.
-        # Note that if some solve for the implicit timestep already failed, we will reset
-        # to the beginning of the ion/neutral timestep, so the electron solution
-        # calculated here would be discarded - we might as well skip calculating it in
-        # that case.
-        if update_electrons && success == ""
-            kinetic_electron_success = update_electron_pdf!(
-               scratch_electron, pdf.electron.norm, moments, fields.phi, r, z, vperp, vpa,
-               z_spectral, vperp_spectral, vpa_spectral, electron_z_advect,
-               electron_vpa_advect, scratch_dummy, t_params.electron, collisions,
-               composition, external_source_settings, num_diss_params,
-               nl_solver_params.electron_advance, max_electron_pdf_iterations,
-               max_electron_sim_time, solution_method=Val("artificial_time_derivative"))
-            success = kinetic_electron_success
         end
     end
     # update the electron parallel friction force
@@ -3098,8 +3079,7 @@ appropriate.
         loworder_constraints_scratch, pdf, moments, fields, boundaries, scratch_electron,
         vz, vr, vzeta, vpa, vperp, z, r, spectral_objects, advect_objects, composition,
         collisions, geometry, gyroavs, external_source_settings, num_diss_params,
-        t_params, nl_solver_params, advance, scratch_dummy, false, 0, 0.0;
-        update_electrons=false)
+        t_params, nl_solver_params, advance, scratch_dummy, false, 0, 0.0)
 
     # Re-calculate moment derivatives in the `moments` struct, in case they were changed
     # by the previous call
@@ -3108,7 +3088,7 @@ appropriate.
         scratch_electron, vz, vr, vzeta, vpa, vperp, z, r, spectral_objects,
         advect_objects, composition, collisions, geometry, gyroavs,
         external_source_settings, num_diss_params, t_params, nl_solver_params, advance,
-        scratch_dummy, false, 0, 0.0; pdf_bc_constraints=false, update_electrons=false)
+        scratch_dummy, false, 0, 0.0; pdf_bc_constraints=false)
 
     # Calculate the timstep error estimates
     if z.bc == "wall" && (moments.evolve_upar || moments.evolve_p)
@@ -3564,19 +3544,13 @@ end
                 # The result of the implicit solve gives the state vector at 'istage'
                 # which is used as input to the explicit part of the IMEX time step.
                 old_scratch = scratch_implicit[istage]
-                update_electrons = t_params.kinetic_electron_solver ∉ (implicit_time_evolving,
-                                                                       implicit_p_implicit_pseudotimestep,
-                                                                       implicit_steady_state,
-                                                                       explicit_time_evolving,
-                                                                       implicit_p_explicit_pseudotimestep)
                 bcs_constraints_success = apply_all_bcs_constraints_update_moments!(
                     scratch_implicit[istage], pdf, moments, fields,
                     boundaries, scratch_electron, vz, vr, vzeta, vpa, vperp, z, r,
                     spectral_objects, advect_objects, composition, collisions, geometry,
                     gyroavs, external_source_settings, num_diss_params, t_params,
                     nl_solver_params, advance, scratch_dummy, false,
-                    max_electron_pdf_iterations, max_electron_sim_time;
-                    update_electrons=update_electrons)
+                    max_electron_pdf_iterations, max_electron_sim_time)
                 write_debug_IO(scratch_implicit[istage], istage,
                                "implicit apply_all_bcs_constraints_update_moments!")
                 if bcs_constraints_success != ""
@@ -3621,12 +3595,6 @@ end
                                 || !t_params.implicit_ion_advance
                                 || (istage == n_rk_stages && t_params.implicit_coefficient_is_zero[1])
                                 || t_params.implicit_coefficient_is_zero[istage+1])
-        update_electrons = ((t_params.rk_coefs_implicit === nothing && t_params.kinetic_electron_solver !== explicit_time_evolving)
-                            || t_params.kinetic_electron_solver ∉ (implicit_time_evolving,
-                                                                   implicit_p_implicit_pseudotimestep,
-                                                                   implicit_steady_state,
-                                                                   explicit_time_evolving,
-                                                                   implicit_p_explicit_pseudotimestep))
         diagnostic_moments = diagnostic_checks && istage == n_rk_stages
         bcs_constraints_success = apply_all_bcs_constraints_update_moments!(
             scratch[istage+1], pdf, moments, fields, boundaries, scratch_electron, vz, vr,
@@ -3634,7 +3602,7 @@ end
             collisions, geometry, gyroavs, external_source_settings, num_diss_params,
             t_params, nl_solver_params, advance, scratch_dummy, diagnostic_moments,
             max_electron_pdf_iterations, max_electron_sim_time;
-            pdf_bc_constraints=apply_bc_constraints, update_electrons=update_electrons)
+            pdf_bc_constraints=apply_bc_constraints)
         write_debug_IO(scratch[istage+1], istage,
                        "apply_all_bcs_constraints_update_moments!")
         if bcs_constraints_success != ""
