@@ -556,6 +556,15 @@ function get_source_profile(profile_type, width, relative_minimum, coord)
             end
         end
         return profile
+    elseif profile_type == "inverted_parabolic"
+        x = coord.grid
+        profile = @. (1.0 - relative_minimum) * ((2.0 * x / width)^2) + relative_minimum
+        for i ∈ eachindex(profile)
+            if profile[i] < relative_minimum
+                profile[i] = relative_minimum
+            end
+        end
+        return profile
     elseif profile_type == "wall_exp_decay"
         x = coord.grid
         L = coord.L

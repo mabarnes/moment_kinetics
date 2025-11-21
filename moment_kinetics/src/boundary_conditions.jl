@@ -856,21 +856,13 @@ also enforce boundary conditions in z on all separately evolved velocity space m
         enforce_z_boundary_condition_moments!(density, moments, z.bc)
         enforce_z_boundary_condition!(f, density, upar, p, fields, moments, z.bc, z_adv,
                                       z, vperp, vpa, composition, geometry,
-                                      scratch_dummy.buffer_vpavperprs_1,
-                                      scratch_dummy.buffer_vpavperprs_2,
-                                      scratch_dummy.buffer_vpavperprs_3,
-                                      scratch_dummy.buffer_vpavperprs_4,
                                       scratch_dummy.dummy_vpavperp)
 
     end
     if r.n > 1
         moment_r_speed = fields.vEr # For now, allow only ExB drift of ion moments
         enforce_r_boundary_condition!(f, density, upar, p, moment_r_speed, boundaries.r,
-                                      r_adv, vpa, vperp, z, r, composition,
-                                      scratch_dummy.buffer_vpavperpzs_1,
-                                      scratch_dummy.buffer_vpavperpzs_2,
-                                      scratch_dummy.buffer_vpavperpzs_3,
-                                      scratch_dummy.buffer_vpavperpzs_4, r_diffusion)
+                                      r_adv, vpa, vperp, z, r, composition, r_diffusion)
     end
 end
 function enforce_boundary_conditions!(fvec_out::scratch_pdf, moments,
@@ -1024,58 +1016,16 @@ end
 """
 enforce boundary conditions on ions in r
 """
-function enforce_r_boundary_condition!(f::AbstractArray{mk_float,ndim_pdf_ion},
+@timeit_debug global_timer enforce_r_boundary_condition!(
+        f::AbstractArray{mk_float,ndim_pdf_ion},
         density::AbstractArray{mk_float,ndim_moment},
         upar::AbstractArray{mk_float,ndim_moment}, p::AbstractArray{mk_float,ndim_moment},
         moment_r_speed::AbstractArray{mk_float,ndim_field},
         r_boundaries::r_boundary_info, adv, vpa, vperp, z, r, composition,
-        end1::AbstractArray{mk_float,ndim_pdf_ion_boundary},
-        end2::AbstractArray{mk_float,ndim_pdf_ion_boundary},
-        buffer1::AbstractArray{mk_float,ndim_pdf_ion_boundary},
-        buffer2::AbstractArray{mk_float,ndim_pdf_ion_boundary}, r_diffusion::Bool)
+        r_diffusion::Bool) = begin
 
     nr = r.n
     zero = 1.0e-10
-
-    if r.nelement_global > r.nelement_local
-        # reconcile internal element boundaries across processes
-        # & enforce periodicity and external boundaries if needed
-        @begin_s_z_vperp_vpa_region()
-        @loop_s_z_vperp_vpa is iz ivperp ivpa begin
-            end1[ivpa,ivperp,iz,is] = f[ivpa,ivperp,iz,1,is]
-            end2[ivpa,ivperp,iz,is] = f[ivpa,ivperp,iz,nr,is]
-        end
-        reconcile_element_boundaries_MPI!(f, end1, end2, buffer1, buffer2, r)
-
-        # Hacky way to get buffers to use for moment communication, to avoid having to
-        # pass in even more buffers. We know that the distribution function buffers are
-        # bigger than those needed for moments, so we can just take a chunk at the
-        # beginning of the distribution function buffers.
-        moment_end1 = reshape(@view(end1[1:z.n*composition.n_ion_species]), z.n,
-                              composition.n_ion_species)
-        moment_end2 = reshape(@view(end2[1:z.n*composition.n_ion_species]), z.n,
-                              composition.n_ion_species)
-        moment_buffer1 = reshape(@view(buffer1[1:z.n*composition.n_ion_species]), z.n,
-                                 composition.n_ion_species)
-        moment_buffer2 = reshape(@view(buffer2[1:z.n*composition.n_ion_species]), z.n,
-                                 composition.n_ion_species)
-        @begin_s_z_region()
-        @loop_s_z is iz begin
-            moment_end1[iz,is] = density[iz,1,is]
-            moment_end2[iz,is] = density[iz,nr,is]
-        end
-        reconcile_element_boundaries_MPI!(density, end1, end2, buffer1, buffer2, r)
-        @loop_s_z is iz begin
-            moment_end1[iz,is] = upar[iz,1,is]
-            moment_end2[iz,is] = upar[iz,nr,is]
-        end
-        reconcile_element_boundaries_MPI!(upar, end1, end2, buffer1, buffer2, r)
-        @loop_s_z is iz begin
-            moment_end1[iz,is] = p[iz,1,is]
-            moment_end2[iz,is] = p[iz,nr,is]
-        end
-        reconcile_element_boundaries_MPI!(p, end1, end2, buffer1, buffer2, r)
-    end
 
     for (ir, sections_tuple) ∈ ((1, r_boundaries.inner_sections),
                                 (nr, r_boundaries.outer_sections))
@@ -1092,25 +1042,10 @@ enforce boundary conditions on ion particle f in z
 `vpavperp_buffer` should be an unshared array, as it is used inside a
 shared-memory-parallelised loop.
 """
-function enforce_z_boundary_condition!(pdf, density, upar, p, fields, moments, bc::String,
+@timeit_debug global_timer enforce_z_boundary_condition!(
+                                       pdf, density, upar, p, fields, moments, bc::String,
                                        adv, z, vperp, vpa, composition, geometry,
-                                       end1::AbstractArray{mk_float,4},
-                                       end2::AbstractArray{mk_float,4},
-                                       buffer1::AbstractArray{mk_float,4},
-                                       buffer2::AbstractArray{mk_float,4},
-                                       vpavperp_buffer::AbstractArray{mk_float,2})
-    # this block ensures periodic BC can be supported with distributed memory MPI
-    if z.nelement_global > z.nelement_local
-        # reconcile internal element boundaries across processes
-        # & enforce periodicity and external boundaries if needed
-        nz = z.n
-        @loop_s_r_vperp_vpa is ir ivperp ivpa begin
-            end1[ivpa,ivperp,ir,is] = pdf[ivpa,ivperp,1,ir,is]
-            end2[ivpa,ivperp,ir,is] = pdf[ivpa,ivperp,nz,ir,is]
-        end
-        # check on periodic bc happens inside this call below
-        reconcile_element_boundaries_MPI!(pdf, end1, end2, buffer1, buffer2, z)
-    end
+                                       vpavperp_buffer::AbstractArray{mk_float,2}) = begin
     # define a zero that accounts for finite precision
     zero = 1.0e-14
     # 'constant' BC is time-independent f at upwind boundary
@@ -1330,54 +1265,16 @@ end
 """
 enforce boundary conditions on electrons in r
 """
-function enforce_electron_r_boundary_condition!(f::AbstractArray{mk_float,ndim_pdf_electron},
+@timeit_debug global_timer enforce_electron_r_boundary_condition!(
+        f::AbstractArray{mk_float,ndim_pdf_electron},
         density::AbstractArray{mk_float,ndim_field},
         upar::AbstractArray{mk_float,ndim_field}, p::AbstractArray{mk_float,ndim_field},
         moment_r_speed::AbstractArray{mk_float,ndim_field},
         r_boundaries::r_boundary_info, adv, vpa, vperp, z, r, composition,
-        end1::AbstractArray{mk_float,ndim_pdf_electron_boundary},
-        end2::AbstractArray{mk_float,ndim_pdf_electron_boundary},
-        buffer1::AbstractArray{mk_float,ndim_pdf_electron_boundary},
-        buffer2::AbstractArray{mk_float,ndim_pdf_electron_boundary}, r_diffusion::Bool)
+        r_diffusion::Bool) = begin
 
     nr = r.n
     zero = 1.0e-10
-
-    if r.nelement_global > r.nelement_local
-        # reconcile internal element boundaries across processes
-        # & enforce periodicity and external boundaries if needed
-        @begin_z_vperp_vpa_region()
-        @loop_z_vperp_vpa iz ivperp ivpa begin
-            end1[ivpa,ivperp,iz] = f[ivpa,ivperp,iz,1]
-            end2[ivpa,ivperp,iz] = f[ivpa,ivperp,iz,nr]
-        end
-        reconcile_element_boundaries_MPI!(f, end1, end2, buffer1, buffer2, r)
-
-        # Hacky way to get buffers to use for moment communication, to avoid having to
-        # pass in even more buffers. We know that the distribution function buffers are
-        # bigger than those needed for moments, so we can just take a chunk at the
-        # beginning of the distribution function buffers.
-        moment_end1 = @view end1[1:z.n]
-        moment_end2 = @view end2[1:z.n]
-        moment_buffer1 = @view buffer1[1:z.n]
-        moment_buffer2 = @view buffer2[1:z.n]
-        @begin_z_region()
-        @loop_z iz begin
-            moment_end1[iz] = density[iz,1]
-            moment_end2[iz] = density[iz,nr]
-        end
-        reconcile_element_boundaries_MPI!(density, end1, end2, buffer1, buffer2, r)
-        @loop_z iz begin
-            moment_end1[iz] = upar[iz,1]
-            moment_end2[iz] = upar[iz,nr]
-        end
-        reconcile_element_boundaries_MPI!(upar, end1, end2, buffer1, buffer2, r)
-        @loop_z iz begin
-            moment_end1[iz] = p[iz,1]
-            moment_end2[iz] = p[iz,nr]
-        end
-        reconcile_element_boundaries_MPI!(p, end1, end2, buffer1, buffer2, r)
-    end
 
     for (ir, sections_tuple) ∈ ((1, r_boundaries.inner_sections),
                                 (nr, r_boundaries.outer_sections))
@@ -1438,16 +1335,11 @@ enforce boundary conditions on neutral particle distribution function
         @begin_sn_r_vzeta_vr_vz_region()
         enforce_neutral_z_boundary_condition!(f_neutral, density_neutral, uz_neutral,
             p_neutral, moments, density_ion, upar_ion, Er, boundaries.z, z_adv, z, vzeta,
-            vr, vz, composition, geometry, scratch_dummy.buffer_vzvrvzetarsn_1,
-            scratch_dummy.buffer_vzvrvzetarsn_2, scratch_dummy.buffer_vzvrvzetarsn_3,
-            scratch_dummy.buffer_vzvrvzetarsn_4,
-            scratch_dummy.buffer_vzvrvzetarsn_5)
+            vr, vz, composition, geometry, scratch_dummy.buffer_vzvrvzetarsn_1)
     end
     if r.n > 1
         enforce_neutral_r_boundary_condition!(f_neutral, density_neutral, uz_neutral,
             ur_neutral, p_neutral, boundaries.r, r_adv, vz, vr, vzeta, z, r, composition,
-            scratch_dummy.buffer_vzvrvzetazsn_1, scratch_dummy.buffer_vzvrvzetazsn_2,
-            scratch_dummy.buffer_vzvrvzetazsn_3, scratch_dummy.buffer_vzvrvzetazsn_4,
             r_diffusion)
     end
 end
@@ -1589,63 +1481,15 @@ end
 """
 enforce boundary conditions on neutrals in r
 """
-function enforce_neutral_r_boundary_condition!(
+@timeit_debug global_timer enforce_neutral_r_boundary_condition!(
         f::AbstractArray{mk_float,ndim_pdf_neutral},
         density::AbstractArray{mk_float,ndim_moment},
         uz::AbstractArray{mk_float,ndim_moment}, ur::AbstractArray{mk_float,ndim_moment},
         p::AbstractArray{mk_float,ndim_moment}, r_boundaries::r_boundary_info, adv, vz,
-        vr, vzeta, z, r, composition,
-        end1::AbstractArray{mk_float,ndim_pdf_neutral_boundary},
-        end2::AbstractArray{mk_float,ndim_pdf_neutral_boundary},
-        buffer1::AbstractArray{mk_float,ndim_pdf_neutral_boundary},
-        buffer2::AbstractArray{mk_float,ndim_pdf_neutral_boundary}, r_diffusion::Bool)
+        vr, vzeta, z, r, composition, r_diffusion::Bool) = begin
 
     nr = r.n
     zero = 1.0e-10
-
-    if r.nelement_global > r.nelement_local
-        # reconcile internal element boundaries across processes
-        # & enforce periodicity and external boundaries if needed
-        @begin_sn_z_vzeta_vr_vz_region()
-        @loop_sn_z_vzeta_vr_vz isn iz ivzeta ivr ivz begin
-            end1[ivz,ivr,ivzeta,iz,isn] = f[ivz,ivr,ivzeta,iz,1,isn]
-            end2[ivz,ivr,ivzeta,iz,isn] = f[ivz,ivr,ivzeta,iz,nr,isn]
-        end
-        reconcile_element_boundaries_MPI!(f, end1, end2, buffer1, buffer2, r;
-                                          neutrals=true)
-
-        # Hacky way to get buffers to use for moment communication, to avoid having to
-        # pass in even more buffers. We know that the distribution function buffers are
-        # bigger than those needed for moments, so we can just take a chunk at the
-        # beginning of the distribution function buffers.
-        moment_end1 = reshape(@view(end1[1:z.n*composition.n_neutral_species]), z.n,
-                              composition.n_neutral_species)
-        moment_end2 = reshape(@view(end2[1:z.n*composition.n_neutral_species]), z.n,
-                              composition.n_neutral_species)
-        moment_buffer1 = reshape(@view(buffer1[1:z.n*composition.n_neutral_species]), z.n,
-                                 composition.n_neutral_species)
-        moment_buffer2 = reshape(@view(buffer2[1:z.n*composition.n_neutral_species]), z.n,
-                                 composition.n_neutral_species)
-        @begin_sn_z_region()
-        @loop_sn_z isn iz begin
-            moment_end1[iz,isn] = density[iz,1,isn]
-            moment_end2[iz,isn] = density[iz,nr,isn]
-        end
-        reconcile_element_boundaries_MPI!(density, end1, end2, buffer1, buffer2, r;
-                                          neutrals=true)
-        @loop_sn_z isn iz begin
-            moment_end1[iz,isn] = uz[iz,1,isn]
-            moment_end2[iz,isn] = uz[iz,nr,isn]
-        end
-        reconcile_element_boundaries_MPI!(uz, end1, end2, buffer1, buffer2, r;
-                                          neutrals=true)
-        @loop_sn_z isn iz begin
-            moment_end1[iz,isn] = p[iz,1,isn]
-            moment_end2[iz,isn] = p[iz,nr,isn]
-        end
-        reconcile_element_boundaries_MPI!(p, end1, end2, buffer1, buffer2, r;
-                                          neutrals=true)
-    end
 
     for (ir, sections_tuple) ∈ ((1, r_boundaries.inner_sections),
                                 (nr, r_boundaries.outer_sections))
@@ -1660,26 +1504,12 @@ end
 """
 enforce boundary conditions on neutral particle f in z
 """
-function enforce_neutral_z_boundary_condition!(pdf, density, uz, pz, moments, density_ion,
-                                               upar_ion, Er, z_boundaries, adv,
-                                               z, vzeta, vr, vz, composition, geometry,
-                                               end1::AbstractArray{mk_float,5}, end2::AbstractArray{mk_float,5},
-                                               buffer1::AbstractArray{mk_float,5}, buffer2::AbstractArray{mk_float,5},
-                                               buffer3::AbstractArray{mk_float,5})
+@timeit_debug global_timer enforce_neutral_z_boundary_condition!(
+                                               pdf, density, uz, pz, moments, density_ion,
+                                               upar_ion, Er, z_boundaries, adv, z, vzeta,
+                                               vr, vz, composition, geometry,
+                                               pdf_buffer) = begin
 
-
-    if z.nelement_global > z.nelement_local
-        # reconcile internal element boundaries across processes
-        # & enforce periodicity and external boundaries if needed
-        nz = z.n
-        @loop_sn_r_vzeta_vr_vz isn ir ivzeta ivr ivz begin
-            end1[ivz,ivr,ivzeta,ir,isn] = pdf[ivz,ivr,ivzeta,1,ir,isn]
-            end2[ivz,ivr,ivzeta,ir,isn] = pdf[ivz,ivr,ivzeta,nz,ir,isn]
-        end
-        # check on periodic bc occurs within this call below
-        reconcile_element_boundaries_MPI!(pdf, end1, end2, buffer1, buffer2, z;
-                                          neutrals=true)
-    end
 
     zero = 1.0e-14
     # 'constant' BC is time-independent f at upwind boundary
@@ -1772,7 +1602,7 @@ function enforce_neutral_z_boundary_condition!(pdf, density, uz, pz, moments, de
                     density[:,ir,isn], ion_flux_0, ion_flux_L, z_boundaries,
                     T_wall_over_m, composition.recycling_fraction, moments.evolve_p,
                     moments.evolve_upar, moments.evolve_density, zero,
-                    buffer3[:,:,:,ir,isn])
+                    pdf_buffer[:,:,:,ir,isn])
             end
         end
     end

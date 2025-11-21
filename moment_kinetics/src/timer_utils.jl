@@ -49,17 +49,21 @@ and added to the dfns output file.
 const timer_names_all_ranks_dfns = TimerNamesDict()
 
 """
-    format_global_timer(; show=true, truncate_output=true)
+    format_global_timer(; show_output=false, threshold=1.0e-3, truncate_output=true,
+                          top_level=nothing)
 
 Manipulate a copy of the [`global_timer`](@ref), to remove some things to reduce the
 clutter when it is printed.
 
-By default the resulting `TimerOutput` is displayed in the terminal. Pass
-`show_output=true` to display the resulting `TimerOutput` in the terminal.
+By default the resulting `TimerOutput` is not displayed.  Pass `show_output=true` to
+display the resulting `TimerOutput` in the terminal.
 
 By default, the output is truncated, removing deeply nested timers and timers with very
 little time. To include all timers, pass `truncate_output=false`. The threshold for
 dropping timers is if their time is less than `threshold` times the total time.
+
+`top_level` can be passed a Tuple of Strings to select a (possibly nested) sub-timer of
+`global_timer` to be formatted, instead of `global_timer`.
 
 By default, returns a string showing the contents of the `TimerOutput`. When
 `show_output=true` is passed, just returns the empty string.
@@ -166,6 +170,8 @@ function format_global_timer(; show_output=false, threshold=1.0e-3, truncate_out
         # may be printed in microseconds.
         result = replace(result, "μ" => "u")
         result = ascii(replace(result, !isascii=>' '))
+
+        return result
     end
 end
 

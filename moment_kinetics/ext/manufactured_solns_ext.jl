@@ -266,13 +266,18 @@ using IfElse
             initial_density = species.initial_density
             density_amplitude = species.z_IC.density_amplitude
             density_phase = species.z_IC.density_phase
-            T0 = Ti_sym(Lr, Lz, r_bc, z_bc, composition, manufactured_solns_input,
-                        species)
-            eta0 = (initial_density
-                    * (1.0 + density_amplitude
-                       * sin(2.0*π*background_wavenumber*z/Lz
-                             + density_phase)))
-            densi = eta0^((T0/(1+T0)))
+            densi = (initial_density
+                     * (1.0 + density_amplitude
+                        * sin(2.0*π*background_wavenumber*z/Lz
+                              + density_phase)))
+            # Use the following to set a sinusoidal profile for eta(z) rather than n(z).
+            #T0 = Ti_sym(Lr, Lz, r_bc, z_bc, composition, manufactured_solns_input,
+            #            species)
+            #eta0 = (initial_density
+            #        * (1.0 + density_amplitude
+            #           * sin(2.0*π*background_wavenumber*z/Lz
+            #                 + density_phase)))
+            #densi = eta0^((T0/(1+T0)))
         else
             error("Unrecognized option "
                   * "manufactured_solns:type=$(manufactured_solns_input.type)")
@@ -292,6 +297,7 @@ using IfElse
                   * (1.0 + temperature_amplitude
                      * sin(2.0*π*background_wavenumber*z/Lz)
                     ))
+            return T0
         else
             error("Unrecognized option "
                   * "manufactured_solns:type=$(manufactured_solns_input.type)")
@@ -322,9 +328,12 @@ using IfElse
     
     # ion parallel pressure symbolic function 
     function ppari_sym(Lr,Lz,r_bc,z_bc,composition,manufactured_solns_input,species)
-        # normalisation factor due to pressure normalisation convention in master pref = nref mref cref^2
-        norm_fac = 0.5
-        if z_bc == "periodic"
+        if manufactured_solns_input.type == "2D-instability"
+            densi = densi_sym(Lr,Lz,r_bc,z_bc,composition,manufactured_solns_input,species)
+            Tpari = Ti_sym(Lr, Lz, r_bc, z_bc, composition, manufactured_solns_input,
+                           species)
+            ppari = densi * Tpari
+        elseif z_bc == "periodic"
             densi = densi_sym(Lr,Lz,r_bc,z_bc,composition,manufactured_solns_input,species)
             ppari = densi
         elseif z_bc == "wall"
@@ -337,20 +346,24 @@ using IfElse
                       - (2.0/(pi*densi))*((z/Lz + 0.5)*nplus_sym(Lr,Lz,r_bc,z_bc,epsilon,alpha) 
                       - (0.5 - z/Lz)*nminus_sym(Lr,Lz,r_bc,z_bc,epsilon,alpha))^2 )
         end
-        return ppari*norm_fac
+        return ppari
     end
     
     # ion perpendicular pressure symbolic function 
     function pperpi_sym(Lr,Lz,r_bc,z_bc,composition,manufactured_solns_input,species,nvperp)
         densi = densi_sym(Lr,Lz,r_bc,z_bc,composition,manufactured_solns_input,species)
-        normfac = 0.5 # if pressure normalised to 0.5* nref * Tref = mref cref^2
-        #normfac = 1.0 # if pressure normalised to nref*Tref
         if nvperp > 1
-            pperpi = densi # simple vperp^2 dependence of dfni
+            if manufactured_solns_input.type == "2D-instability"
+                Tperpi = Ti_sym(Lr, Lz, r_bc, z_bc, composition, manufactured_solns_input,
+                               species)
+                pperpi = densi * Tperpi
+            else
+                pperpi = densi # simple vperp^2 dependence of dfni
+            end
         else
             pperpi = 0.0 # marginalised model has nvperp = 1, vperp[1] = 0
         end
-        return pperpi*normfac
+        return pperpi
     end
     
     # ion thermal speed symbolic function 
@@ -595,6 +608,11 @@ using IfElse
         if length(boundaries.r.inner_sections) > 1 || length(boundaries.r.outer_sections) > 1
             error("Manufactured solutions do not support multiple radial boundary sections")
         end
+        if length(boundaries.r.inner_sections) == 0 || length(boundaries.r.outer_sections) == 0
+            # No radial domain, so r_bc does not matter
+            return "periodic"
+        end
+
         r_bc_type = typeof(boundaries.r.inner_sections[1].ion)
         if typeof(boundaries.r.outer_sections[1].ion) !== r_bc_type
             error("Inner and outer radial boundary conditions are different "
@@ -726,18 +744,20 @@ using IfElse
                - ionization_frequency*dense*gav_dfnn )
         nu_krook = collisions.krook.nuii0
         if nu_krook > 0.0
-            Ti_over_Tref = vthi^2
             if collisions.krook.frequency_option == "manual"
                 nuii_krook = nu_krook
             else # default option
-                nuii_krook = nu_krook * densi * Ti_over_Tref^(-1.5)
+                nuii_krook = nu_krook * densi / vthi^3
             end
             if vperp_coord.n > 1
                 pvth  = 3
+                Krook_vthi = vthi
             else 
                 pvth = 1
+                Krook_vthi = sqrt(3.0) * vthi
+                nuii_krook /= 3.0^1.5
             end
-            FMaxwellian = (densi/vthi^pvth)/π^(pvth/2)*exp( -( ( vpa-upari)^2 + vperp^2 )/vthi^2)
+            FMaxwellian = (densi/Krook_vthi^pvth)/π^(pvth/2)*exp( -( ( vpa-upari)^2 + vperp^2 )/Krook_vthi^2)
             Si += - nuii_krook*(FMaxwellian - dfni)
         end
         include_num_diss_in_MMS = true

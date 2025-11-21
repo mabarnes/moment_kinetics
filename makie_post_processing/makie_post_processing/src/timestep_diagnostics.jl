@@ -301,7 +301,17 @@ function timestep_diagnostics(run_info, run_info_dfns; plot_prefix=nothing, it=n
                     time = ri.time
                 end
                 for varname ∈ CFL_vars
-                    var = get_variable(ri, varname)
+                    var = nothing
+                    try
+                        var = get_variable(ri, varname)
+                    catch e
+                        if isa(e, KeyError)
+                            # Variable was not found, so skip.
+                            continue
+                        else
+                            rethrow(e)
+                        end
+                    end
                     #maxval = NaNMath.min(maxval, NaNMath.maximum(var))
                     if occursin("neutral", varname)
                         if varname ∈ implicit_CFL_vars

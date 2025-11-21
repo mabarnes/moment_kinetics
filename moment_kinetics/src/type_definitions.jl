@@ -53,4 +53,10 @@ defined as an alias for `DebugMPISharedArray`.
 """
 const MPISharedArray = @debug_shared_array_ifelse(DebugMPISharedArray, Array)
 
+# Custom error types
+struct MKFileNotFound <: Exception
+    msg::String
+end
+export MKFileNotFound
+
 end

@@ -1184,6 +1184,30 @@ function apply_adv_fac!(buffer::AbstractArray{mk_float,5},
     end
 end
 
+function apply_adv_fac_vpavperpz!(buffer::AbstractArray{mk_float,2},
+                                  adv_fac::AbstractArray{mk_float,2},
+                                  endpoints::AbstractArray{mk_float,2}, sgn::mk_int)
+    #buffer contains off-process endpoint
+    #adv_fac < 0 is positive advection speed
+    #adv_fac > 0 is negative advection speed
+    #endpoint is local on-process endpoint
+    #sgn = 1 for send irank -> irank + 1
+    #sgn = -1 for send irank + 1 -> irank
+    #loop over all indices in array
+    @begin_anyzv_vperp_vpa_region()
+    @loop_vperp_vpa ivperp ivpa begin
+        if sgn*adv_fac[ivpa,ivperp] > 0.0
+            # replace buffer value with endpoint value
+            buffer[ivpa,ivperp] = endpoints[ivpa,ivperp]
+        elseif sgn*adv_fac[ivpa,ivperp] < 0.0
+            #do nothing
+        else #average values
+            buffer[ivpa,ivperp] = 0.5*(buffer[ivpa,ivperp] + endpoints[ivpa,ivperp])
+        end
+    end
+    return nothing
+end
+
 @timeit_debug global_timer reconcile_element_boundaries_MPI!(
                   df1d::AbstractArray{mk_float,Ndims},
                   adv_fac_lower_endpoints::AbstractArray{mk_float,Mdims},
@@ -1351,11 +1375,11 @@ end
     # -- called within an r-parallelised loop, not within z-, vperp- or vpa-loops or from
     # -- an @anyzv_serial_region or from an if statment isolating a single rank in a
     # -- subblock
+    nrank = coord.nrank
+    irank = coord.irank
     @anyzv_serial_region begin
         # now deal with endpoints that are stored across ranks
         comm = coord.comm
-        nrank = coord.nrank
-        irank = coord.irank
         #send_buffer = coord.send_buffer
         #receive_buffer = coord.receive_buffer
         # sending pattern is cyclic. First we send data form irank -> irank + 1
@@ -1379,17 +1403,19 @@ end
     if irank == 0
         if coord.periodic
             # depending on adv_fac, update the extreme lower endpoint with data from irank = nrank -1	
-            apply_adv_fac!(receive_buffer1,adv_fac_lower_endpoints,dfdx_lower_endpoints,1)
+            apply_adv_fac_vpavperpz!(receive_buffer1, adv_fac_lower_endpoints,
+                                     dfdx_lower_endpoints, 1)
         else # directly use value from Cheb at extreme lower point
             # Don't do an array copy here, just make the `receive_buffer1` variable refer
             # to a different array.
             receive_buffer1 = dfdx_lower_endpoints
         end
     else # depending on adv_fac, update the lower endpoint with data from irank = nrank -1	
-        apply_adv_fac!(receive_buffer1,adv_fac_lower_endpoints,dfdx_lower_endpoints,1)
+        apply_adv_fac_vpavperpz!(receive_buffer1, adv_fac_lower_endpoints,
+                                 dfdx_lower_endpoints, 1)
     end
     #now update the df1d array -- using a slice appropriate to the dimension reconciled
-    @begin_vperp_vpa_region()
+    @begin_anyzv_vperp_vpa_region()
     @loop_vperp_vpa ivperp ivpa begin
         df1d[ivpa,ivperp,1] = receive_buffer1[ivpa,ivperp]
     end
@@ -1397,19 +1423,21 @@ end
     if irank == nrank-1
         if coord.periodic
             # depending on adv_fac, update the extreme upper endpoint with data from irank = 0
-            apply_adv_fac!(receive_buffer2,adv_fac_upper_endpoints,dfdx_upper_endpoints,-1)
+            apply_adv_fac_vpavperpz!(receive_buffer2, adv_fac_upper_endpoints,
+                                     dfdx_upper_endpoints, -1)
         else #directly use value from Cheb
             # Don't do an array copy here, just make the `receive_buffer2` variable refer
             # to a different array.
             receive_buffer2 = dfdx_upper_endpoints
         end
     else # enforce continuity at upper endpoint
-        apply_adv_fac!(receive_buffer2,adv_fac_upper_endpoints,dfdx_upper_endpoints,-1)
+        apply_adv_fac_vpavperpz!(receive_buffer2, adv_fac_upper_endpoints,
+                                 dfdx_upper_endpoints, -1)
     end
     #now update the df1d array -- using a slice appropriate to the dimension reconciled
-    @begin_vperp_vpa_region()
+    @begin_anyzv_vperp_vpa_region()
     @loop_vperp_vpa ivperp ivpa begin
-        df1d[ivperp,ivpa,end] = receive_buffer2[ivperp,ivpa]
+        df1d[ivpa,ivperp,end] = receive_buffer2[ivpa,ivperp]
     end
 
     # synchronize buffers

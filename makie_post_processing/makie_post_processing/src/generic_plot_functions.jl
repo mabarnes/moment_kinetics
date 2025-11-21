@@ -129,7 +129,7 @@ for dim ∈ one_dimension_combinations
                                          ylabel=get_variable_symbol(var_name),
                                          yscale=yscale, axis_args...)
                      for (d, ri) ∈ zip(data, run_info)
-                         $function_name(ri, var_name, is=is, data=d, input=input, ax=ax,
+                         $function_name(ri, var_name; is=is, data=d, input=input, ax=ax,
                                         transform=transform, label=ri.run_name,
                                         $idim=$idim, kwargs...)
                      end
@@ -1919,7 +1919,10 @@ Make a 1d animation of `data` vs `xcoord`.
 (sub-)plot.
 
 `ylims` can be passed a Tuple (ymin, ymax) to set the y-axis limits. By default the
-minimum and maximum of the data (over all time points) will be used.
+minimum and maximum of the data (over all time points) will be used. You can also pass
+`ylims=missing` to reset the ylims for each time point with the minimum/maximum of the
+data at those time points, or with a `Tuple{Vector,Vector}` to manually set the ylims for
+each time point.
 
 `yscale` can be used to set the scaling function for the y-axis. Options are `identity`,
 `log`, `log2`, `log10`, `sqrt`, `Makie.logit`, `Makie.pseudolog10` and `Makie.Symlog10`.
@@ -1958,8 +1961,16 @@ function animate_1d(xcoord, data; frame_index=nothing, ax=nothing, fig=nothing,
     end
 
     if ax === nothing
-        fig, ax = get_1d_ax(; title=title, xlabel=xlabel, ylabel=ylabel, yscale=yscale,
-                            axis_args...)
+        fig, ax = get_1d_ax(; yscale=yscale, axis_args...)
+    end
+    if title !== nothing
+        ax.title = title
+    end
+    if xlabel !== nothing
+        ax.xlabel = xlabel
+    end
+    if ylabel !== nothing
+        ax.ylabel = ylabel
     end
 
     if !isa(data, VariableCache)
@@ -1986,6 +1997,47 @@ function animate_1d(xcoord, data; frame_index=nothing, ax=nothing, fig=nothing,
             # the default is.
             if datamin != datamax
                 ylims!(ax, datamin, datamax)
+            end
+        else
+            # Expand currently set limits to ensure they include the minimum and maxiumum
+            # of the data.
+            current_ymin, current_ymax = ax.limits.val[2]
+            ylims!(ax, min(datamin, current_ymin), max(datamax, current_ymax))
+        end
+    elseif ylims === missing || isa(ylims, Tuple{Vector, Vector})
+        if ylims === missing
+            # Set time-dependent ylims
+            if isa(data, VariableCache)
+                datamin, datamax = variable_cache_extrema(data; transform=transform,
+                                                          time_dependent=true)
+            else
+                datamin = vec(minimum(data, dims=1:ndims(data)-1))
+                datamax = vec(maximum(data, dims=1:ndims(data)-1))
+            end
+        else
+            datamin, datamax = ylims
+        end
+
+        # Because ylims!() does not support Observable arguments, cannot extract existing
+        # Observable and re-call ylims!(). Therefore only first branch currently works,
+        # and this function always resets the ylims according to the current variable when
+        # using ylims=missing, and for the workaround we must not make `datamin` and
+        # `datamax` observables.
+        ## Make datamin/datamax into Observables for animation
+        #datamin = @lift datamin[$ind]
+        #datamax = @lift datamax[$ind]
+        if true #ax.limits.val[2] === nothing
+            # No limits set yet.
+            # If datamin==datamax, plot is probably not that interesting, but also the
+            # limits do not change with time, so might as well leave limits as whatever
+            # the default is.
+            if datamin != datamax
+                # ylims!() doesn't natively support Observables. Following workaround
+                # comes from
+                # https://discourse.julialang.org/t/makie-observables/69796/2
+                onany(ind) do i
+                    ylims!(ax, datamin[i], datamax[i])
+                end
             end
         else
             # Expand currently set limits to ensure they include the minimum and maxiumum
@@ -2069,12 +2121,15 @@ function animate_2d(xcoord, ycoord, data; frame_index=nothing, ax=nothing, fig=n
     colormap = parse_colormap(colormap)
 
     if ax === nothing
-        fig, ax, colorbar_place = get_2d_ax(; title=title, axis_args...)
+        fig, ax, colorbar_place = get_2d_ax(; axis_args...)
     end
     if frame_index === nothing
         ind = Observable(1)
     else
         ind = frame_index
+    end
+    if title !== nothing
+        ax.title = title
     end
     if xlabel !== nothing
         ax.xlabel = xlabel
@@ -2099,8 +2154,8 @@ function animate_2d(xcoord, ycoord, data; frame_index=nothing, ax=nothing, fig=n
         datamin, datamax = variable_cache_extrema(data; transform=transform)
         heatmap_data = @lift(transform.(get_cache_slice(data, $ind)))
     else
-        datamin, datamax = NaNMath.extrema(data)
         data = transform.(data)
+        datamin, datamax = NaNMath.extrema(data)
         heatmap_data = @lift(@view data[:,:,$ind])
     end
     if !isfinite(extrema_check_colorscale(datamin)) && !isfinite(extrema_check_colorscale(datamax))

@@ -67,6 +67,7 @@ include("plots_for_variable.jl")
 include("generic_plot_functions.jl")
 include("slicing.jl")
 include("error_handler.jl")
+include("utils.jl")
 
 include("compare_runs.jl")
 include("moment_constraints.jl")
@@ -79,6 +80,5 @@ include("mms.jl")
 include("timestep_diagnostics.jl")
 include("collisionality.jl")
 include("performance_analysis.jl")
-include("utils.jl")
 
 end
