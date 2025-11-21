@@ -476,13 +476,12 @@ function runtests(; highres=false)
     @testset "Fokker Planck dFdt = C[F,F] relaxation test" verbose=use_verbose begin
         println("Fokker Planck dFdt = C[F,F] relaxation test")
 
+        test_cases = Any[(false, false, false, 2.0e-14, 2.0e-14, highres ? 4.0e-3 : 1.0e-5, highres ? 1.0e-4 : 5.0e-12, highres ? 4.0e-3 : 1.0e-5)]
+        @long push!(test_cases, (true, false, false, highres ? 2.0e-8 : 2.0e-14, highres ? 2.0e-8 : 2.0e-14, highres ? 4.0e-3 : 1.0e-5, highres ? 1.0e-4 : 5.0e-12, highres ? 4.0e-3 : 1.0e-5))
+        @long push!(test_cases, (true, true, false, highres ? 2.0e-3 : 4.0e-14, highres ? 3.0e-4 : 2.0e-14, highres ? 4.0e-3 : 1.0e-5, highres ? 3.0e-4 : 5.0e-12, highres ? 4.0e-3 : 1.0e-5))
+        push!(test_cases, (true, true, true, highres ? 2.0e-3 : 2.0e-14, highres ? 2.0e-3 : 2.0e-14, highres ? 4.0e-3 : 1.0e-5, highres ? 2.0e-3 : 5.0e-12, highres ? 4.0e-3 : 1.0e-3))
         @testset "evolve_density=$evolve_density, evolve_upar=$evolve_upar, evolve_p=$evolve_p" for
-                (evolve_density, evolve_upar, evolve_p, tol1, tol2, tol3, tol4) ∈
-                    ((false, false, false, 2.0e-14, 2.0e-14, highres ? 4.0e-3 : 1.0e-5, highres ? 1.0e-4 : 5.0e-12),
-                     (true, false, false, highres ? 2.0e-8 : 2.0e-14, highres ? 2.0e-8 : 1.0e-14, highres ? 4.0e-3 : 1.0e-5, highres ? 1.0e-4 : 5.0e-12),
-                     (true, true, false, highres ? 2.0e-3 : 2.0e-14, highres ? 3.0e-4 : 2.0e-14, highres ? 4.0e-3 : 1.0e-5, highres ? 3.0e-4 : 5.0e-12),
-                     (true, true, true, highres ? 2.0e-3 : 2.0e-14, highres ? 2.0e-3 : 2.0e-14, highres ? 4.0e-3 : 1.0e-5, highres ? 2.0e-3 : 5.0e-12),
-                    )
+                (evolve_density, evolve_upar, evolve_p, tol1, tol2, tol3, tol4, tol5) ∈ test_cases
             println("  evolve_density=$evolve_density, evolve_upar=$evolve_upar, evolve_p=$evolve_p:")
 
             if evolve_p
@@ -498,7 +497,7 @@ function runtests(; highres=false)
                 # This case does not conserve moments well enough to compare full-f to
                 # moment-kinetic cases, so skip unless separate expected output is saved
                 # for full-f and moment-kinetic.
-                @testset "Gauss Legendre base" begin
+                @long @testset "Gauss Legendre base" begin
                     run_name = "gausslegendre_pseudospectral"
                     vperp_bc = "zero-impose-regularity"
                     if highres
@@ -548,7 +547,7 @@ function runtests(; highres=false)
                          vpa=OptionsDict("bc" => vpa_bc, "L" => Lvpa),
                          evolve_moments=OptionsDict("density" => evolve_density, "parallel_flow" => evolve_upar, "pressure" => evolve_p))
             end
-            @testset "Gauss Legendre no (explicitly) enforced boundary conditions: IMEX timestepping PareschiRusso3(4,3,3)" begin
+            @long @testset "Gauss Legendre no (explicitly) enforced boundary conditions: IMEX timestepping PareschiRusso3(4,3,3)" begin
                 run_name = "gausslegendre_pseudospectral_none_bc"
                 vperp_bc = "none"
                 vpa_bc = "none"
@@ -559,7 +558,7 @@ function runtests(; highres=false)
                     this_expected = expected_none_bc[(evolve_density, evolve_upar, evolve_p)]
                     this_input = test_input_gauss_legendre
                 end
-                run_test(this_input, this_expected, tol3, tol4;
+                run_test(this_input, this_expected, tol5, tol4;
                          interp_to_expected=highres,
                          vperp=OptionsDict("bc" => vperp_bc, "L" => Lvperp),
                          vpa=OptionsDict("bc" => vpa_bc, "L" => Lvpa),
@@ -570,7 +569,7 @@ function runtests(; highres=false)
                          timestepping=OptionsDict("kinetic_ion_solver" => "implicit_ion_fp_collisions",
                                                   "type" => "PareschiRusso3(4,3,3)",))
             end
-            @testset "Gauss Legendre no (explicitly) enforced boundary conditions: IMEX timestepping EulerIMEX" begin
+            @long @testset "Gauss Legendre no (explicitly) enforced boundary conditions: IMEX timestepping EulerIMEX" begin
                 run_name = "gausslegendre_pseudospectral_none_bc"
                 vperp_bc = "none"
                 vpa_bc = "none"
