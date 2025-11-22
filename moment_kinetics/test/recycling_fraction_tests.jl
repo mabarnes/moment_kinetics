@@ -56,8 +56,7 @@ test_input = OptionsDict("composition" => OptionsDict("n_ion_species" => 1,
                          "output" => OptionsDict("run_name" => "full-f"),
                          "evolve_moments" => OptionsDict("density" => false,
                                                          "parallel_flow" => false,
-                                                         "pressure" => false,
-                                                         "moments_conservation" => false),
+                                                         "pressure" => false),
                          "reactions" => OptionsDict("charge_exchange_frequency" => 1.0606601717798214,
                                                     "ionization_frequency" => 0.7071067811865476),
                          "timestepping" => OptionsDict("nstep" => 1000,
@@ -97,8 +96,7 @@ end
 
 test_input_split1 = recursive_merge(test_input,
                                     OptionsDict("output" => OptionsDict("run_name" => "split1"),
-                                                "evolve_moments" => OptionsDict("density" => true,
-                                                                                "moments_conservation" => true)))
+                                                "evolve_moments" => OptionsDict("density" => true)))
 test_input_split2 = recursive_merge(test_input_split1,
                                     OptionsDict("output" => OptionsDict("run_name" => "split2"),
                                                 "evolve_moments" => OptionsDict("parallel_flow" => true)))
@@ -161,8 +159,7 @@ end
 
 test_input_adaptive_split1 = recursive_merge(test_input_adaptive,
                                              OptionsDict("output" => OptionsDict("run_name" => "adaptive split1"),
-                                                         "evolve_moments" => OptionsDict("density" => true,
-                                                                                         "moments_conservation" => true)))
+                                                         "evolve_moments" => OptionsDict("density" => true)))
 test_input_adaptive_split2 = recursive_merge(test_input_adaptive_split1,
                                              OptionsDict("output" => OptionsDict("run_name" => "adaptive split2"),
                                                          "evolve_moments" => OptionsDict("parallel_flow" => true)))

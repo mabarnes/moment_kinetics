@@ -6,7 +6,6 @@ source_T = 0.25
 [evolve_moments]
 density = false
 parallel_flow = false
-moments_conservation = false
 pressure = false
 
 [z]

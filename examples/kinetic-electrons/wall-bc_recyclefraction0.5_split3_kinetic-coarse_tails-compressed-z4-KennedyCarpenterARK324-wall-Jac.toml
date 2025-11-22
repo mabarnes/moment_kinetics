@@ -4,7 +4,6 @@ nelement = 1
 
 [evolve_moments]
 density = true
-moments_conservation = true
 parallel_flow = true
 pressure = true
 

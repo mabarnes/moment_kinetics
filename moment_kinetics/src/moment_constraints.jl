@@ -28,6 +28,10 @@ initial state, and when applying boundary conditions.
 Note this function assumes the input is given at a single spatial position.
 """
 @timeit global_timer hard_force_moment_constraints!(f, moments, vpa, vperp) = begin
+    if !moments.enforce_conservation
+        # Imposing moment constraints has been explicitly disabled.
+        return nothing
+    end
 
     f1d = @view f[:,1]
     if moments.evolve_p
@@ -118,6 +122,11 @@ Note this function assumes the input is given at a single spatial position.
 end
 @timeit global_timer hard_force_moment_constraints!(
                          f::AbstractArray{mk_float,4}, moments, vpa, vperp) = begin
+    if !moments.enforce_conservation
+        # Imposing moment constraints has been explicitly disabled.
+        return nothing
+    end
+
     A = moments.electron.constraints_A_coefficient
     B = moments.electron.constraints_B_coefficient
     C = moments.electron.constraints_C_coefficient
@@ -129,6 +138,11 @@ end
 end
 @timeit global_timer hard_force_moment_constraints!(
                          f::AbstractArray{mk_float,5}, moments, vpa, vperp) = begin
+    if !moments.enforce_conservation
+        # Imposing moment constraints has been explicitly disabled.
+        return nothing
+    end
+
     A = moments.ion.constraints_A_coefficient
     B = moments.ion.constraints_B_coefficient
     C = moments.ion.constraints_C_coefficient
@@ -152,6 +166,11 @@ Notes:
 * currently only works with '1V' runs, where vz is the only velocity-space dimension
 """
 @timeit global_timer hard_force_moment_constraints_neutral!(f, moments, vz) = begin
+    if !moments.enforce_conservation
+        # Imposing moment constraints has been explicitly disabled.
+        return nothing
+    end
+
     f1d = @view f[:,1,1]
     if moments.evolve_p
         # fnew = (A + B*wz + C*wz^2)*f
@@ -239,6 +258,11 @@ Notes:
 end
 @timeit global_timer hard_force_moment_constraints_neutral!(
                          f::AbstractArray{mk_float,6}, moments, vz) = begin
+    if !moments.enforce_conservation
+        # Imposing moment constraints has been explicitly disabled.
+        return nothing
+    end
+
     A = moments.neutral.constraints_A_coefficient
     B = moments.neutral.constraints_B_coefficient
     C = moments.neutral.constraints_C_coefficient
@@ -266,6 +290,11 @@ Note this function assumes the input is given at a single spatial position.
 """
 function moment_constraints_on_residual!(residual::AbstractArray{T,N},
                                          f::AbstractArray{T,N}, moments, vpa) where {T,N}
+    if !moments.enforce_conservation
+        # Imposing moment constraints has been explicitly disabled.
+        return nothing
+    end
+
     if N == 2
         f = @view f[:,1]
         residual = @view residual[:,1]

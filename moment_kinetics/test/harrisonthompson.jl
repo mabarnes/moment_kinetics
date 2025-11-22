@@ -87,8 +87,7 @@ test_input_finite_difference = OptionsDict("composition" => OptionsDict("n_ion_s
                                                                    "parallel_io" => false),
                                            "evolve_moments" => OptionsDict("density" => false,
                                                                            "parallel_flow" => false,
-                                                                           "pressure" => false,
-                                                                           "moments_conservation" => false),
+                                                                           "pressure" => false),
                                            "reactions" => OptionsDict("charge_exchange_frequency" => 0.0,
                                                                       "ionization_frequency" => 0.0),
                                            "timestepping" => OptionsDict("nstep" => 25000,
@@ -134,8 +133,7 @@ test_input_chebyshev = recursive_merge(test_input_finite_difference,
 
 test_input_chebyshev_split1 = recursive_merge(test_input_chebyshev,
                                               OptionsDict("output" => OptionsDict("run_name" => "chebyshev_pseudospectral_split1"),
-                                                          "evolve_moments" => OptionsDict("density" => true,
-                                                                                          "moments_conservation" => true),
+                                                          "evolve_moments" => OptionsDict("density" => true),
                                                          ))
 
 test_input_chebyshev_split2 = recursive_merge(test_input_chebyshev_split1,

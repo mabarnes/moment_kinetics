@@ -8,7 +8,6 @@ ionization_frequency = 2.8284271247461903
 [evolve_moments]
 density = false
 parallel_flow = false
-moments_conservation = false
 pressure = false
 
 [r]

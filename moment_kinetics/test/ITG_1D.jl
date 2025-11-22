@@ -48,7 +48,6 @@ test_input = OptionsDict(
  "evolve_moments" => OptionsDict(
      "pressure" => false,
      "density" => false,
-     "moments_conservation" => false,
      "parallel_flow" => false
     ),
  "ion_species_1" => OptionsDict(
