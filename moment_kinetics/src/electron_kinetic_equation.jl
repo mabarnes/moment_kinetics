@@ -2521,7 +2521,8 @@ function apply_electron_bc_and_constraints_no_r!(
             @views hard_force_moment_constraints!(f_electron[:,:,iz],
                                                   (evolve_density=true,
                                                    evolve_upar=true,
-                                                   evolve_p=true), vpa, vperp)
+                                                   evolve_p=true,
+                                                   enforce_conservation=true), vpa, vperp)
     end
 
     return ""

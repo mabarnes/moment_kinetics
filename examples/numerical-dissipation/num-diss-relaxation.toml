@@ -10,7 +10,6 @@ nuii = 0.0
 [evolve_moments]
 density = false
 parallel_flow = false
-moments_conservation = false
 pressure = false
 
 [z]

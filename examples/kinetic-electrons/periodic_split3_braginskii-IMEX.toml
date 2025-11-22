@@ -8,7 +8,6 @@ nu_ei = 1414.213562373095
 [evolve_moments]
 density = true
 parallel_flow = true
-moments_conservation = true
 pressure = true
 
 [r]

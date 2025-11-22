@@ -1,7 +1,6 @@
 [evolve_moments]
 density = true
 parallel_flow = false
-moments_conservation = true
 pressure = false
 
 [r]

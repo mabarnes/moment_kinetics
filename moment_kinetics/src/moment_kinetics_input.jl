@@ -126,8 +126,16 @@ function mk_input(input_dict=OptionsDict("output" => OptionsDict("run_name" => "
         density=false,
         parallel_flow=false,
         pressure=false,
-        moments_conservation=false,
+        moments_conservation="default",
        )
+    if evolve_moments_settings["moments_conservation"] == "default"
+        # Default to `true` for moment-kinetic runs and `false` for standard drift
+        # kinetics.
+        evolve_moments_settings["moments_conservation"] =
+            any(Any[evolve_moments_settings["density"],
+                    evolve_moments_settings["parallel_flow"],
+                    evolve_moments_settings["pressure"]])
+    end
     evolve_moments = Dict_to_NamedTuple(evolve_moments_settings)
 
     # Reference parameters that define the conversion between physical quantities and

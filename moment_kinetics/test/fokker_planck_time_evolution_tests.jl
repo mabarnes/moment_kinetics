@@ -243,7 +243,6 @@ test_input_gauss_legendre = OptionsDict("output" => OptionsDict("run_name" => "g
                                                                                   "nuii" => 4.0,
                                                                                   "frequency_option" => "manual"),
                                         "evolve_moments" => OptionsDict("pressure" => false,
-                                                                        "moments_conservation" => false,
                                                                         "parallel_flow" => false,
                                                                         "density" => false),
                                         "z" => OptionsDict("discretization" => "chebyshev_pseudospectral",
