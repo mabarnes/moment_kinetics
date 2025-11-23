@@ -346,8 +346,8 @@ parallel loop ranges, and are only used by the tests in `debug_test/`.
     end
 
     zero = 1.0e-14
-    boundaries = create_boundary_info(input_dict, pdf, moments, r, z, vperp, vpa, vzeta,
-                                      vr, vz, r_spectral, composition, zero;
+    boundaries = create_boundary_info(input_dict, pdf, moments, fields, r, z, vperp, vpa,
+                                      vzeta, vr, vz, r_spectral, composition, zero;
                                       warn_unexpected=warn_unexpected_input)
 
     # Broadcast code_time from the root process of each shared-memory block (on which it

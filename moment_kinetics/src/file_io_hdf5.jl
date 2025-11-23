@@ -332,9 +332,11 @@ function create_dynamic_variable!(file_or_group::HDF5.H5DataStore, name, type,
         # To create unlimited-length arrays of strings, use a fixed-width array of UInt8
         # as HDF5.jl does not support arrays of variable-length strings when using
         # parallel I/O (as of version 0.17.2).
-        return create_dataset(file_or_group, name, UInt8,
-                              ((string_array_size, 1), (string_array_size, -1));
-                              chunk=(string_array_size, 1))
+        var = create_dataset(file_or_group, name, UInt8,
+                             ((string_array_size, 1), (string_array_size, -1));
+                             chunk=(string_array_size, 1))
+        add_attribute!(var, "dims", "string")
+        return var
     end
 
     if any(isa(c, mk_int) ? c < 0 : c.n < 0 for c ∈ coords)

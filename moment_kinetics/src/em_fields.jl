@@ -9,6 +9,7 @@ export calculate_phi_from_Epar!
 
 using ..type_definitions: mk_float
 using ..array_allocation: allocate_shared_float
+using ..boundary_conditions
 using ..communication: @_block_synchronize
 using ..input_structs
 using ..looping
@@ -51,7 +52,8 @@ update_phi updates the electrostatic potential, phi
 """
 @timeit_debug global_timer update_phi!(fields, fvec, vperp, z, r, composition, collisions,
                                        moments, geometry, z_spectral, r_spectral,
-                                       scratch_dummy, gyroavs::gyro_operators) = begin
+                                       scratch_dummy, gyroavs::gyro_operators,
+                                       boundaries) = begin
     n_ion_species = composition.n_ion_species
     # check bounds of fields and fvec arrays
     @debug_consistency_checks size(fields.phi,1) == z.n || throw(BoundsError(fields.phi))
@@ -139,13 +141,20 @@ update_phi updates the electrostatic potential, phi
     ## can calculate phi at z = L and hence phi_wall(z=L) using jpar_i at z =L if needed
     @_block_synchronize()
 
+    # Apply radial boundary conditions before calculating Er.
+    enforce_r_boundary_condition_em!(fields, boundaries.r, z, r)
+
     ## calculate the electric fields after obtaining phi
     #Er = - d phi / dr 
     if r.n > 1
-        derivative_r!(fields.Er,-fields.phi,
+        derivative_r!(fields.Er,fields.phi,
                 scratch_dummy.buffer_z_1, scratch_dummy.buffer_z_2,
                 scratch_dummy.buffer_z_3, scratch_dummy.buffer_z_4,
                 r_spectral,r)
+        @begin_r_z_region()
+        @loop_r_z ir iz begin
+            fields.Er[iz,ir] *= -1.0
+        end
         if z.irank == 0 && fields.force_Er_zero_at_wall
             @begin_serial_region()
             @serial_region begin
@@ -169,11 +178,16 @@ update_phi updates the electrostatic potential, phi
                                        kinetic_electrons_with_temperature_equation)
         if z.n > 1
             # Ez = - d phi / dz
-            @views derivative_z!(fields.Ez,-fields.phi,
+            @views derivative_z!(fields.Ez,fields.phi,
                     scratch_dummy.buffer_rs_1[:,1], scratch_dummy.buffer_rs_2[:,1],
                     scratch_dummy.buffer_rs_3[:,1], scratch_dummy.buffer_rs_4[:,1],
                     z_spectral,z)
+            @begin_r_z_region()
+            @loop_r_z ir iz begin
+                fields.Ez[iz,ir] *= -1.0
+            end
         else
+            @begin_r_z_region()
             @loop_r_z ir iz begin
                 fields.Ez[iz,ir] = 0.0
             end

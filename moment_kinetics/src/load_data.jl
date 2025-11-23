@@ -3714,8 +3714,8 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
     end
 
     zero = 1.0e-14
-    boundaries = create_boundary_info(input, nothing, nothing, r, z, vperp, vpa, vzeta,
-                                      vr, vz, r_spectral, composition, zero;
+    boundaries = create_boundary_info(input, nothing, nothing, nothing, r, z, vperp, vpa,
+                                      vzeta, vr, vz, r_spectral, composition, zero;
                                       warn_unexpected=true)
 
     overview = get_group(fids0[1], "overview")

@@ -37,8 +37,7 @@ test_input = OptionsDict("composition" => OptionsDict("n_ion_species" => 1,
                                                  "display_timing_info" => false),
                          "evolve_moments" => OptionsDict("density" => false,
                                                          "parallel_flow" => false,
-                                                         "pressure" => false,
-                                                         "moments_conservation" => false),
+                                                         "pressure" => false),
                          "timestepping" => OptionsDict("nstep" => 50,
                                                        "dt" => 0.002,
                                                        "nwrite" => 10,
@@ -82,21 +81,18 @@ test_input_2 = recursive_merge(test_input_1,
                                OptionsDict("output" => OptionsDict("run_name" => "evolve n"),
                                            "evolve_moments" => OptionsDict("density" => true,
                                                                            "parallel_flow" => false,
-                                                                           "pressure" => false,
-                                                                           "moments_conservation" => true)
+                                                                           "pressure" => false)
                                           ))
 test_input_3 = recursive_merge(test_input,
                                OptionsDict("output" => OptionsDict("run_name" => "evolve n, upar"),
                                            "evolve_moments" => OptionsDict("density" => true,
                                                                            "parallel_flow" => true,
-                                                                           "pressure" => false,
-                                                                           "moments_conservation" => true)))
+                                                                           "pressure" => false)))
 test_input_4 = recursive_merge(test_input,
                                OptionsDict("output" => OptionsDict("run_name" => "evolve n, upar, p"),
                                            "evolve_moments" => OptionsDict("density" => true,
                                                                            "parallel_flow" => true,
-                                                                           "pressure" => true,
-                                                                           "moments_conservation" => true)))
+                                                                           "pressure" => true)))
 
 
 """
