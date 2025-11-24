@@ -4290,18 +4290,42 @@ function get_variable(run_info::Vector{Any}, variable_name; kwargs...)
     return [get_variable(ri, variable_name; kwargs...) for ri ∈ run_info]
 end
 
-function get_variable(run_info, variable_name; normalize_advection_speed_shape=true,
-                      kwargs...)
-    return _get_variable_internal(run_info, Symbol(variable_name);
-                                  normalize_advection_speed_shape=normalize_advection_speed_shape,
-                                  kwargs...)
+function get_variable(run_info, variable_name; kwargs...)
+    # Set up loop macros for serial operation, in case they are used by any functions
+    # below.
+    looping.setup_loop_ranges!(0, 1;
+                               s=run_info.composition.n_ion_species,
+                               sn=run_info.composition.n_neutral_species, r=run_info.r.n,
+                               z=run_info.z.n, vperp=run_info.vperp.n, vpa=run_info.vpa.n,
+                               vzeta=run_info.vzeta.n, vr=run_info.vr.n, vz=run_info.vz.n)
+    if variable_name ∈ keys(get_variable_funcs)
+        return get_variable_funcs[variable_name](run_info; kwargs...)
+    elseif occursin("_timestep_error", String(variable_name))
+        return get_timestep_error_variable(run_info, variable_name; kwargs...)
+    elseif occursin("_timestep_residual", String(variable_name))
+        return get_timestep_residual_variable(run_info, variable_name; kwargs...)
+    elseif occursin("_steady_state_residual", String(variable_name))
+        return get_steady_state_residual_variable(run_info, variable_name; kwargs...)
+    elseif occursin("_nonlinear_iterations_per_solve", String(variable_name))
+        return get_nonlinear_iterations_per_solve(run_info, variable_name; kwargs...)
+    elseif occursin("_linear_iterations_per_nonlinear_iteration", String(variable_name))
+        return get_linear_iterations_per_nonlinear_iteration(run_info, variable_name; kwargs...)
+    elseif occursin("_precon_iterations_per_linear_iteration", String(variable_name))
+        return get_precon_iterations_per_linear_iteration(run_info, variable_name; kwargs...)
+    elseif endswith(String(variable_name), "_per_step") && String(variable_name) ∉ run_info.variable_names
+        return get_per_step_from_cumulative_variable(run_info,
+                                                     split(String(variable_name), "_per_step")[1];
+                                                     kwargs...)
+    else
+        return postproc_load_variable(run_info, String(variable_name); kwargs...)
+    end
 end
 
 # Select a slice of an time-series sized variable
 function select_slice_of_variable(variable::AbstractVector; it=nothing,
                                   is=nothing, ir=nothing, iz=nothing, ivperp=nothing,
                                   ivpa=nothing, ivzeta=nothing, ivr=nothing,
-                                  ivz=nothing)
+                                  ivz=nothing, kwargs...)
     if it !== nothing
         variable = selectdim(variable, 1, it)
     end
@@ -4313,7 +4337,7 @@ end
 function select_slice_of_variable(variable::AbstractArray{T,3} where T; it=nothing,
                                   is=nothing, ir=nothing, iz=nothing, ivperp=nothing,
                                   ivpa=nothing, ivzeta=nothing, ivr=nothing,
-                                  ivz=nothing)
+                                  ivz=nothing, kwargs...)
     if it !== nothing
         variable = selectdim(variable, 3, it)
     end
@@ -4331,7 +4355,7 @@ end
 function select_slice_of_variable(variable::AbstractArray{T,4} where T; it=nothing,
                                   is=nothing, ir=nothing, iz=nothing, ivperp=nothing,
                                   ivpa=nothing, ivzeta=nothing, ivr=nothing,
-                                  ivz=nothing)
+                                  ivz=nothing, kwargs...)
     if it !== nothing
         variable = selectdim(variable, 4, it)
     end
@@ -4352,7 +4376,7 @@ end
 function select_slice_of_variable(variable::AbstractArray{T,6} where T; it=nothing,
                                   is=nothing, ir=nothing, iz=nothing, ivperp=nothing,
                                   ivpa=nothing, ivzeta=nothing, ivr=nothing,
-                                  ivz=nothing)
+                                  ivz=nothing, kwargs...)
     if it !== nothing
         variable = selectdim(variable, 6, it)
     end
@@ -4379,7 +4403,7 @@ end
 function select_slice_of_variable(variable::AbstractArray{T,5} where T; it=nothing,
                                   is=nothing, ir=nothing, iz=nothing, ivperp=nothing,
                                   ivpa=nothing, ivzeta=nothing, ivr=nothing,
-                                  ivz=nothing)
+                                  ivz=nothing, kwargs...)
     if it !== nothing
         variable = selectdim(variable, 5, it)
     end
@@ -4403,7 +4427,7 @@ end
 function select_slice_of_variable(variable::AbstractArray{T,7} where T; it=nothing,
                                   is=nothing, ir=nothing, iz=nothing, ivperp=nothing,
                                   ivpa=nothing, ivzeta=nothing, ivr=nothing,
-                                  ivz=nothing)
+                                  ivz=nothing, kwargs...)
     if it !== nothing
         variable = selectdim(variable, 7, it)
     end
@@ -4429,1671 +4453,1887 @@ function select_slice_of_variable(variable::AbstractArray{T,7} where T; it=nothi
     return variable
 end
 
-# Define internal function with a `Symbol` argument because this allows the compiler to
-# optimize out (most of?) the large if-elseif-... chain below to improve the compile time.
-function _get_variable_internal(run_info, variable_name::Symbol;
-                                normalize_advection_speed_shape=true, kwargs...)
-    # Set up loop macros for serial operation, in case they are used by any functions
-    # below.
-    looping.setup_loop_ranges!(0, 1;
-                               s=run_info.composition.n_ion_species,
-                               sn=run_info.composition.n_neutral_species, r=run_info.r.n,
-                               z=run_info.z.n, vperp=run_info.vperp.n, vpa=run_info.vpa.n,
-                               vzeta=run_info.vzeta.n, vr=run_info.vr.n, vz=run_info.vz.n)
-
-    # Get a 'per step' value from a saved 'cumulative' value. E.g. 'iterations per step'
-    # from a saved 'cumulative total iterations'
-    function get_per_step_from_cumulative_variable(run_info, varname::AbstractString;
-                                                   kwargs...)
-        variable = get_variable(run_info, varname; kwargs...)
-        tdim = ndims(variable)
-        for i ∈ size(variable, tdim):-1:2
-            selectdim(variable, tdim, i) .-= selectdim(variable, tdim, i-1)
-        end
-
-        # Per-step count does not make sense for the first step, so make sure element-1 is
-        # zero.
-        selectdim(variable, tdim, 1) .= zero(first(variable))
-
-        # Assume cumulative variables always increase, so if any value in the 'per-step'
-        # variable is negative, it is because there was a restart where the cumulative
-        # variable started over
-        variable .= max.(variable, zero(first(variable)))
-
-        return variable
+# Get a 'per step' value from a saved 'cumulative' value. E.g. 'iterations per step'
+# from a saved 'cumulative total iterations'
+function get_per_step_from_cumulative_variable(run_info, varname::AbstractString;
+                                               kwargs...)
+    variable = get_variable(run_info, varname; kwargs...)
+    tdim = ndims(variable)
+    for i ∈ size(variable, tdim):-1:2
+        selectdim(variable, tdim, i) .-= selectdim(variable, tdim, i-1)
     end
 
-    function get_r_derivative_of_loaded_variable(x)
-        dx_dr = similar(x)
-        if run_info.r.n == 1
-            dx_dr .= 0.0
-            return dx_dr
-        end
-        if :ir ∈ keys(kwargs) && kwargs[:ir] !== nothing
-            error("Cannot take r-derivative when ir!==nothing")
-        end
-        if :is ∈ keys(kwargs) && isa(kwargs[:is], mk_int) && :iz ∈ keys(kwargs) && isa(kwargs[:iz], mk_int)
-            for it ∈ 1:size(dx_dr, 2)
-                @views derivative!(dx_dr[:,it], x[:,it], run_info.r, run_info.r_spectral)
-            end
-        elseif :iz ∈ keys(kwargs) && isa(kwargs[:iz], mk_int)
-            for it ∈ 1:size(dx_dr, 3), is ∈ 1:size(dx_dr, 2)
-                @views derivative!(dx_dr[:,is,it], x[:,is,it], run_info.r,
-                                   run_info.r_spectral)
-            end
-        elseif :is ∈ keys(kwargs) && isa(kwargs[:is], mk_int)
-            for it ∈ 1:size(dx_dr, 3), iz ∈ 1:run_info.z.n
-                @views derivative!(dx_dr[iz,:,it], x[iz,:,it], run_info.r,
-                                   run_info.r_spectral)
-            end
-        else
-            for it ∈ 1:size(dx_dr, 4), is ∈ 1:size(dx_dr, 3), iz ∈ size(dx_dr, 1)
-                @views derivative!(dx_dr[iz,:,is,it], x[iz,:,is,it], run_info.r,
-                                   run_info.r_spectral)
-            end
-        end
+    # Per-step count does not make sense for the first step, so make sure element-1 is
+    # zero.
+    selectdim(variable, tdim, 1) .= zero(first(variable))
+
+    # Assume cumulative variables always increase, so if any value in the 'per-step'
+    # variable is negative, it is because there was a restart where the cumulative
+    # variable started over
+    variable .= max.(variable, zero(first(variable)))
+
+    return variable
+end
+
+function get_r_derivative_of_loaded_variable(run_info, x; kwargs...)
+    dx_dr = similar(x)
+    if run_info.r.n == 1
+        dx_dr .= 0.0
         return dx_dr
     end
-
-    function get_z_derivative_of_loaded_variable(x)
-        dx_dz = similar(x)
-        if :iz ∈ keys(kwargs) && kwargs[:iz] !== nothing
-            error("Cannot take z-derivative when iz!==nothing")
-        end
-        if :is ∈ keys(kwargs) && isa(kwargs[:is], mk_int) && :ir ∈ keys(kwargs) && isa(kwargs[:ir], mk_int)
-            for it ∈ 1:size(dx_dz, 2)
-                @views derivative!(dx_dz[:,it], x[:,it], run_info.z, run_info.z_spectral)
-            end
-        elseif :ir ∈ keys(kwargs) && isa(kwargs[:ir], mk_int)
-            for it ∈ 1:size(dx_dz, 3), is ∈ 1:size(dx_dz, 2)
-                @views derivative!(dx_dz[:,is,it], x[:,is,it], run_info.z,
-                                   run_info.z_spectral)
-            end
-        elseif :is ∈ keys(kwargs) && isa(kwargs[:is], mk_int)
-            for it ∈ 1:size(dx_dz, 3), ir ∈ 1:size(dx_dz, 2)
-                @views derivative!(dx_dz[:,ir,it], x[:,ir,it], run_info.z,
-                                   run_info.z_spectral)
-            end
-        else
-            for it ∈ 1:size(dx_dz, 4), is ∈ 1:size(dx_dz, 3), ir ∈ 1:size(dx_dz, 2)
-                @views derivative!(dx_dz[:,ir,is,it], x[:,ir,is,it], run_info.z,
-                                   run_info.z_spectral)
-            end
-        end
-        return dx_dz
+    if :ir ∈ keys(kwargs) && kwargs[:ir] !== nothing
+        error("Cannot take r-derivative when ir!==nothing")
     end
-
-    function get_electron_z_derivative(x)
-        dx_dz = similar(x)
-        if :iz ∈ keys(kwargs) && kwargs[:iz] !== nothing
-            error("Cannot take z-derivative when iz!==nothing")
+    if :is ∈ keys(kwargs) && isa(kwargs[:is], mk_int) && :iz ∈ keys(kwargs) && isa(kwargs[:iz], mk_int)
+        for it ∈ 1:size(dx_dr, 2)
+            @views derivative!(dx_dr[:,it], x[:,it], run_info.r, run_info.r_spectral)
         end
-        if :ir ∈ keys(kwargs) && isa(kwargs[:ir], mk_int)
-            for it ∈ 1:size(dx_dz, 2)
-                @views derivative!(dx_dz[:,it], x[:,it], run_info.z,
-                                   run_info.z_spectral)
-            end
-        else
-            for it ∈ 1:size(dx_dz, 3), ir ∈ 1:size(dx_dz, 2)
-                @views derivative!(dx_dz[:,ir,it], x[:,ir,it], run_info.z,
-                                   run_info.z_spectral)
-            end
+    elseif :iz ∈ keys(kwargs) && isa(kwargs[:iz], mk_int)
+        for it ∈ 1:size(dx_dr, 3), is ∈ 1:size(dx_dr, 2)
+            @views derivative!(dx_dr[:,is,it], x[:,is,it], run_info.r,
+                               run_info.r_spectral)
         end
-        return dx_dz
+    elseif :is ∈ keys(kwargs) && isa(kwargs[:is], mk_int)
+        for it ∈ 1:size(dx_dr, 3), iz ∈ 1:run_info.z.n
+            @views derivative!(dx_dr[iz,:,it], x[iz,:,it], run_info.r,
+                               run_info.r_spectral)
+        end
+    else
+        for it ∈ 1:size(dx_dr, 4), is ∈ 1:size(dx_dr, 3), iz ∈ size(dx_dr, 1)
+            @views derivative!(dx_dr[iz,:,is,it], x[iz,:,is,it], run_info.r,
+                               run_info.r_spectral)
+        end
     end
+    return dx_dr
+end
 
-    function append_dims_to_variable(v, dims...)
-        for d ∈ dims
-            if !(d ∈ keys(kwargs) && isa(kwargs[d], Integer))
-                if isa(v, AbstractArray)
-                    v = reshape(v, 1, size(v)...)
+function get_z_derivative_of_loaded_variable(run_info, x; kwargs...)
+    dx_dz = similar(x)
+    if :iz ∈ keys(kwargs) && kwargs[:iz] !== nothing
+        error("Cannot take z-derivative when iz!==nothing")
+    end
+    if :is ∈ keys(kwargs) && isa(kwargs[:is], mk_int) && :ir ∈ keys(kwargs) && isa(kwargs[:ir], mk_int)
+        for it ∈ 1:size(dx_dz, 2)
+            @views derivative!(dx_dz[:,it], x[:,it], run_info.z, run_info.z_spectral)
+        end
+    elseif :ir ∈ keys(kwargs) && isa(kwargs[:ir], mk_int)
+        for it ∈ 1:size(dx_dz, 3), is ∈ 1:size(dx_dz, 2)
+            @views derivative!(dx_dz[:,is,it], x[:,is,it], run_info.z,
+                               run_info.z_spectral)
+        end
+    elseif :is ∈ keys(kwargs) && isa(kwargs[:is], mk_int)
+        for it ∈ 1:size(dx_dz, 3), ir ∈ 1:size(dx_dz, 2)
+            @views derivative!(dx_dz[:,ir,it], x[:,ir,it], run_info.z,
+                               run_info.z_spectral)
+        end
+    else
+        for it ∈ 1:size(dx_dz, 4), is ∈ 1:size(dx_dz, 3), ir ∈ 1:size(dx_dz, 2)
+            @views derivative!(dx_dz[:,ir,is,it], x[:,ir,is,it], run_info.z,
+                               run_info.z_spectral)
+        end
+    end
+    return dx_dz
+end
+
+function get_electron_z_derivative(run_info, x; kwargs)
+    dx_dz = similar(x)
+    if :iz ∈ keys(kwargs) && kwargs[:iz] !== nothing
+        error("Cannot take z-derivative when iz!==nothing")
+    end
+    if :ir ∈ keys(kwargs) && isa(kwargs[:ir], mk_int)
+        for it ∈ 1:size(dx_dz, 2)
+            @views derivative!(dx_dz[:,it], x[:,it], run_info.z,
+                               run_info.z_spectral)
+        end
+    else
+        for it ∈ 1:size(dx_dz, 3), ir ∈ 1:size(dx_dz, 2)
+            @views derivative!(dx_dz[:,ir,it], x[:,ir,it], run_info.z,
+                               run_info.z_spectral)
+        end
+    end
+    return dx_dz
+end
+
+function append_dims_to_variable(v, dims...; kwargs...)
+    for d ∈ dims
+        if !(d ∈ keys(kwargs) && isa(kwargs[d], Integer))
+            if isa(v, AbstractArray)
+                v = reshape(v, 1, size(v)...)
+            else
+                v = [v]
+            end
+        end
+    end
+    return v
+end
+function prepend_dims_to_variable(v, dims...; kwargs...)
+    for d ∈ dims
+        if !(d ∈ keys(kwargs) && isa(kwargs[d], Integer))
+            if isa(v, AbstractArray)
+                v = reshape(v, size(v)..., 1)
+            else
+                v = [v]
+            end
+        end
+    end
+    return v
+end
+
+const get_variable_funcs = Dict{String,Any}(
+    "temperature" => (run_info; kwargs...) -> begin
+            vth = get_variable(run_info, "thermal_speed"; kwargs...)
+            variable = @. 0.5 * vth^2
+            return variable
+        end,
+    "perpendicular_temperature" => (run_info; kwargs...) -> begin
+            perpendicular_pressure = get_variable(run_info, "perpendicular_pressure"; kwargs...)
+            density = get_variable(run_info, "density"; kwargs...)
+            variable = perpendicular_pressure ./ density
+            return variable
+        end,
+    "parallel_temperature" => (run_info; kwargs...) -> begin
+            parallel_pressure = get_variable(run_info, "parallel_pressure"; kwargs...)
+            density = get_variable(run_info, "density"; kwargs...)
+            variable = parallel_pressure ./ density
+            return variable
+        end,
+    "f_unnorm" => (run_info; kwargs...) -> begin
+            variable = get_variable(run_info, "f"; kwargs...)
+            if run_info.evolve_p
+                vth = append_dims_to_variable(get_variable(run_info, "thermal_speed"; kwargs...), :ivperp, :ivpa; kwargs...)
+                if run_info.vperp.n == 1
+                    variable ./= vth
                 else
-                    v = [v]
+                    variable ./= vth^3
                 end
             end
-        end
-        return v
-    end
-    function prepend_dims_to_variable(v, dims...)
-        for d ∈ dims
-            if !(d ∈ keys(kwargs) && isa(kwargs[d], Integer))
-                if isa(v, AbstractArray)
-                    v = reshape(v, size(v)..., 1)
-                else
-                    v = [v]
-                end
-            end
-        end
-        return v
-    end
-
-    if variable_name == :temperature
-        vth = get_variable(run_info, "thermal_speed"; kwargs...)
-        variable = 0.5 * vth.^2
-    elseif variable_name == :perpendicular_temperature
-        perpendicular_pressure = get_variable(run_info, "perpendicular_pressure"; kwargs...)
-        density = get_variable(run_info, "density"; kwargs...)
-        variable = perpendicular_pressure ./ density
-    elseif variable_name == :parallel_temperature
-        parallel_pressure = get_variable(run_info, "parallel_pressure"; kwargs...)
-        density = get_variable(run_info, "density"; kwargs...)
-        variable = parallel_pressure ./ density
-    elseif variable_name == :f_unnorm
-        variable = get_variable(run_info, "f"; kwargs...)
-        if run_info.evolve_p
-            vth = append_dims_to_variable(get_variable(run_info, "thermal_speed"; kwargs...), :ivperp, :ivpa)
-            if run_info.vperp.n == 1
-                variable ./= vth
-            else
-                variable ./= vth^3
-            end
-        end
-        if run_info.evolve_density
-            n = append_dims_to_variable(get_variable(run_info, "density"; kwargs...), :ivperp, :ivpa)
-            variable .*= n
-        end
-    elseif variable_name == :f_electron_unnorm
-        variable = get_variable(run_info, "f_electron"; kwargs...)
-        if run_info.evolve_p
-            vth = append_dims_to_variable(get_variable(run_info, "electron_thermal_speed"; kwargs...), :ivperp, :ivpa)
-            if run_info.vperp.n == 1
-                variable ./= vth
-            else
-                variable ./= vth^3
-            end
-        end
-        if run_info.evolve_density
-            n = append_dims_to_variable(get_variable(run_info, "electron_density"; kwargs...), :ivperp, :ivpa)
-            variable .*= n
-        end
-    elseif variable_name == :f_neutral_unnorm
-        variable = get_variable(run_info, "f_neutral"; kwargs...)
-        if run_info.evolve_p
-            vth = append_dims_to_variable(get_variable(run_info, "thermal_speed_neutral"; kwargs...), :ivzeta, :ivr, :ivz)
-            if run_info.vperp.n == 1
-                variable ./= vth
-            else
-                variable ./= vth^3
-            end
-        end
-        if run_info.evolve_density
-            n = append_dims_to_variable(get_variable(run_info, "density_neutral"; kwargs...), :ivzeta, :ivr, :ivz)
-            variable = variable .* n
-        end
-    elseif variable_name == :vperp_unnorm
-        variable = run_info.vperp.grid
-        if :ivperp ∈ keys(kwargs)
-            variable = variable[kwargs[:ivperp]]
-        end
-        variable = prepend_dims_to_variable(variable, :iz, :ir, :is)
-        variable = append_dims_to_variable(variable, :ivpa)
-        if run_info.evolve_p
-            vth = append_dims_to_variable(get_variable(run_info, "thermal_speed"; kwargs...), :ivpa, :ivperp)
-            variable = variable .* vth
-        end
-    elseif variable_name == :vpa_unnorm
-        variable = run_info.vpa.grid
-        if :ivpa ∈ keys(kwargs)
-            variable = variable[kwargs[:ivpa]]
-        end
-        variable = prepend_dims_to_variable(variable, :ivperp, :iz, :ir, :is)
-        if run_info.evolve_p
-            vth = append_dims_to_variable(get_variable(run_info, "thermal_speed"; kwargs...), :ivpa, :ivperp)
-            variable = variable .* vth
-        end
-        if run_info.evolve_upar
-            u = append_dims_to_variable(get_variable(run_info, "parallel_flow"; kwargs...), :ivpa, :ivperp)
-            variable = variable .+ u
-        end
-    elseif variable_name == :electron_vperp_unnorm
-        variable = run_info.vperp.grid
-        if :ivperp ∈ keys(kwargs)
-            variable = variable[kwargs[:ivperp]]
-        end
-        variable = prepend_dims_to_variable(variable, :iz, :ir)
-        variable = append_dims_to_variable(variable, :ivpa)
-        if run_info.evolve_p
-            vth = append_dims_to_variable(get_variable(run_info, "electron_thermal_speed"; kwargs...), :ivpa, :ivperp)
-            variable = variable .* vth
-        end
-    elseif variable_name == :electron_vpa_unnorm
-        variable = run_info.vpa.grid
-        if :ivpa ∈ keys(kwargs)
-            variable = variable[kwargs[:ivpa]]
-        end
-        variable = prepend_dims_to_variable(variable, :ivperp, :iz, :ir)
-        if run_info.evolve_p
-            vth = append_dims_to_variable(get_variable(run_info, "electron_thermal_speed"; kwargs...), :ivpa, :ivperp)
-            variable = variable .* vth
-        end
-        if run_info.evolve_upar
-            u = append_dims_to_variable(get_variable(run_info, "electron_parallel_flow"; kwargs...), :ivpa, :ivperp)
-            variable = variable .+ u
-        end
-    elseif variable_name == :vzeta_unnorm
-        variable = run_info.vzeta.grid
-        if :ivzeta ∈ keys(kwargs)
-            variable = variable[kwargs[:ivzeta]]
-        end
-        variable = prepend_dims_to_variable(variable, :iz, :ir, :is)
-        variable = append_dims_to_variable(variable, :ivz, :ivr)
-        if run_info.evolve_p
-            vth = append_dims_to_variable(get_variable(run_info, "neutral_thermal_speed"; kwargs...), :ivz, :ivr, :ivzeta)
-            variable = variable .* vth
-        end
-    elseif variable_name == :vr_unnorm
-        variable = run_info.vr.grid
-        if :ivr ∈ keys(kwargs)
-            variable = variable[kwargs[:ivr]]
-        end
-        variable = prepend_dims_to_variable(variable, :ivzeta, :iz, :ir, :is)
-        variable = append_dims_to_variable(variable, :ivz)
-        if run_info.evolve_p
-            vth = append_dims_to_variable(get_variable(run_info, "neutral_thermal_speed"; kwargs...), :ivz, :ivr, :ivzeta)
-            variable = variable .* vth
-        end
-    elseif variable_name == :vz_unnorm
-        variable = run_info.vz.grid
-        if :ivz ∈ keys(kwargs)
-            variable = variable[kwargs[:ivz]]
-        end
-        variable = prepend_dims_to_variable(variable, :ivr, :ivzeta, :iz, :ir, :is)
-        if run_info.evolve_p
-            vth = append_dims_to_variable(get_variable(run_info, "neutral_thermal_speed"; kwargs...), :ivz, :ivr, :ivzeta)
-            variable = variable .* vth
-        end
-        if run_info.evolve_upar
-            u = append_dims_to_variable(get_variable(run_info, "neutral_uz"; kwargs...), :ivz, :ivr, :ivzeta)
-            variable = variable .+ u
-        end
-    elseif variable_name == :ddens_dr
-        variable = get_r_derivative(run_info, "density"; kwargs...)
-    elseif variable_name == :ddens_dr_upwind
-        variable = get_upwind_r_derivative(run_info, "density"; kwargs...)
-    elseif variable_name == :ddens_dz
-        variable = get_z_derivative(run_info, "density"; kwargs...)
-    elseif variable_name == :ddens_dz_upwind
-        variable = get_upwind_z_derivative(run_info, "density"; kwargs...)
-    elseif variable_name == :dupar_dr
-        variable = get_r_derivative(run_info, "parallel_flow"; kwargs...)
-    elseif variable_name == :dupar_dr_upwind
-        variable = get_upwind_r_derivative(run_info, "parallel_flow"; kwargs...)
-    elseif variable_name == :dupar_dz
-        variable = get_z_derivative(run_info, "parallel_flow"; kwargs...)
-    elseif variable_name == :dupar_dz_upwind
-        variable = get_upwind_z_derivative(run_info, "parallel_flow"; kwargs...)
-    elseif variable_name == :dp_dr_upwind
-        variable = get_upwind_r_derivative(run_info, "pressure"; kwargs...)
-    elseif variable_name == :dp_dz
-        variable = get_z_derivative(run_info, "pressure"; kwargs...)
-    elseif variable_name == :dp_dz_upwind
-        variable = get_upwind_z_derivative(run_info, "pressure"; kwargs...)
-    elseif variable_name == :dppar_dz
-        variable = get_z_derivative(run_info, "parallel_pressure"; kwargs...)
-    elseif variable_name == :dppar_dz_upwind
-        variable = get_upwind_z_derivative(run_info, "parallel_pressure"; kwargs...)
-    elseif variable_name == :dvth_dr
-        variable = get_r_derivative(run_info, "thermal_speed"; kwargs...)
-    elseif variable_name == :dvth_dz
-        variable = get_z_derivative(run_info, "thermal_speed"; kwargs...)
-    elseif variable_name == :dT_dz
-        variable = get_z_derivative(run_info, "temperature"; kwargs...)
-    elseif variable_name == :dqpar_dz
-        variable = get_z_derivative(run_info, "parallel_heat_flux"; kwargs...)
-    elseif variable_name == :electron_ddens_dz
-        n = get_variable(run_info, "electron_density"; kwargs...)
-        variable = get_electron_z_derivative(n)
-    elseif variable_name == :electron_dupar_dz
-        upar = get_variable(run_info, "electron_parallel_flow"; kwargs...)
-        variable = get_electron_z_derivative(upar)
-    elseif variable_name == :electron_dp_dz
-        p = get_variable(run_info, "electron_pressure"; kwargs...)
-        variable = get_electron_z_derivative(p)
-    elseif variable_name == :electron_dppar_dz
-        ppar = get_variable(run_info, "electron_parallel_pressure"; kwargs...)
-        variable = get_electron_z_derivative(ppar)
-    elseif variable_name == :electron_dvth_dz
-        vth = get_variable(run_info, "electron_thermal_speed"; kwargs...)
-        variable = get_electron_z_derivative(vth)
-    elseif variable_name == :electron_dT_dz
-        T = get_variable(run_info, "electron_temperature"; kwargs...)
-        variable = get_electron_z_derivative(T)
-    elseif variable_name == :electron_dqpar_dz
-        qpar = get_variable(run_info, "electron_parallel_heat_flux"; kwargs...)
-        variable = get_electron_z_derivative(qpar)
-    elseif variable_name == :neutral_ddens_dz
-        variable = get_z_derivative(run_info, "density_neutral"; kwargs...)
-    elseif variable_name == :neutral_ddens_dz_upwind
-        variable = get_upwind_z_derivative(run_info, "density_neutral"; neutral=true,
-                                           kwargs...)
-    elseif variable_name == :neutral_duz_dz
-        variable = get_z_derivative(run_info, "uz_neutral"; kwargs...)
-    elseif variable_name == :neutral_duz_dz_upwind
-        variable = get_upwind_z_derivative(run_info, "uz_neutral"; neutral=true,
-                                           kwargs...)
-    elseif variable_name == :neutral_dp_dz
-        variable = get_z_derivative(run_info, "p_neutral"; kwargs...)
-    elseif variable_name == :neutral_dp_dz_upwind
-        variable = get_upwind_z_derivative(run_info, "p_neutral"; neutral=true,
-                                           kwargs...)
-    elseif variable_name == :neutral_dpz_dz
-        variable = get_z_derivative(run_info, "pz_neutral"; kwargs...)
-    elseif variable_name == :neutral_dvth_dz
-        variable = get_z_derivative(run_info, "thermal_speed_neutral"; kwargs...)
-    elseif variable_name == :neutral_dT_dz
-        variable = get_z_derivative(run_info, "temperature_neutral"; kwargs...)
-    elseif variable_name == :neutral_dqz_dz
-        variable = get_z_derivative(run_info, "qz_neutral"; kwargs...)
-    elseif variable_name == :ddens_dt
-        if !run_info.evolve_density
-            throw(KeyError("evolve_density=false, so do not calculate ddens_dt"))
-        end
-        all_moments = _get_all_moment_variables(run_info)
-        variable = similar(all_moments.density)
-        # Define function here to minimise effect type instability due to
-        # get_all_moment_variables returning NamedTuples
-        function get_ddens_dt!(variable, all_moments)
-            nt = size(variable, ndims(variable))
-            dummy = similar(variable, size(variable)[1:end-1])
-            for tind ∈ 1:nt
-                moments, fields, fvec =
-                    _get_fake_moments_fields_scratch(all_moments, tind;
-                                                     ion_extra=(:ddens_dt=>variable,))
-                # Dummy first argument, because we actually want the 'side effect' of
-                # filling the time derivative array in `moments`.
-                continuity_equation!(dummy, fvec, fields, moments, run_info.composition,
-                                     run_info.geometry, 0.0, run_info.z_spectral,
-                                     run_info.collisions.reactions.ionization_frequency,
-                                     run_info.external_source_settings.ion,
-                                     run_info.num_diss_params)
-            end
-        end
-        get_ddens_dt!(variable, all_moments)
-        variable = select_slice_of_variable(variable; kwargs...)
-    elseif variable_name == :dnupar_dt
-        if !run_info.evolve_upar
-            throw(KeyError("evolve_upar=false, so do not calculate dnupar_dt"))
-        end
-        all_moments = _get_all_moment_variables(run_info)
-        variable = similar(all_moments.parallel_flow)
-        # Define function here to minimise effect type instability due to
-        # get_all_moment_variables returning NamedTuples
-        function get_dnupar_dt!(variable, all_moments)
-            nt = size(variable, ndims(variable))
-            dummy = similar(variable, size(variable)[1:end-1])
-            for tind ∈ 1:nt
-                moments, fields, fvec =
-                    _get_fake_moments_fields_scratch(all_moments, tind;
-                                                     ion_extra=(:dnupar_dt=>variable,))
-                # Dummy first argument, because we actually want the 'side effect' of
-                # filling the time derivative array in `moments`.
-                force_balance!(dummy, fvec.density, fvec, moments, fields,
-                               run_info.collisions, 0.0, run_info.z_spectral,
-                               run_info.composition, run_info.geometry,
-                               run_info.external_source_settings.ion,
-                               run_info.num_diss_params, run_info.z)
-            end
-        end
-        get_dnupar_dt!(variable, all_moments)
-        variable = select_slice_of_variable(variable; kwargs...)
-    elseif variable_name == :dupar_dt
-        if !run_info.evolve_upar
-            throw(KeyError("evolve_upar=false, so do not calculate dupar_dt"))
-        end
-        dn_dt = get_variable(run_info, "ddens_dt"; kwargs...)
-        dnupar_dt = get_variable(run_info, "dnupar_dt"; kwargs...)
-        n = get_variable(run_info, "density"; kwargs...)
-        upar = get_variable(run_info, "parallel_flow"; kwargs...)
-        variable = @. dnupar_dt / n - upar / n * dn_dt
-    elseif variable_name == :dp_dt
-        if !run_info.evolve_p
-            throw(KeyError("evolve_p=false, so do not calculate dp_dt"))
-        end
-        all_moments = _get_all_moment_variables(run_info)
-        variable = similar(all_moments.pressure)
-        # Define function here to minimise effect type instability due to
-        # get_all_moment_variables returning NamedTuples
-        function get_dp_dt!(variable, all_moments)
-            nt = size(variable, ndims(variable))
-            dummy = similar(variable, size(variable)[1:end-1])
-            for tind ∈ 1:nt
-                moments, fields, fvec =
-                    _get_fake_moments_fields_scratch(all_moments, tind;
-                                                     ion_extra=(:dp_dt=>variable,))
-                # Dummy first argument, because we actually want the 'side effect' of
-                # filling the time derivative array in `moments`.
-                energy_equation!(dummy, fvec, moments, fields, run_info.collisions, 0.0,
-                                 run_info.z_spectral, run_info.composition,
-                                 run_info.geometry, run_info.external_source_settings.ion,
-                                 run_info.num_diss_params)
-            end
-        end
-        get_dp_dt!(variable, all_moments)
-        variable = select_slice_of_variable(variable; kwargs...)
-    elseif variable_name == :dvth_dt
-        if !run_info.evolve_p
-            throw(KeyError("evolve_p=false, so do not calculate dvth_dt"))
-        end
-        dn_dt = get_variable(run_info, "ddens_dt"; kwargs...)
-        dp_dt = get_variable(run_info, "dp_dt"; kwargs...)
-        n = get_variable(run_info, "density"; kwargs...)
-        p = get_variable(run_info, "pressure"; kwargs...)
-        vth = get_variable(run_info, "thermal_speed"; kwargs...)
-        variable = @. 0.5 * vth * (dp_dt / p - dn_dt / n)
-    elseif variable_name == :electron_dp_dt
-        if !run_info.evolve_p
-            throw(KeyError("evolve_p=false, so do not calculate electron_dp_dt"))
-        end
-        # Try to load electron pressure to check that electrons are present in the output.
-        _ = get_variable(run_info, "electron_pressure"; kwargs...)
-
-        all_moments = _get_all_moment_variables(run_info)
-        variable = similar(all_moments.electron_pressure)
-        # Define function here to minimise effect type instability due to
-        # get_all_moment_variables returning NamedTuples
-        function get_electron_dp_dt!(variable, all_moments)
-            nt = size(variable, ndims(variable))
-            dummy = similar(variable, size(variable)[1:end-1])
-            for tind ∈ 1:nt
-                moments, fields, fvec =
-                    _get_fake_moments_fields_scratch(all_moments, tind;
-                                                     electron_extra=(:dp_dt=>variable,))
-                # Dummy first argument, because we actually want the 'side effect' of
-                # filling the time derivative array in `moments`.
-                electron_energy_equation!(dummy, moments.electron.dens,
-                                          moments.electron.p, moments.electron.dens,
-                                          moments.electron.upar, moments.electron.ppar,
-                                          moments.ion.dens, moments.ion.upar,
-                                          moments.ion.p, moments.neutral.dens,
-                                          moments.neutral.uz, moments.neutral.p,
-                                          moments.electron, run_info.collisions, 0.0,
-                                          run_info.composition,
-                                          run_info.external_source_settings.electron,
-                                          run_info.num_diss_params, run_info.r,
-                                          run_info.z)
-            end
-        end
-        get_electron_dp_dt!(variable, all_moments)
-        variable = select_slice_of_variable(variable; kwargs...)
-    elseif variable_name == :electron_dvth_dt
-        if !run_info.evolve_p
-            throw(KeyError("evolve_p=false, so do not calculate electron_dvth_dt"))
-        end
-        # Try to load electron pressure to check that electrons are present in the output.
-        _ = get_variable(run_info, "electron_pressure"; kwargs...)
-
-        # Note that this block neglects any contribution of dn/dt to dvth/dt because the
-        # operator splitting between implicit/explicit operators in the code means that
-        # when dvth/dt is calculated for electrons, the (ion) density does not change in
-        # the same step, so does not contribute to the dvth/dt used internally. This
-        # post-processing function replicates that behaviour, guessing that that will
-        # usually be what we want, e.g. if we want recalculate the coefficients used in
-        # the electron kinetic equation.
-        dp_dt = get_variable(run_info, "electron_dp_dt"; kwargs...)
-        n = get_variable(run_info, "electron_density"; kwargs...)
-        p = get_variable(run_info, "electron_pressure"; kwargs...)
-        vth = get_variable(run_info, "electron_thermal_speed"; kwargs...)
-        variable = @. 0.5 * vth * dp_dt / p
-    elseif variable_name == :neutral_ddens_dt
-        if !run_info.evolve_density
-            throw(KeyError("evolve_density=false, so do not calculate neutral_ddens_dt"))
-        end
-        all_moments = _get_all_moment_variables(run_info)
-        if :density_neutral ∉ keys(all_moments)
-            throw(KeyError("density_neutral not present"))
-        end
-        variable = similar(all_moments.density_neutral)
-        # Define function here to minimise effect type instability due to
-        # get_all_moment_variables returning NamedTuples
-        function get_neutral_ddens_dt!(variable, all_moments)
-            nt = size(variable, ndims(variable))
-            dummy = similar(variable, size(variable)[1:end-1])
-            for tind ∈ 1:nt
-                moments, fields, fvec =
-                    _get_fake_moments_fields_scratch(all_moments, tind;
-                                                     neutral_extra=(:ddens_dt=>variable,))
-                # Dummy first argument, because we actually want the 'side effect' of
-                # filling the time derivative array in `moments`.
-                neutral_continuity_equation!(dummy, fvec, moments, run_info.composition,
-                                             0.0, run_info.z_spectral,
-                                             run_info.collisions.reactions.ionization_frequency,
-                                             run_info.external_source_settings.neutral,
-                                             run_info.num_diss_params)
-            end
-        end
-        get_neutral_ddens_dt!(variable, all_moments)
-        variable = select_slice_of_variable(variable; kwargs...)
-    elseif variable_name == :neutral_dnuz_dt
-        if !run_info.evolve_upar
-            throw(KeyError("evolve_upar=false, so do not calculate neutral_dnuz_dt"))
-        end
-        all_moments = _get_all_moment_variables(run_info)
-        if :uz_neutral ∉ keys(all_moments)
-            throw(KeyError("uz_neutral not present"))
-        end
-        variable = similar(all_moments.uz_neutral)
-        # Define function here to minimise effect type instability due to
-        # get_all_moment_variables returning NamedTuples
-        function get_neutral_dnuz_dt!(variable, all_moments)
-            nt = size(variable, ndims(variable))
-            dummy = similar(variable, size(variable)[1:end-1])
-            for tind ∈ 1:nt
-                moments, fields, fvec =
-                    _get_fake_moments_fields_scratch(all_moments, tind;
-                                                     neutral_extra=(:dnuz_dt=>variable,))
-                # Dummy first argument, because we actually want the 'side effect' of
-                # filling the time derivative array in `moments`.
-                neutral_force_balance!(dummy, fvec.density_neutral, fvec, moments, fields,
-                                       run_info.collisions, 0.0, run_info.z_spectral,
-                                       run_info.composition, run_info.geometry,
-                                       run_info.external_source_settings.neutral,
-                                       run_info.num_diss_params)
-            end
-        end
-        get_neutral_dnuz_dt!(variable, all_moments)
-        variable = select_slice_of_variable(variable; kwargs...)
-    elseif variable_name == :neutral_duz_dt
-        if !run_info.evolve_upar
-            throw(KeyError("evolve_upar=false, so do not calculate neutral_duz_dt"))
-        end
-        dn_dt = get_variable(run_info, "neutral_ddens_dt"; kwargs...)
-        dnuz_dt = get_variable(run_info, "neutral_dnuz_dt"; kwargs...)
-        n = get_variable(run_info, "density_neutral"; kwargs...)
-        uz = get_variable(run_info, "uz_neutral"; kwargs...)
-        variable = @. dnuz_dt / n - uz / n * dn_dt
-    elseif variable_name == :neutral_dp_dt
-        if !run_info.evolve_p
-            throw(KeyError("evolve_p=false, so do not calculate neutral_dp_dt"))
-        end
-        all_moments = _get_all_moment_variables(run_info)
-        if :p_neutral ∉ keys(all_moments)
-            throw(KeyError("p_neutral not present"))
-        end
-        variable = similar(all_moments.p_neutral)
-        # Define function here to minimise effect type instability due to
-        # get_all_moment_variables returning NamedTuples
-        function get_neutral_duz_dt!(variable, all_moments)
-            nt = size(variable, ndims(variable))
-            dummy = similar(variable, size(variable)[1:end-1])
-            for tind ∈ 1:nt
-                moments, fields, fvec =
-                    _get_fake_moments_fields_scratch(all_moments, tind;
-                                                     neutral_extra=(:dp_dt=>variable,))
-                # Dummy first argument, because we actually want the 'side effect' of
-                # filling the time derivative array in `moments`.
-                neutral_energy_equation!(dummy, fvec, moments, run_info.collisions, 0.0,
-                                         run_info.z_spectral, run_info.composition,
-                                         run_info.external_source_settings.neutral,
-                                         run_info.num_diss_params)
-            end
-        end
-        get_neutral_duz_dt!(variable, all_moments)
-        variable = select_slice_of_variable(variable; kwargs...)
-    elseif variable_name == :neutral_dvth_dt
-        if !run_info.evolve_p
-            throw(KeyError("evolve_p=false, so do not calculate neutral_dvth_dt"))
-        end
-        dn_dt = get_variable(run_info, "neutral_ddens_dt"; kwargs...)
-        dp_dt = get_variable(run_info, "neutral_dp_dt"; kwargs...)
-        n = get_variable(run_info, "density_neutral"; kwargs...)
-        p = get_variable(run_info, "p_neutral"; kwargs...)
-        vth = get_variable(run_info, "thermal_speed_neutral"; kwargs...)
-        variable = @. 0.5 * vth * (dp_dt / p - dn_dt / n)
-    elseif variable_name == :vEr
-        variable = get_vEr(run_info.geometry.rhostar, run_info.geometry.jacobian,
-                           run_info.geometry.bzeta, run_info.geometry.Bmag,
-                           get_variable(run_info, "Ez"))
-        variable = select_slice_of_variable(variable; kwargs...)
-    elseif variable_name == :vEz
-        variable = get_vEz(run_info.geometry.rhostar, run_info.geometry.jacobian,
-                           run_info.geometry.bzeta, run_info.geometry.Bmag,
-                           get_variable(run_info, "Er"))
-        variable = select_slice_of_variable(variable; kwargs...)
-    elseif variable_name == :mfp
-        # this is mean free path for krook collision purposes, but it should be the same collision
-        # frequency used for other collision operators in general, as it encompasses the magnitude
-        # of collision frequency
-        vth = get_variable(run_info, "thermal_speed"; kwargs...)
-        nu_ii = get_variable(run_info, "Krook_collision_frequency_ii"; kwargs...)
-        if run_info.vperp.n == 1
-            variable = sqrt(3.0) .* vth ./ nu_ii
-        else
-            variable = vth ./ nu_ii
-        end
-    elseif variable_name == :L_T
-        # same in 1V and 2V because it's just ratio of T to dT/dz
-        dT_dz = get_variable(run_info, "dT_dz"; kwargs...)
-        temp = get_variable(run_info, "temperature"; kwargs...)
-        # We define gradient lengthscale of T as LT^-1 = dln(T)/dz (ignore negative sign
-        # tokamak convention as we're only concerned with comparing magnitudes)
-        variable = abs.(temp .* dT_dz.^(-1))
-        # flat points in temperature have diverging LT, so ignore those with NaN
-        # using a hard coded 10.0 tolerance for now
-        variable[variable .> 50.0] .= NaN
-    elseif variable_name == :L_n
-        ddens_dz = get_variable(run_info, "ddens_dz"; kwargs...)
-        n = get_variable(run_info, "density"; kwargs...)
-        # We define gradient lengthscale of n as Ln^-1 = dln(n)/dz (ignore negative sign
-        # tokamak convention as we're only concerned with comparing magnitudes)
-        variable = abs.(n .* ddens_dz.^(-1))
-        # flat points in temperature have diverging Ln, so ignore those with NaN
-        # using a hard coded 10.0 tolerance for now
-        variable[variable .> 50.0] .= NaN
-    elseif variable_name == :L_upar
-        dupar_dz = get_variable(run_info, "dupar_dz"; kwargs...)
-        upar = get_variable(run_info, "parallel_flow"; kwargs...)
-        # We define gradient lengthscale of upar as Lupar^-1 = dln(upar)/dz (ignore negative sign
-        # tokamak convention as we're only concerned with comparing magnitudes)
-        variable = abs.(upar .* dupar_dz.^(-1))
-        # flat points in temperature have diverging Lupar, so ignore those with NaN
-        # using a hard coded 10.0 tolerance for now
-        variable[variable .> 50.0] .= NaN
-    elseif variable_name == :coll_krook_heat_flux
-        n = get_variable(run_info, "density"; kwargs...)
-        vth = get_variable(run_info, "thermal_speed"; kwargs...)
-        dT_dz = get_variable(run_info, "dT_dz"; kwargs...)
-        if run_info.vperp.n == 1
-            Krook_vth = sqrt(3.0) * vth
-        else
-            Krook_vth = vth
-        end
-        Krook_nu_ii = get_variable(run_info, "Krook_collision_frequency_ii"; kwargs...)
-        variable = @. -(1/2) * 3/2 * n * Krook_vth^2 * 3 * dT_dz / Krook_nu_ii
-    elseif variable_name == :collision_frequency_ii
-        n = get_variable(run_info, "density"; kwargs...)
-        vth = get_variable(run_info, "thermal_speed"; kwargs...)
-        variable = get_collision_frequency_ii(run_info.collisions, n, vth)
-    elseif variable_name == :Krook_collision_frequency_ii
-        n = get_variable(run_info, "density"; kwargs...)
-        vth = get_variable(run_info, "thermal_speed"; kwargs...)
-        if run_info.vperp.n == 1
-            Krook_vth = sqrt(3.0) * vth
-        else
-            Krook_vth = vth
-        end
-        variable = get_collision_frequency_ii(run_info.collisions, n, Krook_vth)
-    elseif variable_name == :collision_frequency_ee
-        n = get_variable(run_info, "electron_density"; kwargs...)
-        vth = get_variable(run_info, "electron_thermal_speed"; kwargs...)
-        variable = get_collision_frequency_ee(run_info.collisions, n, vth)
-    elseif variable_name == :collision_frequency_ei
-        n = get_variable(run_info, "electron_density"; kwargs...)
-        vth = get_variable(run_info, "electron_thermal_speed"; kwargs...)
-        variable = get_collision_frequency_ei(run_info.collisions, n, vth)
-    elseif variable_name == :electron_temperature
-        vth = get_variable(run_info, "electron_thermal_speed"; kwargs...)
-        variable = 0.5 * run_info.composition.me_over_mi .* vth.^2
-    elseif variable_name == :temperature_neutral
-        vth = get_variable(run_info, "thermal_speed_neutral"; kwargs...)
-        variable = 0.5 * vth.^2
-    elseif variable_name == :sound_speed
-        T_e = run_info.composition.T_e
-        T_i = get_variable(run_info, "temperature"; kwargs...)
-
-        # Adiabatic index. Not too clear what value should be (see e.g. [Riemann 1991,
-        # below eq. (39)], or discussion of Bohm criterion in Stangeby's book.
-        gamma = 1.0 # 3.0
-
-        variable = @. sqrt((T_e + gamma*T_i))
-    elseif variable_name == :mach_number
-        upar = get_variable(run_info, "parallel_flow"; kwargs...)
-        cs = get_variable(run_info, "sound_speed"; kwargs...)
-        variable = upar ./ cs
-    elseif variable_name == :total_energy
-        p = get_variable(run_info, "pressure"; kwargs...)
-        upar = get_variable(run_info, "parallel_flow"; kwargs...)
-        n = get_variable(run_info, "density"; kwargs...)
-
-        variable = @. 1.5 * p + 0.5*n*upar^2
-    elseif variable_name == :total_energy_neutral
-        p = get_variable(run_info, "p_neutral"; kwargs...)
-        upar = get_variable(run_info, "uz_neutral"; kwargs...)
-        n = get_variable(run_info, "density_neutral"; kwargs...)
-
-        # Factor of 3/2 in front of 1/2*n*vth^2*upar because this in 1V - would be 5/2
-        # for 2V/3V cases.
-        variable = @. 1.5 * p + 0.5*n*upar^2
-    elseif variable_name == :total_energy_flux
-        if run_info.vperp.n > 1
-            qpar = get_variable(run_info, "parallel_heat_flux"; kwargs...)
-            vth = get_variable(run_info, "thermal_speed"; kwargs...)
-            upar = get_variable(run_info, "parallel_flow"; kwargs...)
-            n = get_variable(run_info, "density"; kwargs...)
-
-            variable = @. qpar + 1.25*n*vth^2*upar + 0.5*n*upar^3
-        else
-            qpar = get_variable(run_info, "parallel_heat_flux"; kwargs...)
-            vth = get_variable(run_info, "thermal_speed"; kwargs...)
-            upar = get_variable(run_info, "parallel_flow"; kwargs...)
-            n = get_variable(run_info, "density"; kwargs...)
-
-            # Factor of 3/2 in front of 1/2*n*vth^2*upar because this in 1V - would be 5/2
-            # for 2V/3V cases.
-            variable = @. qpar + 0.75*n*vth^2*upar + 0.5*n*upar^3
-        end
-    elseif variable_name == :total_energy_flux_neutral
-        if run_info.vzeta.n > 1 || run_info.vr.n > 1
-            qpar = get_variable(run_info, "qz_neutral"; kwargs...)
-            vth = get_variable(run_info, "thermal_speed_neutral"; kwargs...)
-            upar = get_variable(run_info, "uz_neutral"; kwargs...)
-            n = get_variable(run_info, "density_neutral"; kwargs...)
-
-            variable = @. qpar + 1.25*n*vth^2*upar + 0.5*n*upar^3
-        else
-            qpar = get_variable(run_info, "qz_neutral"; kwargs...)
-            vth = get_variable(run_info, "thermal_speed_neutral"; kwargs...)
-            upar = get_variable(run_info, "uz_neutral"; kwargs...)
-            n = get_variable(run_info, "density_neutral"; kwargs...)
-
-            # Factor of 3/2 in front of 1/2*n*vth^2*upar because this in 1V - would be 5/2
-            # for 2V/3V cases.
-            variable = @. qpar + 0.75*n*vth^2*upar + 0.5*n*upar^3
-        end
-    elseif variable_name == :local_Maxwellian
-        n = append_dims_to_variable(get_variable(run_info, "density"; kwargs...), :ivpa, :ivperp)
-        u = append_dims_to_variable(get_variable(run_info, "parallel_flow"; kwargs...), :ivpa, :ivperp)
-        vth = append_dims_to_variable(get_variable(run_info, "thermal_speed"; kwargs...), :ivpa, :ivperp)
-        vperp = get_variable(run_info, "vperp_unnorm"; kwargs...)
-        vpa = get_variable(run_info, "vpa_unnorm"; kwargs...)
-        if run_info.vperp.n == 1
-            vth .*= sqrt(3)
-            variable = @. n / (sqrt(π) * vth) * exp(-(vperp^2 + (vpa - u)^2) / vth^2)
-        else
-            variable = @. n / (sqrt(π) * vth)^3 * exp(-(vperp^2 + (vpa - u)^2) / vth^2)
-        end
-    elseif variable_name == :r_advect_speed
-        # update_speed_r!() requires all dimensions to be present, so do *not* pass kwargs
-        # to get_variable() in this case. Instead select a slice of the result.
-        Ez = get_variable(run_info, "Ez")
-        vEr = get_variable(run_info, "vEr")
-        nz, nr, nt = size(Ez)
-        nspecies = run_info.n_ion_species
-        nvperp = run_info.vperp.n
-        nvpa = run_info.vpa.n
-
-        speed = allocate_float(nr, nvpa, nvperp, nz, nspecies, nt)
-        gEz = allocate_float(nvperp, nz, nr, nspecies, nt)
-        for it ∈ 1:nt, is ∈ 1:nspecies, ir ∈ 1:nr, iz ∈ 1:nz
-            # Don't support gyroaveraging here (yet)
-            gEz[:,iz,ir,is,it] .= Ez[iz,ir,it]
-        end
-
-        setup_distributed_memory_MPI(1,1,1,1)
-        setup_loop_ranges!(0, 1; s=nspecies, sn=run_info.n_neutral_species, r=nr, z=nz,
-                           vperp=nvperp, vpa=nvpa, vzeta=run_info.vzeta.n,
-                           vr=run_info.vr.n, vz=run_info.vz.n)
-        for it ∈ 1:nt, is ∈ 1:nspecies
-            @begin_serial_region()
-            # Only need some struct with a 'speed' variable
-            advect = (speed=@view(speed[:,:,:,:,is,it]),)
-            # Only need Er
-            fields = (gEz=@view(gEz[:,:,:,is,it]), vEr=@view(vEr[:,:,it]))
-            @views update_speed_r!(advect, fields, run_info.evolve_density,
-                                   run_info.evolve_upar, run_info.evolve_p, run_info.vpa,
-                                   run_info.vperp, run_info.z, run_info.r,
-                                   run_info.geometry, is)
-        end
-
-        # Horrible hack so that we can get the speed back without rearranging the
-        # dimensions, if we want that to pass it to a utility function from the main code
-        # (e.g. to calculate a CFL limit).
-        if normalize_advection_speed_shape
-            variable = allocate_float(nvpa, nvperp, nz, nr, nspecies, nt)
-            for it ∈ 1:nt, is ∈ 1:nspecies, ir ∈ 1:nr, iz ∈ 1:nz, ivperp ∈ 1:nvperp, ivpa ∈ 1:nvpa
-                variable[ivpa,ivperp,iz,ir,is,it] = speed[ir,ivpa,ivperp,iz,is,it]
-            end
-            variable = select_slice_of_variable(variable; kwargs...)
-        else
-            variable = speed
-            if :it ∈ keys(kwargs)
-                variable = selectdim(variable, 6, kwargs[:it])
-            end
-            if :is ∈ keys(kwargs)
-                variable = selectdim(variable, 5, kwargs[:is])
-            end
-            if :iz ∈ keys(kwargs)
-                variable = selectdim(variable, 4, kwargs[:iz])
-            end
-            if :ivperp ∈ keys(kwargs)
-                variable = selectdim(variable, 3, kwargs[:ivperp])
-            end
-            if :ivpa ∈ keys(kwargs)
-                variable = selectdim(variable, 2, kwargs[:ivpa])
-            end
-            if :ir ∈ keys(kwargs)
-                variable = selectdim(variable, 1, kwargs[:ir])
-            end
-        end
-    elseif variable_name == :z_advect_speed
-        # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
-        # to get_variable() in this case. Instead select a slice of the result.
-        upar = get_variable(run_info, "parallel_flow")
-        vth = get_variable(run_info, "thermal_speed")
-        nz, nr, nspecies, nt = size(upar)
-        nvperp = run_info.vperp.n
-        nvpa = run_info.vpa.n
-
-        speed = allocate_float(nz, nvpa, nvperp, nr, nspecies, nt)
-        Er = get_variable(run_info, "Er")
-        vEz = get_variable(run_info, "vEz")
-        gEr = allocate_float(nvperp, nz, nr, nspecies, nt)
-        for it ∈ 1:nt, is ∈ 1:nspecies, ir ∈ 1:nr, iz ∈ 1:nz
-            # Don't support gyroaveraging here (yet)
-            gEr[:,iz,ir,is,it] .= Er[iz,ir,it]
-        end
-
-        setup_distributed_memory_MPI(1,1,1,1)
-        setup_loop_ranges!(0, 1; s=nspecies, sn=run_info.n_neutral_species, r=nr, z=nz,
-                           vperp=nvperp, vpa=nvpa, vzeta=run_info.vzeta.n,
-                           vr=run_info.vr.n, vz=run_info.vz.n)
-        for it ∈ 1:nt, is ∈ 1:nspecies
-            @begin_serial_region()
-            # Only need some struct with a 'speed' variable
-            advect = (speed=@view(speed[:,:,:,:,is,it]),)
-            # Only need Er
-            fields = (gEr=@view(gEr[:,:,:,is,it]), vEz=@view(vEz[:,:,it]))
-            @views update_speed_z!(advect, upar[:,:,is,it], vth[:,:,is,it],
-                                   run_info.evolve_upar, run_info.evolve_p, fields,
-                                   run_info.vpa, run_info.vperp, run_info.z, run_info.r,
-                                   run_info.time[it], run_info.geometry, is)
-        end
-
-        # Horrible hack so that we can get the speed back without rearranging the
-        # dimensions, if we want that to pass it to a utility function from the main code
-        # (e.g. to calculate a CFL limit).
-        if normalize_advection_speed_shape
-            variable = allocate_float(nvpa, nvperp, nz, nr, nspecies, nt)
-            for it ∈ 1:nt, is ∈ 1:nspecies, ir ∈ 1:nr, iz ∈ 1:nz, ivperp ∈ 1:nvperp, ivpa ∈ 1:nvpa
-                variable[ivpa,ivperp,iz,ir,is,it] = speed[iz,ivpa,ivperp,ir,is,it]
-            end
-            variable = select_slice_of_variable(variable; kwargs...)
-        else
-            variable = speed
-            if :it ∈ keys(kwargs)
-                variable = selectdim(variable, 6, kwargs[:it])
-            end
-            if :is ∈ keys(kwargs)
-                variable = selectdim(variable, 5, kwargs[:is])
-            end
-            if :ir ∈ keys(kwargs)
-                variable = selectdim(variable, 4, kwargs[:ir])
-            end
-            if :ivperp ∈ keys(kwargs)
-                variable = selectdim(variable, 3, kwargs[:ivperp])
-            end
-            if :ivpa ∈ keys(kwargs)
-                variable = selectdim(variable, 2, kwargs[:ivpa])
-            end
-            if :iz ∈ keys(kwargs)
-                variable = selectdim(variable, 1, kwargs[:iz])
-            end
-        end
-    elseif variable_name == :vpa_advect_speed
-        density = get_variable(run_info, "density"; kwargs...)
-        upar = get_variable(run_info, "parallel_flow"; kwargs...)
-        p = get_variable(run_info, "pressure"; kwargs...)
-        vth = get_variable(run_info, "thermal_speed"; kwargs...)
-        dupar_dr = get_r_derivative_of_loaded_variable(upar)
-        dupar_dz = get_z_derivative_of_loaded_variable(upar)
-        dp_dz = get_z_derivative_of_loaded_variable(p)
-        dvth_dr = get_r_derivative_of_loaded_variable(vth)
-        dvth_dz = get_z_derivative_of_loaded_variable(vth)
-        dqpar_dz = get_z_derivative(run_info, "parallel_heat_flux"; kwargs...)
-        dupar_dt = get_variable(run_info, "dupar_dt"; kwargs...)
-        dvth_dt = get_variable(run_info, "dvth_dt"; kwargs...)
-        if any(x -> x.active, run_info.external_source_settings.ion)
-            n_sources = length(run_info.external_source_settings.ion)
-            external_source_amplitude = get_variable(run_info, "external_source_amplitude")
             if run_info.evolve_density
-                external_source_density_amplitude = get_variable(run_info, "external_source_density_amplitude")
-            else
-                external_source_density_amplitude = zeros(0,0,n_sources,run_info.nt)
+                n = append_dims_to_variable(get_variable(run_info, "density"; kwargs...), :ivperp, :ivpa; kwargs...)
+                variable .*= n
+            end
+            return variable
+        end,
+    "f_electron_unnorm" => (run_info; kwargs...) -> begin
+            variable = get_variable(run_info, "f_electron"; kwargs...)
+            if run_info.evolve_p
+                vth = append_dims_to_variable(get_variable(run_info, "electron_thermal_speed"; kwargs...), :ivperp, :ivpa; kwargs...)
+                if run_info.vperp.n == 1
+                    variable ./= vth
+                else
+                    variable ./= vth^3
+                end
+            end
+            if run_info.evolve_density
+                n = append_dims_to_variable(get_variable(run_info, "electron_density"; kwargs...), :ivperp, :ivpa; kwargs...)
+                variable .*= n
+            end
+            return variable
+        end,
+    "f_neutral_unnorm" => (run_info; kwargs...) -> begin
+            variable = get_variable(run_info, "f_neutral"; kwargs...)
+            if run_info.evolve_p
+                vth = append_dims_to_variable(get_variable(run_info, "thermal_speed_neutral"; kwargs...), :ivzeta, :ivr, :ivz; kwargs...)
+                if run_info.vperp.n == 1
+                    variable ./= vth
+                else
+                    variable ./= vth^3
+                end
+            end
+            if run_info.evolve_density
+                n = append_dims_to_variable(get_variable(run_info, "density_neutral"; kwargs...), :ivzeta, :ivr, :ivz; kwargs...)
+                variable = variable .* n
+            end
+            return variable
+        end,
+    "vperp_unnorm" => (run_info; kwargs...) -> begin
+            variable = run_info.vperp.grid
+            if :ivperp ∈ keys(kwargs)
+                variable = variable[kwargs[:ivperp]]
+            end
+            variable = prepend_dims_to_variable(variable, :iz, :ir, :is; kwargs...)
+            variable = append_dims_to_variable(variable, :ivpa; kwargs...)
+            if run_info.evolve_p
+                vth = append_dims_to_variable(get_variable(run_info, "thermal_speed"; kwargs...), :ivpa, :ivperp; kwargs...)
+                variable = variable .* vth
+            end
+            return variable
+        end,
+    "vpa_unnorm" => (run_info; kwargs...) -> begin
+            variable = run_info.vpa.grid
+            if :ivpa ∈ keys(kwargs)
+                variable = variable[kwargs[:ivpa]]
+            end
+            variable = prepend_dims_to_variable(variable, :ivperp, :iz, :ir, :is; kwargs...)
+            if run_info.evolve_p
+                vth = append_dims_to_variable(get_variable(run_info, "thermal_speed"; kwargs...), :ivpa, :ivperp; kwargs...)
+                variable = variable .* vth
             end
             if run_info.evolve_upar
-                external_source_momentum_amplitude = get_variable(run_info, "external_source_momentum_amplitude")
-            else
-                external_source_momentum_amplitude = zeros(0,0,n_sources,run_info.nt)
+                u = append_dims_to_variable(get_variable(run_info, "parallel_flow"; kwargs...), :ivpa, :ivperp; kwargs...)
+                variable = variable .+ u
             end
+            return variable
+        end,
+    "electron_vperp_unnorm" => (run_info; kwargs...) -> begin
+            variable = run_info.vperp.grid
+            if :ivperp ∈ keys(kwargs)
+                variable = variable[kwargs[:ivperp]]
+            end
+            variable = prepend_dims_to_variable(variable, :iz, :ir; kwargs...)
+            variable = append_dims_to_variable(variable, :ivpa; kwargs...)
             if run_info.evolve_p
-                external_source_pressure_amplitude = get_variable(run_info, "external_source_pressure_amplitude")
+                vth = append_dims_to_variable(get_variable(run_info, "electron_thermal_speed"; kwargs...), :ivpa, :ivperp; kwargs...)
+                variable = variable .* vth
+            end
+            return variable
+        end,
+    "electron_vpa_unnorm" => (run_info; kwargs...) -> begin
+            variable = run_info.vpa.grid
+            if :ivpa ∈ keys(kwargs)
+                variable = variable[kwargs[:ivpa]]
+            end
+            variable = prepend_dims_to_variable(variable, :ivperp, :iz, :ir; kwargs...)
+            if run_info.evolve_p
+                vth = append_dims_to_variable(get_variable(run_info, "electron_thermal_speed"; kwargs...), :ivpa, :ivperp; kwargs...)
+                variable = variable .* vth
+            end
+            if run_info.evolve_upar
+                u = append_dims_to_variable(get_variable(run_info, "electron_parallel_flow"; kwargs...), :ivpa, :ivperp; kwargs...)
+                variable = variable .+ u
+            end
+            return variable
+        end,
+    "vzeta_unnorm" => (run_info; kwargs...) -> begin
+            variable = run_info.vzeta.grid
+            if :ivzeta ∈ keys(kwargs)
+                variable = variable[kwargs[:ivzeta]]
+            end
+            variable = prepend_dims_to_variable(variable, :iz, :ir, :is; kwargs...)
+            variable = append_dims_to_variable(variable, :ivz, :ivr; kwargs...)
+            if run_info.evolve_p
+                vth = append_dims_to_variable(get_variable(run_info, "neutral_thermal_speed"; kwargs...), :ivz, :ivr, :ivzeta; kwargs...)
+                variable = variable .* vth
+            end
+            return variable
+        end,
+    "vr_unnorm" => (run_info; kwargs...) -> begin
+            variable = run_info.vr.grid
+            if :ivr ∈ keys(kwargs)
+                variable = variable[kwargs[:ivr]]
+            end
+            variable = prepend_dims_to_variable(variable, :ivzeta, :iz, :ir, :is; kwargs...)
+            variable = append_dims_to_variable(variable, :ivz; kwargs...)
+            if run_info.evolve_p
+                vth = append_dims_to_variable(get_variable(run_info, "neutral_thermal_speed"; kwargs...), :ivz, :ivr, :ivzeta; kwargs...)
+                variable = variable .* vth
+            end
+            return variable
+        end,
+    "vz_unnorm" => (run_info; kwargs...) -> begin
+            variable = run_info.vz.grid
+            if :ivz ∈ keys(kwargs)
+                variable = variable[kwargs[:ivz]]
+            end
+            variable = prepend_dims_to_variable(variable, :ivr, :ivzeta, :iz, :ir, :is; kwargs...)
+            if run_info.evolve_p
+                vth = append_dims_to_variable(get_variable(run_info, "neutral_thermal_speed"; kwargs...), :ivz, :ivr, :ivzeta; kwargs...)
+                variable = variable .* vth
+            end
+            if run_info.evolve_upar
+                u = append_dims_to_variable(get_variable(run_info, "neutral_uz"; kwargs...), :ivz, :ivr, :ivzeta; kwargs...)
+                variable = variable .+ u
+            end
+            return variable
+        end,
+    "ddens_dr" => (run_info; kwargs...) -> begin
+            variable = get_r_derivative(run_info, "density"; kwargs...)
+            return variable
+        end,
+    "ddens_dr_upwind" => (run_info; kwargs...) -> begin
+            variable = get_upwind_r_derivative(run_info, "density"; kwargs...)
+            return variable
+        end,
+    "ddens_dz" => (run_info; kwargs...) -> begin
+            variable = get_z_derivative(run_info, "density"; kwargs...)
+            return variable
+        end,
+    "ddens_dz_upwind" => (run_info; kwargs...) -> begin
+            variable = get_upwind_z_derivative(run_info, "density"; kwargs...)
+            return variable
+        end,
+    "dupar_dr" => (run_info; kwargs...) -> begin
+            variable = get_r_derivative(run_info, "parallel_flow"; kwargs...)
+            return variable
+        end,
+    "dupar_dr_upwind" => (run_info; kwargs...) -> begin
+            variable = get_upwind_r_derivative(run_info, "parallel_flow"; kwargs...)
+            return variable
+        end,
+    "dupar_dz" => (run_info; kwargs...) -> begin
+            variable = get_z_derivative(run_info, "parallel_flow"; kwargs...)
+            return variable
+        end,
+    "dupar_dz_upwind" => (run_info; kwargs...) -> begin
+            variable = get_upwind_z_derivative(run_info, "parallel_flow"; kwargs...)
+            return variable
+        end,
+    "dp_dr_upwind" => (run_info; kwargs...) -> begin
+            variable = get_upwind_r_derivative(run_info, "pressure"; kwargs...)
+            return variable
+        end,
+    "dp_dz" => (run_info; kwargs...) -> begin
+            variable = get_z_derivative(run_info, "pressure"; kwargs...)
+            return variable
+        end,
+    "dp_dz_upwind" => (run_info; kwargs...) -> begin
+            variable = get_upwind_z_derivative(run_info, "pressure"; kwargs...)
+            return variable
+        end,
+    "dppar_dz" => (run_info; kwargs...) -> begin
+            variable = get_z_derivative(run_info, "parallel_pressure"; kwargs...)
+            return variable
+        end,
+    "dppar_dz_upwind" => (run_info; kwargs...) -> begin
+            variable = get_upwind_z_derivative(run_info, "parallel_pressure"; kwargs...)
+            return variable
+        end,
+    "dvth_dr" => (run_info; kwargs...) -> begin
+            variable = get_r_derivative(run_info, "thermal_speed"; kwargs...)
+            return variable
+        end,
+    "dvth_dz" => (run_info; kwargs...) -> begin
+            variable = get_z_derivative(run_info, "thermal_speed"; kwargs...)
+            return variable
+        end,
+    "dT_dz" => (run_info; kwargs...) -> begin
+            variable = get_z_derivative(run_info, "temperature"; kwargs...)
+            return variable
+        end,
+    "dqpar_dz" => (run_info; kwargs...) -> begin
+            variable = get_z_derivative(run_info, "parallel_heat_flux"; kwargs...)
+            return variable
+        end,
+    "electron_ddens_dz" => (run_info; kwargs...) -> begin
+            n = get_variable(run_info, "electron_density"; kwargs...)
+            variable = get_electron_z_derivative(run_info, n; kwargs)
+            return variable
+        end,
+    "electron_dupar_dz" => (run_info; kwargs...) -> begin
+            upar = get_variable(run_info, "electron_parallel_flow"; kwargs...)
+            variable = get_electron_z_derivative(run_info, upar; kwargs)
+            return variable
+        end,
+    "electron_dp_dz" => (run_info; kwargs...) -> begin
+            p = get_variable(run_info, "electron_pressure"; kwargs...)
+            variable = get_electron_z_derivative(run_info, p; kwargs)
+            return variable
+        end,
+    "electron_dppar_dz" => (run_info; kwargs...) -> begin
+            ppar = get_variable(run_info, "electron_parallel_pressure"; kwargs...)
+            variable = get_electron_z_derivative(run_info, ppar; kwargs)
+            return variable
+        end,
+    "electron_dvth_dz" => (run_info; kwargs...) -> begin
+            vth = get_variable(run_info, "electron_thermal_speed"; kwargs...)
+            variable = get_electron_z_derivative(run_info, vth; kwargs)
+            return variable
+        end,
+    "electron_dT_dz" => (run_info; kwargs...) -> begin
+            T = get_variable(run_info, "electron_temperature"; kwargs...)
+            variable = get_electron_z_derivative(run_info, T; kwargs)
+            return variable
+        end,
+    "electron_dqpar_dz" => (run_info; kwargs...) -> begin
+            qpar = get_variable(run_info, "electron_parallel_heat_flux"; kwargs...)
+            variable = get_electron_z_derivative(run_info, qpar; kwargs)
+            return variable
+        end,
+    "neutral_ddens_dz" => (run_info; kwargs...) -> begin
+            variable = get_z_derivative(run_info, "density_neutral"; kwargs...)
+            return variable
+        end,
+    "neutral_ddens_dz_upwind" => (run_info; kwargs...) -> begin
+            variable = get_upwind_z_derivative(run_info, "density_neutral"; neutral=true,
+                                               kwargs...)
+            return variable
+        end,
+    "neutral_duz_dz" => (run_info; kwargs...) -> begin
+            variable = get_z_derivative(run_info, "uz_neutral"; kwargs...)
+            return variable
+        end,
+    "neutral_duz_dz_upwind" => (run_info; kwargs...) -> begin
+            variable = get_upwind_z_derivative(run_info, "uz_neutral"; neutral=true,
+                                               kwargs...)
+            return variable
+        end,
+    "neutral_dp_dz" => (run_info; kwargs...) -> begin
+            variable = get_z_derivative(run_info, "p_neutral"; kwargs...)
+            return variable
+        end,
+    "neutral_dp_dz_upwind" => (run_info; kwargs...) -> begin
+            variable = get_upwind_z_derivative(run_info, "p_neutral"; neutral=true,
+                                               kwargs...)
+            return variable
+        end,
+    "neutral_dpz_dz" => (run_info; kwargs...) -> begin
+            variable = get_z_derivative(run_info, "pz_neutral"; kwargs...)
+            return variable
+        end,
+    "neutral_dvth_dz" => (run_info; kwargs...) -> begin
+            variable = get_z_derivative(run_info, "thermal_speed_neutral"; kwargs...)
+            return variable
+        end,
+    "neutral_dT_dz" => (run_info; kwargs...) -> begin
+            variable = get_z_derivative(run_info, "temperature_neutral"; kwargs...)
+            return variable
+        end,
+    "neutral_dqz_dz" => (run_info; kwargs...) -> begin
+            variable = get_z_derivative(run_info, "qz_neutral"; kwargs...)
+            return variable
+        end,
+    "ddens_dt" => (run_info; kwargs...) -> begin
+            if !run_info.evolve_density
+                throw(KeyError("evolve_density=false, so do not calculate ddens_dt"))
+            end
+            all_moments = _get_all_moment_variables(run_info)
+            variable = similar(all_moments.density)
+            # Define function here to minimise effect type instability due to
+            # get_all_moment_variables returning NamedTuples
+            function get_ddens_dt!(variable, all_moments)
+                nt = size(variable, ndims(variable))
+                dummy = similar(variable, size(variable)[1:end-1])
+                for tind ∈ 1:nt
+                    moments, fields, fvec =
+                        _get_fake_moments_fields_scratch(all_moments, tind;
+                                                         ion_extra=(:ddens_dt=>variable,))
+                    # Dummy first argument, because we actually want the 'side effect' of
+                    # filling the time derivative array in `moments`.
+                    continuity_equation!(dummy, fvec, fields, moments, run_info.composition,
+                                         run_info.geometry, 0.0, run_info.z_spectral,
+                                         run_info.collisions.reactions.ionization_frequency,
+                                         run_info.external_source_settings.ion,
+                                         run_info.num_diss_params)
+                end
+            end
+            get_ddens_dt!(variable, all_moments)
+            variable = select_slice_of_variable(variable; kwargs...)
+            return variable
+        end,
+    "dnupar_dt" => (run_info; kwargs...) -> begin
+            if !run_info.evolve_upar
+                throw(KeyError("evolve_upar=false, so do not calculate dnupar_dt"))
+            end
+            all_moments = _get_all_moment_variables(run_info)
+            variable = similar(all_moments.parallel_flow)
+            # Define function here to minimise effect type instability due to
+            # get_all_moment_variables returning NamedTuples
+            function get_dnupar_dt!(variable, all_moments)
+                nt = size(variable, ndims(variable))
+                dummy = similar(variable, size(variable)[1:end-1])
+                for tind ∈ 1:nt
+                    moments, fields, fvec =
+                        _get_fake_moments_fields_scratch(all_moments, tind;
+                                                         ion_extra=(:dnupar_dt=>variable,))
+                    # Dummy first argument, because we actually want the 'side effect' of
+                    # filling the time derivative array in `moments`.
+                    force_balance!(dummy, fvec.density, fvec, moments, fields,
+                                   run_info.collisions, 0.0, run_info.z_spectral,
+                                   run_info.composition, run_info.geometry,
+                                   run_info.external_source_settings.ion,
+                                   run_info.num_diss_params, run_info.z)
+                end
+            end
+            get_dnupar_dt!(variable, all_moments)
+            variable = select_slice_of_variable(variable; kwargs...)
+            return variable
+        end,
+    "dupar_dt" => (run_info; kwargs...) -> begin
+            if !run_info.evolve_upar
+                throw(KeyError("evolve_upar=false, so do not calculate dupar_dt"))
+            end
+            dn_dt = get_variable(run_info, "ddens_dt"; kwargs...)
+            dnupar_dt = get_variable(run_info, "dnupar_dt"; kwargs...)
+            n = get_variable(run_info, "density"; kwargs...)
+            upar = get_variable(run_info, "parallel_flow"; kwargs...)
+            variable = @. dnupar_dt / n - upar / n * dn_dt
+            return variable
+        end,
+    "dp_dt" => (run_info; kwargs...) -> begin
+            if !run_info.evolve_p
+                throw(KeyError("evolve_p=false, so do not calculate dp_dt"))
+            end
+            all_moments = _get_all_moment_variables(run_info)
+            variable = similar(all_moments.pressure)
+            # Define function here to minimise effect type instability due to
+            # get_all_moment_variables returning NamedTuples
+            function get_dp_dt!(variable, all_moments)
+                nt = size(variable, ndims(variable))
+                dummy = similar(variable, size(variable)[1:end-1])
+                for tind ∈ 1:nt
+                    moments, fields, fvec =
+                        _get_fake_moments_fields_scratch(all_moments, tind;
+                                                         ion_extra=(:dp_dt=>variable,))
+                    # Dummy first argument, because we actually want the 'side effect' of
+                    # filling the time derivative array in `moments`.
+                    energy_equation!(dummy, fvec, moments, fields, run_info.collisions, 0.0,
+                                     run_info.z_spectral, run_info.composition,
+                                     run_info.geometry, run_info.external_source_settings.ion,
+                                     run_info.num_diss_params)
+                end
+            end
+            get_dp_dt!(variable, all_moments)
+            variable = select_slice_of_variable(variable; kwargs...)
+            return variable
+        end,
+    "dvth_dt" => (run_info; kwargs...) -> begin
+            if !run_info.evolve_p
+                throw(KeyError("evolve_p=false, so do not calculate dvth_dt"))
+            end
+            dn_dt = get_variable(run_info, "ddens_dt"; kwargs...)
+            dp_dt = get_variable(run_info, "dp_dt"; kwargs...)
+            n = get_variable(run_info, "density"; kwargs...)
+            p = get_variable(run_info, "pressure"; kwargs...)
+            vth = get_variable(run_info, "thermal_speed"; kwargs...)
+            variable = @. 0.5 * vth * (dp_dt / p - dn_dt / n)
+            return variable
+        end,
+    "electron_dp_dt" => (run_info; kwargs...) -> begin
+            if !run_info.evolve_p
+                throw(KeyError("evolve_p=false, so do not calculate electron_dp_dt"))
+            end
+            # Try to load electron pressure to check that electrons are present in the output.
+            _ = get_variable(run_info, "electron_pressure"; kwargs...)
+
+            all_moments = _get_all_moment_variables(run_info)
+            variable = similar(all_moments.electron_pressure)
+            # Define function here to minimise effect type instability due to
+            # get_all_moment_variables returning NamedTuples
+            function get_electron_dp_dt!(variable, all_moments)
+                nt = size(variable, ndims(variable))
+                dummy = similar(variable, size(variable)[1:end-1])
+                for tind ∈ 1:nt
+                    moments, fields, fvec =
+                        _get_fake_moments_fields_scratch(all_moments, tind;
+                                                         electron_extra=(:dp_dt=>variable,))
+                    # Dummy first argument, because we actually want the 'side effect' of
+                    # filling the time derivative array in `moments`.
+                    electron_energy_equation!(dummy, moments.electron.dens,
+                                              moments.electron.p, moments.electron.dens,
+                                              moments.electron.upar, moments.electron.ppar,
+                                              moments.ion.dens, moments.ion.upar,
+                                              moments.ion.p, moments.neutral.dens,
+                                              moments.neutral.uz, moments.neutral.p,
+                                              moments.electron, run_info.collisions, 0.0,
+                                              run_info.composition,
+                                              run_info.external_source_settings.electron,
+                                              run_info.num_diss_params, run_info.r,
+                                              run_info.z)
+                end
+            end
+            get_electron_dp_dt!(variable, all_moments)
+            variable = select_slice_of_variable(variable; kwargs...)
+            return variable
+        end,
+    "electron_dvth_dt" => (run_info; kwargs...) -> begin
+            if !run_info.evolve_p
+                throw(KeyError("evolve_p=false, so do not calculate electron_dvth_dt"))
+            end
+            # Try to load electron pressure to check that electrons are present in the output.
+            _ = get_variable(run_info, "electron_pressure"; kwargs...)
+
+            # Note that this block neglects any contribution of dn/dt to dvth/dt because the
+            # operator splitting between implicit/explicit operators in the code means that
+            # when dvth/dt is calculated for electrons, the (ion) density does not change in
+            # the same step, so does not contribute to the dvth/dt used internally. This
+            # post-processing function replicates that behaviour, guessing that that will
+            # usually be what we want, e.g. if we want recalculate the coefficients used in
+            # the electron kinetic equation.
+            dp_dt = get_variable(run_info, "electron_dp_dt"; kwargs...)
+            n = get_variable(run_info, "electron_density"; kwargs...)
+            p = get_variable(run_info, "electron_pressure"; kwargs...)
+            vth = get_variable(run_info, "electron_thermal_speed"; kwargs...)
+            variable = @. 0.5 * vth * dp_dt / p
+            return variable
+        end,
+    "neutral_ddens_dt" => (run_info; kwargs...) -> begin
+            if !run_info.evolve_density
+                throw(KeyError("evolve_density=false, so do not calculate neutral_ddens_dt"))
+            end
+            all_moments = _get_all_moment_variables(run_info)
+            if :density_neutral ∉ keys(all_moments)
+                throw(KeyError("density_neutral not present"))
+            end
+            variable = similar(all_moments.density_neutral)
+            # Define function here to minimise effect type instability due to
+            # get_all_moment_variables returning NamedTuples
+            function get_neutral_ddens_dt!(variable, all_moments)
+                nt = size(variable, ndims(variable))
+                dummy = similar(variable, size(variable)[1:end-1])
+                for tind ∈ 1:nt
+                    moments, fields, fvec =
+                        _get_fake_moments_fields_scratch(all_moments, tind;
+                                                         neutral_extra=(:ddens_dt=>variable,))
+                    # Dummy first argument, because we actually want the 'side effect' of
+                    # filling the time derivative array in `moments`.
+                    neutral_continuity_equation!(dummy, fvec, moments, run_info.composition,
+                                                 0.0, run_info.z_spectral,
+                                                 run_info.collisions.reactions.ionization_frequency,
+                                                 run_info.external_source_settings.neutral,
+                                                 run_info.num_diss_params)
+                end
+            end
+            get_neutral_ddens_dt!(variable, all_moments)
+            variable = select_slice_of_variable(variable; kwargs...)
+            return variable
+        end,
+    "neutral_dnuz_dt" => (run_info; kwargs...) -> begin
+            if !run_info.evolve_upar
+                throw(KeyError("evolve_upar=false, so do not calculate neutral_dnuz_dt"))
+            end
+            all_moments = _get_all_moment_variables(run_info)
+            if :uz_neutral ∉ keys(all_moments)
+                throw(KeyError("uz_neutral not present"))
+            end
+            variable = similar(all_moments.uz_neutral)
+            # Define function here to minimise effect type instability due to
+            # get_all_moment_variables returning NamedTuples
+            function get_neutral_dnuz_dt!(variable, all_moments)
+                nt = size(variable, ndims(variable))
+                dummy = similar(variable, size(variable)[1:end-1])
+                for tind ∈ 1:nt
+                    moments, fields, fvec =
+                        _get_fake_moments_fields_scratch(all_moments, tind;
+                                                         neutral_extra=(:dnuz_dt=>variable,))
+                    # Dummy first argument, because we actually want the 'side effect' of
+                    # filling the time derivative array in `moments`.
+                    neutral_force_balance!(dummy, fvec.density_neutral, fvec, moments, fields,
+                                           run_info.collisions, 0.0, run_info.z_spectral,
+                                           run_info.composition, run_info.geometry,
+                                           run_info.external_source_settings.neutral,
+                                           run_info.num_diss_params)
+                end
+            end
+            get_neutral_dnuz_dt!(variable, all_moments)
+            variable = select_slice_of_variable(variable; kwargs...)
+            return variable
+        end,
+    "neutral_duz_dt" => (run_info; kwargs...) -> begin
+            if !run_info.evolve_upar
+                throw(KeyError("evolve_upar=false, so do not calculate neutral_duz_dt"))
+            end
+            dn_dt = get_variable(run_info, "neutral_ddens_dt"; kwargs...)
+            dnuz_dt = get_variable(run_info, "neutral_dnuz_dt"; kwargs...)
+            n = get_variable(run_info, "density_neutral"; kwargs...)
+            uz = get_variable(run_info, "uz_neutral"; kwargs...)
+            variable = @. dnuz_dt / n - uz / n * dn_dt
+            return variable
+        end,
+    "neutral_dp_dt" => (run_info; kwargs...) -> begin
+            if !run_info.evolve_p
+                throw(KeyError("evolve_p=false, so do not calculate neutral_dp_dt"))
+            end
+            all_moments = _get_all_moment_variables(run_info)
+            if :p_neutral ∉ keys(all_moments)
+                throw(KeyError("p_neutral not present"))
+            end
+            variable = similar(all_moments.p_neutral)
+            # Define function here to minimise effect type instability due to
+            # get_all_moment_variables returning NamedTuples
+            function get_neutral_duz_dt!(variable, all_moments)
+                nt = size(variable, ndims(variable))
+                dummy = similar(variable, size(variable)[1:end-1])
+                for tind ∈ 1:nt
+                    moments, fields, fvec =
+                        _get_fake_moments_fields_scratch(all_moments, tind;
+                                                         neutral_extra=(:dp_dt=>variable,))
+                    # Dummy first argument, because we actually want the 'side effect' of
+                    # filling the time derivative array in `moments`.
+                    neutral_energy_equation!(dummy, fvec, moments, run_info.collisions, 0.0,
+                                             run_info.z_spectral, run_info.composition,
+                                             run_info.external_source_settings.neutral,
+                                             run_info.num_diss_params)
+                end
+            end
+            get_neutral_duz_dt!(variable, all_moments)
+            variable = select_slice_of_variable(variable; kwargs...)
+            return variable
+        end,
+    "neutral_dvth_dt" => (run_info; kwargs...) -> begin
+            if !run_info.evolve_p
+                throw(KeyError("evolve_p=false, so do not calculate neutral_dvth_dt"))
+            end
+            dn_dt = get_variable(run_info, "neutral_ddens_dt"; kwargs...)
+            dp_dt = get_variable(run_info, "neutral_dp_dt"; kwargs...)
+            n = get_variable(run_info, "density_neutral"; kwargs...)
+            p = get_variable(run_info, "p_neutral"; kwargs...)
+            vth = get_variable(run_info, "thermal_speed_neutral"; kwargs...)
+            variable = @. 0.5 * vth * (dp_dt / p - dn_dt / n)
+            return variable
+        end,
+    "vEr" => (run_info; kwargs...) -> begin
+            variable = get_vEr(run_info.geometry.rhostar, run_info.geometry.jacobian,
+                               run_info.geometry.bzeta, run_info.geometry.Bmag,
+                               get_variable(run_info, "Ez"))
+            variable = select_slice_of_variable(variable; kwargs...)
+            return variable
+        end,
+    "vEz" => (run_info; kwargs...) -> begin
+            variable = get_vEz(run_info.geometry.rhostar, run_info.geometry.jacobian,
+                               run_info.geometry.bzeta, run_info.geometry.Bmag,
+                               get_variable(run_info, "Er"))
+            variable = select_slice_of_variable(variable; kwargs...)
+            return variable
+        end,
+    "mfp" => (run_info; kwargs...) -> begin
+            # this is mean free path for krook collision purposes, but it should be the same collision
+            # frequency used for other collision operators in general, as it encompasses the magnitude
+            # of collision frequency
+            vth = get_variable(run_info, "thermal_speed"; kwargs...)
+            nu_ii = get_variable(run_info, "Krook_collision_frequency_ii"; kwargs...)
+            if run_info.vperp.n == 1
+                variable = sqrt(3.0) .* vth ./ nu_ii
             else
+                variable = vth ./ nu_ii
+            end
+            return variable
+        end,
+    "L_T" => (run_info; kwargs...) -> begin
+            # same in 1V and 2V because it's just ratio of T to dT/dz
+            dT_dz = get_variable(run_info, "dT_dz"; kwargs...)
+            temp = get_variable(run_info, "temperature"; kwargs...)
+            # We define gradient lengthscale of T as LT^-1 = dln(T)/dz (ignore negative sign
+            # tokamak convention as we're only concerned with comparing magnitudes)
+            variable = abs.(temp .* dT_dz.^(-1))
+            # flat points in temperature have diverging LT, so ignore those with NaN
+            # using a hard coded 10.0 tolerance for now
+            variable[variable .> 50.0] .= NaN
+            return variable
+        end,
+    "L_n" => (run_info; kwargs...) -> begin
+            ddens_dz = get_variable(run_info, "ddens_dz"; kwargs...)
+            n = get_variable(run_info, "density"; kwargs...)
+            # We define gradient lengthscale of n as Ln^-1 = dln(n)/dz (ignore negative sign
+            # tokamak convention as we're only concerned with comparing magnitudes)
+            variable = abs.(n .* ddens_dz.^(-1))
+            # flat points in temperature have diverging Ln, so ignore those with NaN
+            # using a hard coded 10.0 tolerance for now
+            variable[variable .> 50.0] .= NaN
+            return variable
+        end,
+    "L_upar" => (run_info; kwargs...) -> begin
+            dupar_dz = get_variable(run_info, "dupar_dz"; kwargs...)
+            upar = get_variable(run_info, "parallel_flow"; kwargs...)
+            # We define gradient lengthscale of upar as Lupar^-1 = dln(upar)/dz (ignore negative sign
+            # tokamak convention as we're only concerned with comparing magnitudes)
+            variable = abs.(upar .* dupar_dz.^(-1))
+            # flat points in temperature have diverging Lupar, so ignore those with NaN
+            # using a hard coded 10.0 tolerance for now
+            variable[variable .> 50.0] .= NaN
+            return variable
+        end,
+    "coll_krook_heat_flux" => (run_info; kwargs...) -> begin
+            n = get_variable(run_info, "density"; kwargs...)
+            vth = get_variable(run_info, "thermal_speed"; kwargs...)
+            dT_dz = get_variable(run_info, "dT_dz"; kwargs...)
+            if run_info.vperp.n == 1
+                Krook_vth = sqrt(3.0) * vth
+            else
+                Krook_vth = vth
+            end
+            Krook_nu_ii = get_variable(run_info, "Krook_collision_frequency_ii"; kwargs...)
+            variable = @. -(1/2) * 3/2 * n * Krook_vth^2 * 3 * dT_dz / Krook_nu_ii
+            return variable
+        end,
+    "collision_frequency_ii" => (run_info; kwargs...) -> begin
+            n = get_variable(run_info, "density"; kwargs...)
+            vth = get_variable(run_info, "thermal_speed"; kwargs...)
+            variable = get_collision_frequency_ii(run_info.collisions, n, vth)
+            return variable
+        end,
+    "Krook_collision_frequency_ii" => (run_info; kwargs...) -> begin
+            n = get_variable(run_info, "density"; kwargs...)
+            vth = get_variable(run_info, "thermal_speed"; kwargs...)
+            if run_info.vperp.n == 1
+                Krook_vth = sqrt(3.0) * vth
+            else
+                Krook_vth = vth
+            end
+            variable = get_collision_frequency_ii(run_info.collisions, n, Krook_vth)
+            return variable
+        end,
+    "collision_frequency_ee" => (run_info; kwargs...) -> begin
+            n = get_variable(run_info, "electron_density"; kwargs...)
+            vth = get_variable(run_info, "electron_thermal_speed"; kwargs...)
+            variable = get_collision_frequency_ee(run_info.collisions, n, vth)
+            return variable
+        end,
+    "collision_frequency_ei" => (run_info; kwargs...) -> begin
+            n = get_variable(run_info, "electron_density"; kwargs...)
+            vth = get_variable(run_info, "electron_thermal_speed"; kwargs...)
+            variable = get_collision_frequency_ei(run_info.collisions, n, vth)
+            return variable
+        end,
+    "electron_temperature" => (run_info; kwargs...) -> begin
+            vth = get_variable(run_info, "electron_thermal_speed"; kwargs...)
+            variable = 0.5 * run_info.composition.me_over_mi .* vth.^2
+            return variable
+        end,
+    "temperature_neutral" => (run_info; kwargs...) -> begin
+            vth = get_variable(run_info, "thermal_speed_neutral"; kwargs...)
+            variable = 0.5 * vth.^2
+            return variable
+        end,
+    "sound_speed" => (run_info; kwargs...) -> begin
+            T_e = run_info.composition.T_e
+            T_i = get_variable(run_info, "temperature"; kwargs...)
+
+            # Adiabatic index. Not too clear what value should be (see e.g. [Riemann 1991,
+            # below eq. (39)], or discussion of Bohm criterion in Stangeby's book.
+            gamma = 1.0 # 3.0
+
+            variable = @. sqrt((T_e + gamma*T_i))
+            return variable
+        end,
+    "mach_number" => (run_info; kwargs...) -> begin
+            upar = get_variable(run_info, "parallel_flow"; kwargs...)
+            cs = get_variable(run_info, "sound_speed"; kwargs...)
+            variable = upar ./ cs
+            return variable
+        end,
+    "total_energy" => (run_info; kwargs...) -> begin
+            p = get_variable(run_info, "pressure"; kwargs...)
+            upar = get_variable(run_info, "parallel_flow"; kwargs...)
+            n = get_variable(run_info, "density"; kwargs...)
+
+            variable = @. 1.5 * p + 0.5*n*upar^2
+            return variable
+        end,
+    "total_energy_neutral" => (run_info; kwargs...) -> begin
+            p = get_variable(run_info, "p_neutral"; kwargs...)
+            upar = get_variable(run_info, "uz_neutral"; kwargs...)
+            n = get_variable(run_info, "density_neutral"; kwargs...)
+
+            # Factor of 3/2 in front of 1/2*n*vth^2*upar because this in 1V - would be 5/2
+            # for 2V/3V cases.
+            variable = @. 1.5 * p + 0.5*n*upar^2
+            return variable
+        end,
+    "total_energy_flux" => (run_info; kwargs...) -> begin
+            if run_info.vperp.n > 1
+                qpar = get_variable(run_info, "parallel_heat_flux"; kwargs...)
+                vth = get_variable(run_info, "thermal_speed"; kwargs...)
+                upar = get_variable(run_info, "parallel_flow"; kwargs...)
+                n = get_variable(run_info, "density"; kwargs...)
+
+                variable = @. qpar + 1.25*n*vth^2*upar + 0.5*n*upar^3
+            else
+                qpar = get_variable(run_info, "parallel_heat_flux"; kwargs...)
+                vth = get_variable(run_info, "thermal_speed"; kwargs...)
+                upar = get_variable(run_info, "parallel_flow"; kwargs...)
+                n = get_variable(run_info, "density"; kwargs...)
+
+                # Factor of 3/2 in front of 1/2*n*vth^2*upar because this in 1V - would be 5/2
+                # for 2V/3V cases.
+                variable = @. qpar + 0.75*n*vth^2*upar + 0.5*n*upar^3
+            end
+            return variable
+        end,
+    "total_energy_flux_neutral" => (run_info; kwargs...) -> begin
+            if run_info.vzeta.n > 1 || run_info.vr.n > 1
+                qpar = get_variable(run_info, "qz_neutral"; kwargs...)
+                vth = get_variable(run_info, "thermal_speed_neutral"; kwargs...)
+                upar = get_variable(run_info, "uz_neutral"; kwargs...)
+                n = get_variable(run_info, "density_neutral"; kwargs...)
+
+                variable = @. qpar + 1.25*n*vth^2*upar + 0.5*n*upar^3
+            else
+                qpar = get_variable(run_info, "qz_neutral"; kwargs...)
+                vth = get_variable(run_info, "thermal_speed_neutral"; kwargs...)
+                upar = get_variable(run_info, "uz_neutral"; kwargs...)
+                n = get_variable(run_info, "density_neutral"; kwargs...)
+
+                # Factor of 3/2 in front of 1/2*n*vth^2*upar because this in 1V - would be 5/2
+                # for 2V/3V cases.
+                variable = @. qpar + 0.75*n*vth^2*upar + 0.5*n*upar^3
+            end
+            return variable
+        end,
+    "local_Maxwellian" => (run_info; kwargs...) -> begin
+            n = append_dims_to_variable(get_variable(run_info, "density"; kwargs...), :ivpa, :ivperp; kwargs...)
+            u = append_dims_to_variable(get_variable(run_info, "parallel_flow"; kwargs...), :ivpa, :ivperp; kwargs...)
+            vth = append_dims_to_variable(get_variable(run_info, "thermal_speed"; kwargs...), :ivpa, :ivperp; kwargs...)
+            vperp = get_variable(run_info, "vperp_unnorm"; kwargs...)
+            vpa = get_variable(run_info, "vpa_unnorm"; kwargs...)
+            if run_info.vperp.n == 1
+                vth .*= sqrt(3)
+                variable = @. n / (sqrt(π) * vth) * exp(-(vperp^2 + (vpa - u)^2) / vth^2)
+            else
+                variable = @. n / (sqrt(π) * vth)^3 * exp(-(vperp^2 + (vpa - u)^2) / vth^2)
+            end
+            return variable
+        end,
+    "r_advect_speed" => (run_info; normalize_advection_speed_shape=true, kwargs...) -> begin
+            # update_speed_r!() requires all dimensions to be present, so do *not* pass kwargs
+            # to get_variable() in this case. Instead select a slice of the result.
+            Ez = get_variable(run_info, "Ez")
+            vEr = get_variable(run_info, "vEr")
+            nz, nr, nt = size(Ez)
+            nspecies = run_info.n_ion_species
+            nvperp = run_info.vperp.n
+            nvpa = run_info.vpa.n
+
+            speed = allocate_float(nr, nvpa, nvperp, nz, nspecies, nt)
+            gEz = allocate_float(nvperp, nz, nr, nspecies, nt)
+            for it ∈ 1:nt, is ∈ 1:nspecies, ir ∈ 1:nr, iz ∈ 1:nz
+                # Don't support gyroaveraging here (yet)
+                gEz[:,iz,ir,is,it] .= Ez[iz,ir,it]
+            end
+
+            setup_distributed_memory_MPI(1,1,1,1)
+            setup_loop_ranges!(0, 1; s=nspecies, sn=run_info.n_neutral_species, r=nr, z=nz,
+                               vperp=nvperp, vpa=nvpa, vzeta=run_info.vzeta.n,
+                               vr=run_info.vr.n, vz=run_info.vz.n)
+            for it ∈ 1:nt, is ∈ 1:nspecies
+                @begin_serial_region()
+                # Only need some struct with a 'speed' variable
+                advect = (speed=@view(speed[:,:,:,:,is,it]),)
+                # Only need Er
+                fields = (gEz=@view(gEz[:,:,:,is,it]), vEr=@view(vEr[:,:,it]))
+                @views update_speed_r!(advect, fields, run_info.evolve_density,
+                                       run_info.evolve_upar, run_info.evolve_p, run_info.vpa,
+                                       run_info.vperp, run_info.z, run_info.r,
+                                       run_info.geometry, is)
+            end
+
+            # Horrible hack so that we can get the speed back without rearranging the
+            # dimensions, if we want that to pass it to a utility function from the main code
+            # (e.g. to calculate a CFL limit).
+            if normalize_advection_speed_shape
+                variable = allocate_float(nvpa, nvperp, nz, nr, nspecies, nt)
+                for it ∈ 1:nt, is ∈ 1:nspecies, ir ∈ 1:nr, iz ∈ 1:nz, ivperp ∈ 1:nvperp, ivpa ∈ 1:nvpa
+                    variable[ivpa,ivperp,iz,ir,is,it] = speed[ir,ivpa,ivperp,iz,is,it]
+                end
+                variable = select_slice_of_variable(variable; kwargs...)
+            else
+                variable = speed
+                if :it ∈ keys(kwargs)
+                    variable = selectdim(variable, 6, kwargs[:it])
+                end
+                if :is ∈ keys(kwargs)
+                    variable = selectdim(variable, 5, kwargs[:is])
+                end
+                if :iz ∈ keys(kwargs)
+                    variable = selectdim(variable, 4, kwargs[:iz])
+                end
+                if :ivperp ∈ keys(kwargs)
+                    variable = selectdim(variable, 3, kwargs[:ivperp])
+                end
+                if :ivpa ∈ keys(kwargs)
+                    variable = selectdim(variable, 2, kwargs[:ivpa])
+                end
+                if :ir ∈ keys(kwargs)
+                    variable = selectdim(variable, 1, kwargs[:ir])
+                end
+            end
+            return variable
+        end,
+    "z_advect_speed" => (run_info; normalize_advection_speed_shape=true, kwargs...) -> begin
+            # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
+            # to get_variable() in this case. Instead select a slice of the result.
+            upar = get_variable(run_info, "parallel_flow")
+            vth = get_variable(run_info, "thermal_speed")
+            nz, nr, nspecies, nt = size(upar)
+            nvperp = run_info.vperp.n
+            nvpa = run_info.vpa.n
+
+            speed = allocate_float(nz, nvpa, nvperp, nr, nspecies, nt)
+            Er = get_variable(run_info, "Er")
+            vEz = get_variable(run_info, "vEz")
+            gEr = allocate_float(nvperp, nz, nr, nspecies, nt)
+            for it ∈ 1:nt, is ∈ 1:nspecies, ir ∈ 1:nr, iz ∈ 1:nz
+                # Don't support gyroaveraging here (yet)
+                gEr[:,iz,ir,is,it] .= Er[iz,ir,it]
+            end
+
+            setup_distributed_memory_MPI(1,1,1,1)
+            setup_loop_ranges!(0, 1; s=nspecies, sn=run_info.n_neutral_species, r=nr, z=nz,
+                               vperp=nvperp, vpa=nvpa, vzeta=run_info.vzeta.n,
+                               vr=run_info.vr.n, vz=run_info.vz.n)
+            for it ∈ 1:nt, is ∈ 1:nspecies
+                @begin_serial_region()
+                # Only need some struct with a 'speed' variable
+                advect = (speed=@view(speed[:,:,:,:,is,it]),)
+                # Only need Er
+                fields = (gEr=@view(gEr[:,:,:,is,it]), vEz=@view(vEz[:,:,it]))
+                @views update_speed_z!(advect, upar[:,:,is,it], vth[:,:,is,it],
+                                       run_info.evolve_upar, run_info.evolve_p, fields,
+                                       run_info.vpa, run_info.vperp, run_info.z, run_info.r,
+                                       run_info.time[it], run_info.geometry, is)
+            end
+
+            # Horrible hack so that we can get the speed back without rearranging the
+            # dimensions, if we want that to pass it to a utility function from the main code
+            # (e.g. to calculate a CFL limit).
+            if normalize_advection_speed_shape
+                variable = allocate_float(nvpa, nvperp, nz, nr, nspecies, nt)
+                for it ∈ 1:nt, is ∈ 1:nspecies, ir ∈ 1:nr, iz ∈ 1:nz, ivperp ∈ 1:nvperp, ivpa ∈ 1:nvpa
+                    variable[ivpa,ivperp,iz,ir,is,it] = speed[iz,ivpa,ivperp,ir,is,it]
+                end
+                variable = select_slice_of_variable(variable; kwargs...)
+            else
+                variable = speed
+                if :it ∈ keys(kwargs)
+                    variable = selectdim(variable, 6, kwargs[:it])
+                end
+                if :is ∈ keys(kwargs)
+                    variable = selectdim(variable, 5, kwargs[:is])
+                end
+                if :ir ∈ keys(kwargs)
+                    variable = selectdim(variable, 4, kwargs[:ir])
+                end
+                if :ivperp ∈ keys(kwargs)
+                    variable = selectdim(variable, 3, kwargs[:ivperp])
+                end
+                if :ivpa ∈ keys(kwargs)
+                    variable = selectdim(variable, 2, kwargs[:ivpa])
+                end
+                if :iz ∈ keys(kwargs)
+                    variable = selectdim(variable, 1, kwargs[:iz])
+                end
+            end
+            return variable
+        end,
+    "vpa_advect_speed" => (run_info; kwargs...) -> begin
+            density = get_variable(run_info, "density"; kwargs...)
+            upar = get_variable(run_info, "parallel_flow"; kwargs...)
+            p = get_variable(run_info, "pressure"; kwargs...)
+            vth = get_variable(run_info, "thermal_speed"; kwargs...)
+            dupar_dr = get_r_derivative_of_loaded_variable(run_info, upar; kwargs...)
+            dupar_dz = get_z_derivative_of_loaded_variable(run_info, upar; kwargs...)
+            dp_dz = get_z_derivative_of_loaded_variable(run_info, p; kwargs...)
+            dvth_dr = get_r_derivative_of_loaded_variable(run_info, vth; kwargs...)
+            dvth_dz = get_z_derivative_of_loaded_variable(run_info, vth; kwargs...)
+            dqpar_dz = get_z_derivative(run_info, "parallel_heat_flux"; kwargs...)
+            dupar_dt = get_variable(run_info, "dupar_dt"; kwargs...)
+            dvth_dt = get_variable(run_info, "dvth_dt"; kwargs...)
+            if any(x -> x.active, run_info.external_source_settings.ion)
+                n_sources = length(run_info.external_source_settings.ion)
+                external_source_amplitude = get_variable(run_info, "external_source_amplitude")
+                if run_info.evolve_density
+                    external_source_density_amplitude = get_variable(run_info, "external_source_density_amplitude")
+                else
+                    external_source_density_amplitude = zeros(0,0,n_sources,run_info.nt)
+                end
+                if run_info.evolve_upar
+                    external_source_momentum_amplitude = get_variable(run_info, "external_source_momentum_amplitude")
+                else
+                    external_source_momentum_amplitude = zeros(0,0,n_sources,run_info.nt)
+                end
+                if run_info.evolve_p
+                    external_source_pressure_amplitude = get_variable(run_info, "external_source_pressure_amplitude")
+                else
+                    external_source_pressure_amplitude = zeros(0,0,n_sources,run_info.nt)
+                end
+            else
+                n_sources = 0
+                external_source_amplitude = zeros(0,0,n_sources,run_info.nt)
+                external_source_density_amplitude = zeros(0,0,n_sources,run_info.nt)
+                external_source_momentum_amplitude = zeros(0,0,n_sources,run_info.nt)
                 external_source_pressure_amplitude = zeros(0,0,n_sources,run_info.nt)
             end
-        else
-            n_sources = 0
-            external_source_amplitude = zeros(0,0,n_sources,run_info.nt)
-            external_source_density_amplitude = zeros(0,0,n_sources,run_info.nt)
-            external_source_momentum_amplitude = zeros(0,0,n_sources,run_info.nt)
-            external_source_pressure_amplitude = zeros(0,0,n_sources,run_info.nt)
-        end
 
-        nz, nr, nspecies, nt = size(vth)
-        nvperp = run_info.vperp.n
-        nvpa = run_info.vpa.n
+            nz, nr, nspecies, nt = size(vth)
+            nvperp = run_info.vperp.n
+            nvpa = run_info.vpa.n
 
-        # update_speed_vpa!() requires all dimensions to be present, so do *not* pass
-        # kwargs to get_variable() in this case. Instead select a slice of the result.
-        Ez = get_variable(run_info, "Ez")
-        gEz = allocate_float(nvperp, nz, nr, nspecies, nt)
-        for it ∈ 1:nt, is ∈ 1:nspecies, ir ∈ 1:nr, iz ∈ 1:nz
-            # Don't support gyroaveraging here (yet)
-            gEz[:,iz,ir,is,it] .= Ez[iz,ir,it]
-        end
+            # update_speed_vpa!() requires all dimensions to be present, so do *not* pass
+            # kwargs to get_variable() in this case. Instead select a slice of the result.
+            Ez = get_variable(run_info, "Ez")
+            gEz = allocate_float(nvperp, nz, nr, nspecies, nt)
+            for it ∈ 1:nt, is ∈ 1:nspecies, ir ∈ 1:nr, iz ∈ 1:nz
+                # Don't support gyroaveraging here (yet)
+                gEz[:,iz,ir,is,it] .= Ez[iz,ir,it]
+            end
 
-        speed=allocate_float(nvpa, nvperp, nz, nr, nspecies, nt)
-        setup_distributed_memory_MPI(1,1,1,1)
-        setup_loop_ranges!(0, 1; s=nspecies, sn=run_info.n_neutral_species, r=nr, z=nz,
-                           vperp=nvperp, vpa=nvpa, vzeta=run_info.vzeta.n,
-                           vr=run_info.vr.n, vz=run_info.vz.n)
+            speed=allocate_float(nvpa, nvperp, nz, nr, nspecies, nt)
+            setup_distributed_memory_MPI(1,1,1,1)
+            setup_loop_ranges!(0, 1; s=nspecies, sn=run_info.n_neutral_species, r=nr, z=nz,
+                               vperp=nvperp, vpa=nvpa, vzeta=run_info.vzeta.n,
+                               vr=run_info.vr.n, vz=run_info.vz.n)
 
-        r_speed = get_variable(run_info, "r_advect_speed";
-                               normalize_advection_speed_shape=false, kwargs...)
-        z_speed = get_variable(run_info, "z_advect_speed";
-                               normalize_advection_speed_shape=false, kwargs...)
-        
-        # Use neutrals for fvec calculation in moment_kinetic version only when 
-        # n_neutrals != 0
-        if run_info.n_neutral_species != 0
-            density_neutral = get_variable(run_info, "density_neutral")
-            uz_neutral = get_variable(run_info, "uz_neutral")
-            p_neutral = get_variable(run_info, "p_neutral")
-        end
-
-        for it ∈ 1:nt
-            @begin_serial_region()
-            # Only need some struct with a 'speed' variable
-            advect = [(speed=@view(speed[:,:,:,:,is,it]),) for is ∈ 1:nspecies]
-            r_advect = [(speed=@view(r_speed[:,:,:,:,is,it]),) for is ∈ 1:nspecies]
-            z_advect = [(speed=@view(z_speed[:,:,:,:,is,it]),) for is ∈ 1:nspecies]
-            # Only need Ez
-            fields = (gEz=@view(gEz[:,:,:,:,it]), Ez=@view(Ez[:,:,it]))
-            @views moments = (ion=(dp_dz=dp_dz[:,:,:,it],
-                                   dupar_dr=dupar_dr[:,:,:,it],
-                                   dupar_dz=dupar_dz[:,:,:,it],
-                                   dvth_dr=dvth_dr[:,:,:,it],
-                                   dvth_dz=dvth_dz[:,:,:,it],
-                                   dqpar_dz=dqpar_dz[:,:,:,it],
-                                   vth=vth[:,:,:,it],
-                                   dupar_dt=dupar_dt[:,:,:,it],
-                                   dvth_dt=dvth_dt[:,:,:,it],
-                                   external_source_amplitude=external_source_amplitude[:,:,:,it],
-                                   external_source_density_amplitude=external_source_density_amplitude[:,:,:,it],
-                                   external_source_momentum_amplitude=external_source_momentum_amplitude[:,:,:,it],
-                                   external_source_pressure_amplitude=external_source_pressure_amplitude[:,:,:,it]),
-                             evolve_density=run_info.evolve_density,
-                             evolve_upar=run_info.evolve_upar,
-                             evolve_p=run_info.evolve_p)
+            r_speed = get_variable(run_info, "r_advect_speed";
+                                   normalize_advection_speed_shape=false, kwargs...)
+            z_speed = get_variable(run_info, "z_advect_speed";
+                                   normalize_advection_speed_shape=false, kwargs...)
+            
+            # Use neutrals for fvec calculation in moment_kinetic version only when 
+            # n_neutrals != 0
             if run_info.n_neutral_species != 0
+                density_neutral = get_variable(run_info, "density_neutral")
+                uz_neutral = get_variable(run_info, "uz_neutral")
+                p_neutral = get_variable(run_info, "p_neutral")
+            end
+
+            for it ∈ 1:nt
+                @begin_serial_region()
+                # Only need some struct with a 'speed' variable
+                advect = [(speed=@view(speed[:,:,:,:,is,it]),) for is ∈ 1:nspecies]
+                r_advect = [(speed=@view(r_speed[:,:,:,:,is,it]),) for is ∈ 1:nspecies]
+                z_advect = [(speed=@view(z_speed[:,:,:,:,is,it]),) for is ∈ 1:nspecies]
+                # Only need Ez
+                fields = (gEz=@view(gEz[:,:,:,:,it]), Ez=@view(Ez[:,:,it]))
+                @views moments = (ion=(dp_dz=dp_dz[:,:,:,it],
+                                       dupar_dr=dupar_dr[:,:,:,it],
+                                       dupar_dz=dupar_dz[:,:,:,it],
+                                       dvth_dr=dvth_dr[:,:,:,it],
+                                       dvth_dz=dvth_dz[:,:,:,it],
+                                       dqpar_dz=dqpar_dz[:,:,:,it],
+                                       vth=vth[:,:,:,it],
+                                       dupar_dt=dupar_dt[:,:,:,it],
+                                       dvth_dt=dvth_dt[:,:,:,it],
+                                       external_source_amplitude=external_source_amplitude[:,:,:,it],
+                                       external_source_density_amplitude=external_source_density_amplitude[:,:,:,it],
+                                       external_source_momentum_amplitude=external_source_momentum_amplitude[:,:,:,it],
+                                       external_source_pressure_amplitude=external_source_pressure_amplitude[:,:,:,it]),
+                                 evolve_density=run_info.evolve_density,
+                                 evolve_upar=run_info.evolve_upar,
+                                 evolve_p=run_info.evolve_p)
+                if run_info.n_neutral_species != 0
+                    @views fvec = (density=density[:,:,:,it],
+                                   upar=upar[:,:,:,it],
+                                   p=p[:,:,:,it],
+                                   density_neutral=density_neutral[:,:,:,it],
+                                   uz_neutral=uz_neutral[:,:,:,it],
+                                   p_neutral=p_neutral[:,:,:,it])
+                else
+                    @views fvec = (density=density[:,:,:,it],
+                                   upar=upar[:,:,:,it],
+                                   p=p[:,:,:,it])
+                end
+                @views update_speed_vpa!(advect, fields, fvec, moments, r_advect, z_advect,
+                                         run_info.vpa, run_info.vperp, run_info.z, run_info.r,
+                                         run_info.composition, run_info.collisions,
+                                         run_info.external_source_settings.ion,
+                                         run_info.time[it], run_info.geometry)
+            end
+
+            variable = speed
+            variable = select_slice_of_variable(variable; kwargs...)
+            return variable
+        end,
+     "electron_z_advect_speed" => (run_info; normalize_advection_speed_shape, kwargs...) -> begin
+            # update_speed_electron_z!() requires all dimensions to be present, so do *not*
+            # pass kwargs to get_variable() in this case. Instead select a slice of the
+            # result.
+            upar = get_variable(run_info, "electron_parallel_flow")
+            vth = get_variable(run_info, "electron_thermal_speed")
+            nz, nr, nt = size(upar)
+            nvperp = run_info.vperp.n
+            nvpa = run_info.vpa.n
+
+            speed = allocate_float(nz, nvpa, nvperp, nr, nt)
+
+            setup_distributed_memory_MPI(1,1,1,1)
+            setup_loop_ranges!(0, 1; s=run_info.n_ion_species, sn=run_info.n_neutral_species,
+                               r=nr, z=nz,
+                               vperp=(run_info.vperp === nothing ? 1 : run_info.vperp.n),
+                               vpa=(run_info.vpa === nothing ? 1 : run_info.vpa.n),
+                               vzeta=(run_info.vzeta === nothing ? 1 : run_info.vzeta.n),
+                               vr=(run_info.vr === nothing ? 1 : run_info.vr.n),
+                               vz=(run_info.vz === nothing ? 1 : run_info.vz.n))
+            for it ∈ 1:nt
+                @begin_r_anyzv_region()
+                # Only need some struct with a 'speed' variable
+                advect = (speed=@view(speed[:,:,:,:,it]),)
+                @loop_r ir begin
+                    @views update_electron_speed_z!(advect, upar[:,ir,it], vth[:,ir,it],
+                                                    run_info.vpa.grid, ir)
+                end
+            end
+
+            # Horrible hack so that we can get the speed back without rearranging the
+            # dimensions, if we want that to pass it to a utility function from the main code
+            # (e.g. to calculate a CFL limit).
+            if normalize_advection_speed_shape
+                variable = allocate_float(nvpa, nvperp, nz, nr, nspecies, nt)
+                for it ∈ 1:nt, ir ∈ 1:nr, iz ∈ 1:nz, ivperp ∈ 1:nvperp, ivpa ∈ 1:nvpa
+                    variable[ivpa,ivperp,iz,ir,it] = speed[iz,ivpa,ivperp,ir,it]
+                end
+                variable = select_slice_of_variable(variable; kwargs...)
+            else
+                variable = speed
+                if :it ∈ keys(kwargs)
+                    variable = selectdim(variable, 5, kwargs[:it])
+                end
+                if :ir ∈ keys(kwargs)
+                    variable = selectdim(variable, 4, kwargs[:ir])
+                end
+                if :ivperp ∈ keys(kwargs)
+                    variable = selectdim(variable, 3, kwargs[:ivperp])
+                end
+                if :ivpa ∈ keys(kwargs)
+                    variable = selectdim(variable, 2, kwargs[:ivpa])
+                end
+                if :iz ∈ keys(kwargs)
+                    variable = selectdim(variable, 1, kwargs[:iz])
+                end
+            end
+            return variable
+        end,
+    "electron_vpa_advect_speed" => (run_info; kwargs...) -> begin
+            # update_speed_electron_vpa!() requires all dimensions to be present, so do *not*
+            # pass kwargs to get_variable() in this case. Instead select a slice of the
+            # result.
+            density = get_variable(run_info, "electron_density"; kwargs...)
+            upar = get_variable(run_info, "electron_parallel_flow"; kwargs...)
+            p = get_variable(run_info, "electron_pressure"; kwargs...)
+            ppar = get_variable(run_info, "electron_parallel_pressure"; kwargs...)
+            vth = get_variable(run_info, "electron_thermal_speed"; kwargs...)
+            dp_dz = get_z_derivative_of_loaded_variable(run_info, p; kwargs...)
+            dppar_dz = get_z_derivative_of_loaded_variable(run_info, ppar; kwargs...)
+            dvth_dz = get_z_derivative_of_loaded_variable(run_info, vth; kwargs...)
+            dqpar_dz = get_z_derivative(run_info, "electron_parallel_heat_flux"; kwargs...)
+            if any(x -> x.active, run_info.external_source_settings.electron)
+                n_sources = length(run_info.external_source_settings.electron)
+                external_source_amplitude = get_variable(run_info, "external_source_electron_amplitude"; kwargs...)
+                external_source_density_amplitude = get_variable(run_info, "external_source_electron_density_amplitude"; kwargs...)
+                external_source_momentum_amplitude = get_variable(run_info, "external_source_electron_momentum_amplitude"; kwargs...)
+                external_source_pressure_amplitude = get_variable(run_info, "external_source_electron_pressure_amplitude"; kwargs...)
+            else
+                n_sources = 0
+                external_source_amplitude = zeros(0,0,n_sources,run_info.nt)
+                external_source_density_amplitude = zeros(0,0,n_sources,run_info.nt)
+                external_source_momentum_amplitude = zeros(0,0,n_sources,run_info.nt)
+                external_source_pressure_amplitude = zeros(0,0,n_sources,run_info.nt)
+            end
+
+            nz, nr, nt = size(vth)
+            nvperp = run_info.vperp.n
+            nvpa = run_info.vpa.n
+
+            speed=allocate_float(nvpa, nvperp, nz, nr, nt)
+            setup_distributed_memory_MPI(1,1,1,1)
+            setup_loop_ranges!(0, 1; s=run_info.n_ion_species, sn=run_info.n_neutral_species,
+                               r=nr, z=nz,
+                               vperp=(run_info.vperp === nothing ? 1 : run_info.vperp.n),
+                               vpa=(run_info.vpa === nothing ? 1 : run_info.vpa.n),
+                               vzeta=(run_info.vzeta === nothing ? 1 : run_info.vzeta.n),
+                               vr=(run_info.vr === nothing ? 1 : run_info.vr.n),
+                               vz=(run_info.vz === nothing ? 1 : run_info.vz.n))
+            for it ∈ 1:nt
+                @begin_serial_region()
+                # Only need some struct with a 'speed' variable
+                advect = (speed=@view(speed[:,:,:,:,it]),)
+                moments = (electron=(ppar=ppar[:,:,it],
+                                     vth=vth[:,:,it],
+                                     dp_dz=dp_dz[:,:,it],
+                                     dppar_dz=dppar_dz[:,:,it],
+                                     dqpar_dz=dqpar_dz[:,:,it],
+                                     dvth_dz=dvth_dz[:,:,it],
+                                     external_source_amplitude=external_source_amplitude[:,:,:,it],
+                                     external_source_density_amplitude=external_source_density_amplitude[:,:,:,it],
+                                     external_source_momentum_amplitude=external_source_momentum_amplitude[:,:,:,it],
+                                     external_source_pressure_amplitude=external_source_pressure_amplitude[:,:,:,it]),)
+                @views update_electron_speed_vpa!(advect, density[:,:,it], upar[:,:,it],
+                                                  p[:,:,it], moments,
+                                                  run_info.composition.me_over_mi,
+                                                  run_info.vpa.grid,
+                                                  run_info.external_source_settings.electron)
+            end
+
+            variable = speed
+            variable = select_slice_of_variable(variable; kwargs...)
+            return variable
+        end,
+    "neutral_z_advect_speed" => (run_info; normalize_advection_speed_shape, kwargs...) -> begin
+            # update_speed_neutral_z!() requires all dimensions to be present, so do *not*
+            # pass kwargs to get_variable() in this case. Instead select a slice of the
+            # result.
+            uz = get_variable(run_info, "parallel_flow")
+            vth = get_variable(run_info, "thermal_speed_neutral")
+            nz, nr, nspecies, nt = size(uz)
+            nvzeta = run_info.vzeta.n
+            nvr = run_info.vr.n
+            nvz = run_info.vz.n
+
+            speed = allocate_float(nz, nvz, nvr, nvzeta, nr, nspecies, nt)
+
+            setup_distributed_memory_MPI(1,1,1,1)
+            setup_loop_ranges!(0, 1; s=nspecies, sn=run_info.n_neutral_species, r=nr, z=nz,
+                               vperp=run_info.vperp.n, vpa=run_info.vpa.n, vzeta=nvzeta,
+                               vr=nvr, vz=nvz)
+            for it ∈ 1:nt, isn ∈ 1:nspecies
+                @begin_serial_region()
+                # Only need some struct with a 'speed' variable
+                advect = (speed=@view(speed[:,:,:,:,:,isn,it]),)
+                @views update_speed_neutral_z!(advect, uz[:,:,:,it], vth[:,:,:,it],
+                                               run_info.evolve_upar, run_info.evolve_p,
+                                               run_info.vz, run_info.vr, run_info.vzeta,
+                                               run_info.z, run_info.r, run_info.time[it])
+            end
+
+            # Horrible hack so that we can get the speed back without rearranging the
+            # dimensions, if we want that to pass it to a utility function from the main code
+            # (e.g. to calculate a CFL limit).
+            if normalize_advection_speed_shape
+                variable = allocate_float(nvz, nvr, nvzeta, nz, nr, nspecies, nt)
+                for it ∈ 1:nt, isn ∈ 1:nspecies, ir ∈ 1:nr, iz ∈ 1:nz, ivzeta ∈ 1:nvzeta, ivr ∈ 1:nvr, ivz ∈ 1:nvz
+                    variable[ivz,ivr,ivzeta,iz,ir,isn,it] = speed[iz,ivz,ivr,ivzeta,ir,isn,it]
+                end
+                variable = select_slice_of_variable(variable; kwargs...)
+            else
+                variable = speed
+                if :it ∈ keys(kwargs)
+                    variable = selectdim(variable, 7, kwargs[:it])
+                end
+                if :is ∈ keys(kwargs)
+                    variable = selectdim(variable, 6, kwargs[:is])
+                end
+                if :ir ∈ keys(kwargs)
+                    variable = selectdim(variable, 5, kwargs[:ir])
+                end
+                if :ivzeta ∈ keys(kwargs)
+                    variable = selectdim(variable, 4, kwargs[:ivzeta])
+                end
+                if :ivr ∈ keys(kwargs)
+                    variable = selectdim(variable, 3, kwargs[:ivr])
+                end
+                if :ivz ∈ keys(kwargs)
+                    variable = selectdim(variable, 2, kwargs[:ivz])
+                end
+                if :iz ∈ keys(kwargs)
+                    variable = selectdim(variable, 1, kwargs[:iz])
+                end
+            end
+            return variable
+        end,
+    "neutral_vz_advect_speed" => (run_info; kwargs...) -> begin
+            # update_speed_neutral_vz!() requires all dimensions to be present, so do *not*
+            # pass kwargs to get_variable() in this case. Instead select a slice of the
+            # result.
+            Ez = get_variable(run_info, "Ez"; kwargs...)
+            density = get_variable(run_info, "density"; kwargs...)
+            upar = get_variable(run_info, "parallel_flow"; kwargs...)
+            p = get_variable(run_info, "pressure"; kwargs...)
+            density_neutral = get_variable(run_info, "density_neutral"; kwargs...)
+            uz_neutral = get_variable(run_info, "uz_neutral"; kwargs...)
+            p_neutral = get_variable(run_info, "p_neutral"; kwargs...)
+            vth = get_variable(run_info, "thermal_speed_neutral"; kwargs...)
+            duz_dz = get_z_derivative_of_loaded_variable(run_info, uz_neutral; kwargs...)
+            dp_dz = get_z_derivative_of_loaded_variable(run_info, p_neutral; kwargs...)
+            dvth_dz = get_z_derivative_of_loaded_variable(run_info, vth; kwargs...)
+            dqz_dz = get_z_derivative(run_info, "qz_neutral"; kwargs...)
+            dp_dt = get_variable(run_info, "p_neutral")
+            duz_dt = get_variable(run_info, "uz_neutral")
+            dvth_dt = get_variable(run_info, "thermal_speed_neutral")
+            if any(x -> x.active, run_info.external_source_settings.neutral)
+                n_sources = length(run_info.external_source_settings.neutral)
+                external_source_amplitude = get_variable(run_info, "external_source_neutral_amplitude"; kwargs...)
+                if run_info.evolve_density
+                    external_source_density_amplitude = get_variable(run_info, "external_source_neutral_density_amplitude"; kwargs...)
+                else
+                    external_source_density_amplitude = zeros(0,0,n_sources,run_info.nt)
+                end
+                if run_info.evolve_upar
+                    external_source_momentum_amplitude = get_variable(run_info, "external_source_neutral_momentum_amplitude"; kwargs...)
+                else
+                    external_source_momentum_amplitude = zeros(0,0,n_sources,run_info.nt)
+                end
+                if run_info.evolve_p
+                    external_source_pressure_amplitude = get_variable(run_info, "external_source_neutral_pressure_amplitude"; kwargs...)
+                else
+                    external_source_pressure_amplitude = zeros(0,0,n_sources,run_info.nt)
+                end
+            else
+                n_sources = 0
+                external_source_amplitude = zeros(0,0,n_sources,run_info.nt)
+                external_source_density_amplitude = zeros(0,0,n_sources,run_info.nt)
+                external_source_momentum_amplitude = zeros(0,0,n_sources,run_info.nt)
+                external_source_pressure_amplitude = zeros(0,0,n_sources,run_info.nt)
+            end
+
+            nz, nr, nspecies, nt = size(vth)
+            nvzeta = run_info.vzeta.n
+            nvr = run_info.vr.n
+            nvz = run_info.vz.n
+            speed = allocate_float(nvz, nvr, nvzeta, nz, nr, nspecies, nt)
+
+            setup_distributed_memory_MPI(1,1,1,1)
+            setup_loop_ranges!(0, 1; s=nspecies, sn=run_info.n_neutral_species, r=nr, z=nz,
+                               vperp=run_info.vperp.n, vpa=run_info.vpa.n, vzeta=nvzeta,
+                               vr=nvr, vz=nvz)
+            for it ∈ 1:nt
+                @begin_serial_region()
+                # Only need some struct with a 'speed' variable
+                advect = [(speed=@view(speed[:,:,:,:,:,isn,it]),) for isn ∈ 1:nspecies]
+                # Don't actually use `fields` at the moment
+                fields = nothing
                 @views fvec = (density=density[:,:,:,it],
                                upar=upar[:,:,:,it],
                                p=p[:,:,:,it],
                                density_neutral=density_neutral[:,:,:,it],
                                uz_neutral=uz_neutral[:,:,:,it],
                                p_neutral=p_neutral[:,:,:,it])
-            else
-                @views fvec = (density=density[:,:,:,it],
-                               upar=upar[:,:,:,it],
-                               p=p[:,:,:,it])
+                @views moments = (neutral=(dp_dz=dp_dz[:,:,:,it],
+                                           duz_dz=duz_dz[:,:,:,it],
+                                           dvth_dz=dvth_dz[:,:,:,it],
+                                           dqz_dz=dqz_dz[:,:,:,it],
+                                           vth=vth[:,:,:,it],
+                                           dp_dt=dp_dt[:,:,:,it],
+                                           duz_dt=duz_dt[:,:,:,it],
+                                           dvth_dt=dvth_dt[:,:,:,it],
+                                           external_source_amplitude=external_source_amplitude[:,:,:,it],
+                                           external_source_density_amplitude=external_source_density_amplitude[:,:,:,it],
+                                           external_source_momentum_amplitude=external_source_momentum_amplitude[:,:,:,it],
+                                           external_source_pressure_amplitude=external_source_pressure_amplitude[:,:,:,it]),
+                                 evolve_density=run_info.evolve_density,
+                                 evolve_upar=run_info.evolve_upar,
+                                 evolve_p=run_info.evolve_p)
+                @views update_speed_neutral_vz!(advect, fields, fvec, moments,
+                                                run_info.vz, run_info.vr, run_info.vzeta,
+                                                run_info.z, run_info.r, run_info.composition,
+                                                run_info.collisions,
+                                                run_info.external_source_settings.neutral)
             end
-            @views update_speed_vpa!(advect, fields, fvec, moments, r_advect, z_advect,
-                                     run_info.vpa, run_info.vperp, run_info.z, run_info.r,
-                                     run_info.composition, run_info.collisions,
-                                     run_info.external_source_settings.ion,
-                                     run_info.time[it], run_info.geometry)
-        end
 
-        variable = speed
-        variable = select_slice_of_variable(variable; kwargs...)
-     elseif variable_name == :electron_z_advect_speed
-        # update_speed_electron_z!() requires all dimensions to be present, so do *not*
-        # pass kwargs to get_variable() in this case. Instead select a slice of the
-        # result.
-        upar = get_variable(run_info, "electron_parallel_flow")
-        vth = get_variable(run_info, "electron_thermal_speed")
-        nz, nr, nt = size(upar)
-        nvperp = run_info.vperp.n
-        nvpa = run_info.vpa.n
+            variable = speed
+            variable = select_slice_of_variable(variable; kwargs...)
+            return variable
+        end,
+    "steps_per_output" => (run_info; kwargs...) -> begin
+            variable = get_per_step_from_cumulative_variable(run_info, "step_counter"; kwargs...)
+            return variable
+        end,
+    "failures_per_output" => (run_info; kwargs...) -> begin
+            variable = get_per_step_from_cumulative_variable(run_info, "failure_counter"; kwargs...)
+            return variable
+        end,
+    "failure_caused_by_per_output" => (run_info; kwargs...) -> begin
+            variable = get_per_step_from_cumulative_variable(run_info, "failure_caused_by"; kwargs...)
+            return variable
+        end,
+    "limit_caused_by_per_output" => (run_info; kwargs...) -> begin
+            variable = get_per_step_from_cumulative_variable(run_info, "limit_caused_by"; kwargs...)
+            return variable
+        end,
+    "average_successful_dt" => (run_info; kwargs...) -> begin
+            steps_per_output = get_variable(run_info, "steps_per_output"; kwargs...)
+            failures_per_output = get_variable(run_info, "failures_per_output"; kwargs...)
+            successful_steps_per_output = steps_per_output - failures_per_output
 
-        speed = allocate_float(nz, nvpa, nvperp, nr, nt)
-
-        setup_distributed_memory_MPI(1,1,1,1)
-        setup_loop_ranges!(0, 1; s=run_info.n_ion_species, sn=run_info.n_neutral_species,
-                           r=nr, z=nz,
-                           vperp=(run_info.vperp === nothing ? 1 : run_info.vperp.n),
-                           vpa=(run_info.vpa === nothing ? 1 : run_info.vpa.n),
-                           vzeta=(run_info.vzeta === nothing ? 1 : run_info.vzeta.n),
-                           vr=(run_info.vr === nothing ? 1 : run_info.vr.n),
-                           vz=(run_info.vz === nothing ? 1 : run_info.vz.n))
-        for it ∈ 1:nt
-            @begin_r_anyzv_region()
-            # Only need some struct with a 'speed' variable
-            advect = (speed=@view(speed[:,:,:,:,it]),)
-            @loop_r ir begin
-                @views update_electron_speed_z!(advect, upar[:,ir,it], vth[:,ir,it],
-                                                run_info.vpa.grid, ir)
+            delta_t = copy(run_info.time)
+            for i ∈ length(delta_t):-1:2
+                delta_t[i] -= delta_t[i-1]
             end
-        end
 
-        # Horrible hack so that we can get the speed back without rearranging the
-        # dimensions, if we want that to pass it to a utility function from the main code
-        # (e.g. to calculate a CFL limit).
-        if normalize_advection_speed_shape
+            variable = delta_t ./ successful_steps_per_output
+            for i ∈ eachindex(successful_steps_per_output)
+                if successful_steps_per_output[i] == 0
+                    variable[i] = 0.0
+                end
+            end
+            if successful_steps_per_output[1] == 0
+                # Don't want a meaningless Inf...
+                variable[1] = 0.0
+            end
+            return variable
+        end,
+    "electron_steps_per_ion_step" => (run_info; kwargs...) -> begin
+            electron_steps_per_output = get_variable(run_info, "electron_steps_per_output"; kwargs...)
+            ion_steps_per_output = get_variable(run_info, "steps_per_output"; kwargs...)
+            variable = electron_steps_per_output ./
+                       reshape(ion_steps_per_output,
+                               (1 for _ ∈ 1:(ndims(electron_steps_per_output)-ndims(ion_steps_per_output)))...,
+                               size(ion_steps_per_output)...)
+            return variable
+        end,
+    "electron_steps_per_output" => (run_info; kwargs...) -> begin
+            variable = get_per_step_from_cumulative_variable(run_info, "electron_step_counter"; kwargs...)
+            return variable
+        end,
+    "electron_failures_per_output" => (run_info; kwargs...) -> begin
+            variable = get_per_step_from_cumulative_variable(run_info, "electron_failure_counter"; kwargs...)
+            return variable
+        end,
+    "electron_failure_caused_by_per_output" => (run_info; kwargs...) -> begin
+            variable = get_per_step_from_cumulative_variable(run_info, "electron_failure_caused_by"; kwargs...)
+            return variable
+        end,
+    "electron_limit_caused_by_per_output" => (run_info; kwargs...) -> begin
+            variable = get_per_step_from_cumulative_variable(run_info, "electron_limit_caused_by"; kwargs...)
+            return variable
+        end,
+    "electron_average_successful_dt" => (run_info; kwargs...) -> begin
+            electron_steps_per_output = get_variable(run_info, "electron_steps_per_output"; kwargs...)
+            electron_failures_per_output = get_variable(run_info, "electron_failures_per_output"; kwargs...)
+            electron_successful_steps_per_output = electron_steps_per_output - electron_failures_per_output
+            electron_pseudotime = get_variable(run_info, "electron_cumulative_pseudotime"; kwargs...)
+
+            delta_t = copy(electron_pseudotime)
+            for i ∈ length(delta_t):-1:2
+                delta_t[i] -= delta_t[i-1]
+            end
+
+            variable = delta_t ./ electron_successful_steps_per_output
+            for i ∈ eachindex(electron_successful_steps_per_output)
+                if electron_successful_steps_per_output[i] == 0
+                    variable[i] = 0.0
+                end
+            end
+            if electron_successful_steps_per_output[1] == 0
+                # Don't want a meaningless Inf...
+                variable[1] = 0.0
+            end
+            return variable
+        end,
+    "CFL_ion_r" => (run_info; kwargs...) -> begin
+            # update_speed_r!() requires all dimensions to be present, so do *not* pass kwargs
+            # to get_variable() in this case. Instead select a slice of the result.
+            speed = get_variable(run_info, "r_advect_speed";
+                                 normalize_advection_speed_shape=false)
+            nr, nvpa, nvperp, nz, nspecies, nt = size(speed)
+            CFL = similar(speed)
+            for it ∈ 1:nt
+                @views get_CFL!(CFL[:,:,:,:,:,it], speed[:,:,:,:,:,it], run_info.r)
+            end
+
             variable = allocate_float(nvpa, nvperp, nz, nr, nspecies, nt)
+            for it ∈ 1:nt, is ∈ 1:nspecies, ir ∈ 1:nr, iz ∈ 1:nz, ivperp ∈ 1:nvperp, ivpa ∈ 1:nvpa
+                variable[ivpa,ivperp,iz,ir,is,it] = CFL[ir,ivpa,ivperp,iz,is,it]
+            end
+            variable = select_slice_of_variable(variable; kwargs...)
+            return variable
+        end,
+    "CFL_ion_z" => (run_info; kwargs...) -> begin
+            # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
+            # to get_variable() in this case. Instead select a slice of the result.
+            speed = get_variable(run_info, "z_advect_speed";
+                                 normalize_advection_speed_shape=false)
+            nz, nvpa, nvperp, nr, nspecies, nt = size(speed)
+            CFL = similar(speed)
+            for it ∈ 1:nt
+                @views get_CFL!(CFL[:,:,:,:,:,it], speed[:,:,:,:,:,it], run_info.z)
+            end
+
+            variable = allocate_float(nvpa, nvperp, nz, nr, nspecies, nt)
+            for it ∈ 1:nt, is ∈ 1:nspecies, ir ∈ 1:nr, iz ∈ 1:nz, ivperp ∈ 1:nvperp, ivpa ∈ 1:nvpa
+                variable[ivpa,ivperp,iz,ir,is,it] = CFL[iz,ivpa,ivperp,ir,is,it]
+            end
+            variable = select_slice_of_variable(variable; kwargs...)
+            return variable
+        end,
+    "CFL_ion_vpa" => (run_info; kwargs...) -> begin
+            # update_speed_vpa!() requires all dimensions to be present, so do *not* pass
+            # kwargs to get_variable() in this case. Instead select a slice of the result.
+            speed = get_variable(run_info, "vpa_advect_speed")
+            nt = size(speed, 6)
+            CFL = similar(speed)
+            for it ∈ 1:nt
+                @views get_CFL!(CFL[:,:,:,:,:,it], speed[:,:,:,:,:,it], run_info.vpa)
+            end
+
+            variable = CFL
+            variable = select_slice_of_variable(variable; kwargs...)
+            return variable
+        end,
+    "CFL_ion_vperp" => (run_info; kwargs...) -> begin
+            # update_speed_vperp!() requires all dimensions to be present, so do *not* pass
+            # kwargs to get_variable() in this case. Instead select a slice of the result.
+            speed = get_variable(run_info, "vperp_advect_speed";
+                                 normalize_advection_speed_shape=false)
+            nvperp, nvpa, nz, nr, nspecies, nt = size(speed)
+            CFL = similar(speed)
+            for it ∈ 1:nt
+                @views get_CFL!(CFL[:,:,:,:,:,it], speed[:,:,:,:,:,it], run_info.vperp)
+            end
+
+            variable = allocate_float(nvpa, nvperp, nz, nr, nspecies, nt)
+            for it ∈ 1:nt, is ∈ 1:nspecies, ir ∈ 1:nr, iz ∈ 1:nz, ivperp ∈ 1:nvperp, ivpa ∈ 1:nvpa
+                variable[ivpa,ivperp,iz,ir,is,it] = CFL[ivperp,ivpa,iz,ir,is,it]
+            end
+            variable = select_slice_of_variable(variable; kwargs...)
+            return variable
+        end,
+    "CFL_electron_z" => (run_info; kwargs...) -> begin
+            # update_speed_electron_z!() requires all dimensions to be present, so do *not*
+            # pass kwargs to get_variable() in this case. Instead select a slice of the
+            # result.
+            speed = get_variable(run_info, "electron_z_advect_speed";
+                                 normalize_advection_speed_shape=false)
+            nz, nvpa, nvperp, nr, nt = size(speed)
+            CFL = similar(speed)
+            for it ∈ 1:nt
+                @views get_CFL!(CFL[:,:,:,:,it], speed[:,:,:,:,it], run_info.z)
+            end
+
+            variable = allocate_float(nvpa, nvperp, nz, nr, nt)
             for it ∈ 1:nt, ir ∈ 1:nr, iz ∈ 1:nz, ivperp ∈ 1:nvperp, ivpa ∈ 1:nvpa
-                variable[ivpa,ivperp,iz,ir,it] = speed[iz,ivpa,ivperp,ir,it]
+                variable[ivpa,ivperp,iz,ir,it] = CFL[iz,ivpa,ivperp,ir,it]
             end
             variable = select_slice_of_variable(variable; kwargs...)
-        else
-            variable = speed
-            if :it ∈ keys(kwargs)
-                variable = selectdim(variable, 5, kwargs[:it])
+            return variable
+        end,
+    "CFL_electron_vpa" => (run_info; kwargs...) -> begin
+            # update_speed_electron_vpa!() requires all dimensions to be present, so do *not*
+            # pass kwargs to get_variable() in this case. Instead select a slice of the
+            # result.
+            speed = get_variable(run_info, "electron_vpa_advect_speed")
+            nt = size(speed, 5)
+            CFL = similar(speed)
+            for it ∈ 1:nt
+                @views get_CFL!(CFL[:,:,:,:,it], speed[:,:,:,:,it], run_info.vpa)
             end
-            if :ir ∈ keys(kwargs)
-                variable = selectdim(variable, 4, kwargs[:ir])
+
+            variable = CFL
+            variable = select_slice_of_variable(variable; kwargs...)
+            return variable
+        end,
+    "CFL_neutral_z" => (run_info; kwargs...) -> begin
+            # update_speed_neutral_z!() requires all dimensions to be present, so do *not*
+            # pass kwargs to get_variable() in this case. Instead select a slice of the
+            # result.
+            speed = get_variable(run_info, "neutral_z_advect_speed";
+                                 normalize_advection_speed_shape=false)
+            nz, nvz, nvr, nvzeta, nr, nspecies, nt = size(speed)
+            CFL = similar(speed)
+            for it ∈ 1:nt
+                @views get_CFL!(CFL[:,:,:,:,:,:,it], speed[:,:,:,:,:,:,it], run_info.z)
             end
-            if :ivperp ∈ keys(kwargs)
-                variable = selectdim(variable, 3, kwargs[:ivperp])
-            end
-            if :ivpa ∈ keys(kwargs)
-                variable = selectdim(variable, 2, kwargs[:ivpa])
-            end
-            if :iz ∈ keys(kwargs)
-                variable = selectdim(variable, 1, kwargs[:iz])
-            end
-        end
-    elseif variable_name == :electron_vpa_advect_speed
-        # update_speed_electron_vpa!() requires all dimensions to be present, so do *not*
-        # pass kwargs to get_variable() in this case. Instead select a slice of the
-        # result.
-        density = get_variable(run_info, "electron_density"; kwargs...)
-        upar = get_variable(run_info, "electron_parallel_flow"; kwargs...)
-        p = get_variable(run_info, "electron_pressure"; kwargs...)
-        ppar = get_variable(run_info, "electron_parallel_pressure"; kwargs...)
-        vth = get_variable(run_info, "electron_thermal_speed"; kwargs...)
-        dp_dz = get_z_derivative_of_loaded_variable(p)
-        dppar_dz = get_z_derivative_of_loaded_variable(ppar)
-        dvth_dz = get_z_derivative_of_loaded_variable(vth)
-        dqpar_dz = get_z_derivative(run_info, "electron_parallel_heat_flux"; kwargs...)
-        if any(x -> x.active, run_info.external_source_settings.electron)
-            n_sources = length(run_info.external_source_settings.electron)
-            external_source_amplitude = get_variable(run_info, "external_source_electron_amplitude"; kwargs...)
-            external_source_density_amplitude = get_variable(run_info, "external_source_electron_density_amplitude"; kwargs...)
-            external_source_momentum_amplitude = get_variable(run_info, "external_source_electron_momentum_amplitude"; kwargs...)
-            external_source_pressure_amplitude = get_variable(run_info, "external_source_electron_pressure_amplitude"; kwargs...)
-        else
-            n_sources = 0
-            external_source_amplitude = zeros(0,0,n_sources,run_info.nt)
-            external_source_density_amplitude = zeros(0,0,n_sources,run_info.nt)
-            external_source_momentum_amplitude = zeros(0,0,n_sources,run_info.nt)
-            external_source_pressure_amplitude = zeros(0,0,n_sources,run_info.nt)
-        end
 
-        nz, nr, nt = size(vth)
-        nvperp = run_info.vperp.n
-        nvpa = run_info.vpa.n
-
-        speed=allocate_float(nvpa, nvperp, nz, nr, nt)
-        setup_distributed_memory_MPI(1,1,1,1)
-        setup_loop_ranges!(0, 1; s=run_info.n_ion_species, sn=run_info.n_neutral_species,
-                           r=nr, z=nz,
-                           vperp=(run_info.vperp === nothing ? 1 : run_info.vperp.n),
-                           vpa=(run_info.vpa === nothing ? 1 : run_info.vpa.n),
-                           vzeta=(run_info.vzeta === nothing ? 1 : run_info.vzeta.n),
-                           vr=(run_info.vr === nothing ? 1 : run_info.vr.n),
-                           vz=(run_info.vz === nothing ? 1 : run_info.vz.n))
-        for it ∈ 1:nt
-            @begin_serial_region()
-            # Only need some struct with a 'speed' variable
-            advect = (speed=@view(speed[:,:,:,:,it]),)
-            moments = (electron=(ppar=ppar[:,:,it],
-                                 vth=vth[:,:,it],
-                                 dp_dz=dp_dz[:,:,it],
-                                 dppar_dz=dppar_dz[:,:,it],
-                                 dqpar_dz=dqpar_dz[:,:,it],
-                                 dvth_dz=dvth_dz[:,:,it],
-                                 external_source_amplitude=external_source_amplitude[:,:,:,it],
-                                 external_source_density_amplitude=external_source_density_amplitude[:,:,:,it],
-                                 external_source_momentum_amplitude=external_source_momentum_amplitude[:,:,:,it],
-                                 external_source_pressure_amplitude=external_source_pressure_amplitude[:,:,:,it]),)
-            @views update_electron_speed_vpa!(advect, density[:,:,it], upar[:,:,it],
-                                              p[:,:,it], moments,
-                                              run_info.composition.me_over_mi,
-                                              run_info.vpa.grid,
-                                              run_info.external_source_settings.electron)
-        end
-
-        variable = speed
-        variable = select_slice_of_variable(variable; kwargs...)
-    elseif variable_name == :neutral_z_advect_speed
-        # update_speed_neutral_z!() requires all dimensions to be present, so do *not*
-        # pass kwargs to get_variable() in this case. Instead select a slice of the
-        # result.
-        uz = get_variable(run_info, "parallel_flow")
-        vth = get_variable(run_info, "thermal_speed_neutral")
-        nz, nr, nspecies, nt = size(uz)
-        nvzeta = run_info.vzeta.n
-        nvr = run_info.vr.n
-        nvz = run_info.vz.n
-
-        speed = allocate_float(nz, nvz, nvr, nvzeta, nr, nspecies, nt)
-
-        setup_distributed_memory_MPI(1,1,1,1)
-        setup_loop_ranges!(0, 1; s=nspecies, sn=run_info.n_neutral_species, r=nr, z=nz,
-                           vperp=run_info.vperp.n, vpa=run_info.vpa.n, vzeta=nvzeta,
-                           vr=nvr, vz=nvz)
-        for it ∈ 1:nt, isn ∈ 1:nspecies
-            @begin_serial_region()
-            # Only need some struct with a 'speed' variable
-            advect = (speed=@view(speed[:,:,:,:,:,isn,it]),)
-            @views update_speed_neutral_z!(advect, uz[:,:,:,it], vth[:,:,:,it],
-                                           run_info.evolve_upar, run_info.evolve_p,
-                                           run_info.vz, run_info.vr, run_info.vzeta,
-                                           run_info.z, run_info.r, run_info.time[it])
-        end
-
-        # Horrible hack so that we can get the speed back without rearranging the
-        # dimensions, if we want that to pass it to a utility function from the main code
-        # (e.g. to calculate a CFL limit).
-        if normalize_advection_speed_shape
             variable = allocate_float(nvz, nvr, nvzeta, nz, nr, nspecies, nt)
-            for it ∈ 1:nt, isn ∈ 1:nspecies, ir ∈ 1:nr, iz ∈ 1:nz, ivzeta ∈ 1:nvzeta, ivr ∈ 1:nvr, ivz ∈ 1:nvz
-                variable[ivz,ivr,ivzeta,iz,ir,isn,it] = speed[iz,ivz,ivr,ivzeta,ir,isn,it]
+            for it ∈ 1:nt, is ∈ 1:nspecies, ir ∈ 1:nr, iz ∈ 1:nz, ivzeta ∈ 1:nvzeta, ivr ∈ 1:nvr, ivz ∈ 1:nvz
+                variable[ivz,ivr,ivzeta,iz,ir,is,it] = CFL[iz,ivz,ivr,ivzeta,ir,is,it]
             end
             variable = select_slice_of_variable(variable; kwargs...)
-        else
-            variable = speed
-            if :it ∈ keys(kwargs)
-                variable = selectdim(variable, 7, kwargs[:it])
+            return variable
+        end,
+    "CFL_neutral_vz" => (run_info; kwargs...) -> begin
+            # update_speed-neutral_vz!() requires all dimensions to be present, so do *not*
+            # pass kwargs to get_variable() in this case. Instead select a slice of the
+            # result.
+            speed = get_variable(run_info, "neutral_vz_advect_speed")
+            nt = size(speed, 7)
+            CFL = similar(speed)
+            for it ∈ 1:nt
+                @views get_CFL!(CFL[:,:,:,:,:,:,it], speed[:,:,:,:,:,:,it], run_info.vz)
             end
-            if :is ∈ keys(kwargs)
-                variable = selectdim(variable, 6, kwargs[:is])
-            end
-            if :ir ∈ keys(kwargs)
-                variable = selectdim(variable, 5, kwargs[:ir])
-            end
-            if :ivzeta ∈ keys(kwargs)
-                variable = selectdim(variable, 4, kwargs[:ivzeta])
-            end
-            if :ivr ∈ keys(kwargs)
-                variable = selectdim(variable, 3, kwargs[:ivr])
-            end
-            if :ivz ∈ keys(kwargs)
-                variable = selectdim(variable, 2, kwargs[:ivz])
-            end
-            if :iz ∈ keys(kwargs)
-                variable = selectdim(variable, 1, kwargs[:iz])
-            end
-        end
-    elseif variable_name == :neutral_vz_advect_speed
-        # update_speed_neutral_vz!() requires all dimensions to be present, so do *not*
-        # pass kwargs to get_variable() in this case. Instead select a slice of the
-        # result.
-        Ez = get_variable(run_info, "Ez"; kwargs...)
-        density = get_variable(run_info, "density"; kwargs...)
-        upar = get_variable(run_info, "parallel_flow"; kwargs...)
-        p = get_variable(run_info, "pressure"; kwargs...)
-        density_neutral = get_variable(run_info, "density_neutral"; kwargs...)
-        uz_neutral = get_variable(run_info, "uz_neutral"; kwargs...)
-        p_neutral = get_variable(run_info, "p_neutral"; kwargs...)
-        vth = get_variable(run_info, "thermal_speed_neutral"; kwargs...)
-        duz_dz = get_z_derivative_of_loaded_variable(uz_neutral)
-        dp_dz = get_z_derivative_of_loaded_variable(p_neutral)
-        dvth_dz = get_z_derivative_of_loaded_variable(vth)
-        dqz_dz = get_z_derivative(run_info, "qz_neutral"; kwargs...)
-        dp_dt = get_variable(run_info, "p_neutral")
-        duz_dt = get_variable(run_info, "uz_neutral")
-        dvth_dt = get_variable(run_info, "thermal_speed_neutral")
-        if any(x -> x.active, run_info.external_source_settings.neutral)
-            n_sources = length(run_info.external_source_settings.neutral)
-            external_source_amplitude = get_variable(run_info, "external_source_neutral_amplitude"; kwargs...)
-            if run_info.evolve_density
-                external_source_density_amplitude = get_variable(run_info, "external_source_neutral_density_amplitude"; kwargs...)
-            else
-                external_source_density_amplitude = zeros(0,0,n_sources,run_info.nt)
-            end
-            if run_info.evolve_upar
-                external_source_momentum_amplitude = get_variable(run_info, "external_source_neutral_momentum_amplitude"; kwargs...)
-            else
-                external_source_momentum_amplitude = zeros(0,0,n_sources,run_info.nt)
-            end
-            if run_info.evolve_p
-                external_source_pressure_amplitude = get_variable(run_info, "external_source_neutral_pressure_amplitude"; kwargs...)
-            else
-                external_source_pressure_amplitude = zeros(0,0,n_sources,run_info.nt)
-            end
-        else
-            n_sources = 0
-            external_source_amplitude = zeros(0,0,n_sources,run_info.nt)
-            external_source_density_amplitude = zeros(0,0,n_sources,run_info.nt)
-            external_source_momentum_amplitude = zeros(0,0,n_sources,run_info.nt)
-            external_source_pressure_amplitude = zeros(0,0,n_sources,run_info.nt)
-        end
 
-        nz, nr, nspecies, nt = size(vth)
-        nvzeta = run_info.vzeta.n
-        nvr = run_info.vr.n
-        nvz = run_info.vz.n
-        speed = allocate_float(nvz, nvr, nvzeta, nz, nr, nspecies, nt)
-
-        setup_distributed_memory_MPI(1,1,1,1)
-        setup_loop_ranges!(0, 1; s=nspecies, sn=run_info.n_neutral_species, r=nr, z=nz,
-                           vperp=run_info.vperp.n, vpa=run_info.vpa.n, vzeta=nvzeta,
-                           vr=nvr, vz=nvz)
-        for it ∈ 1:nt
+            variable = CFL
+            variable = select_slice_of_variable(variable; kwargs...)
+            return variable
+        end,
+    "minimum_CFL_ion_r" => (run_info; kwargs...) -> begin
+            # update_speed_r!() requires all dimensions to be present, so do *not* pass kwargs
+            # to get_variable() in this case. Instead select a slice of the result.
+            speed = get_variable(run_info, "r_advect_speed";
+                                 normalize_advection_speed_shape=false)
+            nt = size(speed, 6)
+            nspecies = size(speed, 5)
+            variable = allocate_float(nt)
             @begin_serial_region()
-            # Only need some struct with a 'speed' variable
-            advect = [(speed=@view(speed[:,:,:,:,:,isn,it]),) for isn ∈ 1:nspecies]
-            # Don't actually use `fields` at the moment
-            fields = nothing
-            @views fvec = (density=density[:,:,:,it],
-                           upar=upar[:,:,:,it],
-                           p=p[:,:,:,it],
-                           density_neutral=density_neutral[:,:,:,it],
-                           uz_neutral=uz_neutral[:,:,:,it],
-                           p_neutral=p_neutral[:,:,:,it])
-            @views moments = (neutral=(dp_dz=dp_dz[:,:,:,it],
-                                       duz_dz=duz_dz[:,:,:,it],
-                                       dvth_dz=dvth_dz[:,:,:,it],
-                                       dqz_dz=dqz_dz[:,:,:,it],
-                                       vth=vth[:,:,:,it],
-                                       dp_dt=dp_dt[:,:,:,it],
-                                       duz_dt=duz_dt[:,:,:,it],
-                                       dvth_dt=dvth_dt[:,:,:,it],
-                                       external_source_amplitude=external_source_amplitude[:,:,:,it],
-                                       external_source_density_amplitude=external_source_density_amplitude[:,:,:,it],
-                                       external_source_momentum_amplitude=external_source_momentum_amplitude[:,:,:,it],
-                                       external_source_pressure_amplitude=external_source_pressure_amplitude[:,:,:,it]),
-                             evolve_density=run_info.evolve_density,
-                             evolve_upar=run_info.evolve_upar,
-                             evolve_p=run_info.evolve_p)
-            @views update_speed_neutral_vz!(advect, fields, fvec, moments,
-                                            run_info.vz, run_info.vr, run_info.vzeta,
-                                            run_info.z, run_info.r, run_info.composition,
-                                            run_info.collisions,
-                                            run_info.external_source_settings.neutral)
-        end
-
-        variable = speed
-        variable = select_slice_of_variable(variable; kwargs...)
-    elseif variable_name == :steps_per_output
-        variable = get_per_step_from_cumulative_variable(run_info, "step_counter"; kwargs...)
-    elseif variable_name == :failures_per_output
-        variable = get_per_step_from_cumulative_variable(run_info, "failure_counter"; kwargs...)
-    elseif variable_name == :failure_caused_by_per_output
-        variable = get_per_step_from_cumulative_variable(run_info, "failure_caused_by"; kwargs...)
-    elseif variable_name == :limit_caused_by_per_output
-        variable = get_per_step_from_cumulative_variable(run_info, "limit_caused_by"; kwargs...)
-    elseif variable_name == :average_successful_dt
-        steps_per_output = get_variable(run_info, "steps_per_output"; kwargs...)
-        failures_per_output = get_variable(run_info, "failures_per_output"; kwargs...)
-        successful_steps_per_output = steps_per_output - failures_per_output
-
-        delta_t = copy(run_info.time)
-        for i ∈ length(delta_t):-1:2
-            delta_t[i] -= delta_t[i-1]
-        end
-
-        variable = delta_t ./ successful_steps_per_output
-        for i ∈ eachindex(successful_steps_per_output)
-            if successful_steps_per_output[i] == 0
-                variable[i] = 0.0
+            for it ∈ 1:nt
+                min_CFL = Inf
+                for is ∈ 1:nspecies
+                    min_CFL = min(min_CFL, get_minimum_CFL_r(@view(speed[:,:,:,:,is,it]), run_info.r))
+                end
+                variable[it] = min_CFL
             end
-        end
-        if successful_steps_per_output[1] == 0
-            # Don't want a meaningless Inf...
-            variable[1] = 0.0
-        end
-    elseif variable_name == :electron_steps_per_ion_step
-        electron_steps_per_output = get_variable(run_info, "electron_steps_per_output"; kwargs...)
-        ion_steps_per_output = get_variable(run_info, "steps_per_output"; kwargs...)
-        variable = electron_steps_per_output ./
-                   reshape(ion_steps_per_output,
-                           (1 for _ ∈ 1:(ndims(electron_steps_per_output)-ndims(ion_steps_per_output)))...,
-                           size(ion_steps_per_output)...)
-    elseif variable_name == :electron_steps_per_output
-        variable = get_per_step_from_cumulative_variable(run_info, "electron_step_counter"; kwargs...)
-    elseif variable_name == :electron_failures_per_output
-        variable = get_per_step_from_cumulative_variable(run_info, "electron_failure_counter"; kwargs...)
-    elseif variable_name == :electron_failure_caused_by_per_output
-        variable = get_per_step_from_cumulative_variable(run_info, "electron_failure_caused_by"; kwargs...)
-    elseif variable_name == :electron_limit_caused_by_per_output
-        variable = get_per_step_from_cumulative_variable(run_info, "electron_limit_caused_by"; kwargs...)
-    elseif variable_name == :electron_average_successful_dt
-        electron_steps_per_output = get_variable(run_info, "electron_steps_per_output"; kwargs...)
-        electron_failures_per_output = get_variable(run_info, "electron_failures_per_output"; kwargs...)
-        electron_successful_steps_per_output = electron_steps_per_output - electron_failures_per_output
-        electron_pseudotime = get_variable(run_info, "electron_cumulative_pseudotime"; kwargs...)
-
-        delta_t = copy(electron_pseudotime)
-        for i ∈ length(delta_t):-1:2
-            delta_t[i] -= delta_t[i-1]
-        end
-
-        variable = delta_t ./ electron_successful_steps_per_output
-        for i ∈ eachindex(electron_successful_steps_per_output)
-            if electron_successful_steps_per_output[i] == 0
-                variable[i] = 0.0
+            variable = select_slice_of_variable(variable; kwargs...)
+            return variable
+        end,
+    "minimum_CFL_ion_z" => (run_info; kwargs...) -> begin
+            # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
+            # to get_variable() in this case. Instead select a slice of the result.
+            speed = get_variable(run_info, "z_advect_speed";
+                                 normalize_advection_speed_shape=false)
+            nt = size(speed, 6)
+            nspecies = size(speed, 5)
+            variable = allocate_float(nt)
+            @begin_serial_region()
+            for it ∈ 1:nt
+                min_CFL = Inf
+                for is ∈ 1:nspecies
+                    min_CFL = min(min_CFL, get_minimum_CFL_z(@view(speed[:,:,:,:,is,it]), run_info.z))
+                end
+                variable[it] = min_CFL
             end
-        end
-        if electron_successful_steps_per_output[1] == 0
-            # Don't want a meaningless Inf...
-            variable[1] = 0.0
-        end
-    elseif variable_name == :CFL_ion_r
-        # update_speed_r!() requires all dimensions to be present, so do *not* pass kwargs
-        # to get_variable() in this case. Instead select a slice of the result.
-        speed = get_variable(run_info, "r_advect_speed";
-                             normalize_advection_speed_shape=false)
-        nr, nvpa, nvperp, nz, nspecies, nt = size(speed)
-        CFL = similar(speed)
-        for it ∈ 1:nt
-            @views get_CFL!(CFL[:,:,:,:,:,it], speed[:,:,:,:,:,it], run_info.r)
-        end
-
-        variable = allocate_float(nvpa, nvperp, nz, nr, nspecies, nt)
-        for it ∈ 1:nt, is ∈ 1:nspecies, ir ∈ 1:nr, iz ∈ 1:nz, ivperp ∈ 1:nvperp, ivpa ∈ 1:nvpa
-            variable[ivpa,ivperp,iz,ir,is,it] = CFL[ir,ivpa,ivperp,iz,is,it]
-        end
-        variable = select_slice_of_variable(variable; kwargs...)
-    elseif variable_name == :CFL_ion_z
-        # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
-        # to get_variable() in this case. Instead select a slice of the result.
-        speed = get_variable(run_info, "z_advect_speed";
-                             normalize_advection_speed_shape=false)
-        nz, nvpa, nvperp, nr, nspecies, nt = size(speed)
-        CFL = similar(speed)
-        for it ∈ 1:nt
-            @views get_CFL!(CFL[:,:,:,:,:,it], speed[:,:,:,:,:,it], run_info.z)
-        end
-
-        variable = allocate_float(nvpa, nvperp, nz, nr, nspecies, nt)
-        for it ∈ 1:nt, is ∈ 1:nspecies, ir ∈ 1:nr, iz ∈ 1:nz, ivperp ∈ 1:nvperp, ivpa ∈ 1:nvpa
-            variable[ivpa,ivperp,iz,ir,is,it] = CFL[iz,ivpa,ivperp,ir,is,it]
-        end
-        variable = select_slice_of_variable(variable; kwargs...)
-    elseif variable_name == :CFL_ion_vpa
-        # update_speed_vpa!() requires all dimensions to be present, so do *not* pass
-        # kwargs to get_variable() in this case. Instead select a slice of the result.
-        speed = get_variable(run_info, "vpa_advect_speed")
-        nt = size(speed, 6)
-        CFL = similar(speed)
-        for it ∈ 1:nt
-            @views get_CFL!(CFL[:,:,:,:,:,it], speed[:,:,:,:,:,it], run_info.vpa)
-        end
-
-        variable = CFL
-        variable = select_slice_of_variable(variable; kwargs...)
-    elseif variable_name == :CFL_ion_vperp
-        # update_speed_vperp!() requires all dimensions to be present, so do *not* pass
-        # kwargs to get_variable() in this case. Instead select a slice of the result.
-        speed = get_variable(run_info, "vperp_advect_speed";
-                             normalize_advection_speed_shape=false)
-        nvperp, nvpa, nz, nr, nspecies, nt = size(speed)
-        CFL = similar(speed)
-        for it ∈ 1:nt
-            @views get_CFL!(CFL[:,:,:,:,:,it], speed[:,:,:,:,:,it], run_info.vperp)
-        end
-
-        variable = allocate_float(nvpa, nvperp, nz, nr, nspecies, nt)
-        for it ∈ 1:nt, is ∈ 1:nspecies, ir ∈ 1:nr, iz ∈ 1:nz, ivperp ∈ 1:nvperp, ivpa ∈ 1:nvpa
-            variable[ivpa,ivperp,iz,ir,is,it] = CFL[ivperp,ivpa,iz,ir,is,it]
-        end
-        variable = select_slice_of_variable(variable; kwargs...)
-    elseif variable_name == :CFL_electron_z
-        # update_speed_electron_z!() requires all dimensions to be present, so do *not*
-        # pass kwargs to get_variable() in this case. Instead select a slice of the
-        # result.
-        speed = get_variable(run_info, "electron_z_advect_speed";
-                             normalize_advection_speed_shape=false)
-        nz, nvpa, nvperp, nr, nt = size(speed)
-        CFL = similar(speed)
-        for it ∈ 1:nt
-            @views get_CFL!(CFL[:,:,:,:,it], speed[:,:,:,:,it], run_info.z)
-        end
-
-        variable = allocate_float(nvpa, nvperp, nz, nr, nt)
-        for it ∈ 1:nt, ir ∈ 1:nr, iz ∈ 1:nz, ivperp ∈ 1:nvperp, ivpa ∈ 1:nvpa
-            variable[ivpa,ivperp,iz,ir,it] = CFL[iz,ivpa,ivperp,ir,it]
-        end
-        variable = select_slice_of_variable(variable; kwargs...)
-    elseif variable_name == :CFL_electron_vpa
-        # update_speed_electron_vpa!() requires all dimensions to be present, so do *not*
-        # pass kwargs to get_variable() in this case. Instead select a slice of the
-        # result.
-        speed = get_variable(run_info, "electron_vpa_advect_speed")
-        nt = size(speed, 5)
-        CFL = similar(speed)
-        for it ∈ 1:nt
-            @views get_CFL!(CFL[:,:,:,:,it], speed[:,:,:,:,it], run_info.vpa)
-        end
-
-        variable = CFL
-        variable = select_slice_of_variable(variable; kwargs...)
-    elseif variable_name == :CFL_neutral_z
-        # update_speed_neutral_z!() requires all dimensions to be present, so do *not*
-        # pass kwargs to get_variable() in this case. Instead select a slice of the
-        # result.
-        speed = get_variable(run_info, "neutral_z_advect_speed";
-                             normalize_advection_speed_shape=false)
-        nz, nvz, nvr, nvzeta, nr, nspecies, nt = size(speed)
-        CFL = similar(speed)
-        for it ∈ 1:nt
-            @views get_CFL!(CFL[:,:,:,:,:,:,it], speed[:,:,:,:,:,:,it], run_info.z)
-        end
-
-        variable = allocate_float(nvz, nvr, nvzeta, nz, nr, nspecies, nt)
-        for it ∈ 1:nt, is ∈ 1:nspecies, ir ∈ 1:nr, iz ∈ 1:nz, ivzeta ∈ 1:nvzeta, ivr ∈ 1:nvr, ivz ∈ 1:nvz
-            variable[ivz,ivr,ivzeta,iz,ir,is,it] = CFL[iz,ivz,ivr,ivzeta,ir,is,it]
-        end
-        variable = select_slice_of_variable(variable; kwargs...)
-    elseif variable_name == :CFL_neutral_vz
-        # update_speed-neutral_vz!() requires all dimensions to be present, so do *not*
-        # pass kwargs to get_variable() in this case. Instead select a slice of the
-        # result.
-        speed = get_variable(run_info, "neutral_vz_advect_speed")
-        nt = size(speed, 7)
-        CFL = similar(speed)
-        for it ∈ 1:nt
-            @views get_CFL!(CFL[:,:,:,:,:,:,it], speed[:,:,:,:,:,:,it], run_info.vz)
-        end
-
-        variable = CFL
-        variable = select_slice_of_variable(variable; kwargs...)
-    elseif variable_name == :minimum_CFL_ion_r
-        # update_speed_r!() requires all dimensions to be present, so do *not* pass kwargs
-        # to get_variable() in this case. Instead select a slice of the result.
-        speed = get_variable(run_info, "r_advect_speed";
-                             normalize_advection_speed_shape=false)
-        nt = size(speed, 6)
-        nspecies = size(speed, 5)
-        variable = allocate_float(nt)
-        @begin_serial_region()
-        for it ∈ 1:nt
-            min_CFL = Inf
-            for is ∈ 1:nspecies
-                min_CFL = min(min_CFL, get_minimum_CFL_r(@view(speed[:,:,:,:,is,it]), run_info.r))
+            variable = select_slice_of_variable(variable; kwargs...)
+            return variable
+        end,
+    "minimum_CFL_ion_vpa" => (run_info; kwargs...) -> begin
+            # update_speed_vpa!() requires all dimensions to be present, so do *not* pass
+            # kwargs to get_variable() in this case. Instead select a slice of the result.
+            speed = get_variable(run_info, "vpa_advect_speed")
+            nt = size(speed, 6)
+            nspecies = size(speed, 5)
+            variable = allocate_float(nt)
+            @begin_serial_region()
+            for it ∈ 1:nt
+                min_CFL = Inf
+                for is ∈ 1:nspecies
+                    min_CFL = min(min_CFL, get_minimum_CFL_vpa(@view(speed[:,:,:,:,is,it]), run_info.vpa))
+                end
+                variable[it] = min_CFL
             end
-            variable[it] = min_CFL
-        end
-        variable = select_slice_of_variable(variable; kwargs...)
-    elseif variable_name == :minimum_CFL_ion_z
-        # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
-        # to get_variable() in this case. Instead select a slice of the result.
-        speed = get_variable(run_info, "z_advect_speed";
-                             normalize_advection_speed_shape=false)
-        nt = size(speed, 6)
-        nspecies = size(speed, 5)
-        variable = allocate_float(nt)
-        @begin_serial_region()
-        for it ∈ 1:nt
-            min_CFL = Inf
-            for is ∈ 1:nspecies
-                min_CFL = min(min_CFL, get_minimum_CFL_z(@view(speed[:,:,:,:,is,it]), run_info.z))
+            variable = select_slice_of_variable(variable; kwargs...)
+            return variable
+        end,
+    "minimum_CFL_ion_vperp" => (run_info; kwargs...) -> begin
+            # update_speed_vperp!() requires all dimensions to be present, so do *not* pass
+            # kwargs to get_variable() in this case. Instead select a slice of the result.
+            speed = get_variable(run_info, "vperp_advect_speed")
+            nt = size(speed, 6)
+            nspecies = size(speed, 5)
+            variable = allocate_float(nt)
+            @begin_serial_region()
+            for it ∈ 1:nt
+                min_CFL = Inf
+                for is ∈ 1:nspecies
+                    min_CFL = min(min_CFL, get_minimum_CFL_vperp(@view(speed[:,:,:,:,is,it]), run_info.vperp))
+                end
+                variable[it] = min_CFL
             end
-            variable[it] = min_CFL
-        end
-        variable = select_slice_of_variable(variable; kwargs...)
-    elseif variable_name == :minimum_CFL_ion_vpa
-        # update_speed_vpa!() requires all dimensions to be present, so do *not* pass
-        # kwargs to get_variable() in this case. Instead select a slice of the result.
-        speed = get_variable(run_info, "vpa_advect_speed")
-        nt = size(speed, 6)
-        nspecies = size(speed, 5)
-        variable = allocate_float(nt)
-        @begin_serial_region()
-        for it ∈ 1:nt
-            min_CFL = Inf
-            for is ∈ 1:nspecies
-                min_CFL = min(min_CFL, get_minimum_CFL_vpa(@view(speed[:,:,:,:,is,it]), run_info.vpa))
+            variable = select_slice_of_variable(variable; kwargs...)
+            return variable
+        end,
+    "minimum_CFL_electron_z" => (run_info; kwargs...) -> begin
+            # update_speed_electron_z!() requires all dimensions to be present, so do *not*
+            # pass kwargs to get_variable() in this case. Instead select a slice of the
+            # result.
+            speed = get_variable(run_info, "electron_z_advect_speed";
+                                 normalize_advection_speed_shape=false)
+            nt = size(speed, 5)
+            variable = allocate_float(nt)
+            @begin_serial_region()
+            for it ∈ 1:nt
+                min_CFL = get_minimum_CFL_z(@view(speed[:,:,:,:,it]), run_info.z)
+                variable[it] = min_CFL
             end
-            variable[it] = min_CFL
-        end
-        variable = select_slice_of_variable(variable; kwargs...)
-    elseif variable_name == :minimum_CFL_ion_vperp
-        # update_speed_vperp!() requires all dimensions to be present, so do *not* pass
-        # kwargs to get_variable() in this case. Instead select a slice of the result.
-        speed = get_variable(run_info, "vperp_advect_speed")
-        nt = size(speed, 6)
-        nspecies = size(speed, 5)
-        variable = allocate_float(nt)
-        @begin_serial_region()
-        for it ∈ 1:nt
-            min_CFL = Inf
-            for is ∈ 1:nspecies
-                min_CFL = min(min_CFL, get_minimum_CFL_vperp(@view(speed[:,:,:,:,is,it]), run_info.vperp))
+            variable = select_slice_of_variable(variable; kwargs...)
+            return variable
+        end,
+    "minimum_CFL_electron_vpa" => (run_info; kwargs...) -> begin
+            # update_speed_electron_vpa!() requires all dimensions to be present, so do *not*
+            # pass kwargs to get_variable() in this case. Instead select a slice of the
+            # result.
+            speed = get_variable(run_info, "electron_vpa_advect_speed")
+            nt = size(speed, 5)
+            variable = allocate_float(nt)
+            @begin_serial_region()
+            for it ∈ 1:nt
+                min_CFL = get_minimum_CFL_vpa(@view(speed[:,:,:,:,it]), run_info.vpa)
+                variable[it] = min_CFL
             end
-            variable[it] = min_CFL
-        end
-        variable = select_slice_of_variable(variable; kwargs...)
-    elseif variable_name == :minimum_CFL_electron_z
-        # update_speed_electron_z!() requires all dimensions to be present, so do *not*
-        # pass kwargs to get_variable() in this case. Instead select a slice of the
-        # result.
-        speed = get_variable(run_info, "electron_z_advect_speed";
-                             normalize_advection_speed_shape=false)
-        nt = size(speed, 5)
-        variable = allocate_float(nt)
-        @begin_serial_region()
-        for it ∈ 1:nt
-            min_CFL = get_minimum_CFL_z(@view(speed[:,:,:,:,it]), run_info.z)
-            variable[it] = min_CFL
-        end
-        variable = select_slice_of_variable(variable; kwargs...)
-    elseif variable_name == :minimum_CFL_electron_vpa
-        # update_speed_electron_vpa!() requires all dimensions to be present, so do *not*
-        # pass kwargs to get_variable() in this case. Instead select a slice of the
-        # result.
-        speed = get_variable(run_info, "electron_vpa_advect_speed")
-        nt = size(speed, 5)
-        variable = allocate_float(nt)
-        @begin_serial_region()
-        for it ∈ 1:nt
-            min_CFL = get_minimum_CFL_vpa(@view(speed[:,:,:,:,it]), run_info.vpa)
-            variable[it] = min_CFL
-        end
-        variable = select_slice_of_variable(variable; kwargs...)
-    elseif variable_name == :minimum_CFL_neutral_z
-        # update_speed_neutral_z!() requires all dimensions to be present, so do *not*
-        # pass kwargs to get_variable() in this case. Instead select a slice of the
-        # result.
-        speed = get_variable(run_info, "neutral_z_advect_speed";
-                             normalize_advection_speed_shape=false)
-        nt = size(speed, 7)
-        nspecies = size(speed, 6)
-        variable = allocate_float(nt)
-        @begin_serial_region()
-        for it ∈ 1:nt
-            min_CFL = Inf
-            for isn ∈ 1:nspecies
-                min_CFL = min(min_CFL, get_minimum_CFL_neutral_z(@view(speed[:,:,:,:,:,isn,it]), run_info.z))
+            variable = select_slice_of_variable(variable; kwargs...)
+            return variable
+        end,
+    "minimum_CFL_neutral_z" => (run_info; kwargs...) -> begin
+            # update_speed_neutral_z!() requires all dimensions to be present, so do *not*
+            # pass kwargs to get_variable() in this case. Instead select a slice of the
+            # result.
+            speed = get_variable(run_info, "neutral_z_advect_speed";
+                                 normalize_advection_speed_shape=false)
+            nt = size(speed, 7)
+            nspecies = size(speed, 6)
+            variable = allocate_float(nt)
+            @begin_serial_region()
+            for it ∈ 1:nt
+                min_CFL = Inf
+                for isn ∈ 1:nspecies
+                    min_CFL = min(min_CFL, get_minimum_CFL_neutral_z(@view(speed[:,:,:,:,:,isn,it]), run_info.z))
+                end
+                variable[it] = min_CFL
             end
-            variable[it] = min_CFL
-        end
-        variable = select_slice_of_variable(variable; kwargs...)
-    elseif variable_name == :minimum_CFL_neutral_vz
-        # update_speed_neutral_vz!() requires all dimensions to be present, so do *not*
-        # pass kwargs to get_variable() in this case. Instead select a slice of the
-        # result.
-        speed = get_variable(run_info, "neutral_vz_advect_speed")
-        nt = size(speed, 7)
-        nspecies = size(speed, 6)
-        variable = allocate_float(nt)
-        @begin_serial_region()
-        for it ∈ 1:nt
-            min_CFL = Inf
-            for isn ∈ 1:nspecies
-                min_CFL = min(min_CFL, get_minimum_CFL_neutral_vz(@view(speed[:,:,:,:,:,isn,it]), run_info.vz))
+            variable = select_slice_of_variable(variable; kwargs...)
+            return variable
+        end,
+    "minimum_CFL_neutral_vz" => (run_info; kwargs...) -> begin
+            # update_speed_neutral_vz!() requires all dimensions to be present, so do *not*
+            # pass kwargs to get_variable() in this case. Instead select a slice of the
+            # result.
+            speed = get_variable(run_info, "neutral_vz_advect_speed")
+            nt = size(speed, 7)
+            nspecies = size(speed, 6)
+            variable = allocate_float(nt)
+            @begin_serial_region()
+            for it ∈ 1:nt
+                min_CFL = Inf
+                for isn ∈ 1:nspecies
+                    min_CFL = min(min_CFL, get_minimum_CFL_neutral_vz(@view(speed[:,:,:,:,:,isn,it]), run_info.vz))
+                end
+                variable[it] = min_CFL
             end
-            variable[it] = min_CFL
-        end
-        variable = select_slice_of_variable(variable; kwargs...)
-    elseif occursin("_timestep_error", String(variable_name))
-        prefix = split(String(variable_name), "_timestep_error")[1]
-        full_order = get_variable(run_info, prefix; kwargs...)
-        low_order = get_variable(run_info, prefix * "_loworder"; kwargs...)
-        variable = low_order .- full_order
-    elseif occursin("_timestep_residual", String(variable_name))
-        prefix = split(String(variable_name), "_timestep_residual")[1]
-        full_order = get_variable(run_info, prefix; kwargs...)
-        low_order = get_variable(run_info, prefix * "_loworder"; kwargs...)
-        if prefix == "pdf_electron"
-            rtol = run_info.input["electron_timestepping"]["rtol"]
-            atol = run_info.input["electron_timestepping"]["atol"]
-        else
-            rtol = run_info.input["timestepping"]["rtol"]
-            atol = run_info.input["timestepping"]["atol"]
-        end
-        variable = @. (low_order - full_order) / (rtol * abs(full_order) + atol)
-    elseif occursin("_steady_state_residual", String(variable_name))
-        prefix = split(String(variable_name), "_steady_state_residual")[1]
-        end_step = get_variable(run_info, prefix; kwargs...)
-        begin_step = get_variable(run_info, prefix * "_start_last_timestep"; kwargs...)
-        if prefix == "f_electron"
-            dt = get_variable(run_info, "electron_previous_dt"; kwargs...)
-        else
-            dt = get_variable(run_info, "previous_dt"; kwargs...)
-        end
-        dt = reshape(dt, ones(mk_int, ndims(end_step)-1)..., length(dt))
-        for i ∈ eachindex(dt)
-            if dt[i] ≤ 0.0
-                dt[i] = Inf
-            end
-        end
-        variable = (end_step .- begin_step) ./ dt
-    elseif occursin("_nonlinear_iterations_per_solve", String(variable_name))
-        prefix = split(String(variable_name), "_nonlinear_iterations_per_solve")[1]
-        nl_nsolves = get_per_step_from_cumulative_variable(
-            run_info, "$(prefix)_n_solves"; kwargs...)
-        nl_iterations = get_per_step_from_cumulative_variable(
-            run_info, "$(prefix)_nonlinear_iterations"; kwargs...)
-        variable = nl_iterations ./ nl_nsolves
-    elseif occursin("_linear_iterations_per_nonlinear_iteration", String(variable_name))
-        prefix = split(String(variable_name), "_linear_iterations_per_nonlinear_iteration")[1]
-        nl_iterations = get_per_step_from_cumulative_variable(
-            run_info, "$(prefix)_nonlinear_iterations"; kwargs...)
-        nl_linear_iterations = get_per_step_from_cumulative_variable(
-            run_info, "$(prefix)_linear_iterations"; kwargs...)
-        variable = nl_linear_iterations ./ nl_iterations
-    elseif occursin("_precon_iterations_per_linear_iteration", String(variable_name))
-        prefix = split(String(variable_name), "_precon_iterations_per_linear_iteration")[1]
-        nl_linear_iterations = get_per_step_from_cumulative_variable(
-            run_info, "$(prefix)_linear_iterations"; kwargs...)
-        nl_precon_iterations = get_per_step_from_cumulative_variable(
-            run_info, "$(prefix)_precon_iterations"; kwargs...)
-        variable = nl_precon_iterations ./ nl_linear_iterations
-    elseif endswith(String(variable_name), "_per_step") && String(variable_name) ∉ run_info.variable_names
-        # If "_per_step" is appended to a variable name, assume it is a cumulative
-        # variable, and get the per-step version.
-        variable =
-            get_per_step_from_cumulative_variable(run_info,
-                                                  split(String(variable_name), "_per_step")[1];
-                                                  kwargs...)
-    else
-        variable = postproc_load_variable(run_info, String(variable_name); kwargs...)
-    end
+            variable = select_slice_of_variable(variable; kwargs...)
+            return variable
+        end,
+)
 
-    return variable
+function get_timestep_error_variable(run_info, variable_name; kwargs...)
+    prefix = split(String(variable_name), "_timestep_error")[1]
+    full_order = get_variable(run_info, prefix; kwargs...)
+    low_order = get_variable(run_info, prefix * "_loworder"; kwargs...)
+    return low_order .- full_order
 end
+
+function get_timestep_residual_variable(run_info, variable_name; kwargs...)
+    prefix = split(String(variable_name), "_timestep_residual")[1]
+    full_order = get_variable(run_info, prefix; kwargs...)
+    low_order = get_variable(run_info, prefix * "_loworder"; kwargs...)
+    if prefix == "pdf_electron"
+        rtol = run_info.input["electron_timestepping"]["rtol"]
+        atol = run_info.input["electron_timestepping"]["atol"]
+    else
+        rtol = run_info.input["timestepping"]["rtol"]
+        atol = run_info.input["timestepping"]["atol"]
+    end
+    return @. (low_order - full_order) / (rtol * abs(full_order) + atol)
+end
+
+function get_steady_state_residual_variable(run_info, variable_name; kwargs...)
+    prefix = split(String(variable_name), "_steady_state_residual")[1]
+    end_step = get_variable(run_info, prefix; kwargs...)
+    begin_step = get_variable(run_info, prefix * "_start_last_timestep"; kwargs...)
+    if prefix == "f_electron"
+        dt = get_variable(run_info, "electron_previous_dt"; kwargs...)
+    else
+        dt = get_variable(run_info, "previous_dt"; kwargs...)
+    end
+    dt = reshape(dt, ones(mk_int, ndims(end_step)-1)..., length(dt))
+    for i ∈ eachindex(dt)
+        if dt[i] ≤ 0.0
+            dt[i] = Inf
+        end
+    end
+    return (end_step .- begin_step) ./ dt
+end
+
+function get_nonlinear_iterations_per_solve(run_info, variable_name; kwargs...)
+    prefix = split(String(variable_name), "_nonlinear_iterations_per_solve")[1]
+    nl_nsolves = get_per_step_from_cumulative_variable(
+        run_info, "$(prefix)_n_solves"; kwargs...)
+    nl_iterations = get_per_step_from_cumulative_variable(
+        run_info, "$(prefix)_nonlinear_iterations"; kwargs...)
+    return nl_iterations ./ nl_nsolves
+end
+
+function get_linear_iterations_per_nonlinear_iteration(run_info, variable_name; kwargs...)
+    prefix = split(String(variable_name), "_linear_iterations_per_nonlinear_iteration")[1]
+    nl_iterations = get_per_step_from_cumulative_variable(
+        run_info, "$(prefix)_nonlinear_iterations"; kwargs...)
+    nl_linear_iterations = get_per_step_from_cumulative_variable(
+        run_info, "$(prefix)_linear_iterations"; kwargs...)
+    return nl_linear_iterations ./ nl_iterations
+end
+
+function get_precon_iterations_per_linear_iteration(run_info, variable_name; kwargs...)
+    prefix = split(String(variable_name), "_precon_iterations_per_linear_iteration")[1]
+    nl_linear_iterations = get_per_step_from_cumulative_variable(
+        run_info, "$(prefix)_linear_iterations"; kwargs...)
+    nl_precon_iterations = get_per_step_from_cumulative_variable(
+        run_info, "$(prefix)_precon_iterations"; kwargs...)
+    return nl_precon_iterations ./ nl_linear_iterations
+end
+
 
 """
     get_r_derivative(run_info, variable_name; kwargs...)
