@@ -25,5 +25,5 @@ jobs:
       - name: Test test_scripts
         run: |
           touch Project.toml
-          julia -O3 --project -e 'import Pkg; Pkg.develop(path="moment_kinetics/"); Pkg.develop(path="makie_post_processing/makie_post_processing"); Pkg.add(["FastGaussQuadrature", "Glob", "LaTeXStrings", "LegendrePolynomials", "Measures", "MPI", "Plots", "SpecialFunctions"]); Pkg.precompile()'
-          julia -O3 --project test_scripts/runtests.jl
+          julia -O3 --project --check-bounds=yes -e 'import Pkg; Pkg.develop(path="moment_kinetics/"); Pkg.develop(path="makie_post_processing/makie_post_processing"); Pkg.add(["FastGaussQuadrature", "Glob", "LaTeXStrings", "LegendrePolynomials", "Measures", "MPI", "Plots", "SpecialFunctions"]); Pkg.precompile()'
+          julia -O3 --project --check-bounds=yes test_scripts/runtests.jl
