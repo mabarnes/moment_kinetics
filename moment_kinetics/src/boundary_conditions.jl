@@ -2039,10 +2039,16 @@ function enforce_zero_incoming_bc!(pdf, z::coordinate, vperp::coordinate, vpa::c
                                           evolve_p, z, vpa, zero, phi)
     if z.irank == 0
         pdf[last_negative_vpa_ind+1:end,:,1] .= 0.0
-        # Limit last non-zero grid point to be less than the linear fit between the
-        # second-last non-zero point and zero at the cut-off velocity. This ensures that
-        # there is no jump when the cut-off velocity passes this grid point, but the
-        # boundary condition can also be re-applied giving the exact same result.
+        # Limit last non-zero grid point to be less than a value that depends linearly on
+        # the value at the second-last non-zero point and the difference between the
+        # cut-off velocity and the grid point position. This ensures that there is no jump
+        # when the cut-off velocity passes this grid point, but the boundary condition can
+        # also be re-applied giving the exact same result. The proportionality constant is
+        # chosen so that the cutoff is equal to the value at the second-last non-zero
+        # point when the cut-off velocity is just inside the first zero point - this
+        # ensures that as long as the values of the shape function are decreasing towards
+        # the cut-off point, there is no jump at the new 'last non-zero point' when the
+        # cut-off velocity passes a grid point.
         @. pdf[last_negative_vpa_ind,:,1] = min(pdf[last_negative_vpa_ind,:,1],
                                                 pdf[last_negative_vpa_ind-1,:,1] *
                                                 (wpa_cut_lower - vpa.grid[last_negative_vpa_ind]) /
@@ -2051,10 +2057,16 @@ function enforce_zero_incoming_bc!(pdf, z::coordinate, vperp::coordinate, vpa::c
     # absolute velocity at right boundary
     if z.irank == z.nrank - 1
         pdf[1:first_positive_vpa_ind-1,:,end] .= 0.0
-        # Limit first non-zero grid point to be less than the linear fit between the
-        # second non-zero point and zero at the cut-off velocity. This ensures that
-        # there is no jump when the cut-off velocity passes this grid point, but the
-        # boundary condition can also be re-applied giving the exact same result.
+        # Limit last non-zero grid point to be less than a value that depends linearly on
+        # the value at the second-last non-zero point and the difference between the
+        # cut-off velocity and the grid point position. This ensures that there is no jump
+        # when the cut-off velocity passes this grid point, but the boundary condition can
+        # also be re-applied giving the exact same result. The proportionality constant is
+        # chosen so that the cutoff is equal to the value at the second-last non-zero
+        # point when the cut-off velocity is just inside the first zero point - this
+        # ensures that as long as the values of the shape function are decreasing towards
+        # the cut-off point, there is no jump at the new 'last non-zero point' when the
+        # cut-off velocity passes a grid point.
         @. pdf[first_positive_vpa_ind,:,end] = min(pdf[first_positive_vpa_ind,:,end],
                                                    pdf[first_positive_vpa_ind+1,:,end] *
                                                  (vpa.grid[first_positive_vpa_ind] - wpa_cut_upper) /
