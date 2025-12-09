@@ -502,10 +502,6 @@ function check_input(io, output_dir, timestepping_section, r, z, vpa, vperp, com
                      evolve_moments, num_diss_params, save_inputs_to_txt, collisions)
     nstep = timestepping_section["nstep"]
     dt = timestepping_section["dt"]
-    # copy the input file to the output directory to be saved
-    if save_inputs_to_txt && global_rank[] == 0
-        cp(joinpath(@__DIR__, "moment_kinetics_input.jl"), joinpath(output_dir, "moment_kinetics_input.jl"), force=true)
-    end
     # open ascii file in which informtaion about input choices will be written
     check_input_time_advance(nstep, dt, io)
     check_coordinate_input(r, "r", io)
