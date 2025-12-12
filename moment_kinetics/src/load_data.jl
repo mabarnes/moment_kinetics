@@ -46,6 +46,7 @@ using ..utils: get_CFL!, get_minimum_CFL_r, get_minimum_CFL_z, get_minimum_CFL_v
                get_minimum_CFL_vperp, get_minimum_CFL_neutral_z,
                get_minimum_CFL_neutral_vz, enum_from_string
 using ..vpa_advection: update_speed_vpa!
+using ..alpha_advection: update_speed_alpha!
 using ..z_advection: update_speed_z!
 
 using Glob
@@ -5440,12 +5441,13 @@ const get_variable_funcs = Dict{String,Any}(
             end
             return variable
         end,
-    "z_advect_speed" => (run_info; normalize_advection_speed_shape=true, kwargs...) -> begin
-            # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
+    "alpha_advect_speed" => (run_info; normalize_advection_speed_shape=true, kwargs...) -> begin
+            # update_speed_alpha!() requires all dimensions to be present, so do *not* pass kwargs
             # to get_variable() in this case. Instead select a slice of the result.
-            upar = get_variable(run_info, "parallel_flow")
-            vth = get_variable(run_info, "thermal_speed")
-            nz, nr, nspecies, nt = size(upar)
+            nt = run_info.nt
+            nspecies = run_info.composition.n_ion_species
+            nr = run_info.r.n
+            nz = run_info.z.n
             nvperp = run_info.vperp.n
             nvpa = run_info.vpa.n
 
@@ -5468,10 +5470,68 @@ const get_variable_funcs = Dict{String,Any}(
                 advect = (speed=@view(speed[:,:,:,:,is,it]),)
                 # Only need Er
                 fields = (gEr=@view(gEr[:,:,:,is,it]), vEz=@view(vEz[:,:,it]))
+                @views update_speed_alpha!(advect, run_info.evolve_upar,
+                                           run_info.evolve_p, fields, run_info.vpa,
+                                           run_info.vperp, run_info.z, run_info.r,
+                                           run_info.geometry, is)
+            end
+
+            # Horrible hack so that we can get the speed back without rearranging the
+            # dimensions, if we want that to pass it to a utility function from the main code
+            # (e.g. to calculate a CFL limit).
+            if normalize_advection_speed_shape
+                variable = allocate_float(nvpa, nvperp, nz, nr, nspecies, nt)
+                for it ∈ 1:nt, is ∈ 1:nspecies, ir ∈ 1:nr, iz ∈ 1:nz, ivperp ∈ 1:nvperp, ivpa ∈ 1:nvpa
+                    variable[ivpa,ivperp,iz,ir,is,it] = speed[iz,ivpa,ivperp,ir,is,it]
+                end
+                variable = select_slice_of_variable(variable; kwargs...)
+            else
+                variable = speed
+                if :it ∈ keys(kwargs)
+                    variable = selectdim(variable, 6, kwargs[:it])
+                end
+                if :is ∈ keys(kwargs)
+                    variable = selectdim(variable, 5, kwargs[:is])
+                end
+                if :ir ∈ keys(kwargs)
+                    variable = selectdim(variable, 4, kwargs[:ir])
+                end
+                if :ivperp ∈ keys(kwargs)
+                    variable = selectdim(variable, 3, kwargs[:ivperp])
+                end
+                if :ivpa ∈ keys(kwargs)
+                    variable = selectdim(variable, 2, kwargs[:ivpa])
+                end
+                if :iz ∈ keys(kwargs)
+                    variable = selectdim(variable, 1, kwargs[:iz])
+                end
+            end
+            return variable
+        end,
+    "z_advect_speed" => (run_info; normalize_advection_speed_shape=true, kwargs...) -> begin
+            # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
+            # to get_variable() in this case. Instead select a slice of the result.
+            upar = get_variable(run_info, "parallel_flow")
+            vth = get_variable(run_info, "thermal_speed")
+            nz, nr, nspecies, nt = size(upar)
+            nvperp = run_info.vperp.n
+            nvpa = run_info.vpa.n
+
+            speed = allocate_float(nz, nvpa, nvperp, nr, nspecies, nt)
+
+            setup_distributed_memory_MPI(1,1,1,1)
+            setup_loop_ranges!(0, 1; s=nspecies, sn=run_info.n_neutral_species, r=nr, z=nz,
+                               vperp=nvperp, vpa=nvpa, vzeta=run_info.vzeta.n,
+                               vr=run_info.vr.n, vz=run_info.vz.n)
+            for it ∈ 1:nt, is ∈ 1:nspecies
+                @begin_serial_region()
+                # Only need some struct with a 'speed' variable
+                advect = (speed=@view(speed[:,:,:,:,is,it]),)
+                # Only need Er
                 @views update_speed_z!(advect, upar[:,:,is,it], vth[:,:,is,it],
-                                       run_info.evolve_upar, run_info.evolve_p, fields,
-                                       run_info.vpa, run_info.vperp, run_info.z, run_info.r,
-                                       run_info.time[it], run_info.geometry, is)
+                                       run_info.evolve_upar, run_info.evolve_p,
+                                       run_info.vpa, run_info.vperp, run_info.z,
+                                       run_info.r, run_info.geometry)
             end
 
             # Horrible hack so that we can get the speed back without rearranging the
@@ -5566,6 +5626,8 @@ const get_variable_funcs = Dict{String,Any}(
 
             r_speed = get_variable(run_info, "r_advect_speed";
                                    normalize_advection_speed_shape=false, kwargs...)
+            alpha_speed = get_variable(run_info, "alpha_advect_speed";
+                                       normalize_advection_speed_shape=false, kwargs...)
             z_speed = get_variable(run_info, "z_advect_speed";
                                    normalize_advection_speed_shape=false, kwargs...)
             
@@ -5582,6 +5644,7 @@ const get_variable_funcs = Dict{String,Any}(
                 # Only need some struct with a 'speed' variable
                 advect = [(speed=@view(speed[:,:,:,:,is,it]),) for is ∈ 1:nspecies]
                 r_advect = [(speed=@view(r_speed[:,:,:,:,is,it]),) for is ∈ 1:nspecies]
+                alpha_advect = [(speed=@view(alpha_speed[:,:,:,:,is,it]),) for is ∈ 1:nspecies]
                 z_advect = [(speed=@view(z_speed[:,:,:,:,is,it]),) for is ∈ 1:nspecies]
                 # Only need Ez
                 fields = (gEz=@view(gEz[:,:,:,:,it]), Ez=@view(Ez[:,:,it]))
@@ -5613,8 +5676,9 @@ const get_variable_funcs = Dict{String,Any}(
                                    upar=upar[:,:,:,it],
                                    p=p[:,:,:,it])
                 end
-                @views update_speed_vpa!(advect, fields, fvec, moments, r_advect, z_advect,
-                                         run_info.vpa, run_info.vperp, run_info.z, run_info.r,
+                @views update_speed_vpa!(advect, fields, fvec, moments, r_advect,
+                                         alpha_advect, z_advect, run_info.vpa,
+                                         run_info.vperp, run_info.z, run_info.r,
                                          run_info.composition, run_info.collisions,
                                          run_info.external_source_settings.ion,
                                          run_info.time[it], run_info.geometry)
@@ -6010,12 +6074,15 @@ const get_variable_funcs = Dict{String,Any}(
     "CFL_ion_z" => (run_info; kwargs...) -> begin
             # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
             # to get_variable() in this case. Instead select a slice of the result.
-            speed = get_variable(run_info, "z_advect_speed";
-                                 normalize_advection_speed_shape=false)
-            nz, nvpa, nvperp, nr, nspecies, nt = size(speed)
-            CFL = similar(speed)
+            z_speed = get_variable(run_info, "z_advect_speed";
+                                   normalize_advection_speed_shape=false)
+            alpha_speed = get_variable(run_info, "alpha_advect_speed";
+                                       normalize_advection_speed_shape=false)
+            z_speed .+= alpha_speed
+            nz, nvpa, nvperp, nr, nspecies, nt = size(z_speed)
+            CFL = similar(z_speed)
             for it ∈ 1:nt
-                @views get_CFL!(CFL[:,:,:,:,:,it], speed[:,:,:,:,:,it], run_info.z)
+                @views get_CFL!(CFL[:,:,:,:,:,it], z_speed[:,:,:,:,:,it], run_info.z)
             end
 
             variable = allocate_float(nvpa, nvperp, nz, nr, nspecies, nt)
@@ -6147,16 +6214,19 @@ const get_variable_funcs = Dict{String,Any}(
     "minimum_CFL_ion_z" => (run_info; kwargs...) -> begin
             # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
             # to get_variable() in this case. Instead select a slice of the result.
-            speed = get_variable(run_info, "z_advect_speed";
-                                 normalize_advection_speed_shape=false)
-            nt = size(speed, 6)
-            nspecies = size(speed, 5)
+            z_speed = get_variable(run_info, "z_advect_speed";
+                                   normalize_advection_speed_shape=false)
+            alpha_speed = get_variable(run_info, "alpha_advect_speed";
+                                       normalize_advection_speed_shape=false)
+            z_speed .+= alpha_speed
+            nt = size(z_speed, 6)
+            nspecies = size(z_speed, 5)
             variable = allocate_float(nt)
             @begin_serial_region()
             for it ∈ 1:nt
                 min_CFL = Inf
                 for is ∈ 1:nspecies
-                    min_CFL = min(min_CFL, get_minimum_CFL_z(@view(speed[:,:,:,:,is,it]), run_info.z))
+                    min_CFL = min(min_CFL, get_minimum_CFL_z(@view(z_speed[:,:,:,:,is,it]), run_info.z))
                 end
                 variable[it] = min_CFL
             end
