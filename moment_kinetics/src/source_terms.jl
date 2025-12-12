@@ -14,8 +14,8 @@ calculate the source terms due to redefinition of the pdf to split off density,
 flow and/or pressure, and use them to update the pdf
 """
 @timeit global_timer source_terms!(
-                         pdf_out, fvec_in, moments, r_advect, z_advect, vpa, vperp, z, r,
-                         dt, spectral, composition, collisions,
+                         pdf_out, fvec_in, moments, r_advect, alpha_advect, z_advect, vpa,
+                         vperp, z, r, dt, spectral, composition, collisions,
                          ion_source_settings) = begin
 
     @begin_s_r_z_vperp_vpa_region()
@@ -40,6 +40,7 @@ flow and/or pressure, and use them to update the pdf
         dvth_dz = moments.ion.dvth_dz
         @loop_s is begin
             r_speed = r_advect[is].speed
+            alpha_speed = alpha_advect[is].speed
             z_speed = z_advect[is].speed
             @loop_r_z ir iz begin
                 ddt_term = v_dim_coeff / vth[iz,ir,is] * dvth_dt[iz,ir,is] - dn_dt[iz,ir,is] / n[iz,ir,is]
@@ -49,7 +50,7 @@ flow and/or pressure, and use them to update the pdf
                     pdf_out[ivpa,ivperp,iz,ir,is] +=
                         dt * (ddt_term
                               + rdot_coefficient * r_speed[ir,ivpa,ivperp,iz]
-                              + zdot_coefficient * z_speed[iz,ivpa,ivperp,ir]
+                              + zdot_coefficient * (alpha_speed[iz,ivpa,ivperp,ir] + z_speed[iz,ivpa,ivperp,ir])
                              ) *
                         pdf_in[ivpa,ivperp,iz,ir,is]
                 end
@@ -58,6 +59,7 @@ flow and/or pressure, and use them to update the pdf
     elseif moments.evolve_upar || moments.evolve_density
         @loop_s is begin
             r_speed = r_advect[is].speed
+            alpha_speed = alpha_advect[is].speed
             z_speed = z_advect[is].speed
             @loop_r_z ir iz begin
                 ddt_term = - dn_dt[iz,ir,is] / n[iz,ir,is]
@@ -67,7 +69,7 @@ flow and/or pressure, and use them to update the pdf
                     pdf_out[ivpa,ivperp,iz,ir,is] +=
                         dt * (ddt_term
                               + rdot_coefficient * r_speed[ir,ivpa,ivperp,iz]
-                              + zdot_coefficient * z_speed[iz,ivpa,ivperp,ir]
+                              + zdot_coefficient * (alpha_speed[iz,ivpa,ivperp,ir] + z_speed[iz,ivpa,ivperp,ir])
                              ) *
                         pdf_in[ivpa,ivperp,iz,ir,is]
                 end
