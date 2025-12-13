@@ -69,6 +69,39 @@ flow and/or pressure, and use them to update the pdf
     return nothing
 end
 
+function get_contribution_from_ion_pdf_term_evolve_nup(sub_terms::IonSubTerms)
+    nvperp = sub_term.nvperp
+    vth = sub_terms.vth
+    dvth_dt = sub_terms.dvth_dt
+    dvth_dr = sub_terms.dvth_dr
+    dvth_dz = sub_terms.dvth_dz
+    n = sub_terms.n
+    dn_dt = sub_terms.dn_dt
+    dn_dr = sub_terms.dn_dr
+    dn_dz = sub_terms.dn_dz
+    r_speed = sub_terms.r_speed
+    alpha_speed = sub_terms.alpha_speed
+    z_speed = sub_terms.z_speed
+    f = sub_terms.f
+
+    # velocity dimension coefficient is 1.0 for 1V, and 3.0 for 3V. Only needed for
+    # evolve_p since vth does not come in to gdot (Fdot) for other cases.
+    if nvperp == 1
+        v_dim_coeff = 1.0
+    else
+        v_dim_coeff = 3.0
+    end
+
+    ddt_term = v_dim_coeff * vth^(-1) * dvth_dt - dn_dt * n^(-1)
+    rdot_coefficient = v_dim_coeff * vth^(-1) * dvth_dr - dn_dr * n^(-1)
+    zdot_coefficient = v_dim_coeff * vth^(-1) * dvth_dz - dn_dz * n^(-1)
+    term = (ddt_term
+            + rdot_coefficient * r_speed
+            + zdot_coefficient * (alpha_speed + z_speed)) * f
+
+    return term
+end
+
 """
 calculate the source terms due to redefinition of the pdf to split off density,
 flow and/or pressure, and use them to update the pdf

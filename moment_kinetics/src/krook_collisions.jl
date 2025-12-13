@@ -212,6 +212,35 @@ Currently Krook collisions
     return nothing
 end
 
+function get_ion_krook_collisions_term_evolve_nup(sub_terms::IonSubTerms)
+    nvperp = sub_terms.nvperp
+    collisions = sub_terms.collisions
+    f = sub_terms.f
+    n = sub_terms.n
+    vth = sub_terms.vth
+    wpa = sub_terms.wpa
+    wperp = sub_terms.wperp
+
+    if nvperp == 1
+        # For 1V need to use parallel temperature for Maxwellian in Krook
+        # operator, and for consistency with old 1D1V results also calculate
+        # collision frequency using parallel temperature.
+        Krook_vth = sqrt(3.0) * vth
+        adjust_1V = 1.0 / sqrt(3.0)
+        Maxwellian_prefactor = 1.0 / sqrt(π)
+    else
+        Krook_vth = vth
+        adjust_1V = 1.0
+        Maxwellian_prefactor = 1.0 / π^1.5
+    end
+    nu_ii = get_collision_frequency_ii(collisions, n, Krook_vth)
+
+    term = nu_ii * (f - Maxwellian_prefactor * adjust_1V * exp(-(wpa*adjust_1V)^2
+                                                               -(wperp*adjust_1V)^2))
+
+    return term
+end
+
 """
 Add Krook collision operator for electrons
 

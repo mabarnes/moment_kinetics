@@ -33,6 +33,7 @@ using ..velocity_grid_transforms: vzvrvzeta_to_vpavperp!, vpavperp_to_vzvrvzeta!
 using ..boundary_conditions
 using ..boundary_conditions: get_ion_z_boundary_cutoff_indices, enforce_vperp_boundary_condition!
 using ..boundary_conditions: vpagrid_to_vpa, enforce_v_boundary_condition_local!,
+                             skip_f_ion_bc_points_in_Jacobian,
                              skip_f_electron_bc_points_in_Jacobian,
                              skip_f_electron_bc_points_in_Jacobian_v_solve,
                              skip_f_electron_bc_points_in_Jacobian_z_solve
@@ -60,6 +61,7 @@ using ..electron_kinetic_equation: update_electron_pdf!, implicit_electron_advan
                                    get_electron_preconditioners
 using ..electron_vpa_advection: update_electron_speed_vpa!
 using ..electron_z_advection: update_electron_speed_z!
+using ..ion_jacobian_terms: get_ion_preconditioners
 using ..ionization: ion_ionization_collisions_1V!, neutral_ionization_collisions_1V!,
                     ion_ionization_collisions_3V!, neutral_ionization_collisions_3V!
 using ..krook_collisions: krook_collisions!

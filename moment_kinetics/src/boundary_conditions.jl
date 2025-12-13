@@ -2769,6 +2769,41 @@ function enforce_vperp_boundary_condition!(f::AbstractArray{mk_float,3}, bc, vpe
 end
 
 """
+    skip_f_ion_bc_points_in_Jacobian(z_speed, ivpa, ivperp, iz, vpa, vperp, z)
+
+This function returns `true` when the grid point specified by `iz`, `ivperp`, `ivpa` would
+be set by the boundary conditions on the electron distribution function. When this
+happens, the corresponding row should be skipped when adding contributions to the Jacobian
+matrix, so that the row remains the same as a row of the identity matrix, so that the
+Jacobian matrix does not modify those points. Returns `false` otherwise.
+"""
+function skip_f_ion_bc_points_in_Jacobian(z_speed, ivpa, ivperp, iz, vpa, vperp, z)
+    # z boundary condition
+    # Treat as if using Dirichlet boundary condition for incoming part of the distribution
+    # function on the block boundary, regardless of the actual boundary condition and
+    # whether this is an internal boundary or an actual domain boundary. This prevents the
+    # matrix evaluated for a single block (without coupling to neighbouring blocks) from
+    # becoming singular
+    if iz == 1 && z_speed[iz,ivpa,ivperp] ≥ 0.0
+        return true
+    end
+    if iz == z.n && z_speed[iz,ivpa,ivperp] ≤ 0.0
+        return true
+    end
+
+    # vperp boundary condition
+    if vperp.n > 1 && ivperp == vperp.n
+        return true
+    end
+
+    if ivpa == 1 || ivpa == vpa.n
+        return true
+    end
+
+    return false
+end
+
+"""
     skip_f_electron_bc_points_in_Jacobian(z_speed, ivpa, ivperp, iz, vpa, vperp, z)
 
 This function returns `true` when the grid point specified by `iz`, `ivperp`, `ivpa` would

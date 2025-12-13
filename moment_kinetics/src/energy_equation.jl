@@ -151,4 +151,16 @@ evolve the neutral parallel pressure by solving the energy equation
     return nothing
 end
 
+"""
+    get_dvth_dt_expanded_term_evolve_nup(bzed, mi, n, vth, ppar, dupar_dz, dqpar_dz)
+
+Note that this function only includes terms that depend directly on the ion shape
+function, as these are the only ones that will contribute to the Jacobian matrix from
+here. The contributions of all the 'constant' terms contribute only through the
+`dupar_dt_array`.
+"""
+function get_dvth_dt_expanded_term_evolve_nup(bzed, mi, n, vth, ppar, dupar_dz, dqpar_dz)
+    return - 2.0 * (3.0 * mi * n * vth)^(-1) * bzed * (dqpar_dz + ppar * dupar_dz)
+end
+
 end

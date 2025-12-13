@@ -102,4 +102,16 @@ function update_speed_z_inner!(advect, upar, vth, vpa, bzed, evolve_upar::Val,
     return nothing
 end
 
+function get_ion_z_advection_term_evolve_nup(sub_terms::IonSubTerms)
+    vth = sub_terms.vth
+    wpa = sub_terms.wpa
+    upar = sub_terms.upar
+    bzed = sub_terms.bzed
+    df_dz = sub_terms.df_dz
+
+    term = (vth * wpa + upar) * bzed * df_dz
+
+    return term
+end
+
 end

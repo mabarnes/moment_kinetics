@@ -571,4 +571,26 @@ function update_speed_vpa_inner!(vpa_advect, gEz, bzed, dBdz, mu,
     return nothing
 end
 
+function get_ion_vpa_advection_term_evolve_nup(sub_terms::IonSubTerms)
+    bz = sub_terms.bzed
+    Ez = sub_terms.Ez
+    r_speed = sub_terms.r_speed
+    alpha_speed = sub_terms.alpha_speed
+    z_speed = sub_terms.z_speed
+    dupar_dt = sub_terms.dupar_dt
+    dupar_dr = sub_terms.dupar_dr
+    dupar_dz = sub_terms.dupar_dz
+    dvth_dt = sub_terms.dvth_dt
+    dvth_dr = sub_terms.dvth_dr
+    dvth_dz = sub_terms.dvth_dz
+
+    speed = (bz * Ez
+             - (dupar_dt + r_speed * dupar_dr + (alpha_speed + z_speed) * dupar_dz)
+             - wpa * (dvth_dt + r_speed * dvth_dr + (alpha_speed + z_speed) * dvth_dz)
+            ) / vth
+    term = speed * df_dvpa
+
+    return term
+end
+
 end

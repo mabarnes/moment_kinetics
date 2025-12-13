@@ -177,4 +177,16 @@ end
     return nothing
 end
 
+"""
+    get_dupar_dt_expanded_term(bzed, mi, n, dppar_dz)
+
+Note that this function only includes terms that depend directly on the ion shape
+function, as these are the only ones that will contribute to the Jacobian matrix from
+here. The contributions of all the 'constant' terms contribute only through the
+`dupar_dt_array`.
+"""
+function get_dupar_dt_expanded_term_evolve_nup(bzed, mi, n, dppar_dz)
+    return - bzed * (mi * n)^(-1) * dppar_dz
+end
+
 end

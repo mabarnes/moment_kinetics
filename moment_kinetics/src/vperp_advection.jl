@@ -263,4 +263,23 @@ function update_z_alpha_r_speeds!(z_advect, alpha_advect, r_advect, fvec_in, mom
     return nothing
 end    
 
+function get_ion_vperp_advection_term_evolve_nup(sub_terms::IonSubTerms)
+    vth = sub_terms.vth
+    dvth_dt = sub_terms.dvth_dt
+    dvth_dr = sub_terms.dvth_dr
+    dvth_dz = sub_terms.dvth_dz
+    wperp = sub_terms.wperp
+    r_speed = sub_terms.r_speed
+    alpha_speed = sub_terms.alpha_speed
+    z_speed = sub_terms.z_speed
+    df_dvperp = sub_terms.df_dvperp
+
+    speed = -vth^(-1) * wperp * (dvth_dt
+                                 + r_speed * dvth_dr
+                                 + (alpha_speed + z_speed) * dvth_dz)
+    term = speed * df_dvperp
+
+    return term
+end
+
 end

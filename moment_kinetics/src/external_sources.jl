@@ -1219,9 +1219,58 @@ Add external source term to the ion kinetic equation.
                   * "evolve_upar=$(moments.evolve_upar), evolve_p=$(moments.evolve_p)")
         end
     else
-        error("Unsupported source_type=$(source_type) ")
+        error("Unsupported source_type=$(source_type)")
     end
     return nothing
+end
+
+function get_total_external_ion_source_term_evolve_nup(sub_terms::IonSubTerms)
+    external_sources = sub_terms.external_sources
+    ir = sub_terms.ir
+    nvperp = sub_terms.nvperp
+    z = sub_terms.z
+    vth = sub_terms.vth
+    n = sub_terms.n
+    wperp = sub_terms.wperp
+    wpa = sub_terms.wpa
+    f = sub_terms.f
+
+    term = NullTerm()
+    if nvperp == 1
+        Maxwellian_prefactor = 1.0 / sqrt(π)
+    else
+        Maxwellian_prefactor = 1.0 / π^1.5
+    end
+    for ion_source ∈ external_sources
+        source_type = ion_source.source_type
+        if source_type in ("Maxwellian","energy","density_midpoint_control","density_profile_control","temperature_midpoint_control")
+            source_T = ConstantTerm(@view ion_source.source_T_array[:,ir]; z=z)
+            source_amplitude = ConstantTerm(@view ion_source.source_amplitude[:,ir]; z=z)
+            source_n = ion_source.source_n
+            if nvperp == 1
+                source_vth_factor = (2.0 * source_T)^(-0.5)
+                this_vth_factor = vth
+            else
+                source_vth_factor = (2.0 * source_T)^(-1.5)
+                this_vth_factor = vth^3
+            end
+            Tperp_over_Tpar = ion_source.Tperp_over_Tpar
+
+            term -= this_vth_factor * n^(-1) * Maxwellian_prefactor * source_vth_factor *
+                    source_amplitude * source_n *
+                    exp( - (wperp*vth)^2 * (2.0 * 3.0 * source_T)^(-1) * (2.0 + Tperp_over_Tpar^(-1))
+                         - (wpa*vth + upar)^2 * (2.0 * 3.0 * source_T)^(-1) * (1.0 + 2.0 * Tperp_over_Tpar))
+        else
+            error("source_type=$(source_type) not supported in "
+                  * "get_total_external_ion_source_term_evolve_nup().")
+        end
+
+        if source_type ∈ ("energy", "temperature_midpoint_control")
+            term += source_amplitude * f
+        end
+    end
+
+    return term
 end
 
 """

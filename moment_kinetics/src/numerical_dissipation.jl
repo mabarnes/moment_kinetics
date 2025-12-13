@@ -16,6 +16,7 @@ using ..calculus: derivative!, second_derivative!, laplacian_derivative!
 using ..derivatives: derivative_r!, derivative_z!, second_derivative_r!,
                      second_derivative_z!
 using ..input_structs
+using ..jacobian_matrices: NullTerm
 using ..timer_utils
 using ..type_definitions: mk_float, mk_int
 
@@ -473,6 +474,29 @@ on internal or external element boundaries
     end
 
     return nothing
+end
+
+function get_ion_dissipation_term_evolve_nup(sub_terms::IonSubTerms)
+    term = NullTerm()
+
+    z_dissipation_coefficient = sub_terms.z_dissipation_coefficient
+    vperp_dissipation_coefficient = sub_terms.vperp_dissipation_coefficient
+    vpa_dissipation_coefficient = sub_terms.vpa_dissipation_coefficient
+
+    if z_dissipation_coefficient > 0.0
+        d2f_dz2 = sub_terms.d2f_dz2
+        term += z_dissipation_coefficient * d2f_dz2
+    end
+    if vperp_dissipation_coefficient > 0.0
+        d2f_dvperp2 = sub_terms.d2f_dvperp2
+        term += vperp_dissipation_coefficient * d2f_dvperp2
+    end
+    if vpa_dissipation_coefficient > 0.0
+        d2f_dvpa2 = sub_terms.d2f_dvpa2
+        term += vpa_dissipation_coefficient * d2f_dvpa2
+    end
+
+    return term
 end
 
 """
