@@ -18,18 +18,25 @@ using Combinatorics
 using MPI
 using Primes
 
+# `combinations()` returns a result including an empty vector `[]` from Combinatorics
+# v1.1.0, but without the empty vector in earlier versions, so wrap in our own function to
+# make the behaviour consistent.
+function combinations_without_empty(x)
+    return (x for x in combinations(x) if !isempty(x))
+end
+
 # The ion dimensions and neutral dimensions are separated in order to restrict the
 # supported parallel loop types to correct combinations. This also reduces the number
 # of combinations - for some of the debugging features this helps.
 const dimension_combinations = Tuple(Tuple(c) for c in
-                                     unique((combinations(ion_dimensions)...,
-                                             combinations(neutral_dimensions)...)))
+                                     unique((combinations_without_empty(ion_dimensions)...,
+                                             combinations_without_empty(neutral_dimensions)...)))
 const anysv_dimension_combinations = tuple((:anysv,),
                                           ((:anysv, d...) for d ∈
-                                           unique(combinations((:s, :vperp, :vpa))))...)
+                                           unique(combinations_without_empty((:s, :vperp, :vpa))))...)
 const anyzv_dimension_combinations = tuple((:anyzv,),
                                           ((:anyzv, d...) for d ∈
-                                           unique(combinations((:z, :vperp, :vpa))))...)
+                                           unique(combinations_without_empty((:z, :vperp, :vpa))))...)
 
 """
 Construct a string composed of the dimension names given in the Tuple `dims`,
@@ -53,7 +60,7 @@ function get_subblock_splits(sub_block_size, n)
     # Iterate over all possible factors of sub_block_size (either 1 or any
     # combination of the prime factors)
     result = Vector{Vector{mk_int}}(undef, 0)
-    for this_factor_parts ∈ [[1]; collect(combinations(factors))]
+    for this_factor_parts ∈ [[1]; collect(combinations_without_empty(factors))]
         this_factor = prod(this_factor_parts)
         @assert sub_block_size % this_factor == 0
 
@@ -422,7 +429,7 @@ function get_best_anyzv_split(block_size, dim_sizes)
     # Choose the number of processes to distribute the r grid across as:
     # 1. some factor of block_size
     factors = factor(Vector, block_size)
-    r_splits = [[1]; collect(combinations(factors))]
+    r_splits = [[1]; collect(combinations_without_empty(factors))]
     r_splits = unique(prod(r) for r ∈ r_splits)
     sort!(r_splits)
 
