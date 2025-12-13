@@ -16,7 +16,7 @@ using ..derivatives: derivative_z!
 do a single stage time advance (potentially as part of a multi-stage RK scheme)
 """
 @timeit global_timer z_advection!(
-                         f_out, fvec_in, moments, fields, advect, z, vpa, vperp, r, dt, t,
+                         f_out, fvec_in, moments, fields, advect, z, vpa, vperp, r, dt,
                          spectral, composition, geometry, scratch_dummy) = begin
 
     # get the updated speed along the z direction using the current f

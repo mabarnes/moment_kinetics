@@ -3955,7 +3955,7 @@ implementation), a call needs to be made with `dt` scaled by some coefficient.
         # apply z-advection operation to ion species
         if advance.z_advection
             z_advection!(fvec_out.pdf, fvec_in, moments, fields, z_advect, z, vpa, vperp, r,
-                        dt, t, z_spectral, composition, geometry, scratch_dummy)
+                        dt, z_spectral, composition, geometry, scratch_dummy)
             write_debug_IO("z_advection!")
         end
 

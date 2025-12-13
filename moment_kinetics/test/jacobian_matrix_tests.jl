@@ -336,8 +336,9 @@ function get_delta_state(delta_f, delta_p, separate_zeroth_moment,
     return delta_state
 end
 
-function test_get_pdf_term(test_input::AbstractDict, label::String, get_term::Function,
-                           rhs_func!::Function, rtol::mk_float)
+function test_get_electron_pdf_term(test_input::AbstractDict, label::String,
+                                    get_term::Function, rhs_func!::Function,
+                                    rtol::mk_float)
     test_input = deepcopy(test_input)
     test_input["output"]["run_name"] *= "_" * label[1:min(11, length(label))]
     println("        - $label")
@@ -855,8 +856,8 @@ function test_get_pdf_term(test_input::AbstractDict, label::String, get_term::Fu
     return nothing
 end
 
-function test_get_p_term(test_input::AbstractDict, label::String, get_term::Function,
-                         rhs_func!::Function, rtol::mk_float)
+function test_get_electron_p_term(test_input::AbstractDict, label::String,
+                                  get_term::Function, rhs_func!::Function, rtol::mk_float)
     test_input = deepcopy(test_input)
     test_input["output"]["run_name"] *= "_" * label[1:min(11, length(label))]
     println("        - $label")
@@ -2224,18 +2225,13 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2)
     return nothing
 end
 
-function runtests()
-    if Sys.isapple() && "CI" ∈ keys(ENV) && global_size[] > 1
-        # These tests are too slow in the parallel tests job on macOS, so skip in that
-        # case.
-        return nothing
-    end
+function run_electron_tests()
     # Create a temporary directory for test output
     test_output_directory = get_MPI_tempdir()
     test_input["output"]["base_directory"] = test_output_directory
 
-    @testset "Jacobian matrix " verbose=use_verbose begin
-        println("Jacobian matrix")
+    @testset "Electron Jacobian matrix " verbose=use_verbose begin
+        println("Electron Jacobian matrix")
         precon_list = String[]
         @long push!(precon_list, "lu_no_separate_moments")
         @long push!(precon_list, "lu_separate_third_moment")
@@ -2259,9 +2255,9 @@ function runtests()
                                       kwargs[:scratch_dummy], kwargs[:dt], kwargs[:ir])
                 return nothing
             end
-            test_get_pdf_term(this_test_input, "electron_z_advection",
-                              get_electron_z_advection_term, z_advection_wrapper!,
-                              (2.5e2*epsilon)^2)
+            test_get_electron_pdf_term(this_test_input, "electron_z_advection",
+                                       get_electron_z_advection_term,
+                                       z_advection_wrapper!, (2.5e2*epsilon)^2)
 
             function vpa_advection_wrapper!(; kwargs...)
                 electron_vpa_advection!(kwargs[:residual], kwargs[:this_f], kwargs[:dens],
@@ -2273,9 +2269,9 @@ function runtests()
                                         kwargs[:ir])
                 return nothing
             end
-            test_get_pdf_term(this_test_input, "electron_vpa_advection",
-                              get_electron_vpa_advection_term, vpa_advection_wrapper!,
-                              (3.0e2*epsilon)^2)
+            test_get_electron_pdf_term(this_test_input, "electron_vpa_advection",
+                                       get_electron_vpa_advection_term,
+                                       vpa_advection_wrapper!, (3.0e2*epsilon)^2)
 
             function contribution_from_electron_pdf_term_wrapper!(; kwargs...)
                 add_contribution_from_pdf_term!(kwargs[:residual], kwargs[:this_f],
@@ -2286,9 +2282,11 @@ function runtests()
                                                 kwargs[:ir])
                 return nothing
             end
-            test_get_pdf_term(this_test_input, "contribution_from_electron_pdf_term",
-                              get_contribution_from_electron_pdf_term,
-                              contribution_from_electron_pdf_term_wrapper!, (4.0e2*epsilon)^2)
+            test_get_electron_pdf_term(this_test_input,
+                                       "contribution_from_electron_pdf_term",
+                                       get_contribution_from_electron_pdf_term,
+                                       contribution_from_electron_pdf_term_wrapper!,
+                                       (4.0e2*epsilon)^2)
 
             function contribution_from_electron_dissipation_term!(; kwargs...)
                 add_dissipation_term!(kwargs[:residual], kwargs[:this_f],
@@ -2297,9 +2295,10 @@ function runtests()
                                       kwargs[:num_diss_params], kwargs[:dt])
                 return nothing
             end
-            test_get_pdf_term(this_test_input, "electron_dissipation_term",
-                              get_electron_dissipation_term,
-                              contribution_from_electron_dissipation_term!, (1.0e1*epsilon)^2)
+            test_get_electron_pdf_term(this_test_input, "electron_dissipation_term",
+                                       get_electron_dissipation_term,
+                                       contribution_from_electron_dissipation_term!,
+                                       (1.0e1*epsilon)^2)
 
             function contribution_from_krook_collisions!(; kwargs...)
                 electron_krook_collisions!(kwargs[:residual], kwargs[:this_f], kwargs[:dens],
@@ -2308,9 +2307,10 @@ function runtests()
                                            kwargs[:dt])
                 return nothing
             end
-            test_get_pdf_term(this_test_input, "electron_krook_collisions",
-                              get_electron_krook_collisions_term,
-                              contribution_from_krook_collisions!, (2.0e1*epsilon)^2)
+            test_get_electron_pdf_term(this_test_input, "electron_krook_collisions",
+                                       get_electron_krook_collisions_term,
+                                       contribution_from_krook_collisions!,
+                                       (2.0e1*epsilon)^2)
 
             function contribution_from_external_electron_sources!(; kwargs...)
                 total_external_electron_sources!(kwargs[:residual], kwargs[:this_f],
@@ -2321,9 +2321,10 @@ function runtests()
                                                  kwargs[:ir])
                 return nothing
             end
-            test_get_pdf_term(this_test_input, "external_electron_sources",
-                              get_total_external_electron_source_term,
-                              contribution_from_external_electron_sources!, (3.0e1*epsilon)^2)
+            test_get_electron_pdf_term(this_test_input, "external_electron_sources",
+                                       get_total_external_electron_source_term,
+                                       contribution_from_external_electron_sources!,
+                                       (3.0e1*epsilon)^2)
 
             # For this test where only the 'constraint forcing' term is added to the residual,
             # the residual is exactly zero for the initial condition (because that is
@@ -2354,9 +2355,194 @@ function runtests()
                                                       kwargs[:dt], kwargs[:ir])
                 return nothing
             end
-            test_get_pdf_term(this_test_input, "implicit_constraint_forcing",
-                              get_electron_implicit_constraint_forcing_term,
-                              contribution_from_implicit_constraint_forcing!, (2.5e0*epsilon))
+            test_get_electron_pdf_term(this_test_input, "implicit_constraint_forcing",
+                                       get_electron_implicit_constraint_forcing_term,
+                                       contribution_from_implicit_constraint_forcing!,
+                                       (2.5e0*epsilon))
+
+            function contribution_from_electron_energy_equation!(; kwargs...)
+                electron_energy_equation_no_r!(
+                    kwargs[:residual], kwargs[:dens], kwargs[:this_p], kwargs[:dens],
+                    kwargs[:upar], kwargs[:ppar], kwargs[:ion_dens], kwargs[:ion_upar],
+                    kwargs[:ion_p], kwargs[:neutral_dens], kwargs[:neutral_uz],
+                    kwargs[:neutral_p], kwargs[:moments].electron, kwargs[:collisions],
+                    kwargs[:dt], kwargs[:composition],
+                    kwargs[:external_source_settings].electron, kwargs[:num_diss_params],
+                    kwargs[:z], kwargs[:ir])
+                return nothing
+            end
+            test_get_electron_p_term(this_test_input, "electron_energy_equation",
+                                     get_electron_energy_equation_term,
+                                     contribution_from_electron_energy_equation!,
+                                     (6.0e2*epsilon)^2)
+
+            function contribution_from_ion_dt_forcing_of_electron_p!(; kwargs...)
+                p_previous_ion_step = kwargs[:moments].electron.p
+                residual = kwargs[:residual]
+                this_p = kwargs[:this_p]
+                ir = kwargs[:ir]
+                ion_dt = kwargs[:ion_dt]
+                @begin_anyzv_z_region()
+                @loop_z iz begin
+                    # At this point, p_out = p_in + dt*RHS(p_in). Here we add a source/damping
+                    # term so that in the steady state of the electron pseudo-timestepping
+                    # iteration,
+                    #   RHS(p) - (p - p_previous_ion_step) / ion_dt = 0,
+                    # resulting in a backward-Euler step (as long as the pseudo-timestepping
+                    # loop converges).
+                    residual[iz] += -dt * (this_p[iz] - p_previous_ion_step[iz,ir]) / ion_dt
+                end
+                return nothing
+            end
+            test_get_electron_p_term(this_test_input, "ion_dt_forcing_of_electron_p",
+                                     get_ion_dt_forcing_of_electron_p_term,
+                                     contribution_from_ion_dt_forcing_of_electron_p!,
+                                     (1.5e1*epsilon)^2)
+
+            test_electron_wall_bc(this_test_input)
+
+            test_electron_kinetic_equation(this_test_input)
+        end
+    end
+
+    if global_rank[] == 0
+        # Delete output directory to avoid using too much disk space
+        rm(realpath(test_output_directory); recursive=true)
+    end
+
+    return nothing
+end
+
+function run_ion_tests()
+    # Create a temporary directory for test output
+    test_output_directory = get_MPI_tempdir()
+    test_input["output"]["base_directory"] = test_output_directory
+
+    @testset "Ion Jacobian matrix " verbose=use_verbose begin
+        println("Ion Jacobian matrix")
+        precon_list = String[]
+        push!(precon_list, "lu")
+        @testset "$kinetic_ion_preconditioner" verbose=use_verbose for kinetic_ion_preconditioner ∈ precon_list
+            println("    - $kinetic_ion_preconditioner")
+
+            this_test_input = deepcopy(test_input)
+            this_test_input["output"]["run_name"] *= "_" * kinetic_ion_preconditioner
+            this_test_input["timestepping"]["kinetic_ion_preconditioner"] = kinetic_ion_preconditioner
+
+            # Quite large multipliers for rtol in these tests, but it is plausible that a
+            # nonlinear error (∼epsilon^2) could be multiplied by
+            # ∼vth*vpa.L/2∼sqrt(2)*60*6≈500.
+
+            function z_advection_wrapper!(; kwargs...)
+                z_advection!(kwargs[:residual], kwargs[:this_f], kwargs[:moments],
+                             kwargs[:fields], kwargs[:z_advect], kwargs[:z], kwargs[:vpa],
+                             kwargs[:vperp], kwargs[:r], kwargs[:dt], kwargs[:z_spectral],
+                             kwargs[:composition], kwargs[:geometry],
+                             kwargs[:scratch_dummy], kwargs[:ir])
+                return nothing
+            end
+            test_get_ion_pdf_term(this_test_input, "electron_z_advection",
+                                  get_electron_z_advection_term, z_advection_wrapper!,
+                                  (2.5e2*epsilon)^2)
+
+            function vpa_advection_wrapper!(; kwargs...)
+                electron_vpa_advection!(kwargs[:residual], kwargs[:this_f], kwargs[:dens],
+                                        kwargs[:upar], kwargs[:this_p], kwargs[:moments],
+                                        kwargs[:composition], kwargs[:vpa_advect],
+                                        kwargs[:vpa], kwargs[:vpa_spectral],
+                                        kwargs[:scratch_dummy], kwargs[:dt],
+                                        kwargs[:external_source_settings].electron,
+                                        kwargs[:ir])
+                return nothing
+            end
+            test_get_ion_pdf_term(this_test_input, "electron_vpa_advection",
+                                  get_electron_vpa_advection_term, vpa_advection_wrapper!,
+                                  (3.0e2*epsilon)^2)
+
+            function contribution_from_electron_pdf_term_wrapper!(; kwargs...)
+                add_contribution_from_pdf_term!(kwargs[:residual], kwargs[:this_f],
+                                                kwargs[:this_p], kwargs[:dens], kwargs[:upar],
+                                                kwargs[:moments], kwargs[:vpa].grid,
+                                                kwargs[:z], kwargs[:dt],
+                                                kwargs[:external_source_settings].electron,
+                                                kwargs[:ir])
+                return nothing
+            end
+            test_get_ion_pdf_term(this_test_input, "contribution_from_electron_pdf_term",
+                                  get_contribution_from_electron_pdf_term,
+                                  contribution_from_electron_pdf_term_wrapper!,
+                                  (4.0e2*epsilon)^2)
+
+            function contribution_from_electron_dissipation_term!(; kwargs...)
+                add_dissipation_term!(kwargs[:residual], kwargs[:this_f],
+                                      kwargs[:scratch_dummy], kwargs[:z_spectral], kwargs[:z],
+                                      kwargs[:vpa], kwargs[:vpa_spectral],
+                                      kwargs[:num_diss_params], kwargs[:dt])
+                return nothing
+            end
+            test_get_ion_pdf_term(this_test_input, "electron_dissipation_term",
+                                  get_electron_dissipation_term,
+                                  contribution_from_electron_dissipation_term!,
+                                  (1.0e1*epsilon)^2)
+
+            function contribution_from_krook_collisions!(; kwargs...)
+                electron_krook_collisions!(kwargs[:residual], kwargs[:this_f], kwargs[:dens],
+                                           kwargs[:upar], kwargs[:ion_upar], kwargs[:vth],
+                                           kwargs[:collisions], kwargs[:vperp], kwargs[:vpa],
+                                           kwargs[:dt])
+                return nothing
+            end
+            test_get_ion_pdf_term(this_test_input, "electron_krook_collisions",
+                                  get_electron_krook_collisions_term,
+                                  contribution_from_krook_collisions!, (2.0e1*epsilon)^2)
+
+            function contribution_from_external_electron_sources!(; kwargs...)
+                total_external_electron_sources!(kwargs[:residual], kwargs[:this_f],
+                                                 kwargs[:dens], kwargs[:upar],
+                                                 kwargs[:moments], kwargs[:composition],
+                                                 kwargs[:external_source_settings].electron,
+                                                 kwargs[:vperp], kwargs[:vpa], kwargs[:dt],
+                                                 kwargs[:ir])
+                return nothing
+            end
+            test_get_ion_pdf_term(this_test_input, "external_electron_sources",
+                                  get_total_external_electron_source_term,
+                                  contribution_from_external_electron_sources!,
+                                  (3.0e1*epsilon)^2)
+
+            # For this test where only the 'constraint forcing' term is added to the residual,
+            # the residual is exactly zero for the initial condition (because that is
+            # constructed to obey the constraints). Therefore the 'perturbed_residual' is
+            # non-zero only because of delta_f, which is small, O(epsilon), so 'norm_factor'
+            # is also O(epsilon). We therefore use a tolerance of O(epsilon) in this test,
+            # unlike the other tests which use a tolerance of O(epsilon^2). Note that in the
+            # final test of the full electron kinetic equations, with all terms including this
+            # one, we do not have a similar issue, as there the other terms create an O(1)
+            # residual for the initial condition, which will then set the 'norm_factor'.
+            #
+            # We test the Jacobian for these constraint forcing terms using
+            # constraint_forcing_rate=O(1), because in these tests we set dt=O(1), so a large
+            # coefficient would make the non-linearity large and then it would be hard to
+            # distinguish errors from non-linearity (or rounding errors) in
+            # `test_electron_kinetic_equation()` that tests the combined effect of all terms
+            # in the electron kinetic equation. This test would actually be OK because the
+            # ratio of linear to non-linear contributions of this single term does not depend
+            # on the size of the coefficient. In the combined test, we are effectively
+            # comparing the non-linear error from this term to the residual from other terms,
+            # so the coefficient of this term matters there. Even though these settings are
+            # not what we would use in a real simulation, they should tell us if the
+            # implementation is correct.
+            function contribution_from_implicit_constraint_forcing!(; kwargs...)
+                electron_implicit_constraint_forcing!(kwargs[:residual], kwargs[:this_f],
+                                                      kwargs[:t_params].electron.constraint_forcing_rate,
+                                                      kwargs[:vperp], kwargs[:vpa],
+                                                      kwargs[:dt], kwargs[:ir])
+                return nothing
+            end
+            test_get_ion_pdf_term(this_test_input, "implicit_constraint_forcing",
+                                  get_electron_implicit_constraint_forcing_term,
+                                  contribution_from_implicit_constraint_forcing!,
+                                  (2.5e0*epsilon))
 
             function contribution_from_electron_energy_equation!(; kwargs...)
                 electron_energy_equation_no_r!(
@@ -2406,6 +2592,18 @@ function runtests()
         # Delete output directory to avoid using too much disk space
         rm(realpath(test_output_directory); recursive=true)
     end
+
+    return nothing
+end
+
+function runtests()
+    if Sys.isapple() && "CI" ∈ keys(ENV) && global_size[] > 1
+        # These tests are too slow in the parallel tests job on macOS, so skip in that
+        # case.
+        return nothing
+    end
+    run_electron_tests()
+    run_ion_tests()
 
     return nothing
 end
