@@ -23,9 +23,9 @@ do a single stage time advance (potentially as part of a multi-stage RK scheme)
 
     @loop_s is begin
         # get the updated speed along the z direction using the current f
-        @views update_speed_z!(advect[is], fvec_in.upar[:,:,is], moments.ion.vth[:,:,is],
-                               moments.evolve_upar, moments.evolve_p, vpa, vperp, z, r,
-                               geometry)
+        @views update_speed_z!(advect[:,:,:,:,is], fvec_in.upar[:,:,is],
+                               moments.ion.vth[:,:,is], moments.evolve_upar,
+                               moments.evolve_p, vpa, vperp, z, r, geometry)
     end
     #calculate the upwind derivative
     derivative_z!(scratch_dummy.buffer_vpavperpzrs_1, fvec_in.pdf, advect,
@@ -38,7 +38,7 @@ do a single stage time advance (potentially as part of a multi-stage RK scheme)
     @loop_s_r_vperp_vpa is ir ivperp ivpa begin
         @. @views z.scratch = scratch_dummy.buffer_vpavperpzrs_1[ivpa,ivperp,:,ir,is]
         @views advance_f_df_precomputed!(f_out[ivpa,ivperp,:,ir,is], z.scratch,
-                                         advect[is], ivpa, ivperp, ir, z, dt)
+                                         advect[:,ivpa,ivperp,ir,is], z, dt)
     end
 end
 
@@ -47,24 +47,24 @@ calculate the advection speed in the z-direction at each grid point
 """
 function update_speed_z!(advect, upar, vth, evolve_upar, evolve_p, vpa, vperp, z, r,
                          geometry)
-    @debug_consistency_checks r.n == size(advect.speed,4) || throw(BoundsError(advect))
-    @debug_consistency_checks vperp.n == size(advect.speed,3) || throw(BoundsError(advect))
-    @debug_consistency_checks vpa.n == size(advect.speed,2) || throw(BoundsError(advect))
-    @debug_consistency_checks z.n == size(advect.speed,1) || throw(BoundsError(speed))
+    @debug_consistency_checks r.n == size(advect,4) || throw(BoundsError(advect))
+    @debug_consistency_checks vperp.n == size(advect,3) || throw(BoundsError(advect))
+    @debug_consistency_checks vpa.n == size(advect,2) || throw(BoundsError(advect))
+    @debug_consistency_checks z.n == size(advect,1) || throw(BoundsError(advect))
 
     bzed = geometry.bzed
     if evolve_p
         @loop_r_vperp_vpa ir ivperp ivpa begin
-            @. @views advect.speed[:,ivpa,ivperp,ir] = (vth[:,ir] * vpa.grid[ivpa] + upar[:,ir]) * bzed[:,ir]
+            @. @views advect[:,ivpa,ivperp,ir] = (vth[:,ir] * vpa.grid[ivpa] + upar[:,ir]) * bzed[:,ir]
         end
     elseif evolve_upar
         @loop_r_vperp_vpa ir ivperp ivpa begin
-            @. @views advect.speed[:,ivpa,ivperp,ir] = (vpa.grid[ivpa] + upar[:,ir]) * bzed[:,ir]
+            @. @views advect[:,ivpa,ivperp,ir] = (vpa.grid[ivpa] + upar[:,ir]) * bzed[:,ir]
         end
     else
         @loop_r_vperp_vpa ir ivperp ivpa begin
             # vpa bzed
-            @. @views advect.speed[:,ivpa,ivperp,ir] = vpa.grid[ivpa]*bzed[:,ir]
+            @. @views advect[:,ivpa,ivperp,ir] = vpa.grid[ivpa]*bzed[:,ir]
         end
     end
 

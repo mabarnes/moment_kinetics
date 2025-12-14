@@ -26,17 +26,15 @@ calculate the z-advection term for the electron kinetic equation = wpa * vthe * 
                          scratch_dummy, dt, ir) = begin
     @begin_anyzv_vperp_vpa_region()
 
-    speed = advect[1].speed
-
     # create a pointer to a scratch_dummy array to store the z-derivative of the electron pdf
     dpdf_dz = @view scratch_dummy.buffer_vpavperpzr_1[:,:,:,ir]
     d2pdf_dz2 = @view scratch_dummy.buffer_vpavperpzr_2[:,:,:,ir]
     @begin_anyzv_vperp_vpa_region()
     # get the updated speed along the z direction using the current pdf
-    @views update_electron_speed_z!(advect[1], upar, vth, vpa, ir)
+    @views update_electron_speed_z!(advect[:,:,:,ir], upar, vth, vpa)
     #calculate the upwind derivative
     @views derivative_z_pdf_vpavperpz!(
-               dpdf_dz, pdf_in, speed[:,:,:,ir],
+               dpdf_dz, pdf_in, advect[:,:,:,ir],
                scratch_dummy.buffer_vpavperpr_1[:,:,ir],
                scratch_dummy.buffer_vpavperpr_2[:,:,ir],
                scratch_dummy.buffer_vpavperpr_3[:,:,ir],
@@ -49,8 +47,8 @@ calculate the z-advection term for the electron kinetic equation = wpa * vthe * 
     # calculate the advection term
     @begin_anyzv_z_vperp_vpa_region()
     @loop_z_vperp_vpa iz ivperp ivpa begin
-        pdf_out[ivpa,ivperp,iz] += -dt * speed[iz,ivpa,ivperp,ir] * dpdf_dz[ivpa,ivperp,iz]
-        #pdf_out[ivpa,ivperp,iz] += -dt * speed[iz,ivpa,ivperp,ir] * dpdf_dz[ivpa,ivperp,iz] + 0.0001*d2pdf_dz2[ivpa,ivperp,iz]
+        pdf_out[ivpa,ivperp,iz] += -dt * advect[iz,ivpa,ivperp,ir] * dpdf_dz[ivpa,ivperp,iz]
+        #pdf_out[ivpa,ivperp,iz] += -dt * advect[iz,ivpa,ivperp,ir] * dpdf_dz[ivpa,ivperp,iz] + 0.0001*d2pdf_dz2[ivpa,ivperp,iz]
     end
     return nothing
 end
@@ -58,20 +56,19 @@ end
 """
 calculate the electron advection speed in the z-direction at each grid point
 """
-function update_electron_speed_z!(advect, upar, vth, vpa, ir)
+function update_electron_speed_z!(advect::AbstractArray{mk_float,3}, upar, vth, vpa)
     # the electron advection speed in z is v_par = w_par * v_the
-    speed = advect.speed
     @begin_anyzv_vperp_vpa_region()
     @loop_vperp_vpa ivperp ivpa begin
-        @. speed[:,ivpa,ivperp,ir] = vpa[ivpa] * vth
+        @. advect[:,ivpa,ivperp] = vpa[ivpa] * vth
     end
     return nothing
 end
 # Alternative version with loop over r is used for adaptive timestep update
-function update_electron_speed_z!(advect, upar, vth, vpa)
+function update_electron_speed_z!(advect::AbstractArray{mk_float,4}, upar, vth, vpa)
     @begin_r_anyzv_region()
     @loop_r ir begin
-        @views update_electron_speed_z!(advect, upar[:,ir], vth[:,ir], vpa, ir)
+        @views update_electron_speed_z!(advect[:,:,:,ir], upar[:,ir], vth[:,ir], vpa)
     end
     return nothing
 end

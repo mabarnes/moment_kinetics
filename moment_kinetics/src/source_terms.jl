@@ -38,41 +38,31 @@ flow and/or pressure, and use them to update the pdf
         end
         dvth_dt = moments.ion.dvth_dt
         dvth_dz = moments.ion.dvth_dz
-        @loop_s is begin
-            r_speed = r_advect[is].speed
-            alpha_speed = alpha_advect[is].speed
-            z_speed = z_advect[is].speed
-            @loop_r_z ir iz begin
-                ddt_term = v_dim_coeff / vth[iz,ir,is] * dvth_dt[iz,ir,is] - dn_dt[iz,ir,is] / n[iz,ir,is]
-                rdot_coefficient = v_dim_coeff / vth[iz,ir,is] * dvth_dr[iz,ir,is] - dn_dr[iz,ir,is] / n[iz,ir,is]
-                zdot_coefficient = v_dim_coeff / vth[iz,ir,is] * dvth_dz[iz,ir,is] - dn_dz[iz,ir,is] / n[iz,ir,is]
-                @loop_vperp_vpa ivperp ivpa begin
-                    pdf_out[ivpa,ivperp,iz,ir,is] +=
-                        dt * (ddt_term
-                              + rdot_coefficient * r_speed[ir,ivpa,ivperp,iz]
-                              + zdot_coefficient * (alpha_speed[iz,ivpa,ivperp,ir] + z_speed[iz,ivpa,ivperp,ir])
-                             ) *
-                        pdf_in[ivpa,ivperp,iz,ir,is]
-                end
+        @loop_s_r_z is ir iz begin
+            ddt_term = v_dim_coeff / vth[iz,ir,is] * dvth_dt[iz,ir,is] - dn_dt[iz,ir,is] / n[iz,ir,is]
+            rdot_coefficient = v_dim_coeff / vth[iz,ir,is] * dvth_dr[iz,ir,is] - dn_dr[iz,ir,is] / n[iz,ir,is]
+            zdot_coefficient = v_dim_coeff / vth[iz,ir,is] * dvth_dz[iz,ir,is] - dn_dz[iz,ir,is] / n[iz,ir,is]
+            @loop_vperp_vpa ivperp ivpa begin
+                pdf_out[ivpa,ivperp,iz,ir,is] +=
+                    dt * (ddt_term
+                          + rdot_coefficient * r_advect[ir,ivpa,ivperp,iz,is]
+                          + zdot_coefficient * (alpha_advect[iz,ivpa,ivperp,ir,is] + z_advect[iz,ivpa,ivperp,ir,is])
+                         ) *
+                    pdf_in[ivpa,ivperp,iz,ir,is]
             end
         end
     elseif moments.evolve_upar || moments.evolve_density
-        @loop_s is begin
-            r_speed = r_advect[is].speed
-            alpha_speed = alpha_advect[is].speed
-            z_speed = z_advect[is].speed
-            @loop_r_z ir iz begin
-                ddt_term = - dn_dt[iz,ir,is] / n[iz,ir,is]
-                rdot_coefficient = - dn_dr[iz,ir,is] / n[iz,ir,is]
-                zdot_coefficient = - dn_dz[iz,ir,is] / n[iz,ir,is]
-                @loop_vperp_vpa ivperp ivpa begin
-                    pdf_out[ivpa,ivperp,iz,ir,is] +=
-                        dt * (ddt_term
-                              + rdot_coefficient * r_speed[ir,ivpa,ivperp,iz]
-                              + zdot_coefficient * (alpha_speed[iz,ivpa,ivperp,ir] + z_speed[iz,ivpa,ivperp,ir])
-                             ) *
-                        pdf_in[ivpa,ivperp,iz,ir,is]
-                end
+        @loop_s_r_z is ir iz begin
+            ddt_term = - dn_dt[iz,ir,is] / n[iz,ir,is]
+            rdot_coefficient = - dn_dr[iz,ir,is] / n[iz,ir,is]
+            zdot_coefficient = - dn_dz[iz,ir,is] / n[iz,ir,is]
+            @loop_vperp_vpa ivperp ivpa begin
+                pdf_out[ivpa,ivperp,iz,ir,is] +=
+                    dt * (ddt_term
+                          + rdot_coefficient * r_advect[ir,ivpa,ivperp,iz,is]
+                          + zdot_coefficient * (alpha_advect[iz,ivpa,ivperp,ir,is] + z_advect[iz,ivpa,ivperp,ir,is])
+                         ) *
+                    pdf_in[ivpa,ivperp,iz,ir,is]
             end
         end
     end

@@ -236,12 +236,12 @@ function get_electron_Jacobian_matrix(run_directory; restart_time_index=1,
     else
         # Allow any combination of terms, selected by the include_* flags
 
-        z_speed = @view z_advect[1].speed[:,:,:,ir]
+        z_speed = @view z_advect[:,:,:,ir]
         dpdf_dz = @view scratch_dummy.buffer_vpavperpzr_1[:,:,:,ir]
         @begin_anyzv_vperp_vpa_region()
-        update_electron_speed_z!(z_advect[1], upar, vth, vpa.grid, ir)
+        update_electron_speed_z!(z_speed, upar, vth, vpa.grid)
         #calculate the upwind derivative
-        @views derivative_z_pdf_vpavperpz!(dpdf_dz, f, z_advect[1].speed[:,:,:,ir],
+        @views derivative_z_pdf_vpavperpz!(dpdf_dz, f, z_speed,
                                            scratch_dummy.buffer_vpavperpr_1[:,:,ir],
                                            scratch_dummy.buffer_vpavperpr_2[:,:,ir],
                                            scratch_dummy.buffer_vpavperpr_3[:,:,ir],
@@ -252,15 +252,15 @@ function get_electron_Jacobian_matrix(run_directory; restart_time_index=1,
 
         dpdf_dvpa = @view scratch_dummy.buffer_vpavperpzr_2[:,:,:,ir]
         @begin_anyzv_z_vperp_region()
-        update_electron_speed_vpa!(vpa_advect[1], dens, upar, p, moments,
+        update_electron_speed_vpa!(vpa_advect, dens, upar, p, moments,
                                    composition.me_over_mi, vpa.grid,
                                    external_source_settings.electron, ir)
         #calculate the upwind derivative of the electron pdf w.r.t. wpa
         @loop_z_vperp iz ivperp begin
             @views derivative!(dpdf_dvpa[:,ivperp,iz], f[:,ivperp,iz], vpa,
-                               vpa_advect[1].speed[:,ivperp,iz,ir], vpa_spectral)
+                               vpa_advect[:,ivperp,iz,ir], vpa_spectral)
         end
-        vpa_speed = @view vpa_advect[1].speed[:,:,:,ir]
+        vpa_speed = @view vpa_advect[:,:,:,ir]
 
         d2pdf_dvpa2 = @view scratch_dummy.buffer_vpavperpzr_3[:,:,:,ir]
         @begin_anyzv_z_vperp_region()

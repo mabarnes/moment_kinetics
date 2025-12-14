@@ -1504,14 +1504,13 @@ global_rank[] == 0 && println("recalculating precon")
     derivative_z_anyzv!(dthird_moment_dz, third_moment, buffer_1, buffer_2,
                         buffer_3, buffer_4, z_spectral, z)
 
-    z_speed = @view z_advect[1].speed[:,:,:,ir]
+    z_speed = @view z_advect[:,:,:,ir]
 
     dpdf_dz = @view scratch_dummy.buffer_vpavperpzr_1[:,:,:,ir]
     @begin_anyzv_vperp_vpa_region()
-    update_electron_speed_z!(z_advect[1], electron_upar, vth, vpa.grid, ir)
+    update_electron_speed_z!(z_speed, electron_upar, vth, vpa.grid)
     #calculate the upwind derivative
-    @views derivative_z_pdf_vpavperpz!(dpdf_dz, f_electron_new,
-                                       z_advect[1].speed[:,:,:,ir],
+    @views derivative_z_pdf_vpavperpz!(dpdf_dz, f_electron_new, z_speed,
                                        scratch_dummy.buffer_vpavperpr_1[:,:,ir],
                                        scratch_dummy.buffer_vpavperpr_2[:,:,ir],
                                        scratch_dummy.buffer_vpavperpr_3[:,:,ir],
@@ -1522,15 +1521,15 @@ global_rank[] == 0 && println("recalculating precon")
 
     dpdf_dvpa = @view scratch_dummy.buffer_vpavperpzr_2[:,:,:,ir]
     @begin_anyzv_z_vperp_region()
-    update_electron_speed_vpa!(vpa_advect[1], electron_density, electron_upar,
+    update_electron_speed_vpa!(vpa_advect, electron_density, electron_upar,
                                electron_p_new, moments, composition.me_over_mi,
                                vpa.grid, external_source_settings.electron, ir)
     #calculate the upwind derivative of the electron pdf w.r.t. wpa
     @loop_z_vperp iz ivperp begin
         @views derivative!(dpdf_dvpa[:,ivperp,iz], f_electron_new[:,ivperp,iz], vpa,
-                           vpa_advect[1].speed[:,ivperp,iz,ir], vpa_spectral)
+                           vpa_advect[:,ivperp,iz,ir], vpa_spectral)
     end
-    vpa_speed = @view vpa_advect[1].speed[:,:,:,ir]
+    vpa_speed = @view vpa_advect[:,:,:,ir]
 
     zeroth_moment = @view scratch_dummy.buffer_zrs_3[:,ir,1]
     first_moment = @view scratch_dummy.buffer_zrs_4[:,ir,1]
@@ -2149,7 +2148,7 @@ function (res::kinetic_electron_residual!)(this_residual, new_variables; krylov=
         @begin_anyzv_z_vperp_region()
         @loop_z_vperp iz ivperp begin
             @views enforce_v_boundary_condition_local!(f_electron_residual[:,ivperp,iz], vpa.bc,
-                                                       vpa_advect[1].speed[:,ivperp,iz,ir],
+                                                       vpa_advect[:,ivperp,iz,ir],
                                                        num_diss_params.electron.vpa_dissipation_coefficient > 0.0,
                                                        vpa, vpa_spectral)
         end
@@ -3052,7 +3051,7 @@ end
             # enforce the vpa BC
             # use that adv.speed independent of vpa
             @views enforce_v_boundary_condition_local!(pdf[:,ivperp,iz], vpa.bc,
-                                                       vpa_adv[1].speed[:,ivperp,iz,ir],
+                                                       vpa_adv[:,ivperp,iz,ir],
                                                        vpa_diffusion, vpa, vpa_spectral)
         end
     end
@@ -4655,9 +4654,9 @@ appropriate.
     # z-advection
     # No need to synchronize here, as we just called @_block_synchronize()
     @begin_anyzv_vperp_vpa_region(true)
-    @views update_electron_speed_z!(z_advect[1], moments.electron.upar[:,ir],
-                                    moments.electron.vth[:,ir], vpa.grid, ir)
-    z_CFL = get_minimum_CFL_z(z_advect[1].speed, z, ir)
+    @views update_electron_speed_z!(z_advect[:,:,:,ir], moments.electron.upar[:,ir],
+                                    moments.electron.vth[:,ir], vpa.grid)
+    z_CFL = get_minimum_CFL_z(z_advect, z, ir)
     if block_rank[] == 0
         CFL_limits["CFL_z"] = t_params.CFL_prefactor * z_CFL
     else
@@ -4666,12 +4665,12 @@ appropriate.
 
     # vpa-advection
     @begin_anyzv_z_vperp_region()
-    @views update_electron_speed_vpa!(vpa_advect[1], moments.electron.dens[:,ir],
+    @views update_electron_speed_vpa!(vpa_advect, moments.electron.dens[:,ir],
                                       moments.electron.upar[:,ir],
                                       scratch[t_params.n_rk_stages+1].electron_p[:,ir],
                                       moments, composition.me_over_mi, vpa.grid,
                                       external_source_settings.electron, ir)
-    vpa_CFL = get_minimum_CFL_vpa(vpa_advect[1].speed, vpa, ir)
+    vpa_CFL = get_minimum_CFL_vpa(vpa_advect, vpa, ir)
     if block_rank[] == 0
         CFL_limits["CFL_vpa"] = t_params.CFL_prefactor * vpa_CFL
     else
@@ -5467,13 +5466,13 @@ in the time derivative term as it is for the non-boundary points.]
     derivative_z_anyzv!(dthird_moment_dz, third_moment, buffer_1, buffer_2, buffer_3,
                         buffer_4, z_spectral, z)
 
-    z_speed = @view z_advect[1].speed[:,:,:,ir]
+    z_speed = @view z_advect[:,:,:,ir]
 
     dpdf_dz = @view scratch_dummy.buffer_vpavperpzr_1[:,:,:,ir]
     @begin_anyzv_vperp_vpa_region()
-    update_electron_speed_z!(z_advect[1], upar, vth, vpa.grid, ir)
+    update_electron_speed_z!(z_speed, upar, vth, vpa.grid)
     #calculate the upwind derivative
-    @views derivative_z_pdf_vpavperpz!(dpdf_dz, f, z_advect[1].speed[:,:,:,ir],
+    @views derivative_z_pdf_vpavperpz!(dpdf_dz, f, z_advect[:,:,:,ir],
                                        scratch_dummy.buffer_vpavperpr_1[:,:,ir],
                                        scratch_dummy.buffer_vpavperpr_2[:,:,ir],
                                        scratch_dummy.buffer_vpavperpr_3[:,:,ir],
@@ -5484,15 +5483,15 @@ in the time derivative term as it is for the non-boundary points.]
 
     dpdf_dvpa = @view scratch_dummy.buffer_vpavperpzr_2[:,:,:,ir]
     @begin_anyzv_z_vperp_region()
-    update_electron_speed_vpa!(vpa_advect[1], dens, upar, p, moments,
+    update_electron_speed_vpa!(vpa_advect, dens, upar, p, moments,
                                composition.me_over_mi, vpa.grid,
                                external_source_settings.electron, ir)
     #calculate the upwind derivative of the electron pdf w.r.t. wpa
     @loop_z_vperp iz ivperp begin
         @views derivative!(dpdf_dvpa[:,ivperp,iz], f[:,ivperp,iz], vpa,
-                           vpa_advect[1].speed[:,ivperp,iz,ir], vpa_spectral)
+                           vpa_advect[:,ivperp,iz,ir], vpa_spectral)
     end
-    vpa_speed = @view vpa_advect[1].speed[:,:,:,ir]
+    vpa_speed = @view vpa_advect[:,:,:,ir]
 
     d2pdf_dvpa2 = @view scratch_dummy.buffer_vpavperpzr_3[:,:,:,ir]
     # If not using electron vpa dissipation, the value of d2pdf_dvpa2 won't actually be
