@@ -24,8 +24,9 @@ Do a single stage time advance (potentially as part of a multi-stage RK scheme).
     @loop_s is begin
         # Get the updated alpha-advection speed projected along the z direction using the
         # current f.
-        @views update_speed_alpha!(advect[is], moments.evolve_upar, moments.evolve_p,
-                                   fields, vpa, vperp, z, r, geometry, is)
+        @views update_speed_alpha!(advect[:,:,:,:,is], moments.evolve_upar,
+                                   moments.evolve_p, fields, vpa, vperp, z, r, geometry,
+                                   is)
     end
 
     #calculate the upwind derivative
@@ -39,7 +40,7 @@ Do a single stage time advance (potentially as part of a multi-stage RK scheme).
     @loop_s_r_vperp_vpa is ir ivperp ivpa begin
         @. @views z.scratch = scratch_dummy.buffer_vpavperpzrs_1[ivpa,ivperp,:,ir,is]
         @views advance_f_df_precomputed!(f_out[ivpa,ivperp,:,ir,is], z.scratch,
-                                         advect[is], ivpa, ivperp, ir, z, dt)
+                                         advect[:,ivpa,ivperp,ir,is], z, dt)
     end
 end
 
@@ -48,10 +49,10 @@ calculate the advection speed in the z-direction at each grid point
 """
 function update_speed_alpha!(advect, evolve_upar, evolve_p, fields, vpa, vperp, z, r,
                              geometry, is)
-    @debug_consistency_checks r.n == size(advect.speed,4) || throw(BoundsError(advect))
-    @debug_consistency_checks vperp.n == size(advect.speed,3) || throw(BoundsError(advect))
-    @debug_consistency_checks vpa.n == size(advect.speed,2) || throw(BoundsError(advect))
-    @debug_consistency_checks z.n == size(advect.speed,1) || throw(BoundsError(speed))
+    @debug_consistency_checks r.n == size(advect,4) || throw(BoundsError(advect))
+    @debug_consistency_checks vperp.n == size(advect,3) || throw(BoundsError(advect))
+    @debug_consistency_checks vpa.n == size(advect,2) || throw(BoundsError(advect))
+    @debug_consistency_checks z.n == size(advect,1) || throw(BoundsError(advect))
 
     Bmag = geometry.Bmag
     bzeta = geometry.bzeta
@@ -62,16 +63,16 @@ function update_speed_alpha!(advect, evolve_upar, evolve_p, fields, vpa, vperp, 
     if evolve_p || evolve_upar
         vEz = fields.vEz
         @loop_r_vperp_vpa ir ivperp ivpa begin
-            @. @views advect.speed[:,ivpa,ivperp,ir] = vEz[:,ir]
+            @. @views advect[:,ivpa,ivperp,ir] = vEz[:,ir]
         end
     else
         @loop_r_vperp_vpa ir ivperp ivpa begin
             # ExB drift
-            @. @views advect.speed[:,ivpa,ivperp,ir] = -rhostar*bzeta[:,ir]*jacobian[:,ir]/Bmag[:,ir]*fields.gEr[ivperp,:,ir,is]
+            @. @views advect[:,ivpa,ivperp,ir] = -rhostar*bzeta[:,ir]*jacobian[:,ir]/Bmag[:,ir]*fields.gEr[ivperp,:,ir,is]
             # magnetic curvature drift
-            @. @views advect.speed[:,ivpa,ivperp,ir] += rhostar*(vpa.grid[ivpa]^2)*curvature_drift_z[:,ir]
+            @. @views advect[:,ivpa,ivperp,ir] += rhostar*(vpa.grid[ivpa]^2)*curvature_drift_z[:,ir]
             # magnetic grad B drift
-            @. @views advect.speed[:,ivpa,ivperp,ir] += 0.5*rhostar*(vperp.grid[ivperp]^2)*grad_B_drift_z[:,ir]
+            @. @views advect[:,ivpa,ivperp,ir] += 0.5*rhostar*(vperp.grid[ivperp]^2)*grad_B_drift_z[:,ir]
         end
     end
 

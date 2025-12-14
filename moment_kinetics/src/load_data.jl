@@ -5396,8 +5396,7 @@ const get_variable_funcs = Dict{String,Any}(
                                vr=run_info.vr.n, vz=run_info.vz.n)
             for it ∈ 1:nt, is ∈ 1:nspecies
                 @begin_serial_region()
-                # Only need some struct with a 'speed' variable
-                advect = (speed=@view(speed[:,:,:,:,is,it]),)
+                advect = @view speed[:,:,:,:,is,it]
                 # Only need Er
                 fields = (gEz=@view(gEz[:,:,:,is,it]), vEr=@view(vEr[:,:,it]))
                 @views update_speed_r!(advect, fields, run_info.evolve_density,
@@ -5463,8 +5462,7 @@ const get_variable_funcs = Dict{String,Any}(
                                vr=run_info.vr.n, vz=run_info.vz.n)
             for it ∈ 1:nt, is ∈ 1:nspecies
                 @begin_serial_region()
-                # Only need some struct with a 'speed' variable
-                advect = (speed=@view(speed[:,:,:,:,is,it]),)
+                advect = @view speed[:,:,:,:,is,it]
                 # Only need Er
                 fields = (gEr=@view(gEr[:,:,:,is,it]), vEz=@view(vEz[:,:,it]))
                 @views update_speed_alpha!(advect, run_info.evolve_upar,
@@ -5522,8 +5520,7 @@ const get_variable_funcs = Dict{String,Any}(
                                vr=run_info.vr.n, vz=run_info.vz.n)
             for it ∈ 1:nt, is ∈ 1:nspecies
                 @begin_serial_region()
-                # Only need some struct with a 'speed' variable
-                advect = (speed=@view(speed[:,:,:,:,is,it]),)
+                advect = @view speed[:,:,:,:,is,it]
                 # Only need Er
                 @views update_speed_z!(advect, upar[:,:,is,it], vth[:,:,is,it],
                                        run_info.evolve_upar, run_info.evolve_p,
@@ -5638,11 +5635,10 @@ const get_variable_funcs = Dict{String,Any}(
 
             for it ∈ 1:nt
                 @begin_serial_region()
-                # Only need some struct with a 'speed' variable
-                advect = [(speed=@view(speed[:,:,:,:,is,it]),) for is ∈ 1:nspecies]
-                r_advect = [(speed=@view(r_speed[:,:,:,:,is,it]),) for is ∈ 1:nspecies]
-                alpha_advect = [(speed=@view(alpha_speed[:,:,:,:,is,it]),) for is ∈ 1:nspecies]
-                z_advect = [(speed=@view(z_speed[:,:,:,:,is,it]),) for is ∈ 1:nspecies]
+                advect = @view speed[:,:,:,:,:,it]
+                r_advect = @view r_speed[:,:,:,:,:,it]
+                alpha_advect = @view alpha_speed[:,:,:,:,:,it]
+                z_advect = @view z_speed[:,:,:,:,:,it]
                 # Only need Ez
                 fields = (gEz=@view(gEz[:,:,:,:,it]), Ez=@view(Ez[:,:,it]))
                 @views moments = (ion=(dp_dz=dp_dz[:,:,:,it],
@@ -5706,13 +5702,9 @@ const get_variable_funcs = Dict{String,Any}(
                                vr=(run_info.vr === nothing ? 1 : run_info.vr.n),
                                vz=(run_info.vz === nothing ? 1 : run_info.vz.n))
             for it ∈ 1:nt
-                @begin_r_anyzv_region()
-                # Only need some struct with a 'speed' variable
-                advect = (speed=@view(speed[:,:,:,:,it]),)
-                @loop_r ir begin
-                    @views update_electron_speed_z!(advect, upar[:,ir,it], vth[:,ir,it],
-                                                    run_info.vpa.grid, ir)
-                end
+                advect = @view speed[:,:,:,:,it]
+                @views update_electron_speed_z!(advect, upar[:,:,it], vth[:,:,it],
+                                                run_info.vpa.grid)
             end
 
             # Horrible hack so that we can get the speed back without rearranging the
@@ -5786,8 +5778,7 @@ const get_variable_funcs = Dict{String,Any}(
                                vz=(run_info.vz === nothing ? 1 : run_info.vz.n))
             for it ∈ 1:nt
                 @begin_serial_region()
-                # Only need some struct with a 'speed' variable
-                advect = (speed=@view(speed[:,:,:,:,it]),)
+                advect = @view speed[:,:,:,:,it]
                 moments = (electron=(ppar=ppar[:,:,it],
                                      vth=vth[:,:,it],
                                      dp_dz=dp_dz[:,:,it],
@@ -5829,7 +5820,7 @@ const get_variable_funcs = Dict{String,Any}(
             for it ∈ 1:nt, isn ∈ 1:nspecies
                 @begin_serial_region()
                 # Only need some struct with a 'speed' variable
-                advect = (speed=@view(speed[:,:,:,:,:,isn,it]),)
+                advect = @view speed[:,:,:,:,:,isn,it]
                 @views update_speed_neutral_z!(advect, uz[:,:,:,it], vth[:,:,:,it],
                                                run_info.evolve_upar, run_info.evolve_p,
                                                run_info.vz, run_info.vr, run_info.vzeta,
@@ -5928,8 +5919,7 @@ const get_variable_funcs = Dict{String,Any}(
                                vr=nvr, vz=nvz)
             for it ∈ 1:nt
                 @begin_serial_region()
-                # Only need some struct with a 'speed' variable
-                advect = [(speed=@view(speed[:,:,:,:,:,isn,it]),) for isn ∈ 1:nspecies]
+                advect = @view speed[:,:,:,:,:,:,it]
                 # Don't actually use `fields` at the moment
                 fields = nothing
                 @views fvec = (density=density[:,:,:,it],

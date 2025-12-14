@@ -42,7 +42,7 @@ using SparseArrays
     @loop_s is begin
         @loop_r_z_vperp ir iz ivperp begin
             @views advance_f_local!(f_out[:,ivperp,iz,ir,is], fvec_in.pdf[:,ivperp,iz,ir,is],
-                                    vpa_advect[is], ivperp, iz, ir, vpa, dt, vpa_spectral)
+                                    vpa_advect[:,ivperp,iz,ir,is], vpa, dt, vpa_spectral)
         end
     end
 end
@@ -86,7 +86,7 @@ end
         @loop_r_z_vperp ir iz ivperp begin
             f_old_no_bc = @view fvec_in.pdf[:,ivperp,iz,ir,is]
             this_f_out = @view f_out[:,ivperp,iz,ir,is]
-            speed = @view vpa_advect[is].speed[:,ivperp,iz,ir]
+            speed = @view vpa_advect[:,ivperp,iz,ir,is]
 
             if z.irank == 0 && iz == 1
                 @. vpa.scratch = vpagrid_to_vpa(vpa.grid, moments.ion.vth[iz,ir,is],
@@ -271,8 +271,8 @@ end
             function residual_func!(residual, f_new; krylov=false)
                 apply_bc!(f_new)
                 residual .= f_old
-                advance_f_local!(residual, f_new, vpa_advect[is], ivperp, iz, ir, vpa, dt,
-                                 vpa_spectral)
+                @views advance_f_local!(residual, f_new, vpa_advect[ivperp,iz,ir,is], vpa,
+                                        dt, vpa_spectral)
 
                 if vpa_diffusion
                     second_derivative!(vpa.scratch, f_new, vpa, vpa_spectral)
@@ -325,12 +325,11 @@ calculate the advection speed in the vpa-direction at each grid point
 function update_speed_vpa!(vpa_advect, fields, fvec, moments, r_advect, alpha_advect,
                            z_advect, vpa, vperp, z, r, composition, collisions,
                            ion_source_settings, t, geometry)
-    @debug_consistency_checks r.n == size(vpa_advect[1].speed,4) || throw(BoundsError(vpa_advect))
-    @debug_consistency_checks z.n == size(vpa_advect[1].speed,3) || throw(BoundsError(vpa_advect))
-    @debug_consistency_checks vperp.n == size(vpa_advect[1].speed,2) || throw(BoundsError(vpa_advect))
-    #@debug_consistency_checks composition.n_ion_species == size(vpa_advect,2) || throw(BoundsError(vpa_advect))
-    @debug_consistency_checks composition.n_ion_species == size(vpa_advect,1) || throw(BoundsError(vpa_advect))
-    @debug_consistency_checks vpa.n == size(vpa_advect[1].speed,1) || throw(BoundsError(speed))
+    @debug_consistency_checks r.n == size(vpa_advect,4) || throw(BoundsError(vpa_advect))
+    @debug_consistency_checks z.n == size(vpa_advect,3) || throw(BoundsError(vpa_advect))
+    @debug_consistency_checks vperp.n == size(vpa_advect,2) || throw(BoundsError(vpa_advect))
+    @debug_consistency_checks composition.n_ion_species == size(vpa_advect,5) || throw(BoundsError(vpa_advect))
+    @debug_consistency_checks vpa.n == size(vpa_advect,1) || throw(BoundsError(vpa_advect))
 
     # dvpa/dt = Ze/m ⋅ E_parallel - (vperp^2/2B) bz dB/dz
     # magnetic mirror term only supported for standard DK implementation
@@ -374,25 +373,16 @@ function update_speed_vpa_n_u_p_evolution!(vpa_advect, fields, fvec, moments, r_
     dupar_dt = moments.ion.dupar_dt
     dvth_dt = moments.ion.dvth_dt
     wpa = vpa.grid
-    @loop_s is begin
-        speed = vpa_advect[is].speed
-        r_speed = r_advect[is].speed
-        alpha_speed = alpha_advect[is].speed
-        z_speed = z_advect[is].speed
-        @loop_r ir begin
-            # update parallel acceleration to account for:
-            @loop_z_vperp_vpa iz ivperp ivpa begin
-                speed[ivpa,ivperp,iz,ir] =
-                    (bz[iz,ir] * Ez[iz,ir]
-                     - (dupar_dt[iz,ir,is]
-                        + r_speed[ir,ivpa,ivperp,iz] * dupar_dr[iz,ir,is]
-                        + (alpha_speed[iz,ivpa,ivperp,ir] + z_speed[iz,ivpa,ivperp,ir]) * dupar_dz[iz,ir,is])
-                     - wpa[ivpa] * (dvth_dt[iz,ir,is]
-                                    + r_speed[ir,ivpa,ivperp,iz] * dvth_dr[iz,ir,is]
-                                    + (alpha_speed[iz,ivpa,ivperp,ir] + z_speed[iz,ivpa,ivperp,ir]) * dvth_dz[iz,ir,is])
-                    ) / vth[iz,ir,is]
-            end
-        end
+    @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
+        vpa_advect[ivpa,ivperp,iz,ir,is] =
+            (bz[iz,ir] * Ez[iz,ir]
+             - (dupar_dt[iz,ir,is]
+                + r_advect[ir,ivpa,ivperp,iz,is] * dupar_dr[iz,ir,is]
+                + (alpha_advect[iz,ivpa,ivperp,ir,is] + z_advect[iz,ivpa,ivperp,ir,is]) * dupar_dz[iz,ir,is])
+             - wpa[ivpa] * (dvth_dt[iz,ir,is]
+                            + r_advect[ir,ivpa,ivperp,iz,is] * dvth_dr[iz,ir,is]
+                            + (alpha_advect[iz,ivpa,ivperp,ir,is] + z_advect[iz,ivpa,ivperp,ir,is]) * dvth_dz[iz,ir,is])
+            ) / vth[iz,ir,is]
     end
 
     return nothing
@@ -414,22 +404,13 @@ function update_speed_vpa_n_u_evolution!(vpa_advect, fields, fvec, moments, r_ad
     dupar_dz = moments.ion.dupar_dz
     dupar_dt = moments.ion.dupar_dt
     wpa = vpa.grid
-    @loop_s is begin
-        speed = vpa_advect[is].speed
-        r_speed = r_advect[is].speed
-        alpha_speed = alpha_advect[is].speed
-        z_speed = z_advect[is].speed
-        @loop_r ir begin
-            # update parallel acceleration to account for:
-            @loop_z_vperp_vpa iz ivperp ivpa begin
-                speed[ivpa,ivperp,iz,ir] =
-                    (bz[iz,ir] * Ez[iz,ir]
-                     - (dupar_dt[iz,ir,is]
-                        + r_speed[ir,ivpa,ivperp,iz] * dupar_dr[iz,ir,is]
-                        + (alpha_speed[iz,ivpa,ivperp,ir] + z_speed[iz,ivpa,ivperp,ir]) * dupar_dz[iz,ir,is])
-                    )
-            end
-        end
+    @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
+        vpa_advect[ivpa,ivperp,iz,ir,is] =
+            (bz[iz,ir] * Ez[iz,ir]
+             - (dupar_dt[iz,ir,is]
+                + r_advect[ir,ivpa,ivperp,iz,is] * dupar_dr[iz,ir,is]
+                + (alpha_advect[iz,ivpa,ivperp,ir,is] + z_advect[iz,ivpa,ivperp,ir,is]) * dupar_dz[iz,ir,is])
+            )
     end
 
     return nothing
@@ -445,13 +426,8 @@ function update_speed_vpa_n_evolution!(vpa_advect, fields, fvec, moments, vpa, z
                                        geometry)
     Ez = fields.Ez
     bz = geometry.bzed
-    @loop_s is begin
-        speed = vpa_advect[is].speed
-        @loop_r ir begin
-            @loop_z_vperp iz ivperp begin
-                @. speed[:,ivperp,iz,ir] = bz[iz,ir] * Ez[iz,ir]
-            end
-        end
+    @loop_s_r_z_vperp is ir iz ivperp begin
+        @. vpa_advect[:,ivperp,iz,ir,is] = bz[iz,ir] * Ez[iz,ir]
     end
 
     return nothing
@@ -464,13 +440,8 @@ where no moments are evolved independently from the pdf. vpa is unchanged.
 function update_speed_vpa_DK!(vpa_advect, fields, fvec, moments, vpa, vperp, z, r,
                                      composition, collisions, ion_source_settings, geometry)
     gEz = fields.gEz
-    @loop_s is begin
-        speed = vpa_advect[is].speed
-        @loop_r ir begin
-            @loop_z_vperp iz ivperp begin
-                @. speed[:,ivperp,iz,ir] = gEz[ivperp,iz,ir,is]
-            end
-        end
+    @loop_s_r_z_vperp is ir iz ivperp begin
+        @. vpa_advect[:,ivperp,iz,ir,is] = gEz[ivperp,iz,ir,is]
     end
     bzed = geometry.bzed
     dBdz = geometry.dBdz
@@ -480,8 +451,8 @@ function update_speed_vpa_DK!(vpa_advect, fields, fvec, moments, vpa, vperp, z, 
             # mu, the adiabatic invariant
             mu = 0.5*(vperp.grid[ivperp]^2)/Bmag[iz,ir]
             # bzed = B_z/B
-            vpa_advect[is].speed[ivpa,ivperp,iz,ir] = (bzed[iz,ir]*fields.gEz[ivperp,iz,ir,is] -
-                                                    mu*bzed[iz,ir]*dBdz[iz,ir])
+            vpa_advect[ivpa,ivperp,iz,ir,is] = (bzed[iz,ir]*fields.gEz[ivperp,iz,ir,is] -
+                                                mu*bzed[iz,ir]*dBdz[iz,ir])
         end
     end
     return nothing

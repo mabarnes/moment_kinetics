@@ -84,7 +84,6 @@ using ..fokker_planck: setup_fp_nl_solve, implicit_ion_fokker_planck_self_collis
 using ..gyroaverages: init_gyro_operators, gyroaverage_pdf!
 using ..manufactured_solns: manufactured_sources
 using ..timer_utils
-using ..advection: advection_info
 using ..runge_kutta: rk_update_evolved_moments!, rk_update_evolved_moments_neutral!,
                      rk_update_variable!, rk_loworder_solution!,
                      setup_runge_kutta_coefficients!, local_error_norm,
@@ -233,16 +232,16 @@ struct scratch_dummy_arrays
 end 
 
 struct advect_object_struct
-    vpa_advect::Vector{advection_info{4}}
-    vperp_advect::Vector{advection_info{4}}
-    z_advect::Vector{advection_info{4}}
-    alpha_advect::Vector{advection_info{4}}
-    r_advect::Vector{advection_info{4}}
-    electron_z_advect::Vector{advection_info{4}}
-    electron_vpa_advect::Vector{advection_info{4}}
-    neutral_z_advect::Vector{advection_info{5}}
-    neutral_r_advect::Vector{advection_info{5}}
-    neutral_vz_advect::Vector{advection_info{5}}
+    vpa_advect::MPISharedArray{mk_float,5}
+    vperp_advect::MPISharedArray{mk_float,5}
+    z_advect::MPISharedArray{mk_float,5}
+    alpha_advect::MPISharedArray{mk_float,5}
+    r_advect::MPISharedArray{mk_float,5}
+    electron_z_advect::MPISharedArray{mk_float,4}
+    electron_vpa_advect::MPISharedArray{mk_float,4}
+    neutral_z_advect::MPISharedArray{mk_float,6}
+    neutral_r_advect::MPISharedArray{mk_float,6}
+    neutral_vz_advect::MPISharedArray{mk_float,6}
 end
 
 # consider changing code structure so that
@@ -259,9 +258,8 @@ end
 
 function allocate_advection_structs(composition, z, r, vpa, vperp, vz, vr, vzeta)
     # define some local variables for convenience/tidiness
-    n_ion_species = composition.n_ion_species
-    n_neutral_species = composition.n_neutral_species
-    n_neutral_species_alloc = max(1,composition.n_neutral_species)
+    ion_species_coord = composition.ion_species_coord
+    neutral_species_coord = composition.neutral_species_coord
     ##                              ##
     # ion particle advection structs #
     ##                              ##
@@ -269,23 +267,23 @@ function allocate_advection_structs(composition, z, r, vpa, vperp, vz, vr, vzeta
     # the advection term(s) appearing in the part of the ion kinetic equation dealing
     # with advection in z
     @begin_serial_region()
-    z_advect = setup_advection(n_ion_species, z, vpa, vperp, r)
-    alpha_advect = setup_advection(n_ion_species, z, vpa, vperp, r)
+    z_advect = setup_advection(z, vpa, vperp, r, ion_species_coord)
+    alpha_advect = setup_advection(z, vpa, vperp, r, ion_species_coord)
     # create structure r_advect whose members are the arrays needed to compute
     # the advection term(s) appearing in the split part of the ion kinetic equation dealing
     # with advection in r
     @begin_serial_region()
-    r_advect = setup_advection(n_ion_species, r, vpa, vperp, z)
+    r_advect = setup_advection(r, vpa, vperp, z, ion_species_coord)
     # create structure vpa_advect whose members are the arrays needed to compute
     # the advection term(s) appearing in the split part of the ion kinetic equation dealing
     # with advection in vpa
     @begin_serial_region()
-    vpa_advect = setup_advection(n_ion_species, vpa, vperp, z, r)
+    vpa_advect = setup_advection(vpa, vperp, z, r, ion_species_coord)
     # create structure vperp_advect whose members are the arrays needed to compute
     # the advection term(s) appearing in the split part of the ion kinetic equation dealing
     # with advection in vperp
     @begin_serial_region()
-    vperp_advect = setup_advection(n_ion_species, vperp, vpa, z, r)
+    vperp_advect = setup_advection(vperp, vpa, z, r, ion_species_coord)
     ##                                   ##
     # electron particle advection structs #
     ##                                   ##
@@ -293,24 +291,24 @@ function allocate_advection_structs(composition, z, r, vpa, vperp, vz, vr, vzeta
     # the advection term(s) appearing in the part of the electron kinetic equation dealing
     # with advection in z
     @begin_serial_region()
-    electron_z_advect = setup_advection(1, z, vpa, vperp, r)
+    electron_z_advect = setup_advection(z, vpa, vperp, r)
     # create structure vpa_advect whose members are the arrays needed to compute
     # the advection term(s) appearing in the part of the electron kinetic equation dealing
     # with advection in vpa
     @begin_serial_region()
-    electron_vpa_advect = setup_advection(1, vpa, vperp, z, r)
+    electron_vpa_advect = setup_advection(vpa, vperp, z, r)
     ##                                  ##
     # neutral particle advection structs #
     ##                                  ##
     # create structure neutral_z_advect for neutral particle advection
     @begin_serial_region()
-    neutral_z_advect = setup_advection(n_neutral_species_alloc, z, vz, vr, vzeta, r)
+    neutral_z_advect = setup_advection(z, vz, vr, vzeta, r, neutral_species_coord)
     # create structure neutral_r_advect for neutral particle advection
     @begin_serial_region()
-    neutral_r_advect = setup_advection(n_neutral_species_alloc, r, vz, vr, vzeta, z)
+    neutral_r_advect = setup_advection(r, vz, vr, vzeta, z, neutral_species_coord)
     # create structure neutral_vz_advect for neutral particle advection
     @begin_serial_region()
-    neutral_vz_advect = setup_advection(n_neutral_species_alloc, vz, vr, vzeta, z, r)
+    neutral_vz_advect = setup_advection(vz, vr, vzeta, z, r, neutral_species_coord)
     ##                                                                 ##
     # construct named list of advection structs to compactify arguments #
     ##                                                                 ##
@@ -1200,7 +1198,7 @@ function _setup_time_advance_internal!(pdf, fields, vz, vr, vzeta, vpa, vperp, z
         # initialise the r advection speed
         @begin_s_z_vperp_vpa_region()
         @loop_s is begin
-            @views update_speed_r!(r_advect[is], fields, moments.evolve_density,
+            @views update_speed_r!(r_advect[:,:,:,:,is], fields, moments.evolve_density,
                                    moments.evolve_upar, moments.evolve_p, vpa, vperp, z,
                                    r, geometry, is)
         end
@@ -1211,14 +1209,14 @@ function _setup_time_advance_internal!(pdf, fields, vz, vr, vzeta, vpa, vperp, z
         # initialise the z advection speed
         @begin_s_r_vperp_vpa_region()
         @loop_s is begin
-            @views update_speed_z!(z_advect[is], moments.ion.upar[:,:,is],
+            @views update_speed_z!(z_advect[:,:,:,:,is], moments.ion.upar[:,:,is],
                                    moments.ion.vth[:,:,is], moments.evolve_upar,
                                    moments.evolve_p, vpa, vperp, z, r, geometry)
         end
         # initialise the binormal advection speed
         @begin_s_r_vperp_vpa_region()
         @loop_s is begin
-            @views update_speed_alpha!(alpha_advect[is], moments.evolve_upar,
+            @views update_speed_alpha!(alpha_advect[:,:,:,:,is], moments.evolve_upar,
                                        moments.evolve_p, fields, vpa, vperp, z, r,
                                        geometry, is)
         end
@@ -1248,7 +1246,7 @@ function _setup_time_advance_internal!(pdf, fields, vz, vr, vzeta, vpa, vperp, z
         # initialise the r advection speed
         @begin_sn_z_vzeta_vr_vz_region()
         @loop_sn isn begin
-            @views update_speed_neutral_r!(neutral_r_advect[isn], r, z, vzeta, vr, vz)
+            @views update_speed_neutral_r!(neutral_r_advect[:,:,:,:,:,isn], r, z, vzeta, vr, vz)
         end
     end
 
@@ -1256,7 +1254,7 @@ function _setup_time_advance_internal!(pdf, fields, vz, vr, vzeta, vpa, vperp, z
         # initialise the z advection speed
         @begin_sn_r_vzeta_vr_vz_region()
         @loop_sn isn begin
-            @views update_speed_neutral_z!(neutral_z_advect[isn],
+            @views update_speed_neutral_z!(neutral_z_advect[:,:,:,:,:,isn],
                                            moments.neutral.uz[:,:,isn],
                                            moments.neutral.vth[:,:,isn],
                                            moments.evolve_upar, moments.evolve_p, vz,
@@ -1270,9 +1268,7 @@ function _setup_time_advance_internal!(pdf, fields, vz, vr, vzeta, vpa, vperp, z
             # Initialise the vz 'advection speed' in case it does not need updating. It
             # may still be used to decide which boundary is 'incoming' in the vz boundary
             # condition.
-            @loop_sn isn begin
-                neutral_vz_advect[isn].speed .= 0.0
-            end
+            neutral_vz_advect .= 0.0
         end
         @begin_sn_r_z_vzeta_vr_region()
         @views update_speed_neutral_vz!(neutral_vz_advect, fields, scratch[1], moments,
@@ -3006,9 +3002,9 @@ appropriate.
     if !t_params.implicit_ion_advance && r.n > 1
         ion_r_CFL = Inf
         @loop_s is begin
-            update_speed_r!(r_advect[is], fields, evolve_density, evolve_upar, evolve_p,
-                            vpa, vperp, z, r, geometry, is)
-            this_minimum = get_minimum_CFL_r(r_advect[is].speed, r)
+            update_speed_r!(@view(r_advect[:,:,:,:,is]), fields, evolve_density,
+                            evolve_upar, evolve_p, vpa, vperp, z, r, geometry, is)
+            this_minimum = get_minimum_CFL_r(@view(r_advect[:,:,:,:,is]), r)
             @serial_region begin
                 ion_r_CFL = min(ion_r_CFL, this_minimum)
             end
@@ -3021,14 +3017,15 @@ appropriate.
         @begin_r_vperp_vpa_region()
         ion_z_CFL = Inf
         @loop_s is begin
-            update_speed_z!(z_advect[is], moments.ion.upar, moments.ion.vth, evolve_upar,
-                            evolve_p, vpa, vperp, z, r, geometry)
-            update_speed_alpha!(alpha_advect[is], evolve_upar, evolve_p, fields, vpa,
-                                vperp, z, r, geometry, is)
+            @views update_speed_z!(z_advect[:,:,:,:,is], moments.ion.upar,
+                                   moments.ion.vth, evolve_upar, evolve_p, vpa, vperp, z,
+                                   r, geometry)
+            @views update_speed_alpha!(alpha_advect[:,:,:,:,is], evolve_upar, evolve_p,
+                                       fields, vpa, vperp, z, r, geometry, is)
             # Add alpha_speed as that is also in the z-direction in the 2D simulations
             # implemented so far.
-            z_speed = z_advect[is].speed
-            alpha_speed = alpha_advect[is].speed
+            z_speed = @view z_advect[:,:,:,:,is]
+            alpha_speed = @view alpha_advect[:,:,:,:,is]
             @loop_r_vperp_vpa ir ivperp ivpa begin
                 @views z_speed[:,ivpa,ivperp,ir] .+= alpha_speed[:,ivpa,ivperp,ir]
             end
@@ -3049,7 +3046,7 @@ appropriate.
                           collisions, external_source_settings.ion, t_params.t[],
                           geometry)
         @loop_s is begin
-            this_minimum = get_minimum_CFL_vpa(vpa_advect[is].speed, vpa)
+            this_minimum = get_minimum_CFL_vpa(@view(vpa_advect[:,:,:,:,is]), vpa)
             @serial_region begin
                 ion_vpa_CFL = min(ion_vpa_CFL, this_minimum)
             end
@@ -3064,7 +3061,7 @@ appropriate.
         update_speed_vperp!(vperp_advect, scratch[t_params.n_rk_stages+1], vpa, vperp, z,
                             r, z_advect, alpha_advect, r_advect, geometry, moments)
         @loop_s is begin
-            this_minimum = get_minimum_CFL_vperp(vperp_advect[is].speed, vperp)
+            this_minimum = get_minimum_CFL_vperp(@view(vperp_advect[:,:,:,:,is]), vperp)
             @serial_region begin
                 ion_vperp_CFL = min(ion_vperp_CFL, this_minimum)
             end
@@ -3075,9 +3072,9 @@ appropriate.
     if t_params.kinetic_electron_solver == explicit_time_evolving
         # Need to check electron CFL limits
         @begin_r_vperp_vpa_region()
-        update_electron_speed_z!(electron_z_advect[1], moments.electron.upar,
+        update_electron_speed_z!(electron_z_advect, moments.electron.upar,
                                  moments.electron.vth, vpa.grid)
-        electron_z_CFL = get_minimum_CFL_z(electron_z_advect[1].speed, z)
+        electron_z_CFL = get_minimum_CFL_z(electron_z_advect, z)
         if block_rank[] == 0
             CFL_limits["electron_CFL_z"] = t_params.CFL_prefactor * electron_z_CFL
         else
@@ -3085,12 +3082,12 @@ appropriate.
         end
 
         @begin_r_z_vperp_region()
-        update_electron_speed_vpa!(electron_vpa_advect[1], moments.electron.dens,
+        update_electron_speed_vpa!(electron_vpa_advect, moments.electron.dens,
                                    moments.electron.upar,
                                    scratch[t_params.n_rk_stages+1].electron_p, moments,
                                    composition.me_over_mi, vpa.grid,
                                    external_source_settings.electron)
-        electron_vpa_CFL = get_minimum_CFL_vpa(electron_vpa_advect[1].speed, vpa)
+        electron_vpa_CFL = get_minimum_CFL_vpa(electron_vpa_advect, vpa)
         if block_rank[] == 0
             CFL_limits["electron_CFL_vpa"] = t_params.CFL_prefactor * electron_vpa_CFL
         else
@@ -3291,10 +3288,10 @@ appropriate.
         @begin_r_vzeta_vr_vz_region()
         neutral_z_CFL = Inf
         @loop_sn isn begin
-            update_speed_neutral_z!(neutral_z_advect[isn], moments.neutral.uz,
+            update_speed_neutral_z!(neutral_z_advect[:,:,:,:,:,isn], moments.neutral.uz,
                                     moments.neutral.vth, evolve_upar, evolve_p, vz, vr,
                                     vzeta, z, r, t_params.t[])
-            this_minimum = get_minimum_CFL_neutral_z(neutral_z_advect[isn].speed, z)
+            this_minimum = get_minimum_CFL_neutral_z(@view(neutral_z_advect[:,:,:,:,:,isn]), z)
             @serial_region begin
                 neutral_z_CFL = min(neutral_z_CFL, this_minimum)
             end
@@ -3309,7 +3306,7 @@ appropriate.
                                  z, r, composition, collisions,
                                  external_source_settings.neutral)
         @loop_sn isn begin
-            this_minimum = get_minimum_CFL_neutral_vz(neutral_vz_advect[isn].speed, vz)
+            this_minimum = get_minimum_CFL_neutral_vz(@view(neutral_vz_advect[:,:,:,:,:,isn]), vz)
             @serial_region begin
                 neutral_vz_CFL = min(neutral_vz_CFL, this_minimum)
             end
@@ -4417,19 +4414,19 @@ Do a backward-Euler timestep for all terms in the ion kinetic equation.
     if z.n > 1
         @loop_s is begin
             # get the updated speed along the z direction using the current f
-            @views update_speed_z!(z_advect[is], fvec_in.upar[:,:,is],
+            @views update_speed_z!(z_advect[:,:,:,:,is], fvec_in.upar[:,:,is],
                                    moments.ion.vth[:,:,is], moments.evolve_upar,
                                    moments.evolve_p, vpa, vperp, z, r, geometry)
             # get the updated speed along the binormal direction using the current f
-            @views update_speed_alpha!(alpha_advect[is], moments.evolve_upar,
+            @views update_speed_alpha!(alpha_advect[:,:,:,:,is], moments.evolve_upar,
                                        moments.evolve_p, fields, vpa, vperp, z, r,
                                        geometry, is)
         end
     end
     @begin_s_r_vperp_region()
     @loop_s_r_vperp is ir ivperp begin
-        z_speed = @view z_advect[is].speed[:,:,:,ir]
-        alpha_speed = @view alpha_advect[is].speed[:,:,:,ir]
+        z_speed = @view z_advect[:,:,:,ir,is]
+        alpha_speed = @view alpha_advect[:,:,:,ir,is]
         if z.irank == 0
             iz = 1
             icut_lower_z[ivperp,ir,is] = vpa.n
@@ -4466,7 +4463,7 @@ Do a backward-Euler timestep for all terms in the ion kinetic equation.
     if r.n > 1
         @loop_s is begin
             # get the updated speed along the r direction using the current f
-            @views update_speed_r!(r_advect[is], fields, moments.evolve_density,
+            @views update_speed_r!(r_advect[:,:,:,:,is], fields, moments.evolve_density,
                                    moments.evolve_upar, moments.evolve_p, vpa, vperp, z,
                                    r, geometry, is)
         end
@@ -4484,7 +4481,7 @@ Do a backward-Euler timestep for all terms in the ion kinetic equation.
             @begin_s_r_z_vperp_region()
             @loop_s_r_z_vperp is ir iz ivperp begin
                 @views enforce_v_boundary_condition_local!(x[:,ivperp,iz,ir,is], vpa.bc,
-                                                           vpa_advect[is].speed[:,ivperp,iz,ir],
+                                                           vpa_advect[:,ivperp,iz,ir,is],
                                                            advance.vpa_diffusion, vpa,
                                                            vpa_spectral)
             end

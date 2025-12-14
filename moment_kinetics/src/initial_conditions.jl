@@ -384,8 +384,7 @@ function initialize_electrons!(pdf, moments, fields, geometry, composition, r, z
         init_electron_pdf_over_density_and_boundary_phi!(
             pdf.electron.norm, fields.phi, moments.electron.dens, moments.electron.upar,
             moments.electron.vth, r, z, vpa, vperp, vperp_spectral, vpa_spectral,
-            [(speed=speed,)], moments, num_diss_params,
-            composition.me_over_mi, scratch_dummy)
+            speed, moments, num_diss_params, composition.me_over_mi, scratch_dummy)
     end
     # calculate the initial electron parallel heat flux;
     # if using kinetic electrons, this relies on the electron pdf, which itself relies on the electron heat flux

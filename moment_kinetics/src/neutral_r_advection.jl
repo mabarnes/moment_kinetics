@@ -23,7 +23,7 @@ do a single stage time advance in r (potentially as part of a multi-stage RK sch
     
     @loop_sn isn begin
         # get the updated speed along the r direction using the current f
-        @views update_speed_neutral_r!(advect[isn], r, z, vzeta, vr, vz)
+        @views update_speed_neutral_r!(advect[:,:,:,:,:,isn], r, z, vzeta, vr, vz)
     end
     # calculate the upwind derivative along r
     derivative_r!(scratch_dummy.buffer_vzvrvzetazrsn_1, fvec_in.pdf_neutral, advect,
@@ -35,8 +35,8 @@ do a single stage time advance in r (potentially as part of a multi-stage RK sch
     # advance r-advection equation
     @loop_sn_z_vzeta_vr_vz isn iz ivzeta ivr ivz begin
         @. @views r.scratch = scratch_dummy.buffer_vzvrvzetazrsn_1[ivz,ivr,ivzeta,iz,:,isn]
-        @views advance_f_df_precomputed!(f_out[ivz,ivr,ivzeta,iz,:,isn],
-          r.scratch, advect[isn], ivz, ivr, ivzeta, iz, r, dt)
+        @views advance_f_df_precomputed!(f_out[ivz,ivr,ivzeta,iz,:,isn], r.scratch,
+                                         advect[:,ivz,ivr,ivzeta,iz,isn], r, dt)
     end
 end
 
@@ -44,21 +44,21 @@ end
 calculate the advection speed in the r-direction at each grid point
 """
 function update_speed_neutral_r!(advect, r, z, vzeta, vr, vz)
-    @debug_consistency_checks z.n == size(advect.speed,5) || throw(BoundsError(advect))
-    @debug_consistency_checks vzeta.n == size(advect.speed,4) || throw(BoundsError(advect))
-    @debug_consistency_checks vr.n == size(advect.speed,3) || throw(BoundsError(advect))
-    @debug_consistency_checks vz.n == size(advect.speed,2) || throw(BoundsError(advect))
-    @debug_consistency_checks r.n == size(advect.speed,1) || throw(BoundsError(speed))
+    @debug_consistency_checks z.n == size(advect,5) || throw(BoundsError(advect))
+    @debug_consistency_checks vzeta.n == size(advect,4) || throw(BoundsError(advect))
+    @debug_consistency_checks vr.n == size(advect,3) || throw(BoundsError(advect))
+    @debug_consistency_checks vz.n == size(advect,2) || throw(BoundsError(advect))
+    @debug_consistency_checks r.n == size(advect,1) || throw(BoundsError(advect))
     if r.n > 1
         @inbounds begin
             @loop_z_vzeta_vr_vz iz ivzeta ivr ivz begin
-                @views advect.speed[:,ivz,ivr,ivzeta,iz] .= vr.grid[ivr]
+                @views advect[:,ivz,ivr,ivzeta,iz] .= vr.grid[ivr]
             end
         end
     else
         # no advection if no length in r 
         @loop_z_vzeta_vr_vz iz ivzeta ivr ivz begin
-            advect.speed[:,ivz,ivr,ivzeta,iz] .= 0.0
+            advect[:,ivz,ivr,ivzeta,iz] .= 0.0
         end
     end
     return nothing
