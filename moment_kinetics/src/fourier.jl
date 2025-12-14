@@ -167,13 +167,13 @@ function elementwise_derivative!(coord, ff, fourier::fourier_info)
 end
 
 """
-    elementwise_derivative!(coord, ff, adv_fac, spectral::fourier_info)
+    elementwise_derivative!(coord, ff, speed, spectral::fourier_info)
 
 Fourier transform f to get spectral coefficients and use them to calculate f'.
 
 Note: Fourier derivative does not make use of upwinding information.
 """
-function elementwise_derivative!(coord, ff, adv_fac, spectral::fourier_info)
+function elementwise_derivative!(coord, ff, speed, spectral::fourier_info)
     return elementwise_derivative!(coord, ff, spectral)
 end
 

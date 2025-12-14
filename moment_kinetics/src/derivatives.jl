@@ -13,7 +13,7 @@ export derivative_z!, derivative_z_chrg!, derivative_z_ntrl!
 
 using ..calculus: derivative!, second_derivative!, reconcile_element_boundaries_MPI!,
                   reconcile_element_boundaries_MPI_anyzv!,
-                  reconcile_element_boundaries_MPI_z_pdf_vpavperpz!, apply_adv_fac!
+                  reconcile_element_boundaries_MPI_z_pdf_vpavperpz!
 using ..communication
 using ..type_definitions: mk_float
 using ..looping
@@ -632,8 +632,8 @@ dfns (neutrals) -> [vz,vr,vzeta,z,r,sn]
 #df/dr
 #2D version for f[z,r] -> Er, Ez, phi
 function derivative_r!(dfdr::AbstractArray{mk_float,2}, f::AbstractArray{mk_float,2},
-        adv_fac, adv_fac_lower_buffer::AbstractArray{mk_float,1},
-        adv_fac_upper_buffer::AbstractArray{mk_float,1},
+        speed, speed_lower_buffer::AbstractArray{mk_float,1},
+        speed_upper_buffer::AbstractArray{mk_float,1},
         dfdr_lower_endpoints::AbstractArray{mk_float,1},
         dfdr_upper_endpoints::AbstractArray{mk_float,1},
         r_receive_buffer1::AbstractArray{mk_float,1},
@@ -643,20 +643,20 @@ function derivative_r!(dfdr::AbstractArray{mk_float,2}, f::AbstractArray{mk_floa
 
     # differentiate f w.r.t r
     @loop_z iz begin
-        # Note that for moments, `adv_fac` has its dimensions in the same order as the
+        # Note that for moments, `speed` has its dimensions in the same order as the
         # moment arrays, not with the derivative dimension moved to be left-most index.
-        @views derivative!(dfdr[iz,:], f[iz,:], r, adv_fac[iz,:], r_spectral)
+        @views derivative!(dfdr[iz,:], f[iz,:], r, speed[iz,:], r_spectral)
         # get external endpoints to reconcile via MPI
         dfdr_lower_endpoints[iz] = r.scratch_2d[1,1]
         dfdr_upper_endpoints[iz] = r.scratch_2d[end,end]
-        adv_fac_lower_buffer[iz] = adv_fac[1,iz]
-        adv_fac_upper_buffer[iz] = adv_fac[end,iz]
+        speed_lower_buffer[iz] = speed[1,iz]
+        speed_upper_buffer[iz] = speed[end,iz]
     end
     # now reconcile element boundaries across
     # processes with large message involving all other dimensions
     if r.nelement_local < r.nelement_global
         reconcile_element_boundaries_MPI!(
-            dfdr, adv_fac_lower_buffer, adv_fac_upper_buffer, dfdr_lower_endpoints,
+            dfdr, speed_lower_buffer, speed_upper_buffer, dfdr_lower_endpoints,
             dfdr_upper_endpoints, r_receive_buffer1, r_receive_buffer2, r)
     end
 end
@@ -664,8 +664,8 @@ end
 #df/dr
 #3D version for f[z,r,s] -> moments n, u, T etc
 function derivative_r!(dfdr::AbstractArray{mk_float,3}, f::AbstractArray{mk_float,3},
-        adv_fac, adv_fac_lower_buffer::AbstractArray{mk_float,2},
-        adv_fac_upper_buffer::AbstractArray{mk_float,2},
+        speed, speed_lower_buffer::AbstractArray{mk_float,2},
+        speed_upper_buffer::AbstractArray{mk_float,2},
         dfdr_lower_endpoints::AbstractArray{mk_float,2},
         dfdr_upper_endpoints::AbstractArray{mk_float,2},
         r_receive_buffer1::AbstractArray{mk_float,2},
@@ -674,27 +674,27 @@ function derivative_r!(dfdr::AbstractArray{mk_float,3}, f::AbstractArray{mk_floa
     # differentiate f w.r.t r
     if neutrals
         @loop_sn_z isn iz begin
-            # Note that for moments, `adv_fac` has its dimensions in the same order as the
+            # Note that for moments, `speed` has its dimensions in the same order as the
             # moment arrays, not with the derivative dimension moved to be left-most
             # index.
-            @views derivative!(dfdr[iz,:,isn], f[iz,:,isn], r, adv_fac[iz,:,isn], r_spectral)
+            @views derivative!(dfdr[iz,:,isn], f[iz,:,isn], r, speed[iz,:,isn], r_spectral)
             # get external endpoints to reconcile via MPI
             dfdr_lower_endpoints[iz,isn] = r.scratch_2d[1,1]
             dfdr_upper_endpoints[iz,isn] = r.scratch_2d[end,end]
-            adv_fac_lower_buffer[iz,isn] = adv_fac[iz,1,isn]
-            adv_fac_upper_buffer[iz,isn] = adv_fac[iz,end,isn]
+            speed_lower_buffer[iz,isn] = speed[iz,1,isn]
+            speed_upper_buffer[iz,isn] = speed[iz,end,isn]
         end
     else
         @loop_s_z is iz begin
-            # Note that for moments, `adv_fac` has its dimensions in the same order as the
+            # Note that for moments, `speed` has its dimensions in the same order as the
             # moment arrays, not with the derivative dimension moved to be left-most
             # index.
-            @views derivative!(dfdr[iz,:,is], f[iz,:,is], r, adv_fac[iz,:,is], r_spectral)
+            @views derivative!(dfdr[iz,:,is], f[iz,:,is], r, speed[iz,:,is], r_spectral)
             # get external endpoints to reconcile via MPI
             dfdr_lower_endpoints[iz,is] = r.scratch_2d[1,1]
             dfdr_upper_endpoints[iz,is] = r.scratch_2d[end,end]
-            adv_fac_lower_buffer[iz,is] = adv_fac[iz,1,is]
-            adv_fac_upper_buffer[iz,is] = adv_fac[iz,end,is]
+            speed_lower_buffer[iz,is] = speed[iz,1,is]
+            speed_upper_buffer[iz,is] = speed[iz,end,is]
         end
     end
 
@@ -705,7 +705,7 @@ function derivative_r!(dfdr::AbstractArray{mk_float,3}, f::AbstractArray{mk_floa
         # processes with large message involving all other dimensions
         if r.nelement_local < r.nelement_global
             reconcile_element_boundaries_MPI!(
-                dfdr, adv_fac_lower_buffer, adv_fac_upper_buffer, dfdr_lower_endpoints,
+                dfdr, speed_lower_buffer, speed_upper_buffer, dfdr_lower_endpoints,
                 dfdr_upper_endpoints, r_receive_buffer1, r_receive_buffer2, r; neutrals)
         end
     end
@@ -714,8 +714,8 @@ end
 #df/dr
 #5D version for f[vpa,vperp,z,r,s] -> ion particle dfn
 function derivative_r!(dfdr::AbstractArray{mk_float,5}, f::AbstractArray{mk_float,5},
-        advect, adv_fac_lower_buffer::AbstractArray{mk_float,4},
-        adv_fac_upper_buffer::AbstractArray{mk_float,4},
+        advect, speed_lower_buffer::AbstractArray{mk_float,4},
+        speed_upper_buffer::AbstractArray{mk_float,4},
         dfdr_lower_endpoints::AbstractArray{mk_float,4},
         dfdr_upper_endpoints::AbstractArray{mk_float,4},
         r_receive_buffer1::AbstractArray{mk_float,4},
@@ -725,18 +725,18 @@ function derivative_r!(dfdr::AbstractArray{mk_float,5}, f::AbstractArray{mk_floa
 
 	# differentiate f w.r.t r
 	@loop_s_z_vperp_vpa is iz ivperp ivpa begin
-		@views derivative!(dfdr[ivpa,ivperp,iz,:,is], f[ivpa,ivperp,iz,:,is], r, advect[is].adv_fac[:,ivpa,ivperp,iz], r_spectral)
+		@views derivative!(dfdr[ivpa,ivperp,iz,:,is], f[ivpa,ivperp,iz,:,is], r, advect[is].speed[:,ivpa,ivperp,iz], r_spectral)
 		# get external endpoints to reconcile via MPI
 		dfdr_lower_endpoints[ivpa,ivperp,iz,is] = r.scratch_2d[1,1]
 		dfdr_upper_endpoints[ivpa,ivperp,iz,is] = r.scratch_2d[end,end]
-		adv_fac_lower_buffer[ivpa,ivperp,iz,is] = advect[is].adv_fac[1,ivpa,ivperp,iz]
-		adv_fac_upper_buffer[ivpa,ivperp,iz,is] = advect[is].adv_fac[end,ivpa,ivperp,iz]
+		speed_lower_buffer[ivpa,ivperp,iz,is] = advect[is].speed[1,ivpa,ivperp,iz]
+		speed_upper_buffer[ivpa,ivperp,iz,is] = advect[is].speed[end,ivpa,ivperp,iz]
 	end
 	# now reconcile element boundaries across
 	# processes with large message involving all other dimensions
 	if r.nelement_local < r.nelement_global
 		reconcile_element_boundaries_MPI!(dfdr,
-		 adv_fac_lower_buffer, adv_fac_upper_buffer,
+		 speed_lower_buffer, speed_upper_buffer,
 		 dfdr_lower_endpoints,dfdr_upper_endpoints,
 		 r_receive_buffer1, r_receive_buffer2, r)
 	end
@@ -745,8 +745,8 @@ end
 
 #6D version for f[vz,vz,vzeta,z,r,sn] -> neutral particle dfn (species indexing taken outside this loop)
 function derivative_r!(dfdr::AbstractArray{mk_float,6}, f::AbstractArray{mk_float,6},
-        advect, adv_fac_lower_buffer::AbstractArray{mk_float,5},
-        adv_fac_upper_buffer::AbstractArray{mk_float,5},
+        advect, speed_lower_buffer::AbstractArray{mk_float,5},
+        speed_upper_buffer::AbstractArray{mk_float,5},
         dfdr_lower_endpoints::AbstractArray{mk_float,5},
         dfdr_upper_endpoints::AbstractArray{mk_float,5},
         r_receive_buffer1::AbstractArray{mk_float,5},
@@ -757,18 +757,18 @@ function derivative_r!(dfdr::AbstractArray{mk_float,6}, f::AbstractArray{mk_floa
 	# differentiate f w.r.t r
 	@loop_sn_z_vzeta_vr_vz isn iz ivzeta ivr ivz begin
 		@views derivative!(dfdr[ivz,ivr,ivzeta,iz,:,isn], f[ivz,ivr,ivzeta,iz,:,isn],
-                            r, advect[isn].adv_fac[:,ivz,ivr,ivzeta,iz], r_spectral)
+                            r, advect[isn].speed[:,ivz,ivr,ivzeta,iz], r_spectral)
 		# get external endpoints to reconcile via MPI
 		dfdr_lower_endpoints[ivz,ivr,ivzeta,iz,isn] = r.scratch_2d[1,1]
 		dfdr_upper_endpoints[ivz,ivr,ivzeta,iz,isn] = r.scratch_2d[end,end]
-		adv_fac_lower_buffer[ivz,ivr,ivzeta,iz,isn] = advect[isn].adv_fac[1,ivz,ivr,ivzeta,iz]
-		adv_fac_upper_buffer[ivz,ivr,ivzeta,iz,isn] = advect[isn].adv_fac[end,ivz,ivr,ivzeta,iz]
+		speed_lower_buffer[ivz,ivr,ivzeta,iz,isn] = advect[isn].speed[1,ivz,ivr,ivzeta,iz]
+		speed_upper_buffer[ivz,ivr,ivzeta,iz,isn] = advect[isn].speed[end,ivz,ivr,ivzeta,iz]
 	end
 	# now reconcile element boundaries across
 	# processes with large message involving all other dimensions
 	if r.nelement_local < r.nelement_global
 		reconcile_element_boundaries_MPI!(dfdr,
-		 adv_fac_lower_buffer, adv_fac_upper_buffer,
+		 speed_lower_buffer, speed_upper_buffer,
 		 dfdr_lower_endpoints,dfdr_upper_endpoints,
 		 r_receive_buffer1, r_receive_buffer2, r)
 	end
@@ -785,8 +785,8 @@ dfns (neutrals) -> [vz,vr,vzeta,z,r,sn]
 
 #2D version for f[z,r] -> Er, Ez, phi
 function derivative_z!(dfdz::AbstractArray{mk_float,2}, f::AbstractArray{mk_float,2},
-        adv_fac, adv_fac_lower_buffer::AbstractArray{mk_float,1},
-        adv_fac_upper_buffer::AbstractArray{mk_float,1},
+        speed, speed_lower_buffer::AbstractArray{mk_float,1},
+        speed_upper_buffer::AbstractArray{mk_float,1},
         dfdz_lower_endpoints::AbstractArray{mk_float,1},
         dfdz_upper_endpoints::AbstractArray{mk_float,1},
         z_send_buffer::AbstractArray{mk_float,1},
@@ -796,26 +796,26 @@ function derivative_z!(dfdz::AbstractArray{mk_float,2}, f::AbstractArray{mk_floa
 
     # differentiate f w.r.t z
     @loop_r ir begin
-        @views derivative!(dfdz[:,ir], f[:,ir], z, adv_fac[:,ir], z_spectral)
+        @views derivative!(dfdz[:,ir], f[:,ir], z, speed[:,ir], z_spectral)
         # get external endpoints to reconcile via MPI
         dfdz_lower_endpoints[ir] = z.scratch_2d[1,1]
         dfdz_upper_endpoints[ir] = z.scratch_2d[end,end]
-        adv_fac_lower_buffer[ir] = adv_fac[1,ir]
-        adv_fac_upper_buffer[ir] = adv_fac[end,ir]
+        speed_lower_buffer[ir] = speed[1,ir]
+        speed_upper_buffer[ir] = speed[end,ir]
     end
     # now reconcile element boundaries across
     # processes with large message
     if z.nelement_local < z.nelement_global
         reconcile_element_boundaries_MPI!(
-            dfdz, adv_fac_lower_buffer, adv_fac_upper_buffer,
+            dfdz, speed_lower_buffer, speed_upper_buffer,
             dfdz_lower_endpoints,dfdz_upper_endpoints, z_send_buffer, z_receive_buffer, z)
     end
 end
 
 #3D version for f[z,r] -> moments n, u, T etc
 function derivative_z!(dfdz::AbstractArray{mk_float,3}, f::AbstractArray{mk_float,3},
-        adv_fac, adv_fac_lower_buffer::AbstractArray{mk_float,2},
-        adv_fac_upper_buffer::AbstractArray{mk_float,2},
+        speed, speed_lower_buffer::AbstractArray{mk_float,2},
+        speed_upper_buffer::AbstractArray{mk_float,2},
         dfdz_lower_endpoints::AbstractArray{mk_float,2},
         dfdz_upper_endpoints::AbstractArray{mk_float,2},
         z_send_buffer::AbstractArray{mk_float,2},
@@ -824,21 +824,21 @@ function derivative_z!(dfdz::AbstractArray{mk_float,3}, f::AbstractArray{mk_floa
     # differentiate f w.r.t z
     if neutrals
         @loop_sn_r isn ir begin
-            @views derivative!(dfdz[:,ir,isn], f[:,ir,isn], z, adv_fac[:,ir,isn], z_spectral)
+            @views derivative!(dfdz[:,ir,isn], f[:,ir,isn], z, speed[:,ir,isn], z_spectral)
             # get external endpoints to reconcile via MPI
             dfdz_lower_endpoints[ir,isn] = z.scratch_2d[1,1]
             dfdz_upper_endpoints[ir,isn] = z.scratch_2d[end,end]
-            adv_fac_lower_buffer[ir,isn] = adv_fac[1,ir,isn]
-            adv_fac_upper_buffer[ir,isn] = adv_fac[end,ir,isn]
+            speed_lower_buffer[ir,isn] = speed[1,ir,isn]
+            speed_upper_buffer[ir,isn] = speed[end,ir,isn]
         end
     else
         @loop_s_r is ir begin
-            @views derivative!(dfdz[:,ir,is], f[:,ir,is], z, adv_fac[:,ir,is], z_spectral)
+            @views derivative!(dfdz[:,ir,is], f[:,ir,is], z, speed[:,ir,is], z_spectral)
             # get external endpoints to reconcile via MPI
             dfdz_lower_endpoints[ir,is] = z.scratch_2d[1,1]
             dfdz_upper_endpoints[ir,is] = z.scratch_2d[end,end]
-            adv_fac_lower_buffer[ir,is] = adv_fac[1,ir,is]
-            adv_fac_upper_buffer[ir,is] = adv_fac[end,ir,is]
+            speed_lower_buffer[ir,is] = speed[1,ir,is]
+            speed_upper_buffer[ir,is] = speed[end,ir,is]
         end
     end
 
@@ -849,7 +849,7 @@ function derivative_z!(dfdz::AbstractArray{mk_float,3}, f::AbstractArray{mk_floa
         # processes with large message
         if z.nelement_local < z.nelement_global
             reconcile_element_boundaries_MPI!(
-                dfdz, adv_fac_lower_buffer, adv_fac_upper_buffer,
+                dfdz, speed_lower_buffer, speed_upper_buffer,
                 dfdz_lower_endpoints,dfdz_upper_endpoints, z_send_buffer,
                 z_receive_buffer, z; neutrals)
         end
@@ -860,8 +860,8 @@ end
 # 3D version for f[vpa,vperp,z]. Uses modified function name to avoid clash with 'standard'
 # 3D version for ion/neutral moments.
 function derivative_z_pdf_vpavperpz!(dfdz::AbstractArray{mk_float,3}, f::AbstractArray{mk_float,3},
-        adv_fac, adv_fac_lower_buffer::AbstractArray{mk_float,2},
-        adv_fac_upper_buffer::AbstractArray{mk_float,2},
+        speed, speed_lower_buffer::AbstractArray{mk_float,2},
+        speed_upper_buffer::AbstractArray{mk_float,2},
         dfdz_lower_endpoints::AbstractArray{mk_float,2},
         dfdz_upper_endpoints::AbstractArray{mk_float,2},
         z_receive_buffer1::AbstractArray{mk_float,2},
@@ -869,27 +869,27 @@ function derivative_z_pdf_vpavperpz!(dfdz::AbstractArray{mk_float,3}, f::Abstrac
 
     # differentiate f w.r.t z
     @loop_vperp_vpa ivperp ivpa begin
-        @views derivative!(dfdz[ivpa,ivperp,:], f[ivpa,ivperp,:], z, adv_fac[:,ivpa,ivperp], z_spectral)
+        @views derivative!(dfdz[ivpa,ivperp,:], f[ivpa,ivperp,:], z, speed[:,ivpa,ivperp], z_spectral)
         # get external endpoints to reconcile via MPI
         dfdz_lower_endpoints[ivpa,ivperp] = z.scratch_2d[1,1]
         dfdz_upper_endpoints[ivpa,ivperp] = z.scratch_2d[end,end]
-        adv_fac_lower_buffer[ivpa,ivperp] = adv_fac[1,ivpa,ivperp]
-        adv_fac_upper_buffer[ivpa,ivperp] = adv_fac[end,ivpa,ivperp]
+        speed_lower_buffer[ivpa,ivperp] = speed[1,ivpa,ivperp]
+        speed_upper_buffer[ivpa,ivperp] = speed[end,ivpa,ivperp]
     end
 
     # now reconcile element boundaries across
     # processes with large message
     if z.nelement_local < z.nelement_global
         reconcile_element_boundaries_MPI_z_pdf_vpavperpz!(
-            dfdz, adv_fac_lower_buffer, adv_fac_upper_buffer, dfdz_lower_endpoints,
+            dfdz, speed_lower_buffer, speed_upper_buffer, dfdz_lower_endpoints,
             dfdz_upper_endpoints, z_receive_buffer1, z_receive_buffer2, z)
     end
 end
 
 #5D version for f[vpa,vperp,z,r,s] -> dfn ion particles
 function derivative_z!(dfdz::AbstractArray{mk_float,5}, f::AbstractArray{mk_float,5},
-        advect, adv_fac_lower_buffer::AbstractArray{mk_float,4},
-        adv_fac_upper_buffer::AbstractArray{mk_float,4},
+        advect, speed_lower_buffer::AbstractArray{mk_float,4},
+        speed_upper_buffer::AbstractArray{mk_float,4},
         dfdz_lower_endpoints::AbstractArray{mk_float,4},
         dfdz_upper_endpoints::AbstractArray{mk_float,4},
         z_send_buffer::AbstractArray{mk_float,4},
@@ -899,18 +899,18 @@ function derivative_z!(dfdz::AbstractArray{mk_float,5}, f::AbstractArray{mk_floa
 
 	# differentiate f w.r.t z
 	@loop_s_r_vperp_vpa is ir ivperp ivpa begin
-		@views derivative!(dfdz[ivpa,ivperp,:,ir,is], f[ivpa,ivperp,:,ir,is], z, advect[is].adv_fac[:,ivpa,ivperp,ir], z_spectral)
+		@views derivative!(dfdz[ivpa,ivperp,:,ir,is], f[ivpa,ivperp,:,ir,is], z, advect[is].speed[:,ivpa,ivperp,ir], z_spectral)
 		# get external endpoints to reconcile via MPI
 		dfdz_lower_endpoints[ivpa,ivperp,ir,is] = z.scratch_2d[1,1]
 		dfdz_upper_endpoints[ivpa,ivperp,ir,is] = z.scratch_2d[end,end]
-		adv_fac_lower_buffer[ivpa,ivperp,ir,is] = advect[is].adv_fac[1,ivpa,ivperp,ir]
-		adv_fac_upper_buffer[ivpa,ivperp,ir,is] = advect[is].adv_fac[end,ivpa,ivperp,ir]
+		speed_lower_buffer[ivpa,ivperp,ir,is] = advect[is].speed[1,ivpa,ivperp,ir]
+		speed_upper_buffer[ivpa,ivperp,ir,is] = advect[is].speed[end,ivpa,ivperp,ir]
 	end
 	# now reconcile element boundaries across
 	# processes with large message
 	if z.nelement_local < z.nelement_global
 		reconcile_element_boundaries_MPI!(dfdz,
-		 adv_fac_lower_buffer, adv_fac_upper_buffer,
+		 speed_lower_buffer, speed_upper_buffer,
 		 dfdz_lower_endpoints,dfdz_upper_endpoints,
 		 z_send_buffer, z_receive_buffer, z)
 	end
@@ -919,8 +919,8 @@ end
 
 #4D version for f[vpa,vperp,z,r] -> dfn electron particles
 function derivative_z!(dfdz::AbstractArray{mk_float,4}, f::AbstractArray{mk_float,4},
-	advect, adv_fac_lower_buffer::AbstractArray{mk_float,3},
-	adv_fac_upper_buffer::AbstractArray{mk_float,3},
+	advect, speed_lower_buffer::AbstractArray{mk_float,3},
+	speed_upper_buffer::AbstractArray{mk_float,3},
 	dfdz_lower_endpoints::AbstractArray{mk_float,3},
 	dfdz_upper_endpoints::AbstractArray{mk_float,3},
 	z_send_buffer::AbstractArray{mk_float,3},
@@ -930,18 +930,18 @@ function derivative_z!(dfdz::AbstractArray{mk_float,4}, f::AbstractArray{mk_floa
 
     # differentiate the pdf f w.r.t z
     @loop_r_vperp_vpa ir ivperp ivpa begin
-            @views derivative!(dfdz[ivpa,ivperp,:,ir], f[ivpa,ivperp,:,ir], z, advect[1].adv_fac[:,ivpa,ivperp,ir], z_spectral)
+            @views derivative!(dfdz[ivpa,ivperp,:,ir], f[ivpa,ivperp,:,ir], z, advect[1].speed[:,ivpa,ivperp,ir], z_spectral)
             # get external endpoints to reconcile via MPI
             dfdz_lower_endpoints[ivpa,ivperp,ir] = z.scratch_2d[1,1]
             dfdz_upper_endpoints[ivpa,ivperp,ir] = z.scratch_2d[end,end]
-            adv_fac_lower_buffer[ivpa,ivperp,ir] = advect[1].adv_fac[1,ivpa,ivperp,ir]
-            adv_fac_upper_buffer[ivpa,ivperp,ir] = advect[1].adv_fac[end,ivpa,ivperp,ir]
+            speed_lower_buffer[ivpa,ivperp,ir] = advect[1].speed[1,ivpa,ivperp,ir]
+            speed_upper_buffer[ivpa,ivperp,ir] = advect[1].speed[end,ivpa,ivperp,ir]
     end
     # now reconcile element boundaries across
     # processes with large message
     if z.nelement_local < z.nelement_global
             reconcile_element_boundaries_MPI!(dfdz,
-             adv_fac_lower_buffer, adv_fac_upper_buffer,
+             speed_lower_buffer, speed_upper_buffer,
              dfdz_lower_endpoints,dfdz_upper_endpoints,
              z_send_buffer, z_receive_buffer, z)
     end
@@ -950,8 +950,8 @@ end
 
 #6D version for f[vz,vr,vzeta,z,r,sn] -> dfn neutral particles
 function derivative_z!(dfdz::AbstractArray{mk_float,6}, f::AbstractArray{mk_float,6},
-        advect, adv_fac_lower_buffer::AbstractArray{mk_float,5},
-        adv_fac_upper_buffer::AbstractArray{mk_float,5},
+        advect, speed_lower_buffer::AbstractArray{mk_float,5},
+        speed_upper_buffer::AbstractArray{mk_float,5},
         dfdz_lower_endpoints::AbstractArray{mk_float,5},
         dfdz_upper_endpoints::AbstractArray{mk_float,5},
         z_send_buffer::AbstractArray{mk_float,5},
@@ -962,18 +962,18 @@ function derivative_z!(dfdz::AbstractArray{mk_float,6}, f::AbstractArray{mk_floa
 	# differentiate f w.r.t z
 	@loop_sn_r_vzeta_vr_vz isn ir ivzeta ivr ivz begin
 		@views derivative!(dfdz[ivz,ivr,ivzeta,:,ir,isn], f[ivz,ivr,ivzeta,:,ir,isn],
-                            z, advect[isn].adv_fac[:,ivz,ivr,ivzeta,ir], z_spectral)
+                            z, advect[isn].speed[:,ivz,ivr,ivzeta,ir], z_spectral)
 		# get external endpoints to reconcile via MPI
 		dfdz_lower_endpoints[ivz,ivr,ivzeta,ir,isn] = z.scratch_2d[1,1]
 		dfdz_upper_endpoints[ivz,ivr,ivzeta,ir,isn] = z.scratch_2d[end,end]
-		adv_fac_lower_buffer[ivz,ivr,ivzeta,ir,isn] = advect[isn].adv_fac[1,ivz,ivr,ivzeta,ir]
-		adv_fac_upper_buffer[ivz,ivr,ivzeta,ir,isn] = advect[isn].adv_fac[end,ivz,ivr,ivzeta,ir]
+		speed_lower_buffer[ivz,ivr,ivzeta,ir,isn] = advect[isn].speed[1,ivz,ivr,ivzeta,ir]
+		speed_upper_buffer[ivz,ivr,ivzeta,ir,isn] = advect[isn].speed[end,ivz,ivr,ivzeta,ir]
 	end
     # now reconcile element boundaries across
 	# processes with large message
 	if z.nelement_local < z.nelement_global
 		reconcile_element_boundaries_MPI!(dfdz,
-		 adv_fac_lower_buffer, adv_fac_upper_buffer,
+		 speed_lower_buffer, speed_upper_buffer,
 		 dfdz_lower_endpoints,dfdz_upper_endpoints,
 		 z_send_buffer, z_receive_buffer, z)
 	end

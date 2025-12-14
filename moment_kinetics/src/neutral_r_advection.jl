@@ -24,10 +24,6 @@ do a single stage time advance in r (potentially as part of a multi-stage RK sch
     @loop_sn isn begin
         # get the updated speed along the r direction using the current f
         @views update_speed_neutral_r!(advect[isn], r, z, vzeta, vr, vz)
-        # update adv_fac
-        @loop_z_vzeta_vr_vz iz ivzeta ivr ivz begin
-            @. @views advect[isn].adv_fac[:,ivz,ivr,ivzeta,iz] = -dt*advect[isn].speed[:,ivz,ivr,ivzeta,iz]
-        end
     end
     # calculate the upwind derivative along r
     derivative_r!(scratch_dummy.buffer_vzvrvzetazrsn_1, fvec_in.pdf_neutral, advect,

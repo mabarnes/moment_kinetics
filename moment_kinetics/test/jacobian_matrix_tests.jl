@@ -445,11 +445,8 @@ function test_get_pdf_term(test_input::AbstractDict, label::String, get_term::Fu
         dpdf_dz = @view scratch_dummy.buffer_vpavperpzr_1[:,:,:,ir]
         @begin_anyzv_vperp_vpa_region()
         update_electron_speed_z!(z_advect[1], upar_test, vth, vpa.grid, ir)
-        @loop_vperp_vpa ivperp ivpa begin
-            @views z_advect[1].adv_fac[:,ivpa,ivperp,ir] = -z_speed[:,ivpa,ivperp]
-        end
         #calculate the upwind derivative
-        @views derivative_z_pdf_vpavperpz!(dpdf_dz, f, z_advect[1].adv_fac[:,:,:,ir],
+        @views derivative_z_pdf_vpavperpz!(dpdf_dz, f, z_advect[1].speed[:,:,:,ir],
                                            scratch_dummy.buffer_vpavperpr_1[:,:,ir],
                                            scratch_dummy.buffer_vpavperpr_2[:,:,ir],
                                            scratch_dummy.buffer_vpavperpr_3[:,:,ir],
@@ -463,13 +460,10 @@ function test_get_pdf_term(test_input::AbstractDict, label::String, get_term::Fu
         update_electron_speed_vpa!(vpa_advect[1], dens, upar, p, moments,
                                    composition.me_over_mi, vpa.grid,
                                    external_source_settings.electron, ir)
-        @loop_z_vperp iz ivperp begin
-            @views @. vpa_advect[1].adv_fac[:,ivperp,iz,ir] = -vpa_advect[1].speed[:,ivperp,iz,ir]
-        end
         #calculate the upwind derivative of the electron pdf w.r.t. wpa
         @loop_z_vperp iz ivperp begin
             @views derivative!(dpdf_dvpa[:,ivperp,iz], f[:,ivperp,iz], vpa,
-                               vpa_advect[1].adv_fac[:,ivperp,iz,ir], vpa_spectral)
+                               vpa_advect[1].speed[:,ivperp,iz,ir], vpa_spectral)
         end
 
         d2pdf_dvpa2 = @view scratch_dummy.buffer_vpavperpzr_3[:,:,:,ir]
@@ -967,11 +961,8 @@ function test_get_p_term(test_input::AbstractDict, label::String, get_term::Func
         dpdf_dz = @view scratch_dummy.buffer_vpavperpzr_1[:,:,:,ir]
         @begin_anyzv_vperp_vpa_region()
         update_electron_speed_z!(z_advect[1], upar, vth, vpa.grid, ir)
-        @loop_vperp_vpa ivperp ivpa begin
-            @views z_advect[1].adv_fac[:,ivpa,ivperp,ir] = -z_speed[:,ivpa,ivperp]
-        end
         #calculate the upwind derivative
-        @views derivative_z_pdf_vpavperpz!(dpdf_dz, f, z_advect[1].adv_fac[:,:,:,ir],
+        @views derivative_z_pdf_vpavperpz!(dpdf_dz, f, z_advect[1].speed[:,:,:,ir],
                                            scratch_dummy.buffer_vpavperpr_1[:,:,ir],
                                            scratch_dummy.buffer_vpavperpr_2[:,:,ir],
                                            scratch_dummy.buffer_vpavperpr_3[:,:,ir],
@@ -985,13 +976,10 @@ function test_get_p_term(test_input::AbstractDict, label::String, get_term::Func
         update_electron_speed_vpa!(vpa_advect[1], dens, upar, p, moments,
                                    composition.me_over_mi, vpa.grid,
                                    external_source_settings.electron, ir)
-        @loop_z_vperp iz ivperp begin
-            @views @. vpa_advect[1].adv_fac[:,ivperp,iz,ir] = -vpa_advect[1].speed[:,ivperp,iz,ir]
-        end
         #calculate the upwind derivative of the electron pdf w.r.t. wpa
         @loop_z_vperp iz ivperp begin
             @views derivative!(dpdf_dvpa[:,ivperp,iz], f[:,ivperp,iz], vpa,
-                               vpa_advect[1].adv_fac[:,ivperp,iz,ir], vpa_spectral)
+                               vpa_advect[1].speed[:,ivperp,iz,ir], vpa_spectral)
         end
 
         d2pdf_dvpa2 = @view scratch_dummy.buffer_vpavperpzr_3[:,:,:,ir]
@@ -1411,11 +1399,8 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
         dpdf_dz = @view scratch_dummy.buffer_vpavperpzr_1[:,:,:,ir]
         @begin_anyzv_vperp_vpa_region()
         update_electron_speed_z!(z_advect[1], upar, vth, vpa.grid, ir)
-        @loop_vperp_vpa ivperp ivpa begin
-            @views z_advect[1].adv_fac[:,ivpa,ivperp,ir] = -z_speed[:,ivpa,ivperp]
-        end
         #calculate the upwind derivative
-        @views derivative_z_pdf_vpavperpz!(dpdf_dz, f, z_advect[1].adv_fac[:,:,:,ir],
+        @views derivative_z_pdf_vpavperpz!(dpdf_dz, f, z_advect[1].speed[:,:,:,ir],
                                            scratch_dummy.buffer_vpavperpr_1[:,:,ir],
                                            scratch_dummy.buffer_vpavperpr_2[:,:,ir],
                                            scratch_dummy.buffer_vpavperpr_3[:,:,ir],
@@ -1429,13 +1414,10 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
         update_electron_speed_vpa!(vpa_advect[1], dens, upar, p, moments,
                                    composition.me_over_mi, vpa.grid,
                                    external_source_settings.electron, ir)
-        @loop_z_vperp iz ivperp begin
-            @views @. vpa_advect[1].adv_fac[:,ivperp,iz,ir] = -vpa_advect[1].speed[:,ivperp,iz,ir]
-        end
         #calculate the upwind derivative of the electron pdf w.r.t. wpa
         @loop_z_vperp iz ivperp begin
             @views derivative!(dpdf_dvpa[:,ivperp,iz], f[:,ivperp,iz], vpa,
-                               vpa_advect[1].adv_fac[:,ivperp,iz,ir], vpa_spectral)
+                               vpa_advect[1].speed[:,ivperp,iz,ir], vpa_spectral)
         end
         vpa_speed = @view vpa_advect[1].speed[:,:,:,ir]
 
@@ -1942,13 +1924,10 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2)
         update_electron_speed_vpa!(vpa_advect[1], dens, upar, p, moments,
                                    composition.me_over_mi, vpa.grid,
                                    external_source_settings.electron, ir)
-        @loop_z_vperp iz ivperp begin
-            @views @. vpa_advect[1].adv_fac[:,ivperp,iz,ir] = -vpa_advect[1].speed[:,ivperp,iz,ir]
-        end
         #calculate the upwind derivative of the electron pdf w.r.t. wpa
         @loop_z_vperp iz ivperp begin
             @views derivative!(dpdf_dvpa[:,ivperp,iz], f[:,ivperp,iz], vpa,
-                               vpa_advect[1].adv_fac[:,ivperp,iz,ir], vpa_spectral)
+                               vpa_advect[1].speed[:,ivperp,iz,ir], vpa_spectral)
         end
 
         jacobian = nl_solver_params.electron_advance.preconditioners[1][2]

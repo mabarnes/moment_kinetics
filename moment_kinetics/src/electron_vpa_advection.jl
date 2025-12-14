@@ -25,7 +25,6 @@ calculate the wpa-advection term for the electron kinetic equation
                          ir) = begin
     @begin_anyzv_z_vperp_region()
 
-    adv_fac = advect[1].adv_fac
     speed = advect[1].speed
 
     # create a reference to a scratch_dummy array to store the wpa-derivative of the electron pdf
@@ -36,22 +35,18 @@ calculate the wpa-advection term for the electron kinetic equation
     @views update_electron_speed_vpa!(advect[1], density, upar, p, moments,
                                       composition.me_over_mi, vpa.grid,
                                       electron_source_settings, ir)
-    # update adv_fac
-    @loop_z_vperp iz ivperp begin
-        @views @. adv_fac[:,ivperp,iz,ir] = -speed[:,ivperp,iz,ir]
-    end
     #calculate the upwind derivative of the electron pdf w.r.t. wpa
     @loop_z_vperp iz ivperp begin
         @views derivative!(dpdf_dvpa[:,ivperp,iz], pdf_in[:,ivperp,iz], vpa,
-                           advect[1].adv_fac[:,ivperp,iz,ir], spectral)
+                           advect[1].speed[:,ivperp,iz,ir], spectral)
     end
     #@loop_z_vperp iz ivperp begin
     #    @views second_derivative!(d2pdf_dvpa2[:,ivperp,iz], pdf_in[:,ivperp,iz], vpa, spectral)
     #end
     # calculate the advection term
     @loop_z_vperp iz ivperp begin
-        @views @. pdf_out[:,ivperp,iz] += dt * adv_fac[:,ivperp,iz,ir] * dpdf_dvpa[:,ivperp,iz]
-        #@. pdf_out[:,ivperp,iz] -= advect[1].adv_fac[:,ivperp,iz,ir] * dpdf_dvpa[:,ivperp,iz] + 0.0001*d2pdf_dvpa2[:,ivperp,iz]
+        @views @. pdf_out[:,ivperp,iz] += -dt * speed[:,ivperp,iz,ir] * dpdf_dvpa[:,ivperp,iz]
+        #@. pdf_out[:,ivperp,iz] -= -advect[1].speed[:,ivperp,iz,ir] * dpdf_dvpa[:,ivperp,iz] + 0.0001*d2pdf_dvpa2[:,ivperp,iz]
     end
     return nothing
 end
