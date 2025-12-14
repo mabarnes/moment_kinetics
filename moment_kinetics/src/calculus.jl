@@ -25,19 +25,19 @@ using ..looping
 using LinearAlgebra
 
 """
-    elementwise_derivative!(coord, f, adv_fac, spectral)
+    elementwise_derivative!(coord, f, speed, spectral)
     elementwise_derivative!(coord, f, spectral)
 
 Generic function for element-by-element derivatives
 
-First signature, with `adv_fac`, calculates an upwind derivative, the second signature
+First signature, with `speed`, calculates an upwind derivative, the second signature
 calculates a derivative without upwinding information.
 
 Result is stored in coord.scratch_2d.
 """
 function elementwise_derivative! end
 
-function elementwise_derivative!(coord, f, adv_fac,
+function elementwise_derivative!(coord, f, speed,
                                  null::Union{null_spatial_dimension_info,null_velocity_dimension_info,null_vperp_dimension_info})
     coord.scratch_2d .= 0.0
     return nothing
@@ -93,17 +93,17 @@ function indefinite_integral_elements_to_full_grid!(pf, coord)
 end
 
 """
-    derivative!(df, f, coord, adv_fac, spectral)
+    derivative!(df, f, coord, speed, spectral)
 
 Upwinding derivative.
 """
-function derivative!(df, f, coord, adv_fac, spectral::discretization_info)
+function derivative!(df, f, coord, speed, spectral::discretization_info)
     # get the derivative at each grid point within each element and store in
     # coord.scratch_2d
-    elementwise_derivative!(coord, f, adv_fac, spectral)
+    elementwise_derivative!(coord, f, speed, spectral)
     # map the derivative from the elemental grid to the full grid;
     # at element boundaries, use the derivative from the upwind element.
-    derivative_elements_to_full_grid!(df, coord.scratch_2d, coord, adv_fac)
+    derivative_elements_to_full_grid!(df, coord.scratch_2d, coord, speed)
 end
 
 """
@@ -336,12 +336,12 @@ end
 
 """
 """
-function derivative_elements_to_full_grid!(df1d, df2d, coord, adv_fac::AbstractArray{mk_float,1})
+function derivative_elements_to_full_grid!(df1d, df2d, coord, speed::AbstractArray{mk_float,1})
     # no changes need to be made for the derivative at points away from element boundaries
     elements_to_full_grid_interior_pts!(df1d, df2d, coord)
     # resolve the multi-valued nature of the derivative at element boundaries
     # by using the derivative from the upwind element
-    reconcile_element_boundaries_upwind!(df1d, df2d, coord, adv_fac)
+    reconcile_element_boundaries_upwind!(df1d, df2d, coord, speed)
     return nothing
 end
 
@@ -385,37 +385,37 @@ df is multi-valued at the overlapping point at the boundary
 between neighboring elements.
 here we choose to use the value of df from the upwind element.
 """
-function reconcile_element_boundaries_upwind!(df1d, df2d, coord, adv_fac::AbstractArray{mk_float,1})
+function reconcile_element_boundaries_upwind!(df1d, df2d, coord, speed::AbstractArray{mk_float,1})
     # note that the first ngrid points are classified as belonging to the first element
     # and the next ngrid-1 points belonging to second element, etc.
 
     # first deal with domain boundaries
     if coord.periodic && coord.nelement_global == coord.nelement_local
         # consider left domain boundary
-        if adv_fac[1] > 0.0
-            # adv_fac > 0 corresponds to negative advection speed, so
+        if speed[1] < 0.0
+            # speed < 0 corresponds to negative advection speed, so
             # use derivative information from upwind element at larger coordinate value
             df1d[1] = df2d[1,1]
-        elseif adv_fac[1] < 0.0
-            # adv_fac < 0 corresponds to positive advection speed, so
+        elseif speed[1] > 0.0
+            # speed > 0 corresponds to positive advection speed, so
             # use derivative information from upwind element at smaller coordinate value
             df1d[1] = df2d[coord.ngrid,coord.nelement_local]
         else
-            # adv_fac = 0, so no upwinding required;
+            # speed = 0, so no upwinding required;
             # use average value
             df1d[1] = 0.5*(df2d[1,1]+df2d[coord.ngrid,coord.nelement_local])
         end
         # consider right domain boundary
-        if adv_fac[coord.n] > 0.0
-            # adv_fac > 0 corresponds to negative advection speed, so
+        if speed[coord.n] < 0.0
+            # speed < 0 corresponds to negative advection speed, so
             # use derivative information from upwind element at larger coordinate value
             df1d[coord.n] = df2d[1,1]
-        elseif adv_fac[coord.n] < 0.0
-            # adv_fac < 0 corresponds to positive advection speed, so
+        elseif speed[coord.n] > 0.0
+            # speed > 0 corresponds to positive advection speed, so
             # use derivative information from upwind element at smaller coordinate value
             df1d[coord.n] = df2d[coord.ngrid,coord.nelement_local]
         else
-            # adv_fac = 0, so no upwinding required;
+            # speed = 0, so no upwinding required;
             # use average value
             df1d[coord.n] = 0.5*(df2d[1,1]+df2d[coord.ngrid,coord.nelement_local])
         end
@@ -429,16 +429,16 @@ function reconcile_element_boundaries_upwind!(df1d, df2d, coord, adv_fac::Abstra
         for ielem ∈ 2:coord.nelement_local
             im1 = ielem-1
             # consider left element boundary
-            if adv_fac[coord.imax[im1]] > 0.0
-                # adv_fac > 0 corresponds to negative advection speed, so
+            if speed[coord.imax[im1]] < 0.0
+                # speed < 0 corresponds to negative advection speed, so
                 # use derivative information from upwind element at larger coordinate value
                 df1d[coord.imax[im1]] = df2d[1,ielem]
-            elseif adv_fac[coord.imax[im1]] < 0.0
-                # adv_fac < 0 corresponds to positive advection speed, so
+            elseif speed[coord.imax[im1]] > 0.0
+                # speed > 0 corresponds to positive advection speed, so
                 # use derivative information from upwind element at smaller coordinate value
                 df1d[coord.imax[im1]] = df2d[coord.ngrid,im1]
             else
-                # adv_fac = 0, so no upwinding required;
+                # speed = 0, so no upwinding required;
                 # use average value
                 df1d[coord.imax[im1]] = 0.5*(df2d[1,ielem]+df2d[coord.ngrid,im1])
             end
@@ -611,8 +611,6 @@ function apply_centred!(buffer::AbstractArray{mk_float,0},
                         endpoints::AbstractArray{mk_float,0}, coord_name::String;
                         neutrals=false)
     #buffer contains off-process endpoint
-    #adv_fac < 0 is positive advection speed
-    #adv_fac > 0 is negative advection speed
     #endpoint is local on-process endpoint
     #sgn = 1 for send irank -> irank + 1
     #sgn = -1 for send irank + 1 -> irank
@@ -627,8 +625,6 @@ function apply_centred!(buffer::AbstractArray{mk_float,1},
                         endpoints::AbstractArray{mk_float,1}, coord_name::String;
                         neutrals=false)
     #buffer contains off-process endpoint
-    #adv_fac < 0 is positive advection speed
-    #adv_fac > 0 is negative advection speed
     #endpoint is local on-process endpoint
     #sgn = 1 for send irank -> irank + 1
     #sgn = -1 for send irank + 1 -> irank
@@ -652,8 +648,6 @@ function apply_centred!(buffer::AbstractArray{mk_float,2},
                         endpoints::AbstractArray{mk_float,2}, coord_name::String;
                         neutrals)
     #buffer contains off-process endpoint
-    #adv_fac < 0 is positive advection speed
-    #adv_fac > 0 is negative advection speed
     #endpoint is local on-process endpoint
     #sgn = 1 for send irank -> irank + 1
     #sgn = -1 for send irank + 1 -> irank
@@ -691,8 +685,6 @@ function apply_centred!(buffer::AbstractArray{mk_float,3},
                         endpoints::AbstractArray{mk_float,3}, coord_name::String;
                         neutrals=false)
     #buffer contains off-process endpoint
-    #adv_fac < 0 is positive advection speed
-    #adv_fac > 0 is negative advection speed
     #endpoint is local on-process endpoint
     #sgn = 1 for send irank -> irank + 1
     #sgn = -1 for send irank + 1 -> irank
@@ -716,8 +708,6 @@ function apply_centred!(buffer::AbstractArray{mk_float,4},
                         endpoints::AbstractArray{mk_float,4}, coord_name::String;
                         neutrals=false)
     #buffer contains off-process endpoint
-    #adv_fac < 0 is positive advection speed
-    #adv_fac > 0 is negative advection speed
     #endpoint is local on-process endpoint
     #sgn = 1 for send irank -> irank + 1
     #sgn = -1 for send irank + 1 -> irank
@@ -741,8 +731,6 @@ function apply_centred!(buffer::AbstractArray{mk_float,5},
                         endpoints::AbstractArray{mk_float,5}, coord_name::String;
                         neutrals=false)
     #buffer contains off-process endpoint
-    #adv_fac < 0 is positive advection speed
-    #adv_fac > 0 is negative advection speed
     #endpoint is local on-process endpoint
     #sgn = 1 for send irank -> irank + 1
     #sgn = -1 for send irank + 1 -> irank
@@ -765,8 +753,6 @@ end
 function apply_centred_anyzv!(buffer::AbstractArray{mk_float,0},
                               endpoints::AbstractArray{mk_float,0}, coord_name::String)
     #buffer contains off-process endpoint
-    #adv_fac < 0 is positive advection speed
-    #adv_fac > 0 is negative advection speed
     #endpoint is local on-process endpoint
     #sgn = 1 for send irank -> irank + 1
     #sgn = -1 for send irank + 1 -> irank
@@ -780,8 +766,6 @@ end
 function apply_centred_anyzv!(buffer::AbstractArray{mk_float,2},
                               endpoints::AbstractArray{mk_float,2}, coord_name::String)
     #buffer contains off-process endpoint
-    #adv_fac < 0 is positive advection speed
-    #adv_fac > 0 is negative advection speed
     #endpoint is local on-process endpoint
     #sgn = 1 for send irank -> irank + 1
     #sgn = -1 for send irank + 1 -> irank
@@ -863,23 +847,23 @@ end
     assign_endpoint!(df1d, receive_buffer2, "upper", coord; neutrals)
 end
 
-function apply_adv_fac!(buffer::AbstractArray{mk_float,0},
-                        adv_fac::AbstractArray{mk_float,10},
-                        endpoints::AbstractArray{mk_float,10}, sgn::mk_int,
-                        coord_name::String; neutrals=false)
+function apply_upwind!(buffer::AbstractArray{mk_float,0},
+                       speed::AbstractArray{mk_float,0},
+                       endpoints::AbstractArray{mk_float,0}, sgn::mk_int,
+                       coord_name::String; neutrals=false)
     #buffer contains off-process endpoint
-    #adv_fac < 0 is positive advection speed
-    #adv_fac > 0 is negative advection speed
+    #speed > 0 is positive advection speed
+    #speed < 0 is negative advection speed
     #endpoint is local on-process endpoint
     #sgn = 1 for send irank -> irank + 1
     #sgn = -1 for send irank + 1 -> irank
     #loop over all indices in array
     @begin_serial_region
     @serial_region begin
-        if sgn*adv_fac[] > 0.0
+        if sgn*speed[] < 0.0
             # replace buffer value with endpoint value
             buffer[] = endpoints[]
-        elseif sgn*adv_fac[] < 0.0
+        elseif sgn*speed[] > 0.0
             #do nothing
         else #average values
             buffer[] = 0.5*(buffer[] + endpoints[])
@@ -956,13 +940,13 @@ end
     @_anyzv_subblock_synchronize()
 end
 
-function apply_adv_fac!(buffer::AbstractArray{mk_float,1},
-                        adv_fac::AbstractArray{mk_float,1},
-                        endpoints::AbstractArray{mk_float,1}, sgn::mk_int,
-                        coord_name::String; neutrals=false)
+function apply_upwind!(buffer::AbstractArray{mk_float,1},
+                       speed::AbstractArray{mk_float,1},
+                       endpoints::AbstractArray{mk_float,1}, sgn::mk_int,
+                       coord_name::String; neutrals=false)
     #buffer contains off-process endpoint
-    #adv_fac < 0 is positive advection speed
-    #adv_fac > 0 is negative advection speed
+    #speed > 0 is positive advection speed
+    #speed < 0 is negative advection speed
     #endpoint is local on-process endpoint
     #sgn = 1 for send irank -> irank + 1
     #sgn = -1 for send irank + 1 -> irank
@@ -970,10 +954,10 @@ function apply_adv_fac!(buffer::AbstractArray{mk_float,1},
     if coord_name == "r"
         @begin_z_region
         @loop_z iz begin
-            if sgn*adv_fac[iz] > 0.0
+            if sgn*speed[iz] < 0.0
                 # replace buffer value with endpoint value
                 buffer[iz] = endpoints[iz]
-            elseif sgn*adv_fac[iz] < 0.0
+            elseif sgn*speed[iz] > 0.0
                 #do nothing
             else #average values
                 buffer[iz] = 0.5*(buffer[iz] + endpoints[iz])
@@ -982,10 +966,10 @@ function apply_adv_fac!(buffer::AbstractArray{mk_float,1},
     elseif coord_name == "z"
         @begin_r_region
         @loop_r ir begin
-            if sgn*adv_fac[ir] > 0.0
+            if sgn*speed[ir] < 0.0
                 # replace buffer value with endpoint value
                 buffer[ir] = endpoints[ir]
-            elseif sgn*adv_fac[ir] < 0.0
+            elseif sgn*speed[ir] > 0.0
                 #do nothing
             else #average values
                 buffer[ir] = 0.5*(buffer[ir] + endpoints[ir])
@@ -996,13 +980,13 @@ function apply_adv_fac!(buffer::AbstractArray{mk_float,1},
     end
 end
 
-function apply_adv_fac!(buffer::AbstractArray{mk_float,2},
-                        adv_fac::AbstractArray{mk_float,2},
-                        endpoints::AbstractArray{mk_float,2}, sgn::mk_int,
-                        coord_name::String; neutrals)
+function apply_upwind!(buffer::AbstractArray{mk_float,2},
+                       speed::AbstractArray{mk_float,2},
+                       endpoints::AbstractArray{mk_float,2}, sgn::mk_int,
+                       coord_name::String; neutrals)
     #buffer contains off-process endpoint
-    #adv_fac < 0 is positive advection speed
-    #adv_fac > 0 is negative advection speed
+    #speed > 0 is positive advection speed
+    #speed < 0 is negative advection speed
     #endpoint is local on-process endpoint
     #sgn = 1 for send irank -> irank + 1
     #sgn = -1 for send irank + 1 -> irank
@@ -1011,10 +995,10 @@ function apply_adv_fac!(buffer::AbstractArray{mk_float,2},
         if neutrals
             @begin_sn_z_region
             @loop_sn_z isn iz begin
-                if sgn*adv_fac[iz,isn] > 0.0
+                if sgn*speed[iz,isn] < 0.0
                     # replace buffer value with endpoint value
                     buffer[iz,isn] = endpoints[iz,isn]
-                elseif sgn*adv_fac[iz,isn] < 0.0
+                elseif sgn*speed[iz,isn] > 0.0
                     #do nothing
                 else #average values
                     buffer[iz,isn] = 0.5*(buffer[iz,isn] + endpoints[iz,isn])
@@ -1023,10 +1007,10 @@ function apply_adv_fac!(buffer::AbstractArray{mk_float,2},
         else
             @begin_s_z_region
             @loop_s_z is iz begin
-                if sgn*adv_fac[iz,is] > 0.0
+                if sgn*speed[iz,is] < 0.0
                     # replace buffer value with endpoint value
                     buffer[iz,is] = endpoints[iz,is]
-                elseif sgn*adv_fac[iz,is] < 0.0
+                elseif sgn*speed[iz,is] > 0.0
                     #do nothing
                 else #average values
                     buffer[iz,is] = 0.5*(buffer[iz,is] + endpoints[iz,is])
@@ -1037,10 +1021,10 @@ function apply_adv_fac!(buffer::AbstractArray{mk_float,2},
         if neutrals
             @begin_sn_r_region
             @loop_sn_r isn ir begin
-                if sgn*adv_fac[ir,isn] > 0.0
+                if sgn*speed[ir,isn] < 0.0
                     # replace buffer value with endpoint value
                     buffer[ir,isn] = endpoints[ir,isn]
-                elseif sgn*adv_fac[ir,isn] < 0.0
+                elseif sgn*speed[ir,isn] > 0.0
                     #do nothing
                 else #average values
                     buffer[ir,isn] = 0.5*(buffer[ir,isn] + endpoints[ir,isn])
@@ -1049,10 +1033,10 @@ function apply_adv_fac!(buffer::AbstractArray{mk_float,2},
         else
             @begin_s_r_region
             @loop_s_r is ir begin
-                if sgn*adv_fac[ir,is] > 0.0
+                if sgn*speed[ir,is] < 0.0
                     # replace buffer value with endpoint value
                     buffer[ir,is] = endpoints[ir,is]
-                elseif sgn*adv_fac[ir,is] < 0.0
+                elseif sgn*speed[ir,is] > 0.0
                     #do nothing
                 else #average values
                     buffer[ir,is] = 0.5*(buffer[ir,is] + endpoints[ir,is])
@@ -1064,13 +1048,13 @@ function apply_adv_fac!(buffer::AbstractArray{mk_float,2},
     end
 end
 
-function apply_adv_fac!(buffer::AbstractArray{mk_float,3},
-                        adv_fac::AbstractArray{mk_float,3},
-                        endpoints::AbstractArray{mk_float,3}, sgn::mk_int,
-                        coord_name::String; neutrals=false)
+function apply_upwind!(buffer::AbstractArray{mk_float,3},
+                       speed::AbstractArray{mk_float,3},
+                       endpoints::AbstractArray{mk_float,3}, sgn::mk_int,
+                       coord_name::String; neutrals=false)
     #buffer contains off-process endpoint
-    #adv_fac < 0 is positive advection speed
-    #adv_fac > 0 is negative advection speed
+    #speed > 0 is positive advection speed
+    #speed < 0 is negative advection speed
     #endpoint is local on-process endpoint
     #sgn = 1 for send irank -> irank + 1
     #sgn = -1 for send irank + 1 -> irank
@@ -1078,10 +1062,10 @@ function apply_adv_fac!(buffer::AbstractArray{mk_float,3},
     if coord_name == "r"
         @begin_z_vperp_vpa_region
         @loop_z_vperp_vpa iz ivperp ivpa begin
-            if sgn*adv_fac[ivpa,ivperp,iz] > 0.0
+            if sgn*speed[ivpa,ivperp,iz] < 0.0
                 # replace buffer value with endpoint value
                 buffer[ivpa,ivperp,iz] = endpoints[ivpa,ivperp,iz]
-            elseif sgn*adv_fac[ivpa,ivperp,iz] < 0.0
+            elseif sgn*speed[ivpa,ivperp,iz] > 0.0
                 #do nothing
             else #average values
                 buffer[ivpa,ivperp,iz] = 0.5*(buffer[ivpa,ivperp,iz] + endpoints[ivpa,ivperp,iz])
@@ -1090,10 +1074,10 @@ function apply_adv_fac!(buffer::AbstractArray{mk_float,3},
     elseif coord_name == "z"
         @begin_r_vperp_vpa_region
         @loop_r_vperp_vpa ir ivperp ivpa begin
-            if sgn*adv_fac[ivpa,ivperp,ir] > 0.0
+            if sgn*speed[ivpa,ivperp,ir] < 0.0
                 # replace buffer value with endpoint value
                 buffer[ivpa,ivperp,ir] = endpoints[ivpa,ivperp,ir]
-            elseif sgn*adv_fac[ivpa,ivperp,ir] < 0.0
+            elseif sgn*speed[ivpa,ivperp,ir] > 0.0
                 #do nothing
             else #average values
                 buffer[ivpa,ivperp,ir] = 0.5*(buffer[ivpa,ivperp,ir] + endpoints[ivpa,ivperp,ir])
@@ -1104,13 +1088,13 @@ function apply_adv_fac!(buffer::AbstractArray{mk_float,3},
     end
 end
 
-function apply_adv_fac!(buffer::AbstractArray{mk_float,4},
-                        adv_fac::AbstractArray{mk_float,4},
-                        endpoints::AbstractArray{mk_float,4}, sgn::mk_int,
-                        coord_name::String; neutrals=false)
+function apply_upwind!(buffer::AbstractArray{mk_float,4},
+                       speed::AbstractArray{mk_float,4},
+                       endpoints::AbstractArray{mk_float,4}, sgn::mk_int,
+                       coord_name::String; neutrals=false)
     #buffer contains off-process endpoint
-    #adv_fac < 0 is positive advection speed
-    #adv_fac > 0 is negative advection speed
+    #speed > 0 is positive advection speed
+    #speed < 0 is negative advection speed
     #endpoint is local on-process endpoint
     #sgn = 1 for send irank -> irank + 1
     #sgn = -1 for send irank + 1 -> irank
@@ -1118,10 +1102,10 @@ function apply_adv_fac!(buffer::AbstractArray{mk_float,4},
     if coord_name == "r"
         @begin_s_z_vperp_vpa_region
         @loop_s_z_vperp_vpa is iz ivperp ivpa begin
-            if sgn*adv_fac[ivpa,ivperp,iz,is] > 0.0
+            if sgn*speed[ivpa,ivperp,iz,is] < 0.0
                 # replace buffer value with endpoint value
                 buffer[ivpa,ivperp,iz,is] = endpoints[ivpa,ivperp,iz,is]
-            elseif sgn*adv_fac[ivpa,ivperp,iz,is] < 0.0
+            elseif sgn*speed[ivpa,ivperp,iz,is] > 0.0
                 #do nothing
             else #average values
                 buffer[ivpa,ivperp,iz,is] = 0.5*(buffer[ivpa,ivperp,iz,is] + endpoints[ivpa,ivperp,iz,is])
@@ -1130,10 +1114,10 @@ function apply_adv_fac!(buffer::AbstractArray{mk_float,4},
     elseif coord_name == "z"
         @begin_s_r_vperp_vpa_region
         @loop_s_r_vperp_vpa is ir ivperp ivpa begin
-            if sgn*adv_fac[ivpa,ivperp,ir,is] > 0.0
+            if sgn*speed[ivpa,ivperp,ir,is] < 0.0
                 # replace buffer value with endpoint value
                 buffer[ivpa,ivperp,ir,is] = endpoints[ivpa,ivperp,ir,is]
-            elseif sgn*adv_fac[ivpa,ivperp,ir,is] < 0.0
+            elseif sgn*speed[ivpa,ivperp,ir,is] > 0.0
                 #do nothing
             else #average values
                 buffer[ivpa,ivperp,ir,is] = 0.5*(buffer[ivpa,ivperp,ir,is] + endpoints[ivpa,ivperp,ir,is])
@@ -1144,13 +1128,13 @@ function apply_adv_fac!(buffer::AbstractArray{mk_float,4},
     end
 end
 
-function apply_adv_fac!(buffer::AbstractArray{mk_float,5},
-                        adv_fac::AbstractArray{mk_float,5},
-                        endpoints::AbstractArray{mk_float,5}, sgn::mk_int,
-                        coord_name::String; neutrals=false)
+function apply_upwind!(buffer::AbstractArray{mk_float,5},
+                       speed::AbstractArray{mk_float,5},
+                       endpoints::AbstractArray{mk_float,5}, sgn::mk_int,
+                       coord_name::String; neutrals=false)
     #buffer contains off-process endpoint
-    #adv_fac < 0 is positive advection speed
-    #adv_fac > 0 is negative advection speed
+    #speed > 0 is positive advection speed
+    #speed < 0 is negative advection speed
     #endpoint is local on-process endpoint
     #sgn = 1 for send irank -> irank + 1
     #sgn = -1 for send irank + 1 -> irank
@@ -1158,10 +1142,10 @@ function apply_adv_fac!(buffer::AbstractArray{mk_float,5},
     if coord_name == "r"
         @begin_sn_z_vzeta_vr_vz_region
         @loop_sn_z_vzeta_vr_vz isn iz ivzeta ivr ivz begin
-            if sgn*adv_fac[ivz,ivr,ivzeta,iz,isn] > 0.0
+            if sgn*speed[ivz,ivr,ivzeta,iz,isn] < 0.0
                 # replace buffer value with endpoint value
                 buffer[ivz,ivr,ivzeta,iz,isn] = endpoints[ivz,ivr,ivzeta,iz,isn]
-            elseif sgn*adv_fac[ivz,ivr,ivzeta,iz,isn] < 0.0
+            elseif sgn*speed[ivz,ivr,ivzeta,iz,isn] > 0.0
                 #do nothing
             else #average values
                 buffer[ivz,ivr,ivzeta,iz,isn] = 0.5*(buffer[ivz,ivr,ivzeta,iz,isn] + endpoints[ivz,ivr,ivzeta,iz,isn])
@@ -1170,10 +1154,10 @@ function apply_adv_fac!(buffer::AbstractArray{mk_float,5},
     elseif coord_name == "z"
         @begin_sn_r_vzeta_vr_vz_region
         @loop_sn_r_vzeta_vr_vz isn ir ivzeta ivr ivz begin
-            if sgn*adv_fac[ivz,ivr,ivzeta,ir,isn] > 0.0
+            if sgn*speed[ivz,ivr,ivzeta,ir,isn] < 0.0
                 # replace buffer value with endpoint value
                 buffer[ivz,ivr,ivzeta,ir,isn] = endpoints[ivz,ivr,ivzeta,ir,isn]
-            elseif sgn*adv_fac[ivz,ivr,ivzeta,ir,isn] < 0.0
+            elseif sgn*speed[ivz,ivr,ivzeta,ir,isn] > 0.0
                 #do nothing
             else #average values
                 buffer[ivz,ivr,ivzeta,ir,isn] = 0.5*(buffer[ivz,ivr,ivzeta,ir,isn] + endpoints[ivz,ivr,ivzeta,ir,isn])
@@ -1184,22 +1168,22 @@ function apply_adv_fac!(buffer::AbstractArray{mk_float,5},
     end
 end
 
-function apply_adv_fac_vpavperpz!(buffer::AbstractArray{mk_float,2},
-                                  adv_fac::AbstractArray{mk_float,2},
-                                  endpoints::AbstractArray{mk_float,2}, sgn::mk_int)
+function apply_upwind_vpavperpz!(buffer::AbstractArray{mk_float,2},
+                                 speed::AbstractArray{mk_float,2},
+                                 endpoints::AbstractArray{mk_float,2}, sgn::mk_int)
     #buffer contains off-process endpoint
-    #adv_fac < 0 is positive advection speed
-    #adv_fac > 0 is negative advection speed
+    #speed > 0 is positive advection speed
+    #speed < 0 is negative advection speed
     #endpoint is local on-process endpoint
     #sgn = 1 for send irank -> irank + 1
     #sgn = -1 for send irank + 1 -> irank
     #loop over all indices in array
     @begin_anyzv_vperp_vpa_region()
     @loop_vperp_vpa ivperp ivpa begin
-        if sgn*adv_fac[ivpa,ivperp] > 0.0
+        if sgn*speed[ivpa,ivperp] < 0.0
             # replace buffer value with endpoint value
             buffer[ivpa,ivperp] = endpoints[ivpa,ivperp]
-        elseif sgn*adv_fac[ivpa,ivperp] < 0.0
+        elseif sgn*speed[ivpa,ivperp] > 0.0
             #do nothing
         else #average values
             buffer[ivpa,ivperp] = 0.5*(buffer[ivpa,ivperp] + endpoints[ivpa,ivperp])
@@ -1210,8 +1194,8 @@ end
 
 @timeit_debug global_timer reconcile_element_boundaries_MPI!(
                   df1d::AbstractArray{mk_float,Ndims},
-                  adv_fac_lower_endpoints::AbstractArray{mk_float,Mdims},
-                  adv_fac_upper_endpoints::AbstractArray{mk_float,Mdims},
+                  speed_lower_endpoints::AbstractArray{mk_float,Mdims},
+                  speed_upper_endpoints::AbstractArray{mk_float,Mdims},
                   dfdx_lower_endpoints::AbstractArray{mk_float,Mdims},
                   dfdx_upper_endpoints::AbstractArray{mk_float,Mdims},
                   receive_buffer1::AbstractArray{mk_float,Mdims},
@@ -1254,34 +1238,34 @@ end
     # now update receive buffers, taking into account the reconciliation
     if irank == 0
         if coord.periodic
-            # depending on adv_fac, update the extreme lower endpoint with data from irank = nrank -1	
-            apply_adv_fac!(receive_buffer1, adv_fac_lower_endpoints, dfdx_lower_endpoints,
-                           1, coord.name; neutrals)
+            # depending on speed, update the extreme lower endpoint with data from irank = nrank -1	
+            apply_upwind!(receive_buffer1, speed_lower_endpoints, dfdx_lower_endpoints, 1,
+                          coord.name; neutrals)
         else # directly use value from Cheb at extreme lower point
             # Don't do an array copy here, just make the `receive_buffer1` variable refer
             # to a different array.
             receive_buffer1 = dfdx_lower_endpoints
         end
-    else # depending on adv_fac, update the lower endpoint with data from irank = nrank -1	
-        apply_adv_fac!(receive_buffer1, adv_fac_lower_endpoints, dfdx_lower_endpoints, 1,
-                       coord.name; neutrals)
+    else # depending on speed, update the lower endpoint with data from irank = nrank -1	
+        apply_upwind!(receive_buffer1, speed_lower_endpoints, dfdx_lower_endpoints, 1,
+                      coord.name; neutrals)
     end
     #now update the df1d array -- using a slice appropriate to the dimension reconciled
     assign_endpoint!(df1d, receive_buffer1, "lower", coord; neutrals)
 
     if irank == nrank-1
         if coord.periodic
-            # depending on adv_fac, update the extreme upper endpoint with data from irank = 0
-            apply_adv_fac!(receive_buffer2, adv_fac_upper_endpoints, dfdx_upper_endpoints,
-                           -1, coord.name; neutrals)
+            # depending on speed, update the extreme upper endpoint with data from irank = 0
+            apply_upwind!(receive_buffer2, speed_upper_endpoints, dfdx_upper_endpoints,
+                          -1, coord.name; neutrals)
         else #directly use value from Cheb
             # Don't do an array copy here, just make the `receive_buffer2` variable refer
             # to a different array.
             receive_buffer2 = dfdx_upper_endpoints
         end
     else # enforce continuity at upper endpoint
-        apply_adv_fac!(receive_buffer2, adv_fac_upper_endpoints, dfdx_upper_endpoints, -1,
-                       coord.name; neutrals)
+        apply_upwind!(receive_buffer2, speed_upper_endpoints, dfdx_upper_endpoints, -1,
+                      coord.name; neutrals)
     end
     #now update the df1d array -- using a slice appropriate to the dimension reconciled
     assign_endpoint!(df1d, receive_buffer2, "upper", coord; neutrals)
@@ -1363,8 +1347,8 @@ end
 # dimensions as an ion/neutral moment variable, but different dimensions.
 @timeit_debug global_timer reconcile_element_boundaries_MPI_z_pdf_vpavperpz!(
                   df1d::AbstractArray{mk_float,3},
-                  adv_fac_lower_endpoints::AbstractArray{mk_float,2},
-                  adv_fac_upper_endpoints::AbstractArray{mk_float,2},
+                  speed_lower_endpoints::AbstractArray{mk_float,2},
+                  speed_upper_endpoints::AbstractArray{mk_float,2},
                   dfdx_lower_endpoints::AbstractArray{mk_float,2},
                   dfdx_upper_endpoints::AbstractArray{mk_float,2},
                   receive_buffer1::AbstractArray{mk_float,2},
@@ -1402,17 +1386,17 @@ end
     # now update receive buffers, taking into account the reconciliation
     if irank == 0
         if coord.periodic
-            # depending on adv_fac, update the extreme lower endpoint with data from irank = nrank -1	
-            apply_adv_fac_vpavperpz!(receive_buffer1, adv_fac_lower_endpoints,
-                                     dfdx_lower_endpoints, 1)
+            # depending on speed, update the extreme lower endpoint with data from irank = nrank -1	
+            apply_upwind_vpavperpz!(receive_buffer1, speed_lower_endpoints,
+                                    dfdx_lower_endpoints, 1)
         else # directly use value from Cheb at extreme lower point
             # Don't do an array copy here, just make the `receive_buffer1` variable refer
             # to a different array.
             receive_buffer1 = dfdx_lower_endpoints
         end
-    else # depending on adv_fac, update the lower endpoint with data from irank = nrank -1	
-        apply_adv_fac_vpavperpz!(receive_buffer1, adv_fac_lower_endpoints,
-                                 dfdx_lower_endpoints, 1)
+    else # depending on speed, update the lower endpoint with data from irank = nrank -1	
+        apply_upwind_vpavperpz!(receive_buffer1, speed_lower_endpoints,
+                                dfdx_lower_endpoints, 1)
     end
     #now update the df1d array -- using a slice appropriate to the dimension reconciled
     @begin_anyzv_vperp_vpa_region()
@@ -1422,17 +1406,17 @@ end
 
     if irank == nrank-1
         if coord.periodic
-            # depending on adv_fac, update the extreme upper endpoint with data from irank = 0
-            apply_adv_fac_vpavperpz!(receive_buffer2, adv_fac_upper_endpoints,
-                                     dfdx_upper_endpoints, -1)
+            # depending on speed, update the extreme upper endpoint with data from irank = 0
+            apply_upwind_vpavperpz!(receive_buffer2, speed_upper_endpoints,
+                                    dfdx_upper_endpoints, -1)
         else #directly use value from Cheb
             # Don't do an array copy here, just make the `receive_buffer2` variable refer
             # to a different array.
             receive_buffer2 = dfdx_upper_endpoints
         end
     else # enforce continuity at upper endpoint
-        apply_adv_fac_vpavperpz!(receive_buffer2, adv_fac_upper_endpoints,
-                                 dfdx_upper_endpoints, -1)
+        apply_upwind_vpavperpz!(receive_buffer2, speed_upper_endpoints,
+                                dfdx_upper_endpoints, -1)
     end
     #now update the df1d array -- using a slice appropriate to the dimension reconciled
     @begin_anyzv_vperp_vpa_region()

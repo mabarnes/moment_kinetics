@@ -35,13 +35,13 @@ function fd_check_option(option, ngrid)
 end
 
 """
-    elementwise_derivative!(coord, f, adv_fac, not_spectral::finite_difference_info)
+    elementwise_derivative!(coord, f, speed, not_spectral::finite_difference_info)
 
 Calculate the derivative of f using finite differences, with particular scheme
 specified by coord.finite_difference_option; result stored in coord.scratch_2d.
 """
-function elementwise_derivative!(coord, f, adv_fac, not_spectral::finite_difference_info)
-    return derivative_finite_difference!(coord.scratch_2d, f, coord.cell_width, adv_fac,
+function elementwise_derivative!(coord, f, speed, not_spectral::finite_difference_info)
+    return derivative_finite_difference!(coord.scratch_2d, f, coord.cell_width, speed,
         coord.bc, coord.finite_difference_option, coord.igrid, coord.ielement)
 end
 
@@ -81,12 +81,12 @@ end
 
 """
 """
-function derivative_finite_difference!(df, f, del, adv_fac, bc, finite_difference_option,
+function derivative_finite_difference!(df, f, del, speed, bc, finite_difference_option,
                                        igrid, ielement)
 	if finite_difference_option == "second_order_upwind"
-		upwind_second_order!(df, f, del, adv_fac, bc, igrid, ielement)
+		upwind_second_order!(df, f, del, speed, bc, igrid, ielement)
 	elseif finite_difference_option == "third_order_upwind"
-		upwind_third_order!(df, f, del, adv_fac, bc, igrid, ielement)
+		upwind_third_order!(df, f, del, speed, bc, igrid, ielement)
 	elseif finite_difference_option == "fourth_order_upwind"
 		upwind_fourth_order!(df, f, del, bc, igrid, ielement)
 	elseif finite_difference_option == "second_order_centered"
@@ -94,7 +94,7 @@ function derivative_finite_difference!(df, f, del, adv_fac, bc, finite_differenc
 	elseif finite_difference_option == "fourth_order_centered"
 		centered_fourth_order!(df, f, del, bc, igrid, ielement)
 	elseif finite_difference_option == "first_order_upwind"
-		upwind_first_order!(df, f, del, adv_fac, bc, igrid, ielement)
+		upwind_first_order!(df, f, del, speed, bc, igrid, ielement)
 	end
 	# have not filled df array values for the first grid point in each element
 	# after the first, as these are repeated points that overlap with the neighbouring element
@@ -125,14 +125,14 @@ end
 
 """
 """
-function upwind_first_order!(df, f, del, adv_fac, bc, igrid, ielement)
+function upwind_first_order!(df, f, del, speed, bc, igrid, ielement)
     n = length(del)
 	@debug_consistency_checks n == length(f) || throw(BoundsError(f))
     @debug_consistency_checks n == length(del) || throw(BoundsError(del))
-	@debug_consistency_checks n == length(adv_fac) || throw(BoundsError(adv_fac))
+	@debug_consistency_checks n == length(speed) || throw(BoundsError(speed))
     @inbounds @fastmath begin
         for i ∈ 2:n-1
-            if adv_fac[i] < 0
+            if speed[i] > 0
                 #df[i] =  (f[i]-f[i-1])/del[i]
 				df[igrid[i],ielement[i]] =  (f[i]-f[i-1])/del[i]
             else
@@ -145,7 +145,7 @@ function upwind_first_order!(df, f, del, adv_fac, bc, igrid, ielement)
             df[1, j] = df[end, j-1]
         end
 		i = 1
-                if adv_fac[i] >= 0.0 || bc ∈ ("zero", "both_zero", "wall")
+                if speed[i] < 0.0 || bc ∈ ("zero", "both_zero", "wall")
                         # For boundary conditions that set the values of fields at the
                         # boundary, just use a one-sided difference away from the
                         # boundary.
@@ -162,7 +162,7 @@ function upwind_first_order!(df, f, del, adv_fac, bc, igrid, ielement)
 			df[igrid[i],ielement[i]] = (f[i]-tmp)/del[i]
 		end
 		i = n
-		if adv_fac[i] <= 0 || bc ∈ ("zero", "both_zero", "wall")
+		if speed[i] > 0 || bc ∈ ("zero", "both_zero", "wall")
                         # For boundary conditions that set the values of fields at the
                         # boundary, just use a one-sided difference away from the
                         # boundary.
@@ -182,14 +182,14 @@ end
 
 """
 """
-function upwind_second_order!(df, f, del, adv_fac, bc, igrid, ielement)
+function upwind_second_order!(df, f, del, speed, bc, igrid, ielement)
     n = length(del)
 	@debug_consistency_checks n == length(f) || throw(BoundsError(f))
     @debug_consistency_checks n == length(del) || throw(BoundsError(del))
-	@debug_consistency_checks n == length(adv_fac) || throw(BoundsError(adv_fac))
+	@debug_consistency_checks n == length(speed) || throw(BoundsError(speed))
     @inbounds @fastmath begin
         for i ∈ 3:n-2
-            if adv_fac[i] < 0
+            if speed[i] ≥ 0
                 #df[i] =  (3*f[i]-4*f[i-1]+f[i-2])/(2*del[i])
 				df[igrid[i],ielement[i]] =  (3*f[i]-4*f[i-1]+f[i-2])/(2*del[i])
             else
@@ -198,7 +198,7 @@ function upwind_second_order!(df, f, del, adv_fac, bc, igrid, ielement)
             end
         end
 		i = 2
-		if adv_fac[i] >= 0
+		if speed[i] < 0
 			df[igrid[i],ielement[i]] = (-f[i+2]+4*f[i+1]-3*f[i])/(2*del[i+1])
                 elseif bc ∈ ("zero", "both_zero", "wall")
                         # For boundary conditions that set the values of fields at the
@@ -214,7 +214,7 @@ function upwind_second_order!(df, f, del, adv_fac, bc, igrid, ielement)
 			df[igrid[i],ielement[i]] = (3.0*f[i]-4.0*f[i-1]+tmp1)/(2.0*del[i])
 		end
 		i = 1
-		if adv_fac[i] >= 0 || bc ∈ ("zero", "both_zero", "wall")
+		if speed[i] < 0 || bc ∈ ("zero", "both_zero", "wall")
                         # For boundary conditions that set the values of fields at the
                         # boundary, just use a one-sided difference away from the
                         # boundary.
@@ -231,7 +231,7 @@ function upwind_second_order!(df, f, del, adv_fac, bc, igrid, ielement)
 			df[igrid[i],ielement[i]] = (3.0*f[i]-4.0*tmp1+tmp2)/(2.0*del[i])
 		end
                 i = n-1
-		if adv_fac[i] <= 0
+		if speed[i] > 0
 			df[igrid[i],ielement[i]] =  (3*f[i]-4*f[i-1]+f[i-2])/(2*del[i])
                 elseif bc ∈ ("zero", "both_zero", "wall")
                         # For boundary conditions that set the values of fields at the
@@ -245,10 +245,10 @@ function upwind_second_order!(df, f, del, adv_fac, bc, igrid, ielement)
                         end
 			#df[i] = (-tmp1+4*f[i+1]-3*f[i])/(2*del[i+1])
 			df[igrid[i],ielement[i]] = (-tmp1+4*f[i+1]-3*f[i])/(2*del[1])
-			#println("i: ", i, "  adv_fac: ", adv_fac[i], "  tmp1: ", tmp1)
+			#println("i: ", i, "  speed: ", speed[i], "  tmp1: ", tmp1)
 		end
                 i = n
-		if adv_fac[i] <= 0 || bc ∈ ("zero", "both_zero", "wall")
+		if speed[i] > 0 || bc ∈ ("zero", "both_zero", "wall")
                         # For boundary conditions that set the values of fields at the
                         # boundary, just use a one-sided difference away from the
                         # boundary.
@@ -277,21 +277,21 @@ end
 
 """
 """
-function upwind_third_order!(df, f, del, adv_fac, bc, igrid, ielement)
+function upwind_third_order!(df, f, del, speed, bc, igrid, ielement)
     n = length(del)
 	@debug_consistency_checks n == length(f) && n > 3 || throw(BoundsError(f))
     @debug_consistency_checks n == length(del) || throw(BoundsError(del))
-	@debug_consistency_checks n == length(adv_fac) || throw(BoundsError(adv_fac))
+	@debug_consistency_checks n == length(speed) || throw(BoundsError(speed))
     #@inbounds @fastmath begin
         for i ∈ 3:n-2
-			if adv_fac[i] < 0.0
+			if speed[i] ≥ 0.0
 				df[igrid[i],ielement[i]] =  (2.0*f[i+1]+3.0*f[i]-6.0*f[i-1]+f[i-2])/(6.0*del[i])
             else
 				df[igrid[i],ielement[i]] = (-f[i+2]+6.0*f[i+1]-3.0*f[i]-2.0*f[i-1])/(6.0*del[i+1])
             end
         end
 		i = 2
-		if adv_fac[i] >= 0 || bc ∈ ("zero", "both_zero", "wall", "none")
+		if speed[i] < 0 || bc ∈ ("zero", "both_zero", "wall", "none")
                         # For boundary conditions that set the values of fields at the
                         # boundary, use the unbalanced difference away from the
                         # boundary.
@@ -314,7 +314,7 @@ function upwind_third_order!(df, f, del, adv_fac, bc, igrid, ielement)
 			tmp2 = f[1]
 			tmp1 = tmp2
 		end
-		if adv_fac[i] >= 0 || bc ∈ ("zero", "both_zero", "wall", "none")
+		if speed[i] < 0 || bc ∈ ("zero", "both_zero", "wall", "none")
                     if bc == "periodic"
 			df[igrid[i],ielement[i]] = (-f[i+2]+6.0*f[i+1]-3.0*f[i]-2.0*tmp1)/(6.0*del[i+1])
                     else
@@ -326,7 +326,7 @@ function upwind_third_order!(df, f, del, adv_fac, bc, igrid, ielement)
 			df[igrid[i],ielement[i]] = (2.0*f[i+1]+3.0*f[i]-6.0*tmp1+tmp2)/(6.0*del[i])
 		end
                 i = n-1
-		if adv_fac[i] <= 0 || bc ∈ ("zero", "both_zero", "wall", "none")
+		if speed[i] > 0 || bc ∈ ("zero", "both_zero", "wall", "none")
                         # For boundary conditions that set the values of fields at the
                         # boundary, use the unbalanced difference away from the
                         # boundary.
@@ -349,7 +349,7 @@ function upwind_third_order!(df, f, del, adv_fac, bc, igrid, ielement)
 			tmp1 = tmp2
 		end
                 i = n
-		if adv_fac[i] <= 0 || bc ∈ ("zero", "both_zero", "wall", "none")
+		if speed[i] > 0 || bc ∈ ("zero", "both_zero", "wall", "none")
                     if bc == "periodic"
 			df[igrid[i],ielement[i]] =  (2.0*tmp1+3.0*f[i]-6.0*f[i-1]+f[i-2])/(6.0*del[i-1])
                     else

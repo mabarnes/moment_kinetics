@@ -233,16 +233,16 @@ struct scratch_dummy_arrays
 end 
 
 struct advect_object_struct
-    vpa_advect::Vector{advection_info{4,5}}
-    vperp_advect::Vector{advection_info{4,5}}
-    z_advect::Vector{advection_info{4,5}}
-    alpha_advect::Vector{advection_info{4,5}}
-    r_advect::Vector{advection_info{4,5}}
-    electron_z_advect::Vector{advection_info{4,5}}
-    electron_vpa_advect::Vector{advection_info{4,5}}
-    neutral_z_advect::Vector{advection_info{5,6}}
-    neutral_r_advect::Vector{advection_info{5,6}}
-    neutral_vz_advect::Vector{advection_info{5,6}}
+    vpa_advect::Vector{advection_info{4}}
+    vperp_advect::Vector{advection_info{4}}
+    z_advect::Vector{advection_info{4}}
+    alpha_advect::Vector{advection_info{4}}
+    r_advect::Vector{advection_info{4}}
+    electron_z_advect::Vector{advection_info{4}}
+    electron_vpa_advect::Vector{advection_info{4}}
+    neutral_z_advect::Vector{advection_info{5}}
+    neutral_r_advect::Vector{advection_info{5}}
+    neutral_vz_advect::Vector{advection_info{5}}
 end
 
 # consider changing code structure so that
