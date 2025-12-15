@@ -5394,15 +5394,15 @@ const get_variable_funcs = Dict{String,Any}(
             setup_loop_ranges!(0, 1; s=nspecies, sn=run_info.n_neutral_species, r=nr, z=nz,
                                vperp=nvperp, vpa=nvpa, vzeta=run_info.vzeta.n,
                                vr=run_info.vr.n, vz=run_info.vz.n)
-            for it ∈ 1:nt, is ∈ 1:nspecies
+            for it ∈ 1:nt
                 @begin_serial_region()
-                advect = @view speed[:,:,:,:,is,it]
+                advect = @view speed[:,:,:,:,:,it]
                 # Only need Er
-                fields = (gEz=@view(gEz[:,:,:,is,it]), vEr=@view(vEr[:,:,it]))
+                fields = (gEz=@view(gEz[:,:,:,:,it]), vEr=@view(vEr[:,:,it]))
                 @views update_speed_r!(advect, fields, run_info.evolve_density,
-                                       run_info.evolve_upar, run_info.evolve_p, run_info.vpa,
-                                       run_info.vperp, run_info.z, run_info.r,
-                                       run_info.geometry, is)
+                                       run_info.evolve_upar, run_info.evolve_p,
+                                       run_info.vpa, run_info.vperp, run_info.z,
+                                       run_info.r, run_info.geometry)
             end
 
             # Horrible hack so that we can get the speed back without rearranging the
@@ -5460,15 +5460,15 @@ const get_variable_funcs = Dict{String,Any}(
             setup_loop_ranges!(0, 1; s=nspecies, sn=run_info.n_neutral_species, r=nr, z=nz,
                                vperp=nvperp, vpa=nvpa, vzeta=run_info.vzeta.n,
                                vr=run_info.vr.n, vz=run_info.vz.n)
-            for it ∈ 1:nt, is ∈ 1:nspecies
+            for it ∈ 1:nt
                 @begin_serial_region()
-                advect = @view speed[:,:,:,:,is,it]
+                advect = @view speed[:,:,:,:,:,it]
                 # Only need Er
-                fields = (gEr=@view(gEr[:,:,:,is,it]), vEz=@view(vEz[:,:,it]))
+                fields = (gEr=@view(gEr[:,:,:,:,it]), vEz=@view(vEz[:,:,it]))
                 @views update_speed_alpha!(advect, run_info.evolve_upar,
                                            run_info.evolve_p, fields, run_info.vpa,
                                            run_info.vperp, run_info.z, run_info.r,
-                                           run_info.geometry, is)
+                                           run_info.geometry)
             end
 
             # Horrible hack so that we can get the speed back without rearranging the
@@ -5518,11 +5518,11 @@ const get_variable_funcs = Dict{String,Any}(
             setup_loop_ranges!(0, 1; s=nspecies, sn=run_info.n_neutral_species, r=nr, z=nz,
                                vperp=nvperp, vpa=nvpa, vzeta=run_info.vzeta.n,
                                vr=run_info.vr.n, vz=run_info.vz.n)
-            for it ∈ 1:nt, is ∈ 1:nspecies
+            for it ∈ 1:nt
                 @begin_serial_region()
-                advect = @view speed[:,:,:,:,is,it]
+                advect = @view speed[:,:,:,:,:,it]
                 # Only need Er
-                @views update_speed_z!(advect, upar[:,:,is,it], vth[:,:,is,it],
+                @views update_speed_z!(advect, upar[:,:,:,it], vth[:,:,:,it],
                                        run_info.evolve_upar, run_info.evolve_p,
                                        run_info.vpa, run_info.vperp, run_info.z,
                                        run_info.r, run_info.geometry)
@@ -6189,10 +6189,7 @@ const get_variable_funcs = Dict{String,Any}(
             variable = allocate_float(nt)
             @begin_serial_region()
             for it ∈ 1:nt
-                min_CFL = Inf
-                for is ∈ 1:nspecies
-                    min_CFL = min(min_CFL, get_minimum_CFL_r(@view(speed[:,:,:,:,is,it]), run_info.r))
-                end
+                min_CFL = get_minimum_CFL_r(@view(speed[:,:,:,:,:,it]), run_info.r)
                 variable[it] = min_CFL
             end
             variable = select_slice_of_variable(variable; kwargs...)
@@ -6211,10 +6208,7 @@ const get_variable_funcs = Dict{String,Any}(
             variable = allocate_float(nt)
             @begin_serial_region()
             for it ∈ 1:nt
-                min_CFL = Inf
-                for is ∈ 1:nspecies
-                    min_CFL = min(min_CFL, get_minimum_CFL_z(@view(z_speed[:,:,:,:,is,it]), run_info.z))
-                end
+                min_CFL = get_minimum_CFL_z(@view(z_speed[:,:,:,:,:,it]), run_info.z)
                 variable[it] = min_CFL
             end
             variable = select_slice_of_variable(variable; kwargs...)
@@ -6229,10 +6223,7 @@ const get_variable_funcs = Dict{String,Any}(
             variable = allocate_float(nt)
             @begin_serial_region()
             for it ∈ 1:nt
-                min_CFL = Inf
-                for is ∈ 1:nspecies
-                    min_CFL = min(min_CFL, get_minimum_CFL_vpa(@view(speed[:,:,:,:,is,it]), run_info.vpa))
-                end
+                min_CFL = get_minimum_CFL_vpa(@view(speed[:,:,:,:,:,it]), run_info.vpa)
                 variable[it] = min_CFL
             end
             variable = select_slice_of_variable(variable; kwargs...)
@@ -6247,10 +6238,7 @@ const get_variable_funcs = Dict{String,Any}(
             variable = allocate_float(nt)
             @begin_serial_region()
             for it ∈ 1:nt
-                min_CFL = Inf
-                for is ∈ 1:nspecies
-                    min_CFL = min(min_CFL, get_minimum_CFL_vperp(@view(speed[:,:,:,:,is,it]), run_info.vperp))
-                end
+                min_CFL = get_minimum_CFL_vperp(@view(speed[:,:,:,:,:,it]), run_info.vperp)
                 variable[it] = min_CFL
             end
             variable = select_slice_of_variable(variable; kwargs...)
@@ -6298,10 +6286,7 @@ const get_variable_funcs = Dict{String,Any}(
             variable = allocate_float(nt)
             @begin_serial_region()
             for it ∈ 1:nt
-                min_CFL = Inf
-                for isn ∈ 1:nspecies
-                    min_CFL = min(min_CFL, get_minimum_CFL_neutral_z(@view(speed[:,:,:,:,:,isn,it]), run_info.z))
-                end
+                min_CFL = get_minimum_CFL_neutral_z(@view(speed[:,:,:,:,:,:,it]), run_info.z)
                 variable[it] = min_CFL
             end
             variable = select_slice_of_variable(variable; kwargs...)
@@ -6317,10 +6302,7 @@ const get_variable_funcs = Dict{String,Any}(
             variable = allocate_float(nt)
             @begin_serial_region()
             for it ∈ 1:nt
-                min_CFL = Inf
-                for isn ∈ 1:nspecies
-                    min_CFL = min(min_CFL, get_minimum_CFL_neutral_vz(@view(speed[:,:,:,:,:,isn,it]), run_info.vz))
-                end
+                min_CFL = get_minimum_CFL_neutral_vz(@view(speed[:,:,:,:,:,:,it]), run_info.vz)
                 variable[it] = min_CFL
             end
             variable = select_slice_of_variable(variable; kwargs...)

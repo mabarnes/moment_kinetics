@@ -386,15 +386,25 @@ the r direction.
 Reduces the result over the shared-memory block (handling distributed parallelism is left
 to the calling site). The result is only to be used on rank-0 of the shared-memory block.
 """
-function get_minimum_CFL_r(speed::AbstractArray{T,4} where T, r)
+function get_minimum_CFL_r(speed::AbstractArray{T,N}, r) where {T,N}
     min_CFL = Inf
 
     dr = r.cell_width
     nr = r.n
-    @loop_z_vperp_vpa iz ivperp ivpa begin
-        for ir ∈ 1:nr
-            min_CFL = min(min_CFL, abs(dr[ir] / speed[ir,ivpa,ivperp,iz]))
+    if N == 4
+        @loop_z_vperp_vpa iz ivperp ivpa begin
+            for ir ∈ 1:nr
+                min_CFL = min(min_CFL, abs(dr[ir] / speed[ir,ivpa,ivperp,iz]))
+            end
         end
+    elseif N == 5
+        @loop_s_z_vperp_vpa is iz ivperp ivpa begin
+            for ir ∈ 1:nr
+                min_CFL = min(min_CFL, abs(dr[ir] / speed[ir,ivpa,ivperp,iz,is]))
+            end
+        end
+    else
+        error("Unsupported value N=$N.")
     end
 
     if comm_block[] !== MPI.COMM_NULL
@@ -414,15 +424,25 @@ the z direction.
 Reduces the result over the shared-memory block (handling distributed parallelism is left
 to the calling site). The result is only to be used on rank-0 of the shared-memory block.
 """
-function get_minimum_CFL_z(speed::AbstractArray{T,4} where T, z)
+function get_minimum_CFL_z(speed::AbstractArray{T,N}, z) where {T,N}
     min_CFL = Inf
 
     dz = z.cell_width
     nz = z.n
-    @loop_r_vperp_vpa ir ivperp ivpa begin
-        for iz ∈ 1:nz
-            min_CFL = min(min_CFL, abs(dz[iz] / speed[iz,ivpa,ivperp,ir]))
+    if N == 4
+        @loop_r_vperp_vpa ir ivperp ivpa begin
+            for iz ∈ 1:nz
+                min_CFL = min(min_CFL, abs(dz[iz] / speed[iz,ivpa,ivperp,ir]))
+            end
         end
+    elseif N == 5
+        @loop_s_r_vperp_vpa is ir ivperp ivpa begin
+            for iz ∈ 1:nz
+                min_CFL = min(min_CFL, abs(dz[iz] / speed[iz,ivpa,ivperp,ir,is]))
+            end
+        end
+    else
+        error("Unsupported value N=$N.")
     end
 
     if comm_block[] !== MPI.COMM_NULL
@@ -459,15 +479,25 @@ the vperp direction.
 Reduces the result over the shared-memory block (handling distributed parallelism is left
 to the calling site). The result is only to be used on rank-0 of the shared-memory block.
 """
-function get_minimum_CFL_vperp(speed::AbstractArray{T,4} where T, vperp)
+function get_minimum_CFL_vperp(speed::AbstractArray{T,N}, vperp) where {T,N}
     min_CFL = Inf
 
     dvperp = vperp.cell_width
     nvperp = vperp.n
-    @loop_r_z_vpa ir iz ivpa begin
-        for ivperp ∈ 1:nvperp
-            min_CFL = min(min_CFL, abs(dvperp[ivperp] / speed[ivperp,ivpa,iz,ir]))
+    if N == 4
+        @loop_r_z_vpa ir iz ivpa begin
+            for ivperp ∈ 1:nvperp
+                min_CFL = min(min_CFL, abs(dvperp[ivperp] / speed[ivperp,ivpa,iz,ir]))
+            end
         end
+    elseif N == 5
+        @loop_s_r_z_vpa is ir iz ivpa begin
+            for ivperp ∈ 1:nvperp
+                min_CFL = min(min_CFL, abs(dvperp[ivperp] / speed[ivperp,ivpa,iz,ir,is]))
+            end
+        end
+    else
+        error("Unsupported value N=$N.")
     end
 
     if comm_block[] !== MPI.COMM_NULL
@@ -487,15 +517,25 @@ the vpa direction.
 Reduces the result over the shared-memory block (handling distributed parallelism is left
 to the calling site). The result is only to be used on rank-0 of the shared-memory block.
 """
-function get_minimum_CFL_vpa(speed::AbstractArray{T,4} where T, vpa)
+function get_minimum_CFL_vpa(speed::AbstractArray{T,N}, vpa) where {T,N}
     min_CFL = Inf
 
     dvpa = vpa.cell_width
     nvpa = vpa.n
-    @loop_r_z_vperp ir iz ivperp begin
-        for ivpa ∈ 1:nvpa
-            min_CFL = min(min_CFL, abs(dvpa[ivpa] / speed[ivpa,ivperp,iz,ir]))
+    if N == 4
+        @loop_r_z_vperp ir iz ivperp begin
+            for ivpa ∈ 1:nvpa
+                min_CFL = min(min_CFL, abs(dvpa[ivpa] / speed[ivpa,ivperp,iz,ir]))
+            end
         end
+    elseif N == 5
+        @loop_s_r_z_vperp is ir iz ivperp begin
+            for ivpa ∈ 1:nvpa
+                min_CFL = min(min_CFL, abs(dvpa[ivpa] / speed[ivpa,ivperp,iz,ir,is]))
+            end
+        end
+    else
+        error("Unsupported value N=$N.")
     end
 
     if comm_block[] !== MPI.COMM_NULL
@@ -532,15 +572,25 @@ neutrals in the z direction.
 Reduces the result over the shared-memory block (handling distributed parallelism is left
 to the calling site). The result is only to be used on rank-0 of the shared-memory block.
 """
-function get_minimum_CFL_neutral_z(speed::AbstractArray{T,5} where T, z)
+function get_minimum_CFL_neutral_z(speed::AbstractArray{T,N}, z) where {T,N}
     min_CFL = Inf
 
     dz = z.cell_width
     nz = z.n
-    @loop_r_vzeta_vr_vz ir ivzeta ivr ivz begin
-        for iz ∈ 1:nz
-            min_CFL = min(min_CFL, abs(dz[iz] / speed[iz,ivz,ivr,ivzeta,ir]))
+    if N == 5
+        @loop_r_vzeta_vr_vz ir ivzeta ivr ivz begin
+            for iz ∈ 1:nz
+                min_CFL = min(min_CFL, abs(dz[iz] / speed[iz,ivz,ivr,ivzeta,ir]))
+            end
         end
+    elseif N == 6
+        @loop_sn_r_vzeta_vr_vz isn ir ivzeta ivr ivz begin
+            for iz ∈ 1:nz
+                min_CFL = min(min_CFL, abs(dz[iz] / speed[iz,ivz,ivr,ivzeta,ir,isn]))
+            end
+        end
+    else
+        error("Unsupported value N=$N.")
     end
 
     if comm_block[] !== MPI.COMM_NULL
@@ -560,15 +610,25 @@ neutrals in the vz direction.
 Reduces the result over the shared-memory block (handling distributed parallelism is left
 to the calling site). The result is only to be used on rank-0 of the shared-memory block.
 """
-function get_minimum_CFL_neutral_vz(speed::AbstractArray{T,5} where T, vz)
+function get_minimum_CFL_neutral_vz(speed::AbstractArray{T,N}, vz) where {T,N}
     min_CFL = Inf
 
     dvz = vz.cell_width
     nvz = vz.n
-    @loop_r_z_vzeta_vr ir iz ivzeta ivr begin
-        for ivz ∈ 1:nvz
-            min_CFL = min(min_CFL, abs(dvz[ivz] / speed[ivz,ivr,ivzeta,iz,ir]))
+    if N == 5
+        @loop_r_z_vzeta_vr ir iz ivzeta ivr begin
+            for ivz ∈ 1:nvz
+                min_CFL = min(min_CFL, abs(dvz[ivz] / speed[ivz,ivr,ivzeta,iz,ir]))
+            end
         end
+    elseif N == 6
+        @loop_sn_r_z_vzeta_vr isn ir iz ivzeta ivr begin
+            for ivz ∈ 1:nvz
+                min_CFL = min(min_CFL, abs(dvz[ivz] / speed[ivz,ivr,ivzeta,iz,ir,isn]))
+            end
+        end
+    else
+        error("Unsupported value N=$N.")
     end
 
     if comm_block[] !== MPI.COMM_NULL
