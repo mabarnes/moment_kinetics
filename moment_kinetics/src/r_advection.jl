@@ -22,12 +22,9 @@ do a single stage time advance (potentially as part of a multi-stage RK scheme)
 
     @begin_s_z_vperp_vpa_region()
 
-    @loop_s is begin
-        # get the updated speed along the r direction using the current f
-        @views update_speed_r!(advect[:,:,:,:,is], fields, moments.evolve_density,
-                               moments.evolve_upar, moments.evolve_p, vpa, vperp, z, r,
-                               geometry, is)
-    end
+    # get the updated speed along the r direction using the current f
+    update_speed_r!(advect, fields, moments.evolve_density, moments.evolve_upar,
+                    moments.evolve_p, vpa, vperp, z, r, geometry)
     # calculate the upwind derivative along r
     df_dr = scratch_dummy.buffer_vpavperpzrs_1
     derivative_r!(df_dr, fvec_in.pdf, advect, scratch_dummy.buffer_vpavperpzs_1,
@@ -80,7 +77,7 @@ end
 calculate the advection speed in the r-direction at each grid point
 """
 function update_speed_r!(advect, fields, evolve_density, evolve_upar, evolve_p, vpa,
-                         vperp, z, r, geometry, is)
+                         vperp, z, r, geometry)
     @debug_consistency_checks z.n == size(advect,4) || throw(BoundsError(advect))
     @debug_consistency_checks vperp.n == size(advect,3) || throw(BoundsError(advect))
     @debug_consistency_checks vpa.n == size(advect,2) || throw(BoundsError(advect))
@@ -90,9 +87,9 @@ function update_speed_r!(advect, fields, evolve_density, evolve_upar, evolve_p, 
         if evolve_density || evolve_upar || evolve_p
             # Magnetic drifts not supported here yet
             vEr = fields.vEr
-            @loop_z_vperp_vpa iz ivperp ivpa begin
+            @loop_s_z_vperp_vpa is iz ivperp ivpa begin
                 # ExB drift
-                @views @. advect[:,ivpa,ivperp,iz] = vEr[iz,:]
+                @views @. advect[:,ivpa,ivperp,iz,is] = vEr[iz,:]
             end
         else
             Bmag = geometry.Bmag
@@ -103,20 +100,20 @@ function update_speed_r!(advect, fields, evolve_density, evolve_upar, evolve_p, 
             curvature_drift_r = geometry.curvature_drift_r
             grad_B_drift_r = geometry.grad_B_drift_r
             gEz = fields.gEz
-            @loop_z_vperp_vpa iz ivperp ivpa begin
+            @loop_s_z_vperp_vpa is iz ivperp ivpa begin
                 # ExB drift
                 @views @. geofac = bzeta[iz,:]*jacobian[iz,:]/Bmag[iz,:]
-                @views @. advect[:,ivpa,ivperp,iz] = rhostar*geofac*gEz[ivperp,iz,:,is]
+                @views @. advect[:,ivpa,ivperp,iz,is] = rhostar*geofac*gEz[ivperp,iz,:,is]
                 # magnetic curvature drift
-                @. @views advect[:,ivpa,ivperp,iz] += rhostar*(vpa.grid[ivpa]^2)*curvature_drift_r[iz,:]
+                @. @views advect[:,ivpa,ivperp,iz,is] += rhostar*(vpa.grid[ivpa]^2)*curvature_drift_r[iz,:]
                 # magnetic grad B drift
-                @. @views advect[:,ivpa,ivperp,iz] += 0.5*rhostar*(vperp.grid[ivperp]^2)*grad_B_drift_r[iz,:]
+                @. @views advect[:,ivpa,ivperp,iz,is] += 0.5*rhostar*(vperp.grid[ivperp]^2)*grad_B_drift_r[iz,:]
             end
         end
     else
         # no advection if no length in r
-        @loop_z_vperp_vpa iz ivperp ivpa begin
-            advect[:,ivpa,ivperp,iz] .= 0.0
+        @loop_s_z_vperp_vpa is iz ivperp ivpa begin
+            advect[:,ivpa,ivperp,iz,is] .= 0.0
         end
     end
     return nothing

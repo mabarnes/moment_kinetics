@@ -1201,29 +1201,21 @@ function _setup_time_advance_internal!(pdf, fields, vz, vr, vzeta, vpa, vperp, z
     if r.n > 1
         # initialise the r advection speed
         @begin_s_z_vperp_vpa_region()
-        @loop_s is begin
-            @views update_speed_r!(r_advect[:,:,:,:,is], fields, moments.evolve_density,
-                                   moments.evolve_upar, moments.evolve_p, vpa, vperp, z,
-                                   r, geometry, is)
-        end
+        @views update_speed_r!(r_advect, fields, moments.evolve_density,
+                               moments.evolve_upar, moments.evolve_p, vpa, vperp, z, r,
+                               geometry)
         # enforce prescribed boundary condition in r on the distribution function f
     end
 
     if z.n > 1
         # initialise the z advection speed
         @begin_s_r_vperp_vpa_region()
-        @loop_s is begin
-            @views update_speed_z!(z_advect[:,:,:,:,is], moments.ion.upar[:,:,is],
-                                   moments.ion.vth[:,:,is], moments.evolve_upar,
-                                   moments.evolve_p, vpa, vperp, z, r, geometry)
-        end
+        update_speed_z!(z_advect, moments.ion.upar, moments.ion.vth, moments.evolve_upar,
+                        moments.evolve_p, vpa, vperp, z, r, geometry)
         # initialise the binormal advection speed
         @begin_s_r_vperp_vpa_region()
-        @loop_s is begin
-            @views update_speed_alpha!(alpha_advect[:,:,:,:,is], moments.evolve_upar,
-                                       moments.evolve_p, fields, vpa, vperp, z, r,
-                                       geometry, is)
-        end
+        @views update_speed_alpha!(alpha_advect, moments.evolve_upar, moments.evolve_p,
+                                   fields, vpa, vperp, z, r, geometry)
     end
 
     # initialise the vpa advection speed
@@ -1249,21 +1241,15 @@ function _setup_time_advance_internal!(pdf, fields, vz, vr, vzeta, vpa, vperp, z
     if n_neutral_species > 0 && r.n > 1
         # initialise the r advection speed
         @begin_sn_z_vzeta_vr_vz_region()
-        @loop_sn isn begin
-            @views update_speed_neutral_r!(neutral_r_advect[:,:,:,:,:,isn], r, z, vzeta, vr, vz)
-        end
+        update_speed_neutral_r!(neutral_r_advect, r, z, vzeta, vr, vz)
     end
 
     if n_neutral_species > 0 && z.n > 1
         # initialise the z advection speed
         @begin_sn_r_vzeta_vr_vz_region()
-        @loop_sn isn begin
-            @views update_speed_neutral_z!(neutral_z_advect[:,:,:,:,:,isn],
-                                           moments.neutral.uz[:,:,isn],
-                                           moments.neutral.vth[:,:,isn],
-                                           moments.evolve_upar, moments.evolve_p, vz,
-                                           vr, vzeta, z, r, 0.0)
-        end
+        update_speed_neutral_z!(neutral_z_advect, moments.neutral.uz, moments.neutral.vth,
+                                moments.evolve_upar, moments.evolve_p, vz, vr, vzeta, z,
+                                r, 0.0)
     end
 
     if n_neutral_species > 0
@@ -1275,9 +1261,9 @@ function _setup_time_advance_internal!(pdf, fields, vz, vr, vzeta, vpa, vperp, z
             neutral_vz_advect .= 0.0
         end
         @begin_sn_r_z_vzeta_vr_region()
-        @views update_speed_neutral_vz!(neutral_vz_advect, fields, scratch[1], moments,
-                                        vz, vr, vzeta, z, r, composition, collisions,
-                                        external_source_settings.neutral)
+        update_speed_neutral_vz!(neutral_vz_advect, fields, scratch[1], moments, vz, vr,
+                                 vzeta, z, r, composition, collisions,
+                                 external_source_settings.neutral)
     end
 
     ##
@@ -3038,73 +3024,54 @@ appropriate.
     # species at the same time.
     @begin_z_vperp_vpa_region(true)
     if !t_params.implicit_ion_advance && r.n > 1
-        ion_r_CFL = Inf
-        @loop_s is begin
-            update_speed_r!(@view(r_advect[:,:,:,:,is]), fields, evolve_density,
-                            evolve_upar, evolve_p, vpa, vperp, z, r, geometry, is)
-            this_minimum = get_minimum_CFL_r(@view(r_advect[:,:,:,:,is]), r)
-            @serial_region begin
-                ion_r_CFL = min(ion_r_CFL, this_minimum)
-            end
+        update_speed_r!(r_advect, fields, evolve_density, evolve_upar, evolve_p, vpa,
+                        vperp, z, r, geometry)
+        ion_r_CFL = get_minimum_CFL_r(r_advect, r)
+        @serial_region begin
+            CFL_limits["CFL_r"] = t_params.CFL_prefactor * ion_r_CFL
         end
-        CFL_limits["CFL_r"] = t_params.CFL_prefactor * ion_r_CFL
     end
 
     if !t_params.implicit_ion_advance
         # ion z-advection
         @begin_r_vperp_vpa_region()
-        ion_z_CFL = Inf
-        @loop_s is begin
-            @views update_speed_z!(z_advect[:,:,:,:,is], moments.ion.upar,
-                                   moments.ion.vth, evolve_upar, evolve_p, vpa, vperp, z,
-                                   r, geometry)
-            @views update_speed_alpha!(alpha_advect[:,:,:,:,is], evolve_upar, evolve_p,
-                                       fields, vpa, vperp, z, r, geometry, is)
-            # Add alpha_speed as that is also in the z-direction in the 2D simulations
-            # implemented so far.
-            z_speed = @view z_advect[:,:,:,:,is]
-            alpha_speed = @view alpha_advect[:,:,:,:,is]
-            @loop_r_vperp_vpa ir ivperp ivpa begin
-                @views z_speed[:,ivpa,ivperp,ir] .+= alpha_speed[:,ivpa,ivperp,ir]
-            end
-            this_minimum = get_minimum_CFL_z(z_speed, z)
-            @serial_region begin
-                ion_z_CFL = min(ion_z_CFL, this_minimum)
-            end
+        update_speed_z!(z_advect, moments.ion.upar, moments.ion.vth, evolve_upar,
+                        evolve_p, vpa, vperp, z, r, geometry)
+        update_speed_alpha!(alpha_advect, evolve_upar, evolve_p, fields, vpa, vperp, z, r,
+                            geometry)
+        # Add alpha_speed as that is also in the z-direction in the 2D simulations
+        # implemented so far.
+        @loop_s_r_vperp_vpa is ir ivperp ivpa begin
+            @views z_advect[:,ivpa,ivperp,ir,is] .+= alpha_advect[:,ivpa,ivperp,ir,is]
         end
-        CFL_limits["CFL_z"] = t_params.CFL_prefactor * ion_z_CFL
+        ion_z_CFL = get_minimum_CFL_z(z_advect, z)
+        @serial_region begin
+            CFL_limits["CFL_z"] = t_params.CFL_prefactor * ion_z_CFL
+        end
     end
 
     if !(t_params.implicit_ion_advance || t_params.implicit_vpa_advection)
         # ion vpa-advection
         @begin_r_z_vperp_region()
-        ion_vpa_CFL = Inf
         update_speed_vpa!(vpa_advect, fields, scratch[t_params.n_rk_stages+1], moments,
                           r_advect, alpha_advect, z_advect, vpa, vperp, z, r, composition,
                           collisions, external_source_settings.ion, t_params.t[],
                           geometry)
-        @loop_s is begin
-            this_minimum = get_minimum_CFL_vpa(@view(vpa_advect[:,:,:,:,is]), vpa)
-            @serial_region begin
-                ion_vpa_CFL = min(ion_vpa_CFL, this_minimum)
-            end
+        ion_vpa_CFL = get_minimum_CFL_vpa(vpa_advect, vpa)
+        @serial_region begin
+            CFL_limits["CFL_vpa"] = t_params.CFL_prefactor * ion_vpa_CFL
         end
-        CFL_limits["CFL_vpa"] = t_params.CFL_prefactor * ion_vpa_CFL
     end
 
     if !t_params.implicit_ion_advance && vperp.n > 1
         # ion vperp-advection
         @begin_r_z_vpa_region()
-        ion_vperp_CFL = Inf
         update_speed_vperp!(vperp_advect, scratch[t_params.n_rk_stages+1], vpa, vperp, z,
                             r, z_advect, alpha_advect, r_advect, geometry, moments)
-        @loop_s is begin
-            this_minimum = get_minimum_CFL_vperp(@view(vperp_advect[:,:,:,:,is]), vperp)
-            @serial_region begin
-                ion_vperp_CFL = min(ion_vperp_CFL, this_minimum)
-            end
+        ion_vperp_CFL = get_minimum_CFL_vperp(vperp_advect, vperp)
+        @serial_region begin
+            CFL_limits["CFL_vperp"] = t_params.CFL_prefactor * ion_vperp_CFL
         end
-        CFL_limits["CFL_vperp"] = t_params.CFL_prefactor * ion_vperp_CFL
     end
 
     if t_params.kinetic_electron_solver == explicit_time_evolving
@@ -3324,32 +3291,23 @@ appropriate.
         # reduction over the shared-memory block, so all processes must calculate the same
         # species at the same time.
         @begin_r_vzeta_vr_vz_region()
-        neutral_z_CFL = Inf
-        @loop_sn isn begin
-            update_speed_neutral_z!(neutral_z_advect[:,:,:,:,:,isn], moments.neutral.uz,
-                                    moments.neutral.vth, evolve_upar, evolve_p, vz, vr,
-                                    vzeta, z, r, t_params.t[])
-            this_minimum = get_minimum_CFL_neutral_z(@view(neutral_z_advect[:,:,:,:,:,isn]), z)
-            @serial_region begin
-                neutral_z_CFL = min(neutral_z_CFL, this_minimum)
-            end
+        update_speed_neutral_z!(neutral_z_advect, moments.neutral.uz, moments.neutral.vth,
+                                evolve_upar, evolve_p, vz, vr, vzeta, z, r, t_params.t[])
+        neutral_z_CFL = get_minimum_CFL_neutral_z(neutral_z_advect, z)
+        @serial_region begin
+            CFL_limits["neutral_CFL_z"] = t_params.CFL_prefactor * neutral_z_CFL
         end
-        CFL_limits["neutral_CFL_z"] = t_params.CFL_prefactor * neutral_z_CFL
 
         # neutral vz-advection
         @begin_r_z_vzeta_vr_region()
-        neutral_vz_CFL = Inf
         update_speed_neutral_vz!(neutral_vz_advect, fields,
                                  scratch[t_params.n_rk_stages+1], moments, vz, vr, vzeta,
                                  z, r, composition, collisions,
                                  external_source_settings.neutral)
-        @loop_sn isn begin
-            this_minimum = get_minimum_CFL_neutral_vz(@view(neutral_vz_advect[:,:,:,:,:,isn]), vz)
-            @serial_region begin
-                neutral_vz_CFL = min(neutral_vz_CFL, this_minimum)
-            end
+        neutral_vz_CFL = get_minimum_CFL_neutral_vz(neutral_vz_advect, vz)
+        @serial_region begin
+            CFL_limits["neutral_CFL_vz"] = t_params.CFL_prefactor * neutral_vz_CFL
         end
-        CFL_limits["neutral_CFL_vz"] = t_params.CFL_prefactor * neutral_vz_CFL
 
         # Calculate error for neutral distribution functions
         neut_pdf_error = local_error_norm(scratch[2].pdf_neutral,
@@ -4450,16 +4408,13 @@ Do a backward-Euler timestep for all terms in the ion kinetic equation.
     end
 
     if z.n > 1
-        @loop_s is begin
-            # get the updated speed along the z direction using the current f
-            @views update_speed_z!(z_advect[:,:,:,:,is], fvec_in.upar[:,:,is],
-                                   moments.ion.vth[:,:,is], moments.evolve_upar,
-                                   moments.evolve_p, vpa, vperp, z, r, geometry)
-            # get the updated speed along the binormal direction using the current f
-            @views update_speed_alpha!(alpha_advect[:,:,:,:,is], moments.evolve_upar,
-                                       moments.evolve_p, fields, vpa, vperp, z, r,
-                                       geometry, is)
-        end
+        # get the updated speed along the z direction using the current f
+        @views update_speed_z!(z_advect, fvec_in.upar, moments.ion.vth,
+                               moments.evolve_upar, moments.evolve_p, vpa, vperp, z, r,
+                               geometry)
+        # get the updated speed along the binormal direction using the current f
+        @views update_speed_alpha!(alpha_advect, moments.evolve_upar, moments.evolve_p,
+                                   fields, vpa, vperp, z, r, geometry)
     end
     @begin_s_r_vperp_region()
     @loop_s_r_vperp is ir ivperp begin

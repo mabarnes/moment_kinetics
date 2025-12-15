@@ -21,12 +21,10 @@ do a single stage time advance (potentially as part of a multi-stage RK scheme)
 
     @begin_sn_r_vzeta_vr_vz_region()
 
-    @loop_sn isn begin
-        # get the updated speed along the z direction using the current f
-        @views update_speed_neutral_z!(advect[:,:,:,:,:,isn], fvec_in.uz_neutral[:,:,isn],
-                                       moments.neutral.vth[:,:,isn], moments.evolve_upar,
-                                       moments.evolve_p, vz, vr, vzeta, z, r, t)
-    end
+    # get the updated speed along the z direction using the current f
+    @views update_speed_neutral_z!(advect, fvec_in.uz_neutral, moments.neutral.vth,
+                                   moments.evolve_upar, moments.evolve_p, vz, vr, vzeta,
+                                   z, r, t)
     #calculate the upwind derivative
     derivative_z!(scratch_dummy.buffer_vzvrvzetazrsn_1, fvec_in.pdf_neutral, advect,
                   scratch_dummy.buffer_vzvrvzetarsn_1, scratch_dummy.buffer_vzvrvzetarsn_2,
@@ -53,17 +51,17 @@ function update_speed_neutral_z!(advect, uz, vth, evolve_upar, evolve_p, vz, vr,
     @debug_consistency_checks vz.n == size(advect,2) || throw(BoundsError(advect))
     @debug_consistency_checks z.n == size(advect,1) || throw(BoundsError(advect))
 
-    @loop_r_vzeta_vr_vz ir ivzeta ivr ivz begin
-        @. advect[:,ivz,ivr,ivzeta,ir] = vz.grid[ivz]
+    @loop_sn_r_vzeta_vr_vz isn ir ivzeta ivr ivz begin
+        @. advect[:,ivz,ivr,ivzeta,ir,isn] = vz.grid[ivz]
     end
     if evolve_p
-        @loop_r_vzeta_vr_vz ir ivzeta ivr ivz begin
-            @views @. advect[:,ivz,ivr,ivzeta,ir] *= vth[:,ir]
+        @loop_sn_r_vzeta_vr_vz isn ir ivzeta ivr ivz begin
+            @views @. advect[:,ivz,ivr,ivzeta,ir,isn] *= vth[:,ir,isn]
         end
     end
     if evolve_upar
-        @loop_r_vzeta_vr_vz ir ivzeta ivr ivz begin
-            @views @. advect[:,ivz,ivr,ivzeta,ir] += uz[:,ir]
+        @loop_sn_r_vzeta_vr_vz isn ir ivzeta ivr ivz begin
+            @views @. advect[:,ivz,ivr,ivzeta,ir,isn] += uz[:,ir,isn]
         end
     end
 

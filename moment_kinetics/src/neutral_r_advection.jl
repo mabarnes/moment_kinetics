@@ -21,10 +21,8 @@ do a single stage time advance in r (potentially as part of a multi-stage RK sch
     
     @begin_sn_z_vzeta_vr_vz_region()
     
-    @loop_sn isn begin
-        # get the updated speed along the r direction using the current f
-        @views update_speed_neutral_r!(advect[:,:,:,:,:,isn], r, z, vzeta, vr, vz)
-    end
+    # get the updated speed along the r direction using the current f
+    @views update_speed_neutral_r!(advect, r, z, vzeta, vr, vz)
     # calculate the upwind derivative along r
     derivative_r!(scratch_dummy.buffer_vzvrvzetazrsn_1, fvec_in.pdf_neutral, advect,
 					scratch_dummy.buffer_vzvrvzetazsn_1, scratch_dummy.buffer_vzvrvzetazsn_2,
@@ -51,14 +49,14 @@ function update_speed_neutral_r!(advect, r, z, vzeta, vr, vz)
     @debug_consistency_checks r.n == size(advect,1) || throw(BoundsError(advect))
     if r.n > 1
         @inbounds begin
-            @loop_z_vzeta_vr_vz iz ivzeta ivr ivz begin
-                @views advect[:,ivz,ivr,ivzeta,iz] .= vr.grid[ivr]
+            @loop_sn_z_vzeta_vr_vz isn iz ivzeta ivr ivz begin
+                @views advect[:,ivz,ivr,ivzeta,iz,isn] .= vr.grid[ivr]
             end
         end
     else
         # no advection if no length in r 
-        @loop_z_vzeta_vr_vz iz ivzeta ivr ivz begin
-            advect[:,ivz,ivr,ivzeta,iz] .= 0.0
+        @loop_sn_z_vzeta_vr_vz isn iz ivzeta ivr ivz begin
+            advect[:,ivz,ivr,ivzeta,iz,isn] .= 0.0
         end
     end
     return nothing

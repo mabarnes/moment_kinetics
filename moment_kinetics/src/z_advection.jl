@@ -21,12 +21,9 @@ do a single stage time advance (potentially as part of a multi-stage RK scheme)
 
     @begin_s_r_vperp_vpa_region()
 
-    @loop_s is begin
-        # get the updated speed along the z direction using the current f
-        @views update_speed_z!(advect[:,:,:,:,is], fvec_in.upar[:,:,is],
-                               moments.ion.vth[:,:,is], moments.evolve_upar,
-                               moments.evolve_p, vpa, vperp, z, r, geometry)
-    end
+    # get the updated speed along the z direction using the current f
+    update_speed_z!(advect, fvec_in.upar, moments.ion.vth, moments.evolve_upar,
+                    moments.evolve_p, vpa, vperp, z, r, geometry)
     #calculate the upwind derivative
     derivative_z!(scratch_dummy.buffer_vpavperpzrs_1, fvec_in.pdf, advect,
                   scratch_dummy.buffer_vpavperprs_1, scratch_dummy.buffer_vpavperprs_2,
@@ -54,17 +51,17 @@ function update_speed_z!(advect, upar, vth, evolve_upar, evolve_p, vpa, vperp, z
 
     bzed = geometry.bzed
     if evolve_p
-        @loop_r_vperp_vpa ir ivperp ivpa begin
-            @. @views advect[:,ivpa,ivperp,ir] = (vth[:,ir] * vpa.grid[ivpa] + upar[:,ir]) * bzed[:,ir]
+        @loop_s_r_vperp_vpa is ir ivperp ivpa begin
+            @. @views advect[:,ivpa,ivperp,ir,is] = (vth[:,ir,is] * vpa.grid[ivpa] + upar[:,ir,is]) * bzed[:,ir]
         end
     elseif evolve_upar
-        @loop_r_vperp_vpa ir ivperp ivpa begin
-            @. @views advect[:,ivpa,ivperp,ir] = (vpa.grid[ivpa] + upar[:,ir]) * bzed[:,ir]
+        @loop_s_r_vperp_vpa is ir ivperp ivpa begin
+            @. @views advect[:,ivpa,ivperp,ir,is] = (vpa.grid[ivpa] + upar[:,ir,is]) * bzed[:,ir]
         end
     else
-        @loop_r_vperp_vpa ir ivperp ivpa begin
+        @loop_s_r_vperp_vpa is ir ivperp ivpa begin
             # vpa bzed
-            @. @views advect[:,ivpa,ivperp,ir] = vpa.grid[ivpa]*bzed[:,ir]
+            @. @views advect[:,ivpa,ivperp,ir,is] = vpa.grid[ivpa]*bzed[:,ir]
         end
     end
 

@@ -187,16 +187,13 @@ function update_z_alpha_r_speeds!(z_advect, alpha_advect, r_advect, fvec_in, mom
         # make sure z speed is physical despite
         # 0D nature of simulation
         @begin_s_r_vperp_vpa_region()
-        @loop_s is begin
-            # get the updated speed along the z direction using the current f
-            @views update_speed_z!(z_advect[:,:,:,:,is], fvec_in.upar[:,:,is],
-                                   moments.ion.vth[:,:,is], moments.evolve_upar,
-                                   moments.evolve_ppar, vpa, vperp, z, r, geometry)
-            # get the updated speed along the binormal direction using the current f
-            @views update_speed_alpha!(alpha_advect[:,:,:,:,is], moments.evolve_upar,
-                                       moments.evolve_ppar, fields, vpa, vperp, z, r,
-                                       geometry, is)
-        end
+        # get the updated speed along the z direction using the current f
+        @views update_speed_z!(z_advect, fvec_in.upar, moments.ion.vth,
+                               moments.evolve_upar, moments.evolve_ppar, vpa, vperp, z, r,
+                               geometry)
+        # get the updated speed along the binormal direction using the current f
+        @views update_speed_alpha!(alpha_advect, moments.evolve_upar, moments.evolve_ppar,
+                                   fields, vpa, vperp, z, r, geometry)
     end
     
     update_r_speed = (r.n == 1 && geometry.input.option == "0D-Spitzer-test")
@@ -204,11 +201,9 @@ function update_z_alpha_r_speeds!(z_advect, alpha_advect, r_advect, fvec_in, mom
         # make sure r speed is physical despite
         # 0D nature of simulation
         @begin_s_z_vperp_vpa_region()
-        @loop_s is begin
-            # get the updated speed along the r direction using the current f
-            @views update_speed_r!(r_advect[:,:,:,:,is], fields, moments.evolve_upar,
-                                   moments.evolve_ppar, vpa, vperp, z, r, geometry, is)
-        end
+        # get the updated speed along the r direction using the current f
+        @views update_speed_r!(r_advect, fields, moments.evolve_upar, moments.evolve_ppar,
+                               vpa, vperp, z, r, geometry)
     end
     return nothing
 end    
