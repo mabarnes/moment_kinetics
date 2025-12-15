@@ -2216,6 +2216,11 @@ function time_advance!(pdf, scratch, scratch_implicit, scratch_electron, t_param
                 write_dfns = (t_params.step_counter[] % t_params.nwrite_dfns == 0
                               || t_params.step_counter[] >= t_params.nstep
                               || finish_now)
+                # Slightly hacky, but t_params.dt_before_output[] is not set in the
+                # adaptive timestep update when
+                # t_params.write_after_fixed_step_count=true, so just set it to the
+                # current dt so that we get a sensibly terminal output printed below.
+                t_params.dt_before_output[] = t_params.dt[]
             end
             if write_moments
                 t_params.moments_output_counter[] += 1
