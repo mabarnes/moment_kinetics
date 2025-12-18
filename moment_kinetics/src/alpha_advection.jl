@@ -44,35 +44,80 @@ end
 """
 calculate the advection speed in the z-direction at each grid point
 """
-function update_speed_alpha!(advect, evolve_upar, evolve_p, fields, vpa, vperp, z, r,
-                             geometry)
+function update_speed_alpha!(advect, evolve_upar::Bool, evolve_p::Bool, fields, vpa,
+                             vperp, z, r, geometry)
+    return update_speed_alpha!(advect, Val(evolve_upar), Val(evolve_p), fields, vpa,
+                               vperp, z, r, geometry)
+end
+function update_speed_alpha!(advect, evolve_upar::Val, evolve_p::Val, fields, vpa, vperp,
+                             z, r, geometry)
     @debug_consistency_checks r.n == size(advect,4) || throw(BoundsError(advect))
     @debug_consistency_checks vperp.n == size(advect,3) || throw(BoundsError(advect))
     @debug_consistency_checks vpa.n == size(advect,2) || throw(BoundsError(advect))
     @debug_consistency_checks z.n == size(advect,1) || throw(BoundsError(advect))
 
-    Bmag = geometry.Bmag
-    bzeta = geometry.bzeta
-    jacobian = geometry.jacobian
-    rhostar = geometry.rhostar
-    curvature_drift_z = geometry.curvature_drift_z
-    grad_B_drift_z = geometry.grad_B_drift_z
-    if evolve_p || evolve_upar
-        vEz = fields.vEz
-        @loop_s_r_vperp_vpa is ir ivperp ivpa begin
-            @. @views advect[:,ivpa,ivperp,ir,is] = vEz[:,ir]
-        end
-    else
-        @loop_s_r_vperp_vpa is ir ivperp ivpa begin
-            # ExB drift
-            @. @views advect[:,ivpa,ivperp,ir,is] = -rhostar*bzeta[:,ir]*jacobian[:,ir]/Bmag[:,ir]*fields.gEr[ivperp,:,ir,is]
-            # magnetic curvature drift
-            @. @views advect[:,ivpa,ivperp,ir,is] += rhostar*(vpa.grid[ivpa]^2)*curvature_drift_z[:,ir]
-            # magnetic grad B drift
-            @. @views advect[:,ivpa,ivperp,ir,is] += 0.5*rhostar*(vperp.grid[ivperp]^2)*grad_B_drift_z[:,ir]
+    speed_args = get_speed_alpha_inner_args(advect, fields, geometry, z, vpa, vperp,
+                                            evolve_upar, evolve_p)
+    @loop_s_r is ir begin
+        speed_args_sr = get_speed_alpha_inner_views_sr(is, ir, speed_args...)
+        @loop_vperp ivperp begin
+            speed_args_vperp = get_speed_alpha_inner_views_vperp(ivperp, speed_args_sr...)
+            @loop_vpa ivpa begin
+                @views update_speed_alpha_inner!(get_speed_alpha_inner_views_vpa(ivpa, speed_args_vperp...)...)
+            end
         end
     end
 
+    return nothing
+end
+
+@inline function get_speed_alpha_inner_args(advect, fields, geometry, z, vpa, vperp,
+                                            evolve_upar, evolve_p)
+    return advect, fields.vEz, geometry.rhostar, z.scratch, geometry.bzeta,
+           geometry.jacobian, geometry.Bmag, geometry.curvature_drift_z,
+           geometry.grad_B_drift_z, fields.gEr, vpa.grid, vperp.grid, evolve_upar,
+           evolve_p
+end
+
+@inline function get_speed_alpha_inner_views_sr(is, ir, advect, vEz, rhostar, geofac,
+                                                bzeta, jacobian, Bmag, curvature_drift_z,
+                                                grad_B_drift_z, gEr, vpa, vperp,
+                                                evolve_upar, evolve_p)
+    @views @. geofac = bzeta[:,ir] * jacobian[:,ir] / Bmag[:,ir]
+    return @views advect[:,:,:,ir,is], vEz[:,ir], rhostar, geofac,
+                  curvature_drift_z[:,ir], grad_B_drift_z[:,ir], gEr[:,:,ir,is], vpa,
+                  vperp, evolve_upar, evolve_p
+end
+
+@inline function get_speed_alpha_inner_views_vperp(ivperp, advect, vEz, rhostar, geofac,
+                                                   curvature_drift_z, grad_B_drift_z, gEr,
+                                                   vpa, vperp, evolve_upar, evolve_p)
+    return @views advect[:,:,ivperp], vEz, rhostar, geofac, curvature_drift_z,
+                  grad_B_drift_z, gEr[ivperp,:], vpa, vperp[ivperp], evolve_upar, evolve_p
+end
+
+@inline function get_speed_alpha_inner_views_vpa(ivpa, advect, vEz, rhostar, geofac,
+                                                 curvature_drift_z, grad_B_drift_z, gEr,
+                                                 vpa, vperp, evolve_upar, evolve_p)
+    return @views advect[:,ivpa], vEz, rhostar, geofac, curvature_drift_z, grad_B_drift_z,
+                  gEr, vpa[ivpa], vperp, evolve_upar, evolve_p
+end
+
+function update_speed_alpha_inner!(advect, vEz, rhostar, geofac, curvature_drift_z,
+                                   grad_B_drift_z, gEr, vpa, vperp, evolve_upar::Val,
+                                   evolve_p::Val)
+    if evolve_upar === Val(true) || evolve_p === Val(true)
+        # Magnetic drifts not supported here yet
+        # ExB drift
+        @. advect = vEz
+    else
+        # ExB drift
+        @. advect = -rhostar * geofac * gEr
+        # magnetic curvature drift
+        @. advect += rhostar * vpa^2 * curvature_drift_z
+        # magnetic grad B drift
+        @. advect += 0.5 * rhostar * vperp^2 * grad_B_drift_z
+    end
     return nothing
 end
 

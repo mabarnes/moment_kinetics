@@ -1241,7 +1241,7 @@ function _setup_time_advance_internal!(pdf, fields, vz, vr, vzeta, vpa, vperp, z
     if n_neutral_species > 0 && r.n > 1
         # initialise the r advection speed
         @begin_sn_z_vzeta_vr_vz_region()
-        update_speed_neutral_r!(neutral_r_advect, r, z, vzeta, vr, vz)
+        update_speed_neutral_r!(neutral_r_advect, r, z, vzeta, vr, vz, moments.evolve_p)
     end
 
     if n_neutral_species > 0 && z.n > 1
@@ -4044,7 +4044,7 @@ implementation), a call needs to be made with `dt` scaled by some coefficient.
         if advance.vperp_advection
             vperp_advection!(fvec_out.pdf, fvec_in, vperp_advect, r, z, vperp, vpa,
                              dt, vperp_spectral, composition, z_advect, alpha_advect,
-                             r_advect, geometry, moments, fields, t)
+                             r_advect, geometry, moments, fields)
             write_debug_IO("vperp_advection!")
         end
 
@@ -4062,8 +4062,9 @@ implementation), a call needs to be made with `dt` scaled by some coefficient.
         end
 
         if advance.neutral_r_advection
-            neutral_advection_r!(fvec_out.pdf_neutral, fvec_in, neutral_r_advect,
-                r, z, vzeta, vr, vz, dt, r_spectral, composition, geometry, scratch_dummy)
+            neutral_advection_r!(fvec_out.pdf_neutral, fvec_in, moments, neutral_r_advect,
+                                 r, z, vzeta, vr, vz, dt, r_spectral, composition,
+                                 geometry, scratch_dummy)
             write_debug_IO("neutral_advection_r!")
         end
 

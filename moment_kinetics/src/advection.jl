@@ -39,10 +39,12 @@ function advance_f_local!(f_new, f_current, advect, coord, dt, spectral)
     df = coord.scratch
     derivative!(df, f_current, coord, advect, spectral)
     @. f_new += -dt * advect * df
+    return nothing
 end
 
 function advance_f_df_precomputed!(f_new, df_current, advect, coord, dt)
     @. f_new += -dt * advect * df_current
+    return nothing
 end
 
 end
