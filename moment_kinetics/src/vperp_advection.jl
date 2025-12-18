@@ -8,6 +8,7 @@ using ..chebyshev: chebyshev_info
 using ..debugging
 using ..looping
 using ..timer_utils
+using ..type_definitions
 using ..z_advection: update_speed_z!
 using ..alpha_advection: update_speed_alpha!
 using ..r_advection: update_speed_r!
@@ -16,23 +17,47 @@ using ..r_advection: update_speed_r!
 @timeit global_timer vperp_advection!(
                          f_out, fvec_in, vperp_advect, r, z, vperp, vpa, dt,
                          vperp_spectral, composition, z_advect, alpha_advect, r_advect,
-                         geometry, moments, fields, t) = begin
+                         geometry, moments, fields) = begin
+    return vperp_advection!(f_out, fvec_in, vperp_advect, r, z, vperp, vpa, dt,
+                            vperp_spectral, composition, z_advect, alpha_advect, r_advect,
+                            geometry, moments, fields, Val(moments.evolve_density),
+                            Val(moments.evolve_upar), Val(moments.evolve_p))
+end
+function vperp_advection!(f_out, fvec_in, vperp_advect, r, z, vperp, vpa, dt,
+                          vperp_spectral, composition, z_advect, alpha_advect, r_advect,
+                          geometry, moments, fields, evolve_density::Val,
+                          evolve_upar::Val, evolve_p::Val)
     
     # if appropriate, update z and r speeds (except for the 'Spitzer test', this function
     # does nothing because the r- and z-speeds have already been calculated).
     update_z_alpha_r_speeds!(z_advect, alpha_advect, r_advect, fvec_in, moments, fields,
-                             geometry, vpa, vperp, z, r, t)
-    # get the updated speed along the vperp direction using the current f
-    update_speed_vperp!(vperp_advect, fvec_in, vpa, vperp, z, r, z_advect, alpha_advect,
-                        r_advect, geometry, moments)
-    
+                             geometry, vpa, vperp, z, r)
+
+    speed_args = get_speed_vperp_inner_args(vperp_advect, moments, geometry, r_advect,
+                                            alpha_advect, z_advect, r, vperp,
+                                            evolve_density, evolve_upar, evolve_p)
+    f_in = fvec_in.pdf
     @begin_s_r_z_vpa_region()
-    @loop_s is begin
-        @loop_r_z_vpa ir iz ivpa begin
-            @views advance_f_local!(f_out[ivpa,:,iz,ir,is], fvec_in.pdf[ivpa,:,iz,ir,is],
-                                    vperp_advect[:,ivpa,iz,ir,is], vperp, dt, vperp_spectral)
+    @loop_s_r is ir begin
+        speed_args_sr = get_speed_vperp_inner_views_sr(is, ir, speed_args...)
+        this_f_out = @view f_out[:,:,:,ir,is]
+        this_f_in = @view f_in[:,:,:,ir,is]
+        @loop_z iz begin
+            speed_args_z = get_speed_vperp_inner_views_z(iz, speed_args_sr...)
+            this_iz_f_out = @view this_f_out[:,:,iz]
+            this_iz_f_in = @view this_f_in[:,:,iz]
+            @loop_vpa ivpa begin
+                speed_args_vperp = get_speed_vperp_inner_views_vpa(ivpa, speed_args_z...)
+                # get the updated speed along the vperp direction using the current f
+                update_speed_vperp_inner!(speed_args_vperp...)
+                @views advance_f_local!(this_iz_f_out[ivpa,:], this_iz_f_in[ivpa,:],
+                                        first(speed_args_vperp), vperp, dt,
+                                        vperp_spectral)
+            end
         end
     end
+
+    return nothing
 end
 
 # calculate the advection speed in the vperp-direction at each grid point
@@ -40,102 +65,178 @@ end
 # It is important to ensure that z_advect and r_advect are updated before vperp_advect
 function update_speed_vperp!(vperp_advect, fvec, vpa, vperp, z, r, z_advect, alpha_advect,
                              r_advect, geometry, moments)
+    return update_speed_vperp!(vperp_advect, fvec, vpa, vperp, z, r, z_advect, alpha_advect,
+                             r_advect, geometry, moments, Val(moments.evolve_density),
+                             Val(moments.evolve_upar), Val(moments.evolve_p))
+end
+function update_speed_vperp!(vperp_advect, fvec, vpa, vperp, z, r, z_advect, alpha_advect,
+                             r_advect, geometry, moments, evolve_density::Val,
+                             evolve_upar::Val, evolve_p::Val)
     @debug_consistency_checks z.n == size(vperp_advect,3) || throw(BoundsError(vperp_advect))
     @debug_consistency_checks vperp.n == size(vperp_advect,1) || throw(BoundsError(vperp_advect))
     @debug_consistency_checks vpa.n == size(vperp_advect,2) || throw(BoundsError(vperp_advect))
     @debug_consistency_checks r.n == size(vperp_advect,4) || throw(BoundsError(vperp_advect))
     @begin_s_r_z_vpa_region()
-    if moments.evolve_p
-        update_speed_vperp_n_u_p_evolution!(vperp_advect, fvec, vpa, vperp, z, r,
-                                            z_advect, alpha_advect, r_advect, geometry,
-                                            moments)
-    elseif moments.evolve_upar
-        update_speed_vperp_n_u_evolution!(vperp_advect, vpa, vperp, z, r, z_advect,
-                                          alpha_advect, r_advect, geometry, moments)
-    elseif moments.evolve_density
-        update_speed_vperp_n_evolution!(vperp_advect, vpa, vperp, z, r, z_advect,
-                                        alpha_advect, r_advect, geometry, moments)
-    else
-        update_speed_vperp_DK!(vperp_advect, vpa, vperp, z, r, z_advect, alpha_advect,
-                               r_advect, geometry, moments)
+    speed_args = get_speed_vperp_inner_args(vperp_advect, moments, geometry, r_advect,
+                                            alpha_advect, z_advect, r, vperp,
+                                            evolve_density, evolve_upar, evolve_p)
+    @loop_s_r is ir begin
+        speed_args_sr = get_speed_vperp_inner_views_sr(is, ir, speed_args...)
+        @loop_z iz begin
+            speed_args_z = get_speed_vperp_inner_views_z(iz, speed_args_sr...)
+            @loop_vpa ivpa begin
+                update_speed_vperp_inner!(get_speed_vperp_inner_views_vpa(ivpa, speed_args_z...)...)
+            end
+        end
     end
 
     return nothing
+end
+
+@inline function get_speed_vperp_inner_args(vperp_advect, moments, geometry, r_advect, alpha_advect,
+                                            z_advect, r, vperp, evolve_density::Val,
+                                            evolve_upar::Val, evolve_p::Val)
+    if evolve_p === Val(true)
+        return vperp_advect, moments.ion.vth, moments.ion.dvth_dt, moments.ion.dvth_dr,
+               moments.ion.dvth_dz, r_advect, alpha_advect, z_advect, vperp.grid,
+               evolve_density, evolve_upar, evolve_p
+    elseif evolve_upar === Val(true)
+        return vperp_advect, evolve_density, evolve_upar, evolve_p
+    elseif evolve_density === Val(true)
+        return vperp_advect, evolve_density, evolve_upar, evolve_p
+    else
+        rfac = r.n > 1 ? 1.0 : 0.0
+        return vperp_advect, geometry.Bmag, geometry.dBdr, geometry.dBdz, vperp.grid,
+               rfac, r_advect, alpha_advect, z_advect, evolve_density, evolve_upar,
+               evolve_p
+    end
+end
+
+@inline function get_speed_vperp_inner_views_sr(is, ir, vperp_advect, vth, dvth_dt,
+                                                dvth_dr, dvth_dz, r_advect, alpha_advect,
+                                                z_advect, wperp,
+                                                evolve_density::Val{true},
+                                                evolve_upar::Val{true},
+                                                evolve_p::Val{true})
+    return @views vperp_advect[:,:,:,ir,is], vth[:,ir,is], dvth_dt[:,ir,is],
+                  dvth_dr[:,ir,is], dvth_dz[:,ir,is], r_advect[ir,:,:,:,is],
+                  alpha_advect[:,:,:,ir,is], z_advect[:,:,:,ir,is], wperp, evolve_density,
+                  evolve_upar, evolve_p
+end
+
+@inline function get_speed_vperp_inner_views_z(iz, vperp_advect, vth, dvth_dt, dvth_dr,
+                                               dvth_dz, r_advect, alpha_advect, z_advect,
+                                               wperp, evolve_density::Val{true},
+                                               evolve_upar::Val{true},
+                                               evolve_p::Val{true})
+    return @views vperp_advect[:,:,iz], vth[iz], dvth_dt[iz], dvth_dr[iz], dvth_dz[iz],
+                  r_advect[:,:,iz], alpha_advect[iz,:,:], z_advect[iz,:,:], wperp,
+                  evolve_density, evolve_upar, evolve_p
+end
+
+@inline function get_speed_vperp_inner_views_vpa(ivpa, vperp_advect, vth, dvth_dt,
+                                                 dvth_dr, dvth_dz, r_advect, alpha_advect,
+                                                 z_advect, wperp,
+                                                 evolve_density::Val{true},
+                                                 evolve_upar::Val{true},
+                                                 evolve_p::Val{true})
+    return @views vperp_advect[:,ivpa], vth, dvth_dt, dvth_dr, dvth_dz, r_advect[ivpa,:],
+                  alpha_advect[ivpa,:], z_advect[ivpa,:], wperp, evolve_density,
+                  evolve_upar, evolve_p
 end
 
 """
 update vperp advection speed when n, u, p are evolved separately
 """
-function update_speed_vperp_n_u_p_evolution!(vperp_advect, fvec, vpa, vperp, z, r,
-                                             z_advect, alpha_advect, r_advect, geometry,
-                                             moments)
-    upar = fvec.upar
-    vth = moments.ion.vth
-    dvth_dr = moments.ion.dvth_dr
-    dvth_dz = moments.ion.dvth_dz
-    dvth_dt = moments.ion.dvth_dt
-    wperp = vperp.grid
-    @loop_s_r_z_vpa is ir iz ivpa begin
-        @loop_vperp ivperp begin
-            # update perpendicular advection speed, which is only nonzero because of the
-            # normalisation by thermal speed, so wperp grid is constantly stretching and
-            # compressing to account for changing local temperatures while maintaining
-            # a normalised perpendicular speed.
-            vperp_advect[ivperp,ivpa,iz,ir,is] =
-                - (1/vth[iz,ir,is]) * wperp[ivperp] * (
-                    dvth_dt[iz,ir,is]
-                    + r_advect[ir,ivpa,ivperp,iz,is] * dvth_dr[iz,ir,is]
-                    + (alpha_advect[iz,ivpa,ivperp,ir,is] + z_advect[iz,ivpa,ivperp,ir,is]) * dvth_dz[iz,ir,is])
-        end
-    end
+function update_speed_vperp_inner!(vperp_advect, vth, dvth_dt, dvth_dr, dvth_dz, r_advect,
+                                   alpha_advect, z_advect, wperp,
+                                   evolve_density::Val{true}, evolve_upar::Val{true},
+                                   evolve_p::Val{true})
+    # update perpendicular advection speed, which is only nonzero because of the
+    # normalisation by thermal speed, so wperp grid is constantly stretching and
+    # compressing to account for changing local temperatures while maintaining a
+    # normalised perpendicular speed.
+    @. vperp_advect =
+           - (1/vth) * wperp * (
+               dvth_dt
+               + r_advect * dvth_dr
+               + (alpha_advect + z_advect) * dvth_dz)
 
     return nothing
 end
 
+@inline function get_speed_vperp_inner_views_sr(is, ir, vperp_advect,
+                                                evolve_density::Val{true},
+                                                evolve_upar::Val,
+                                                evolve_p::Val{false})
+    return @views vperp_advect[:,:,:,ir,is], evolve_density, evolve_upar, evolve_p
+end
+
+@inline function get_speed_vperp_inner_views_z(iz, vperp_advect,
+                                               evolve_density::Val{true},
+                                               evolve_upar::Val, evolve_p::Val{false})
+    return @views vperp_advect[:,:,iz], evolve_density, evolve_upar, evolve_p
+end
+
+@inline function get_speed_vperp_inner_views_vpa(ivpa, vperp_advect,
+                                                 evolve_density::Val{true},
+                                                 evolve_upar::Val,
+                                                 evolve_p::Val{false})
+    return @views vperp_advect[:,ivpa], evolve_density, evolve_upar, evolve_p
+end
+
 """
-update vperp advection speed when n, u are evolved separately
+update vperp advection speed when n, u are evolved separately, or only n is evolved separately.
+u does not affect the wperp coordinate, so these two cases can be handled together.
 """
-function update_speed_vperp_n_u_evolution!(vperp_advect, vpa, vperp, z, r, z_advect,
-                                           alpha_advect, r_advect, geometry, moments)
+function update_speed_vperp_inner!(vperp_advect, evolve_density::Val{true},
+                                   evolve_upar::Val, evolve_p::Val{false})
     # with no perpendicular advection terms, the advection speed is zero
     return nothing
 end
 
-"""
-update vperp advection speed when n is evolved separately
-"""
-function update_speed_vperp_n_evolution!(vperp_advect, vpa, vperp, z, r, z_advect,
-                                         alpha_advect, r_advect, geometry, moments)
-    # with no perpendicular advection terms, the advection speed is zero
-    return nothing
+@inline function get_speed_vperp_inner_views_sr(is, ir, vperp_advect, Bmag, dBdr, dBdz,
+                                                vperp, rfac, r_advect, alpha_advect,
+                                                z_advect, evolve_density::Val{false},
+                                                evolve_upar::Val{false},
+                                                evolve_p::Val{false})
+    return @views vperp_advect[:,:,:,ir,is], Bmag[:,ir], dBdr[:,ir], dBdz[:,ir], vperp,
+                  rfac, r_advect[ir,:,:,:,is], alpha_advect[:,:,:,ir,is],
+                  z_advect[:,:,:,ir,is], evolve_density, evolve_upar, evolve_p
 end
 
-function update_speed_vperp_DK!(vperp_advect, vpa, vperp, z, r, z_advect, alpha_advect,
-                                r_advect, geometry, moments)
+@inline function get_speed_vperp_inner_views_z(iz, vperp_advect, Bmag, dBdr, dBdz, vperp,
+                                               rfac, r_advect, alpha_advect, z_advect,
+                                               evolve_density::Val{false},
+                                               evolve_upar::Val{false},
+                                               evolve_p::Val{false})
+    return @views vperp_advect[:,:,iz], Bmag[iz], dBdr[iz], dBdz[iz], vperp, rfac,
+                  r_advect[:,:,iz], alpha_advect[iz,:,:], z_advect[iz,:,:],
+                  evolve_density, evolve_upar, evolve_p
+end
+
+@inline function get_speed_vperp_inner_views_vpa(ivpa, vperp_advect, Bmag, dBdr, dBdz,
+                                                 vperp, rfac, r_advect, alpha_advect,
+                                                 z_advect, evolve_density::Val{false},
+                                                 evolve_upar::Val{false},
+                                                 evolve_p::Val{false})
+    return @views vperp_advect[:,ivpa], Bmag, dBdr, dBdz, vperp, rfac, r_advect[ivpa,:],
+                  alpha_advect[ivpa,:], z_advect[ivpa,:], evolve_density, evolve_upar,
+                  evolve_p
+end
+
+function update_speed_vperp_inner!(vperp_advect, Bmag, dBdr, dBdz, vperp, rfac, r_advect,
+                                   alpha_advect, z_advect, evolve_density::Val{false},
+                                   evolve_upar::Val{false}, evolve_p::Val{false})
     # advection of vperp due to conservation of 
     # the adiabatic invariant mu = vperp^2 / 2 B
-    dzdt = vperp.scratch
-    dalphadt = vperp.scratch2
-    drdt = vperp.scratch3
-    dBdr = geometry.dBdr
-    dBdz = geometry.dBdz
-    Bmag = geometry.Bmag
-    rfac = 0.0
-    if r.n > 1
-        rfac = 1.0
-    end
-    @inbounds begin
-        @loop_s_r_z_vpa is ir iz ivpa begin
-            @. @views dzdt = z_advect[iz,ivpa,:,ir,is]
-            @. @views dalphadt = alpha_advect[iz,ivpa,:,ir,is]
-            @. @views drdt = rfac*r_advect[ir,ivpa,:,iz,is]
-            @. @views vperp_advect[:,ivpa,iz,ir,is] = (0.5*vperp.grid/Bmag[iz,ir])*((dalphadt+dzdt)*dBdz[iz,ir] + drdt*dBdr[iz,ir])
-        end
-    end
+    @. vperp_advect = (0.5 * vperp / Bmag) * ((alpha_advect + z_advect) * dBdz + rfac * r_advect * dBdr)
+
+    return nothing
 end
 
 function update_z_alpha_r_speeds!(z_advect, alpha_advect, r_advect, fvec_in, moments,
-                                  fields, geometry, vpa, vperp, z, r, t)
+                                  fields, geometry, vpa, vperp, z, r)
     update_z_speed = (z.n == 1 && geometry.input.option == "0D-Spitzer-test")
     if update_z_speed
         # make sure z speed is physical despite
