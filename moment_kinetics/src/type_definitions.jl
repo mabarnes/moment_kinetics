@@ -54,9 +54,21 @@ defined as an alias for `DebugMPISharedArray`.
 const MPISharedArray = @debug_shared_array_ifelse(DebugMPISharedArray, Array)
 
 # Custom error types
-struct MKFileNotFound <: Exception
+####################
+
+# Sub-type for exceptions that are guaranteed to be thrown on all MPI ranks, so that we
+# can handle the exception without an MPI.Abort().
+abstract type MKCollectiveError <: Exception end
+export MKCollectiveError
+
+struct MKFileNotFound <: MKCollectiveError
     msg::String
 end
 export MKFileNotFound
+
+struct MKOptionError <: MKCollectiveError
+    msg::String
+end
+export MKOptionError
 
 end
