@@ -4217,8 +4217,8 @@ function _get_fake_moments_fields_scratch(all_moments, it; ion_extra::Tuple=(),
     end
 
     ion_moments = make_struct(; dens=:density, upar=:parallel_flow,
-        p=:pressure, ppar=:parallel_pressure, qpar=:parallel_heat_flux,
-        vth=:thermal_speed, temp=:temperature, ddens_dr=:ddens_dr,
+        p=:pressure, ppar=:parallel_pressure, pperp=:perpendicular_pressure,
+        qpar=:parallel_heat_flux, vth=:thermal_speed, temp=:temperature, ddens_dr=:ddens_dr,
         ddens_dr_upwind=:ddens_dr_upwind, ddens_dz=:ddens_dz,
         ddens_dz_upwind=:ddens_dz_upwind, dupar_dr=:dupar_dr,
         dupar_dr_upwind=:dupar_dr_upwind, dupar_dz=:dupar_dz,
