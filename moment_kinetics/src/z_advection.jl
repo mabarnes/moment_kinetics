@@ -19,11 +19,11 @@ do a single stage time advance (potentially as part of a multi-stage RK scheme)
                          f_out, fvec_in, moments, fields, advect, z, vpa, vperp, r, dt, t,
                          spectral, composition, geometry, scratch_dummy) = begin
 
-    @begin_s_r_vperp_vpa_region()
-
     # get the updated speed along the z direction using the current f
     update_speed_z!(advect, fvec_in.upar, moments.ion.vth, moments.evolve_upar,
                     moments.evolve_p, vpa, vperp, z, r, geometry)
+
+    @begin_s_r_vperp_vpa_region()
 
     #calculate the upwind derivative
     df_dz = scratch_dummy.buffer_vpavperpzrs_1
@@ -36,7 +36,7 @@ do a single stage time advance (potentially as part of a multi-stage RK scheme)
     @loop_s_r_vperp_vpa is ir ivperp ivpa begin
         @views advance_f_df_precomputed!(f_out[ivpa,ivperp,:,ir,is],
                                          df_dz[ivpa,ivperp,:,ir,is],
-                                         advect[:,ivpa,ivperp,ir,is], z, dt)
+                                         advect[ivpa,ivperp,:,ir,is], z, dt)
     end
 end
 
@@ -51,19 +51,21 @@ end
 function update_speed_z!(advect, upar, vth, evolve_upar::Val, evolve_p::Val, vpa, vperp,
                          z, r, geometry)
     @debug_consistency_checks r.n == size(advect,4) || throw(BoundsError(advect))
-    @debug_consistency_checks vperp.n == size(advect,3) || throw(BoundsError(advect))
-    @debug_consistency_checks vpa.n == size(advect,2) || throw(BoundsError(advect))
-    @debug_consistency_checks z.n == size(advect,1) || throw(BoundsError(advect))
+    @debug_consistency_checks z.n == size(advect,3) || throw(BoundsError(advect))
+    @debug_consistency_checks vperp.n == size(advect,2) || throw(BoundsError(advect))
+    @debug_consistency_checks vpa.n == size(advect,1) || throw(BoundsError(advect))
+
+    @begin_s_r_z_vperp_region()
 
     bzed = geometry.bzed
     vpa_grid = vpa.grid
     @loop_s_r is ir begin
         speed_args_sr = get_speed_z_inner_views_sr(is, ir, advect, upar, vth, vpa_grid,
                                                    bzed, evolve_upar, evolve_p)
-        @loop_vperp ivperp begin
-            speed_args_vperp = get_speed_z_inner_views_vperp(ivperp, speed_args_sr...)
-            @loop_vpa ivpa begin
-                update_speed_z_inner!(get_speed_z_inner_views_vpa(ivpa, speed_args_vperp...)...)
+        @loop_z iz begin
+            speed_args_z = get_speed_z_inner_views_z(iz, speed_args_sr...)
+            @loop_vperp ivperp begin
+                update_speed_z_inner!(get_speed_z_inner_views_vperp(ivperp, speed_args_z...)...)
             end
         end
     end
@@ -76,14 +78,14 @@ end
                   evolve_upar, evolve_p
 end
 
-@inline function get_speed_z_inner_views_vperp(ivperp, advect, upar, vth, vpa, bzed,
-                                               evolve_upar::Val, evolve_p::Val)
-    return @views advect[:,:,ivperp], upar, vth, vpa, bzed, evolve_upar, evolve_p
+@inline function get_speed_z_inner_views_z(iz, advect, upar, vth, vpa, bzed,
+                                           evolve_upar::Val, evolve_p::Val)
+    return @views advect[:,:,iz], upar[iz], vth[iz], vpa, bzed[iz], evolve_upar, evolve_p
 end
 
-@inline function get_speed_z_inner_views_vpa(ivpa, advect, upar, vth, vpa, bzed,
-                                             evolve_upar::Val, evolve_p::Val)
-    return @views advect[:,ivpa], upar, vth, vpa[ivpa], bzed, evolve_upar, evolve_p
+@inline function get_speed_z_inner_views_vperp(ivperp, advect, upar, vth, vpa, bzed,
+                                               evolve_upar::Val, evolve_p::Val)
+    return @views advect[:,ivperp], upar, vth, vpa, bzed, evolve_upar, evolve_p
 end
 
 function update_speed_z_inner!(advect, upar, vth, vpa, bzed, evolve_upar::Val,

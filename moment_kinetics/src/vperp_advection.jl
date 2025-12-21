@@ -72,10 +72,10 @@ end
 function update_speed_vperp!(vperp_advect, fvec, vpa, vperp, z, r, z_advect, alpha_advect,
                              r_advect, geometry, moments, evolve_density::Val,
                              evolve_upar::Val, evolve_p::Val)
-    @debug_consistency_checks z.n == size(vperp_advect,3) || throw(BoundsError(vperp_advect))
-    @debug_consistency_checks vperp.n == size(vperp_advect,1) || throw(BoundsError(vperp_advect))
-    @debug_consistency_checks vpa.n == size(vperp_advect,2) || throw(BoundsError(vperp_advect))
     @debug_consistency_checks r.n == size(vperp_advect,4) || throw(BoundsError(vperp_advect))
+    @debug_consistency_checks z.n == size(vperp_advect,3) || throw(BoundsError(vperp_advect))
+    @debug_consistency_checks vperp.n == size(vperp_advect,2) || throw(BoundsError(vperp_advect))
+    @debug_consistency_checks vpa.n == size(vperp_advect,1) || throw(BoundsError(vperp_advect))
     @begin_s_r_z_vpa_region()
     speed_args = get_speed_vperp_inner_args(vperp_advect, moments, geometry, r_advect,
                                             alpha_advect, z_advect, r, vperp,
@@ -119,7 +119,7 @@ end
                                                 evolve_upar::Val{true},
                                                 evolve_p::Val{true})
     return @views vperp_advect[:,:,:,ir,is], vth[:,ir,is], dvth_dt[:,ir,is],
-                  dvth_dr[:,ir,is], dvth_dz[:,ir,is], r_advect[ir,:,:,:,is],
+                  dvth_dr[:,ir,is], dvth_dz[:,ir,is], r_advect[:,:,:,ir,is],
                   alpha_advect[:,:,:,ir,is], z_advect[:,:,:,ir,is], wperp, evolve_density,
                   evolve_upar, evolve_p
 end
@@ -130,7 +130,7 @@ end
                                                evolve_upar::Val{true},
                                                evolve_p::Val{true})
     return @views vperp_advect[:,:,iz], vth[iz], dvth_dt[iz], dvth_dr[iz], dvth_dz[iz],
-                  r_advect[:,:,iz], alpha_advect[iz,:,:], z_advect[iz,:,:], wperp,
+                  r_advect[:,:,iz], alpha_advect[:,:,iz], z_advect[:,:,iz], wperp,
                   evolve_density, evolve_upar, evolve_p
 end
 
@@ -140,7 +140,7 @@ end
                                                  evolve_density::Val{true},
                                                  evolve_upar::Val{true},
                                                  evolve_p::Val{true})
-    return @views vperp_advect[:,ivpa], vth, dvth_dt, dvth_dr, dvth_dz, r_advect[ivpa,:],
+    return @views vperp_advect[ivpa,:], vth, dvth_dt, dvth_dr, dvth_dz, r_advect[ivpa,:],
                   alpha_advect[ivpa,:], z_advect[ivpa,:], wperp, evolve_density,
                   evolve_upar, evolve_p
 end
@@ -182,7 +182,7 @@ end
                                                  evolve_density::Val{true},
                                                  evolve_upar::Val,
                                                  evolve_p::Val{false})
-    return @views vperp_advect[:,ivpa], evolve_density, evolve_upar, evolve_p
+    return @views vperp_advect[ivpa,:], evolve_density, evolve_upar, evolve_p
 end
 
 """
@@ -201,7 +201,7 @@ end
                                                 evolve_upar::Val{false},
                                                 evolve_p::Val{false})
     return @views vperp_advect[:,:,:,ir,is], Bmag[:,ir], dBdr[:,ir], dBdz[:,ir], vperp,
-                  rfac, r_advect[ir,:,:,:,is], alpha_advect[:,:,:,ir,is],
+                  rfac, r_advect[:,:,:,ir,is], alpha_advect[:,:,:,ir,is],
                   z_advect[:,:,:,ir,is], evolve_density, evolve_upar, evolve_p
 end
 
@@ -211,7 +211,7 @@ end
                                                evolve_upar::Val{false},
                                                evolve_p::Val{false})
     return @views vperp_advect[:,:,iz], Bmag[iz], dBdr[iz], dBdz[iz], vperp, rfac,
-                  r_advect[:,:,iz], alpha_advect[iz,:,:], z_advect[iz,:,:],
+                  r_advect[:,:,iz], alpha_advect[:,:,iz], z_advect[:,:,iz],
                   evolve_density, evolve_upar, evolve_p
 end
 
@@ -220,7 +220,7 @@ end
                                                  z_advect, evolve_density::Val{false},
                                                  evolve_upar::Val{false},
                                                  evolve_p::Val{false})
-    return @views vperp_advect[:,ivpa], Bmag, dBdr, dBdz, vperp, rfac, r_advect[ivpa,:],
+    return @views vperp_advect[ivpa,:], Bmag, dBdr, dBdz, vperp, rfac, r_advect[ivpa,:],
                   alpha_advect[ivpa,:], z_advect[ivpa,:], evolve_density, evolve_upar,
                   evolve_p
 end

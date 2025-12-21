@@ -23,8 +23,6 @@ calculate the wpa-advection term for the electron kinetic equation
                          pdf_out, pdf_in, density, upar, p, moments, composition, advect,
                          vpa, spectral, scratch_dummy, dt, electron_source_settings,
                          ir) = begin
-    @begin_anyzv_z_vperp_region()
-
     # create a reference to a scratch_dummy array to store the wpa-derivative of the electron pdf
     dpdf_dvpa = @view scratch_dummy.buffer_vpavperpzr_1[:,:,:,ir]
     #d2pdf_dvpa2 = @view scratch_dummy.buffer_vpavperpzr_2[:,:,:,ir]
@@ -33,6 +31,8 @@ calculate the wpa-advection term for the electron kinetic equation
     @views update_electron_speed_vpa!(advect, density, upar, p, moments,
                                       composition.me_over_mi, vpa.grid,
                                       electron_source_settings, ir)
+    @begin_anyzv_z_vperp_region()
+
     #calculate the upwind derivative of the electron pdf w.r.t. wpa
     @loop_z_vperp iz ivperp begin
         @views derivative!(dpdf_dvpa[:,ivperp,iz], pdf_in[:,ivperp,iz], vpa,
@@ -54,6 +54,8 @@ calculate the electron advection speed in the wpa-direction at each grid point
 """
 function update_electron_speed_vpa!(advect, density, upar, p, moments, me_over_mi, vpa,
                                     electron_source_settings, ir)
+    @begin_anyzv_z_vperp_region()
+
     vth = @view moments.electron.vth[:,ir]
     dppar_dz = @view moments.electron.dppar_dz[:,ir]
     dqpar_dz = @view moments.electron.dqpar_dz[:,ir]

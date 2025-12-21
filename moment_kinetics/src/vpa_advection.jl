@@ -405,7 +405,7 @@ end
     return @views vpa_advect[:,:,:,ir,is], upar[:,ir,is], vth[:,ir,is], Ez[:,ir],
                   bzed[:,ir], dupar_dt[:,ir,is], dupar_dr[:,ir,is], dupar_dz[:,ir,is],
                   dvth_dt[:,ir,is], dvth_dr[:,ir,is], dvth_dz[:,ir,is],
-                  r_advect[ir,:,:,:,is], alpha_advect[:,:,:,ir,is], z_advect[:,:,:,ir,is],
+                  r_advect[:,:,:,ir,is], alpha_advect[:,:,:,ir,is], z_advect[:,:,:,ir,is],
                   wpa, evolve_density, evolve_upar, evolve_p
 end
 
@@ -416,7 +416,7 @@ end
                                              evolve_upar::Val{true}, evolve_p::Val{true})
     return @views vpa_advect[:,:,iz], upar[iz], vth[iz], Ez[iz], bzed[iz], dupar_dt[iz],
                   dupar_dr[iz], dupar_dz[iz], dvth_dt[iz], dvth_dr[iz], dvth_dz[iz],
-                  r_advect[:,:,iz], alpha_advect[iz,:,:], z_advect[iz,:,:], wpa,
+                  r_advect[:,:,iz], alpha_advect[:,:,iz], z_advect[:,:,iz], wpa,
                   evolve_density, evolve_upar, evolve_p
 end
 
@@ -458,7 +458,7 @@ end
                                               evolve_p::Val{false})
     return @views vpa_advect[:,:,:,ir,is], upar[:,ir,is], Ez[:,ir],
                   bzed[:,ir], dupar_dt[:,ir,is], dupar_dr[:,ir,is], dupar_dz[:,ir,is],
-                  r_advect[ir,:,:,:,is], alpha_advect[:,:,:,ir,is],
+                  r_advect[:,:,:,ir,is], alpha_advect[:,:,:,ir,is],
                   z_advect[:,:,:,ir,is], wpa, evolve_density, evolve_upar, evolve_p
 end
 
@@ -467,8 +467,8 @@ end
                                              z_advect, wpa, evolve_density::Val{true},
                                              evolve_upar::Val{true}, evolve_p::Val{false})
     return @views vpa_advect[:,:,iz], upar[iz], Ez[iz], bzed[iz], dupar_dt[iz],
-                  dupar_dr[iz], dupar_dz[iz], r_advect[:,:,iz], alpha_advect[iz,:,:],
-                  z_advect[iz,:,:], wpa, evolve_density, evolve_upar, evolve_p
+                  dupar_dr[iz], dupar_dz[iz], r_advect[:,:,iz], alpha_advect[:,:,iz],
+                  z_advect[:,:,iz], wpa, evolve_density, evolve_upar, evolve_p
 end
 
 @inline function get_speed_vpa_inner_views_vperp(ivperp, vpa_advect, upar, Ez, bzed,

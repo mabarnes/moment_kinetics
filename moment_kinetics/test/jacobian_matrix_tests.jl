@@ -567,11 +567,11 @@ function test_get_pdf_term(test_input::AbstractDict, label::String, get_term::Fu
                                                       collisions, external_source_settings,
                                                       num_diss_params, t_params.electron,
                                                       ion_dt, z, vperp, vpa,
-                                                      z_speed[:,ivpa,ivperp], ir, ivperp,
+                                                      z_speed[ivpa,ivperp,:], ir, ivperp,
                                                       ivpa)
                     implict_z_term = get_term(implicit_z_sub_terms)
                     @views add_term_to_Jacobian!(z_solve_jacobian_ADI_check, :electron_pdf,
-                                                 dt, implict_z_term, z_speed[:,ivpa,ivperp])
+                                                 dt, implict_z_term, z_speed[ivpa,ivperp,:])
 
                     @views jacobian_ADI_check.matrix[1][1][this_slice,this_slice] .+= z_solve_jacobian_ADI_check.matrix[1][1]
                 end
@@ -634,7 +634,7 @@ function test_get_pdf_term(test_input::AbstractDict, label::String, get_term::Fu
                             @view(dpdf_dz[:,:,iz]), @view(dpdf_dvpa[:,:,iz]),
                             @view(d2pdf_dvpa2[:,:,iz]), me, moments, collisions,
                             external_source_settings, num_diss_params, t_params.electron,
-                            ion_dt, z, vperp, vpa, @view(z_speed[iz,:,:]),
+                            ion_dt, z, vperp, vpa, @view(z_speed[:,:,iz]),
                             @view(vpa_speed[:,:,iz]), ir, iz)
                     implicit_v_term = get_term(implicit_v_sub_terms)
                     add_term_to_Jacobian!(v_solve_jacobian_ADI_check, :electron_pdf, dt,
@@ -1065,7 +1065,7 @@ function test_get_p_term(test_input::AbstractDict, label::String, get_term::Func
                                                       d2pdf_dvpa2[1,1,:], me, moments,
                                                       collisions, external_source_settings,
                                                       num_diss_params, t_params, ion_dt, z,
-                                                      vperp, vpa, z_speed[:,1,1], ir, 1, 1)
+                                                      vperp, vpa, z_speed[1,1,:], ir, 1, 1)
                     implict_z_term = get_term(implicit_z_sub_terms)
                     add_term_to_Jacobian!(z_solve_jacobian_ADI_check, :electron_p, dt,
                                           implict_z_term)
@@ -1130,7 +1130,7 @@ function test_get_p_term(test_input::AbstractDict, label::String, get_term::Func
                             @view(dpdf_dz[:,:,iz]), @view(dpdf_dvpa[:,:,iz]),
                             @view(d2pdf_dvpa2[:,:,iz]), me, moments, collisions,
                             external_source_settings, num_diss_params, t_params, ion_dt, z,
-                            vperp, vpa, @view(z_speed[iz,:,:]), @view(vpa_speed[:,:,iz]), ir,
+                            vperp, vpa, @view(z_speed[:,:,iz]), @view(vpa_speed[:,:,iz]), ir,
                             iz)
                     implicit_v_term = get_term(implicit_v_sub_terms)
                     add_term_to_Jacobian!(v_solve_jacobian_ADI_check, :electron_p, dt,
@@ -1510,7 +1510,7 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
                     @views fill_electron_kinetic_equation_z_only_Jacobian_f!(
                         z_solve_jacobian_ADI_check, f[ivpa,ivperp,:], p,
                         dpdf_dz[ivpa,ivperp,:], dpdf_dvpa[ivpa,ivperp,:],
-                        d2pdf_dvpa2[ivpa,ivperp,:], z_speed[:,ivpa,ivperp], moments,
+                        d2pdf_dvpa2[ivpa,ivperp,:], z_speed[ivpa,ivperp,:], moments,
                         zeroth_moment, first_moment, second_moment, third_moment,
                         dthird_moment_dz, collisions, composition, z, vperp, vpa, z_spectral,
                         vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
@@ -1525,7 +1525,7 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
                     # Add 'implicit' contribution
                     @views fill_electron_kinetic_equation_z_only_Jacobian_p!(
                         z_solve_p_jacobian_ADI_check, p, f[1,1,:], dpdf_dz[1,1,:],
-                        dpdf_dvpa[1,1,:], d2pdf_dvpa2[1,1,:], z_speed[:,1,1], moments,
+                        dpdf_dvpa[1,1,:], d2pdf_dvpa2[1,1,:], z_speed[1,1,:], moments,
                         zeroth_moment, first_moment, second_moment, third_moment,
                         dthird_moment_dz, collisions, composition, z, vperp, vpa, z_spectral,
                         vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
@@ -1582,7 +1582,7 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
                     fill_electron_kinetic_equation_v_only_Jacobian!(
                         v_solve_jacobian_ADI_check, @view(f[:,:,iz]), @view(p[iz]),
                         @view(dpdf_dz[:,:,iz]), @view(dpdf_dvpa[:,:,iz]),
-                        @view(d2pdf_dvpa2[:,:,iz]), @view(z_speed[iz,:,:]),
+                        @view(d2pdf_dvpa2[:,:,iz]), @view(z_speed[:,:,iz]),
                         @view(vpa_speed[:,:,iz]), moments, @view(zeroth_moment[iz]),
                         @view(first_moment[iz]), @view(second_moment[iz]),
                         @view(third_moment[iz]), dthird_moment_dz[iz], phi[iz], collisions,

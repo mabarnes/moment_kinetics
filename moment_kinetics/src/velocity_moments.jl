@@ -1355,7 +1355,7 @@ function update_chodura!(moments,ff,vpa,vperp,z,r,r_spectral,composition,geometr
     if z.irank == 0
         @loop_s_r is ir begin
             @views moments.ion.chodura_integral_lower[ir,is] = update_chodura_integral_species!(ff[:,:,1,ir,is],dffdr[:,:,1,ir,is],
-            ff_dummy[:,:],vpa,vperp,z,r,composition,geometry,z_advect[1,:,:,ir,is],moments.ion.dens[1,ir,is],del_vpa,1,ir)
+            ff_dummy[:,:],vpa,vperp,z,r,composition,geometry,z_advect[:,:,1,ir,is],moments.ion.dens[1,ir,is],del_vpa,1,ir)
         end
     else # we do not save this Chodura integral to the output file
         @loop_s_r is ir begin
@@ -1365,7 +1365,7 @@ function update_chodura!(moments,ff,vpa,vperp,z,r,r_spectral,composition,geometr
     if z.irank == z.nrank - 1
         @loop_s_r is ir begin
             @views moments.ion.chodura_integral_upper[ir,is] = update_chodura_integral_species!(ff[:,:,end,ir,is],dffdr[:,:,end,ir,is],
-            ff_dummy[:,:],vpa,vperp,z,r,composition,geometry,z_advect[end,:,:,ir,is],moments.ion.dens[end,ir,is],del_vpa,z.n,ir)
+            ff_dummy[:,:],vpa,vperp,z,r,composition,geometry,z_advect[:,:,end,ir,is],moments.ion.dens[end,ir,is],del_vpa,z.n,ir)
         end
     else # we do not save this Chodura integral to the output file
         @loop_s_r is ir begin

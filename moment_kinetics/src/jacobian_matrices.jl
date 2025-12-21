@@ -732,13 +732,6 @@ struct EquationTerm
     # Upwind speeds corresponding to each derivative in `derivatives`. If the derivative
     # is not upwinded, set the entry to a zero-size Vector{mk_int}.
     upwind_speeds::Vector{EquationTermDataVector}
-    # Size of the dimensions for each entry of `upwind_speeds`. Note that upwind speed
-    # arrays have an unusual dimension order - the dimension corresponding to the
-    # derivative is the left-most dimension, followed by the remaining dimensions (in the
-    # usual order), so this is not equivalent to `dimension_sizes`.
-    speed_dim_sizes::Vector{Vector{mk_int}}
-    # The current loop indices corresponding to the dimensions of an upwind speed.
-    current_speed_indices::Vector{mk_int}
     # If `kind = ETsimple`, this term may represent a second derivative, e.g. `∂²f/∂z²`. This field
     # lists the second derivatives. At the moment only one second derivative is supported.
     second_derivatives::Vector{Symbol}
@@ -806,9 +799,8 @@ function ConstantTerm(array::AbstractArray; dims_coords...)
 
     return EquationTerm(EquationTerm[], ETsimple, true, Symbol(""), dimensions, mk_int[],
                         dimension_sizes, 1, Symbol(""), Symbol[], mk_int[], mk_int[],
-                        Vector{mk_float}[], Vector{mk_int}[],
-                        fill(mk_int(0), length(dimensions)), Symbol[], mk_int[], mk_int[],
-                        Symbol[], nothing, mk_int[], mk_int[], mk_int[], nothing,
+                        Vector{mk_float}[], Symbol[], mk_int[], mk_int[], Symbol[],
+                        nothing, mk_int[], mk_int[], mk_int[], nothing,
                         Vector{mk_float}[], mk_int[], get_flattened_array(array),
                         fill(mk_int(0), length(dimensions)), fill(mk_float(NaN)))
 end
@@ -823,10 +815,10 @@ null when multiplied by other terms.
 function NullTerm()
     return EquationTerm(EquationTerm[], ETnull, true, Symbol(""), Symbol[], mk_int[],
                         mk_int[], 1, Symbol(""), Symbol[], mk_int[], mk_int[],
-                        Vector{mk_float}[], Vector{mk_int}[], mk_int[], Symbol[],
-                        mk_int[], mk_int[], Symbol[], nothing, mk_int[], mk_int[],
-                        mk_int[], nothing, Vector{mk_float}[], mk_int[],
-                        fill(mk_float(NaN), 1), mk_int[], fill(mk_float(NaN)))
+                        Vector{mk_float}[], Symbol[], mk_int[], mk_int[], Symbol[],
+                        nothing, mk_int[], mk_int[], mk_int[], nothing,
+                        Vector{mk_float}[], mk_int[], fill(mk_float(NaN), 1), mk_int[],
+                        fill(mk_float(NaN)))
 end
 
 const unit_term = ConstantTerm(ones(mk_float))
@@ -869,9 +861,8 @@ function EquationTerm(state_variable::Symbol,
     @debug_consistency_checks array === nothing || size(array) == Tuple(c.n for c ∈ values(dims_coords)) || error("Size of array $(size(array)) does not match coordinates $((; (d=>c.n for (d,c) ∈ pairs(dims_coords))...))")
     @debug_consistency_checks begin
         for (i,(u,du)) ∈ enumerate(zip(upwind_speeds,derivatives))
-            upwind_coords = [dims_coords[du], (c for (d,c) ∈ pairs(dims_coords) if d ≠ du)...]
-            if u !== nothing && size(u) != Tuple(c.n for c ∈ upwind_coords)
-                error("Size of upwind speed $i $(size(u)) does not match coordinates $(Tuple(c.n for c ∈ upwind_coords))")
+            if u !== nothing && size(u) != Tuple(c.n for c ∈ values(dims_coords))
+                error("Size of upwind speed $i $(size(u)) does not match coordinates $(Tuple(c.n for c ∈ values(dims_coords)))")
             end
         end
     end
@@ -936,12 +927,10 @@ function EquationTerm(state_variable::Symbol,
     end
 
     if length(upwind_speeds) == 0
-        speed_dim_sizes = [zeros(mk_int, 0) for _ ∈ derivatives]
         upwind_speeds = [zeros(mk_float, 0) for _ ∈ derivatives]
     else
         @debug_consistency_checks length(derivatives) == length(upwind_speeds) || error("`upwind_speeds` was passed, but length is not the same as length of `derivatives`.")
 
-        speed_dim_sizes = Vector{mk_int}[[size(u)...] for u ∈ upwind_speeds]
         upwind_speeds = [u === nothing ? zeros(mk_float, 0) : get_flattened_array(u)
                          for u ∈ upwind_speeds]
     end
@@ -949,13 +938,11 @@ function EquationTerm(state_variable::Symbol,
     return EquationTerm(EquationTerm[], ETsimple, false, state_variable, dimensions,
                         mk_int[], dimension_sizes, 1, Symbol(""), derivatives,
                         derivative_dim_numbers, current_derivative_indices,
-                        upwind_speeds, speed_dim_sizes,
-                        fill(mk_int(0), length(dimensions)), second_derivatives,
-                        second_derivative_dim_numbers, current_second_derivative_indices,
-                        integrals, integrand_prefactor, mk_int[], mk_int[], mk_int[],
-                        derivative_term, integral_wgts, integral_dim_sizes,
-                        get_flattened_array(array), fill(mk_int(0), length(dimensions)),
-                        fill(mk_float(NaN)))
+                        upwind_speeds, second_derivatives, second_derivative_dim_numbers,
+                        current_second_derivative_indices, integrals, integrand_prefactor,
+                        mk_int[], mk_int[], mk_int[], derivative_term, integral_wgts,
+                        integral_dim_sizes, get_flattened_array(array),
+                        fill(mk_int(0), length(dimensions)), fill(mk_float(NaN)))
 end
 
 """
@@ -981,8 +968,7 @@ function CompoundTerm(compound_term_expanded::EquationTerm,
     return EquationTerm([compound_term_expanded], ETcompound,
                         compound_term_expanded.is_constant, Symbol(""), dimensions,
                         mk_int[], dimension_sizes, 1, Symbol(""), Symbol[], mk_int[],
-                        mk_int[], Vector{mk_float}[], Vector{mk_int}[],
-                        fill(mk_int(0), length(dimensions)), Symbol[], mk_int[], mk_int[],
+                        mk_int[], Vector{mk_float}[], Symbol[], mk_int[], mk_int[],
                         Symbol[], nothing, mk_int[], mk_int[], mk_int[], nothing,
                         Vector{mk_float}[], mk_int[], get_flattened_array(array),
                         fill(mk_int(0), length(dimensions)), fill(mk_float(NaN)))
@@ -1003,10 +989,10 @@ function Base.:^(x::EquationTerm, exponent)
     else
         return EquationTerm([x], ETpower, x.is_constant, Symbol(""), Symbol[], mk_int[],
                             mk_int[], exponent, Symbol(""), Symbol[], mk_int[], mk_int[],
-                            Vector{mk_float}[], Vector{mk_int}[], mk_int[], Symbol[],
-                            mk_int[], mk_int[], Symbol[], nothing, mk_int[], mk_int[],
-                            mk_int[], nothing, Vector{mk_float}[], mk_int[], mk_float[],
-                            mk_int[], fill(mk_float(NaN)))
+                            Vector{mk_float}[], Symbol[], mk_int[], mk_int[], Symbol[],
+                            nothing, mk_int[], mk_int[], mk_int[], nothing,
+                            Vector{mk_float}[], mk_int[], mk_float[], mk_int[],
+                            fill(mk_float(NaN)))
     end
 end
 
@@ -1020,10 +1006,10 @@ function Base.inv(x::EquationTerm)
     else
         return EquationTerm([x], ETpower, x.is_constant, Symbol(""), Symbol[], mk_int[],
                             mk_int[], -1, Symbol(""), Symbol[], mk_int[], mk_int[],
-                            Vector{mk_float}[], Vector{mk_int}[], mk_int[], Symbol[],
-                            mk_int[], mk_int[], Symbol[], nothing, mk_int[], mk_int[],
-                            mk_int[], nothing, Vector{mk_float}[], mk_int[], mk_float[],
-                            mk_int[], fill(mk_float(NaN)))
+                            Vector{mk_float}[], Symbol[], mk_int[], mk_int[], Symbol[],
+                            nothing, mk_int[], mk_int[], mk_int[], nothing,
+                            Vector{mk_float}[], mk_int[], mk_float[], mk_int[],
+                            fill(mk_float(NaN)))
     end
 end
 
@@ -1036,10 +1022,10 @@ function Base.exp(x::EquationTerm)
     end
     return EquationTerm([x], ETfunction, x.is_constant, Symbol(""), Symbol[], mk_int[],
                         mk_int[], 1, :exp, Symbol[], mk_int[], mk_int[],
-                        Vector{mk_float}[], Vector{mk_int}[], mk_int[], Symbol[],
-                        mk_int[], mk_int[], Symbol[], nothing, mk_int[], mk_int[],
-                        mk_int[], nothing, Vector{mk_float}[], mk_int[], mk_float[],
-                        mk_int[], fill(mk_float(NaN)))
+                        Vector{mk_float}[], Symbol[], mk_int[], mk_int[], Symbol[],
+                        nothing, mk_int[], mk_int[], mk_int[], nothing,
+                        Vector{mk_float}[], mk_int[], mk_float[], mk_int[],
+                        fill(mk_float(NaN)))
 end
 
 function Base.:*(x::EquationTerm, y::EquationTerm)
@@ -1054,31 +1040,30 @@ function Base.:*(x::EquationTerm, y::EquationTerm)
         return EquationTerm(vcat(x.sub_terms, y.sub_terms), ETproduct, is_constant,
                             Symbol(""), Symbol[], mk_int[], mk_int[], 1, Symbol(""),
                             Symbol[], mk_int[], mk_int[], Vector{mk_float}[],
-                            Vector{mk_int}[], mk_int[], Symbol[], mk_int[], mk_int[],
-                            Symbol[], nothing, mk_int[], mk_int[], mk_int[], nothing,
-                            Vector{mk_float}[], mk_int[], mk_float[], mk_int[],
-                            fill(mk_float(NaN)))
-    elseif x.kind === ETproduct
-        return EquationTerm(vcat(x.sub_terms, y), ETproduct, is_constant, Symbol(""),
-                            Symbol[], mk_int[], mk_int[], 1, Symbol(""), Symbol[],
-                            mk_int[], mk_int[], Vector{mk_float}[], Vector{mk_int}[],
-                            mk_int[], Symbol[], mk_int[], mk_int[], Symbol[], nothing,
-                            mk_int[], mk_int[], mk_int[], nothing, Vector{mk_float}[],
-                            mk_int[], mk_float[], mk_int[], fill(mk_float(NaN)))
-    elseif y.kind === ETproduct
-        return EquationTerm(vcat(x, y.sub_terms), ETproduct, is_constant, Symbol(""),
-                            Symbol[], mk_int[], mk_int[], 1, Symbol(""), Symbol[],
-                            mk_int[], mk_int[], Vector{mk_float}[], Vector{mk_int}[],
-                            mk_int[], Symbol[], mk_int[], mk_int[], Symbol[], nothing,
-                            mk_int[], mk_int[], mk_int[], nothing, Vector{mk_float}[],
-                            mk_int[], mk_float[], mk_int[], fill(mk_float(NaN)))
-    else
-        return EquationTerm([x, y], ETproduct, is_constant, Symbol(""), Symbol[],
-                            mk_int[], mk_int[], 1, Symbol(""), Symbol[], mk_int[],
-                            mk_int[], Vector{mk_float}[], Vector{mk_int}[], mk_int[],
                             Symbol[], mk_int[], mk_int[], Symbol[], nothing, mk_int[],
                             mk_int[], mk_int[], nothing, Vector{mk_float}[], mk_int[],
                             mk_float[], mk_int[], fill(mk_float(NaN)))
+    elseif x.kind === ETproduct
+        return EquationTerm(vcat(x.sub_terms, y), ETproduct, is_constant, Symbol(""),
+                            Symbol[], mk_int[], mk_int[], 1, Symbol(""), Symbol[],
+                            mk_int[], mk_int[], Vector{mk_float}[], Symbol[], mk_int[],
+                            mk_int[], Symbol[], nothing, mk_int[], mk_int[], mk_int[],
+                            nothing, Vector{mk_float}[], mk_int[], mk_float[], mk_int[],
+                            fill(mk_float(NaN)))
+    elseif y.kind === ETproduct
+        return EquationTerm(vcat(x, y.sub_terms), ETproduct, is_constant, Symbol(""),
+                            Symbol[], mk_int[], mk_int[], 1, Symbol(""), Symbol[],
+                            mk_int[], mk_int[], Vector{mk_float}[], Symbol[], mk_int[],
+                            mk_int[], Symbol[], nothing, mk_int[], mk_int[], mk_int[],
+                            nothing, Vector{mk_float}[], mk_int[], mk_float[], mk_int[],
+                            fill(mk_float(NaN)))
+    else
+        return EquationTerm([x, y], ETproduct, is_constant, Symbol(""), Symbol[],
+                            mk_int[], mk_int[], 1, Symbol(""), Symbol[], mk_int[],
+                            mk_int[], Vector{mk_float}[], Symbol[], mk_int[], mk_int[],
+                            Symbol[], nothing, mk_int[], mk_int[], mk_int[], nothing,
+                            Vector{mk_float}[], mk_int[], mk_float[], mk_int[],
+                            fill(mk_float(NaN)))
     end
 end
 
@@ -1091,17 +1076,16 @@ function Base.:*(x::Number, y::EquationTerm)
         return EquationTerm(vcat(x_term, y.sub_terms), ETproduct, y.is_constant,
                             Symbol(""), Symbol[], mk_int[], mk_int[], 1, Symbol(""),
                             Symbol[], mk_int[], mk_int[], Vector{mk_float}[],
-                            Vector{mk_int}[], mk_int[], Symbol[], mk_int[], mk_int[],
-                            Symbol[], nothing, mk_int[], mk_int[], mk_int[], nothing,
-                            Vector{mk_float}[], mk_int[], mk_float[], mk_int[],
-                            fill(mk_float(NaN)))
-    else
-        return EquationTerm([x_term, y], ETproduct, y.is_constant, Symbol(""), Symbol[],
-                            mk_int[], mk_int[], 1, Symbol(""), Symbol[], mk_int[],
-                            mk_int[], Vector{mk_float}[], Vector{mk_int}[], mk_int[],
                             Symbol[], mk_int[], mk_int[], Symbol[], nothing, mk_int[],
                             mk_int[], mk_int[], nothing, Vector{mk_float}[], mk_int[],
                             mk_float[], mk_int[], fill(mk_float(NaN)))
+    else
+        return EquationTerm([x_term, y], ETproduct, y.is_constant, Symbol(""), Symbol[],
+                            mk_int[], mk_int[], 1, Symbol(""), Symbol[], mk_int[],
+                            mk_int[], Vector{mk_float}[], Symbol[], mk_int[], mk_int[],
+                            Symbol[], nothing, mk_int[], mk_int[], mk_int[], nothing,
+                            Vector{mk_float}[], mk_int[], mk_float[], mk_int[],
+                            fill(mk_float(NaN)))
     end
 end
 Base.:*(x::EquationTerm, y::Number) = Base.:*(y, x)
@@ -1112,10 +1096,9 @@ function Base.:+(x::EquationTerm, y::EquationTerm)
         return EquationTerm(vcat(x.sub_terms, y.sub_terms), ETsum, is_constant,
                             Symbol(""), Symbol[], mk_int[], mk_int[], 1, Symbol(""),
                             Symbol[], mk_int[], mk_int[], Vector{mk_float}[],
-                            Vector{mk_int}[], mk_int[], Symbol[], mk_int[], mk_int[],
-                            Symbol[], nothing, mk_int[], mk_int[], mk_int[], nothing,
-                            Vector{mk_float}[], mk_int[], mk_float[], mk_int[],
-                            fill(mk_float(NaN)))
+                            Symbol[], mk_int[], mk_int[], Symbol[], nothing, mk_int[],
+                            mk_int[], mk_int[], nothing, Vector{mk_float}[], mk_int[],
+                            mk_float[], mk_int[], fill(mk_float(NaN)))
     elseif x.kind === ETnull
         # Drop 'null' terms from sums.
         return y
@@ -1125,24 +1108,24 @@ function Base.:+(x::EquationTerm, y::EquationTerm)
     elseif x.kind === ETsum
         return EquationTerm(vcat(x.sub_terms, y), ETsum, is_constant, Symbol(""),
                             Symbol[], mk_int[], mk_int[], 1, Symbol(""), Symbol[],
-                            mk_int[], mk_int[], Vector{mk_float}[], Vector{mk_int}[],
-                            mk_int[], Symbol[], mk_int[], mk_int[], Symbol[], nothing,
-                            mk_int[], mk_int[], mk_int[], nothing, Vector{mk_float}[],
-                            mk_int[], mk_float[], mk_int[], fill(mk_float(NaN)))
+                            mk_int[], mk_int[], Vector{mk_float}[], Symbol[], mk_int[],
+                            mk_int[], Symbol[], nothing, mk_int[], mk_int[], mk_int[],
+                            nothing, Vector{mk_float}[], mk_int[], mk_float[], mk_int[],
+                            fill(mk_float(NaN)))
     elseif y.kind === ETsum
         return EquationTerm(vcat(x, y.sub_terms), ETsum, is_constant, Symbol(""),
                             Symbol[], mk_int[], mk_int[], 1, Symbol(""), Symbol[],
-                            mk_int[], mk_int[], Vector{mk_float}[], Vector{mk_int}[],
-                            mk_int[], Symbol[], mk_int[], mk_int[], Symbol[], nothing,
-                            mk_int[], mk_int[], mk_int[], nothing, Vector{mk_float}[],
-                            mk_int[], mk_float[], mk_int[], fill(mk_float(NaN)))
+                            mk_int[], mk_int[], Vector{mk_float}[], Symbol[], mk_int[],
+                            mk_int[], Symbol[], nothing, mk_int[], mk_int[], mk_int[],
+                            nothing, Vector{mk_float}[], mk_int[], mk_float[], mk_int[],
+                            fill(mk_float(NaN)))
     else
         return EquationTerm([x, y], ETsum, is_constant, Symbol(""), Symbol[], mk_int[],
                             mk_int[], 1, Symbol(""), Symbol[], mk_int[], mk_int[],
                             Symbol[], mk_int[], mk_int[], Vector{mk_float}[],
-                            Vector{mk_int}[], mk_int[], Symbol[], nothing, mk_int[],
-                            mk_int[], mk_int[], nothing, Vector{mk_float}[], mk_int[],
-                            mk_float[], mk_int[], fill(mk_float(NaN)))
+                            Symbol[], nothing, mk_int[], mk_int[], mk_int[], nothing,
+                            Vector{mk_float}[], mk_int[], mk_float[], mk_int[],
+                            fill(mk_float(NaN)))
     end
 end
 
@@ -1154,17 +1137,17 @@ function Base.:+(x::Number, y::EquationTerm)
     elseif y.kind === ETsum
         return EquationTerm(vcat(x_term, y.sub_terms), ETsum, y.is_constant, Symbol(""),
                             Symbol[], mk_int[], mk_int[], 1, Symbol(""), Symbol[],
-                            mk_int[], mk_int[], Vector{mk_float}[], Vector{mk_int}[],
-                            mk_int[], Symbol[], mk_int[], mk_int[], Symbol[], nothing,
-                            mk_int[], mk_int[], mk_int[], nothing, Vector{mk_float}[],
-                            mk_int[], mk_float[], mk_int[], fill(mk_float(NaN)))
+                            mk_int[], mk_int[], Vector{mk_float}[], Symbol[], mk_int[],
+                            mk_int[], Symbol[], nothing, mk_int[], mk_int[], mk_int[],
+                            nothing, Vector{mk_float}[], mk_int[], mk_float[], mk_int[],
+                            fill(mk_float(NaN)))
     else
         return EquationTerm([x_term, y], ETsum, y.is_constant, Symbol(""), Symbol[],
                             mk_int[], mk_int[], 1, Symbol(""), Symbol[], mk_int[],
-                            mk_int[], Vector{mk_float}[], Vector{mk_int}[], mk_int[],
-                            Symbol[], mk_int[], mk_int[], Symbol[], nothing, mk_int[],
-                            mk_int[], mk_int[], nothing, Vector{mk_float}[], mk_int[],
-                            mk_float[], mk_int[], fill(mk_float(NaN)))
+                            mk_int[], Vector{mk_float}[], Symbol[], mk_int[], mk_int[],
+                            Symbol[], nothing, mk_int[], mk_int[], mk_int[], nothing,
+                            Vector{mk_float}[], mk_int[], mk_float[], mk_int[],
+                            fill(mk_float(NaN)))
     end
 end
 Base.:+(x::EquationTerm, y::Number) = Base.:+(y, x)
@@ -1497,17 +1480,7 @@ function add_derivative_term_to_Jacobian_row!(jacobian::jacobian_info,
             if length(term.upwind_speeds[1]) == 0
                 upwind_speed = 0.0
             else
-                current_speed_indices = term.current_speed_indices
-                current_speed_indices[1] = derivative_dim_index
-                counter = 2
-                for i ∈ 1:term_ndims
-                    if i ≠ derivative_dim_number
-                        current_speed_indices[counter] = current_indices[i]
-                        counter += 1
-                    end
-                end
-                derivative_variable_sizes = jacobian.state_vector_dim_sizes[derivative_variable_index]
-                upwind_speed = term.upwind_speeds[1][get_flattened_index(term.speed_dim_sizes[1], current_speed_indices)]
+                upwind_speed = term.upwind_speeds[1][get_flattened_index(term.dimension_sizes, current_indices)]
             end
         else
             upwind_speed = 0.0

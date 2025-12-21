@@ -392,15 +392,17 @@ function get_minimum_CFL_r(speed::AbstractArray{T,N}, r) where {T,N}
     dr = r.cell_width
     nr = r.n
     if N == 4
-        @loop_z_vperp_vpa iz ivperp ivpa begin
-            for ir ∈ 1:nr
-                min_CFL = min(min_CFL, abs(dr[ir] / speed[ir,ivpa,ivperp,iz]))
+        @loop_r ir begin
+            this_dr = dr[ir]
+            @loop_z_vperp_vpa iz ivperp ivpa begin
+                min_CFL = min(min_CFL, abs(this_dr / speed[ivpa,ivperp,iz,ir]))
             end
         end
     elseif N == 5
-        @loop_s_z_vperp_vpa is iz ivperp ivpa begin
-            for ir ∈ 1:nr
-                min_CFL = min(min_CFL, abs(dr[ir] / speed[ir,ivpa,ivperp,iz,is]))
+        @loop_s_r is ir begin
+            this_dr = dr[ir]
+            @loop_z_vperp_vpa iz ivperp ivpa begin
+                min_CFL = min(min_CFL, abs(this_dr / speed[ivpa,ivperp,iz,ir,is]))
             end
         end
     else
@@ -430,15 +432,17 @@ function get_minimum_CFL_z(speed::AbstractArray{T,N}, z) where {T,N}
     dz = z.cell_width
     nz = z.n
     if N == 4
-        @loop_r_vperp_vpa ir ivperp ivpa begin
-            for iz ∈ 1:nz
-                min_CFL = min(min_CFL, abs(dz[iz] / speed[iz,ivpa,ivperp,ir]))
+        @loop_r_z ir iz begin
+            this_dz = dz[iz]
+            @loop_vperp_vpa ivperp ivpa begin
+                min_CFL = min(min_CFL, abs(this_dz / speed[ivpa,ivperp,iz,ir]))
             end
         end
     elseif N == 5
-        @loop_s_r_vperp_vpa is ir ivperp ivpa begin
-            for iz ∈ 1:nz
-                min_CFL = min(min_CFL, abs(dz[iz] / speed[iz,ivpa,ivperp,ir,is]))
+        @loop_s_z is iz begin
+            this_dz = dz[iz]
+            @loop_r_vperp_vpa ir ivperp ivpa begin
+                min_CFL = min(min_CFL, abs(this_dz / speed[ivpa,ivperp,iz,ir,is]))
             end
         end
     else
@@ -456,9 +460,10 @@ function get_minimum_CFL_z(speed::AbstractArray{T,4} where T, z, ir)
 
     dz = z.cell_width
     nz = z.n
-    @loop_vperp_vpa ivperp ivpa begin
-        for iz ∈ 1:nz
-            min_CFL = min(min_CFL, abs(dz[iz] / speed[iz,ivpa,ivperp,ir]))
+    @loop_z iz begin
+        this_dz = dz[iz]
+        @loop_vperp_vpa ivperp ivpa begin
+            min_CFL = min(min_CFL, abs(this_dz / speed[ivpa,ivperp,iz,ir]))
         end
     end
 
@@ -485,15 +490,17 @@ function get_minimum_CFL_vperp(speed::AbstractArray{T,N}, vperp) where {T,N}
     dvperp = vperp.cell_width
     nvperp = vperp.n
     if N == 4
-        @loop_r_z_vpa ir iz ivpa begin
-            for ivperp ∈ 1:nvperp
-                min_CFL = min(min_CFL, abs(dvperp[ivperp] / speed[ivperp,ivpa,iz,ir]))
+        @loop_r_z_vperp ir iz ivperp begin
+            this_dvperp = dvperp[ivperp]
+            @loop_vpa ivpa begin
+                min_CFL = min(min_CFL, abs(this_dvperp / speed[ivperp,ivpa,iz,ir]))
             end
         end
     elseif N == 5
-        @loop_s_r_z_vpa is ir iz ivpa begin
-            for ivperp ∈ 1:nvperp
-                min_CFL = min(min_CFL, abs(dvperp[ivperp] / speed[ivperp,ivpa,iz,ir,is]))
+        @loop_s_r_z_vperp is ir iz ivperp begin
+            this_dvperp = dvperp[ivperp]
+            @loop_vpa ivpa begin
+                min_CFL = min(min_CFL, abs(this_dvperp / speed[ivperp,ivpa,iz,ir,is]))
             end
         end
     else
@@ -523,16 +530,12 @@ function get_minimum_CFL_vpa(speed::AbstractArray{T,N}, vpa) where {T,N}
     dvpa = vpa.cell_width
     nvpa = vpa.n
     if N == 4
-        @loop_r_z_vperp ir iz ivperp begin
-            for ivpa ∈ 1:nvpa
-                min_CFL = min(min_CFL, abs(dvpa[ivpa] / speed[ivpa,ivperp,iz,ir]))
-            end
+        @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
+            min_CFL = min(min_CFL, abs(dvpa[ivpa] / speed[ivpa,ivperp,iz,ir]))
         end
     elseif N == 5
-        @loop_s_r_z_vperp is ir iz ivperp begin
-            for ivpa ∈ 1:nvpa
-                min_CFL = min(min_CFL, abs(dvpa[ivpa] / speed[ivpa,ivperp,iz,ir,is]))
-            end
+        @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
+            min_CFL = min(min_CFL, abs(dvpa[ivpa] / speed[ivpa,ivperp,iz,ir,is]))
         end
     else
         error("Unsupported value N=$N.")
@@ -549,10 +552,8 @@ function get_minimum_CFL_vpa(speed::AbstractArray{T,4} where T, vpa, ir)
 
     dvpa = vpa.cell_width
     nvpa = vpa.n
-    @loop_z_vperp iz ivperp begin
-        for ivpa ∈ 1:nvpa
-            min_CFL = min(min_CFL, abs(dvpa[ivpa] / speed[ivpa,ivperp,iz,ir]))
-        end
+    @loop_z_vperp_vpa iz ivperp ivpa begin
+        min_CFL = min(min_CFL, abs(dvpa[ivpa] / speed[ivpa,ivperp,iz,ir]))
     end
 
     if comm_block[] !== MPI.COMM_NULL
@@ -578,15 +579,17 @@ function get_minimum_CFL_neutral_z(speed::AbstractArray{T,N}, z) where {T,N}
     dz = z.cell_width
     nz = z.n
     if N == 5
-        @loop_r_vzeta_vr_vz ir ivzeta ivr ivz begin
-            for iz ∈ 1:nz
-                min_CFL = min(min_CFL, abs(dz[iz] / speed[iz,ivz,ivr,ivzeta,ir]))
+        @loop_r_z ir iz begin
+            this_dz = dz[iz]
+            @loop_vzeta_vr_vz ivzeta ivr ivz begin
+                min_CFL = min(min_CFL, abs(this_dz / speed[ivz,ivr,ivzeta,iz,ir]))
             end
         end
     elseif N == 6
-        @loop_sn_r_vzeta_vr_vz isn ir ivzeta ivr ivz begin
-            for iz ∈ 1:nz
-                min_CFL = min(min_CFL, abs(dz[iz] / speed[iz,ivz,ivr,ivzeta,ir,isn]))
+        @loop_sn_r_z isn ir iz begin
+            this_dz = dz[iz]
+            @loop_vzeta_vr_vz ivzeta ivr ivz begin
+                min_CFL = min(min_CFL, abs(this_dz / speed[ivz,ivr,ivzeta,iz,ir,isn]))
             end
         end
     else
@@ -616,16 +619,12 @@ function get_minimum_CFL_neutral_vz(speed::AbstractArray{T,N}, vz) where {T,N}
     dvz = vz.cell_width
     nvz = vz.n
     if N == 5
-        @loop_r_z_vzeta_vr ir iz ivzeta ivr begin
-            for ivz ∈ 1:nvz
-                min_CFL = min(min_CFL, abs(dvz[ivz] / speed[ivz,ivr,ivzeta,iz,ir]))
-            end
+        @loop_r_z_vzeta_vr_vz ir iz ivzeta ivr ivz begin
+            min_CFL = min(min_CFL, abs(dvz[ivz] / speed[ivz,ivr,ivzeta,iz,ir]))
         end
     elseif N == 6
-        @loop_sn_r_z_vzeta_vr isn ir iz ivzeta ivr begin
-            for ivz ∈ 1:nvz
-                min_CFL = min(min_CFL, abs(dvz[ivz] / speed[ivz,ivr,ivzeta,iz,ir,isn]))
-            end
+        @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
+            min_CFL = min(min_CFL, abs(dvz[ivz] / speed[ivz,ivr,ivzeta,iz,ir,isn]))
         end
     else
         error("Unsupported value N=$N.")
@@ -639,46 +638,22 @@ function get_minimum_CFL_neutral_vz(speed::AbstractArray{T,N}, vz) where {T,N}
 end
 
 """
-    get_CFL!(CFL, speed, coord)
+    get_CFL!(CFL, speed, coord, speed_dim)
 
 Calculate the CFL factor 'speed/(grid spacing)' (with no prefactor) corresponding to
-advection speed `speed` for advection. Note that moment_kinetics is set up so that
-dimension in which advection happens is the first dimension of `speed` - `coord` is the
-coordinate corresponding to this dimension.
+advection speed `speed` for advection. `speed_dim` gives the dimension, corresponding to
+`coord`, in which `speed` advects.
 
 The result is written in `CFL`. This function is only intended to be used in
 post-processing.
 """
 function get_CFL end
 
-function get_CFL!(CFL::AbstractArray{T,4}, speed::AbstractArray{T,4}, coord) where T
+function get_CFL!(CFL, speed, coord, speed_dim)
 
-    nmain, n2, n3, n4 = size(speed)
-
-    for i4 ∈ 1:n4, i3 ∈ 1:n3, i2 ∈ 1:n2, imain ∈ 1:nmain
-        CFL[imain,i2,i3,i4] = abs(coord.cell_width[imain] / speed[imain,i2,i3,i4])
-    end
-
-    return CFL
-end
-
-function get_CFL!(CFL::AbstractArray{T,5}, speed::AbstractArray{T,5}, coord) where T
-
-    nmain, n2, n3, n4, n5 = size(speed)
-
-    for i5 ∈ 1:n5, i4 ∈ 1:n4, i3 ∈ 1:n3, i2 ∈ 1:n2, imain ∈ 1:nmain
-        CFL[imain,i2,i3,i4,i5] = abs(coord.cell_width[imain] / speed[imain,i2,i3,i4,i5])
-    end
-
-    return CFL
-end
-
-function get_CFL!(CFL::AbstractArray{T,6}, speed::AbstractArray{T,6}, coord) where T
-
-    nmain, n2, n3, n4, n5, n6 = size(speed)
-
-    for i6 ∈ 1:n6, i5 ∈ 1:n5, i4 ∈ 1:n4, i3 ∈ 1:n3, i2 ∈ 1:n2, imain ∈ 1:nmain
-        CFL[imain,i2,i3,i4,i5,i6] = abs(coord.cell_width[imain] / speed[imain,i2,i3,i4,i5,i6])
+    for i ∈ CartesianIndices(speed)
+        icoord = i[speed_dim]
+        CFL[i] = abs(coord.cell_width[icoord] / speed[i])
     end
 
     return CFL

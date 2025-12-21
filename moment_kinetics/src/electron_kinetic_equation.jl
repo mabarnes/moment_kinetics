@@ -1507,8 +1507,8 @@ global_rank[] == 0 && println("recalculating precon")
     z_speed = @view z_advect[:,:,:,ir]
 
     dpdf_dz = @view scratch_dummy.buffer_vpavperpzr_1[:,:,:,ir]
-    @begin_anyzv_vperp_vpa_region()
     update_electron_speed_z!(z_speed, electron_upar, vth, vpa.grid)
+    @begin_anyzv_vperp_vpa_region()
     #calculate the upwind derivative
     @views derivative_z_pdf_vpavperpz!(dpdf_dz, f_electron_new, z_speed,
                                        scratch_dummy.buffer_vpavperpr_1[:,:,ir],
@@ -1520,10 +1520,10 @@ global_rank[] == 0 && println("recalculating precon")
                                        z_spectral, z)
 
     dpdf_dvpa = @view scratch_dummy.buffer_vpavperpzr_2[:,:,:,ir]
-    @begin_anyzv_z_vperp_region()
     update_electron_speed_vpa!(vpa_advect, electron_density, electron_upar,
                                electron_p_new, moments, composition.me_over_mi,
                                vpa.grid, external_source_settings.electron, ir)
+    @begin_anyzv_z_vperp_region()
     #calculate the upwind derivative of the electron pdf w.r.t. wpa
     @loop_z_vperp iz ivperp begin
         @views derivative!(dpdf_dvpa[:,ivperp,iz], f_electron_new[:,ivperp,iz], vpa,
@@ -1584,7 +1584,7 @@ global_rank[] == 0 && println("recalculating precon")
         fill_electron_kinetic_equation_v_only_Jacobian!(
             A, @view(f_electron_new[:,:,iz]), @view(electron_p_new[iz]),
             @view(dpdf_dz[:,:,iz]), @view(dpdf_dvpa[:,:,iz]),
-            @view(d2pdf_dvpa2[:,:,iz]), @view(z_speed[iz,:,:]),
+            @view(d2pdf_dvpa2[:,:,iz]), @view(z_speed[:,:,iz]),
             @view(vpa_speed[:,:,iz]), moments, @view(zeroth_moment[iz]),
             @view(first_moment[iz]), @view(second_moment[iz]),
             @view(third_moment[iz]), dthird_moment_dz[iz], this_phi[iz],
@@ -1640,7 +1640,7 @@ global_rank[] == 0 && println("recalculating precon")
         @views fill_electron_kinetic_equation_z_only_Jacobian_f!(
             A, f_electron_new[ivpa,ivperp,:], electron_p_new,
             dpdf_dz[ivpa,ivperp,:], dpdf_dvpa[ivpa,ivperp,:],
-            d2pdf_dvpa2[ivpa,ivperp,:], z_speed[:,ivpa,ivperp], moments,
+            d2pdf_dvpa2[ivpa,ivperp,:], z_speed[ivpa,ivperp,:], moments,
             zeroth_moment, first_moment, second_moment, third_moment,
             dthird_moment_dz, collisions, composition, z, vperp, vpa, z_spectral,
             vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
@@ -1681,7 +1681,7 @@ global_rank[] == 0 && println("recalculating precon")
         # Get LU-factorized matrix for implicit part of the solve
         @views fill_electron_kinetic_equation_z_only_Jacobian_p!(
             A_p, electron_p_new, f_electron_new[1,1,:], dpdf_dz[1,1,:],
-            dpdf_dvpa[1,1,:], d2pdf_dvpa2[1,1,:], z_speed[:,1,1], moments,
+            dpdf_dvpa[1,1,:], d2pdf_dvpa2[1,1,:], z_speed[1,1,:], moments,
             zeroth_moment, first_moment, second_moment, third_moment,
             dthird_moment_dz, collisions, composition, z, vperp, vpa, z_spectral,
             vperp_spectral, vpa_spectral, z_advect, vpa_advect, scratch_dummy,
@@ -5469,8 +5469,8 @@ in the time derivative term as it is for the non-boundary points.]
     z_speed = @view z_advect[:,:,:,ir]
 
     dpdf_dz = @view scratch_dummy.buffer_vpavperpzr_1[:,:,:,ir]
-    @begin_anyzv_vperp_vpa_region()
     update_electron_speed_z!(z_speed, upar, vth, vpa.grid)
+    @begin_anyzv_vperp_vpa_region()
     #calculate the upwind derivative
     @views derivative_z_pdf_vpavperpz!(dpdf_dz, f, z_advect[:,:,:,ir],
                                        scratch_dummy.buffer_vpavperpr_1[:,:,ir],
@@ -5482,10 +5482,10 @@ in the time derivative term as it is for the non-boundary points.]
                                        z_spectral, z)
 
     dpdf_dvpa = @view scratch_dummy.buffer_vpavperpzr_2[:,:,:,ir]
-    @begin_anyzv_z_vperp_region()
     update_electron_speed_vpa!(vpa_advect, dens, upar, p, moments,
                                composition.me_over_mi, vpa.grid,
                                external_source_settings.electron, ir)
+    @begin_anyzv_z_vperp_region()
     #calculate the upwind derivative of the electron pdf w.r.t. wpa
     @loop_z_vperp iz ivperp begin
         @views derivative!(dpdf_dvpa[:,ivperp,iz], f[:,ivperp,iz], vpa,
