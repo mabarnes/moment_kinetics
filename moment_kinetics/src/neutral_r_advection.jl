@@ -25,10 +25,10 @@ do a single stage time advance in r (potentially as part of a multi-stage RK sch
               * "separate pressure yet.")
     end
     
-    @begin_sn_z_vzeta_vr_vz_region()
-    
     # get the updated speed along the r direction using the current f
     @views update_speed_neutral_r!(advect, r, z, vzeta, vr, vz, moments.evolve_p)
+
+    @begin_sn_z_vzeta_vr_vz_region()
 
     # calculate the upwind derivative along r
     df_dr = scratch_dummy.buffer_vzvrvzetazrsn_1
@@ -42,7 +42,7 @@ do a single stage time advance in r (potentially as part of a multi-stage RK sch
     @loop_sn_z_vzeta_vr_vz isn iz ivzeta ivr ivz begin
         @views advance_f_df_precomputed!(f_out[ivz,ivr,ivzeta,iz,:,isn],
                                          df_dr[ivz,ivr,ivzeta,iz,:,isn],
-                                         advect[:,ivz,ivr,ivzeta,iz,isn], r, dt)
+                                         advect[ivz,ivr,ivzeta,iz,:,isn], r, dt)
     end
 end
 
@@ -54,49 +54,45 @@ function update_speed_neutral_r!(advect, r, z, vzeta, vr, vz, evolve_p::Bool)
 end
 function update_speed_neutral_r!(advect, r, z, vzeta, vr, vz,
                                  evolve_p::Val)
-    @debug_consistency_checks z.n == size(advect,5) || throw(BoundsError(advect))
-    @debug_consistency_checks vzeta.n == size(advect,4) || throw(BoundsError(advect))
-    @debug_consistency_checks vr.n == size(advect,3) || throw(BoundsError(advect))
-    @debug_consistency_checks vz.n == size(advect,2) || throw(BoundsError(advect))
-    @debug_consistency_checks r.n == size(advect,1) || throw(BoundsError(advect))
+    @debug_consistency_checks r.n == size(advect,5) || throw(BoundsError(advect))
+    @debug_consistency_checks z.n == size(advect,4) || throw(BoundsError(advect))
+    @debug_consistency_checks vzeta.n == size(advect,3) || throw(BoundsError(advect))
+    @debug_consistency_checks vr.n == size(advect,2) || throw(BoundsError(advect))
+    @debug_consistency_checks vz.n == size(advect,1) || throw(BoundsError(advect))
+
+    @begin_sn_r_z_vzeta_vr_region()
+
     if r.n > 1
         vr_grid = vr.grid
-        @loop_sn_z isn iz begin
-            speed_args_snz = get_speed_neutral_r_inner_views_sz(isn, iz, advect, vr_grid,
+        @loop_sn_r isn ir begin
+            speed_args_snr = get_speed_neutral_r_inner_views_sr(isn, ir, advect, vr_grid,
                                                                 evolve_p)
-            @loop_vzeta ivzeta begin
-                speed_args_vzeta = get_speed_neutral_r_inner_views_vzeta(ivzeta, speed_args_snz...)
-                @loop_vr ivr begin
-                    speed_args_vr = get_speed_neutral_r_inner_views_vr(ivr, speed_args_vzeta...)
-                    @loop_vz ivz begin
-                        update_speed_neutral_r_inner!(get_speed_neutral_r_inner_views_vz(ivz, speed_args_vr...)...)
-                    end
+            @loop_z iz begin
+                speed_args_z = get_speed_neutral_r_inner_views_z(iz, speed_args_snr...)
+                @loop_vzeta_vr ivzeta ivr begin
+                    update_speed_neutral_r_inner!(get_speed_neutral_r_inner_views_vzetavr(ivzeta, ivr, speed_args_z...)...)
                 end
             end
         end
     else
         # no advection if no length in r 
-        @loop_sn_z_vzeta_vr_vz isn iz ivzeta ivr ivz begin
-            advect[:,ivz,ivr,ivzeta,iz,isn] .= 0.0
+        @loop_sn_r_z_vzeta_vr isn ir iz ivzeta ivr begin
+            advect[:,ivr,ivzeta,iz,ir,isn] .= 0.0
         end
     end
     return nothing
 end
 
-@inline function get_speed_neutral_r_inner_views_sz(isn, iz, advect, vr, evolve_p::Val)
-    return @views advect[:,:,:,:,iz,isn], vr, evolve_p
+@inline function get_speed_neutral_r_inner_views_sr(isn, ir, advect, vr, evolve_p::Val)
+    return @views advect[:,:,:,:,ir,isn], vr, evolve_p
 end
 
-@inline function get_speed_neutral_r_inner_views_vzeta(ivzeta, advect, vr, evolve_p::Val)
-    return @views advect[:,:,:,ivzeta], vr, evolve_p
+@inline function get_speed_neutral_r_inner_views_z(iz, advect, vr, evolve_p::Val)
+    return @views advect[:,:,:,iz], vr, evolve_p
 end
 
-@inline function get_speed_neutral_r_inner_views_vr(ivr, advect, vr, evolve_p::Val)
-    return @views advect[:,:,ivr], vr[ivr], evolve_p
-end
-
-@inline function get_speed_neutral_r_inner_views_vz(ivz, advect, vr, evolve_p::Val)
-    return @views advect[:,ivz], vr, evolve_p
+@inline function get_speed_neutral_r_inner_views_vzetavr(ivzeta, ivr, advect, vr, evolve_p::Val)
+    return @views advect[:,ivr,ivzeta], vr[ivr], evolve_p
 end
 
 function update_speed_neutral_r_inner!(advect, vr, evolve_p::Val)

@@ -83,6 +83,8 @@ function update_speed_neutral_vz!(advect, fields, fvec, moments, vz, vr, vzeta, 
         return nothing
     end
 
+    @begin_sn_r_z_vzeta_vr_region()
+
     speed_args = get_speed_vz_inner_args(advect, fvec, moments, vz, evolve_density,
                                          evolve_upar, evolve_p)
     @loop_sn_r isn ir begin

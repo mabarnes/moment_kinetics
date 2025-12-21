@@ -5376,7 +5376,7 @@ const get_variable_funcs = Dict{String,Any}(
             end
             return variable
         end,
-    "r_advect_speed" => (run_info; normalize_advection_speed_shape=true, kwargs...) -> begin
+    "r_advect_speed" => (run_info; kwargs...) -> begin
             # update_speed_r!() requires all dimensions to be present, so do *not* pass kwargs
             # to get_variable() in this case. Instead select a slice of the result.
             Ez = get_variable(run_info, "Ez")
@@ -5386,7 +5386,7 @@ const get_variable_funcs = Dict{String,Any}(
             nvperp = run_info.vperp.n
             nvpa = run_info.vpa.n
 
-            speed = allocate_float(nr, nvpa, nvperp, nz, nspecies, nt)
+            speed = allocate_float(nvpa, nvperp, nz, nr, nspecies, nt)
             gEz = allocate_float(nvperp, nz, nr, nspecies, nt)
             for it ∈ 1:nt, is ∈ 1:nspecies, ir ∈ 1:nr, iz ∈ 1:nz
                 # Don't support gyroaveraging here (yet)
@@ -5408,39 +5408,10 @@ const get_variable_funcs = Dict{String,Any}(
                                        run_info.r, run_info.geometry)
             end
 
-            # Horrible hack so that we can get the speed back without rearranging the
-            # dimensions, if we want that to pass it to a utility function from the main code
-            # (e.g. to calculate a CFL limit).
-            if normalize_advection_speed_shape
-                variable = allocate_float(nvpa, nvperp, nz, nr, nspecies, nt)
-                for it ∈ 1:nt, is ∈ 1:nspecies, ir ∈ 1:nr, iz ∈ 1:nz, ivperp ∈ 1:nvperp, ivpa ∈ 1:nvpa
-                    variable[ivpa,ivperp,iz,ir,is,it] = speed[ir,ivpa,ivperp,iz,is,it]
-                end
-                variable = select_slice_of_variable(variable; kwargs...)
-            else
-                variable = speed
-                if :it ∈ keys(kwargs)
-                    variable = selectdim(variable, 6, kwargs[:it])
-                end
-                if :is ∈ keys(kwargs)
-                    variable = selectdim(variable, 5, kwargs[:is])
-                end
-                if :iz ∈ keys(kwargs)
-                    variable = selectdim(variable, 4, kwargs[:iz])
-                end
-                if :ivperp ∈ keys(kwargs)
-                    variable = selectdim(variable, 3, kwargs[:ivperp])
-                end
-                if :ivpa ∈ keys(kwargs)
-                    variable = selectdim(variable, 2, kwargs[:ivpa])
-                end
-                if :ir ∈ keys(kwargs)
-                    variable = selectdim(variable, 1, kwargs[:ir])
-                end
-            end
+            variable = select_slice_of_variable(speed; kwargs...)
             return variable
         end,
-    "alpha_advect_speed" => (run_info; normalize_advection_speed_shape=true, kwargs...) -> begin
+    "alpha_advect_speed" => (run_info; kwargs...) -> begin
             # update_speed_alpha!() requires all dimensions to be present, so do *not* pass kwargs
             # to get_variable() in this case. Instead select a slice of the result.
             nt = run_info.nt
@@ -5450,7 +5421,7 @@ const get_variable_funcs = Dict{String,Any}(
             nvperp = run_info.vperp.n
             nvpa = run_info.vpa.n
 
-            speed = allocate_float(nz, nvpa, nvperp, nr, nspecies, nt)
+            speed = allocate_float(nvpa, nvperp, nz, nr, nspecies, nt)
             Er = get_variable(run_info, "Er")
             vEz = get_variable(run_info, "vEz")
             gEr = allocate_float(nvperp, nz, nr, nspecies, nt)
@@ -5474,39 +5445,10 @@ const get_variable_funcs = Dict{String,Any}(
                                            run_info.geometry)
             end
 
-            # Horrible hack so that we can get the speed back without rearranging the
-            # dimensions, if we want that to pass it to a utility function from the main code
-            # (e.g. to calculate a CFL limit).
-            if normalize_advection_speed_shape
-                variable = allocate_float(nvpa, nvperp, nz, nr, nspecies, nt)
-                for it ∈ 1:nt, is ∈ 1:nspecies, ir ∈ 1:nr, iz ∈ 1:nz, ivperp ∈ 1:nvperp, ivpa ∈ 1:nvpa
-                    variable[ivpa,ivperp,iz,ir,is,it] = speed[iz,ivpa,ivperp,ir,is,it]
-                end
-                variable = select_slice_of_variable(variable; kwargs...)
-            else
-                variable = speed
-                if :it ∈ keys(kwargs)
-                    variable = selectdim(variable, 6, kwargs[:it])
-                end
-                if :is ∈ keys(kwargs)
-                    variable = selectdim(variable, 5, kwargs[:is])
-                end
-                if :ir ∈ keys(kwargs)
-                    variable = selectdim(variable, 4, kwargs[:ir])
-                end
-                if :ivperp ∈ keys(kwargs)
-                    variable = selectdim(variable, 3, kwargs[:ivperp])
-                end
-                if :ivpa ∈ keys(kwargs)
-                    variable = selectdim(variable, 2, kwargs[:ivpa])
-                end
-                if :iz ∈ keys(kwargs)
-                    variable = selectdim(variable, 1, kwargs[:iz])
-                end
-            end
+            variable = select_slice_of_variable(speed; kwargs...)
             return variable
         end,
-    "z_advect_speed" => (run_info; normalize_advection_speed_shape=true, kwargs...) -> begin
+    "z_advect_speed" => (run_info; kwargs...) -> begin
             # update_speed_z!() requires all dimensions to be present, so do *not* pass kwargs
             # to get_variable() in this case. Instead select a slice of the result.
             upar = get_variable(run_info, "parallel_flow")
@@ -5515,7 +5457,7 @@ const get_variable_funcs = Dict{String,Any}(
             nvperp = run_info.vperp.n
             nvpa = run_info.vpa.n
 
-            speed = allocate_float(nz, nvpa, nvperp, nr, nspecies, nt)
+            speed = allocate_float(nvpa, nvperp, nz, nr, nspecies, nt)
 
             setup_distributed_memory_MPI(1,1,1,1)
             setup_loop_ranges!(0, 1; s=nspecies, sn=run_info.n_neutral_species, r=nr, z=nz,
@@ -5531,36 +5473,7 @@ const get_variable_funcs = Dict{String,Any}(
                                        run_info.r, run_info.geometry)
             end
 
-            # Horrible hack so that we can get the speed back without rearranging the
-            # dimensions, if we want that to pass it to a utility function from the main code
-            # (e.g. to calculate a CFL limit).
-            if normalize_advection_speed_shape
-                variable = allocate_float(nvpa, nvperp, nz, nr, nspecies, nt)
-                for it ∈ 1:nt, is ∈ 1:nspecies, ir ∈ 1:nr, iz ∈ 1:nz, ivperp ∈ 1:nvperp, ivpa ∈ 1:nvpa
-                    variable[ivpa,ivperp,iz,ir,is,it] = speed[iz,ivpa,ivperp,ir,is,it]
-                end
-                variable = select_slice_of_variable(variable; kwargs...)
-            else
-                variable = speed
-                if :it ∈ keys(kwargs)
-                    variable = selectdim(variable, 6, kwargs[:it])
-                end
-                if :is ∈ keys(kwargs)
-                    variable = selectdim(variable, 5, kwargs[:is])
-                end
-                if :ir ∈ keys(kwargs)
-                    variable = selectdim(variable, 4, kwargs[:ir])
-                end
-                if :ivperp ∈ keys(kwargs)
-                    variable = selectdim(variable, 3, kwargs[:ivperp])
-                end
-                if :ivpa ∈ keys(kwargs)
-                    variable = selectdim(variable, 2, kwargs[:ivpa])
-                end
-                if :iz ∈ keys(kwargs)
-                    variable = selectdim(variable, 1, kwargs[:iz])
-                end
-            end
+            variable = select_slice_of_variable(speed; kwargs...)
             return variable
         end,
     "vpa_advect_speed" => (run_info; kwargs...) -> begin
@@ -5621,12 +5534,9 @@ const get_variable_funcs = Dict{String,Any}(
                                vperp=nvperp, vpa=nvpa, vzeta=run_info.vzeta.n,
                                vr=run_info.vr.n, vz=run_info.vz.n)
 
-            r_speed = get_variable(run_info, "r_advect_speed";
-                                   normalize_advection_speed_shape=false, kwargs...)
-            alpha_speed = get_variable(run_info, "alpha_advect_speed";
-                                       normalize_advection_speed_shape=false, kwargs...)
-            z_speed = get_variable(run_info, "z_advect_speed";
-                                   normalize_advection_speed_shape=false, kwargs...)
+            r_speed = get_variable(run_info, "r_advect_speed"; kwargs...)
+            alpha_speed = get_variable(run_info, "alpha_advect_speed"; kwargs...)
+            z_speed = get_variable(run_info, "z_advect_speed"; kwargs...)
             
             # Use neutrals for fvec calculation in moment_kinetic version only when 
             # n_neutrals != 0
@@ -5680,11 +5590,10 @@ const get_variable_funcs = Dict{String,Any}(
                                          run_info.time[it], run_info.geometry)
             end
 
-            variable = speed
-            variable = select_slice_of_variable(variable; kwargs...)
+            variable = select_slice_of_variable(speed; kwargs...)
             return variable
         end,
-     "electron_z_advect_speed" => (run_info; normalize_advection_speed_shape, kwargs...) -> begin
+     "electron_z_advect_speed" => (run_info; kwargs...) -> begin
             # update_speed_electron_z!() requires all dimensions to be present, so do *not*
             # pass kwargs to get_variable() in this case. Instead select a slice of the
             # result.
@@ -5694,7 +5603,7 @@ const get_variable_funcs = Dict{String,Any}(
             nvperp = run_info.vperp.n
             nvpa = run_info.vpa.n
 
-            speed = allocate_float(nz, nvpa, nvperp, nr, nt)
+            speed = allocate_float(nvpa, nvperp, nz, nr, nt)
 
             setup_distributed_memory_MPI(1,1,1,1)
             setup_loop_ranges!(0, 1; s=run_info.n_ion_species, sn=run_info.n_neutral_species,
@@ -5710,33 +5619,7 @@ const get_variable_funcs = Dict{String,Any}(
                                                 run_info.vpa.grid)
             end
 
-            # Horrible hack so that we can get the speed back without rearranging the
-            # dimensions, if we want that to pass it to a utility function from the main code
-            # (e.g. to calculate a CFL limit).
-            if normalize_advection_speed_shape
-                variable = allocate_float(nvpa, nvperp, nz, nr, nspecies, nt)
-                for it ∈ 1:nt, ir ∈ 1:nr, iz ∈ 1:nz, ivperp ∈ 1:nvperp, ivpa ∈ 1:nvpa
-                    variable[ivpa,ivperp,iz,ir,it] = speed[iz,ivpa,ivperp,ir,it]
-                end
-                variable = select_slice_of_variable(variable; kwargs...)
-            else
-                variable = speed
-                if :it ∈ keys(kwargs)
-                    variable = selectdim(variable, 5, kwargs[:it])
-                end
-                if :ir ∈ keys(kwargs)
-                    variable = selectdim(variable, 4, kwargs[:ir])
-                end
-                if :ivperp ∈ keys(kwargs)
-                    variable = selectdim(variable, 3, kwargs[:ivperp])
-                end
-                if :ivpa ∈ keys(kwargs)
-                    variable = selectdim(variable, 2, kwargs[:ivpa])
-                end
-                if :iz ∈ keys(kwargs)
-                    variable = selectdim(variable, 1, kwargs[:iz])
-                end
-            end
+            variable = select_slice_of_variable(speed; kwargs...)
             return variable
         end,
     "electron_vpa_advect_speed" => (run_info; kwargs...) -> begin
@@ -5799,11 +5682,10 @@ const get_variable_funcs = Dict{String,Any}(
                                                   run_info.external_source_settings.electron)
             end
 
-            variable = speed
-            variable = select_slice_of_variable(variable; kwargs...)
+            variable = select_slice_of_variable(speed; kwargs...)
             return variable
         end,
-    "neutral_z_advect_speed" => (run_info; normalize_advection_speed_shape, kwargs...) -> begin
+    "neutral_z_advect_speed" => (run_info; kwargs...) -> begin
             # update_speed_neutral_z!() requires all dimensions to be present, so do *not*
             # pass kwargs to get_variable() in this case. Instead select a slice of the
             # result.
@@ -5814,7 +5696,7 @@ const get_variable_funcs = Dict{String,Any}(
             nvr = run_info.vr.n
             nvz = run_info.vz.n
 
-            speed = allocate_float(nz, nvz, nvr, nvzeta, nr, nspecies, nt)
+            speed = allocate_float(nvz, nvr, nvzeta, nz, nr, nspecies, nt)
 
             setup_distributed_memory_MPI(1,1,1,1)
             setup_loop_ranges!(0, 1; s=nspecies, sn=run_info.n_neutral_species, r=nr, z=nz,
@@ -5830,39 +5712,7 @@ const get_variable_funcs = Dict{String,Any}(
                                                run_info.z, run_info.r, run_info.time[it])
             end
 
-            # Horrible hack so that we can get the speed back without rearranging the
-            # dimensions, if we want that to pass it to a utility function from the main code
-            # (e.g. to calculate a CFL limit).
-            if normalize_advection_speed_shape
-                variable = allocate_float(nvz, nvr, nvzeta, nz, nr, nspecies, nt)
-                for it ∈ 1:nt, isn ∈ 1:nspecies, ir ∈ 1:nr, iz ∈ 1:nz, ivzeta ∈ 1:nvzeta, ivr ∈ 1:nvr, ivz ∈ 1:nvz
-                    variable[ivz,ivr,ivzeta,iz,ir,isn,it] = speed[iz,ivz,ivr,ivzeta,ir,isn,it]
-                end
-                variable = select_slice_of_variable(variable; kwargs...)
-            else
-                variable = speed
-                if :it ∈ keys(kwargs)
-                    variable = selectdim(variable, 7, kwargs[:it])
-                end
-                if :is ∈ keys(kwargs)
-                    variable = selectdim(variable, 6, kwargs[:is])
-                end
-                if :ir ∈ keys(kwargs)
-                    variable = selectdim(variable, 5, kwargs[:ir])
-                end
-                if :ivzeta ∈ keys(kwargs)
-                    variable = selectdim(variable, 4, kwargs[:ivzeta])
-                end
-                if :ivr ∈ keys(kwargs)
-                    variable = selectdim(variable, 3, kwargs[:ivr])
-                end
-                if :ivz ∈ keys(kwargs)
-                    variable = selectdim(variable, 2, kwargs[:ivz])
-                end
-                if :iz ∈ keys(kwargs)
-                    variable = selectdim(variable, 1, kwargs[:iz])
-                end
-            end
+            variable = select_slice_of_variable(speed; kwargs...)
             return variable
         end,
     "neutral_vz_advect_speed" => (run_info; kwargs...) -> begin
@@ -5953,8 +5803,7 @@ const get_variable_funcs = Dict{String,Any}(
                                                 run_info.external_source_settings.neutral)
             end
 
-            variable = speed
-            variable = select_slice_of_variable(variable; kwargs...)
+            variable = select_slice_of_variable(speed; kwargs...)
             return variable
         end,
     "steps_per_output" => (run_info; kwargs...) -> begin
@@ -6046,19 +5895,13 @@ const get_variable_funcs = Dict{String,Any}(
     "CFL_ion_r" => (run_info; kwargs...) -> begin
             # update_speed_r!() requires all dimensions to be present, so do *not* pass kwargs
             # to get_variable() in this case. Instead select a slice of the result.
-            speed = get_variable(run_info, "r_advect_speed";
-                                 normalize_advection_speed_shape=false)
-            nr, nvpa, nvperp, nz, nspecies, nt = size(speed)
+            speed = get_variable(run_info, "r_advect_speed")
             CFL = similar(speed)
-            for it ∈ 1:nt
-                @views get_CFL!(CFL[:,:,:,:,:,it], speed[:,:,:,:,:,it], run_info.r)
+            for it ∈ 1:run_info.nt
+                @views get_CFL!(CFL[:,:,:,:,:,it], speed[:,:,:,:,:,it], run_info.r, 4)
             end
 
-            variable = allocate_float(nvpa, nvperp, nz, nr, nspecies, nt)
-            for it ∈ 1:nt, is ∈ 1:nspecies, ir ∈ 1:nr, iz ∈ 1:nz, ivperp ∈ 1:nvperp, ivpa ∈ 1:nvpa
-                variable[ivpa,ivperp,iz,ir,is,it] = CFL[ir,ivpa,ivperp,iz,is,it]
-            end
-            variable = select_slice_of_variable(variable; kwargs...)
+            variable = select_slice_of_variable(CFL; kwargs...)
             return variable
         end,
     "CFL_ion_z" => (run_info; kwargs...) -> begin
@@ -6069,31 +5912,24 @@ const get_variable_funcs = Dict{String,Any}(
             alpha_speed = get_variable(run_info, "alpha_advect_speed";
                                        normalize_advection_speed_shape=false)
             z_speed .+= alpha_speed
-            nz, nvpa, nvperp, nr, nspecies, nt = size(z_speed)
             CFL = similar(z_speed)
-            for it ∈ 1:nt
-                @views get_CFL!(CFL[:,:,:,:,:,it], z_speed[:,:,:,:,:,it], run_info.z)
+            for it ∈ 1:run_info.nt
+                @views get_CFL!(CFL[:,:,:,:,:,it], z_speed[:,:,:,:,:,it], run_info.z, 3)
             end
 
-            variable = allocate_float(nvpa, nvperp, nz, nr, nspecies, nt)
-            for it ∈ 1:nt, is ∈ 1:nspecies, ir ∈ 1:nr, iz ∈ 1:nz, ivperp ∈ 1:nvperp, ivpa ∈ 1:nvpa
-                variable[ivpa,ivperp,iz,ir,is,it] = CFL[iz,ivpa,ivperp,ir,is,it]
-            end
-            variable = select_slice_of_variable(variable; kwargs...)
+            variable = select_slice_of_variable(CFL; kwargs...)
             return variable
         end,
     "CFL_ion_vpa" => (run_info; kwargs...) -> begin
             # update_speed_vpa!() requires all dimensions to be present, so do *not* pass
             # kwargs to get_variable() in this case. Instead select a slice of the result.
             speed = get_variable(run_info, "vpa_advect_speed")
-            nt = size(speed, 6)
             CFL = similar(speed)
-            for it ∈ 1:nt
-                @views get_CFL!(CFL[:,:,:,:,:,it], speed[:,:,:,:,:,it], run_info.vpa)
+            for it ∈ 1:run_info.nt
+                @views get_CFL!(CFL[:,:,:,:,:,it], speed[:,:,:,:,:,it], run_info.vpa, 1)
             end
 
-            variable = CFL
-            variable = select_slice_of_variable(variable; kwargs...)
+            variable = select_slice_of_variable(CFL; kwargs...)
             return variable
         end,
     "CFL_ion_vperp" => (run_info; kwargs...) -> begin
@@ -6101,17 +5937,12 @@ const get_variable_funcs = Dict{String,Any}(
             # kwargs to get_variable() in this case. Instead select a slice of the result.
             speed = get_variable(run_info, "vperp_advect_speed";
                                  normalize_advection_speed_shape=false)
-            nvperp, nvpa, nz, nr, nspecies, nt = size(speed)
             CFL = similar(speed)
-            for it ∈ 1:nt
-                @views get_CFL!(CFL[:,:,:,:,:,it], speed[:,:,:,:,:,it], run_info.vperp)
+            for it ∈ 1:run_info.nt
+                @views get_CFL!(CFL[:,:,:,:,:,it], speed[:,:,:,:,:,it], run_info.vperp, 2)
             end
 
-            variable = allocate_float(nvpa, nvperp, nz, nr, nspecies, nt)
-            for it ∈ 1:nt, is ∈ 1:nspecies, ir ∈ 1:nr, iz ∈ 1:nz, ivperp ∈ 1:nvperp, ivpa ∈ 1:nvpa
-                variable[ivpa,ivperp,iz,ir,is,it] = CFL[ivperp,ivpa,iz,ir,is,it]
-            end
-            variable = select_slice_of_variable(variable; kwargs...)
+            variable = select_slice_of_variable(CFL; kwargs...)
             return variable
         end,
     "CFL_electron_z" => (run_info; kwargs...) -> begin
@@ -6120,17 +5951,12 @@ const get_variable_funcs = Dict{String,Any}(
             # result.
             speed = get_variable(run_info, "electron_z_advect_speed";
                                  normalize_advection_speed_shape=false)
-            nz, nvpa, nvperp, nr, nt = size(speed)
             CFL = similar(speed)
-            for it ∈ 1:nt
-                @views get_CFL!(CFL[:,:,:,:,it], speed[:,:,:,:,it], run_info.z)
+            for it ∈ 1:run_info.nt
+                @views get_CFL!(CFL[:,:,:,:,it], speed[:,:,:,:,it], run_info.z, 3)
             end
 
-            variable = allocate_float(nvpa, nvperp, nz, nr, nt)
-            for it ∈ 1:nt, ir ∈ 1:nr, iz ∈ 1:nz, ivperp ∈ 1:nvperp, ivpa ∈ 1:nvpa
-                variable[ivpa,ivperp,iz,ir,it] = CFL[iz,ivpa,ivperp,ir,it]
-            end
-            variable = select_slice_of_variable(variable; kwargs...)
+            variable = select_slice_of_variable(CFL; kwargs...)
             return variable
         end,
     "CFL_electron_vpa" => (run_info; kwargs...) -> begin
@@ -6138,14 +5964,12 @@ const get_variable_funcs = Dict{String,Any}(
             # pass kwargs to get_variable() in this case. Instead select a slice of the
             # result.
             speed = get_variable(run_info, "electron_vpa_advect_speed")
-            nt = size(speed, 5)
             CFL = similar(speed)
-            for it ∈ 1:nt
-                @views get_CFL!(CFL[:,:,:,:,it], speed[:,:,:,:,it], run_info.vpa)
+            for it ∈ 1:run_info.nt
+                @views get_CFL!(CFL[:,:,:,:,it], speed[:,:,:,:,it], run_info.vpa, 1)
             end
 
-            variable = CFL
-            variable = select_slice_of_variable(variable; kwargs...)
+            variable = select_slice_of_variable(CFL; kwargs...)
             return variable
         end,
     "CFL_neutral_z" => (run_info; kwargs...) -> begin
@@ -6154,17 +5978,12 @@ const get_variable_funcs = Dict{String,Any}(
             # result.
             speed = get_variable(run_info, "neutral_z_advect_speed";
                                  normalize_advection_speed_shape=false)
-            nz, nvz, nvr, nvzeta, nr, nspecies, nt = size(speed)
             CFL = similar(speed)
-            for it ∈ 1:nt
-                @views get_CFL!(CFL[:,:,:,:,:,:,it], speed[:,:,:,:,:,:,it], run_info.z)
+            for it ∈ 1:run_info.nt
+                @views get_CFL!(CFL[:,:,:,:,:,:,it], speed[:,:,:,:,:,:,it], run_info.z, 4)
             end
 
-            variable = allocate_float(nvz, nvr, nvzeta, nz, nr, nspecies, nt)
-            for it ∈ 1:nt, is ∈ 1:nspecies, ir ∈ 1:nr, iz ∈ 1:nz, ivzeta ∈ 1:nvzeta, ivr ∈ 1:nvr, ivz ∈ 1:nvz
-                variable[ivz,ivr,ivzeta,iz,ir,is,it] = CFL[iz,ivz,ivr,ivzeta,ir,is,it]
-            end
-            variable = select_slice_of_variable(variable; kwargs...)
+            variable = select_slice_of_variable(CFL; kwargs...)
             return variable
         end,
     "CFL_neutral_vz" => (run_info; kwargs...) -> begin
@@ -6172,14 +5991,12 @@ const get_variable_funcs = Dict{String,Any}(
             # pass kwargs to get_variable() in this case. Instead select a slice of the
             # result.
             speed = get_variable(run_info, "neutral_vz_advect_speed")
-            nt = size(speed, 7)
             CFL = similar(speed)
-            for it ∈ 1:nt
-                @views get_CFL!(CFL[:,:,:,:,:,:,it], speed[:,:,:,:,:,:,it], run_info.vz)
+            for it ∈ 1:run_info.nt
+                @views get_CFL!(CFL[:,:,:,:,:,:,it], speed[:,:,:,:,:,:,it], run_info.vz, 1)
             end
 
-            variable = CFL
-            variable = select_slice_of_variable(variable; kwargs...)
+            variable = select_slice_of_variable(CFL; kwargs...)
             return variable
         end,
     "minimum_CFL_ion_r" => (run_info; kwargs...) -> begin
@@ -6187,11 +6004,9 @@ const get_variable_funcs = Dict{String,Any}(
             # to get_variable() in this case. Instead select a slice of the result.
             speed = get_variable(run_info, "r_advect_speed";
                                  normalize_advection_speed_shape=false)
-            nt = size(speed, 6)
-            nspecies = size(speed, 5)
-            variable = allocate_float(nt)
+            variable = allocate_float(run_info.nt)
             @begin_serial_region()
-            for it ∈ 1:nt
+            for it ∈ 1:run_info.nt
                 min_CFL = get_minimum_CFL_r(@view(speed[:,:,:,:,:,it]), run_info.r)
                 variable[it] = min_CFL
             end
@@ -6206,11 +6021,9 @@ const get_variable_funcs = Dict{String,Any}(
             alpha_speed = get_variable(run_info, "alpha_advect_speed";
                                        normalize_advection_speed_shape=false)
             z_speed .+= alpha_speed
-            nt = size(z_speed, 6)
-            nspecies = size(z_speed, 5)
-            variable = allocate_float(nt)
+            variable = allocate_float(run_info.nt)
             @begin_serial_region()
-            for it ∈ 1:nt
+            for it ∈ 1:run_info.nt
                 min_CFL = get_minimum_CFL_z(@view(z_speed[:,:,:,:,:,it]), run_info.z)
                 variable[it] = min_CFL
             end
@@ -6221,11 +6034,9 @@ const get_variable_funcs = Dict{String,Any}(
             # update_speed_vpa!() requires all dimensions to be present, so do *not* pass
             # kwargs to get_variable() in this case. Instead select a slice of the result.
             speed = get_variable(run_info, "vpa_advect_speed")
-            nt = size(speed, 6)
-            nspecies = size(speed, 5)
-            variable = allocate_float(nt)
+            variable = allocate_float(run_info.nt)
             @begin_serial_region()
-            for it ∈ 1:nt
+            for it ∈ 1:run_info.nt
                 min_CFL = get_minimum_CFL_vpa(@view(speed[:,:,:,:,:,it]), run_info.vpa)
                 variable[it] = min_CFL
             end
@@ -6236,11 +6047,9 @@ const get_variable_funcs = Dict{String,Any}(
             # update_speed_vperp!() requires all dimensions to be present, so do *not* pass
             # kwargs to get_variable() in this case. Instead select a slice of the result.
             speed = get_variable(run_info, "vperp_advect_speed")
-            nt = size(speed, 6)
-            nspecies = size(speed, 5)
-            variable = allocate_float(nt)
+            variable = allocate_float(run_info.nt)
             @begin_serial_region()
-            for it ∈ 1:nt
+            for it ∈ 1:run_info.nt
                 min_CFL = get_minimum_CFL_vperp(@view(speed[:,:,:,:,:,it]), run_info.vperp)
                 variable[it] = min_CFL
             end
@@ -6253,10 +6062,9 @@ const get_variable_funcs = Dict{String,Any}(
             # result.
             speed = get_variable(run_info, "electron_z_advect_speed";
                                  normalize_advection_speed_shape=false)
-            nt = size(speed, 5)
-            variable = allocate_float(nt)
+            variable = allocate_float(run_info.nt)
             @begin_serial_region()
-            for it ∈ 1:nt
+            for it ∈ 1:run_info.nt
                 min_CFL = get_minimum_CFL_z(@view(speed[:,:,:,:,it]), run_info.z)
                 variable[it] = min_CFL
             end
@@ -6268,10 +6076,9 @@ const get_variable_funcs = Dict{String,Any}(
             # pass kwargs to get_variable() in this case. Instead select a slice of the
             # result.
             speed = get_variable(run_info, "electron_vpa_advect_speed")
-            nt = size(speed, 5)
-            variable = allocate_float(nt)
+            variable = allocate_float(run_info.nt)
             @begin_serial_region()
-            for it ∈ 1:nt
+            for it ∈ 1:run_info.nt
                 min_CFL = get_minimum_CFL_vpa(@view(speed[:,:,:,:,it]), run_info.vpa)
                 variable[it] = min_CFL
             end
@@ -6284,11 +6091,9 @@ const get_variable_funcs = Dict{String,Any}(
             # result.
             speed = get_variable(run_info, "neutral_z_advect_speed";
                                  normalize_advection_speed_shape=false)
-            nt = size(speed, 7)
-            nspecies = size(speed, 6)
-            variable = allocate_float(nt)
+            variable = allocate_float(run_info.nt)
             @begin_serial_region()
-            for it ∈ 1:nt
+            for it ∈ 1:run_info.nt
                 min_CFL = get_minimum_CFL_neutral_z(@view(speed[:,:,:,:,:,:,it]), run_info.z)
                 variable[it] = min_CFL
             end
@@ -6300,11 +6105,9 @@ const get_variable_funcs = Dict{String,Any}(
             # pass kwargs to get_variable() in this case. Instead select a slice of the
             # result.
             speed = get_variable(run_info, "neutral_vz_advect_speed")
-            nt = size(speed, 7)
-            nspecies = size(speed, 6)
-            variable = allocate_float(nt)
+            variable = allocate_float(run_info.nt)
             @begin_serial_region()
-            for it ∈ 1:nt
+            for it ∈ 1:run_info.nt
                 min_CFL = get_minimum_CFL_neutral_vz(@view(speed[:,:,:,:,:,:,it]), run_info.vz)
                 variable[it] = min_CFL
             end

@@ -45,8 +45,8 @@ flow and/or pressure, and use them to update the pdf
             @loop_vperp_vpa ivperp ivpa begin
                 pdf_out[ivpa,ivperp,iz,ir,is] +=
                     dt * (ddt_term
-                          + rdot_coefficient * r_advect[ir,ivpa,ivperp,iz,is]
-                          + zdot_coefficient * (alpha_advect[iz,ivpa,ivperp,ir,is] + z_advect[iz,ivpa,ivperp,ir,is])
+                          + rdot_coefficient * r_advect[ivpa,ivperp,iz,ir,is]
+                          + zdot_coefficient * (alpha_advect[ivpa,ivperp,iz,ir,is] + z_advect[ivpa,ivperp,iz,ir,is])
                          ) *
                     pdf_in[ivpa,ivperp,iz,ir,is]
             end
@@ -59,8 +59,8 @@ flow and/or pressure, and use them to update the pdf
             @loop_vperp_vpa ivperp ivpa begin
                 pdf_out[ivpa,ivperp,iz,ir,is] +=
                     dt * (ddt_term
-                          + rdot_coefficient * r_advect[ir,ivpa,ivperp,iz,is]
-                          + zdot_coefficient * (alpha_advect[iz,ivpa,ivperp,ir,is] + z_advect[iz,ivpa,ivperp,ir,is])
+                          + rdot_coefficient * r_advect[ivpa,ivperp,iz,ir,is]
+                          + zdot_coefficient * (alpha_advect[ivpa,ivperp,iz,ir,is] + z_advect[ivpa,ivperp,iz,ir,is])
                          ) *
                     pdf_in[ivpa,ivperp,iz,ir,is]
             end

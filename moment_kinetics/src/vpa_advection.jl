@@ -408,12 +408,12 @@ end
                                               alpha_advect, z_advect, wperp, wpa,
                                               evolve_density::Val{true},
                                               evolve_upar::Val{true}, evolve_p::Val{true})
-    return @views vpa_advect[:,:,:,ir,is], vth[:,ir,is], gEz[:,:,ir,is],
-                  bzed[:,ir], Bmag[:,ir], dBdz[:,ir], dupar_dt[:,ir,is],
-                  dupar_dr[:,ir,is], dupar_dz[:,ir,is], dvth_dt[:,ir,is],
-                  dvth_dr[:,ir,is], dvth_dz[:,ir,is], r_advect[ir,:,:,:,is],
-                  alpha_advect[:,:,:,ir,is], z_advect[:,:,:,ir,is], wperp, wpa,
-                  evolve_density, evolve_upar, evolve_p
+    return @views vpa_advect[:,:,:,ir,is], vth[:,ir,is], gEz[:,:,ir,is], bzed[:,ir],
+                  Bmag[:,ir], dBdz[:,ir], dupar_dt[:,ir,is], dupar_dr[:,ir,is],
+                  dupar_dz[:,ir,is], dvth_dt[:,ir,is], dvth_dr[:,ir,is],
+                  dvth_dz[:,ir,is], r_advect[:,:,:,ir,is], alpha_advect[:,:,:,ir,is],
+                  z_advect[:,:,:,ir,is], wperp, wpa, evolve_density, evolve_upar,
+                  evolve_p
 end
 
 @inline function get_speed_vpa_inner_views_z(iz, vpa_advect, vth, gEz, bzed, Bmag, dBdz,
@@ -424,7 +424,7 @@ end
                                              evolve_upar::Val{true}, evolve_p::Val{true})
     return @views vpa_advect[:,:,iz], vth[iz], gEz[:,iz], bzed[iz], Bmag[iz], dBdz[iz],
                   dupar_dt[iz], dupar_dr[iz], dupar_dz[iz], dvth_dt[iz], dvth_dr[iz],
-                  dvth_dz[iz], r_advect[:,:,iz], alpha_advect[iz,:,:], z_advect[iz,:,:],
+                  dvth_dz[iz], r_advect[:,:,iz], alpha_advect[:,:,iz], z_advect[:,:,iz],
                   wperp, wpa, evolve_density, evolve_upar, evolve_p
 end
 
@@ -473,7 +473,7 @@ end
                                               evolve_p::Val{false})
     return @views vpa_advect[:,:,:,ir,is], gEz[:,:,ir,is], bzed[:,ir], Bmag[:,ir],
                   dBdz[:,ir], dupar_dt[:,ir,is], dupar_dr[:,ir,is], dupar_dz[:,ir,is],
-                  r_advect[ir,:,:,:,is], alpha_advect[:,:,:,ir,is],
+                  r_advect[:,:,:,ir,is], alpha_advect[:,:,:,ir,is],
                   z_advect[:,:,:,ir,is], vperp, evolve_density, evolve_upar, evolve_p
 end
 
@@ -485,7 +485,7 @@ end
                                              evolve_p::Val{false})
     return @views vpa_advect[:,:,iz], gEz[:,iz], bzed[iz], Bmag[iz], dBdz[iz],
                   dupar_dt[iz], dupar_dr[iz], dupar_dz[iz], r_advect[:,:,iz],
-                  alpha_advect[iz,:,:], z_advect[iz,:,:], vperp, evolve_density,
+                  alpha_advect[:,:,iz], z_advect[:,:,iz], vperp, evolve_density,
                   evolve_upar, evolve_p
 end
 

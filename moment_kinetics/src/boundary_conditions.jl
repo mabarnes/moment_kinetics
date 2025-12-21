@@ -1059,8 +1059,8 @@ function enforce_r_boundary_section_f!(f, adv, r_diffusion::Bool, r::coordinate,
     @loop_s is begin
         for (iz_section, iz) ∈ enumerate(section.z_range)
             @loop_vperp_vpa ivperp ivpa begin
-                if r_diffusion || (ir == 1 ? adv[ir,ivpa,ivperp,iz,is] > zero
-                                           : adv[ir,ivpa,ivperp,iz,is] < -zero)
+                if r_diffusion || (ir == 1 ? adv[ivpa,ivperp,iz,ir,is] > zero
+                                           : adv[ivpa,ivperp,iz,ir,is] < -zero)
                     f[ivpa,ivperp,iz,ir,is] = f_boundary[ivpa,ivperp,iz_section,is]
                 end
             end
@@ -1110,8 +1110,8 @@ function enforce_r_boundary_section_f!(f, adv, r_diffusion::Bool, r::coordinate,
     @loop_s is begin
         for (iz_section, iz) ∈ enumerate(section.z_range)
             @loop_vperp_vpa ivperp ivpa begin
-                if r_diffusion || (ir == 1 ? adv[ir,ivpa,ivperp,iz,is] > zero
-                                           : adv[ir,ivpa,ivperp,iz,is] < -zero)
+                if r_diffusion || (ir == 1 ? adv[ivpa,ivperp,iz,ir,is] > zero
+                                           : adv[ivpa,ivperp,iz,ir,is] < -zero)
                     @views f[ivpa,ivperp,iz,ir,is] =
                         dot(derivative_coefficients,
                             f[ivpa,ivperp,iz,other_elements_range,is]) *
@@ -1234,8 +1234,8 @@ shared-memory-parallelised loop.
                     prefactor *= moments.ion.vth[1,ir,is]
                 end
                 @loop_vperp_vpa ivperp ivpa begin
-                    if speed[1,ivpa,ivperp] > 0.0
-                        pdf[ivpa,ivperp,1,ir,is] = prefactor * exp(-(speed[1,ivpa,ivperp]^2 + vperp.grid[ivperp]^2)/vwidth^2)
+                    if speed[ivpa,ivperp,1] > 0.0
+                        pdf[ivpa,ivperp,1,ir,is] = prefactor * exp(-(speed[ivpa,ivperp,1]^2 + vperp.grid[ivperp]^2)/vwidth^2)
                     end
                 end
             end
@@ -1251,8 +1251,8 @@ shared-memory-parallelised loop.
                     prefactor *= moments.ion.vth[end,ir,is]
                 end
                 @loop_vperp_vpa ivperp ivpa begin
-                    if speed[end,ivpa,ivperp] > 0.0
-                        pdf[ivpa,ivperp,end,ir,is] = prefactor * exp(-(speed[end,ivpa,ivperp]^2 + vperp.grid[ivperp]^2)/vwidth^2)
+                    if speed[ivpa,ivperp,end] > 0.0
+                        pdf[ivpa,ivperp,end,ir,is] = prefactor * exp(-(speed[ivpa,ivperp,end]^2 + vperp.grid[ivperp]^2)/vwidth^2)
                     end
                 end
             end
@@ -1366,8 +1366,8 @@ function enforce_electron_r_boundary_section_f!(f, adv, r_diffusion::Bool, r::co
     @begin_vperp_vpa_region()
     for (iz_section, iz) ∈ enumerate(section.z_range)
         @loop_vperp_vpa ivperp ivpa begin
-            if r_diffusion || (ir == 1 ? adv[ir,ivpa,ivperp,iz] > zero
-                                       : adv[ir,ivpa,ivperp,iz] < -zero)
+            if r_diffusion || (ir == 1 ? adv[ivpa,ivperp,iz,ir] > zero
+                                       : adv[ivpa,ivperp,iz,ir] < -zero)
                 f[ivpa,ivperp,iz,ir] = f_boundary[ivpa,ivperp,iz_section]
             end
         end
@@ -1416,8 +1416,8 @@ function enforce_electron_r_boundary_section_f!(f, adv, r_diffusion::Bool, r::co
     @begin_vperp_vpa_region()
     for (iz_section, iz) ∈ enumerate(section.z_range)
         @loop_vperp_vpa ivperp ivpa begin
-            if r_diffusion || (ir == 1 ? adv[ir,ivpa,ivperp,iz] > zero
-                                       : adv[ir,ivpa,ivperp,iz] < -zero)
+            if r_diffusion || (ir == 1 ? adv[ivpa,ivperp,iz,ir] > zero
+                                       : adv[ivpa,ivperp,iz,ir] < -zero)
                 @views f[ivpa,ivperp,iz,ir,is] =
                     dot(derivative_coefficients,
                         f[ivpa,ivperp,iz,other_elements_range,is]) *
@@ -1627,8 +1627,8 @@ function enforce_neutral_r_boundary_section_f!(f, p, adv, r_diffusion::Bool,
     @loop_sn isn begin
         for (iz_section, iz) ∈ enumerate(section.z_range)
             @loop_vzeta_vr_vz ivzeta ivr ivz begin
-                if r_diffusion || (ir == 1 ? adv[ir,ivz,ivr,ivzeta,iz,isn] > zero
-                                           : adv[ir,ivz,ivr,ivzeta,iz,isn] < -zero)
+                if r_diffusion || (ir == 1 ? adv[ivz,ivr,ivzeta,iz,ir,isn] > zero
+                                           : adv[ivz,ivr,ivzeta,iz,ir,isn] < -zero)
                     f[ivz,ivr,ivzeta,iz,ir,isn] = f_boundary[ivz,ivr,ivzeta,iz_section,isn]
                 end
             end
@@ -1679,8 +1679,8 @@ function enforce_neutral_r_boundary_section_f!(f, adv, r_diffusion::Bool, r::coo
     @loop_sn isn begin
         for (iz_section, iz) ∈ enumerate(section.z_range)
             @loop_vzeta_vr_vz ivzeta ivr ivz begin
-                if r_diffusion || (ir == 1 ? adv[ir,ivz,ivr,ivzeta,iz,isn] > zero
-                                           : adv[ir,ivz,ivr,ivzeta,iz,isn] < -zero)
+                if r_diffusion || (ir == 1 ? adv[ivz,ivr,ivzeta,iz,ir,isn] > zero
+                                           : adv[ivz,ivr,ivzeta,iz,ir,isn] < -zero)
                     @views f[ivz,ivr,ivzeta,iz,ir,isn] =
                         dot(derivative_coefficients,
                             f[ivz,ivr,ivzeta,iz,other_elements_range,isn]) *
@@ -1787,9 +1787,9 @@ enforce boundary conditions on neutral particle f in z
                     prefactor *= moments.neutral.vth[1,ir,isn]
                 end
                 @loop_vzeta_vr_vz ivzeta ivr ivz begin
-                    if speed[1,ivz,ivr,ivzeta] > 0.0
+                    if speed[ivz,ivr,ivzeta,1] > 0.0
                         pdf[ivz,ivr,ivzeta,1,ir,isn] = prefactor *
-                            exp(-(speed[1,ivz,ivr,ivzeta]^2 + vr.grid[ivr] + vz.grid[ivz])/vwidth^2)
+                            exp(-(vzeta.grid[ivzeta]^2 + vr.grid[ivr]^2 + speed[ivz,ivr,ivzeta,1]^2)/vwidth^2)
                     end
                 end
             end
@@ -1806,9 +1806,9 @@ enforce boundary conditions on neutral particle f in z
                         prefactor *= moments.neutral.vth[end,ir,isn]
                     end
                     @loop_vzeta_vr_vz ivzeta ivr ivz begin
-                        if speed[end,ivz,ivr,ivzeta] > 0.0
+                        if speed[ivz,ivr,ivzeta,end] > 0.0
                             pdf[ivz,ivr,ivzeta,end,ir,isn] = prefactor *
-                                exp(-(speed[end,ivz,ivr,ivzeta][ivzeta]^2 + vr.grid[ivr] + vz.grid[ivz])/vwidth^2)
+                                exp(-(vzeta.grid[ivzeta]^2 + vr.grid[ivr]^2 + speed[ivz,ivr,ivzeta,end]^2)/vwidth^2)
                         end
                     end
                 end
@@ -1968,7 +1968,7 @@ function enforce_zero_incoming_bc!(pdf, speed, z, zero, phi, epsz)
         @loop_vperp_vpa ivperp ivpa begin
             # for left boundary in zed (z = -Lz/2), want
             # f(z=-Lz/2, v_parallel > 0) = 0
-            if speed[1,ivpa,ivperp] > zero - vcut
+            if speed[ivpa,ivperp,1] > zero - vcut
                 pdf[ivpa,ivperp,1] = 0.0
             end
         end
@@ -1979,7 +1979,7 @@ function enforce_zero_incoming_bc!(pdf, speed, z, zero, phi, epsz)
         @loop_vperp_vpa ivperp ivpa begin
             # for right boundary in zed (z = Lz/2), want
             # f(z=Lz/2, v_parallel < 0) = 0
-            if speed[end,ivpa,ivperp] < -zero + vcut
+            if speed[ivpa,ivperp,end] < -zero + vcut
                 pdf[ivpa,ivperp,end] = 0.0
             end
         end
@@ -2741,7 +2741,7 @@ function enforce_vperp_boundary_condition!(f::AbstractArray{mk_float,3}, bc, vpe
         ngrid = vperp.ngrid
         # set zero boundary condition
         @loop_z_vpa iz ivpa begin
-            if diffusion || vperp_advect[nvperp,ivpa,iz] < 0.0
+            if diffusion || vperp_advect[ivpa,nvperp,iz] < 0.0
                 f[ivpa,nvperp,iz] = 0.0
             end
         end
@@ -2750,7 +2750,7 @@ function enforce_vperp_boundary_condition!(f::AbstractArray{mk_float,3}, bc, vpe
             D0 = vperp_spectral.radau.D0
             buffer = @view vperp.scratch[1:ngrid-1]
             @loop_z_vpa iz ivpa begin
-                if diffusion || vperp_advect[1,ivpa,iz] > 0.0
+                if diffusion || vperp_advect[ivpa,1,iz] > 0.0
                     # adjust f(vperp = 0) so that d f / d vperp = 0 at vperp = 0
                     @views @. buffer = D0[2:ngrid] * f[ivpa,2:ngrid,iz]
                     f[ivpa,1,iz] = -sum(buffer)/D0[1]
@@ -2785,10 +2785,10 @@ function skip_f_electron_bc_points_in_Jacobian(z_speed, ivpa, ivperp, iz, vpa, v
     # whether this is an internal boundary or an actual domain boundary. This prevents the
     # matrix evaluated for a single block (without coupling to neighbouring blocks) from
     # becoming singular
-    if iz == 1 && z_speed[iz,ivpa,ivperp] ≥ 0.0
+    if iz == 1 && z_speed[ivpa,ivperp,iz] ≥ 0.0
         return true
     end
-    if iz == z.n && z_speed[iz,ivpa,ivperp] ≤ 0.0
+    if iz == z.n && z_speed[ivpa,ivperp,iz] ≤ 0.0
         return true
     end
 
