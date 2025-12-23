@@ -16,7 +16,7 @@ export animate_f_unnorm_vs_vpa, animate_f_unnorm_vs_vpa_z, get_1d_ax, get_2d_ax,
        irregular_heatmap, irregular_heatmap!, plot_f_unnorm_vs_vpa,
        plot_f_unnorm_vs_vpa_z, positive_or_nan, get_variable, positive_or_nan,
        put_legend_above, put_legend_below, put_legend_left, put_legend_right
-export timing_data, parallel_scaling
+export timing_data, parallel_scaling, compare_performance
 
 # Need this import just to allow links in the docstrings to be understood by Documenter.jl
 import moment_kinetics
