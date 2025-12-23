@@ -23,6 +23,7 @@ using ..type_definitions: mk_float, mk_int
 # Import moment_kinetics so we can refer to it in docstrings
 import ..moment_kinetics
 
+using Dates
 using LibGit2
 using MPI
 using Pkg
@@ -836,6 +837,10 @@ function write_provenance_tracking_info!(fid, parallel_io, run_id, restart_time_
                             description="Index of the previous run from which this run " *
                                         "was restarted (if this value is negative, the " *
                                         "run is not a restart)")
+
+        write_single_value!(provenance_tracking, "run_started_at", "$(now())",
+                            parallel_io=parallel_io,
+                            description="Date and time when the run was started")
 
         # Convert input_dict into a TOML-formatted string so that we can store it in a
         # single variable.
