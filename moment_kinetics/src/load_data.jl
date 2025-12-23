@@ -3771,6 +3771,10 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
 
     groups = get_subgroup_keys(fids0[1])
 
+    pt_group = get_group(fids0[1], "provenance_tracking")
+    provenance_tracking = NamedTuple(Symbol(k) => pt_group[k][]
+                                     for k ∈ get_variable_keys(pt_group))
+
     if parallel_io
         files = fids0
     else
@@ -3804,7 +3808,8 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
                 vzeta_chunk_size=vzeta_chunk_size, vr_chunk_size=vr_chunk_size,
                 vz_chunk_size=vz_chunk_size, variable_names=variable_names,
                 evolving_variables=evolving_variables,
-                timing_variable_names=timing_variable_names, dfns=dfns)
+                timing_variable_names=timing_variable_names,
+                provenance_tracking=provenance_tracking, dfns=dfns)
 
     return run_info
 end
