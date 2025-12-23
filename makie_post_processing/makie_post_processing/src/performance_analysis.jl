@@ -737,3 +737,202 @@ function parallel_scaling(run_info; plot_prefix=nothing, this_input_dict=nothing
 
     return nothing
 end
+
+"""
+    compare_performance(run_info; plot_prefix=nothing, this_input_dict=nothing,
+                        label::Union{Symbol,Vector{String}}=:number,
+                        compare_all_relative=false,
+                        logscale_all::Bool=!compare_all_relative,
+                        threshold_all=0.0,
+                        include_patterns::Union{Nothing,String,Regex,AbstractVector}=nothing)
+
+Compare the performance of a set of simulations. Might be useful for example to check for
+performance regressions, to quantify the impact of optimizations, or to compare
+performance of different options.
+
+`label` specifies the x-axis label for the runs being compared:
+* `:number` - numbered following the order of runs passed as `run_info`.
+* `:githash` - labelled by the (shortened) git hash of each run.
+* `:githashfull` - labelled by the (full) git hash of each run.
+* `:datetime` - labelled by the date and time when each run started.
+* If a `Vector{String}` is passed, it must be the same length as `run_info`, and the
+  strings are used to label the x-axes.
+
+If `compare_all_relative=true` is passed, all the times are scaled relative to the values from
+`run_info[1]`.
+
+The vertical (time) axis of the 'all timers' plot is log-scaled if `logscale_all=true`.
+
+In the 'all timers' plot, only timers larger than `threshold_all` times the total run time
+are included (by default `threshold_all=0.0`, so all timers are included).
+
+If `include_patterns` is passed, only timers that match the pattern
+(`occursin(include_patterns, variable_name)` is true), or one of the patterns (if a Vector
+of String/Regex is passed) are included in the 'all timers' plot.
+"""
+function compare_performance(run_info; plot_prefix=nothing, this_input_dict=nothing,
+                             label::Union{Symbol,Vector{String}}=:number,
+                             compare_all_relative=false,
+                             logscale_all::Bool=!compare_all_relative,
+                             threshold_all=0.0,
+                             include_patterns::Union{Nothing,String,Regex,AbstractVector}=nothing)
+    if !isa(run_info, Vector) || length(run_info) == 1
+        # Doesn't make sense to do a strong scaling plot with only one run.
+        return nothing
+    end
+
+    if this_input_dict !== nothing
+        input = Dict_to_NamedTuple(this_input_dict["timing_data"])
+    else
+        input = Dict_to_NamedTuple(input_dict["timing_data"])
+    end
+
+    if input !== nothing && !input.plot_scaling
+        return nothing
+    end
+
+    nruns = length(run_info)
+
+    if label === :number
+        x_labels = ["$i" for i ∈ 1:length(run_info)]
+    elseif label === :githash
+        x_labels = [first(ri.provenance_tracking.git_commit_hash, 8) for ri ∈ run_info]
+    elseif label === :githashfull
+        x_labels = [ri.provenance_tracking.git_commit_hash for ri ∈ run_info]
+    elseif label === :datetime
+        x_labels = [ri.provenance_tracking.run_started_at for ri ∈ run_info]
+    elseif isa(label, Vector{String})
+        if length(label) != nruns
+            error("Number of labels ($(length(label))) not equal to number of runs in "
+                  * "run_info ($(length(run_info))).")
+        end
+        x_labels = label
+    else
+        error("Unsupported value for argument label=$label in compare_performance()")
+    end
+
+    if compare_all_relative
+        ylabel_all = "relative run time"
+    else
+        ylabel_all = "run time (s)"
+    end
+
+    timing_group = "timing_data"
+
+    function add_to_plots(variable_name, ax; scatter=false, relative=false, cutoff=0.0)
+        run_time = mk_float[]
+        first_time = get_variable(run_info[1], variable_name; group=timing_group,
+                                  it=run_info[1].nt)[1] / 1.0e9
+        if first_time < cutoff
+            return nothing
+        end
+
+        if relative
+            push!(run_time, 1.0)
+            for ri ∈ run_info[2:end]
+                this_time = get_variable(ri, variable_name; group=timing_group,
+                                         it=ri.nt)[1] / 1.0e9
+                push!(run_time, this_time / first_time)
+            end
+        else
+            push!(run_time, first_time)
+            for ri ∈ run_info[2:end]
+                # Use the total time in `ssp_rk!()` as the thing to compare, so that we exclude
+                # file I/O time, which may be relatively large in short runs done for parallel
+                # scaling timings, but should be insignificant in production runs due to the large
+                # number of steps between outputs.
+                # Use `it` to select the last time point of each simulation, which gives the total
+                # cumulative time spent in `ssp_rk!()`.
+                # Convert from nanoseconds to seconds.
+                push!(run_time,
+                      get_variable(ri, variable_name;
+                                   group=timing_group, it=ri.nt)[1] / 1.0e9)
+            end
+        end
+
+        # All variables that this function is called for should have names starting with
+        # "time:moment_kinetics;time_advance! step;", so remove this preface from the
+        # names we put in the legend.
+        variable_label = split(variable_name, "time:moment_kinetics;time_advance! step;")[2]
+
+        if scatter
+            scatter!(ax, run_time, label=variable_label,
+                     inspector_label=(self,i,p) -> "$(self.label[])\nx: $(p[1])\ny: $(p[2])")
+        else
+            lines!(ax, run_time, label=variable_label,
+                   inspector_label=(self,i,p) -> "$(self.label[])\nx: $(p[1])\ny: $(p[2])")
+        end
+
+        return run_time
+    end
+
+    fig, ax = get_1d_ax(xlabel="run label", ylabel="run time (s)", xticks=(1:nruns, x_labels))
+
+    total_times = add_to_plots("time:moment_kinetics;time_advance! step;ssp_rk!", ax;
+                               scatter=true)
+
+    if input.plot_scaling_all_timers
+        fig_all, ax_all, legend_place_all =
+            get_1d_ax(xlabel="run label", ylabel=ylabel_all, get_legend_place=:below, xticks=(1:nruns, x_labels))
+
+        for variable_name ∈ run_info[1].timing_variable_names
+            if !startswith(variable_name, "time:moment_kinetics;time_advance! step;ssp_rk!")
+                # Only plot variables that are time variables and part of the time advance
+                continue
+            end
+            if include_patterns !== nothing
+                # Only include variables that match include_patterns.
+                if isa(include_patterns, AbstractVector)
+                    if !any(occursin(p, variable_name) for p ∈ include_patterns)
+                        continue
+                    end
+                else
+                    if !occursin(include_patterns, variable_name)
+                        continue
+                    end
+                end
+            end
+            add_to_plots(variable_name, ax_all; relative=compare_all_relative,
+                         cutoff=threshold_all*total_times[1])
+        end
+
+        if logscale_all
+            ax_all.yscale = log10
+        end
+
+        # Ensure the first row width is 3/4 of the column width so that the plot does not
+        # get squashed by the legend
+        rowsize!(fig_all.layout, 1, Aspect(1, 3/4))
+    end
+
+    if plot_prefix === nothing
+        # Can make interactive plots
+
+        backend = Makie.current_backend()
+
+        DataInspector(fig)
+        display(backend.Screen(), fig)
+
+        if input.plot_scaling_all_timers
+            DataInspector(fig_all)
+            display(backend.Screen(), fig_all)
+        end
+    else
+        if plot_prefix !== nothing
+            outfile = plot_prefix * "run_timings.pdf"
+            save(outfile, fig)
+        end
+
+        if input.plot_scaling_all_timers
+            Legend(legend_place_all, ax_all; tellheight=true, tellwidth=true)
+            resize_to_layout!(fig_all)
+
+            if plot_prefix !== nothing
+                outfile = plot_prefix * "run_timings_all.pdf"
+                save(outfile, fig_all)
+            end
+        end
+    end
+
+    return nothing
+end
