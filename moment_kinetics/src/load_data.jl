@@ -3820,6 +3820,13 @@ end
 Close all the files in a run_info NamedTuple.
 """
 function close_run_info(run_info)
+    if isa(run_info, Vector)
+        for ri ∈ run_info
+            close_run_info(ri)
+        end
+        return nothing
+    end
+
     if run_info === nothing
         return nothing
     end
