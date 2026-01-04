@@ -3843,41 +3843,39 @@ implementation), a call needs to be made with `dt` scaled by some coefficient.
     # Start advance for moments
     if advance.continuity
         continuity_equation!(fvec_out.density, fvec_in, fields, moments, composition,
-                             geometry, dt, z_spectral,
-                             collisions.reactions.ionization_frequency,
+                             geometry, dt, collisions.reactions.ionization_frequency,
                              external_source_settings.ion, num_diss_params)
         write_debug_IO("continuity_equation!")
     end
     if advance.force_balance
         force_balance!(fvec_out.upar, fvec_out.density, fvec_in, moments, fields,
-                       collisions, dt, z_spectral, composition, geometry,
+                       collisions, dt, composition, geometry,
                        external_source_settings.ion, num_diss_params, z)
         write_debug_IO("force_balance!")
     end
     if advance.energy
-        energy_equation!(fvec_out.p, fvec_in, moments, fields, collisions, dt, z_spectral,
+        energy_equation!(fvec_out.p, fvec_in, moments, fields, collisions, dt,
                          composition, geometry, external_source_settings.ion,
                          num_diss_params)
         write_debug_IO("energy_equation!")
     end
     if advance.neutral_continuity
         neutral_continuity_equation!(fvec_out.density_neutral, fvec_in, moments,
-                                     composition, dt, z_spectral,
+                                     composition, dt,
                                      collisions.reactions.ionization_frequency,
                                      external_source_settings.neutral, num_diss_params)
         write_debug_IO("neutral_continuity_equation!")
     end
     if advance.neutral_force_balance
         neutral_force_balance!(fvec_out.uz_neutral, fvec_out.density_neutral, fvec_in,
-                               moments, fields, collisions, dt, z_spectral, composition,
-                               geometry, external_source_settings.neutral,
-                               num_diss_params)
+                               moments, fields, collisions, dt, composition, geometry,
+                               external_source_settings.neutral, num_diss_params)
         write_debug_IO("neutral_force_balance!")
     end
     if advance.neutral_energy
         neutral_energy_equation!(fvec_out.p_neutral, fvec_in, moments, collisions, dt,
-                                 z_spectral, composition,
-                                 external_source_settings.neutral, num_diss_params)
+                                 composition, external_source_settings.neutral,
+                                 num_diss_params)
         write_debug_IO("neutral_energy_equation!")
     end
 

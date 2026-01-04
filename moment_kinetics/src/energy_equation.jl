@@ -13,9 +13,8 @@ using ..timer_utils
 evolve the parallel pressure by solving the energy equation
 """
 @timeit global_timer energy_equation!(
-                         p_out, fvec, moments, fields, collisions, dt, spectral,
-                         composition, geometry, ion_source_settings,
-                         num_diss_params) = begin
+                         p_out, fvec, moments, fields, collisions, dt, composition,
+                         geometry, ion_source_settings, num_diss_params) = begin
 
     @begin_s_r_z_region()
 
@@ -92,7 +91,7 @@ end
 evolve the neutral parallel pressure by solving the energy equation
 """
 @timeit global_timer neutral_energy_equation!(
-                         p_out, fvec, moments, collisions, dt, spectral, composition,
+                         p_out, fvec, moments, collisions, dt, composition,
                          neutral_source_settings, num_diss_params) = begin
 
     @begin_sn_r_z_region()

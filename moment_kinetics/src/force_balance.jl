@@ -16,8 +16,8 @@ to update the parallel particle flux dens*upar for each species
 """
 @timeit global_timer force_balance!(
                          upar_out, density_out, fvec, moments, fields, collisions, dt,
-                         spectral, composition, geometry, ion_source_settings,
-                         num_diss_params, z) = begin
+                         composition, geometry, ion_source_settings, num_diss_params,
+                         z) = begin
     @begin_s_r_z_region()
 
     dnupar_dt = moments.ion.dnupar_dt
@@ -118,7 +118,7 @@ end
 
 @timeit global_timer neutral_force_balance!(
                          uz_out, density_out, fvec, moments, fields, collisions, dt,
-                         spectral, composition, geometry, neutral_source_settings,
+                         composition, geometry, neutral_source_settings,
                          num_diss_params) = begin
 
     @begin_sn_r_z_region()
