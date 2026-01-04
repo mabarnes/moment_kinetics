@@ -99,12 +99,12 @@ function update_speed_z!(advect, upar, vth, evolve_upar::Val, evolve_p::Val, vpa
 end
 
 function update_speed_z_no_sr!(advect, upar, vth, evolve_upar::Bool, evolve_p::Bool, vpa,
-                               vperp, z, geometry, is, ir)
-    return update_speed_z!(advect, upar, vth, Val(evolve_upar), Val(evolve_p), vpa, vperp,
-                           z, r, geometry, ir, is)
+                               vperp, z, geometry)
+    return update_speed_z_no_sr!(advect, upar, vth, Val(evolve_upar), Val(evolve_p), vpa,
+                                 vperp, z, geometry)
 end
 function update_speed_z_no_sr!(advect, upar, vth, evolve_upar::Val, evolve_p::Val, vpa,
-                               vperp, z, geometry, is, ir)
+                               vperp, z, geometry)
     @debug_consistency_checks z.n == size(advect,3) || throw(BoundsError(advect))
     @debug_consistency_checks vperp.n == size(advect,2) || throw(BoundsError(advect))
     @debug_consistency_checks vpa.n == size(advect,1) || throw(BoundsError(advect))

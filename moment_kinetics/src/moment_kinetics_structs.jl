@@ -731,6 +731,12 @@ end
 @kwdef @concrete struct IonSubTerms
     f
     df_dz
+    df_dvperp
+    df_dvpa
+    n
+    dn_dt
+    dn_dr
+    dn_dz
     upar
     dupar_dt
     dupar_dr
@@ -739,6 +745,7 @@ end
     dvth_dt
     dvth_dr
     dvth_dz
+    wperp
     wpa
     bzed
     r_speed
