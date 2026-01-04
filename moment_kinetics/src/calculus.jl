@@ -37,6 +37,12 @@ Result is stored in coord.scratch_2d.
 """
 function elementwise_derivative! end
 
+function elementwise_derivative!(coord, f,
+                                 null::Union{null_spatial_dimension_info,null_velocity_dimension_info,null_vperp_dimension_info})
+    coord.scratch_2d .= 0.0
+    return nothing
+end
+
 function elementwise_derivative!(coord, f, speed,
                                  null::Union{null_spatial_dimension_info,null_velocity_dimension_info,null_vperp_dimension_info})
     coord.scratch_2d .= 0.0
