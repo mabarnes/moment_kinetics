@@ -7,6 +7,7 @@ using ..advection: advance_f_local!
 using ..chebyshev: chebyshev_info
 using ..debugging
 using ..looping
+using ..moment_kinetics_structs
 using ..timer_utils
 using ..type_definitions
 using ..z_advection: update_speed_z!

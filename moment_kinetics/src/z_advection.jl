@@ -9,6 +9,7 @@ using ..advection: advance_f_df_precomputed!
 using ..chebyshev: chebyshev_info
 using ..debugging
 using ..looping
+using ..moment_kinetics_structs
 using ..timer_utils
 using ..derivatives: derivative_z!
 

@@ -17,6 +17,7 @@ using ..derivatives: derivative_r!, derivative_z!, second_derivative_r!,
                      second_derivative_z!
 using ..input_structs
 using ..jacobian_matrices: NullTerm
+using ..moment_kinetics_structs
 using ..timer_utils
 using ..type_definitions: mk_float, mk_int
 

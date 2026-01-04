@@ -593,26 +593,6 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
                      debug_io, electron_t_params)
 end
 
-function get_ion_preconditioners(preconditioner_type, coords, outer_coords;
-                                 boundary_skip_funcs::BSF=nothing) where {BSF}
-    coord_sizes = Tuple(isa(c, coordinate) ? c.n : c for c ∈ coords)
-    total_size_coords = prod(coord_sizes)
-    outer_coord_sizes = Tuple(isa(c, coordinate) ? c.n : c for c ∈ outer_coords)
-
-    if preconditioner_type === Val(:lu)
-        # Create dummy LU solver objects so we can create an array for preconditioners.
-        # These will be calculated properly within the time loop.
-        preconditioners = [lu(sparse(1.0*I, total_size_coords, total_size_coords))
-                           for _ ∈ CartesianIndices(reverse(outer_coord_sizes))]
-    elseif preconditioner_type === Val(:none)
-        preconditioners = nothing
-    else
-        error("Unrecognised preconditioner_type=$preconditioner_type")
-    end
-
-    return preconditioners
-end
-
 function get_nl_solver_params(t_params, input_dict, composition, r, z, vperp, vpa,
                               r_spectral, z_spectral, vperp_spectral, vpa_spectral)
     # Set up parameters for Jacobian-free Newton-Krylov solver used for implicit part of

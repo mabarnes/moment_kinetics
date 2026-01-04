@@ -6,9 +6,11 @@ using ..energy_equation: get_dvth_dt_expanded_term_evolve_nup
 using ..force_balance: get_dupar_dt_expanded_term_evolve_nup
 using ..jacobian_matrices
 using ..krook_collisions: get_ion_krook_collisions_term_evolve_nup
+using ..looping
 using ..moment_kinetics_structs
 using ..numerical_dissipation: get_ion_dissipation_term_evolve_nup
 using ..timer_utils
+using ..type_definitions
 using ..vpa_advection: get_ion_vpa_advection_term_evolve_nup
 using ..vperp_advection: get_ion_vperp_advection_term_evolve_nup
 using ..z_advection: get_ion_z_advection_term_evolve_nup
@@ -168,7 +170,7 @@ end
     add_term_to_Jacobian!(jacobian, :ion_pdf, dt, pdf_terms, z_speed)
     if collisions.fkpl.use_fokker_planck
         error("Preconditioner for Fokker-Planck collisions not integrated into "
-              "fill_ion_kinetic_equation_Jacobian!() yet.")
+              * "fill_ion_kinetic_equation_Jacobian!() yet.")
     end
 
     if vperp.n > 1

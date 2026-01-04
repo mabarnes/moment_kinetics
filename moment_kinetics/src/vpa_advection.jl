@@ -13,7 +13,7 @@ using ..looping
 using ..moment_constraints: hard_force_moment_constraints!,
                             moment_constraints_on_residual!
 using ..timer_utils
-using ..moment_kinetics_structs: scratch_pdf, weak_discretization_info
+using ..moment_kinetics_structs
 using ..nonlinear_solvers: newton_solve!
 using ..velocity_moments: update_derived_moments!, calculate_ion_moment_derivatives!
 

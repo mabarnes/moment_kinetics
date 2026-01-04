@@ -7,6 +7,7 @@ export source_terms_manufactured!
 
 using ..calculus: derivative!
 using ..looping
+using ..moment_kinetics_structs
 using ..timer_utils
 
 """
@@ -69,7 +70,7 @@ flow and/or pressure, and use them to update the pdf
     return nothing
 end
 
-function get_contribution_from_ion_pdf_term_evolve_nup(sub_terms::IonSubTerms)
+function get_source_terms_evolve_nup(sub_terms::IonSubTerms)
     nvperp = sub_term.nvperp
     vth = sub_terms.vth
     dvth_dt = sub_terms.dvth_dt
