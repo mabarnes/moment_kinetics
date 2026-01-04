@@ -267,7 +267,7 @@ function jacobian_vector_product(j::jacobian_info, v::AbstractVector)
     for (x, row) ∈ zip(result, j.matrix)
         if length(row) != length(v)
             error("Number of blocks in RHS (length(v)=$(length(v))) is not the same as "
-                  * "the number of columns in j.matrix (length(row)=$(length(Row))).")
+                  * "the number of columns in j.matrix (length(row)=$(length(row))).")
         end
         for (w, block) ∈ zip(v, row)
             mul!(x, block, w, 1.0, 1.0)
@@ -276,11 +276,19 @@ function jacobian_vector_product(j::jacobian_info, v::AbstractVector)
     return result
 end
 
-function get_delta_state(delta_f, delta_p, separate_zeroth_moment,
-                         separate_first_moment, separate_second_moment,
-                         separate_third_moment, separate_dp_dz, separate_dq_dz, p, dp_dz,
-                         n, dn_dz, third_moment, dthird_moment_dz, me, z, vperp, vpa,
-                         z_spectral)
+function get_ion_delta_state(delta_f, z)
+    p_size = z.n
+
+    delta_state = [vec(delta_f), zeros(mk_float, p_size)]
+
+    return delta_state
+end
+
+function get_electron_delta_state(delta_f, delta_p, separate_zeroth_moment,
+                                  separate_first_moment, separate_second_moment,
+                                  separate_third_moment, separate_dp_dz, separate_dq_dz,
+                                  p, dp_dz, n, dn_dz, third_moment, dthird_moment_dz, me,
+                                  z, vperp, vpa, z_spectral)
     p_size = length(delta_p)
 
     delta_state = [vec(delta_f), delta_p]
@@ -448,6 +456,12 @@ function test_get_ion_pdf_term(test_input::AbstractDict, label::String,
                        reshape(exp.(sin.(2.0.*π.*test_wavenumber.*vpa.grid./vpa.L)) .- 1.0, vpa.n, 1, 1) .*
                        f
         end
+        delta_third_moment = allocate_shared_float(z; comm=comm_anyzv_subblock[])
+        @begin_anyzv_z_region()
+        @loop_z iz begin
+            @views delta_third_moment[iz] = integral((vperp,vpa)->vpa*(vpa^2+vperp^2),
+                                                     f[:,:,iz], vperp, vpa)
+        end
 
         if label == "krook_collisions"
             upar_test = upar
@@ -567,11 +581,11 @@ function test_get_ion_pdf_term(test_input::AbstractDict, label::String,
             @loop_z_vperp_vpa iz ivperp ivpa begin
                 residual[ivpa,ivperp,iz] = f[ivpa,ivperp,iz]
             end
-            @views rhs_func!(; residual, this_f, dens, upar=upar_test, p, vth, moments,
-                             fields, collisions, composition, z_advect, vpa_advect, z,
-                             vperp, vpa, z_spectral, vpa_spectral,
+            @views rhs_func!(; residual, this_f, fvec, dens, upar=upar_test, p, vth,
+                             moments, fields, collisions, composition, geometry, z_advect,
+                             vpa_advect, r, z, vperp, vpa, z_spectral, vpa_spectral,
                              external_source_settings, num_diss_params, t_params,
-                             scratch_dummy, dt, ir)
+                             scratch_dummy, dt, is, ir)
             # Now
             #   residual = f_electron_old + dt*RHS(f_electron_newvar)
             # so update to desired residual
@@ -641,12 +655,13 @@ function test_get_ion_pdf_term(test_input::AbstractDict, label::String,
 
         @begin_anyzv_region()
         @anyzv_serial_region begin
-            residual_update_with_Jacobian = jacobian_vector_product(jacobian, (delta_f,))
+            delta_state = get_ion_delta_state(delta_f, z)
+            residual_update_with_Jacobian = jacobian_vector_product(jacobian, delta_state)
             perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1]
 
-            # Check p did not get perturbed by the Jacobian
+            # Check second element is perturbed third_moment
             @test elementwise_isapprox(residual_update_with_Jacobian[2],
-                                       zeros(p_size); atol=1.0e-15)
+                                       delta_third_moment; atol=rtol)
 
             norm_factor = generate_norm_factor(perturbed_residual)
             @test elementwise_isapprox(perturbed_residual ./ norm_factor,
@@ -1097,14 +1112,15 @@ function test_get_electron_pdf_term(test_input::AbstractDict, label::String,
 
             @begin_anyzv_region()
             @anyzv_serial_region begin
-                delta_state = get_delta_state(delta_f, zeros(mk_float, p_size),
-                                              separate_zeroth_moment,
-                                              separate_first_moment,
-                                              separate_second_moment,
-                                              separate_third_moment, separate_dp_dz,
-                                              separate_dq_dz, p, dp_dz, dens, ddens_dz,
-                                              third_moment, dthird_moment_dz, me, z,
-                                              vperp, vpa, z_spectral)
+                delta_state = get_electron_delta_state(delta_f, zeros(mk_float, p_size),
+                                                       separate_zeroth_moment,
+                                                       separate_first_moment,
+                                                       separate_second_moment,
+                                                       separate_third_moment,
+                                                       separate_dp_dz, separate_dq_dz, p,
+                                                       dp_dz, dens, ddens_dz,
+                                                       third_moment, dthird_moment_dz, me,
+                                                       z, vperp, vpa, z_spectral)
                 residual_update_with_Jacobian = jacobian_vector_product(jacobian, delta_state)
                 perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1]
 
@@ -1125,14 +1141,15 @@ function test_get_electron_pdf_term(test_input::AbstractDict, label::String,
 
             @begin_anyzv_region()
             @anyzv_serial_region begin
-                delta_state = get_delta_state(zeros(mk_float, vpa.n, vperp.n, z.n),
-                                              delta_p, separate_zeroth_moment,
-                                              separate_first_moment,
-                                              separate_second_moment,
-                                              separate_third_moment, separate_dp_dz,
-                                              separate_dq_dz, p, dp_dz, dens, ddens_dz,
-                                              third_moment, dthird_moment_dz, me, z,
-                                              vperp, vpa, z_spectral)
+                delta_state = get_electron_delta_state(zeros(mk_float, vpa.n, vperp.n, z.n),
+                                                       delta_p, separate_zeroth_moment,
+                                                       separate_first_moment,
+                                                       separate_second_moment,
+                                                       separate_third_moment,
+                                                       separate_dp_dz, separate_dq_dz, p,
+                                                       dp_dz, dens, ddens_dz,
+                                                       third_moment, dthird_moment_dz, me,
+                                                       z, vperp, vpa, z_spectral)
                 residual_update_with_Jacobian = jacobian_vector_product(jacobian, delta_state)
                 perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1]
 
@@ -1153,13 +1170,15 @@ function test_get_electron_pdf_term(test_input::AbstractDict, label::String,
 
             @begin_anyzv_region()
             @anyzv_serial_region begin
-                delta_state = get_delta_state(delta_f, delta_p, separate_zeroth_moment,
-                                              separate_first_moment,
-                                              separate_second_moment,
-                                              separate_third_moment, separate_dp_dz,
-                                              separate_dq_dz, p, dp_dz, dens, ddens_dz,
-                                              third_moment, dthird_moment_dz, me, z,
-                                              vperp, vpa, z_spectral)
+                delta_state = get_electron_delta_state(delta_f, delta_p,
+                                                       separate_zeroth_moment,
+                                                       separate_first_moment,
+                                                       separate_second_moment,
+                                                       separate_third_moment,
+                                                       separate_dp_dz, separate_dq_dz, p,
+                                                       dp_dz, dens, ddens_dz,
+                                                       third_moment, dthird_moment_dz, me,
+                                                       z, vperp, vpa, z_spectral)
                 residual_update_with_Jacobian = jacobian_vector_product(jacobian, delta_state)
                 perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1]
 
@@ -1537,14 +1556,15 @@ function test_get_electron_p_term(test_input::AbstractDict, label::String,
 
             @begin_anyzv_region()
             @anyzv_serial_region begin
-                delta_state = get_delta_state(delta_f, zeros(mk_float, p_size),
-                                              separate_zeroth_moment,
-                                              separate_first_moment,
-                                              separate_second_moment,
-                                              separate_third_moment, separate_dp_dz,
-                                              separate_dq_dz, p, dp_dz, dens, ddens_dz,
-                                              third_moment, dthird_moment_dz, me, z,
-                                              vperp, vpa, z_spectral)
+                delta_state = get_electron_delta_state(delta_f, zeros(mk_float, p_size),
+                                                       separate_zeroth_moment,
+                                                       separate_first_moment,
+                                                       separate_second_moment,
+                                                       separate_third_moment,
+                                                       separate_dp_dz, separate_dq_dz, p,
+                                                       dp_dz, dens, ddens_dz,
+                                                       third_moment, dthird_moment_dz, me,
+                                                       z, vperp, vpa, z_spectral)
                 residual_update_with_Jacobian = jacobian_vector_product(jacobian, delta_state)
                 perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[2]
 
@@ -1573,14 +1593,15 @@ function test_get_electron_p_term(test_input::AbstractDict, label::String,
 
             @begin_anyzv_region()
             @anyzv_serial_region begin
-                delta_state = get_delta_state(zeros(mk_float, vpa.n, vperp.n, z.n),
-                                              delta_p, separate_zeroth_moment,
-                                              separate_first_moment,
-                                              separate_second_moment,
-                                              separate_third_moment, separate_dp_dz,
-                                              separate_dq_dz, p, dp_dz, dens, ddens_dz,
-                                              third_moment, dthird_moment_dz, me, z,
-                                              vperp, vpa, z_spectral)
+                delta_state = get_electron_delta_state(zeros(mk_float, vpa.n, vperp.n, z.n),
+                                                       delta_p, separate_zeroth_moment,
+                                                       separate_first_moment,
+                                                       separate_second_moment,
+                                                       separate_third_moment,
+                                                       separate_dp_dz, separate_dq_dz, p,
+                                                       dp_dz, dens, ddens_dz,
+                                                       third_moment, dthird_moment_dz, me,
+                                                       z, vperp, vpa, z_spectral)
                 residual_update_with_Jacobian = jacobian_vector_product(jacobian, delta_state)
                 perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[2]
 
@@ -1601,13 +1622,15 @@ function test_get_electron_p_term(test_input::AbstractDict, label::String,
 
             @begin_anyzv_region()
             @anyzv_serial_region begin
-                delta_state = get_delta_state(delta_f, delta_p, separate_zeroth_moment,
-                                              separate_first_moment,
-                                              separate_second_moment,
-                                              separate_third_moment, separate_dp_dz,
-                                              separate_dq_dz, p, dp_dz, dens, ddens_dz,
-                                              third_moment, dthird_moment_dz, me, z,
-                                              vperp, vpa, z_spectral)
+                delta_state = get_electron_delta_state(delta_f, delta_p,
+                                                       separate_zeroth_moment,
+                                                       separate_first_moment,
+                                                       separate_second_moment,
+                                                       separate_third_moment,
+                                                       separate_dp_dz, separate_dq_dz, p,
+                                                       dp_dz, dens, ddens_dz,
+                                                       third_moment, dthird_moment_dz, me,
+                                                       z, vperp, vpa, z_spectral)
                 residual_update_with_Jacobian = jacobian_vector_product(jacobian, delta_state)
                 perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[2]
 
@@ -2040,15 +2063,16 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
                 # Take this difference rather than using delta_f directly because we need
                 # the effect of the boundary condition having been applied to
                 # f_plus_delta_f.
-                delta_state = get_delta_state(f_plus_delta_f .- f,
-                                              zeros(mk_float, p_size),
-                                              separate_zeroth_moment,
-                                              separate_first_moment,
-                                              separate_second_moment,
-                                              separate_third_moment, separate_dp_dz,
-                                              separate_dq_dz, p, dp_dz, dens, ddens_dz,
-                                              third_moment, dthird_moment_dz, me, z,
-                                              vperp, vpa, z_spectral)
+                delta_state = get_electron_delta_state(f_plus_delta_f .- f,
+                                                       zeros(mk_float, p_size),
+                                                       separate_zeroth_moment,
+                                                       separate_first_moment,
+                                                       separate_second_moment,
+                                                       separate_third_moment,
+                                                       separate_dp_dz, separate_dq_dz, p,
+                                                       dp_dz, dens, ddens_dz,
+                                                       third_moment, dthird_moment_dz, me,
+                                                       z, vperp, vpa, z_spectral)
                 residual_update_with_Jacobian = jacobian_vector_product(jacobian, delta_state)
                 perturbed_with_Jacobian_f = vec(original_residual_f) .+ residual_update_with_Jacobian[1]
                 perturbed_with_Jacobian_p = vec(original_residual_p) .+ residual_update_with_Jacobian[2]
@@ -2073,14 +2097,15 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
                 # Take this difference rather than using delta_f directly because we need
                 # the effect of the boundary condition having been applied to
                 # f_with_delta_p.
-                delta_state = get_delta_state(f_with_delta_p .- f, delta_p,
-                                              separate_zeroth_moment,
-                                              separate_first_moment,
-                                              separate_second_moment,
-                                              separate_third_moment, separate_dp_dz,
-                                              separate_dq_dz, p, dp_dz, dens, ddens_dz,
-                                              third_moment, dthird_moment_dz, me, z,
-                                              vperp, vpa, z_spectral)
+                delta_state = get_electron_delta_state(f_with_delta_p .- f, delta_p,
+                                                       separate_zeroth_moment,
+                                                       separate_first_moment,
+                                                       separate_second_moment,
+                                                       separate_third_moment,
+                                                       separate_dp_dz, separate_dq_dz, p,
+                                                       dp_dz, dens, ddens_dz,
+                                                       third_moment, dthird_moment_dz, me,
+                                                       z, vperp, vpa, z_spectral)
                 residual_update_with_Jacobian = jacobian_vector_product(jacobian, delta_state)
                 perturbed_with_Jacobian_f = vec(original_residual_f) .+ residual_update_with_Jacobian[1]
                 perturbed_with_Jacobian_p = vec(original_residual_p) .+ residual_update_with_Jacobian[2]
@@ -2105,14 +2130,15 @@ function test_electron_kinetic_equation(test_input; rtol=(5.0e2*epsilon)^2)
                 # Take this difference rather than using delta_f directly because we need
                 # the effect of the boundary condition having been applied to
                 # f_plus_delta_f.
-                delta_state = get_delta_state(f_plus_delta_f .- f, delta_p,
-                                              separate_zeroth_moment,
-                                              separate_first_moment,
-                                              separate_second_moment,
-                                              separate_third_moment, separate_dp_dz,
-                                              separate_dq_dz, p, dp_dz, dens, ddens_dz,
-                                              third_moment, dthird_moment_dz, me, z,
-                                              vperp, vpa, z_spectral)
+                delta_state = get_electron_delta_state(f_plus_delta_f .- f, delta_p,
+                                                       separate_zeroth_moment,
+                                                       separate_first_moment,
+                                                       separate_second_moment,
+                                                       separate_third_moment,
+                                                       separate_dp_dz, separate_dq_dz, p,
+                                                       dp_dz, dens, ddens_dz,
+                                                       third_moment, dthird_moment_dz, me,
+                                                       z, vperp, vpa, z_spectral)
                 residual_update_with_Jacobian = jacobian_vector_product(jacobian, delta_state)
                 perturbed_with_Jacobian_f = vec(original_residual_f) .+ residual_update_with_Jacobian[1]
                 perturbed_with_Jacobian_p = vec(original_residual_p) .+ residual_update_with_Jacobian[2]
@@ -2433,15 +2459,16 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2)
                 # Take this difference rather than using delta_f directly because we need
                 # the effect of the boundary condition having been applied to
                 # f_plus_delta_f.
-                delta_state = get_delta_state(f_plus_delta_f .- f,
-                                              zeros(mk_float, p_size),
-                                              separate_zeroth_moment,
-                                              separate_first_moment,
-                                              separate_second_moment,
-                                              separate_third_moment, separate_dp_dz,
-                                              separate_dq_dz, p, dp_dz, dens, ddens_dz,
-                                              third_moment, dthird_moment_dz, me, z,
-                                              vperp, vpa, z_spectral)
+                delta_state = get_electron_delta_state(f_plus_delta_f .- f,
+                                                       zeros(mk_float, p_size),
+                                                       separate_zeroth_moment,
+                                                       separate_first_moment,
+                                                       separate_second_moment,
+                                                       separate_third_moment,
+                                                       separate_dp_dz, separate_dq_dz, p,
+                                                       dp_dz, dens, ddens_dz,
+                                                       third_moment, dthird_moment_dz, me,
+                                                       z, vperp, vpa, z_spectral)
                 residual_update_with_Jacobian = jacobian_vector_product(jacobian, delta_state)
                 perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1]
 
@@ -2472,14 +2499,15 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2)
                 # Take this difference rather than using delta_f directly because we need
                 # the effect of the boundary condition having been applied to
                 # f_with_delta_p.
-                delta_state = get_delta_state(f_with_delta_p .- f, delta_p,
-                                              separate_zeroth_moment,
-                                              separate_first_moment,
-                                              separate_second_moment,
-                                              separate_third_moment, separate_dp_dz,
-                                              separate_dq_dz, p, dp_dz, dens, ddens_dz,
-                                              third_moment, dthird_moment_dz, me, z,
-                                              vperp, vpa, z_spectral)
+                delta_state = get_electron_delta_state(f_with_delta_p .- f, delta_p,
+                                                       separate_zeroth_moment,
+                                                       separate_first_moment,
+                                                       separate_second_moment,
+                                                       separate_third_moment,
+                                                       separate_dp_dz, separate_dq_dz, p,
+                                                       dp_dz, dens, ddens_dz,
+                                                       third_moment, dthird_moment_dz, me,
+                                                       z, vperp, vpa, z_spectral)
                 residual_update_with_Jacobian = jacobian_vector_product(jacobian, delta_state)
                 perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1]
 
@@ -2510,14 +2538,15 @@ function test_electron_wall_bc(test_input; atol=(10.0*epsilon)^2)
                 # Take this difference rather than using delta_f directly because we need
                 # the effect of the boundary condition having been applied to
                 # f_plus_delta_f.
-                delta_state = get_delta_state(f_plus_delta_f .- f, delta_p,
-                                              separate_zeroth_moment,
-                                              separate_first_moment,
-                                              separate_second_moment,
-                                              separate_third_moment, separate_dp_dz,
-                                              separate_dq_dz, p, dp_dz, dens, ddens_dz,
-                                              third_moment, dthird_moment_dz, me, z,
-                                              vperp, vpa, z_spectral)
+                delta_state = get_electron_delta_state(f_plus_delta_f .- f, delta_p,
+                                                       separate_zeroth_moment,
+                                                       separate_first_moment,
+                                                       separate_second_moment,
+                                                       separate_third_moment,
+                                                       separate_dp_dz, separate_dq_dz, p,
+                                                       dp_dz, dens, ddens_dz,
+                                                       third_moment, dthird_moment_dz, me,
+                                                       z, vperp, vpa, z_spectral)
                 residual_update_with_Jacobian = jacobian_vector_product(jacobian, delta_state)
                 perturbed_with_Jacobian = vec(original_residual) .+ residual_update_with_Jacobian[1]
 
@@ -2754,9 +2783,9 @@ function run_ion_tests()
             # ∼vth*vpa.L/2∼sqrt(2)*60*6≈500.
 
             function z_advection_wrapper!(; kwargs...)
-                z_advection_no_sr!(kwargs[:residual], kwargs[:this_f], kwargs[:moments],
+                z_advection_no_sr!(kwargs[:residual], kwargs[:fvec], kwargs[:moments],
                                    kwargs[:fields], kwargs[:z_advect], kwargs[:z],
-                                   kwargs[:vpa], kwargs[:vperp], kwargs[:r], kwargs[:dt],
+                                   kwargs[:vpa], kwargs[:vperp], kwargs[:dt],
                                    kwargs[:z_spectral], kwargs[:composition],
                                    kwargs[:geometry], kwargs[:scratch_dummy], kwargs[:is],
                                    kwargs[:ir])
