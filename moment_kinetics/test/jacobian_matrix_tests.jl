@@ -53,6 +53,7 @@ using moment_kinetics.moment_constraints: electron_implicit_constraint_forcing!,
 using moment_kinetics.timer_utils: reset_mk_timers!
 using moment_kinetics.type_definitions: mk_float
 using moment_kinetics.velocity_moments: calculate_electron_moment_derivatives_no_r!
+using moment_kinetics.z_advection: get_ion_z_advection_term_evolve_nup
 
 using moment_kinetics.BlockBandedMatrices
 using LinearAlgebra
@@ -2953,16 +2954,17 @@ function run_ion_tests()
             # ∼vth*vpa.L/2∼sqrt(2)*60*6≈500.
 
             function z_advection_wrapper!(; kwargs...)
-                z_advection!(kwargs[:residual], kwargs[:this_f], kwargs[:moments],
-                             kwargs[:fields], kwargs[:z_advect], kwargs[:z], kwargs[:vpa],
-                             kwargs[:vperp], kwargs[:r], kwargs[:dt], kwargs[:z_spectral],
-                             kwargs[:composition], kwargs[:geometry],
-                             kwargs[:scratch_dummy], kwargs[:ir])
+                z_advection_no_sr!(kwargs[:residual], kwargs[:this_f], kwargs[:moments],
+                                   kwargs[:fields], kwargs[:z_advect], kwargs[:z],
+                                   kwargs[:vpa], kwargs[:vperp], kwargs[:r], kwargs[:dt],
+                                   kwargs[:z_spectral], kwargs[:composition],
+                                   kwargs[:geometry], kwargs[:scratch_dummy], kwargs[:is],
+                                   kwargs[:ir])
                 return nothing
             end
             test_get_ion_pdf_term(this_test_input, "z_advection",
-                                  get_z_advection_term, z_advection_wrapper!,
-                                  (2.5e2*epsilon)^2)
+                                  get_ion_z_advection_term_evolve_nup,
+                                  z_advection_wrapper!, (2.5e2*epsilon)^2)
 
             function vpa_advection_wrapper!(; kwargs...)
                 vpa_advection!(kwargs[:residual], kwargs[:this_f], kwargs[:dens],
