@@ -220,6 +220,7 @@ function mk_input(input_dict=OptionsDict("output" => OptionsDict("run_name" => "
         last_fail_proximity_factor=1.05,
         minimum_dt=0.0,
         maximum_dt=Inf,
+        kinetic_ion_preconditioner="default",
         implicit_braginskii_conduction=true,
         kinetic_electron_solver=(composition.electron_physics ∈ (kinetic_electrons,
                                                                  kinetic_electrons_with_temperature_equation)

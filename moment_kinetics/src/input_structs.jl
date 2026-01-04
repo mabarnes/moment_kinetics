@@ -66,7 +66,7 @@ export null_kinetic_ions
 an option but known at compile time when a `time_info` struct is passed as a function
 argument.
 """
-struct time_info{T_varsf, T_varsi, T_caused_by, Terrorsum <: Real, T_debug_output, T_electron, Trkimp, Timpzero, Telectronprecon}
+struct time_info{T_varsf, T_varsi, T_caused_by, Terrorsum <: Real, T_debug_output, T_electron, Trkimp, Timpzero, Telectronprecon, Tionprecon}
     n_variables::mk_int
     nstep::mk_int
     end_time::mk_float
@@ -114,6 +114,7 @@ struct time_info{T_varsf, T_varsi, T_caused_by, Terrorsum <: Real, T_debug_outpu
     kinetic_electron_solver::kinetic_electron_solver_type
     electron_preconditioner_type::Telectronprecon
     kinetic_ion_solver::kinetic_ion_solver_type
+    ion_preconditioner_type::Tionprecon
     implicit_ion_advance::Bool
     implicit_vpa_advection::Bool
     use_implicit_ion_fp_collisions::Bool

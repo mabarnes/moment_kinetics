@@ -492,6 +492,7 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
         kinetic_electron_solver = null_kinetic_electrons # This option is only used from the ion time_info struct
         electron_preconditioner_type = nothing
         kinetic_ion_solver = null_kinetic_ions
+        ion_preconditioner_type = nothing
         decrease_dt_iteration_threshold = t_input["decrease_dt_iteration_threshold"]
         increase_dt_iteration_threshold = t_input["increase_dt_iteration_threshold"]
         cap_factor_ion_dt = mk_float(t_input["cap_factor_ion_dt"])
@@ -502,6 +503,13 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
     elseif electron === false
         kinetic_electron_solver = null_kinetic_electrons
         kinetic_ion_solver = t_input["kinetic_ion_solver"]
+        ion_precon_types = Dict("parallel_lu" => :ion_parallel_lu,)
+        if t_input["kinetic_ion_preconditioner"] == "default"
+            ion_precon_option = "lu"
+        else
+            ion_precon_option = t_input["kinetic_ion_preconditioner"]
+        end
+        ion_preconditioner_type = Val(ion_precon_types[ion_precon_option])
         electron_preconditioner_type = nothing
         decrease_dt_iteration_threshold = -1
         increase_dt_iteration_threshold = typemax(mk_int)
@@ -539,6 +547,7 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
             electron_preconditioner_type = Val(:none)
         end
         kinetic_ion_solver = t_input["kinetic_ion_solver"]
+        ion_preconditioner_type = nothing
         decrease_dt_iteration_threshold = -1
         increase_dt_iteration_threshold = typemax(mk_int)
         cap_factor_ion_dt = Inf
@@ -576,7 +585,7 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
                      !is_electron && t_input["implicit_braginskii_conduction"],
                      kinetic_electron_solver, electron_preconditioner_type,
                      # read main ion algorithm flag
-                     kinetic_ion_solver,
+                     kinetic_ion_solver, ion_preconditioner_type,
                      # set useful derived parameters
                      !is_electron && (t_input["kinetic_ion_solver"] == full_implicit_ion_advance),
                      !is_electron && (t_input["kinetic_ion_solver"] == implicit_ion_vpa_advection),
