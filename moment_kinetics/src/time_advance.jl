@@ -155,6 +155,15 @@ struct scratch_dummy_arrays
     buffer_zrs_4::MPISharedArray{mk_float,3}
     buffer_zrs_5::MPISharedArray{mk_float,3}
 
+    buffer_vpavperp_1::MPISharedArray{mk_float,2}
+    buffer_vpavperp_2::MPISharedArray{mk_float,2}
+    buffer_vpavperp_3::MPISharedArray{mk_float,2}
+    buffer_vpavperp_4::MPISharedArray{mk_float,2}
+    buffer_vpavperp_5::MPISharedArray{mk_float,2}
+    buffer_vpavperp_6::MPISharedArray{mk_float,2}
+
+    buffer_vpavperpz_1::MPISharedArray{mk_float,3}
+
     buffer_vpavperpzs_1::MPISharedArray{mk_float,4}
     buffer_vpavperpzs_2::MPISharedArray{mk_float,4}
     buffer_vpavperpzs_3::MPISharedArray{mk_float,4}
@@ -1826,6 +1835,15 @@ function setup_dummy_and_buffer_arrays(r, z, vpa, vperp, vz, vr, vzeta, composit
     buffer_zrs_4 = allocate_shared_float(z, r, composition.ion_species_coord)
     buffer_zrs_5 = allocate_shared_float(z, r, composition.ion_species_coord)
     
+    buffer_vpavperp_1 = allocate_shared_float(vpa, vperp)
+    buffer_vpavperp_2 = allocate_shared_float(vpa, vperp)
+    buffer_vpavperp_3 = allocate_shared_float(vpa, vperp)
+    buffer_vpavperp_4 = allocate_shared_float(vpa, vperp)
+    buffer_vpavperp_5 = allocate_shared_float(vpa, vperp)
+    buffer_vpavperp_6 = allocate_shared_float(vpa, vperp)
+
+    buffer_vpavperpz_1 = allocate_shared_float(vpa, vperp, z)
+
     buffer_vpavperpzs_1 = allocate_shared_float(vpa, vperp, z, composition.ion_species_coord)
     buffer_vpavperpzs_2 = allocate_shared_float(vpa, vperp, z, composition.ion_species_coord)
     buffer_vpavperpzs_3 = allocate_shared_float(vpa, vperp, z, composition.ion_species_coord)
@@ -1936,6 +1954,8 @@ function setup_dummy_and_buffer_arrays(r, z, vpa, vperp, vz, vr, vzeta, composit
         buffer_rs_1,buffer_rs_2,buffer_rs_3,buffer_rs_4,buffer_rs_5,buffer_rs_6,
         buffer_rsn_1,buffer_rsn_2,buffer_rsn_3,buffer_rsn_4,buffer_rsn_5,buffer_rsn_6,
         buffer_zrs_1,buffer_zrs_2,buffer_zrs_3,buffer_zrs_4,buffer_zrs_5,
+        buffer_vpavperp_1, buffer_vpavperp_2, buffer_vpavperp_3, buffer_vpavperp_4, buffer_vpavperp_5, buffer_vpavperp_6,
+        buffer_vpavperpz_1,
         buffer_vpavperpzs_1,buffer_vpavperpzs_2,buffer_vpavperpzs_3,buffer_vpavperpzs_4,buffer_vpavperpzs_5,buffer_vpavperpzs_6,
         buffer_vpavperprs_1,buffer_vpavperprs_2,buffer_vpavperprs_3,buffer_vpavperprs_4,buffer_vpavperprs_5,buffer_vpavperprs_6,
         buffer_vpavperpzrs_1,buffer_vpavperpzrs_2,

@@ -11,7 +11,7 @@ using ..debugging
 using ..looping
 using ..moment_kinetics_structs
 using ..timer_utils
-using ..derivatives: derivative_z!
+using ..derivatives: derivative_z!, derivative_z_pdf_vpavperpz!
 
 """
 do a single stage time advance (potentially as part of a multi-stage RK scheme)
@@ -54,10 +54,13 @@ end
 
     #calculate the upwind derivative
     df_dz = scratch_dummy.buffer_vpavperpz_1
-    derivative_z_anyzv!(df_dz, fvec_in.pdf, advect, scratch_dummy.buffer_vpavperp_1,
-                        scratch_dummy.buffer_vpavperp_2, scratch_dummy.buffer_vpavperp_3,
-                        scratch_dummy.buffer_vpavperp_4, scratch_dummy.buffer_vpavperp_5,
-                        scratch_dummy.buffer_vpavperp_6, spectral, z)
+    derivative_z_pdf_vpavperpz!(df_dz, fvec_in.pdf, advect,
+                                scratch_dummy.buffer_vpavperp_1,
+                                scratch_dummy.buffer_vpavperp_2,
+                                scratch_dummy.buffer_vpavperp_3,
+                                scratch_dummy.buffer_vpavperp_4,
+                                scratch_dummy.buffer_vpavperp_5,
+                                scratch_dummy.buffer_vpavperp_6, spectral, z)
 
     # advance z-advection equation
     @loop_vperp_vpa ivperp ivpa begin
