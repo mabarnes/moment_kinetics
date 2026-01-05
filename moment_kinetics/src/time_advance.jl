@@ -669,7 +669,7 @@ function get_nl_solver_params(t_params, input_dict, composition, r, z, vperp, vp
     end
 
     if t_params.implicit_ion_advance
-        ion_coords = (s=composition.n_ion_species, r=r, z=z, vperp=vperp, vpa=vpa)
+        ion_coords = (s=composition.ion_species_coord, r=r, z=z, vperp=vperp, vpa=vpa)
         ion_outer_coords = ()
         ion_precon_type = Val(:none)
         nl_solver_ion_advance_params =
@@ -683,8 +683,8 @@ function get_nl_solver_params(t_params, input_dict, composition, r, z, vperp, vp
     end
 
     if t_params.implicit_ion_parallel_dynamics
-        ion_precon_type = Val(t_params.ion_preconditioner_type)
-        ion_coords = (s=composition.n_ion_species, r=r, z=z, vperp=vperp, vpa=vpa)
+        ion_precon_type = t_params.ion_preconditioner_type
+        ion_coords = (s=composition.ion_species_coord, r=r, z=z, vperp=vperp, vpa=vpa)
         ion_outer_coords = ()
         spectral = (z=z_spectral, vperp=vperp_spectral, vpa=vpa_spectral)
         nl_solver_ion_parallel_dynamics_params =
@@ -694,7 +694,9 @@ function get_nl_solver_params(t_params, input_dict, composition, r, z, vperp, vp
                                                                           ion_coords,
                                                                           ion_outer_coords,
                                                                           spectral;
-                                                                          boundary_skip_funcs=(full=(ion_pdf=skip_f_ion_bc_points_in_Jacobian,),)))
+                                                                          boundary_skip_funcs=(full=(ion_pdf=skip_f_ion_bc_points_in_Jacobian,
+                                                                                                     wpa2_moment=nothing,
+                                                                                                     third_moment=nothing),)))
     else
         nl_solver_ion_parallel_dynamics_params = nothing
     end
@@ -703,7 +705,7 @@ function get_nl_solver_params(t_params, input_dict, composition, r, z, vperp, vp
         # Implicit solve for vpa_advection term should be done in serial, as it will be called
         # within a parallelised s_r_z_vperp loop.
         vpa_coords = (vpa=vpa,)
-        vpa_outer_coords = (composition.n_ion_species, r, z, vperp)
+        vpa_outer_coords = (composition.ion_species_coord, r, z, vperp)
         vpa_precon_type = Val(:none)
         nl_solver_vpa_advection_params =
             setup_nonlinear_solve(nl_solver_input, vpa_coords, vpa_outer_coords;

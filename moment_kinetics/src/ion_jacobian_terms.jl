@@ -2,6 +2,9 @@ module ion_jacobian_terms
 
 export get_ion_preconditioners, fill_ion_kinetic_equation_Jacobian!
 
+using ..array_allocation
+using ..communication
+using ..communication: _anyzv_subblock_synchronize
 using ..energy_equation: get_dvth_dt_expanded_term_evolve_nup
 using ..force_balance: get_dupar_dt_expanded_term_evolve_nup
 using ..jacobian_matrices
@@ -14,6 +17,9 @@ using ..type_definitions
 using ..vpa_advection: get_ion_vpa_advection_term_evolve_nup
 using ..vperp_advection: get_ion_vperp_advection_term_evolve_nup
 using ..z_advection: get_ion_z_advection_term_evolve_nup
+
+using LinearAlgebra
+using SparseArrays
 
 """
 """
@@ -222,9 +228,9 @@ function get_ion_preconditioners(preconditioner_type, coords, outer_coords, spec
                                                      boundary_skip_funcs=boundary_skip_funcs.full,
                                                      ion_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z), false),
                                                      third_moment=((:anyzv,:z), (:z,), true)),
-                                allocate_shared_float(:newton_size=>pdf_plus_p_plus_constraints_size;
+                                allocate_shared_float(:newton_size=>pdf_plus_constraints_size;
                                                       comm=comm_anyzv_subblock[]),
-                                allocate_shared_float(:newton_size=>pdf_plus_p_plus_constraints_size;
+                                allocate_shared_float(:newton_size=>pdf_plus_constraints_size;
                                                       comm=comm_anyzv_subblock[]),
                                )
                                for _ ∈ CartesianIndices(reverse(outer_coord_sizes))]
@@ -240,9 +246,9 @@ function get_ion_preconditioners(preconditioner_type, coords, outer_coords, spec
                                                      ion_pdf=((:anyzv,:z,:vperp,:vpa), (:vpa, :vperp, :z), false),
                                                      wpa2_moment=((:anyzv,:z), (:z,), true),
                                                      third_moment=((:anyzv,:z), (:z,), true)),
-                                allocate_shared_float(:newton_size=>pdf_plus_p_plus_constraints_size;
+                                allocate_shared_float(:newton_size=>pdf_plus_constraints_size;
                                                       comm=comm_anyzv_subblock[]),
-                                allocate_shared_float(:newton_size=>pdf_plus_p_plus_constraints_size;
+                                allocate_shared_float(:newton_size=>pdf_plus_constraints_size;
                                                       comm=comm_anyzv_subblock[]),
                                )
                                for _ ∈ CartesianIndices(reverse(outer_coord_sizes))]
