@@ -2,7 +2,9 @@
 """
 module array_allocation
 
-export allocate_float, allocate_int, allocate_complex, allocate_bool, allocate_shared
+export allocate_float, allocate_int, allocate_complex, allocate_bool, allocate_shared,
+       allocate_shared_float, allocate_shared_int, allocate_shared_complex,
+       allocate_shared_bool
 
 using ..type_definitions: mk_float, mk_int
 using ..communication

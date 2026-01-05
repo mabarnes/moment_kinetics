@@ -2784,10 +2784,10 @@ function skip_f_ion_bc_points_in_Jacobian(z_speed, ivpa, ivperp, iz, vpa, vperp,
     # whether this is an internal boundary or an actual domain boundary. This prevents the
     # matrix evaluated for a single block (without coupling to neighbouring blocks) from
     # becoming singular
-    if iz == 1 && z_speed[iz,ivpa,ivperp] ≥ 0.0
+    if iz == 1 && z_speed[ivpa,ivperp,iz] ≥ 0.0
         return true
     end
-    if iz == z.n && z_speed[iz,ivpa,ivperp] ≤ 0.0
+    if iz == z.n && z_speed[ivpa,ivperp,iz] ≤ 0.0
         return true
     end
 
