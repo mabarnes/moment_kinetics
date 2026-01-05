@@ -548,7 +548,7 @@ function test_get_ion_pdf_term(test_input::AbstractDict, label::String,
 #                                                vperp, vpa)
 #        end
 
-        jacobian = nl_solver_params.ion_advance.preconditioners[1][2]
+        jacobian = nl_solver_params.ion_parallel_dynamics.preconditioners[1][2]
         jacobian_initialize_identity!(jacobian)
 
         sub_terms = get_ion_sub_terms_evolve_nup(f, dpdf_dz, dpdf_dvperp, dpdf_dvpa,
@@ -590,28 +590,27 @@ function test_get_ion_pdf_term(test_input::AbstractDict, label::String,
 #                moments, dens, upar_test, p, scratch_dummy, z, z_spectral,
 #                num_diss_params.ion.moment_dissipation_coefficient, ir)
 
-            # Update functions just adds dt*d(g_e)/dt to the electron_pdf member of the
-            # first argument, so if we set the pdf member of the first argument to zero,
-            # and pass dt=1, then it will evaluate the time derivative, which is the
-            # residual for a steady-state solution.
             @begin_anyzv_z_vperp_vpa_region()
             @loop_z_vperp_vpa iz ivperp ivpa begin
                 residual[ivpa,ivperp,iz] = f[ivpa,ivperp,iz]
             end
-            @views rhs_func!(; residual, this_f, fvec, dens, upar=upar_test, p, vth,
-                             moments, fields, collisions, composition, geometry, z_advect,
-                             vpa_advect, r, z, vperp, vpa, z_spectral, vpa_spectral,
-                             external_source_settings, num_diss_params, t_params,
-                             scratch_dummy, dt, is, ir)
+            this_fvec = (pdf=this_f, density=moments.ion.dens, upar=moments.ion.upar,
+                         p=moments.ion.p, density_neutral=moments.neutral.dens,
+                         uz_neutral=moments.neutral.uz, p_neutral=moments.neutral.p)
+            @views rhs_func!(; residual, this_f, fvec=this_fvec, dens, upar=upar_test, p,
+                             vth, moments, fields, collisions, composition, geometry,
+                             z_advect, vpa_advect, r, z, vperp, vpa, z_spectral,
+                             vpa_spectral, external_source_settings, num_diss_params,
+                             t_params, scratch_dummy, dt, is, ir)
             # Now
-            #   residual = f_electron_old + dt*RHS(f_electron_newvar)
+            #   residual = f_ion_old + dt*RHS(f_ion_newvar)
             # so update to desired residual
             @begin_anyzv_z_vperp_vpa_region()
             @loop_z_vperp_vpa iz ivperp ivpa begin
                 residual[ivpa,ivperp,iz] = this_f[ivpa,ivperp,iz] - residual[ivpa,ivperp,iz]
             end
 
-            # Set residual to zero where pdf_electron is determined by boundary conditions.
+            # Set residual to zero where pdf_ion is determined by boundary conditions.
             if vpa.n > 1
                 @begin_anyzv_z_vperp_region()
                 @loop_z_vperp iz ivperp begin
@@ -632,7 +631,7 @@ function test_get_ion_pdf_term(test_input::AbstractDict, label::String,
             elseif (z.bc == "constant") && (z.irank == 0 || z.irank == z.nrank - 1)
                 # Boundary conditions on incoming part of distribution function. Note
                 # that as density, upar, p do not change in this implicit step,
-                # f_electron_newvar, f_old, and residual should all be zero at exactly the
+                # f_ion_newvar, f_old, and residual should all be zero at exactly the
                 # same set of grid points, so it is reasonable to zero-out `residual` to
                 # impose the boundary condition. We impose this after subtracting f_old in
                 # case rounding errors, etc. mean that at some point f_old had a different
@@ -668,7 +667,12 @@ function test_get_ion_pdf_term(test_input::AbstractDict, label::String,
         perturbed_residual = allocate_shared_float(vpa, vperp, z; comm=comm_anyzv_subblock[])
 
         residual_func!(original_residual, f)
-        residual_func!(perturbed_residual, f.+delta_f)
+        f_plus_delta_f = allocate_shared_float(vpa, vperp, z; comm=comm_anyzv_subblock[])
+        @begin_anyzv_region()
+        @anyzv_serial_region begin
+            @. f_plus_delta_f = f + delta_f
+        end
+        residual_func!(perturbed_residual, f_plus_delta_f)
 
         @begin_anyzv_region()
         @anyzv_serial_region begin
@@ -1046,10 +1050,6 @@ function test_get_electron_pdf_term(test_input::AbstractDict, label::String,
                 moments, dens, upar_test, this_p, scratch_dummy, z, z_spectral,
                 num_diss_params.electron.moment_dissipation_coefficient, ir)
 
-            # electron_kinetic_equation_euler_update!() just adds dt*d(g_e)/dt to the
-            # electron_pdf member of the first argument, so if we set the electron_pdf member
-            # of the first argument to zero, and pass dt=1, then it will evaluate the time
-            # derivative, which is the residual for a steady-state solution.
             @begin_anyzv_z_vperp_vpa_region()
             @loop_z_vperp_vpa iz ivperp ivpa begin
                 residual[ivpa,ivperp,iz] = f[ivpa,ivperp,iz]
