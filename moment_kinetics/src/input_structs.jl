@@ -49,12 +49,14 @@ export null_kinetic_electrons
 """
 @enum kinetic_ion_solver_type begin
     full_implicit_ion_advance
+    implicit_ion_parallel_dynamics
     implicit_ion_vpa_advection
     implicit_ion_fp_collisions
     full_explicit_ion_advance
     null_kinetic_ions
 end
 export kinetic_ion_solver_type
+export implicit_ion_parallel_dynamics
 export full_implicit_ion_advance
 export implicit_ion_vpa_advection
 export implicit_ion_fp_collisions
@@ -116,6 +118,7 @@ struct time_info{T_varsf, T_varsi, T_caused_by, Terrorsum <: Real, T_debug_outpu
     kinetic_ion_solver::kinetic_ion_solver_type
     ion_preconditioner_type::Tionprecon
     implicit_ion_advance::Bool
+    implicit_ion_parallel_dynamics::Bool
     implicit_vpa_advection::Bool
     use_implicit_ion_fp_collisions::Bool
     constraint_forcing_rate::mk_float

@@ -142,6 +142,7 @@ function get_ion_sub_terms_evolve_nup(
 
     return IonSubTerms(; f, df_dz, df_dvperp, df_dvpa, n, dn_dt, dn_dr, dn_dz, upar,
                        dupar_dt, dupar_dr, dupar_dz, vth, dvth_dt, dvth_dr, dvth_dz,
+                       wpa2_moment_constraint_rhs, third_moment_constraint_rhs,
                        wperp, wpa, bzed, r_speed, alpha_speed, z_speed, nvperp,
                        z_dissipation_coefficient, vperp_dissipation_coefficient,
                        vpa_dissipation_coefficient, collisions, external_sources, z, ir)
@@ -204,8 +205,7 @@ function get_all_ion_terms_evolve_nup(sub_terms::IonSubTerms)
     return pdf_terms
 end
 
-function get_ion_preconditioners(preconditioner_type, nl_solver_input, coords,
-                                 outer_coords, spectral;
+function get_ion_preconditioners(preconditioner_type, coords, outer_coords, spectral;
                                  boundary_skip_funcs::BSF=nothing) where {BSF}
     coord_sizes = Tuple(isa(c, coordinate) ? c.n : c for c ∈ coords)
     total_size_coords = prod(coord_sizes)
