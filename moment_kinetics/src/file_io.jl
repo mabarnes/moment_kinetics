@@ -370,10 +370,12 @@ function setup_io_input(input_dict, timestepping_section, warn_unexpected::Bool;
     run_id = string(uuid4())
     if !ignore_MPI
         # Communicate run_id to all blocks
-        # Need to convert run_id to a Vector{Char} for MPI
-        run_id_chars = [run_id...]
+        # Need to convert run_id to a Vector{Int64} for MPI - really want a Vector{Char},
+        # but some MPI implementations segfault if we try to MPI.Bcast!() a Vector{Char},
+        # so use Vector{Int64} and convert to Vector{Char} after the Bcast!.
+        run_id_chars = Int64[run_id...]
         MPI.Bcast!(run_id_chars, 0, comm_world)
-        run_id = string(run_id_chars...)
+        run_id = string(Char.(run_id_chars)...)
     end
     io_settings["run_id"] = run_id
     io_settings["output_dir"] = joinpath(io_settings["base_directory"], io_settings["run_name"])
