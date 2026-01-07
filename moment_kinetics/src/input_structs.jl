@@ -669,8 +669,8 @@ Base.@kwdef struct geometry_input
     dBdr_constant::mk_float
 end
 
-@enum binary_format_type hdf5 netcdf
-export binary_format_type, hdf5, netcdf
+@enum binary_format_type hdf5 netcdf adios
+export binary_format_type, hdf5, netcdf, adios
 
 """
 """

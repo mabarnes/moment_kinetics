@@ -4,6 +4,7 @@ authors = ["Michael Barnes <michael.barnes@physics.ox.ac.uk>"]
 version = "0.1.0"
 
 [deps]
+ADIOS2 = "e0ce9d3b-0dbd-416f-8264-ccca772f60ec"
 ArgParse = "c7e460c6-2fb9-53a9-8c5b-16f535851c63"
 BlockArrays = "8e7c35d0-a365-5155-bbbb-fb81a777f24e"
 BlockBandedMatrices = "ffab5731-97b5-5995-9138-79e8c1846df0"

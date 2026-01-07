@@ -2138,6 +2138,9 @@ function reopen_output_file(filename, io_input, io_comm)
         check_io_implementation(hdf5)
         return open_output_file_implementation(Val(hdf5), prefix, io_input, io_comm,
                                                "r+")[1]
+    elseif format_string == ".bp"
+        check_io_implementation(adios)
+        return open_output_file_implementation(Val(adios), prefix, io_input, io_comm)[1]
     elseif format_string == ".cdf"
         check_io_implementation(netcdf)
         return open_output_file_implementation(Val(netcdf), prefix, io_input, io_comm,
