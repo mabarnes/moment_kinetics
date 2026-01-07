@@ -2114,7 +2114,13 @@ function time_advance!(pdf, scratch, scratch_implicit, scratch_electron, t_param
         debug_detect_redundant_is_active[] = true
     end
 
-    if isfile(t_params.stopfile)
+    if global_rank[] == 0
+        stopfile = Ref(isfile(t_params.stopfile * "now"))
+    else
+        stopfile = Ref(false)
+    end
+    MPI.Bcast!(stopfile, comm_world)
+    if stopfile[]
         if filesize(t_params.stopfile) > 0
             error("Found a 'stop file' at $(t_params.stopfile), but it contains some data "
                   * "(file size is greater than zero), so will not delete.")
@@ -2123,8 +2129,20 @@ function time_advance!(pdf, scratch, scratch_implicit, scratch_electron, t_param
             rm(t_params.stopfile)
         end
     end
-    if isfile(t_params.stopfile * "now") && global_rank[] == 0
-        rm(t_params.stopfile * "now")
+    if global_rank[] == 0
+        stopnow = Ref(isfile(t_params.stopfile * "now"))
+    else
+        stopnow = Ref(false)
+    end
+    MPI.Bcast!(stopnow, comm_world)
+    if stopnow[] && global_rank[] == 0
+        if filesize(t_params.stopfile) > 0
+            error("Found a 'stopnow file' at $(t_params.stopfile)now, but it contains "
+                  * "some data (file size is greater than zero), so will not delete.")
+        end
+        if global_rank[] == 0
+            rm(t_params.stopfile * "now")
+        end
     end
 
     @serial_region begin
@@ -2196,7 +2214,13 @@ function time_advance!(pdf, scratch, scratch_implicit, scratch_electron, t_param
                 finish_now = true
             end
 
-            if isfile(t_params.stopfile * "now")
+            if global_rank[] == 0
+                stopnow = Ref(isfile(t_params.stopfile * "now"))
+            else
+                stopnow = Ref(false)
+            end
+            MPI.Bcast!(stopnow, comm_world)
+            if stopnow[]
                 # Stop cleanly if a file called 'stop' was created
                 println("Found 'stopnow' file $(t_params.stopfile * "now"), aborting run")
                 finish_now = true
@@ -2241,7 +2265,13 @@ function time_advance!(pdf, scratch, scratch_implicit, scratch_electron, t_param
                 @begin_serial_region(true)
                 @_block_synchronize()
 
-                if isfile(t_params.stopfile)
+                if global_rank[] == 0
+                    stopfile = Ref(isfile(t_params.stopfile))
+                else
+                    stopfile = Ref(false)
+                end
+                MPI.Bcast!(stopfile, comm_world)
+                if stopfile[]
                     # Stop cleanly if a file called 'stop' was created
                     println("Found 'stop' file $(t_params.stopfile), aborting run")
                     flush(stdout)
