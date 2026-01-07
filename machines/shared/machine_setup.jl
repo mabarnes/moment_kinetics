@@ -25,6 +25,7 @@ default_settings["base"] = Dict("account"=>"",
                                 "use_system_mpi"=>"y",
                                 "use_netcdf"=>"n",
                                 "enable_mms"=>"n",
+                                "use_stopnow"=>"n",
                                 "use_revise"=>"n")
 # No batch system steup for "generic-pc"
 default_settings["generic-pc"] = merge(default_settings["base"],
@@ -33,6 +34,7 @@ default_settings["generic-pc"] = merge(default_settings["base"],
                                         "default_postproc_time"=>"0:00:00",
                                         "default_postproc_memory"=>"0",
                                         "use_makie"=>"y",
+                                        "use_stopnow"=>"y",
                                         "use_revise"=>"y"))
 default_settings["generic-batch"] = deepcopy(default_settings["base"])
 default_settings["archer"] = merge(default_settings["base"],
@@ -249,6 +251,13 @@ function machine_setup_moment_kinetics(machine::String; no_force_exit::Bool=fals
                 machine, mk_preferences, ["y", "n"])
     get_setting("enable_mms",
                 "Would you like to enable MMS testing?",
+                machine, mk_preferences, ["y", "n"])
+    get_setting("use_stopnow",
+                "Would you like to enable the creation of a 'stopnow' file to cleanly terminate\n"
+                * "a run at the end of the current timestep (this is useful for interactive runs\n"
+                * "to avoid stopping Julia, but not recommended on HPC clusters for performance\n"
+                * "reasons; it is always possible to create a 'stop' file to cleanly terminate a\n"
+                * "run at the next output)?",
                 machine, mk_preferences, ["y", "n"])
     if !batch_system
         get_setting("use_revise",
