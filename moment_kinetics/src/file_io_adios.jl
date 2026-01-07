@@ -13,6 +13,7 @@ import moment_kinetics.file_io: io_has_implementation, io_has_parallel,
                                 create_dynamic_variable!, append_to_dynamic_var
 import moment_kinetics.load_data: open_file_to_read, get_attribute, has_attribute,
                                   load_variable, load_slice
+using moment_kinetics.communication
 using moment_kinetics.coordinates: coordinate
 using moment_kinetics.input_structs: adios
 using moment_kinetics.type_definitions
@@ -52,7 +53,7 @@ function open_output_file_implementation(::Val{adios}, prefix, io_input, io_comm
         adios = adios_init_mpi(io_comm)
         adios_io = declare_io(adios, "WriteIO")
 
-        # Apen file for writing - here appending to an existing file.
+        # Open file for writing - here appending to an existing file.
         adios_writer = open(adios_io, filename, mode_write)
     end
 
@@ -95,7 +96,12 @@ function add_attribute!(group::Tuple{Tuple{AIO,Engine},String}, name, value)
     return define_attribute(adios_io, group_name * "/" * name, value)
 end
 function add_attribute!(var::Variable, name, value)
-    return define_variable_attribute(var, name, value)
+    error("Don't know how to define attribute from just an ADIOS2.Variable instance. "
+          * "Would also need the AIO instance")
+end
+
+function add_variable_attribute!(adios_io::AIO, variable_name, name, value)
+    return define_variable_attribute(adios_io, name, value, variable_name)
 end
 
 function has_attribute(file::Tuple{AIO,Engine}, name)
@@ -177,13 +183,17 @@ function write_single_value!(file::Tuple{AIO,Engine}, name,
         # length of the string, so cannot be easily created by hand. Note that a String of
         # the correct length must be passed from every process in `comm_inter_block[]`,
         # but only the contents of the string on `global_rank[]==0` are actually written.
+        if isa(data, Bool)
+            # Convert to UInt8 because ADIOS cannot read/write Bool.
+            data = UInt8(data)
+        end
         if !(overwrite && name ∈ inquire_all_variables(adios_io))
             io_var = define_variable(adios_io, name, typeof(data))
             if description !== nothing
-                add_attribute!(io_var, "description", description)
+                add_variable_attribute!(adios_io, name, "description", description)
             end
             if units !== nothing
-                add_attribute!(io_var, "units", units)
+                add_variable_attribute!(adios_io, name, "units", units)
             end
         else
             io_var = inquire_variable(adios_io, name)
@@ -202,7 +212,7 @@ function write_single_value!(file::Tuple{AIO,Engine}, name,
         return nothing
     end
 
-    dim_sizes = get_fixed_dim_sizes(coords, parallel_io)
+    dim_sizes = get_fixed_dim_sizes(coords)
     local_ranges = Tuple(isa(c, mk_int) ? (1:c) : isa(c, coordinate) ? c.local_io_range : c.n for c ∈ coords)
     global_ranges = Tuple(isa(c, mk_int) ? (1:c) : isa(c, coordinate) ? c.global_io_range : c.n for c ∈ coords)
     if overwrite && name ∈ keys(file_or_group)
@@ -211,8 +221,8 @@ function write_single_value!(file::Tuple{AIO,Engine}, name,
         # Final `true` argument ('constant_dims') indicates that the dimensions passed
         # here never change.
         io_var = define_variable(adios_io, name, T, dim_sizes,
-                                 tuple(first(r) for r ∈ global_ranges),
-                                 tuple(length(r) for r ∈ local_ranges), true)
+                                 Tuple(first(r) for r ∈ global_ranges),
+                                 Tuple(length(r) for r ∈ local_ranges), true)
     end
 
     if description !== nothing
@@ -224,10 +234,18 @@ function write_single_value!(file::Tuple{AIO,Engine}, name,
     return nothing
 end
 
+# Convert Enum values to String to be written to file
+function write_single_value!(group::Tuple{Tuple{AIO,Engine},String}, name, data::Enum; kwargs...)
+    return write_single_value!(group, name, string(data); kwargs...)
+end
+function write_single_value!(file::Tuple{AIO,Engine}, name, data::Enum; kwargs...)
+    return write_single_value!(file, name, string(data); kwargs...)
+end
+
 """
 Get sizes of fixed dimensions (i.e. everything but time) for I/O
 
-`coords` should be a tuple whose elements are coordinate structs or integers (e.g. number
+`coords` should be a Tuple whose elements are coordinate structs or integers (e.g. number
 of species).
 """
 function get_fixed_dim_sizes(coords)
@@ -253,7 +271,7 @@ function create_dynamic_variable!(file::Tuple{AIO,Engine}, name, type,
         return nothing
     end
 
-    dim_sizes = get_fixed_dim_sizes(coords, parallel_io)
+    dim_sizes = get_fixed_dim_sizes(coords)
     local_ranges = Tuple(isa(c, mk_int) ? (1:c) : isa(c, coordinate) ? c.local_io_range : c.n for c ∈ coords)
     global_ranges = Tuple(isa(c, mk_int) ? (1:c) : isa(c, coordinate) ? c.global_io_range : c.n for c ∈ coords)
     if overwrite && name ∈ keys(file_or_group)
@@ -262,19 +280,19 @@ function create_dynamic_variable!(file::Tuple{AIO,Engine}, name, type,
         # Final `true` argument ('constant_dims') indicates that the dimensions passed
         # here never change.
         io_var = define_variable(adios_io, name, T, dim_sizes,
-                                 tuple(first(r) for r ∈ global_ranges),
-                                 tuple(length(r) for r ∈ local_ranges), true)
+                                 Tuple(first(r) for r ∈ global_ranges),
+                                 Tuple(length(r) for r ∈ local_ranges), true)
     end
 
     # Add attribute listing the dimensions belonging to this variable
     dim_names = Tuple(c.name for c ∈ coords)
-    add_attribute!(var, "dims", join(dim_names, ","))
+    add_variable_attribute!(adios_io, name, "dims", join(dim_names, ","))
 
     if description !== nothing
-        add_attribute!(adios_io, name * "/description", description)
+        add_variable_attribute!(adios_io, name, "description", description)
     end
     if units !== nothing
-        add_attribute!(adios_io, name * "/units", units)
+        add_variable_attribute!(adios_io, name, "units", units)
     end
 
     return var
@@ -327,6 +345,49 @@ function Base.close(file::Tuple{AIO,Engine})
     close(adios_writer)
 
     return nothing
+end
+
+function open_file_to_read(::Val{adios}, filename)
+    adios = adios_init_serial()
+    adios_io = declare_io(adios, "ReadIO")
+
+    # Open file for writing - here appending to an existing file.
+    adios_reader = open(adios_io, filename, mode_readRandomAccess)
+
+    return (adios_io, adios_reader)
+end
+
+function load_variable(file_or_group::Tuple{AIO,Engine}, name::String)
+    error("load_variable not implemented yet for ADIOS")
+    # This overload deals with cases where fid is a NetCDF `Dataset` (which could be a
+    # file or a group).
+    try
+        if size(file_or_group[name].var) == ()
+            var = file_or_group[name].var[]
+        else
+            var = copy(file_or_group[name].var)
+        end
+        if isa(var, UInt8)
+            var = (var == UInt8(true))
+        end
+        return var
+    catch
+        println("An error occured while loading $name")
+        rethrow()
+    end
+end
+
+function load_slice(file_or_group::Tuple{AIO,Engine}, name::String, slices_or_indices...)
+    error("load_slice not implemented yet for ADIOS")
+    # This overload deals with cases where fid is a NetCDF `Dataset` (which could be a
+    # file or a group).
+    try
+        var = file_or_group[name].var[slices_or_indices...]
+        return var
+    catch
+        println("An error occured while loading $name")
+        rethrow()
+    end
 end
 
 end # file_io_adios
