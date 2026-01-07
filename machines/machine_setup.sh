@@ -206,7 +206,7 @@ echo "Using Julia at $JULIA"
 echo
 echo "$JULIA" > .julia_default.txt
 
-if [ x$MACHINE == xarcher ]; then
+if [ x$MACHINE == xarcher -o x$MACHINE == xpitagora ]; then
   JULIA_DEPOT_IN_TMP=true
 
   # Julia depot is created in /tmp/ so that it can be copied into /tmp/ on each
