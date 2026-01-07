@@ -66,11 +66,6 @@ function add_attribute!(var::HDF5.Dataset, name, value)
     attributes(var)[name] = value
 end
 
-# HDF5.H5DataStore is the supertype for HDF5.File and HDF5.Group
-function modify_attribute!(file_or_group_or_var::Union{HDF5.H5DataStore,HDF5.Dataset}, name, value)
-    attrs(file_or_group_or_var)[name] = value
-end
-
 function get_group(file_or_group::HDF5.H5DataStore, name::String)
     # This overload deals with cases where fid is an HDF5 `File` or `Group` (`H5DataStore`
     # is the abstract super-type for both

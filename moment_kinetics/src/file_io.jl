@@ -509,7 +509,6 @@ function setup_electron_io(io_input, vpa, vperp, z, r, composition, collisions,
         # write a header to the output file
         add_attribute!(fid, "file_info",
                        "Output initial electron state from the moment_kinetics code")
-        add_attribute!(fid, "pdf_electron_converged", false)
 
         # write some overview information to the output file
         write_overview!(fid, composition, collisions, parallel_io, evolve_density,
@@ -2113,11 +2112,6 @@ Add an attribute to a file, group or variable
 function add_attribute! end
 
 """
-Modify an attribute to a file, group or variable
-"""
-function modify_attribute! end
-
-"""
 Low-level function to open a binary output file
 
 Each implementation (HDF5, NetCDF, etc.) defines a method of this function to open a file
@@ -3703,8 +3697,8 @@ function write_electron_state(scratch_electron, moments, phi::AbstractMatrix{mk_
                                               z, ir)
 
         if pdf_electron_converged
-            modify_attribute!(io_initial_electron.fid, "pdf_electron_converged",
-                              pdf_electron_converged)
+            add_attribute!(io_initial_electron.fid, "pdf_electron_converged",
+                           pdf_electron_converged)
         end
 
         closefile && close(io_initial_electron.fid)

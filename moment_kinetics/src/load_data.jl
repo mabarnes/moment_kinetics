@@ -146,6 +146,11 @@ function open_file_to_read(::Val{hdf5}, filename)
     return h5open(filename, "r")
 end
 
+function has_attribute end
+function has_attribute(file_or_group_or_var::Union{HDF5.H5DataStore,HDF5.Dataset}, name)
+    return name ∈ keys(attrs(file_or_group_or_var))
+end
+
 function get_attribute end
 function get_attribute(file_or_group_or_var::Union{HDF5.H5DataStore,HDF5.Dataset}, name)
     return attrs(file_or_group_or_var)[name]
@@ -1116,7 +1121,9 @@ function reload_electron_data!(pdf, moments, phi, t_params, restart_prefix_ibloc
                                         time_index, coords, reload_ranges, restart_coords,
                                         interpolation_needed)
 
-            pdf_electron_converged[] = get_attribute(fid, "pdf_electron_converged")
+            if has_attribute(fid, "pdf_electron_converged")
+                pdf_electron_converged[] = get_attribute(fid, "pdf_electron_converged")
+            end
 
             moments.electron.upar_updated[] = true
             moments.electron.p .=
