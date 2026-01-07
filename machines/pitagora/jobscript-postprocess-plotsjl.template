@@ -22,6 +22,19 @@ echo "post-processing (with original post_processing) RUNDIR $(date)"
 # Set this environment variable to avoid warning messages from Qt when running without a display
 export QT_QPA_PLATFORM=offscreen
 
-bin/julia -Jplots_postproc.so --project=plots_post_processing/ run_post_processing.jl RUNDIR
+if [ -e compute-node-temp.julia.tar.bz ]; then
+  # Distribute the tar'ed Julia depot to all compute nodes, saving it to the $TMPDIR directory which is local to each node.
+  sbcast --compress=none compute-node-temp.julia.tar.bz  $TMPDIR/compute-node-temp.julia.tar.bz
+
+  # Copy the julia directory (found from the name of the executable) and
+  # moment_kinetics.so to the compute nodes for efficiency.
+  cp -ra $(dirname $(dirname $(cat .julia_default.txt))) $TMPDIR/julia-dir
+  cp -a plots_postproc.so $TMPDIR/plots_postproc.so
+else
+  echo "compute-node-temp.julia.tar.bz does not exist but is required: run machines/machine_setup.sh to create it."
+  exit 1
+fi
+
+machines/pitagora/tmp-depot-wrapper.sh -Jplots_postproc.so --project=plots_post_processing/ run_post_processing.jl RUNDIR
 
 echo "finished post-processing RUNDIR $(date)"

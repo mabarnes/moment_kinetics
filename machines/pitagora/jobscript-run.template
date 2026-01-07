@@ -20,6 +20,23 @@ source julia.env
 
 echo "running INPUTFILE $(date)"
 
-srun --hint=nomultithread --distribution=block:block -n $SLURM_NTASKS bin/julia -Jmoment_kinetics.so --project -O3 RUNSCRIPT INPUTFILE
+if [ -e compute-node-temp.julia.tar.bz ]; then
+  # Distribute the tar'ed Julia depot to all compute nodes, saving it to the $TMPDIR directory which is local to each node.
+  sbcast --compress=none compute-node-temp.julia.tar.bz  $TMPDIR/compute-node-temp.julia.tar.bz
+
+  # Copy the julia directory (found from the name of the executable) and
+  # moment_kinetics.so to the compute nodes for efficiency.
+  # sbcast only copies files, so (following hint from
+  # https://www.ch.cam.ac.uk/computing/slurm-usage) just use srun instead to
+  # copy the julia directory - we are probably not too worried about
+  # performance here, so should be fine.
+  srun --ntasks=NODES --tasks-per-node=1 cp -ra $(dirname $(dirname $(cat .julia_default.txt))) $TMPDIR/julia-dir
+  sbcast --compress=none moment_kinetics.so $TMPDIR/moment_kinetics.so
+else
+  echo "compute-node-temp.julia.tar.bz does not exist but is required: run machines/machine_setup.sh to create it."
+  exit 1
+fi
+
+srun --hint=nomultithread --distribution=block:block -n $SLURM_NTASKS machines/pitagora/tmp-depot-wrapper.sh $TMPDIR/$USER/julia-dir/bin/julia -J $TMPDIR/$USER/moment_kinetics.so --project -O3 RUNSCRIPT INPUTFILE
 
 echo "finished INPUTFILE $(date)"

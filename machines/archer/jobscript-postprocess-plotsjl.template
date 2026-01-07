@@ -32,7 +32,7 @@ if [ -e compute-node-temp.julia.tar.bz ]; then
   cp -ra $(dirname $(dirname $(cat .julia_default.txt))) /tmp/julia-dir
   cp -a plots_postproc.so  /tmp/plots_postproc.so
 else
-  echo "compute-node-temp.julia.tar.bz but is required: run machines/machine_setup.sh to create it."
+  echo "compute-node-temp.julia.tar.bz does not exist but is required: run machines/machine_setup.sh to create it."
   exit 1
 fi
 

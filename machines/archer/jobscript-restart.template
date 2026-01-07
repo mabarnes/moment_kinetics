@@ -33,9 +33,9 @@ if [ -e compute-node-temp.julia.tar.bz ]; then
   # copy the julia directory - we are probably not too worried about
   # performance here, so should be fine.
   srun --ntasks=NODES --tasks-per-node=1 cp -ra $(dirname $(dirname $(cat .julia_default.txt))) /tmp/julia-dir
-  sbcast --compress=none moment_kinetics.so  /tmp/moment_kinetics.so
+  sbcast --compress=none moment_kinetics.so /tmp/moment_kinetics.so
 else
-  echo "compute-node-temp.julia.tar.bz but is required: run machines/machine_setup.sh to create it."
+  echo "compute-node-temp.julia.tar.bz does not exist but is required: run machines/machine_setup.sh to create it."
   exit 1
 fi
 
