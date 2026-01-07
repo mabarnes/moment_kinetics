@@ -132,6 +132,7 @@ struct time_info{T_varsf, T_varsi, T_caused_by, Terrorsum <: Real, T_debug_outpu
     converged_residual_value::mk_float
     use_manufactured_solns_for_advance::Bool
     stopfile::String
+    use_stopnow::Bool
     debug_io::T_debug_output
     electron::T_electron
 end

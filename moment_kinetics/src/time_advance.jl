@@ -9,6 +9,7 @@ export setup_dummy_and_buffer_arrays
 
 using MPI
 using OrderedCollections
+using Preferences
 using Quadmath
 using Random
 using ..type_definitions
@@ -550,6 +551,9 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
         end
         electron.previous_dt[] = electron.dt[]
     end
+
+    use_stopnow = (load_preference("moment_kinetics", "use_stopnow", "n") == "y")
+
     return time_info(n_variables, t_input["nstep"], end_time, t, dt, previous_dt,
                      dt_before_output, dt_before_last_fail, mk_float(CFL_prefactor),
                      step_to_moments_output, step_to_dfns_output, write_moments_output,
@@ -584,7 +588,7 @@ function setup_time_info(t_input, n_variables, code_time, dt_reload,
                      t_input["steady_state_residual"], 
                      mk_float(t_input["converged_residual_value"]),
                      manufactured_solns_input.use_for_advance, t_input["stopfile_name"],
-                     debug_io, electron_t_params)
+                     use_stopnow, debug_io, electron_t_params)
 end
 
 function get_ion_preconditioners(preconditioner_type, coords, outer_coords;
@@ -2115,7 +2119,7 @@ function time_advance!(pdf, scratch, scratch_implicit, scratch_electron, t_param
     end
 
     if global_rank[] == 0
-        stopfile = Ref(isfile(t_params.stopfile * "now"))
+        stopfile = Ref(isfile(t_params.stopfile))
     else
         stopfile = Ref(false)
     end
@@ -2129,19 +2133,21 @@ function time_advance!(pdf, scratch, scratch_implicit, scratch_electron, t_param
             rm(t_params.stopfile)
         end
     end
-    if global_rank[] == 0
-        stopnow = Ref(isfile(t_params.stopfile * "now"))
-    else
-        stopnow = Ref(false)
-    end
-    MPI.Bcast!(stopnow, comm_world)
-    if stopnow[] && global_rank[] == 0
-        if filesize(t_params.stopfile) > 0
-            error("Found a 'stopnow file' at $(t_params.stopfile)now, but it contains "
-                  * "some data (file size is greater than zero), so will not delete.")
-        end
+    if t_params.use_stopnow
         if global_rank[] == 0
-            rm(t_params.stopfile * "now")
+            stopnow = Ref(isfile(t_params.stopfile * "now"))
+        else
+            stopnow = Ref(false)
+        end
+        MPI.Bcast!(stopnow, comm_world)
+        if stopnow[] && global_rank[] == 0
+            if filesize(t_params.stopfile) > 0
+                error("Found a 'stopnow file' at $(t_params.stopfile)now, but it contains "
+                      * "some data (file size is greater than zero), so will not delete.")
+            end
+            if global_rank[] == 0
+                rm(t_params.stopfile * "now")
+            end
         end
     end
 
@@ -2214,17 +2220,19 @@ function time_advance!(pdf, scratch, scratch_implicit, scratch_electron, t_param
                 finish_now = true
             end
 
-            if global_rank[] == 0
-	        stopnow = Ref(isfile(t_params.stopfile * "now"))
-            else
-	        stopnow = Ref(false)
-            end
-            MPI.Bcast!(stopnow, comm_world)
-            if stopnow[]
-                # Stop cleanly if a file called 'stop' was created
-                println("Found 'stopnow' file $(t_params.stopfile * "now"), aborting run")
-                finish_now = true
-                t_params.dt_before_output[] = t_params.dt[]
+            if t_params.use_stopnow
+                if global_rank[] == 0
+	            stopnow = Ref(isfile(t_params.stopfile * "now"))
+                else
+	            stopnow = Ref(false)
+                end
+                MPI.Bcast!(stopnow, comm_world)
+                if stopnow[]
+                    # Stop cleanly if a file called 'stop' was created
+                    println("Found 'stopnow' file $(t_params.stopfile * "now"), aborting run")
+                    finish_now = true
+                    t_params.dt_before_output[] = t_params.dt[]
+                end
             end
 
             if t_params.adaptive && !t_params.write_after_fixed_step_count
