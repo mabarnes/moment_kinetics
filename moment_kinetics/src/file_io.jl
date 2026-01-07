@@ -2130,7 +2130,7 @@ function open_output_file(prefix, io_input, io_comm)
 end
 
 """
-Re-open an existing output file, selecting the backend based on io_option
+Re-open an existing output file, selecting the backend based on the filename extension
 """
 function reopen_output_file(filename, io_input, io_comm)
     prefix, format_string = splitext(filename)

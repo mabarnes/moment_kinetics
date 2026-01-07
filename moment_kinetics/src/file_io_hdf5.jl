@@ -139,40 +139,7 @@ function write_single_value!(file_or_group::HDF5.H5DataStore, name,
     local_ranges = Tuple(isa(c, mk_int) ? (1:c) : isa(c, coordinate) ? c.local_io_range : c.n for c ∈ coords)
     global_ranges = Tuple(isa(c, mk_int) ? (1:c) : isa(c, coordinate) ? c.global_io_range : c.n for c ∈ coords)
 
-    if N == 1
-        io_var[global_ranges[1]] = @view data[local_ranges[1]]
-    elseif N == 2
-        io_var[global_ranges[1], global_ranges[2]] =
-            @view data[local_ranges[1], local_ranges[2]]
-    elseif N == 3
-        io_var[global_ranges[1], global_ranges[2], global_ranges[3]] =
-            @view data[local_ranges[1], local_ranges[2], local_ranges[3]]
-    elseif N == 4
-        io_var[global_ranges[1], global_ranges[2], global_ranges[3], global_ranges[4]] =
-            @view data[local_ranges[1], local_ranges[2], local_ranges[3], local_ranges[4]]
-    elseif N == 5
-        io_var[global_ranges[1], global_ranges[2], global_ranges[3], global_ranges[4],
-               global_ranges[5]] =
-            @view data[local_ranges[1], local_ranges[2], local_ranges[3], local_ranges[4],
-                       local_ranges[5]]
-    elseif N == 6
-        io_var[global_ranges[1], global_ranges[2], global_ranges[3], global_ranges[4],
-               global_ranges[5], global_ranges[6]] =
-            @view data[local_ranges[1], local_ranges[2], local_ranges[3], local_ranges[4],
-                       local_ranges[5], local_ranges[6]]
-    elseif N == 7
-        io_var[global_ranges[1], global_ranges[2], global_ranges[3], global_ranges[4],
-               global_ranges[5], global_ranges[6], global_ranges[6], global_ranges[7]] =
-            @view data[local_ranges[1], local_ranges[2], local_ranges[3], local_ranges[4],
-                       local_ranges[5], local_ranges[6], local_ranges[7]]
-    elseif N == 8
-        io_var[global_ranges[1], global_ranges[2], global_ranges[3], global_ranges[4],
-               global_ranges[5], global_ranges[6], global_ranges[7], global_ranges[8]] =
-            @view data[local_ranges[1], local_ranges[2], local_ranges[3], local_ranges[4],
-                       local_ranges[5], local_ranges[6], local_ranges[7], local_ranges[8]]
-    else
-        error("data of dimension $N not supported yet")
-    end
+    io_var[global_ranges...] = @view data[local_ranges...]
 
     if description !== nothing
         add_attribute!(file_or_group[name], "description", description)
@@ -437,42 +404,8 @@ function append_to_dynamic_var(io_var::HDF5.Dataset,
             temparray[1:length(data_vec)] .= data_vec
             io_var[:,t_idx] = temparray
         end
-    elseif N == 1
-        io_var[global_ranges[1], t_idx] = @view data[local_ranges[1]]
-    elseif N == 2
-        io_var[global_ranges[1], global_ranges[2], t_idx] =
-            @view data[local_ranges[1], local_ranges[2]]
-    elseif N == 3
-        io_var[global_ranges[1], global_ranges[2], global_ranges[3], t_idx] =
-            @view data[local_ranges[1], local_ranges[2], local_ranges[3]]
-    elseif N == 4
-        io_var[global_ranges[1], global_ranges[2], global_ranges[3], global_ranges[4],
-               t_idx] =
-            @view data[local_ranges[1], local_ranges[2], local_ranges[3], local_ranges[4]]
-    elseif N == 5
-        io_var[global_ranges[1], global_ranges[2], global_ranges[3], global_ranges[4],
-               global_ranges[5], t_idx] =
-            @view data[local_ranges[1], local_ranges[2], local_ranges[3], local_ranges[4],
-                       local_ranges[5]]
-    elseif N == 6
-        io_var[global_ranges[1], global_ranges[2], global_ranges[3], global_ranges[4],
-               global_ranges[5], global_ranges[6], t_idx] =
-            @view data[local_ranges[1], local_ranges[2], local_ranges[3], local_ranges[4],
-                       local_ranges[5], local_ranges[6]]
-    elseif N == 7
-        io_var[global_ranges[1], global_ranges[2], global_ranges[3], global_ranges[4],
-               global_ranges[5], global_ranges[6], global_ranges[6], global_ranges[7],
-               t_idx] =
-            @view data[local_ranges[1], local_ranges[2], local_ranges[3], local_ranges[4],
-                       local_ranges[5], local_ranges[6], local_ranges[7]]
-    elseif N == 8
-        io_var[global_ranges[1], global_ranges[2], global_ranges[3], global_ranges[4],
-               global_ranges[5], global_ranges[6], global_ranges[7], global_ranges[8],
-               t_idx] =
-            @view data[local_ranges[1], local_ranges[2], local_ranges[3], local_ranges[4],
-                       local_ranges[5], local_ranges[6], local_ranges[7], local_ranges[8]]
     else
-        error("data of dimension $N not supported yet")
+        io_var[global_ranges..., t_idx] = @view data[local_ranges...]
     end
 
     return nothing
