@@ -8,8 +8,8 @@ module file_io_netcdf
 
 import moment_kinetics.file_io: io_has_implementation, io_has_parallel,
                                 open_output_file_implementation, create_io_group,
-                                get_group, is_group, get_subgroup_keys, get_variable_keys,
-                                add_attribute!, write_single_value!,
+                                get_variable, get_group, is_group, get_subgroup_keys,
+                                get_variable_keys, add_attribute!, write_single_value!,
                                 create_dynamic_variable!, append_to_dynamic_var
 import moment_kinetics.load_data: open_file_to_read, get_attribute, has_attribute,
                                   load_variable, load_slice
@@ -49,6 +49,10 @@ function create_io_group(parent::NCDataset, name; description=nothing)
     end
 
     return defGroup(parent, name, attrib=attributes)
+end
+
+function get_variable(file_or_group::NCDataset, name::String)
+    return file_or_group[name]
 end
 
 function get_group(file_or_group::NCDataset, name::String)
