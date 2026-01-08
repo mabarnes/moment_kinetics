@@ -8,8 +8,8 @@ module file_io_adios
 
 import moment_kinetics.file_io: io_has_implementation, io_has_parallel,
                                 open_output_file_implementation, create_io_group,
-                                get_group, is_group, get_subgroup_keys, get_variable_keys,
-                                add_attribute!, write_single_value!,
+                                get_variable, get_group, is_group, get_subgroup_keys,
+                                get_variable_keys, add_attribute!, write_single_value!,
                                 create_dynamic_variable!, append_to_dynamic_var
 import moment_kinetics.load_data: open_file_to_read, get_attribute, has_attribute,
                                   load_variable, load_slice
@@ -29,29 +29,35 @@ function io_has_parallel(::Val{adios})
     return true
 end
 
-function open_output_file_implementation(::Val{adios}, prefix, io_input, io_comm)
+function open_output_file_implementation(::Val{adios}, prefix, io_input, aio_or_comm)
     # The ADIOS file will be given by output_dir/run_name with .bp appended.
     filename = string(prefix, ".bp")
 
+    if !io_input.parallel_io
+        error("ADIOS I/O requires parallel_io=true.")
+    end
+
     # Create the new ADIOS file.
     # ADIOS always uses parallel I/O.
-    if !isa(io_comm, AIO) && MPI.Comm_rank(io_comm) == 0 && isfile(filename)
+    if !isa(aio_or_comm, Tuple{AIO,MPI.Comm}) && MPI.Comm_rank(aio_or_comm) == 0 && isfile(filename)
         # If a file with the requested name already exists, remove it.
         rm(filename)
     end
-    MPI.Barrier(io_comm)
 
-    if isa(io_comm, AIO)
-        # io_comm is not actually an MPI communicator, but rather an existing ADIOS
-        # I/O handler. It is passed as io_comm for compatibility with the structure set up
-        # for other I/O backends.
-        adios_io = io_comm
+    if isa(aio_or_comm, Tuple{AIO,MPI.Comm})
+        # aio_or_comm is not an MPI communicator, but rather a Tuple with an existing ADIOS
+        # I/O handler and the communicator. It is passed this way for compatibility with
+        # the structure set up for other I/O backends.
+        adios_io, io_comm = aio_or_comm
+        MPI.Barrier(io_comm)
 
         # Apen file for writing - here appending to an existing file.
         adios_writer = open(adios_io, filename, mode_append)
     else
+        io_comm = aio_or_comm
         adios = adios_init_mpi(io_comm)
         adios_io = declare_io(adios, "WriteIO")
+        MPI.Barrier(io_comm)
 
         # Open file for writing - here appending to an existing file.
         adios_writer = open(adios_io, filename, mode_write)
@@ -62,7 +68,7 @@ function open_output_file_implementation(::Val{adios}, prefix, io_input, io_comm
 
     fid = (adios_io, adios_writer)
 
-    return fid, (filename, io_input, adios_io)
+    return fid, (filename, io_input, (adios_io, io_comm))
 end
 
 function create_io_group(parent::Union{Tuple{AIO,Engine},Tuple{Tuple{AIO,Engine},String}}, name; description=nothing)
@@ -95,7 +101,7 @@ function add_attribute!(group::Tuple{Tuple{AIO,Engine},String}, name, value)
     adios_io, writer = file
     return define_attribute(adios_io, group_name * "/" * name, value)
 end
-function add_attribute!(var::Variable, name, value)
+function add_attribute!(io_var::Variable, name, value)
     error("Don't know how to define attribute from just an ADIOS2.Variable instance. "
           * "Would also need the AIO instance")
 end
@@ -115,9 +121,19 @@ function has_attribute(group::Tuple{Tuple{AIO,Engine},String}, name)
     attrs = inquire_group_attributes(adios_io, group_name)
     return name ∈ [basename(name(a)) for a ∈ attrs]
 end
-function has_attribute(var::Variable, name)
+function has_attribute(io_var::Variable, name)
     error("Don't know how to check attribute from just an ADIOS2.Variable instance. "
           * "Would also need the AIO instance")
+end
+
+function get_variable(file::Tuple{AIO,Engine}, name::String)
+    adios_io, writer = file
+    return (writer, inquire_variable(adios_io, name))
+end
+function get_variable(group::Tuple{Tuple{AIO,Engine},String}, name::String)
+    file, group_name = group
+    adios_io, writer = file
+    return (writer, inquire_variable(adios_io, group_name * "/" * name))
 end
 
 function get_group(file::Tuple{AIO,Engine}, name::String)
@@ -150,12 +166,14 @@ end
 
 function get_variable_keys(file::Tuple{AIO,Engine})
     adios_io, writer = file
-    return inquire_group_variables(adios_io, "")
+    variables = inquire_group_variables(adios_io, "")
+    return [name(v) for v ∈ variables]
 end
 function get_variable_keys(parent::Tuple{Tuple{AIO,Engine},String})
     file, parent_name = parent
     adios_io, writer = file
-    return inquire_group_variables(adios_io, parent_name)
+    variables = inquire_group_variables(adios_io, parent_name)
+    return [basename(name(v)) for v ∈ variables]
 end
 
 function write_single_value!(group::Tuple{Tuple{AIO,Engine},String}, name, args...;
@@ -222,14 +240,15 @@ function write_single_value!(file::Tuple{AIO,Engine}, name,
         # here never change.
         io_var = define_variable(adios_io, name, T, dim_sizes,
                                  Tuple(first(r) for r ∈ global_ranges),
-                                 Tuple(length(r) for r ∈ local_ranges), true)
+                                 Tuple(length(r) for r ∈ local_ranges);
+                                 constant_dims=true)
     end
 
     if description !== nothing
-        add_attribute!(adios_io, name * "/description", description)
+        add_attribute!(file, name * "/description", description)
     end
 
-    put!(io_var, @view(data[local_ranges...]))
+    put!(adios_writer, io_var, @view(data[local_ranges...]))
 
     return nothing
 end
@@ -274,15 +293,11 @@ function create_dynamic_variable!(file::Tuple{AIO,Engine}, name, type,
     dim_sizes = get_fixed_dim_sizes(coords)
     local_ranges = Tuple(isa(c, mk_int) ? (1:c) : isa(c, coordinate) ? c.local_io_range : c.n for c ∈ coords)
     global_ranges = Tuple(isa(c, mk_int) ? (1:c) : isa(c, coordinate) ? c.global_io_range : c.n for c ∈ coords)
-    if overwrite && name ∈ keys(file_or_group)
-        io_var = inquire_variable(adios_io, name)
-    else
-        # Final `true` argument ('constant_dims') indicates that the dimensions passed
-        # here never change.
-        io_var = define_variable(adios_io, name, T, dim_sizes,
-                                 Tuple(first(r) for r ∈ global_ranges),
-                                 Tuple(length(r) for r ∈ local_ranges), true)
-    end
+    # Final `true` argument ('constant_dims') indicates that the dimensions passed
+    # here never change.
+    io_var = define_variable(adios_io, name, type, dim_sizes,
+                             Tuple(first(r) for r ∈ global_ranges),
+                             Tuple(length(r) for r ∈ local_ranges); constant_dims=true)
 
     # Add attribute listing the dimensions belonging to this variable
     dim_names = Tuple(c.name for c ∈ coords)
@@ -295,7 +310,7 @@ function create_dynamic_variable!(file::Tuple{AIO,Engine}, name, type,
         add_variable_attribute!(adios_io, name, "units", units)
     end
 
-    return var
+    return io_var
 end
 
 function append_to_dynamic_var(writer_var::Tuple{Engine,Variable},
