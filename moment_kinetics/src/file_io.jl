@@ -2842,7 +2842,7 @@ function write_timing_data(io_moments, t_idx, dfns=false)
             # If we got the length of `time:$this_name`, the variable might have
             # the wrong length (e.g. if it has only just been created and has
             # length 1).
-            length_check_var = io_group["time:" * first(keys(timer_names_all_ranks))]
+            length_check_var = get_variable(io_group, "time:" * first(keys(timer_names_all_ranks)))
             this_t_idx = size(length_check_var, ndims(length_check_var))
         else
             this_t_idx = t_idx
@@ -2855,9 +2855,9 @@ function write_timing_data(io_moments, t_idx, dfns=false)
                            global_io_range=1:block_size[])
         end
         function write_level(names_dict, this_name)
-            io_time = io_group["time:" * this_name]
-            io_ncalls = io_group["ncalls:" * this_name]
-            io_allocs = io_group["allocs:" * this_name]
+            io_time = get_variable(io_group, "time:" * this_name)
+            io_ncalls = get_variable(io_group, "ncalls:" * this_name)
+            io_allocs = get_variable(io_group, "allocs:" * this_name)
             @views append_to_dynamic_var(io_time, gathered_times_data[counter,:],
                                          this_t_idx, parallel_io, timer_coord)
             @views append_to_dynamic_var(io_ncalls, gathered_ncalls_data[counter,:],
