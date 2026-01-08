@@ -2826,6 +2826,11 @@ function write_timing_data(io_moments, t_idx, dfns=false)
         gathered_ncalls_data = reshape(gathered_ncalls_data, n_timers, block_size[])
         gathered_allocs_data = reshape(gathered_allocs_data, n_timers, block_size[])
 
+        # Transpose so that the data being written is contiguous.
+        gathered_times_data = Matrix(gathered_times_data')
+        gathered_ncalls_data = Matrix(gathered_ncalls_data')
+        gathered_allocs_data = Matrix(gathered_allocs_data')
+
         # Write the timer variables
 
         # We iterate through the variables in the same order as they were packed into
@@ -2858,11 +2863,11 @@ function write_timing_data(io_moments, t_idx, dfns=false)
             io_time = get_variable(io_group, "time:" * this_name)
             io_ncalls = get_variable(io_group, "ncalls:" * this_name)
             io_allocs = get_variable(io_group, "allocs:" * this_name)
-            @views append_to_dynamic_var(io_time, gathered_times_data[counter,:],
+            @views append_to_dynamic_var(io_time, gathered_times_data[:,counter],
                                          this_t_idx, parallel_io, timer_coord)
-            @views append_to_dynamic_var(io_ncalls, gathered_ncalls_data[counter,:],
+            @views append_to_dynamic_var(io_ncalls, gathered_ncalls_data[:,counter],
                                          this_t_idx, parallel_io, timer_coord)
-            @views append_to_dynamic_var(io_allocs, gathered_allocs_data[counter,:],
+            @views append_to_dynamic_var(io_allocs, gathered_allocs_data[:,counter],
                                          this_t_idx, parallel_io, timer_coord)
             counter += 1
             for (sub_name, sub_dict) ∈ pairs(names_dict)
