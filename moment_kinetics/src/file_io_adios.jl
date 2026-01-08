@@ -71,17 +71,17 @@ function open_output_file_implementation(::Val{adios}, prefix, io_input, aio_or_
     return fid, (filename, io_input, (adios_io, io_comm))
 end
 
-function create_io_group(parent::Union{Tuple{AIO,Engine},Tuple{Tuple{AIO,Engine},String}}, name; description=nothing)
+function create_io_group(parent::Union{Tuple{AIO,Engine},Tuple{Tuple{AIO,Engine},String}}, group_name; description=nothing)
     # The C API that ADIOS2.jl wraps apparently does not support independent handles for
     # groups. As a workaround, we represent a group by a Tuple of the AIO/Engine and the
-    # group name. The group should be implicitly created if it does not already exsist
+    # group group_name. The group should be implicitly created if it does not already exsist
     # when a variable or attribute is added to it.
 
     if isa(parent, Tuple{AIO,Engine})
-        group = (parent, name)
+        group = (parent, group_name)
     else
         file, parent_name = parent
-        group = (file, parent_name * "/" * name)
+        group = (file, parent_name * "/" * group_name)
     end
 
     if description !== nothing
@@ -91,67 +91,67 @@ function create_io_group(parent::Union{Tuple{AIO,Engine},Tuple{Tuple{AIO,Engine}
     return group
 end
 
-function add_attribute!(file::Tuple{AIO,Engine}, name, value)
+function add_attribute!(file::Tuple{AIO,Engine}, attribute_name, value)
     adios_io, writer = file
-    return define_attribute(adios_io, name, value)
+    return define_attribute(adios_io, attribute_name, value)
 end
-function add_attribute!(group::Tuple{Tuple{AIO,Engine},String}, name, value)
+function add_attribute!(group::Tuple{Tuple{AIO,Engine},String}, attribute_name, value)
     # Add attribute to a Group.
     file, group_name = group
     adios_io, writer = file
-    return define_attribute(adios_io, group_name * "/" * name, value)
+    return define_attribute(adios_io, group_name * "/" * attribute_name, value)
 end
-function add_attribute!(io_var::Variable, name, value)
+function add_attribute!(io_var::Variable, attribute_name, value)
     error("Don't know how to define attribute from just an ADIOS2.Variable instance. "
           * "Would also need the AIO instance")
 end
 
-function add_variable_attribute!(adios_io::AIO, variable_name, name, value)
-    return define_variable_attribute(adios_io, name, value, variable_name)
+function add_variable_attribute!(adios_io::AIO, variable_name, attribute_name, value)
+    return define_variable_attribute(adios_io, attribute_name, value, variable_name)
 end
 
-function has_attribute(file::Tuple{AIO,Engine}, name)
+function has_attribute(file::Tuple{AIO,Engine}, attribute_name)
     adios_io, writer = file
     attrs = inquire_group_attributes(adios_io, "")
-    return name ∈ [basename(name(a)) for a ∈ attrs]
+    return attribute_name ∈ [basename(name(a)) for a ∈ attrs]
 end
-function has_attribute(group::Tuple{Tuple{AIO,Engine},String}, name)
+function has_attribute(group::Tuple{Tuple{AIO,Engine},String}, attribute_name)
     file, group_name = group
     adios_io, writer = file
     attrs = inquire_group_attributes(adios_io, group_name)
-    return name ∈ [basename(name(a)) for a ∈ attrs]
+    return attribute_name ∈ [basename(name(a)) for a ∈ attrs]
 end
-function has_attribute(io_var::Variable, name)
+function has_attribute(io_var::Variable, attribute_name)
     error("Don't know how to check attribute from just an ADIOS2.Variable instance. "
           * "Would also need the AIO instance")
 end
 
-function get_variable(file::Tuple{AIO,Engine}, name::String)
+function get_variable(file::Tuple{AIO,Engine}, variable_name::String)
     adios_io, writer = file
-    return (writer, inquire_variable(adios_io, name))
+    return (writer, inquire_variable(adios_io, variable_name))
 end
-function get_variable(group::Tuple{Tuple{AIO,Engine},String}, name::String)
+function get_variable(group::Tuple{Tuple{AIO,Engine},String}, variable_name::String)
     file, group_name = group
     adios_io, writer = file
-    return (writer, inquire_variable(adios_io, group_name * "/" * name))
+    return (writer, inquire_variable(adios_io, group_name * "/" * variable_name))
 end
 
-function get_group(file::Tuple{AIO,Engine}, name::String)
-    return (file, name)
+function get_group(file::Tuple{AIO,Engine}, group_name::String)
+    return (file, group_name)
 end
-function get_group(parent::Tuple{Tuple{AIO,Engine},String}, name::String)
+function get_group(parent::Tuple{Tuple{AIO,Engine},String}, group_name::String)
     file, parent_name = parent
-    return (file, parent_name * "/" * name)
+    return (file, parent_name * "/" * group_name)
 end
 
-function is_group(file::Tuple{AIO,Engine}, name::String)
+function is_group(file::Tuple{AIO,Engine}, group_name::String)
     adios_io, writer = file
-    return name ∈ inquire_subgroups(adios_io, "")
+    return group_name ∈ inquire_subgroups(adios_io, "")
 end
-function is_group(parent::Tuple{Tuple{AIO,Engine},String}, name::String)
+function is_group(parent::Tuple{Tuple{AIO,Engine},String}, group_name::String)
     file, parent_name = parent
     adios_io, writer = file
-    return name ∈ inquire_subgroups(adios_io, parent_name)
+    return group_name ∈ inquire_subgroups(adios_io, parent_name)
 end
 
 function get_subgroup_keys(file::Tuple{AIO,Engine})
@@ -176,12 +176,12 @@ function get_variable_keys(parent::Tuple{Tuple{AIO,Engine},String})
     return [basename(name(v)) for v ∈ variables]
 end
 
-function write_single_value!(group::Tuple{Tuple{AIO,Engine},String}, name, args...;
+function write_single_value!(group::Tuple{Tuple{AIO,Engine},String}, variable_name, args...;
                              kwargs...)
     file, group_name = group
-    return write_single_value!(file, group_name * "/" * name, args...; kwargs...)
+    return write_single_value!(file, group_name * "/" * variable_name, args...; kwargs...)
 end
-function write_single_value!(file::Tuple{AIO,Engine}, name,
+function write_single_value!(file::Tuple{AIO,Engine}, variable_name,
                              data::Union{Number, AbstractString, AbstractArray{T,N}},
                              coords::Union{coordinate,mk_int,NamedTuple}...; parallel_io,
                              description=nothing, units=nothing,
@@ -205,16 +205,16 @@ function write_single_value!(file::Tuple{AIO,Engine}, name,
             # Convert to UInt8 because ADIOS cannot read/write Bool.
             data = UInt8(data)
         end
-        if !(overwrite && name ∈ inquire_all_variables(adios_io))
-            io_var = define_variable(adios_io, name, typeof(data))
+        if !(overwrite && variable_name ∈ [name(v) for v ∈ inquire_all_variables(adios_io)])
+            io_var = define_variable(adios_io, variable_name, typeof(data))
             if description !== nothing
-                add_variable_attribute!(adios_io, name, "description", description)
+                add_variable_attribute!(adios_io, variable_name, "description", description)
             end
             if units !== nothing
-                add_variable_attribute!(adios_io, name, "units", units)
+                add_variable_attribute!(adios_io, variable_name, "units", units)
             end
         else
-            io_var = inquire_variable(adios_io, name)
+            io_var = inquire_variable(adios_io, variable_name)
         end
         if global_rank[] == 0
             put!(adios_writer, io_var, data)
@@ -233,19 +233,19 @@ function write_single_value!(file::Tuple{AIO,Engine}, name,
     dim_sizes = get_fixed_dim_sizes(coords)
     local_ranges = Tuple(isa(c, mk_int) ? (1:c) : isa(c, coordinate) ? c.local_io_range : c.n for c ∈ coords)
     global_ranges = Tuple(isa(c, mk_int) ? (1:c) : isa(c, coordinate) ? c.global_io_range : c.n for c ∈ coords)
-    if overwrite && name ∈ keys(file_or_group)
-        io_var = inquire_variable(adios_io, name)
+    if overwrite && variable_name ∈ keys(file_or_group)
+        io_var = inquire_variable(adios_io, variable_name)
     else
         # Final `true` argument ('constant_dims') indicates that the dimensions passed
         # here never change.
-        io_var = define_variable(adios_io, name, T, dim_sizes,
-                                 Tuple(first(r) for r ∈ global_ranges),
+        io_var = define_variable(adios_io, variable_name, T, dim_sizes,
+                                 Tuple(first(r) - 1 for r ∈ global_ranges), # Note - need to convert to 0-based indexing for the offset
                                  Tuple(length(r) for r ∈ local_ranges);
                                  constant_dims=true)
     end
 
     if description !== nothing
-        add_attribute!(file, name * "/description", description)
+        add_attribute!(file, variable_name * "/description", description)
     end
 
     put!(adios_writer, io_var, @view(data[local_ranges...]))
@@ -254,11 +254,11 @@ function write_single_value!(file::Tuple{AIO,Engine}, name,
 end
 
 # Convert Enum values to String to be written to file
-function write_single_value!(group::Tuple{Tuple{AIO,Engine},String}, name, data::Enum; kwargs...)
-    return write_single_value!(group, name, string(data); kwargs...)
+function write_single_value!(group::Tuple{Tuple{AIO,Engine},String}, variable_name, data::Enum; kwargs...)
+    return write_single_value!(group, variable_name, string(data); kwargs...)
 end
-function write_single_value!(file::Tuple{AIO,Engine}, name, data::Enum; kwargs...)
-    return write_single_value!(file, name, string(data); kwargs...)
+function write_single_value!(file::Tuple{AIO,Engine}, variable_name, data::Enum; kwargs...)
+    return write_single_value!(file, variable_name, string(data); kwargs...)
 end
 
 """
@@ -271,12 +271,12 @@ function get_fixed_dim_sizes(coords)
     return Tuple(isa(c, mk_int) ? c : (isa(c, coordinate) ? c.n_global : c.n) for c in coords)
 end
 
-function create_dynamic_variable!(group::Tuple{Tuple{AIO,Engine},String}, name, args...;
+function create_dynamic_variable!(group::Tuple{Tuple{AIO,Engine},String}, variable_name, args...;
                                   kwargs...)
     file, group_name = group
-    return create_dynamic_variable!(file, group_name * "/" * name, args...; kwargs...)
+    return create_dynamic_variable!(file, group_name * "/" * variable_name, args...; kwargs...)
 end
-function create_dynamic_variable!(file::Tuple{AIO,Engine}, name, type,
+function create_dynamic_variable!(file::Tuple{AIO,Engine}, variable_name, type,
                                   coords::Union{coordinate,NamedTuple}...; parallel_io,
                                   description=nothing, units=nothing)
 
@@ -295,19 +295,19 @@ function create_dynamic_variable!(file::Tuple{AIO,Engine}, name, type,
     global_ranges = Tuple(isa(c, mk_int) ? (1:c) : isa(c, coordinate) ? c.global_io_range : c.n for c ∈ coords)
     # Final `true` argument ('constant_dims') indicates that the dimensions passed
     # here never change.
-    io_var = define_variable(adios_io, name, type, dim_sizes,
-                             Tuple(first(r) for r ∈ global_ranges),
+    io_var = define_variable(adios_io, variable_name, type, dim_sizes,
+                             Tuple(first(r) - 1 for r ∈ global_ranges), # Note - need to convert to 0-based indexing for the offset
                              Tuple(length(r) for r ∈ local_ranges); constant_dims=true)
 
     # Add attribute listing the dimensions belonging to this variable
     dim_names = Tuple(c.name for c ∈ coords)
-    add_variable_attribute!(adios_io, name, "dims", join(dim_names, ","))
+    add_variable_attribute!(adios_io, variable_name, "dims", join(dim_names, ","))
 
     if description !== nothing
-        add_variable_attribute!(adios_io, name, "description", description)
+        add_variable_attribute!(adios_io, variable_name, "description", description)
     end
     if units !== nothing
-        add_variable_attribute!(adios_io, name, "units", units)
+        add_variable_attribute!(adios_io, variable_name, "units", units)
     end
 
     return io_var
@@ -362,6 +362,12 @@ function Base.close(file::Tuple{AIO,Engine})
     return nothing
 end
 
+# Overload to get dimensions of a variable from our Tuple{Engine,Variable}
+function Base.ndims(engine_var::Tuple{Engine,Variable})
+    writer, io_var = engine_var
+    return ndims(io_var)
+end
+
 function open_file_to_read(::Val{adios}, filename)
     adios = adios_init_serial()
     adios_io = declare_io(adios, "ReadIO")
@@ -372,35 +378,35 @@ function open_file_to_read(::Val{adios}, filename)
     return (adios_io, adios_reader)
 end
 
-function load_variable(file_or_group::Tuple{AIO,Engine}, name::String)
+function load_variable(file_or_group::Tuple{AIO,Engine}, variable_name::String)
     error("load_variable not implemented yet for ADIOS")
     # This overload deals with cases where fid is a NetCDF `Dataset` (which could be a
     # file or a group).
     try
-        if size(file_or_group[name].var) == ()
-            var = file_or_group[name].var[]
+        if size(file_or_group[variable_name].var) == ()
+            var = file_or_group[variable_name].var[]
         else
-            var = copy(file_or_group[name].var)
+            var = copy(file_or_group[variable_name].var)
         end
         if isa(var, UInt8)
             var = (var == UInt8(true))
         end
         return var
     catch
-        println("An error occured while loading $name")
+        println("An error occured while loading $variable_name")
         rethrow()
     end
 end
 
-function load_slice(file_or_group::Tuple{AIO,Engine}, name::String, slices_or_indices...)
+function load_slice(file_or_group::Tuple{AIO,Engine}, variable_name::String, slices_or_indices...)
     error("load_slice not implemented yet for ADIOS")
     # This overload deals with cases where fid is a NetCDF `Dataset` (which could be a
     # file or a group).
     try
-        var = file_or_group[name].var[slices_or_indices...]
+        var = file_or_group[variable_name].var[slices_or_indices...]
         return var
     catch
-        println("An error occured while loading $name")
+        println("An error occured while loading $variable_name")
         rethrow()
     end
 end
