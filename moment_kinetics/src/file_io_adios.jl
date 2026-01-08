@@ -64,6 +64,9 @@ function open_output_file_implementation(::Val{adios}, prefix, io_input, aio_or_
     end
 
     # ADIOS requires that we begin a 'step' as well as opening the file.
+    # Note that if we did not always close the file after each output, for ADIOS we would
+    # need to add functions to the file_io interface that could call
+    # begin_step()/end_step() for each output.
     begin_step(adios_writer)
 
     fid = (adios_io, adios_writer)

@@ -150,7 +150,9 @@ function run_moment_kinetics(input_dict::OptionsDict; restart=false, restart_tim
             # Print the timing information
             format_global_timer(; show_output=true)
         end
-        write_final_timing_data_to_binary(mk_state[end-1:end]...)
+        # temp_arrays returned to ensure these arrays are not garbage-collected until
+        # after the output files are closed.
+        temp_arrays = write_final_timing_data_to_binary(mk_state[end-1:end]...)
 
         # clean up i/o and communications
         # last 3 elements of mk_state are ascii_io, io_moments, and io_dfns

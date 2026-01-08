@@ -2604,14 +2604,16 @@ file
     end
 
     if timing_data
-        write_timing_data(io_moments, t_idx, dfns)
+        timing_data_io_arrays = write_timing_data(io_moments, t_idx, dfns)
+    else
+        timing_data_io_arrays = nothing
     end
 
     @serial_region begin
         closefile && close(io_moments.fid)
     end
 
-    return nothing
+    return timing_data_io_arrays
 end
 
 function write_timing_data(io_moments, t_idx, dfns=false)
@@ -2884,6 +2886,7 @@ function write_timing_data(io_moments, t_idx, dfns=false)
     # without needing to resize it.
     global_timer_string_size = 10000 # 100 characters x 100 lines seems like a reasonable maximum size.
     global_timer_description = "Formatted representation of global_timer"
+    string_to_write = ""
     if global_rank[] == 0 || (block_rank[] == 0 && !parallel_io)
         if t_idx > 1 || t_idx == -1
             if t_idx == -1
@@ -2945,7 +2948,8 @@ function write_timing_data(io_moments, t_idx, dfns=false)
         end
     end
 
-    return nothing
+    return gathered_times_data, gathered_ncalls_data, gathered_allocs_data,
+           string_to_write
 end
 
 """
@@ -2979,14 +2983,14 @@ function write_final_timing_data_to_binary(io_or_file_info_moments, io_or_file_i
         io_dfns_moments = io_dfns.io_moments
     end
 
-    write_timing_data(io_moments, -1)
-    write_timing_data(io_dfns_moments, -1, true)
+    moments_timing_data_io_arrays = write_timing_data(io_moments, -1)
+    dfns_timing_data_io_arrays = write_timing_data(io_dfns_moments, -1, true)
 
     @serial_region begin
         closefile && close(io_moments.fid)
         closefile && close(io_dfns.fid)
     end
-    return nothing
+    return moments_timing_data_io_arrays, dfns_timing_data_io_arrays
 end
 
 """
@@ -3462,10 +3466,13 @@ binary output file
 
     # Write the moments for this time slice to the output file.
     # This also updates the time.
-    write_all_moments_data_to_binary(scratch, moments, fields, n_ion_species,
-                                     n_neutral_species, io_dfns_moments, t_idx,
-                                     time_for_run, t_params, nl_solver_params, r, z, true;
-                                     timing_data=!is_debug)
+    # temp_arrays returned to ensure these arrays are not garbage-collected until after
+    # the output files are closed.
+    temp_arrays = write_all_moments_data_to_binary(scratch, moments, fields,
+                                                   n_ion_species, n_neutral_species,
+                                                   io_dfns_moments, t_idx, time_for_run,
+                                                   t_params, nl_solver_params, r, z, true;
+                                                   timing_data=!is_debug)
 
     @serial_region begin
         # add the distribution function data at this time slice to the output file
