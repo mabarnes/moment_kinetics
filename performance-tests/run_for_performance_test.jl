@@ -1,7 +1,5 @@
 # Similar to run_moment_kinetics.jl script, but first runs a single timestep to ensure all
 # compilation is complete, then starts a new run.
-using Pkg
-Pkg.activate(".")
 
 using MPI
 MPI.Init()
