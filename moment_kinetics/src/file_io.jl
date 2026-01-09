@@ -3746,7 +3746,7 @@ function write_electron_state(scratch_electron, moments, phi::AbstractMatrix{mk_
 
         if pdf_electron_converged
             add_attribute!(io_initial_electron.fid, "pdf_electron_converged",
-                           pdf_electron_converged)
+                           mk_int(pdf_electron_converged))
         end
 
         closefile && close(io_initial_electron.fid)
