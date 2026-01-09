@@ -1218,7 +1218,6 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
             dynamic, "failure_counter", mk_int; parallel_io=parallel_io,
             description="cumulative number of timestep failures for the run")
 
-        dynamic_keys = collect(keys(dynamic))
         for failure_var ∈ keys(t_params.failure_caused_by)
             create_dynamic_variable!(
                 dynamic, "failure_caused_by_$failure_var", mk_int;
@@ -1752,20 +1751,32 @@ function define_dynamic_electron_moment_variables!(fid, r::coordinate, z::coordi
             dynamic, "electron_failure_counter", mk_int, io_r; parallel_io=parallel_io,
             description="cumulative number of electron pseudo-timestep failures for the run")
 
-        for failure_var ∈ keys(t_params.failure_caused_by)
-            create_dynamic_variable!(
-                dynamic, "electron_failure_caused_by_$failure_var", mk_int, io_r;
-                parallel_io=parallel_io,
-                description="cumulative count of how many times $failure_var caused an "
-                            * "electron pseudo-timestep failure for the run")
+        if isa(t_params.failure_caused_by, AbstractDict)
+            for failure_var ∈ keys(t_params.failure_caused_by)
+                create_dynamic_variable!(
+                    dynamic, "electron_failure_caused_by_$failure_var", mk_int, io_r;
+                    parallel_io=parallel_io,
+                    description="cumulative count of how many times $failure_var caused an "
+                                * "electron pseudo-timestep failure for the run")
+            end
+        else
+            # When failures are recorded per-r-index (so t_params.failure_caused_by is a
+            # Vector{OrderedDict{String,mk_int}}) we need to do more work to convert into
+            # a form that can be written. For now just skip, as this is not often needed.
         end
 
-        for limit_var ∈ keys(t_params.limit_caused_by)
-            create_dynamic_variable!(
-                dynamic, "electron_limit_caused_by_$limit_var", mk_int, io_r;
-                parallel_io=parallel_io,
-                description="cumulative count of how many times $limit_var limited the "
-                            * "electron pseudo-timestep for the run")
+        if isa(t_params.limit_caused_by, AbstractDict)
+            for limit_var ∈ keys(t_params.limit_caused_by)
+                create_dynamic_variable!(
+                    dynamic, "electron_limit_caused_by_$limit_var", mk_int, io_r;
+                    parallel_io=parallel_io,
+                    description="cumulative count of how many times $limit_var limited the "
+                                * "electron pseudo-timestep for the run")
+            end
+        else
+            # When limits are recorded per-r-index (so t_params.limit_caused_by is a
+            # Vector{OrderedDict{String,mk_int}}) we need to do more work to convert into
+            # a form that can be written. For now just skip, as this is not often needed.
         end
 
         io_electron_dt_before_last_fail = create_dynamic_variable!(
@@ -3290,23 +3301,39 @@ function write_electron_moments_data_to_binary(scratch, moments, t_params, elect
                 only_root = comm_anysv_subblock[]
             end
 
-            for (k,v) ∈ pairs(electron_t_params.failure_caused_by)
-                # Only write these variables if they were created in the output file,
-                # because sometimes (e.g. for debug_io=true) they are not needed.
-                if k ∈ dynamic_keys
-                    io_var = get_variable(dynamic, "electron_failure_caused_by_$k")
-                    append_to_dynamic_var(io_var, get_from_ir_1d(v), t_idx, parallel_io,
-                                          r; only_root=only_root)
+            if isa(electron_t_params.failure_caused_by, AbstractDict)
+                for (k,v) ∈ pairs(electron_t_params.failure_caused_by)
+                    # Only write these variables if they were created in the output file,
+                    # because sometimes (e.g. for debug_io=true) they are not needed.
+                    if k ∈ dynamic_keys
+                        io_var = get_variable(dynamic, "electron_failure_caused_by_$k")
+                        append_to_dynamic_var(io_var, get_from_ir_1d(v), t_idx, parallel_io,
+                                              r; only_root=only_root)
+                    end
                 end
+            else
+                # When failures are recorded per-r-index (so t_params.failure_caused_by is
+                # a Vector{OrderedDict{String,mk_int}}) we need to do more work to convert
+                # into a form that can be written. For now just skip, although this
+                # information could be useful when using pseudotimestepping to advance
+                # electrons to steady state.
             end
-            for (k,v) ∈ pairs(electron_t_params.limit_caused_by)
-                # Only write these variables if they were created in the output file,
-                # because sometimes (e.g. for debug_io=true) they are not needed.
-                if k ∈ dynamic_keys
-                    io_var = get_variable(dynamic, "electron_limit_caused_by_$k")
-                    append_to_dynamic_var(io_var, get_from_ir_1d(v), t_idx, parallel_io,
-                                          r; only_root=only_root)
+            if isa(electron_t_params.limit_caused_by, AbstractDict)
+                for (k,v) ∈ pairs(electron_t_params.limit_caused_by)
+                    # Only write these variables if they were created in the output file,
+                    # because sometimes (e.g. for debug_io=true) they are not needed.
+                    if k ∈ dynamic_keys
+                        io_var = get_variable(dynamic, "electron_limit_caused_by_$k")
+                        append_to_dynamic_var(io_var, get_from_ir_1d(v), t_idx, parallel_io,
+                                              r; only_root=only_root)
+                    end
                 end
+            else
+                # When failures are recorded per-r-index (so t_params.failure_caused_by is
+                # a Vector{OrderedDict{String,mk_int}}) we need to do more work to convert
+                # into a form that can be written. For now just skip, although this
+                # information could be useful when using pseudotimestepping to advance
+                # electrons to steady state.
             end
             append_to_dynamic_var(io_moments.electron_dt_before_last_fail,
                                   get_from_ir_1d(electron_t_params.dt_before_last_fail),
