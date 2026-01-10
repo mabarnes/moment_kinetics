@@ -338,7 +338,7 @@ function append_to_dynamic_var(io_var::Tuple{Variable,AdiosFile},
     return nothing
 end
 
-function mk_close(file::AdiosFile)
+function io_close(file::AdiosFile)
 
     # ADIOS requires that we end a 'step' as well as closing the file.
     end_step(file.engine)

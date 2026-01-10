@@ -600,7 +600,7 @@ function setup_electron_io(io_input, vpa, vperp, z, r, composition, collisions,
                                           description="electrostatic potential",
                                           units="T_ref/e")
 
-        mk_close(fid)
+        io_close(fid)
 
         return file_info
     end
@@ -695,7 +695,7 @@ function io_finalize!(file_info::Tuple{String,io_input_struct,MPI.Comm})
 end
 
 # Default implementation
-function mk_close(fid)
+function io_close(fid)
     return close(fid)
 end
 
@@ -2221,7 +2221,7 @@ function setup_moments_io(prefix, io_input, vz, vr, vzeta, vpa, vperp, r, z,
             io_input, external_source_settings, evolve_density, evolve_upar,
             evolve_p, composition.electron_physics, t_params, nl_solver_params)
 
-        mk_close(fid)
+        io_close(fid)
 
         return file_info
     end
@@ -2397,7 +2397,7 @@ function setup_dfns_io(prefix, io_input, r, z, vperp, vpa, vzeta, vr, vz, compos
                                                 description="call-site label")
         end
 
-        mk_close(fid)
+        io_close(fid)
 
         return file_info
     end
@@ -2632,7 +2632,7 @@ file
     end
 
     @serial_region begin
-        closefile && mk_close(io_moments.fid)
+        closefile && io_close(io_moments.fid)
     end
 
     return timing_data_io_arrays
@@ -3009,8 +3009,8 @@ function write_final_timing_data_to_binary(io_or_file_info_moments, io_or_file_i
     dfns_timing_data_io_arrays = write_timing_data(io_dfns_moments, -1, true)
 
     @serial_region begin
-        closefile && mk_close(io_moments.fid)
-        closefile && mk_close(io_dfns.fid)
+        closefile && io_close(io_moments.fid)
+        closefile && io_close(io_dfns.fid)
     end
     return moments_timing_data_io_arrays, dfns_timing_data_io_arrays
 end
@@ -3523,7 +3523,7 @@ binary output file
         write_neutral_dfns_data_to_binary(scratch, t_params, n_neutral_species, io_dfns,
                                           t_idx, r, z, vzeta, vr, vz)
 
-        closefile && mk_close(io_dfns.fid)
+        closefile && io_close(io_dfns.fid)
     end
     return nothing
 end
@@ -3760,7 +3760,7 @@ function write_electron_state(scratch_electron, moments, phi::AbstractMatrix{mk_
                            mk_int(pdf_electron_converged))
         end
 
-        closefile && mk_close(io_initial_electron.fid)
+        closefile && io_close(io_initial_electron.fid)
     end
 
     return nothing
@@ -3788,12 +3788,12 @@ function finish_file_io(ascii_io::Union{ascii_ios,Nothing},
         if isa(binary_moments, Tuple)
             io_finalize!(binary_moments)
         elseif binary_moments !== nothing
-            mk_close(binary_moments.fid)
+            io_close(binary_moments.fid)
         end
         if isa(binary_dfns, Tuple)
             io_finalize!(binary_dfns)
         elseif binary_dfns !== nothing
-            mk_close(binary_dfns.fid)
+            io_close(binary_dfns.fid)
         end
     end
     return nothing
