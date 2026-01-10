@@ -15,7 +15,7 @@ import moment_kinetics.load_data: open_file_to_read, get_attribute, has_attribut
                                   load_variable, load_slice
 using moment_kinetics.communication
 using moment_kinetics.coordinates: coordinate
-using moment_kinetics.input_structs: adios
+using moment_kinetics.input_structs: adios, io_input_struct
 using moment_kinetics.type_definitions
 
 using ADIOS2
