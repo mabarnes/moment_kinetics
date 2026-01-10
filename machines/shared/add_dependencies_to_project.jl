@@ -67,7 +67,9 @@ for p ∈ to_rm
     catch
     end
 end
-to_add = ["HDF5", "MPI", "MPIPreferences", "PackageCompiler", "SpecialFunctions"]
+println("check ADIOS2 path ", ENV["JULIA_ADIOS2_PATH"])
+flush(stdout)
+to_add = ["ADIOS2", "HDF5", "MPI", "MPIPreferences", "PackageCompiler", "SpecialFunctions"]
 if !mk_preferences["batch_system"] && mk_preferences["use_revise"] == "y"
     push!(to_add, "Revise")
 end
@@ -278,6 +280,11 @@ if mk_preferences["use_system_mpi"] == "y"
               * "hdf5_library_setting=$(machine_settings["hdf5_library_setting"])")
     end
 end
+
+# ADIOS2 setup
+##############
+
+Pkg.build()
 
 
 Pkg.develop(path="moment_kinetics")
