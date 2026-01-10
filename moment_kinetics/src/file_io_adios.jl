@@ -13,7 +13,7 @@ import moment_kinetics.file_io: io_has_implementation, io_has_parallel,
                                 create_dynamic_variable!, append_to_dynamic_var
 import moment_kinetics.load_data: open_file_to_read, get_attribute, has_attribute,
                                   load_variable, load_slice
-using file_io: io_input_struct
+using moment_kinetics.file_io: io_input_struct
 using moment_kinetics.communication
 using moment_kinetics.coordinates: coordinate
 using moment_kinetics.input_structs: adios
@@ -131,7 +131,7 @@ function get_variable(file::AdiosFile, variable_name::String)
 end
 function get_variable(group::Tuple{AdiosFile,String}, variable_name::String)
     file, group_name = group
-    return (writer, inquire_variable(file.io, group_name * "/" * variable_name))
+    return (file, inquire_variable(file.io, group_name * "/" * variable_name))
 end
 
 function get_group(file::AdiosFile, group_name::String)
@@ -207,7 +207,7 @@ function write_single_value!(file::AdiosFile, variable_name,
             io_var = inquire_variable(file.io, variable_name)
         end
         if global_rank[] == 0
-            put!(file.writer, io_var, data)
+            put!(file.engine, io_var, data)
         end
         return nothing
     end
