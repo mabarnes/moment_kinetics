@@ -13,9 +13,10 @@ import moment_kinetics.file_io: io_has_implementation, io_has_parallel,
                                 create_dynamic_variable!, append_to_dynamic_var
 import moment_kinetics.load_data: open_file_to_read, get_attribute, has_attribute,
                                   load_variable, load_slice
+using file_io: io_input_struct
 using moment_kinetics.communication
 using moment_kinetics.coordinates: coordinate
-using moment_kinetics.input_structs: adios, io_input_struct
+using moment_kinetics.input_structs: adios
 using moment_kinetics.type_definitions
 
 using ADIOS2
