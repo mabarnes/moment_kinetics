@@ -584,6 +584,11 @@ function load_slice(file::AdiosFile, variable_name::String, slices_or_indices...
         end
         # end _normalize_data_shape
         var = result
+        # End of cut and paste code from https://github.com/eschnett/ADIOS2.jl/pull/21.
+
+        # Remove unwanted dimensions of `var`
+        vardims = [d for (i,d) ∈ enumerate(size(var)) if !drop_dims[i]]
+        var = reshape(var, vardims)
 
         return var
     catch
