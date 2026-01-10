@@ -369,21 +369,7 @@ function load_variable(group::Tuple{AdiosFile,String}, variable_name::String)
     return load_variable(file, group_name * "/" * variable_name)
 end
 function load_variable(file::AdiosFile, variable_name::String)
-    error("load_variable not implemented yet for ADIOS")
-    try
-        if size(file_or_group[variable_name].var) == ()
-            var = file_or_group[variable_name].var[]
-        else
-            var = copy(file_or_group[variable_name].var)
-        end
-        if isa(var, UInt8)
-            var = (var == UInt8(true))
-        end
-        return var
-    catch
-        println("An error occured while loading $variable_name")
-        rethrow()
-    end
+    return adios_load(file, variable_name)
 end
 
 function load_slice(group::Tuple{AdiosFile,String}, variable_name::String, slices_or_indices...)
@@ -391,11 +377,213 @@ function load_slice(group::Tuple{AdiosFile,String}, variable_name::String, slice
     return load_variable(file, group_name * "/" * variable_name, slices_or_indices...)
 end
 function load_slice(file::AdiosFile, variable_name::String, slices_or_indices...)
-    error("load_slice not implemented yet for ADIOS")
-    # This overload deals with cases where fid is a NetCDF `Dataset` (which could be a
-    # file or a group).
+
+    nd = length(slices_or_indices)
+
+    # Any dimensions that were indexed with an Integer (rather than a UnitRange or
+    # AbstractArray) should be dropped from the result after loading.
+    drop_dims = ntuple(i->isa(slices_or_indices[i], Integer), nd)
+
+    # Assume all arrays being loaded are time-dependent, so the last element of
+    # slices_or_indices is the time index.
+    it = slices_or_indices[end]
+
+    # All other indices are required to be contiguous (i.e. Integer or UnitRange) and need
+    # to be converted to `start` and `count` values for ADIOS2.
+    function get_start_value(r)
+        if isa(r, Integer)
+            return r
+        elseif isa(r, UnitRange)
+            return first(r)
+        elseif isa(r, AbstractVector)
+            if !(r[2:end] .- 1 == r[1:end-1])
+                error("file_io_adios requires that slices to be loaded are contiguous. "
+                      * "Got $r.")
+            end
+            return first(r)
+        else
+            error("Range type $(typeof(r)) ($r) is unsupported by file_io_adios.")
+        end
+    end
+    function get_count_value(r)
+        if isa(r, Integer)
+            return 1
+        elseif isa(r, UnitRange)
+            return length(r)
+        elseif isa(r, AbstractVector)
+            if !(r[2:end] .- 1 == r[1:end-1])
+                error("file_io_adios requires that slices to be loaded are contiguous. "
+                      * "Got $r.")
+            end
+            return length(r)
+        else
+            error("Range type $(typeof(r)) ($r) is unsupported by file_io_adios.")
+        end
+    end
+    start = ntuple(i->get_start_value(slices_or_indices[i]), nd-1)
+    count = ntuple(i->get_count_value(slices_or_indices[i]), nd-1)
+
     try
-        var = file_or_group[variable_name].var[slices_or_indices...]
+        # If/when https://github.com/eschnett/ADIOS2.jl/pull/21 is merged and released,
+        # this should simplify to:
+        #var = adios_load(file, variable_name, it; start=start, count=count)
+
+        # Cut and paste code from https://github.com/eschnett/ADIOS2.jl/pull/21 as a
+        # temporary workaround:
+        step_list = it
+        @assert openmode(file.engine) === mode_readRandomAccess "File must be opened with `mode_readRandomAccess`"
+        ADIOS2._check_validity_of_steps(file, step_list)
+
+        # body of _schedule_tasks_randomAccess
+        if isa(it, Integer)
+            it = [it]
+        end
+        if isa(it, AbstractUnitRange)
+            @assert minimum(step_list) >= 0 "Steps must be non-negative integers"
+            @assert maximum(step_list) < steps(file.engine) "Steps must be less than total steps"
+
+            adios_var = inquire_variable(file.io, varName)
+            if adios_var === nothing
+                error("Variable '$varName' not found in the file")
+            end
+            T, D, sh = _get_var_type_ndims_shape(adios_var)
+
+            if start !== nothing || count !== nothing
+                if start === nothing
+                    start = ntuple(i->0, D)
+                else
+                    # Convert `start` to 0-based indexing
+                    start = start .- 1
+                end
+                if count === nothing
+                    count = ntuple(i->(Int(sh[i]) - start[i]), D)
+                end
+                set_selection(adios_var, start, count)
+                orig_sh = sh
+                sh = count
+            end
+
+            # For contiguous UnitRange, create a single IORef
+            set_step_selection(adios_var, step_list[1], length(step_list))
+
+            ioref = IORef{T,D + 1}(file.engine,
+                                   Array{T,D + 1}(undef, (sh..., length(step_list))))
+            get(file.engine, adios_var, ioref.array)
+            push!(file.engine.get_tasks, () -> (ioref.engine = nothing))
+
+            if start !== nothing || count !== nothing
+                # Unset selection on variable to avoid messing up future operations.
+                zero_start = ntuple(i->0, D)
+                set_selection(adios_var, zero_start, Int.(orig_sh))
+            end
+        else
+            adios_var = inquire_variable(file.io, varName)
+            if adios_var === nothing
+                error("Variable '$varName' not found in the file")
+            end
+            T, D, sh = _get_var_type_ndims_shape(adios_var)
+
+            if start !== nothing || count !== nothing
+                if start === nothing
+                    start = ntuple(i->0, D)
+                else
+                    # Convert `start` to 0-based indexing
+                    start = start .- 1
+                end
+                if count === nothing
+                    count = ntuple(i->(Int(sh[i]) - start[i]), D)
+                end
+                set_selection(adios_var, start, count)
+                orig_sh = sh
+                sh = count
+            end
+
+            # Schedule reading for all requested steps
+            ioref = IORef[]
+            sizehint!(ioref, length(steps))
+            for step in steps
+                set_step_selection(adios_var, step, 1)
+
+                # Schedule reading data for the current step
+                ioref = IORef{T,D}(file.engine, Array{T,D}(undef, Tuple(sh)))
+                get(file.engine, adios_var, ioref.array)
+                push!(file.engine.get_tasks, () -> (ioref.engine = nothing))
+                push!(ioref, ioref)
+            end
+
+            if start !== nothing || count !== nothing
+                # Unset selection on variable to avoid messing up future operations.
+                zero_start = ntuple(i->0, D)
+                set_selection(adios_var, zero_start, Int.(orig_sh))
+            end
+        end
+        # end _schedule_tasks_randomAccess
+
+        # Perform all reads at once
+        perform_gets(file.engine)
+
+        # If `start` or `count` was passed, then the data is not a scalar and so never needs
+        # to be normalized.
+        # body of _normalize_data_shape
+        maybe_normalize = (start === nothing && count === nothing)
+        if isa(ioref, AbstractArray)
+            @assert all(isready.(iorefs)) "All IORefs must be ready before assembling data"
+
+            N_steps = length(iorefs)
+
+            # Create result array with time as the last dimension (column-major optimized)
+            # Get dimensions from the first IORef's data
+            data_arr = [fetch(ioref) for ioref in iorefs]
+            dims = size(data_arr[1])
+            T = eltype(data_arr[1])
+
+            # Create the final array with time as the last dimension
+            result_shape = (dims..., N_steps)
+            last_index = findlast(x -> x != 1, result_shape)
+
+            if last_index === nothing
+                # scalar
+                result = data_arr[1][]
+            else
+                # Array
+                if maybe_normalize
+                    result_shape = result_shape[1:last_index]
+                    if result_shape[1] == 1
+                        result_shape = result_shape[2:end]
+                    end
+                elseif N_steps == 1
+                    # Only one time point, so remove time dimension
+                    result_shape = result_shape[1:end-1]
+                end
+
+                D = length(result_shape)
+
+                result = Array{T,D}(undef, result_shape)
+
+                if N_steps == 1
+                    @views result .= data_arr[1]
+                else
+                    # Copy data from each step into the result array
+                    for i in 1:N_steps
+                        selectdim(result, D, i) .= data_arr[i]
+                    end
+                end
+            end
+        else
+            @assert isready(ioref) "IORefs must be ready before assembling data"
+
+            if maybe_normalize && ndims(ioref.array) == 2 && size(ioref.array, 1) == 1
+                # This is a collection of scalar
+                # return it as a Vector, not as a Matrix
+                result = ioref.array[:]
+            else
+                # Otherwise, return it as is
+                result = ioref.array
+            end
+        end
+        # end _normalize_data_shape
+        var = result
+
         return var
     catch
         println("An error occured while loading $variable_name")
