@@ -6,11 +6,12 @@
 # `using Pkg; Pkg.precompile(strict=true)`.
 module file_io_adios
 
-import moment_kinetics.file_io: io_has_implementation, io_has_parallel,
-                                open_output_file_implementation, create_io_group,
-                                get_variable, get_group, is_group, get_subgroup_keys,
-                                get_variable_keys, add_attribute!, write_single_value!,
-                                create_dynamic_variable!, append_to_dynamic_var
+import moment_kinetics.file_io: io_has_implementation, io_has_parallel, io_close,
+                                io_finalize!, open_output_file_implementation,
+                                create_io_group, get_variable, get_group, is_group,
+                                get_subgroup_keys, get_variable_keys, add_attribute!,
+                                write_single_value!, create_dynamic_variable!,
+                                append_to_dynamic_var
 import moment_kinetics.load_data: open_file_to_read, get_attribute, has_attribute,
                                   load_variable, load_slice
 using moment_kinetics.file_io: io_input_struct
@@ -127,11 +128,11 @@ function has_attribute(io_var::Tuple{Variable,AdiosFile}, attribute_name)
 end
 
 function get_variable(file::AdiosFile, variable_name::String)
-    return (file, inquire_variable(file.io, variable_name))
+    return (inquire_variable(file.io, variable_name), file)
 end
 function get_variable(group::Tuple{AdiosFile,String}, variable_name::String)
     file, group_name = group
-    return (file, inquire_variable(file.io, group_name * "/" * variable_name))
+    return (inquire_variable(file.io, group_name * "/" * variable_name), file)
 end
 
 function get_group(file::AdiosFile, group_name::String)
@@ -307,7 +308,7 @@ function append_to_dynamic_var(io_var::Tuple{Variable,AdiosFile},
                                coords::Union{coordinate,NamedTuple,Integer}...;
                                only_root=false, write_from_this_rank=nothing) where {T,N}
 
-    file, var = io_var
+    var, file = io_var
 
     if only_root === false
         # Continue
@@ -355,9 +356,9 @@ function io_finalize!(file_info::Tuple{String,io_input_struct,Tuple{Adios,AIO,MP
     return nothing
 end
 
-# Overload to get dimensions of a variable from our Tuple{AdiosFile,Variable}
-function Base.ndims(io_var::Tuple{AdiosFile,Variable})
-    file, var = io_var
+# Overload to get dimensions of a variable from our Tuple{Variable,AdiosFile}
+function Base.ndims(io_var::Tuple{Variable,AdiosFile})
+    var, file = io_var
     return ndims(var)
 end
 
@@ -375,7 +376,7 @@ end
 
 function load_slice(group::Tuple{AdiosFile,String}, variable_name::String, slices_or_indices...)
     file, group_name = group
-    return load_variable(file, group_name * "/" * variable_name, slices_or_indices...)
+    return load_slice(file, group_name * "/" * variable_name, slices_or_indices...)
 end
 function load_slice(file::AdiosFile, variable_name::String, slices_or_indices...)
 
