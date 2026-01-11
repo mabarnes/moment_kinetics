@@ -66,7 +66,7 @@ function add_attribute!(var::HDF5.Dataset, name, value)
     attributes(var)[name] = value
 end
 
-function get_variable(file_or_group::HDF5.H5DataStore, name::String)
+function get_io_variable(file_or_group::HDF5.H5DataStore, name::String)
     return file_or_group[name]
 end
 

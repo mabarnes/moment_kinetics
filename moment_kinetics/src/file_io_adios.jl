@@ -8,7 +8,7 @@ module file_io_adios
 
 import moment_kinetics.file_io: io_has_implementation, io_has_parallel, io_close,
                                 io_finalize!, open_output_file_implementation,
-                                create_io_group, get_variable, get_group, is_group,
+                                create_io_group, get_io_variable, get_group, is_group,
                                 get_subgroup_keys, get_variable_keys, add_attribute!,
                                 write_single_value!, create_dynamic_variable!,
                                 append_to_dynamic_var
@@ -127,36 +127,49 @@ function has_attribute(io_var::Tuple{Variable,AdiosFile}, attribute_name)
     return has_attribute(file, name(var) * "/" * attribute_name)
 end
 
-function get_variable(file::AdiosFile, variable_name::String)
+function get_attribute(file::AdiosFile, attribute_name)
+    attr = inquire_attribute(file.io, attribute_name)
+    return data(attr)
+end
+function get_attribute(group::Tuple{AdiosFile,String}, attribute_name)
+    file, group_name = group
+    return get_attribute(file, group_name * "/" * attribute_name)
+end
+function get_attribute(io_var::Tuple{Variable,AdiosFile}, attribute_name)
+    var, file = io_var
+    return get_attribute(file, name(var) * "/" * attribute_name)
+end
+
+function get_io_variable(file::AdiosFile, variable_name::AbstractString)
     return (inquire_variable(file.io, variable_name), file)
 end
-function get_variable(group::Tuple{AdiosFile,String}, variable_name::String)
+function get_io_variable(group::Tuple{AdiosFile,String}, variable_name::AbstractString)
     file, group_name = group
     return (inquire_variable(file.io, group_name * "/" * variable_name), file)
 end
 
-function get_group(file::AdiosFile, group_name::String)
-    return (file, group_name)
+function get_group(file::AdiosFile, group_name::AbstractString)
+    return (file, String(group_name))
 end
-function get_group(parent::Tuple{AdiosFile,String}, group_name::String)
+function get_group(parent::Tuple{AdiosFile,String}, group_name::AbstractString)
     file, parent_name = parent
-    return (file, parent_name * "/" * group_name)
+    return (file, String(parent_name * "/" * group_name))
 end
 
-function is_group(file::AdiosFile, group_name::String)
+function is_group(file::AdiosFile, group_name::AbstractString)
     return group_name ∈ inquire_subgroups(file.io, "")
 end
-function is_group(parent::Tuple{AdiosFile,String}, group_name::String)
+function is_group(parent::Tuple{AdiosFile,String}, group_name::AbstractString)
     file, parent_name = parent
     return group_name ∈ inquire_subgroups(file.io, parent_name)
 end
 
 function get_subgroup_keys(file::AdiosFile)
-    return inquire_subgroups(file.io, "")
+    return [lstrip(s, '/') for s ∈ inquire_subgroups(file.io, "")]
 end
 function get_subgroup_keys(parent::Tuple{AdiosFile,String})
     file, parent_name = parent
-    return inquire_subgroups(file.io, parent_name)
+    return [lstrip(s, '/') for s ∈ inquire_subgroups(file.io, parent_name)]
 end
 
 function get_variable_keys(file::AdiosFile)
