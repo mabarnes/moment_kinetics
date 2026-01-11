@@ -363,7 +363,7 @@ function Base.ndims(io_var::Tuple{Variable,AdiosFile})
 end
 
 function open_file_to_read(::Val{adios}, filename)
-    return adios_open_serial(filename, mode_readRandomAcces)
+    return adios_open_serial(filename, mode_readRandomAccess)
 end
 
 function load_variable(group::Tuple{AdiosFile,String}, variable_name::String)
