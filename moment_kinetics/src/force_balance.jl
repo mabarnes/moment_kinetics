@@ -55,7 +55,6 @@ to update the parallel particle flux dens*upar for each species
         end
 
     for index ∈ eachindex(ion_source_settings)
-        # no momentum source in our sources for now, make this false so code doesn't have to add zero
         if ion_source_settings[index].active
             @views source_amplitude = moments.ion.external_source_momentum_amplitude[:, :, index]
             @loop_s_r_z is ir iz begin

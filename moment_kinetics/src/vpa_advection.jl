@@ -412,7 +412,6 @@ function update_speed_vpa_n_u_evolution!(vpa_advect, fields, fvec, moments, r_ad
     dBdz = geometry.dBdz
     Bmag = geometry.Bmag
 
-    # Ez = fields.Ez
     dupar_dr = moments.ion.dupar_dr
     dupar_dz = moments.ion.dupar_dz
     dupar_dt = moments.ion.dupar_dt
