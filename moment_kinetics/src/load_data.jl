@@ -29,7 +29,7 @@ using ..em_fields: get_vEr, get_vEz
 using ..energy_equation: energy_equation!, neutral_energy_equation!
 using ..external_sources: setup_external_sources!
 using ..file_io: check_io_implementation, get_group, get_io_variable, get_subgroup_keys,
-                 get_variable_keys, io_close
+                 get_variable_keys
 using ..force_balance: force_balance!, neutral_force_balance!
 using ..input_structs
 using ..interpolation: interpolate_to_grid_1d!
@@ -218,7 +218,7 @@ function get_nranks(run_name,nblocks,description)
         z_irank, r_irank = load_rank_data(fid,printout=false)
         z_nrank = max(z_irank,z_nrank)
         r_nrank = max(r_irank,r_nrank)
-        io_close(fid)
+        close(fid)
     end
     r_nrank = r_nrank + 1
     z_nrank = z_nrank + 1
@@ -1051,7 +1051,7 @@ function reload_evolving_fields!(pdf, moments, fields, restart_prefix_iblock, ti
                                    interpolation_needed)
             end
         finally
-            io_close(fid)
+            close(fid)
         end
     end
     moments.ion.dens_updated .= true
@@ -1202,7 +1202,7 @@ function reload_electron_data!(pdf, moments, phi, t_params, restart_prefix_ibloc
                 reload_r_array("electron_step_counter", dynamic, time_index, coords,
                                reload_ranges, restart_coords, interpolation_needed)
         finally
-            io_close(fid)
+            close(fid)
         end
     end
 
@@ -3041,7 +3041,7 @@ function load_distributed_ion_pdf_slice(run_names::Tuple, nblocks::Tuple, t_rang
             f_local_slice = selectdim(f_local_slice, thisdim, local_t_range)
 
             f_global_slice .= f_local_slice
-            io_close(fid)
+            close(fid)
         end
         local_tind_start = local_tind_end + 1
         global_tind_start = global_tind_end + 1
@@ -3241,7 +3241,7 @@ function load_distributed_electron_pdf_slice(run_names::Tuple, nblocks::Tuple, t
             f_local_slice = selectdim(f_local_slice, thisdim, local_t_range)
 
             f_global_slice .= f_local_slice
-            io_close(fid)
+            close(fid)
         end
         local_tind_start = local_tind_end + 1
         global_tind_start = global_tind_end + 1
@@ -3455,7 +3455,7 @@ function load_distributed_neutral_pdf_slice(run_names::Tuple, nblocks::Tuple, t_
             f_local_slice = selectdim(f_local_slice, thisdim, local_t_range)
 
             f_global_slice .= f_local_slice
-            io_close(fid)
+            close(fid)
         end
         local_tind_start = local_tind_end + 1
         global_tind_start = global_tind_end + 1
@@ -3789,7 +3789,7 @@ function get_run_info_no_setup(run_dir::Union{AbstractString,Tuple{AbstractStrin
         # themselves
         files = run_prefixes
         for f ∈ fids0
-            io_close(f)
+            close(f)
         end
     end
 
@@ -3835,7 +3835,7 @@ function close_run_info(run_info)
     end
 
     for f ∈ run_info.files
-        io_close(f)
+        close(f)
     end
 
     return nothing
@@ -6671,7 +6671,7 @@ function read_distributed_zr_data!(var::Array{mk_float,N}, var_name::String,
                     end
                 end
             end
-            io_close(fid)
+            close(fid)
         end
         local_tind_start = local_tind_end + 1
         global_tind_start = global_tind_end + 1

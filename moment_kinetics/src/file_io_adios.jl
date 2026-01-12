@@ -355,7 +355,9 @@ end
 function io_close(file::AdiosFile)
 
     # ADIOS requires that we end a 'step' as well as closing the file.
-    end_step(file.engine)
+    if openmode(file.engine) != mode_readRandomAccess
+        end_step(file.engine)
+    end
 
     close(file.engine)
 
@@ -372,13 +374,35 @@ end
 # Overload to get dimensions of a variable from our Tuple{Variable,AdiosFile}
 function Base.ndims(io_var::Tuple{Variable,AdiosFile})
     var, file = io_var
-    return ndims(var)
+    nsteps = steps(var)
+    nd = ndims(var)
+    if nsteps > 1
+        # Time-dependent variable. ADIOS2 does not include 'steps' (i.e. the time
+        # dimension) in result of `ndims()`, so need to add.
+        nd += 1
+    end
+    return nd
+end
+
+# Overload to get element type of a variable from our Tuple{Variable,AdiosFile}
+function Base.eltype(io_var::Tuple{Variable,AdiosFile})
+    var, file = io_var
+    return type(var)
 end
 
 # Overload to get size of a variable from our Tuple{Variable,AdiosFile}
 function Base.size(io_var::Tuple{Variable,AdiosFile})
     var, file = io_var
-    return count(var)
+    var_count = mk_int.(count(var))
+    nsteps = steps(var)
+    if nsteps > 1
+        # Time-dependent variable. ADIOS2 does not include 'steps' (i.e. the time
+        # dimension) in result of `ndims()`, so need to add.
+        var_size = tuple(var_count..., nsteps)
+    else
+        var_size = var_count
+    end
+    return var_size
 end
 function Base.size(io_var::Tuple{Variable,AdiosFile}, d::Integer)
     return size(io_var)[d]
@@ -416,6 +440,7 @@ function load_slice(io_variable::Union{Tuple{<:AbstractString,AdiosFile},Tuple{V
                     slices_or_indices...)
 
     variable, file = io_variable
+    var_size = size(io_variable)
 
     nd = length(slices_or_indices)
 
@@ -440,11 +465,13 @@ function load_slice(io_variable::Union{Tuple{<:AbstractString,AdiosFile},Tuple{V
                       * "Got $r.")
             end
             return first(r)
+        elseif isa(r, Colon)
+            return 1
         else
             error("Range type $(typeof(r)) ($r) is unsupported by file_io_adios.")
         end
     end
-    function get_count_value(r)
+    function get_count_value(r, dim_size)
         if isa(r, Integer)
             return 1
         elseif isa(r, UnitRange)
@@ -455,12 +482,25 @@ function load_slice(io_variable::Union{Tuple{<:AbstractString,AdiosFile},Tuple{V
                       * "Got $r.")
             end
             return length(r)
+        elseif isa(r, Colon)
+            return dim_size
         else
             error("Range type $(typeof(r)) ($r) is unsupported by file_io_adios.")
         end
     end
     start = ntuple(i->get_start_value(slices_or_indices[i]), nd-1)
-    count = ntuple(i->get_count_value(slices_or_indices[i]), nd-1)
+    count = ntuple(i->get_count_value(slices_or_indices[i], var_size[i]), nd-1)
+
+    if isa(it, StepRange)
+        # ADIOS2.jl only supports UnitRange slices
+        if it.step != 1
+            error("Non-unit step not supported in file_io_adios. Got it=$it.")
+        end
+        it = it.start:it.stop
+    end
+
+    # ADIOS2 uses 0-based indexing, so convert `it`.
+    it = it .- 1
 
     try
         # If/when https://github.com/eschnett/ADIOS2.jl/pull/21 is merged and released,
