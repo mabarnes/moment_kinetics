@@ -374,7 +374,7 @@ function update_speed_vpa_n_u_p_evolution!(vpa_advect, fields, fvec, moments, r_
     dvth_dt = moments.ion.dvth_dt
     wpa = vpa.grid
     wperp = vperp.grid
-    Ez = fields.gEz
+    gEz = fields.gEz
     @loop_s is begin
         speed = vpa_advect[is].speed
         r_speed = r_advect[is].speed
@@ -384,7 +384,7 @@ function update_speed_vpa_n_u_p_evolution!(vpa_advect, fields, fvec, moments, r_
             @loop_z_vperp_vpa iz ivperp ivpa begin
                 mu = 0.5*(wperp[ivperp]^2 * vth[iz,ir,is]^2)/Bmag[iz,ir]
                 speed[ivpa,ivperp,iz,ir] =
-                    (bzed[iz,ir] * Ez[ivperp,iz,ir,is]
+                    (bzed[iz,ir] * gEz[ivperp,iz,ir,is]
                      - (dupar_dt[iz,ir,is]
                         + r_speed[ir,ivpa,ivperp,iz] * dupar_dr[iz,ir,is]
                         + z_speed[iz,ivpa,ivperp,ir] * dupar_dz[iz,ir,is])
@@ -412,7 +412,7 @@ function update_speed_vpa_n_u_evolution!(vpa_advect, fields, fvec, moments, r_ad
     bzed = geometry.bzed
     dBdz = geometry.dBdz
     Bmag = geometry.Bmag
-    Ez = fields.gEz
+    gEz = fields.gEz
     dupar_dr = moments.ion.dupar_dr
     dupar_dz = moments.ion.dupar_dz
     dupar_dt = moments.ion.dupar_dt
@@ -426,7 +426,7 @@ function update_speed_vpa_n_u_evolution!(vpa_advect, fields, fvec, moments, r_ad
             @loop_z_vperp_vpa iz ivperp ivpa begin
                 mu = 0.5*(vperp.grid[ivperp]^2)/Bmag[iz,ir]
                 speed[ivpa,ivperp,iz,ir] =
-                    (bzed[iz,ir] * Ez[ivperp,iz,ir,is]
+                    (bzed[iz,ir] * gEz[ivperp,iz,ir,is]
                      - (dupar_dt[iz,ir,is]
                         + r_speed[ir,ivpa,ivperp,iz] * dupar_dr[iz,ir,is]
                         + z_speed[iz,ivpa,ivperp,ir] * dupar_dz[iz,ir,is])
@@ -450,10 +450,10 @@ function update_speed_vpa_n_evolution!(vpa_advect, fields, fvec, moments, vpa, v
     bzed = geometry.bzed
     dBdz = geometry.dBdz
     Bmag = geometry.Bmag
-    Ez = fields.gEz
+    gEz = fields.gEz
     @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
         mu = 0.5*(vperp.grid[ivperp]^2)/Bmag[iz,ir]
-        vpa_advect[is].speed[ivpa,ivperp,iz,ir] = (bzed[iz,ir]*Ez[ivperp,iz,ir,is] -
+        vpa_advect[is].speed[ivpa,ivperp,iz,ir] = (bzed[iz,ir]*gEz[ivperp,iz,ir,is] -
                                                 mu*bzed[iz,ir]*dBdz[iz,ir])
     end
 
@@ -469,13 +469,13 @@ function update_speed_vpa_DK!(vpa_advect, fields, fvec, moments, vpa, vperp, z, 
     bzed = geometry.bzed
     dBdz = geometry.dBdz
     Bmag = geometry.Bmag
-    Ez = fields.gEz
+    gEz = fields.gEz
     @inbounds @fastmath begin
         @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
             # mu, the adiabatic invariant
             mu = 0.5*(vperp.grid[ivperp]^2)/Bmag[iz,ir]
             # bzed = B_z/B
-            vpa_advect[is].speed[ivpa,ivperp,iz,ir] = (bzed[iz,ir]*Ez[ivperp,iz,ir,is] -
+            vpa_advect[is].speed[ivpa,ivperp,iz,ir] = (bzed[iz,ir]*gEz[ivperp,iz,ir,is] -
                                                     mu*bzed[iz,ir]*dBdz[iz,ir])
         end
     end

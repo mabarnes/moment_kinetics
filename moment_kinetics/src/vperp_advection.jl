@@ -104,8 +104,6 @@ end
 update vperp advection speed when n, u are evolved separately
 """
 function update_speed_vperp_n_u_evolution!(vperp_advect, vpa, vperp, z, r, z_advect, r_advect, geometry, moments)
-    dzdt = vperp.scratch
-    drdt = vperp.scratch2
     dBdr = geometry.dBdr
     dBdz = geometry.dBdz
     Bmag = geometry.Bmag
