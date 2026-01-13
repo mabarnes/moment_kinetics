@@ -119,7 +119,9 @@ function has_attribute(file::AdiosFile, attribute_name)
 end
 function has_attribute(group::Tuple{AdiosFile,String}, attribute_name)
     file, group_name = group
-    attrs = inquire_group_attributes(file.io, group_name)
+    # Extra separator for safety. Multiple "/" separators are ignored, so this should be
+    # safe to do.
+    attrs = inquire_group_attributes(file.io, group_name * "/")
     return attribute_name ∈ [basename(name(a)) for a ∈ attrs]
 end
 function has_attribute(io_var::Tuple{Variable,AdiosFile}, attribute_name)
@@ -161,7 +163,11 @@ function is_group(file::AdiosFile, group_name::AbstractString)
 end
 function is_group(parent::Tuple{AdiosFile,String}, group_name::AbstractString)
     file, parent_name = parent
-    return group_name ∈ inquire_subgroups(file.io, parent_name)
+    # Extra separator needed to ensure that for example "_bar" is not returned as a
+    # subgroup of "foo" when there is another subgroup called "foo_bar" (not sure if this
+    # is a bug in ADIOS2/ADIOS2.jl?). Multiple "/" separators are ignored, so this should
+    # be safe to do.
+    return group_name ∈ inquire_subgroups(file.io, parent_name * "/")
 end
 
 function get_subgroup_keys(file::AdiosFile)
@@ -169,7 +175,11 @@ function get_subgroup_keys(file::AdiosFile)
 end
 function get_subgroup_keys(parent::Tuple{AdiosFile,String})
     file, parent_name = parent
-    return [lstrip(s, '/') for s ∈ inquire_subgroups(file.io, parent_name)]
+    # Extra separator needed to ensure that for example "_bar" is not returned as a
+    # subgroup of "foo" when there is another subgroup called "foo_bar" (not sure if this
+    # is a bug in ADIOS2/ADIOS2.jl?). Multiple "/" separators are ignored, so this should
+    # be safe to do.
+    return [lstrip(s, '/') for s ∈ inquire_subgroups(file.io, parent_name * "/")]
 end
 
 function get_variable_keys(file::AdiosFile)
@@ -178,7 +188,9 @@ function get_variable_keys(file::AdiosFile)
 end
 function get_variable_keys(parent::Tuple{AdiosFile,String})
     file, parent_name = parent
-    variables = inquire_group_variables(file.io, parent_name)
+    # Extra separator for safety. Multiple "/" separators are ignored, so this should be
+    # safe to do.
+    variables = inquire_group_variables(file.io, parent_name * "/")
     return [basename(name(v)) for v ∈ variables]
 end
 
