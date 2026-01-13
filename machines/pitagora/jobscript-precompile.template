@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+
+#SBATCH --ntasks=1
+#SBATCH --ntasks-per-node=1
+# As of 5/11/2025 it is important to set `--ntasks-per-socket` explicitly to avoid poor performance on Pitagora.
+#SBATCH --ntasks-per-socket=1
+#SBATCH --cpus-per-task=128
+#SBATCH --time=0:30:00
+#SBATCH --account=ACCOUNT
+#SBATCH --partition=dcgp_fua_dbg
+#SBATCH --output=PRECOMPILEDIRslurm-%j.out
+
+set -e
+
+cd $SLURM_SUBMIT_DIR
+
+# Get setup for Julia
+source julia.env
+
+echo "precompiling $(date)"
+
+# Create the Julia 'depot' in $TMPDIR/$USER, which is local to each node.
+mkdir -p $TMPDIR/$USER
+
+if [ -e compute-node-temp.julia.tar.bz ]; then
+  tar -xjf compute-node-temp.julia.tar.bz -C $TMPDIR/$USER/
+else
+  echo "compute-node-temp.julia.tar.bz does not exist but is required: run machines/machine_setup.sh to create it."
+  exit 1
+fi
+
+bin/julia -t 128 --project -O3 precompile.jl
+
+# Don't re-save the tar file, because it might overwrite one being created by
+# machines/machine-setup.sh (e.g. one with post-processing packages included).
+#tar cjf compute-node-temp.julia.tar.bz -C $TMPDIR/$USER/ compute-node-temp.julia/
+
+# I think $TMPDIR/ should be cleaned up automatically, but just in case, delete our temporary depot.
+rm -rf $TMPDIR/$USER
+
+echo "finished! $(date)"

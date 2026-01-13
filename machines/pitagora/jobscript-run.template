@@ -2,7 +2,9 @@
 
 #SBATCH --nodes=NODES
 #SBATCH --cpus-per-task=1
-#SBATCH --ntasks-per-node=128
+#SBATCH --ntasks-per-node=256
+# As of 5/11/2025 it is important to set `--ntasks-per-socket` explicitly to avoid poor performance on Pitagora.
+#SBATCH --ntasks-per-socket=128
 #SBATCH --time=RUNTIME
 #SBATCH --account=ACCOUNT
 #SBATCH --partition=PARTITION
@@ -16,15 +18,11 @@ cd $SLURM_SUBMIT_DIR
 # Get setup for Julia
 source julia.env
 
-# Workaround as cpus-per-task no longer inherited by srun from sbatch.
-# See https://docs.archer2.ac.uk/faq/upgrade-2023/
-export SRUN_CPUS_PER_TASK=$SLURM_CPUS_PER_TASK
-
 echo "running INPUTFILE $(date)"
 
 if [ -e compute-node-temp.julia.tar.bz ]; then
-  # Distribute the tar'ed Julia depot to all compute nodes, saving it to the /tmp/ directory which lives in RAM.
-  sbcast --compress=none compute-node-temp.julia.tar.bz  /tmp/compute-node-temp.julia.tar.bz
+  # Distribute the tar'ed Julia depot to all compute nodes, saving it to the $TMPDIR directory which is local to each node.
+  sbcast --compress=none compute-node-temp.julia.tar.bz  $TMPDIR/compute-node-temp.julia.tar.bz
 
   # Copy the julia directory (found from the name of the executable) and
   # moment_kinetics.so to the compute nodes for efficiency.
@@ -32,13 +30,13 @@ if [ -e compute-node-temp.julia.tar.bz ]; then
   # https://www.ch.cam.ac.uk/computing/slurm-usage) just use srun instead to
   # copy the julia directory - we are probably not too worried about
   # performance here, so should be fine.
-  srun --ntasks=NODES --tasks-per-node=1 cp -ra $(dirname $(dirname $(cat .julia_default.txt))) /tmp/julia-dir
-  sbcast --compress=none moment_kinetics.so /tmp/moment_kinetics.so
+  srun --ntasks=NODES --tasks-per-node=1 cp -ra $(dirname $(dirname $(cat .julia_default.txt))) $TMPDIR/julia-dir
+  sbcast --compress=none moment_kinetics.so $TMPDIR/moment_kinetics.so
 else
   echo "compute-node-temp.julia.tar.bz does not exist but is required: run machines/machine_setup.sh to create it."
   exit 1
 fi
 
-srun --distribution=block:block --hint=nomultithread --ntasks=$SLURM_NTASKS machines/archer/tmp-depot-wrapper.sh /tmp/$USER/julia-dir/bin/julia -J /tmp/$USER/moment_kinetics.so --project -O3 RUNSCRIPT INPUTFILE
+srun --hint=nomultithread --distribution=block:block -n $SLURM_NTASKS machines/pitagora/tmp-depot-wrapper.sh $TMPDIR/$USER/julia-dir/bin/julia -J $TMPDIR/$USER/moment_kinetics.so --project -O3 RUNSCRIPT INPUTFILE
 
 echo "finished INPUTFILE $(date)"

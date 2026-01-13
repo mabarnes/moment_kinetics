@@ -25,6 +25,7 @@ default_settings["base"] = Dict("account"=>"",
                                 "use_system_mpi"=>"y",
                                 "use_netcdf"=>"n",
                                 "enable_mms"=>"n",
+                                "use_stopnow"=>"n",
                                 "use_revise"=>"n")
 # No batch system steup for "generic-pc"
 default_settings["generic-pc"] = merge(default_settings["base"],
@@ -33,14 +34,16 @@ default_settings["generic-pc"] = merge(default_settings["base"],
                                         "default_postproc_time"=>"0:00:00",
                                         "default_postproc_memory"=>"0",
                                         "use_makie"=>"y",
+                                        "use_stopnow"=>"y",
                                         "use_revise"=>"y"))
 default_settings["generic-batch"] = deepcopy(default_settings["base"])
 default_settings["archer"] = merge(default_settings["base"],
                                    Dict("default_partition"=>"standard",
                                         "default_qos"=>"standard"))
-default_settings["marconi"] = merge(default_settings["base"],
-                                    Dict("default_partition"=>"skl_fua_prod",
-                                         "default_qos"=>"normal"))
+default_settings["pitagora"] = merge(default_settings["base"],
+                                     Dict("default_partition"=>"dcgp_fua_prod",
+                                          "default_postproc_time"=>"0:30:00",
+                                          "default_qos"=>"normal"))
 """
     get_user_input(possible_values, default_value)
 
@@ -147,8 +150,8 @@ Currently supported machines:
 * `"generic-batch"` - A generic cluster using a batch queue. Requires some manual setup
     first, see `machines/generic-batch-template/README.md`.
 * `"archer"` - the UK supercomputer [ARCHER2](https://www.archer2.ac.uk/)
-* `"marconi"` - the EUROfusion supercomputer
-    [Marconi](https://wiki.u-gov.it/confluence/display/SCAIUS/UG3.1%3A+MARCONI+UserGuide)
+* "pitagora" - the EUROfusion supercomputer
+  [Pitagora](https://docs.hpc.cineca.it/hpc/pitagora.html)
 
 !!! note
     The settings created by this function are saved in LocalPreferences.toml. It might
@@ -248,6 +251,13 @@ function machine_setup_moment_kinetics(machine::String; no_force_exit::Bool=fals
                 machine, mk_preferences, ["y", "n"])
     get_setting("enable_mms",
                 "Would you like to enable MMS testing?",
+                machine, mk_preferences, ["y", "n"])
+    get_setting("use_stopnow",
+                "Would you like to enable the creation of a 'stopnow' file to cleanly terminate\n"
+                * "a run at the end of the current timestep (this is useful for interactive runs\n"
+                * "to avoid stopping Julia, but not recommended on HPC clusters for performance\n"
+                * "reasons; it is always possible to create a 'stop' file to cleanly terminate a\n"
+                * "run at the next output)?",
                 machine, mk_preferences, ["y", "n"])
     if !batch_system
         get_setting("use_revise",
@@ -374,7 +384,13 @@ function machine_setup_moment_kinetics(machine::String; no_force_exit::Bool=fals
         needs_account = true
     elseif machine == "archer"
         needs_account = true
-    elseif machine == "marconi"
+        if julia_directory == ""
+            error("On ARCHER2, the `julia_directory` setting is required, because the "
+                  * "default location for the `.julia` directory is in your home "
+                  * "directory and the `/home/` filesystem is not available on the "
+                  * "compute nodes.")
+        end
+    elseif machine == "pitagora"
         needs_account = true
     else
         error("Unsupported machine '$machine'")

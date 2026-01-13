@@ -1898,6 +1898,7 @@ function enforce_r_boundary_section_em!(fields, r::coordinate, ir::mk_int,
                                         section::r_boundary_section,
                                         em_section::em_r_boundary_section_Dirichlet)
     phi_boundary = em_section.phi
+    phi = fields.phi
     @begin_serial_region()
     @serial_region begin
         for (iz_section, iz) ∈ enumerate(section.z_range)

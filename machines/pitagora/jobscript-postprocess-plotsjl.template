@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
 
-#SBATCH --mem=POSTPROCMEMORY
+#SBATCH --ntasks=1
+#SBATCH --ntasks-per-node=1
+# As of 5/11/2025 it is important to set `--ntasks-per-socket` explicitly to avoid poor performance on Pitagora.
+#SBATCH --ntasks-per-socket=1
+#SBATCH --cpus-per-task=1
 #SBATCH --time=POSTPROCTIME
 #SBATCH --account=ACCOUNT
-#SBATCH --partition=serial
-#SBATCH --qos=serial
+#SBATCH --partition=dcgp_fua_dbg
 #SBATCH --output=RUNDIRslurm-post-%j.out
 
 set -e
@@ -14,28 +17,24 @@ cd $SLURM_SUBMIT_DIR
 # Get setup for Julia
 source julia.env
 
-# Workaround as cpus-per-task no longer inherited by srun from sbatch.
-# See https://docs.archer2.ac.uk/faq/upgrade-2023/
-export SRUN_CPUS_PER_TASK=$SLURM_CPUS_PER_TASK
-
 echo "post-processing (with original post_processing) RUNDIR $(date)"
 
 # Set this environment variable to avoid warning messages from Qt when running without a display
 export QT_QPA_PLATFORM=offscreen
 
 if [ -e compute-node-temp.julia.tar.bz ]; then
-  # Distribute the tar'ed Julia depot to all compute nodes, saving it to the /tmp/ directory which lives in RAM.
-  sbcast --compress=none compute-node-temp.julia.tar.bz  /tmp/compute-node-temp.julia.tar.bz
+  # Distribute the tar'ed Julia depot to all compute nodes, saving it to the $TMPDIR directory which is local to each node.
+  sbcast --compress=none compute-node-temp.julia.tar.bz  $TMPDIR/compute-node-temp.julia.tar.bz
 
   # Copy the julia directory (found from the name of the executable) and
   # moment_kinetics.so to the compute nodes for efficiency.
-  cp -ra $(dirname $(dirname $(cat .julia_default.txt))) /tmp/julia-dir
-  cp -a plots_postproc.so  /tmp/plots_postproc.so
+  cp -ra $(dirname $(dirname $(cat .julia_default.txt))) $TMPDIR/julia-dir
+  cp -a plots_postproc.so $TMPDIR/plots_postproc.so
 else
   echo "compute-node-temp.julia.tar.bz does not exist but is required: run machines/machine_setup.sh to create it."
   exit 1
 fi
 
-machines/archer/tmp-depot-wrapper.sh /tmp/$USER/julia-dir/bin/julia -J /tmp/$USER/plots_postproc.so --project=plots_post_processing/ run_post_processing.jl RUNDIR
+machines/pitagora/tmp-depot-wrapper.sh -Jplots_postproc.so --project=plots_post_processing/ run_post_processing.jl RUNDIR
 
 echo "finished post-processing RUNDIR $(date)"

@@ -171,7 +171,11 @@ if mk_preferences["use_system_mpi"] == "y"
     println("\n** Setting up to use system HDF5\n")
 
     if machine_settings["hdf5_library_setting"] == "system"
-        hdf5_dir = joinpath(ENV["HDF5_DIR"], "lib") # system hdf5
+        if "HDF5_LIB" ∈ keys(ENV)
+            hdf5_dir = ENV["HDF5_LIB"] # system hdf5
+        else
+            hdf5_dir = joinpath(ENV["HDF5_DIR"], "lib") # system hdf5
+        end
         using HDF5
         HDF5.API.set_libraries!(get_hdf5_lib_names(hdf5_dir)...)
     elseif machine_settings["hdf5_library_setting"] == "download"
