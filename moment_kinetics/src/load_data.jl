@@ -4177,17 +4177,17 @@ function _get_all_moment_variables(run_info; it=nothing, kwargs...)
         # `it`.
         it = it:it
     end
-    pairs = Pair{Symbol,Any}[]
+    vars = Dict{String,Any}()
     for v ∈ all_moment_variables_no_ddt
         try
-            push!(pairs, Symbol(v)=>get_variable(run_info, v; it=it, kwargs...))
+            vars[v] = get_variable(run_info, v; it=it, kwargs...)
         catch e
             if !isa(e, KeyError)
                 rethrow()
             end
         end
     end
-    return (; pairs...)
+    return vars
 end
 
 """
@@ -4199,10 +4199,11 @@ function _get_fake_moments_fields_scratch(all_moments, it; ion_extra::Tuple=(),
                                           neutral_extra::Tuple=())
     function make_struct(; kwargs...)
         function get_var(variable_name_or_array)
-            if isa(variable_name_or_array, Symbol)
+            if isa(variable_name_or_array, String)
                 if variable_name_or_array ∉ keys(all_moments)
-                    nz, nr, _, nt = size(all_moments[:density])
-                    var = zeros(nr, nz, 0, nt)
+                    # Include dummy variable - if this variable was needed, it should have
+                    # been present in the output files, and added into all_moments.
+                    return nothing
                 else
                     var = all_moments[variable_name_or_array]
                 end
@@ -4216,64 +4217,66 @@ function _get_fake_moments_fields_scratch(all_moments, it; ion_extra::Tuple=(),
                   )...)
     end
 
-    ion_moments = make_struct(; dens=:density, upar=:parallel_flow,
-        p=:pressure, ppar=:parallel_pressure, pperp=:perpendicular_pressure,
-        qpar=:parallel_heat_flux, vth=:thermal_speed, temp=:temperature, ddens_dr=:ddens_dr,
-        ddens_dr_upwind=:ddens_dr_upwind, ddens_dz=:ddens_dz,
-        ddens_dz_upwind=:ddens_dz_upwind, dupar_dr=:dupar_dr,
-        dupar_dr_upwind=:dupar_dr_upwind, dupar_dz=:dupar_dz,
-        dupar_dz_upwind=:dupar_dz_upwind, dp_dr_upwind=:dp_dr_upwind, dp_dz=:dp_dz,
-        dp_dz_upwind=:dp_dz_upwind, dppar_dz=:dppar_dz, dppar_dz_upwind=:dppar_dz_upwind,
-        dvth_dr=:dvth_dr, dvth_dz=:dvth_dz, dT_dz=:dT_dz, dqpar_dz=:dqpar_dz,
-        external_source_amplitude=:external_source_amplitude,
-        external_source_density_amplitude=:external_source_density_amplitude,
-        external_source_momentum_amplitude=:external_source_momentum_amplitude,
-        external_source_pressure_amplitude=:external_source_pressure_amplitude,
-        external_source_controller_integral=:external_source_controller_integral,
+    ion_moments = make_struct(; dens="density", upar="parallel_flow",
+        p="pressure", ppar="parallel_pressure", pperp="perpendicular_pressure",
+        qpar="parallel_heat_flux", vth="thermal_speed", temp="temperature",
+        ddens_dr="ddens_dr", ddens_dr_upwind="ddens_dr_upwind", ddens_dz="ddens_dz",
+        ddens_dz_upwind="ddens_dz_upwind", dupar_dr="dupar_dr",
+        dupar_dr_upwind="dupar_dr_upwind", dupar_dz="dupar_dz",
+        dupar_dz_upwind="dupar_dz_upwind", dp_dr_upwind="dp_dr_upwind", dp_dz="dp_dz",
+        dp_dz_upwind="dp_dz_upwind", dppar_dz="dppar_dz",
+        dppar_dz_upwind="dppar_dz_upwind", dvth_dr="dvth_dr", dvth_dz="dvth_dz",
+        dT_dz="dT_dz", dqpar_dz="dqpar_dz",
+        external_source_amplitude="external_source_amplitude",
+        external_source_density_amplitude="external_source_density_amplitude",
+        external_source_momentum_amplitude="external_source_momentum_amplitude",
+        external_source_pressure_amplitude="external_source_pressure_amplitude",
+        external_source_controller_integral="external_source_controller_integral",
         ion_extra...)
 
-    electron_moments = make_struct(; dens=:electron_density, upar=:electron_parallel_flow,
-        p=:electron_pressure, ppar=:electron_parallel_pressure,
-        qpar=:electron_parallel_heat_flux, vth=:electron_thermal_speed,
-        temp=:electron_temperature, ddens_dz=:electron_ddens_dz,
-        dupar_dz=:electron_dupar_dz, dp_dz=:electron_dp_dz, dppar_dz=:electron_dppar_dz,
-        dvth_dz=:electron_dvth_dz, dT_dz=:electron_dT_dz, dqpar_dz=:electron_dqpar_dz,
-        external_source_amplitude=:external_source_electron_amplitude,
-        external_source_density_amplitude=:external_source_electron_density_amplitude,
-        external_source_momentum_amplitude=:external_source_electron_momentum_amplitude,
-        external_source_pressure_amplitude=:external_source_electron_pressure_amplitude,
-        external_source_controller_integral=:external_electron_source_controller_integral,
+    electron_moments = make_struct(; dens="electron_density",
+        upar="electron_parallel_flow", p="electron_pressure",
+        ppar="electron_parallel_pressure", qpar="electron_parallel_heat_flux",
+        vth="electron_thermal_speed", temp="electron_temperature",
+        ddens_dz="electron_ddens_dz", dupar_dz="electron_dupar_dz",
+        dp_dz="electron_dp_dz", dppar_dz="electron_dppar_dz", dvth_dz="electron_dvth_dz",
+        dT_dz="electron_dT_dz", dqpar_dz="electron_dqpar_dz",
+        external_source_amplitude="external_source_electron_amplitude",
+        external_source_density_amplitude="external_source_electron_density_amplitude",
+        external_source_momentum_amplitude="external_source_electron_momentum_amplitude",
+        external_source_pressure_amplitude="external_source_electron_pressure_amplitude",
+        external_source_controller_integral="external_electron_source_controller_integral",
         electron_extra...)
 
-    neutral_moments = make_struct(; dens=:density_neutral, uz=:uz_neutral, p=:p_neutral,
-        pz=:pz_neutral, qz=:qz_neutral, vth=:thermal_speed_neutral,
-        temp=:temperature_neutral, ddens_dz=:neutral_ddens_dz,
-        ddens_dz_upwind=:neutral_ddens_dz_upwind, duz_dz=:neutral_duz_dz,
-        duz_dz_upwind=:neutral_duz_dz_upwind, dp_dz=:neutral_dp_dz,
-        dp_dz_upwind=:neutral_dp_dz_upwind, dpz_dz=:neutral_dpz_dz,
-        dvth_dz=:neutral_dvth_dz, dT_dz=:neutral_dT_dz, dqz_dz=:neutral_dqz_dz,
-        external_source_amplitude=:external_source_neutral_amplitude,
-        external_source_density_amplitude=:external_source_neutral_density_amplitude,
-        external_source_momentum_amplitude=:external_source_neutral_momentum_amplitude,
-        external_source_pressure_amplitude=:external_source_neutral_pressure_amplitude,
-        external_source_controller_integral=:external_source_neutral_controller_integral,
+    neutral_moments = make_struct(; dens="density_neutral", uz="uz_neutral",
+        p="p_neutral", pz="pz_neutral", qz="qz_neutral", vth="thermal_speed_neutral",
+        temp="temperature_neutral", ddens_dz="neutral_ddens_dz",
+        ddens_dz_upwind="neutral_ddens_dz_upwind", duz_dz="neutral_duz_dz",
+        duz_dz_upwind="neutral_duz_dz_upwind", dp_dz="neutral_dp_dz",
+        dp_dz_upwind="neutral_dp_dz_upwind", dpz_dz="neutral_dpz_dz",
+        dvth_dz="neutral_dvth_dz", dT_dz="neutral_dT_dz", dqz_dz="neutral_dqz_dz",
+        external_source_amplitude="external_source_neutral_amplitude",
+        external_source_density_amplitude="external_source_neutral_density_amplitude",
+        external_source_momentum_amplitude="external_source_neutral_momentum_amplitude",
+        external_source_pressure_amplitude="external_source_neutral_pressure_amplitude",
+        external_source_controller_integral="external_source_neutral_controller_integral",
         neutral_extra...)
 
     moments = (; ion=ion_moments, electron=electron_moments, neutral=neutral_moments)
 
-    fields = make_struct(; phi=:phi, Er=:Er, Ez=:Ez, vEr=:vEr, vEz=:vEz)
+    fields = make_struct(; phi="phi", Er="Er", Ez="Ez", vEr="vEr", vEz="vEz")
 
-    fvec = make_struct(; density=:density, upar=:parallel_flow, p=:pressure,
-        electron_density=:electron_density, electron_upar=:electron_parallel_flow,
-        electron_p=:electron_pressure, electron_temp=:electron_temperature,
-        density_neutral=:density_neutral, uz_neutral=:uz_neutral, p_neutral=:p_neutral)
+    fvec = make_struct(; density="density", upar="parallel_flow", p="pressure",
+        electron_density="electron_density", electron_upar="electron_parallel_flow",
+        electron_p="electron_pressure", electron_temp="electron_temperature",
+        density_neutral="density_neutral", uz_neutral="uz_neutral", p_neutral="p_neutral")
 
     return moments, fields, fvec
 end
 
 """
-    get_variable(run_info::Tuple, variable_name; kwargs...)
-    get_variable(run_info, variable_name; kwargs...)
+    get_variable(run_info::Tuple, variable_name::AbstractString; kwargs...)
+    get_variable(run_info, variable_name::AbstractString; kwargs...)
 
 Get an array (or Tuple of arrays, if `run_info` is a Tuple) of the data for
 `variable_name` from `run_info`.
@@ -4286,11 +4289,11 @@ handles the case where `run_info` is a Tuple (which `postproc_load_data` does no
 """
 function get_variable end
 
-function get_variable(run_info::Vector{Any}, variable_name; kwargs...)
+function get_variable(run_info::Vector{Any}, variable_name::AbstractString; kwargs...)
     return [get_variable(ri, variable_name; kwargs...) for ri ∈ run_info]
 end
 
-function get_variable(run_info, variable_name; kwargs...)
+function get_variable(run_info, variable_name::AbstractString; kwargs...)
     # Set up loop macros for serial operation, in case they are used by any functions
     # below.
     looping.setup_loop_ranges!(0, 1;
@@ -4300,24 +4303,24 @@ function get_variable(run_info, variable_name; kwargs...)
                                vzeta=run_info.vzeta.n, vr=run_info.vr.n, vz=run_info.vz.n)
     if variable_name ∈ keys(get_variable_funcs)
         return get_variable_funcs[variable_name](run_info; kwargs...)
-    elseif occursin("_timestep_error", String(variable_name))
+    elseif occursin("_timestep_error", variable_name)
         return get_timestep_error_variable(run_info, variable_name; kwargs...)
-    elseif occursin("_timestep_residual", String(variable_name))
+    elseif occursin("_timestep_residual", variable_name)
         return get_timestep_residual_variable(run_info, variable_name; kwargs...)
-    elseif occursin("_steady_state_residual", String(variable_name))
+    elseif occursin("_steady_state_residual", variable_name)
         return get_steady_state_residual_variable(run_info, variable_name; kwargs...)
-    elseif occursin("_nonlinear_iterations_per_solve", String(variable_name))
+    elseif occursin("_nonlinear_iterations_per_solve", variable_name)
         return get_nonlinear_iterations_per_solve(run_info, variable_name; kwargs...)
-    elseif occursin("_linear_iterations_per_nonlinear_iteration", String(variable_name))
+    elseif occursin("_linear_iterations_per_nonlinear_iteration", variable_name)
         return get_linear_iterations_per_nonlinear_iteration(run_info, variable_name; kwargs...)
-    elseif occursin("_precon_iterations_per_linear_iteration", String(variable_name))
+    elseif occursin("_precon_iterations_per_linear_iteration", variable_name)
         return get_precon_iterations_per_linear_iteration(run_info, variable_name; kwargs...)
-    elseif endswith(String(variable_name), "_per_step") && String(variable_name) ∉ run_info.variable_names
+    elseif endswith(variable_name, "_per_step") && variable_name ∉ run_info.variable_names
         return get_per_step_from_cumulative_variable(run_info,
-                                                     split(String(variable_name), "_per_step")[1];
+                                                     split(variable_name, "_per_step")[1];
                                                      kwargs...)
     else
-        return postproc_load_variable(run_info, String(variable_name); kwargs...)
+        return postproc_load_variable(run_info, variable_name; kwargs...)
     end
 end
 
@@ -4896,7 +4899,7 @@ const get_variable_funcs = Dict{String,Any}(
                 throw(KeyError("evolve_density=false, so do not calculate ddens_dt"))
             end
             all_moments = _get_all_moment_variables(run_info)
-            variable = similar(all_moments.density)
+            variable = similar(all_moments["density"])
             # Define function here to minimise effect type instability due to
             # get_all_moment_variables returning NamedTuples
             function get_ddens_dt!(variable, all_moments)
@@ -4924,7 +4927,7 @@ const get_variable_funcs = Dict{String,Any}(
                 throw(KeyError("evolve_upar=false, so do not calculate dnupar_dt"))
             end
             all_moments = _get_all_moment_variables(run_info)
-            variable = similar(all_moments.parallel_flow)
+            variable = similar(all_moments["parallel_flow"])
             # Define function here to minimise effect type instability due to
             # get_all_moment_variables returning NamedTuples
             function get_dnupar_dt!(variable, all_moments)
@@ -4963,7 +4966,7 @@ const get_variable_funcs = Dict{String,Any}(
                 throw(KeyError("evolve_p=false, so do not calculate dp_dt"))
             end
             all_moments = _get_all_moment_variables(run_info)
-            variable = similar(all_moments.pressure)
+            variable = similar(all_moments["pressure"])
             # Define function here to minimise effect type instability due to
             # get_all_moment_variables returning NamedTuples
             function get_dp_dt!(variable, all_moments)
@@ -5005,7 +5008,7 @@ const get_variable_funcs = Dict{String,Any}(
             _ = get_variable(run_info, "electron_pressure"; kwargs...)
 
             all_moments = _get_all_moment_variables(run_info)
-            variable = similar(all_moments.electron_pressure)
+            variable = similar(all_moments["electron_pressure"])
             # Define function here to minimise effect type instability due to
             # get_all_moment_variables returning NamedTuples
             function get_electron_dp_dt!(variable, all_moments)
@@ -5060,10 +5063,10 @@ const get_variable_funcs = Dict{String,Any}(
                 throw(KeyError("evolve_density=false, so do not calculate neutral_ddens_dt"))
             end
             all_moments = _get_all_moment_variables(run_info)
-            if :density_neutral ∉ keys(all_moments)
+            if "density_neutral" ∉ keys(all_moments)
                 throw(KeyError("density_neutral not present"))
             end
-            variable = similar(all_moments.density_neutral)
+            variable = similar(all_moments["density_neutral"])
             # Define function here to minimise effect type instability due to
             # get_all_moment_variables returning NamedTuples
             function get_neutral_ddens_dt!(variable, all_moments)
@@ -5091,10 +5094,10 @@ const get_variable_funcs = Dict{String,Any}(
                 throw(KeyError("evolve_upar=false, so do not calculate neutral_dnuz_dt"))
             end
             all_moments = _get_all_moment_variables(run_info)
-            if :uz_neutral ∉ keys(all_moments)
+            if "uz_neutral" ∉ keys(all_moments)
                 throw(KeyError("uz_neutral not present"))
             end
-            variable = similar(all_moments.uz_neutral)
+            variable = similar(all_moments["uz_neutral"])
             # Define function here to minimise effect type instability due to
             # get_all_moment_variables returning NamedTuples
             function get_neutral_dnuz_dt!(variable, all_moments)
@@ -5133,10 +5136,10 @@ const get_variable_funcs = Dict{String,Any}(
                 throw(KeyError("evolve_p=false, so do not calculate neutral_dp_dt"))
             end
             all_moments = _get_all_moment_variables(run_info)
-            if :p_neutral ∉ keys(all_moments)
+            if "p_neutral" ∉ keys(all_moments)
                 throw(KeyError("p_neutral not present"))
             end
-            variable = similar(all_moments.p_neutral)
+            variable = similar(all_moments["p_neutral"])
             # Define function here to minimise effect type instability due to
             # get_all_moment_variables returning NamedTuples
             function get_neutral_duz_dt!(variable, all_moments)
