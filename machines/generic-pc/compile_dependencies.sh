@@ -10,5 +10,6 @@ cd machines/artifacts/
 export ARTIFACT_DIR=$PWD
 
 ../shared/default_compile_hdf5.sh
+../shared/default_compile_adios.sh
 
 exit 0

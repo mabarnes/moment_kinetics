@@ -53,6 +53,9 @@ end
 
 
 to_rm = String[]
+if mk_preferences["use_adios"] == "n"
+    push!(to_rm, "ADIOS2")
+end
 if mk_preferences["use_netcdf"] == "n"
     push!(to_rm, "NCDatasets")
 end
@@ -67,9 +70,8 @@ for p ∈ to_rm
     catch
     end
 end
-println("check ADIOS2 path ", ENV["JULIA_ADIOS2_PATH"])
 flush(stdout)
-to_add = ["ADIOS2", "HDF5", "MPI", "MPIPreferences", "PackageCompiler", "SpecialFunctions"]
+to_add = ["HDF5", "MPI", "MPIPreferences", "PackageCompiler", "SpecialFunctions"]
 if !mk_preferences["batch_system"] && mk_preferences["use_revise"] == "y"
     push!(to_add, "Revise")
 end
@@ -288,17 +290,24 @@ Pkg.build()
 
 
 Pkg.develop(path="moment_kinetics")
-Pkg.precompile()
 
 
 # It seems to be important to add the dependencies for MMS before the ones for NetCDF (as
 # of 30/12/2023).  Don't understand why that should be true.
 if mk_preferences["enable_mms"] == "y"
     Pkg.add(["Symbolics", "IfElse"])
-    Pkg.precompile()
+end
+
+if mk_preferences["use_adios"] == "y"
+    Pkg.add("ADIOS2")
+    if get(mk_preferences, "build_adios", "n") == "y"
+        ENV["JULIA_ADIOS2_PATH"] = joinpath(pwd(), "machines", "artifacts", "adios-build")
+    end
+    Pkg.build()
 end
 
 if mk_preferences["use_netcdf"] == "y"
     Pkg.add("NCDatasets")
-    Pkg.precompile()
 end
+
+Pkg.precompile()
