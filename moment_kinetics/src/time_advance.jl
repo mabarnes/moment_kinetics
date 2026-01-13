@@ -2719,7 +2719,7 @@ moments and moment derivatives
 
     success = ""
 
-    if pdf_bc_constraints
+    if pdf_bc_constraints && composition.ion_physics ∈ (drift_kinetic_ions, gyrokinetic_ions)
         # Ensure there are no negative values in the pdf before applying boundary
         # conditions, so that negative deviations do not mess up the integral-constraint
         # corrections in the sheath boundary conditions.

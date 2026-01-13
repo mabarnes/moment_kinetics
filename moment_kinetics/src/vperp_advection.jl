@@ -60,28 +60,38 @@ end
 update vperp advection speed when n, u, p are evolved separately
 """
 function update_speed_vperp_n_u_p_evolution!(vperp_advect, fvec, vpa, vperp, z, r, z_advect, r_advect, geometry, moments)
-    upar = fvec.upar
+    # update perpendicular advection speed, which has an extra term apart due to
+    # normalisation by thermal speed, so wperp grid is constantly stretching and
+    # compressing to account for changing local temperatures while maintaining
+    # a normalised perpendicular speed.
     vth = moments.ion.vth
     dvth_dr = moments.ion.dvth_dr
     dvth_dz = moments.ion.dvth_dz
     dvth_dt = moments.ion.dvth_dt
     wperp = vperp.grid
+    dBdr = geometry.dBdr
+    dBdz = geometry.dBdz
+    Bmag = geometry.Bmag
+    rfac = 0.0
+    if r.n > 1
+        rfac = 1.0
+    end
     @loop_s is begin
-        speed = vperp_advect[is].speed
         r_speed = r_advect[is].speed
         z_speed = z_advect[is].speed
         @loop_r ir begin
             @loop_z_vpa iz ivpa begin
                 @loop_vperp ivperp begin
-                    # update perpendicular advection speed, which is only nonzero because of the
-                    # normalisation by thermal speed, so wperp grid is constantly stretching and
-                    # compressing to account for changing local temperatures while maintaining
-                    # a normalised perpendicular speed.
-                    speed[ivperp,ivpa,iz,ir] =
-                        - (1/vth[iz,ir,is]) * wperp[ivperp] * (
-                            dvth_dt[iz,ir,is]
-                            + r_speed[ir,ivpa,ivperp,iz] * dvth_dr[iz,ir,is]
-                            + z_speed[iz,ivpa,ivperp,ir] * dvth_dz[iz,ir,is])
+                    dzdt = z_speed[iz,ivpa,ivperp,ir]
+                    drdt = rfac*r_speed[ir,ivpa,ivperp,iz]
+                    vperp_advect[is].speed[ivperp,ivpa,iz,ir] =
+                                        - (1/vth[iz,ir,is]) * (wperp[ivperp] *
+                                            (dvth_dt[iz,ir,is]
+                                             + drdt*dvth_dr[iz,ir,is] + dzdt*dvth_dz[iz,ir,is])
+                                             - ((0.5 * wperp[ivperp] * vth[iz,ir,is]/Bmag[iz,ir])
+                                             * (drdt*dBdr[iz,ir] + dzdt*dBdz[iz,ir]))
+                                           )
+
                 end
             end
         end
@@ -94,7 +104,25 @@ end
 update vperp advection speed when n, u are evolved separately
 """
 function update_speed_vperp_n_u_evolution!(vperp_advect, vpa, vperp, z, r, z_advect, r_advect, geometry, moments)
-    # with no perpendicular advection terms, the advection speed is zero
+    dBdr = geometry.dBdr
+    dBdz = geometry.dBdz
+    Bmag = geometry.Bmag
+    rfac = 0.0
+    if r.n > 1
+        rfac = 1.0
+    end
+    @loop_s is begin
+        z_speed = z_advect[is].speed
+        r_speed = r_advect[is].speed
+        @loop_r_z_vpa ir iz ivpa begin
+            @loop_vperp ivperp begin
+                dzdt = z_speed[iz,ivpa,ivperp,ir]
+                drdt = rfac*r_speed[ir,ivpa,ivperp,iz]
+                vperp_advect[is].speed[ivperp,ivpa,iz,ir] = (0.5*vperp.grid[ivperp]/Bmag[iz,ir])*
+                                                            (dzdt*dBdz[iz,ir] + drdt*dBdr[iz,ir])
+            end
+        end
+    end
     return nothing
 end
 
@@ -102,13 +130,30 @@ end
 update vperp advection speed when n is evolved separately
 """
 function update_speed_vperp_n_evolution!(vperp_advect, vpa, vperp, z, r, z_advect, r_advect, geometry, moments)
-    # with no perpendicular advection terms, the advection speed is zero
+    dBdr = geometry.dBdr
+    dBdz = geometry.dBdz
+    Bmag = geometry.Bmag
+    rfac = 0.0
+    if r.n > 1
+        rfac = 1.0
+    end
+    @loop_s is begin
+        z_speed = z_advect[is].speed
+        r_speed = r_advect[is].speed
+        @loop_r_z_vpa ir iz ivpa begin
+            @loop_vperp ivperp begin
+                dzdt = z_speed[iz,ivpa,ivperp,ir]
+                drdt = rfac*r_speed[ir,ivpa,ivperp,iz]
+                vperp_advect[is].speed[ivperp,ivpa,iz,ir] = (0.5*vperp.grid[ivperp]/Bmag[iz,ir])*
+                                                            (dzdt*dBdz[iz,ir] + drdt*dBdr[iz,ir])
+            end
+        end
+    end
     return nothing
 end
 
 function update_speed_vperp_DK!(vperp_advect, vpa, vperp, z, r, z_advect, r_advect, geometry, moments)
-    # advection of vperp due to conservation of 
-    # the adiabatic invariant mu = vperp^2 / 2 B
+    # with no moments evolved, only vperp advection possible is due to magnetic trapping
     dzdt = vperp.scratch
     drdt = vperp.scratch2
     dBdr = geometry.dBdr
@@ -118,18 +163,19 @@ function update_speed_vperp_DK!(vperp_advect, vpa, vperp, z, r, z_advect, r_adve
     if r.n > 1
         rfac = 1.0
     end
-    @inbounds begin
-        @loop_s is begin
-            vperp_speed = vperp_advect[is].speed
-            z_speed = z_advect[is].speed
-            r_speed = r_advect[is].speed
-            @loop_r_z_vpa ir iz ivpa begin
-                @. @views dzdt = z_speed[iz,ivpa,:,ir]
-                @. @views drdt = rfac*r_speed[ir,ivpa,:,iz]
-                @. @views vperp_speed[:,ivpa,iz,ir] = (0.5*vperp.grid[:]/Bmag[iz,ir])*(dzdt[:]*dBdz[iz,ir] + drdt[:]*dBdr[iz,ir])
+    @loop_s is begin
+        z_speed = z_advect[is].speed
+        r_speed = r_advect[is].speed
+        @loop_r_z_vpa ir iz ivpa begin
+            @loop_vperp ivperp begin
+                dzdt = z_speed[iz,ivpa,ivperp,ir]
+                drdt = rfac*r_speed[ir,ivpa,ivperp,iz]
+                vperp_advect[is].speed[ivperp,ivpa,iz,ir] = (0.5*vperp.grid[ivperp]/Bmag[iz,ir])*
+                                                            (dzdt*dBdz[iz,ir] + drdt*dBdr[iz,ir])
             end
         end
     end
+    return nothing
 end
 
 function update_z_r_speeds!(z_advect, r_advect, fvec_in, moments, fields,
